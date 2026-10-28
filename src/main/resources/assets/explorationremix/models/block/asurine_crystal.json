@@ -1,7 +1,7 @@
 {
-  "parent": "minecraft:block/cube_all",
-  "render_type": "minecraft:translucent",
+  "parent": "minecraft:block/cross",
+  "render_type": "minecraft:cutout",
   "textures": {
-    "all": "explorationremix:block/asurine_crystal"
+    "cross": "explorationremix:block/asurine_crystal"
   }
 }

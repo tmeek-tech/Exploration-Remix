@@ -1,9 +1,6 @@
 {
   "variants": {
-    "waterlogged=false": {
-      "model": "explorationremix:block/silver_fern"
-    },
-    "waterlogged=true": {
+    "": {
       "model": "explorationremix:block/silver_fern"
     }
   }

@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "explorationremix:block/orange_shelf_fungus"
+    },
+    "facing=east": {
+      "model": "explorationremix:block/orange_shelf_fungus",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "explorationremix:block/orange_shelf_fungus",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "explorationremix:block/orange_shelf_fungus",
+      "y": 270
+    }
+  }
+}

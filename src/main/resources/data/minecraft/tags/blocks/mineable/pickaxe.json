@@ -1,13 +1,6 @@
 {
   "replace": false,
   "values": [
-    "explorationremix:banded_iron",
-    "explorationremix:honeycomb_ochrum",
-    "explorationremix:rusted_gear",
-    "explorationremix:rusted_pipe",
-    "explorationremix:ochre_crystal",
-    "explorationremix:amber_resin",
-    "explorationremix:asurine_crystal",
-    "explorationremix:hematite_crystal"
+    "explorationremix:asurine_crystal"
   ]
 }

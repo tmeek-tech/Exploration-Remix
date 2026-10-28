@@ -2,37 +2,39 @@ package com.explorationremix.devtools;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.Layer;
-import com.explorationremix.world.plan.CellPlan;
-import com.explorationremix.world.plan.Chamber;
-import com.explorationremix.world.plan.Gate;
+import com.explorationremix.world.terrain.Plans;
+import com.explorationremix.world.terrain.Route;
+import com.explorationremix.world.terrain.Shape;
+import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkStatus;
-import net.minecraft.world.level.levelgen.DensityFunction;
-import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.registries.ForgeRegistries;
 
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
- * Headless smoke test, enabled with the environment variable ER_DEVRUN=1: once the server is up it generates the
- * chunks around the first gate of the spawn cell, dumps block columns and density slices into {@code remix_devrun/},
- * then stops the server. Used by the build to check world generation without a client.
+ * Headless world generation check, enabled with the environment variable ER_DEVRUN=1. Once the server is up it
+ * generates the spawn cell's gates and routes, checks that every passage and route is open, writes pictures of the
+ * real blocks into {@code remix_devrun/}, then stops the server (unless ER_DEVRUN=keep).
  */
 public final class DevAutoRun {
     private static int ticks = -1;
@@ -44,24 +46,23 @@ public final class DevAutoRun {
 
     @SubscribeEvent
     public static void onStarted(ServerStartedEvent event) {
-        if (!enabled()) return;
         server = event.getServer();
         ticks = 0;
-        ExplorationRemix.LOGGER.info("[devrun] server started, running the world generation smoke test");
+        ExplorationRemix.LOGGER.info("[devrun] server started, running the world generation check");
     }
 
     @SubscribeEvent
     public static void onTick(TickEvent.ServerTickEvent event) {
         if (ticks < 0 || event.phase != TickEvent.Phase.END) return;
         ticks++;
-        if (ticks == 10) {
+        if (ticks == 20) {
             try {
                 run();
             } catch (Throwable t) {
                 ExplorationRemix.LOGGER.error("[devrun] failed", t);
             }
         }
-        if (ticks == 30) {
+        if (ticks == 40 && !"keep".equals(System.getenv("ER_DEVRUN"))) {
             ExplorationRemix.LOGGER.info("[devrun] done, stopping server");
             server.halt(false);
         }
@@ -71,142 +72,205 @@ public final class DevAutoRun {
         File dir = new File(server.getServerDirectory(), "remix_devrun");
         dir.mkdirs();
         ServerLevel level = server.overworld();
+        long start = System.nanoTime();
         try (PrintWriter out = new PrintWriter(new FileWriter(new File(dir, "report.txt")))) {
-            out.println("installed=" + DeepWorld.installed() + " packFloor=" + DeepWorld.packFloor() + " floorY=" + DeepWorld.floorY()
-                    + " minBuild=" + level.getMinBuildHeight() + " height=" + level.getHeight()
-                    + (level.getMinBuildHeight() != DeepWorld.floorY() ? "  HEIGHT MISMATCH: the world's floor is not the deep floor" : ""));
-            for (Layer l : DeepWorld.layers()) out.println("layer " + l.id() + " y " + l.bottom() + ".." + l.top());
-            if (!DeepWorld.installed()) return;
+            Terrain t = DeepWorld.terrain();
+            out.println("installed=" + DeepWorld.installed() + " minBuild=" + level.getMinBuildHeight() + " height=" + level.getHeight()
+                    + " packFloor=" + DeepWorld.packFloor() + " floorY=" + DeepWorld.floorY());
+            if (t == null || !DeepWorld.installed()) { out.println("NOT INSTALLED"); return; }
+            if (level.getMinBuildHeight() != t.shape.floorY) out.println("HEIGHT MISMATCH: the world's floor is not the deep floor");
+            Shape s = t.shape;
+            for (int i = 0; i < s.layerCount; i++) {
+                out.printf(Locale.ROOT, "layer %d %s: y %d..%d, fluid table y %d (%s), band above y %d..%d%n", i + 1, s.id(i), s.bottom(i), s.top(i),
+                        s.waterY(i) - 1, s.lava(i) ? "lava" : "water", s.bandBottom(i + 1), s.bandTop(i + 1));
+            }
             BlockPos spawn = level.getSharedSpawnPos();
-            Gate g1 = DeepWorld.plans().gateAt(1, spawn.getX(), spawn.getZ());
-            out.printf("spawn %s, gate1 upper %.0f %.0f %.0f lower %.0f %.0f %.0f%n", spawn, g1.upperX(), g1.upperY(), g1.upperZ(), g1.lowerX(), g1.lowerY(), g1.lowerZ());
-            List<BlockPos> probes = new ArrayList<>();
-            probes.add(new BlockPos((int) g1.upperX(), (int) g1.upperY(), (int) g1.upperZ()));
-            probes.add(new BlockPos((int) g1.lowerX(), (int) g1.lowerY(), (int) g1.lowerZ()));
-            for (Layer l : DeepWorld.layers()) {
-                CellPlan plan = DeepWorld.plans().cellAt(l.index(), spawn.getX(), spawn.getZ());
-                for (Chamber ch : plan.chambers) {
-                    if (ch.kind() == Chamber.Kind.REFUGE || ch.kind() == Chamber.Kind.CATHEDRAL) probes.add(new BlockPos((int) ch.x(), (int) ch.y(), (int) ch.z()));
+            int cx = t.plans.cellOf(spawn.getX()), cz = t.plans.cellOf(spawn.getZ());
+            String cellEnv = System.getenv("ER_DEVRUN_CELL");
+            if (cellEnv != null && cellEnv.contains(",")) {
+                cx = Integer.parseInt(cellEnv.split(",")[0].trim());
+                cz = Integer.parseInt(cellEnv.split(",")[1].trim());
+            }
+            out.println("cell " + cx + " " + cz + " (spawn " + spawn.toShortString() + ")");
+            out.flush();
+
+            // Gates: walk each passage's centre line; every block on it must be open and dry.
+            for (int b = 1; b <= s.layerCount; b++) {
+                Plans.Gate g = t.plans.gate(b, cx, cz);
+                long t0 = System.nanoTime();
+                int samples = 0, solid = 0, wet = 0;
+                BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+                for (int i = 0; i <= 400; i++) {
+                    double tt = i / 400.0;
+                    p.set(Math.floor(g.px(tt)), Math.floor(g.py(tt)), Math.floor(g.pz(tt)));
+                    BlockState st = level.getChunk(p.getX() >> 4, p.getZ() >> 4, ChunkStatus.FULL, true).getBlockState(p);
+                    samples++;
+                    if (!st.getFluidState().isEmpty()) wet++;
+                    else if (!st.isAir()) solid++;
                 }
-                double[] mid = plan.routePoint(0.5);
-                probes.add(new BlockPos((int) mid[0], (int) mid[1], (int) mid[2]));
-                if (plan.bedrockLanding != null) probes.add(new BlockPos((int) plan.bedrockLanding.x(), (int) plan.bedrockLanding.y(), (int) plan.bedrockLanding.z()));
+                out.printf(Locale.ROOT, "gate %d: upper landing %.0f %.0f %.0f, lower landing %.0f %.0f %.0f, passage samples %d, blocked %d, flooded %d%s (%.1f s)%n",
+                        b, g.ux, g.uFloor + 1, g.uz, g.lx, g.lFloor + 1, g.lz, samples, solid, wet, solid + wet == 0 ? "  OK" : "  PROBLEM",
+                        (System.nanoTime() - t0) / 1e9);
+                out.flush();
+                double y0 = Math.min(g.lFloor, g.uFloor) - 24, y1 = Math.max(g.lFloor, g.uFloor) + 40;
+                BlockImages.write(along(level, g.ux, g.uz, g.lx, g.lz, 40, (int) y0, (int) y1), new File(dir, "gate_" + b + ".png"), 3);
             }
-            long t0 = System.nanoTime();
-            int generated = 0;
-            for (BlockPos p : probes) {
-                ChunkPos cp = new ChunkPos(p);
-                level.getChunk(cp.x, cp.z, ChunkStatus.FULL, true);
-                generated++;
-            }
-            long ms = (System.nanoTime() - t0) / 1_000_000;
-            out.println("generated " + generated + " chunks in " + ms + " ms (" + (ms / Math.max(1, generated)) + " ms/chunk, includes neighbours)");
-            for (BlockPos p : probes) {
-                out.println("column " + p.getX() + "," + p.getZ() + " (probe y " + p.getY() + ")");
-                dumpColumn(level, p.getX(), p.getZ(), out);
-                BlockState at = level.getBlockState(p);
-                out.println("  at probe: " + ForgeRegistries.BLOCKS.getKey(at.getBlock()) + " biome " + level.getBiome(p).unwrapKey().map(k -> k.location().toString()).orElse("?"));
-            }
-            // The gate tube: every block along its centre line should be open.
-            int open = 0, total = 0;
-            StringBuilder tube = new StringBuilder();
-            for (int i = 0; i <= 24; i++) {
-                double t = i / 24.0;
-                BlockPos tp = new BlockPos((int) Math.floor(g1.px(t)), (int) Math.floor(g1.py(t)), (int) Math.floor(g1.pz(t)));
-                ChunkPos cp = new ChunkPos(tp);
-                level.getChunk(cp.x, cp.z, ChunkStatus.FULL, true);
-                BlockState st = level.getBlockState(tp);
-                boolean isOpen = !level.isOutsideBuildHeight(tp) && (st.isAir() || !st.getFluidState().isEmpty());
-                if (isOpen) open++;
-                total++;
-                tube.append(isOpen ? '.' : '#');
-                if (i % 6 == 0) tube.append('[').append(tp.getX()).append(',').append(tp.getY()).append(',').append(tp.getZ()).append(']');
-            }
-            out.println("gate1 tube centre line: " + open + "/" + total + " open " + tube);
-            tubeSlice(level, g1, new File(dir, "slice_gate1_tube.png"), out);
-            slice(level, (int) g1.upperX(), (int) g1.upperZ(), 384, true, new File(dir, "slice_gate1_x.png"), out);
-            slice(level, (int) g1.upperX(), (int) g1.upperZ(), 384, false, new File(dir, "slice_gate1_z.png"), out);
-            ChunkAccess chunk = level.getChunk(new BlockPos((int) g1.lowerX(), 0, (int) g1.lowerZ()));
-            out.println("sections in a deep chunk: " + chunk.getSections().length);
-        }
-    }
 
-    /** A slice that follows the gate's centre line (extended along its tangents), so the whole tube is visible. */
-    private static void tubeSlice(ServerLevel level, Gate g, File file, PrintWriter out) throws IOException {
-        int width = 160;
-        int minY = Math.max(level.getMinBuildHeight(), (int) g.lowerY() - 60), maxY = Math.min(level.getMaxBuildHeight(), (int) g.upperY() + 60);
-        BufferedImage img = new BufferedImage(width, maxY - minY, BufferedImage.TYPE_INT_RGB);
-        long t0 = System.nanoTime();
-        for (int i = 0; i < width; i++) {
-            double t = -0.5 + 2.0 * i / (width - 1);
-            double x, z;
-            if (t < 0) { x = g.px(0) + (g.px(0) - g.px(0.05)) * (-t / 0.05); z = g.pz(0) + (g.pz(0) - g.pz(0.05)) * (-t / 0.05); }
-            else if (t > 1) { x = g.px(1) + (g.px(1) - g.px(0.95)) * ((t - 1) / 0.05); z = g.pz(1) + (g.pz(1) - g.pz(0.95)) * ((t - 1) / 0.05); }
-            else { x = g.px(t); z = g.pz(t); }
-            int bx = (int) Math.floor(x), bz = (int) Math.floor(z);
-            level.getChunk(bx >> 4, bz >> 4, ChunkStatus.FULL, true);
-            for (int y = minY; y < maxY; y++) {
-                BlockState st = level.getBlockState(new BlockPos(bx, y, bz));
-                int rgb;
-                if (st.isAir()) rgb = 0;
-                else if (!st.getFluidState().isEmpty()) rgb = st.getFluidState().is(net.minecraft.tags.FluidTags.LAVA) ? 0xc04010 : 0x2050c0;
-                else if (st.is(com.explorationremix.registry.ERBlocks.BAND_STONE.get())) rgb = 0x101018;
-                else rgb = 0x7a7a7a;
-                boolean onLine = t >= 0 && t <= 1 && Math.abs(y - g.py(t)) < 0.5;
-                if (onLine) rgb = 0x00ff00;
-                img.setRGB(i, maxY - 1 - y, rgb);
-            }
-        }
-        ImageIO.write(img, "png", file);
-        out.println("tube slice " + file.getName() + " in " + (System.nanoTime() - t0) / 1_000_000 + " ms");
-    }
-
-    private static void dumpColumn(ServerLevel level, int x, int z, PrintWriter out) {
-        String last = null;
-        int runStart = level.getMaxBuildHeight() - 1;
-        for (int y = level.getMaxBuildHeight() - 1; y >= level.getMinBuildHeight(); y--) {
-            BlockState st = level.getBlockState(new BlockPos(x, y, z));
-            String id = String.valueOf(ForgeRegistries.BLOCKS.getKey(st.getBlock()));
-            if (!id.equals(last)) {
-                if (last != null) out.println("  " + runStart + ".." + (y + 1) + " " + last);
-                last = id;
-                runStart = y;
-            }
-        }
-        out.println("  " + runStart + ".." + level.getMinBuildHeight() + " " + last);
-    }
-
-    private static void slice(ServerLevel level, int cx, int cz, int width, boolean alongX, File file, PrintWriter out) throws IOException {
-        RandomState rs = level.getChunkSource().randomState();
-        DensityFunction density = rs.router().finalDensity();
-        int minY = level.getMinBuildHeight(), maxY = level.getMaxBuildHeight();
-        BufferedImage img = new BufferedImage(width, maxY - minY, BufferedImage.TYPE_INT_RGB);
-        long t0 = System.nanoTime();
-        for (int i = 0; i < width; i++) {
-            int x = alongX ? cx - width / 2 + i : cx;
-            int z = alongX ? cz : cz - width / 2 + i;
-            for (int y = minY; y < maxY; y++) {
-                double d = density.compute(new DensityFunction.SinglePointContext(x, y, z));
-                int rgb;
-                if (d > 0) {
-                    int band = DeepWorld.bandAt(y);
-                    Layer l = DeepWorld.layerAt(y);
-                    if (y < DeepWorld.floorY() + 5) rgb = 0x202020;
-                    else if (band != 0) rgb = 0x101018;
-                    else if (l != null) rgb = switch (l.index()) { case 0 -> 0x6a5a40; case 1 -> 0x4a5a70; case 2 -> 0x70402a; default -> 0x3a3a40; };
-                    else rgb = 0x7a7a7a;
-                } else {
-                    rgb = 0;
-                    Layer l = DeepWorld.layerAt(y);
-                    if (l != null && y < DeepWorld.packFloor()) {
-                        int table = com.explorationremix.world.gen.DeepFluids.tableLevel(l, DeepWorld.plans(), x, z);
-                        if (y < table && !DeepWorld.plans().cellAt(l.index(), x, z).insideRefuge(x, y, z)) rgb = l.fluid() == Layer.FluidKind.LAVA ? 0xc04010 : 0x2050c0;
+            // Routes: walk each one like a player, from the entry landing to the exit landing (or the bedrock landing).
+            Map<String, Integer> biomes = new TreeMap<>();
+            for (int li = 0; li < s.layerCount; li++) {
+                Route r = t.plans.route(li, cx, cz);
+                long t0 = System.nanoTime();
+                Walker wk = new Walker(level);
+                BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+                int w = (int) Math.ceil(r.walkLength) + 1, h = s.top(li) - s.bottom(li) + 1;
+                BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+                Map<String, Integer> blocks = new HashMap<>();
+                double[] q0 = r.pathAt(0);
+                wk.start(q0[2] + 1);
+                for (int i = 0; i < w; i++) {
+                    double[] q = r.pathAt(i);
+                    int x = (int) Math.floor(q[0]), z = (int) Math.floor(q[1]);
+                    ChunkAccess chunk = level.getChunk(x >> 4, z >> 4, ChunkStatus.FULL, true);
+                    for (int y = s.bottom(li); y <= s.top(li); y++) {
+                        p.set(x, y, z);
+                        BlockState st = chunk.getBlockState(p);
+                        img.setRGB(i, s.top(li) - y, BlockImages.color(level, p, st));
+                        if (!st.isAir() && st.getFluidState().isEmpty()) {
+                            String id = String.valueOf(ForgeRegistries.BLOCKS.getKey(st.getBlock()));
+                            blocks.merge(id, 1, Integer::sum);
+                        }
+                    }
+                    int plan = (int) Math.floor(q[2]);
+                    if (plan >= s.bottom(li) && plan <= s.top(li)) img.setRGB(i, s.top(li) - plan, 0xE8C547);
+                    boolean landing = r.exit != null ? Math.hypot(q[0] - r.exit.ux, q[1] - r.exit.uz) < r.exit.landR
+                            : Math.hypot(q[0] - r.endX, q[1] - r.endZ) < r.endR;
+                    if (landing) continue;
+                    double feet = wk.step(x, z, q[2] + 1, i);
+                    int fy = (int) Math.floor(feet);
+                    if (fy >= s.bottom(li) && fy <= s.top(li)) img.setRGB(i, s.top(li) - fy, 0xE0453A);
+                    if (i % 2 == 0) {
+                        Holder<Biome> bh = level.getBiome(p.set(x, fy + 1, z));
+                        biomes.merge(s.id(li) + " " + bh.unwrapKey().map(k -> k.location().toString()).orElse("?"), 1, Integer::sum);
                     }
                 }
-                img.setRGB(i, maxY - 1 - y, rgb);
+                boolean ok = wk.tooHigh + wk.noFooting + wk.wet + wk.bigDrops == 0;
+                out.printf(Locale.ROOT, "route %d %s: walking line %.0f blocks, %d steps walked, jumps %d, too high %d, drops over 3 %d, no footing %d, wet %d, more than 2 off the plan %d%s (%.1f s)%n",
+                        li + 1, s.id(li), r.walkLength, wk.steps, wk.jumps, wk.tooHigh, wk.bigDrops, wk.noFooting, wk.wet, wk.offPlan, ok ? "  OK" : "  PROBLEM",
+                        (System.nanoTime() - t0) / 1e9);
+                if (wk.where.length() > 0) out.println("  where:" + wk.where);
+                out.println("  halls " + r.halls.size() + ", bridges " + r.bridges.size() + ", geodes " + r.geodes.size()
+                        + (r.bedrockEnd ? String.format(Locale.ROOT, ", bedrock landing at %.0f %.0f %.0f", r.endX, r.endFloor + 1, r.endZ) : ""));
+                StringBuilder sb = new StringBuilder("  rock along the route:");
+                blocks.entrySet().stream().sorted((a, bb) -> bb.getValue() - a.getValue()).limit(12)
+                        .forEach(e -> sb.append(' ').append(e.getKey().replace("minecraft:", "")).append('=').append(e.getValue()));
+                out.println(sb);
+                out.flush();
+                BlockImages.write(img, new File(dir, "route_" + (li + 1) + ".png"), 2);
+            }
+            out.println("biomes on the route paths: " + biomes);
+
+            // A slice through the whole cell, top to bottom.
+            int mx = cx * t.settings.gateSpacing() + t.settings.gateSpacing() / 2, mz = cz * t.settings.gateSpacing() + t.settings.gateSpacing() / 2;
+            long t0 = System.nanoTime();
+            BlockImages.write(BlockImages.slice(level, "x", mx, mz, 300, s.floorY, 100), new File(dir, "cell_slice_x.png"), 1);
+            out.printf(Locale.ROOT, "cell slice written (%.1f s)%n", (System.nanoTime() - t0) / 1e9);
+            out.printf(Locale.ROOT, "total %.1f s%n", (System.nanoTime() - start) / 1e9);
+        }
+        ExplorationRemix.LOGGER.info("[devrun] report written to {}", dir.getAbsolutePath());
+    }
+
+    /**
+     * Walks a route the way a player would: keeps its height where it can, steps or jumps up at most 1.25 blocks,
+     * and falls to the next floor below where the floor ends. Slabs and other low blocks count as floor.
+     */
+    private static final class Walker {
+        final ServerLevel level;
+        final BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        double h;
+        int steps, jumps, tooHigh, bigDrops, noFooting, wet, offPlan;
+        final StringBuilder where = new StringBuilder();
+
+        Walker(ServerLevel level) { this.level = level; }
+
+        void start(double feet) { h = feet; }
+
+        /** Moves onto column (x, z); returns the new standing height (the planned one when there is no footing). */
+        double step(int x, int z, double plan, int at) {
+            steps++;
+            double best = Double.NaN, fall = Double.NaN;
+            int top = (int) Math.floor(h) + 2, bottom = (int) Math.floor(h) - 9;
+            for (int y = top; y >= bottom; y--) {
+                double sh = standHeight(x, y, z);
+                if (Double.isNaN(sh)) continue;
+                double dh = sh - h;
+                if (dh <= 1.25 && dh >= -0.6) { if (Double.isNaN(best) || Math.abs(dh) < Math.abs(best - h)) best = sh; }
+                else if (dh < -0.6 && Double.isNaN(fall)) fall = sh;
+            }
+            double nh;
+            if (!Double.isNaN(best)) {
+                if (best - h > 0.6) jumps++;
+                nh = best;
+            } else if (!Double.isNaN(fall)) {
+                if (h - fall > 3.01) { bigDrops++; note(String.format(Locale.ROOT, " drop %.1f at %d (%d %d %d)", h - fall, at, x, (int) Math.floor(fall), z)); }
+                nh = fall;
+            } else {
+                boolean higher = false;
+                for (int y = top + 1; y <= top + 4 && !higher; y++) higher = !Double.isNaN(standHeight(x, y, z));
+                if (higher) { tooHigh++; note(" too high at " + at + " (" + x + " " + top + " " + z + ")"); }
+                else { noFooting++; note(" no footing at " + at + " (" + x + " " + (int) Math.floor(plan) + " " + z + ")"); }
+                nh = plan;
+            }
+            BlockState feet = level.getBlockState(p.set(x, (int) Math.floor(nh), z));
+            if (!feet.getFluidState().isEmpty()) { wet++; note(" wet at " + at); }
+            if (Math.abs(nh - plan) > 2.01) offPlan++;
+            h = nh;
+            return nh;
+        }
+
+        private void note(String s) { if (where.length() < 600) where.append(s); }
+
+        /** Height a player stands at with their feet in block y, or NaN when they can't stand or don't fit there. */
+        private double standHeight(int x, int y, int z) {
+            BlockState f = level.getBlockState(p.set(x, y, z));
+            double sh;
+            VoxelShape fs = f.getCollisionShape(level, p);
+            if (fs.isEmpty()) {
+                BlockState b = level.getBlockState(p.set(x, y - 1, z));
+                VoxelShape bs = b.getCollisionShape(level, p);
+                if (bs.isEmpty()) return Double.NaN;
+                sh = y - 1 + bs.max(Direction.Axis.Y);
+                if (sh < y - 0.55) return Double.NaN; // a low block below an empty one: you'd stand on the block under it
+            } else {
+                double top = fs.max(Direction.Axis.Y);
+                if (top > 0.55) return Double.NaN;
+                sh = y + top;
+            }
+            for (int yy = (int) Math.floor(sh + 0.01); yy <= (int) Math.floor(sh + 1.79); yy++) {
+                if (yy == y && !fs.isEmpty()) continue;
+                BlockState a = level.getBlockState(p.set(x, yy, z));
+                if (!a.getCollisionShape(level, p).isEmpty()) return Double.NaN;
+            }
+            return sh;
+        }
+    }
+
+    /** A vertical slice of real blocks along the straight line from (x0, z0) to (x1, z1), extended by pad at each end. */
+    private static BufferedImage along(ServerLevel level, double x0, double z0, double x1, double z1, int pad, int y0, int y1) {
+        double len = Math.max(1, Math.hypot(x1 - x0, z1 - z0));
+        double dx = (x1 - x0) / len, dz = (z1 - z0) / len;
+        int w = (int) Math.ceil(len) + pad * 2, h = y1 - y0 + 1;
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int i = 0; i < w; i++) {
+            double d = i - pad;
+            int x = (int) Math.floor(x0 + dx * d), z = (int) Math.floor(z0 + dz * d);
+            ChunkAccess chunk = level.getChunk(x >> 4, z >> 4, ChunkStatus.FULL, true);
+            for (int y = y0; y <= y1; y++) {
+                p.set(x, y, z);
+                img.setRGB(i, y1 - y, BlockImages.color(level, p, chunk.getBlockState(p)));
             }
         }
-        ImageIO.write(img, "png", file);
-        out.println("slice " + file.getName() + " in " + (System.nanoTime() - t0) / 1_000_000 + " ms");
+        return img;
     }
 }

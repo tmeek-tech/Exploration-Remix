@@ -1,3 +1,6 @@
 {
-  "parent": "explorationremix:block/asurine_crystal"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "explorationremix:block/asurine_crystal"
+  }
 }

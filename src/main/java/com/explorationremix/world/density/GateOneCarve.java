@@ -1,7 +1,7 @@
 package com.explorationremix.world.density;
 
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.plan.LayerPlans;
+import com.explorationremix.world.terrain.Terrain;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.world.level.levelgen.DensityFunction;
@@ -11,17 +11,16 @@ import net.minecraft.world.level.levelgen.DensityFunction;
  * Combined with the pack's density through {@code min}, so it only ever removes stone.
  */
 public final class GateOneCarve implements DensityFunction {
-    public static final KeyDispatchDataCodec<GateOneCarve> CODEC = KeyDispatchDataCodec.of(MapCodec.unit(GateOneCarve::new));
+    public static final GateOneCarve INSTANCE = new GateOneCarve();
+    public static final KeyDispatchDataCodec<GateOneCarve> CODEC = KeyDispatchDataCodec.of(MapCodec.unit(INSTANCE));
+
+    private GateOneCarve() {}
 
     @Override
     public double compute(FunctionContext ctx) {
-        int y = ctx.blockY();
-        int floor = DeepWorld.packFloor();
-        if (y < floor - 8 || y > floor + 64) return 1.0;
-        LayerPlans plans = DeepWorld.plans();
-        if (plans == null) return 1.0;
-        double d = plans.gateOneCarveDistance(ctx.blockX(), y, ctx.blockZ());
-        double v = d / 3.0;
+        Terrain t = DeepWorld.terrain();
+        if (t == null) return 1.0;
+        double v = t.gateOneCarve(ctx.blockX(), ctx.blockY(), ctx.blockZ()) / 8.0;
         return v < -1 ? -1 : (v > 1 ? 1 : v);
     }
 

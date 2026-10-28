@@ -2,9 +2,8 @@ package com.explorationremix.registry;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.world.feature.FallbackStateProvider;
-import com.explorationremix.world.feature.GateTubeFeature;
 import com.explorationremix.world.feature.LayerRangePlacement;
-import com.explorationremix.world.feature.RuinFeature;
+import com.explorationremix.world.feature.OpenWayFeature;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
@@ -21,9 +20,7 @@ public final class ERWorldgen {
 
     private ERWorldgen() {}
 
-    public static final RegistryObject<Feature<NoneFeatureConfiguration>> RUIN = FEATURES.register("ruin", () -> new RuinFeature(NoneFeatureConfiguration.CODEC));
-    public static final RegistryObject<Feature<NoneFeatureConfiguration>> GATE_TUBE = FEATURES.register("gate_tube", () -> new GateTubeFeature(NoneFeatureConfiguration.CODEC));
-    public static final RegistryObject<Feature<NoneFeatureConfiguration>> FLOCK_ROOST = FEATURES.register("flock_roost", () -> new com.explorationremix.world.feature.FlockRoostFeature(NoneFeatureConfiguration.CODEC));
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> OPEN_WAY = FEATURES.register("open_way", () -> new OpenWayFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<BlockStateProviderType<FallbackStateProvider>> FALLBACK_PROVIDER = STATE_PROVIDERS.register("fallback", () -> new BlockStateProviderType<>(FallbackStateProvider.CODEC));
     public static final RegistryObject<PlacementModifierType<LayerRangePlacement>> LAYER_RANGE = PLACEMENT_TYPES.register("layer_range", () -> () -> LayerRangePlacement.CODEC);
 }

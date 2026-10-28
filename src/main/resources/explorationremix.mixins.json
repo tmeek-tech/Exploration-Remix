@@ -15,11 +15,7 @@
     "NoiseBasedAquiferMixin",
     "StructurePiecesBuilderMixin",
     "StructureMixin",
-    "AboveBottomAnchorMixin",
-    "EnchantmentHelperMixin",
-    "AnvilMenuMixin",
-    "ElytraItemMixin",
-    "AbstractVillagerMixin"
+    "AboveBottomAnchorMixin"
   ],
   "client": [],
   "injectors": {

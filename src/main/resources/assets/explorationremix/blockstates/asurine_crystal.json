@@ -1,7 +1,30 @@
 {
   "variants": {
-    "": {
+    "facing=down": {
+      "model": "explorationremix:block/asurine_crystal",
+      "x": 180
+    },
+    "facing=east": {
+      "model": "explorationremix:block/asurine_crystal",
+      "x": 90,
+      "y": 90
+    },
+    "facing=north": {
+      "model": "explorationremix:block/asurine_crystal",
+      "x": 90
+    },
+    "facing=south": {
+      "model": "explorationremix:block/asurine_crystal",
+      "x": 90,
+      "y": 180
+    },
+    "facing=up": {
       "model": "explorationremix:block/asurine_crystal"
+    },
+    "facing=west": {
+      "model": "explorationremix:block/asurine_crystal",
+      "x": 90,
+      "y": 270
     }
   }
 }

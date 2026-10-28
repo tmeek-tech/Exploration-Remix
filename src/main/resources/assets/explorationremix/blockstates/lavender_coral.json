@@ -1,9 +1,6 @@
 {
   "variants": {
-    "waterlogged=false": {
-      "model": "explorationremix:block/lavender_coral"
-    },
-    "waterlogged=true": {
+    "": {
       "model": "explorationremix:block/lavender_coral"
     }
   }

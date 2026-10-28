@@ -1,65 +1,109 @@
 {
-  "temperature": 0.9,
-  "downfall": 0.6,
   "has_precipitation": false,
+  "temperature": 1.2,
+  "downfall": 0.4,
   "effects": {
-    "fog_color": 3807752,
-    "water_color": 6965792,
-    "water_fog_color": 2759176,
-    "sky_color": 1706500,
+    "fog_color": 11028269,
+    "sky_color": 11028269,
+    "water_color": 5220805,
+    "water_fog_color": 1457997,
+    "grass_color": 11046988,
+    "foliage_color": 9994300,
     "mood_sound": {
       "sound": "minecraft:ambient.cave",
       "tick_delay": 6000,
       "block_search_extent": 8,
       "offset": 2.0
-    },
-    "grass_color": 12614192,
-    "foliage_color": 11561504,
-    "music": {
-      "sound": "minecraft:music.overworld.lush_caves",
-      "min_delay": 12000,
-      "max_delay": 24000,
-      "replace_current_music": false
     }
   },
+  "spawners": {
+    "monster": [
+      {
+        "type": "minecraft:spider",
+        "weight": 100,
+        "minCount": 4,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:zombie",
+        "weight": 95,
+        "minCount": 4,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:zombie_villager",
+        "weight": 5,
+        "minCount": 1,
+        "maxCount": 1
+      },
+      {
+        "type": "minecraft:skeleton",
+        "weight": 100,
+        "minCount": 4,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:creeper",
+        "weight": 100,
+        "minCount": 4,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:slime",
+        "weight": 100,
+        "minCount": 4,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:enderman",
+        "weight": 10,
+        "minCount": 1,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:witch",
+        "weight": 5,
+        "minCount": 1,
+        "maxCount": 1
+      }
+    ],
+    "creature": [],
+    "ambient": [
+      {
+        "type": "minecraft:bat",
+        "weight": 10,
+        "minCount": 8,
+        "maxCount": 8
+      }
+    ],
+    "underground_water_creature": [
+      {
+        "type": "minecraft:glow_squid",
+        "weight": 10,
+        "minCount": 4,
+        "maxCount": 6
+      }
+    ],
+    "water_creature": [],
+    "water_ambient": [],
+    "misc": [],
+    "axolotls": []
+  },
+  "spawn_costs": {},
   "carvers": {},
   "features": [
     [],
     [],
     [],
-    [
-      "explorationremix:ruin"
-    ],
     [],
     [],
-    [
-      "explorationremix:ore_iron_ember_gardens",
-      "explorationremix:ore_gold_ember_gardens",
-      "explorationremix:ore_redstone_ember_gardens",
-      "explorationremix:ore_diamond_ember_gardens"
-    ],
-    [
-      "explorationremix:glow_lichen_ember_gardens"
-    ],
+    [],
+    [],
+    [],
+    [],
     [],
     [
-      "explorationremix:remains_ember_gardens",
-      "explorationremix:flock_roost_ember_gardens",
-      "explorationremix:heat_fungus_ember_gardens",
-      "explorationremix:shelf_fungus_ember_ember_gardens",
-      "explorationremix:moss_ember_gardens"
-    ],
-    []
-  ],
-  "spawners": {
-    "monster": [],
-    "creature": [],
-    "ambient": [],
-    "axolotls": [],
-    "underground_water_creature": [],
-    "water_creature": [],
-    "water_ambient": [],
-    "misc": []
-  },
-  "spawn_costs": {}
+      "explorationremix:open_way"
+    ]
+  ]
 }
