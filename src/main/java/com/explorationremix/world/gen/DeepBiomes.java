@@ -2,18 +2,25 @@ package com.explorationremix.world.gen;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.config.ERConfig;
+import com.explorationremix.mixin.accessor.MultiNoiseBiomeSourceAccessor;
+import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.DeepBiome;
+import com.mojang.datafixers.util.Pair;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 
 import javax.annotation.Nullable;
 import java.util.EnumMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /** Biome holders for the deep world and the Rootvaults, resolved once per server start. */
@@ -26,6 +33,7 @@ public final class DeepBiomes {
     @Nullable private static Holder<Biome> rootvaults;
     private static boolean replaceCaveBiomes = true;
     private static Set<Holder<Biome>> lastBase, lastUnion;
+    @Nullable private static volatile Climate.ParameterList<Holder<Biome>> withoutDeepDark;
 
     private DeepBiomes() {}
 
@@ -75,6 +83,34 @@ public final class DeepBiomes {
         return lastUnion;
     }
 
+    /**
+     * Keeps a copy of the overworld biome source's climate table without the deep dark, so that above the old floor the
+     * pack's caves get what the pack would have put there if the deep dark did not exist.
+     */
+    public static void keepWithoutDeepDark(BiomeSource source) {
+        withoutDeepDark = null;
+        if (!(source instanceof MultiNoiseBiomeSource m)) {
+            ExplorationRemix.LOGGER.warn("The overworld biome source is {}, not multi-noise; above the old floor the deep dark becomes the surface biome", source.getClass().getName());
+            return;
+        }
+        List<Pair<Climate.ParameterPoint, Holder<Biome>>> all = ((MultiNoiseBiomeSourceAccessor) m).er$parameters().values();
+        List<Pair<Climate.ParameterPoint, Holder<Biome>>> kept = all.stream().filter(p -> !p.getSecond().is(Biomes.DEEP_DARK)).toList();
+        if (kept.isEmpty()) return;
+        withoutDeepDark = new Climate.ParameterList<>(kept);
+        ExplorationRemix.LOGGER.info("Above the old floor the deep dark gives way to the pack's own caves ({} of {} climate entries kept)", kept.size(), all.size());
+    }
+
+    /**
+     * What the pack would put at a quart if the deep dark did not exist: the same climate looked up without it, or the
+     * surface biome over the column when the biome source has no climate table.
+     */
+    public static Holder<Biome> withoutDeepDark(Holder<Biome> deepDark, int qx, int qy, int qz, Climate.Sampler sampler, int x, int z) {
+        Climate.ParameterList<Holder<Biome>> list = withoutDeepDark;
+        if (list != null) return list.findValue(sampler.sample(qx, qy, qz));
+        SurfaceOracle o = DeepWorld.oracle();
+        return o != null ? o.biome(x, z) : deepDark;
+    }
+
     public static void clear() {
         synchronized (DeepBiomes.class) {
             HOLDERS.clear();
@@ -83,6 +119,7 @@ public final class DeepBiomes {
             rootvaults = null;
             lastBase = null;
             lastUnion = null;
+            withoutDeepDark = null;
         }
     }
 }

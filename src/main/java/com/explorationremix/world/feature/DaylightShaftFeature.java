@@ -3,6 +3,7 @@ package com.explorationremix.world.feature;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.valueproviders.FloatProvider;
@@ -15,11 +16,17 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructureType;
+
+import java.util.Set;
 
 /**
  * A daylight shaft: a ragged, slightly leaning hole from a cave's ceiling up to the open sky, so daylight falls into
  * the cave below. Wide, stretched ones open a ravine to the sky. A shaft is only cut through dry land, never under
- * water, through a cave holding water or lava, or where a village or other structure stands.
+ * water, through a cave holding water or lava, through a tree's trunk, or where a village or other structure stands
+ * (mineshafts and strongholds, which lie underground, aside). It opens between the trees, leaving their logs and
+ * leaves alone.
  */
 public final class DaylightShaftFeature extends Feature<DaylightShaftFeature.Config> {
     /** {@code stretch} lengthens the shaft along a random direction into a slot; {@code max_lean} is how far it may lean. */
@@ -51,22 +58,27 @@ public final class DaylightShaftFeature extends Feature<DaylightShaftFeature.Con
         double wide = 1.15 * r + 1.8;
         double long_ = Math.min(c.stretch(), (15.0 - c.maxLean()) / wide);
         int ri = Mth.ceil(wide * long_) + c.maxLean();
-        // The surface over every column the shaft could touch: dry, and not too far up.
+        // The ground over every column the shaft could touch: dry, no tree standing on it, and not too far up. The
+        // ground is the terrain before any feature (the ocean-floor heightmap of world generation), and what stands on
+        // it now is read from the blocks, so a fern or a tree another chunk has grown there is seen as what it is.
         int top = Integer.MIN_VALUE;
+        BlockPos.MutableBlockPos q = new BlockPos.MutableBlockPos();
         for (int dx = -ri; dx <= ri; dx++) for (int dz = -ri; dz <= ri; dz++) {
             if (dx * dx + dz * dz > ri * ri) continue;
             int x = o.getX() + dx, z = o.getZ() + dz;
-            int surf = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
-            int floor = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, x, z);
-            if (surf != floor) return false; // water or lava on top
+            int surf = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, x, z);
+            BlockState on = level.getBlockState(q.set(x, surf, z));
+            if (!on.getFluidState().isEmpty()) return false; // water or lava on top
+            if (on.is(BlockTags.LOGS) || on.is(Blocks.MANGROVE_ROOTS)) return false; // a tree trunk
             if (surf - y0 > c.maxDepth() || surf <= y0) return false;
             top = Math.max(top, surf);
         }
-        // No structure in the way.
+        // No structure in the way. Mineshafts and strongholds lie underground, and their references cover whole
+        // regions; they do not count.
         ChunkPos a = new ChunkPos(new BlockPos(o.getX() - ri, 0, o.getZ() - ri)), b = new ChunkPos(new BlockPos(o.getX() + ri, 0, o.getZ() + ri));
         for (int cx = a.x; cx <= b.x; cx++) for (int cz = a.z; cz <= b.z; cz++) {
             ChunkAccess chunk = level.getChunk(cx, cz);
-            if (!chunk.getAllReferences().isEmpty() || !chunk.getAllStarts().isEmpty()) return false;
+            if (blocking(chunk.getAllReferences().keySet()) || blocking(chunk.getAllStarts().keySet())) return false;
         }
         int height = top + 1 - y0;
         double maxLean = Math.min(0.18, c.maxLean() / (double) height);
@@ -93,12 +105,20 @@ public final class DaylightShaftFeature extends Feature<DaylightShaftFeature.Con
                     BlockState s = level.getBlockState(p);
                     if (pass == 0) {
                         if (!s.getFluidState().isEmpty() || s.hasBlockEntity() || s.is(Blocks.BEDROCK)) return false;
-                    } else if (!s.isAir()) {
+                    } else if (!s.isAir() && !s.is(BlockTags.LOGS) && !s.is(BlockTags.LEAVES)) {
+                        // The shaft opens between the trees: it never cuts their trunks or leaves.
                         level.setBlock(p, Blocks.AIR.defaultBlockState(), 2);
                     }
                 }
             }
         }
         return true;
+    }
+
+    private static boolean blocking(Set<Structure> structures) {
+        for (Structure st : structures) {
+            if (st.type() != StructureType.MINESHAFT && st.type() != StructureType.STRONGHOLD) return true;
+        }
+        return false;
     }
 }

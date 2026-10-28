@@ -2,6 +2,8 @@ package com.explorationremix.world;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.config.ERConfig;
+import com.explorationremix.world.gen.SurfaceOracle;
+import com.explorationremix.world.terrain.Rootvaults;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import com.explorationremix.world.terrain.TerrainSettings;
@@ -18,6 +20,8 @@ import java.util.WeakHashMap;
  */
 public final class DeepWorld {
     private static volatile Terrain terrain;
+    private static volatile Rootvaults roots;
+    private static volatile SurfaceOracle oracle;
     private static volatile boolean installed = false;
     private static final Set<BiomeSource> DEEP_SOURCES = Collections.newSetFromMap(new WeakHashMap<>());
     private static final Set<Object> DEEP_GENERATORS = Collections.newSetFromMap(new WeakHashMap<>());
@@ -33,6 +37,19 @@ public final class DeepWorld {
     public static Terrain terrain() { return terrain; }
     @Nullable
     public static Shape shape() { Terrain t = terrain; return t == null ? null : t.shape; }
+
+    /** The Rootvaults of the running world, or null when they are switched off or the deep world is not installed. */
+    @Nullable
+    public static Rootvaults roots() { return installed ? roots : null; }
+
+    /** What is over each column of the running world (the pack's ground and surface biome), or null before install. */
+    @Nullable
+    public static SurfaceOracle oracle() { return oracle; }
+
+    public static void setRoots(@Nullable Rootvaults r, @Nullable SurfaceOracle o) {
+        roots = r;
+        oracle = o;
+    }
 
     public static int packFloor() { Terrain t = terrain; return t == null ? -64 : t.shape.packFloor; }
     public static int floorY() { Terrain t = terrain; return t == null ? -64 : t.shape.floorY; }
@@ -62,5 +79,7 @@ public final class DeepWorld {
         synchronized (DEEP_GENERATORS) { DEEP_GENERATORS.clear(); }
         synchronized (DEEP_SOURCES) { DEEP_SOURCES.clear(); }
         installed = false;
+        roots = null;
+        oracle = null;
     }
 }

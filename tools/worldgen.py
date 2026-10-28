@@ -212,15 +212,14 @@ def build_features():
     PLANT_FLOORS = ["minecraft:moss_block", "minecraft:grass_block", "minecraft:rooted_dirt", "minecraft:dirt", "minecraft:moss_carpet"]
 
     # ---- local modifications: shafts, spikes, pools and columns shape the space before anything grows in it
-    feature("rootvaults/daylight_shaft_hall", "local_modifications", rv,
-            {"type": f"{MOD}:daylight_shaft", "config": {"radius": funiform(1.5, 3.2), "max_depth": 120}},
-            [count(4), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
-    feature("rootvaults/daylight_shaft_ravine", "local_modifications", rv,
-            {"type": f"{MOD}:daylight_shaft", "config": {"radius": funiform(3.5, 6.0), "max_depth": 150, "stretch": 2.2, "max_lean": 2}},
-            [count(4), SQUARE, layer(up)] + ceiling() + [looks(2), BIOME])
+    # The Rootvaults' skylights: planned per grotto (0 to 2 over a root hall, 0 or 1 over a teal grotto; ravines are
+    # open to the sky by their shape) and cut here through at most 24 blocks of dry rock, between the trees.
+    feature("rootvaults/skylights", "local_modifications", rv,
+            {"type": f"{MOD}:daylight_shaft", "config": {"radius": funiform(1.5, 3.0), "max_depth": 24}},
+            [{"type": f"{MOD}:rootvaults_openings"}] + ceiling() + [BIOME])
     feature("rootvaults/pools", "local_modifications", rv,
             pools(mix((LIMESTONE, 3), (simple("minecraft:moss_block"), 1)), mix((simple("minecraft:clay"), 2), (simple("minecraft:gravel"), 1)), 6),
-            [count(3), SQUARE, layer(up)] + floor() + [looks(0), BIOME])
+            [count(2), SQUARE, layer(up)] + floor() + [looks(0, 1), BIOME])
     feature("ivory_root_cavern/stalactites", "local_modifications", ["ivory_root_cavern"],
             spike(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 2)), simple("minecraft:dripstone_block"), (5, 14), (1.4, 3.2), 0.35,
                   point=state("minecraft:pointed_dripstone", thickness="tip", vertical_direction="down")),
@@ -249,7 +248,7 @@ def build_features():
 
     # ---- underground decoration: moss, wall growth, crystals, frost, machines
     feature("rootvaults/moss_floor", "underground_decoration", rv, "minecraft:moss_patch",
-            [count(30), SQUARE, layer(up)] + floor() + [looks(0, 1, 2), BIOME])
+            [count(16), SQUARE, layer(up)] + floor() + [looks(0, 1, 2), BIOME])
     feature("rootvaults/glow_lichen", "underground_decoration", rv + ["silver_fern_rift"],
             {"type": "minecraft:multiface_growth", "config": {
                 "block": "minecraft:glow_lichen", "search_range": 20, "can_place_on_floor": True, "can_place_on_ceiling": True,
@@ -259,7 +258,7 @@ def build_features():
                                      "minecraft:moss_block"]}},
             [count(80), SQUARE, layer(up), BIOME])
     feature("rootvaults/moss_ceiling", "underground_decoration", rv, "minecraft:moss_patch_ceiling",
-            [count(30), SQUARE, layer(up)] + ceiling() + [looks(1, 2), BIOME])
+            [count(16), SQUARE, layer(up)] + ceiling() + [looks(1, 2), BIOME])
     feature("ember_gardens/shelf_fungi", "underground_decoration", ["ember_gardens"],
             attach(simple("explorationremix:orange_shelf_fungus"), "walls", 96, f"#{MOD}:cave_rock", radius=8, height=8),
             [count(28), SQUARE, layer("deep_gardens", above_water=True), BIOME])
@@ -280,7 +279,7 @@ def build_features():
 
     # ---- fluid springs: waterfalls and lava falls
     feature("rootvaults/waterfalls", "fluid_springs", rv, fall("minecraft:water", 6, (1, 3)),
-            [count(8), SQUARE, layer(up), BIOME])
+            [count(10), SQUARE, layer(up), BIOME])
     feature("silver_fern_rift/waterfalls", "fluid_springs", ["silver_fern_rift"], fall("minecraft:water", 8, (1, 3)),
             [count(24), SQUARE, layer(up), BIOME])
     feature("ivory_root_cavern/waterfalls", "fluid_springs", ["ivory_root_cavern"], fall("minecraft:water", 10, (2, 3)),
@@ -294,10 +293,6 @@ def build_features():
             [count(20), SQUARE, layer("basalt_galleries", above_water=True), BIOME])
 
     # ---- vegetal decoration: roots, vines and plants
-    feature("rootvaults/ceiling_roots", "vegetal_decoration", rv,
-            {"type": f"{MOD}:ceiling_roots", "config": {"log": state("minecraft:oak_log", axis="y"), "dirt": state("minecraft:rooted_dirt"),
-                                                       "hanging": state("minecraft:hanging_roots"), "length": uniform(4, 18)}},
-            [count(6), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
     feature("rootvaults/hanging_roots", "vegetal_decoration", rv,
             attach(simple("minecraft:hanging_roots"), "ceiling", 32, ["minecraft:rooted_dirt", "minecraft:dirt", "minecraft:moss_block"], radius=6, height=4),
             [count(8), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
@@ -374,7 +369,17 @@ def build_features():
             patch(simple("explorationremix:blue_glow_mushroom"), state("explorationremix:blue_glow_mushroom"), tries=16, xz=4, y=2),
             [count(24), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
 
-    # ---- top layer: the way down is kept open after everything else
+    # ---- top layer: roots of the trees above, once the chunk's trees have grown; the way down is kept open after
+    # everything else. The roots take the wood of the trees over them (match_trees): oak, birch, spruce, jungle, dark
+    # oak, cherry, or mangrove roots under a mangrove swamp.
+    def roots(length, column_chance, branches):
+        return {"type": f"{MOD}:ceiling_roots", "config": {
+            "log": state("minecraft:oak_log", axis="y"), "dirt": state("minecraft:rooted_dirt"), "hanging": state("minecraft:hanging_roots"),
+            "length": length, "match_trees": True, "column_chance": column_chance, "branches": branches}}
+    feature("rootvaults/ceiling_roots", "top_layer_modification", rv, roots(uniform(3, 14), 0.25, uniform(0, 2)),
+            [count(8), SQUARE, layer(up)] + ceiling() + [BIOME])
+    feature("rootvaults/tree_roots", "top_layer_modification", rv, roots(uniform(4, 16), 0.3, uniform(1, 3)),
+            [{"type": f"{MOD}:under_trees", "chance": 0.7}, BIOME])
     feature("open_way", "top_layer_modification", DEEP, {"type": f"{MOD}:open_way", "config": {}}, [])
 
 
@@ -384,6 +389,25 @@ DEEP_DARK_FEATURES = [
     ("deep_dark/sculk_vein", "minecraft:sculk_vein", [count(112), SQUARE, layer("blue_reaches"), BIOME]),
     ("deep_dark/sculk_patch", "minecraft:sculk_patch_deep_dark", [count(136), SQUARE, layer("blue_reaches"), BIOME]),
 ]
+
+# ----------------------------------------------------------------------------------------------- Rootvaults tags
+# The Rootvaults grow under trees. Each tag names the surface biomes whose trees send down roots of one wood; the
+# mod checks them in the order mangrove, cherry, dark oak, birch, jungle, spruce, oak (the first match wins), and a
+# biome in none of them grows no Rootvaults. WWOO keeps vanilla's biome ids, so these cover the pack.
+ROOT_KINDS = {
+    "mangrove": ["minecraft:mangrove_swamp"],
+    "cherry": ["minecraft:cherry_grove"],
+    "dark_oak": ["minecraft:dark_forest"],
+    "birch": ["minecraft:birch_forest", "minecraft:old_growth_birch_forest"],
+    "jungle": ["#minecraft:is_jungle"],
+    "spruce": ["#minecraft:is_taiga", "minecraft:grove", "minecraft:windswept_forest"],
+    "oak": ["minecraft:forest", "minecraft:flower_forest", "minecraft:swamp"],
+}
+# Where a ravine may not open to the sky: biomes that grow villages and other surface structures, swamps, water.
+NO_RAVINES = ["#minecraft:has_structure/" + s for s in (
+    "village_plains", "village_desert", "village_savanna", "village_snowy", "village_taiga", "pillager_outpost", "woodland_mansion",
+    "jungle_temple", "igloo", "trail_ruins", "swamp_hut")] + [
+    {"id": "#forge:is_swamp", "required": False}, "#minecraft:is_river", "#minecraft:is_ocean", "#minecraft:is_beach"]
 
 # ----------------------------------------------------------------------------------------------- block tags
 CREATE_STONES = ["create:limestone", "create:veridium", "create:asurine", "create:crimsite", "create:ochrum", "create:scoria", "create:scorchia"]
@@ -436,9 +460,14 @@ def spawners(name):
     return s
 
 
+# Biomes open to the sky in places keep a sky of the usual colour (the Rootvaults' ravines and skylights).
+SKY = {"rootvaults": "#78a7ff"}
+
+
 def effects(name):
     fog, water, water_fog, grass, foliage = (rgb(c) for c in LOOKS[name])
-    e = {"fog_color": fog, "sky_color": fog, "water_color": water, "water_fog_color": water_fog, "grass_color": grass, "foliage_color": foliage,
+    sky = rgb(SKY[name]) if name in SKY else fog
+    e = {"fog_color": fog, "sky_color": sky, "water_color": water, "water_fog_color": water_fog, "grass_color": grass, "foliage_color": foliage,
          "mood_sound": {"sound": "minecraft:ambient.cave", "tick_delay": 6000, "block_search_extent": 8, "offset": 2.0}}
     if name in PARTICLES:
         p, chance = PARTICLES[name]
@@ -496,6 +525,9 @@ def write_all(data_dir, res_dir, write):
     tag("minecraft", "worldgen/biome", "is_overworld", [f"{MOD}:{b}" for b in UPPER])
     tag("forge", "worldgen/biome", "is_cave", [f"{MOD}:{b}" for b in OURS])
     tag("forge", "worldgen/biome", "is_underground", [f"{MOD}:{b}" for b in OURS])
+    for kind, values in ROOT_KINDS.items():
+        tag(MOD, "worldgen/biome", "rootvaults/" + kind, values)
+    tag(MOD, "worldgen/biome", "rootvaults/no_ravines", NO_RAVINES)
     for tname, values in BLOCK_TAGS.items():
         tag(MOD, "blocks", tname, values)
     return {f"biome.{MOD}.{k}": v for k, v in NAMES.items()}

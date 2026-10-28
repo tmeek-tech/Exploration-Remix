@@ -14,8 +14,10 @@ import com.explorationremix.world.feature.LayerRangePlacement;
 import com.explorationremix.world.feature.MixStateProvider;
 import com.explorationremix.world.feature.OpenWayFeature;
 import com.explorationremix.world.feature.RootvaultsLookFilter;
+import com.explorationremix.world.feature.RootvaultsOpeningsPlacement;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
 import com.explorationremix.world.feature.TerracePoolsFeature;
+import com.explorationremix.world.feature.UnderTreesPlacement;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
@@ -50,5 +52,7 @@ public final class ERWorldgen {
     public static final RegistryObject<BlockStateProviderType<MixStateProvider>> MIX_PROVIDER = STATE_PROVIDERS.register("mix", () -> new BlockStateProviderType<>(MixStateProvider.CODEC));
     public static final RegistryObject<PlacementModifierType<LayerRangePlacement>> LAYER_RANGE = PLACEMENT_TYPES.register("layer_range", () -> () -> LayerRangePlacement.CODEC);
     public static final RegistryObject<PlacementModifierType<RootvaultsLookFilter>> ROOTVAULTS_LOOK = PLACEMENT_TYPES.register("rootvaults_look", () -> () -> RootvaultsLookFilter.CODEC);
+    public static final RegistryObject<PlacementModifierType<RootvaultsOpeningsPlacement>> ROOTVAULTS_OPENINGS = PLACEMENT_TYPES.register("rootvaults_openings", () -> () -> RootvaultsOpeningsPlacement.CODEC);
+    public static final RegistryObject<PlacementModifierType<UnderTreesPlacement>> UNDER_TREES = PLACEMENT_TYPES.register("under_trees", () -> () -> UnderTreesPlacement.CODEC);
     public static final RegistryObject<HeightProviderType<LayerHeight>> LAYER_HEIGHT = HEIGHT_PROVIDERS.register("layer_height", () -> () -> LayerHeight.CODEC);
 }

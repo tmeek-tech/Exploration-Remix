@@ -1,8 +1,11 @@
 package com.explorationremix.devtools;
 
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.gen.SurfaceOracle;
 import com.explorationremix.world.terrain.DeepBiome;
+import com.explorationremix.world.terrain.Overhead;
 import com.explorationremix.world.terrain.Plans;
+import com.explorationremix.world.terrain.Rootvaults;
 import com.explorationremix.world.terrain.Route;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
@@ -36,7 +39,8 @@ import java.util.Locale;
  * /remix: commands for looking around the deep world (operators only).
  * <ul>
  *     <li>{@code /remix layers}: the layer table</li>
- *     <li>{@code /remix info}: where you are</li>
+ *     <li>{@code /remix info}: where you are; above the old floor also the ground and surface biome over you and the
+ *     Rootvaults grotto under you</li>
  *     <li>{@code /remix tp <1-3>}: the landing at the top of a layer, under its band</li>
  *     <li>{@code /remix tp gate <1-3>}: the landing above a band, where its gate passage starts</li>
  *     <li>{@code /remix tp bedrock}: the bedrock landing at the end of the last layer's route</li>
@@ -123,6 +127,7 @@ public final class RemixCommands {
         say(c, "At " + x + " " + y + " " + z + ": " + where + ", cell " + cx + " " + cz);
         DeepBiome b = t.biomeAt(x, y, z);
         if (b != null) say(c, "  deep biome: " + shortName(b) + " (" + b.role.name().toLowerCase(Locale.ROOT) + ")");
+        if (y >= s.packFloor) upperInfo(c, x, z);
         if (li >= 0) {
             double[] path = t.routePathAt(li, x, z);
             if (path != null) say(c, String.format(Locale.ROOT, "  route: %.0f blocks from the walking line, path floor y %.0f", path[0], path[1]));
@@ -131,6 +136,23 @@ public final class RemixCommands {
                     li + 2, exit.ux, exit.uFloor + 1, exit.uz, Math.hypot(exit.ux - x, exit.uz - z)));
         }
         return 1;
+    }
+
+    /** Above the old floor: what the pack has over the column (as the Rootvaults see it), and the grotto under it. */
+    private static void upperInfo(CommandContext<CommandSourceStack> c, int x, int z) {
+        SurfaceOracle o = DeepWorld.oracle();
+        if (o != null) {
+            Overhead.Surface s = o.at(x, z);
+            String biome = o.biome(x, z).unwrapKey().map(k -> k.location().toString()).orElse("?");
+            say(c, String.format(Locale.ROOT, "  over this column: ground y %d, %s, %s trees%s%s", s.y(), biome, s.trees().id,
+                    s.wet() ? ", wet" : "", s.ravineOk() ? ", ravines allowed" : ""));
+        }
+        Rootvaults r = DeepWorld.roots();
+        if (r == null) return;
+        Rootvaults.Grotto g = r.grottoAt(x, z);
+        if (g != null) say(c, String.format(Locale.ROOT, "  rootvaults: %s under %s trees, water y %.0f, roof at most y %.0f, ground %d to %d, %d skylight(s)",
+                g.lookName(), g.kind.id, g.water, g.top(), g.groundMin, g.groundMax, g.skylights.length));
+        else if (r.anyNear(x, z)) say(c, "  rootvaults: a tunnel or a grotto's edge runs under this column");
     }
 
     private static int tpLayer(CommandContext<CommandSourceStack> c, int layer) throws CommandSyntaxException {
@@ -256,31 +278,25 @@ public final class RemixCommands {
         return 1;
     }
 
-    /** The nearest Rootvaults: where the pack's own biomes put the deep dark, which the Rootvaults replace. */
+    /** The nearest Rootvaults grotto: onto a bank beside its water. */
     private static int tpRootvaults(CommandContext<CommandSourceStack> c, Terrain t) throws CommandSyntaxException {
         ServerPlayer pl = c.getSource().getPlayerOrException();
-        ServerLevel level = (ServerLevel) pl.level();
-        net.minecraft.world.level.biome.BiomeSource src = level.getChunkSource().getGenerator().getBiomeSource();
-        net.minecraft.world.level.biome.Climate.Sampler sampler = level.getChunkSource().randomState().sampler();
-        int px = (int) Math.floor(pl.getX()), pz = (int) Math.floor(pl.getZ());
-        int qy = net.minecraft.core.QuartPos.fromBlock(t.shape.packFloor + 24);
-        for (int ring = 0; ring <= 64; ring++) {
-            for (int i = -ring; i <= ring; i++) for (int j = -ring; j <= ring; j++) {
-                if (Math.max(Math.abs(i), Math.abs(j)) != ring) continue;
-                int x = px + i * 32, z = pz + j * 32;
-                if (!src.getNoiseBiome(net.minecraft.core.QuartPos.fromBlock(x), qy, net.minecraft.core.QuartPos.fromBlock(z), sampler)
-                        .is(net.minecraft.world.level.biome.Biomes.DEEP_DARK)) continue;
-                for (int y = t.shape.packFloor + 8; y < t.shape.packFloor + 70; y += 4) {
-                    BlockPos stand = findStand(level, x, y, z);
-                    if (stand == null) continue;
-                    teleport(pl, stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
-                    say(c, "rootvaults at " + stand.getX() + " " + stand.getY() + " " + stand.getZ());
-                    return 1;
-                }
-            }
+        Rootvaults roots = DeepWorld.roots();
+        if (roots == null) {
+            c.getSource().sendFailure(Component.literal("There are no Rootvaults in this world (replaceVanillaCaveBiomes is off)."));
+            return 0;
         }
-        c.getSource().sendFailure(Component.literal("No Rootvaults found within 2000 blocks."));
-        return 0;
+        Rootvaults.Grotto g = nearestGrotto(roots, pl, -1);
+        if (g == null) {
+            c.getSource().sendFailure(Component.literal("No Rootvaults found within " + SEARCH_CELLS * Rootvaults.CELL + " blocks."));
+            return 0;
+        }
+        BlockPos stand = standIn((ServerLevel) pl.level(), g);
+        BlockPos at = stand != null ? stand : BlockPos.containing(g.cx, g.water + 2, g.cz);
+        teleport(pl, at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
+        say(c, String.format(Locale.ROOT, "rootvaults (%s under %s trees, ground %d to %d) at %d %d %d", g.lookName(), g.kind.id, g.groundMin, g.groundMax,
+                at.getX(), at.getY(), at.getZ()));
+        return 1;
     }
 
     // ============================================================================================== views
@@ -296,14 +312,17 @@ public final class RemixCommands {
         int look = -1, radius = 24;
         boolean rootvaults = name.equalsIgnoreCase("rootvaults");
         if (rootvaults) {
-            look = n;
-            radius = 32;
+            look = n > 2 ? -1 : n;
             key = net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, com.explorationremix.world.gen.DeepBiomes.ROOTVAULTS);
-            around = findRootvaults(level, t, pl, look);
-            if (around == null) {
-                c.getSource().sendFailure(Component.literal("No Rootvaults" + (look >= 0 ? " with look " + look : "") + " found within 2000 blocks."));
+            Rootvaults roots = DeepWorld.roots();
+            Rootvaults.Grotto g = roots != null ? nearestGrotto(roots, pl, look) : null;
+            if (g == null) {
+                c.getSource().sendFailure(Component.literal("No Rootvaults" + (look >= 0 ? " with look " + look : "") + " found within "
+                        + SEARCH_CELLS * Rootvaults.CELL + " blocks."));
                 return 0;
             }
+            around = BlockPos.containing(g.cx, g.water + 2, g.cz);
+            radius = (int) Math.min(40, Math.max(g.a, g.b) + 6);
         } else {
             DeepBiome target = null;
             for (DeepBiome b : DeepBiome.values()) if (shortName(b).equalsIgnoreCase(name)) target = b;
@@ -323,7 +342,8 @@ public final class RemixCommands {
         }
         final int lk = look;
         final net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> k = key;
-        ViewFinder.View v = ViewFinder.find(level, around, p -> level.getBiome(p).is(k) && (lk < 0 || t.palette.rootvaultsLook(p.getX(), p.getZ()) == lk),
+        Rootvaults rv = DeepWorld.roots();
+        ViewFinder.View v = ViewFinder.find(level, around, p -> level.getBiome(p).is(k) && (lk < 0 || (rv != null && rv.look(p.getX(), p.getZ()) == lk)),
                 radius, 14);
         if (v == null) {
             BlockPos stand = findStand(level, around.getX(), around.getY(), around.getZ());
@@ -385,73 +405,46 @@ public final class RemixCommands {
         return out.get(Math.min(nth, out.size() - 1));
     }
 
-    /** A standing spot in the Rootvaults (with the given look, or any when look is -1), nearest the player first. */
+    /** How far the Rootvaults commands search, in grotto cells. */
+    private static final int SEARCH_CELLS = 24;
+
+    /** The grotto nearest the player (with the given look, or any when look is -1), or null. */
     @javax.annotation.Nullable
-    private static BlockPos findRootvaults(ServerLevel level, Terrain t, ServerPlayer pl, int look) {
-        net.minecraft.world.level.biome.BiomeSource src = level.getChunkSource().getGenerator().getBiomeSource();
-        net.minecraft.world.level.biome.Climate.Sampler sampler = level.getChunkSource().randomState().sampler();
-        net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> rv =
-                net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, com.explorationremix.world.gen.DeepBiomes.ROOTVAULTS);
+    private static Rootvaults.Grotto nearestGrotto(Rootvaults roots, ServerPlayer pl, int look) {
         int px = (int) Math.floor(pl.getX()), pz = (int) Math.floor(pl.getZ());
-        int qy = net.minecraft.core.QuartPos.fromBlock(t.shape.packFloor + 24);
-        // Score every candidate in the first few rings that have any, and keep the most open one.
-        BlockPos best = null;
-        double bestScore = 0;
-        int firstRing = -1, tried = 0;
-        for (int ring = 0; ring <= 64 && tried < 24; ring++) {
-            if (firstRing >= 0 && ring > firstRing + 3) break;
-            for (int i = -ring; i <= ring && tried < 24; i++) for (int j = -ring; j <= ring && tried < 24; j++) {
+        int ci = Math.floorDiv(px, Rootvaults.CELL), cj = Math.floorDiv(pz, Rootvaults.CELL);
+        Rootvaults.Grotto best = null;
+        double bd = 1e18;
+        // Rings of cells outwards; one more ring after the first find, since a grotto in it may still be nearer.
+        int found = -1;
+        for (int ring = 0; ring <= SEARCH_CELLS && (found < 0 || ring <= found + 1); ring++) {
+            for (int i = -ring; i <= ring; i++) for (int j = -ring; j <= ring; j++) {
                 if (Math.max(Math.abs(i), Math.abs(j)) != ring) continue;
-                int x = px + i * 32, z = pz + j * 32;
-                if (look >= 0 && t.palette.rootvaultsLook(x, z) != look) continue;
-                if (!src.getNoiseBiome(net.minecraft.core.QuartPos.fromBlock(x), qy, net.minecraft.core.QuartPos.fromBlock(z), sampler)
-                        .is(net.minecraft.world.level.biome.Biomes.DEEP_DARK)) continue;
-                if (firstRing < 0) firstRing = ring;
-                tried++;
-                double[] sc = scoreRootvaults(level, t, x, z, rv, look);
-                if (sc != null && sc[0] > bestScore) {
-                    bestScore = sc[0];
-                    best = new BlockPos((int) sc[1], (int) sc[2], (int) sc[3]);
-                }
+                Rootvaults.Grotto g = roots.grotto(ci + i, cj + j);
+                if (g == null || (look >= 0 && g.look != look)) continue;
+                double d = Math.hypot(g.cx - px, g.cz - pz);
+                if (d < bd) { bd = d; best = g; }
+                if (found < 0) found = ring;
             }
         }
         return best;
     }
 
-    /**
-     * How good a chunk of Rootvaults is for a view: its open air in the Rootvaults, with tall spaces, daylight, light
-     * and water counting extra. Returns {score, x, y, z} of the best place to stand in it, or null if there is none.
-     */
-    private static double[] scoreRootvaults(ServerLevel level, Terrain t, int x, int z,
-                                            net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> rv, int look) {
-        ChunkAccess ch = level.getChunk(x >> 4, z >> 4, ChunkStatus.FULL, true);
-        int bx = (x >> 4) << 4, bz = (z >> 4) << 4, top = 4;
-        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-        double score = 0, bestSpot = -1;
-        int sx = 0, sy = 0, sz = 0;
-        for (int dx = 1; dx < 16; dx += 3) for (int dz = 1; dz < 16; dz += 3) {
-            int wx = bx + dx, wz = bz + dz;
-            if (look >= 0 && t.palette.rootvaultsLook(wx, wz) != look) continue;
-            int run = 0;
-            for (int y = t.shape.packFloor + 1; y <= top + 1; y++) {
-                BlockState s = y <= top ? ch.getBlockState(p.set(wx, y, wz)) : null;
-                if (s != null && s.isAir()) { run++; continue; }
-                if (s != null && s.getFluidState().is(net.minecraft.tags.FluidTags.WATER)) score += 0.5;
-                if (run >= 5) {
-                    int floorY = y - run;
-                    BlockPos stand = new BlockPos(wx, floorY, wz);
-                    if (level.getBiome(stand).is(rv) && ch.getBlockState(p.set(wx, floorY - 1, wz)).isSolid()) {
-                        int sky = level.getBrightness(net.minecraft.world.level.LightLayer.SKY, stand.above(2));
-                        int glow = level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, stand.above());
-                        double spot = Math.min(run, 30) + (sky >= 8 ? 15 : 0) + glow;
-                        score += Math.min(run, 30);
-                        if (spot > bestSpot) { bestSpot = spot; sx = wx; sy = floorY; sz = wz; }
-                    }
-                }
-                run = 0;
+    /** A standing spot on a grotto's floor, above its water: on a bank part way out from its middle, or null. */
+    @javax.annotation.Nullable
+    private static BlockPos standIn(ServerLevel level, Rootvaults.Grotto g) {
+        Rootvaults roots = DeepWorld.roots();
+        int y = (int) Math.floor(g.water) + 1;
+        for (double f : new double[]{0.45, 0.3, 0.6, 0.15}) {
+            for (int k = 0; k < 8; k++) {
+                double th = k * Math.PI / 4;
+                int x = (int) Math.floor(g.cx + f * g.a * Math.cos(th)), z = (int) Math.floor(g.cz + f * g.a * Math.sin(th));
+                if (roots != null && roots.grottoAt(x, z) != g) continue;
+                BlockPos stand = findStand(level, x, y, z);
+                if (stand != null && stand.getY() >= g.water) return stand;
             }
         }
-        return bestSpot < 0 ? null : new double[]{score + bestSpot * 3, sx, sy, sz};
+        return null;
     }
 
     /** A real block position with air for feet and head and something solid underneath, near (x, y, z). */

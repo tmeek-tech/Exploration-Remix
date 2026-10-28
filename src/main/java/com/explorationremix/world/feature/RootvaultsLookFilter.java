@@ -2,7 +2,7 @@ package com.explorationremix.world.feature;
 
 import com.explorationremix.registry.ERWorldgen;
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.terrain.Terrain;
+import com.explorationremix.world.terrain.Rootvaults;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * Keeps a feature to some of the Rootvaults' three looks: 0 root halls, 1 teal grottos, 2 ravines open to the sky.
- * The look changes every couple of hundred blocks, the same way the rock does.
+ * Each grotto has one look (see {@link Rootvaults}); its tunnels share it.
  */
 public final class RootvaultsLookFilter extends PlacementFilter {
     public static final Codec<RootvaultsLookFilter> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -30,9 +30,10 @@ public final class RootvaultsLookFilter extends PlacementFilter {
 
     @Override
     protected boolean shouldPlace(PlacementContext ctx, RandomSource random, BlockPos pos) {
-        Terrain t = DeepWorld.terrain();
-        if (t == null || !DeepWorld.installed()) return false;
-        return looks.contains(t.palette.rootvaultsLook(pos.getX(), pos.getZ()));
+        Rootvaults r = DeepWorld.roots();
+        if (r == null) return false;
+        int look = r.look(pos.getX(), pos.getZ());
+        return look >= 0 && looks.contains(look);
     }
 
     @Override

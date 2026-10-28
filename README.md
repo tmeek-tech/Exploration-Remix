@@ -51,11 +51,15 @@ regenerated.
 * Each layer has a flat water table (lava in the Basalt Galleries, at y -823). The Basalt Galleries keep their
   arches, Obsidian Tubes, some high ledges and the last gate's landing above y -798, the highest the lava will rise
   when a later milestone adds quakes and lava surges.
-* **Upper caves:** the deep dark and its ancient cities moved down into the Blue Reaches, and the **Rootvaults**
-  take their old places, in three looks (root halls, teal grottos, ravines open to daylight). Inside the Rootvaults
-  the lava lakes at the bottom of the pack's caves are still water instead. The Silver Fern Rift and the Ivory Root
-  Cavern are carved into the pack's caves between y -64 and about y 0. Strongholds and mineshafts stay above y -56
-  so the End stays reachable.
+* **Upper caves:** the deep dark and its ancient cities moved down into the Blue Reaches; where the pack put the
+  deep dark above the first band, its ordinary caves are back. The **Rootvaults** are grottos 10 to 40 blocks under
+  forests, jungles, taigas, swamps and cherry groves, where the trees above push their roots (in their own wood:
+  oak, birch, spruce, jungle, dark oak, cherry or mangrove) through the ceilings, in three looks: root halls with a
+  stream and terraced walls, teal grottos around a pool, and ravines open to the sky. Most are 15 to 30 blocks
+  across; halls and teal grottos can have a skylight. Tunnels lead from each grotto down into the pack's caves and
+  join neighbouring grottos. The Silver Fern Rift and the Ivory Root Cavern are set pieces 40 to 60 blocks across,
+  carved into the pack's caves between y -64 and about y 0, never under an ocean or river. The upper caves hold no
+  lava. Strongholds and mineshafts stay above y -56 so the End stays reachable.
 * **Looks:** new plants and crystals (white glow flowers, lantern fungi and roots, giant lantern fungi with glowing
   caps, wisteria, lantern pods, lavender flowers and glowing gold flowers, silver ferns, orange shelf fungi, lavender
   coral, pale coral fans, ember vines, asurine crystals, blue glow mushrooms and vines), glow berries thick in the
@@ -74,7 +78,7 @@ regenerated.
 | `/remix tp <1-3>` | the landing at the top of a layer |
 | `/remix tp gate <1-3>` | the landing above a band, where its gate starts |
 | `/remix tp bedrock` | the bedrock landing at the end of the last layer |
-| `/remix tp biome <name>` | the nearest spot of a biome (also `rootvaults`) |
+| `/remix tp biome <name>` | the nearest spot of a biome (also `rootvaults`: the nearest grotto, with its look and trees) |
 | `/remix view <name> [n]` | a spot with a wide view into a biome, facing it (n: Rootvaults look 0 to 2, or another set piece) |
 | `/remix slice [x\|z] [half width]` | a picture of the blocks under you, in `remix_slices/` |
 

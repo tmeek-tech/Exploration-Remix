@@ -4,7 +4,7 @@
   "downfall": 0.5,
   "effects": {
     "fog_color": 11846268,
-    "sky_color": 11846268,
+    "sky_color": 7907327,
     "water_color": 3982516,
     "water_fog_color": 1006165,
     "grass_color": 7319128,
@@ -108,8 +108,7 @@
     [],
     [
       "minecraft:amethyst_geode",
-      "explorationremix:rootvaults/daylight_shaft_hall",
-      "explorationremix:rootvaults/daylight_shaft_ravine",
+      "explorationremix:rootvaults/skylights",
       "explorationremix:rootvaults/pools"
     ],
     [
@@ -159,7 +158,6 @@
     ],
     [
       "minecraft:glow_lichen",
-      "explorationremix:rootvaults/ceiling_roots",
       "explorationremix:rootvaults/hanging_roots",
       "explorationremix:rootvaults/lantern_roots",
       "explorationremix:rootvaults/cave_vines",
@@ -168,7 +166,9 @@
       "explorationremix:rootvaults/white_glow_flowers_sparse"
     ],
     [
-      "minecraft:freeze_top_layer"
+      "minecraft:freeze_top_layer",
+      "explorationremix:rootvaults/ceiling_roots",
+      "explorationremix:rootvaults/tree_roots"
     ]
   ]
 }

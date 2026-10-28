@@ -1,6 +1,7 @@
 package com.explorationremix.world.gen;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.config.ERConfig;
 import com.explorationremix.mixin.accessor.DimensionTypeAccessor;
 import com.explorationremix.mixin.accessor.NoiseBasedChunkGeneratorAccessor;
 import com.explorationremix.mixin.accessor.NoiseGeneratorSettingsAccessor;
@@ -8,14 +9,12 @@ import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.density.DeepDensityFunction;
 import com.explorationremix.world.density.DeepFineDensity;
 import com.explorationremix.world.density.UpperCarve;
+import com.explorationremix.world.density.UpperFine;
 import com.explorationremix.world.density.InterpolationGater;
+import com.explorationremix.world.terrain.Rootvaults;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.Holder;
-import net.minecraft.core.QuartPos;
-import net.minecraft.tags.BiomeTags;
-import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeSource;
-import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
@@ -126,14 +125,15 @@ public final class DeepWorldInstaller {
 
         long seed = server.getWorldData().worldGenOptions().seed();
         Terrain terrain = DeepWorld.build(currentMin, seed);
-        // The upper set pieces are never carved under an ocean, river or beach: ask the pack's own biomes at sea level.
+        // What is over each column: the pack's ground and surface biome, from its own noise before we change it. The
+        // upper set pieces are never carved under an ocean, river or beach, and the Rootvaults only under trees.
         BiomeSource biomeSource = generator.getBiomeSource();
-        Climate.Sampler sampler = RandomState.create(settings, access.lookupOrThrow(Registries.NOISE), seed).sampler();
-        int seaQ = QuartPos.fromBlock(settings.seaLevel());
-        terrain.surfaceProbe = (x, z) -> {
-            Holder<Biome> b = biomeSource.getNoiseBiome(QuartPos.fromBlock(x), seaQ, QuartPos.fromBlock(z), sampler);
-            return b.is(BiomeTags.IS_OCEAN) || b.is(BiomeTags.IS_DEEP_OCEAN) || b.is(BiomeTags.IS_RIVER) || b.is(BiomeTags.IS_BEACH);
-        };
+        RandomState packState = RandomState.create(settings, access.lookupOrThrow(Registries.NOISE), seed);
+        SurfaceOracle oracle = new SurfaceOracle(packState, biomeSource, settings.seaLevel(), currentMin, currentMin + dimension.height());
+        terrain.surfaceProbe = oracle;
+        boolean rootvaultsOn = ERConfig.INSTANCE.replaceVanillaCaveBiomes.get();
+        DeepWorld.setRoots(rootvaultsOn ? new Rootvaults(seed, currentMin, oracle) : null, oracle);
+        if (rootvaultsOn) DeepBiomes.keepWithoutDeepDark(biomeSource);
         DeepMaterials.resolve();
         int floorY = terrain.shape.floorY;
         int packFloor = terrain.shape.packFloor;
@@ -143,7 +143,7 @@ public final class DeepWorldInstaller {
         // Density: the pack's terrain above its old floor (with its interpolators gated), the deep world below.
         NoiseRouter router = settings.noiseRouter();
         DensityFunction original = router.finalDensity().mapAll(new InterpolationGater(packFloor - 8));
-        DensityFunction upper = DensityFunctions.min(original, DensityFunctions.interpolated(UpperCarve.INSTANCE));
+        DensityFunction upper = DensityFunctions.min(original, new UpperFine(DensityFunctions.interpolated(UpperCarve.INSTANCE)));
         DensityFunction deep = new DeepFineDensity(DensityFunctions.interpolated(DeepDensityFunction.INSTANCE));
         DensityFunction selector = DensityFunctions.yClampedGradient(packFloor - 1, packFloor, 0.0, 1.0);
         DensityFunction composed = DensityFunctions.rangeChoice(selector, 0.5, 2.0, upper, deep);

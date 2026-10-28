@@ -5,6 +5,7 @@ import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Hashing;
 import com.explorationremix.world.terrain.Rock;
+import com.explorationremix.world.terrain.Rootvaults;
 import com.explorationremix.world.terrain.Terrain;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.Holder;
@@ -17,8 +18,9 @@ import net.minecraft.world.level.levelgen.SurfaceRules;
 
 /**
  * Surface rules for the deepened overworld, run before the pack's own: the deep layers' rock near open space (per
- * biome, see {@code Palette.shell}), deepslate where the pack's bedrock floor used to be, and the Rootvaults' veridium
- * and limestone. Everything else falls through to the pack's rules unchanged.
+ * biome, see {@code Palette.shell}), deepslate where the pack's bedrock floor used to be, the set pieces' rock, and the
+ * shell of the Rootvaults' grottos (see {@code Palette.rootvaults}). Everything else falls through to the pack's rules
+ * unchanged.
  */
 public final class DeepSurfaceRules {
     private DeepSurfaceRules() {}
@@ -44,6 +46,7 @@ public final class DeepSurfaceRules {
             int packFloor = t.shape.packFloor;
             BlockState deepslate = DeepMaterials.state(Rock.DEEPSLATE);
             Holder<Biome> rootvaults = DeepBiomes.rootvaults();
+            Rootvaults roots = DeepWorld.roots();
             Holder<Biome> fernRift = DeepBiomes.holder(DeepBiome.SILVER_FERN_RIFT), rootCavern = DeepBiomes.holder(DeepBiome.IVORY_ROOT_CAVERN);
             ChunkAccess chunk = a.er$chunk();
             int minX = chunk.getPos().getMinBlockX(), minZ = chunk.getPos().getMinBlockZ();
@@ -59,8 +62,11 @@ public final class DeepSurfaceRules {
                 int by = y + (int) ((h >>> 2) & 3) - 1;
                 int bz = clamp(z + (int) ((h >>> 4) & 3) - 1, minZ, minZ + 15);
                 Holder<Biome> b = chunk.getNoiseBiome(QuartPos.fromBlock(bx), QuartPos.fromBlock(by), QuartPos.fromBlock(bz));
-                if (b == rootvaults && rootvaults != null)
-                    return DeepMaterials.state(t.palette.rootvaults(x, y, z, a.er$stoneDepthAbove(), a.er$stoneDepthBelow()));
+                if (b == rootvaults && rootvaults != null && roots != null) {
+                    int look = roots.look(x, z);
+                    return DeepMaterials.state(t.palette.rootvaults(look < 0 ? Rootvaults.HALL : look, x, y, z, a.er$stoneDepthAbove(),
+                            a.er$stoneDepthBelow(), a.er$waterHeight() != Integer.MIN_VALUE, roots.carve(x, y, z)));
+                }
                 if (b == fernRift || b == rootCavern) {
                     DeepBiome db = b == fernRift ? DeepBiome.SILVER_FERN_RIFT : DeepBiome.IVORY_ROOT_CAVERN;
                     return DeepMaterials.state(t.palette.upperShell(db, x, y, z, a.er$stoneDepthAbove(), a.er$stoneDepthBelow(),

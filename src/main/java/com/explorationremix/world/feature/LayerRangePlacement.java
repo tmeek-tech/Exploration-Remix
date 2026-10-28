@@ -2,6 +2,7 @@ package com.explorationremix.world.feature;
 
 import com.explorationremix.registry.ERWorldgen;
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.terrain.Rootvaults;
 import com.explorationremix.world.terrain.Shape;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -16,8 +17,9 @@ import java.util.stream.Stream;
 /**
  * Picks a random Y inside a named layer (by its config id), so datapack features follow the configured heights
  * instead of hard-coded numbers. {@code inset} keeps the position away from the band edges; {@code above_water}
- * keeps it above the layer's water or lava table. The layer {@code upper} is the pack's own caves, from its old
- * floor up to 128 blocks above it, where the Rootvaults, the Silver Fern Rift and the Ivory Root Cavern are.
+ * keeps it above the layer's water or lava table. The layer {@code upper} is the pack's own caves: where a Rootvaults
+ * grotto lies under the column, mostly the heights of that grotto (10 to 40 blocks under the ground); otherwise from
+ * the old floor up to 128 blocks above it, where the Silver Fern Rift and the Ivory Root Cavern are.
  */
 public final class LayerRangePlacement extends PlacementModifier {
     public static final Codec<LayerRangePlacement> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -45,6 +47,10 @@ public final class LayerRangePlacement extends PlacementModifier {
         Shape s = DeepWorld.shape();
         if (s == null || !DeepWorld.installed()) return Stream.empty();
         if (layer.equals("upper")) {
+            Rootvaults r = DeepWorld.roots();
+            int[] band = r != null ? r.band(pos.getX(), pos.getZ()) : null;
+            if (band != null && random.nextFloat() < 0.75F)
+                return Stream.of(new BlockPos(pos.getX(), band[0] + random.nextInt(band[1] - band[0] + 1), pos.getZ()));
             int lo = s.packFloor + 6 + inset;
             return Stream.of(new BlockPos(pos.getX(), lo + random.nextInt(128 - inset), pos.getZ()));
         }
