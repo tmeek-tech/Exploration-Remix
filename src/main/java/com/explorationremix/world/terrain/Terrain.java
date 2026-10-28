@@ -837,29 +837,7 @@ public final class Terrain {
         Column c = column(x, z);
         Upper.Piece p = upperOf(c);
         if (p == null || y > p.topY + 2) return SOLID;
-        if (p instanceof Upper.Rift r) {
-            // Stepped ledges up both walls from the stream, under a low roof; the ends close in.
-            double v = Math.max(0, c.upD + 3.0 * ledgeN.noise2(x / 16.0, z / 16.0 + 50));
-            double endFade = smooth((Math.min(c.upS, r.length - c.upS) - 4) / 36.0);
-            double half = r.halfTop * (0.45 + 0.55 * endFade);
-            if (v > half + 12) return SOLID;
-            double step = r.stepH + 1.5 * ledgeN.noise2(c.upS / 40.0, 7.7);
-            double fl = riftFloor(v, r.bedY, r.ledgeTop, half, r.streamHalf, step);
-            double q = Math.min(1, v / half);
-            double ce = r.ledgeTop + r.roofH * (1 - q * q) + 3 * ceilN.noise2(x / 13.0, z / 13.0 + 31);
-            ce = fl + (ce - fl) * endFade;
-            return Math.max(fl - y, y - ce) + 2.0 * rough1.noise3(x / 12.0, y / 9.0, z / 12.0);
-        }
-        Upper.Cavern cv = (Upper.Cavern) p;
-        // A round cavern: a lake in the middle, then wide pale terraces stepping up to the walls.
-        double ex = c.upD / cv.rxz, ey = (y - cv.cy) / cv.ry;
-        if (ex > 1.4) return SOLID;
-        double ell = (Math.sqrt(ex * ex + ey * ey) - 1) * Math.min(cv.rxz, cv.ry) + 3.0 * rough1.noise3(x / 18.0, y / 14.0, z / 18.0);
-        double lakeEx = 0.5 + 0.06 * ledgeN.noise2(x / 21.0 + 13, z / 21.0);
-        double fl;
-        if (ex < lakeEx) fl = cv.bedY + (cv.waterY - 1 - cv.bedY) * (ex / lakeEx) * (ex / lakeEx);
-        else fl = cv.waterY + 1 + stairs((ex - lakeEx) / (1 - lakeEx) * cv.rise + 1.0 * ledgeN.noise2(x / 9.0, z / 9.0), 2.0, 0.8);
-        return Math.max(ell, fl - y);
+        return p.dist(c.upD, c.upS, x, y, z);
     }
 
     /**

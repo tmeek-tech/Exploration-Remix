@@ -222,7 +222,7 @@ def build_features():
             pools(mix((LIMESTONE, 3), (simple("minecraft:moss_block"), 1)), mix((simple("minecraft:clay"), 2), (simple("minecraft:gravel"), 1)), 6),
             [count(3), SQUARE, layer(up)] + floor() + [looks(0), BIOME])
     feature("ivory_root_cavern/stalactites", "local_modifications", ["ivory_root_cavern"],
-            spike(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 2)), simple("minecraft:dripstone_block"), (8, 30), (2.0, 4.6), 0.35,
+            spike(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 2)), simple("minecraft:dripstone_block"), (5, 14), (1.4, 3.2), 0.35,
                   point=state("minecraft:pointed_dripstone", thickness="tip", vertical_direction="down")),
             [count(6), SQUARE, layer(up)] + ceiling(offset=0) + [BIOME])
     feature("ember_gardens/pools", "local_modifications", ["ember_gardens"],

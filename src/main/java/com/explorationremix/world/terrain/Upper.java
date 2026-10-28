@@ -1,10 +1,10 @@
 package com.explorationremix.world.terrain;
 
 /**
- * The two safe set pieces carved into the pack's own caves, between its old floor and about y 0: the Silver Fern Rift
- * (a long rift whose walls step up in mossy ledges over a stream) and the Ivory Root Cavern (a round cavern around a
- * still lake, with terraced shores). At most one per cell, kept away from the first gate and from any ocean or river
- * above it.
+ * The two safe set pieces carved into the pack's own caves just above its old floor: the Silver Fern Rift (a tall,
+ * narrow rift whose walls step up in mossy ledges over a stream) and the Ivory Root Cavern (a round cavern around a
+ * still lake, with terraced shores). Set-piece sized, 40 to 60 blocks across. At most one per cell, kept away from the
+ * first gate and from any ocean or river above it. Each piece knows its own shape ({@link Piece#dist}).
  */
 public final class Upper {
     private Upper() {}
@@ -36,6 +36,44 @@ public final class Upper {
 
         /** Roughly how far (x, z) is from the piece's open space (negative inside). */
         public abstract double distXZ(double x, double z);
+
+        /** The noise its walls are shaped with; set when it is planned. */
+        Noise noise;
+
+        Noise noise() {
+            Noise n = noise;
+            return n != null ? n : Noise.of(0L);
+        }
+
+        /**
+         * Signed distance to its open space (negative inside), given the column's distance {@code d} from the rift's
+         * centre line (or the cavern's axis) and {@code s}, the arc length along the rift.
+         */
+        public abstract double dist(double d, double s, int x, int y, int z);
+    }
+
+    /** The noise the set pieces are shaped with, one set per world seed. */
+    static final class Noise {
+        private static volatile Noise last;
+        final long seed;
+        final Perlin ledge, ceil, rough;
+
+        private Noise(long seed) {
+            this.seed = seed;
+            long s = seed ^ 0x1F83D9ABFB41BD6BL;
+            ledge = new Perlin(Hashing.mix(s, 1, 0, 0));
+            ceil = new Perlin(Hashing.mix(s, 2, 0, 0));
+            rough = new Perlin(Hashing.mix(s, 3, 0, 0));
+        }
+
+        static Noise of(long seed) {
+            Noise n = last;
+            if (n == null || n.seed != seed) {
+                n = new Noise(seed);
+                last = n;
+            }
+            return n;
+        }
     }
 
     /** The Silver Fern Rift: a winding rift, a stream along its floor and stepped ledges up both walls under a roof. */
@@ -45,7 +83,7 @@ public final class Upper {
         public final double length, bedY, ledgeTop, halfTop, streamHalf, stepH, roofH;
 
         Rift(double[] px, double[] pz, double bedY, double ledgeTop, double halfTop, double streamHalf, double stepH, double roofH) {
-            super(min(px) - halfTop - 14, max(px) + halfTop + 14, min(pz) - halfTop - 14, max(pz) + halfTop + 14, bedY + 1.6, ledgeTop + roofH + 6);
+            super(min(px) - halfTop - 10, max(px) + halfTop + 10, min(pz) - halfTop - 10, max(pz) + halfTop + 10, bedY + 1.6, ledgeTop + roofH + 5);
             this.px = px;
             this.pz = pz;
             this.n = px.length;
@@ -99,6 +137,22 @@ public final class Upper {
             for (int i = 0; i < n; i++) best = Math.min(best, (px[i] - x) * (px[i] - x) + (pz[i] - z) * (pz[i] - z));
             return Math.sqrt(best) - halfTop;
         }
+
+        @Override public double dist(double d, double s, int x, int y, int z) {
+            // Stepped ledges up both walls from the stream, under a low roof; the ends close in.
+            Noise nz = noise();
+            double v = Math.max(0, d + 1.5 * nz.ledge.noise2(x / 10.0, z / 10.0 + 50));
+            double endFade = Terrain.smooth((Math.min(s, length - s) - 2) / 10.0);
+            double half = halfTop * (0.45 + 0.55 * endFade);
+            if (v > half + 8) return Terrain.SOLID;
+            double step = stepH + 0.8 * nz.ledge.noise2(s / 24.0, 7.7);
+            double fl = Terrain.riftFloor(v, bedY, ledgeTop, half, streamHalf, step);
+            double q = Math.min(1, v / half);
+            double ce = ledgeTop + roofH * (1 - q * q) + 1.8 * nz.ceil.noise2(x / 9.0, z / 9.0 + 31);
+            ce = fl + (ce - fl) * endFade;
+            // Rough walls; none where the ends have closed, so no pockets open in the rock beyond them.
+            return Math.max(fl - y, y - ce) + 1.2 * endFade * nz.rough.noise3(x / 8.0, y / 6.0, z / 8.0);
+        }
     }
 
     /** The Ivory Root Cavern: a round cavern with a lake in the middle and shores that step up in pale terraces. */
@@ -106,7 +160,7 @@ public final class Upper {
         public final double cx, cz, rxz, ry, cy, bedY, rise;
 
         Cavern(double cx, double cz, double rxz, double ry, double cy, double lakeY, double bedY, double rise) {
-            super(cx - rxz - 14, cx + rxz + 14, cz - rxz - 14, cz + rxz + 14, lakeY, cy + ry + 8);
+            super(cx - rxz - 10, cx + rxz + 10, cz - rxz - 10, cz + rxz + 10, lakeY, cy + ry + 6);
             this.cx = cx;
             this.cz = cz;
             this.rxz = rxz;
@@ -123,6 +177,19 @@ public final class Upper {
         @Override public double centerZ() { return cz; }
 
         @Override public double distXZ(double x, double z) { return Math.hypot(x - cx, z - cz) - rxz; }
+
+        @Override public double dist(double d, double s, int x, int y, int z) {
+            // A round cavern: a lake in the middle, then pale terraces stepping up to the walls.
+            Noise nz = noise();
+            double ex = d / rxz, ey = (y - cy) / ry;
+            if (ex > 1.4) return Terrain.SOLID;
+            double ell = (Math.sqrt(ex * ex + ey * ey) - 1) * Math.min(rxz, ry) + 2.0 * nz.rough.noise3(x / 12.0, y / 9.0, z / 12.0);
+            double lakeEx = 0.5 + 0.06 * nz.ledge.noise2(x / 14.0 + 13, z / 14.0);
+            double fl;
+            if (ex < lakeEx) fl = bedY + (waterY - 1 - bedY) * (ex / lakeEx) * (ex / lakeEx);
+            else fl = waterY + 1 + Terrain.stairs((ex - lakeEx) / (1 - lakeEx) * rise + 0.8 * nz.ledge.noise2(x / 7.0, z / 7.0), 2.0, 0.8);
+            return Math.max(ell, fl - y);
+        }
     }
 
     private static double min(double[] a) { double m = a[0]; for (double v : a) m = Math.min(m, v); return m; }
@@ -150,6 +217,7 @@ public final class Upper {
             Piece p = rift ? planRift(ha, cx, cz, cellSize, margin, packFloor) : planCavern(ha, cx, cz, cellSize, margin, packFloor);
             for (double[] a : avoid) if (p.distXZ(a[0], a[1]) < a[2]) continue outer;
             if (probe != null && wetAbove(p, probe)) continue;
+            p.noise = Noise.of(seed);
             return p;
         }
         return null;
@@ -164,9 +232,9 @@ public final class Upper {
     }
 
     private static Rift planRift(long h, int cx, int cz, int cellSize, double margin, int packFloor) {
-        double len = Hashing.range(Hashing.mix(h, 1, 0, 0), 170, 230);
-        double halfTop = Hashing.range(Hashing.mix(h, 2, 0, 0), 18, 24);
-        double room = margin + len * 0.5 + halfTop + 16;
+        double len = Hashing.range(Hashing.mix(h, 1, 0, 0), 46, 58);
+        double halfTop = Hashing.range(Hashing.mix(h, 2, 0, 0), 8, 11);
+        double room = margin + len * 0.5 + halfTop + 12;
         double lo = cx * (double) cellSize + room, hi = (cx + 1) * (double) cellSize - room;
         double mx = lo < hi ? Hashing.range(Hashing.mix(h, 3, 0, 0), lo, hi) : (cx + 0.5) * cellSize;
         lo = cz * (double) cellSize + room;
@@ -196,25 +264,25 @@ public final class Upper {
         px[n - 1] = cxs[4];
         pz[n - 1] = czs[4];
         double bedY = packFloor + 12;
-        double ledgeTop = bedY + Hashing.range(Hashing.mix(h, 6, 0, 0), 40, 50);
-        double streamHalf = Hashing.range(Hashing.mix(h, 7, 0, 0), 2.5, 4.0);
-        double stepH = Hashing.range(Hashing.mix(h, 8, 0, 0), 5.0, 7.0);
-        double roofH = Hashing.range(Hashing.mix(h, 9, 0, 0), 8, 12);
+        double ledgeTop = bedY + Hashing.range(Hashing.mix(h, 6, 0, 0), 20, 26);
+        double streamHalf = Hashing.range(Hashing.mix(h, 7, 0, 0), 1.5, 2.5);
+        double stepH = Hashing.range(Hashing.mix(h, 8, 0, 0), 3.5, 5.0);
+        double roofH = Hashing.range(Hashing.mix(h, 9, 0, 0), 5, 8);
         return new Rift(px, pz, bedY, ledgeTop, halfTop, streamHalf, stepH, roofH);
     }
 
     private static Cavern planCavern(long h, int cx, int cz, int cellSize, double margin, int packFloor) {
-        double rxz = Hashing.range(Hashing.mix(h, 1, 0, 0), 40, 52);
-        double ry = Hashing.range(Hashing.mix(h, 2, 0, 0), 26, 31);
-        double room = margin + rxz + 16;
+        double rxz = Hashing.range(Hashing.mix(h, 1, 0, 0), 21, 28);
+        double ry = Hashing.range(Hashing.mix(h, 2, 0, 0), 13, 16);
+        double room = margin + rxz + 12;
         double lo = cx * (double) cellSize + room, hi = (cx + 1) * (double) cellSize - room;
         double x = lo < hi ? Hashing.range(Hashing.mix(h, 3, 0, 0), lo, hi) : (cx + 0.5) * cellSize;
         lo = cz * (double) cellSize + room;
         hi = (cz + 1) * (double) cellSize - room;
         double z = lo < hi ? Hashing.range(Hashing.mix(h, 4, 0, 0), lo, hi) : (cz + 0.5) * cellSize;
         double lakeY = packFloor + 14;
-        double bedY = lakeY - Hashing.range(Hashing.mix(h, 5, 0, 0), 4, 6);
-        double rise = Hashing.range(Hashing.mix(h, 6, 0, 0), 10, 14);
+        double bedY = lakeY - Hashing.range(Hashing.mix(h, 5, 0, 0), 3, 4.5);
+        double rise = Hashing.range(Hashing.mix(h, 6, 0, 0), 6, 9);
         double cy = lakeY + ry * 0.3;
         return new Cavern(x, z, rxz, ry, cy, lakeY, bedY, rise);
     }

@@ -34,15 +34,15 @@
     "length": {
       "type": "minecraft:uniform",
       "value": {
-        "min_inclusive": 8,
-        "max_inclusive": 30
+        "min_inclusive": 5,
+        "max_inclusive": 14
       }
     },
     "radius": {
       "type": "minecraft:uniform",
       "value": {
-        "min_inclusive": 2.0,
-        "max_exclusive": 4.6
+        "min_inclusive": 1.4,
+        "max_exclusive": 3.2
       }
     },
     "floor_chance": 0.35,
