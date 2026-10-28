@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "lit=false": {
+      "model": "explorationremix:block/rune_block"
+    },
+    "lit=true": {
+      "model": "explorationremix:block/rune_block"
+    }
+  }
+}

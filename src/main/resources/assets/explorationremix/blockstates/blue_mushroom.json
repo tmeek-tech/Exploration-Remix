@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "waterlogged=false": {
+      "model": "explorationremix:block/blue_mushroom"
+    },
+    "waterlogged=true": {
+      "model": "explorationremix:block/blue_mushroom"
+    }
+  }
+}

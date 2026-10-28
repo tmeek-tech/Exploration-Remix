@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "waterlogged=false": {
+      "model": "explorationremix:block/heat_fungus"
+    },
+    "waterlogged=true": {
+      "model": "explorationremix:block/heat_fungus"
+    }
+  }
+}

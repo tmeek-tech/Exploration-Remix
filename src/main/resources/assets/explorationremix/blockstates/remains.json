@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "looted=false": {
+      "model": "explorationremix:block/remains"
+    },
+    "looted=true": {
+      "model": "explorationremix:block/remains_looted"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "feature": "explorationremix:ruin",
+  "placement": [
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

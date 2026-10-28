@@ -1,0 +1,11 @@
+{
+  "kind": "passive",
+  "cost": 0,
+  "tier": 1,
+  "weight": 10,
+  "attunements": [
+    "movement"
+  ],
+  "params": {},
+  "color": "green"
+}

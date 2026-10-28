@@ -1,0 +1,65 @@
+{
+  "temperature": 0.9,
+  "downfall": 0.6,
+  "has_precipitation": false,
+  "effects": {
+    "fog_color": 3807752,
+    "water_color": 6965792,
+    "water_fog_color": 2759176,
+    "sky_color": 1706500,
+    "mood_sound": {
+      "sound": "minecraft:ambient.cave",
+      "tick_delay": 6000,
+      "block_search_extent": 8,
+      "offset": 2.0
+    },
+    "grass_color": 12614192,
+    "foliage_color": 11561504,
+    "music": {
+      "sound": "minecraft:music.overworld.lush_caves",
+      "min_delay": 12000,
+      "max_delay": 24000,
+      "replace_current_music": false
+    }
+  },
+  "carvers": {},
+  "features": [
+    [],
+    [],
+    [],
+    [
+      "explorationremix:ruin"
+    ],
+    [],
+    [],
+    [
+      "explorationremix:ore_iron_ember_gardens",
+      "explorationremix:ore_gold_ember_gardens",
+      "explorationremix:ore_redstone_ember_gardens",
+      "explorationremix:ore_diamond_ember_gardens"
+    ],
+    [
+      "explorationremix:glow_lichen_ember_gardens"
+    ],
+    [],
+    [
+      "explorationremix:remains_ember_gardens",
+      "explorationremix:flock_roost_ember_gardens",
+      "explorationremix:heat_fungus_ember_gardens",
+      "explorationremix:shelf_fungus_ember_ember_gardens",
+      "explorationremix:moss_ember_gardens"
+    ],
+    []
+  ],
+  "spawners": {
+    "monster": [],
+    "creature": [],
+    "ambient": [],
+    "axolotls": [],
+    "underground_water_creature": [],
+    "water_creature": [],
+    "water_ambient": [],
+    "misc": []
+  },
+  "spawn_costs": {}
+}

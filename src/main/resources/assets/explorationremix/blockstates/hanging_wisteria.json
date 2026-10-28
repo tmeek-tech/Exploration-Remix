@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "waterlogged=false": {
+      "model": "explorationremix:block/hanging_wisteria"
+    },
+    "waterlogged=true": {
+      "model": "explorationremix:block/hanging_wisteria"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "trigger",
+  "cost": 40,
+  "tier": 1,
+  "weight": 8,
+  "attunements": [
+    "movement"
+  ],
+  "params": {},
+  "color": "gold"
+}

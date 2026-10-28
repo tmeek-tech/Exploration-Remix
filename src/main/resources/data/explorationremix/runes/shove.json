@@ -1,0 +1,15 @@
+{
+  "kind": "effect",
+  "cost": 25,
+  "tier": 1,
+  "weight": 10,
+  "attunements": [
+    "combat"
+  ],
+  "params": {
+    "force": 1.4,
+    "radius": 3.5,
+    "poise": 8
+  },
+  "color": "light_purple"
+}

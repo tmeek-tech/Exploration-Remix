@@ -1,0 +1,13 @@
+{
+  "kind": "effect",
+  "cost": 25,
+  "tier": 1,
+  "weight": 12,
+  "attunements": [
+    "movement"
+  ],
+  "params": {
+    "power": 0.9
+  },
+  "color": "light_purple"
+}

@@ -1,0 +1,14 @@
+{
+  "kind": "modifier",
+  "cost": 50,
+  "tier": 2,
+  "weight": 8,
+  "attunements": [
+    "combat"
+  ],
+  "params": {
+    "force": 1.75,
+    "poise": 12
+  },
+  "color": "aqua"
+}

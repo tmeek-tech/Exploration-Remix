@@ -1,0 +1,15 @@
+{
+  "kind": "effect",
+  "cost": 40,
+  "tier": 2,
+  "weight": 8,
+  "attunements": [
+    "utility",
+    "fun"
+  ],
+  "params": {
+    "range": 32,
+    "duration": 160
+  },
+  "color": "light_purple"
+}

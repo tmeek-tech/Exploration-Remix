@@ -1,0 +1,27 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.explorationremix.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "explorationremix.refmap.json",
+  "mixins": [
+    "accessor.DimensionTypeAccessor",
+    "accessor.NoiseGeneratorSettingsAccessor",
+    "accessor.NoiseBasedChunkGeneratorAccessor",
+    "accessor.SurfaceContextAccessor",
+    "NoiseBasedChunkGeneratorMixin",
+    "BiomeSourceMixin",
+    "NoiseBasedAquiferMixin",
+    "StructurePiecesBuilderMixin",
+    "StructureMixin",
+    "AboveBottomAnchorMixin",
+    "EnchantmentHelperMixin",
+    "AnvilMenuMixin",
+    "ElytraItemMixin",
+    "AbstractVillagerMixin"
+  ],
+  "client": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

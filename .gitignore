@@ -1,0 +1,17 @@
+build/
+.gradle/
+run/
+run-data/
+runs/
+logs/
+*.iml
+.idea/
+.classpath
+.project
+.settings/
+bin/
+eclipse/
+*.launch
+.vscode/
+libs/*.jar
+out/

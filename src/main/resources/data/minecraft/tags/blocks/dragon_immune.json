@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "explorationremix:band_stone",
+    "explorationremix:rune_block",
+    "explorationremix:lantern_stone",
+    "explorationremix:reach_stone",
+    "explorationremix:ember_stone",
+    "explorationremix:gallery_stone"
+  ]
+}

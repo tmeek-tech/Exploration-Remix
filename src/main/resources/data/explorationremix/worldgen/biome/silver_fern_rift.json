@@ -1,0 +1,67 @@
+{
+  "temperature": 0.3,
+  "downfall": 0.6,
+  "has_precipitation": false,
+  "effects": {
+    "fog_color": 793134,
+    "water_color": 2779840,
+    "water_fog_color": 663624,
+    "sky_color": 660516,
+    "mood_sound": {
+      "sound": "minecraft:ambient.cave",
+      "tick_delay": 6000,
+      "block_search_extent": 8,
+      "offset": 2.0
+    },
+    "grass_color": 8036512,
+    "foliage_color": 6983824,
+    "music": {
+      "sound": "minecraft:music.overworld.deep_dark",
+      "min_delay": 12000,
+      "max_delay": 24000,
+      "replace_current_music": false
+    }
+  },
+  "carvers": {},
+  "features": [
+    [],
+    [],
+    [],
+    [
+      "explorationremix:ruin"
+    ],
+    [],
+    [],
+    [
+      "explorationremix:ore_iron_blue_reaches",
+      "explorationremix:ore_lapis_blue_reaches",
+      "explorationremix:ore_diamond_blue_reaches",
+      "explorationremix:ore_copper_blue_reaches"
+    ],
+    [
+      "explorationremix:glow_lichen_silver_fern_rift"
+    ],
+    [
+      "explorationremix:spring_silver_fern_rift"
+    ],
+    [
+      "explorationremix:remains_silver_fern_rift",
+      "explorationremix:flock_roost_silver_fern_rift",
+      "explorationremix:silver_fern_silver_fern_rift",
+      "explorationremix:blue_mushroom_fern_silver_fern_rift",
+      "explorationremix:moss_silver_fern_rift"
+    ],
+    []
+  ],
+  "spawners": {
+    "monster": [],
+    "creature": [],
+    "ambient": [],
+    "axolotls": [],
+    "underground_water_creature": [],
+    "water_creature": [],
+    "water_ambient": [],
+    "misc": []
+  },
+  "spawn_costs": {}
+}

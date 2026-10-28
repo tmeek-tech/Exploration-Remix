@@ -1,0 +1,6 @@
+{
+  "type": "forge:add_features",
+  "biomes": "#explorationremix:is_deep",
+  "features": "explorationremix:gate_tube",
+  "step": "raw_generation"
+}

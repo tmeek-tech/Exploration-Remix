@@ -1,0 +1,20 @@
+{
+  "feature": "explorationremix:ore_iron_ember_gardens",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 22
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "ember_gardens",
+      "inset": 4
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

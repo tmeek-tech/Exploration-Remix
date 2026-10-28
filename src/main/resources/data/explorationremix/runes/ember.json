@@ -1,0 +1,14 @@
+{
+  "kind": "effect",
+  "cost": 30,
+  "tier": 1,
+  "weight": 10,
+  "attunements": [
+    "element"
+  ],
+  "params": {
+    "seconds": 5,
+    "radius": 2.5
+  },
+  "color": "light_purple"
+}

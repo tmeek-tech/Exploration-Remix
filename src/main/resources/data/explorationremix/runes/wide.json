@@ -1,0 +1,13 @@
+{
+  "kind": "modifier",
+  "cost": 30,
+  "tier": 1,
+  "weight": 10,
+  "attunements": [
+    "element"
+  ],
+  "params": {
+    "scale": 1.8
+  },
+  "color": "aqua"
+}

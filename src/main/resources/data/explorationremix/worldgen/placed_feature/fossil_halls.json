@@ -1,0 +1,20 @@
+{
+  "feature": "minecraft:fossil_coal",
+  "placement": [
+    {
+      "type": "minecraft:rarity_filter",
+      "chance": 28
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "lantern_deeps",
+      "inset": 14
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

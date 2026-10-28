@@ -1,0 +1,20 @@
+{
+  "feature": "explorationremix:ore_lapis_blue_reaches",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 8
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "blue_reaches",
+      "inset": 4
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "temperature": 1.2,
+  "downfall": 0.6,
+  "has_precipitation": false,
+  "effects": {
+    "fog_color": 1182732,
+    "water_color": 4864554,
+    "water_fog_color": 1708040,
+    "sky_color": 656902,
+    "mood_sound": {
+      "sound": "minecraft:ambient.cave",
+      "tick_delay": 6000,
+      "block_search_extent": 8,
+      "offset": 2.0
+    },
+    "grass_color": 8413264,
+    "foliage_color": 7360576,
+    "music": {
+      "sound": "minecraft:music.overworld.dripstone_caves",
+      "min_delay": 12000,
+      "max_delay": 24000,
+      "replace_current_music": false
+    }
+  },
+  "carvers": {},
+  "features": [
+    [],
+    [],
+    [],
+    [
+      "explorationremix:ruin"
+    ],
+    [],
+    [],
+    [
+      "explorationremix:ore_gold_basalt_galleries",
+      "explorationremix:ore_diamond_basalt_galleries",
+      "explorationremix:ore_emerald_basalt_galleries",
+      "explorationremix:ore_redstone_basalt_galleries"
+    ],
+    [
+      "explorationremix:glow_lichen_obsidian_tubes",
+      "explorationremix:pile_magma_tubes_obsidian_tubes"
+    ],
+    [],
+    [
+      "explorationremix:flock_roost_obsidian_tubes"
+    ],
+    []
+  ],
+  "spawners": {
+    "monster": [],
+    "creature": [],
+    "ambient": [],
+    "axolotls": [],
+    "underground_water_creature": [],
+    "water_creature": [],
+    "water_ambient": [],
+    "misc": []
+  },
+  "spawn_costs": {}
+}

@@ -1,0 +1,88 @@
+{
+  "temperature": 0.7,
+  "downfall": 0.6,
+  "has_precipitation": false,
+  "effects": {
+    "fog_color": 1980958,
+    "water_color": 4164175,
+    "water_fog_color": 932378,
+    "sky_color": 1715738,
+    "mood_sound": {
+      "sound": "minecraft:ambient.cave",
+      "tick_delay": 6000,
+      "block_search_extent": 8,
+      "offset": 2.0
+    },
+    "grass_color": 6269002,
+    "foliage_color": 4889146,
+    "music": {
+      "sound": "minecraft:music.overworld.lush_caves",
+      "min_delay": 12000,
+      "max_delay": 24000,
+      "replace_current_music": false
+    }
+  },
+  "carvers": {},
+  "features": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+      "explorationremix:glow_lichen_rootvaults"
+    ],
+    [
+      "explorationremix:spring_rootvaults"
+    ],
+    [
+      "explorationremix:moss_rootvaults",
+      "explorationremix:rooted_azalea_rootvaults",
+      "explorationremix:cave_vines_rootvaults",
+      "explorationremix:spore_blossom_rootvaults",
+      "explorationremix:clay_rootvaults"
+    ],
+    []
+  ],
+  "spawners": {
+    "monster": [
+      {
+        "type": "minecraft:creeper",
+        "weight": 100,
+        "minCount": 1,
+        "maxCount": 2
+      }
+    ],
+    "creature": [],
+    "ambient": [
+      {
+        "type": "minecraft:bat",
+        "weight": 10,
+        "minCount": 4,
+        "maxCount": 8
+      }
+    ],
+    "axolotls": [
+      {
+        "type": "minecraft:axolotl",
+        "weight": 10,
+        "minCount": 2,
+        "maxCount": 4
+      }
+    ],
+    "underground_water_creature": [
+      {
+        "type": "minecraft:glow_squid",
+        "weight": 10,
+        "minCount": 2,
+        "maxCount": 4
+      }
+    ],
+    "water_creature": [],
+    "water_ambient": [],
+    "misc": []
+  },
+  "spawn_costs": {}
+}

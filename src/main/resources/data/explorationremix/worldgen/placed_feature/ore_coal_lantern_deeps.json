@@ -1,0 +1,20 @@
+{
+  "feature": "explorationremix:ore_coal_lantern_deeps",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 10
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "lantern_deeps",
+      "inset": 4
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

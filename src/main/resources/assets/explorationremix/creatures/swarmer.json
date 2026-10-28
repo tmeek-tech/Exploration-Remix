@@ -1,0 +1,372 @@
+{
+ "texture_width": 64,
+ "texture_height": 64,
+ "scale": 1.0,
+ "shadow": 0.35,
+ "hang": false,
+ "parts": [
+  {
+   "name": "body",
+   "parent": null,
+   "pivot": [
+    0,
+    20,
+    0
+   ],
+   "role": "body",
+   "phase": 0.0,
+   "side": 0,
+   "axis": "x",
+   "amp": 1.0,
+   "boxes": [
+    {
+     "from": [
+      -3,
+      -2,
+      -5
+     ],
+     "size": [
+      6,
+      4,
+      10
+     ],
+     "uv": [
+      0,
+      0
+     ],
+     "inflate": 0.0
+    }
+   ]
+  },
+  {
+   "name": "head",
+   "parent": "body",
+   "pivot": [
+    0,
+    -0.5,
+    -5
+   ],
+   "role": "head",
+   "phase": 0.0,
+   "side": 0,
+   "axis": "x",
+   "amp": 1.0,
+   "boxes": [
+    {
+     "from": [
+      -2,
+      -1.5,
+      -4
+     ],
+     "size": [
+      4,
+      3,
+      4
+     ],
+     "uv": [
+      33,
+      0
+     ],
+     "inflate": 0.0
+    }
+   ]
+  },
+  {
+   "name": "jaw_l",
+   "parent": "head",
+   "pivot": [
+    1.5,
+    1,
+    -4
+   ],
+   "role": "jaw",
+   "phase": 0.0,
+   "side": 1,
+   "axis": "x",
+   "amp": 1.0,
+   "boxes": [
+    {
+     "from": [
+      0,
+      0,
+      -3
+     ],
+     "size": [
+      1,
+      1,
+      3
+     ],
+     "uv": [
+      0,
+      15
+     ],
+     "inflate": 0.0
+    }
+   ]
+  },
+  {
+   "name": "jaw_r",
+   "parent": "head",
+   "pivot": [
+    -1.5,
+    1,
+    -4
+   ],
+   "role": "jaw",
+   "phase": 0.0,
+   "side": -1,
+   "axis": "x",
+   "amp": 1.0,
+   "boxes": [
+    {
+     "from": [
+      -1,
+      0,
+      -3
+     ],
+     "size": [
+      1,
+      1,
+      3
+     ],
+     "uv": [
+      9,
+      15
+     ],
+     "inflate": 0.0
+    }
+   ]
+  },
+  {
+   "name": "tail",
+   "parent": "body",
+   "pivot": [
+    0,
+    -0.5,
+    5
+   ],
+   "role": "tail",
+   "phase": 0.0,
+   "side": 0,
+   "axis": "x",
+   "amp": 1.0,
+   "boxes": [
+    {
+     "from": [
+      -1,
+      -1,
+      0
+     ],
+     "size": [
+      2,
+      2,
+      5
+     ],
+     "uv": [
+      50,
+      0
+     ],
+     "inflate": 0.0
+    }
+   ]
+  },
+  {
+   "name": "leg0",
+   "parent": "body",
+   "pivot": [
+    3,
+    1,
+    -3
+   ],
+   "role": "leg",
+   "phase": 0.0,
+   "side": 1,
+   "axis": "y",
+   "amp": 0.6,
+   "boxes": [
+    {
+     "from": [
+      0,
+      -1,
+      -1
+     ],
+     "size": [
+      4,
+      2,
+      2
+     ],
+     "uv": [
+      18,
+      15
+     ],
+     "inflate": 0.0
+    }
+   ]
+  },
+  {
+   "name": "leg1",
+   "parent": "body",
+   "pivot": [
+    3,
+    1,
+    0
+   ],
+   "role": "leg",
+   "phase": 2.1,
+   "side": 1,
+   "axis": "y",
+   "amp": 0.6,
+   "boxes": [
+    {
+     "from": [
+      0,
+      -1,
+      -1
+     ],
+     "size": [
+      4,
+      2,
+      2
+     ],
+     "uv": [
+      31,
+      15
+     ],
+     "inflate": 0.0
+    }
+   ]
+  },
+  {
+   "name": "leg2",
+   "parent": "body",
+   "pivot": [
+    3,
+    1,
+    3
+   ],
+   "role": "leg",
+   "phase": 4.2,
+   "side": 1,
+   "axis": "y",
+   "amp": 0.6,
+   "boxes": [
+    {
+     "from": [
+      0,
+      -1,
+      -1
+     ],
+     "size": [
+      4,
+      2,
+      2
+     ],
+     "uv": [
+      44,
+      15
+     ],
+     "inflate": 0.0
+    }
+   ]
+  },
+  {
+   "name": "leg3",
+   "parent": "body",
+   "pivot": [
+    -3,
+    1,
+    -3
+   ],
+   "role": "leg",
+   "phase": 3.141592653589793,
+   "side": -1,
+   "axis": "y",
+   "amp": 0.6,
+   "boxes": [
+    {
+     "from": [
+      -4,
+      -1,
+      -1
+     ],
+     "size": [
+      4,
+      2,
+      2
+     ],
+     "uv": [
+      0,
+      20
+     ],
+     "inflate": 0.0
+    }
+   ]
+  },
+  {
+   "name": "leg4",
+   "parent": "body",
+   "pivot": [
+    -3,
+    1,
+    0
+   ],
+   "role": "leg",
+   "phase": 5.241592653589793,
+   "side": -1,
+   "axis": "y",
+   "amp": 0.6,
+   "boxes": [
+    {
+     "from": [
+      -4,
+      -1,
+      -1
+     ],
+     "size": [
+      4,
+      2,
+      2
+     ],
+     "uv": [
+      13,
+      20
+     ],
+     "inflate": 0.0
+    }
+   ]
+  },
+  {
+   "name": "leg5",
+   "parent": "body",
+   "pivot": [
+    -3,
+    1,
+    3
+   ],
+   "role": "leg",
+   "phase": 7.341592653589793,
+   "side": -1,
+   "axis": "y",
+   "amp": 0.6,
+   "boxes": [
+    {
+     "from": [
+      -4,
+      -1,
+      -1
+     ],
+     "size": [
+      4,
+      2,
+      2
+     ],
+     "uv": [
+      26,
+      20
+     ],
+     "inflate": 0.0
+    }
+   ]
+  }
+ ]
+}

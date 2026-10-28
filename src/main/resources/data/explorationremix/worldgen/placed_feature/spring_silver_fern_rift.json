@@ -1,0 +1,20 @@
+{
+  "feature": "explorationremix:spring_water_deep",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 50
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "blue_reaches",
+      "inset": 8
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}
