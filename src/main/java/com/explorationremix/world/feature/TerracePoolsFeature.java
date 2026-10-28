@@ -19,21 +19,24 @@ import java.util.ArrayDeque;
 import java.util.Optional;
 
 /**
- * Terrace pools: the flat floor around the origin becomes a shallow pool of real water, held in by a raised pale rim
- * along its edge. On a terraced floor every step gets its own pool, so they read as a staircase of pools. Plants for
- * the pool edges ({@code edge}) grow in the water along the rim.
+ * Terrace pools: the flat floor around the origin becomes a shallow pool of real water (or lava), held in by a raised
+ * rim along its edge. On a terraced floor every step gets its own pool, so they read as a staircase of pools. Plants
+ * for the pool edges ({@code edge}) grow in the water along the rim.
  */
 public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Config> {
     public record Config(BlockStateProvider rim, BlockStateProvider bed, int radius, Optional<BlockStateProvider> edge,
-                         float edgeChance, float overflowChance) implements FeatureConfiguration {
+                         float edgeChance, float overflowChance, boolean lava) implements FeatureConfiguration {
         public static final Codec<Config> CODEC = RecordCodecBuilder.create(i -> i.group(
                 BlockStateProvider.CODEC.fieldOf("rim").forGetter(Config::rim),
                 BlockStateProvider.CODEC.fieldOf("bed").forGetter(Config::bed),
                 Codec.intRange(2, 15).optionalFieldOf("radius", 9).forGetter(Config::radius),
                 BlockStateProvider.CODEC.optionalFieldOf("edge").forGetter(Config::edge),
                 Codec.floatRange(0, 1).optionalFieldOf("edge_chance", 0.3F).forGetter(Config::edgeChance),
-                Codec.floatRange(0, 1).optionalFieldOf("overflow_chance", 0F).forGetter(Config::overflowChance)
+                Codec.floatRange(0, 1).optionalFieldOf("overflow_chance", 0F).forGetter(Config::overflowChance),
+                Codec.BOOL.optionalFieldOf("lava", false).forGetter(Config::lava)
         ).apply(i, Config::new));
+
+        BlockState fluid() { return lava ? Blocks.LAVA.defaultBlockState() : Blocks.WATER.defaultBlockState(); }
     }
 
     public TerracePoolsFeature(Codec<Config> codec) { super(codec); }
@@ -87,10 +90,12 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
             if (cell[idx] != 1) continue;
             int x = o.getX() + dx, z = o.getZ() + dz;
             if (water[idx]) {
+                // The pool's bed is its own (glowing beds light the pool), except under unbreakable rock.
                 pos.set(x, fy - 1, z);
-                if (!level.getBlockState(pos).isSolid()) level.setBlock(pos, c.bed().getState(random, pos), 2);
+                BlockState under = level.getBlockState(pos);
+                if (!under.hasBlockEntity() && under.getDestroySpeed(level, pos) >= 0) level.setBlock(pos, c.bed().getState(random, pos), 2);
                 pos.set(x, fy, z);
-                level.setBlock(pos, Blocks.WATER.defaultBlockState(), 2);
+                level.setBlock(pos, c.fluid(), 2);
             } else {
                 pos.set(x, fy, z);
                 level.setBlock(pos, c.rim().getState(random, pos), 2);
@@ -115,14 +120,14 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
             }
             if (!byPool || !overDrop) continue;
             pos.set(o.getX() + dx, fy, o.getZ() + dz);
-            level.setBlock(pos, Blocks.WATER.defaultBlockState(), 2);
-            level.scheduleTick(pos, Fluids.WATER, 0);
+            level.setBlock(pos, c.fluid(), 2);
+            level.scheduleTick(pos, c.lava() ? Fluids.LAVA : Fluids.WATER, 0);
             pos.set(o.getX() + dx, fy + 1, o.getZ() + dz);
             level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
             spills++;
         }
         // Plants in the water along the rim.
-        if (c.edge().isPresent()) {
+        if (c.edge().isPresent() && !c.lava()) {
             for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
                 int idx = (dz + r) * size + dx + r;
                 if (!water[idx] || random.nextFloat() >= c.edgeChance()) continue;

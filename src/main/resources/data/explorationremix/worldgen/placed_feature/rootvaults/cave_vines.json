@@ -1,9 +1,9 @@
 {
-  "feature": "minecraft:cave_vine",
+  "feature": "explorationremix:rootvaults/cave_vines",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 60
+      "count": 160
     },
     {
       "type": "minecraft:in_square"

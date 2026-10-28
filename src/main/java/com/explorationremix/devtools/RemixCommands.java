@@ -419,8 +419,8 @@ public final class RemixCommands {
     }
 
     /**
-     * How good a chunk of Rootvaults is for a view: its open air in the Rootvaults, with tall spaces, daylight and
-     * water counting extra. Returns {score, x, y, z} of the best place to stand in it, or null if there is none.
+     * How good a chunk of Rootvaults is for a view: its open air in the Rootvaults, with tall spaces, daylight, light
+     * and water counting extra. Returns {score, x, y, z} of the best place to stand in it, or null if there is none.
      */
     private static double[] scoreRootvaults(ServerLevel level, Terrain t, int x, int z,
                                             net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> rv, int look) {
@@ -442,7 +442,8 @@ public final class RemixCommands {
                     BlockPos stand = new BlockPos(wx, floorY, wz);
                     if (level.getBiome(stand).is(rv) && ch.getBlockState(p.set(wx, floorY - 1, wz)).isSolid()) {
                         int sky = level.getBrightness(net.minecraft.world.level.LightLayer.SKY, stand.above(2));
-                        double spot = Math.min(run, 30) + (sky >= 8 ? 15 : 0);
+                        int glow = level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, stand.above());
+                        double spot = Math.min(run, 30) + (sky >= 8 ? 15 : 0) + glow;
                         score += Math.min(run, 30);
                         if (spot > bestSpot) { bestSpot = spot; sx = wx; sy = floorY; sz = wz; }
                     }

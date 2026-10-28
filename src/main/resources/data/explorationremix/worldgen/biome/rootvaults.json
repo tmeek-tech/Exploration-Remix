@@ -152,6 +152,7 @@
     ],
     [
       "explorationremix:rootvaults/moss_floor",
+      "explorationremix:rootvaults/glow_lichen",
       "explorationremix:rootvaults/moss_ceiling"
     ],
     [
@@ -162,6 +163,7 @@
       "minecraft:glow_lichen",
       "explorationremix:rootvaults/ceiling_roots",
       "explorationremix:rootvaults/hanging_roots",
+      "explorationremix:rootvaults/lantern_roots",
       "explorationremix:rootvaults/cave_vines",
       "explorationremix:rootvaults/ferns",
       "explorationremix:rootvaults/white_glow_flowers",

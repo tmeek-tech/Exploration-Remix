@@ -64,7 +64,7 @@ public final class ERBlocks {
     public static final RegistryObject<Block> LAVENDER_FLOWER = block("lavender_flower",
             () -> new CavePlantBlock(flower(MapColor.COLOR_PURPLE, 0), Block.box(3, 0, 3, 13, 14, 13)));
     public static final RegistryObject<Block> GOLD_FLOWER = block("gold_flower",
-            () -> new CavePlantBlock(flower(MapColor.GOLD, 0), Block.box(3, 0, 3, 13, 13, 13)));
+            () -> new CavePlantBlock(flower(MapColor.GOLD, 9), Block.box(3, 0, 3, 13, 13, 13)));
 
     // ------------------------------------------------------------------------------------------- Blue Reaches
     public static final RegistryObject<Block> ASURINE_CRYSTAL = block("asurine_crystal", () -> new AmethystClusterBlock(7, 3,

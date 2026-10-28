@@ -1,0 +1,41 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:weighted_state_provider",
+      "entries": [
+        {
+          "data": {
+            "Name": "minecraft:sea_pickle",
+            "Properties": {
+              "pickles": "3",
+              "waterlogged": "true"
+            }
+          },
+          "weight": 1
+        },
+        {
+          "data": {
+            "Name": "minecraft:sea_pickle",
+            "Properties": {
+              "pickles": "4",
+              "waterlogged": "true"
+            }
+          },
+          "weight": 2
+        }
+      ]
+    },
+    "faces": "floor",
+    "tries": 6,
+    "radius": 6,
+    "height": 2,
+    "on": [
+      "minecraft:sand",
+      "minecraft:clay",
+      "minecraft:gravel",
+      "minecraft:dirt"
+    ],
+    "in_water": true
+  }
+}

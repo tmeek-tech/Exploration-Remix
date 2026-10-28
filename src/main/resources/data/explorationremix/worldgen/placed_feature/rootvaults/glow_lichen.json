@@ -1,0 +1,21 @@
+{
+  "feature": "explorationremix:rootvaults/glow_lichen",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 80
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "upper",
+      "inset": 2,
+      "above_water": false
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

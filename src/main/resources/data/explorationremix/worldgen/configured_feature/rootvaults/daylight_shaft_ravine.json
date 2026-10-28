@@ -5,9 +5,11 @@
       "type": "minecraft:uniform",
       "value": {
         "min_inclusive": 3.5,
-        "max_exclusive": 6.5
+        "max_exclusive": 6.0
       }
     },
-    "max_depth": 100
+    "max_depth": 150,
+    "stretch": 2.2,
+    "max_lean": 2
   }
 }

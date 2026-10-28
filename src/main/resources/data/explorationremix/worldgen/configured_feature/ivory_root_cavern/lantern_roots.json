@@ -8,8 +8,8 @@
       }
     },
     "faces": "ceiling",
-    "tries": 24,
-    "radius": 5,
+    "tries": 32,
+    "radius": 6,
     "height": 3,
     "on": "#explorationremix:cave_rock",
     "in_water": false

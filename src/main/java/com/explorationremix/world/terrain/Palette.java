@@ -120,7 +120,7 @@ public final class Palette {
             case RUST_SPRINGS: {
                 // Crimsite caverns over a pale mineral crust, the hot pools glowing orange from below.
                 if (floor) {
-                    if (wet) return speck(x, y, z) < 0.07 ? Rock.OCHRE_FROGLIGHT : (n > 0.12 ? Rock.CALCITE : Rock.LIMESTONE);
+                    if (wet) return speck(x, y, z) < 0.16 ? Rock.OCHRE_FROGLIGHT : (n > 0.12 ? Rock.CALCITE : Rock.LIMESTONE);
                     if (top) return n > 0.24 ? Rock.CALCITE : (n < -0.3 ? Rock.DRIPSTONE : Rock.LIMESTONE);
                     return above <= 2 ? Rock.LIMESTONE : Rock.CRIMSITE;
                 }
@@ -151,9 +151,9 @@ public final class Palette {
                 return n > 0.36 ? Rock.TUFF : Rock.DEEPSLATE;
             }
             case OBSIDIAN_TUBES: {
-                // Smooth tubes lined with glassy obsidian, a little crying obsidian for light.
+                // Smooth tubes lined with glassy obsidian, crying obsidian through it for light.
                 double g = t.tubeShellDepth(x, y, z);
-                if (g < 1.8) return speck(x, y, z) < 0.035 ? Rock.CRYING_OBSIDIAN : Rock.OBSIDIAN;
+                if (g < 1.8) return speck(x, y, z) < 0.1 ? Rock.CRYING_OBSIDIAN : Rock.OBSIDIAN;
                 if (g < 3.2) return Rock.BLACKSTONE;
                 return n > 0.2 ? Rock.SMOOTH_BASALT : Rock.BASALT;
             }
@@ -229,10 +229,10 @@ public final class Palette {
         double n = patch(x, y, z);
         boolean top = above <= 1;
         switch (rootvaultsLook(x, z)) {
-            case 0: // root halls: limestone ledges, roots through the ceiling
+            case 0: // root halls: grey stone and limestone ledges, as in the picture, with roots through the ceiling
                 if (below <= 2 && n > -0.05) return Rock.ROOTED_DIRT;
                 if (n > 0.22 || (top && n > -0.15)) return Rock.LIMESTONE;
-                return null;
+                return Rock.STONE;
             case 1: // teal grottos: veridium walls, mossy ledges
                 if (top && n > -0.25) return Rock.MOSS;
                 if (n > -0.02) return Rock.VERIDIUM;

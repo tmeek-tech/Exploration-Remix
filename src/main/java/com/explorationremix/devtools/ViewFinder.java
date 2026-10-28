@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkStatus;
@@ -14,7 +15,8 @@ import java.util.function.Predicate;
 /**
  * Finds a spot to stand with a wide view into a biome, for screenshots (/remix view): it tries standing places around
  * a point and casts rays across a field of view in sixteen directions and three pitches, scoring each view by how far
- * it reaches and how much of it stays in the biome.
+ * it reaches, how much of it stays in the biome, and how well lit the rock it ends on is. Views with rock close in
+ * front of the camera anywhere across the frame, or with most of the frame in the dark, score lower.
  */
 final class ViewFinder {
     record View(double x, double y, double z, float yaw, float pitch, double reach, double score) {}
@@ -34,7 +36,7 @@ final class ViewFinder {
         }
         BlockPos.MutableBlockPos feet = new BlockPos.MutableBlockPos();
         View best = null;
-        double[][] d = new double[DIRS][PITCHES.length], frac = new double[DIRS][PITCHES.length];
+        double[][] d = new double[DIRS][PITCHES.length], frac = new double[DIRS][PITCHES.length], lit = new double[DIRS][PITCHES.length];
         for (int dx = -radius; dx <= radius; dx += step) for (int dz = -radius; dz <= radius; dz += step) {
             for (int dy = -vRadius; dy <= vRadius; dy += 2) {
                 feet.set(centre.getX() + dx, centre.getY() + dy, centre.getZ() + dz);
@@ -44,6 +46,7 @@ final class ViewFinder {
                     double[] r = ray(level, ex, ey, ez, k * 360F / DIRS, PITCHES[p], inBiome);
                     d[k][p] = r[0];
                     frac[k][p] = r[1];
+                    lit[k][p] = r[2];
                 }
                 for (int k = 0; k < DIRS; k++) for (int p = 0; p < PITCHES.length; p++) {
                     // A view is as good as the field around its centre: the neighbouring directions and pitches count too.
@@ -51,11 +54,20 @@ final class ViewFinder {
                     for (int j = -1; j <= 1; j++) for (int q = 0; q < PITCHES.length; q++) {
                         int kk = Math.floorMod(k + j, DIRS);
                         double weight = (j == 0 ? 2 : 1) * (q == p ? 2 : 0.5);
-                        s += weight * d[kk][q] * (0.3 + 0.7 * frac[kk][q]);
+                        s += weight * d[kk][q] * (0.15 + 0.85 * frac[kk][q]) * (0.4 + 0.6 * lit[kk][q]);
                         w += weight;
                         if (j == 0 && q == p) reach = d[kk][q];
                     }
                     s /= w;
+                    // Rock right in front of the camera anywhere across the frame fills half the picture, and a frame
+                    // mostly in the dark shows nothing.
+                    double clear = REACH, frameLit = 0;
+                    for (int j = -2; j <= 2; j++) {
+                        int kk = Math.floorMod(k + j, DIRS);
+                        clear = Math.min(clear, d[kk][p]);
+                        for (int q = 0; q < PITCHES.length; q++) frameLit += lit[kk][q];
+                    }
+                    s *= Math.min(1, clear / 6) * (0.5 + 0.5 * frameLit / (5 * PITCHES.length));
                     if (p == 1) s *= 1.08; // a level view reads best
                     if (best == null || s > best.score()) best = new View(ex, feet.getY(), ez, k * 360F / DIRS, PITCHES[p], reach, s);
                 }
@@ -73,11 +85,15 @@ final class ViewFinder {
 
     private static boolean open(BlockState s) { return s.isAir() || (!s.blocksMotion() && !s.canOcclude()); }
 
-    /** {distance until the view is blocked, fraction of the samples along it inside the biome}. */
+    /**
+     * {distance until the view is blocked, fraction of the samples along it inside the biome, light where it ends from 0
+     * to 1}. The light is that of the last open block, which is the light the rock it ends on is drawn with.
+     */
     private static double[] ray(ServerLevel level, double x, double y, double z, float yaw, float pitch, Predicate<BlockPos> inBiome) {
         float yr = yaw * Mth.DEG_TO_RAD, pr = pitch * Mth.DEG_TO_RAD;
         double dx = -Mth.sin(yr) * Mth.cos(pr), dy = -Mth.sin(pr), dz = Mth.cos(yr) * Mth.cos(pr);
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        BlockPos.MutableBlockPos last = new BlockPos.MutableBlockPos().set(Mth.floor(x), Mth.floor(y), Mth.floor(z));
         int in = 0, samples = 0;
         double dist = REACH;
         for (int i = 1; i <= REACH; i++) {
@@ -87,11 +103,13 @@ final class ViewFinder {
             if (c == null) { dist = i; break; }
             BlockState s = c.getBlockState(p);
             if (!s.isAir() && s.getFluidState().isEmpty() && (s.canOcclude() || s.blocksMotion())) { dist = i; break; }
+            last.set(p);
             if (i % 4 == 0) {
                 samples++;
                 if (inBiome.test(p)) in++;
             }
         }
-        return new double[]{dist, samples == 0 ? 0 : in / (double) samples};
+        int light = Math.max(level.getBrightness(LightLayer.BLOCK, last), level.getBrightness(LightLayer.SKY, last));
+        return new double[]{dist, samples == 0 ? 0 : in / (double) samples, light / 15.0};
     }
 }

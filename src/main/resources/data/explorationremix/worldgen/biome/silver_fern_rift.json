@@ -104,7 +104,9 @@
     [],
     [],
     [],
-    [],
+    [
+      "explorationremix:rootvaults/glow_lichen"
+    ],
     [
       "explorationremix:silver_fern_rift/waterfalls"
     ],

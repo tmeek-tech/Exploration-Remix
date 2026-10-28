@@ -1,9 +1,9 @@
 {
-  "feature": "minecraft:cave_vine",
+  "feature": "explorationremix:silver_fern_rift/cave_vines",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 50
+      "count": 80
     },
     {
       "type": "minecraft:in_square"

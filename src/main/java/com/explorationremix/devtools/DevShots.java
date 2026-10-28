@@ -67,6 +67,11 @@ public final class DevShots {
                 String[] setup = {"time set noon", "gamerule doDaylightCycle false", "gamerule doWeatherCycle false",
                         "gamerule doMobSpawning false", "weather clear"};
                 if (remote) {
+                    // /remix view generates chunks on the server thread, which can go quiet for longer than the
+                    // client's 30 second read timeout. Give this test connection ten minutes instead.
+                    io.netty.channel.Channel ch = mc.getConnection().getConnection().channel();
+                    if (ch.pipeline().get("timeout") != null)
+                        ch.pipeline().replace("timeout", "timeout", new io.netty.handler.timeout.ReadTimeoutHandler(600));
                     mc.getConnection().sendCommand("gamemode spectator");
                     for (String cmd : setup) mc.getConnection().sendCommand(cmd);
                 } else {
@@ -109,7 +114,7 @@ public final class DevShots {
             case VIEWING -> {
                 if (remote) {
                     double moved = Math.abs(mc.player.getX() - startX) + Math.abs(mc.player.getY() - startY) + Math.abs(mc.player.getZ() - startZ);
-                    if (moved < 1 && ticks < 2400) return;
+                    if (moved < 1 && ticks < 6000) return;
                 } else if (!viewDone) return;
                 phase = Phase.SETTLING;
                 ticks = 0;

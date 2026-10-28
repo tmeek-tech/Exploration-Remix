@@ -57,10 +57,11 @@ regenerated.
   Cavern are carved into the pack's caves between y -64 and about y 0. Strongholds and mineshafts stay above y -56
   so the End stays reachable.
 * **Looks:** new plants and crystals (white glow flowers, lantern fungi and roots, giant lantern fungi with glowing
-  caps, wisteria, lantern pods, lavender and gold flowers, silver ferns, orange shelf fungi, lavender coral, pale
-  coral fans, ember vines, asurine crystals, blue glow mushrooms and vines), each biome's own fog, water colour,
-  particles and ambient sound, steam over hot pools, embers over lava, and pollen in daylight shafts. Tuned for
-  vanilla lighting without shaders.
+  caps, wisteria, lantern pods, lavender flowers and glowing gold flowers, silver ferns, orange shelf fungi, lavender
+  coral, pale coral fans, ember vines, asurine crystals, blue glow mushrooms and vines), glow berries thick in the
+  upper caves, sea pickles on the lake beds, lava pools and falls in the Basalt Galleries, each biome's own fog, water
+  colour, particles and ambient sound, steam over hot pools, embers over lava, and pollen in daylight shafts. Tuned
+  for vanilla lighting without shaders: every biome carries enough glowing things to see by.
 
 ## Commands
 

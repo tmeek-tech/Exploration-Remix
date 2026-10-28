@@ -38,6 +38,7 @@
     {
       "type": "explorationremix:rootvaults_look",
       "looks": [
+        0,
         1,
         2
       ]
