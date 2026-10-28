@@ -1,0 +1,21 @@
+{
+  "feature": "explorationremix:silver_fern_rift/waterfalls",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 24
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "upper",
+      "inset": 2,
+      "above_water": false
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

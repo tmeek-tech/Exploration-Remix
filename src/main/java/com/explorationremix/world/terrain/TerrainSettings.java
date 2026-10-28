@@ -9,13 +9,13 @@ import java.util.List;
 public record TerrainSettings(int bandThickness, int gateSpacing, double passageRadius, double landingRadius,
                               List<LayerSettings> layers) {
 
-    public static final String[] LAYER_IDS = {"lantern_deeps", "blue_reaches", "ember_gardens", "basalt_galleries"};
+    public static final String[] LAYER_IDS = {"blue_reaches", "deep_gardens", "basalt_galleries"};
 
+    /** Three deep layers under the pack's floor at y -64: bands at -65, -273 and -529, bedrock at -832. */
     public static TerrainSettings defaults() {
         return new TerrainSettings(16, 600, 4.5, 14.0, List.of(
-                new LayerSettings("lantern_deeps", 128, 18, false, 30, 60, 40, 100),
-                new LayerSettings("blue_reaches", 160, 14, false, 80, 140, 30, 60),
-                new LayerSettings("ember_gardens", 192, 16, false, 60, 100, 100, 200),
-                new LayerSettings("basalt_galleries", 224, 10, true, 120, 180, 40, 90)));
+                new LayerSettings("blue_reaches", 192, 14, false, 80, 160, 30, 60),
+                new LayerSettings("deep_gardens", 240, 16, false, 30, 100, 40, 200),
+                new LayerSettings("basalt_galleries", 288, 10, true, 120, 180, 40, 90)));
     }
 }

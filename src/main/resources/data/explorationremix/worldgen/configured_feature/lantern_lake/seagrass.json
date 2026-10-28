@@ -1,0 +1,22 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "minecraft:seagrass"
+      }
+    },
+    "faces": "floor",
+    "tries": 64,
+    "radius": 7,
+    "height": 2,
+    "on": [
+      "minecraft:sand",
+      "minecraft:clay",
+      "minecraft:gravel",
+      "minecraft:dirt"
+    ],
+    "in_water": true
+  }
+}

@@ -31,11 +31,15 @@ public abstract class NoiseBasedAquiferMixin {
         if (this.minGridY != Math.floorDiv(t.shape.floorY, 12) - 1) return;
         int y = ctx.blockY();
         if (y >= t.shape.packFloor) {
-            // The first gate's landing and ramp are carved out of the pack's caves, where vanilla floods everything
-            // near the old floor with lava. Keep a margin around them dry so the gate mouth is never a lava pool.
-            if (density <= 0.0 && y < t.shape.packFloor + 48 && t.gateOneCarve(ctx.blockX(), y, ctx.blockZ()) < 14.0) {
-                this.shouldScheduleFluidUpdate = false;
-                cir.setReturnValue(DeepMaterials.AIR);
+            // The first gate's landing and ramp, the Silver Fern Rift and the Ivory Root Cavern are carved out of the
+            // pack's caves, where vanilla floods everything near the old floor with lava. Around them the deep world
+            // decides: their own stream or lake, and air above it, so no lava pools sit where water belongs.
+            if (density <= 0.0) {
+                int f = t.upperFluid(ctx.blockX(), y, ctx.blockZ());
+                if (f >= 0) {
+                    this.shouldScheduleFluidUpdate = false;
+                    cir.setReturnValue(f == Terrain.WATER ? DeepMaterials.WATER : DeepMaterials.AIR);
+                }
             }
             return;
         }

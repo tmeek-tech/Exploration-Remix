@@ -1,10 +1,10 @@
 {
   "has_precipitation": false,
-  "temperature": 0.7,
-  "downfall": 0.4,
+  "temperature": 0.8,
+  "downfall": 0.5,
   "effects": {
-    "fog_color": 12158276,
-    "sky_color": 12158276,
+    "fog_color": 12749382,
+    "sky_color": 12749382,
     "water_color": 3920068,
     "water_fog_color": 1205599,
     "grass_color": 8826966,
@@ -14,6 +14,17 @@
       "tick_delay": 6000,
       "block_search_extent": 8,
       "offset": 2.0
+    },
+    "particle": {
+      "options": {
+        "type": "minecraft:mycelium"
+      },
+      "probability": 0.012
+    },
+    "ambient_sound": "explorationremix:ambient.gardens.loop",
+    "additions_sound": {
+      "sound": "explorationremix:ambient.gardens.additions",
+      "tick_chance": 0.012
     }
   },
   "spawners": {
@@ -101,7 +112,13 @@
     [],
     [],
     [],
-    [],
+    [
+      "explorationremix:lantern_lake/wisteria",
+      "explorationremix:lantern_lake/wisteria_pods",
+      "explorationremix:lantern_lake/lantern_pods",
+      "explorationremix:lantern_lake/flowers",
+      "explorationremix:lantern_lake/seagrass"
+    ],
     [
       "explorationremix:open_way"
     ]

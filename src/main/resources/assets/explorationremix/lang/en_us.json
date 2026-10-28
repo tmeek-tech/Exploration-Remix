@@ -5,6 +5,7 @@
   "biome.explorationremix.ember_gardens": "Ember Gardens",
   "biome.explorationremix.ivory_root_cavern": "Ivory Root Cavern",
   "biome.explorationremix.lantern_lake": "Lantern Lake",
+  "biome.explorationremix.obsidian_tubes": "Obsidian Tubes",
   "biome.explorationremix.rootvaults": "Rootvaults",
   "biome.explorationremix.rust_springs": "Rust Springs",
   "biome.explorationremix.silver_fern_rift": "Silver Fern Rift",
@@ -27,5 +28,14 @@
   "block.explorationremix.white_glow_flower": "White Glow Flower",
   "block.explorationremix.wisteria": "Wisteria",
   "block.explorationremix.wisteria_plant": "Wisteria",
-  "itemGroup.explorationremix": "Exploration Remix"
+  "itemGroup.explorationremix": "Exploration Remix",
+  "subtitles.explorationremix.ambient.basalt.additions": "Lava pops",
+  "subtitles.explorationremix.ambient.basalt.loop": "The rock rumbles",
+  "subtitles.explorationremix.ambient.blue.additions": "A drip echoes",
+  "subtitles.explorationremix.ambient.blue.loop": "Water roars far below",
+  "subtitles.explorationremix.ambient.gardens.additions": "A drip echoes",
+  "subtitles.explorationremix.ambient.gardens.loop": "Water drips",
+  "subtitles.explorationremix.ambient.springs.loop": "Hot springs bubble",
+  "subtitles.explorationremix.ambient.upper.additions": "Birds sing above",
+  "subtitles.explorationremix.ambient.upper.loop": "Wind blows above"
 }

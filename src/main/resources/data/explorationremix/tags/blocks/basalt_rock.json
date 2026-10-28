@@ -1,0 +1,22 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:basalt",
+    "minecraft:polished_basalt",
+    "minecraft:smooth_basalt",
+    "minecraft:blackstone",
+    "minecraft:gilded_blackstone",
+    "minecraft:magma_block",
+    "minecraft:deepslate_gold_ore",
+    "minecraft:brown_terracotta",
+    "minecraft:polished_blackstone",
+    {
+      "id": "create:scoria",
+      "required": false
+    },
+    {
+      "id": "create:scorchia",
+      "required": false
+    }
+  ]
+}

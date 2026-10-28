@@ -2,6 +2,7 @@ package com.explorationremix.world.gen;
 
 import com.explorationremix.mixin.accessor.SurfaceContextAccessor;
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Hashing;
 import com.explorationremix.world.terrain.Rock;
 import com.explorationremix.world.terrain.Terrain;
@@ -43,6 +44,7 @@ public final class DeepSurfaceRules {
             int packFloor = t.shape.packFloor;
             BlockState deepslate = DeepMaterials.state(Rock.DEEPSLATE);
             Holder<Biome> rootvaults = DeepBiomes.rootvaults();
+            Holder<Biome> fernRift = DeepBiomes.holder(DeepBiome.SILVER_FERN_RIFT), rootCavern = DeepBiomes.holder(DeepBiome.IVORY_ROOT_CAVERN);
             ChunkAccess chunk = a.er$chunk();
             int minX = chunk.getPos().getMinBlockX(), minZ = chunk.getPos().getMinBlockZ();
             return (x, y, z) -> {
@@ -51,15 +53,20 @@ public final class DeepSurfaceRules {
                     return DeepMaterials.state(r);
                 }
                 if (y <= packFloor + 5) return deepslate; // the pack's old bedrock floor
-                if (rootvaults == null) return null;
                 // The biome stored for this block's 4x4x4 cell, read one to two blocks off so borders are ragged.
                 long h = Hashing.mix(t.seed, x, y, z);
                 int bx = clamp(x + (int) (h & 3) - 1, minX, minX + 15);
                 int by = y + (int) ((h >>> 2) & 3) - 1;
                 int bz = clamp(z + (int) ((h >>> 4) & 3) - 1, minZ, minZ + 15);
                 Holder<Biome> b = chunk.getNoiseBiome(QuartPos.fromBlock(bx), QuartPos.fromBlock(by), QuartPos.fromBlock(bz));
-                if (b != rootvaults) return null;
-                return DeepMaterials.state(t.palette.rootvaults(x, y, z, a.er$stoneDepthAbove(), a.er$stoneDepthBelow()));
+                if (b == rootvaults && rootvaults != null)
+                    return DeepMaterials.state(t.palette.rootvaults(x, y, z, a.er$stoneDepthAbove(), a.er$stoneDepthBelow()));
+                if (b == fernRift || b == rootCavern) {
+                    DeepBiome db = b == fernRift ? DeepBiome.SILVER_FERN_RIFT : DeepBiome.IVORY_ROOT_CAVERN;
+                    return DeepMaterials.state(t.palette.upperShell(db, x, y, z, a.er$stoneDepthAbove(), a.er$stoneDepthBelow(),
+                            a.er$waterHeight() != Integer.MIN_VALUE));
+                }
+                return null;
             };
         }
 

@@ -1,11 +1,11 @@
 {
   "has_precipitation": false,
   "temperature": 1.2,
-  "downfall": 0.4,
+  "downfall": 0.5,
   "effects": {
-    "fog_color": 11028269,
-    "sky_color": 11028269,
-    "water_color": 5220805,
+    "fog_color": 11884079,
+    "sky_color": 11884079,
+    "water_color": 5029065,
     "water_fog_color": 1457997,
     "grass_color": 11046988,
     "foliage_color": 9994300,
@@ -14,6 +14,17 @@
       "tick_delay": 6000,
       "block_search_extent": 8,
       "offset": 2.0
+    },
+    "particle": {
+      "options": {
+        "type": "minecraft:mycelium"
+      },
+      "probability": 0.012
+    },
+    "ambient_sound": "explorationremix:ambient.springs.loop",
+    "additions_sound": {
+      "sound": "explorationremix:ambient.gardens.additions",
+      "tick_chance": 0.012
     }
   },
   "spawners": {
@@ -94,14 +105,21 @@
   "features": [
     [],
     [],
+    [
+      "explorationremix:ember_gardens/pools"
+    ],
     [],
     [],
     [],
     [],
+    [
+      "explorationremix:ember_gardens/shelf_fungi"
+    ],
     [],
-    [],
-    [],
-    [],
+    [
+      "explorationremix:ember_gardens/ember_vines",
+      "explorationremix:ember_gardens/coral"
+    ],
     [
       "explorationremix:open_way"
     ]

@@ -1,0 +1,41 @@
+{
+  "type": "explorationremix:giant_fungus",
+  "config": {
+    "stem": {
+      "Name": "minecraft:mushroom_stem"
+    },
+    "cap": {
+      "Name": "minecraft:mushroom_stem",
+      "Properties": {
+        "down": "false"
+      }
+    },
+    "glow": {
+      "Name": "minecraft:shroomlight"
+    },
+    "roots": {
+      "Name": "explorationremix:lantern_roots"
+    },
+    "height": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 2,
+        "max_inclusive": 5
+      }
+    },
+    "radius": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 2,
+        "max_inclusive": 3
+      }
+    },
+    "root_length": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 1,
+        "max_inclusive": 4
+      }
+    }
+  }
+}

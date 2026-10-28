@@ -1,0 +1,170 @@
+{
+  "ambient.upper.loop": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/upper_wind",
+        "volume": 0.55,
+        "stream": true
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.upper.loop"
+  },
+  "ambient.upper.additions": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/bird1",
+        "volume": 0.35,
+        "weight": 2
+      },
+      {
+        "name": "explorationremix:ambient/bird2",
+        "volume": 0.35,
+        "weight": 2
+      },
+      {
+        "name": "explorationremix:ambient/bird3",
+        "volume": 0.35,
+        "weight": 2
+      },
+      {
+        "name": "explorationremix:ambient/bird4",
+        "volume": 0.35,
+        "weight": 2
+      },
+      {
+        "name": "explorationremix:ambient/drip1",
+        "volume": 0.5
+      },
+      {
+        "name": "explorationremix:ambient/drip2",
+        "volume": 0.5
+      },
+      {
+        "name": "explorationremix:ambient/drip3",
+        "volume": 0.5
+      },
+      {
+        "name": "explorationremix:ambient/drip4",
+        "volume": 0.5
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.upper.additions"
+  },
+  "ambient.gardens.loop": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/gardens_drips",
+        "volume": 0.7,
+        "stream": true
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.gardens.loop"
+  },
+  "ambient.gardens.additions": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/echo_drip1",
+        "volume": 0.6
+      },
+      {
+        "name": "explorationremix:ambient/echo_drip2",
+        "volume": 0.6
+      },
+      {
+        "name": "explorationremix:ambient/echo_drip3",
+        "volume": 0.6
+      },
+      {
+        "name": "explorationremix:ambient/echo_drip4",
+        "volume": 0.6
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.gardens.additions"
+  },
+  "ambient.springs.loop": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/springs_bubbling",
+        "volume": 0.6,
+        "stream": true
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.springs.loop"
+  },
+  "ambient.blue.loop": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/blue_roar",
+        "volume": 0.7,
+        "stream": true
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.blue.loop"
+  },
+  "ambient.blue.additions": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/echo_drip1",
+        "volume": 0.45,
+        "pitch": 0.7
+      },
+      {
+        "name": "explorationremix:ambient/echo_drip2",
+        "volume": 0.45,
+        "pitch": 0.7
+      },
+      {
+        "name": "explorationremix:ambient/echo_drip3",
+        "volume": 0.45,
+        "pitch": 0.7
+      },
+      {
+        "name": "explorationremix:ambient/echo_drip4",
+        "volume": 0.45,
+        "pitch": 0.7
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.blue.additions"
+  },
+  "ambient.basalt.loop": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/basalt_rumble",
+        "volume": 0.8,
+        "stream": true
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.basalt.loop"
+  },
+  "ambient.basalt.additions": {
+    "sounds": [
+      {
+        "name": "minecraft:block/lava/pop",
+        "volume": 0.7,
+        "pitch": 0.9,
+        "weight": 3
+      },
+      {
+        "name": "minecraft:ambient/nether/basalt_deltas/debris1",
+        "volume": 0.5
+      },
+      {
+        "name": "minecraft:ambient/nether/basalt_deltas/debris2",
+        "volume": 0.5
+      },
+      {
+        "name": "minecraft:ambient/nether/basalt_deltas/debris3",
+        "volume": 0.5
+      },
+      {
+        "name": "explorationremix:ambient/rumble1",
+        "volume": 0.8
+      },
+      {
+        "name": "explorationremix:ambient/rumble2",
+        "volume": 0.8
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.basalt.additions"
+  }
+}

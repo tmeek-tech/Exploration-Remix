@@ -1,0 +1,68 @@
+{
+  "type": "explorationremix:giant_spike",
+  "config": {
+    "body": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "explorationremix:fallback",
+            "blocks": [
+              "create:crimsite",
+              "minecraft:granite"
+            ]
+          },
+          "weight": 4
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:granite"
+            }
+          },
+          "weight": 1
+        }
+      ]
+    },
+    "tip": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "explorationremix:fallback",
+            "blocks": [
+              "create:crimsite",
+              "minecraft:granite"
+            ]
+          },
+          "weight": 2
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:red_terracotta"
+            }
+          },
+          "weight": 1
+        }
+      ]
+    },
+    "length": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 8,
+        "max_inclusive": 28
+      }
+    },
+    "radius": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 2.0,
+        "max_exclusive": 4.6
+      }
+    },
+    "floor_chance": 0.4
+  }
+}

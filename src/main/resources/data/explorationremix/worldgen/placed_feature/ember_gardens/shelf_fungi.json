@@ -1,0 +1,21 @@
+{
+  "feature": "explorationremix:ember_gardens/shelf_fungi",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 15
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "deep_gardens",
+      "inset": 2,
+      "above_water": true
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

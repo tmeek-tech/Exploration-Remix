@@ -1,11 +1,11 @@
 {
   "has_precipitation": false,
   "temperature": 0.8,
-  "downfall": 0.4,
+  "downfall": 0.5,
   "effects": {
-    "fog_color": 12175756,
-    "sky_color": 12175756,
-    "water_color": 3127209,
+    "fog_color": 11846268,
+    "sky_color": 11846268,
+    "water_color": 3982516,
     "water_fog_color": 1006165,
     "grass_color": 7319128,
     "foliage_color": 6134856,
@@ -14,6 +14,11 @@
       "tick_delay": 6000,
       "block_search_extent": 8,
       "offset": 2.0
+    },
+    "ambient_sound": "explorationremix:ambient.upper.loop",
+    "additions_sound": {
+      "sound": "explorationremix:ambient.upper.additions",
+      "tick_chance": 0.008
     }
   },
   "spawners": {
@@ -87,18 +92,27 @@
     "water_creature": [],
     "water_ambient": [],
     "misc": [],
-    "axolotls": []
+    "axolotls": [
+      {
+        "type": "minecraft:axolotl",
+        "weight": 10,
+        "minCount": 4,
+        "maxCount": 6
+      }
+    ]
   },
   "spawn_costs": {},
   "carvers": {},
   "features": [
     [],
     [
-      "minecraft:lake_lava_underground",
-      "minecraft:lake_lava_surface"
+      "explorationremix:rootvaults/lava_to_water"
     ],
     [
-      "minecraft:amethyst_geode"
+      "minecraft:amethyst_geode",
+      "explorationremix:rootvaults/daylight_shaft_hall",
+      "explorationremix:rootvaults/daylight_shaft_ravine",
+      "explorationremix:rootvaults/pools"
     ],
     [
       "minecraft:monster_room",
@@ -136,13 +150,22 @@
       "minecraft:disk_clay",
       "minecraft:disk_gravel"
     ],
-    [],
     [
-      "minecraft:spring_water",
-      "minecraft:spring_lava"
+      "explorationremix:rootvaults/moss_floor",
+      "explorationremix:rootvaults/moss_ceiling"
     ],
     [
-      "minecraft:glow_lichen"
+      "minecraft:spring_water",
+      "explorationremix:rootvaults/waterfalls"
+    ],
+    [
+      "minecraft:glow_lichen",
+      "explorationremix:rootvaults/ceiling_roots",
+      "explorationremix:rootvaults/hanging_roots",
+      "explorationremix:rootvaults/cave_vines",
+      "explorationremix:rootvaults/ferns",
+      "explorationremix:rootvaults/white_glow_flowers",
+      "explorationremix:rootvaults/white_glow_flowers_sparse"
     ],
     [
       "minecraft:freeze_top_layer"

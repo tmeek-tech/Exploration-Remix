@@ -1,0 +1,13 @@
+{
+  "type": "explorationremix:daylight_shaft",
+  "config": {
+    "radius": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 1.5,
+        "max_exclusive": 3.2
+      }
+    },
+    "max_depth": 80
+  }
+}

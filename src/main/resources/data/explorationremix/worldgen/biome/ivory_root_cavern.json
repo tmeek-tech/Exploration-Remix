@@ -1,11 +1,11 @@
 {
   "has_precipitation": false,
-  "temperature": 0.7,
-  "downfall": 0.4,
+  "temperature": 0.8,
+  "downfall": 0.5,
   "effects": {
-    "fog_color": 13145418,
-    "sky_color": 13145418,
-    "water_color": 3525056,
+    "fog_color": 13088644,
+    "sky_color": 13088644,
+    "water_color": 3722178,
     "water_fog_color": 941658,
     "grass_color": 9416282,
     "foliage_color": 8232522,
@@ -14,6 +14,11 @@
       "tick_delay": 6000,
       "block_search_extent": 8,
       "offset": 2.0
+    },
+    "ambient_sound": "explorationremix:ambient.upper.loop",
+    "additions_sound": {
+      "sound": "explorationremix:ambient.upper.additions",
+      "tick_chance": 0.008
     }
   },
   "spawners": {
@@ -94,16 +99,23 @@
   "features": [
     [],
     [],
-    [],
-    [],
-    [],
+    [
+      "explorationremix:ivory_root_cavern/stalactites"
+    ],
     [],
     [],
     [],
     [],
     [],
     [
-      "explorationremix:open_way"
-    ]
+      "explorationremix:ivory_root_cavern/waterfalls"
+    ],
+    [
+      "explorationremix:ivory_root_cavern/giant_lantern_fungi",
+      "explorationremix:ivory_root_cavern/lantern_fungi",
+      "explorationremix:ivory_root_cavern/lantern_roots",
+      "explorationremix:ivory_root_cavern/moss"
+    ],
+    []
   ]
 }

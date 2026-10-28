@@ -51,18 +51,15 @@ public final class Palette {
     public Rock interior(int li, int x, int y, int z) {
         double n = interiorN.noise3(x * 0.024, y * 0.034, z * 0.024);
         switch (li) {
-            case Terrain.LANTERN:
-                if (n > 0.26) return Rock.TUFF;
+            case Terrain.GARDENS:
+                // Deepslate and blackstone, with pale limestone, crimsite and ochrum in bold patches.
+                if (n > 0.24) return n > 0.42 ? Rock.CRIMSITE : Rock.BLACKSTONE;
                 if (n < -0.3) return n < -0.46 ? Rock.OCHRUM : Rock.LIMESTONE;
                 return Rock.DEEPSLATE;
             case Terrain.BLUE:
                 if (n > 0.28) return Rock.TUFF;
                 if (n < -0.28) return Rock.ASURINE;
                 return Rock.DEEPSLATE;
-            case Terrain.EMBER:
-                if (n > 0.22) return Rock.CRIMSITE;
-                if (n < -0.42) return Rock.LIMESTONE;
-                return Rock.BLACKSTONE;
             default:
                 if (n > 0.22) return Rock.BLACKSTONE;
                 if (n < -0.28) return n < -0.45 ? Rock.SCORIA : Rock.SCORCHIA;
@@ -90,33 +87,46 @@ public final class Palette {
         boolean ceil = !floor && below <= 2;
         int W = s.waterY(li);
         switch (b) {
-            case IVORY_ROOT_CAVERN: {
-                // Pale limestone and calcite over deepslate, a pale shore around the turquoise lake.
-                if (floor) {
-                    if (wet) return n > 0.18 ? Rock.CLAY : (n < -0.22 ? Rock.LIMESTONE : Rock.CALCITE);
-                    if (top && y <= W + 1) return Rock.CALCITE;
-                    return n > 0.26 ? Rock.CALCITE : Rock.LIMESTONE;
-                }
-                double line = W + 8 + 7 * wobN.noise2(x * 0.021, z * 0.021);
-                if (y < line) return n > 0.3 ? Rock.TUFF : Rock.DEEPSLATE;
-                if (ceil && n < -0.3) return Rock.DRIPSTONE;
-                if (seam(x, y, z)) return Rock.CALCITE;
-                return n > 0.24 ? Rock.CALCITE : Rock.LIMESTONE;
-            }
             case LANTERN_LAKE: {
-                // A still lake with mossy islands under a low ceiling of limestone and blackstone veined with gold.
+                // A still lake with islands under a low ceiling of limestone and blackstone veined with gold.
                 if (floor) {
                     if (wet) return n > 0.22 ? Rock.CLAY : (n < -0.22 ? Rock.GRAVEL : Rock.SAND);
                     if (top) return n > -0.08 ? Rock.MOSS : Rock.GRASS;
-                    return above <= 2 ? Rock.DIRT : Rock.TUFF;
+                    return above <= 2 ? Rock.DIRT : Rock.LIMESTONE;
                 }
-                if (ceil || y > W + 12 + 5 * wobN.noise2(x * 0.03, z * 0.03)) {
+                if (ceil) {
                     boolean lime = n > -0.06;
                     if (vein(x, y, z, 0.03)) return lime ? Rock.GOLD_ORE : Rock.GILDED_BLACKSTONE;
                     return lime ? Rock.LIMESTONE : Rock.BLACKSTONE;
                 }
+                if (vein(x, y, z, 0.022)) return Rock.DEEPSLATE_GOLD_ORE;
                 if (seam(x, y, z)) return Rock.LIMESTONE;
-                return n > 0.3 ? Rock.LIMESTONE : (n < -0.3 ? Rock.TUFF : Rock.DEEPSLATE);
+                return n > 0.26 ? Rock.LIMESTONE : (n < -0.3 ? Rock.BLACKSTONE : Rock.DEEPSLATE);
+            }
+            case EMBER_GARDENS: {
+                // Blackstone caverns with pale limestone terraces, gold in the rock.
+                if (floor) {
+                    if (wet) return n > 0.2 ? Rock.CLAY : Rock.LIMESTONE;
+                    if (top) return n > 0.28 ? Rock.CALCITE : Rock.LIMESTONE;
+                    return above <= 2 ? Rock.LIMESTONE : Rock.BLACKSTONE;
+                }
+                if (speck(x, y, z) < 0.004) return Rock.GILDED_BLACKSTONE;
+                if (vein(x, y, z, 0.02)) return Rock.DEEPSLATE_GOLD_ORE;
+                if (seam(x, y, z)) return Rock.LIMESTONE;
+                if (n > 0.34) return Rock.CRIMSITE;
+                if (n < -0.38) return Rock.OCHRUM;
+                return Rock.BLACKSTONE;
+            }
+            case RUST_SPRINGS: {
+                // Crimsite caverns over a pale mineral crust, the hot pools glowing orange from below.
+                if (floor) {
+                    if (wet) return speck(x, y, z) < 0.07 ? Rock.OCHRE_FROGLIGHT : (n > 0.12 ? Rock.CALCITE : Rock.LIMESTONE);
+                    if (top) return n > 0.24 ? Rock.CALCITE : (n < -0.3 ? Rock.DRIPSTONE : Rock.LIMESTONE);
+                    return above <= 2 ? Rock.LIMESTONE : Rock.CRIMSITE;
+                }
+                if (n < -0.36) return Rock.BLACKSTONE;
+                if (n > 0.42) return Rock.GRANITE;
+                return Rock.CRIMSITE;
             }
             case ASURINE_GEODES: {
                 // Dark rock outside, a band of white calcite, then the asurine lining.
@@ -136,44 +146,16 @@ public final class Palette {
                 if (n < -0.2) return Rock.ASURINE;
                 return n > 0.32 ? Rock.TUFF : Rock.DEEPSLATE;
             }
-            case SILVER_FERN_RIFT: {
-                // Blue-grey cliffs of asurine and deepslate, stepped with mossy ledges, copper and iron in the walls.
-                if (floor) {
-                    if (wet) return n > 0 ? Rock.GRAVEL : Rock.CLAY;
-                    if (top) return Rock.MOSS;
-                    return n < -0.05 ? Rock.ASURINE : Rock.DEEPSLATE;
-                }
-                if (vein(x, y, z, 0.026)) return speck(x, y, z) < 0.5 ? Rock.DEEPSLATE_COPPER_ORE : Rock.DEEPSLATE_IRON_ORE;
-                if (n < 0.04) return Rock.ASURINE;
-                return n > 0.38 ? Rock.TUFF : Rock.DEEPSLATE;
-            }
             case DEEP_DARK: {
                 if (floor && !wet && n < -0.36) return Rock.COBBLED_DEEPSLATE;
                 return n > 0.36 ? Rock.TUFF : Rock.DEEPSLATE;
             }
-            case RUST_SPRINGS: {
-                // Crimsite caverns over a pale mineral crust.
-                if (floor) {
-                    if (wet) return n > 0.12 ? Rock.CALCITE : Rock.LIMESTONE;
-                    if (top) return n > 0.24 ? Rock.CALCITE : (n < -0.3 ? Rock.DRIPSTONE : Rock.LIMESTONE);
-                    return above <= 2 ? Rock.LIMESTONE : Rock.CRIMSITE;
-                }
-                if (n < -0.36) return Rock.BLACKSTONE;
-                if (n > 0.42) return Rock.GRANITE;
-                return Rock.CRIMSITE;
-            }
-            case EMBER_GARDENS: {
-                // Blackstone caverns with pale limestone terraces, gold in the rock.
-                if (floor) {
-                    if (wet) return n > 0.2 ? Rock.CLAY : Rock.LIMESTONE;
-                    if (top) return n > 0.28 ? Rock.CALCITE : Rock.LIMESTONE;
-                    return above <= 2 ? Rock.LIMESTONE : Rock.BLACKSTONE;
-                }
-                if (speck(x, y, z) < 0.004) return Rock.GILDED_BLACKSTONE;
-                if (seam(x, y, z)) return Rock.LIMESTONE;
-                if (n > 0.34) return Rock.CRIMSITE;
-                if (n < -0.38) return Rock.BASALT;
-                return Rock.BLACKSTONE;
+            case OBSIDIAN_TUBES: {
+                // Smooth tubes lined with glassy obsidian, a little crying obsidian for light.
+                double g = t.tubeShellDepth(x, y, z);
+                if (g < 1.8) return speck(x, y, z) < 0.035 ? Rock.CRYING_OBSIDIAN : Rock.OBSIDIAN;
+                if (g < 3.2) return Rock.BLACKSTONE;
+                return n > 0.2 ? Rock.SMOOTH_BASALT : Rock.BASALT;
             }
             default: {
                 // Basalt galleries: basalt and blackstone with scoria and scorchia, gilded blackstone and gold.
@@ -188,6 +170,47 @@ public final class Palette {
                 return n > 0.12 ? Rock.SMOOTH_BASALT : Rock.BASALT;
             }
         }
+    }
+
+    // ============================================================================================== upper caves
+
+    /**
+     * Rock around the two set pieces carved into the pack's caves: the Silver Fern Rift and the Ivory Root Cavern.
+     * Null keeps the pack's own choice.
+     */
+    public Rock upperShell(DeepBiome b, int x, int y, int z, int above, int below, boolean wet) {
+        double n = patch(x, y, z);
+        boolean top = above <= 1;
+        boolean floor = above <= 3;
+        boolean ceil = !floor && below <= 2;
+        if (b == DeepBiome.SILVER_FERN_RIFT) {
+            // Blue-grey cliffs of asurine and deepslate, stepped with mossy ledges, copper and iron in the walls.
+            if (floor) {
+                if (wet) return n > 0 ? Rock.GRAVEL : Rock.CLAY;
+                if (top) return Rock.MOSS;
+                return n < -0.05 ? Rock.ASURINE : Rock.DEEPSLATE;
+            }
+            if (ceil && n > 0.2) return Rock.LIMESTONE;
+            if (vein(x, y, z, 0.026)) return speck(x, y, z) < 0.5 ? Rock.DEEPSLATE_COPPER_ORE : Rock.DEEPSLATE_IRON_ORE;
+            if (n < 0.04) return Rock.ASURINE;
+            return n > 0.38 ? Rock.TUFF : Rock.DEEPSLATE;
+        }
+        if (b == DeepBiome.IVORY_ROOT_CAVERN) {
+            // Pale limestone and calcite over deepslate, a pale shore around the turquoise lake.
+            double lake = t.upperLakeY(x, z);
+            if (floor) {
+                if (wet) return n > 0.18 ? Rock.CLAY : (n < -0.22 ? Rock.LIMESTONE : Rock.CALCITE);
+                if (top && y <= lake + 1) return Rock.CALCITE;
+                return n > 0.26 ? Rock.CALCITE : Rock.LIMESTONE;
+            }
+            double line = lake + 6 + 6 * wobN.noise2(x * 0.021, z * 0.021);
+            if (y < line) return vein(x, y, z, 0.024) ? Rock.DEEPSLATE_IRON_ORE : (n > 0.3 ? Rock.TUFF : Rock.DEEPSLATE);
+            if (ceil && n < -0.3) return Rock.DRIPSTONE;
+            if (vein(x, y, z, 0.02)) return Rock.IRON_ORE;
+            if (seam(x, y, z)) return Rock.CALCITE;
+            return n > 0.24 ? Rock.CALCITE : Rock.LIMESTONE;
+        }
+        return null;
     }
 
     // ============================================================================================== Rootvaults

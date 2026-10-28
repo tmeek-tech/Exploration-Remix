@@ -17,7 +17,9 @@
     "StructureMixin",
     "AboveBottomAnchorMixin"
   ],
-  "client": [],
+  "client": [
+    "client.LightTextureMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

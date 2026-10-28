@@ -29,7 +29,8 @@ public final class ERConfig {
     public final ForgeConfigSpec.IntValue structureFloorY;
     public final ForgeConfigSpec.BooleanValue replaceVanillaCaveBiomes;
     public final ForgeConfigSpec.BooleanValue removeCreateStriations;
-    public final LayerConfig[] layers = new LayerConfig[4];
+    public final ForgeConfigSpec.BooleanValue upperRegions;
+    public final LayerConfig[] layers = new LayerConfig[3];
 
     public static final class LayerConfig {
         public final String id;
@@ -63,20 +64,21 @@ public final class ERConfig {
     private ERConfig(ForgeConfigSpec.Builder b) {
         TerrainSettings d = TerrainSettings.defaults();
         b.comment("The deep world below the pack's old floor. Changes apply to newly generated chunks.").push("world");
-        worldEnabled = b.comment("Extend the overworld down through the four deep layers.").define("enabled", true);
+        worldEnabled = b.comment("Extend the overworld down through the three deep layers.").define("enabled", true);
         bandThickness = b.comment("Thickness of the unbreakable bands between layers.").defineInRange("bandThickness", d.bandThickness(), 8, 64);
         gateSpacing = b.comment("One gate per band in every square of this many blocks.").defineInRange("gateSpacing", d.gateSpacing(), 320, 4096);
         passageRadius = b.comment("Radius of the twisting gate passages.").defineInRange("passageRadius", d.passageRadius(), 2.5, 12.0);
         landingRadius = b.comment("Radius of the landing chambers at each end of a gate passage.").defineInRange("landingRadius", d.landingRadius(), 8.0, 40.0);
         structureFloorY = b.comment("Strongholds and mineshafts stay above this Y so the End stays reachable.").defineInRange("structureFloorY", -56, -64, 0);
-        replaceVanillaCaveBiomes = b.comment("Rootvaults replace vanilla's dripstone caves and deep dark above the first band (both moved down into the layers).")
+        replaceVanillaCaveBiomes = b.comment("Rootvaults replace vanilla's deep dark above the first band (the deep dark moved down into the Blue Reaches).")
                 .define("replaceVanillaCaveBiomes", true);
+        upperRegions = b.comment("Carve the Silver Fern Rift and the Ivory Root Cavern into the pack's caves between y -64 and about 0.")
+                .define("upperRegions", true);
         removeCreateStriations = b.comment("Remove Create's striped stone layers from the overworld; the layers use Create's stones as patches instead.")
                 .define("removeCreateStriations", true);
-        layers[0] = new LayerConfig(b, d.layers().get(0), "hall height", "lake width");
-        layers[1] = new LayerConfig(b, d.layers().get(1), "rift depth", "geode width");
-        layers[2] = new LayerConfig(b, d.layers().get(2), "cavern height", "cavern width");
-        layers[3] = new LayerConfig(b, d.layers().get(3), "gallery height", "gallery width");
+        layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width");
+        layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width");
+        layers[2] = new LayerConfig(b, d.layers().get(2), "gallery height", "gallery width");
         b.pop();
     }
 

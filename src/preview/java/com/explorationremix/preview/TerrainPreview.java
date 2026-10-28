@@ -61,6 +61,7 @@ public final class TerrainPreview {
             case RUST_SPRINGS -> 0xD8603A;
             case EMBER_GARDENS -> 0xF09A50;
             case BASALT_GALLERIES -> 0xC0A090;
+            case OBSIDIAN_TUBES -> 0x7A3FB0;
         };
     }
 
@@ -246,13 +247,13 @@ public final class TerrainPreview {
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
         TerrainPreview p = new TerrainPreview(t);
         Shape s = t.shape;
-        for (int li = 0; li < 4; li++) {
+        for (int li = 0; li < s.layerCount; li++) {
             System.out.printf("layer %d %s: y %d..%d water %d%n", li, s.id(li), s.bottom(li), s.top(li), s.waterY(li));
         }
         long t0 = System.nanoTime();
         if (what.equals("mat")) {
             // Rock along each route and across it, as the game would place it.
-            for (int li = 0; li < 4; li++) {
+            for (int li = 0; li < s.layerCount; li++) {
                 Route r = t.plans.route(li, 0, 0);
                 int ns = 4;
                 BufferedImage fan = new BufferedImage(ns * 130, s.top(li) - s.bottom(li) + 12, BufferedImage.TYPE_INT_RGB);
@@ -273,7 +274,7 @@ public final class TerrainPreview {
             return;
         }
         int cell = t.plans.cellOf(0);
-        for (int li = 0; li < 4; li++) {
+        for (int li = 0; li < s.layerCount; li++) {
             if (!what.equals("all") && !what.equals(String.valueOf(li))) continue;
             Route r = t.plans.route(li, 0, 0);
             System.out.printf("layer %d route length %.0f, floor %.0f -> %.0f, halls %d, geodes %d, bridges %d%n", li, r.length, r.floorAt(0), r.floorAt(r.length), r.halls.size(), r.geodes.size(), r.bridges.size());

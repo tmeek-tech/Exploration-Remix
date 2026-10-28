@@ -1,0 +1,6 @@
+{
+  "type": "forge:add_features",
+  "biomes": "minecraft:deep_dark",
+  "features": "explorationremix:open_way",
+  "step": "top_layer_modification"
+}

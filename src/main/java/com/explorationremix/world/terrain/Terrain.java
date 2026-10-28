@@ -9,12 +9,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * Minecraft's interpolation.
  *
  * <p>Each layer is built from a few large pieces: heightfield caverns (a floor and a ceiling per column, so spaces are
- * big and connected), rift networks, the planned route with its set pieces, and the gate landings and passages. Rock
+ * big and connected), basalt galleries, the planned route with its set pieces (lake halls, the rift and its bridges,
+ * and the refuges beside it: Rust Springs, geodes, obsidian tubes), and the gate landings and passages. Rock
  * that must stay (pillars, bridges, arches, the path's floor, the seals under each band) is added on top, and the
  * route's walking space, the landings and the passages are cut last so nothing can block the way down.
  */
 public final class Terrain {
-    public static final int LANTERN = 0, BLUE = 1, EMBER = 2, BASALT = 3;
+    public static final int BLUE = 0, GARDENS = 1, BASALT = 2;
+    /**
+     * How far above its lava table the Basalt Galleries' lava rises at the height of a surge (a later milestone's
+     * quake cycle). The natural arches, the obsidian tubes and the high benches along the gallery walls all sit above
+     * this, so there is always somewhere to climb to.
+     */
+    public static final int SURGE_RISE = 24;
     public static final int AIR = 0, WATER = 1, LAVA = 2;
     static final double SOLID = 64;
     /** Blocks of layer rock kept between any cave and the band above or the bedrock below. */
@@ -27,18 +34,22 @@ public final class Terrain {
     public final long seed;
     public final Plans plans;
     public final Palette palette;
+    /** Asked before an upper set piece is placed, so none is carved under an ocean or river. Null in tests. */
+    public volatile Upper.SurfaceProbe surfaceProbe;
 
     private final Perlin warpX, warpZ, maskA, maskB, chan, floorN, ceilN, islandN, heightN, region, riftN, riftDepth,
             rough1, rough2, gal1, gal2, ledgeN, detail;
     private final Map<Long, Arch> arches = new ConcurrentHashMap<>();
-    private final ThreadLocal<Column[]> cache = ThreadLocal.withInitial(() -> {
-        Column[] a = new Column[1024];
-        for (int i = 0; i < a.length; i++) a[i] = new Column(4);
-        return a;
-    });
+    private final ThreadLocal<Column[]> cache;
 
     public Terrain(TerrainSettings settings, int packFloor, long seed) {
         this.settings = settings;
+        int layerCount = settings.layers().size();
+        this.cache = ThreadLocal.withInitial(() -> {
+            Column[] a = new Column[1024];
+            for (int i = 0; i < a.length; i++) a[i] = new Column(layerCount);
+            return a;
+        });
         this.shape = new Shape(settings, packFloor);
         this.seed = seed;
         long s = seed ^ 0x6A09E667F3BCC909L;
@@ -71,6 +82,10 @@ public final class Terrain {
         int x, z, cellX, cellZ;
         boolean valid;
         final LayerCol[] layers;
+        boolean upDone;                     // the upper set piece over this column (if any): computed on first use
+        Upper.Piece up;
+        double upD, upS;                    // distance from the rift's centre line or the cavern's axis; arc length
+        final double[] upT = new double[3];
 
         Column(int count) {
             layers = new LayerCol[count];
@@ -80,11 +95,10 @@ public final class Terrain {
 
     static final class LayerCol {
         boolean done, routeDone;            // everything, or only the route part (enough for the per-block pass)
-        double geoNear;                     // distance to the nearest refuge geode's shell
+        double refugeNear;                  // distance to the nearest refuge (geode, spring cavern, tube) or lake hall
         double aF, aC, bF, bC;              // two heightfield cavern tiers: floor and ceiling (open where C > F)
         double aPd, aPr, bPd, bPr;          // nearest pillar: distance to its axis and its radius
         boolean aHour, bHour;               // hourglass pillars (stalactite meets stalagmite) or straight columns
-        double regionV;                     // blue reaches: > 0 silver fern rifts, < 0 deep dark
         Route route;
         boolean rOn, wOn;                   // near the route's centre line / near its walking line
         double rD, rS, rV, rTop, rHalfTop;  // centre line: distance, arc length, signed side; the rift's top and half width
@@ -99,6 +113,10 @@ public final class Terrain {
         int geoN;
         final Route.Geode[] geo = new Route.Geode[10];
         final double[] geoD2 = new double[10];
+        int springN;
+        final Route.Spring[] spring = new Route.Spring[2];
+        int tubeN;
+        final Route.Tube[] tube = new Route.Tube[10];
         Route.Bridge bridge;
         Plans.Gate entry, exit;
         double entryD, exitD, endD;
@@ -119,8 +137,30 @@ public final class Terrain {
         c.cellX = plans.cellOf(x);
         c.cellZ = plans.cellOf(z);
         c.valid = true;
+        c.upDone = false;
         for (LayerCol lc : c.layers) { lc.done = false; lc.routeDone = false; }
         return c;
+    }
+
+    private Upper.Piece upperOf(Column c) {
+        if (!c.upDone) {
+            Upper.Piece p = plans.upper(c.cellX, c.cellZ);
+            c.up = null;
+            if (p != null && p.near(c.x, c.z)) {
+                c.up = p;
+                if (p instanceof Upper.Rift r) {
+                    r.nearest(c.x, c.z, c.upT);
+                    c.upD = c.upT[0];
+                    c.upS = c.upT[1];
+                } else {
+                    Upper.Cavern cv = (Upper.Cavern) p;
+                    c.upD = Math.hypot(c.x - cv.cx, c.z - cv.cz);
+                    c.upS = 0;
+                }
+            }
+            c.upDone = true;
+        }
+        return c.up;
     }
 
     LayerCol layerCol(Column c, int li) {
@@ -204,7 +244,13 @@ public final class Terrain {
         return bedY + Math.min(gq, depth + 2);
     }
 
-    private static double terraced(double v, double step) {
+    /** Steps of the given height that stay flat for {@code flat} of each step and then rise sharply. */
+    static double stairs(double v, double step, double flat) {
+        double k = Math.floor(v / step), frac = v / step - k;
+        return step * (k + smooth((frac - flat) / (1 - flat)));
+    }
+
+    static double terraced(double v, double step) {
         double k = Math.floor(v / step), frac = v / step - k;
         return step * (k + smooth((frac - 0.6) / 0.4));
     }
@@ -215,6 +261,8 @@ public final class Terrain {
         double x = c.x, z = c.z;
         lc.hallN = 0;
         lc.geoN = 0;
+        lc.springN = 0;
+        lc.tubeN = 0;
         lc.bridge = null;
         lc.arch = null;
         Route r = plans.route(li, c.cellX, c.cellZ);
@@ -290,22 +338,37 @@ public final class Terrain {
                 lc.hallD[lc.hallN++] = d;
             }
         }
-        double geoNear = 1e9;
+        double near = 1e9;
         for (Route.Geode g : r.geodes) {
             double d2 = (x - g.x()) * (x - g.x()) + (z - g.z()) * (z - g.z());
             double d = Math.sqrt(d2);
-            geoNear = Math.min(geoNear, d - g.r());
+            near = Math.min(near, d - g.r());
             if (d < g.r() + 12 && lc.geoN < lc.geo.length) {
                 lc.geo[lc.geoN] = g;
                 lc.geoD2[lc.geoN++] = d2;
             }
+        }
+        for (Route.Spring sp : r.springs) {
+            double d = Math.hypot(x - sp.x(), z - sp.z());
+            near = Math.min(near, d - sp.rxz());
+            if (d < sp.rxz() + 12 && lc.springN < lc.spring.length) lc.spring[lc.springN++] = sp;
+        }
+        for (Route.Tube tb : r.tubes) {
+            if (x < tb.minX() - 30 || x > tb.maxX() + 30 || z < tb.minZ() - 30 || z > tb.maxZ() + 30) continue;
+            double d = segDistXZ(x, z, tb.x1(), tb.z1(), tb.x2(), tb.z2()) - tb.r();
+            near = Math.min(near, d);
+            if (d < 10 && lc.tubeN < lc.tube.length) lc.tube[lc.tubeN++] = tb;
+        }
+        // The caverns around also keep away from the perched lakes, so nothing drains them.
+        for (Route.Hall hl : r.halls) {
+            if (hl.lake()) near = Math.min(near, Math.hypot(x - hl.x(), z - hl.z()) - hl.rxz());
         }
         lc.entry = r.entry;
         lc.exit = r.exit;
         lc.entryD = Math.hypot(x - r.entry.lx, z - r.entry.lz);
         lc.exitD = r.exit != null ? Math.hypot(x - r.exit.ux, z - r.exit.uz) : 1e9;
         lc.endD = r.bedrockEnd ? Math.hypot(x - r.endX, z - r.endZ) : 1e9;
-        lc.geoNear = geoNear;
+        lc.refugeNear = near;
         if (li >= BASALT) {
             LayerSettings ls = settings.layers().get(li);
             Arch arch = nearestArch(x, z, ls, shape.waterY(li), shape.top(li));
@@ -317,6 +380,13 @@ public final class Terrain {
             }
         }
         lc.routeDone = true;
+    }
+
+    static double segDistXZ(double x, double z, double x1, double z1, double x2, double z2) {
+        double dx = x2 - x1, dz = z2 - z1, len2 = dx * dx + dz * dz;
+        double t = len2 < 1e-9 ? 0 : ((x - x1) * dx + (z - z1) * dz) / len2;
+        t = t < 0 ? 0 : (t > 1 ? 1 : t);
+        return Math.hypot(x - (x1 + dx * t), z - (z1 + dz * t));
     }
 
     private void computeLayer(Column c, int li, LayerCol lc) {
@@ -331,86 +401,56 @@ public final class Terrain {
         lc.aPd = lc.bPd = 1e9;
         lc.aPr = lc.bPr = 0;
         lc.aHour = lc.bHour = true;
-        lc.regionV = 0;
-        // Hunting caves fade out around refuges, so a refuge is only reached by its own tunnel.
-        double refugeFade = lc.geoNear > 1e8 ? 1 : smooth((lc.geoNear - 8) / 16.0);
+        // Hunting caves fade out around refuges and lake halls: a refuge is only reached by its own tunnel, and no
+        // cavern drains a lake.
+        double refugeFade = lc.refugeNear > 1e8 ? 1 : smooth((lc.refugeNear - 8) / 16.0);
 
         double wx = x + 48 * warpX.noise2(x / 160.0, z / 160.0 + li * 13.1);
         double wz = z + 48 * warpZ.noise2(x / 160.0 + li * 7.7, z / 160.0);
 
         switch (li) {
-            case LANTERN -> {
-                // Tier A: wide still lakes with islands under a low ceiling.
-                double m = maskA.fbm2(wx / 95.0, wz / 95.0, 3);
-                double ch = 1 - Math.abs(chan.noise2(wx / 230.0, wz / 230.0)) * 9.0;
-                double open = Math.min(1, Math.max((m + 0.04) / 0.16, ch * 0.6));
+            case GARDENS -> {
+                // Ember Gardens: big blackstone caverns with terraced floors just above the water table, where the
+                // hot pools sit (the pools themselves are laid on the terraces later).
+                double m = maskA.fbm2(wx / 190.0 + 77, wz / 190.0 - 31, 3);
+                double open = Math.min(1, (m + 0.06) / 0.18) * refugeFade;
                 if (open > 0) {
-                    double f0 = W - 7 + 2.5 * floorN.noise2(x / 47.0, z / 47.0);
-                    double isl = islandN.fbm2(x / 30.0, z / 30.0, 2);
-                    if (isl > 0.12) f0 = Math.min(W + 4, f0 + (isl - 0.12) / 0.5 * 13);
-                    double c0 = W + 17 + 8 * ceilN.noise2(x / 64.0, z / 64.0) + 14 * Math.max(0, heightN.noise2(x / 120.0, z / 120.0));
-                    tier(lc, true, open, f0, Math.min(c0, top - 6), 0.3, 0.55);
-                }
-                pillars(lc, true, x, z, 34, 0.4, 3.5, 7, 1001);
-                // Tier B: tall dry halls higher up.
-                double mb = maskB.fbm2(wx / 125.0 + 31.4, wz / 125.0 - 11.9, 3);
-                double openB = Math.min(1, (mb - 0.1) / 0.16) * refugeFade;
-                if (openB > 0) {
-                    double f0 = W + 40 + 9 * floorN.noise2(x / 80.0 + 50, z / 80.0);
-                    double hgt = hMin + (hMax - hMin) * (0.5 + 0.5 * heightN.noise2(x / 90.0 + 7, z / 90.0));
-                    tier(lc, false, openB, f0, Math.min(f0 + hgt, top - 6), 0.3, 0.7);
-                }
-                pillars(lc, false, x, z, 46, 0.3, 4, 8.5, 1002);
-            }
-            case BLUE -> {
-                double reg = region.fbm2(x / 420.0, z / 420.0, 2);
-                lc.regionV = reg;
-                if (reg > -0.14) {
-                    // Silver fern rifts: a network of deep stepped rifts with a stream at the bottom.
-                    double fade = smooth((reg + 0.14) / 0.26) * refugeFade;
-                    double v = lineDist(riftN, x, z, 270, 60) + 2.5 * ledgeN.noise2(x / 18.0, z / 18.0);
-                    double depth = (hMin + (hMax - hMin) * (0.5 + 0.5 * riftDepth.noise2(x / 300.0, z / 300.0))) * fade;
-                    double topY = Math.min(top - 8, W - 2 + depth);
-                    double halfTop = 16 + depth * 0.15;
-                    if (depth > 14 && v < halfTop + 4) {
-                        double step = 11 + 3 * ledgeN.noise2(x / 90.0, z / 90.0);
-                        double fl = riftFloor(Math.max(0, v), W - 2, topY, halfTop, 3.5 + 1.2 * ledgeN.noise2(x / 40.0, z / 40.0 + 9), step);
-                        double ce = topY + 7 * Math.max(0, 1 - (v / halfTop) * (v / halfTop));
-                        if (ce > fl) { lc.aF = fl; lc.aC = ce; }
-                    }
-                }
-                if (reg < 0.14) {
-                    // Deep dark: big rounded caverns with pillars, sculk and (later) ancient cities.
-                    double fade = smooth((0.14 - reg) / 0.26) * refugeFade;
-                    double m = maskB.fbm2(wx / 85.0 - 40, wz / 85.0 + 13, 3);
-                    double open = Math.min(1, (m + 0.12) / 0.18) * fade;
-                    if (open > 0) {
-                        double f0 = W + 24 + 10 * floorN.noise2(x / 60.0 + 90, z / 60.0);
-                        double hgt = 24 + 22 * (0.5 + 0.5 * heightN.noise2(x / 75.0 + 3, z / 75.0));
-                        tier(lc, false, open, f0, Math.min(f0 + hgt, top - 6), 0.4, 0.8);
-                    }
-                    pillars(lc, false, x, z, 30, 0.45, 3, 6, 1003);
-                }
-            }
-            case EMBER -> {
-                // Big terraced caverns, the hot pools sit on the terraces.
-                double m = maskA.fbm2(wx / 215.0 + 77, wz / 215.0 - 31, 3);
-                double open = Math.min(1, (m + 0.06) / 0.18);
-                if (open > 0) {
-                    double base = 15 * (0.5 + 0.5 * floorN.fbm2(x / 120.0 - 20, z / 120.0, 2));
-                    double f0 = W - 3 + terraced(base + 1.5 * ledgeN.noise2(x / 30.0, z / 30.0), 4.5);
-                    double hgt = hMin + (hMax - hMin) * (0.5 + 0.5 * heightN.noise2(x / 150.0, z / 150.0 + 9));
+                    double base = 16 * (0.5 + 0.5 * floorN.fbm2(x / 110.0 - 20, z / 110.0, 2));
+                    double f0 = W - 3 + terraced(base + 1.5 * ledgeN.noise2(x / 30.0, z / 30.0), 4.0);
+                    double hgt = 40 + 50 * (0.5 + 0.5 * heightN.noise2(x / 140.0, z / 140.0 + 9));
                     tier(lc, true, open, f0, Math.min(f0 + hgt, top - 6), 0.25, 0.65);
                 }
-                pillars(lc, true, x, z, 64, 0.35, 5, 10, 1004);
-                double mb = maskB.fbm2(wx / 160.0 + 5, wz / 160.0 + 77, 3);
-                double openB = Math.min(1, (mb - 0.22) / 0.18);
+                pillars(lc, true, x, z, 60, 0.35, 5, 10, 1004);
+                // Higher up, more of them: smaller, terraced too. Their size stays the same in a taller layer; they
+                // move up into the extra height instead (96 above the table in a 192-block layer, 130 in 240).
+                double mb = maskB.fbm2(wx / 140.0 + 5, wz / 140.0 + 77, 3);
+                double openB = Math.min(1, (mb - 0.16) / 0.16) * refugeFade;
                 if (openB > 0) {
-                    double f0 = W + 105 + 10 * floorN.noise2(x / 70.0, z / 70.0 - 60);
-                    double hgt = 35 + 25 * (0.5 + 0.5 * heightN.noise2(x / 80.0 - 7, z / 80.0));
+                    double upper = 96 + 0.7 * Math.max(0, ls.height() - 192);
+                    double f0 = W + upper + terraced(10 * (0.5 + 0.5 * floorN.noise2(x / 70.0, z / 70.0 - 60)), 4.0);
+                    double hgt = 30 + 26 * (0.5 + 0.5 * heightN.noise2(x / 80.0 - 7, z / 80.0));
                     tier(lc, false, openB, f0, Math.min(f0 + hgt, top - 6), 0.3, 0.7);
                 }
-                pillars(lc, false, x, z, 50, 0.3, 4, 8, 1005);
+                pillars(lc, false, x, z, 46, 0.3, 4, 8, 1005);
+            }
+            case BLUE -> {
+                // Deep dark: big rounded caverns with pillars on two levels; ancient cities stand in the lower one.
+                double m = maskA.fbm2(wx / 110.0 - 40, wz / 110.0 + 13, 3);
+                double open = Math.min(1, (m + 0.1) / 0.18) * refugeFade;
+                if (open > 0) {
+                    double f0 = W + 22 + 6 * floorN.noise2(x / 60.0 + 90, z / 60.0);
+                    double hgt = 30 + 24 * (0.5 + 0.5 * heightN.noise2(x / 75.0 + 3, z / 75.0));
+                    tier(lc, true, open, f0, Math.min(f0 + hgt, top - 6), 0.4, 0.8);
+                }
+                pillars(lc, true, x, z, 30, 0.45, 3, 6, 1003);
+                double mb = maskB.fbm2(wx / 85.0 - 40, wz / 85.0 + 13, 3);
+                double openB = Math.min(1, (mb + 0.02) / 0.18) * refugeFade;
+                if (openB > 0) {
+                    double f0 = W + 100 + 10 * floorN.noise2(x / 60.0 + 90, z / 60.0 - 40);
+                    double hgt = 24 + 22 * (0.5 + 0.5 * heightN.noise2(x / 75.0 - 30, z / 75.0));
+                    tier(lc, false, openB, f0, Math.min(f0 + hgt, top - 6), 0.4, 0.8);
+                }
+                pillars(lc, false, x, z, 34, 0.4, 3, 6.5, 1007);
             }
             default -> {
                 // Basalt galleries: long cathedral halls over a lava river, walls of columns.
@@ -436,9 +476,16 @@ public final class Terrain {
         double riverHalf = 5 + 3 * (0.5 + 0.5 * floorN.noise2(x / 70.0, z / 70.0));
         double bank = Math.min(1, Math.max(0, (v - riverHalf) / Math.max(4, halfW * 0.5)));
         double f0 = W - 5 + terraced(bank * (9 + 7 * (0.5 + 0.5 * ledgeN.noise2(x / 30.0, z / 30.0))), 3.5);
+        double q = Math.min(1, v / halfW);
+        // High benches along about half of the walls, stepping up above the highest a lava surge reaches.
+        double benchMask = smooth(floorN.noise2(x / 95.0 - 17, z / 95.0 + 23) / 0.3);
+        if (benchMask > 0) {
+            double benchTop = SURGE_RISE + 5 + 8 * (0.5 + 0.5 * floorN.noise2(x / 41.0 + 11, z / 41.0 - 7));
+            double rise = smooth((q - 0.58) / 0.27) * benchMask;
+            f0 = Math.max(f0, W + terraced(rise * benchTop, 4.0) - 1);
+        }
         double hgt = ls.heightMin() + (ls.heightMax() - ls.heightMin()) * (0.5 + 0.5 * ceilN.noise2(x / 180.0, z / 180.0));
         // A vaulted roof: highest over the centre line, with ribs.
-        double q = Math.min(1, v / halfW);
         hgt -= q * q * 34 - 9 * ceilN.noise2(x / 37.0 - 9, z / 37.0);
         out[0] = open;
         out[1] = f0;
@@ -485,8 +532,11 @@ public final class Terrain {
                         nx /= l; nz /= l;
                         double hgt = g[2] - g[1];
                         double deck = g[1] + hgt * Hashing.range(Hashing.mix(h, 3, 0, 0), 0.3, 0.7);
+                        // The deck dips 10 blocks towards its ends: keep all of it above the highest surge.
+                        deck = Math.max(deck, W + SURGE_RISE + 14);
                         double span = g[3] + (ls.widthMax() / 2) + 10;
-                        a = new Arch(ax, az, nx, nz, deck, span, Hashing.range(Hashing.mix(h, 4, 0, 0), 3.0, 5.5));
+                        if (deck < g[2] - 14)
+                            a = new Arch(ax, az, nx, nz, deck, span, Hashing.range(Hashing.mix(h, 4, 0, 0), 3.0, 5.5));
                     }
                 }
             }
@@ -539,9 +589,8 @@ public final class Terrain {
     private double rough(int li, int x, int y, int z) {
         double a, s;
         switch (li) {
-            case LANTERN -> { a = 4.5; s = 22; }
+            case GARDENS -> { a = 5.0; s = 26; }
             case BLUE -> { a = 4.0; s = 20; }
-            case EMBER -> { a = 5.5; s = 28; }
             default -> { a = 7.0; s = 34; }
         }
         return a * rough1.noise3(x / s, y / (s * 0.75), z / s) + a * 0.35 * rough2.noise3(x / (s * 0.4), y / (s * 0.4), z / (s * 0.4));
@@ -563,6 +612,48 @@ public final class Terrain {
         return Math.max(ell, bowl - y);
     }
 
+    /** A hall with its islands: low shoals and a few islands a couple of blocks above the lake. */
+    private double hallDist(Route.Hall h, double dxz, int x, int y, int z) {
+        double d = hallSdf(h, dxz, y);
+        if (!h.lake() || d > 8) return d;
+        double isl = islandN.fbm2(x / 24.0 + h.x() * 0.01, z / 24.0, 2) - 0.18;
+        if (isl <= 0 || dxz > h.rxz() * 0.85) return d;
+        double top = Math.min(h.lakeY() + 2.5, h.lakeY() - 3 + isl * 40);
+        return Math.max(d, top - y);
+    }
+
+    /** Signed distance to the nearest Rust Springs cavern. */
+    private double springDist(LayerCol lc, int li, int x, int y, int z) {
+        double best = SOLID;
+        for (int k = 0; k < lc.springN; k++) {
+            Route.Spring sp = lc.spring[k];
+            double dx = x - sp.x(), dz = z - sp.z();
+            double ex = Math.sqrt(dx * dx + dz * dz) / sp.rxz(), ey = (y - sp.y()) / sp.ry();
+            double ell = (Math.sqrt(ex * ex + ey * ey) - 1) * Math.min(sp.rxz(), sp.ry());
+            if (ell > 14) continue;
+            ell += 0.6 * rough(li, x, y, z);
+            double fl = sp.floorY() + terraced(sp.rampFloor(x, z) - sp.floorY() + ex * ex * 6, 3.0);
+            best = Math.min(best, Math.max(ell, fl - y));
+        }
+        return best;
+    }
+
+    /** Signed distance to the nearest obsidian tube: round walls and a flat floor at a little under half height. */
+    private double tubeDist(LayerCol lc, int x, int y, int z) {
+        double best = SOLID;
+        for (int k = 0; k < lc.tubeN; k++) {
+            Route.Tube t = lc.tube[k];
+            double dx = t.x2() - t.x1(), dy = t.y2() - t.y1(), dz = t.z2() - t.z1();
+            double len2 = dx * dx + dy * dy + dz * dz;
+            double u = len2 < 1e-9 ? 0 : ((x - t.x1()) * dx + (y - t.y1()) * dy + (z - t.z1()) * dz) / len2;
+            u = u < 0 ? 0 : (u > 1 ? 1 : u);
+            double ax = x - (t.x1() + dx * u), ay = t.y1() + dy * u, az = z - (t.z1() + dz * u);
+            double dist = Math.sqrt(ax * ax + (y - ay) * (y - ay) + az * az);
+            best = Math.min(best, Math.max(dist - t.r(), ay - t.r() * 0.55 - y));
+        }
+        return best;
+    }
+
     static double geodeSdf(Route.Geode g, double dxz2, double y) {
         double dy = y - g.y();
         double d = Math.sqrt(dxz2 + dy * dy) - g.r();
@@ -578,7 +669,9 @@ public final class Terrain {
             double q = (y - mid) / half;
             r = pr * (0.75 + 0.9 * q * q);
         }
-        return r - pd;
+        // A pillar belongs to its own tier: it ends a little into that tier's floor and ceiling, so it never plugs the
+        // other tier's caverns above or below with a round shaft of rock.
+        return Math.min(r - pd, Math.min(y - (f - 3), (c + 3) - y));
     }
 
     double layerDensity(Column c, int li, int x, int y, int z) {
@@ -594,7 +687,7 @@ public final class Terrain {
         if (lc.rOn && r.rift && lc.rrC > lc.rrF) d = Math.min(d, Math.max(lc.rrF - y, y - lc.rrC));
         if (lc.wOn) d = Math.min(d, vault(lc.wD, y, lc.rF, lc.rW, lc.rH));
         if (lc.w2On) d = Math.min(d, vault(lc.wD2, y, lc.rF2, lc.rW2, lc.rH2));
-        for (int k = 0; k < lc.hallN; k++) d = Math.min(d, hallSdf(lc.hall[k], lc.hallD[k], y));
+        for (int k = 0; k < lc.hallN; k++) d = Math.min(d, hallDist(lc.hall[k], lc.hallD[k], x, y, z));
         for (Route.Link l : r.links) {
             if (Math.abs(x - (l.x1() + l.x2()) * 0.5) > Math.abs(l.x2() - l.x1()) * 0.5 + 10) continue;
             if (Math.abs(z - (l.z1() + l.z2()) * 0.5) > Math.abs(l.z2() - l.z1()) * 0.5 + 10) continue;
@@ -603,6 +696,10 @@ public final class Terrain {
         if (d > -14 && d < 14) d += rough(li, x, y, z);
         // Geodes keep their round shape (only a gentle wobble) so their layered rims follow the wall.
         if (lc.geoN > 0) d = Math.min(d, geodeDist(lc, x, y, z));
+        // Rust Springs: rough walls over a floor that steps down in terraces (the pools are laid on them later).
+        if (lc.springN > 0) d = Math.min(d, springDist(lc, li, x, y, z));
+        // Obsidian tubes stay smooth and round, with a flat floor to walk on.
+        if (lc.tubeN > 0) d = Math.min(d, tubeDist(lc, x, y, z));
 
         // ---- rock that has to stay
         if (lc.aC > lc.aF && lc.aPd < lc.aPr * 2.5) d = Math.max(d, pillarSolid(lc.aPd, lc.aPr, lc.aHour, y, lc.aF, lc.aC));
@@ -674,6 +771,13 @@ public final class Terrain {
         if (lc.entryD < en.landR) d = Math.max(d, Math.min(Math.min(en.lFloor - y, y - (en.lFloor - 7)), en.landR - lc.entryD));
         if (ex != null && lc.exitD < ex.landR) d = Math.max(d, Math.min(Math.min(ex.uFloor - y, y - (ex.uFloor - 7)), ex.landR - lc.exitD));
         if (r.bedrockEnd && lc.endD < r.endR) d = Math.max(d, Math.min(Math.min(r.endFloor - y, y - (r.endFloor - 7)), r.endR - lc.endD));
+        // A rim of rock around each perched lake, below its surface, so no cave or tunnel beside it can drain it.
+        for (int k = 0; k < lc.hallN; k++) {
+            Route.Hall hl = lc.hall[k];
+            if (!hl.lake() || y >= hl.lakeY() || y < hl.floorY() - 12 || hl.lakeY() <= r.W + 0.5) continue;
+            double ring = lc.hallD[k] - hl.lakeR();
+            if (ring > 0 && ring < 3.5) d = Math.max(d, Math.min(ring, 3.5 - ring) + 0.5);
+        }
         return d;
     }
 
@@ -720,6 +824,80 @@ public final class Terrain {
     }
 
     /**
+     * Everything carved out of the pack's own terrain above its old floor: the first gate's landing and ramp, and the
+     * Silver Fern Rift or Ivory Root Cavern of this cell. Negative inside.
+     */
+    public double upperCarve(int x, int y, int z) {
+        return Math.min(gateOneCarve(x, y, z), pieceDist(x, y, z));
+    }
+
+    /** Signed distance to the open space of this column's upper set piece (negative inside), or SOLID when none is near. */
+    public double pieceDist(int x, int y, int z) {
+        if (y < shape.packFloor) return SOLID;
+        Column c = column(x, z);
+        Upper.Piece p = upperOf(c);
+        if (p == null || y > p.topY + 2) return SOLID;
+        if (p instanceof Upper.Rift r) {
+            // Stepped ledges up both walls from the stream, under a low roof; the ends close in.
+            double v = Math.max(0, c.upD + 3.0 * ledgeN.noise2(x / 16.0, z / 16.0 + 50));
+            double endFade = smooth((Math.min(c.upS, r.length - c.upS) - 4) / 36.0);
+            double half = r.halfTop * (0.45 + 0.55 * endFade);
+            if (v > half + 12) return SOLID;
+            double step = r.stepH + 1.5 * ledgeN.noise2(c.upS / 40.0, 7.7);
+            double fl = riftFloor(v, r.bedY, r.ledgeTop, half, r.streamHalf, step);
+            double q = Math.min(1, v / half);
+            double ce = r.ledgeTop + r.roofH * (1 - q * q) + 3 * ceilN.noise2(x / 13.0, z / 13.0 + 31);
+            ce = fl + (ce - fl) * endFade;
+            return Math.max(fl - y, y - ce) + 2.0 * rough1.noise3(x / 12.0, y / 9.0, z / 12.0);
+        }
+        Upper.Cavern cv = (Upper.Cavern) p;
+        // A round cavern: a lake in the middle, then wide pale terraces stepping up to the walls.
+        double ex = c.upD / cv.rxz, ey = (y - cv.cy) / cv.ry;
+        if (ex > 1.4) return SOLID;
+        double ell = (Math.sqrt(ex * ex + ey * ey) - 1) * Math.min(cv.rxz, cv.ry) + 3.0 * rough1.noise3(x / 18.0, y / 14.0, z / 18.0);
+        double lakeEx = 0.5 + 0.06 * ledgeN.noise2(x / 21.0 + 13, z / 21.0);
+        double fl;
+        if (ex < lakeEx) fl = cv.bedY + (cv.waterY - 1 - cv.bedY) * (ex / lakeEx) * (ex / lakeEx);
+        else fl = cv.waterY + 1 + stairs((ex - lakeEx) / (1 - lakeEx) * cv.rise + 1.0 * ledgeN.noise2(x / 9.0, z / 9.0), 2.0, 0.8);
+        return Math.max(ell, fl - y);
+    }
+
+    /**
+     * What fills an open block above the pack's old floor near the upper set piece or the first gate's landing:
+     * {@link #AIR} or {@link #WATER}, or -1 to leave it to the pack. Never lava, which the pack puts in its lowest caves.
+     */
+    public int upperFluid(int x, int y, int z) {
+        if (y < shape.packFloor || y > shape.packFloor + 90) return -1;
+        Column c = column(x, z);
+        Upper.Piece p = upperOf(c);
+        if (p != null && y <= p.topY + 2 && pieceDist(x, y, z) < 10) {
+            if (y >= p.waterY) return AIR;
+            if (p instanceof Upper.Cavern cv && c.upD > cv.rxz + 1) return AIR;
+            return WATER;
+        }
+        if (y < shape.packFloor + 48 && gateOneCarve(x, y, z) < 14.0) return AIR;
+        return -1;
+    }
+
+    /** The upper set piece's biome at a block, or null. */
+    public DeepBiome upperBiome(int x, int y, int z) {
+        if (y < shape.packFloor) return null;
+        Column c = column(x, z);
+        Upper.Piece p = upperOf(c);
+        if (p == null || y > p.topY + 4) return null;
+        return pieceDist(x, y, z) < 6 ? p.biome() : null;
+    }
+
+    /** The surface of the lake (or stream) of the upper set piece over a column. */
+    public double upperLakeY(int x, int z) {
+        Upper.Piece p = upperOf(column(x, z));
+        return p != null ? p.waterY : shape.packFloor + 14;
+    }
+
+    /** The upper set piece over a column, if any. */
+    public Upper.Piece upperPiece(int x, int z) { return upperOf(column(x, z)); }
+
+    /**
      * The first gate's upper landing, the top of its passage and the ramp up into the pack's caves: carved out of
      * the pack's own terrain just above its old floor. Negative inside.
      */
@@ -744,9 +922,16 @@ public final class Terrain {
     /** What fills an open block: {@link #AIR}, {@link #WATER} or {@link #LAVA}. */
     public int fluidAt(int x, int y, int z) {
         int li = shape.layerAt(y);
-        if (li < 0 || y >= shape.waterY(li)) return AIR;
-        Column c = column(x, z);
-        LayerCol lc = layerCol(c, li);
+        if (li < 0) return AIR;
+        LayerCol lc = routeCol(column(x, z), li);
+        if (y >= shape.waterY(li)) {
+            // The Lantern Lake's perched lakes, held in by their rims.
+            for (int k = 0; k < lc.hallN; k++) {
+                Route.Hall hl = lc.hall[k];
+                if (hl.lake() && y < hl.lakeY() && y > hl.floorY() - 14 && lc.hallD[k] < hl.lakeR()) return WATER;
+            }
+            return AIR;
+        }
         Plans.Gate ex = lc.exit;
         if (ex != null) {
             double pxz = ex.passageXZ(x, y, z);
@@ -768,27 +953,39 @@ public final class Terrain {
         }
         Column c = column(x, z);
         LayerCol lc = layerCol(c, li);
+        // The refuge itself, then the route, then the refuge's own tunnel, then the hunting ground.
         switch (li) {
-            case LANTERN:
-                return inRoute(lc, li, y) ? DeepBiome.IVORY_ROOT_CAVERN : DeepBiome.LANTERN_LAKE;
+            case GARDENS:
+                if (lc.springN > 0 && springDist(lc, li, x, y, z) < 6) return DeepBiome.RUST_SPRINGS;
+                if (inRoute(lc, li, y)) return DeepBiome.LANTERN_LAKE;
+                return inLink(lc, x, y, z) ? DeepBiome.RUST_SPRINGS : DeepBiome.EMBER_GARDENS;
             case BLUE:
                 for (int k = 0; k < lc.geoN; k++) if (geodeSdf(lc.geo[k], lc.geoD2[k], y) < 6) return DeepBiome.ASURINE_GEODES;
                 if (inRoute(lc, li, y)) return DeepBiome.DEEP_BLUE_RIFT;
-                return lc.regionV >= 0 ? DeepBiome.SILVER_FERN_RIFT : DeepBiome.DEEP_DARK;
-            case EMBER:
-                return inRoute(lc, li, y) ? DeepBiome.RUST_SPRINGS : DeepBiome.EMBER_GARDENS;
+                return inLink(lc, x, y, z) ? DeepBiome.ASURINE_GEODES : DeepBiome.DEEP_DARK;
             default:
-                return DeepBiome.BASALT_GALLERIES;
+                if (lc.tubeN > 0 && tubeDist(lc, x, y, z) < 5) return DeepBiome.OBSIDIAN_TUBES;
+                if (inRoute(lc, li, y)) return DeepBiome.BASALT_GALLERIES;
+                return inLink(lc, x, y, z) ? DeepBiome.OBSIDIAN_TUBES : DeepBiome.BASALT_GALLERIES;
         }
     }
 
     public static DeepBiome routeBiome(int li) {
         return switch (li) {
-            case LANTERN -> DeepBiome.IVORY_ROOT_CAVERN;
+            case GARDENS -> DeepBiome.LANTERN_LAKE;
             case BLUE -> DeepBiome.DEEP_BLUE_RIFT;
-            case EMBER -> DeepBiome.RUST_SPRINGS;
             default -> DeepBiome.BASALT_GALLERIES;
         };
+    }
+
+    /** The refuge's own tunnel, from the route to the refuge. */
+    private boolean inLink(LayerCol lc, int x, int y, int z) {
+        for (Route.Link l : lc.route.links) {
+            if (Math.abs(x - (l.x1() + l.x2()) * 0.5) > Math.abs(l.x2() - l.x1()) * 0.5 + 8) continue;
+            if (Math.abs(z - (l.z1() + l.z2()) * 0.5) > Math.abs(l.z2() - l.z1()) * 0.5 + 8) continue;
+            if (l.dist(x, y, z) < 4) return true;
+        }
+        return false;
     }
 
     private boolean inRoute(LayerCol lc, int li, int y) {
@@ -817,6 +1014,27 @@ public final class Terrain {
         for (int k = 0; k < lc.geoN; k++) best = Math.min(best, geodeSdf(lc.geo[k], lc.geoD2[k], y));
         if (best > 12) return best;
         return best + 0.7 * detail.noise3(x / 6.0, y / 6.0, z / 6.0);
+    }
+
+    /** Depth into the rock around the nearest obsidian tube (0 at its inner surface), or a large value when none is near. */
+    public double tubeShellDepth(int x, int y, int z) {
+        int li = shape.layerAt(y);
+        if (li != BASALT) return 1e9;
+        LayerCol lc = routeCol(column(x, z), li);
+        return lc.tubeN == 0 ? 1e9 : tubeDist(lc, x, y, z);
+    }
+
+    /** True when (x, z) in the layer at y is at least {@code clear} blocks from its route and refuges. */
+    public boolean clearOfRoute(int x, int y, int z, double clear) {
+        int li = shape.layerAt(y);
+        if (li < 0) return false;
+        LayerCol lc = routeCol(column(x, z), li);
+        if (lc.refugeNear < clear) return false;
+        if (lc.wOn && lc.wD < clear) return false;
+        if (lc.rOn && lc.rD < clear + (lc.route.rift ? lc.rHalfTop : 0)) return false;
+        if (lc.entryD < clear || lc.exitD < clear) return false;
+        for (int k = 0; k < lc.hallN; k++) if (lc.hallD[k] < lc.hall[k].rxz() + clear) return false;
+        return true;
     }
 
     /** True in the bowl of the bedrock landing at the end of the last layer's route. */

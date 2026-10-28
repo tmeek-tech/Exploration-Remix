@@ -1,0 +1,21 @@
+{
+  "feature": "minecraft:sculk_vein",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 112
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "blue_reaches",
+      "inset": 2,
+      "above_water": false
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

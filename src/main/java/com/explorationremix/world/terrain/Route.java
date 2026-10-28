@@ -5,8 +5,9 @@ import java.util.List;
 
 /**
  * One layer's route inside one cell: a smoothed polyline from the entry landing to the exit landing, with a floor
- * profile that steps down the layer, and the layer's own set pieces along it (halls, a rift with bridges, refuge
- * geodes). Built once per (layer, cell) and only read afterwards.
+ * profile that steps down the layer, and the layer's own set pieces along it: in the Blue Reaches a rift with bridges
+ * and refuge geodes, in the Deep Gardens a chain of lake halls with Rust Springs refuges beside it, in the Basalt
+ * Galleries obsidian tube refuges. Built once per (layer, cell) and only read afterwards.
  */
 public final class Route {
     public final int layer, cellX, cellZ;
@@ -33,8 +34,14 @@ public final class Route {
     public final List<Hall> halls = new ArrayList<>();
     public final List<Bridge> bridges = new ArrayList<>();
     public final List<Geode> geodes = new ArrayList<>();
+    public final List<Spring> springs = new ArrayList<>();
+    public final List<Tube> tubes = new ArrayList<>();
     public final List<Link> links = new ArrayList<>();
     final int side;
+    /** In a rift: which side of the rift the ledge path keeps to, per point (-1 to 1; it changes over a bridge). */
+    double[] sideAt;
+    /** Arc lengths along the centre line where the ledge path crosses the rift. */
+    final List<Double> crossings = new ArrayList<>();
     final double streamHalf;
     // spatial index of segments
     private final double gx0, gz0, bucket;
@@ -42,8 +49,53 @@ public final class Route {
     private final int[][] buckets, walkBuckets;
     final double reach;
 
-    /** A big chamber on the route. The floor is a bowl: {@code floorY} in the middle, rising by {@code rise} at the rim. */
-    public record Hall(double x, double z, double cy, double rxz, double ry, double floorY, double rise, boolean lake) {}
+    /**
+     * A big chamber on the route. The floor is a bowl: {@code floorY} in the middle, rising by {@code rise} at the rim.
+     * A lake hall holds still water up to {@code lakeY} (NaN for a dry hall), with islands rising out of it.
+     */
+    /** A hall on the route; a lake hall holds water up to lakeY out to lakeR from its axis (NaN and 0 when dry). */
+    public record Hall(double x, double z, double cy, double rxz, double ry, double floorY, double rise, double lakeY, double lakeR) {
+        public boolean lake() { return !Double.isNaN(lakeY); }
+    }
+
+    /** How far out a hall's terraced bowl stays under its lake, as a fraction of the hall's radius. */
+    static double lakeFraction(double floorY, double rise, double lakeY) {
+        double ex = 0;
+        while (ex < 1 && floorY + Terrain.terraced(ex * ex * rise, 3.0) < lakeY) ex += 0.002;
+        return ex;
+    }
+
+    /**
+     * A Rust Springs refuge: a cavern beside the route whose floor is a staircase of terraces stepping down along
+     * (dirX, dirZ), from {@code floorY + drop / 2} at the end nearest the path to {@code floorY - drop / 2}.
+     */
+    public record Spring(double x, double y, double z, double rxz, double ry, double floorY, double dirX, double dirZ, double drop) {
+        /** The staircase floor at a point, before the terraces are cut into it. */
+        public double rampFloor(double px, double pz) {
+            double t = ((px - x) * dirX + (pz - z) * dirZ) / rxz;
+            t = t < -1 ? -1 : (t > 1 ? 1 : t);
+            return floorY - drop * 0.5 * t;
+        }
+    }
+
+    /** One straight piece of an obsidian tube refuge: a smooth round tube between two points. */
+    public record Tube(double x1, double y1, double z1, double x2, double y2, double z2, double r) {
+        /** Distance from the tube's axis and the axis height at the nearest point: {distance, axisY}. */
+        public void axis(double x, double y, double z, double[] out) {
+            double dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
+            double len2 = dx * dx + dy * dy + dz * dz;
+            double t = len2 < 1e-9 ? 0 : ((x - x1) * dx + (y - y1) * dy + (z - z1) * dz) / len2;
+            t = t < 0 ? 0 : (t > 1 ? 1 : t);
+            double ex = x - (x1 + dx * t), ey = y - (y1 + dy * t), ez = z - (z1 + dz * t);
+            out[0] = Math.sqrt(ex * ex + ey * ey + ez * ez);
+            out[1] = y1 + dy * t;
+        }
+
+        public double minX() { return Math.min(x1, x2) - r; }
+        public double maxX() { return Math.max(x1, x2) + r; }
+        public double minZ() { return Math.min(z1, z2) - r; }
+        public double maxZ() { return Math.max(z1, z2) + r; }
+    }
 
     /** A natural stone bridge across the rift at arc length {@code s}, deck top at {@code y}. */
     public record Bridge(double s, double y, double halfAlong, double span) {}
@@ -93,19 +145,16 @@ public final class Route {
         riftTop = new double[n]; riftHalf = new double[n];
         rift = layer == Terrain.BLUE;
         side = Hashing.unit(Hashing.mix(h, 77, 0, 0)) < 0.5 ? -1 : 1;
+        if (rift) sideAt = ledgeSides();
         streamHalf = Hashing.range(Hashing.mix(h, 78, 0, 0), 3.0, 4.5);
         Perlin along = new Perlin(Hashing.mix(h, 79, 0, 0));
         int top = shape.top(layer);
 
         // ---- floor profile: terraced steps from the entry landing's floor down to the exit landing's floor
-        double descEnd = switch (layer) {
-            case Terrain.LANTERN -> Hashing.range(Hashing.mix(h, 80, 0, 0), 0.45, 0.58);
-            default -> 0.92;
-        };
+        double descEnd = 0.92;
         double stepAvg = switch (layer) {
-            case Terrain.LANTERN -> 7.5;
+            case Terrain.GARDENS -> 6.0;
             case Terrain.BLUE -> 9.0;
-            case Terrain.EMBER -> 4.2;
             default -> 11.0;
         };
         if (rift) {
@@ -114,23 +163,35 @@ public final class Route {
             wx = px; wz = pz; ws = ps;
             walkLength = length;
         }
-        floorProfile(h, ps, length, sFloor, eFloor, descEnd, stepAvg, W);
+        dropEstimate = Math.max(0, sFloor - eFloor);
+        double[][] lakes = layer == Terrain.GARDENS ? planLakeStretches(h) : null;
+        if (lakes != null) floorWithFlats(h, ps, length, sFloor, eFloor, lakes, stepAvg, W);
+        else floorProfile(h, ps, length, sFloor, eFloor, descEnd, stepAvg, W);
         corridor(along, ls, top, W);
         if (rift) {
-            // The ledge path is longer or shorter than the centre line on bends: lay the steps out along the path itself.
+            // The ledge path is longer or shorter than the centre line on bends: lay the steps out along the path
+            // itself, then settle the ledge on the new floor, and lay the steps out once more on the final line.
             walk();
+            for (int pass = 0; pass < 2; pass++) {
+                floorProfile(h, ws, walkLength, sFloor, eFloor, descEnd, stepAvg, W);
+                corridor(along, ls, top, W);
+                walk();
+            }
             floorProfile(h, ws, walkLength, sFloor, eFloor, descEnd, stepAvg, W);
+            double[] walked = offset.clone();
             corridor(along, ls, top, W);
-            walk();
+            System.arraycopy(walked, 0, offset, 0, n);
         }
 
         // ---- set pieces
         double hMin = ls.heightMin(), hMax = ls.heightMax();
         switch (layer) {
-            case Terrain.LANTERN -> planLanternHalls(h, descEnd, hMin, hMax, W);
+            case Terrain.GARDENS -> {
+                planLakeHalls(h, lakes, W);
+                planSprings(h, terrain, W);
+            }
             case Terrain.BLUE -> planRift(h, terrain, W);
-            case Terrain.EMBER -> planEmberHalls(h, hMin, hMax);
-            default -> {}
+            default -> planTubes(h, terrain, W);
         }
 
         // ---- spatial index
@@ -218,9 +279,8 @@ public final class Route {
             double s = ps[i];
             double a = along.noise2(s / 70.0, 3.3), b = along.noise2(s / 45.0, 9.1);
             switch (layer) {
-                case Terrain.LANTERN -> { half[i] = 9 + 2.5 * a; height[i] = 15 + 5 * b; }
+                case Terrain.GARDENS -> { half[i] = 10 + 2.5 * a; height[i] = 16 + 5 * b; }
                 case Terrain.BLUE -> { half[i] = 4.8 + 0.8 * a; height[i] = 8.5 + 1.5 * b; }
-                case Terrain.EMBER -> { half[i] = 16 + 4 * a; height[i] = Math.max(22, hMin * 0.45) + 8 * (b + 1); }
                 default -> { half[i] = 8.5 + 1.5 * a; height[i] = 15 + 4 * b; }
             }
             // Near the water table the slab reaches down to the lake bed, so the path becomes a causeway.
@@ -230,9 +290,54 @@ public final class Route {
                 double rt = Math.min(top - 8, Math.max(W - 2 + depth, floor[i] + 14));
                 riftTop[i] = rt;
                 riftHalf[i] = 20 + (rt - W) * 0.13;
-                offset[i] = side * (riftWallAt(floor[i], rt, riftHalf[i]) + 1.5);
+                offset[i] = sideAt[i] * (riftWallAt(floor[i], rt, riftHalf[i]) + 1.5);
             }
         }
+    }
+
+    /**
+     * Which side of the rift the ledge path keeps to: the outside of each bend, so the ledge never folds back on the
+     * inside of a tight one. Where the bends change direction the path crosses the rift on a natural bridge.
+     */
+    private double[] ledgeSides() {
+        int win = 12;
+        double[] sinT = new double[n];
+        for (int i = 0; i < n; i++) {
+            int a = Math.max(0, i - win), b = Math.min(n - 1, i + win);
+            double ax = px[i] - px[a], az = pz[i] - pz[a], bx = px[b] - px[i], bz = pz[b] - pz[i];
+            double la = Math.hypot(ax, az), lb = Math.hypot(bx, bz);
+            sinT[i] = la < 1e-6 || lb < 1e-6 ? 0 : (ax * bz - az * bx) / (la * lb);
+        }
+        // Positive offsets lie toward the line's left normal, which is the inside of a bend whose sinT is positive.
+        double[] raw = new double[n];
+        int cur = 0, lastSwitch = -1000, lastInflection = 0;
+        for (int i = 0; i < n; i++) {
+            if (i > 0 && Math.signum(sinT[i]) != Math.signum(sinT[i - 1])) lastInflection = i;
+            int want = sinT[i] > 0.3 ? -1 : (sinT[i] < -0.3 ? 1 : 0);
+            if (cur == 0 && want != 0) {
+                cur = want;
+                for (int k = 0; k < i; k++) raw[k] = cur;
+            } else if (want != 0 && want != cur && ps[i] - (lastSwitch < 0 ? -1e9 : ps[lastSwitch]) > 110
+                    && ps[lastInflection] > 60 && ps[lastInflection] < length - 60) {
+                cur = want;
+                lastSwitch = lastInflection;
+                crossings.add(ps[lastInflection]);
+                for (int k = lastInflection; k < i; k++) raw[k] = cur;
+            }
+            raw[i] = cur == 0 ? side : cur;
+        }
+        // The crossing takes about fifty blocks of path, diagonally over the rift.
+        double[] out = new double[n];
+        for (int i = 0; i < n; i++) {
+            double sum = 0, wsum = 0;
+            for (int k = Math.max(0, i - 8); k <= Math.min(n - 1, i + 8); k++) {
+                double w = 9 - Math.abs(k - i);
+                sum += raw[k] * w;
+                wsum += w;
+            }
+            out[i] = sum / wsum;
+        }
+        return out;
     }
 
     /**
@@ -447,60 +552,278 @@ public final class Route {
 
     // ------------------------------------------------------------------------------------------------ set pieces
 
-    private void planLanternHalls(long h, double descEnd, double hMin, double hMax, double W) {
-        // Dry halls on the way down, lake halls once the path reaches the water.
-        double[] dry = {descEnd * 0.32, descEnd * 0.72};
-        for (int k = 0; k < dry.length; k++) {
-            long hk = Hashing.mix(h, 600 + k, 0, 0);
-            double s = length * dry[k] + Hashing.range(Hashing.mix(hk, 1, 0, 0), -12, 12);
-            double rxz = Hashing.range(Hashing.mix(hk, 2, 0, 0), 18, 26);
-            double hgt = Hashing.range(Hashing.mix(hk, 3, 0, 0), hMin, hMin + (hMax - hMin) * 0.6);
-            double ry = hgt / 1.7;
-            double[] p = pointAt(s), d = dirAt(s);
-            double off = Hashing.range(Hashing.mix(hk, 4, 0, 0), 0.15, 0.35) * rxz * (k % 2 == 0 ? 1 : -1);
-            double f = floorAt(s);
-            halls.add(new Hall(p[0] - d[1] * off, p[1] + d[0] * off, f - 3 + ry * 0.7, rxz, ry, f - 4, 9, false));
-        }
-        double flatLen = length * (1 - descEnd);
-        int lakes = flatLen > 200 ? 3 : 2;
-        for (int k = 0; k < lakes; k++) {
+    // ------------------------------------------------------------------------------------------------ Deep Gardens
+
+    /**
+     * Where the Lantern Lake's lakes sit along the route: {arc length of the middle, half length of the level stretch
+     * across it, lake radius}. The last lake is the layer's own water table, by the exit landing; one or two perched
+     * lakes sit on the way down, as long as the descent between them stays gentle.
+     */
+    private double[][] planLakeStretches(long h) {
+        List<double[]> out = new ArrayList<>();
+        double rEnd = Hashing.range(Hashing.mix(h, 640, 0, 0), 30, 40);
+        double halfEnd = rEnd * 0.9 + 4;
+        double sEnd = length - 28 - halfEnd;
+        int mids = length > 560 ? 2 : 1;
+        for (int k = 0; k < mids; k++) {
             long hk = Hashing.mix(h, 650 + k, 0, 0);
-            double frac = descEnd + (1 - descEnd) * ((k + 0.6) / (lakes + 0.4));
-            double s = length * frac + Hashing.range(Hashing.mix(hk, 1, 0, 0), -10, 10);
-            if (length - s < 30) s = length - 30;
-            double rxz = Hashing.range(Hashing.mix(hk, 2, 0, 0), 22, 32);
-            double hgt = Hashing.range(Hashing.mix(hk, 3, 0, 0), hMin + 6, hMax);
-            double ry = hgt / 1.55;
-            double[] p = pointAt(s), d = dirAt(s);
-            double off = Hashing.range(Hashing.mix(hk, 4, 0, 0), 0.5, 0.68) * rxz * (Hashing.unit(Hashing.mix(hk, 5, 0, 0)) < 0.5 ? 1 : -1);
-            halls.add(new Hall(p[0] - d[1] * off, p[1] + d[0] * off, W - 7 + ry * 0.75, rxz, ry, W - 7, 14, true));
+            double frac = mids == 1 ? 0.46 : (k == 0 ? 0.3 : 0.6);
+            double s = length * frac + Hashing.range(Hashing.mix(hk, 1, 0, 0), -15, 15);
+            double r = Hashing.range(Hashing.mix(hk, 2, 0, 0), 30, 42);
+            out.add(new double[]{s, r * 0.95 + 4, r});
+        }
+        out.add(new double[]{sEnd, halfEnd, rEnd});
+        // Keep at least 2.2 blocks of walking for every block of drop outside the level stretches: drop perched lakes
+        // (the later one first), then shorten what is left.
+        while (true) {
+            double flat = 0;
+            for (double[] f : out) flat += 2 * f[1];
+            double descent = sEnd - halfEnd - 10 - (flat - 2 * halfEnd);
+            if (descent >= 2.2 * dropEstimate || out.size() == 1) break;
+            out.remove(out.size() - 2);
+        }
+        return out.toArray(new double[0][]);
+    }
+
+    /** Set before the floor profile: how far the route has to descend (start floor minus end floor). */
+    private double dropEstimate;
+
+    /**
+     * Like {@link #floorProfile}, but level across each lake stretch: the descent is shared out between the stretches
+     * in proportion to their lengths, so every ramp is as gentle as the route allows.
+     */
+    private void floorWithFlats(long h, double[] arcs, double total, double sFloor, double eFloor, double[][] flats, double stepAvg, double W) {
+        double drop = Math.max(0, sFloor - eFloor);
+        int k = flats.length;
+        double[] a = new double[k], b = new double[k];
+        for (int i = 0; i < k; i++) { a[i] = flats[i][0] - flats[i][1]; b[i] = flats[i][0] + flats[i][1]; }
+        // descent parts: [10, a0], [b0, a1], ... [b(k-2), a(k-1)]; the last flat runs on to the exit landing
+        double[] p0 = new double[k], p1 = new double[k];
+        double sum = 0;
+        for (int j = 0; j < k; j++) {
+            p0[j] = j == 0 ? 10 : b[j - 1];
+            p1[j] = Math.max(p0[j] + 1, a[j]);
+            sum += p1[j] - p0[j];
+        }
+        double[] lvl = new double[k + 1];
+        lvl[0] = sFloor;
+        for (int j = 0; j < k; j++) lvl[j + 1] = lvl[j] - drop * (p1[j] - p0[j]) / Math.max(1, sum);
+        lvl[k] = eFloor;
+        for (int i = 0; i < n; i++) {
+            double s = arcs[i];
+            double f = lvl[k];
+            if (s <= 10) f = sFloor;
+            else {
+                for (int j = 0; j < k; j++) {
+                    if (s < p1[j]) { f = stepped(h, 4000 + 100 * j, s, p0[j], p1[j], lvl[j], lvl[j + 1], stepAvg); break; }
+                    if (s <= b[j] || j == k - 1) { f = lvl[j + 1]; if (s <= b[j]) break; }
+                }
+            }
+            floor[i] = Math.max(f, W + 2);
+        }
+        for (int i = 0; i < n; i++) {
+            double rem = total - arcs[i];
+            if (rem < 24) floor[i] = floor[i] + (eFloor - floor[i]) * smooth(1 - rem / 24);
         }
     }
 
-    private void planEmberHalls(long h, double hMin, double hMax) {
-        int count = length > 380 ? 3 : 2;
-        for (int k = 0; k < count; k++) {
-            long hk = Hashing.mix(h, 700 + k, 0, 0);
-            double s = length * ((k + 0.7) / (count + 0.6)) + Hashing.range(Hashing.mix(hk, 1, 0, 0), -15, 15);
-            double rxz = Hashing.range(Hashing.mix(hk, 2, 0, 0), 26, 36);
-            double hgt = Hashing.range(Hashing.mix(hk, 3, 0, 0), hMin * 0.7, hMin * 1.1);
-            double ry = hgt / 1.6;
+    /** Terraced steps from level hA at arc p to level hB at arc q, the same way {@link #floorProfile} lays them. */
+    private static double stepped(long h, int salt, double s, double p, double q, double hA, double hB, double stepAvg) {
+        double dropAll = Math.max(0, hA - hB), span = Math.max(1, q - p);
+        int steps = Math.max(2, (int) Math.round(dropAll / stepAvg));
+        steps = Math.max(steps, (int) Math.ceil(1.5 * 1.3 * dropAll / (MAX_SLOPE * span * 0.8)));
+        double sumW = 0;
+        double[] w = new double[steps];
+        for (int j = 0; j < steps; j++) { w[j] = Hashing.range(Hashing.mix(h, salt + j, 0, 0), 0.7, 1.3); sumW += w[j]; }
+        double stepLen = span / steps;
+        double u = (s - p) / span * steps;
+        int j = Math.max(0, Math.min(steps - 1, (int) Math.floor(u)));
+        double level = hA;
+        for (int i = 0; i < j; i++) level -= dropAll * w[i] / sumW;
+        double dj = dropAll * w[j] / sumW;
+        double tread = Hashing.range(Hashing.mix(h, salt + 50 + j, 0, 0), 0.4, 0.62);
+        tread = Math.max(0, Math.min(tread, 1 - 1.5 * dj / (MAX_SLOPE * stepLen)));
+        double local = u - j;
+        double ramp = local <= tread ? 0 : smooth((local - tread) / (1 - tread));
+        return level - dj * ramp;
+    }
+
+    /**
+     * The Lantern Lake: a wide, low hall over each level stretch, holding a still lake a block under the path, which
+     * crosses it on a causeway. The hall sits off to one side so the path runs partly along the shore.
+     */
+    private void planLakeHalls(long h, double[][] lakes, double W) {
+        for (int k = 0; k < lakes.length; k++) {
+            long hk = Hashing.mix(h, 660 + k, 0, 0);
+            double s = lakes[k][0], rxz = lakes[k][2];
+            boolean last = k == lakes.length - 1;
+            double level = floorAt(s);
+            double lakeY = last ? W : level - 0.8;
+            double depth = Hashing.range(Hashing.mix(hk, 1, 0, 0), 5, 8);
+            double ry = Hashing.range(Hashing.mix(hk, 2, 0, 0), 13, 18);
+            double rise = Hashing.range(Hashing.mix(hk, 3, 0, 0), 11, 14);
             double[] p = pointAt(s), d = dirAt(s);
-            double off = Hashing.range(Hashing.mix(hk, 4, 0, 0), -0.3, 0.3) * rxz;
-            double f = floorAt(s);
-            halls.add(new Hall(p[0] - d[1] * off, p[1] + d[0] * off, f - 4 + ry * 0.7, rxz, ry, f - 5, 10, false));
+            double offFrac = Hashing.range(Hashing.mix(hk, 4, 0, 0), 0.25, 0.5) * (Hashing.unit(Hashing.mix(hk, 5, 0, 0)) < 0.5 ? 1 : -1);
+            double frac = lakeFraction(lakeY - depth, rise, lakeY);
+            double hx = 0, hz = 0;
+            boolean wet = true;
+            if (!last) {
+                // A perched lake is held in by a rim (see Terrain.mustStay). The path's walking space may only cross
+                // that rim where the path is level with the lake, so shrink the hall until every lower stretch of
+                // the path keeps clear of it.
+                for (int it = 0; it < 6; it++) {
+                    hx = p[0] - d[1] * offFrac * rxz;
+                    hz = p[1] + d[0] * offFrac * rxz;
+                    double minD = 1e9;
+                    for (int i = 0; i < n; i++) {
+                        if (floor[i] >= lakeY - 0.5) continue;
+                        minD = Math.min(minD, Math.hypot(wx[i] - hx, wz[i] - hz));
+                    }
+                    double maxR = (minD - 8.5) / Math.max(0.05, frac);
+                    if (rxz <= maxR) break;
+                    rxz = maxR;
+                }
+                if (rxz < 18) { wet = false; rxz = Math.max(18, rxz); }
+            }
+            hx = p[0] - d[1] * offFrac * rxz;
+            hz = p[1] + d[0] * offFrac * rxz;
+            Hall hall = wet
+                    ? new Hall(hx, hz, lakeY + ry * 0.45, rxz, ry, lakeY - depth, rise, lakeY, frac * rxz)
+                    : new Hall(hx, hz, level - 3 + ry * 0.7, rxz, ry, level - 4, 9, Double.NaN, 0);
+            halls.add(hall);
+            if (!wet) continue;
+            // The causeway: under the path the slab reaches down to the lake bed.
+            for (int i = 0; i < n; i++) {
+                double dxz = Math.hypot(wx[i] - hall.x(), wz[i] - hall.z());
+                if (dxz < rxz + 2) slab[i] = Math.max(slab[i], floor[i] - (hall.floorY() - 2));
+            }
+        }
+        // A dry hall halfway down each descent between lakes.
+        double prevEnd = 10;
+        for (int k = 0; k < lakes.length; k++) {
+            double a = lakes[k][0] - lakes[k][1];
+            if (a - prevEnd > 90) {
+                long hk = Hashing.mix(h, 680 + k, 0, 0);
+                double s = (prevEnd + a) * 0.5 + Hashing.range(Hashing.mix(hk, 1, 0, 0), -10, 10);
+                double rxz = Hashing.range(Hashing.mix(hk, 2, 0, 0), 18, 26);
+                double ry = Hashing.range(Hashing.mix(hk, 3, 0, 0), 14, 22);
+                double[] p = pointAt(s), d = dirAt(s);
+                double off = Hashing.range(Hashing.mix(hk, 4, 0, 0), 0.15, 0.35) * rxz * (k % 2 == 0 ? 1 : -1);
+                double f = floorAt(s);
+                halls.add(new Hall(p[0] - d[1] * off, p[1] + d[0] * off, f - 3 + ry * 0.7, rxz, ry, f - 4, 9, Double.NaN, 0));
+            }
+            prevEnd = lakes[k][0] + lakes[k][1];
         }
     }
+
+    /** Rust Springs refuges: a cavern beside the path, reached by its own short tunnel, its floor a staircase of pools. */
+    private void planSprings(long h, Terrain terrain, double W) {
+        int count = length > 400 ? 2 : 1;
+        double[] fracs = count == 1 ? new double[]{0.62} : new double[]{0.24, 0.74};
+        for (int c = 0; c < count; c++) {
+            long hc = Hashing.mix(h, 950 + c, 0, 0);
+            double sg = length * fracs[c] + Hashing.range(Hashing.mix(hc, 1, 0, 0), -15, 15);
+            // not under a lake hall: slide forward off any level stretch
+            for (Hall hl : halls) {
+                if (!hl.lake()) continue;
+                double[] q = pointAt(sg);
+                if (Math.hypot(q[0] - hl.x(), q[1] - hl.z()) < hl.rxz() + 30) sg = Math.min(length - 60, sg + hl.rxz() + 40);
+            }
+            double[] p = pointAt(sg), d = dirAt(sg);
+            double f = floorAt(sg);
+            int sd = (c % 2 == 0 ? side : -side);
+            double rxz = Hashing.range(Hashing.mix(hc, 2, 0, 0), 22, 30);
+            double ry = Hashing.range(Hashing.mix(hc, 3, 0, 0), 14, 19);
+            double drop = Hashing.range(Hashing.mix(hc, 4, 0, 0), 10, 15);
+            double v = sd * (at(half, sg) + 12 + rxz);
+            double nx = -d[1] * sd, nz = d[0] * sd;
+            double cx = p[0] + nx * Math.abs(v), cz = p[1] + nz * Math.abs(v);
+            double cs = terrain.plans.cellSize, mg = Plans.MARGIN - 20 + rxz;
+            cx = Math.max(cellX * cs + mg, Math.min((cellX + 1) * cs - mg, cx));
+            cz = Math.max(cellZ * cs + mg, Math.min((cellZ + 1) * cs - mg, cz));
+            double dx = cx - p[0], dz = cz - p[1], dl = Math.max(1e-6, Math.hypot(dx, dz));
+            double dirX = dx / dl, dirZ = dz / dl;
+            double floorY = Math.max(W + 2 + drop * 0.25, f - drop * 0.5);
+            Spring sp = new Spring(cx, floorY + ry * 0.55, cz, rxz, ry, floorY, dirX, dirZ, drop);
+            springs.add(sp);
+            int wi = indexAt(sg);
+            double ex = cx - dirX * rxz * 0.72, ez = cz - dirZ * rxz * 0.72;
+            double ey = sp.rampFloor(ex, ez);
+            links.add(new Link(wx[wi], f + 2.5, wz[wi], ex, ey + 2.5, ez, 3.2));
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------------ Basalt Galleries
+
+    /** Obsidian Tubes refuges: a few smooth round tubes beside the path, branching from one reached by a short tunnel. */
+    private void planTubes(long h, Terrain terrain, double W) {
+        int count = length > 400 ? 2 : 1;
+        double[] fracs = count == 1 ? new double[]{0.55} : new double[]{0.3, 0.7};
+        int top = terrain.shape.top(layer);
+        double cs = terrain.plans.cellSize;
+        for (int c = 0; c < count; c++) {
+            long hc = Hashing.mix(h, 970 + c, 0, 0);
+            double sg = length * fracs[c] + Hashing.range(Hashing.mix(hc, 1, 0, 0), -15, 15);
+            double[] p = pointAt(sg), d = dirAt(sg);
+            double f = floorAt(sg);
+            int sd = (c % 2 == 0 ? side : -side);
+            double nx = -d[1] * sd, nz = d[0] * sd;
+            double r0 = Hashing.range(Hashing.mix(hc, 2, 0, 0), 5.0, 6.5);
+            double ang = Math.atan2(nz, nx) + Hashing.range(Hashing.mix(hc, 3, 0, 0), -0.4, 0.4);
+            double len = Hashing.range(Hashing.mix(hc, 4, 0, 0), 40, 60);
+            double ax = p[0] + nx * (at(half, sg) + 10), az = p[1] + nz * (at(half, sg) + 10);
+            // Refuges stay above the highest a lava surge reaches.
+            double ay = Math.max(W + Terrain.SURGE_RISE + 4 + r0 * 0.55, f + r0 * 0.55);
+            double bx = ax + Math.cos(ang) * len, bz = az + Math.sin(ang) * len;
+            double by = clampY(ay + Hashing.range(Hashing.mix(hc, 5, 0, 0), -4, 5), r0, W, top);
+            double[] A = clampXZ(ax, az, r0, cs), B = clampXZ(bx, bz, r0, cs);
+            Tube main = new Tube(A[0], ay, A[1], B[0], by, B[1], r0);
+            tubes.add(main);
+            int branches = 2 + (int) (Hashing.unit(Hashing.mix(hc, 6, 0, 0)) * 2);
+            for (int e = 0; e < branches; e++) {
+                long he = Hashing.mix(hc, 20 + e, 0, 0);
+                double t = Hashing.range(Hashing.mix(he, 1, 0, 0), 0.35, 1.0);
+                double sx = main.x1() + (main.x2() - main.x1()) * t, sy = main.y1() + (main.y2() - main.y1()) * t, sz = main.z1() + (main.z2() - main.z1()) * t;
+                double turn = Hashing.range(Hashing.mix(he, 2, 0, 0), 0.6, 1.4) * (e % 2 == 0 ? 1 : -1);
+                double bl = Hashing.range(Hashing.mix(he, 3, 0, 0), 22, 40);
+                double r = Hashing.range(Hashing.mix(he, 4, 0, 0), 4.0, 5.5);
+                double ex = sx + Math.cos(ang + turn) * bl, ez = sz + Math.sin(ang + turn) * bl;
+                double ey = clampY(sy + Hashing.range(Hashing.mix(he, 5, 0, 0), -6, 6), r, W, top);
+                double[] E = clampXZ(ex, ez, r, cs);
+                tubes.add(new Tube(sx, sy, sz, E[0], ey, E[1], r));
+            }
+            int wi = indexAt(sg);
+            links.add(new Link(wx[wi], f + 2.5, wz[wi], main.x1(), ay - r0 * 0.55 + 2.5, main.z1(), 3.2));
+        }
+    }
+
+    private double[] clampXZ(double x, double z, double r, double cs) {
+        double mg = Plans.MARGIN - 20 + r;
+        return new double[]{Math.max(cellX * cs + mg, Math.min((cellX + 1) * cs - mg, x)), Math.max(cellZ * cs + mg, Math.min((cellZ + 1) * cs - mg, z))};
+    }
+
+    private static double clampY(double y, double r, double W, int top) {
+        return Math.max(W + Terrain.SURGE_RISE + 4 + r * 0.55, Math.min(top - r - 10, y));
+    }
+
+    // ------------------------------------------------------------------------------------------------ Blue Reaches
 
     private void planRift(long h, Terrain terrain, double W) {
-        // Natural bridges across the rift.
+        // The bridges the path crosses on, where it changes sides; the path's own slab is their deck.
+        for (double sc : crossings) {
+            int i = indexAt(sc);
+            bridges.add(new Bridge(sc, floor[i], Hashing.range(Hashing.mix(h, 790, (int) sc, 0), 4.5, 6.5), riftHalf[i] + 4));
+        }
+        // More natural bridges across the rift, out of the path's way.
         double s = Hashing.range(Hashing.mix(h, 800, 0, 0), 40, 70);
         int k = 0;
         while (s < length - 40) {
             long hk = Hashing.mix(h, 810 + k, 0, 0);
             double rt = at(riftTop, s);
             double lo = W + 18, hi = rt - 16;
-            if (hi > lo) {
+            boolean clear = true;
+            for (double sc : crossings) if (Math.abs(sc - s) < 45) clear = false;
+            if (hi > lo && clear) {
                 double y = Hashing.range(Hashing.mix(hk, 1, 0, 0), lo, hi);
                 bridges.add(new Bridge(s, y, Hashing.range(Hashing.mix(hk, 2, 0, 0), 2.5, 4.0), at(riftHalf, s) + 4));
             }
@@ -515,7 +838,7 @@ public final class Route {
             double[] p = pointAt(sg), d = dirAt(sg);
             double f = floorAt(sg);
             double rh = at(riftHalf, sg);
-            double v = side * (rh + Hashing.range(Hashing.mix(hc, 2, 0, 0), 20, 30));
+            double v = (at(sideAt, sg) >= 0 ? 1 : -1) * (rh + Hashing.range(Hashing.mix(hc, 2, 0, 0), 20, 30));
             double r0 = Hashing.range(Hashing.mix(hc, 3, 0, 0), 17, 24);
             double gx = p[0] - d[1] * v, gz = p[1] + d[0] * v;
             double cs = terrain.plans.cellSize, mg = Plans.MARGIN - 20 + r0;

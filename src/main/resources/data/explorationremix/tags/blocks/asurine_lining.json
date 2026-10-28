@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:deepslate_tiles",
+    {
+      "id": "create:asurine",
+      "required": false
+    }
+  ]
+}

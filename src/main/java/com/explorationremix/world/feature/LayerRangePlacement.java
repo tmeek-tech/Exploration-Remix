@@ -16,7 +16,8 @@ import java.util.stream.Stream;
 /**
  * Picks a random Y inside a named layer (by its config id), so datapack features follow the configured heights
  * instead of hard-coded numbers. {@code inset} keeps the position away from the band edges; {@code above_water}
- * keeps it above the layer's water or lava table.
+ * keeps it above the layer's water or lava table. The layer {@code upper} is the pack's own caves, from its old
+ * floor up to 128 blocks above it, where the Rootvaults, the Silver Fern Rift and the Ivory Root Cavern are.
  */
 public final class LayerRangePlacement extends PlacementModifier {
     public static final Codec<LayerRangePlacement> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -43,6 +44,10 @@ public final class LayerRangePlacement extends PlacementModifier {
     public Stream<BlockPos> getPositions(PlacementContext ctx, RandomSource random, BlockPos pos) {
         Shape s = DeepWorld.shape();
         if (s == null || !DeepWorld.installed()) return Stream.empty();
+        if (layer.equals("upper")) {
+            int lo = s.packFloor + 6 + inset;
+            return Stream.of(new BlockPos(pos.getX(), lo + random.nextInt(128 - inset), pos.getZ()));
+        }
         int li = s.layerIndex(layer);
         if (li < 0) return Stream.empty();
         int min = (aboveWater ? s.waterY(li) : s.bottom(li)) + inset, max = s.top(li) - inset;

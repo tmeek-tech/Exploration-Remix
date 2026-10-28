@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:asurine_crystal"
+      }
+    },
+    "faces": "any",
+    "tries": 128,
+    "radius": 8,
+    "height": 8,
+    "on": "#explorationremix:asurine_lining",
+    "in_water": false
+  }
+}

@@ -9,6 +9,8 @@ import json, os, shutil
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import textures
+import worldgen
+import sounds
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RES = os.path.join(ROOT, "src/main/resources")
@@ -20,6 +22,7 @@ OWNED = [
     os.path.join(DATA, "worldgen"), os.path.join(DATA, "tags"), os.path.join(DATA, "forge"), os.path.join(DATA, "loot_tables"),
     os.path.join(RES, "data", "minecraft", "tags"), os.path.join(RES, "data", "forge", "tags"),
     os.path.join(ASSETS, "blockstates"), os.path.join(ASSETS, "models"), os.path.join(ASSETS, "textures"), os.path.join(ASSETS, "lang"),
+    os.path.join(ASSETS, "sounds.json"), os.path.join(ASSETS, "particles"),
 ]
 
 
@@ -30,7 +33,6 @@ def write(path, obj):
         f.write("\n")
 
 
-def worldgen(kind, name, obj): write(os.path.join(DATA, "worldgen", kind, name + ".json"), obj)
 def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", ns, "tags", kind, name + ".json"), {"replace": replace, "values": values})
 
 
@@ -70,7 +72,7 @@ BLOCK_TAGS = {
     ("minecraft", "climbable"): ["wisteria", "wisteria_plant", "blue_glow_vines", "blue_glow_vines_plant", "ember_vines", "ember_vines_plant"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus"],
-    (MOD, "hanging_supports"): ["wisteria", "wisteria_plant"],
+    (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots"],
 }
 
 # A crystal points along its facing; the model points up. These are vanilla amethyst's turns.
@@ -142,116 +144,10 @@ def block_assets():
 
 
 # =============================================================================================== biomes
-# Colours per biome. Fog is the colour of the distance in the cave, water and water fog tint the water.
-def rgb(h): return int(h.lstrip("#"), 16)
-
-DEEP_BIOMES = ["ivory_root_cavern", "lantern_lake", "asurine_geodes", "deep_blue_rift", "silver_fern_rift", "rust_springs",
-               "ember_gardens", "basalt_galleries"]
-BIOME_NAMES = {
-    "rootvaults": "Rootvaults", "ivory_root_cavern": "Ivory Root Cavern", "lantern_lake": "Lantern Lake", "asurine_geodes": "Asurine Geodes",
-    "deep_blue_rift": "Deep Blue Rift", "silver_fern_rift": "Silver Fern Rift", "rust_springs": "Rust Springs", "ember_gardens": "Ember Gardens",
-    "basalt_galleries": "Basalt Galleries",
-}
-LOOKS = {
-    #                    fog        water      water fog  grass      foliage
-    "rootvaults":        ("#b9c98c", "#2fb7a9", "#0f5a55", "#6fae58", "#5d9c48"),
-    "ivory_root_cavern": ("#c8954a", "#35c9c0", "#0e5e5a", "#8fae5a", "#7d9e4a"),
-    "lantern_lake":      ("#b98544", "#3bd0c4", "#12655f", "#86b056", "#74a046"),
-    "asurine_geodes":    ("#2c4f8c", "#3e72d8", "#0b1f4a", "#6f8fa8", "#5f7f98"),
-    "deep_blue_rift":    ("#1d3e75", "#2554ba", "#08183d", "#6a8aa8", "#5a7a98"),
-    "silver_fern_rift":  ("#2c4b7c", "#2f63c6", "#0a1c42", "#7f9db2", "#6f8da2"),
-    "rust_springs":      ("#a64b2b", "#c2672c", "#5a2a10", "#a08a50", "#907a40"),
-    "ember_gardens":     ("#a8472d", "#4fa9c5", "#163f4d", "#a8904c", "#98803c"),
-    "basalt_galleries":  ("#6b5249", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
-}
-
-# The pack's dripstone caves list these in this order (WWOO's copy, which matches vanilla). The Rootvaults take its
-# place, so they keep its ores and springs in the same order: a different order would break feature sorting.
-DRIPSTONE_FEATURES = [
-    [],
-    ["minecraft:lake_lava_underground", "minecraft:lake_lava_surface"],
-    ["minecraft:amethyst_geode"],
-    ["minecraft:monster_room", "minecraft:monster_room_deep"],
-    [],
-    [],
-    ["minecraft:ore_dirt", "minecraft:ore_gravel", "minecraft:ore_granite_upper", "minecraft:ore_granite_lower", "minecraft:ore_diorite_upper",
-     "minecraft:ore_diorite_lower", "minecraft:ore_andesite_upper", "minecraft:ore_andesite_lower", "minecraft:ore_tuff", "minecraft:ore_coal_upper",
-     "minecraft:ore_coal_lower", "minecraft:ore_iron_upper", "minecraft:ore_iron_middle", "minecraft:ore_iron_small", "minecraft:ore_gold",
-     "minecraft:ore_gold_lower", "minecraft:ore_redstone", "minecraft:ore_redstone_lower", "minecraft:ore_diamond", "minecraft:ore_diamond_large",
-     "minecraft:ore_diamond_buried", "minecraft:ore_lapis", "minecraft:ore_lapis_buried", "minecraft:ore_copper_large", "minecraft:underwater_magma",
-     "minecraft:disk_sand", "minecraft:disk_clay", "minecraft:disk_gravel"],
-    [],
-    ["minecraft:spring_water", "minecraft:spring_lava"],
-    ["minecraft:glow_lichen"],
-    ["minecraft:freeze_top_layer"],
-]
-
-CAVE_MONSTERS = [
-    {"type": "minecraft:spider", "weight": 100, "minCount": 4, "maxCount": 4},
-    {"type": "minecraft:zombie", "weight": 95, "minCount": 4, "maxCount": 4},
-    {"type": "minecraft:zombie_villager", "weight": 5, "minCount": 1, "maxCount": 1},
-    {"type": "minecraft:skeleton", "weight": 100, "minCount": 4, "maxCount": 4},
-    {"type": "minecraft:creeper", "weight": 100, "minCount": 4, "maxCount": 4},
-    {"type": "minecraft:slime", "weight": 100, "minCount": 4, "maxCount": 4},
-    {"type": "minecraft:enderman", "weight": 10, "minCount": 1, "maxCount": 4},
-    {"type": "minecraft:witch", "weight": 5, "minCount": 1, "maxCount": 1},
-]
-
-
-def spawners(water_life=True):
-    s = {"monster": CAVE_MONSTERS, "creature": [], "ambient": [{"type": "minecraft:bat", "weight": 10, "minCount": 8, "maxCount": 8}],
-         "underground_water_creature": [], "water_creature": [], "water_ambient": [], "misc": [], "axolotls": []}
-    if water_life:
-        s["underground_water_creature"] = [{"type": "minecraft:glow_squid", "weight": 10, "minCount": 4, "maxCount": 6}]
-    return s
-
-
-def biome(name, features, water_life=True, temperature=0.8):
-    fog, water, water_fog, grass, foliage = (rgb(c) for c in LOOKS[name])
-    return {
-        "has_precipitation": False,
-        "temperature": temperature,
-        "downfall": 0.4,
-        "effects": {
-            "fog_color": fog,
-            "sky_color": fog,
-            "water_color": water,
-            "water_fog_color": water_fog,
-            "grass_color": grass,
-            "foliage_color": foliage,
-            "mood_sound": {"sound": "minecraft:ambient.cave", "tick_delay": 6000, "block_search_extent": 8, "offset": 2.0},
-        },
-        "spawners": spawners(water_life),
-        "spawn_costs": {},
-        "carvers": {},
-        "features": features,
-    }
-
-
-def empty_steps(): return [[] for _ in range(11)]
-
-
-def biomes():
-    # Rootvaults: the dripstone caves' ores and springs, nothing of the dripstone itself.
-    rv = [list(step) for step in DRIPSTONE_FEATURES]
-    worldgen("biome", "rootvaults", biome("rootvaults", rv))
-    for name in DEEP_BIOMES:
-        f = empty_steps()
-        f[10].append(f"{MOD}:open_way")
-        worldgen("biome", name, biome(name, f, water_life=name not in ("basalt_galleries",), temperature=1.2 if name in ("rust_springs", "ember_gardens", "basalt_galleries") else 0.7))
-
-
-def features():
-    worldgen("configured_feature", "open_way", {"type": f"{MOD}:open_way", "config": {}})
-    worldgen("placed_feature", "open_way", {"feature": f"{MOD}:open_way", "placement": []})
+# The biomes, their features and the block tags they use live in worldgen.py.
 
 
 def tags():
-    deep = [f"{MOD}:{b}" for b in DEEP_BIOMES]
-    tag(MOD, "worldgen/biome", "is_deep", deep)
-    tag("minecraft", "worldgen/biome", "is_overworld", [f"{MOD}:rootvaults"])
-    tag("forge", "worldgen/biome", "is_cave", deep + [f"{MOD}:rootvaults"])
-    tag("forge", "worldgen/biome", "is_underground", deep + [f"{MOD}:rootvaults"])
     # Band stone: nothing breaks it, moves it or grows through it.
     for t in ("dragon_immune", "wither_immune", "features_cannot_replace", "geode_invalid_blocks"):
         tag("minecraft", "blocks", t, [f"{MOD}:band_stone"])
@@ -264,20 +160,34 @@ def biome_modifiers():
 
 
 def lang(extra):
-    out = {f"biome.{MOD}.{k}": v for k, v in BIOME_NAMES.items()}
-    out.update(extra)
+    out = dict(extra)
     write(os.path.join(ASSETS, "lang", "en_us.json"), dict(sorted(out.items())))
+
+
+# The mod's particle types (ERParticles) reuse vanilla sprites; CaveParticles tints and animates them.
+PARTICLES = {
+    "steam": [f"minecraft:big_smoke_{i}" for i in range(12)],
+    "ember": ["minecraft:generic_0", "minecraft:generic_1"],
+    "pollen": ["minecraft:generic_0"],
+}
+
+
+def particles():
+    for name, sprites in PARTICLES.items():
+        write(os.path.join(ASSETS, "particles", name + ".json"), {"textures": sprites})
 
 
 def main():
     for d in OWNED:
         if os.path.isdir(d): shutil.rmtree(d)
+        elif os.path.isfile(d): os.remove(d)
     names = block_assets()
     textures.write_all(os.path.join(ASSETS, "textures"))
-    biomes()
-    features()
+    names.update(worldgen.write_all(DATA, RES, write))
     tags()
     biome_modifiers()
+    names.update(sounds.write_all(ASSETS, write))
+    particles()
     lang(names)
     print("data written")
 

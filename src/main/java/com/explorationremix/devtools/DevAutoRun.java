@@ -94,11 +94,13 @@ public final class DevAutoRun {
             out.println("cell " + cx + " " + cz + " (spawn " + spawn.toShortString() + ")");
             out.flush();
 
-            // Gates: walk each passage's centre line; every block on it must be open and dry.
+            // Gates: walk each passage's centre line; every block on it must be open and dry. Plants and other
+            // blocks a player walks through are listed but don't block the way.
             for (int b = 1; b <= s.layerCount; b++) {
                 Plans.Gate g = t.plans.gate(b, cx, cz);
                 long t0 = System.nanoTime();
                 int samples = 0, solid = 0, wet = 0;
+                Map<String, Integer> passable = new TreeMap<>(), blocking = new TreeMap<>();
                 BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
                 for (int i = 0; i <= 400; i++) {
                     double tt = i / 400.0;
@@ -106,11 +108,17 @@ public final class DevAutoRun {
                     BlockState st = level.getChunk(p.getX() >> 4, p.getZ() >> 4, ChunkStatus.FULL, true).getBlockState(p);
                     samples++;
                     if (!st.getFluidState().isEmpty()) wet++;
-                    else if (!st.isAir()) solid++;
+                    else if (!st.isAir()) {
+                        String name = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(st.getBlock()).toString();
+                        if (st.blocksMotion()) { solid++; blocking.merge(name, 1, Integer::sum); }
+                        else passable.merge(name, 1, Integer::sum);
+                    }
                 }
                 out.printf(Locale.ROOT, "gate %d: upper landing %.0f %.0f %.0f, lower landing %.0f %.0f %.0f, passage samples %d, blocked %d, flooded %d%s (%.1f s)%n",
                         b, g.ux, g.uFloor + 1, g.uz, g.lx, g.lFloor + 1, g.lz, samples, solid, wet, solid + wet == 0 ? "  OK" : "  PROBLEM",
                         (System.nanoTime() - t0) / 1e9);
+                if (!blocking.isEmpty()) out.println("  blocking: " + blocking);
+                if (!passable.isEmpty()) out.println("  passable: " + passable);
                 out.flush();
                 double y0 = Math.min(g.lFloor, g.uFloor) - 24, y1 = Math.max(g.lFloor, g.uFloor) + 40;
                 BlockImages.write(along(level, g.ux, g.uz, g.lx, g.lz, 40, (int) y0, (int) y1), new File(dir, "gate_" + b + ".png"), 3);

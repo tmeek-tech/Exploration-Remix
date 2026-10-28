@@ -1,14 +1,15 @@
 {
   "replace": false,
   "values": [
+    "explorationremix:rootvaults",
+    "explorationremix:silver_fern_rift",
     "explorationremix:ivory_root_cavern",
     "explorationremix:lantern_lake",
-    "explorationremix:asurine_geodes",
-    "explorationremix:deep_blue_rift",
-    "explorationremix:silver_fern_rift",
-    "explorationremix:rust_springs",
     "explorationremix:ember_gardens",
+    "explorationremix:rust_springs",
+    "explorationremix:deep_blue_rift",
+    "explorationremix:asurine_geodes",
     "explorationremix:basalt_galleries",
-    "explorationremix:rootvaults"
+    "explorationremix:obsidian_tubes"
   ]
 }

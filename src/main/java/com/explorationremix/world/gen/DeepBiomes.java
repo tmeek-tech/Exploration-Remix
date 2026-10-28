@@ -47,7 +47,7 @@ public final class DeepBiomes {
             set.add(h);
         }
         rootvaults = registry.getHolder(ResourceKey.create(Registries.BIOME, ROOTVAULTS)).orElse(null);
-        if (rootvaults == null) ExplorationRemix.LOGGER.error("Biome {} is missing; dripstone caves and the deep dark stay above the first band", ROOTVAULTS);
+        if (rootvaults == null) ExplorationRemix.LOGGER.error("Biome {} is missing; the deep dark stays above the first band", ROOTVAULTS);
         replaceCaveBiomes = ERConfig.INSTANCE.replaceVanillaCaveBiomes.get();
         if (rootvaults != null && replaceCaveBiomes) set.add(rootvaults);
         all = Set.copyOf(set);

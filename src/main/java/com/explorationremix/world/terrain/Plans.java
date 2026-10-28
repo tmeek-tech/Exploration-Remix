@@ -191,6 +191,27 @@ public final class Plans {
         return new double[]{bestX, bestZ};
     }
 
+    // ------------------------------------------------------------------------------------------------ upper caves
+
+    private final Map<Long, Upper.Piece> uppers = new ConcurrentHashMap<>();
+    private static final Upper.Piece NO_PIECE = new Upper.Cavern(0, 0, 1, 1, -1e9, -1e9, -1e9, 0);
+
+    /** The Silver Fern Rift or Ivory Root Cavern carved into the pack's caves in a cell, or null. */
+    public Upper.Piece upper(int cx, int cz) {
+        long k = key(1, cx, cz);
+        Upper.Piece p = uppers.get(k);
+        if (p == null) {
+            Gate g = gate(1, cx, cz);
+            Route.Link r = ramp(g);
+            double[][] avoid = {{g.ux, g.uz, g.landR + 40}, {r.x2(), r.z2(), 30}, {(g.ux + r.x2()) * 0.5, (g.uz + r.z2()) * 0.5, 30}};
+            p = Upper.plan(seed, cx, cz, cellSize, 8, shape.packFloor, avoid, terrain.surfaceProbe);
+            if (p == null) p = NO_PIECE;
+            Upper.Piece prev = uppers.putIfAbsent(k, p);
+            if (prev != null) p = prev;
+        }
+        return p == NO_PIECE ? null : p;
+    }
+
     private final Map<Long, Route.Link> ramps = new ConcurrentHashMap<>();
 
     /** The first gate's upper landing sits on the pack's old floor; this ramp climbs from it into the pack's caves. */
@@ -233,18 +254,33 @@ public final class Plans {
             endR = landingRadius + 5; endHalf = (landingRadius + 5) / 1.5;
         }
 
-        // Waypoints: a meandering line from the entry landing to the exit landing.
+        // Waypoints: a meandering line from the entry landing to the exit landing. Deeper layers have further to
+        // descend, so the line meanders more (and gains waypoints) until it is long enough for gentle ramps.
+        double drop = Math.max(0, sFloor - eFloor);
+        double want = layer == Terrain.GARDENS ? 40 + drop / 0.48 + 170 : (10 + drop / 0.48) / 0.92;
+        List<double[]> pts = null;
+        for (int attempt = 0; attempt < 6; attempt++) {
+            double amp = 1.0 + 0.25 * attempt;
+            List<double[]> cand = meander(h, layer, cx, cz, sx, sz, ex, ez, amp, attempt / 2);
+            if (pts == null || polyLength(cand) > polyLength(pts)) pts = cand;
+            if (polyLength(pts) >= want) break;
+        }
+        return new Route(terrain, layer, cx, cz, h, pts, sFloor, eFloor, entry, exit, ex, ez, endR, endHalf, W);
+    }
+
+    /** A smoothed meandering polyline from (sx, sz) to (ex, ez), one point every ~3 blocks, kept inside the cell. */
+    private List<double[]> meander(long h, int layer, int cx, int cz, double sx, double sz, double ex, double ez, double amp, int extra) {
         List<double[]> way = new ArrayList<>();
         way.add(new double[]{sx, sz});
         double dx = ex - sx, dz = ez - sz, dist = Math.max(1, Math.hypot(dx, dz));
         double nx = -dz / dist, nz = dx / dist;
-        int n = 3 + (int) (Hashing.unit(Hashing.mix(h, 20, 0, 0)) * 2.0);
+        int n = 3 + (int) (Hashing.unit(Hashing.mix(h, 20, 0, 0)) * 2.0) + extra;
         double sign = Hashing.unit(Hashing.mix(h, 21, 0, 0)) < 0.5 ? -1 : 1;
         for (int i = 0; i < n; i++) {
             long hi = Hashing.mix(h, 30 + i, 0, 0);
             double t = (i + 1.0) / (n + 1) + Hashing.range(Hashing.mix(hi, 1, 0, 0), -0.05, 0.05);
             // A rift bends gently: its path runs on a ledge far from the centre line, which tight bends would fold.
-            double off = sign * (layer == Terrain.BLUE ? Hashing.range(Hashing.mix(hi, 2, 0, 0), 0.06, 0.2)
+            double off = sign * amp * (layer == Terrain.BLUE ? Hashing.range(Hashing.mix(hi, 2, 0, 0), 0.08, 0.22)
                     : Hashing.range(Hashing.mix(hi, 2, 0, 0), 0.12, 0.34)) * Math.max(dist, 220);
             sign = -sign;
             double wx = clampCell(sx + dx * t + nx * off, cx, MARGIN + 10);
@@ -252,8 +288,6 @@ public final class Plans {
             way.add(new double[]{wx, wz});
         }
         way.add(new double[]{ex, ez});
-
-        // Smooth the waypoints into a polyline (Catmull-Rom), one point every ~3 blocks.
         List<double[]> pts = new ArrayList<>();
         for (int i = 0; i + 1 < way.size(); i++) {
             double[] p0 = way.get(Math.max(0, i - 1)), p1 = way.get(i), p2 = way.get(i + 1), p3 = way.get(Math.min(way.size() - 1, i + 2));
@@ -266,7 +300,13 @@ public final class Plans {
             }
         }
         pts.add(new double[]{ex, ez});
-        return new Route(terrain, layer, cx, cz, h, pts, sFloor, eFloor, entry, exit, ex, ez, endR, endHalf, W);
+        return pts;
+    }
+
+    private static double polyLength(List<double[]> pts) {
+        double l = 0;
+        for (int i = 1; i < pts.size(); i++) l += Math.hypot(pts.get(i)[0] - pts.get(i - 1)[0], pts.get(i)[1] - pts.get(i - 1)[1]);
+        return l;
     }
 
     static double catmull(double p0, double p1, double p2, double p3, double t) {
