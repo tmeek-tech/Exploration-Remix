@@ -3,6 +3,7 @@ package com.explorationremix.mixin;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.gen.DeepMaterials;
 import com.explorationremix.world.terrain.Terrain;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Aquifer;
 import net.minecraft.world.level.levelgen.DensityFunction;
@@ -16,7 +17,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
  * Below the pack's old floor, the deep world decides every block while the noise is filled: each layer's flat water
  * (or lava) table instead of vanilla's aquifers, band stone, bedrock, and the deep rock of each layer. Rock near open
- * space is left as stone for the surface pass, which dresses it per biome.
+ * space is left as stone for the surface pass, which dresses it per biome. Above the old floor, in the upper caves,
+ * vanilla's aquifers stay but never hold lava: the lava lakes it would put at the bottom of the pack's caves are water.
  */
 @Mixin(Aquifer.NoiseBasedAquifer.class)
 public abstract class NoiseBasedAquiferMixin {
@@ -50,5 +52,15 @@ public abstract class NoiseBasedAquiferMixin {
         }
         int f = t.fluidAt(ctx.blockX(), y, ctx.blockZ());
         cir.setReturnValue(f == Terrain.WATER ? DeepMaterials.WATER : f == Terrain.LAVA ? DeepMaterials.LAVA : DeepMaterials.AIR);
+    }
+
+    /** The upper caves are safe: wherever vanilla's aquifer would leave lava above the old floor, it leaves water. */
+    @Inject(method = "computeSubstance", at = @At("RETURN"), cancellable = true)
+    private void er$noUpperLava(DensityFunction.FunctionContext ctx, double density, CallbackInfoReturnable<BlockState> cir) {
+        BlockState s = cir.getReturnValue();
+        if (s == null || !s.is(Blocks.LAVA)) return;
+        Terrain t = DeepWorld.terrain();
+        if (t == null || !DeepWorld.installed() || this.minGridY != Math.floorDiv(t.shape.floorY, 12) - 1) return;
+        if (ctx.blockY() >= t.shape.packFloor) cir.setReturnValue(DeepMaterials.WATER);
     }
 }

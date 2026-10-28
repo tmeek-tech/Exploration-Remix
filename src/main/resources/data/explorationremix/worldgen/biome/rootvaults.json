@@ -105,9 +105,7 @@
   "carvers": {},
   "features": [
     [],
-    [
-      "explorationremix:rootvaults/lava_to_water"
-    ],
+    [],
     [
       "minecraft:amethyst_geode",
       "explorationremix:rootvaults/daylight_shaft_hall",

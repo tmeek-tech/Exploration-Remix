@@ -12,7 +12,6 @@ import com.explorationremix.world.feature.GiantSpikeFeature;
 import com.explorationremix.world.feature.LayerHeight;
 import com.explorationremix.world.feature.LayerRangePlacement;
 import com.explorationremix.world.feature.MixStateProvider;
-import com.explorationremix.world.feature.LavaToWaterFeature;
 import com.explorationremix.world.feature.OpenWayFeature;
 import com.explorationremix.world.feature.RootvaultsLookFilter;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
@@ -45,7 +44,6 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<DaylightShaftFeature.Config>> DAYLIGHT_SHAFT = FEATURES.register("daylight_shaft", () -> new DaylightShaftFeature(DaylightShaftFeature.Config.CODEC));
     public static final RegistryObject<Feature<CeilingRootsFeature.Config>> CEILING_ROOTS = FEATURES.register("ceiling_roots", () -> new CeilingRootsFeature(CeilingRootsFeature.Config.CODEC));
     public static final RegistryObject<Feature<GiantFungusFeature.Config>> GIANT_FUNGUS = FEATURES.register("giant_fungus", () -> new GiantFungusFeature(GiantFungusFeature.Config.CODEC));
-    public static final RegistryObject<Feature<NoneFeatureConfiguration>> LAVA_TO_WATER = FEATURES.register("lava_to_water", () -> new LavaToWaterFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> BROKEN_MACHINE = FEATURES.register("broken_machine", () -> new BrokenMachineFeature(NoneFeatureConfiguration.CODEC));
 
     public static final RegistryObject<BlockStateProviderType<FallbackStateProvider>> FALLBACK_PROVIDER = STATE_PROVIDERS.register("fallback", () -> new BlockStateProviderType<>(FallbackStateProvider.CODEC));

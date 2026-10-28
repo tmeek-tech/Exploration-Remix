@@ -64,13 +64,13 @@ public final class DeepMaterials {
                 case SAND -> Blocks.SAND.defaultBlockState();
                 case GRAVEL -> Blocks.GRAVEL.defaultBlockState();
                 case MAGMA -> Blocks.MAGMA_BLOCK.defaultBlockState();
-                case OCHRE_FROGLIGHT -> Blocks.OCHRE_FROGLIGHT.defaultBlockState();
                 case GILDED_BLACKSTONE -> Blocks.GILDED_BLACKSTONE.defaultBlockState();
                 case GOLD_ORE -> Blocks.GOLD_ORE.defaultBlockState();
                 case DEEPSLATE_GOLD_ORE -> Blocks.DEEPSLATE_GOLD_ORE.defaultBlockState();
                 case DEEPSLATE_DIAMOND_ORE -> Blocks.DEEPSLATE_DIAMOND_ORE.defaultBlockState();
                 case DEEPSLATE_COPPER_ORE -> Blocks.DEEPSLATE_COPPER_ORE.defaultBlockState();
                 case DEEPSLATE_IRON_ORE -> Blocks.DEEPSLATE_IRON_ORE.defaultBlockState();
+                case DEEPSLATE_REDSTONE_ORE -> Blocks.DEEPSLATE_REDSTONE_ORE.defaultBlockState();
                 case IRON_ORE -> Blocks.IRON_ORE.defaultBlockState();
                 case OBSIDIAN -> Blocks.OBSIDIAN.defaultBlockState();
                 case CRYING_OBSIDIAN -> Blocks.CRYING_OBSIDIAN.defaultBlockState();

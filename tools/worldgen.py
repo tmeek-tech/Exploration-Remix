@@ -211,9 +211,6 @@ def build_features():
     up = "upper"
     PLANT_FLOORS = ["minecraft:moss_block", "minecraft:grass_block", "minecraft:rooted_dirt", "minecraft:dirt", "minecraft:moss_carpet"]
 
-    # ---- lakes: the pack's lava lakes under the Rootvaults become still water, like the pictures' clear pools
-    feature("rootvaults/lava_to_water", "lakes", rv, {"type": f"{MOD}:lava_to_water", "config": {}}, [])
-
     # ---- local modifications: shafts, spikes, pools and columns shape the space before anything grows in it
     feature("rootvaults/daylight_shaft_hall", "local_modifications", rv,
             {"type": f"{MOD}:daylight_shaft", "config": {"radius": funiform(1.5, 3.2), "max_depth": 120}},
@@ -230,7 +227,7 @@ def build_features():
             [count(6), SQUARE, layer(up)] + ceiling(offset=0) + [BIOME])
     feature("ember_gardens/pools", "local_modifications", ["ember_gardens"],
             pools(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 1)),
-                  mix((simple("minecraft:calcite"), 6), (LIMESTONE, 3), (simple("minecraft:pearlescent_froglight"), 3)), 10,
+                  mix((simple("minecraft:calcite"), 6), (LIMESTONE, 3)), 10,
                   edge=mix((simple("explorationremix:lavender_coral"), 2), (simple("explorationremix:pale_coral_fan"), 3)), edge_chance=0.35,
                   overflow=0.08),
             [count(18), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
@@ -239,7 +236,7 @@ def build_features():
             [count(8), SQUARE, layer("deep_gardens")] + ceiling(offset=0) + [BIOME])
     feature("rust_springs/pools", "local_modifications", ["rust_springs"],
             pools(mix((simple("minecraft:calcite"), 3), (LIMESTONE, 2)),
-                  mix((LIMESTONE, 5), (simple("minecraft:calcite"), 3), (simple("minecraft:ochre_froglight"), 6)), 11, overflow=0.12),
+                  mix((LIMESTONE, 5), (simple("minecraft:calcite"), 3)), 11, overflow=0.12),
             [count(20), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
     feature("basalt_galleries/lava_pools", "local_modifications", ["basalt_galleries"],
             pools(mix((simple("minecraft:blackstone"), 2), (simple("minecraft:basalt", axis="y"), 3)), simple("minecraft:magma_block"), 6, lava=True),
@@ -351,7 +348,7 @@ def build_features():
             [count(45), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
     feature("lantern_lake/flowers", "vegetal_decoration", ["lantern_lake"],
             patch(mix((simple("explorationremix:lavender_flower"), 3), (simple("explorationremix:gold_flower"), 2)),
-                  state("explorationremix:lavender_flower"), tries=40, xz=6, y=3, on=PLANT_FLOORS),
+                  state("explorationremix:lavender_flower"), tries=40, xz=6, y=3, on=f"#{MOD}:cave_rock"),
             [count(25), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
     feature("lantern_lake/seagrass", "vegetal_decoration", ["lantern_lake"],
             attach(simple("minecraft:seagrass"), "floor", 64, ["minecraft:sand", "minecraft:clay", "minecraft:gravel", "minecraft:dirt"],

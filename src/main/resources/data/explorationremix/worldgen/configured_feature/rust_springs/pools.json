@@ -46,15 +46,6 @@
             }
           },
           "weight": 3
-        },
-        {
-          "data": {
-            "type": "minecraft:simple_state_provider",
-            "state": {
-              "Name": "minecraft:ochre_froglight"
-            }
-          },
-          "weight": 6
         }
       ]
     },

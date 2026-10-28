@@ -15,7 +15,8 @@
     "NoiseBasedAquiferMixin",
     "StructurePiecesBuilderMixin",
     "StructureMixin",
-    "AboveBottomAnchorMixin"
+    "AboveBottomAnchorMixin",
+    "SpringFeatureMixin"
   ],
   "client": [
     "client.LightTextureMixin"
