@@ -67,15 +67,59 @@ PAINTERS = {
     "block/band_stone": band_stone,
 }
 
-import plants  # noqa: E402  (the plant and crystal textures live in their own file)
+# The plant and crystal textures live in their own files: plants.py (the first plants and the shared helpers), then
+# plants_upper.py (Upper Caves and Blue Reaches) and plants_deep.py (Deep Gardens and Basalt Galleries). plants_deep
+# goes last because it may repaint a plant of plants.py.
+import plants  # noqa: E402
+import plants_upper  # noqa: E402
+import plants_deep  # noqa: E402
 PAINTERS.update(plants.PAINTERS)
+PAINTERS.update(plants_upper.PAINTERS)
+PAINTERS.update(plants_deep.PAINTERS)
+
+# Emissive overlays: texture -> the colours lifted into <texture>_glow.png, which the models draw a second time at full
+# block light (gen_data.py), so those pixels glow even where the plant gives little or no light. The plant files add
+# theirs with plants.register(..., glow=...); the first glowing plants get theirs here.
+GLOW = {
+    "block/white_glow_flower": {"#F6F0DE", "#F4CF6A"},
+    "block/lantern_fungus": {"#FFE29A", "#FFF3CC", "#FFDD86", "#F1B84F"},
+    "block/lantern_roots": {"#F1B84F", "#FFE08A"},
+    "block/lantern_pod": {"#F4A93A", "#FFD26E", "#FFF0C0"},
+    "block/gold_flower": {"#FFF4C8", "#EBCB72"},
+    "block/asurine_crystal": {"#EEF6FF", "#AACDFF"},
+    "block/blue_glow_mushroom": {"#F4F9FF", "#CFE3FF"},
+    "block/blue_glow_vines": {"#E2F0FF", "#86B8FF"},
+    "block/blue_glow_vines_plant": {"#E2F0FF", "#86B8FF"},
+    "block/ember_vines": {"#FFE6A6", "#F7B046"},
+    "block/ember_vines_plant": {"#FFE6A6", "#F7B046"},
+}
+GLOW.update(plants.GLOW)
+
+
+def glow_layer(img, colours):
+    """Only the pixels of these colours (hex), everything else transparent."""
+    keep = {plants.hexc(c) for c in colours}
+    out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    src, dst = img.load(), out.load()
+    for y in range(img.size[1]):
+        for x in range(img.size[0]):
+            if src[x, y] in keep:
+                dst[x, y] = src[x, y]
+    return out
 
 
 def write_all(textures_dir):
     for name, painter in PAINTERS.items():
         path = os.path.join(textures_dir, name + ".png")
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        painter().save(path)
+        img = painter()
+        img.save(path)
+        if name in GLOW:
+            overlay = glow_layer(img, GLOW[name])
+            assert overlay.getbbox() is not None, f"{name}: none of its glow colours is in the texture"
+            overlay.save(os.path.join(textures_dir, name + "_glow.png"))
+    for name in GLOW:
+        assert name in PAINTERS, f"{name}: a glow overlay for a texture nobody paints"
 
 
 def sheet(path, names=None, scale=8, cols=6):

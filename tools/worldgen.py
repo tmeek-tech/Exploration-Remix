@@ -157,6 +157,15 @@ def hanging_column(body, tip, lo, hi):
         "layers": [{"height": uniform(lo, hi), "provider": simple(body)}, {"height": 1, "provider": simple(tip)}]}}
 
 
+def hanging_patch(column, tries=8, xz=4, y=2):
+    """Several vines hanging close together: a patch of block columns, each started right under a solid ceiling.
+    Clusters light the caves in pockets with dim gaps between them, instead of an even scatter of single vines. Each
+    try that lands in the air looks up for the ceiling over it, so the clusters form under rough ceilings too."""
+    return {"type": "minecraft:random_patch", "config": {
+        "tries": tries, "xz_spread": xz, "y_spread": y,
+        "feature": {"feature": column, "placement": ceiling(steps=2 * y + 2)}}}
+
+
 def berry_vines(lo, hi, berries):
     """Cave vines hanging from a ceiling, lo to hi blocks long, with glow berries on about this share of them (vanilla's
     share is a fifth). The tips are grown out, as vanilla's are, so the vines stay the length they were placed."""
@@ -379,7 +388,8 @@ def build_features():
 
 
 # The vanilla deep dark, moved down into the Blue Reaches: its sculk, which vanilla only places relative to the old
-# floor, placed again across the layer. Added to minecraft:deep_dark by a biome modifier.
+# floor, placed again across the layer. Added to minecraft:deep_dark by a biome modifier. (name, configured feature
+# (vanilla id or inline dict), placement).
 DEEP_DARK_FEATURES = [
     ("deep_dark/sculk_vein", "minecraft:sculk_vein", [count(112), SQUARE, layer("blue_reaches"), BIOME]),
     ("deep_dark/sculk_patch", "minecraft:sculk_patch_deep_dark", [count(136), SQUARE, layer("blue_reaches"), BIOME]),
@@ -470,6 +480,9 @@ def write_all(data_dir, res_dir, write):
         for b in biomes:
             per_biome[b][STEPS.index(step)].append(f"{MOD}:{name}")
     for name, cf, placement in DEEP_DARK_FEATURES:
+        if not isinstance(cf, str):
+            write(os.path.join(wg, "configured_feature", name + ".json"), cf)
+            cf = f"{MOD}:{name}"
         write(os.path.join(wg, "placed_feature", name + ".json"), {"feature": cf, "placement": placement})
     for b in OURS:
         write(os.path.join(wg, "biome", b + ".json"), {

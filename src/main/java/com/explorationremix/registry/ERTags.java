@@ -11,4 +11,7 @@ public final class ERTags {
 
     /** Blocks that lantern pods and roots can hang from besides a solid ceiling. */
     public static final TagKey<Block> HANGING_SUPPORTS = TagKey.create(Registries.BLOCK, new ResourceLocation(ExplorationRemix.MOD_ID, "hanging_supports"));
+
+    /** Every plant and crystal the caves grow, ours and vanilla's: what /remix census counts as growth. */
+    public static final TagKey<Block> PLANTS = TagKey.create(Registries.BLOCK, new ResourceLocation(ExplorationRemix.MOD_ID, "plants"));
 }

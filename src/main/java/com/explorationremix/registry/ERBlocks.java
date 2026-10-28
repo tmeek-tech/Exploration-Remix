@@ -12,10 +12,12 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.DoubleHighBlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.AmethystClusterBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.GlowLichenBlock;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
@@ -128,9 +130,23 @@ public final class ERBlocks {
         return plant(color, SoundType.GRASS, light).offsetType(BlockBehaviour.OffsetType.XZ).ignitedByLava();
     }
 
+    /** A sheet of lichen or ivy over the rock (a GlowLichenBlock), giving light only where it covers a face. */
+    private static BlockBehaviour.Properties lichen(MapColor color, SoundType sound, int light) {
+        BlockBehaviour.Properties p = BlockBehaviour.Properties.of().mapColor(color).replaceable().noCollission().strength(0.2F).sound(sound)
+                .pushReaction(PushReaction.DESTROY);
+        return light > 0 ? p.lightLevel(GlowLichenBlock.emission(light)) : p;
+    }
+
     static RegistryObject<Block> block(String name, Supplier<Block> supplier) {
         RegistryObject<Block> ro = BLOCKS.register(name, supplier);
         item(name, ro);
+        return ro;
+    }
+
+    /** A two-block plant, whose item places both halves. */
+    static RegistryObject<Block> tallBlock(String name, Supplier<Block> supplier) {
+        RegistryObject<Block> ro = BLOCKS.register(name, supplier);
+        ITEMS.register(name, () -> new DoubleHighBlockItem(ro.get(), new Item.Properties()));
         return ro;
     }
 
