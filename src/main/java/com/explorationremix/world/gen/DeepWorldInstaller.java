@@ -25,6 +25,7 @@ import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.NoiseSettings;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
@@ -35,9 +36,10 @@ import java.util.Set;
 import java.util.WeakHashMap;
 
 /**
- * Deepens the overworld when a server starts. Runs after every datapack (Tectonic, WWOO, Lithostitched) has loaded,
- * reads whatever floor the pack ended up with, and extends the dimension, the noise settings, the density router and
- * the surface rules downward from there.
+ * Deepens the overworld when a server starts. Runs from the head of {@code MinecraftServer.loadLevel()}, which is after
+ * every datapack has loaded and after Lithostitched has applied its worldgen modifiers (Tectonic's set_height_limits
+ * modifier runs there and would otherwise reset the height limits we just changed). It reads whatever floor the pack
+ * ended up with and extends the dimension, the noise settings, the density router and the surface rules downward.
  */
 public final class DeepWorldInstaller {
     private static final Set<Object> PATCHED = Collections.newSetFromMap(new WeakHashMap<>());
@@ -46,9 +48,12 @@ public final class DeepWorldInstaller {
 
     @SubscribeEvent
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
-        MinecraftServer server = event.getServer();
         DeepWorld.clearMarks();
         DeepWorld.setInstalled(false);
+    }
+
+    /** Called by {@code MinecraftServerMixin} at the head of {@code loadLevel()}, before any level or chunk map exists. */
+    public static void onLoadLevel(MinecraftServer server) {
         if (!DeepWorld.enabled()) {
             ExplorationRemix.LOGGER.info("Deep world disabled by config");
             return;
@@ -58,6 +63,25 @@ public final class DeepWorldInstaller {
         } catch (RuntimeException e) {
             ExplorationRemix.LOGGER.error("Failed to install the deep world; the overworld is unchanged", e);
             DeepWorld.setInstalled(false);
+        }
+    }
+
+    /** After the levels exist: make sure nothing undid the deepening between loadLevel() and now. */
+    @SubscribeEvent
+    public static void onServerStarted(ServerStartedEvent event) {
+        if (!DeepWorld.installed()) return;
+        net.minecraft.server.level.ServerLevel overworld = event.getServer().getLevel(net.minecraft.world.level.Level.OVERWORLD);
+        if (overworld == null) return;
+        int minY = overworld.getMinBuildHeight();
+        int noiseMin = Integer.MIN_VALUE;
+        if (overworld.getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator g) {
+            noiseMin = g.generatorSettings().value().noiseSettings().minY();
+        }
+        if (minY != DeepWorld.floorY() || noiseMin != DeepWorld.floorY()) {
+            ExplorationRemix.LOGGER.error("The deep world was installed but another mod changed the overworld's height afterwards (dimension minY {}, noise minY {}, expected {}). The deep layers will not generate.", minY, noiseMin, DeepWorld.floorY());
+            DeepWorld.setInstalled(false);
+        } else {
+            ExplorationRemix.LOGGER.info("Deep world check passed: overworld floor is y {}", minY);
         }
     }
 
