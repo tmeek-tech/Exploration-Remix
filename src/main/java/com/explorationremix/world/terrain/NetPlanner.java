@@ -1077,8 +1077,18 @@ final class NetPlanner {
             }
         }
 
-        /** The ancient city's reserve round its chamber's centre (blocks): no view-cutting shape stands in it either. */
+        /** The ancient city's reserve round its chamber's centre (blocks). */
         static final double CITY_RESERVE = Network.CITY_RESERVE;
+        /**
+         * Blocks a view-cutting shape keeps from a city's chamber (review). The breaker used to keep out of the whole
+         * reserve (128 from the centre), and the caverns round a city kept views of up to 400 blocks: 2,559 of the
+         * 23,614 places sampled in seed 2000023's cell -1,1 had one over 160. The city's pieces stand on the chamber's
+         * floor; the few that reach past it meet the shapes as they meet any rock (beard_box).
+         */
+        static final double CITY_SIGHT_MARGIN = 16;
+
+        /** How far from a city's centre no view-cutting shape stands. */
+        static double cityKeep(Chamber c) { return Math.min(CITY_RESERVE, c.R() + CITY_SIGHT_MARGIN); }
         /** Margin of the view breaker's map round the cell (blocks): a long run touching the cell lies inside it. */
         static final double SIGHT_APRON = 120;
         /** Line directions of the view breaker over half a turn, and the spacing of its lines (blocks). */
@@ -1098,6 +1108,16 @@ final class NetPlanner {
         static final double SIGHT_WALL = 4, SIGHT_ROOM = 4;
         /** A shape stands where its tier is at least this tall along its whole segment (blocks). */
         static final double SIGHT_MIN_H = 12;
+        /**
+         * The rift's second pass (review): a straight stretch of the ledge path is a long view along the rift that no
+         * spire beside the path can cut, so the runs the first pass leaves get spires that may stand on the path itself,
+         * from sites on a finer grid. The path's walking core and floor are carved after them (mustOpen, mustStay), so
+         * the path runs on through the spire in a short tunnel. They keep clear of the bridges, ways, climbs, geodes and
+         * the city as the first pass's spires do.
+         */
+        static boolean SIGHT_PATH_SPIRES = true;
+        static final int SIGHT_STEP2 = 4;
+        static final double SPIRE2_R_MIN = 3.5, SPIRE2_R_MAX = 5, FIN2_R = 3.5, FIN2_HALF_MIN = 7, FIN2_HALF_MAX = 13;
 
         /** Map classes of the view breaker: open cavern floor, closed, a chamber, the rift. */
         static final byte SEE_OPEN = 0, SEE_WALL = 1, SEE_ROOM = 2, SEE_RIFT = 3;
@@ -1128,23 +1148,27 @@ final class NetPlanner {
             double[] ang = new double[SIGHT_DIRS];
             for (int a = 0; a < ang.length; a++) ang[a] = Math.PI * a / SIGHT_DIRS;
             // a spire stands the rift's full height: it keeps its room from everything at any height
-            float[] roomAll = new float[M * M];
-            Arrays.fill(roomAll, 1e6f);
-            for (Way wy : n.ways) for (int j = 0; j < wy.n; j++) stampRoom(roomAll, M, sx0, sz0, g, wy.x[j], wy.z[j], wy.w[j], 32);
-            for (Shaft sh : n.shafts) stampRoom(roomAll, M, sx0, sz0, g, sh.x, sh.z, sh.r + 2, 32);
+            // (and roomOff the same without the ledge path, for the second pass's spires, which may stand on it)
+            float[] roomOff = new float[M * M];
+            Arrays.fill(roomOff, 1e6f);
+            for (Way wy : n.ways) for (int j = 0; j < wy.n; j++) stampRoom(roomOff, M, sx0, sz0, g, wy.x[j], wy.z[j], wy.w[j], 32);
+            for (Shaft sh : n.shafts) stampRoom(roomOff, M, sx0, sz0, g, sh.x, sh.z, sh.r + 2, 32);
             for (Route r : n.canyons) {
-                for (Route.Geode ge : r.geodes) stampRoom(roomAll, M, sx0, sz0, g, ge.x(), ge.z(), ge.r() + 4, 32);
+                for (Route.Geode ge : r.geodes) stampRoom(roomOff, M, sx0, sz0, g, ge.x(), ge.z(), ge.r() + 4, 32);
+                for (Route.Bridge b : r.bridges) {
+                    double[] c = r.pointAt(b.s()), d = r.dirAt(b.s());
+                    for (double v = -b.span(); v <= b.span(); v += 2)
+                        stampRoom(roomOff, M, sx0, sz0, g, c[0] - d[1] * v, c[1] + d[0] * v, b.halfAlong() + 1, 32);
+                }
+            }
+            for (Chamber c : n.ch) if (c.keep && c.kind == Kind.CITY) stampRoom(roomOff, M, sx0, sz0, g, c.x, c.z, cityKeep(c), 32);
+            float[] roomAll = roomOff.clone();
+            for (Route r : n.canyons) {
                 for (double s = 0; s <= r.walkLength; s += 2) {
                     double[] q = r.pathAt(s);
                     stampRoom(roomAll, M, sx0, sz0, g, q[0], q[1], r.atIndex(r.half, r.walkIndex(s)) + 1, 32);
                 }
-                for (Route.Bridge b : r.bridges) {
-                    double[] c = r.pointAt(b.s()), d = r.dirAt(b.s());
-                    for (double v = -b.span(); v <= b.span(); v += 2)
-                        stampRoom(roomAll, M, sx0, sz0, g, c[0] - d[1] * v, c[1] + d[0] * v, b.halfAlong() + 1, 32);
-                }
             }
-            for (Chamber c : n.ch) if (c.keep && c.kind == Kind.CITY) stampRoom(roomAll, M, sx0, sz0, g, c.x, c.z, CITY_RESERVE, 32);
             NetSight.Shapes spires = new NetSight.Shapes();
             for (int t = 0; t < 2; t++) {
                 SightMap sm = new SightMap(new NetSight.Raster(sx0, sz0, g, M, M), focus);
@@ -1209,6 +1233,7 @@ final class NetPlanner {
                 sm.clear = NetSight.distanceTo(walls, M, M, g);
                 sm.clearRift = NetSight.distanceTo(rift, M, M, g);
                 sm.roomAll = roomAll;
+                sm.roomOff = roomOff;
                 // how near the tier's ways, climbs, geodes and the city come (blocks from their edge)
                 float[] room = sm.room;
                 Arrays.fill(room, 1e6f);
@@ -1226,7 +1251,7 @@ final class NetPlanner {
                 }
                 for (Chamber c : n.ch) {
                     if (!c.keep || c.kind != Kind.CITY || c.yHi() < span[t][0] || c.yLo() > span[t][1]) continue;
-                    stampRoom(room, M, sx0, sz0, g, c.x, c.z, CITY_RESERVE, 32);
+                    stampRoom(room, M, sx0, sz0, g, c.x, c.z, cityKeep(c), 32);
                 }
                 // the pillars already there: 0.2.0's, the seams' fins (which both neighbours carve), the spires so far
                 List<double[]> grid = new ArrayList<>();
@@ -1260,11 +1285,41 @@ final class NetPlanner {
                     }
                 }
                 double ccx = sx0 + M * g * 0.5, ccz = sz0 + M * g * 0.5;
-                int[] ch = NetSight.choose(ras, ang, ccx, ccz, SIGHT_OFF, focus, sm.blk, cand, NetSight.LMAX, SIGHT_SHRINK, 0.9, st);
+                boolean second = SIGHT_PATH_SPIRES && !n.canyons.isEmpty();
+                NetSight.Stats st1 = second ? new NetSight.Stats() : st;
+                int[] ch = NetSight.choose(ras, ang, ccx, ccz, SIGHT_OFF, focus, sm.blk, cand, NetSight.LMAX, SIGHT_SHRINK, 0.9, st1);
                 NetSight.Shapes res = new NetSight.Shapes();
                 for (int j : ch) {
                     if (inRift.get(j)) spires.add(cand.get(j));
                     else res.add(cand.get(j));
+                }
+                if (second) {
+                    // the rift's second pass: slimmer spires on a finer grid, which may stand on the ledge path
+                    for (int j : ch) sm.blk.add(cand.get(j));
+                    sm.index();
+                    NetSight.Shapes cand2 = new NetSight.Shapes();
+                    int step2 = (int) Math.round(SIGHT_STEP2 / g);
+                    for (int i = 0; i < M; i += step2) for (int k = 0; k < M; k += step2) {
+                        double x = ras.px(i), z = ras.pz(k);
+                        if (x < x0 || x >= x0 + cell || z < z0 || z >= z0 + cell) continue;
+                        int c = i * M + k;
+                        if (ras.see[c] == 0 || sm.obst[c] != SEE_RIFT) continue;
+                        long hh = Hashing.mix(h, 9920 + t, i, k);
+                        double rr = Hashing.range(Hashing.mix(hh, 1, 0, 0), SPIRE2_R_MIN, SPIRE2_R_MAX);
+                        if (sm.fitsOnPath(x, z, x, z, rr)) cand2.add(x, z, x, z, rr);
+                        double half = Hashing.range(Hashing.mix(hh, 2, 0, 0), FIN2_HALF_MIN, FIN2_HALF_MAX);
+                        double turn = Hashing.range(Hashing.mix(hh, 3, 0, 0), -0.2, 0.2);
+                        for (int q = 0; q < 4; q++) {
+                            double a = q * Math.PI / 4 + turn, ux = Math.cos(a) * half, uz = Math.sin(a) * half;
+                            if (sm.fitsOnPath(x - ux, z - uz, x + ux, z + uz, FIN2_R)) cand2.add(x - ux, z - uz, x + ux, z + uz, FIN2_R);
+                        }
+                    }
+                    int[] ch2 = NetSight.choose(ras, ang, ccx, ccz, SIGHT_OFF, focus, sm.blk, cand2, NetSight.LMAX, SIGHT_SHRINK, 0.9, st);
+                    for (int j : ch2) spires.add(cand2.get(j));
+                    st.placed += st1.placed;
+                    st.fins += st1.fins;
+                    st.area += st1.area;
+                    st.candidates += st1.candidates;
                 }
                 p.setSight(t, res);
             }
@@ -1278,8 +1333,11 @@ final class NetPlanner {
             final double[] cellBox;
             final byte[] obst;
             final float[] hgt, room;
-            /** Blocks to the nearest wall or chamber, and to the rift; the room from everything at any height. */
-            float[] clear, clearRift, roomAll;
+            /**
+             * Blocks to the nearest wall or chamber, and to the rift; the room from everything at any height, and from
+             * everything but the rift's ledge path.
+             */
+            float[] clear, clearRift, roomAll, roomOff;
             final NetSight.Shapes blk = new NetSight.Shapes();
             private int[][] bk;
             private int nb;
@@ -1306,6 +1364,40 @@ final class NetPlanner {
                 }
                 bk = new int[nb * nb][];
                 for (int i = 0; i < bk.length; i++) bk[i] = tmp.get(i).stream().mapToInt(Integer::intValue).toArray();
+            }
+
+            /**
+             * Whether a spire of the rift's second pass may stand here: all of its segment in the rift, at least
+             * SIGHT_MIN_H tall, its foot inside the rift's walls, its waist two blocks from the bridges, ways, climbs,
+             * geodes and the city (but not from the ledge path), and apart from the shapes already there.
+             */
+            boolean fitsOnPath(double ax, double az, double bx, double bz, double r) {
+                double foot = 1.65 * r, reach = 2.5 * r + 2;
+                for (int e = 0; e < 2; e++) {
+                    double x = e == 0 ? ax : bx, z = e == 0 ? az : bz;
+                    if (x - cellBox[0] < reach || cellBox[2] - x < reach || z - cellBox[1] < reach || cellBox[3] - z < reach) return false;
+                }
+                double len = Math.hypot(bx - ax, bz - az);
+                int ns = Math.max(1, (int) Math.ceil(len / 4));
+                for (int s = 0; s <= ns; s++) {
+                    double x = ax + (bx - ax) * s / ns, z = az + (bz - az) * s / ns;
+                    int i = (int) Math.floor((x - ras.x0) / ras.g), k = (int) Math.floor((z - ras.z0) / ras.g);
+                    if (i < 0 || k < 0 || i >= ras.nx || k >= ras.nz) return false;
+                    int c = i * ras.nz + k;
+                    if (ras.see[c] == 0 || obst[c] != SEE_RIFT || hgt[c] < SIGHT_MIN_H) return false;
+                    if (clear[c] < foot || roomOff[c] < 0.75 * r + 2) return false;
+                }
+                return apart(ax, az, bx, bz, foot);
+            }
+
+            /** No shape already there comes within 0.9 of the sum of the two feet of segment a-b. */
+            boolean apart(double ax, double az, double bx, double bz, double foot) {
+                int i0 = bucket(Math.min(ax, bx), ras.x0), i1 = bucket(Math.max(ax, bx), ras.x0);
+                int k0 = bucket(Math.min(az, bz), ras.z0), k1 = bucket(Math.max(az, bz), ras.z0);
+                for (int i = i0; i <= i1; i++) for (int k = k0; k <= k1; k++)
+                    for (int j : bk[i * nb + k])
+                        if (NetSight.segSeg(ax, az, bx, bz, blk.ax[j], blk.az[j], blk.bx[j], blk.bz[j]) < 0.9 * (foot + 1.65 * blk.r[j])) return false;
+                return true;
             }
 
             private int bucket(double v, double o) { return Math.max(0, Math.min(nb - 1, (int) Math.floor((v - o) / BK))); }

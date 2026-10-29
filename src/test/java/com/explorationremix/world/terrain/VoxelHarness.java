@@ -491,10 +491,15 @@ final class VoxelHarness {
     static final int SIGHT_YAWS = 24;
     /** Eye height over the feet. */
     static final double EYE = 1.62;
+    /** A view longer than this (blocks) shows the sky past the render distance under the shader. */
+    static final double LONG = 160;
 
     /** What the sight-line check saw. */
     static final class Sight {
-        long places, rays, left;
+        /** left: rays that left the box first; leftLong: those of them that had run more than {@link #LONG} by then. */
+        long places, rays, left, leftLong;
+        /** The places with a view longer than {@link #LONG} (a ray that left the box after that counts): {x, y, z}. */
+        final java.util.List<int[]> longPlaces = new java.util.ArrayList<>();
         /** Ray lengths in 10-block bins; the last bin holds 170 and more (up to the cap). */
         final long[] hist = new long[18];
         double max;
@@ -511,6 +516,8 @@ final class VoxelHarness {
             places += o.places;
             rays += o.rays;
             left += o.left;
+            leftLong += o.leftLong;
+            longPlaces.addAll(o.longPlaces);
             for (int b = 0; b < hist.length; b++) hist[b] += o.hist[b];
             max = Math.max(max, o.max);
             longest.addAll(o.longest);
@@ -522,8 +529,9 @@ final class VoxelHarness {
     /**
      * Sight lines: from the eyes of main-component places standing on rock, in every {@code every}-th column along x and
      * z, rays at the pitches of {@link #SIGHT_PITCHES} and 24 yaws are marched block by block to the first rock (the
-     * bands over and under the layer are rock). A ray that leaves the box first is counted apart. Rays are followed up
-     * to {@code cap}; the {@code keep} longest are listed.
+     * bands over and under the layer are rock). A ray that leaves the box first is counted apart, and as a long view
+     * when it had run more than {@link #LONG} by then. Rays are followed up to {@code cap}; the {@code keep} longest are
+     * listed.
      */
     Sight sight(int every, double cap, int keep) { return sight(every, cap, keep, x0, z0, x0 + nx, z0 + nz); }
 
@@ -543,13 +551,19 @@ final class VoxelHarness {
                     int y = y0 + placeY[p];
                     if (!solid(x, y - 1, z)) continue;
                     s.places++;
+                    boolean far = false;
                     double ox = x + 0.5, oy = y + EYE, oz = z + 0.5;
                     for (int q = 0; q < ys.length; q++) for (int a = 0; a < SIGHT_YAWS; a++) {
                         double yaw = a * (360.0 / SIGHT_YAWS), th = Math.toRadians(yaw);
                         double dx = cs[q] * Math.cos(th), dy = ys[q], dz = cs[q] * Math.sin(th);
                         double d = ray(ox, oy, oz, dx, dy, dz, cap);
                         s.rays++;
-                        if (d < 0) { s.left++; continue; }
+                        if (d < 0) {
+                            s.left++;
+                            if (-1 - d > LONG) { s.leftLong++; far = true; }
+                            continue;
+                        }
+                        if (d > LONG) far = true;
                         s.hist[Math.min(s.hist.length - 1, (int) (d / 10))]++;
                         s.max = Math.max(s.max, d);
                         if (keep > 0 && (s.longest.size() < keep || d > s.longest.get(s.longest.size() - 1)[5])) {
@@ -558,6 +572,7 @@ final class VoxelHarness {
                             if (s.longest.size() > keep) s.longest.remove(s.longest.size() - 1);
                         }
                     }
+                    if (far) s.longPlaces.add(new int[]{x, y, z});
                 }
             }
             return s;
@@ -566,7 +581,8 @@ final class VoxelHarness {
 
     /**
      * The distance from (ox, oy, oz) along the unit direction (dx, dy, dz) to the first rock block it enters; the cap
-     * when it meets none that near; -1 when it leaves the box across a side first. Over and under the layer is rock.
+     * when it meets none that near; -1 - t when it leaves the box across a side first, after running t. Over and under
+     * the layer is rock.
      */
     double ray(double ox, double oy, double oz, double dx, double dy, double dz, double cap) {
         int x = (int) Math.floor(ox), y = (int) Math.floor(oy), z = (int) Math.floor(oz);
@@ -579,7 +595,7 @@ final class VoxelHarness {
         double t = 0;
         while (t <= cap) {
             if (y < y0 || y >= y0 + ny) return t;
-            if (x < x0 || x >= x0 + nx || z < z0 || z >= z0 + nz) return -1;
+            if (x < x0 || x >= x0 + nx || z < z0 || z >= z0 + nz) return -1 - t;
             if (mat(x, y, z) == ROCK) return t;
             if (tx <= ty && tx <= tz) { x += sx; t = tx; tx += ddx; }
             else if (ty <= tz) { y += sy; t = ty; ty += ddy; }
