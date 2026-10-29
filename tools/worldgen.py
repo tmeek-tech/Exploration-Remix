@@ -254,6 +254,16 @@ def build_features():
     feature("rootvaults/pools", "local_modifications", rv,
             pools(mix((LIMESTONE, 3), (simple("minecraft:moss_block"), 1)), mix((simple("minecraft:clay"), 2), (simple("minecraft:gravel"), 1)), 6),
             [count(2), SQUARE, layer(up)] + floor() + [looks(0, 1), BIOME])
+    # A pale bed of calcite and limestone under the lake, as in its picture: the biome's cells end at the water, so the
+    # rock under it was often the pack's deepslate.
+    feature("ivory_root_cavern/lake_bed", "local_modifications", ["ivory_root_cavern"],
+            {"type": "minecraft:disk", "config": {
+                "state_provider": {"fallback": mix((simple("minecraft:calcite"), 3), (LIMESTONE, 2)), "rules": []},
+                "target": {"type": "minecraft:matching_blocks", "blocks": [
+                    "minecraft:deepslate", "minecraft:cobbled_deepslate", "minecraft:stone", "minecraft:tuff", "minecraft:gravel",
+                    "minecraft:andesite", "minecraft:diorite", "minecraft:granite"]},
+                "radius": uniform(3, 6), "half_height": 2}},
+            [count(24), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, BIOME])
     feature("ivory_root_cavern/stalactites", "local_modifications", ["ivory_root_cavern"],
             spike(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 2)), simple("minecraft:dripstone_block"), (5, 14), (1.4, 3.2), 0.35,
                   point=state("minecraft:pointed_dripstone", thickness="tip", vertical_direction="down")),
@@ -475,8 +485,11 @@ def build_features():
             {"type": "minecraft:multiface_growth", "config": {
                 "block": "minecraft:glow_lichen", "search_range": 4, "can_place_on_floor": True, "can_place_on_ceiling": False,
                 "can_place_on_wall": True, "chance_of_spreading": 0.8, "can_be_placed_on": f"#{MOD}:cave_rock"}},
-            [count(24), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) +
-            [{"type": "minecraft:block_predicate_filter", "predicate": {"type": "minecraft:matching_fluids", "fluids": "minecraft:water"}}, BIOME])
+            [count(64), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, BIOME])
+    # The lichen alone left the lake dark under the shader; pool pearls over its bed turn it turquoise from below.
+    feature("ivory_root_cavern/pool_pearls", "vegetal_decoration", ["ivory_root_cavern"],
+            attach(simple(f"{MOD}:pool_pearls"), "floor", 64, f"#{MOD}:cave_rock", radius=6, height=2, in_water=True),
+            [count(32), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, BIOME])
     feature("ivory_root_cavern/moss", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple("minecraft:moss_carpet"), state("minecraft:moss_carpet"), tries=24, xz=4, y=2),
             [count(10), SQUARE, layer(up)] + floor() + [BIOME])

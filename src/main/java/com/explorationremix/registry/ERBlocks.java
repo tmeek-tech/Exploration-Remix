@@ -180,7 +180,7 @@ public final class ERBlocks {
             () -> new SubmergedPlantBlock(plant(MapColor.COLOR_ORANGE, SoundType.WET_GRASS, 8), Block.box(3, 0, 3, 13, 13, 13)));
     /** Glassy beads on the beds of the warm pools and the lake shallows; they glow turquoise through the water. */
     public static final RegistryObject<Block> POOL_PEARLS = block("pool_pearls",
-            () -> new SubmergedPlantBlock(plant(MapColor.COLOR_CYAN, SoundType.WET_GRASS, 4).replaceable(), Block.box(0, 0, 0, 16, 1, 16)));
+            () -> new SubmergedPlantBlock(plant(MapColor.COLOR_CYAN, SoundType.WET_GRASS, 15).replaceable(), Block.box(0, 0, 0, 16, 1, 16)));
     public static final RegistryObject<Block> PALE_CORAL = block("pale_coral",
             () -> new PoolPlantBlock(plant(MapColor.SAND, SoundType.WET_GRASS, 0), Block.box(2, 0, 2, 14, 14, 14)));
 
