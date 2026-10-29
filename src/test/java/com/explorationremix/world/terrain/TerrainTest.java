@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Checks of the deep terrain's promises that don't need Minecraft: layer heights, open gates and routes, flat water. */
+/** Checks of the deep terrain's promises that don't need Minecraft: layer heights, open gates and ways, flat water. */
 class TerrainTest {
     private static final long[] SEEDS = {8675309L, 12345L, -42L};
     private static final int[][] CELLS = {{0, 0}, {-1, 0}, {3, -2}};
@@ -64,31 +64,87 @@ class TerrainTest {
     }
 
     @Test
-    void everyRouteHasAnOpenWalkingPathWithRockUnderIt() {
+    void everyWayHasAnOpenWalkingPathWithRockUnderIt() {
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
             for (int[] c : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
-                Route r = t.plans.route(li, c[0], c[1]);
-                int noFloor = 0, samples = 0;
-                for (double s = 0; s <= r.length; s += 2) {
-                    double[] p = r.pathAt(s);
-                    int x = (int) Math.floor(p[0]), z = (int) Math.floor(p[1]);
-                    // The path is carved open from half a block above its floor line, so this is where the feet go.
-                    // On a slope a block's own floor can sit a block above the line at the sample point: a step up.
-                    int feet = (int) Math.floor(p[2] + 0.5) + 1;
-                    if (t.rawDensity(x, feet, z) >= 0) feet++;
-                    for (int y = feet; y <= feet + 1; y++) {
-                        assertTrue(t.rawDensity(x, y, z) < 0, "route " + li + " blocked at s=" + s + " (" + x + " " + y + " " + z + ") seed " + seed);
-                        assertEquals(Terrain.AIR, t.fluidAt(x, y, z), "route " + li + " under water at s=" + s + " seed " + seed);
+                Net n = t.network.net(li, c[0], c[1]);
+                Plans.Gate en = t.plans.gate(li + 1, c[0], c[1]);
+                Plans.Gate ex = li + 2 <= t.shape.layerCount ? t.plans.gate(li + 2, c[0], c[1]) : null;
+                int[] counts = new int[2];
+                double cell = t.network.cell, x0 = c[0] * cell, z0 = c[1] * cell;
+                // every tunnel, inner walk, ledge passage and stub, every 2 blocks along its line
+                for (Net.Way wy : n.ways) {
+                    double carry = 0, acc = 0;
+                    for (int i = 0; i + 1 < wy.n; i++) {
+                        double dx = wy.x[i + 1] - wy.x[i], dz = wy.z[i + 1] - wy.z[i], len = Math.hypot(dx, dz);
+                        double s = carry;
+                        for (; s < len; s += 2) {
+                            // a blind tube ending in lava: its walking line stops 3 blocks short of the pool
+                            if (acc + s > wy.walkTo) break;
+                            double q = s / len, px = wy.x[i] + dx * q, pz = wy.z[i] + dz * q;
+                            // a portal's stub runs on past the seam: the neighbour's own plan carves (and checks) that half
+                            if (px < x0 || pz < z0 || px >= x0 + cell || pz >= z0 + cell) continue;
+                            double f = wy.f[i] + (wy.f[i + 1] - wy.f[i]) * q;
+                            // an inner walk across a chamber whose floor dips under the table: a flooded bay, swum across
+                            if (wy.inner && f < t.shape.waterY(li)) continue;
+                            // a climb's ledge or tunnel sets out across the mouth of the stage it leaves, and a walk
+                            // from a stage that opens in a chamber's floor starts there: the hole is the way up
+                            if (overStage(n, px, f, pz)) continue;
+                            wayPoint(t, li, en, ex, px, f, pz, "way #" + wy.id + " (" + wy.kind + ")", seed, counts);
+                        }
+                        carry = s - len;
+                        acc += len;
                     }
-                    samples++;
-                    boolean nearEnd = s < 20 || s > r.length - 20;
-                    // Rock right under the feet, or a block lower (a step down).
-                    if (!nearEnd && t.rawDensity(x, feet - 1, z) < 0 && t.rawDensity(x, feet - 2, z) < 0) noFloor++;
                 }
-                assertTrue(noFloor <= samples / 50, "route " + li + " seed " + seed + ": " + noFloor + " of " + samples + " path points have no rock under them");
+                // the Deep Blue Rift's ledge path, checked as in 0.2.0
+                for (Route r : n.canyons) {
+                    for (double s = 0; s <= r.length; s += 2) {
+                        double[] p = r.pathAt(s);
+                        int x = (int) Math.floor(p[0]), z = (int) Math.floor(p[1]);
+                        // The path is carved open from half a block above its floor line, so this is where the feet go.
+                        // On a slope a block's own floor can sit a block above the line at the sample point: a step up.
+                        int feet = (int) Math.floor(p[2] + 0.5) + 1;
+                        if (t.rawDensity(x, feet, z) >= 0) feet++;
+                        for (int y = feet; y <= feet + 1; y++) {
+                            assertTrue(t.rawDensity(x, y, z) < 0, "the rift's path blocked at s=" + s + " (" + x + " " + y + " " + z + ") seed " + seed);
+                            assertEquals(Terrain.AIR, t.fluidAt(x, y, z), "the rift's path under water at s=" + s + " seed " + seed);
+                        }
+                        counts[0]++;
+                        boolean nearEnd = s < 20 || s > r.length - 20;
+                        // Rock right under the feet, or a block lower (a step down).
+                        if (!nearEnd && t.rawDensity(x, feet - 1, z) < 0 && t.rawDensity(x, feet - 2, z) < 0) counts[1]++;
+                    }
+                }
+                assertTrue(counts[1] <= counts[0] / 50, "layer " + li + " cell " + c[0] + "," + c[1] + " seed " + seed + ": " + counts[1] + " of " + counts[0] + " path points have no rock under them");
             }
         }
+    }
+
+    /** True when the block nearest a walking line's point lies over the hole of a climb's stage, at its mouth. */
+    private static boolean overStage(Net n, double px, double floor, double pz) {
+        int x = (int) Math.round(px), z = (int) Math.round(pz);
+        for (Net.Shaft s : n.shafts)
+            if (Math.hypot(x - s.x, z - s.z) < s.r + 0.5 && floor > s.y0 && floor < s.y1 + 1) return true;
+        return false;
+    }
+
+    /**
+     * One point of a walking line: the feet (at the first block over the floor line, or one higher on a step up) and the
+     * head are open and dry; counts the point, and whether there is rock under the feet or one block lower.
+     */
+    private static void wayPoint(Terrain t, int li, Plans.Gate en, Plans.Gate ex, double px, double floor, double pz, String what, long seed, int[] counts) {
+        // the block whose column is nearest the line
+        int x = (int) Math.round(px), z = (int) Math.round(pz);
+        int feet = (int) Math.ceil(floor - 1e-9);
+        if (en.passageXZ(x, feet, z) < en.radius * 1.45 + 3 || (ex != null && ex.passageXZ(x, feet, z) < ex.radius * 1.45 + 3)) return;
+        if (t.rawDensity(x, feet, z) >= 0) feet++;
+        for (int y = feet; y <= feet + 1; y++) {
+            assertTrue(t.rawDensity(x, y, z) < 0, what + " in layer " + li + " blocked at " + x + " " + y + " " + z + " seed " + seed);
+            assertEquals(Terrain.AIR, t.fluidAt(x, y, z), what + " in layer " + li + " under water at " + x + " " + y + " " + z + " seed " + seed);
+        }
+        counts[0]++;
+        if (t.rawDensity(x, feet - 1, z) < 0 && t.rawDensity(x, feet - 2, z) < 0) counts[1]++;
     }
 
     @Test
@@ -112,8 +168,9 @@ class TerrainTest {
     }
 
     private static boolean inPerchedLake(Terrain t, int li, int x, int y, int z) {
-        for (Route.Hall hl : t.plans.route(li, t.plans.cellOf(x), t.plans.cellOf(z)).halls)
-            if (hl.lake() && y < hl.lakeY() && Math.hypot(x - hl.x(), z - hl.z()) < hl.lakeR()) return true;
+        Network w = t.network;
+        for (Net.Chamber c : w.net(li, w.cellOf(x), w.cellOf(z)).ch)
+            if (c.keep && c.kind == Net.Kind.LAKE && y < c.lakeY && w.e(c, x, z) < c.lakeE + 0.1) return true;
         return false;
     }
 
@@ -124,11 +181,12 @@ class TerrainTest {
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
             for (int[] c : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
-                for (Route.Hall hl : t.plans.route(li, c[0], c[1]).halls) {
-                    if (!hl.lake() || hl.lakeY() <= t.shape.waterY(li) + 0.5) continue;
+                for (Net.Chamber hl : t.network.net(li, c[0], c[1]).ch) {
+                    // the perched lakes and the pools at the wells' feet
+                    if (!hl.keep || !Network.pool(hl) || hl.lakeY <= t.shape.waterY(li) + 0.5) continue;
                     lakes++;
-                    int top = (int) Math.ceil(hl.lakeY()) - 1, reach = (int) Math.ceil(hl.lakeR()) + 1;
-                    int cx = (int) Math.floor(hl.x()), cz = (int) Math.floor(hl.z());
+                    int top = (int) Math.ceil(hl.lakeY) - 1, reach = (int) Math.ceil(hl.R()) + 1;
+                    int cx = (int) Math.floor(hl.x), cz = (int) Math.floor(hl.z);
                     for (int y = top; y >= top - 3; y--) for (int x = cx - reach; x <= cx + reach; x++) for (int z = cz - reach; z <= cz + reach; z++) {
                         if (t.rawDensity(x, y, z) >= 0 || t.fluidAt(x, y, z) != Terrain.WATER) continue;
                         int[][] sides = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}};
@@ -151,20 +209,35 @@ class TerrainTest {
      */
     @Test
     void noSeamsAtCellBorders() {
+        // the seeds run side by side
+        int[][] counts = java.util.Arrays.stream(SEEDS).parallel().mapToObj(TerrainTest::seamSteps).toArray(int[][]::new);
         int border = 0, inside = 0;
-        for (long seed : SEEDS) {
-            Terrain t = terrain(seed);
-            java.util.Random r = new java.util.Random(11 + seed);
-            for (int k = 0; k < 3000; k++) {
-                int line = (r.nextInt(6) - 3) * 600, along = r.nextInt(2400) - 1200;
-                int li = r.nextInt(t.shape.layerCount);
-                int y = t.shape.bottom(li) + 6 + r.nextInt(t.shape.height(li) - 12);
-                boolean xLine = r.nextBoolean();
-                if (sharpStep(t, xLine, line, y, along)) border++;
-                if (sharpStep(t, xLine, line + 300, y, along)) inside++;
-            }
-        }
+        for (int[] c : counts) { border += c[0]; inside += c[1]; }
         assertTrue(border <= inside * 1.5 + 10, border + " sharp steps across cell borders against " + inside + " across lines inside the cells");
+    }
+
+    /** One seed's sharp steps {across the cell borders, across lines through the middle of the cells}. */
+    private static int[] seamSteps(long seed) {
+        Terrain t = terrain(seed);
+        java.util.Random r = new java.util.Random(11 + seed);
+        java.util.List<int[]> samples = new java.util.ArrayList<>();
+        for (int k = 0; k < 3000; k++) {
+            int line = (r.nextInt(6) - 3) * 600, along = r.nextInt(2400) - 1200;
+            int li = r.nextInt(t.shape.layerCount);
+            int y = t.shape.bottom(li) + 6 + r.nextInt(t.shape.height(li) - 12);
+            boolean xLine = r.nextBoolean();
+            samples.add(new int[]{li, xLine ? 1 : 0, line, Math.floorDiv(along, 600), along, y});
+        }
+        // Taken grouped by layer, line and cell along the line, so each cell-layer is planned once: in random order
+        // the samples visit about 150 cell-layers and thrashed the plan cache.
+        samples.sort(java.util.Comparator.<int[]>comparingInt(s -> s[0]).thenComparingInt(s -> s[1]).thenComparingInt(s -> s[2]).thenComparingInt(s -> s[3]));
+        int border = 0, inside = 0;
+        for (int[] s : samples) {
+            boolean xLine = s[1] == 1;
+            if (sharpStep(t, xLine, s[2], s[5], s[4])) border++;
+            if (sharpStep(t, xLine, s[2] + 300, s[5], s[4])) inside++;
+        }
+        return new int[]{border, inside};
     }
 
     /** True where the density flips between open and solid by more than 8 blocks from one block to the next. */
@@ -192,6 +265,7 @@ class TerrainTest {
         }
         assertTrue(tallest[Terrain.BLUE] > 140, "the Deep Blue Rift is only " + tallest[Terrain.BLUE] + " blocks deep");
         assertTrue(tallest[Terrain.GARDENS] > 60, "the Deep Gardens' tallest hall is only " + tallest[Terrain.GARDENS] + " blocks");
-        assertTrue(tallest[Terrain.BASALT] > 120, "the Basalt Galleries' tallest open space is only " + tallest[Terrain.BASALT] + " blocks");
+        // the chimney: its drop can be as little as about 95
+        assertTrue(tallest[Terrain.BASALT] > 90, "the Basalt Galleries' tallest open space is only " + tallest[Terrain.BASALT] + " blocks");
     }
 }

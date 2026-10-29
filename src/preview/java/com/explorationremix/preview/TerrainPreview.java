@@ -1,10 +1,10 @@
 package com.explorationremix.preview;
 
 import com.explorationremix.world.terrain.DeepBiome;
-import com.explorationremix.world.terrain.Plans;
 import com.explorationremix.world.terrain.Hashing;
+import com.explorationremix.world.terrain.Net;
+import com.explorationremix.world.terrain.Plans;
 import com.explorationremix.world.terrain.Rock;
-import com.explorationremix.world.terrain.Route;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import com.explorationremix.world.terrain.TerrainSettings;
@@ -14,12 +14,18 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Offline preview of the deep world's shape: renders the terrain the way the game would after its 4x8x4 noise
- * interpolation, without starting Minecraft. Usage: TerrainPreview outDir [seed].
+ * Offline preview of the deep world's shape: renders the terrain the way the game makes it (the density at its 4 x 8 x
+ * 4 corners, interpolated, then the network's per-block pass), without starting Minecraft. Per layer of cell (0, 0):
+ * the longest tunnel unrolled with its walking floor, sections across the six longest tunnels, a map and the same map
+ * with the plan drawn over it, x and z sections through each set piece, and straight sections through the cell; then
+ * the stack of layers through a gate. Usage: TerrainPreview outDir [seed] [all|0|1|2|mat].
  */
 public final class TerrainPreview {
     private final Terrain t;
@@ -65,10 +71,13 @@ public final class TerrainPreview {
         };
     }
 
+    /** The density as the game ends up with it: interpolated, then the network's per-block pass. */
+    double blockDensity(int x, int y, int z) { return t.fine(x, y, z, interp(x, y, z)); }
+
     /** 0 rock, 1 air, 2 water, 3 lava, 4 band rock. */
     int kind(int x, int y, int z) {
         if (y < shape.floorY) return 0;
-        double d = interp(x, y, z);
+        double d = blockDensity(x, y, z);
         if (d > 0) return shape.bandAt(y) > 0 ? 4 : 0;
         int f = t.fluidAt(x, y, z);
         return f == Terrain.WATER ? 2 : (f == Terrain.LAVA ? 3 : 1);
@@ -97,22 +106,61 @@ public final class TerrainPreview {
         return img;
     }
 
-    /** The route unrolled: x is the arc length, y is height; the walking line is drawn in red. */
-    BufferedImage routeSection(Route r, int li, boolean onPath) {
-        int len = (int) r.length;
+    /** A point of a way at arc length s: {x, z, floor, dx, dz} (the unit direction there). */
+    static double[] wayAt(Net.Way w, double s) {
+        double acc = 0;
+        for (int i = 1; i < w.n; i++) {
+            double l = Math.hypot(w.x[i] - w.x[i - 1], w.z[i] - w.z[i - 1]);
+            if (acc + l >= s || i == w.n - 1) {
+                double f = l < 1e-9 ? 0 : Math.max(0, Math.min(1, (s - acc) / l));
+                return new double[]{w.x[i - 1] + (w.x[i] - w.x[i - 1]) * f, w.z[i - 1] + (w.z[i] - w.z[i - 1]) * f,
+                        w.f[i - 1] + (w.f[i] - w.f[i - 1]) * f, (w.x[i] - w.x[i - 1]) / Math.max(1e-9, l), (w.z[i] - w.z[i - 1]) / Math.max(1e-9, l)};
+            }
+            acc += l;
+        }
+        return new double[]{w.x[0], w.z[0], w.f[0], 1, 0};
+    }
+
+    /** The tunnels of a plan (no inner walks, ledges or stubs), longest first. */
+    static List<Net.Way> tunnels(Net n) {
+        List<Net.Way> out = new ArrayList<>();
+        for (Net.Way w : n.ways) if (!w.inner && !w.ledge && !w.taper && w.a >= 0 && w.b >= 0 && w.n > 1) out.add(w);
+        out.sort(Comparator.comparingDouble((Net.Way w) -> -w.length));
+        return out;
+    }
+
+    /** A way unrolled: x is the arc length, y is height; its walking floor is drawn in red. */
+    BufferedImage waySection(Net.Way w, int li) {
+        int len = Math.max(1, (int) w.length);
         int y0 = shape.bottom(li) - 6, y1 = shape.top(li) + 20;
         BufferedImage img = new BufferedImage(len, y1 - y0 + 1, BufferedImage.TYPE_INT_RGB);
         for (int i = 0; i < len; i++) {
-            double[] p = r.pointAt(i);
-            double[] p2 = r.pointAt(i + 1);
-            double dx = p2[0] - p[0], dz = p2[1] - p[1], l = Math.max(1e-6, Math.hypot(dx, dz));
-            double off = onPath ? r.offsetAt(i) : 0;
-            int x = (int) Math.floor(p[0] - dz / l * off), z = (int) Math.floor(p[1] + dx / l * off);
+            double[] p = wayAt(w, i);
+            int x = (int) Math.floor(p[0]), z = (int) Math.floor(p[1]);
             for (int y = y0; y <= y1; y++) img.setRGB(i, y1 - y, pixel(x, y, z));
-            int fy = (int) Math.floor(r.floorAt(i));
+            int fy = (int) Math.floor(p[2]) - 1;
             if (fy >= y0 && fy <= y1) img.setRGB(i, y1 - fy, 0xFF0000);
         }
         return img;
+    }
+
+    /** Sections across a plan's longest tunnels at their middles, side by side, each {@code half} to either side. */
+    BufferedImage fan(Net n, int li, int count, int half, boolean materials) {
+        List<Net.Way> ws = tunnels(n);
+        int k = Math.min(count, ws.size());
+        int y0 = shape.bottom(li) - 8, y1 = shape.top(li) + 20;
+        BufferedImage fan = new BufferedImage(Math.max(1, k) * (2 * half + 10), y1 - y0 + 1, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = fan.createGraphics();
+        for (int i = 0; i < k; i++) {
+            Net.Way w = ws.get(i);
+            double[] a = wayAt(w, w.length * 0.5);
+            double nx = -a[4], nz = a[3];
+            BufferedImage sec = materials ? materialSection(a[0] - nx * half, a[1] - nz * half, a[0] + nx * half, a[1] + nz * half, y0, y1)
+                    : section(a[0] - nx * half, a[1] - nz * half, a[0] + nx * half, a[1] + nz * half, y0, y1);
+            g.drawImage(sec, i * (2 * half + 10), 0, null);
+        }
+        g.dispose();
+        return fan;
     }
 
     /** Top-down map of a layer: brightness is how much of the column is open, colour is the biome at the opening. */
@@ -157,7 +205,7 @@ public final class TerrainPreview {
         double[] dens = new double[n];
         for (int i = 0; i < n; i++) {
             int y = shape.floorY + i;
-            double d = interp(x, y, z);
+            double d = blockDensity(x, y, z);
             dens[i] = d;
             if (d <= 0) {
                 int f = t.fluidAt(x, y, z);
@@ -216,18 +264,31 @@ public final class TerrainPreview {
         return img;
     }
 
-    void overlay(BufferedImage img, Route r, int x0, int z0, int step) {
+    /**
+     * The plan over a map: the ways' walking lines (red; inner walks orange), the climbs (cyan), the chambers' centres
+     * (yellow), the way in (green) and the way on (magenta).
+     */
+    void overlay(BufferedImage img, Net n, int x0, int z0, int step) {
         Graphics2D g = img.createGraphics();
-        g.setColor(Color.RED);
-        for (int i = 0; i + 2 < (int) r.length; i += 2) {
-            double[] a = r.pointAt(i), b = r.pointAt(i + 2);
-            g.drawLine((int) ((a[0] - x0) / step), (int) ((a[1] - z0) / step), (int) ((b[0] - x0) / step), (int) ((b[1] - z0) / step));
+        for (Net.Way w : n.ways) {
+            g.setColor(w.inner ? Color.ORANGE : Color.RED);
+            for (int i = 1; i < w.n; i++)
+                g.drawLine((int) ((w.x[i - 1] - x0) / step), (int) ((w.z[i - 1] - z0) / step), (int) ((w.x[i] - x0) / step), (int) ((w.z[i] - z0) / step));
         }
-        g.setColor(Color.GREEN);
-        Plans.Gate e = r.entry;
-        g.drawOval((int) ((e.lx - x0) / step) - 4, (int) ((e.lz - z0) / step) - 4, 8, 8);
-        g.setColor(Color.MAGENTA);
-        g.drawOval((int) ((r.endX - x0) / step) - 4, (int) ((r.endZ - z0) / step) - 4, 8, 8);
+        g.setColor(Color.CYAN);
+        for (Net.Shaft sh : n.shafts) g.drawOval((int) ((sh.x - x0) / step) - 2, (int) ((sh.z - z0) / step) - 2, 4, 4);
+        g.setColor(Color.YELLOW);
+        for (Net.Chamber c : n.ch) g.fillRect((int) ((c.x - x0) / step) - 1, (int) ((c.z - z0) / step) - 1, 3, 3);
+        if (n.entry >= 0) {
+            Net.Chamber e = n.ch.get(n.entry);
+            g.setColor(Color.GREEN);
+            g.drawOval((int) ((e.x - x0) / step) - 4, (int) ((e.z - z0) / step) - 4, 8, 8);
+        }
+        if (n.exit >= 0) {
+            Net.Chamber e = n.ch.get(n.exit);
+            g.setColor(Color.MAGENTA);
+            g.drawOval((int) ((e.x - x0) / step) - 4, (int) ((e.z - z0) / step) - 4, 8, 8);
+        }
         g.dispose();
     }
 
@@ -252,20 +313,9 @@ public final class TerrainPreview {
         }
         long t0 = System.nanoTime();
         if (what.equals("mat")) {
-            // Rock along each route and across it, as the game would place it.
+            // Rock across each layer's four longest tunnels, as the game would place it.
             for (int li = 0; li < s.layerCount; li++) {
-                Route r = t.plans.route(li, 0, 0);
-                int ns = 4;
-                BufferedImage fan = new BufferedImage(ns * 130, s.top(li) - s.bottom(li) + 12, BufferedImage.TYPE_INT_RGB);
-                for (int k = 0; k < ns; k++) {
-                    double sk = r.length * (k + 0.5) / ns;
-                    double[] a = r.pointAt(sk), b = r.pointAt(sk + 1);
-                    double dx = b[0] - a[0], dz = b[1] - a[1], l = Math.max(1e-6, Math.hypot(dx, dz));
-                    double nx = -dz / l, nz = dx / l;
-                    BufferedImage sec = p.materialSection(a[0] - nx * 62, a[1] - nz * 62, a[0] + nx * 62, a[1] + nz * 62, s.bottom(li) - 6, s.top(li) + 6);
-                    fan.createGraphics().drawImage(sec, k * 130, 0, null);
-                }
-                save(scale(fan, 2, 2), new File(out, "mat_fan_" + li + ".png"));
+                save(scale(p.fan(t.network(li, 0, 0), li, 4, 60, true), 2, 2), new File(out, "mat_fan_" + li + ".png"));
                 p.corners.clear();
             }
             Plans.Gate g = t.plans.gate(2, 0, 0);
@@ -273,31 +323,34 @@ public final class TerrainPreview {
             System.out.printf("done in %.1f s%n", (System.nanoTime() - t0) / 1e9);
             return;
         }
-        int cell = t.plans.cellOf(0);
+        int size = 1;
+        while (t.plans.cellOf(size) == 0) size++;   // the cell size
         for (int li = 0; li < s.layerCount; li++) {
             if (!what.equals("all") && !what.equals(String.valueOf(li))) continue;
-            Route r = t.plans.route(li, 0, 0);
-            System.out.printf("layer %d route length %.0f, floor %.0f -> %.0f, halls %d, geodes %d, bridges %d%n", li, r.length, r.floorAt(0), r.floorAt(r.length), r.halls.size(), r.geodes.size(), r.bridges.size());
-            save(p.routeSection(r, li, false), new File(out, "route_" + li + ".png"));
-            if (li == Terrain.BLUE) save(p.routeSection(r, li, true), new File(out, "route_" + li + "_path.png"));
-            // cross-sections perpendicular to the route
-            int ns = 6;
-            BufferedImage fan = new BufferedImage(ns * 170, s.top(li) - s.bottom(li) + 30, BufferedImage.TYPE_INT_RGB);
-            for (int k = 0; k < ns; k++) {
-                double sk = r.length * (k + 0.5) / ns;
-                double[] a = r.pointAt(sk), b = r.pointAt(sk + 1);
-                double dx = b[0] - a[0], dz = b[1] - a[1], l = Math.max(1e-6, Math.hypot(dx, dz));
-                double nx = -dz / l, nz = dx / l;
-                BufferedImage sec = p.section(a[0] - nx * 80, a[1] - nz * 80, a[0] + nx * 80, a[1] + nz * 80, s.bottom(li) - 8, s.top(li) + 20);
-                fan.createGraphics().drawImage(sec, k * 170, 0, null);
-            }
-            save(fan, new File(out, "fan_" + li + ".png"));
-            BufferedImage map = p.topDown(li, -300, -300, 1200, 2);
-            p.overlay(map, r, -300, -300, 2);
+            Net n = t.network(li, 0, 0);
+            List<Net.Way> ts = tunnels(n);
+            System.out.printf("layer %d: %d chambers, %d ways (%d tunnels, longest %.0f), %d climbs, %d pools%s%n", li, n.ch.size(), n.ways.size(), ts.size(),
+                    ts.isEmpty() ? 0 : ts.get(0).length, n.shafts.size(), n.pools.size(), n.ch.stream().anyMatch(c -> c.kind == Net.Kind.CANYON) ? ", the rift" : "");
+            if (!ts.isEmpty()) save(p.waySection(ts.get(0), li), new File(out, "way_" + li + ".png"));
+            // cross-sections across the longest tunnels
+            save(p.fan(n, li, 6, 80, false), new File(out, "fan_" + li + ".png"));
+            BufferedImage map = p.topDown(li, -size / 4, -size / 4, size * 3 / 2, 2);
             save(map, new File(out, "map_" + li + ".png"));
+            p.overlay(map, n, -size / 4, -size / 4, 2);
+            save(map, new File(out, "plan_" + li + ".png"));
+            // the set pieces, cut along x and z through their middles
+            for (Net.Chamber c : n.ch) {
+                if (!c.set) continue;
+                double r = c.R() + 24;
+                int y0 = Math.max(s.bottom(li) - 4, (int) Math.floor(c.f0) - 24), y1 = Math.min(s.top(li) + 4, (int) Math.ceil(c.f0 + c.h + c.rise) + 24);
+                if (c.helix()) y1 = Math.min(s.top(li) + 4, (int) Math.ceil(c.top) + 12);
+                String tag = li + "_" + c.kind.name().toLowerCase(java.util.Locale.ROOT) + "_" + c.id;
+                save(scale(p.section(c.x - r, c.z, c.x + r, c.z, y0, y1), 3, 3), new File(out, "set_" + tag + "_x.png"));
+                save(scale(p.section(c.x, c.z - r, c.x, c.z + r, y0, y1), 3, 3), new File(out, "set_" + tag + "_z.png"));
+            }
             // straight sections through the cell
-            save(p.section(0, 300, 600, 300, s.bottom(li) - 8, s.top(li) + 20), new File(out, "secx_" + li + ".png"));
-            save(p.section(300, 0, 300, 600, s.bottom(li) - 8, s.top(li) + 20), new File(out, "secz_" + li + ".png"));
+            save(p.section(0, size / 2.0, size, size / 2.0, s.bottom(li) - 8, s.top(li) + 20), new File(out, "secx_" + li + ".png"));
+            save(p.section(size / 2.0, 0, size / 2.0, size, s.bottom(li) - 8, s.top(li) + 20), new File(out, "secz_" + li + ".png"));
             p.corners.clear();
         }
         // the full stack through a gate

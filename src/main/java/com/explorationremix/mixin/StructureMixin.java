@@ -18,7 +18,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * Below the pack's floor the only structures are the ancient cities, which moved down with the deep dark into the
  * Blue Reaches. A structure may start there only when it is made for the deep dark alone (it accepts the deep dark but
  * not the Rootvaults, so general overworld structures stay out), the deep world puts the deep dark at its start, and the
- * start is well clear of the layer's route and refuges.
+ * Blue Reaches' network planned a city there: a CITY chamber at an eligible site, with its reserve kept clear of every
+ * other chamber and tunnel (network-final.md, section 11.1).
  */
 @Mixin(Structure.class)
 public abstract class StructureMixin {
@@ -32,7 +33,7 @@ public abstract class StructureMixin {
         boolean ok = t != null && deepDark != null && ctx.validBiome().test(deepDark)
                 && (rootvaults == null || !ctx.validBiome().test(rootvaults))
                 && t.biomeAt(p.getX(), p.getY(), p.getZ()) == DeepBiome.DEEP_DARK
-                && t.clearOfRoute(p.getX(), p.getY(), p.getZ(), 90);
+                && t.citySite(p.getX(), p.getY(), p.getZ());
         cir.setReturnValue(ok);
     }
 }
