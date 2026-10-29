@@ -408,6 +408,105 @@ class NetworkTest {
     }
 
     /**
+     * The rock palette reads the plan through three queries (sections 5, 6 and 9): where the rock meets a tube hub or a
+     * round tube it is lined with obsidian (shell depth under 1.8), where it meets a geode it takes the geode's layers
+     * (under 1.7), and the bedrock landing's plate is bedrock.
+     */
+    @Test
+    void paletteQueriesFollowThePlan() {
+        List<String> fails = new ArrayList<>();
+        int hubFaces = 0, tubeFaces = 0, geodeFaces = 0, landings = 0;
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            for (int[] cell : CELLS) {
+                Net nb = t.network.net(Terrain.BASALT, cell[0], cell[1]);
+                String tg = tag(seed, Terrain.BASALT, cell[0], cell[1]);
+                for (Chamber c : nb.ch) {
+                    if (!c.keep || c.kind != Kind.TUBEHUB) continue;
+                    double r0 = c.pillars.length >= 3 ? c.pillars[2] + 2 : 1;
+                    // rays out from the pillar at the floor, the dome's middle and high in it; a ray that leaves the
+                    // footprint in the open has gone out through a door and is not a face of the hub
+                    for (double fy : new double[]{2, c.h * 0.4, c.h * 0.7}) {
+                        int y = (int) Math.floor(c.f0 + fy);
+                        for (int a = 0; a < 16; a++) {
+                            double ang = a * Math.PI / 8 + 0.1;
+                            // the open block before the rock must be inside the hub's own space: otherwise the ray
+                            // has gone out through a door, and the rock is a tunnel's
+                            boolean open = false, inHub = false;
+                            for (double r = r0; r < c.R() + 6; r += 0.5) {
+                                int x = (int) Math.floor(c.x + Math.cos(ang) * r), z = (int) Math.floor(c.z + Math.sin(ang) * r);
+                                if (t.rawDensity(x, y, z) <= 0) {
+                                    open = true;
+                                    inHub = t.tubeShellDepth(x, y, z) < 0;
+                                    continue;
+                                }
+                                if (!open) continue;
+                                if (!inHub) break;
+                                hubFaces++;
+                                double g = t.tubeShellDepth(x, y, z);
+                                DeepBiome b = t.biomeAt(x, y, z);
+                                if (g >= 1.8 || b != DeepBiome.OBSIDIAN_TUBES) {
+                                    fails.add(tg + ": tube hub #" + c.id + " meets rock at " + x + " " + y + " " + z + " with a shell depth of " + fmt(g) + " in " + b);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                // round tubes: the rock over the middle of each round way's line
+                for (Way wy : nb.ways) {
+                    if (!wy.round) continue;
+                    for (int i = 1; i + 1 < wy.n; i += 2) {
+                        int x = (int) Math.floor(wy.x[i]), z = (int) Math.floor(wy.z[i]);
+                        for (int y = (int) Math.ceil(wy.f[i]); y < wy.f[i] + wy.w[i] * 2 + 6; y++) {
+                            if (t.rawDensity(x, y, z) <= 0) continue;
+                            tubeFaces++;
+                            double g = t.tubeShellDepth(x, y, z);
+                            if (g >= 1.8) fails.add(tg + ": round way #" + wy.id + " meets rock at " + x + " " + y + " " + z + " with a shell depth of " + fmt(g));
+                            break;
+                        }
+                    }
+                }
+                Chamber bed = nb.ch.get(nb.exit);
+                landings++;
+                int bx = (int) Math.floor(bed.x), bz = (int) Math.floor(bed.z), by = (int) Math.floor(bed.f0) - 1;
+                if (bed.kind != Kind.BEDROCK || !t.bedrockLanding(bx, by, bz)) fails.add(tg + ": no bedrock under the bedrock landing at " + bx + " " + by + " " + bz);
+                if (t.bedrockLanding(bx + (int) bed.rx + 12, by, bz)) fails.add(tg + ": bedrock 12 blocks past the bedrock landing's rim");
+
+                Net nu = t.network.net(Terrain.BLUE, cell[0], cell[1]);
+                // geodes: rays out from each geode's centre a little under its equator, to the first rock
+                for (Route r : nu.canyons) for (Route.Geode ge : r.geodes) {
+                    int y = (int) Math.floor(ge.y()) - 1;
+                    for (int a = 0; a < 8; a++) {
+                        double ang = a * Math.PI / 4 + 0.1;
+                        boolean open = false, inGeode = false;
+                        for (double rr = ge.r() * 0.5; rr < ge.r() + 4; rr += 0.25) {
+                            int x = (int) Math.floor(ge.x() + Math.cos(ang) * rr), z = (int) Math.floor(ge.z() + Math.sin(ang) * rr);
+                            if (t.rawDensity(x, y, z) <= 0) {
+                                open = true;
+                                inGeode = t.geodeShellDepth(x, y, z) < 0;
+                                continue;
+                            }
+                            // the rock must close a geode, not one of the links or the rift beyond it
+                            if (!open || !inGeode) break;
+                            geodeFaces++;
+                            double g = t.geodeShellDepth(x, y, z);
+                            DeepBiome b = t.biomeAt(x, y, z);
+                            if (g >= 1.7 || b != DeepBiome.ASURINE_GEODES) {
+                                fails.add(tag(seed, Terrain.BLUE, cell[0], cell[1]) + ": geode at " + (int) ge.x() + " " + (int) ge.y() + " " + (int) ge.z() + " meets rock at " + x + " " + y + " " + z + " with a shell depth of " + fmt(g) + " in " + b);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        System.out.println("paletteQueriesFollowThePlan: " + hubFaces + " hub faces, " + tubeFaces + " round tube faces, " + geodeFaces + " geode faces, " + landings + " bedrock landings");
+        assertTrue(hubFaces > 100 && geodeFaces > 100, "too few faces checked");
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(30, fails.size()))));
+    }
+
+    /**
      * A plan depends on nothing but the seed, the layer and the cell: planned in a fresh world, planned on another
      * thread after its neighbours, and planned again by the planner itself, it hashes the same. Eight threads asking
      * for one new cell-layer at once get one plan, made once (single-flight).

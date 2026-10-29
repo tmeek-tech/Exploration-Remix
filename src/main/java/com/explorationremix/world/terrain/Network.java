@@ -1172,6 +1172,8 @@ public final class Network {
         for (int k = 0; k < lc.nc; k++) {
             double d = Math.max(lc.F[k] - y, y - lc.C[k]);
             d = Math.max(d, wallTerm(lc.c[k], lc.e[k]));
+            // a hub's biome (and so its obsidian) reaches round its dome past the wall line, as 0.2.0's tubes did
+            if (lc.c[k].kind == Kind.TUBEHUB) d = hubDepth(lc, k, y);
             DeepBiome b = lc.c[k].biome;
             if (b == null && lc.c[k].parent >= 0) b = lc.net.ch.get(lc.c[k].parent).biome;
             if (b == null) continue;
@@ -1207,13 +1209,42 @@ public final class Network {
         return lc.geoN == 0 ? 1e9 : geodeDist(lc, x, y, z);
     }
 
-    /** Depth into the rock round the nearest obsidian tube hub (0 at its inner surface), or 1e9 when none is near. */
+    /**
+     * Depth into the rock round the nearest obsidian tube (0 at its inner surface): a tube hub or a round way (the
+     * hubs' tunnels and blind tubes), or 1e9 when none is near.
+     */
     double tubeShellDepth(int li, int x, int y, int z) {
         if (li != Terrain.BASALT) return 1e9;
         LCol lc = layer(column(x, z), li);
         double best = 1e9;
-        for (int k = 0; k < lc.nc; k++) if (lc.c[k].kind == Kind.TUBEHUB) best = Math.min(best, chamberDist(lc, k, y));
+        for (int k = 0; k < lc.nc; k++) if (lc.c[k].kind == Kind.TUBEHUB) best = Math.min(best, hubDepth(lc, k, y));
+        for (int k = 0; k < lc.nw; k++) if (lc.w[k].round) best = Math.min(best, roundDist(lc.wd[k], y, lc.wf[k], lc.ww[k]));
         return best;
+    }
+
+    /**
+     * Depth into the rock round a tube hub (negative inside it): below its floor as built, and out from its dome, taken
+     * as the ellipsoid its ceiling follows, so the depth holds past the wall line too, where the chamber's own ceiling
+     * term gives up (it drops the ceiling 30 under the floor there).
+     */
+    static double hubDepth(LCol lc, int k, int y) {
+        Chamber c = lc.c[k];
+        double e = lc.e[k], R = Math.min(c.rx, c.rz);
+        double v = Math.max(0, y - c.f0) / c.h, q = Math.sqrt(e * e + v * v);
+        // first order: (q - 1) over the gradient of q, exact on the axes
+        double g = Math.sqrt(e * e / (R * R) + v * v / (c.h * c.h));
+        double dome = g < 1e-9 ? (q - 1) * Math.min(R, c.h) : (q - 1) * q / g;
+        if (e < 1) dome = Math.min(dome, y - lc.C[k]);
+        return Math.max(lc.F[k] - y, dome);
+    }
+
+    /**
+     * A round way's cross-section (section 5, after 0.2.0's tubes): a circle of radius w + 0.5 round f + 0.85 w, cut
+     * by the flat floor at f. Signed: negative inside.
+     */
+    static double roundDist(double wd, int y, double wf, double ww) {
+        double dy = y - (wf + 0.85 * ww);
+        return Math.max(Math.sqrt(wd * wd + dy * dy) - (ww + 0.5), wf - y);
     }
 
     /** True in the bowl of the bedrock landing at the bottom of the last layer. */
