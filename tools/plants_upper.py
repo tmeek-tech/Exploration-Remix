@@ -448,9 +448,12 @@ register(PAINTERS, "lantern_fungus_2", lambda: grid([
 
 # ------------------------------------------------------------------------------------------------ Deep Blue Rift
 # deep_blue_rift.jpg: glowing bells on teal stems (left), a tiered pagoda fungus, specks of light on the walls.
-BELL = ["#456FBB", "#698BD9", "#78BAF5", "#ACD5FB", "#DDEEFF"]
-BELL_GLOW = ["#78BAF5", "#ACD5FB", "#DDEEFF"]
-BELL_STEM = ["#2E6E80", "#4A98B5", "#6FBADB"]
+# Everything that glows in the Blue Reaches is drawn from one saturated ramp (#1C3478 #2650B4 #3368D8 #4486EE #6AA6F6
+# #A8D0FF): under a shader a glowing block shines at about 2.5 times its texture's brightness, so paler blues clip to
+# white, and both pictures glow blue.
+BELL = ["#2650B4", "#3368D8", "#4486EE", "#6AA6F6", "#A8D0FF"]
+BELL_GLOW = ["#4486EE", "#6AA6F6", "#A8D0FF"]
+BELL_STEM = ["#1F5266", "#2F7890", "#3F93AE"]
 # The blooms are round and glow all over but for their rim (in the picture they read as discs of light), five or
 # four pixels across; each hangs from a stem that rises and bends over to it.
 BLOOM_5 = [".abA.",
@@ -488,14 +491,16 @@ def _glowbell(v):
 register(PAINTERS, "glowbell", lambda: _glowbell(1), glow=BELL_GLOW)
 register(PAINTERS, "glowbell_2", lambda: _glowbell(2), glow=BELL_GLOW)
 
-PAGODA = {"top": ["#4E69AF", "#6081CC", "#7B9FE7"], "under": "#2B3A6D", "gill": "#334D90", "rim": "#ACD5FB",
-          "stem": ["#6E86C4", "#9DB3E6"]}
+PAGODA = {"top": ["#2A4A9E", "#3A62C4", "#4A7EE0"], "under": "#1A2550", "gill": "#22397A", "rim": "#6AA6F6",
+          "stem": ["#4A5F96", "#6F86C0"]}
 # Caps as (centre column, row of the underside, half width, thickness at the middle), from the top down, on a 16 by
-# 32 canvas: a puffy top cap, then caps to alternate sides, widest low down, as in the picture.
+# 32 canvas: a puffy top cap, then caps to alternate sides, widest low down, as in the picture. The second look has
+# four caps, a wide one on top and the others alternating sides under it.
 PAGODA_CAPS = [(7.5, 8, 5.5, 4), (10.5, 13, 5.0, 3), (6.0, 19, 6.5, 4), (11.5, 24, 4.2, 3), (4.0, 27, 4.2, 3)]
+PAGODA_CAPS_2 = [(8.0, 9, 6.5, 4), (4.5, 16, 4.5, 3), (11.0, 21, 5.5, 4), (6.5, 28, 6.0, 3)]
 
 
-def _pagoda():
+def _pagoda(caps=PAGODA_CAPS):
     """Both halves on one 16 by 32 canvas: a pale stem with puffy caps on it, their rims glowing."""
     canvas = Image.new("RGBA", (16, 32), (0, 0, 0, 0))
     cpx = canvas.load()
@@ -507,7 +512,7 @@ def _pagoda():
     for y in range(6, 32):
         cput(7, y, PAGODA["stem"][1])
         cput(8, y, PAGODA["stem"][0])
-    for cx, under, half, thick in PAGODA_CAPS:
+    for cx, under, half, thick in caps:
         for x in range(int(math.floor(cx - half)), int(math.ceil(cx + half))):
             d = abs(x + 0.5 - cx) / half
             if d > 1:
@@ -528,14 +533,17 @@ def _pagoda():
 
 register(PAINTERS, "pagoda_fungus_top", lambda: _pagoda().crop((0, 0, 16, 16)), glow=[PAGODA["rim"]])
 register(PAINTERS, "pagoda_fungus_bottom", lambda: _pagoda().crop((0, 16, 16, 32)), glow=[PAGODA["rim"]])
+register(PAINTERS, "pagoda_fungus_top_2", lambda: _pagoda(PAGODA_CAPS_2).crop((0, 0, 16, 16)), glow=[PAGODA["rim"]])
+register(PAINTERS, "pagoda_fungus_bottom_2", lambda: _pagoda(PAGODA_CAPS_2).crop((0, 16, 16, 32)), glow=[PAGODA["rim"]])
 
-# Blue lichen: specks of light on the rift's walls.
-LICHEN_BLUE = ["#202F64", "#2E4486", "#4A63A8", "#6E8BCB", "#A9C4F2"]
-register(PAINTERS, "blue_lichen", lambda: speckle_sheet(9301, 0, 0.7, 1.6, LICHEN_BLUE, coverage=0.34), glow=["#6E8BCB", "#A9C4F2"])
-register(PAINTERS, "blue_lichen_2", lambda: speckle_sheet(9302, 0, 0.6, 1.2, LICHEN_BLUE, coverage=0.26), glow=["#6E8BCB", "#A9C4F2"])
+# Blue lichen: specks of light on the rift's walls; the third look in larger patches.
+LICHEN_BLUE = ["#18285C", "#22408E", "#2E58BE", "#3D74DC", "#6AA6F6"]
+register(PAINTERS, "blue_lichen", lambda: speckle_sheet(9301, 0, 0.7, 1.6, LICHEN_BLUE, coverage=0.34), glow=["#3D74DC", "#6AA6F6"])
+register(PAINTERS, "blue_lichen_2", lambda: speckle_sheet(9302, 0, 0.6, 1.2, LICHEN_BLUE, coverage=0.26), glow=["#3D74DC", "#6AA6F6"])
+register(PAINTERS, "blue_lichen_3", lambda: speckle_sheet(9303, 0, 0.9, 2.0, LICHEN_BLUE, coverage=0.5), glow=["#3D74DC", "#6AA6F6"])
 
 # Asurine buds: small crystals among the big ones (asurine_geodes.jpg, deep_blue_rift.jpg).
-ASURINE = {"dark": "#2B468F", "left": "#5D82D1", "right": "#87ABF2", "edge": "#B1D7FB", "tip": "#EEF6FF"}
+ASURINE = {"dark": "#1C3478", "left": "#3368D8", "right": "#4486EE", "edge": "#6AA6F6", "tip": "#A8D0FF"}
 
 
 def _asurine_bud(v):
@@ -545,11 +553,32 @@ def _asurine_bud(v):
     return img
 
 
-register(PAINTERS, "asurine_bud", lambda: _asurine_bud(1), glow=["#B1D7FB", "#EEF6FF"])
-register(PAINTERS, "asurine_bud_2", lambda: _asurine_bud(2), glow=["#B1D7FB", "#EEF6FF"])
+register(PAINTERS, "asurine_bud", lambda: _asurine_bud(1), glow=["#6AA6F6", "#A8D0FF"])
+register(PAINTERS, "asurine_bud_2", lambda: _asurine_bud(2), glow=["#6AA6F6", "#A8D0FF"])
+
+# Asurine crust: a sheet of small facets over the asurine of the geodes' lining and the rift's walls, which a shader
+# leaves near black where nothing glows (asurine_geodes.jpg, deep_blue_rift.jpg). Each facet has a lit edge, a face and
+# a shadow; a few carry a pale glint.
+CRUST = ["#1C3478", "#2650B4", "#3368D8", "#4486EE", "#8CC0FF"]
+
+
+def _facet(px, rng, x, y):
+    """One small facet: lit edge, face, shadow; now and then a pale glint."""
+    shape = ([(0, -1, 3), (-1, 0, 3), (0, 0, 2), (1, 0, 1), (0, 1, 1), (1, 1, 0)] if rng.random() < 0.6
+             else [(0, 0, 3), (1, 0, 2), (0, 1, 1), (1, 1, 0)])
+    for dx, dy, c in shape:
+        put_wrap(px, x + dx, y + dy, CRUST[c])
+    if rng.random() < 0.18:
+        put_wrap(px, x, y - (1 if len(shape) == 6 else 0), CRUST[4])
+
+
+register(PAINTERS, "asurine_crust", lambda: speckle_sheet(9401, 0, 0, 0, CRUST, coverage=0.6, stamp_fn=_facet),
+         glow=["#8CC0FF", "#4486EE"])
+register(PAINTERS, "asurine_crust_2", lambda: speckle_sheet(9402, 0, 0, 0, CRUST, coverage=0.5, stamp_fn=_facet),
+         glow=["#8CC0FF", "#4486EE"])
 
 # More looks for the existing asurine crystal and blue glow mushroom, in their palettes and with their glow.
-ASURINE_CRYSTAL = {"dark": "#2B468F", "left": "#6E9FF0", "right": "#AACDFF", "edge": "#AACDFF", "tip": "#EEF6FF"}
+ASURINE_CRYSTAL = {"dark": "#1C3478", "left": "#3368D8", "right": "#4486EE", "edge": "#4486EE", "tip": "#A8D0FF"}
 
 
 def asurine_crystal_2():
@@ -560,9 +589,9 @@ def asurine_crystal_2():
     return img
 
 
-register(PAINTERS, "asurine_crystal_2", asurine_crystal_2, glow=["#EEF6FF", "#AACDFF"])
+register(PAINTERS, "asurine_crystal_2", asurine_crystal_2, glow=["#A8D0FF", "#4486EE"])
 
-BLUE_MUSHROOM = {"w": "#F4F9FF", "B": "#CFE3FF", "b": "#8FB9FF", "d": "#5683DA", "s": "#C3D4EA", "S": "#8EA5C4"}
+BLUE_MUSHROOM = {"w": "#A8D0FF", "B": "#6AA6F6", "b": "#4486EE", "d": "#2650B4", "s": "#6F86B8", "S": "#4C6496"}
 register(PAINTERS, "blue_glow_mushroom_2", lambda: grid([
     "................",
     "................",
@@ -580,7 +609,7 @@ register(PAINTERS, "blue_glow_mushroom_2", lambda: grid([
     "..ssS..sS...sS..",
     "..sSS.ssSS.ssS..",
     "................",
-], BLUE_MUSHROOM), glow=["#CFE3FF", "#F4F9FF"])
+], BLUE_MUSHROOM), glow=["#6AA6F6", "#A8D0FF"])
 register(PAINTERS, "blue_glow_mushroom_3", lambda: grid([
     "................",
     "................",
@@ -598,14 +627,15 @@ register(PAINTERS, "blue_glow_mushroom_3", lambda: grid([
     "......sSS....sS.",
     ".....ssSSS..ssS.",
     "................",
-], BLUE_MUSHROOM), glow=["#CFE3FF", "#F4F9FF"])
+], BLUE_MUSHROOM), glow=["#6AA6F6", "#A8D0FF"])
 
 
 # ------------------------------------------------------------------------------------------------ Deep dark
 # Dusk vines: near-black strands with a few cold specks that glow without giving light. No picture: the deep dark
-# stays dark, and these are its one new plant.
+# stays dark, and these are its one new plant. The specks are a deep teal, which a shader glows cyan; a paler one
+# clipped to white points.
 DUSK_STRANDS = [(3, 1.0, 0.4), (9, 1.0, 3.0), (13, 1.0, 5.1)]
-DUSK_GLOW = ["#6FE3E0", "#2FA3A8"]
+DUSK_GLOW = ["#3FC2C0", "#2FA3A8"]
 
 
 def _dusk_vines(v, tip):
@@ -620,7 +650,7 @@ def _dusk_vines(v, tip):
             if rng.random() < 0.25:
                 put(px, xs[y] + rng.choice((-1, 1)), y, "#1C3640")
         for y in range(3 + (i * 4 + v) % 5, min(13, end), 6):
-            put(px, xs[y] + (1 if i % 2 else -1), y, "#6FE3E0")
+            put(px, xs[y] + (1 if i % 2 else -1), y, "#3FC2C0")
         if tip:
             put(px, xs[min(15, end)], min(15, end), "#2FA3A8")
     return img

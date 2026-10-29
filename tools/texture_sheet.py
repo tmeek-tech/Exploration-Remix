@@ -52,12 +52,14 @@ SHEET = [
                           ("pale_coral", "Pale coral", 0), ("pale_coral_2", "Pale coral 2", 0),
                           ("lilac_waterweed", "Lilac waterweed", 0), ("lilac_waterweed_2", "Lilac waterweed 2", 0),
                           ("lilac_waterweed_3", "Lilac waterweed 3", 0),
-                          ("lantern_weed", "Lantern weed", 8), ("lantern_weed_2", "Lantern weed 2", 8)]),
+                          ("lantern_weed", "Lantern weed", 8), ("lantern_weed_2", "Lantern weed 2", 8),
+                          ("pool_pearls", "Pool pearls", 4), ("pool_pearls_2", "Pool pearls 2", 4)]),
         ("Ember Gardens", [("orange_shelf_fungus", "Shelf fungus, top", 6), ("orange_shelf_fungus_2", "Shelf fungus, top 2", 6),
                            ("orange_shelf_fungus_under", "Shelf fungus, under", 6),
                            ("lavender_coral", "Lavender coral", 0), ("lavender_coral_2", "Lavender coral 2", 0),
                            ("pale_coral_fan", "Pale coral fan", 0),
                            ("ember_anemone", "Ember anemone", 11), ("ember_anemone_2", "Ember anemone 2", 11),
+                           ("pool_pearls", "Pool pearls", 4), ("pool_pearls_2", "Pool pearls 2", 4),
                            ("ember_vines_plant", "Ember vines", 10), ("ember_vines_plant_2", "Ember vines 2", 10),
                            ("ember_vines", "Ember vines, tip", 10),
                            ("rose_tendrils_plant", "Rose tendrils", 0), ("rose_tendrils_plant_2", "Rose tendrils 2", 0),
@@ -76,20 +78,23 @@ SHEET = [
     ("Blue Reaches", [
         ("Deep Blue Rift", [("blue_glow_mushroom", "Blue glow mushroom", 10), ("blue_glow_mushroom_2", "Blue glow mushroom 2", 10),
                             ("blue_glow_mushroom_3", "Blue glow mushroom 3", 10),
-                            ("blue_glow_vines_plant", "Blue glow vines", 8), ("blue_glow_vines", "Blue glow vines, tip", 8),
+                            ("blue_glow_vines_plant", "Blue glow vines", 6), ("blue_glow_vines_plant_2", "Blue glow vines 2", 6),
+                            ("blue_glow_vines", "Blue glow vines, tip", 10),
                             ("glowbell", "Glowbell", 9), ("glowbell_2", "Glowbell 2", 9),
                             ("pagoda_fungus_top", "Pagoda fungus, top", 7), ("pagoda_fungus_bottom", "Pagoda fungus, bottom", 7),
-                            ("blue_lichen", "Blue lichen", 4), ("blue_lichen_2", "Blue lichen 2", 4)]),
+                            ("pagoda_fungus_top_2", "Pagoda fungus 2, top", 7), ("pagoda_fungus_bottom_2", "Pagoda fungus 2, bottom", 7),
+                            ("blue_lichen", "Blue lichen", 4), ("blue_lichen_2", "Blue lichen 2", 4), ("blue_lichen_3", "Blue lichen 3", 4)]),
         ("Asurine Geodes and Deep Blue Rift", [("asurine_crystal", "Asurine crystal", 10), ("asurine_crystal_2", "Asurine crystal 2", 10),
-                                               ("asurine_bud", "Asurine bud", 5), ("asurine_bud_2", "Asurine bud 2", 5)]),
+                                               ("asurine_bud", "Asurine bud", 5), ("asurine_bud_2", "Asurine bud 2", 5),
+                                               ("asurine_crust", "Asurine crust", 3), ("asurine_crust_2", "Asurine crust 2", 3)]),
         ("Deep dark", [("dusk_vines_plant", "Dusk vines", 0), ("dusk_vines_plant_2", "Dusk vines 2", 0), ("dusk_vines", "Dusk vines, tip", 0)]),
     ]),
 ]
 
 # Vines: (tip, number of body variants). Tall plants: (id, number of variants).
 VINES = [("amber_bulb_vine", 3), ("weeping_ivy", 3), ("silver_frond", 2), ("gold_threads", 2), ("dusk_vines", 2), ("wisteria", 3),
-         ("pale_wisteria", 2), ("blue_glow_vines", 1), ("ember_vines", 2), ("rose_tendrils", 2)]
-TALL = [("tall_silver_fern", 2), ("pagoda_fungus", 1), ("lilac_plume", 2)]
+         ("pale_wisteria", 2), ("blue_glow_vines", 2), ("ember_vines", 2), ("rose_tendrils", 2)]
+TALL = [("tall_silver_fern", 2), ("pagoda_fungus", 2), ("lilac_plume", 2)]
 
 
 def paint(name):

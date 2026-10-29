@@ -446,7 +446,7 @@ def asurine_crystal():
         ".LMDDKLMDKLMDLM.",
         "..MDKKMMDKMDKMD.",
         "...DKKDDKKDKKD..",
-    ], {"W": "#EEF6FF", "L": "#AACDFF", "M": "#6E9FF0", "D": "#4068C6", "K": "#2B468F"})
+    ], {"W": "#A8D0FF", "L": "#4486EE", "M": "#3368D8", "D": "#2650B4", "K": "#1C3478"})
 
 
 def blue_glow_mushroom():
@@ -468,11 +468,12 @@ def blue_glow_mushroom():
         "....sS......sS..",
         "...ssS.....ssS..",
         "...sSS.....sSS..",
-    ], {"w": "#F4F9FF", "B": "#CFE3FF", "b": "#8FB9FF", "d": "#5683DA", "s": "#C3D4EA", "S": "#8EA5C4"})
+    ], {"w": "#A8D0FF", "B": "#6AA6F6", "b": "#4486EE", "d": "#2650B4", "s": "#6F86B8", "S": "#4C6496"})
 
 
-def _beaded_vines(seed, tip, vine, vine_dark, leaf, bead, bead_bright, bead_dim):
-    """Hanging vines with glowing beads along them: the body tiles top to bottom, the tip ends in a bead."""
+def _beaded_vines(seed, tip, vine, vine_dark, leaf, bead, bead_bright, bead_dim, look=1):
+    """Hanging vines with glowing beads along them: the body tiles top to bottom, the tip ends in a bead. Look 2 hangs
+    its beads on other rows and the other side of the strands, some of them single points, and only on rows 2 to 11."""
     rng = random.Random(seed)
     img = blank()
     px = img.load()
@@ -487,13 +488,20 @@ def _beaded_vines(seed, tip, vine, vine_dark, leaf, bead, bead_bright, bead_dim)
                 side = x + rng.choice((-1, 1))
                 if 0 <= side < 16:
                     px[side, y] = hexc(leaf)
-            if (y + i * 3) % 5 == 2:
+            if look == 1 and (y + i * 3) % 5 == 2:
                 bx = x + (1 if (y // 5 + i) % 2 else -1)
                 if 0 <= bx < 16:
                     px[bx, y] = hexc(bead_bright)
                     if y + 1 < 16:
                         px[bx, y + 1] = hexc(bead)
                     if y + 2 < 16 and 0 <= bx < 16:
+                        px[bx, y + 2] = hexc(bead_dim)
+            elif look == 2 and (y + i * 3) % 5 == 0 and 2 <= y <= 11:
+                bx = x + (-1 if (y // 5 + i) % 2 else 1)
+                if 0 <= bx < 16:
+                    px[bx, y] = hexc(bead_bright)
+                    if (y + i) % 3:
+                        px[bx, y + 1] = hexc(bead)
                         px[bx, y + 2] = hexc(bead_dim)
         if tip:
             px[x, min(15, end)] = hexc(bead_bright)
@@ -502,12 +510,23 @@ def _beaded_vines(seed, tip, vine, vine_dark, leaf, bead, bead_bright, bead_dim)
     return img
 
 
+# The blue vines (deep_blue_rift.jpg): pale slate strands and leaves (vine, vine_dark, leaf) carrying saturated blue
+# beads (bead, bead_bright, bead_dim). Under a shader the beads glow blue instead of clipping to white, and the strands
+# show as lines between them.
+BLUE_VINE = ("#56607E", "#454D68", "#5E6A90", "#3F7FE8", "#8CC0FF", "#2A58C4")
+
+
 def blue_glow_vines_plant():
-    return _beaded_vines(5303, False, "#4C74B4", "#3A5E9C", "#6A94D0", "#86B8FF", "#E2F0FF", "#5A8EE6")
+    return _beaded_vines(5303, False, *BLUE_VINE)
+
+
+def blue_glow_vines_plant_2():
+    """A second body: the strands sway on other rows (another seed) and carry their beads differently."""
+    return _beaded_vines(5311, False, *BLUE_VINE, look=2)
 
 
 def blue_glow_vines():
-    return _beaded_vines(5303, True, "#4C74B4", "#3A5E9C", "#6A94D0", "#86B8FF", "#E2F0FF", "#5A8EE6")
+    return _beaded_vines(5303, True, *BLUE_VINE)
 
 
 def _line(x0, y0, x1, y1):
@@ -665,6 +684,7 @@ PAINTERS = {
     "block/blue_glow_mushroom": blue_glow_mushroom,
     "block/blue_glow_vines": blue_glow_vines,
     "block/blue_glow_vines_plant": blue_glow_vines_plant,
+    "block/blue_glow_vines_plant_2": blue_glow_vines_plant_2,
     "block/silver_fern": silver_fern,
     "block/orange_shelf_fungus": orange_shelf_fungus,
     "block/orange_shelf_fungus_under": orange_shelf_fungus_under,

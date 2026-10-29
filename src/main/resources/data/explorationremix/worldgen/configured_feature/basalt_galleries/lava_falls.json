@@ -8,7 +8,7 @@
       }
     },
     "rock": "#explorationremix:basalt_rock",
-    "min_drop": 10,
+    "min_drop": 6,
     "search": 10,
     "width": {
       "type": "minecraft:uniform",

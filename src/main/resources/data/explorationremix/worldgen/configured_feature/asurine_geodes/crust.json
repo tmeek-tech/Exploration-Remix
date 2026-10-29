@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:asurine_crust"
+      }
+    },
+    "faces": "walls_ceiling",
+    "tries": 96,
+    "radius": 7,
+    "height": 7,
+    "on": "#explorationremix:asurine_lining",
+    "in_water": false
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:pool_pearls"
+      }
+    },
+    "faces": "floor",
+    "tries": 96,
+    "radius": 6,
+    "height": 2,
+    "on": "#explorationremix:garden_soil",
+    "in_water": true
+  }
+}

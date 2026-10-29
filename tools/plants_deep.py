@@ -117,7 +117,8 @@ for _k in (1, 2, 3):
     register(PAINTERS, variants("wisteria_petals", 3)[_k - 1], (lambda k=_k: _petals(k)))
 
 # The flowers on the islands keep their pictures; their green stalks turn brown.
-register(PAINTERS, "lavender_flower", lambda: recolour(plants.lavender_flower(), {"#6E8740": STALK[0], "#526A2E": STALK[1]}))
+register(PAINTERS, "lavender_flower", lambda: recolour(plants.lavender_flower(), {"#6E8740": STALK[0], "#526A2E": STALK[1]}),
+         glow=["#E2D2F2", "#C3A6E0"])
 register(PAINTERS, "gold_flower", lambda: recolour(plants.gold_flower(), {"#748A3E": "#7A5E3A", "#55682C": "#5A4428"}))
 
 
@@ -226,6 +227,48 @@ def _lantern_weed(v):
 
 register(PAINTERS, "lantern_weed", lambda: _lantern_weed(1), glow=POD_GLOW)
 register(PAINTERS, "lantern_weed_2", lambda: _lantern_weed(2), glow=POD_GLOW)
+
+
+# Pool pearls: the turquoise glow from under the water in lantern_lake.jpg (the shallows) and ember_gardens.jpg (the
+# terrace pools). Under the shader only an emissive bed keeps the water turquoise.
+PEARL = ["#2E6F8A", "#3F9DB5", "#7FD6E6", "#B4EEF6"]   # turquoise, hue 187-198: nothing green
+PEARL_GLINT = "#E6FBFF"
+
+
+def _pool_pearls(v):
+    """Round glassy beads lying apart on the bed: 2x2 and single beads, pale above left and dark below right, some
+    with a white glint, kept at least a pixel apart (round the tile's edges) so they read as beads, not a crust."""
+    rng = random.Random(4810 + v)
+    img = blank()
+    px = img.load()
+    taken = set()
+    beads, want = 0, (26 if v == 1 else 30)
+    for _ in range(800):
+        if beads >= want:
+            break
+        x, y = rng.randrange(16), rng.randrange(16)
+        big = rng.random() < 0.6
+        cells = [(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)] if big else [(x, y)]
+        ring = {((cx + dx) % 16, (cy + dy) % 16) for cx, cy in cells for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
+        if ring & taken:
+            continue
+        taken |= {(cx % 16, cy % 16) for cx, cy in cells}
+        if big:
+            put_wrap(px, x, y, PEARL[3])
+            put_wrap(px, x + 1, y, PEARL[2])
+            put_wrap(px, x, y + 1, PEARL[2])
+            put_wrap(px, x + 1, y + 1, PEARL[1] if rng.random() < 0.5 else PEARL[0])
+            if rng.random() < 0.5:
+                put_wrap(px, x, y, PEARL_GLINT)
+        else:
+            put_wrap(px, x, y, PEARL[rng.choice((1, 2, 2, 3))])
+        beads += 1
+    return img
+
+
+for _k in (1, 2):
+    register(PAINTERS, variants("pool_pearls", 2)[_k - 1], (lambda k=_k: _pool_pearls(k)),
+             glow=["#7FD6E6", "#B4EEF6", PEARL_GLINT])
 
 
 # ------------------------------------------------------------------------------------------------ Ember Gardens

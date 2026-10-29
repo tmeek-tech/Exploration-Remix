@@ -1,0 +1,38 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/pool_pearls",
+        "y": 0
+      },
+      {
+        "model": "explorationremix:block/pool_pearls",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/pool_pearls",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/pool_pearls",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/pool_pearls_2",
+        "y": 0
+      },
+      {
+        "model": "explorationremix:block/pool_pearls_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/pool_pearls_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/pool_pearls_2",
+        "y": 270
+      }
+    ]
+  }
+}

@@ -1,8 +1,8 @@
 {
   "type": "minecraft:random_patch",
   "config": {
-    "tries": 8,
-    "xz_spread": 4,
+    "tries": 10,
+    "xz_spread": 5,
     "y_spread": 2,
     "feature": {
       "feature": {
@@ -36,10 +36,27 @@
             {
               "height": 1,
               "provider": {
-                "type": "minecraft:simple_state_provider",
-                "state": {
-                  "Name": "explorationremix:wisteria"
-                }
+                "type": "explorationremix:mix",
+                "entries": [
+                  {
+                    "data": {
+                      "type": "minecraft:simple_state_provider",
+                      "state": {
+                        "Name": "explorationremix:wisteria"
+                      }
+                    },
+                    "weight": 6
+                  },
+                  {
+                    "data": {
+                      "type": "minecraft:simple_state_provider",
+                      "state": {
+                        "Name": "explorationremix:lantern_pod"
+                      }
+                    },
+                    "weight": 1
+                  }
+                ]
               }
             }
           ]

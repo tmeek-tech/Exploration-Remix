@@ -24,11 +24,11 @@
         }
       ]
     },
-    "faces": "any",
-    "tries": 48,
+    "faces": "walls_ceiling",
+    "tries": 56,
     "radius": 7,
     "height": 7,
-    "on": "#explorationremix:blue_rift_walls",
+    "on": "#explorationremix:asurine_lining",
     "in_water": false
   }
 }

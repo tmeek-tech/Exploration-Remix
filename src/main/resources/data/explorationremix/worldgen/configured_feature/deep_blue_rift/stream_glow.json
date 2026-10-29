@@ -1,0 +1,43 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:blue_lichen"
+            }
+          },
+          "weight": 4
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:asurine_bud"
+            }
+          },
+          "weight": 3
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:asurine_crystal"
+            }
+          },
+          "weight": 1
+        }
+      ]
+    },
+    "faces": "floor",
+    "tries": 40,
+    "radius": 5,
+    "height": 2,
+    "on": "#explorationremix:blue_rift_walls",
+    "in_water": true
+  }
+}

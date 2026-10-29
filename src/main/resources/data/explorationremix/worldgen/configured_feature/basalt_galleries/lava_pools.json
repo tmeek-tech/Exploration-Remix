@@ -33,7 +33,7 @@
         "Name": "minecraft:magma_block"
       }
     },
-    "radius": 6,
+    "radius": 4,
     "edge_chance": 0.3,
     "overflow_chance": 0.0,
     "lava": true

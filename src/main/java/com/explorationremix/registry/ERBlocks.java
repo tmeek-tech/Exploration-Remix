@@ -76,10 +76,11 @@ public final class ERBlocks {
                     .strength(1.5F).lightLevel(s -> 10).pushReaction(PushReaction.DESTROY)));
     public static final RegistryObject<Block> BLUE_GLOW_MUSHROOM = block("blue_glow_mushroom",
             () -> new CavePlantBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.FUNGUS, 10), Block.box(3, 0, 3, 13, 12, 13)));
+    /** Bright at the tip and dim along the strand, so the light pools under the ends instead of washing the rift evenly. */
     public static final RegistryObject<Block> BLUE_GLOW_VINES = BLOCKS.register("blue_glow_vines",
-            () -> new HangingVinesBlock(plant(MapColor.COLOR_BLUE, SoundType.CAVE_VINES, 8), ERBlocks.BLUE_GLOW_VINES_PLANT_REF));
+            () -> new HangingVinesBlock(plant(MapColor.COLOR_BLUE, SoundType.CAVE_VINES, 10), ERBlocks.BLUE_GLOW_VINES_PLANT_REF));
     public static final RegistryObject<Block> BLUE_GLOW_VINES_PLANT = BLOCKS.register("blue_glow_vines_plant",
-            () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_BLUE, SoundType.CAVE_VINES, 8), ERBlocks.BLUE_GLOW_VINES_REF));
+            () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_BLUE, SoundType.CAVE_VINES, 6), ERBlocks.BLUE_GLOW_VINES_REF));
 
     // ------------------------------------------------------------------------------------------- Silver Fern Rift
     public static final RegistryObject<Block> SILVER_FERN = block("silver_fern",
@@ -151,6 +152,9 @@ public final class ERBlocks {
     public static final RegistryObject<Block> ASURINE_BUD = block("asurine_bud", () -> new AmethystClusterBlock(3, 4,
             BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).forceSolidOn().noOcclusion().sound(SoundType.SMALL_AMETHYST_BUD)
                     .strength(1.5F).lightLevel(s -> 5).pushReaction(PushReaction.DESTROY)));
+    /** A crust of small asurine facets over the asurine: light only where it covers a face, like glow lichen. */
+    public static final RegistryObject<Block> ASURINE_CRUST = block("asurine_crust",
+            () -> new GlowLichenBlock(lichen(MapColor.COLOR_LIGHT_BLUE, SoundType.AMETHYST_CLUSTER, 3)));
     /** The deep dark's only new plant: dark strands whose cold specks glow without giving light, so the dark stays dark. */
     public static final RegistryObject<Block> DUSK_VINES = BLOCKS.register("dusk_vines",
             () -> new HangingVinesBlock(plant(MapColor.COLOR_BLACK, SoundType.SCULK_VEIN, 0), ERBlocks.DUSK_VINES_PLANT_REF));
@@ -174,6 +178,9 @@ public final class ERBlocks {
     /** Glowing pods on the lake bed, in place of sea pickles. */
     public static final RegistryObject<Block> LANTERN_WEED = block("lantern_weed",
             () -> new SubmergedPlantBlock(plant(MapColor.COLOR_ORANGE, SoundType.WET_GRASS, 8), Block.box(3, 0, 3, 13, 13, 13)));
+    /** Glassy beads on the beds of the warm pools and the lake shallows; they glow turquoise through the water. */
+    public static final RegistryObject<Block> POOL_PEARLS = block("pool_pearls",
+            () -> new SubmergedPlantBlock(plant(MapColor.COLOR_CYAN, SoundType.WET_GRASS, 4).replaceable(), Block.box(0, 0, 0, 16, 1, 16)));
     public static final RegistryObject<Block> PALE_CORAL = block("pale_coral",
             () -> new PoolPlantBlock(plant(MapColor.SAND, SoundType.WET_GRASS, 0), Block.box(2, 0, 2, 14, 14, 14)));
 

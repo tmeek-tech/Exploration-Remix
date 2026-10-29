@@ -51,8 +51,9 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #   carpet      a flat sheet lying on the floor, turned at random
 #   wall_plant  a plant growing sideways out of a wall, drawn with vanilla's coral wall fan model
 # Options: variants (how many textures: <id>, <id>_2, <id>_3; the game picks one per block from its position, so it
-# never changes), weights (one per variant), glow_under (shelf: the whole underside glows). A texture with an entry
-# in textures.GLOW gets an emissive overlay.
+# never changes), weights (one per variant), glow_under (shelf: the whole underside glows), shader_glow (default True;
+# False keeps the glow overlay but leaves the block out of glowing_blocks.json, so under Complementary only the overlay
+# shines and the rest is lit like rock). A texture with an entry in textures.GLOW gets an emissive overlay.
 BLOCKS = {
     "band_stone": ("Band Stone", "cube"),
     "white_glow_flower": ("White Glow Flower", "cross"),
@@ -66,7 +67,7 @@ BLOCKS = {
     "asurine_crystal": ("Asurine Crystal", "crystal", {"variants": 2}),
     "blue_glow_mushroom": ("Blue Glow Mushroom", "cross", {"variants": 3}),
     "blue_glow_vines": ("Blue Glow Vines", "vine"),
-    "blue_glow_vines_plant": ("Blue Glow Vines", "vine_body:blue_glow_vines"),
+    "blue_glow_vines_plant": ("Blue Glow Vines", "vine_body:blue_glow_vines", {"variants": 2}),
     "silver_fern": ("Silver Fern", "cross", {"variants": 3}),
     "orange_shelf_fungus": ("Orange Shelf Fungus", "shelf", {"variants": 2}),
     "lavender_coral": ("Lavender Coral", "cross", {"variants": 2}),
@@ -89,9 +90,10 @@ BLOCKS = {
     "gold_threads_plant": ("Gold Threads", "vine_body:gold_threads", {"variants": 2}),
     "sage_bush": ("Sage Bush", "cross", {"variants": 2}),
     "glowbell": ("Glowbell", "cross", {"variants": 2}),
-    "pagoda_fungus": ("Pagoda Fungus", "tall"),
-    "blue_lichen": ("Blue Lichen", "lichen", {"variants": 2}),
+    "pagoda_fungus": ("Pagoda Fungus", "tall", {"variants": 2}),
+    "blue_lichen": ("Blue Lichen", "lichen", {"variants": 3}),
     "asurine_bud": ("Asurine Bud", "crystal", {"variants": 2}),
+    "asurine_crust": ("Asurine Crust", "lichen", {"variants": 2}),
     "dusk_vines": ("Dusk Vines", "vine"),
     "dusk_vines_plant": ("Dusk Vines", "vine_body:dusk_vines", {"variants": 2}),
     # ---- vegetation rework, part B: Deep Gardens (no green) and Basalt Galleries
@@ -100,6 +102,7 @@ BLOCKS = {
     "wisteria_petals": ("Wisteria Petals", "carpet", {"variants": 3}),
     "lilac_waterweed": ("Lilac Waterweed", "cross", {"variants": 3}),
     "lantern_weed": ("Lantern Weed", "cross", {"variants": 2}),
+    "pool_pearls": ("Pool Pearls", "carpet", {"variants": 2}),
     "pale_coral": ("Pale Coral", "cross", {"variants": 2}),
     "ochre_grass": ("Ochre Grass", "cross", {"variants": 3, "weights": [3, 2, 2]}),
     "lilac_plume": ("Lilac Plume", "tall", {"variants": 2}),
@@ -108,7 +111,7 @@ BLOCKS = {
     "rose_tendrils_plant": ("Rose Tendrils", "vine_body:rose_tendrils", {"variants": 2}),
     "amber_shard": ("Amber Shard", "crystal", {"variants": 2}),
     "cinder_bloom": ("Cinder Bloom", "cross", {"variants": 2}),
-    "ash_fern": ("Ash Fern", "cross", {"variants": 2}),
+    "ash_fern": ("Ash Fern", "cross", {"variants": 2, "shader_glow": False}),
     "smoulder_lichen": ("Smoulder Lichen", "lichen", {"variants": 2}),
 }
 NO_DROP = {"band_stone"}
@@ -121,7 +124,7 @@ BLOCK_TAGS = {
                                  "silver_frond_plant", "gold_threads", "gold_threads_plant", "dusk_vines", "dusk_vines_plant", "grotto_ivy",
                                  # vegetation rework, part B
                                  "pale_wisteria", "pale_wisteria_plant", "rose_tendrils", "rose_tendrils_plant"],
-    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "amber_shard"],
+    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen"],
     (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "pale_wisteria", "pale_wisteria_plant"],
 }
@@ -314,7 +317,8 @@ def block_assets():
                 painted = "block/" + tex.split("block/", 1)[1]
                 if key == "glow":
                     used_glow.add(painted[:-len("_glow")])
-                    glowing.add(bid)
+                    if opts.get("shader_glow", True):
+                        glowing.add(bid)
                 else:
                     assert painted in textures.PAINTERS, f"{bid}: no painter for {tex}"
             write(os.path.join(ASSETS, "models", "block", mname + ".json"), m)

@@ -63,8 +63,15 @@ public final class LayerRangePlacement extends PlacementModifier {
                 Upper.Piece p = t != null ? t.upperPiece(x, z) : null;
                 if (p != null && p.distXZ(x, z) < 4) {
                     if (focus.equals("pieces") || random.nextFloat() < 0.75F) {
+                        // Start in the open: the floor and ceiling scans that follow find nothing from rock or water,
+                        // and most of a set piece's columns are rock or stream.
                         int lo = (int) Math.floor(p.waterY) - 3, hi = (int) Math.ceil(p.topY);
-                        return Stream.of(new BlockPos(x, lo + random.nextInt(Math.max(1, hi - lo + 1)), z));
+                        BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos(x, lo, z);
+                        int open = 0, pick = lo;
+                        for (int y = lo; y <= hi; y++) {
+                            if (ctx.getBlockState(at.setY(y)).isAir() && random.nextInt(++open) == 0) pick = y;
+                        }
+                        return open > 0 ? Stream.of(new BlockPos(x, pick, z)) : Stream.empty();
                     }
                 } else if (focus.equals("pieces")) {
                     return Stream.empty();

@@ -106,7 +106,8 @@
     [],
     [],
     [
-      "explorationremix:ember_gardens/pools"
+      "explorationremix:ember_gardens/pools",
+      "explorationremix:ember_gardens/stalactites"
     ],
     [],
     [],
@@ -114,6 +115,7 @@
     [],
     [
       "explorationremix:ember_gardens/shelf_fungi",
+      "explorationremix:ember_gardens/shelf_stacks",
       "explorationremix:ember_gardens/mushroom_shelves",
       "explorationremix:ember_gardens/mushroom_caps",
       "explorationremix:ember_gardens/amber_shards"
