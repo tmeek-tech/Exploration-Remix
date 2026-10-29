@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import textures
 import worldgen
 import sounds
+import check_data
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RES = os.path.join(ROOT, "src/main/resources")
@@ -372,6 +373,9 @@ def main():
     particles()
     lang(names)
     print("data written")
+    # The game refuses the whole datapack over one unknown id, and unit tests never load it.
+    problems = check_data.main()
+    assert not problems, "the datapack would not load:\n" + "\n".join(problems)
 
 
 if __name__ == "__main__":

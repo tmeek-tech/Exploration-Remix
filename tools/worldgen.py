@@ -317,7 +317,7 @@ def build_features():
                                                        "half_width": uniform(1, 3)}},
             [count(10), SQUARE, layer("deep_gardens", above_water=True), BIOME])
     feature("ember_gardens/mushroom_caps", "underground_decoration", ["ember_gardens"],
-            {"type": "minecraft:replace_blobs", "config": {"target": state("minecraft:blackstone"),
+            {"type": "minecraft:netherrack_replace_blobs", "config": {"target": state("minecraft:blackstone"),
                                                           "state": state("minecraft:brown_mushroom_block"), "radius": uniform(2, 3)}},
             [count(6), SQUARE, layer("deep_gardens")] + ceiling(offset=0) +
             [{"type": "minecraft:block_predicate_filter", "predicate": {"type": "minecraft:matching_blocks", "blocks": "minecraft:blackstone"}}, BIOME])

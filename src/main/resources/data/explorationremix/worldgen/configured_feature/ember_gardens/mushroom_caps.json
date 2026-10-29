@@ -1,5 +1,5 @@
 {
-  "type": "minecraft:replace_blobs",
+  "type": "minecraft:netherrack_replace_blobs",
   "config": {
     "target": {
       "Name": "minecraft:blackstone"
