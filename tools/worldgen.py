@@ -307,7 +307,7 @@ def build_features():
             [count(24), SQUARE, layer(up), looks(1, 2), BIOME])
     feature("ivory_root_cavern/grotto_ivy", "underground_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:grotto_ivy"), "walls_ceiling", 32, f"#{MOD}:cave_rock", radius=5, height=5),
-            [count(4), SQUARE, layer(up), BIOME])
+            [count(9), SQUARE, layer(up), BIOME])
     feature("silver_fern_rift/wall_ferns", "underground_decoration", ["silver_fern_rift"],
             attach(simple(f"{MOD}:silver_wall_fern"), "walls", 32, f"#{MOD}:cave_rock", radius=6, height=6),
             [count(6), SQUARE, layer(up), BIOME])
@@ -394,7 +394,15 @@ def build_features():
             [count(5), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/lantern_roots", "vegetal_decoration", ["ivory_root_cavern"],
             attach(simple("explorationremix:lantern_roots"), "ceiling", 32, f"#{MOD}:cave_rock", radius=6, height=3),
-            [count(6), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(3), SQUARE, layer(up)] + ceiling() + [BIOME])
+    # Glow lichen on the lake bed lights the Ivory Root Cavern's lake from below, as in its picture; with a shader the
+    # water's surface otherwise mirrors the dark cave.
+    feature("ivory_root_cavern/lake_lichen", "vegetal_decoration", ["ivory_root_cavern"],
+            {"type": "minecraft:multiface_growth", "config": {
+                "block": "minecraft:glow_lichen", "search_range": 4, "can_place_on_floor": True, "can_place_on_ceiling": False,
+                "can_place_on_wall": True, "chance_of_spreading": 0.8, "can_be_placed_on": f"#{MOD}:cave_rock"}},
+            [count(24), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) +
+            [{"type": "minecraft:block_predicate_filter", "predicate": {"type": "minecraft:matching_fluids", "fluids": "minecraft:water"}}, BIOME])
     feature("ivory_root_cavern/moss", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple("minecraft:moss_carpet"), state("minecraft:moss_carpet"), tries=24, xz=4, y=2),
             [count(10), SQUARE, layer(up)] + floor() + [BIOME])
@@ -453,8 +461,8 @@ def build_features():
             patch(simple(f"{MOD}:tall_silver_fern"), state(f"{MOD}:tall_silver_fern"), tries=24, xz=6, y=3),
             [count(16), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/gold_threads", "vegetal_decoration", ["ivory_root_cavern"],
-            hanging_patch(hanging_column(f"{MOD}:gold_threads_plant", f"{MOD}:gold_threads", 2, 7), tries=5, xz=4, y=2),
-            [count(3), SQUARE, layer(up)] + ceiling() + [BIOME])
+            hanging_patch(hanging_column(f"{MOD}:gold_threads_plant", f"{MOD}:gold_threads", 2, 7), tries=3, xz=4, y=2),
+            [count(1), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("ivory_root_cavern/sage", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple(f"{MOD}:sage_bush"), state(f"{MOD}:sage_bush"), tries=16, xz=5, y=2),
             [count(14), SQUARE, layer(up)] + floor() + [BIOME])
