@@ -31,7 +31,7 @@ LOOKS = {
     "rootvaults":        ("#b4c27c", "#3cc4b4", "#0f5a55", "#6fae58", "#5d9c48"),
     "silver_fern_rift":  ("#93ab98", "#3aa9c2", "#0f4a5a", "#7fa86a", "#6f985a"),
     "ivory_root_cavern": ("#c7b784", "#38cbc2", "#0e5e5a", "#8fae5a", "#7d9e4a"),
-    "lantern_lake":      ("#c28a46", "#3bd0c4", "#12655f", "#a89a6a", "#988a5a"),
+    "lantern_lake":      ("#5f7fb2", "#3bd0c4", "#12655f", "#a89a6a", "#988a5a"),
     "ember_gardens":     ("#b5562f", "#4cbcc9", "#163f4d", "#a8904c", "#98803c"),
     "rust_springs":      ("#a9482a", "#c9662b", "#5a2a10", "#a08a50", "#907a40"),
     "deep_blue_rift":    ("#1f3f7c", "#2554ba", "#08183d", "#6a8aa8", "#5a7a98"),
@@ -115,6 +115,11 @@ AIR = {"type": "minecraft:matching_blocks", "blocks": ["minecraft:air", "minecra
 AIR_OR_WATER = {"type": "minecraft:matching_blocks", "blocks": ["minecraft:air", "minecraft:cave_air", "minecraft:water"]}
 SQUARE = {"type": "minecraft:in_square"}
 BIOME = {"type": "minecraft:biome"}
+IN_WATER = {"type": "minecraft:block_predicate_filter", "predicate": {"type": "minecraft:matching_blocks", "blocks": ["minecraft:water"]}}
+# Shallow water: air three blocks up, so the spot is on a shore or under at most three blocks of water.
+SHALLOW = {"type": "minecraft:block_predicate_filter", "predicate": {"type": "minecraft:matching_blocks", "offset": [0, 3, 0],
+                                                                     "blocks": ["minecraft:air", "minecraft:cave_air"]}}
+PALE_CEILING = {"type": "minecraft:block_predicate_filter", "predicate": {"type": "minecraft:matching_blocks", "blocks": f"#{MOD}:pale_rock"}}
 def count(n): return {"type": "minecraft:count", "count": n}
 def rarity(n): return {"type": "minecraft:rarity_filter", "chance": n}
 def layer(name, inset=2, above_water=False): return {"type": f"{MOD}:layer_range", "layer": name, "inset": inset, "above_water": above_water}
@@ -151,10 +156,11 @@ def patch(provider, survive, tries=32, xz=6, y=3, on=None):
 
 
 def hanging_column(body, tip, lo, hi):
-    """A vine hanging from a ceiling: lo to hi blocks of body, then its tip."""
+    """A vine hanging from a ceiling: lo to hi blocks of body, then its tip (a block id, or a state provider)."""
     return {"type": "minecraft:block_column", "config": {
         "direction": "down", "allowed_placement": AIR, "prioritize_tip": True,
-        "layers": [{"height": uniform(lo, hi), "provider": simple(body)}, {"height": 1, "provider": simple(tip)}]}}
+        "layers": [{"height": uniform(lo, hi), "provider": simple(body)},
+                   {"height": 1, "provider": tip if isinstance(tip, dict) else simple(tip)}]}}
 
 
 def hanging_patch(column, tries=8, xz=4, y=2):
@@ -164,6 +170,11 @@ def hanging_patch(column, tries=8, xz=4, y=2):
     return {"type": "minecraft:random_patch", "config": {
         "tries": tries, "xz_spread": xz, "y_spread": y,
         "feature": {"feature": column, "placement": ceiling(steps=2 * y + 2)}}}
+
+
+# Wisteria strands ending, one in seven, in a lantern pod, so the pods glow inside the curtains (lantern_lake.jpg).
+LILAC_TIPS = mix((simple(f"{MOD}:wisteria"), 6), (simple(f"{MOD}:lantern_pod"), 1))
+CREAM_TIPS = mix((simple(f"{MOD}:pale_wisteria"), 6), (simple(f"{MOD}:lantern_pod"), 1))
 
 
 def berry_vines(lo, hi, berries):
@@ -195,9 +206,12 @@ def spike(body, tip, length, radius, floor_chance, point=None):
     return {"type": f"{MOD}:giant_spike", "config": c}
 
 
-def pools(rim, bed, radius, edge=None, edge_chance=0.3, overflow=0.0, lava=False):
+def pools(rim, bed, radius, edge=None, edge_chance=0.3, overflow=0.0, lava=False, inner=None, inner_chance=0.0):
     c = {"rim": rim, "bed": bed, "radius": radius, "edge_chance": edge_chance, "overflow_chance": overflow}
     if edge: c["edge"] = edge
+    if inner:
+        c["inner"] = inner
+        c["inner_chance"] = inner_chance
     if lava: c["lava"] = True
     return {"type": f"{MOD}:terrace_pools", "config": c}
 
@@ -244,30 +258,68 @@ def build_features():
             spike(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 2)), simple("minecraft:dripstone_block"), (5, 14), (1.4, 3.2), 0.35,
                   point=state("minecraft:pointed_dripstone", thickness="tip", vertical_direction="down")),
             [count(3), SQUARE, layer(up)] + ceiling(offset=0) + [BIOME])
+    # A stair of pools on the Ember Gardens' treads, rims lit by anemones, beds glowing turquoise with pool pearls
+    # (ember_gardens.jpg).
     feature("ember_gardens/pools", "local_modifications", ["ember_gardens"],
             pools(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 1)),
                   mix((simple("minecraft:calcite"), 6), (LIMESTONE, 3)), 10,
                   edge=mix((simple("explorationremix:lavender_coral"), 2), (simple(f"{MOD}:pale_coral"), 3),
-                           (simple("explorationremix:pale_coral_fan"), 2), (simple(f"{MOD}:ember_anemone"), 3)), edge_chance=0.45,
-                  overflow=0.08),
-            [count(18), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
+                           (simple("explorationremix:pale_coral_fan"), 2), (simple(f"{MOD}:ember_anemone"), 5)), edge_chance=0.55,
+                  overflow=0.08, inner=simple(f"{MOD}:pool_pearls"), inner_chance=0.4),
+            [count(36), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
+    # Cream stalactites from the pale parts of the Deep Gardens' ceilings, after the pools so no stalagmite rises from
+    # their water.
+    feature("ember_gardens/stalactites", "local_modifications", ["ember_gardens"],
+            spike(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 1)), simple("minecraft:calcite"), (4, 12), (1.2, 2.4), 0.1),
+            [count(32), SQUARE, layer("deep_gardens")] + ceiling(offset=0) + [PALE_CEILING, BIOME])
+    feature("lantern_lake/stalactites", "local_modifications", ["lantern_lake"],
+            spike(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 1)), simple("minecraft:calcite"), (3, 9), (1.0, 1.8), 0.15),
+            [count(16), SQUARE, layer("deep_gardens")] + ceiling(offset=0) + [PALE_CEILING, BIOME])
+    # Red spikes of mixed sizes, three or four to a spring (rust_springs.jpg).
     feature("rust_springs/stalactites", "local_modifications", ["rust_springs"],
-            spike(mix((CRIMSITE, 4), (simple("minecraft:granite"), 1)), mix((CRIMSITE, 2), (simple("minecraft:red_terracotta"), 1)), (8, 28), (2.0, 4.6), 0.4),
-            [count(8), SQUARE, layer("deep_gardens")] + ceiling(offset=0) + [BIOME])
+            spike(mix((CRIMSITE, 4), (simple("minecraft:granite"), 1)), mix((CRIMSITE, 2), (simple("minecraft:red_terracotta"), 1)), (5, 13), (1.2, 2.8), 0.4),
+            [count(28), SQUARE, layer("deep_gardens")] + ceiling(offset=0) + [BIOME])
     feature("rust_springs/pools", "local_modifications", ["rust_springs"],
             pools(mix((simple("minecraft:calcite"), 3), (LIMESTONE, 2)),
                   mix((LIMESTONE, 5), (simple("minecraft:calcite"), 3)), 11, overflow=0.12),
             [count(20), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
+    # Small lava pools flush with the floor, in about every second or third gallery (basalt_galleries.jpg).
     feature("basalt_galleries/lava_pools", "local_modifications", ["basalt_galleries"],
-            pools(mix((simple("minecraft:blackstone"), 2), (simple("minecraft:basalt", axis="y"), 3)), simple("minecraft:magma_block"), 6, lava=True),
-            [count(5), SQUARE, layer("basalt_galleries", above_water=True)] + floor() + [BIOME])
+            pools(mix((simple("minecraft:blackstone"), 2), (simple("minecraft:basalt", axis="y"), 3)), simple("minecraft:magma_block"), 4, lava=True),
+            [count(32), SQUARE, layer("basalt_galleries", above_water=True)] + floor() + [BIOME])
     feature("basalt_galleries/columns", "local_modifications", ["basalt_galleries"],
             {"type": f"{MOD}:column_cluster", "config": {
                 "block": mix((simple("minecraft:basalt", axis="y"), 4), (simple("minecraft:polished_basalt", axis="y"), 1)),
                 "radius": 6, "count": 26, "height": uniform(3, 16)}},
-            [count(4), SQUARE, layer("basalt_galleries", above_water=True)] + floor() + [BIOME])
+            [count(8), SQUARE, layer("basalt_galleries", above_water=True)] + floor() + [BIOME])
+    # Columns hanging from the vaults, longest in the middle of a cluster; the longest under the great hall's vault, the
+    # chimney and the tallest galleries, where the floor is more than 16 below.
+    feature("basalt_galleries/hanging_columns", "local_modifications", ["basalt_galleries"],
+            {"type": f"{MOD}:column_cluster", "config": {
+                "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:polished_basalt", axis="y"), 1)),
+                "radius": 4, "count": 20, "height": uniform(3, 10), "hang_chance": 1.0}},
+            [count(12), SQUARE, layer("basalt_galleries", above_water=True)] + ceiling() + [BIOME])
+    tall = {"type": "minecraft:block_predicate_filter", "predicate": dict(AIR, offset=[0, -16, 0])}
+    feature("basalt_galleries/great_hanging_columns", "local_modifications", ["basalt_galleries"],
+            {"type": f"{MOD}:column_cluster", "config": {
+                "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:polished_basalt", axis="y"), 1)),
+                "radius": 6, "count": 34, "height": uniform(8, 18), "hang_chance": 1.0}},
+            [count(6), SQUARE, layer("basalt_galleries", above_water=True)] + ceiling() + [tall, BIOME])
+    # A still pool in the tube hubs, between obsidian and pebbly basalt, its bed glinting with crying obsidian.
+    feature("obsidian_tubes/still_pool", "local_modifications", ["obsidian_tubes"],
+            pools(mix((simple("minecraft:obsidian"), 3), (simple("minecraft:basalt", axis="y"), 1)),
+                  mix((simple("minecraft:obsidian"), 5), (simple("minecraft:crying_obsidian"), 1)), 3),
+            [count(64), SQUARE, layer("basalt_galleries", above_water=True)] + floor() + [BIOME])
+    # Short basalt columns hanging only from the basalt patches of the tubes' vaults.
+    under_basalt = {"type": "minecraft:block_predicate_filter",
+                    "predicate": {"type": "minecraft:matching_blocks", "offset": [0, 1, 0], "blocks": "minecraft:basalt"}}
+    feature("obsidian_tubes/vault_columns", "local_modifications", ["obsidian_tubes"],
+            {"type": f"{MOD}:column_cluster", "config": {
+                "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:polished_basalt", axis="y"), 1)),
+                "radius": 3, "count": 18, "height": uniform(1, 5), "hang_chance": 1.0}},
+            [count(96), SQUARE, layer("basalt_galleries", above_water=True)] + ceiling() + [under_basalt, BIOME])
 
-    # ---- underground decoration: moss, wall growth, crystals, frost, machines
+    # ---- underground decoration: moss, wall growth, crystals, machines
     feature("rootvaults/moss_floor", "underground_decoration", rv, "minecraft:moss_patch",
             [count(16), SQUARE, layer(up)] + floor() + [looks(0, 1, 2), BIOME])
     feature("rootvaults/glow_lichen", "underground_decoration", rv + ["silver_fern_rift"],
@@ -280,25 +332,40 @@ def build_features():
             [count(50), SQUARE, layer(up), BIOME])
     feature("rootvaults/moss_ceiling", "underground_decoration", rv, "minecraft:moss_patch_ceiling",
             [count(16), SQUARE, layer(up)] + ceiling() + [looks(1, 2), BIOME])
+    # Shelf fungi scattered over the walls, and in stacked tiers (ember_gardens.jpg).
     feature("ember_gardens/shelf_fungi", "underground_decoration", ["ember_gardens"],
             attach(simple("explorationremix:orange_shelf_fungus"), "walls", 96, f"#{MOD}:cave_rock", radius=8, height=8),
-            [count(24), SQUARE, layer("deep_gardens", above_water=True), BIOME])
+            [count(12), SQUARE, layer("deep_gardens", above_water=True), BIOME])
+    feature("ember_gardens/shelf_stacks", "underground_decoration", ["ember_gardens"],
+            attach(simple("explorationremix:orange_shelf_fungus"), "walls", 48, f"#{MOD}:cave_rock", radius=4, height=3),
+            [count(12), SQUARE, layer("deep_gardens", above_water=True), BIOME])
     feature("rust_springs/machines", "underground_decoration", ["rust_springs"],
             {"type": f"{MOD}:broken_machine", "config": {}},
-            [count(2), SQUARE, layer("deep_gardens", above_water=True)] + floor(through=AIR_OR_WATER) + [BIOME])
+            [count(6), SQUARE, layer("deep_gardens", above_water=True)] + floor(through=AIR_OR_WATER) + [BIOME])
+    # The rift's crystals grow out of the blue asurine of its walls and ledges, not its floors (deep_blue_rift.jpg).
     feature("deep_blue_rift/crystals", "underground_decoration", ["deep_blue_rift"],
-            attach(mix((simple("explorationremix:asurine_crystal"), 1), (simple("explorationremix:asurine_bud"), 2)), "any", 48,
-                   f"#{MOD}:blue_rift_walls", radius=7, height=7),
-            [count(10), SQUARE, layer("blue_reaches", above_water=True), BIOME])
+            attach(mix((simple("explorationremix:asurine_crystal"), 1), (simple("explorationremix:asurine_bud"), 2)), "walls_ceiling", 56,
+                   f"#{MOD}:asurine_lining", radius=7, height=7),
+            [count(14), SQUARE, layer("blue_reaches", above_water=True), BIOME])
+    # The geodes' crystals jut from the lining of the walls and hang from the ceilings, some in tight clusters, and about
+    # a fifth stand on the floor ledges (asurine_geodes.jpg).
     feature("asurine_geodes/crystals", "underground_decoration", ["asurine_geodes"],
-            attach(mix((simple("explorationremix:asurine_crystal"), 2), (simple("explorationremix:asurine_bud"), 3)), "any", 128,
+            attach(mix((simple("explorationremix:asurine_crystal"), 2), (simple("explorationremix:asurine_bud"), 3)), "walls_ceiling", 160,
                    f"#{MOD}:asurine_lining", radius=8, height=8),
-            [count(12), SQUARE, layer("blue_reaches", above_water=True), BIOME])
-    feature("asurine_geodes/frost", "underground_decoration", ["asurine_geodes"],
-            attach({"type": "minecraft:weighted_state_provider", "entries": [
-                {"data": state("minecraft:snow", layers=1), "weight": 3}, {"data": state("minecraft:snow", layers=2), "weight": 1}]},
-                "floor", 24, f"#{MOD}:asurine_lining", radius=6, height=3),
-            [count(4), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+            [count(14), SQUARE, layer("blue_reaches", above_water=True), BIOME])
+    feature("asurine_geodes/crystal_clusters", "underground_decoration", ["asurine_geodes"],
+            attach(mix((simple("explorationremix:asurine_crystal"), 3), (simple("explorationremix:asurine_bud"), 2)), "walls_ceiling", 14,
+                   f"#{MOD}:asurine_lining", radius=2, height=2),
+            [count(10), SQUARE, layer("blue_reaches", above_water=True)] + ceiling(offset=0) + [BIOME])
+    feature("asurine_geodes/floor_crystals", "underground_decoration", ["asurine_geodes"],
+            attach(mix((simple("explorationremix:asurine_crystal"), 1), (simple("explorationremix:asurine_bud"), 2)), "floor", 40,
+                   f"#{MOD}:asurine_lining", radius=6, height=2),
+            [count(20), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+    # Under a shader the lining is black between the crystals; a crust of glowing facets over about a fifth of it keeps
+    # it blue. It comes after the crystals, which get first pick of the lining.
+    feature("asurine_geodes/crust", "underground_decoration", ["asurine_geodes"],
+            attach(simple(f"{MOD}:asurine_crust"), "walls_ceiling", 96, f"#{MOD}:asurine_lining", radius=7, height=7),
+            [count(120), SQUARE, layer("blue_reaches", above_water=True), BIOME])
 
     # ---- vegetation rework, part A: sheets of ivy and lichen, wall ferns and brackets, before the floor and ceiling
     # plants take their spots. Ivy covers walls and ceilings but never floors, where a climbable sheet slows walking.
@@ -314,9 +381,14 @@ def build_features():
     feature("ivory_root_cavern/brackets", "underground_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:ivory_bracket"), "walls", 64, f"#{MOD}:cave_rock", radius=7, height=8),
             [count(3), SQUARE, layer(up), BIOME])
+    # The rift's blue walls are its asurine, near black under a shader: lichen specks and a crust of facets over about
+    # one asurine face in six turn them blue in patches, and leave the dark rock bare.
     feature("deep_blue_rift/lichen", "underground_decoration", ["deep_blue_rift"],
-            attach(simple(f"{MOD}:blue_lichen"), "any", 40, f"#{MOD}:blue_rift_walls", radius=6, height=6),
-            [count(12), SQUARE, layer("blue_reaches", above_water=True), BIOME])
+            attach(simple(f"{MOD}:blue_lichen"), "walls_ceiling", 48, f"#{MOD}:asurine_lining", radius=6, height=6),
+            [count(128), SQUARE, layer("blue_reaches", above_water=True), BIOME])
+    feature("deep_blue_rift/crust", "underground_decoration", ["deep_blue_rift"],
+            attach(simple(f"{MOD}:asurine_crust"), "walls", 48, f"#{MOD}:asurine_lining", radius=6, height=6),
+            [count(40), SQUARE, layer("blue_reaches", above_water=True), BIOME])
 
     # ---- vegetation rework, part B: brown mushroom shelves up the Ember Gardens' walls and mushroom flesh in their
     # blackstone ceilings (vanilla blocks; plants grow on the shelves, vines hang from the caps), amber crystals in the
@@ -326,7 +398,7 @@ def build_features():
             {"type": f"{MOD}:mushroom_shelf", "config": {"block": simple("minecraft:brown_mushroom_block", down=False),
                                                        "tiers": uniform(2, 4), "spacing": uniform(2, 3), "depth": uniform(2, 4),
                                                        "half_width": uniform(1, 3)}},
-            [count(10), SQUARE, layer("deep_gardens", above_water=True), BIOME])
+            [count(20), SQUARE, layer("deep_gardens", above_water=True), BIOME])
     feature("ember_gardens/mushroom_caps", "underground_decoration", ["ember_gardens"],
             {"type": "minecraft:netherrack_replace_blobs", "config": {"target": state("minecraft:blackstone"),
                                                           "state": state("minecraft:brown_mushroom_block"), "radius": uniform(2, 3)}},
@@ -353,9 +425,11 @@ def build_features():
             [count(8), SQUARE, layer("blue_reaches", above_water=True), BIOME])
     feature("asurine_geodes/meltwater", "fluid_springs", ["asurine_geodes"], fall("minecraft:water", 0, (1, 1), search=12),
             [count(1), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+    # Lava falls lighting the galleries (basalt_galleries.jpg), each from 3 to 6 blocks under a vault; every one ends in
+    # lava, in a pool or in its own sump, so none runs onto a walk.
     feature("basalt_galleries/lava_falls", "fluid_springs", ["basalt_galleries"],
-            fall("minecraft:lava", 10, (1, 2), rock=f"#{MOD}:basalt_rock"),
-            [count(20), SQUARE, layer("basalt_galleries", above_water=True), BIOME])
+            fall("minecraft:lava", 6, (1, 2), rock=f"#{MOD}:basalt_rock"),
+            [count(80), SQUARE, layer("basalt_galleries", above_water=True)] + ceiling(offset=uniform(-6, -3)) + [BIOME])
 
     # ---- vegetal decoration: roots, vines and plants
     feature("rootvaults/hanging_roots", "vegetal_decoration", rv,
@@ -407,31 +481,32 @@ def build_features():
             patch(simple("minecraft:moss_carpet"), state("minecraft:moss_carpet"), tries=24, xz=4, y=2),
             [count(10), SQUARE, layer(up)] + floor() + [BIOME])
     feature("lantern_lake/wisteria", "vegetal_decoration", ["lantern_lake"],
-            hanging_patch(hanging_column("explorationremix:wisteria_plant", "explorationremix:wisteria", 1, 6), tries=8, xz=4, y=2),
-            [count(10), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
+            hanging_patch(hanging_column("explorationremix:wisteria_plant", LILAC_TIPS, 1, 6), tries=10, xz=5, y=2),
+            [count(64), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
     feature("lantern_lake/wisteria_pods", "vegetal_decoration", ["lantern_lake"],
             hanging_column("explorationremix:wisteria_plant", "explorationremix:lantern_pod", 1, 4),
             [count(20), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
     feature("lantern_lake/lantern_pods", "vegetal_decoration", ["lantern_lake"],
             patch(simple("explorationremix:lantern_pod"), state("explorationremix:lantern_pod"), tries=20, xz=5, y=6),
-            [count(30), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
+            [count(10), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
     feature("lantern_lake/flowers", "vegetal_decoration", ["lantern_lake"],
             patch(mix((simple("explorationremix:lavender_flower"), 3), (simple("explorationremix:gold_flower"), 2)),
-                  state("explorationremix:lavender_flower"), tries=40, xz=6, y=3, on=f"#{MOD}:garden_soil"),
-            [count(16), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
+                  state("explorationremix:lavender_flower"), tries=56, xz=6, y=3, on=f"#{MOD}:garden_soil"),
+            [count(48), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
     feature("ember_gardens/ember_vines", "vegetal_decoration", ["ember_gardens"],
-            hanging_patch(hanging_column("explorationremix:ember_vines_plant", "explorationremix:ember_vines", 1, 10), tries=8, xz=4, y=2),
-            [count(16), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
+            hanging_patch(hanging_column("explorationremix:ember_vines_plant", "explorationremix:ember_vines", 1, 10), tries=10, xz=5, y=2),
+            [count(56), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
     feature("ember_gardens/coral", "vegetal_decoration", ["ember_gardens"],
             patch(mix((simple("explorationremix:lavender_coral"), 2), (simple(f"{MOD}:pale_coral"), 2), (simple("explorationremix:pale_coral_fan"), 2)),
-                  state("explorationremix:lavender_coral"), tries=24, xz=5, y=2, on=f"#{MOD}:garden_soil"),
-            [count(22), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
+                  state("explorationremix:lavender_coral"), tries=32, xz=5, y=2, on=f"#{MOD}:garden_soil"),
+            [count(56), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
+    # The rift's strands hang in groups, with dark gaps between them (deep_blue_rift.jpg).
     feature("deep_blue_rift/glow_vines", "vegetal_decoration", ["deep_blue_rift"],
-            hanging_column("explorationremix:blue_glow_vines_plant", "explorationremix:blue_glow_vines", 1, 14),
-            [count(56), SQUARE, layer("blue_reaches")] + ceiling() + [BIOME])
+            hanging_patch(hanging_column("explorationremix:blue_glow_vines_plant", "explorationremix:blue_glow_vines", 2, 10), tries=6, xz=3, y=2),
+            [count(32), SQUARE, layer("blue_reaches")] + ceiling() + [BIOME])
     feature("deep_blue_rift/mushrooms", "vegetal_decoration", ["deep_blue_rift"],
-            patch(simple("explorationremix:blue_glow_mushroom"), state("explorationremix:blue_glow_mushroom"), tries=16, xz=4, y=2),
-            [count(20), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+            patch(simple("explorationremix:blue_glow_mushroom"), state("explorationremix:blue_glow_mushroom"), tries=10, xz=3, y=2),
+            [count(40), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
 
     # ---- vegetation rework, part A: vines in clusters, floor plants. The new vines hang in patches (hanging_patch), so
     # their light comes in pockets with dim gaps between them.
@@ -467,11 +542,20 @@ def build_features():
             patch(simple(f"{MOD}:sage_bush"), state(f"{MOD}:sage_bush"), tries=16, xz=5, y=2),
             [count(14), SQUARE, layer(up)] + floor() + [BIOME])
     feature("deep_blue_rift/glowbells", "vegetal_decoration", ["deep_blue_rift"],
-            patch(simple(f"{MOD}:glowbell"), state(f"{MOD}:glowbell"), tries=16, xz=4, y=2),
-            [count(10), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+            patch(simple(f"{MOD}:glowbell"), state(f"{MOD}:glowbell"), tries=12, xz=3, y=2),
+            [count(18), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
     feature("deep_blue_rift/pagodas", "vegetal_decoration", ["deep_blue_rift"],
-            patch(simple(f"{MOD}:pagoda_fungus"), state(f"{MOD}:pagoda_fungus"), tries=6, xz=4, y=2),
-            [count(3), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+            patch(simple(f"{MOD}:pagoda_fungus"), state(f"{MOD}:pagoda_fungus"), tries=8, xz=4, y=2),
+            [count(20), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+    # The stream at the bottom of the rift glows blue from its bed (deep_blue_rift.jpg); under a shader water is dark
+    # unless something glows in it. Each try starts just above the layer's water table, looks down through the water
+    # for the bed, and keeps only spots in the water.
+    feature("deep_blue_rift/stream_glow", "vegetal_decoration", ["deep_blue_rift"],
+            attach(mix((simple(f"{MOD}:blue_lichen"), 4), (simple(f"{MOD}:asurine_bud"), 3), (simple(f"{MOD}:asurine_crystal"), 1)),
+                   "floor", 40, f"#{MOD}:blue_rift_walls", radius=5, height=2, in_water=True),
+            [count(16), SQUARE,
+             {"type": "minecraft:height_range", "height": {"type": f"{MOD}:layer_height", "layer": "blue_reaches", "above_fluid": 0, "fallback": -258}}]
+            + floor(steps=8, through=AIR_OR_WATER) + [IN_WATER, BIOME])
 
     # ---- vegetation rework, part B: the Deep Gardens grow no green, and their floor plants grow only from limestone,
     # calcite and sand (garden_soil) and the mushroom shelves; under the lake they grow from its bed (lake_bed). The
@@ -482,43 +566,50 @@ def build_features():
     lake_bed = [layer("deep_gardens")] + floor(through=AIR_OR_WATER) + [BIOME]
     soil = f"#{MOD}:garden_soil"
     feature("lantern_lake/pale_wisteria", "vegetal_decoration", ["lantern_lake"],
-            hanging_patch(hanging_column(f"{MOD}:pale_wisteria_plant", f"{MOD}:pale_wisteria", 1, 6), tries=8, xz=4, y=2),
-            [count(8), SQUARE] + gardens_ceiling)
+            hanging_patch(hanging_column(f"{MOD}:pale_wisteria_plant", CREAM_TIPS, 1, 6), tries=10, xz=5, y=2),
+            [count(48), SQUARE] + gardens_ceiling)
     feature("lantern_lake/plumes", "vegetal_decoration", ["lantern_lake"],
-            patch(simple(f"{MOD}:lilac_plume"), state(f"{MOD}:lilac_plume"), tries=8, xz=4, y=2, on=soil),
-            [count(3), SQUARE] + gardens_floor)
+            patch(simple(f"{MOD}:lilac_plume"), state(f"{MOD}:lilac_plume"), tries=12, xz=4, y=2, on=soil),
+            [count(12), SQUARE] + gardens_floor)
     feature("lantern_lake/coral", "vegetal_decoration", ["lantern_lake"],
-            patch(mix((simple(f"{MOD}:pale_coral"), 2), (simple(f"{MOD}:lavender_coral"), 2)), state(f"{MOD}:pale_coral"), tries=16, xz=4, y=2,
+            patch(mix((simple(f"{MOD}:pale_coral"), 2), (simple(f"{MOD}:lavender_coral"), 2)), state(f"{MOD}:pale_coral"), tries=20, xz=4, y=2,
                   on=soil),
-            [count(8), SQUARE] + gardens_floor)
+            [count(32), SQUARE] + gardens_floor)
     feature("lantern_lake/petals", "vegetal_decoration", ["lantern_lake"],
-            patch(simple(f"{MOD}:wisteria_petals"), state(f"{MOD}:wisteria_petals"), tries=24, xz=5, y=2, on=soil),
-            [count(8), SQUARE] + gardens_floor)
+            patch(simple(f"{MOD}:wisteria_petals"), state(f"{MOD}:wisteria_petals"), tries=32, xz=5, y=2, on=soil),
+            [count(32), SQUARE] + gardens_floor)
     feature("lantern_lake/waterweed", "vegetal_decoration", ["lantern_lake"],
-            attach(simple(f"{MOD}:lilac_waterweed"), "floor", 48, f"#{MOD}:lake_bed", radius=7, height=2, in_water=True),
-            [count(16), SQUARE] + lake_bed)
+            attach(simple(f"{MOD}:lilac_waterweed"), "floor", 96, f"#{MOD}:lake_bed", radius=7, height=2, in_water=True),
+            [count(40), SQUARE] + lake_bed)
     feature("lantern_lake/lantern_weed", "vegetal_decoration", ["lantern_lake"],
             attach(simple(f"{MOD}:lantern_weed"), "floor", 10, f"#{MOD}:lake_bed", radius=6, height=2, in_water=True),
             [count(6), SQUARE] + lake_bed)
+    # Pool pearls light the shallows round the islands and shores turquoise from the bed; the open water over the dark
+    # bed stays dark (lantern_lake.jpg).
+    feature("lantern_lake/pool_pearls", "vegetal_decoration", ["lantern_lake"],
+            attach(simple(f"{MOD}:pool_pearls"), "floor", 96, soil, radius=6, height=2, in_water=True),
+            [count(48), SQUARE, layer("deep_gardens")] + floor(through=AIR_OR_WATER) + [SHALLOW, BIOME])
     feature("ember_gardens/rose_tendrils", "vegetal_decoration", ["ember_gardens"],
-            hanging_patch(hanging_column(f"{MOD}:rose_tendrils_plant", f"{MOD}:rose_tendrils", 2, 10), tries=8, xz=4, y=2),
-            [count(12), SQUARE] + gardens_ceiling)
+            hanging_patch(hanging_column(f"{MOD}:rose_tendrils_plant", f"{MOD}:rose_tendrils", 2, 10), tries=10, xz=5, y=2),
+            [count(40), SQUARE] + gardens_ceiling)
     feature("ember_gardens/plumes", "vegetal_decoration", ["ember_gardens"],
-            patch(simple(f"{MOD}:lilac_plume"), state(f"{MOD}:lilac_plume"), tries=12, xz=5, y=3, on=soil),
-            [count(10), SQUARE] + gardens_floor)
+            patch(simple(f"{MOD}:lilac_plume"), state(f"{MOD}:lilac_plume"), tries=16, xz=5, y=3, on=soil),
+            [count(32), SQUARE] + gardens_floor)
     feature("ember_gardens/ochre_grass", "vegetal_decoration", ["ember_gardens"],
-            patch(simple(f"{MOD}:ochre_grass"), state(f"{MOD}:ochre_grass"), tries=32, xz=6, y=3, on=soil),
-            [count(24), SQUARE] + gardens_floor)
+            patch(simple(f"{MOD}:ochre_grass"), state(f"{MOD}:ochre_grass"), tries=40, xz=6, y=3, on=soil),
+            [count(64), SQUARE] + gardens_floor)
     feature("ember_gardens/brown_mushrooms", "vegetal_decoration", ["ember_gardens"],
             patch(simple("minecraft:brown_mushroom"), state("minecraft:brown_mushroom"), tries=16, xz=5, y=2, on=soil),
-            [count(6), SQUARE] + gardens_floor)
+            [count(12), SQUARE] + gardens_floor)
     basalt_floor = [layer("basalt_galleries", above_water=True)] + floor() + [BIOME]
     feature("basalt_galleries/cinder_blooms", "vegetal_decoration", ["basalt_galleries"],
             patch(simple(f"{MOD}:cinder_bloom"), state(f"{MOD}:cinder_bloom"), tries=12, xz=5, y=2, on=f"#{MOD}:basalt_rock"),
-            [count(5), SQUARE] + basalt_floor)
+            [count(24), SQUARE] + basalt_floor)
+    # One ash-fern spot in four takes a cinder bloom (both need only a sturdy face below).
     feature("basalt_galleries/ash_ferns", "vegetal_decoration", ["basalt_galleries"],
-            patch(simple(f"{MOD}:ash_fern"), state(f"{MOD}:ash_fern"), tries=16, xz=6, y=3, on=f"#{MOD}:basalt_rock"),
-            [count(4), SQUARE] + basalt_floor)
+            patch(mix((simple(f"{MOD}:ash_fern"), 3), (simple(f"{MOD}:cinder_bloom"), 1)), state(f"{MOD}:ash_fern"), tries=16, xz=6, y=3,
+                  on=f"#{MOD}:basalt_rock"),
+            [count(28), SQUARE] + basalt_floor)
 
     # ---- top layer: roots of the trees above, once the chunk's trees have grown; the way down is kept open after
     # everything else. The roots take the wood of the trees over them (match_trees): oak, birch, spruce, jungle, dark
@@ -578,15 +669,19 @@ BLOCK_TAGS = {
     "cave_rock": ["#minecraft:base_stone_overworld", "minecraft:cobbled_deepslate", "minecraft:calcite", "minecraft:dripstone_block",
                   "minecraft:smooth_basalt", "minecraft:basalt", "minecraft:polished_basalt", "minecraft:blackstone", "minecraft:gilded_blackstone",
                   "minecraft:obsidian", "minecraft:crying_obsidian", "minecraft:magma_block", "minecraft:moss_block", "minecraft:rooted_dirt",
-                  "minecraft:dirt", "minecraft:clay", "#minecraft:coal_ores", "#minecraft:iron_ores", "#minecraft:copper_ores", "#minecraft:gold_ores",
-                  "#minecraft:redstone_ores", "#minecraft:lapis_ores", "#minecraft:diamond_ores", "#minecraft:emerald_ores"]
+                  "minecraft:dirt", "minecraft:clay", "minecraft:brown_mushroom_block", "#minecraft:coal_ores", "#minecraft:iron_ores",
+                  "#minecraft:copper_ores", "#minecraft:gold_ores", "#minecraft:redstone_ores", "#minecraft:lapis_ores", "#minecraft:diamond_ores",
+                  "#minecraft:emerald_ores"]
                  + STAND_INS + optional(CREATE_STONES),
     "asurine_lining": ["minecraft:deepslate_tiles"] + optional(["create:asurine"]),
-    "blue_rift_walls": ["minecraft:deepslate", "minecraft:tuff", "minecraft:calcite", "minecraft:deepslate_tiles"] + optional(["create:asurine"]),
+    "blue_rift_walls": ["minecraft:deepslate", "minecraft:cobbled_deepslate", "minecraft:gravel", "minecraft:tuff", "minecraft:calcite",
+                        "minecraft:deepslate_tiles"] + optional(["create:asurine"]),
     # vegetation rework, part B: the Deep Gardens' plants grow from limestone, calcite and sand (no grass or moss) and
     # from the brown mushroom shelves; under Lantern Lake's water they grow from its bed.
     "garden_soil": ["minecraft:calcite", "minecraft:sand", "minecraft:brown_mushroom_block"] + optional(["create:limestone"]),
     "lake_bed": ["minecraft:sand", "minecraft:gravel", "minecraft:clay", "minecraft:calcite"] + optional(["create:limestone"]),
+    # The Deep Gardens' pale ceilings, which grow cream stalactites.
+    "pale_rock": ["minecraft:calcite"] + optional(["create:limestone"]),
     "basalt_rock": ["minecraft:basalt", "minecraft:polished_basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:gilded_blackstone",
                     "minecraft:magma_block", "minecraft:deepslate_gold_ore", "minecraft:brown_terracotta", "minecraft:polished_blackstone"]
                    + optional(["create:scoria", "create:scorchia"]),

@@ -2,6 +2,8 @@
   "replace": false,
   "values": [
     "minecraft:deepslate",
+    "minecraft:cobbled_deepslate",
+    "minecraft:gravel",
     "minecraft:tuff",
     "minecraft:calcite",
     "minecraft:deepslate_tiles",

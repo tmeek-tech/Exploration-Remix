@@ -1,0 +1,44 @@
+{
+  "type": "explorationremix:column_cluster",
+  "config": {
+    "block": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:basalt",
+              "Properties": {
+                "axis": "y"
+              }
+            }
+          },
+          "weight": 3
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:polished_basalt",
+              "Properties": {
+                "axis": "y"
+              }
+            }
+          },
+          "weight": 1
+        }
+      ]
+    },
+    "radius": 6,
+    "count": 34,
+    "height": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 8,
+        "max_inclusive": 18
+      }
+    },
+    "hang_chance": 1.0
+  }
+}

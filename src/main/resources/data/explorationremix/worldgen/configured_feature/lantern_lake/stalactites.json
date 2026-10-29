@@ -1,0 +1,50 @@
+{
+  "type": "explorationremix:giant_spike",
+  "config": {
+    "body": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "explorationremix:fallback",
+            "blocks": [
+              "create:limestone",
+              "minecraft:calcite"
+            ]
+          },
+          "weight": 3
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:calcite"
+            }
+          },
+          "weight": 1
+        }
+      ]
+    },
+    "tip": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "minecraft:calcite"
+      }
+    },
+    "length": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 3,
+        "max_inclusive": 9
+      }
+    },
+    "radius": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 1.0,
+        "max_exclusive": 1.8
+      }
+    },
+    "floor_chance": 0.15
+  }
+}

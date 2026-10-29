@@ -19,13 +19,16 @@ import java.util.ArrayDeque;
 import java.util.Optional;
 
 /**
- * Terrace pools: the flat floor around the origin becomes a shallow pool of real water (or lava), held in by a raised
- * rim along its edge. On a terraced floor every step gets its own pool, so they read as a staircase of pools. Plants
- * for the pool edges ({@code edge}) grow in the water along the rim.
+ * Terrace pools: the flat floor around the origin becomes a shallow pool of real water (or lava), held in by a rim
+ * along its edge, raised one block round water and flush with the floor round lava, so that anyone who walks into a
+ * lava pool can step out. On a terraced floor every step gets its own pool, so they read as a staircase of pools.
+ * Plants for the pool edges ({@code edge}) grow in the water along the rim. Plants for the bed ({@code inner}) grow on
+ * a share ({@code inner_chance}) of the other water cells.
  */
 public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Config> {
     public record Config(BlockStateProvider rim, BlockStateProvider bed, int radius, Optional<BlockStateProvider> edge,
-                         float edgeChance, float overflowChance, boolean lava) implements FeatureConfiguration {
+                         float edgeChance, float overflowChance, boolean lava, Optional<BlockStateProvider> inner,
+                         float innerChance) implements FeatureConfiguration {
         public static final Codec<Config> CODEC = RecordCodecBuilder.create(i -> i.group(
                 BlockStateProvider.CODEC.fieldOf("rim").forGetter(Config::rim),
                 BlockStateProvider.CODEC.fieldOf("bed").forGetter(Config::bed),
@@ -33,7 +36,9 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
                 BlockStateProvider.CODEC.optionalFieldOf("edge").forGetter(Config::edge),
                 Codec.floatRange(0, 1).optionalFieldOf("edge_chance", 0.3F).forGetter(Config::edgeChance),
                 Codec.floatRange(0, 1).optionalFieldOf("overflow_chance", 0F).forGetter(Config::overflowChance),
-                Codec.BOOL.optionalFieldOf("lava", false).forGetter(Config::lava)
+                Codec.BOOL.optionalFieldOf("lava", false).forGetter(Config::lava),
+                BlockStateProvider.CODEC.optionalFieldOf("inner").forGetter(Config::inner),
+                Codec.floatRange(0, 1).optionalFieldOf("inner_chance", 0F).forGetter(Config::innerChance)
         ).apply(i, Config::new));
 
         BlockState fluid() { return lava ? Blocks.LAVA.defaultBlockState() : Blocks.WATER.defaultBlockState(); }
@@ -49,9 +54,14 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
         BlockPos o = ctx.origin();
         int fy = o.getY() - 1; // the floor's top block
         if (!isFloor(level, o.getX(), fy, o.getZ())) return false;
-        int r = c.radius(), size = 2 * r + 1;
-        // Pools never flood the way down or put a rim across it.
-        if (Walkway.near(o.getX(), o.getZ(), fy, fy + 1, r + 1)) return false;
+        // Pools never flood a way or put a rim across it. Beside a way a water pool shrinks until its rim keeps a
+        // block clear of the way's corridor (in the network every room has ways through it); a lava pool keeps away
+        // altogether.
+        int r = c.radius();
+        int smallest = c.lava() ? r : Math.min(r, 3);
+        while (r >= smallest && Walkway.near(o.getX(), o.getZ(), fy, fy + 1, r + 1)) r--;
+        if (r < smallest) return false;
+        int size = 2 * r + 1;
         byte[] cell = new byte[size * size]; // 0 unknown/outside, 1 flat floor in the region
         ArrayDeque<int[]> queue = new ArrayDeque<>();
         queue.add(new int[]{0, 0});
@@ -99,8 +109,11 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
             } else {
                 pos.set(x, fy, z);
                 level.setBlock(pos, c.rim().getState(random, pos), 2);
+                // A lava pool lies flush with the floor, as the lava basin's last tread does: over a raised rim,
+                // anyone who fell in would stand two blocks under its top with no way out. Water pools keep the
+                // raised rim.
                 pos.set(x, fy + 1, z);
-                if (level.getBlockState(pos).isAir()) level.setBlock(pos, c.rim().getState(random, pos), 2);
+                if (!c.lava() && level.getBlockState(pos).isAir()) level.setBlock(pos, c.rim().getState(random, pos), 2);
             }
         }
         // Where the rim stands over a drop, the pool may spill over it, down to the next step.
@@ -139,6 +152,18 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
                 if (!byRim) continue;
                 pos.set(o.getX() + dx, fy, o.getZ() + dz);
                 BlockState p = c.edge().get().getState(random, pos);
+                if (p.hasProperty(BlockStateProperties.WATERLOGGED)) p = p.setValue(BlockStateProperties.WATERLOGGED, true);
+                if (p.canSurvive(level, pos)) level.setBlock(pos, p, 2);
+            }
+        }
+        // Plants on the bed inside the pool, where no edge plant stands (pool pearls glowing through the water).
+        if (c.inner().isPresent() && !c.lava()) {
+            for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
+                int idx = (dz + r) * size + dx + r;
+                if (!water[idx] || random.nextFloat() >= c.innerChance()) continue;
+                pos.set(o.getX() + dx, fy, o.getZ() + dz);
+                if (!level.getBlockState(pos).is(Blocks.WATER)) continue;
+                BlockState p = c.inner().get().getState(random, pos);
                 if (p.hasProperty(BlockStateProperties.WATERLOGGED)) p = p.setValue(BlockStateProperties.WATERLOGGED, true);
                 if (p.canSurvive(level, pos)) level.setBlock(pos, p, 2);
             }

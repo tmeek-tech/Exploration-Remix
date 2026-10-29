@@ -8,7 +8,7 @@
       }
     },
     "faces": "floor",
-    "tries": 48,
+    "tries": 96,
     "radius": 7,
     "height": 2,
     "on": "#explorationremix:lake_bed",

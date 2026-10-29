@@ -50,7 +50,7 @@
       ]
     },
     "radius": 10,
-    "edge_chance": 0.45,
+    "edge_chance": 0.55,
     "overflow_chance": 0.08,
     "edge": {
       "type": "explorationremix:mix",
@@ -89,9 +89,16 @@
               "Name": "explorationremix:ember_anemone"
             }
           },
-          "weight": 3
+          "weight": 5
         }
       ]
-    }
+    },
+    "inner": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:pool_pearls"
+      }
+    },
+    "inner_chance": 0.4
   }
 }

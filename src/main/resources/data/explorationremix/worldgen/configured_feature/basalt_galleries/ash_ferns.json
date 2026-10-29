@@ -9,10 +9,27 @@
         "type": "minecraft:simple_block",
         "config": {
           "to_place": {
-            "type": "minecraft:simple_state_provider",
-            "state": {
-              "Name": "explorationremix:ash_fern"
-            }
+            "type": "explorationremix:mix",
+            "entries": [
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "explorationremix:ash_fern"
+                  }
+                },
+                "weight": 3
+              },
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "explorationremix:cinder_bloom"
+                  }
+                },
+                "weight": 1
+              }
+            ]
           }
         }
       },

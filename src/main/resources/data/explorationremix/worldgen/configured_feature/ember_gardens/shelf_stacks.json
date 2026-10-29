@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:orange_shelf_fungus"
+      }
+    },
+    "faces": "walls",
+    "tries": 48,
+    "radius": 4,
+    "height": 3,
+    "on": "#explorationremix:cave_rock",
+    "in_water": false
+  }
+}

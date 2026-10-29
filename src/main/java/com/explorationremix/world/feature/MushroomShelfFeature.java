@@ -64,7 +64,7 @@ public final class MushroomShelfFeature extends Feature<MushroomShelfFeature.Con
         Direction out = toWall.getOpposite(), along = toWall.getClockWise();
         BlockPos base = origin.relative(toWall, dist - 1);
         int tiers = c.tiers().sample(random);
-        if (Walkway.near(base.getX(), base.getZ(), base.getY() - 1, base.getY() + tiers * 7, 8)) return false;
+        if (Walkway.near(base.getX(), base.getZ(), base.getY() - 1, base.getY() + tiers * 7, 6)) return false;
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         int y = base.getY(), shift = 0, placed = 0;
         for (int t = 0; t < tiers; t++) {
@@ -80,6 +80,8 @@ public final class MushroomShelfFeature extends Feature<MushroomShelfFeature.Con
                 if (reach <= 0 || !open(level, p, out, reach + CLEAR)) continue;
                 for (int o = 0; o < reach; o++) {
                     BlockPos q = p.relative(out, o);
+                    // Never into a way's corridor, nor within a block of it.
+                    if (Walkway.near(q.getX(), q.getZ(), q.getY(), q.getY(), 1)) break;
                     level.setBlock(q, c.block().getState(random, q), 2);
                     placed++;
                 }

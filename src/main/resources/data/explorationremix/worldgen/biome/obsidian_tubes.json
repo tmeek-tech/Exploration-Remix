@@ -98,7 +98,10 @@
   "features": [
     [],
     [],
-    [],
+    [
+      "explorationremix:obsidian_tubes/still_pool",
+      "explorationremix:obsidian_tubes/vault_columns"
+    ],
     [],
     [],
     [],

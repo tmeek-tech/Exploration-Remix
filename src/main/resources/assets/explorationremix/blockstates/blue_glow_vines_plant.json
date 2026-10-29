@@ -1,7 +1,12 @@
 {
   "variants": {
-    "": {
-      "model": "explorationremix:block/blue_glow_vines_plant"
-    }
+    "": [
+      {
+        "model": "explorationremix:block/blue_glow_vines_plant"
+      },
+      {
+        "model": "explorationremix:block/blue_glow_vines_plant_2"
+      }
+    ]
   }
 }

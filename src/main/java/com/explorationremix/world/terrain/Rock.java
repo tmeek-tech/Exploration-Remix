@@ -41,7 +41,8 @@ public enum Rock {
     DEEPSLATE_REDSTONE_ORE(0x6e4848),
     IRON_ORE(0x88807a),
     OBSIDIAN(0x15111f),
-    CRYING_OBSIDIAN(0x2c0d52);
+    CRYING_OBSIDIAN(0x2c0d52),
+    MUSHROOM(0x957051);
 
     public final int color;
 

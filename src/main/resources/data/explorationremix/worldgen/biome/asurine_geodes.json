@@ -112,7 +112,9 @@
     [],
     [
       "explorationremix:asurine_geodes/crystals",
-      "explorationremix:asurine_geodes/frost"
+      "explorationremix:asurine_geodes/crystal_clusters",
+      "explorationremix:asurine_geodes/floor_crystals",
+      "explorationremix:asurine_geodes/crust"
     ],
     [
       "explorationremix:asurine_geodes/meltwater"

@@ -87,32 +87,42 @@ public final class Palette {
         int W = s.waterY(li);
         switch (b) {
             case LANTERN_LAKE: {
-                // A still lake with islands: pale limestone shores and ceilings over blackstone veined with gold.
+                // A still lake with islands: pale shores, ceilings and shallows, a dark bed under the open water, and
+                // walls of cobbled deepslate and blackstone veined with gold.
+                boolean slate = n < -0.05;   // cobbled deepslate in place of about half the blackstone
+                Rock dark = slate ? Rock.COBBLED_DEEPSLATE : Rock.BLACKSTONE;
                 if (floor) {
-                    if (wet) return n > 0.2 ? Rock.SAND : (n < -0.25 ? Rock.GRAVEL : Rock.BLACKSTONE);
-                    if (top) return n > -0.12 ? Rock.LIMESTONE : Rock.BLACKSTONE;
-                    return n > 0.1 ? Rock.LIMESTONE : Rock.BLACKSTONE;
+                    if (wet) {
+                        // under 4 or more blocks of water
+                        if (y < W - 4) return n > 0.1 ? Rock.GRAVEL : Rock.COBBLED_DEEPSLATE;
+                        return n > 0.15 ? Rock.SAND : (n < -0.25 ? Rock.CALCITE : Rock.LIMESTONE);
+                    }
+                    if (top) return n > 0.28 ? Rock.CALCITE : (n < -0.4 ? Rock.COBBLED_DEEPSLATE : Rock.LIMESTONE);
+                    return n > 0.1 ? Rock.LIMESTONE : dark;
                 }
                 if (ceil) {
                     boolean lime = n > -0.1;
-                    if (vein(x, y, z, 0.03)) return lime ? Rock.GOLD_ORE : Rock.GILDED_BLACKSTONE;
-                    return lime ? Rock.LIMESTONE : Rock.BLACKSTONE;
+                    if (vein(x, y, z, 0.03)) return lime ? Rock.GOLD_ORE : Rock.DEEPSLATE_GOLD_ORE;
+                    return lime ? Rock.LIMESTONE : Rock.COBBLED_DEEPSLATE;
                 }
-                if (vein(x, y, z, 0.026)) return Rock.GILDED_BLACKSTONE;
+                if (vein(x, y, z, 0.026)) return slate ? Rock.DEEPSLATE_GOLD_ORE : Rock.GILDED_BLACKSTONE;
                 if (seam(x, y, z)) return Rock.LIMESTONE;
-                return n > 0.3 ? Rock.LIMESTONE : Rock.BLACKSTONE;
+                return n > 0.3 ? Rock.LIMESTONE : dark;
             }
             case EMBER_GARDENS: {
-                // Blackstone and deepslate caverns with pale limestone terraces, gold and redstone in the rock.
+                // Blackstone and deepslate caverns with pale limestone terraces, brown mushroom masses over about a third
+                // of the walls, ceilings and terrace risers, gold and redstone in the rock.
+                boolean flesh = n < -0.15;   // brown mushroom masses, about 30 %
                 if (floor) {
                     if (wet) return n > 0.15 ? Rock.CALCITE : Rock.LIMESTONE;
-                    if (top) return n > 0.28 ? Rock.CALCITE : (n < -0.3 ? Rock.BLACKSTONE : Rock.LIMESTONE);
-                    return above <= 2 ? Rock.LIMESTONE : Rock.BLACKSTONE;
+                    if (top) return n < -0.3 ? Rock.MUSHROOM : (n > 0.28 ? Rock.CALCITE : Rock.LIMESTONE);
+                    return above <= 2 ? (flesh ? Rock.MUSHROOM : Rock.LIMESTONE) : Rock.BLACKSTONE;
                 }
+                if (flesh) return Rock.MUSHROOM;
                 if (speck(x, y, z) < 0.006) return Rock.GILDED_BLACKSTONE;
                 if (vein(x, y, z, 0.02)) return speck(x, y, z) < 0.6 ? Rock.DEEPSLATE_GOLD_ORE : Rock.DEEPSLATE_REDSTONE_ORE;
                 if (ceil && n > 0.2) return Rock.LIMESTONE;
-                return n < -0.28 ? Rock.DEEPSLATE : Rock.BLACKSTONE;
+                return n > 0.4 ? Rock.DEEPSLATE : Rock.BLACKSTONE;
             }
             case RUST_SPRINGS: {
                 // Crimsite caverns over a pale mineral crust, with grey stone and granite in the walls.
@@ -126,31 +136,46 @@ public final class Palette {
                 return Rock.CRIMSITE;
             }
             case ASURINE_GEODES: {
-                // Dark rock outside, a band of white calcite, then the asurine lining.
+                // Dark rock outside, a band of white calcite, then the asurine lining. The floors are a patchwork of
+                // asurine, cream calcite and cobbled deepslate (asurine_geodes.jpg).
                 double g = t.geodeShellDepth(x, y, z);
-                if (g < 1.7) return Rock.ASURINE;
+                if (g < 1.7) {
+                    if (top && !wet) {
+                        if (n > 0.28) return Rock.CALCITE;
+                        if (n < -0.05) return Rock.COBBLED_DEEPSLATE;
+                    }
+                    return Rock.ASURINE;
+                }
                 if (g < 3.1) return Rock.CALCITE;
                 if (g < 4.5) return Rock.SMOOTH_BASALT;
-                return n > 0.3 ? Rock.TUFF : Rock.DEEPSLATE;
+                return n > 0.2 ? Rock.COBBLED_DEEPSLATE : Rock.DEEPSLATE;
             }
             case DEEP_BLUE_RIFT: {
+                // deep_blue_rift.jpg: dark deepslate and cobbled deepslate with broad sheets of blue asurine;
+                // gravel in the stream.
                 if (floor) {
                     if (wet) return n > 0.1 ? Rock.GRAVEL : Rock.DEEPSLATE;
-                    return n > 0.3 ? Rock.TUFF : (n < -0.32 ? Rock.ASURINE : Rock.DEEPSLATE);
+                    if (n < -0.1) return Rock.ASURINE;
+                    return n > 0.1 ? Rock.COBBLED_DEEPSLATE : Rock.DEEPSLATE;
                 }
                 if (speck(x, y, z) < 0.0018) return Rock.DEEPSLATE_DIAMOND_ORE;
-                if (seam(x, y, z)) return Rock.CALCITE;
-                if (n < -0.2) return Rock.ASURINE;
-                return n > 0.32 ? Rock.TUFF : Rock.DEEPSLATE;
+                if (n < -0.05) return Rock.ASURINE;
+                return n > 0.2 ? Rock.COBBLED_DEEPSLATE : Rock.DEEPSLATE;
             }
             case DEEP_DARK: {
                 if (floor && !wet && n < -0.36) return Rock.COBBLED_DEEPSLATE;
                 return n > 0.36 ? Rock.TUFF : Rock.DEEPSLATE;
             }
             case OBSIDIAN_TUBES: {
-                // Smooth tubes lined with glassy obsidian, crying obsidian through it for light.
+                // Tubes lined with obsidian, crying obsidian only as glints in the walls and vault, patches of pale basalt
+                // (about 17 blocks across, so a hub shows both), and obsidian with pebbly basalt tops underfoot.
                 double g = t.tubeShellDepth(x, y, z);
-                if (g < 1.8) return speck(x, y, z) < 0.1 ? Rock.CRYING_OBSIDIAN : Rock.OBSIDIAN;
+                if (g < 1.8) {
+                    double m = wobN.noise3(x * 0.06, y * 0.085, z * 0.06);
+                    if (floor) return m > 0.1 ? Rock.BASALT : Rock.OBSIDIAN;
+                    if (m > (ceil ? 0.0 : 0.2)) return Rock.BASALT;
+                    return speck(x, y, z) < 0.05 ? Rock.CRYING_OBSIDIAN : Rock.OBSIDIAN;
+                }
                 if (g < 3.2) return Rock.BLACKSTONE;
                 return n > 0.2 ? Rock.SMOOTH_BASALT : Rock.BASALT;
             }

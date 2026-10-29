@@ -1,0 +1,34 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:asurine_crystal"
+            }
+          },
+          "weight": 1
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:asurine_bud"
+            }
+          },
+          "weight": 2
+        }
+      ]
+    },
+    "faces": "floor",
+    "tries": 40,
+    "radius": 6,
+    "height": 2,
+    "on": "#explorationremix:asurine_lining",
+    "in_water": false
+  }
+}

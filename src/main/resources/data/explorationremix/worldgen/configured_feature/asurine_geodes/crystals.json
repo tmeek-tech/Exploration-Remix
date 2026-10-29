@@ -24,8 +24,8 @@
         }
       ]
     },
-    "faces": "any",
-    "tries": 128,
+    "faces": "walls_ceiling",
+    "tries": 160,
     "radius": 8,
     "height": 8,
     "on": "#explorationremix:asurine_lining",

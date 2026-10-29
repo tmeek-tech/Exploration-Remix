@@ -74,6 +74,7 @@ public final class DeepMaterials {
                 case IRON_ORE -> Blocks.IRON_ORE.defaultBlockState();
                 case OBSIDIAN -> Blocks.OBSIDIAN.defaultBlockState();
                 case CRYING_OBSIDIAN -> Blocks.CRYING_OBSIDIAN.defaultBlockState();
+                case MUSHROOM -> Blocks.BROWN_MUSHROOM_BLOCK.defaultBlockState();
             };
             STATES.put(r, s);
             BY_ORDINAL[r.ordinal()] = s;

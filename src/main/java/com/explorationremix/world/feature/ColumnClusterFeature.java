@@ -14,15 +14,18 @@ import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvi
 
 /**
  * A cluster of basalt columns around the origin: stepped stacks rising from the floor, some reaching the ceiling, and
- * a few hanging from it, like the column walls of the Basalt Galleries.
+ * some hanging from it (a quarter by default; hang_chance 1 hangs every column from the ceiling), like the column
+ * walls of the Basalt Galleries.
  */
 public final class ColumnClusterFeature extends Feature<ColumnClusterFeature.Config> {
-    public record Config(BlockStateProvider block, int radius, int count, IntProvider height) implements FeatureConfiguration {
+    public record Config(BlockStateProvider block, int radius, int count, IntProvider height, float hangChance)
+            implements FeatureConfiguration {
         public static final Codec<Config> CODEC = RecordCodecBuilder.create(i -> i.group(
                 BlockStateProvider.CODEC.fieldOf("block").forGetter(Config::block),
                 Codec.intRange(1, 14).fieldOf("radius").forGetter(Config::radius),
                 Codec.intRange(1, 200).fieldOf("count").forGetter(Config::count),
-                IntProvider.codec(1, 64).fieldOf("height").forGetter(Config::height)
+                IntProvider.codec(1, 64).fieldOf("height").forGetter(Config::height),
+                Codec.floatRange(0, 1).optionalFieldOf("hang_chance", 0.25F).forGetter(Config::hangChance)
         ).apply(i, Config::new));
     }
 
@@ -42,7 +45,7 @@ public final class ColumnClusterFeature extends Feature<ColumnClusterFeature.Con
             // Taller towards the middle of the cluster.
             double centre = 1 - Math.sqrt(dx * dx + dz * dz) / (c.radius() + 1.0);
             int h = Math.max(1, (int) Math.round(c.height().sample(random) * (0.4 + 0.6 * centre)));
-            boolean hang = random.nextFloat() < 0.25F;
+            boolean hang = random.nextFloat() < c.hangChance();
             pos.set(o.getX() + dx, o.getY(), o.getZ() + dz);
             // Find the floor (or the ceiling for a hanging column) within a few blocks.
             int step = hang ? 1 : -1, tries = 0;

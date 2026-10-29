@@ -3,8 +3,8 @@
   "temperature": 0.8,
   "downfall": 0.5,
   "effects": {
-    "fog_color": 12749382,
-    "sky_color": 12749382,
+    "fog_color": 6258610,
+    "sky_color": 6258610,
     "water_color": 3920068,
     "water_fog_color": 1205599,
     "grass_color": 11049578,
@@ -105,7 +105,9 @@
   "features": [
     [],
     [],
-    [],
+    [
+      "explorationremix:lantern_lake/stalactites"
+    ],
     [],
     [],
     [],
@@ -122,7 +124,8 @@
       "explorationremix:lantern_lake/coral",
       "explorationremix:lantern_lake/petals",
       "explorationremix:lantern_lake/waterweed",
-      "explorationremix:lantern_lake/lantern_weed"
+      "explorationremix:lantern_lake/lantern_weed",
+      "explorationremix:lantern_lake/pool_pearls"
     ],
     [
       "explorationremix:open_way"
