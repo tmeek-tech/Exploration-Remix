@@ -50,6 +50,9 @@ public final class DeepSurfaceRules {
             Holder<Biome> fernRift = DeepBiomes.holder(DeepBiome.SILVER_FERN_RIFT), rootCavern = DeepBiomes.holder(DeepBiome.IVORY_ROOT_CAVERN);
             ChunkAccess chunk = a.er$chunk();
             int minX = chunk.getPos().getMinBlockX(), minZ = chunk.getPos().getMinBlockZ();
+            // Per column: does a ravine run here? (The rule is made per chunk and asked block by block, column by column.)
+            int[] lastColumn = {Integer.MIN_VALUE, Integer.MIN_VALUE};
+            boolean[] ravineColumn = {false};
             return (x, y, z) -> {
                 if (y < packFloor) {
                     Rock r = t.palette.shell(x, y, z, a.er$stoneDepthAbove(), a.er$stoneDepthBelow(), a.er$waterHeight() != Integer.MIN_VALUE);
@@ -62,10 +65,19 @@ public final class DeepSurfaceRules {
                 int by = y + (int) ((h >>> 2) & 3) - 1;
                 int bz = clamp(z + (int) ((h >>> 4) & 3) - 1, minZ, minZ + 15);
                 Holder<Biome> b = chunk.getNoiseBiome(QuartPos.fromBlock(bx), QuartPos.fromBlock(by), QuartPos.fromBlock(bz));
-                if (b == rootvaults && rootvaults != null && roots != null) {
-                    int look = roots.look(x, z);
+                boolean ravineWall = false;
+                if (roots != null && b != rootvaults) {
+                    if (x != lastColumn[0] || z != lastColumn[1]) {
+                        lastColumn[0] = x;
+                        lastColumn[1] = z;
+                        ravineColumn[0] = roots.look(x, z) == Rootvaults.RAVINE;
+                    }
+                    ravineWall = ravineColumn[0] && roots.ravineWall(x, y, z);
+                }
+                if ((b == rootvaults || ravineWall) && rootvaults != null && roots != null) {
+                    int look = ravineWall ? Rootvaults.RAVINE : roots.look(x, z);
                     return DeepMaterials.state(t.palette.rootvaults(look < 0 ? Rootvaults.HALL : look, x, y, z, a.er$stoneDepthAbove(),
-                            a.er$stoneDepthBelow(), a.er$waterHeight() != Integer.MIN_VALUE, roots.carve(x, y, z)));
+                            a.er$stoneDepthBelow(), a.er$waterHeight() != Integer.MIN_VALUE, roots.shell(x, y, z)));
                 }
                 if (b == fernRift || b == rootCavern) {
                     DeepBiome db = b == fernRift ? DeepBiome.SILVER_FERN_RIFT : DeepBiome.IVORY_ROOT_CAVERN;

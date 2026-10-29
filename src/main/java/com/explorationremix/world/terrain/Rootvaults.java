@@ -599,6 +599,32 @@ public final class Rootvaults {
         return Math.max(c.f[0] - y, y - c.c[0]);
     }
 
+    /**
+     * How deep in the rock a block lies, for dressing the grottos' shells: {@link #carve}, which measures up and down
+     * its column, or one more than its nearest side neighbour's, so a wall face under a ledge counts as the surface it
+     * is.
+     */
+    public double shell(int x, int y, int z) {
+        double d = carve(x, y, z);
+        if (d <= 3) return d;
+        double side = Math.min(Math.min(carve(x + 1, y, z), carve(x - 1, y, z)), Math.min(carve(x, y, z + 1), carve(x, y, z - 1)));
+        return Math.min(d, side + 1);
+    }
+
+    /**
+     * A ravine's wall up to two blocks under the ground: dressed as the ravine even where the surface's own biome
+     * holds it (the Rootvaults biome stays 6 blocks under the ground), so the forest's soil does not band every ledge
+     * near the top.
+     */
+    public boolean ravineWall(int x, int y, int z) {
+        Col c = column(x, z);
+        for (int i = 0; i < c.n; i++) {
+            Grotto g = c.g[i];
+            if (g.look == RAVINE && c.e[i] < 6 && y >= g.bottom() - 4 && y <= ground(c) - 2) return true;
+        }
+        return false;
+    }
+
     /** True for any column the Rootvaults may open (a quick test before the per-block work). */
     public boolean anyNear(int x, int z) {
         Col c = column(x, z);
