@@ -16,7 +16,7 @@
           "type": "minecraft:uniform",
           "value": {
             "min_inclusive": 1,
-            "max_inclusive": 10
+            "max_inclusive": 7
           }
         },
         "provider": {
@@ -29,7 +29,7 @@
                   "berries": "false"
                 }
               },
-              "weight": 12
+              "weight": 15
             },
             {
               "data": {
@@ -38,7 +38,7 @@
                   "berries": "true"
                 }
               },
-              "weight": 8
+              "weight": 5
             }
           ]
         }
@@ -66,7 +66,7 @@
                     "age": "0"
                   }
                 },
-                "weight": 12
+                "weight": 15
               },
               {
                 "data": {
@@ -76,7 +76,7 @@
                     "age": "0"
                   }
                 },
-                "weight": 8
+                "weight": 5
               }
             ]
           }

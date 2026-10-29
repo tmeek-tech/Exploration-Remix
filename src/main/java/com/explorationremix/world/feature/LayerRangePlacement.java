@@ -4,6 +4,8 @@ import com.explorationremix.registry.ERWorldgen;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.Rootvaults;
 import com.explorationremix.world.terrain.Shape;
+import com.explorationremix.world.terrain.Terrain;
+import com.explorationremix.world.terrain.Upper;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -19,34 +21,55 @@ import java.util.stream.Stream;
  * instead of hard-coded numbers. {@code inset} keeps the position away from the band edges; {@code above_water}
  * keeps it above the layer's water or lava table. The layer {@code upper} is the pack's own caves: where a Rootvaults
  * grotto lies under the column, mostly the heights of that grotto (10 to 40 blocks under the ground); otherwise from
- * the old floor up to 128 blocks above it, where the Silver Fern Rift and the Ivory Root Cavern are.
+ * the old floor up to 128 blocks above it, where the Silver Fern Rift and the Ivory Root Cavern are. Its
+ * {@code focus} aims the tries: {@code pieces} only into the open space of a set piece over the column (none
+ * elsewhere), {@code grottos} as just described, {@code auto} (the default) into a set piece three times in four
+ * where there is one, as described otherwise.
  */
 public final class LayerRangePlacement extends PlacementModifier {
     public static final Codec<LayerRangePlacement> CODEC = RecordCodecBuilder.create(i -> i.group(
             Codec.STRING.fieldOf("layer").forGetter(LayerRangePlacement::layer),
             Codec.INT.optionalFieldOf("inset", 2).forGetter(LayerRangePlacement::inset),
-            Codec.BOOL.optionalFieldOf("above_water", false).forGetter(LayerRangePlacement::aboveWater)
+            Codec.BOOL.optionalFieldOf("above_water", false).forGetter(LayerRangePlacement::aboveWater),
+            Codec.STRING.optionalFieldOf("focus", "auto").forGetter(LayerRangePlacement::focus)
     ).apply(i, LayerRangePlacement::new));
 
     private final String layer;
     private final int inset;
     private final boolean aboveWater;
+    private final String focus;
 
-    public LayerRangePlacement(String layer, int inset, boolean aboveWater) {
+    public LayerRangePlacement(String layer, int inset, boolean aboveWater, String focus) {
         this.layer = layer;
         this.inset = inset;
         this.aboveWater = aboveWater;
+        this.focus = focus;
     }
 
     public String layer() { return layer; }
     public int inset() { return inset; }
     public boolean aboveWater() { return aboveWater; }
+    public String focus() { return focus; }
 
     @Override
     public Stream<BlockPos> getPositions(PlacementContext ctx, RandomSource random, BlockPos pos) {
         Shape s = DeepWorld.shape();
         if (s == null || !DeepWorld.installed()) return Stream.empty();
         if (layer.equals("upper")) {
+            int x = pos.getX(), z = pos.getZ();
+            if (!focus.equals("grottos")) {
+                // A set piece is a small target in a 126-block range, and often under a grotto: aim at it.
+                Terrain t = DeepWorld.terrain();
+                Upper.Piece p = t != null ? t.upperPiece(x, z) : null;
+                if (p != null && p.distXZ(x, z) < 4) {
+                    if (focus.equals("pieces") || random.nextFloat() < 0.75F) {
+                        int lo = (int) Math.floor(p.waterY) - 3, hi = (int) Math.ceil(p.topY);
+                        return Stream.of(new BlockPos(x, lo + random.nextInt(Math.max(1, hi - lo + 1)), z));
+                    }
+                } else if (focus.equals("pieces")) {
+                    return Stream.empty();
+                }
+            }
             Rootvaults r = DeepWorld.roots();
             int[] band = r != null ? r.band(pos.getX(), pos.getZ()) : null;
             if (band != null && random.nextFloat() < 0.75F)

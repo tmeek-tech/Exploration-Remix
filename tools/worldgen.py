@@ -210,7 +210,18 @@ def ref(cf): return cf  # a vanilla configured feature, by id
 FEATURES = []
 
 
+SET_PIECES = {"silver_fern_rift", "ivory_root_cavern"}
+
+
 def feature(name, step, biomes, configured, placement):
+    # In the upper layer, aim the tries of a set piece's own features at the set piece, and the Rootvaults' at the
+    # grottos (layer_range's focus); features shared between them keep both.
+    for p in placement:
+        if isinstance(p, dict) and p.get("type") == f"{MOD}:layer_range" and p.get("layer") == "upper" and "focus" not in p:
+            if set(biomes) <= SET_PIECES:
+                p["focus"] = "pieces"
+            elif set(biomes) <= {"rootvaults"}:
+                p["focus"] = "grottos"
     FEATURES.append((name, step, biomes, configured, placement))
 
 
@@ -232,7 +243,7 @@ def build_features():
     feature("ivory_root_cavern/stalactites", "local_modifications", ["ivory_root_cavern"],
             spike(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 2)), simple("minecraft:dripstone_block"), (5, 14), (1.4, 3.2), 0.35,
                   point=state("minecraft:pointed_dripstone", thickness="tip", vertical_direction="down")),
-            [count(6), SQUARE, layer(up)] + ceiling(offset=0) + [BIOME])
+            [count(3), SQUARE, layer(up)] + ceiling(offset=0) + [BIOME])
     feature("ember_gardens/pools", "local_modifications", ["ember_gardens"],
             pools(mix((LIMESTONE, 3), (simple("minecraft:calcite"), 1)),
                   mix((simple("minecraft:calcite"), 6), (LIMESTONE, 3)), 10,
@@ -266,7 +277,7 @@ def build_features():
                 "can_be_placed_on": ["minecraft:stone", "minecraft:andesite", "minecraft:diorite", "minecraft:granite", "minecraft:tuff",
                                      "minecraft:calcite", "minecraft:deepslate", "minecraft:cobbled_deepslate", "minecraft:dripstone_block",
                                      "minecraft:moss_block"]}},
-            [count(80), SQUARE, layer(up), BIOME])
+            [count(50), SQUARE, layer(up), BIOME])
     feature("rootvaults/moss_ceiling", "underground_decoration", rv, "minecraft:moss_patch_ceiling",
             [count(16), SQUARE, layer(up)] + ceiling() + [looks(1, 2), BIOME])
     feature("ember_gardens/shelf_fungi", "underground_decoration", ["ember_gardens"],
@@ -296,13 +307,13 @@ def build_features():
             [count(24), SQUARE, layer(up), looks(1, 2), BIOME])
     feature("ivory_root_cavern/grotto_ivy", "underground_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:grotto_ivy"), "walls_ceiling", 32, f"#{MOD}:cave_rock", radius=5, height=5),
-            [count(8), SQUARE, layer(up), BIOME])
+            [count(4), SQUARE, layer(up), BIOME])
     feature("silver_fern_rift/wall_ferns", "underground_decoration", ["silver_fern_rift"],
             attach(simple(f"{MOD}:silver_wall_fern"), "walls", 32, f"#{MOD}:cave_rock", radius=6, height=6),
-            [count(10), SQUARE, layer(up), BIOME])
+            [count(6), SQUARE, layer(up), BIOME])
     feature("ivory_root_cavern/brackets", "underground_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:ivory_bracket"), "walls", 64, f"#{MOD}:cave_rock", radius=7, height=8),
-            [count(10), SQUARE, layer(up), BIOME])
+            [count(5), SQUARE, layer(up), BIOME])
     feature("deep_blue_rift/lichen", "underground_decoration", ["deep_blue_rift"],
             attach(simple(f"{MOD}:blue_lichen"), "any", 40, f"#{MOD}:blue_rift_walls", radius=6, height=6),
             [count(12), SQUARE, layer("blue_reaches", above_water=True), BIOME])
@@ -335,9 +346,9 @@ def build_features():
     feature("rootvaults/waterfalls", "fluid_springs", rv, fall("minecraft:water", 6, (1, 3)),
             [count(10), SQUARE, layer(up), BIOME])
     feature("silver_fern_rift/waterfalls", "fluid_springs", ["silver_fern_rift"], fall("minecraft:water", 8, (1, 3)),
-            [count(24), SQUARE, layer(up), BIOME])
+            [count(8), SQUARE, layer(up), BIOME])
     feature("ivory_root_cavern/waterfalls", "fluid_springs", ["ivory_root_cavern"], fall("minecraft:water", 10, (2, 3)),
-            [count(6), SQUARE, layer(up), BIOME])
+            [count(3), SQUARE, layer(up), BIOME])
     feature("deep_blue_rift/waterfalls", "fluid_springs", ["deep_blue_rift"], fall("minecraft:water", 16, (1, 3)),
             [count(8), SQUARE, layer("blue_reaches", above_water=True), BIOME])
     feature("asurine_geodes/meltwater", "fluid_springs", ["asurine_geodes"], fall("minecraft:water", 0, (1, 1), search=12),
@@ -349,44 +360,44 @@ def build_features():
     # ---- vegetal decoration: roots, vines and plants
     feature("rootvaults/hanging_roots", "vegetal_decoration", rv,
             attach(simple("minecraft:hanging_roots"), "ceiling", 32, ["minecraft:rooted_dirt", "minecraft:dirt", "minecraft:moss_block"], radius=6, height=4),
-            [count(8), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
+            [count(12), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
     feature("rootvaults/lantern_roots", "vegetal_decoration", rv,
             hanging_column("explorationremix:lantern_roots", "explorationremix:lantern_roots", 0, 4),
-            [count(40), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
-    feature("rootvaults/cave_vines", "vegetal_decoration", rv, berry_vines(1, 10, 0.4),
-            [count(90), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(20), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
+    feature("rootvaults/cave_vines", "vegetal_decoration", rv, berry_vines(1, 7, 0.25),
+            [count(40), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("silver_fern_rift/cave_vines", "vegetal_decoration", ["silver_fern_rift"], berry_vines(1, 8, 0.5),
-            [count(45), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(16), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("rootvaults/ferns", "vegetal_decoration", rv,
             patch({"type": "minecraft:weighted_state_provider", "entries": [
                 {"data": state("minecraft:fern"), "weight": 3}, {"data": state("minecraft:grass"), "weight": 2},
                 {"data": state("minecraft:large_fern"), "weight": 1}]},
                 state("minecraft:fern"), tries=32, on=PLANT_FLOORS),
-            [count(30), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(36), SQUARE, layer(up)] + floor() + [BIOME])
     feature("rootvaults/white_glow_flowers", "vegetal_decoration", rv,
             patch(simple("explorationremix:white_glow_flower"), state("explorationremix:white_glow_flower"), tries=20, xz=5, on=PLANT_FLOORS),
-            [count(14), SQUARE, layer(up)] + floor() + [looks(1), BIOME])
+            [count(10), SQUARE, layer(up)] + floor() + [looks(1), BIOME])
     feature("rootvaults/white_glow_flowers_sparse", "vegetal_decoration", rv,
             patch(simple("explorationremix:white_glow_flower"), state("explorationremix:white_glow_flower"), tries=12, xz=4, on=PLANT_FLOORS),
             [count(10), SQUARE, layer(up)] + floor() + [looks(0, 2), BIOME])
     feature("silver_fern_rift/silver_ferns", "vegetal_decoration", ["silver_fern_rift"],
-            patch(simple("explorationremix:silver_fern"), state("explorationremix:silver_fern"), tries=48, xz=7, y=4),
-            [count(36), SQUARE, layer(up)] + floor() + [BIOME])
+            patch(simple("explorationremix:silver_fern"), state("explorationremix:silver_fern"), tries=40, xz=5, y=4),
+            [count(40), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/giant_lantern_fungi", "vegetal_decoration", ["ivory_root_cavern"],
             {"type": f"{MOD}:giant_fungus", "config": {
                 "stem": state("minecraft:mushroom_stem"), "cap": state("minecraft:mushroom_stem", down=False),
                 "glow": state("minecraft:shroomlight"), "roots": state(f"{MOD}:lantern_roots"),
                 "height": uniform(2, 5), "radius": uniform(2, 3), "root_length": uniform(1, 4)}},
-            [count(5), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(3), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/lantern_fungi", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple("explorationremix:lantern_fungus"), state("explorationremix:lantern_fungus"), tries=20, xz=5, y=3),
-            [count(14), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(6), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/lantern_roots", "vegetal_decoration", ["ivory_root_cavern"],
             attach(simple("explorationremix:lantern_roots"), "ceiling", 32, f"#{MOD}:cave_rock", radius=6, height=3),
-            [count(20), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(8), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("ivory_root_cavern/moss", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple("minecraft:moss_carpet"), state("minecraft:moss_carpet"), tries=24, xz=4, y=2),
-            [count(6), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(14), SQUARE, layer(up)] + floor() + [BIOME])
     feature("lantern_lake/wisteria", "vegetal_decoration", ["lantern_lake"],
             hanging_patch(hanging_column("explorationremix:wisteria_plant", "explorationremix:wisteria", 1, 6), tries=8, xz=4, y=2),
             [count(10), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
@@ -418,10 +429,10 @@ def build_features():
     # their light comes in pockets with dim gaps between them.
     feature("rootvaults/amber_bulb_vines", "vegetal_decoration", rv,
             hanging_patch(hanging_column(f"{MOD}:amber_bulb_vine_plant", f"{MOD}:amber_bulb_vine", 1, 6), tries=8, xz=4, y=2),
-            [count(10), SQUARE, layer(up)] + ceiling() + [looks(0, 1), BIOME])
+            [count(5), SQUARE, layer(up)] + ceiling() + [looks(0, 1), BIOME])
     feature("rootvaults/weeping_ivy", "vegetal_decoration", rv,
             hanging_patch(hanging_column(f"{MOD}:weeping_ivy_plant", f"{MOD}:weeping_ivy", 2, 12), tries=10, xz=5, y=3),
-            [count(12), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(16), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("rootvaults/starmoss", "vegetal_decoration", rv,
             patch(simple(f"{MOD}:starmoss"), state(f"{MOD}:starmoss"), tries=32, xz=5, y=2),
             [count(10), SQUARE, layer(up)] + floor() + [looks(1), BIOME])
@@ -431,22 +442,22 @@ def build_features():
     feature("rootvaults/azaleas", "vegetal_decoration", rv,
             patch(mix((simple("minecraft:azalea"), 3), (simple("minecraft:flowering_azalea"), 1)), state("minecraft:azalea"), tries=12, xz=5, y=2,
                   on=PLANT_FLOORS),
-            [count(6), SQUARE, layer(up)] + floor() + [looks(2), BIOME])
+            [count(10), SQUARE, layer(up)] + floor() + [looks(2), BIOME])
     feature("silver_fern_rift/amber_bulb_vines", "vegetal_decoration", ["silver_fern_rift"],
             hanging_patch(hanging_column(f"{MOD}:amber_bulb_vine_plant", f"{MOD}:amber_bulb_vine", 1, 6), tries=8, xz=4, y=2),
-            [count(8), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(4), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("silver_fern_rift/fronds", "vegetal_decoration", ["silver_fern_rift"],
             hanging_patch(hanging_column(f"{MOD}:silver_frond_plant", f"{MOD}:silver_frond", 1, 5), tries=8, xz=5, y=3),
-            [count(16), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(14), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("silver_fern_rift/tall_ferns", "vegetal_decoration", ["silver_fern_rift"],
             patch(simple(f"{MOD}:tall_silver_fern"), state(f"{MOD}:tall_silver_fern"), tries=24, xz=6, y=3),
-            [count(8), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(12), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/gold_threads", "vegetal_decoration", ["ivory_root_cavern"],
             hanging_patch(hanging_column(f"{MOD}:gold_threads_plant", f"{MOD}:gold_threads", 2, 9), tries=8, xz=4, y=2),
-            [count(14), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(6), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("ivory_root_cavern/sage", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple(f"{MOD}:sage_bush"), state(f"{MOD}:sage_bush"), tries=16, xz=5, y=2),
-            [count(10), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(20), SQUARE, layer(up)] + floor() + [BIOME])
     feature("deep_blue_rift/glowbells", "vegetal_decoration", ["deep_blue_rift"],
             patch(simple(f"{MOD}:glowbell"), state(f"{MOD}:glowbell"), tries=16, xz=4, y=2),
             [count(10), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])

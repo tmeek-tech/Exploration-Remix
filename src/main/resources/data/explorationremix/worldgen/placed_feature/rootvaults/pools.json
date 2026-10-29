@@ -12,7 +12,8 @@
       "type": "explorationremix:layer_range",
       "layer": "upper",
       "inset": 2,
-      "above_water": false
+      "above_water": false,
+      "focus": "grottos"
     },
     {
       "type": "minecraft:environment_scan",

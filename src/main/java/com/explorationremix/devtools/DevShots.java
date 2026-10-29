@@ -30,6 +30,9 @@ public final class DevShots {
     private static final String LIST = System.getenv("ER_SHOTS");
     /** The least ticks to wait at each view (ER_SHOTS_SETTLE), for slow renderers. */
     private static final int SETTLE = Integer.getInteger("er.shots.settle", envInt("ER_SHOTS_SETTLE", 300));
+    /** How many chunks around the camera must be loaded before the picture (ER_SHOTS_RADIUS): 6, or more to be sure the
+     * whole view is there, up to the render distance. */
+    private static final int RADIUS = envInt("ER_SHOTS_RADIUS", 6);
 
     private static int envInt(String name, int fallback) {
         try {
@@ -136,21 +139,19 @@ public final class DevShots {
             case SETTLING -> {
                 // Let the chunks arrive and every section around the camera get built before the picture. On a busy
                 // server the chunk count can stand still for seconds while chunks are still being generated, so every
-                // chunk within six of the camera must be there too.
+                // chunk within RADIUS of the camera must be there too.
                 int chunks = mc.level.getChunkSource().getLoadedChunksCount();
-                int pcx = mc.player.getBlockX() >> 4, pcz = mc.player.getBlockZ() >> 4;
-                boolean all = true;
-                for (int dx = -6; dx <= 6 && all; dx++)
-                    for (int dz = -6; dz <= 6 && all; dz++)
-                        if (dx * dx + dz * dz <= 36 && mc.level.getChunkSource().getChunk(pcx + dx, pcz + dz,
-                                net.minecraft.world.level.chunk.ChunkStatus.FULL, false) == null) all = false;
+                int view = mc.options.getEffectiveRenderDistance();
+                boolean all = missing(mc, Math.min(RADIUS, view)) == 0;
                 boolean quiet = all && mc.levelRenderer.hasRenderedAllChunks() && chunks == lastChunks;
                 lastChunks = chunks;
                 stable = quiet ? stable + 1 : 0;
                 if ((ticks > SETTLE && stable > 80) || ticks > Math.max(6000, SETTLE + 600)) {
                     net.minecraft.core.BlockPos eye = net.minecraft.core.BlockPos.containing(mc.player.getEyePosition());
-                    ExplorationRemix.LOGGER.info("[shots] settled after {} ticks: chunks around {}, all sections built {}, light at the eye sky {} block {}",
-                            ticks, all, mc.levelRenderer.hasRenderedAllChunks(), mc.level.getBrightness(net.minecraft.world.level.LightLayer.SKY, eye),
+                    ExplorationRemix.LOGGER.info("[shots] settled after {} ticks: chunks within {} {}, missing within the render distance {}: {}, "
+                                    + "all sections built {}, light at the eye sky {} block {}",
+                            ticks, Math.min(RADIUS, view), all, view, missing(mc, view), mc.levelRenderer.hasRenderedAllChunks(),
+                            mc.level.getBrightness(net.minecraft.world.level.LightLayer.SKY, eye),
                             mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, eye));
                     phase = Phase.SHOOT;
                     ticks = 0;
@@ -168,6 +169,16 @@ public final class DevShots {
             }
             default -> {}
         }
+    }
+
+    /** How many chunks within radius (a circle) of the camera the client has not got yet. */
+    private static int missing(Minecraft mc, int radius) {
+        int pcx = mc.player.getBlockX() >> 4, pcz = mc.player.getBlockZ() >> 4, n = 0;
+        for (int dx = -radius; dx <= radius; dx++)
+            for (int dz = -radius; dz <= radius; dz++)
+                if (dx * dx + dz * dz <= radius * radius && mc.level.getChunkSource().getChunk(pcx + dx, pcz + dz,
+                        net.minecraft.world.level.chunk.ChunkStatus.FULL, false) == null) n++;
+        return n;
     }
 
     private static void run(IntegratedServer server, ServerPlayer player, String command) {
