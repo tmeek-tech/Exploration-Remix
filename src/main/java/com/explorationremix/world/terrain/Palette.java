@@ -236,13 +236,15 @@ public final class Palette {
                 }
                 return n > -0.02 ? Rock.VERIDIUM : Rock.STONE;
             case Rootvaults.RAVINE:
+                // No plain stone on the faces: the vanilla granite, diorite and andesite blobs placed after this
+                // replace stone, and turned whole cliffs brown. Veridium, moss and limestone are not theirs to replace.
                 if (floor) {
                     if (wet) return n > 0.0 ? Rock.LIMESTONE : Rock.GRAVEL;
                     if (top) return n > -0.2 ? Rock.MOSS : Rock.LIMESTONE;
-                    return n > -0.1 ? Rock.VERIDIUM : Rock.STONE;
+                    return n > -0.1 ? Rock.VERIDIUM : Rock.LIMESTONE;
                 }
                 if (n < -0.4) return Rock.LIMESTONE;
-                return n > -0.12 ? Rock.VERIDIUM : Rock.STONE;
+                return n > 0.38 ? Rock.MOSS : Rock.VERIDIUM;
             default:
                 if (floor) {
                     if (wet) return n > 0.05 ? Rock.GRAVEL : Rock.STONE;

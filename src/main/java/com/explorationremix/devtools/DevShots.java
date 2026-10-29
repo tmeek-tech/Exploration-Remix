@@ -28,6 +28,17 @@ import java.util.List;
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, value = Dist.CLIENT)
 public final class DevShots {
     private static final String LIST = System.getenv("ER_SHOTS");
+    /** The least ticks to wait at each view (ER_SHOTS_SETTLE), for slow renderers. */
+    private static final int SETTLE = Integer.getInteger("er.shots.settle", envInt("ER_SHOTS_SETTLE", 300));
+
+    private static int envInt(String name, int fallback) {
+        try {
+            String v = System.getenv(name);
+            return v == null ? fallback : Integer.parseInt(v.trim());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
 
     private enum Phase { WAIT_WORLD, SETUP, NEXT, VIEWING, SETTLING, SHOOT, DONE }
 
@@ -136,7 +147,11 @@ public final class DevShots {
                 boolean quiet = all && mc.levelRenderer.hasRenderedAllChunks() && chunks == lastChunks;
                 lastChunks = chunks;
                 stable = quiet ? stable + 1 : 0;
-                if ((ticks > 300 && stable > 80) || ticks > 6000) {
+                if ((ticks > SETTLE && stable > 80) || ticks > Math.max(6000, SETTLE + 600)) {
+                    net.minecraft.core.BlockPos eye = net.minecraft.core.BlockPos.containing(mc.player.getEyePosition());
+                    ExplorationRemix.LOGGER.info("[shots] settled after {} ticks: chunks around {}, all sections built {}, light at the eye sky {} block {}",
+                            ticks, all, mc.levelRenderer.hasRenderedAllChunks(), mc.level.getBrightness(net.minecraft.world.level.LightLayer.SKY, eye),
+                            mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, eye));
                     phase = Phase.SHOOT;
                     ticks = 0;
                 }
