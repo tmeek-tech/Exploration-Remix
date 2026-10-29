@@ -1,0 +1,33 @@
+{
+  "type": "explorationremix:ceiling_roots",
+  "config": {
+    "log": {
+      "Name": "minecraft:oak_log",
+      "Properties": {
+        "axis": "y"
+      }
+    },
+    "dirt": {
+      "Name": "minecraft:rooted_dirt"
+    },
+    "hanging": {
+      "Name": "minecraft:hanging_roots"
+    },
+    "length": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 4,
+        "max_inclusive": 16
+      }
+    },
+    "match_trees": true,
+    "column_chance": 0.3,
+    "branches": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 1,
+        "max_inclusive": 3
+      }
+    }
+  }
+}

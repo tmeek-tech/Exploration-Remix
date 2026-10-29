@@ -9,6 +9,7 @@
     "accessor.NoiseGeneratorSettingsAccessor",
     "accessor.NoiseBasedChunkGeneratorAccessor",
     "accessor.SurfaceContextAccessor",
+    "accessor.MultiNoiseBiomeSourceAccessor",
     "MinecraftServerMixin",
     "NoiseBasedChunkGeneratorMixin",
     "BiomeSourceMixin",

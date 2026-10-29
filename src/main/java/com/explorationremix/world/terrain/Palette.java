@@ -12,7 +12,7 @@ package com.explorationremix.world.terrain;
 public final class Palette {
     private final Terrain t;
     private final long seed;
-    private final Perlin interiorN, patchN, veinN, veinMask, seamN, seamMask, wobN, lookN;
+    private final Perlin interiorN, patchN, veinN, veinMask, seamN, seamMask, wobN;
 
     Palette(Terrain t, long seed) {
         this.t = t;
@@ -25,7 +25,6 @@ public final class Palette {
         seamN = new Perlin(Hashing.mix(s, 5, 0, 0));
         seamMask = new Perlin(Hashing.mix(s, 6, 0, 0));
         wobN = new Perlin(Hashing.mix(s, 7, 0, 0));
-        lookN = new Perlin(Hashing.mix(s, 8, 0, 0));
     }
 
     private double speck(int x, int y, int z) { return Hashing.unit(Hashing.mix(seed, x, y, z)); }
@@ -212,32 +211,46 @@ public final class Palette {
 
     // ============================================================================================== Rootvaults
 
-    /** Which of the three Rootvaults looks a spot has: 0 root halls, 1 teal grottos, 2 ravines open to the sky. */
-    public int rootvaultsLook(int x, int z) {
-        double v = lookN.noise2(x * 0.0045, z * 0.0045);
-        return v < -0.1 ? 0 : (v < 0.14 ? 1 : 2);
-    }
-
     /**
-     * Rock in the Rootvaults, above the first band: the pack's stone and deepslate with patches of veridium and
-     * limestone. Null keeps the pack's own choice.
+     * Rock around the Rootvaults' grottos, by look (see {@link Rootvaults}): root halls are grey stone with limestone
+     * ledges, moss on top and rooted dirt in the ceiling where the roots come through; teal grottos are stone and
+     * veridium with mossy ledges; ravines are veridium cliffs with moss and pale limestone on the ledges. Only the
+     * shell is dressed: floors, ceilings, and walls within {@code shell} 3 blocks of a grotto. Null keeps the pack's
+     * own stone (and its ores) deeper in.
+     *
+     * @param shell distance from the grotto's open space (its signed distance, positive in rock)
+     * @param wet   water rests on this run of rock
      */
-    public Rock rootvaults(int x, int y, int z, int above, int below) {
-        double n = patch(x, y, z);
+    public Rock rootvaults(int look, int x, int y, int z, int above, int below, boolean wet, double shell) {
         boolean top = above <= 1;
-        switch (rootvaultsLook(x, z)) {
-            case 0: // root halls: grey stone and limestone ledges, as in the picture, with roots through the ceiling
-                if (below <= 2 && n > -0.05) return Rock.ROOTED_DIRT;
-                if (n > 0.22 || (top && n > -0.15)) return Rock.LIMESTONE;
-                return Rock.STONE;
-            case 1: // teal grottos: grey stone and veridium walls, mossy ledges, a stone floor along the water
-                if (top) return n > 0.0 ? Rock.MOSS : Rock.STONE;
-                if (n > -0.02) return Rock.VERIDIUM;
-                return Rock.STONE;
-            default: // ravines: veridium cliffs, moss and ferns on the ledges, pale limestone blocks
-                if (top) return n > -0.2 ? Rock.MOSS : Rock.STONE;
-                if (n > -0.12) return Rock.VERIDIUM;
-                return n < -0.4 ? Rock.LIMESTONE : Rock.STONE;
+        boolean floor = above <= 3;
+        boolean ceil = !floor && below <= 2;
+        if (!floor && !ceil && shell > 3) return null;
+        double n = patch(x, y, z);
+        switch (look) {
+            case Rootvaults.TEAL:
+                if (floor) {
+                    if (wet) return n > 0.1 ? Rock.GRAVEL : Rock.STONE;
+                    if (top) return n > -0.05 ? Rock.MOSS : Rock.STONE;
+                    return n > 0.2 ? Rock.VERIDIUM : Rock.STONE;
+                }
+                return n > -0.02 ? Rock.VERIDIUM : Rock.STONE;
+            case Rootvaults.RAVINE:
+                if (floor) {
+                    if (wet) return n > 0.0 ? Rock.LIMESTONE : Rock.GRAVEL;
+                    if (top) return n > -0.2 ? Rock.MOSS : Rock.LIMESTONE;
+                    return n > -0.1 ? Rock.VERIDIUM : Rock.STONE;
+                }
+                if (n < -0.4) return Rock.LIMESTONE;
+                return n > -0.12 ? Rock.VERIDIUM : Rock.STONE;
+            default:
+                if (floor) {
+                    if (wet) return n > 0.05 ? Rock.GRAVEL : Rock.STONE;
+                    if (top) return n > -0.1 ? Rock.MOSS : (n > -0.35 ? Rock.LIMESTONE : Rock.STONE);
+                    return n > 0.15 ? Rock.LIMESTONE : Rock.STONE;
+                }
+                if (ceil) return n > -0.05 ? Rock.ROOTED_DIRT : Rock.STONE;
+                return n > 0.22 ? Rock.LIMESTONE : Rock.STONE;
         }
     }
 }

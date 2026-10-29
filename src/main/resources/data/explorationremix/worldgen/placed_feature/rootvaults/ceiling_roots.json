@@ -3,7 +3,7 @@
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 6
+      "count": 8
     },
     {
       "type": "minecraft:in_square"
@@ -34,12 +34,6 @@
       "type": "minecraft:random_offset",
       "xz_spread": 0,
       "y_spread": -1
-    },
-    {
-      "type": "explorationremix:rootvaults_look",
-      "looks": [
-        0
-      ]
     },
     {
       "type": "minecraft:biome"

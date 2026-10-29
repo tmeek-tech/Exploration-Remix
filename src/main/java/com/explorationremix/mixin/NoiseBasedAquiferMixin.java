@@ -2,6 +2,7 @@ package com.explorationremix.mixin;
 
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.gen.DeepMaterials;
+import com.explorationremix.world.terrain.Rootvaults;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -35,9 +36,18 @@ public abstract class NoiseBasedAquiferMixin {
         if (y >= t.shape.packFloor) {
             // The first gate's landing and ramp, the Silver Fern Rift and the Ivory Root Cavern are carved out of the
             // pack's caves, where vanilla floods everything near the old floor with lava. Around them the deep world
-            // decides: their own stream or lake, and air above it, so no lava pools sit where water belongs.
+            // decides: their own stream or lake, and air above it, so no lava pools sit where water belongs. The
+            // Rootvaults' grottos likewise hold their own streams and pools, and vanilla never floods one that happens
+            // to lie below sea level.
             if (density <= 0.0) {
                 int f = t.upperFluid(ctx.blockX(), y, ctx.blockZ());
+                if (f < 0) {
+                    Rootvaults r = DeepWorld.roots();
+                    if (r != null) {
+                        int rf = r.fluid(ctx.blockX(), y, ctx.blockZ());
+                        if (rf >= 0) f = rf == Rootvaults.WATER ? Terrain.WATER : Terrain.AIR;
+                    }
+                }
                 if (f >= 0) {
                     this.shouldScheduleFluidUpdate = false;
                     cir.setReturnValue(f == Terrain.WATER ? DeepMaterials.WATER : DeepMaterials.AIR);

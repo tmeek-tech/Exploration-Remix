@@ -1,0 +1,23 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:has_structure/village_plains",
+    "#minecraft:has_structure/village_desert",
+    "#minecraft:has_structure/village_savanna",
+    "#minecraft:has_structure/village_snowy",
+    "#minecraft:has_structure/village_taiga",
+    "#minecraft:has_structure/pillager_outpost",
+    "#minecraft:has_structure/woodland_mansion",
+    "#minecraft:has_structure/jungle_temple",
+    "#minecraft:has_structure/igloo",
+    "#minecraft:has_structure/trail_ruins",
+    "#minecraft:has_structure/swamp_hut",
+    {
+      "id": "#forge:is_swamp",
+      "required": false
+    },
+    "#minecraft:is_river",
+    "#minecraft:is_ocean",
+    "#minecraft:is_beach"
+  ]
+}

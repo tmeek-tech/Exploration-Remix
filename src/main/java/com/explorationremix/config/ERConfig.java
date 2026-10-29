@@ -70,7 +70,9 @@ public final class ERConfig {
         passageRadius = b.comment("Radius of the twisting gate passages.").defineInRange("passageRadius", d.passageRadius(), 2.5, 12.0);
         landingRadius = b.comment("Radius of the landing chambers at each end of a gate passage.").defineInRange("landingRadius", d.landingRadius(), 8.0, 40.0);
         structureFloorY = b.comment("Strongholds and mineshafts stay above this Y so the End stays reachable.").defineInRange("structureFloorY", -56, -64, 0);
-        replaceVanillaCaveBiomes = b.comment("Rootvaults replace vanilla's deep dark above the first band (the deep dark moved down into the Blue Reaches).")
+        replaceVanillaCaveBiomes = b.comment("Carve the Rootvaults 10 to 40 blocks under forests, jungles, taigas, swamps and cherry groves, and keep",
+                        "vanilla's deep dark out of the pack's caves above the first band (the pack's other cave biomes take its place there; the",
+                        "deep dark moved down into the Blue Reaches).")
                 .define("replaceVanillaCaveBiomes", true);
         upperRegions = b.comment("Carve the Silver Fern Rift and the Ivory Root Cavern into the pack's caves between y -64 and about 0.")
                 .define("upperRegions", true);

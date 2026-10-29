@@ -1,0 +1,12 @@
+{
+  "feature": "explorationremix:rootvaults/tree_roots",
+  "placement": [
+    {
+      "type": "explorationremix:under_trees",
+      "chance": 0.7
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}
