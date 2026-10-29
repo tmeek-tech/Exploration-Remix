@@ -10,6 +10,7 @@ import com.explorationremix.world.density.DeepDensityFunction;
 import com.explorationremix.world.density.DeepFineDensity;
 import com.explorationremix.world.density.UpperCarve;
 import com.explorationremix.world.density.UpperFine;
+import com.explorationremix.world.density.UpperSeal;
 import com.explorationremix.world.density.InterpolationGater;
 import com.explorationremix.world.terrain.Rootvaults;
 import com.explorationremix.world.terrain.Terrain;
@@ -143,7 +144,9 @@ public final class DeepWorldInstaller {
         // Density: the pack's terrain above its old floor (with its interpolators gated), the deep world below.
         NoiseRouter router = settings.noiseRouter();
         DensityFunction original = router.finalDensity().mapAll(new InterpolationGater(packFloor - 8));
-        DensityFunction upper = DensityFunctions.min(original, new UpperFine(DensityFunctions.interpolated(UpperCarve.INSTANCE)));
+        // The Rootvaults' water sits in rock the pack's caves may not open (max), then the carve opens our caves (min).
+        DensityFunction upper = DensityFunctions.min(DensityFunctions.max(original, UpperSeal.INSTANCE),
+                new UpperFine(DensityFunctions.interpolated(UpperCarve.INSTANCE)));
         DensityFunction deep = new DeepFineDensity(DensityFunctions.interpolated(DeepDensityFunction.INSTANCE));
         DensityFunction selector = DensityFunctions.yClampedGradient(packFloor - 1, packFloor, 0.0, 1.0);
         DensityFunction composed = DensityFunctions.rangeChoice(selector, 0.5, 2.0, upper, deep);

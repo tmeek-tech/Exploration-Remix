@@ -126,9 +126,9 @@ public final class Rootvaults {
         public boolean covers(double x, double z) { return x >= minX && x <= maxX && z >= minZ && z <= maxZ; }
 
         /** Along its long axis and across it, from its centre. */
-        double along(double x, double z) { return (x - cx) * cos + (z - cz) * sin; }
+        public double along(double x, double z) { return (x - cx) * cos + (z - cz) * sin; }
 
-        double across(double x, double z) { return -(x - cx) * sin + (z - cz) * cos; }
+        public double across(double x, double z) { return -(x - cx) * sin + (z - cz) * cos; }
 
         double worldX(double u, double v) { return cx + u * cos - v * sin; }
 
@@ -153,7 +153,7 @@ public final class Rootvaults {
 
     /** How far its open space can reach from its centre, wobble included. */
     static double reach(int look, double a, double b) {
-        return (look == RAVINE ? a * 1.05 : Math.max(a, b) * 1.3) + 2;
+        return look == RAVINE ? a * 1.05 + 6 : Math.max(a, b) * 1.3 + 2;
     }
 
     /** A tunnel: two straight runs through three points, round with a flat floor. Negative inside. */
@@ -467,6 +467,8 @@ public final class Rootvaults {
         int n, tn;
         final Grotto[] g = new Grotto[4];
         final double[] f = new double[4], c = new double[4], q = new double[4];
+        /** How far outside the grotto's open footprint the column lies, in blocks (negative inside). */
+        final double[] e = new double[4];
         final Tunnel[] t = new Tunnel[32];
         double lo, hi;
         int ground;
@@ -517,7 +519,7 @@ public final class Rootvaults {
     private boolean shape(Grotto g, int x, int z, Col col, int i) {
         double u = g.along(x, z), v = g.across(x, z);
         double nx = x + g.ox, nz = z + g.oz;
-        double f, ce, q;
+        double f, ce, q, e;
         switch (g.look) {
             case HALL -> {
                 double wob = 1 + 0.14 * wobN.noise2(nx / 13.0, nz / 13.0);
@@ -530,6 +532,7 @@ public final class Rootvaults {
                 if (Math.abs(vm) < g.channel) f -= 2.6 * (1 - sq(vm / g.channel)) * (1 - Terrain.smooth((q - 0.72) / 0.25));
                 ce = g.water + g.height * Math.sqrt(Math.max(0, 1 - q * q * q)) + 1.6 * ceilN.noise2(nx / 6.0, nz / 6.0);
                 ce = Math.min(ce, Math.min(g.roofCap, ground(col) - 10));
+                e = (q - 1) * Math.min(g.a, g.b);
             }
             case TEAL -> {
                 double wob = 1 + 0.12 * wobN.noise2(nx / 11.0, nz / 11.0);
@@ -542,12 +545,14 @@ public final class Rootvaults {
                 if (dp < 1) f = Math.min(f, g.water + 0.3 - g.poolD * (1 - dp * dp));
                 ce = g.water + g.height * Math.sqrt(Math.max(0, 1 - Math.pow(q, 2.5))) + 2.2 * ceilN.noise2(nx / 5.0, nz / 5.0);
                 ce = Math.min(ce, Math.min(g.roofCap, ground(col) - 10));
+                e = (q - 1) * Math.min(g.a, g.b);
             }
             default -> {
                 // A slot with a stream at the bottom and stepped ledges up both walls; open to the sky over its middle,
                 // roofed at its ends, which close in.
                 q = Math.abs(u) / g.a;
-                if (q >= 1.05) return false;
+                // Rock past its ends is listed too (closed), so the seal around its water reaches beyond them.
+                if (Math.abs(u) >= g.a * 1.05 + 5) return false;
                 double endFade = Terrain.smooth((1 - q) / 0.3);
                 double half = g.b * (0.35 + 0.65 * endFade);
                 double vv = Math.max(0, Math.abs(v) + 1.2 * wobN.noise2(nx / 8.0, nz / 8.0));
@@ -557,11 +562,14 @@ public final class Rootvaults {
                 double open = Terrain.smooth((0.6 - q) / 0.12);
                 double roof = bed + (g.height + 1.5) * Terrain.smooth((1 - q) / 0.2) + 1.2 * ceilN.noise2(nx / 6.0, nz / 6.0);
                 ce = open * (ground + 8) + (1 - open) * roof;
+                if (q >= 1.05) ce = f - 10;
+                e = Math.max(vv - half, (q - 1) * g.a);
             }
         }
         col.f[i] = f;
         col.c[i] = ce;
         col.q[i] = q;
+        col.e[i] = e;
         return true;
     }
 
@@ -598,10 +606,32 @@ public final class Rootvaults {
     }
 
     /**
+     * Where the pack's own caves must stay shut: under and beside the water of a grotto, from 4 blocks below its lowest
+     * open block to a block over its water level, within 4 blocks of its open footprint (a ravine: of its slot). The
+     * grotto's own open space is carved again afterwards, so this only keeps the pack's caves from draining its water.
+     */
+    public boolean seals(int x, int y, int z) {
+        Col c = column(x, z);
+        if (c.n == 0 || y > c.hi) return false; // not c.lo: under a wall the floor is the ground
+        for (int i = 0; i < c.n; i++) {
+            Grotto g = c.g[i];
+            if (c.e[i] < 4 && y <= g.water + 1 && y >= g.bottom() - 4) return true;
+        }
+        return false;
+    }
+
+    /**
      * Where the Rootvaults biome goes: within 5 blocks of a grotto's open space or 3 of its tunnels (tails only in the
-     * top 46 blocks), and never within 6 blocks of the surface over the column.
+     * top 46 blocks), or one biome cell (4 blocks) to the side of such a place, so the grottos' walls get their own
+     * rock instead of the soil the pack puts on every ledge; and never within 6 blocks of the surface over the column.
      */
     public boolean biomeAt(int x, int y, int z) {
+        if (inBiome(x, y, z)) return true;
+        if (!inBiome(x - 4, y, z) && !inBiome(x + 4, y, z) && !inBiome(x, y, z - 4) && !inBiome(x, y, z + 4)) return false;
+        return y <= ground(column(x, z)) - 6;
+    }
+
+    private boolean inBiome(int x, int y, int z) {
         Col c = column(x, z);
         if (c.n == 0 && c.tn == 0) return false;
         if (y < c.lo - 6 || y > c.hi + 6) return false;

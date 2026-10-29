@@ -261,6 +261,34 @@ class RootvaultsTest {
     }
 
     @Test
+    void thePacksCavesCannotDrainTheWater() {
+        int checked = 0;
+        for (long seed : SEEDS) {
+            Rootvaults r = new Rootvaults(seed, PACK_FLOOR, WORLD);
+            for (Rootvaults.Grotto g : grottos(r)) {
+                double reach = Rootvaults.reach(g.look, g.a, g.b) + 6;
+                for (int x = (int) Math.floor(g.cx - reach); x <= g.cx + reach; x++)
+                    for (int z = (int) Math.floor(g.cz - reach); z <= g.cz + reach; z++) {
+                        if (!r.anyNear(x, z)) continue;
+                        for (int y = (int) g.water - 8; y <= g.water + 2; y++) {
+                            if (r.carve(x, y, z) >= 0 || r.fluid(x, y, z) != Rootvaults.WATER) continue;
+                            // The rock the water rests against, and two blocks under it, stays shut to the pack's caves.
+                            int[][] next = {{x + 1, y, z}, {x - 1, y, z}, {x, y, z + 1}, {x, y, z - 1}, {x, y - 1, z}, {x, y - 2, z}};
+                            for (int[] n : next) {
+                                if (r.carve(n[0], n[1], n[2]) < 0) continue;
+                                checked++;
+                                assertTrue(r.seals(n[0], n[1], n[2]), "the pack's caves could open " + n[0] + " " + n[1] + " " + n[2]
+                                        + " beside the water at " + x + " " + y + " " + z + " in a " + g.lookName() + " a " + g.a + " b " + g.b
+                                        + " u " + g.along(n[0], n[2]) + " v " + g.across(n[0], n[2]) + " water " + g.water);
+                            }
+                        }
+                    }
+            }
+        }
+        assertTrue(checked > 1000, "only " + checked + " rock blocks beside water");
+    }
+
+    @Test
     void sameAnswersOnEveryThread() throws Exception {
         long seed = 8675309L;
         Rootvaults a = new Rootvaults(seed, PACK_FLOOR, WORLD), b = new Rootvaults(seed, PACK_FLOOR, WORLD);

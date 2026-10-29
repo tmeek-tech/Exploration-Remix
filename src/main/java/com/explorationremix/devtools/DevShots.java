@@ -22,8 +22,8 @@ import java.util.List;
 /**
  * Development only, and only when the environment variable ER_SHOTS names a shot list: once a world is open (single
  * player, or a server where the player is an operator), takes a screenshot of each listed biome from the best view
- * /remix view finds, then quits. Each line of the list is "file-name biome [n]". Screenshots go to the game's
- * screenshots folder.
+ * /remix view finds, then quits. Each line of the list is "file-name biome [n]", or "file-name @ x y z yaw pitch" for
+ * a picture from a chosen spot. Screenshots go to the game's screenshots folder.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, value = Dist.CLIENT)
 public final class DevShots {
@@ -92,7 +92,8 @@ public final class DevShots {
                     return;
                 }
                 String[] s = shots.get(index);
-                String cmd = "remix view " + s[1] + (s.length > 2 ? " " + s[2] : "");
+                String cmd = s[1].equals("@") && s.length >= 7 ? "tp @s " + String.join(" ", java.util.Arrays.copyOfRange(s, 2, 7))
+                        : "remix view " + s[1] + (s.length > 2 ? " " + s[2] : "");
                 ExplorationRemix.LOGGER.info("[shots] {} of {}: {}", index + 1, shots.size(), cmd);
                 viewDone = false;
                 startX = mc.player.getX();
@@ -122,12 +123,20 @@ public final class DevShots {
                 lastChunks = -1;
             }
             case SETTLING -> {
-                // Let the chunks arrive and every section around the camera get built before the picture.
+                // Let the chunks arrive and every section around the camera get built before the picture. On a busy
+                // server the chunk count can stand still for seconds while chunks are still being generated, so every
+                // chunk within six of the camera must be there too.
                 int chunks = mc.level.getChunkSource().getLoadedChunksCount();
-                boolean quiet = mc.levelRenderer.hasRenderedAllChunks() && chunks == lastChunks;
+                int pcx = mc.player.getBlockX() >> 4, pcz = mc.player.getBlockZ() >> 4;
+                boolean all = true;
+                for (int dx = -6; dx <= 6 && all; dx++)
+                    for (int dz = -6; dz <= 6 && all; dz++)
+                        if (dx * dx + dz * dz <= 36 && mc.level.getChunkSource().getChunk(pcx + dx, pcz + dz,
+                                net.minecraft.world.level.chunk.ChunkStatus.FULL, false) == null) all = false;
+                boolean quiet = all && mc.levelRenderer.hasRenderedAllChunks() && chunks == lastChunks;
                 lastChunks = chunks;
                 stable = quiet ? stable + 1 : 0;
-                if ((ticks > 300 && stable > 80) || ticks > 2400) {
+                if ((ticks > 300 && stable > 80) || ticks > 6000) {
                     phase = Phase.SHOOT;
                     ticks = 0;
                 }
