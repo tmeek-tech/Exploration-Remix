@@ -75,11 +75,13 @@ class TerrainTest {
                 double cell = t.network.cell, x0 = c[0] * cell, z0 = c[1] * cell;
                 // every tunnel, inner walk, ledge passage and stub, every 2 blocks along its line
                 for (Net.Way wy : n.ways) {
-                    double carry = 0;
+                    double carry = 0, acc = 0;
                     for (int i = 0; i + 1 < wy.n; i++) {
                         double dx = wy.x[i + 1] - wy.x[i], dz = wy.z[i + 1] - wy.z[i], len = Math.hypot(dx, dz);
                         double s = carry;
                         for (; s < len; s += 2) {
+                            // a blind tube ending in lava: its walking line stops 3 blocks short of the pool
+                            if (acc + s > wy.walkTo) break;
                             double q = s / len, px = wy.x[i] + dx * q, pz = wy.z[i] + dz * q;
                             // a portal's stub runs on past the seam: the neighbour's own plan carves (and checks) that half
                             if (px < x0 || pz < z0 || px >= x0 + cell || pz >= z0 + cell) continue;
@@ -92,6 +94,7 @@ class TerrainTest {
                             wayPoint(t, li, en, ex, px, f, pz, "way #" + wy.id + " (" + wy.kind + ")", seed, counts);
                         }
                         carry = s - len;
+                        acc += len;
                     }
                 }
                 // the Deep Blue Rift's ledge path, checked as in 0.2.0

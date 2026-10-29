@@ -64,6 +64,11 @@ public final class Net {
         public boolean taper;
         /** A ledge passage between two stages of a climb (it joins no room). */
         public boolean ledge;
+        /**
+         * Where the walking line ends, as arc length from the way's first point: a blind tube ending in a lava pool
+         * stops 3 blocks short of it ({@link Pool}). The way is carved to its end all the same.
+         */
+        public double walkTo = Double.POSITIVE_INFINITY;
 
         void bounds() {
             minX = minZ = minY = 1e18;
@@ -131,12 +136,52 @@ public final class Net {
         public int chamber;
     }
 
+    /**
+     * A lava pool cut 1 deep into a floor (the lead's list of 2026-10-29): the blocks whose centres lie within
+     * {@code half} of the segment a..b (square ends), at level {@code y}, the floor's top block there; rock under them
+     * and round them at that level ({@link #bank} wide), open over them. A Basalt great hall's perched channel along
+     * its lowest terrace ({@code channel}: its banks are kept level with the lava, open over them), and the end of a
+     * blind tube of an Obsidian Tubes hub (lava only under the tube's open space at the feet: the corners of its
+     * pinched end stay rock).
+     */
+    public static final class Pool {
+        public double ax, az, bx, bz, half;
+        public int y;
+        public boolean channel;
+        /** The chamber (a great hall, or a tube's hub) and the way (a blind tube; -1 for a channel). */
+        public int chamber = -1, way = -1;
+        double ux, uz, len;
+
+        Pool(double ax, double az, double bx, double bz, double half, int y) {
+            this.ax = ax; this.az = az; this.bx = bx; this.bz = bz; this.half = half; this.y = y;
+            len = Math.hypot(bx - ax, bz - az);
+            ux = len < 1e-9 ? 1 : (bx - ax) / len;
+            uz = len < 1e-9 ? 0 : (bz - az) / len;
+        }
+
+        /** The width of rock kept round the lava at its level and under it (blocks past its edge). */
+        public double bank() { return channel ? 1.0 : 1.5; }
+
+        /** Distance from (x, z) to the pool's footprint: negative or 0 inside. */
+        public double dist(double x, double z) {
+            double dx = x - ax, dz = z - az;
+            double along = dx * ux + dz * uz, across = Math.abs(-dx * uz + dz * ux);
+            double da = Math.max(-along, along - len), dc = across - half;
+            if (da <= 0 && dc <= 0) return Math.max(da, dc);
+            return Math.hypot(Math.max(0, da), Math.max(0, dc));
+        }
+    }
+
     public final int li, cx, cz;
     public final List<Chamber> ch = new ArrayList<>();
     public final List<Edge> edges = new ArrayList<>();
     public final List<Way> ways = new ArrayList<>();
     public final List<Shaft> shafts = new ArrayList<>();
     public final List<Arch> arches = new ArrayList<>();
+    /** The Basalt Galleries' lava pools: the great halls' channels and the blind tubes' ends. */
+    public final List<Pool> pools = new ArrayList<>();
+    /** Blind tube ends whose pool could not be held by rock: {x, floor block y, z}; their floor is magma instead. */
+    public final List<double[]> magmaEnds = new ArrayList<>();
     final List<Route> canyons = new ArrayList<>();
     public int entry = -1, exit = -1;
     int surgeNiches;

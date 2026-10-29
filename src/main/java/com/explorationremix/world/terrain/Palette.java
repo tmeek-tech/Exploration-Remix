@@ -85,6 +85,8 @@ public final class Palette {
         boolean floor = above <= 3;
         boolean ceil = !floor && below <= 2;
         int W = s.waterY(li);
+        // a blind tube's end whose lava pool could not be held by rock: a magma floor instead (Network.tubeStubEnd)
+        if (floor && li == Terrain.BASALT && t.tubeStubEnd(x, y, z)) return Rock.MAGMA;
         switch (b) {
             case LANTERN_LAKE: {
                 // A still lake with islands: pale shores, ceilings and shallows, a dark bed under the open water, and

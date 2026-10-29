@@ -37,6 +37,9 @@ final class NetPlanner {
         return Math.hypot(x - (x1 + dx * t), z - (z1 + dz * t));
     }
 
+    /** Lava pools on (the default); off only for the voxel test that compares the walk graph without them. */
+    static boolean POOLS = true;
+
     static Net plan(Network w, int li, int cx, int cz) {
         long t0 = System.nanoTime();
         Net n = new Net(li, cx, cz);
@@ -194,6 +197,7 @@ final class NetPlanner {
             biomes();
             innerWalks();
             arches();
+            lavaPools();
             if (n.dark != null) {
                 long s0 = System.nanoTime();
                 sightBreak();
@@ -2338,6 +2342,177 @@ final class NetPlanner {
                 }
                 if (best != null && (great || bestCuts == 0)) n.arches.add(best);
             }
+        }
+
+        // ------------------------------------------------------------------------------------------- lava pools
+        /**
+         * Lava pools cut 1 deep into floors (the lead's list, 2026-10-29), planned last, when every way is known. Each
+         * Basalt great hall gets a perched channel along its lowest terrace where one fits ({@link #channel}); each
+         * blind tube of an Obsidian Tubes hub ends in lava over its last 3 blocks ({@link #tubeEnd}).
+         */
+        void lavaPools() {
+            if (li != Terrain.BASALT || !POOLS) return;
+            for (Chamber c : n.ch) if (c.keep && c.kind == Kind.GREAT) channel(c);
+            for (Way wy : new ArrayList<>(n.ways))
+                if (wy.kind == EK.STUB && wy.round && wy.a >= 0 && n.ch.get(wy.a).kind == Kind.TUBEHUB) tubeEnd(wy);
+        }
+
+        /** A great hall's channel: 24 to 40 long where that fits, 12 at the least. */
+        static final double CHANNEL_MIN = 12;
+
+        /**
+         * A great hall's perched lava channel: 3 to 4 wide, 24 to 40 long (shorter down to 12 where the tread is
+         * smaller), lying on the flat of the hall's lowest tread with its banks (the blocks beside the lava, kept as
+         * rock level with it, open over them) too, the banks at least 0.6 w + 4 from every way's line (so it never
+         * crosses a walk and needs no bridge), 3 blocks from the hall's pillars and 4 from its climbs, and with the
+         * hall's floor 4 blocks round its ends, so the tread joins round them. Tried along the hall's long axis
+         * first, then turning 15 degrees at a time; longest first, from centres nearest the tread's middle. None
+         * when nothing fits: the lowest tread is a blob 15 to 25 across that the walk from the low door crosses, so
+         * most halls have no room (measured in the Implemented section).
+         */
+        void channel(Chamber c) {
+            double R = c.R() + 2;
+            int x0 = (int) Math.floor(c.x - R), z0 = (int) Math.floor(c.z - R), N = (int) Math.ceil(2 * R) + 1;
+            // per block: the tread it is on (-1 off a tread's flat or near the wall), and whether the hall's floor is there
+            int[] tread = new int[N * N];
+            boolean[] hall = new boolean[N * N];
+            int kMin = Integer.MAX_VALUE;
+            for (int i = 0; i < N; i++) for (int j = 0; j < N; j++) {
+                double px = x0 + i + 0.5, pz = z0 + j + 0.5, e = w.e(c, px, pz);
+                hall[i * N + j] = e < 0.92;
+                tread[i * N + j] = -1;
+                if (e >= 0.85) continue;
+                double q = (w.floorAt(c, e, px, pz) - c.f0) / 3.0;
+                long k = Math.round(q);
+                if (Math.abs(q - k) > 1e-6) continue;
+                tread[i * N + j] = (int) k;
+                kMin = Math.min(kMin, (int) k);
+            }
+            if (kMin == Integer.MAX_VALUE) return;
+            // the lowest tread's blocks clear of every way, pillar and climb
+            boolean[] ok = new boolean[N * N];
+            double sx = 0, sz = 0;
+            int cnt = 0;
+            for (int i = 0; i < N; i++) for (int j = 0; j < N; j++) {
+                if (tread[i * N + j] != kMin) continue;
+                double px = x0 + i + 0.5, pz = z0 + j + 0.5;
+                if (!clearOfWays(px, pz) || !clearOfPillars(c, px, pz)) continue;
+                ok[i * N + j] = true;
+                sx += px; sz += pz; cnt++;
+            }
+            if (cnt == 0) return;
+            double mx = sx / cnt, mz = sz / cnt;
+            List<double[]> centres = new ArrayList<>();
+            for (int i = 0; i < N; i++) for (int j = 0; j < N; j++) if (ok[i * N + j]) centres.add(new double[]{x0 + i + 0.5, z0 + j + 0.5});
+            centres.sort((a, b) -> Double.compare(Math.hypot(a[0] - mx, a[1] - mz), Math.hypot(b[0] - mx, b[1] - mz)));
+            double half = r(9610 + c.id, 1.3, 1.9), want = r(9611 + c.id, 24, 40);
+            int y = (int) Math.ceil(c.f0 + 3 * kMin - 1e-9) - 1;
+            // never under the lava table, where the tread is the lava's bed anyway
+            if (y < W + 2) return;
+            // the drawn width first, then the narrowest (3 blocks) before a shorter length
+            double[] halves = half > 1.35 ? new double[]{half, 1.3} : new double[]{half};
+            for (double L = want; L >= CHANNEL_MIN; L -= 2) {
+                for (double hw : halves) {
+                    for (double[] q : centres) {
+                        for (int a = 0; a < 12; a++) {
+                            double th = c.rot + ((a & 1) == 0 ? 1 : -1) * ((a + 1) / 2) * Math.PI / 12;
+                            double ux = Math.cos(th) * L * 0.5, uz = Math.sin(th) * L * 0.5;
+                            Net.Pool p = new Net.Pool(q[0] - ux, q[1] - uz, q[0] + ux, q[1] + uz, hw, y);
+                            p.channel = true;
+                            p.chamber = c.id;
+                            if (!channelFits(p, x0, z0, N, ok, hall)) continue;
+                            n.pools.add(p);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        /** Every block of the channel and its banks is on the clear lowest tread, the hall's floor 4 round its ends. */
+        boolean channelFits(Net.Pool p, int x0, int z0, int N, boolean[] ok, boolean[] hall) {
+            double reach = p.bank() + 4;
+            int i0 = (int) Math.floor(Math.min(p.ax, p.bx) - p.half - reach) - x0, i1 = (int) Math.ceil(Math.max(p.ax, p.bx) + p.half + reach) - x0;
+            int j0 = (int) Math.floor(Math.min(p.az, p.bz) - p.half - reach) - z0, j1 = (int) Math.ceil(Math.max(p.az, p.bz) + p.half + reach) - z0;
+            for (int i = i0; i <= i1; i++) for (int j = j0; j <= j1; j++) {
+                double d = p.dist(x0 + i + 0.5, z0 + j + 0.5);
+                if (d > reach) continue;
+                boolean in = i >= 0 && j >= 0 && i < N && j < N;
+                if (d <= p.bank() + 0.5 ? !(in && ok[i * N + j]) : !(in && hall[i * N + j])) return false;
+            }
+            return true;
+        }
+
+        /** True when (x, z) is at least 0.6 w + 4 from every way's line (w its half-width there) at any height, 2 from a climb. */
+        boolean clearOfWays(double x, double z) {
+            for (Way o : n.ways) {
+                if (x < o.minX - 12 || x > o.maxX + 12 || z < o.minZ - 12 || z > o.maxZ + 12) continue;
+                for (int j = 0; j + 1 < o.n; j++) {
+                    double d = segDistXZ(x, z, o.x[j], o.z[j], o.x[j + 1], o.z[j + 1]);
+                    // the bank's blocks are checked by their centres: half a block more
+                    if (d < 0.6 * Math.max(o.w[j], o.w[j + 1]) + 4.5) return false;
+                }
+            }
+            for (Shaft s : n.shafts) if (Math.hypot(x - s.x, z - s.z) < s.r + 4) return false;
+            return true;
+        }
+
+        boolean clearOfPillars(Chamber c, double x, double z) {
+            for (int k = 0; k + 2 < c.pillars.length; k += 3) {
+                double px = c.kind == Kind.TUBEHUB ? c.x + c.pillars[k] : c.pillars[k], pz = c.kind == Kind.TUBEHUB ? c.z + c.pillars[k + 1] : c.pillars[k + 1];
+                if (Math.hypot(x - px, z - pz) < c.pillars[k + 2] * 1.65 + 3) return false;
+            }
+            return true;
+        }
+
+        /**
+         * A blind tube's lava end: its last 3 blocks along the line, 3 blocks wide, cut into the floor's top block, the
+         * walking line ending 3 blocks before it. The tube's rock holds the pool (its floor slab, and the rock round its
+         * pinched end); when another space comes within reach of the pool or its bank at that level, the end gets a
+         * magma floor instead ({@link Network#tubeStubEnd}).
+         */
+        void tubeEnd(Way wy) {
+            int m = wy.n;
+            double ex = wy.x[m - 1], ez = wy.z[m - 1], L = 0;
+            for (int i = 1; i < m; i++) L += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
+            double dx = ex - wy.x[m - 2], dz = ez - wy.z[m - 2], dl = Math.max(1e-6, Math.hypot(dx, dz));
+            int y = (int) Math.ceil(wy.f[m - 1] - 1e-9) - 1;
+            Net.Pool p = new Net.Pool(ex - dx / dl * 3, ez - dz / dl * 3, ex, ez, 1.0, y);
+            p.chamber = wy.a;
+            p.way = wy.id;
+            if (poolHeld(p, wy)) {
+                n.pools.add(p);
+                wy.walkTo = L - 6;
+            } else {
+                n.magmaEnds.add(new double[]{ex, y, ez});
+            }
+        }
+
+        /** No other space (way, chamber, climb) opens within 2 blocks of a pool or its bank, at the pool's level. */
+        boolean poolHeld(Net.Pool p, Way own) {
+            double reach = p.bank() + 2;
+            double lo = p.y - 1, hi = p.y + 1;
+            double cx = (p.ax + p.bx) * 0.5, cz = (p.az + p.bz) * 0.5, R = p.len * 0.5 + p.half + reach;
+            for (Way o : n.ways) {
+                if (o == own || cx < o.minX - R || cx > o.maxX + R || cz < o.minZ - R || cz > o.maxZ + R) continue;
+                for (int j = 0; j < o.n; j++) {
+                    if (o.f[j] - o.slab[j] > hi + 1 || o.f[j] + o.hgt[j] < lo - 1) continue;
+                    if (p.dist(o.x[j], o.z[j]) < o.w[j] * 1.85 + reach) return false;
+                }
+            }
+            for (Chamber c : n.ch) {
+                if (!c.keep || c.kind == Kind.CANYON || c.yHi() < lo - 1 || c.yLo() > hi + 1) continue;
+                if (Math.hypot(cx - c.x, cz - c.z) > c.R() + R) continue;
+                for (double t = 0; t <= 1; t += 0.25) {
+                    double qx = p.ax + (p.bx - p.ax) * t, qz = p.az + (p.bz - p.az) * t;
+                    if (w.e(c, qx, qz) < 1 + reach / Math.min(c.rx, c.rz)) return false;
+                }
+            }
+            for (Shaft s : n.shafts) {
+                if (s.y1 < lo - 1 || s.y0 > hi + 1) continue;
+                if (p.dist(s.x, s.z) < s.r + reach) return false;
+            }
+            return true;
         }
 
         Arch arch(Chamber c, int t) {

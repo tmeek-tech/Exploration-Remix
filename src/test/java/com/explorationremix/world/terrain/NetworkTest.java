@@ -224,24 +224,30 @@ class NetworkTest {
      * way's floor and half-width there (so Walkway protects and the open way pass re-opens every way), and shaftsIn
      * finds every climb stage from its axis, its vine column and its step. (A switchback that comes back past a point
      * within 4 blocks along the way is one pass, as in the density's column lookup, and its half-width there may be
-     * that of the nearest stretch, up to a few tenths off.)
+     * that of the nearest stretch, up to a few tenths off. A blind tube ending in lava is walked up to its walkTo.)
      */
     static void queries(Terrain t, Net n, String tag, List<String> fails) {
         Network w = t.network;
         int missed = 0, total = 0;
         String first = null;
-        for (Way wy : n.ways) for (int i = 0; i < wy.n; i++) {
-            if (w.cellOf(wy.x[i]) != n.cx || w.cellOf(wy.z[i]) != n.cz) continue;
-            for (int pass = 0; pass < 2; pass++) {
-                total++;
-                Network.WayLines l = pass == 0 ? w.wayLinesAt(n.li, wy.x[i], wy.z[i], 0.5) : w.carvedLinesAt(n.li, wy.x[i], wy.z[i], 0.5);
-                boolean ok = false;
-                for (int k = 0; k < l.n && !ok; k++)
-                    ok = l.d[k] < 1e-6 && Math.abs(l.floor[k] - wy.f[i]) < 1e-6 && Math.abs(l.half[k] - wy.w[i]) < 0.25;
-                if (!ok) {
-                    missed++;
-                    if (first == null) first = String.format(java.util.Locale.ROOT, "way %d (%s) point %d of %d at %.1f, %.1f floor %.2f (pass %d)",
-                            wy.id, wy.kind, i, wy.n, wy.x[i], wy.z[i], wy.f[i], pass);
+        for (Way wy : n.ways) {
+            double acc = 0;
+            for (int i = 0; i < wy.n; i++) {
+                if (i > 0) acc += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
+                // a blind tube ending in lava: its walking line stops 3 blocks short of the pool
+                if (acc > wy.walkTo) break;
+                if (w.cellOf(wy.x[i]) != n.cx || w.cellOf(wy.z[i]) != n.cz) continue;
+                for (int pass = 0; pass < 2; pass++) {
+                    total++;
+                    Network.WayLines l = pass == 0 ? w.wayLinesAt(n.li, wy.x[i], wy.z[i], 0.5) : w.carvedLinesAt(n.li, wy.x[i], wy.z[i], 0.5);
+                    boolean ok = false;
+                    for (int k = 0; k < l.n && !ok; k++)
+                        ok = l.d[k] < 1e-6 && Math.abs(l.floor[k] - wy.f[i]) < 1e-6 && Math.abs(l.half[k] - wy.w[i]) < 0.25;
+                    if (!ok) {
+                        missed++;
+                        if (first == null) first = String.format(java.util.Locale.ROOT, "way %d (%s) point %d of %d at %.1f, %.1f floor %.2f (pass %d)",
+                                wy.id, wy.kind, i, wy.n, wy.x[i], wy.z[i], wy.f[i], pass);
+                    }
                 }
             }
         }
@@ -628,6 +634,14 @@ class NetworkTest {
                         x = wy.x[i] + (r.nextDouble() * 2 - 1) * (wy.w[i] + 6);
                         z = wy.z[i] + (r.nextDouble() * 2 - 1) * (wy.w[i] + 6);
                         y = wy.f[i] - wy.slab[i] - 5 + r.nextDouble() * (wy.slab[i] + wy.hgt[i] + 14);
+                    } else if (pick == 3 && !n.pools.isEmpty() && (k & 8) != 0) {
+                        // round a lava pool: its bed, its banks and the air over them
+                        Net.Pool p = n.pools.get(r.nextInt(n.pools.size()));
+                        double reach = p.half + p.bank() + 3;
+                        double q = r.nextDouble() * 1.4 - 0.2;
+                        x = p.ax + (p.bx - p.ax) * q + (r.nextDouble() * 2 - 1) * reach;
+                        z = p.az + (p.bz - p.az) * q + (r.nextDouble() * 2 - 1) * reach;
+                        y = p.y - 6 + r.nextDouble() * 12;
                     } else if (pick == 3 && !n.arches.isEmpty() && (k & 4) != 0) {
                         Net.Arch a = n.arches.get(r.nextInt(n.arches.size()));
                         double v = (r.nextDouble() * 2 - 1) * a.span, u = (r.nextDouble() * 2 - 1) * (a.halfAlong * 2.2 + 3);
@@ -1176,7 +1190,10 @@ class NetworkTest {
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
 
-    /** Lava fills the bottom of the Basalt Galleries round the bedrock landing, never above the table, with a way out. */
+    /**
+     * Lava fills the bottom of the Basalt Galleries round the bedrock landing, never above the table (but for the
+     * pools cut into floors: {@link #lavaPoolsHold}), with a way out.
+     */
     @Test
     @Tag("voxel")
     void lavaAtTheBottom() {
@@ -1194,7 +1211,7 @@ class NetworkTest {
                 double d = Math.hypot(x + 0.5 - bed.x, z + 0.5 - bed.z);
                 for (int y = v.y0; y < v.y0 + v.ny; y++) {
                     if (v.mat(x, y, z) != VoxelHarness.LAVA) continue;
-                    if (y >= W) high++;
+                    if (y >= W && !inPool(n, x, y, z)) high++;
                     if (d <= 70) lava++;
                     if (y == W - 1 && v.mat(x, y + 1, z) == VoxelHarness.AIR) {
                         for (int k = 0; k < 4; k++) if (v.inMain(x + VoxelHarness.DX[k], W, z + VoxelHarness.DZ[k])) { steps++; break; }
@@ -1209,6 +1226,141 @@ class NetworkTest {
             if (v.nearestPlace(bed.x, bed.f0 + 1, bed.z, 6, 3, true) == null) fails.add(tg + ": the bedrock landing is not reached");
         }
         assertTrue(fails.isEmpty(), String.join("\n", fails));
+    }
+
+    /**
+     * The Basalt Galleries' lava pools (the lead's list, 2026-10-29), built block by block: every block of a pool's
+     * footprint is lava at its level, rock under it and air over it, and its four side neighbours at that level are
+     * rock or lava; a great hall channel's banks are rock level with the lava, open two blocks over them (no rim);
+     * every blind tube of a tube hub ends in a pool or on magma; no way's walking core (up to its walkTo) has lava in
+     * it; and the walk graph is the one built without the pools, but for the pools and their banks. The Basalt voxel
+     * cells, and a cell whose great hall has a channel (most have no room for one: the Implemented section).
+     */
+    @Test
+    @Tag("voxel")
+    void lavaPoolsHold() {
+        List<String> fails = new ArrayList<>();
+        long[] seeds = {VOX_SEEDS[0], VOX_SEEDS[1], 8675309L};
+        int[][] cells = {VOX_CELLS[0], VOX_CELLS[1], {-1, -1}};
+        int channels = 0, ends = 0, magma = 0;
+        for (int s = 0; s < seeds.length; s++) {
+            long seed = seeds[s];
+            int cx = cells[s][0], cz = cells[s][1], li = Terrain.BASALT;
+            String tg = tag(seed, li, cx, cz);
+            Terrain t = terrain(seed);
+            Network w = t.network;
+            Net n = w.net(li, cx, cz);
+            VoxelHarness v = s < VOX_SEEDS.length ? built(seed, li, cx, cz, 1, 1) : unbuilt(t, li, cx, cz);
+            int W = (int) Math.round(t.shape.waterY(li));
+            long lava = 0, banks = 0;
+            for (Net.Pool p : n.pools) {
+                if (p.channel) channels++;
+                int x0 = (int) Math.floor(Math.min(p.ax, p.bx) - p.half - 3), x1 = (int) Math.ceil(Math.max(p.ax, p.bx) + p.half + 3);
+                int z0 = (int) Math.floor(Math.min(p.az, p.bz) - p.half - 3), z1 = (int) Math.ceil(Math.max(p.az, p.bz) + p.half + 3);
+                int y = p.y, here = 0;
+                for (int x = x0; x <= x1; x++) for (int z = z0; z <= z1; z++) {
+                    double d = p.dist(x + 0.5, z + 0.5);
+                    if (d > p.bank()) continue;
+                    if (w.cellOf(x) != cx || w.cellOf(z) != cz) { fails.add(tg + ": a pool reaches across the seam at " + x + " " + z); continue; }
+                    String at = (p.channel ? "channel" : "tube end") + " at " + x + " " + y + " " + z;
+                    if (d <= 0) {
+                        // a blind tube's lava lies only under its open space at the feet: the pinched end's corners are rock
+                        if (!p.channel && v.mat(x, y, z) == VoxelHarness.ROCK) continue;
+                        lava++;
+                        here++;
+                        if (v.mat(x, y, z) != VoxelHarness.LAVA) fails.add(tg + ": no lava in the " + at);
+                        if (v.mat(x, y - 1, z) != VoxelHarness.ROCK) fails.add(tg + ": no rock under the " + at);
+                        if (v.mat(x, y + 1, z) != VoxelHarness.AIR) fails.add(tg + ": no air over the " + at);
+                        for (int k = 0; k < 4; k++) {
+                            int m = v.mat(x + VoxelHarness.DX[k], y, z + VoxelHarness.DZ[k]);
+                            if (m != VoxelHarness.ROCK && m != VoxelHarness.LAVA) fails.add(tg + ": the " + at + " can flow out sideways");
+                        }
+                    } else if (p.channel) {
+                        banks++;
+                        if (v.mat(x, y, z) != VoxelHarness.ROCK || !v.open(x, y + 1, z) || !v.open(x, y + 2, z))
+                            fails.add(tg + ": the bank of the " + at + " is not level with the lava");
+                    }
+                }
+                if (here < (p.channel ? 30 : 3)) fails.add(tg + ": only " + here + " lava blocks in the " + (p.channel ? "channel" : "tube end") + " at " + (int) p.ax + " " + y + " " + (int) p.az);
+            }
+            for (Way wy : n.ways) {
+                if (wy.kind != EK.STUB || !wy.round || wy.a < 0 || n.ch.get(wy.a).kind != Kind.TUBEHUB) continue;
+                ends++;
+                boolean pool = false;
+                for (Net.Pool p : n.pools) pool |= p.way == wy.id;
+                if (pool) continue;
+                double ex = wy.x[wy.n - 1], ez = wy.z[wy.n - 1];
+                int x = (int) Math.floor(ex), z = (int) Math.floor(ez), y = (int) Math.ceil(wy.f[wy.n - 1] - 1e-9) - 1;
+                magma++;
+                if (!t.tubeStubEnd(x, y, z) || t.palette.shell(x, y, z, 1, 12, false) != Rock.MAGMA)
+                    fails.add(tg + ": the blind tube #" + wy.id + " ends with neither lava nor magma at " + x + " " + y + " " + z);
+            }
+            // no lava on a walking core: the feet's block, the one under and the one over, a block round every line
+            int cores = 0;
+            for (Way wy : n.ways) {
+                double acc = 0;
+                for (int i = 0; i + 1 < wy.n; i++) {
+                    double dx = wy.x[i + 1] - wy.x[i], dz = wy.z[i + 1] - wy.z[i], len = Math.hypot(dx, dz);
+                    for (double q = 0; q < len && acc + q <= wy.walkTo; q += 1) {
+                        double px = wy.x[i] + dx * q / len, pz = wy.z[i] + dz * q / len, f = wy.f[i] + (wy.f[i + 1] - wy.f[i]) * q / len;
+                        if (f < W + 2) continue;
+                        int feet = (int) Math.ceil(f - 1e-9);
+                        for (int ox = -1; ox <= 1; ox++) for (int oz = -1; oz <= 1; oz++) for (int y = feet - 1; y <= feet + 1; y++) {
+                            int x = (int) Math.floor(px) + ox, z = (int) Math.floor(pz) + oz;
+                            if (!v.in(x, y, z)) continue;
+                            cores++;
+                            if (v.mat(x, y, z) == VoxelHarness.LAVA && fails.size() < 40)
+                                fails.add(tg + ": lava on the walking core of way #" + wy.id + " (" + wy.kind + ") at " + x + " " + y + " " + z);
+                        }
+                    }
+                    acc += len;
+                }
+            }
+            // the walk graph without the pools: every place of its main component, away from the pools, is still one
+            boolean was = NetPlanner.POOLS;
+            VoxelHarness v0;
+            try {
+                NetPlanner.POOLS = false;
+                v0 = unbuilt(new Terrain(TerrainSettings.defaults(), -64, seed), li, cx, cz);
+            } finally {
+                NetPlanner.POOLS = was;
+            }
+            long same = 0, lost = 0;
+            for (int x = v0.x0; x < v0.x0 + v0.nx; x++) for (int z = v0.z0; z < v0.z0 + v0.nz; z++) {
+                int near = Integer.MIN_VALUE;
+                for (Net.Pool p : n.pools) if (p.dist(x + 0.5, z + 0.5) <= p.bank() + 1) near = p.y;
+                for (int y = v0.y0 + 1; y < v0.y0 + v0.ny - 1; y++) {
+                    if (!v0.place(x, y, z) || !v0.inMain(x, y, z)) continue;
+                    if (near != Integer.MIN_VALUE && y >= near - 1 && y <= near + 3) continue;
+                    if (v.place(x, y, z) && v.inMain(x, y, z)) same++;
+                    else if (lost++ < 10) fails.add(tg + ": the place " + x + " " + y + " " + z + " left the main component with the pools");
+                }
+            }
+            System.out.printf("%s: %d pools (%d lava blocks, %d bank blocks), %d walking-core blocks checked, %d main places kept, %d lost; main %d with pools, %d without%n",
+                    tg, n.pools.size(), lava, banks, cores, same, lost, v.mainSize(), v0.mainSize());
+        }
+        System.out.printf("lavaPoolsHold: %d channels, %d blind tubes, %d of them on magma%n", channels, ends, magma);
+        if (channels == 0) fails.add("no channel to check");
+        if (ends == 0) fails.add("no blind tube to check");
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
+    }
+
+    /** True in the footprint of one of the plan's lava pools, at its level. */
+    static boolean inPool(Net n, int x, int y, int z) {
+        for (Net.Pool p : n.pools) if (y == p.y && p.dist(x + 0.5, z + 0.5) <= 0) return true;
+        return false;
+    }
+
+    /** A Basalt cell built as {@link #built} builds it, not kept. */
+    static VoxelHarness unbuilt(Terrain t, int li, int cx, int cz) {
+        Network w = t.network;
+        int cell = (int) w.cell;
+        VoxelHarness v = VoxelHarness.build(t, li, cx * cell, cz * cell, cell, cell);
+        v.markShafts(w.net(li, cx, cz));
+        Net n = w.net(li, cx, cz);
+        Chamber e = n.ch.get(n.entry);
+        v.connect(e.x, e.f0 + 1, e.z);
+        return v;
     }
 
     /**

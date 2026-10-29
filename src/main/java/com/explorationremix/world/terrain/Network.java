@@ -173,13 +173,17 @@ public final class Network {
         for (Way wy : n.ways) {
             if (x < wy.minX - reach || x > wy.maxX + reach || z < wy.minZ - reach || z > wy.maxZ + reach) continue;
             // every local minimum of the distance along the way, as the column lookup finds them (compute)
-            double bestD = 1e9, bestFi = 0, prevD = 1e9;
+            double bestD = 1e9, bestFi = 0, prevD = 1e9, acc = 0;
             boolean tracking = true;
             for (int i = 0; i + 1 < wy.n; i++) {
                 double ax = wy.x[i], az = wy.z[i], dx = wy.x[i + 1] - ax, dz = wy.z[i + 1] - az;
-                double len2 = dx * dx + dz * dz;
+                double len2 = dx * dx + dz * dz, seg = Math.sqrt(len2);
+                // the walking line ends at walkTo (a blind tube ending in lava stops 3 blocks short of it)
+                if (acc >= wy.walkTo) break;
+                double tMax = acc + seg > wy.walkTo ? (wy.walkTo - acc) / seg : 1;
+                acc += seg;
                 double t = len2 < 1e-9 ? 0 : ((x - ax) * dx + (z - az) * dz) / len2;
-                t = t < 0 ? 0 : (t > 1 ? 1 : t);
+                t = t < 0 ? 0 : (t > tMax ? tMax : t);
                 double d = Math.hypot(x - (ax + dx * t), z - (az + dz * t));
                 if (tracking) {
                     if (d < bestD) { bestD = d; bestFi = i + t; }
@@ -332,6 +336,13 @@ public final class Network {
         for (Chamber c : n.ch) if (c.keep) kept++;
         out.add(String.format(java.util.Locale.ROOT, "network: cell %d %d of layer %d, %d chambers, %d ways, %d climb stages, %d portals%s",
                 cx, cz, li + 1, kept, n.ways.size(), n.shafts.size(), n.portals.size() - n.droppedPortals.size(), n.canyons.isEmpty() ? "" : ", the rift"));
+        if (!n.pools.isEmpty() || !n.magmaEnds.isEmpty()) {
+            Net.Pool ch = null;
+            for (Net.Pool p : n.pools) if (p.channel) ch = p;
+            out.add(String.format(java.util.Locale.ROOT, "  lava: %d blind tubes end in lava, %d on magma%s", n.pools.size() - (ch == null ? 0 : 1), n.magmaEnds.size(),
+                    ch == null ? ", no channel in the great hall" : String.format(java.util.Locale.ROOT, ", a channel %.0f long in the great hall from %.0f %d %.0f to %.0f %.0f",
+                            ch.len, ch.ax, ch.y, ch.az, ch.bx, ch.bz)));
+        }
         Chamber in = null, near = null;
         double bestIn = 1e9, bestNear = 1e9;
         for (Chamber c : n.ch) {
@@ -1034,6 +1045,13 @@ public final class Network {
         /** The Basalt arch over the column, with the column's place under it (q = across / span, along). */
         Arch arch;
         float archQ, archAlong;
+        /**
+         * The lava pool at the column (Basalt), the distance from the column's centre to its footprint (0 or less:
+         * inside), and whether the column holds its lava (inside the footprint, where the floor is the pool's).
+         */
+        Net.Pool pool;
+        float poolD;
+        boolean poolLava;
         double entryD, exitD, endD;
         double lavaE;
         Chamber bed;
@@ -1227,6 +1245,27 @@ public final class Network {
             lc.fLo = Math.min(lc.fLo, deck - thick - 2.5);
             lc.fHi = Math.max(lc.fHi, deck + 2.5);
             break;
+        }
+        lc.pool = null;
+        for (Net.Pool p : n.pools) {
+            double d = p.dist(x + 0.5, z + 0.5);
+            if (d > p.bank() + 0.5 || (lc.pool != null && d >= lc.poolD)) continue;
+            lc.pool = p;
+            lc.poolD = (float) d;
+        }
+        lc.poolLava = false;
+        if (lc.pool != null) {
+            Net.Pool p = lc.pool;
+            // lava only where the floor is the pool's: all of a channel (it lies on the tread's flat), and in a blind
+            // tube only under its open space at the feet, so the corners of its pinched end stay rock (bank)
+            if (lc.poolD <= 0) {
+                boolean in = p.channel;
+                for (int k = 0; k < lc.nw && !in; k++) if (lc.w[k].id == p.way) in = roundShell(lc, k, p.y + 1) < 0;
+                lc.poolLava = in;
+            }
+            // the pool is a per-block term: its bed, its banks and the air over them
+            lc.fLo = Math.min(lc.fLo, p.y - 3);
+            lc.fHi = Math.max(lc.fHi, p.y + 4);
         }
         lc.done = true;
     }
@@ -1666,6 +1705,11 @@ public final class Network {
                 d = Math.max(d, Math.min(vert, side) + 1.2 * detail.noise3(x / 6.0, y / 6.0, z / 6.0));
             }
         }
+        // a lava pool: rock under the lava, and round it at its own level (and under that)
+        if (lc.pool != null) {
+            int py = lc.pool.y;
+            if (lc.poolLava ? y == py - 1 : (lc.poolD <= lc.pool.bank() && (y == py || y == py - 1))) d = Math.max(d, 1);
+        }
         return d;
     }
 
@@ -1780,6 +1824,14 @@ public final class Network {
             d = Math.min(d, landing(lc.exitD, ex.landR, ex.uCy, ex.landHalf, ex.uFloor, x, y, z));
         if (lc.bed != null && lc.endD < lc.bed.rx + 4 && y > lc.bed.f0 - 2 && y < lc.bed.f0 + 20)
             d = Math.min(d, landing(lc.endD, lc.bed.rx, lc.bed.f0 + 7, 12, lc.bed.f0, x, y, z));
+        // a lava pool: its own block cut out of the floor and the air over it (in a tube, only the feet's block, which
+        // the tube leaves open there anyway); a channel's banks open two over them too, so the tread runs level to the
+        // lava's edge with no rim
+        if (lc.pool != null) {
+            int py = lc.pool.y;
+            boolean ch = lc.pool.channel;
+            if (lc.poolLava ? (y >= py && y <= py + (ch ? 2 : 1)) : (ch && lc.poolD <= lc.pool.bank() && y >= py + 1 && y <= py + 2)) d = Math.min(d, -1);
+        }
         return d;
     }
 
@@ -1838,6 +1890,7 @@ public final class Network {
     /** What fills an open block of layer li: {@link Terrain#AIR}, {@link Terrain#WATER} or {@link Terrain#LAVA}. */
     int fluidAt(int li, int x, int y, int z) {
         LCol lc = layer(column(x, z), li);
+        if (lc.poolLava && y == lc.pool.y) return Terrain.LAVA;
         if (y >= shape.waterY(li)) {
             for (int k = 0; k < lc.nc; k++) {
                 Chamber c = lc.c[k];
@@ -1910,6 +1963,18 @@ public final class Network {
         for (int k = 0; k < lc.nc; k++) if (lc.c[k].kind == Kind.TUBEHUB) best = Math.min(best, hubDepth(lc, k, y));
         for (int k = 0; k < lc.nw; k++) if (lc.w[k].round) best = Math.min(best, roundShell(lc, k, y));
         return best;
+    }
+
+    /**
+     * True within 2 blocks of the end of a blind tube whose lava pool could not be held by rock (Basalt), at its floor's
+     * top block or the one under it: the palette lays magma there instead.
+     */
+    boolean tubeStubEnd(int li, int x, int y, int z) {
+        if (li != Terrain.BASALT) return false;
+        LCol lc = layer(column(x, z), li);
+        for (double[] m : lc.net.magmaEnds)
+            if (Math.hypot(x + 0.5 - m[0], z + 0.5 - m[2]) <= 2 && y <= m[1] && y >= m[1] - 1) return true;
+        return false;
     }
 
     /**

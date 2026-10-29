@@ -1026,6 +1026,12 @@ public final class Terrain {
         return li < 0 ? 1e9 : network.tubeShellDepth(li, x, y, z);
     }
 
+    /** True at the floor of a blind tube's end that has magma instead of a lava pool (within 2 blocks of the end). */
+    public boolean tubeStubEnd(int x, int y, int z) {
+        int li = shape.layerAt(y);
+        return li >= 0 && network.tubeStubEnd(li, x, y, z);
+    }
+
     private double routeTubeShellDepth(int x, int y, int z) {
         int li = shape.layerAt(y);
         if (li != BASALT) return 1e9;
