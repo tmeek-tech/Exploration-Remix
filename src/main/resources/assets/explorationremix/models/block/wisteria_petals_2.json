@@ -1,0 +1,7 @@
+{
+  "parent": "explorationremix:block/template/carpet",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "texture": "explorationremix:block/wisteria_petals_2"
+  }
+}

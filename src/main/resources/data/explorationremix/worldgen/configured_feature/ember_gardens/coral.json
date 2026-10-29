@@ -24,10 +24,19 @@
                 "data": {
                   "type": "minecraft:simple_state_provider",
                   "state": {
+                    "Name": "explorationremix:pale_coral"
+                  }
+                },
+                "weight": 2
+              },
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
                     "Name": "explorationremix:pale_coral_fan"
                   }
                 },
-                "weight": 3
+                "weight": 2
               }
             ]
           }
@@ -51,6 +60,15 @@
                 "state": {
                   "Name": "explorationremix:lavender_coral"
                 }
+              },
+              {
+                "type": "minecraft:matching_blocks",
+                "offset": [
+                  0,
+                  -1,
+                  0
+                ],
+                "blocks": "#explorationremix:garden_soil"
               }
             ]
           }

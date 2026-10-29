@@ -1,9 +1,9 @@
 {
-  "feature": "explorationremix:lantern_lake/sea_pickles",
+  "feature": "explorationremix:lantern_lake/lantern_weed",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 10
+      "count": 6
     },
     {
       "type": "minecraft:in_square"

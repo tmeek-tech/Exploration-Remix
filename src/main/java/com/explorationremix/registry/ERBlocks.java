@@ -8,6 +8,7 @@ import com.explorationremix.block.HangingVinesBlock;
 import com.explorationremix.block.HangingVinesPlantBlock;
 import com.explorationremix.block.PoolPlantBlock;
 import com.explorationremix.block.ShelfFungusBlock;
+import com.explorationremix.block.SubmergedPlantBlock;
 import com.explorationremix.block.TallCavePlantBlock;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -156,6 +157,55 @@ public final class ERBlocks {
     public static final RegistryObject<Block> DUSK_VINES_PLANT = BLOCKS.register("dusk_vines_plant",
             () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_BLACK, SoundType.SCULK_VEIN, 0), ERBlocks.DUSK_VINES_REF));
 
+    // =========================================================================================== vegetation rework, part B
+    // No green in the Deep Gardens: lilac, cream, ochre, amber and rust.
+    // ------------------------------------------------------------------------------------------- Lantern Lake
+    /** Cream wisteria hanging beside the lilac; lantern pods hang from it too. */
+    public static final RegistryObject<Block> PALE_WISTERIA = BLOCKS.register("pale_wisteria",
+            () -> new HangingVinesBlock(plant(MapColor.SAND, SoundType.CAVE_VINES, 0), ERBlocks.PALE_WISTERIA_PLANT_REF));
+    public static final RegistryObject<Block> PALE_WISTERIA_PLANT = BLOCKS.register("pale_wisteria_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.SAND, SoundType.CAVE_VINES, 0), ERBlocks.PALE_WISTERIA_REF));
+    /** Petals fallen from the wisteria, lying on the islands. */
+    public static final RegistryObject<Block> WISTERIA_PETALS = block("wisteria_petals",
+            () -> new CavePlantBlock(plant(MapColor.COLOR_PURPLE, SoundType.PINK_PETALS, 0).replaceable(), Block.box(0, 0, 0, 16, 1, 16)));
+    /** The lake bed's fronds, in place of seagrass. */
+    public static final RegistryObject<Block> LILAC_WATERWEED = block("lilac_waterweed",
+            () -> new SubmergedPlantBlock(plant(MapColor.COLOR_PURPLE, SoundType.WET_GRASS, 0).replaceable(), Block.box(2, 0, 2, 14, 12, 14)));
+    /** Glowing pods on the lake bed, in place of sea pickles. */
+    public static final RegistryObject<Block> LANTERN_WEED = block("lantern_weed",
+            () -> new SubmergedPlantBlock(plant(MapColor.COLOR_ORANGE, SoundType.WET_GRASS, 8), Block.box(3, 0, 3, 13, 13, 13)));
+    public static final RegistryObject<Block> PALE_CORAL = block("pale_coral",
+            () -> new PoolPlantBlock(plant(MapColor.SAND, SoundType.WET_GRASS, 0), Block.box(2, 0, 2, 14, 14, 14)));
+
+    // ------------------------------------------------------------------------------------------- Ember Gardens
+    public static final RegistryObject<Block> OCHRE_GRASS = block("ochre_grass",
+            () -> new CavePlantBlock(plant(MapColor.COLOR_ORANGE, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XYZ)
+                    .ignitedByLava(), Block.box(2, 0, 2, 14, 13, 14)));
+    public static final RegistryObject<Block> LILAC_PLUME = tallBlock("lilac_plume",
+            () -> new TallCavePlantBlock(plant(MapColor.COLOR_PURPLE, SoundType.GRASS, 0).offsetType(BlockBehaviour.OffsetType.XZ).ignitedByLava(),
+                    Block.box(1, 0, 1, 15, 16, 15), Block.box(1, 0, 1, 15, 14, 15)));
+    /** The hot pools' glowing plant, along their rims under the water. */
+    public static final RegistryObject<Block> EMBER_ANEMONE = block("ember_anemone",
+            () -> new SubmergedPlantBlock(plant(MapColor.COLOR_ORANGE, SoundType.WET_GRASS, 11), Block.box(3, 0, 3, 13, 10, 13)));
+    public static final RegistryObject<Block> ROSE_TENDRILS = BLOCKS.register("rose_tendrils",
+            () -> new HangingVinesBlock(plant(MapColor.COLOR_BROWN, SoundType.WEEPING_VINES, 0), ERBlocks.ROSE_TENDRILS_PLANT_REF));
+    public static final RegistryObject<Block> ROSE_TENDRILS_PLANT = BLOCKS.register("rose_tendrils_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_BROWN, SoundType.WEEPING_VINES, 0), ERBlocks.ROSE_TENDRILS_REF));
+    /** Amber crystals in the rock, in the Ember Gardens and the Basalt Galleries. */
+    public static final RegistryObject<Block> AMBER_SHARD = block("amber_shard", () -> new AmethystClusterBlock(5, 3,
+            BlockBehaviour.Properties.of().mapColor(MapColor.GOLD).forceSolidOn().noOcclusion().sound(SoundType.LARGE_AMETHYST_BUD)
+                    .strength(1.5F).lightLevel(s -> 7).pushReaction(PushReaction.DESTROY)));
+
+    // ------------------------------------------------------------------------------------------- Basalt Galleries
+    public static final RegistryObject<Block> CINDER_BLOOM = block("cinder_bloom",
+            () -> new CavePlantBlock(plant(MapColor.COLOR_RED, SoundType.NETHER_SPROUTS, 5), Block.box(3, 0, 3, 13, 10, 13)));
+    public static final RegistryObject<Block> ASH_FERN = block("ash_fern",
+            () -> new CavePlantBlock(plant(MapColor.COLOR_GRAY, SoundType.ROOTS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XZ),
+                    Block.box(2, 0, 2, 14, 13, 14)));
+    /** A dark crust over the basalt with glowing cracks: light only where it covers a face, like glow lichen. */
+    public static final RegistryObject<Block> SMOULDER_LICHEN = block("smoulder_lichen",
+            () -> new GlowLichenBlock(lichen(MapColor.NETHER, SoundType.GLOW_LICHEN, 3)));
+
     // Vine tips and bodies point at each other, so they look each other up when first needed.
     private static final Supplier<Block> WISTERIA_REF = () -> WISTERIA.get();
     private static final Supplier<Block> WISTERIA_PLANT_REF = () -> WISTERIA_PLANT.get();
@@ -174,6 +224,11 @@ public final class ERBlocks {
     private static final Supplier<Block> GOLD_THREADS_PLANT_REF = () -> GOLD_THREADS_PLANT.get();
     private static final Supplier<Block> DUSK_VINES_REF = () -> DUSK_VINES.get();
     private static final Supplier<Block> DUSK_VINES_PLANT_REF = () -> DUSK_VINES_PLANT.get();
+    // vegetation rework, part B
+    private static final Supplier<Block> PALE_WISTERIA_REF = () -> PALE_WISTERIA.get();
+    private static final Supplier<Block> PALE_WISTERIA_PLANT_REF = () -> PALE_WISTERIA_PLANT.get();
+    private static final Supplier<Block> ROSE_TENDRILS_REF = () -> ROSE_TENDRILS.get();
+    private static final Supplier<Block> ROSE_TENDRILS_PLANT_REF = () -> ROSE_TENDRILS_PLANT.get();
 
     // Only the vine tips have items, like vanilla's weeping vines.
     static {
@@ -186,6 +241,9 @@ public final class ERBlocks {
         item("silver_frond", SILVER_FROND);
         item("gold_threads", GOLD_THREADS);
         item("dusk_vines", DUSK_VINES);
+        // vegetation rework, part B
+        item("pale_wisteria", PALE_WISTERIA);
+        item("rose_tendrils", ROSE_TENDRILS);
     }
 
     public static final RegistryObject<CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()

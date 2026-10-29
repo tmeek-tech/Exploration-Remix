@@ -1,0 +1,68 @@
+{
+  "variants": {
+    "facing=down": [
+      {
+        "model": "explorationremix:block/amber_shard",
+        "x": 180
+      },
+      {
+        "model": "explorationremix:block/amber_shard_2",
+        "x": 180
+      }
+    ],
+    "facing=east": [
+      {
+        "model": "explorationremix:block/amber_shard",
+        "x": 90,
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/amber_shard_2",
+        "x": 90,
+        "y": 90
+      }
+    ],
+    "facing=north": [
+      {
+        "model": "explorationremix:block/amber_shard",
+        "x": 90
+      },
+      {
+        "model": "explorationremix:block/amber_shard_2",
+        "x": 90
+      }
+    ],
+    "facing=south": [
+      {
+        "model": "explorationremix:block/amber_shard",
+        "x": 90,
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/amber_shard_2",
+        "x": 90,
+        "y": 180
+      }
+    ],
+    "facing=up": [
+      {
+        "model": "explorationremix:block/amber_shard"
+      },
+      {
+        "model": "explorationremix:block/amber_shard_2"
+      }
+    ],
+    "facing=west": [
+      {
+        "model": "explorationremix:block/amber_shard",
+        "x": 90,
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/amber_shard_2",
+        "x": 90,
+        "y": 270
+      }
+    ]
+  }
+}

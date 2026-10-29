@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/lantern_weed"
+      },
+      {
+        "model": "explorationremix:block/lantern_weed_2"
+      }
+    ]
+  }
+}

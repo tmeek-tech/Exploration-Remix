@@ -1,0 +1,13 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:sand",
+    "minecraft:gravel",
+    "minecraft:clay",
+    "minecraft:calcite",
+    {
+      "id": "create:limestone",
+      "required": false
+    }
+  ]
+}

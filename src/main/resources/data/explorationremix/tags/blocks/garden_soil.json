@@ -1,0 +1,12 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:calcite",
+    "minecraft:sand",
+    "minecraft:brown_mushroom_block",
+    {
+      "id": "create:limestone",
+      "required": false
+    }
+  ]
+}

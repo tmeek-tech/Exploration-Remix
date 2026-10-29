@@ -12,6 +12,7 @@ import com.explorationremix.world.feature.GiantSpikeFeature;
 import com.explorationremix.world.feature.LayerHeight;
 import com.explorationremix.world.feature.LayerRangePlacement;
 import com.explorationremix.world.feature.MixStateProvider;
+import com.explorationremix.world.feature.MushroomShelfFeature;
 import com.explorationremix.world.feature.OpenWayFeature;
 import com.explorationremix.world.feature.RootvaultsLookFilter;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
@@ -45,6 +46,8 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<CeilingRootsFeature.Config>> CEILING_ROOTS = FEATURES.register("ceiling_roots", () -> new CeilingRootsFeature(CeilingRootsFeature.Config.CODEC));
     public static final RegistryObject<Feature<GiantFungusFeature.Config>> GIANT_FUNGUS = FEATURES.register("giant_fungus", () -> new GiantFungusFeature(GiantFungusFeature.Config.CODEC));
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> BROKEN_MACHINE = FEATURES.register("broken_machine", () -> new BrokenMachineFeature(NoneFeatureConfiguration.CODEC));
+    // vegetation rework, part B: brown mushroom shelves stacked up the Ember Gardens' walls
+    public static final RegistryObject<Feature<MushroomShelfFeature.Config>> MUSHROOM_SHELF = FEATURES.register("mushroom_shelf", () -> new MushroomShelfFeature(MushroomShelfFeature.Config.CODEC));
 
     public static final RegistryObject<BlockStateProviderType<FallbackStateProvider>> FALLBACK_PROVIDER = STATE_PROVIDERS.register("fallback", () -> new BlockStateProviderType<>(FallbackStateProvider.CODEC));
     public static final RegistryObject<BlockStateProviderType<MixStateProvider>> MIX_PROVIDER = STATE_PROVIDERS.register("mix", () -> new BlockStateProviderType<>(MixStateProvider.CODEC));

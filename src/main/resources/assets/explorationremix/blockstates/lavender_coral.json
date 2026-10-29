@@ -1,7 +1,12 @@
 {
   "variants": {
-    "": {
-      "model": "explorationremix:block/lavender_coral"
-    }
+    "": [
+      {
+        "model": "explorationremix:block/lavender_coral"
+      },
+      {
+        "model": "explorationremix:block/lavender_coral_2"
+      }
+    ]
   }
 }

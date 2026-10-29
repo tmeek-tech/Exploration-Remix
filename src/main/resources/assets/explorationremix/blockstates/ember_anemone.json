@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/ember_anemone"
+      },
+      {
+        "model": "explorationremix:block/ember_anemone_2"
+      }
+    ]
+  }
+}

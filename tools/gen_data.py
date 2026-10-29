@@ -58,7 +58,7 @@ BLOCKS = {
     "lantern_fungus": ("Lantern Fungus", "cross", {"variants": 2}),
     "lantern_roots": ("Lantern Roots", "cross"),
     "wisteria": ("Wisteria", "vine"),
-    "wisteria_plant": ("Wisteria", "vine_body:wisteria"),
+    "wisteria_plant": ("Wisteria", "vine_body:wisteria", {"variants": 3}),
     "lantern_pod": ("Lantern Pod", "cross"),
     "lavender_flower": ("Lavender Flower", "cross"),
     "gold_flower": ("Gold Flower", "cross"),
@@ -67,11 +67,11 @@ BLOCKS = {
     "blue_glow_vines": ("Blue Glow Vines", "vine"),
     "blue_glow_vines_plant": ("Blue Glow Vines", "vine_body:blue_glow_vines"),
     "silver_fern": ("Silver Fern", "cross", {"variants": 3}),
-    "orange_shelf_fungus": ("Orange Shelf Fungus", "shelf"),
-    "lavender_coral": ("Lavender Coral", "cross"),
+    "orange_shelf_fungus": ("Orange Shelf Fungus", "shelf", {"variants": 2}),
+    "lavender_coral": ("Lavender Coral", "cross", {"variants": 2}),
     "pale_coral_fan": ("Pale Coral Fan", "coral_fan"),
     "ember_vines": ("Ember Vines", "vine"),
-    "ember_vines_plant": ("Ember Vines", "vine_body:ember_vines"),
+    "ember_vines_plant": ("Ember Vines", "vine_body:ember_vines", {"variants": 2}),
     # ---- vegetation rework, part A: Upper Caves and Blue Reaches
     "amber_bulb_vine": ("Amber Bulb Vine", "vine", {"variants": 2}),
     "amber_bulb_vine_plant": ("Amber Bulb Vine", "vine_body:amber_bulb_vine", {"variants": 3}),
@@ -93,6 +93,22 @@ BLOCKS = {
     "asurine_bud": ("Asurine Bud", "crystal", {"variants": 2}),
     "dusk_vines": ("Dusk Vines", "vine"),
     "dusk_vines_plant": ("Dusk Vines", "vine_body:dusk_vines", {"variants": 2}),
+    # ---- vegetation rework, part B: Deep Gardens (no green) and Basalt Galleries
+    "pale_wisteria": ("Pale Wisteria", "vine"),
+    "pale_wisteria_plant": ("Pale Wisteria", "vine_body:pale_wisteria", {"variants": 2}),
+    "wisteria_petals": ("Wisteria Petals", "carpet", {"variants": 3}),
+    "lilac_waterweed": ("Lilac Waterweed", "cross", {"variants": 3}),
+    "lantern_weed": ("Lantern Weed", "cross", {"variants": 2}),
+    "pale_coral": ("Pale Coral", "cross", {"variants": 2}),
+    "ochre_grass": ("Ochre Grass", "cross", {"variants": 3, "weights": [3, 2, 2]}),
+    "lilac_plume": ("Lilac Plume", "tall", {"variants": 2}),
+    "ember_anemone": ("Ember Anemone", "cross", {"variants": 2}),
+    "rose_tendrils": ("Rose Tendrils", "vine"),
+    "rose_tendrils_plant": ("Rose Tendrils", "vine_body:rose_tendrils", {"variants": 2}),
+    "amber_shard": ("Amber Shard", "crystal", {"variants": 2}),
+    "cinder_bloom": ("Cinder Bloom", "cross", {"variants": 2}),
+    "ash_fern": ("Ash Fern", "cross", {"variants": 2}),
+    "smoulder_lichen": ("Smoulder Lichen", "lichen", {"variants": 2}),
 }
 NO_DROP = {"band_stone"}
 
@@ -101,10 +117,12 @@ BLOCK_TAGS = {
     ("minecraft", "climbable"): ["wisteria", "wisteria_plant", "blue_glow_vines", "blue_glow_vines_plant", "ember_vines", "ember_vines_plant",
                                  # vegetation rework, part A: the new vines, and the ivy on the walls
                                  "amber_bulb_vine", "amber_bulb_vine_plant", "weeping_ivy", "weeping_ivy_plant", "silver_frond",
-                                 "silver_frond_plant", "gold_threads", "gold_threads_plant", "dusk_vines", "dusk_vines_plant", "grotto_ivy"],
-    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud"],
-    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen"],
-    (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots"],
+                                 "silver_frond_plant", "gold_threads", "gold_threads_plant", "dusk_vines", "dusk_vines_plant", "grotto_ivy",
+                                 # vegetation rework, part B
+                                 "pale_wisteria", "pale_wisteria_plant", "rose_tendrils", "rose_tendrils_plant"],
+    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "amber_shard"],
+    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen"],
+    (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "pale_wisteria", "pale_wisteria_plant"],
 }
 # Vanilla growth that /remix census counts as plants, with every block above but band stone (tag explorationremix:plants).
 VANILLA_PLANTS = ["minecraft:cave_vines", "minecraft:cave_vines_plant", "minecraft:glow_lichen", "minecraft:moss_carpet", "minecraft:fern",

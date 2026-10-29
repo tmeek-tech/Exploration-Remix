@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/ash_fern"
+      },
+      {
+        "model": "explorationremix:block/ash_fern_2"
+      }
+    ]
+  }
+}
