@@ -1,7 +1,8 @@
 """Plant and crystal textures for Exploration Remix: 16 by 16, vanilla style, colours taken from Taran's pictures.
 
 Shapes that need exact pixels are drawn as character grids (one character per pixel, '.' is transparent); hanging
-vines and fronds are drawn by small deterministic routines, so every texture only changes when this file does.
+vines and fronds are drawn by small deterministic routines, so every texture only changes when this file does. The
+plants of the vegetation rework are painted in plants_upper.py and plants_deep.py with the shared helpers below.
 """
 import math, random
 from PIL import Image
@@ -26,6 +27,225 @@ def grid(rows, palette):
 
 def blank():
     return Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+
+
+# ------------------------------------------------------------------------------------------------ shared helpers
+# Small drawing routines for the painters here and in plants_upper.py (Upper Caves and Blue Reaches) and
+# plants_deep.py (Deep Gardens and Basalt Galleries).
+#
+# Vines: every variant of a vine keeps its strands on the same columns and on the path sway() gives, which repeats
+# every 16 rows, so any body variant stacks on any other and the tip continues the body from its row 0. Nothing that
+# spans several rows is drawn on rows 0, 1, 14 or 15 of a body, so no bulb or leaf is cut in half.
+
+# texture name -> the colours (hex) of its pixels that glow: textures.py lifts them into <texture>_glow.png, which the
+# models draw again at full brightness. Filled by register().
+GLOW = {}
+
+
+def register(table, name, fn, glow=None):
+    """Adds a painter to a PAINTERS table, with the colours of its glowing pixels if it has any."""
+    table["block/" + name] = fn
+    if glow:
+        GLOW["block/" + name] = {c.upper() for c in glow}
+
+
+def put(px, x, y, c):
+    """Colour pixel (x, y) if it is inside the tile."""
+    if 0 <= x < 16 and 0 <= y < 16:
+        px[x, y] = hexc(c)
+
+
+def put_wrap(px, x, y, c):
+    """Colour pixel (x, y), wrapping round the tile's edges (for sheets that tile across a wall or floor)."""
+    px[x % 16, y % 16] = hexc(c)
+
+
+def stamp(px, x, y, rows, colours):
+    """A small character grid drawn with its top left corner at (x, y); '.' is left alone."""
+    for dy, row in enumerate(rows):
+        for dx, ch in enumerate(row):
+            if ch != ".":
+                put(px, x + dx, y + dy, colours[ch])
+
+
+def sway(x0, amp=1.0, phase=0.0):
+    """The column of a hanging strand on rows 0 to 15. It repeats every 16 rows, so tiles stack seamlessly."""
+    return [x0 + int(round(amp * math.sin(2 * math.pi * y / 16 + phase))) for y in range(16)]
+
+
+def ball(px, cx, cy, r, ramp, wrap=False):
+    """A round blob lit from the top left. ramp runs from dark to light. A centre on a pixel corner and r=1 gives a
+    2x2 bead; a centre on a pixel centre and r=1.5 gives a 3x3 bead."""
+    n = len(ramp)
+    for y in range(int(math.floor(cy - r)) - 1, int(math.ceil(cy + r)) + 1):
+        for x in range(int(math.floor(cx - r)) - 1, int(math.ceil(cx + r)) + 1):
+            dx, dy = x + 0.5 - cx, y + 0.5 - cy
+            d = math.hypot(dx, dy)
+            if d > r + 0.05:
+                continue
+            rr = max(r, 0.5)
+            t = 0.62 - 0.42 * (dx + dy) / (rr * 1.41) - 0.3 * (d / rr) ** 2
+            (put_wrap if wrap else put)(px, x, y, ramp[max(0, min(n - 1, int(t * n)))])
+
+
+def bead(px, x, y, ramp):
+    """A 2x2 bead lit from the top left; ramp = (dark, mid, light, highlight). Drawn top to bottom, lower beads overlap
+    upper ones and their dark corners keep the beads apart."""
+    put(px, x, y, ramp[-1])
+    put(px, x + 1, y, ramp[-2])
+    put(px, x, y + 1, ramp[-3])
+    put(px, x + 1, y + 1, ramp[0])
+
+
+def leaf(px, x, y, side, ramp):
+    """A small drooping leaf off a stem at (x, y) on side -1 (left) or 1 (right); ramp = (shadow, mid, light)."""
+    put(px, x + side, y, ramp[1])
+    put(px, x + 2 * side, y, ramp[2])
+    put(px, x + side, y + 1, ramp[0])
+
+
+def bezier(p0, p1, p2, steps=40):
+    """Integer points along a quadratic curve, without repeats."""
+    out = []
+    for i in range(steps + 1):
+        t = i / steps
+        x = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0]
+        y = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1]
+        p = (int(math.floor(x)), int(math.floor(y)))
+        if not out or out[-1] != p:
+            out.append(p)
+    return out
+
+
+def frond(px, pts, rachis, ramp, max_len=2, start=0.3, put_fn=None):
+    """A fern frond along pts (base first): a bare stalk for the first `start` of its length, then leaflets on
+    alternating sides every other pixel, slanting towards the tip. rachis = (base colour, upper colour);
+    ramp = (inner leaflet, outer leaflet, pale tip)."""
+    put_fn = put_fn or put
+    n = len(pts)
+    for i, (x, y) in enumerate(pts):
+        put_fn(px, x, y, rachis[0] if i < n * 0.5 else rachis[1])
+    put_fn(px, pts[-1][0], pts[-1][1], ramp[2])
+    j = 0
+    for i in range(int(n * start), n - 1):
+        x, y = pts[i]
+        dx, dy = pts[i + 1][0] - x, pts[i + 1][1] - y
+        j += 1
+        if j % 2:
+            continue
+        side = 1 if (j // 2) % 2 else -1
+        ox, oy = -dy * side, dx * side
+        if (ox, oy) == (0, 0):
+            continue
+        length = max_len if i < n - 3 else 1
+        for k in range(1, length + 1):
+            lx, ly = x + ox * k + (dx if k == 2 else 0), y + oy * k + (dy if k == 2 else 0)
+            put_fn(px, lx, ly, ramp[0] if k < length else (ramp[1] if i < n * 0.75 else ramp[2]))
+
+
+FERN3 = ("#9DB9A8", "#C6DACD", "#EEF6F0")   # inner leaflet, outer leaflet, pale tip: the silver fern's colours
+
+
+def fern_fan(fronds, ramp=FERN3, rachis=("#5F7C50", "#78978A"), max_len=2, height=16):
+    """Fronds (base, control point, tip) drawn on a 16 by height canvas: 16 for a plant, 32 for both halves of a tall
+    one (cut the canvas in two)."""
+    canvas = Image.new("RGBA", (16, height), (0, 0, 0, 0))
+    cpx = canvas.load()
+
+    def cput(_px, x, y, c):
+        if 0 <= x < 16 and 0 <= y < height:
+            cpx[x, y] = hexc(c)
+    for base, ctrl, tip in fronds:
+        frond(None, bezier(base, ctrl, tip, steps=60), rachis, ramp, max_len=max_len, put_fn=cput)
+    return canvas
+
+
+def branch(px, rng, x, y, angle, length, depth, ramp, width=1):
+    """A coral or shrub branch from (x, y) going up at angle (radians from vertical), splitting depth times.
+    ramp runs from the base (dark) to the tips (light)."""
+    pts = []
+    cx, cy = x + 0.5, y + 0.5
+    for s in range(length):
+        cx += math.sin(angle)
+        cy -= math.cos(angle)
+        pts.append((int(math.floor(cx)), int(math.floor(cy))))
+    level = len(ramp) - 1 - depth
+    for i, (bx, by) in enumerate(pts):
+        c = ramp[max(0, min(len(ramp) - 1, level - (1 if i < len(pts) // 2 else 0)))]
+        put(px, bx, by, c)
+        if width > 1:
+            put(px, bx + 1, by, ramp[max(0, level - 1)])
+    ex, ey = pts[-1] if pts else (x, y)
+    if depth <= 0:
+        put(px, ex, ey - 1, ramp[-1])
+        return
+    spread = 0.5 + rng.random() * 0.3
+    branch(px, rng, ex, ey, angle - spread, max(2, length - 1 - rng.randrange(2)), depth - 1, ramp)
+    branch(px, rng, ex, ey, angle + spread, max(2, length - 1 - rng.randrange(2)), depth - 1, ramp)
+
+
+def blade(px, x0, top, lean, ramp, curve=0.0):
+    """A grass blade from the bottom row at x0 up to row top, leaning lean pixels; ramp from base to tip."""
+    h = 15 - top
+    for i in range(h + 1):
+        t = i / max(1, h)
+        x = x0 + int(round(lean * t + curve * t * t))
+        put(px, x, 15 - i, ramp[min(len(ramp) - 1, int(t * len(ramp)))])
+
+
+def prisms(px, specs, faces):
+    """Crystal prisms standing on the bottom row. specs: (base x, width 2 or 3, height, lean per 4 rows).
+    faces: dict with 'dark', 'left', 'right', 'edge', 'tip' colours."""
+    for bx, w, h, lean in specs:
+        for i in range(h):
+            y = 15 - i
+            x = bx + int(lean * i / 4.0)
+            taper = i >= h - 2
+            if w == 3 and not taper:
+                put(px, x, y, faces["left"])
+                put(px, x + 1, y, faces["right"])
+                put(px, x + 2, y, faces["edge"])
+                put(px, x - 1, y, faces["dark"])
+            else:
+                put(px, x, y, faces["left"] if not taper else faces["right"])
+                put(px, x + 1, y, faces["edge"] if not taper else faces["tip"])
+        x = bx + int(lean * h / 4.0)
+        put(px, x, 15 - h, faces["tip"])
+
+
+def speckle_sheet(seed, count, rmin, rmax, ramp, coverage=None, stamp_fn=None):
+    """A sheet of blobs that tiles across a wall or floor (lichens, moss carpets): count blobs, or blobs until this
+    share of the tile is covered. stamp_fn(px, rng, x, y) draws something else than a blob."""
+    rng = random.Random(seed)
+    img = blank()
+    px = img.load()
+    placed = 0
+    while True:
+        cx, cy = rng.random() * 16, rng.random() * 16
+        r = rmin + rng.random() * (rmax - rmin)
+        if stamp_fn:
+            stamp_fn(px, rng, int(cx), int(cy))
+        else:
+            ball(px, cx, cy, r, ramp, wrap=True)
+        placed += 1
+        filled = sum(1 for y in range(16) for x in range(16) if px[x, y][3])
+        if coverage is None and placed >= count:
+            break
+        if coverage is not None and (filled >= coverage * 256 or placed > 400):
+            break
+    return img
+
+
+def recolour(img, mapping):
+    """The same picture with some colours swapped (hex to hex)."""
+    out = img.copy()
+    px = out.load()
+    m = {hexc(a): hexc(b) for a, b in mapping.items()}
+    for y in range(16):
+        for x in range(16):
+            if px[x, y] in m:
+                px[x, y] = m[px[x, y]]
+    return out
 
 
 # ------------------------------------------------------------------------------------------------ Rootvaults

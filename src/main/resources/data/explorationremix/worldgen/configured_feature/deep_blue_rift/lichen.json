@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:blue_lichen"
+      }
+    },
+    "faces": "any",
+    "tries": 40,
+    "radius": 6,
+    "height": 6,
+    "on": "#explorationremix:blue_rift_walls",
+    "in_water": false
+  }
+}

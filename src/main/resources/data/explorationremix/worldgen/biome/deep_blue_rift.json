@@ -111,14 +111,17 @@
     [],
     [],
     [
-      "explorationremix:deep_blue_rift/crystals"
+      "explorationremix:deep_blue_rift/crystals",
+      "explorationremix:deep_blue_rift/lichen"
     ],
     [
       "explorationremix:deep_blue_rift/waterfalls"
     ],
     [
       "explorationremix:deep_blue_rift/glow_vines",
-      "explorationremix:deep_blue_rift/mushrooms"
+      "explorationremix:deep_blue_rift/mushrooms",
+      "explorationremix:deep_blue_rift/glowbells",
+      "explorationremix:deep_blue_rift/pagodas"
     ],
     [
       "explorationremix:open_way"

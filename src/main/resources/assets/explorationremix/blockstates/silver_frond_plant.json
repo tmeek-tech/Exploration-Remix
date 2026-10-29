@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/silver_frond_plant"
+      },
+      {
+        "model": "explorationremix:block/silver_frond_plant_2"
+      }
+    ]
+  }
+}

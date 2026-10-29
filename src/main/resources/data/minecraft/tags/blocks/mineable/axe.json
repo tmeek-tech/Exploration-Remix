@@ -1,6 +1,9 @@
 {
   "replace": false,
   "values": [
-    "explorationremix:orange_shelf_fungus"
+    "explorationremix:orange_shelf_fungus",
+    "explorationremix:ivory_bracket",
+    "explorationremix:grotto_ivy",
+    "explorationremix:blue_lichen"
   ]
 }

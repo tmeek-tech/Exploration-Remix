@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:silver_wall_fern"
+      }
+    },
+    "faces": "walls",
+    "tries": 32,
+    "radius": 6,
+    "height": 6,
+    "on": "#explorationremix:cave_rock",
+    "in_water": false
+  }
+}

@@ -11,6 +11,7 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.MultifaceBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.levelgen.feature.Feature;
@@ -23,8 +24,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Sticks blocks onto the faces of rock around the origin: crystals on any face, shelf fungi on walls. A block with a
- * {@code facing} property points away from the face it grows on, and is waterlogged when it grows in water.
+ * Sticks blocks onto the faces of rock around the origin: crystals on any face, shelf fungi on walls, sheets of lichen
+ * and ivy. A block with a {@code facing} property points away from the face it grows on; a sheet (a MultifaceBlock)
+ * covers every allowed face it touches. Either is waterlogged when it grows in water. Vanilla's multiface_growth only
+ * looks at the blocks next to its origin; this scatters its tries over a radius by height box, so sheets form patches.
  */
 public final class SurfaceAttachFeature extends Feature<SurfaceAttachFeature.Config> {
     public record Config(BlockStateProvider state, String faces, int tries, int radius, int height, HolderSet<Block> on,
@@ -67,7 +70,10 @@ public final class SurfaceAttachFeature extends Feature<SurfaceAttachFeature.Con
             if (supports.isEmpty()) continue;
             Direction support = supports.get(random.nextInt(supports.size()));
             BlockState place = c.state().getState(random, pos);
-            if (place.hasProperty(BlockStateProperties.FACING)) place = place.setValue(BlockStateProperties.FACING, support.getOpposite());
+            if (place.getBlock() instanceof MultifaceBlock) {
+                // a sheet covers every face it found support on
+                for (Direction d : supports) place = place.setValue(MultifaceBlock.getFaceProperty(d), true);
+            } else if (place.hasProperty(BlockStateProperties.FACING)) place = place.setValue(BlockStateProperties.FACING, support.getOpposite());
             else if (place.hasProperty(BlockStateProperties.HORIZONTAL_FACING)) {
                 if (support.getAxis().isVertical()) continue;
                 place = place.setValue(BlockStateProperties.HORIZONTAL_FACING, support.getOpposite());
@@ -83,13 +89,17 @@ public final class SurfaceAttachFeature extends Feature<SurfaceAttachFeature.Con
         return any;
     }
 
-    /** "any", "walls", "floor" (resting on the block below), "ceiling" (hanging from the block above), or "floor_walls". */
+    /**
+     * "any", "walls", "floor" (resting on the block below), "ceiling" (hanging from the block above), "floor_walls", or
+     * "walls_ceiling" (climbable sheets, which would slow anyone walking over a floor of them).
+     */
     private static boolean allowed(String faces, Direction d) {
         return switch (faces) {
             case "walls" -> d.getAxis().isHorizontal();
             case "floor" -> d == Direction.DOWN;
             case "ceiling" -> d == Direction.UP;
             case "floor_walls" -> d != Direction.UP;
+            case "walls_ceiling" -> d != Direction.DOWN;
             default -> true;
         };
     }

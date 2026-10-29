@@ -2,10 +2,27 @@
   "type": "explorationremix:surface_attach",
   "config": {
     "state": {
-      "type": "minecraft:simple_state_provider",
-      "state": {
-        "Name": "explorationremix:asurine_crystal"
-      }
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:asurine_crystal"
+            }
+          },
+          "weight": 1
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:asurine_bud"
+            }
+          },
+          "weight": 2
+        }
+      ]
     },
     "faces": "any",
     "tries": 48,

@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:ivory_bracket"
+      }
+    },
+    "faces": "walls",
+    "tries": 64,
+    "radius": 7,
+    "height": 8,
+    "on": "#explorationremix:cave_rock",
+    "in_water": false
+  }
+}

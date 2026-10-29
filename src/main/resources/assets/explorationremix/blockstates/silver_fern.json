@@ -1,7 +1,15 @@
 {
   "variants": {
-    "": {
-      "model": "explorationremix:block/silver_fern"
-    }
+    "": [
+      {
+        "model": "explorationremix:block/silver_fern"
+      },
+      {
+        "model": "explorationremix:block/silver_fern_2"
+      },
+      {
+        "model": "explorationremix:block/silver_fern_3"
+      }
+    ]
   }
 }

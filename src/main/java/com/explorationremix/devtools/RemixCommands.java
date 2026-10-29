@@ -49,6 +49,7 @@ import java.util.Locale;
  *     <li>{@code /remix view <name> [n]}: a spot in that biome with a wide view into it, facing the view (for
  *     screenshots); n picks the Rootvaults look (0 root halls, 1 teal grottos, 2 ravines) or another set piece</li>
  *     <li>{@code /remix slice [x|z] [half width]}: a picture of the blocks under you, written to remix_slices/</li>
+ *     <li>{@code /remix census [radius]}: how overgrown and lit the caves around you are, per biome (PlantCensus)</li>
  * </ul>
  */
 public final class RemixCommands {
@@ -60,6 +61,7 @@ public final class RemixCommands {
         d.register(Commands.literal("remix").requires(s -> s.hasPermission(2))
                 .then(Commands.literal("layers").executes(RemixCommands::layers))
                 .then(Commands.literal("info").executes(RemixCommands::info))
+                .then(PlantCensus.command())
                 .then(Commands.literal("tp")
                         .then(Commands.argument("layer", IntegerArgumentType.integer(1, 8)).executes(c -> tpLayer(c, IntegerArgumentType.getInteger(c, "layer"))))
                         .then(Commands.literal("gate").then(Commands.argument("band", IntegerArgumentType.integer(1, 8))

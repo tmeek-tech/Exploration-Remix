@@ -1,0 +1,68 @@
+{
+  "variants": {
+    "facing=down": [
+      {
+        "model": "explorationremix:block/asurine_bud",
+        "x": 180
+      },
+      {
+        "model": "explorationremix:block/asurine_bud_2",
+        "x": 180
+      }
+    ],
+    "facing=east": [
+      {
+        "model": "explorationremix:block/asurine_bud",
+        "x": 90,
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/asurine_bud_2",
+        "x": 90,
+        "y": 90
+      }
+    ],
+    "facing=north": [
+      {
+        "model": "explorationremix:block/asurine_bud",
+        "x": 90
+      },
+      {
+        "model": "explorationremix:block/asurine_bud_2",
+        "x": 90
+      }
+    ],
+    "facing=south": [
+      {
+        "model": "explorationremix:block/asurine_bud",
+        "x": 90,
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/asurine_bud_2",
+        "x": 90,
+        "y": 180
+      }
+    ],
+    "facing=up": [
+      {
+        "model": "explorationremix:block/asurine_bud"
+      },
+      {
+        "model": "explorationremix:block/asurine_bud_2"
+      }
+    ],
+    "facing=west": [
+      {
+        "model": "explorationremix:block/asurine_bud",
+        "x": 90,
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/asurine_bud_2",
+        "x": 90,
+        "y": 270
+      }
+    ]
+  }
+}

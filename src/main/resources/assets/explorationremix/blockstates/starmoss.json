@@ -1,0 +1,38 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/starmoss",
+        "y": 0
+      },
+      {
+        "model": "explorationremix:block/starmoss",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/starmoss",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/starmoss",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/starmoss_2",
+        "y": 0
+      },
+      {
+        "model": "explorationremix:block/starmoss_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/starmoss_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/starmoss_2",
+        "y": 270
+      }
+    ]
+  }
+}
