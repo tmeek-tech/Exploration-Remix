@@ -189,6 +189,7 @@ final class NetPlanner {
             if (n.dark != null) closeUnjoined();
             loops(cand);
             gateWays();
+            chokeRooms();
             walkWays();
             surgeNiches();
             stubs();
@@ -2196,39 +2197,79 @@ final class NetPlanner {
                 int f = NetGraph.maxFlow(n, n.entry, n.exit, false);
                 if (f >= want) break;
                 boolean[] S = NetGraph.minCutSide(n, n.entry, n.exit, false);
-                List<int[]> pairs = new ArrayList<>();
-                for (Chamber a : n.ch) {
-                    if (!a.keep || !S[a.id] || a.refuge || a.landing() || a.kind == Kind.POCKET || a.kind == Kind.CANYON) continue;
-                    for (Chamber b : n.ch) {
-                        if (!b.keep || S[b.id] || b.refuge || b.landing() || b.kind == Kind.POCKET || b.kind == Kind.CANYON) continue;
-                        if (gapXZ(a, b, 1.0) > (n.dark != null ? 240 : 170)) continue;
-                        if (alreadyEdge(a.id, b.id)) continue;
-                        pairs.add(new int[]{a.id, b.id});
-                    }
+                boolean[] T = new boolean[S.length];
+                for (int i = 0; i < S.length; i++) T[i] = !S[i];
+                if (!repairAcross(S, T, -1)) break;
+            }
+        }
+
+        /**
+         * One new edge from side A (the entry's) to side B (the exit's), never at chamber {@code skip}: the cheapest
+         * pair that embeds, then (Blue Reaches) one that may cross other deep dark caverns, then a spoke from a landing.
+         */
+        boolean repairAcross(boolean[] A, boolean[] B, int skip) {
+            List<int[]> pairs = new ArrayList<>();
+            for (Chamber a : n.ch) {
+                if (a.id == skip || !a.keep || !A[a.id] || a.refuge || a.landing() || a.kind == Kind.POCKET || a.kind == Kind.CANYON) continue;
+                for (Chamber b : n.ch) {
+                    if (b.id == skip || !b.keep || !B[b.id] || b.refuge || b.landing() || b.kind == Kind.POCKET || b.kind == Kind.CANYON) continue;
+                    if (gapXZ(a, b, 1.0) > (n.dark != null ? 240 : 170)) continue;
+                    if (alreadyEdge(a.id, b.id)) continue;
+                    pairs.add(new int[]{a.id, b.id});
                 }
-                pairs.sort(Comparator.comparingDouble(p -> {
-                    Chamber a = n.ch.get(p[0]), b = n.ch.get(p[1]);
-                    return gapXZ(a, b, 1.0) + 2.5 * Math.abs(a.f0 - b.f0);
-                }));
-                boolean added = false;
-                for (int k = 0; k < Math.min(n.dark != null ? 120 : 60, pairs.size()) && !added; k++) {
+            }
+            pairs.sort(Comparator.comparingDouble(p -> {
+                Chamber a = n.ch.get(p[0]), b = n.ch.get(p[1]);
+                return gapXZ(a, b, 1.0) + 2.5 * Math.abs(a.f0 - b.f0);
+            }));
+            boolean added = false;
+            for (int k = 0; k < Math.min(n.dark != null ? 120 : 60, pairs.size()) && !added; k++) {
+                Edge e = edge(pairs.get(k)[0], pairs.get(k)[1]);
+                if (!allowed(n.ch.get(e.a), n.ch.get(e.b))) continue;
+                if (embed(e, false) || (k < 20 && embed(e, true))) { e.loop = true; e.gate = true; n.cutRepairs++; added = true; }
+            }
+            if (!added && n.dark != null) {
+                // Blue Reaches: a last try that lets the tunnel cross other deep dark caverns (it bridges them)
+                relaxDark = true;
+                for (int k = 0; k < Math.min(60, pairs.size()) && !added; k++) {
                     Edge e = edge(pairs.get(k)[0], pairs.get(k)[1]);
                     if (!allowed(n.ch.get(e.a), n.ch.get(e.b))) continue;
-                    if (embed(e, false) || (k < 20 && embed(e, true))) { e.loop = true; e.gate = true; n.cutRepairs++; added = true; }
+                    if (embed(e, true)) { e.loop = true; e.gate = true; n.cutRepairs++; added = true; }
                 }
-                if (!added && n.dark != null) {
-                    // Blue Reaches: a last try that lets the tunnel cross other deep dark caverns (it bridges them)
-                    relaxDark = true;
-                    for (int k = 0; k < Math.min(60, pairs.size()) && !added; k++) {
-                        Edge e = edge(pairs.get(k)[0], pairs.get(k)[1]);
-                        if (!allowed(n.ch.get(e.a), n.ch.get(e.b))) continue;
-                        if (embed(e, true)) { e.loop = true; e.gate = true; n.cutRepairs++; added = true; }
-                    }
-                    relaxDark = false;
-                }
-                if (!added) added = landingSpoke(S);
-                if (!added) break;
+                relaxDark = false;
             }
+            if (!added) added = landingSpoke(A, B, skip);
+            return added;
+        }
+
+        /**
+         * No single room stands between the gates (review): two ways that meet in one court, or in any room short of a
+         * deep dark cavern, the rift or the city, are one way in. Each such room gets a way round it, from the side
+         * that holds the entry to the side that holds the exit; a room no way round could be embedded for is left.
+         */
+        void chokeRooms() {
+            java.util.Set<Integer> failed = new java.util.HashSet<>();
+            for (int it = 0; it < 12; it++) {
+                int v = chokeRoom(n, failed);
+                if (v < 0) return;
+                boolean[] A = NetGraph.reachWithout(n, n.entry, v), B = NetGraph.reachWithout(n, n.exit, v);
+                if (repairAcross(A, B, v)) n.chokeRepairs++;
+                else failed.add(v);
+            }
+        }
+
+        /** True for the chambers a single way may pass through without counting as a choke: big open spaces. */
+        static boolean chokeFree(Chamber c) {
+            return c.kind == Kind.CAVERN || c.kind == Kind.CANYON || c.kind == Kind.CITY || c.landing();
+        }
+
+        /** The first kept room (by id, not in {@code skip}) whose loss cuts the entry from the exit, or -1. */
+        static int chokeRoom(Net n, java.util.Set<Integer> skip) {
+            for (Chamber c : n.ch) {
+                if (!c.keep || chokeFree(c) || skip.contains(c.id)) continue;
+                if (!NetGraph.reachWithout(n, n.entry, c.id)[n.exit]) return c.id;
+            }
+            return -1;
         }
 
         /**
@@ -2236,13 +2277,14 @@ final class NetPlanner {
          * doors taken), so nothing on its side of the cut embeds. Then the landing on that side gets one more spoke, a
          * wide walking tunnel like the courts' own, to the nearest space across the cut.
          */
-        boolean landingSpoke(boolean[] S) {
+        boolean landingSpoke(boolean[] A, boolean[] B, int skip) {
             List<int[]> spokes = new ArrayList<>();
             for (int L : new int[]{n.entry, n.exit}) {
                 Chamber l = n.ch.get(L);
                 if (!l.keep) continue;
+                boolean[] other = L == n.entry ? B : A;
                 for (Chamber b : n.ch) {
-                    if (!b.keep || S[b.id] == S[L] || b.refuge || b.landing() || b.kind == Kind.POCKET || b.kind == Kind.CANYON || b.kind == Kind.PORTAL) continue;
+                    if (b.id == skip || !b.keep || !other[b.id] || b.refuge || b.landing() || b.kind == Kind.POCKET || b.kind == Kind.CANYON || b.kind == Kind.PORTAL) continue;
                     if (gapXZ(l, b, 1.0) > 120 || alreadyEdge(L, b.id)) continue;
                     spokes.add(new int[]{L, b.id});
                 }

@@ -124,6 +124,13 @@ class NetworkTest {
         if (de < 2 || (n.courtsE.size() >= 3 && de < 3)) fails.add(tag + ": the entry landing has " + de + " ways out and " + n.courtsE.size() + " courts");
         if (dx < 2 || (n.courtsX.size() >= 3 && dx < 3)) fails.add(tag + ": the exit landing has " + dx + " ways out and " + n.courtsX.size() + " courts");
         if (!NetGraph.reach(n, n.entry, true)[n.exit]) fails.add(tag + ": no way from the entry to the exit without climbing");
+        // edge-disjoint ways can still meet in one room: then they are one way in (a cavern, the rift or the city are
+        // open spaces with many doors, and may be passed by every way)
+        for (Chamber c : n.ch) {
+            if (!c.keep || c.landing() || c.kind == Kind.CAVERN || c.kind == Kind.CANYON || c.kind == Kind.CITY) continue;
+            if (!NetGraph.reachWithout(n, n.entry, c.id)[n.exit])
+                fails.add(tag + ": every way from the entry to the exit passes through " + c.kind + "#" + c.id + (c.court ? " (court)" : ""));
+        }
     }
 
     /** True when the planner had to lower the chamber's ceiling under the seal below the band above. */

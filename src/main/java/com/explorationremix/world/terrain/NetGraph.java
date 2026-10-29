@@ -194,6 +194,26 @@ final class NetGraph {
         return seen;
     }
 
+    /** Nodes reachable from src over any edge (stubs aside) with node {@code without} taken out (src itself stays). */
+    static boolean[] reachWithout(Net n, int src, int without) {
+        List<List<Edge>> adj = adjacency(n, false);
+        boolean[] seen = new boolean[n.ch.size()];
+        if (src == without) return seen;
+        ArrayDeque<Integer> q = new ArrayDeque<>();
+        q.add(src);
+        seen[src] = true;
+        while (!q.isEmpty()) {
+            int u = q.poll();
+            for (Edge e : adj.get(u)) {
+                int v = e.other(u);
+                if (v == without || seen[v]) continue;
+                seen[v] = true;
+                q.add(v);
+            }
+        }
+        return seen;
+    }
+
     /** Degree of each node over real edges (stubs count: they are dead ends hanging off it). */
     static int[] degrees(Net n) {
         int[] d = new int[n.ch.size()];

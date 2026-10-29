@@ -190,7 +190,7 @@ public final class Net {
     /** Portal vestibules no tunnel could reach: removed with their stub, a blind end carved in its place. */
     public final List<Integer> droppedPortals = new ArrayList<>();
     /** Plan statistics. */
-    int attached, tries, embedFail, forced, droppedChambers, loopsAdded, stubsAdded, gateAug, cutRepairs, strandBreaks, walkRepairs, tubeStubs;
+    int attached, tries, embedFail, forced, droppedChambers, loopsAdded, stubsAdded, gateAug, cutRepairs, strandBreaks, walkRepairs, tubeStubs, chokeRepairs;
     final List<Integer> courtsE = new ArrayList<>(), courtsX = new ArrayList<>();
     /** The strands: braided main ways between the landings, as chamber id lists (courts at both ends). */
     final List<List<Integer>> strands = new ArrayList<>();
