@@ -1013,6 +1013,43 @@ class NetworkTest {
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
 
+    /**
+     * The perched lakes and the wells' pools hold their water in the blocks the game makes (TerrainTest's check reads the
+     * exact density, before the 4 x 8 x 4 interpolation): no water block over the water table has air beside or under it.
+     */
+    @Test
+    @Tag("voxel")
+    void perchedPoolsHoldInTheBlocks() {
+        List<String> fails = new ArrayList<>();
+        int pools = 0;
+        long water = 0;
+        int[][] sides = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}};
+        for (int s = 0; s < VOX_SEEDS.length; s++) {
+            Terrain t = terrain(VOX_SEEDS[s]);
+            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
+            VoxelHarness v = built(VOX_SEEDS[s], Terrain.GARDENS, cx, cz, 1, 1);
+            double W = t.shape.waterY(Terrain.GARDENS);
+            for (Chamber c : t.network.net(Terrain.GARDENS, cx, cz).ch) {
+                if (!c.keep || !Network.pool(c) || c.lakeY <= W + 0.5) continue;
+                pools++;
+                int R = (int) Math.ceil(c.R()) + 2;
+                for (int x = (int) c.x - R; x <= c.x + R; x++) for (int z = (int) c.z - R; z <= c.z + R; z++)
+                    for (int y = (int) Math.floor(W) + 1; y <= c.lakeY + 1; y++) {
+                        if (!v.in(x, y, z) || v.mat(x, y, z) != VoxelHarness.WATER) continue;
+                        water++;
+                        for (int[] d : sides) {
+                            int nx = x + d[0], ny = y + d[1], nz = z + d[2];
+                            if (v.in(nx, ny, nz) && v.mat(nx, ny, nz) == VoxelHarness.AIR && fails.size() < 20)
+                                fails.add(tag(VOX_SEEDS[s], Terrain.GARDENS, cx, cz) + ": " + c.kind + "#" + c.id + " drains from " + x + " " + y + " " + z + " into " + nx + " " + ny + " " + nz);
+                        }
+                    }
+            }
+        }
+        System.out.println("perchedPoolsHoldInTheBlocks: " + pools + " pools, " + water + " water blocks");
+        assertTrue(pools >= 4 && water > 1000, "too few pools to check");
+        assertTrue(fails.isEmpty(), String.join("\n", fails));
+    }
+
     @Test
     @Tag("voxel")
     void gardensAreOneCave() { oneCave(Terrain.GARDENS, 0.980); }
