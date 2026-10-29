@@ -828,7 +828,11 @@ class NetworkTest {
     /** The share of the Blue Reaches' places (outside the cities' reserves) allowed a view over 160 blocks. */
     static final double BLUE_LONG = 0.025;
 
-    /** A hash of what a plan carves: node centres, sizes and floors, edges, way samples and shafts, rounded to 1e-6. */
+    /**
+     * A hash of what a plan carves: node centres, sizes and floors, edges, way samples and shafts, and the Basalt
+     * arches, lava pools and magma ends, the rift's geodes and bridges, and the Blue Reaches' deep dark (where each tier
+     * is kept, its floor and ceiling, and the view breakers' columns, fins and spires), rounded to 1e-6.
+     */
     static long planHash(Net n) {
         long h = 17;
         for (Chamber c : n.ch) {
@@ -840,6 +844,19 @@ class NetworkTest {
             for (int i = 0; i < wy.n; i++) h = mixIn(h, wy.x[i], wy.z[i], wy.f[i], wy.w[i], wy.hgt[i], wy.slab[i]);
         }
         for (Shaft sh : n.shafts) h = mixIn(h, sh.x, sh.z, sh.r, sh.y0, sh.y1);
+        for (Net.Arch a : n.arches) h = mixIn(h, a.x, a.z, a.ux, a.uz, a.span, a.halfAlong, a.deck, a.chamber);
+        for (Net.Pool p : n.pools) h = mixIn(h, p.ax, p.az, p.bx, p.bz, p.half, p.y, p.channel ? 1 : 0, p.chamber, p.way);
+        for (double[] m : n.magmaEnds) h = mixIn(h, m);
+        for (Route r : n.canyons) {
+            h = mixIn(h, r.length, r.walkLength);
+            for (Route.Geode g : r.geodes) h = mixIn(h, g.x(), g.y(), g.z(), g.r());
+            for (Route.Bridge b : r.bridges) h = mixIn(h, b.s(), b.y(), b.span(), b.halfAlong());
+        }
+        if (n.dark != null) {
+            NetDark.Plan p = n.dark;
+            for (int t = 0; t < 2; t++) for (int c = 0; c < p.N * p.N; c++) h = mixIn(h, p.keep[t][c], p.F[t][c], p.C[t][c]);
+            for (int t = 0; t < 3; t++) for (int j = 0; j < p.sight[t].n; j++) h = mixIn(h, p.sight[t].get(j));
+        }
         return h;
     }
 
