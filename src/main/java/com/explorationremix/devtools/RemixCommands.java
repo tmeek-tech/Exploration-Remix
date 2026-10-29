@@ -3,10 +3,11 @@ package com.explorationremix.devtools;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.gen.SurfaceOracle;
 import com.explorationremix.world.terrain.DeepBiome;
+import com.explorationremix.world.terrain.Net;
+import com.explorationremix.world.terrain.Network;
 import com.explorationremix.world.terrain.Overhead;
 import com.explorationremix.world.terrain.Plans;
 import com.explorationremix.world.terrain.Rootvaults;
-import com.explorationremix.world.terrain.Route;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import com.mojang.brigadier.CommandDispatcher;
@@ -39,15 +40,18 @@ import java.util.Locale;
  * /remix: commands for looking around the deep world (operators only).
  * <ul>
  *     <li>{@code /remix layers}: the layer table</li>
- *     <li>{@code /remix info}: where you are; above the old floor also the ground and surface biome over you and the
- *     Rootvaults grotto under you</li>
+ *     <li>{@code /remix info}: where you are; in a deep layer also the network's node and way there (the chamber you
+ *     are in or the nearest, the nearest tunnel or walk, a climb, the rift's ledge path); above the old floor the
+ *     ground and surface biome over you and the Rootvaults grotto under you</li>
  *     <li>{@code /remix tp <1-3>}: the landing at the top of a layer, under its band</li>
  *     <li>{@code /remix tp gate <1-3>}: the landing above a band, where its gate passage starts</li>
- *     <li>{@code /remix tp bedrock}: the bedrock landing at the end of the last layer's route</li>
- *     <li>{@code /remix tp biome <name>}: the nearest spot of a deep biome, the Silver Fern Rift, the Ivory Root
- *     Cavern or the Rootvaults</li>
+ *     <li>{@code /remix tp bedrock}: the bedrock landing of the last layer's network in this cell</li>
+ *     <li>{@code /remix tp biome <name>}: a deep biome's nearest chamber in the networks of the nine cells round you
+ *     (set pieces first), standing on its floor in open air; or the Silver Fern Rift, the Ivory Root Cavern or the
+ *     Rootvaults</li>
  *     <li>{@code /remix view <name> [n]}: a spot in that biome with a wide view into it, facing the view (for
- *     screenshots); n picks the Rootvaults look (0 root halls, 1 teal grottos, 2 ravines) or another set piece</li>
+ *     screenshots); n picks the Rootvaults look (0 root halls, 1 teal grottos, 2 ravines) or the n-th place of a deep
+ *     biome (set pieces first, then nearest first)</li>
  *     <li>{@code /remix slice [x|z] [half width]}: a picture of the blocks under you, written to remix_slices/</li>
  *     <li>{@code /remix census [radius]}: how overgrown and lit the caves around you are, per biome (PlantCensus)</li>
  * </ul>
@@ -131,8 +135,7 @@ public final class RemixCommands {
         if (b != null) say(c, "  deep biome: " + shortName(b) + " (" + b.role.name().toLowerCase(Locale.ROOT) + ")");
         if (y >= s.packFloor) upperInfo(c, x, z);
         if (li >= 0) {
-            double[] path = t.routePathAt(li, x, z);
-            if (path != null) say(c, String.format(Locale.ROOT, "  route: %.0f blocks from the walking line, path floor y %.0f", path[0], path[1]));
+            for (String line : t.network.describe(li, x, y, z)) say(c, "  " + line);
             Plans.Gate exit = li + 2 <= s.layerCount ? t.plans.gate(li + 2, cx, cz) : null;
             if (exit != null) say(c, String.format(Locale.ROOT, "  this layer's way down: gate %d at %.0f %.0f %.0f (%.0f blocks away)",
                     li + 2, exit.ux, exit.uFloor + 1, exit.uz, Math.hypot(exit.ux - x, exit.uz - z)));
@@ -190,9 +193,13 @@ public final class RemixCommands {
         if (t == null) return 0;
         ServerPlayer pl = c.getSource().getPlayerOrException();
         int last = t.shape.layerCount - 1;
-        Route r = t.plans.route(last, t.plans.cellOf((int) pl.getX()), t.plans.cellOf((int) pl.getZ()));
-        teleport(pl, r.endX, r.endFloor + 1, r.endZ);
-        say(c, "The bedrock landing at the end of " + t.shape.id(last) + ".");
+        Net n = t.network(last, t.plans.cellOf((int) Math.floor(pl.getX())), t.plans.cellOf((int) Math.floor(pl.getZ())));
+        Net.Chamber b = n.ch.get(n.exit);
+        int x = (int) Math.floor(b.x), z = (int) Math.floor(b.z);
+        BlockPos stand = findStand((ServerLevel) pl.level(), x, (int) Math.floor(b.f0) + 1, z);
+        if (stand != null) teleport(pl, stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+        else teleport(pl, b.x, b.f0 + 1, b.z);
+        say(c, String.format(Locale.ROOT, "The bedrock landing of %s's network in this cell, at %.0f %.0f %.0f.", t.shape.id(last), b.x, b.f0 + 1, b.z));
         return 1;
     }
 
@@ -209,30 +216,34 @@ public final class RemixCommands {
         ServerPlayer pl = c.getSource().getPlayerOrException();
         int px = (int) Math.floor(pl.getX()), pz = (int) Math.floor(pl.getZ());
         if (target.role == DeepBiome.Role.SAFE) return tpUpper(c, t, pl, target, px, pz);
-        Shape s = t.shape;
-        // Search outwards in rings for an open spot of that biome with rock under it.
-        for (int ring = 0; ring <= 40; ring++) {
-            for (int i = -ring; i <= ring; i++) for (int j = -ring; j <= ring; j++) {
-                if (Math.max(Math.abs(i), Math.abs(j)) != ring) continue;
-                int x = px + i * 12, z = pz + j * 12;
-                for (int li = 0; li < s.layerCount; li++) {
-                    for (int y = s.top(li) - 4; y > s.bottom(li) + 4; y -= 3) {
-                        if (t.biomeAt(x, y, z) != target) continue;
-                        if (t.rawDensity(x, y, z) > -1 || t.rawDensity(x, y + 1, z) > -1) continue;
-                        int fy = y;
-                        while (fy > s.bottom(li) && t.rawDensity(x, fy - 1, z) < 0) fy--;
-                        if (t.fluidAt(x, fy, z) != Terrain.AIR) continue;
-                        BlockPos stand = findStand((ServerLevel) pl.level(), x, fy, z);
-                        if (stand == null) continue;
-                        teleport(pl, stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
-                        say(c, shortName(target) + " at " + stand.getX() + " " + stand.getY() + " " + stand.getZ());
-                        return 1;
-                    }
-                }
-            }
+        // The biome's places in the networks of the nine cells round you, set pieces first: stand on the first open
+        // floor (feet and head in air, a solid block under them) the world's blocks show there.
+        ServerLevel level = (ServerLevel) pl.level();
+        int tried = 0;
+        for (Network.Place p : t.network.places(target, px, pz)) {
+            if (tried++ >= MAX_PLACES) break;
+            BlockPos stand = standIn(t, level, p, target);
+            if (stand == null) continue;
+            teleport(pl, stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+            say(c, shortName(target) + " (" + p.what + ") at " + stand.getX() + " " + stand.getY() + " " + stand.getZ());
+            return 1;
         }
-        c.getSource().sendFailure(Component.literal("No " + name + " found within 480 blocks."));
+        c.getSource().sendFailure(Component.literal("No open floor of " + name + " found in the networks of the nine cells round you"
+                + (tried == 0 ? " (none of their chambers has that biome)." : " (" + tried + " places tried).")));
         return 0;
+    }
+
+    /** How many places of a deep biome the commands try before giving up (each may generate chunks). */
+    private static final int MAX_PLACES = 8;
+
+    /** The first spot of a place that is an open floor of the biome in the world: feet and head in air, rock under. */
+    @javax.annotation.Nullable
+    private static BlockPos standIn(Terrain t, ServerLevel level, Network.Place p, DeepBiome target) {
+        for (double[] q : p.stands) {
+            BlockPos stand = findStand(level, (int) Math.floor(q[0]), (int) Math.floor(q[1]), (int) Math.floor(q[2]));
+            if (stand != null && t.biomeAt(stand.getX(), stand.getY(), stand.getZ()) == target) return stand;
+        }
+        return null;
     }
 
     /** The nearest Silver Fern Rift or Ivory Root Cavern: onto a ledge of the rift, or a terrace above the lake. */
@@ -380,31 +391,16 @@ public final class RemixCommands {
                 return new double[]{r.centerX(), (r.waterY + r.ledgeTop) * 0.5, r.centerZ(), 28};
             return null;
         }
-        int li = switch (target) {
-            case LANTERN_LAKE, RUST_SPRINGS -> Terrain.GARDENS;
-            case DEEP_BLUE_RIFT, ASURINE_GEODES -> Terrain.BLUE;
-            case BASALT_GALLERIES, OBSIDIAN_TUBES -> Terrain.BASALT;
-            default -> -1;
-        };
-        if (li < 0) return null;
-        Route r = t.plans.route(li, t.plans.cellOf((int) Math.floor(pl.getX())), t.plans.cellOf((int) Math.floor(pl.getZ())));
-        java.util.List<double[]> out = new java.util.ArrayList<>();
-        switch (target) {
-            case LANTERN_LAKE -> { for (Route.Hall h : r.halls) if (h.lake()) out.add(new double[]{h.x(), h.lakeY() + 2, h.z(), h.rxz()}); }
-            case RUST_SPRINGS -> { for (Route.Spring sp : r.springs) out.add(new double[]{sp.x(), sp.floorY() + 2, sp.z(), sp.rxz()}); }
-            case ASURINE_GEODES -> { for (Route.Geode g : r.geodes) out.add(new double[]{g.x(), g.y() - g.r() * 0.4, g.z(), g.r()}); }
-            case OBSIDIAN_TUBES -> { for (Route.Tube tb : r.tubes) out.add(new double[]{(tb.x1() + tb.x2()) / 2, (tb.y1() + tb.y2()) / 2 - tb.r() * 0.5, (tb.z1() + tb.z2()) / 2, tb.r() * 3}); }
-            default -> {
-                for (double f : new double[]{0.35, 0.55, 0.75, 0.2, 0.9}) {
-                    double[] p = r.pathAt(r.walkLength * f);
-                    out.add(new double[]{p[0], p[2] + 2, p[1], 24});
-                }
-            }
+        // The deep biomes: the n-th place of the biome in the networks round you (set pieces first, then nearest
+        // first), centred on the first open floor of it the world shows, searched over the place's reach.
+        java.util.List<Network.Place> places = t.network.places(target, pl.getX(), pl.getZ());
+        ServerLevel level = (ServerLevel) pl.level();
+        for (int i = Math.min(nth, Math.max(0, places.size() - 1)), tried = 0; i < places.size() && tried < MAX_PLACES; i++, tried++) {
+            Network.Place p = places.get(i);
+            BlockPos stand = standIn(t, level, p, target);
+            if (stand != null) return new double[]{stand.getX(), stand.getY(), stand.getZ(), Math.max(12, p.reach * 0.8)};
         }
-        if (out.isEmpty()) return null;
-        if (target != DeepBiome.DEEP_BLUE_RIFT && target != DeepBiome.BASALT_GALLERIES)
-            out.sort(java.util.Comparator.comparingDouble(q -> Math.hypot(q[0] - pl.getX(), q[2] - pl.getZ())));
-        return out.get(Math.min(nth, out.size() - 1));
+        return null;
     }
 
     /** How far the Rootvaults commands search, in grotto cells. */

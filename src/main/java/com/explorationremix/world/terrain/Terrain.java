@@ -1060,6 +1060,28 @@ public final class Terrain {
         return r.bedrockEnd && lc.endD < r.endR + 3 && y <= r.endFloor + 2 && y > r.endFloor - 6;
     }
 
+    // ------------------------------------------------------------------------------- the network's queries (12.1)
+    /**
+     * Every walking line of layer li within {@code reach} of column (x, z), nearest first: tunnels, inner walks, ledge
+     * passages, stubs and the rift's ledge path ({@link Network#wayLinesAt}). A per-thread result.
+     */
+    public Network.WayLines wayLinesAt(int li, int x, int z, double reach) { return network.wayLinesAt(li, x, z, reach); }
+
+    /** The lines of {@link #wayLinesAt} that the terrain carved in column (x, z): its own cell's plan only. */
+    public Network.WayLines carvedLinesAt(int li, int x, int z, double reach) { return network.carvedLinesAt(li, x, z, reach); }
+
+    /** The climbs and climb stages of layer li reaching into the box minX..maxX, minZ..maxZ (inclusive). */
+    public java.util.List<Net.Shaft> shaftsIn(int minX, int minZ, int maxX, int maxZ, int li) { return network.shaftsIn(li, minX, minZ, maxX, maxZ); }
+
+    /** The plan of layer li in cell (cx, cz). */
+    public Net network(int li, int cx, int cz) { return network.network(li, cx, cz); }
+
+    /**
+     * True when a structure starting at (x, y, z) is a planned ancient city: a CITY chamber's centre within 24 blocks
+     * of (x, z), y within 30 of its floor (section 11.1).
+     */
+    public boolean citySite(int x, int y, int z) { return network.citySite(x, y, z); }
+
     /**
      * For layer li at a column: {distance from the route's walking line, the walking floor there, and the same two for
      * a second stretch of the line passing nearby (distance 1e9 when there is none)}, or null off the route.

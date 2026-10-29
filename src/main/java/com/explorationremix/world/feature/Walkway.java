@@ -1,30 +1,33 @@
 package com.explorationremix.world.feature;
 
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.terrain.Network;
 import com.explorationremix.world.terrain.Plans;
 import com.explorationremix.world.terrain.Route;
 import com.explorationremix.world.terrain.Terrain;
 
 /**
- * Keeps the way down walkable. The open way pass clears each route's walking corridor, but only inside its own chunk:
- * a feature decorating a neighbouring chunk later can still reach across into it. So every feature that builds
- * something solid asks here first and leaves the corridor alone: no column, spike, root, pool rim, machine part or
- * waterfall stands on the path or hangs into its headroom.
+ * Keeps the deep layers' ways walkable. The open way pass clears every way's walking corridor, but only inside its own
+ * chunk: a feature decorating a neighbouring chunk later can still reach across into it. So every feature that builds
+ * something solid asks here first and leaves the corridors alone: no column, spike, root, pool rim, machine part or
+ * waterfall stands on a way or hangs into its headroom. The ways are the network's (section 12.2): every tunnel, inner
+ * walk, ledge passage and stub of every cell, the rift's ledge path, and the gates' passages and landings.
  */
 public final class Walkway {
-    /** How far from the walking line the corridor reaches, sideways. */
+    /** How far from a walking line its corridor reaches sideways, at least. */
     public static final double HALF_WIDTH = 2.6;
 
     private Walkway() {}
 
-    /** True when (x, y, z) is inside a route's walking corridor: on the path's line and up to four blocks above it. */
+    /** True when (x, y, z) is inside a way's walking corridor: on the way's line and up to four blocks above its floor. */
     public static boolean blocks(int x, int y, int z) {
         return near(x, z, y, y, 0);
     }
 
     /**
-     * True when a structure in column (x, z) spanning y0 to y1 would come within {@code margin} blocks of a route's
-     * walking corridor (sideways), at the corridor's height.
+     * True when a structure in column (x, z) spanning y0 to y1 would come within {@code margin} blocks of a way's
+     * walking corridor (sideways), at the corridor's height: within 0.6 of the way's half-width (at least 2.6) plus the
+     * margin of its line, between its feet level and three blocks over it.
      */
     public static boolean near(int x, int z, int y0, int y1, double margin) {
         Terrain t = DeepWorld.terrain();
@@ -35,12 +38,11 @@ public final class Walkway {
         int li0 = t.shape.layerAt(Math.min(hi, t.shape.packFloor - 1)), li1 = t.shape.layerAt(lo);
         for (int li = 0; li < t.shape.layerCount; li++) {
             if (li != li0 && li != li1) continue;
-            double[] path = t.routePathAt(li, x, z);
-            if (path == null) continue;
-            for (int k = 0; k < 4; k += 2) {
-                if (path[k] > HALF_WIDTH + margin) continue;
-                int fy = (int) Math.floor(path[k + 1]);
-                if (hi >= fy + 1 && lo <= fy + 4) return true;
+            Network.WayLines w = t.wayLinesAt(li, x, z, 8 + margin);
+            for (int k = 0; k < w.n; k++) {
+                if (w.d[k] > Math.max(0.6 * w.half[k], HALF_WIDTH) + margin) continue;
+                int feet = (int) Math.ceil(w.floor[k] - 1e-9);
+                if (hi >= feet && lo <= feet + 3) return true;
             }
         }
         return false;

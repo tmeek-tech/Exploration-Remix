@@ -622,6 +622,10 @@ def build_features():
             [count(8), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("rootvaults/tree_roots", "top_layer_modification", rv, roots(uniform(4, 16), 0.3, uniform(1, 3)),
             [{"type": f"{MOD}:under_trees", "chance": 0.7}, BIOME])
+    # The network's climbs get their vines, and the Blue Reaches' lips their shelf vines (section 10 of the network
+    # design), once everything else has grown; then the ways are opened (open_way never removes a climbable block).
+    feature("climb_vines", "top_layer_modification", DEEP, {"type": f"{MOD}:climb_vines", "config": {}}, [])
+    feature("shelf_vines", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:shelf_vines", "config": {}}, [])
     feature("open_way", "top_layer_modification", DEEP, {"type": f"{MOD}:open_way", "config": {}}, [])
 
 
@@ -768,12 +772,13 @@ def write_all(data_dir, res_dir, write):
             "carvers": {},
             "features": per_biome[b],
         })
-    # The deep dark's sculk across the Blue Reaches, and the way down kept open through it.
+    # The deep dark's sculk across the Blue Reaches; its climbs' and lips' vines, and the ways kept open through it.
     write(os.path.join(data_dir, "forge", "biome_modifier", "deep_dark_sculk.json"), {
         "type": "forge:add_features", "biomes": "minecraft:deep_dark",
         "features": [f"{MOD}:{n}" for n, _, _ in DEEP_DARK_FEATURES], "step": "underground_decoration"})
     write(os.path.join(data_dir, "forge", "biome_modifier", "deep_dark_open_way.json"), {
-        "type": "forge:add_features", "biomes": "minecraft:deep_dark", "features": f"{MOD}:open_way", "step": "top_layer_modification"})
+        "type": "forge:add_features", "biomes": "minecraft:deep_dark",
+        "features": [f"{MOD}:climb_vines", f"{MOD}:shelf_vines", f"{MOD}:open_way"], "step": "top_layer_modification"})
     # Biome tags.
     def tag(ns, kind, tname, values):
         write(os.path.join(res_dir, "data", ns, "tags", kind, tname + ".json"), {"replace": False, "values": values})

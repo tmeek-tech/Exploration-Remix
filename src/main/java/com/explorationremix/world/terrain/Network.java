@@ -107,6 +107,277 @@ public final class Network {
 
     int cellOf(double v) { return (int) Math.floor(v / cell); }
 
+    // ================================================================================================ queries (12.1)
+    /**
+     * What {@link #wayLinesAt} found, nearest first: per line the distance from the column to it, the walking floor
+     * there (the feet stand at {@code ceil(floor)}) and the line's half-width. A per-thread buffer, valid until the
+     * thread's next call; it grows as needed, so no line is ever left out.
+     */
+    public static final class WayLines {
+        public int n;
+        public double[] d = new double[16], floor = new double[16], half = new double[16];
+
+        void add(double dd, double f, double h) {
+            if (n == d.length) {
+                d = Arrays.copyOf(d, n * 2);
+                floor = Arrays.copyOf(floor, n * 2);
+                half = Arrays.copyOf(half, n * 2);
+            }
+            int i = n++;
+            while (i > 0 && d[i - 1] > dd) {
+                d[i] = d[i - 1];
+                floor[i] = floor[i - 1];
+                half[i] = half[i - 1];
+                i--;
+            }
+            d[i] = dd;
+            floor[i] = f;
+            half[i] = h;
+        }
+    }
+
+    private static final ThreadLocal<WayLines> LINES = ThreadLocal.withInitial(WayLines::new);
+    private static final ThreadLocal<double[]> LINE_TMP = ThreadLocal.withInitial(() -> new double[6]);
+
+    /**
+     * Every walking line of layer li that passes within {@code reach} of (x, z): the tunnels, inner walks, ledge
+     * passages and stubs of the plans (the neighbouring cells' too), and the rift's ledge path. A way that passes the
+     * column more than once (a helix's turns, a hairpin) is listed once per pass. No cap (section 12.1).
+     */
+    public WayLines wayLinesAt(int li, double x, double z, double reach) {
+        WayLines out = LINES.get();
+        out.n = 0;
+        int cx = cellOf(x), cz = cellOf(z);
+        for (int i = -1; i <= 1; i++) for (int k = -1; k <= 1; k++) {
+            double ex = Math.max(0, Math.max((cx + i) * cell - x, x - (cx + i + 1) * cell));
+            double ez = Math.max(0, Math.max((cz + k) * cell - z, z - (cz + k + 1) * cell));
+            if (Math.hypot(ex, ez) > reach + Net.APRON) continue;
+            linesOf(net(li, cx + i, cz + k), x, z, reach, out);
+        }
+        return out;
+    }
+
+    /**
+     * The lines of {@link #wayLinesAt} from the plan of the column's own cell only: the ways the terrain carved in this
+     * column (the density reads that plan alone; a portal stub is in both cells' plans). For the pass that re-opens
+     * them, which must never cut a corridor through rock that no way carved.
+     */
+    public WayLines carvedLinesAt(int li, double x, double z, double reach) {
+        WayLines out = LINES.get();
+        out.n = 0;
+        linesOf(net(li, cellOf(x), cellOf(z)), x, z, reach, out);
+        return out;
+    }
+
+    private void linesOf(Net n, double x, double z, double reach, WayLines out) {
+        for (Way wy : n.ways) {
+            if (x < wy.minX - reach || x > wy.maxX + reach || z < wy.minZ - reach || z > wy.maxZ + reach) continue;
+            // every local minimum of the distance along the way, as the column lookup finds them (compute)
+            double bestD = 1e9, bestFi = 0, prevD = 1e9;
+            boolean tracking = true;
+            for (int i = 0; i + 1 < wy.n; i++) {
+                double ax = wy.x[i], az = wy.z[i], dx = wy.x[i + 1] - ax, dz = wy.z[i + 1] - az;
+                double len2 = dx * dx + dz * dz;
+                double t = len2 < 1e-9 ? 0 : ((x - ax) * dx + (z - az) * dz) / len2;
+                t = t < 0 ? 0 : (t > 1 ? 1 : t);
+                double d = Math.hypot(x - (ax + dx * t), z - (az + dz * t));
+                if (tracking) {
+                    if (d < bestD) { bestD = d; bestFi = i + t; }
+                    else if (d > bestD + 4) {
+                        if (bestD <= reach) addLine(out, wy, bestD, bestFi);
+                        tracking = false;
+                        bestD = 1e9;
+                    }
+                } else if (d < prevD - 0.25) {
+                    tracking = true;
+                    bestD = d;
+                    bestFi = i + t;
+                }
+                prevD = d;
+            }
+            if (tracking && bestD <= reach) addLine(out, wy, bestD, bestFi);
+        }
+        double[] tmp = LINE_TMP.get();
+        for (Route r : n.canyons) {
+            if (!r.nearestWalk(x, z, tmp)) continue;
+            double fi = tmp[1], d2 = tmp[4], fi2 = tmp[5];
+            if (tmp[0] <= reach) out.add(tmp[0], r.atIndex(r.floor, fi), r.atIndex(r.half, fi));
+            if (d2 <= reach) out.add(d2, r.atIndex(r.floor, fi2), r.atIndex(r.half, fi2));
+        }
+    }
+
+    private static void addLine(WayLines out, Way wy, double d, double fi) {
+        int i = (int) Math.floor(fi);
+        double t = fi - i;
+        if (i >= wy.n - 1) { i = wy.n - 2; t = 1; }
+        out.add(d, wy.f[i] + (wy.f[i + 1] - wy.f[i]) * t, wy.w[i] + (wy.w[i + 1] - wy.w[i]) * t);
+    }
+
+    /**
+     * The climbs and climb stages of layer li whose shafts (with their rims) reach into the box minX..maxX, minZ..maxZ
+     * (inclusive): from the plans of every cell the box touches, each shaft carved in its own cell.
+     */
+    public List<Shaft> shaftsIn(int li, int minX, int minZ, int maxX, int maxZ) {
+        List<Shaft> out = new ArrayList<>();
+        // a climb's radius is at most 3.4 (NetPlanner.climb), 5.4 with its rim and step: 8 covers every cell
+        for (int cx = cellOf(minX - 8); cx <= cellOf(maxX + 8); cx++) for (int cz = cellOf(minZ - 8); cz <= cellOf(maxZ + 8); cz++) {
+            for (Shaft s : net(li, cx, cz).shafts) {
+                if (cellOf(s.x) != cx || cellOf(s.z) != cz) continue;
+                double r = s.r + 2;
+                if (s.x + r < minX || s.x - r > maxX + 1 || s.z + r < minZ || s.z - r > maxZ + 1) continue;
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
+    /** The plan of layer li in cell (cx, cz), for the dev tools. */
+    public Net network(int li, int cx, int cz) { return net(li, cx, cz); }
+
+    // ================================================================================================ dev tools (12.5)
+    /** A place showing a deep biome, for the dev tools: a chamber, the rift or a refuge geode, with spots to stand on. */
+    public static final class Place {
+        public final double x, z, reach;
+        public final boolean setPiece;
+        public final String what;
+        /** Spots to stand on, best first: {x, feet y, z}. The world's blocks decide which is open. */
+        public final List<double[]> stands = new ArrayList<>();
+
+        Place(double x, double z, double reach, boolean setPiece, String what) {
+            this.x = x; this.z = z; this.reach = reach; this.setPiece = setPiece; this.what = what;
+        }
+    }
+
+    /** The deep layer a biome belongs to, or -1 (the Upper Caves' biomes). */
+    public static int layerOf(DeepBiome b) {
+        return switch (b) {
+            case DEEP_BLUE_RIFT, DEEP_DARK, ASURINE_GEODES -> Terrain.BLUE;
+            case LANTERN_LAKE, EMBER_GARDENS, RUST_SPRINGS -> Terrain.GARDENS;
+            case BASALT_GALLERIES, OBSIDIAN_TUBES -> Terrain.BASALT;
+            default -> -1;
+        };
+    }
+
+    /**
+     * The places of a deep biome in the plans of the 3 x 3 cells round (x, z), set pieces first, then nearest first
+     * (/remix tp biome, /remix view): every kept chamber of the biome (spots at its centre and part way out to its
+     * walls, on its walking floor), and in the Blue Reaches the rift (spots along its ledge path) and the refuge geodes
+     * (their floors).
+     */
+    public List<Place> places(DeepBiome b, double x, double z) {
+        List<Place> out = new ArrayList<>();
+        int li = layerOf(b);
+        if (li < 0 || li >= shape.layerCount) return out;
+        int pcx = cellOf(x), pcz = cellOf(z);
+        for (int cx = pcx - 1; cx <= pcx + 1; cx++) for (int cz = pcz - 1; cz <= pcz + 1; cz++) {
+            Net n = net(li, cx, cz);
+            for (Chamber c : n.ch) {
+                if (!c.keep || c.kind == Kind.CANYON || cellOf(c.x) != cx || cellOf(c.z) != cz) continue;
+                DeepBiome cb = c.biome != null ? c.biome : (c.parent >= 0 ? n.ch.get(c.parent).biome : null);
+                if (cb != b) continue;
+                boolean set = c.set || c.kind == Kind.CITY || c.kind == Kind.LAKE || c.kind == Kind.TUBEHUB || c.kind == Kind.SPRING;
+                Place p = new Place(c.x, c.z, c.R(), set, c.kind.name().toLowerCase(java.util.Locale.ROOT) + " #" + c.id + " of cell " + cx + " " + cz);
+                for (int ring = 0; ring < 3; ring++) {
+                    int k = ring == 0 ? 1 : 6;
+                    double f = ring == 0 ? 0 : ring == 1 ? 0.45 : 0.75;
+                    for (int j = 0; j < k; j++) {
+                        double a = (j + (ring == 2 ? 0.5 : 0)) * Math.PI * 2 / k, u = Math.cos(a) * f * c.rx, v = Math.sin(a) * f * c.rz;
+                        double px = c.x + u * c.cos - v * c.sin, pz = c.z + u * c.sin + v * c.cos;
+                        double fl;
+                        if (c.dark >= 0 || c.kind == Kind.CITY || c.helix()) fl = c.f0;
+                        else {
+                            double e = e(c, px, pz);
+                            if (e >= 0.95) continue;
+                            fl = floorAt(c, e, px, pz);
+                            if (c.kind == Kind.LAKE && fl < c.lakeY) continue; // under the water
+                        }
+                        p.stands.add(new double[]{px, Math.ceil(fl - 1e-9), pz});
+                    }
+                }
+                if (!p.stands.isEmpty()) out.add(p);
+            }
+            for (Route r : n.canyons) {
+                if (b == DeepBiome.DEEP_BLUE_RIFT) {
+                    double[] mid = r.pathAt(r.walkLength * 0.5);
+                    Place p = new Place(mid[0], mid[1], 28, true, "the rift of cell " + cx + " " + cz);
+                    for (double f : new double[]{0.5, 0.35, 0.65, 0.2, 0.8}) {
+                        double[] q = r.pathAt(r.walkLength * f);
+                        p.stands.add(new double[]{q[0], Math.ceil(q[2] - 1e-9), q[1]});
+                    }
+                    out.add(p);
+                }
+                if (b == DeepBiome.ASURINE_GEODES) {
+                    for (Route.Geode g : r.geodes) {
+                        Place p = new Place(g.x(), g.z(), g.r(), true, "a refuge geode of cell " + cx + " " + cz);
+                        p.stands.add(new double[]{g.x(), Math.floor(g.y() - g.r() * 0.4), g.z()});
+                        for (int j = 0; j < 4; j++) {
+                            double a = j * Math.PI / 2;
+                            p.stands.add(new double[]{g.x() + Math.cos(a) * g.r() * 0.3, Math.floor(g.y() - g.r() * 0.45), g.z() + Math.sin(a) * g.r() * 0.3});
+                        }
+                        out.add(p);
+                    }
+                }
+            }
+        }
+        out.sort((p, q) -> p.setPiece != q.setPiece ? (p.setPiece ? -1 : 1) : Double.compare(Math.hypot(p.x - x, p.z - z), Math.hypot(q.x - x, q.z - z)));
+        return out;
+    }
+
+    /** For /remix info: the plan's node, way, climb and rift at a block of layer li, in words. */
+    public List<String> describe(int li, int x, int y, int z) {
+        List<String> out = new ArrayList<>();
+        int cx = cellOf(x), cz = cellOf(z);
+        Net n = net(li, cx, cz);
+        int kept = 0;
+        for (Chamber c : n.ch) if (c.keep) kept++;
+        out.add(String.format(java.util.Locale.ROOT, "network: cell %d %d of layer %d, %d chambers, %d ways, %d climb stages, %d portals%s",
+                cx, cz, li + 1, kept, n.ways.size(), n.shafts.size(), n.portals.size() - n.droppedPortals.size(), n.canyons.isEmpty() ? "" : ", the rift"));
+        Chamber in = null, near = null;
+        double bestIn = 1e9, bestNear = 1e9;
+        for (Chamber c : n.ch) {
+            if (!c.keep || c.kind == Kind.CANYON) continue;
+            double e = e(c, x, z), d = Math.hypot(x - c.x, z - c.z) - c.R();
+            if (e < 1 && y >= c.yLo() && y <= c.yHi() && e < bestIn) { bestIn = e; in = c; }
+            if (d < bestNear) { bestNear = d; near = c; }
+        }
+        Chamber c = in != null ? in : near;
+        if (c != null) {
+            out.add(String.format(java.util.Locale.ROOT, "  %s %s #%d (%s%s): centre %.0f %.0f, floor y %.0f, %.0f by %.0f, %.0f tall%s",
+                    in != null ? "in node" : "nearest node", c.kind.name().toLowerCase(java.util.Locale.ROOT), c.id,
+                    c.biome == null ? "-" : c.biome.id, c.set ? ", set piece" : "", c.x, c.z, c.f0, 2 * c.rx, 2 * c.rz, c.helix() ? c.top - c.f0 : c.h,
+                    in != null ? "" : String.format(java.util.Locale.ROOT, ", %.0f blocks past its wall", Math.max(0, bestNear))));
+        }
+        Way bw = null;
+        double bd = 1e9, bDist = 0, bFloor = 0;
+        for (Way wy : n.ways) {
+            if (x < wy.minX - 48 || x > wy.maxX + 48 || z < wy.minZ - 48 || z > wy.maxZ + 48) continue;
+            for (int i = 0; i + 1 < wy.n; i++) {
+                double ax = wy.x[i], az = wy.z[i], dx = wy.x[i + 1] - ax, dz = wy.z[i + 1] - az;
+                double len2 = dx * dx + dz * dz;
+                double t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
+                double d = Math.hypot(x - (ax + dx * t), z - (az + dz * t)), f = wy.f[i] + (wy.f[i + 1] - wy.f[i]) * t;
+                double score = d + 0.5 * Math.abs(y - Math.ceil(f));
+                if (score < bd) { bd = score; bw = wy; bDist = d; bFloor = f; }
+            }
+        }
+        if (bw != null) {
+            String ends = (bw.a >= 0 ? n.ch.get(bw.a).kind.name().toLowerCase(java.util.Locale.ROOT) + " #" + bw.a : "-") + " to "
+                    + (bw.b >= 0 ? n.ch.get(bw.b).kind.name().toLowerCase(java.util.Locale.ROOT) + " #" + bw.b : "-");
+            out.add(String.format(java.util.Locale.ROOT, "  nearest way: #%d, %s%s%s, %s, %.0f blocks off its line, its floor y %.0f",
+                    bw.id, bw.kind.name().toLowerCase(java.util.Locale.ROOT), bw.inner ? " (inner walk)" : "", bw.round ? " (round tube)" : "", ends, bDist, bFloor));
+        }
+        for (Shaft s : n.shafts) {
+            if (Math.hypot(x - s.x, z - s.z) > s.r + 6 || y < s.y0 - 4 || y > s.y1 + 4) continue;
+            out.add(String.format(java.util.Locale.ROOT, "  climb stage %d of %d: foot y %.0f, top y %.0f, vines at %d %d", s.stage, s.stages, s.foot, s.top, s.vineX, s.vineZ));
+        }
+        double[] tmp = new double[6];
+        for (Route r : n.canyons) {
+            if (r.nearestWalk(x, z, tmp))
+                out.add(String.format(java.util.Locale.ROOT, "  the rift's ledge path: %.0f blocks away, its floor y %.0f", tmp[0], r.atIndex(r.floor, tmp[1])));
+        }
+        return out;
+    }
+
     // ================================================================================================ portals
     /** A portal joining two cells: a level stub tunnel across their shared edge between two vestibule chambers. */
     static final class Portal {
@@ -148,6 +419,12 @@ public final class Network {
         double corner = cell / 6;
         double yLo = W + (li == Terrain.BLUE ? 14 : li == Terrain.BASALT ? Terrain.SURGE_RISE + 3 : 6), yHi = T - 52;
         List<double[]> chosen = new ArrayList<>();
+        // Blue Reaches: the eligible city sites of the two cells, whose reserves no vestibule or stub may enter
+        List<double[]> sites = new ArrayList<>();
+        if (li == Terrain.BLUE) {
+            sites.addAll(eligibleCities(xEdge ? ex - 1 : ex, xEdge ? ez : ez - 1));
+            sites.addAll(eligibleCities(ex, ez));
+        }
         for (int i = 0; i < 80 && chosen.size() < count; i++) {
             double a = base0 + corner + Hashing.unit(Hashing.mix(k, 10 + i, 1, 0)) * (cell - 2 * corner);
             double y = yLo + Hashing.unit(Hashing.mix(k, 10 + i, 2, 0)) * (yHi - yLo);
@@ -159,6 +436,7 @@ public final class Network {
                 double sn = snapFloor(xEdge, lineV, a);
                 if (Double.isNaN(sn)) ok = false; else y = sn;
             }
+            if (ok && inReserve(sites, xEdge, lineV, a, Math.floor(y))) ok = false;
             if (ok) chosen.add(new double[]{a, Math.floor(y)});
         }
         for (int i = 0; i < chosen.size(); i++) {
@@ -199,6 +477,22 @@ public final class Network {
             out.add(p);
         }
         return out;
+    }
+
+    /**
+     * True when a portal on this edge at {@code along}, floor y, would put a vestibule (up to 9.5 across and 15 tall
+     * with its rise) or its stub (an S-bend 3 blocks off the line, on a 4-block slab) into a city reserve (section 11.1).
+     */
+    boolean inReserve(List<double[]> sites, boolean xEdge, double lineV, double along, double y) {
+        if (sites.isEmpty()) return false;
+        double W = shape.waterY(Terrain.BLUE);
+        if (y + 16 < W + CITY_RESERVE_LO || y - 5 > W + CITY_RESERVE_HI) return false;
+        for (double[] s : sites) {
+            // from the site to the segment between the two vestibules' centres (30 blocks either side of the edge)
+            double u = xEdge ? s[0] : s[1], v = xEdge ? s[1] : s[0];
+            if (Math.hypot(Math.max(0, Math.abs(u - lineV) - 30), v - along) < CITY_RESERVE + 9.5 + 3) return true;
+        }
+        return false;
     }
 
     /** True when 0.2.0's deep dark tiers open near the two vestibules or along the stub, within the portal's height. */
@@ -508,9 +802,18 @@ public final class Network {
         return pts;
     }
 
-    /** Where vanilla would start an ancient city (random spread 24/8, salt 20083232) well inside this cell. */
-    List<int[]> citySites(int cx, int cz) {
-        List<int[]> out = new ArrayList<>();
+    // ================================================================================================ ancient cities
+    /** The city reserve (section 11.1): its radius round the site, and its heights over the Blue Reaches' water table. */
+    public static final double CITY_RESERVE = 128, CITY_RESERVE_LO = 8, CITY_RESERVE_HI = 80;
+    /** How far inside its cell, and from both of the cell's landings, a city site must lie to be used. */
+    static final double CITY_INSIDE = 150, CITY_LANDING = 140;
+
+    /**
+     * Where vanilla would start an ancient city (random spread 24/8, salt 20083232) in cell (cx, cz): the centre of the
+     * start chunk, {x, z}.
+     */
+    List<double[]> citySites(int cx, int cz) {
+        List<double[]> out = new ArrayList<>();
         int bx0 = (int) Math.round(cx * cell), bz0 = (int) Math.round(cz * cell), size = (int) Math.round(cell);
         int c0x = Math.floorDiv(bx0, 16), c1x = Math.floorDiv(bx0 + size - 1, 16);
         int c0z = Math.floorDiv(bz0, 16), c1z = Math.floorDiv(bz0 + size - 1, 16);
@@ -518,11 +821,43 @@ public final class Network {
             for (int rz = Math.floorDiv(c0z, 24); rz <= Math.floorDiv(c1z, 24); rz++) {
                 Random r = new Random(rx * 341873128712L + rz * 132897987541L + seed + 20083232L);
                 int chx = rx * 24 + r.nextInt(16), chz = rz * 24 + r.nextInt(16);
-                int bx = chx * 16, bz = chz * 16;
-                if (bx >= bx0 + 110 && bx < bx0 + size - 110 && bz >= bz0 + 110 && bz < bz0 + size - 110) out.add(new int[]{bx, bz});
+                double x = chx * 16 + 8, z = chz * 16 + 8;
+                if (x >= bx0 && x < bx0 + size && z >= bz0 && z < bz0 + size) out.add(new double[]{x, z});
             }
         }
         return out;
+    }
+
+    /**
+     * The city sites of cell (cx, cz) that a city may use (section 11.1): at least {@link #CITY_INSIDE} inside the cell
+     * and {@link #CITY_LANDING} from both of the Blue Reaches' landings, so the reserve stays 22 blocks inside the cell
+     * and both landings 12 outside it. A pure function of the seed and the cell (the sites and the gates are pure), so
+     * the portals of the cell's edges read it too. Empty when the cells are too small for a city (under 400).
+     */
+    List<double[]> eligibleCities(int cx, int cz) {
+        List<double[]> out = new ArrayList<>();
+        if (cell < 400) return out;
+        double x0 = cx * cell, z0 = cz * cell;
+        Plans.Gate in = base.plans.gate(Terrain.BLUE + 1, cx, cz), down = base.plans.gate(Terrain.BLUE + 2, cx, cz);
+        for (double[] s : citySites(cx, cz)) {
+            if (s[0] < x0 + CITY_INSIDE || s[0] > x0 + cell - CITY_INSIDE || s[1] < z0 + CITY_INSIDE || s[1] > z0 + cell - CITY_INSIDE) continue;
+            if (Math.hypot(s[0] - in.lx, s[1] - in.lz) < CITY_LANDING || Math.hypot(s[0] - down.ux, s[1] - down.uz) < CITY_LANDING) continue;
+            out.add(s);
+        }
+        return out;
+    }
+
+    /**
+     * True when a structure starting at (x, y, z) is a planned ancient city (section 11.1): a kept CITY chamber's centre
+     * is within 24 blocks of (x, z) and y is within 30 of its floor. Replaces 0.2.0's {@code clearOfRoute}.
+     */
+    public boolean citySite(int x, int y, int z) {
+        // a city stands at least 150 inside its cell, so only the start's own cell can hold it
+        for (Chamber c : net(Terrain.BLUE, cellOf(x), cellOf(z)).ch) {
+            if (!c.keep || c.kind != Kind.CITY) continue;
+            if (Math.hypot(c.x - x, c.z - z) <= 24 && Math.abs(y - c.f0) <= 30) return true;
+        }
+        return false;
     }
 
     // ================================================================================================ chamber shape
@@ -1383,9 +1718,36 @@ public final class Network {
     public static int vineTop(Shaft s) { return (int) Math.ceil(s.top - 1e-9); }
 
     /** Half the opening in a stage's rim over its vines. */
-    static final double RIM_GAP = Math.toRadians(40);
+    public static final double RIM_GAP = Math.toRadians(40);
 
-    static double angleDiff(double a, double b) {
+    // ---- shelf vines (section 10): ShelfVinesFeature and the voxel harness follow these rules
+    /**
+     * The vine lines' spacing: a lip that runs on through columns side by side meets one at least every 10 blocks
+     * (section 10 asks for one every 6 to 10). Measured on the Blue 2 x 2 cells of seed 8675309: 8 hangs 75,100 vines,
+     * 10 61,680 and 16 38,490, and the main component holds 96.3%, 95.7% and 94.5% of the places standing on rock
+     * (90.0% with none).
+     */
+    public static final int SHELF_PERIOD = 10;
+    /** A lip's drop: from 2 to this many blocks between the feet on the lip and the floor (or water) below. */
+    public static final int SHELF_MAX_DROP = 48;
+    /**
+     * How far over the feet on the lip the rock a shelf vine hangs from may be. The game's hanging vines need rock over
+     * them, so a shelf vine hangs from the ceiling over the lip, past the lip, down to the floor below; the deep dark's
+     * tiers are up to about 40 tall, and the rift's open terraces under its far vault get none (its ledge path joins them).
+     */
+    public static final int SHELF_MAX_UP = 40;
+
+    /**
+     * True for the columns a shelf vine may hang in: those on the lines x = 10 i + ox and z = 10 k + oz (ox and oz from
+     * the seed).
+     */
+    public boolean shelfVineColumn(int x, int z) {
+        long h = Hashing.mix(seed, 8811, 0, 0);
+        int ox = (int) Math.floorMod(h, (long) SHELF_PERIOD), oz = (int) Math.floorMod(h >>> 20, (long) SHELF_PERIOD);
+        return Math.floorMod(x - ox, SHELF_PERIOD) == 0 || Math.floorMod(z - oz, SHELF_PERIOD) == 0;
+    }
+
+    public static double angleDiff(double a, double b) {
         return Math.atan2(Math.sin(a - b), Math.cos(a - b));
     }
 

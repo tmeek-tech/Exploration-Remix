@@ -1,12 +1,15 @@
 package com.explorationremix.world.feature;
 
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.terrain.Net;
+import com.explorationremix.world.terrain.Network;
 import com.explorationremix.world.terrain.Plans;
 import com.explorationremix.world.terrain.Route;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Blocks;
@@ -15,12 +18,15 @@ import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 
+import java.util.List;
+
 /**
- * Guarantees the way down is open, after every other feature has run. The terrain's density is interpolated in 4x8x4
+ * Guarantees the ways are open, after every other feature has run. The terrain's density is interpolated in 4x8x4
  * cells, which can pinch a passage that twists through a 16-block band, and other mods' features can drop blocks
  * into it. This pass re-opens, block by block inside each chunk: every gate passage's core, the first gate's ramp up
- * into the pack's caves, and a walking corridor along each layer's route. Only blocks you would bump into are
- * removed, so plants, vines and lichen on the path stay.
+ * into the pack's caves, a walking corridor along every way of the network (section 12.3), and the open core of every
+ * climb. Only blocks you would bump into are removed, so plants, vines and lichen on the path stay; climbable blocks
+ * (the climbs' vines) and the rims round the climbs' mouths are never touched.
  */
 public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
     public OpenWayFeature(Codec<NoneFeatureConfiguration> codec) { super(codec); }
@@ -45,21 +51,47 @@ public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
                 if (band == 1) any |= carveLink(level, plans.ramp(g), 1.4, minX, minZ, maxX, maxZ, pos);
             }
         }
-        // The walking corridor along each route: three blocks of headroom above the path.
-        for (int x = minX; x <= maxX; x++) {
-            for (int z = minZ; z <= maxZ; z++) {
-                for (int li = 0; li < s.layerCount; li++) {
-                    double[] path = t.routePathAt(li, x, z);
-                    if (path == null) continue;
-                    for (int k = 0; k < 4; k += 2) {
-                        if (path[k] > 1.6) continue;
-                        int fy = (int) Math.floor(path[k + 1]);
-                        for (int y = fy + 1; y <= fy + 3; y++) any |= clear(level, pos.set(x, y, z));
+        for (int li = 0; li < s.layerCount; li++) {
+            List<Net.Shaft> shafts = t.shaftsIn(minX, minZ, maxX, maxZ, li);
+            // The walking corridor along every way: the feet and two blocks over them.
+            for (int x = minX; x <= maxX; x++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    Network.WayLines w = t.carvedLinesAt(li, x, z, 1.6);
+                    for (int k = 0; k < w.n; k++) {
+                        int feet = (int) Math.ceil(w.floor[k] - 1e-9);
+                        for (int y = feet; y <= feet + 2; y++) {
+                            if (!rim(shafts, x, y, z)) any |= clear(level, pos.set(x, y, z));
+                        }
+                    }
+                }
+            }
+            // Each climb's open core, and the step off the top of its vines (Network.mustOpen).
+            for (Net.Shaft sh : shafts) {
+                int top = Network.vineTop(sh);
+                for (int x = Math.max(minX, (int) Math.floor(sh.x - sh.r)); x <= Math.min(maxX, (int) Math.ceil(sh.x + sh.r)); x++) {
+                    for (int z = Math.max(minZ, (int) Math.floor(sh.z - sh.r)); z <= Math.min(maxZ, (int) Math.ceil(sh.z + sh.r)); z++) {
+                        if (x == sh.stepX && z == sh.stepZ) {
+                            for (int y = top; y <= top + 1; y++) any |= clear(level, pos.set(x, y, z));
+                            continue;
+                        }
+                        if (Math.hypot(x - sh.x, z - sh.z) >= sh.r - 0.6) continue;
+                        for (int y = (int) Math.floor(sh.y0 + 0.5) + 1; y < sh.y1; y++) any |= clear(level, pos.set(x, y, z));
                     }
                 }
             }
         }
         return any;
+    }
+
+    /** True for a block of the 1-block rim round a climb's mouth (Network.mustStay): left alone. */
+    private static boolean rim(List<Net.Shaft> shafts, int x, int y, int z) {
+        for (Net.Shaft sh : shafts) {
+            if (y != Network.vineTop(sh)) continue;
+            double sd = Math.hypot(x - sh.x, z - sh.z);
+            if (sd <= sh.r + 0.5 || sd >= sh.r + 1.5) continue;
+            if (Math.abs(Network.angleDiff(Math.atan2(z - sh.z, x - sh.x), sh.vineA)) >= Network.RIM_GAP) return true;
+        }
+        return false;
     }
 
     private static boolean carvePassage(WorldGenLevel level, Plans.Gate g, int minX, int minZ, int maxX, int maxZ, BlockPos.MutableBlockPos pos) {
@@ -106,7 +138,7 @@ public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
 
     private static boolean clear(WorldGenLevel level, BlockPos pos) {
         BlockState st = level.getBlockState(pos);
-        if (st.isAir() || !st.getFluidState().isEmpty() || st.is(Blocks.BEDROCK)) return false;
+        if (st.isAir() || !st.getFluidState().isEmpty() || st.is(Blocks.BEDROCK) || st.is(BlockTags.CLIMBABLE)) return false;
         if (st.getCollisionShape(level, pos).isEmpty()) return false;
         level.setBlock(pos, Blocks.CAVE_AIR.defaultBlockState(), 2);
         return true;

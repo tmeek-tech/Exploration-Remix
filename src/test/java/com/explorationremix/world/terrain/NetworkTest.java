@@ -216,6 +216,45 @@ class NetworkTest {
     @Test
     void tubesAndArches() { overPlans(NetworkTest::tubesArches); }
 
+    @Test
+    void queriesSeeEveryWayAndClimb() { overPlans(NetworkTest::queries); }
+
+    /**
+     * Section 12.1: wayLinesAt and carvedLinesAt find every point of every way that lies in the plan's own cell, on that
+     * way's floor and half-width there (so Walkway protects and the open way pass re-opens every way), and shaftsIn
+     * finds every climb stage from its axis, its vine column and its step. (A switchback that comes back past a point
+     * within 4 blocks along the way is one pass, as in the density's column lookup, and its half-width there may be
+     * that of the nearest stretch, up to a few tenths off.)
+     */
+    static void queries(Terrain t, Net n, String tag, List<String> fails) {
+        Network w = t.network;
+        int missed = 0, total = 0;
+        String first = null;
+        for (Way wy : n.ways) for (int i = 0; i < wy.n; i++) {
+            if (w.cellOf(wy.x[i]) != n.cx || w.cellOf(wy.z[i]) != n.cz) continue;
+            for (int pass = 0; pass < 2; pass++) {
+                total++;
+                Network.WayLines l = pass == 0 ? w.wayLinesAt(n.li, wy.x[i], wy.z[i], 0.5) : w.carvedLinesAt(n.li, wy.x[i], wy.z[i], 0.5);
+                boolean ok = false;
+                for (int k = 0; k < l.n && !ok; k++)
+                    ok = l.d[k] < 1e-6 && Math.abs(l.floor[k] - wy.f[i]) < 1e-6 && Math.abs(l.half[k] - wy.w[i]) < 0.25;
+                if (!ok) {
+                    missed++;
+                    if (first == null) first = String.format(java.util.Locale.ROOT, "way %d (%s) point %d of %d at %.1f, %.1f floor %.2f (pass %d)",
+                            wy.id, wy.kind, i, wy.n, wy.x[i], wy.z[i], wy.f[i], pass);
+                }
+            }
+        }
+        if (missed > 0) fails.add(tag + ": " + missed + " of " + total + " way points not found, first " + first);
+        for (Shaft s : n.shafts) {
+            int x = (int) Math.floor(s.x), z = (int) Math.floor(s.z);
+            if (!w.shaftsIn(n.li, x, z, x, z).contains(s)) fails.add(tag + ": climb stage " + s.id + " not found at its axis");
+            if (!w.shaftsIn(n.li, s.vineX, s.vineZ, s.vineX, s.vineZ).contains(s)) fails.add(tag + ": climb stage " + s.id + " not found at its vines");
+            if (s.stepX != Integer.MIN_VALUE && !w.shaftsIn(n.li, s.stepX, s.stepZ, s.stepX, s.stepZ).contains(s))
+                fails.add(tag + ": climb stage " + s.id + " not found at its step");
+        }
+    }
+
     /**
      * Section 10: every climb is at most 4 stages of at most 12.5, consecutive axes 2 r + 3 to 2 r + 5 apart, each next
      * stage's foot on the floor of the ledge passage from the one below, the ledge level at that stage's top, the
@@ -361,6 +400,144 @@ class NetworkTest {
         for (long seed : SEEDS) for (int[] cell : CELLS) for (int l = 1; l < t.shape.layerCount; l++)
             dropped(terrain(seed), terrain(seed).network.net(l, cell[0], cell[1]), tag(seed, l, cell[0], cell[1]), fails);
         assertTrue(fails.isEmpty(), String.join("\n", fails));
+    }
+
+    /**
+     * Section 11.1, over 3 seeds x 4 x 4 Blue cells: every eligible city site is at least 150 inside its cell and 140
+     * from both landings; for every placed city, no chamber but the city (and the deep dark caverns, where the city
+     * sits as in vanilla) and no tunnel or climb but the city's own enters its reserve (radius 128, W + 8 to W + 80),
+     * no portal vestibule or stub enters it, and the rift and its geodes stay 128 plus their half-width away.
+     */
+    @Test
+    void citySitesAreClear() {
+        List<String> fails = new ArrayList<>();
+        int sites = 0, eligible = 0, cities = 0;
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            Network w = t.network;
+            int li = Terrain.BLUE;
+            double W = t.shape.waterY(li), lo = W + Network.CITY_RESERVE_LO, hi = W + Network.CITY_RESERVE_HI, R = Network.CITY_RESERVE;
+            for (int cx = 0; cx < 4; cx++) for (int cz = 0; cz < 4; cz++) {
+                String tg = tag(seed, li, cx, cz);
+                sites += w.citySites(cx, cz).size();
+                Plans.Gate in = t.plans.gate(li + 1, cx, cz), down = t.plans.gate(li + 2, cx, cz);
+                double x0 = cx * w.cell, z0 = cz * w.cell;
+                for (double[] s : w.eligibleCities(cx, cz)) {
+                    eligible++;
+                    double inside = Math.min(Math.min(s[0] - x0, x0 + w.cell - s[0]), Math.min(s[1] - z0, z0 + w.cell - s[1]));
+                    if (inside < 150) fails.add(tg + ": eligible site " + (int) s[0] + "," + (int) s[1] + " only " + (int) inside + " inside");
+                    if (Math.hypot(s[0] - in.lx, s[1] - in.lz) < 140 || Math.hypot(s[0] - down.ux, s[1] - down.uz) < 140)
+                        fails.add(tg + ": eligible site " + (int) s[0] + "," + (int) s[1] + " within 140 of a landing");
+                }
+                Net n = w.net(li, cx, cz);
+                for (Chamber city : n.ch) {
+                    if (!city.keep || city.kind != Kind.CITY) continue;
+                    cities++;
+                    String ct = tg + " city at " + (int) city.x + "," + (int) city.z;
+                    boolean placed = false;
+                    for (double[] s : w.eligibleCities(cx, cz)) if (Math.abs(s[0] - city.x) < 1e-9 && Math.abs(s[1] - city.z) < 1e-9) placed = true;
+                    if (!placed) fails.add(ct + ": not at an eligible site");
+                    for (Chamber c : n.ch) {
+                        // the rift's own nodes are checked with the rift, below
+                        if (!c.keep || c == city || c.dark >= 0 || c.kind == Kind.CANYON) continue;
+                        if (c.yHi() < lo || c.yLo() > hi || Math.hypot(c.x - city.x, c.z - city.z) >= R + c.R()) continue;
+                        fails.add(ct + ": " + c.kind + " " + c.id + " in the reserve, " + (int) Math.hypot(c.x - city.x, c.z - city.z) + " from it");
+                    }
+                    // the city's own tunnels and climbs: the ways and stages of its edges
+                    java.util.Set<Object> own = new java.util.HashSet<>();
+                    for (Edge e : n.edges) {
+                        if (e.a != city.id && e.b != city.id) continue;
+                        if (e.w1 != null) own.add(e.w1);
+                        if (e.w2 != null) own.add(e.w2);
+                        own.addAll(List.of(e.ledges));
+                        own.addAll(List.of(e.stages));
+                    }
+                    for (Way wy : n.ways) {
+                        if (own.contains(wy) || wy.a == city.id || wy.b == city.id) continue;
+                        if (wy.inner && wy.a >= 0 && n.ch.get(wy.a).dark >= 0) continue; // a deep dark cavern's own walk
+                        for (int i = 0; i < wy.n; i++) {
+                            if (wy.f[i] + wy.hgt[i] < lo || wy.f[i] - wy.slab[i] > hi) continue;
+                            if (Math.hypot(wy.x[i] - city.x, wy.z[i] - city.z) >= R + wy.w[i]) continue;
+                            fails.add(ct + ": way " + wy.id + " (" + wy.kind + ", " + wy.a + "-" + wy.b + ") enters the reserve");
+                            break;
+                        }
+                    }
+                    for (Shaft s : n.shafts) {
+                        if (own.contains(s) || s.y1 < lo || s.y0 > hi) continue;
+                        if (Math.hypot(s.x - city.x, s.z - city.z) < R + s.r + 2) fails.add(ct + ": climb stage " + s.id + " in the reserve");
+                    }
+                    for (Route r : n.canyons) {
+                        for (double s = 0; s < r.length; s += 3) {
+                            double[] p = r.pointAt(s);
+                            if (Math.hypot(p[0] - city.x, p[1] - city.z) < r.at(r.riftHalf, s) + R) { fails.add(ct + ": the rift passes within 128 + its half-width"); break; }
+                        }
+                        for (Route.Geode g : r.geodes)
+                            if (Math.hypot(g.x() - city.x, g.z() - city.z) < g.r() + R) fails.add(ct + ": a rift geode within 128 + its radius");
+                    }
+                }
+            }
+        }
+        System.out.printf("citySitesAreClear: %d sites, %d eligible, %d cities in %d cells%n", sites, eligible, cities, SEEDS.length * 16);
+        if (cities == 0) fails.add("no city placed in " + SEEDS.length * 16 + " cells");
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
+    }
+
+    /**
+     * Section 6.3, over 2 seeds x 3 x 3 Blue cells: along every seam between them, every 2 blocks, both tiers, the deep
+     * dark carved at the last column of one cell and at the first column of the next is the raw tier field's span there
+     * (within 16 blocks of a seam both cells carve the raw field, whatever their plans kept), and where the raw field is
+     * open on both sides, neither side is open by more than 6 while the other is closed (a wall across a cavern).
+     */
+    @Test
+    void deepDarkAgreesAcrossSeams() {
+        List<String> fails = new ArrayList<>();
+        int samples = 0, open = 0, walls = 0, off = 0;
+        double[] t2 = new double[2];
+        for (long seed : new long[]{SEEDS[0], SEEDS[1]}) {
+            Terrain t = terrain(seed);
+            Network w = t.network;
+            int cell = (int) Math.round(w.cell);
+            for (int side = 0; side < 2; side++) for (int a = 1; a < 3; a++) for (int along = 1; along < 3 * cell; along += 2) {
+                boolean xEdge = side == 0;
+                int line = a * cell;
+                double[] h = new double[2];
+                boolean rawBoth = true;
+                for (int k = 0; k < 2; k++) {
+                    for (int sd = 0; sd < 2; sd++) {
+                        int x = xEdge ? line - 1 + sd : along, z = xEdge ? along : line - 1 + sd;
+                        Network.LCol lc = w.layer(w.column(x, z), Terrain.BLUE);
+                        double F = k == 0 ? lc.aF : lc.bF, C = k == 0 ? lc.aC : lc.bC;
+                        double rF = 0, rC = 0;
+                        double o = w.dark.open(k, x, z);
+                        if (o > 0 && lc.net.dark != null) {
+                            o *= NetDark.fade(lc.net.dark.geodes, x, z);
+                            if (o > 0) {
+                                w.dark.tier(o, w.dark.floor0(k, x, z), w.dark.ceil0(k, x, z), t2);
+                                rF = t2[0];
+                                rC = t2[1];
+                            }
+                        }
+                        boolean carvedOpen = C > F, rawOpen = rC > rF;
+                        samples++;
+                        if (rawOpen) open++;
+                        if (carvedOpen != rawOpen || (carvedOpen && (Math.abs(F - rF) > 1e-6 || Math.abs(C - rC) > 1e-6))) {
+                            off++;
+                            if (off <= 10) fails.add(String.format(java.util.Locale.ROOT, "seed %d tier %d at %d %d: carved %s, raw %s",
+                                    seed, k, x, z, carvedOpen ? String.format(java.util.Locale.ROOT, "%.1f..%.1f", F, C) : "closed",
+                                    rawOpen ? String.format(java.util.Locale.ROOT, "%.1f..%.1f", rF, rC) : "closed"));
+                        }
+                        h[sd] = carvedOpen ? C - F : 0;
+                        rawBoth &= rawOpen;
+                    }
+                    if (rawBoth && ((h[0] > 6 && h[1] <= 0) || (h[1] > 6 && h[0] <= 0))) walls++;
+                    rawBoth = true;
+                }
+            }
+        }
+        System.out.printf("deepDarkAgreesAcrossSeams: %d samples, %d open in the raw field, %d off the raw field, %d walls%n", samples, open, off, walls);
+        if (open == 0) fails.add("no open deep dark on any seam");
+        if (walls > 0) fails.add(walls + " walls across a cavern on a seam");
+        assertTrue(fails.isEmpty() && off == 0, off + " samples off the raw field:\n" + String.join("\n", fails));
     }
 
     /**
@@ -722,8 +899,9 @@ class NetworkTest {
     private static final Map<String, VoxelHarness> BUILT = new HashMap<>();
 
     /**
-     * One or more cells of a layer built as the game builds them, the plan's climbs marked, the Deep Blue Rift's shelf
-     * vines too, and joined from the first cell's entry landing. An apron of 64 blocks round the cells (the deep dark
+     * One or more cells of a layer built as the game builds them, the climbs' vines marked, the shelf vines of the
+     * Deep Blue Rift and the deep dark too (as ClimbVinesFeature and ShelfVinesFeature place them), and joined from the
+     * first cell's entry landing. An apron of 64 blocks round the cells (the deep dark
      * raster's) keeps the Blue Reaches' caverns that run across a seam joined as they are in the world.
      */
     static synchronized VoxelHarness built(long seed, int li, int cx, int cz, int wc, int hc) {
@@ -738,7 +916,7 @@ class NetworkTest {
         v = VoxelHarness.build(t, li, cx * cell - ap, cz * cell - ap, wc * cell + 2 * ap, hc * cell + 2 * ap);
         for (int i = ap > 0 ? -1 : 0; i < wc + (ap > 0 ? 1 : 0); i++) for (int k = ap > 0 ? -1 : 0; k < hc + (ap > 0 ? 1 : 0); k++)
             v.markShafts(w.net(li, cx + i, cz + k));
-        if (li == Terrain.BLUE) v.markLipVines(DeepBiome.DEEP_BLUE_RIFT);
+        if (li == Terrain.BLUE) v.markShelfVines(DeepBiome.DEEP_BLUE_RIFT, DeepBiome.DEEP_DARK);
         Net n = w.net(li, cx, cz);
         Chamber e = n.ch.get(n.entry);
         v.connect(e.x, e.f0 + 1, e.z);
@@ -847,8 +1025,8 @@ class NetworkTest {
         double share = in[0] / (double) in[1];
         System.out.printf("Blue Reaches 2 x 2 cells: main component %.2f%% of %d places%n", 100 * share, in[1]);
         List<String> fails = new ArrayList<>();
-        // measured 94.90% (rift shelf vines only, as the harness models them in this step): 1.5 points of margin
-        if (share < 0.934) fails.add("the main component holds " + fmt(100 * share) + "% of the standing places");
+        // measured 96.94% with the shelf vines as ShelfVinesFeature places them (89.78% with none); the design's bar is 93%
+        if (share < 0.93) fails.add("the main component holds " + fmt(100 * share) + "% of the standing places");
         for (int i = 0; i < 2; i++) for (int k = 0; k < 2; k++) {
             Net n = w.net(Terrain.BLUE, cx + i, cz + k);
             String tg = tag(seed, Terrain.BLUE, cx + i, cz + k);

@@ -209,30 +209,44 @@ final class VoxelHarness {
     }
 
     /**
-     * Shelf vines: wherever a standing place in the given biome has an edge with a drop of 2 to 48 blocks beside it,
-     * vines hang from the lip down to the floor below, so the drop can be climbed both ways. Returns the number of
-     * vine columns. Call before {@link #connect}.
+     * Shelf vines as {@code ShelfVinesFeature} places them (section 10). A lip is a place standing on rock, in one of
+     * the given biomes, beside a column that is air from a block over its head down to two under its feet. In such a
+     * column on the vine lines ({@link Network#shelfVineColumn}), a vine hangs from the first rock over it (at most
+     * {@link Network#SHELF_MAX_UP} over the feet) down through the air to the floor or water below, when that lies 2 to
+     * {@link Network#SHELF_MAX_DROP} under the feet. Returns the number of vines. Call before {@link #connect}.
      */
-    int markLipVines(DeepBiome biome) {
-        int cols = 0;
+    int markShelfVines(DeepBiome... biomes) {
+        int vines = 0;
+        Network w = t.network;
         for (int i = 0; i < nx; i++) for (int k = 0; k < nz; k++) {
-            int x = x0 + i, z = z0 + k;
-            for (int j = 1; j < ny - 2; j++) {
+            int qx = x0 + i, qz = z0 + k;
+            if (!w.shelfVineColumn(qx, qz)) continue;
+            int last = Integer.MAX_VALUE;
+            for (int j = ny - 3; j >= 2; j--) {
                 int y = y0 + j;
-                if (!place(x, y, z) || !solid(x, y - 1, z)) continue;
-                for (int d = 0; d < 4; d++) {
-                    int qx = x + DX[d], qz = z + DZ[d];
-                    if (!in(qx, y, qz) || !open(qx, y, qz) || !open(qx, y + 1, qz) || !open(qx, y - 1, qz) || !open(qx, y - 2, qz)) continue;
-                    int fy = y - 2;
-                    while (fy > y0 && open(qx, fy - 1, qz) && y - fy < 49) fy--;
-                    if (y - fy > 48 || !solid(qx, fy - 1, qz)) continue;
-                    if (t.biomeAt(x, y, z) != biome) continue;
-                    for (int yy = fy; yy <= y; yy++) setClimb(qx, yy, qz);
-                    cols++;
+                if (y >= last) continue;
+                if (mat(qx, y + 1, qz) != AIR || mat(qx, y, qz) != AIR || mat(qx, y - 1, qz) != AIR || mat(qx, y - 2, qz) != AIR) continue;
+                boolean lip = false;
+                for (int d = 0; d < 4 && !lip; d++) {
+                    int x = qx - DX[d], z = qz - DZ[d];
+                    if (!in(x, y, z) || !place(x, y, z) || !solid(x, y - 1, z)) continue;
+                    DeepBiome b = t.biomeAt(x, y, z);
+                    for (DeepBiome bb : biomes) if (b == bb) lip = true;
                 }
+                if (!lip) continue;
+                int fy = y - 2;
+                while (fy > y0 && mat(qx, fy - 1, qz) == AIR) fy--;
+                int under = mat(qx, fy - 1, qz);
+                if (y - fy > Network.SHELF_MAX_DROP || (under != ROCK && under != WATER)) continue;
+                int hy = y + 2;
+                while (hy < y0 + ny && hy <= y + 1 + Network.SHELF_MAX_UP && mat(qx, hy, qz) == AIR) hy++;
+                if (hy >= y0 + ny || mat(qx, hy, qz) != ROCK) continue;
+                for (int yy = fy; yy < hy; yy++) setClimb(qx, yy, qz);
+                vines++;
+                last = fy;
             }
         }
-        return cols;
+        return vines;
     }
 
     // ================================================================================================ the walk graph

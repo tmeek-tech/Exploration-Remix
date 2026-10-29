@@ -336,16 +336,29 @@ final class NetPlanner {
         // ------------------------------------------------------------------------------------------- the city
         Chamber city;
 
-        /** Blue Reaches: the ancient city's cavern, at vanilla's own start position for this cell, before anything else. */
+        /**
+         * Blue Reaches: the ancient city's cavern, at vanilla's own start position, at the cell's first eligible site
+         * (section 11.1: 150 inside the cell, 140 from both landings; cells under 400 have none), right after the
+         * landings, portals and storeys. Its reserve (radius 128, W + 8 to W + 80) then keeps every later chamber,
+         * tunnel and climb out but its own door tunnels ({@link #reserveHit}).
+         */
         void city() {
-            // a city's pieces reach 116 blocks from its start: cells under 400 have no room for one (section 2.6)
-            if (cell < 400) return;
-            for (int[] cs : w.citySites(cx, cz)) {
+            for (double[] cs : w.eligibleCities(cx, cz)) {
                 Chamber c = chamber(Kind.CITY, 790);
-                c.x = cs[0] + 8; c.z = cs[1] + 8; c.rx = 62; c.rz = 56; c.setRot(r(791, 0, 3.14)); c.warp = 0.12;
+                c.x = cs[0]; c.z = cs[1]; c.rx = 62; c.rz = 56; c.setRot(r(791, 0, 3.14)); c.warp = 0.12;
                 c.f0 = W + 20; c.h = 46; c.rise = 3; c.hunting = true; c.set = true;
                 if (fits(c)) { add(c); city = c; return; }
             }
+        }
+
+        /**
+         * True when a space (centre, reach, heights) enters the kept city's reserve: within {@link Network#CITY_RESERVE}
+         * of its centre, between W + 8 and W + 80.
+         */
+        boolean reserveHit(double x, double z, double R, double yLo, double yHi) {
+            if (city == null || !city.keep) return false;
+            if (yHi < W + Network.CITY_RESERVE_LO || yLo > W + Network.CITY_RESERVE_HI) return false;
+            return Math.hypot(x - city.x, z - city.z) < Network.CITY_RESERVE + R;
         }
 
         // ------------------------------------------------------------------------------------------- courts
@@ -1060,8 +1073,8 @@ final class NetPlanner {
             }
         }
 
-        /** The ancient city's reserve round its chamber's centre (blocks): no view-cutting shape stands in it. */
-        static final double CITY_RESERVE = 128;
+        /** The ancient city's reserve round its chamber's centre (blocks): no view-cutting shape stands in it either. */
+        static final double CITY_RESERVE = Network.CITY_RESERVE;
         /** Margin of the view breaker's map round the cell (blocks): a long run touching the cell lies inside it. */
         static final double SIGHT_APRON = 120;
         /** Line directions of the view breaker over half a turn, and the spacing of its lines (blocks). */
@@ -1578,6 +1591,7 @@ final class NetPlanner {
                 return false;
             }
             if (lavaHit(c.x, c.z, c.R(), c.yLo(), c.yHi(), sp.gapH, sp.gapV)) return false;
+            if (c.kind != Kind.CITY && reserveHit(c.x, c.z, c.R(), c.yLo(), c.yHi())) return false;
             // keep out of the canyons' volume (Blue Reaches)
             for (Route r : n.canyons) {
                 double[] o = w.riftOpen(r, c.x, c.z, c.R() + 12);
@@ -1781,12 +1795,19 @@ final class NetPlanner {
             return lo + (hi - lo) * t;
         }
 
+        /**
+         * True when the rift (or one of its geodes) comes within reach of a chamber: its half-width plus the chamber's
+         * reach plus 16 (a geode: plus 10); for the city, its whole reserve (section 11.1: 128 plus the rift's
+         * half-width round the site).
+         */
         boolean canyonHits(Route r, Chamber c) {
+            boolean isCity = c.kind == Kind.CITY;
+            double reach = isCity ? Network.CITY_RESERVE : c.R() + 16;
             for (double s = 0; s < r.length; s += 6) {
                 double[] p = r.pointAt(s);
-                if (Math.hypot(p[0] - c.x, p[1] - c.z) < r.at(r.riftHalf, s) + c.R() + 16) return true;
+                if (Math.hypot(p[0] - c.x, p[1] - c.z) < r.at(r.riftHalf, s) + reach) return true;
             }
-            for (Route.Geode g : r.geodes) if (Math.hypot(g.x() - c.x, g.z() - c.z) < g.r() + c.R() + 10) return true;
+            for (Route.Geode g : r.geodes) if (Math.hypot(g.x() - c.x, g.z() - c.z) < g.r() + (isCity ? Network.CITY_RESERVE : c.R() + 10)) return true;
             return false;
         }
 
@@ -2378,6 +2399,7 @@ final class NetPlanner {
                 return false;
             }
             if (lavaHit(pk.x, pk.z, pk.R(), pk.yLo(), pk.yHi(), 8, 6)) return false;
+            if (reserveHit(pk.x, pk.z, pk.R(), pk.yLo(), pk.yHi())) return false;
             return !geodeHit(pk.x, pk.z, pk.R(), pk.yLo(), pk.yHi(), GEODE_GAP, GEODE_GAP);
         }
 
@@ -3108,6 +3130,7 @@ final class NetPlanner {
                     if (arc > lim - d0 + 6 && d < lim - 1 && !(wy.f[i] + wy.hgt[i] + sp.clearCV < k.yLo() || k.yHi() + sp.clearCV < wy.f[i] - wy.slab[i])) return false;
                 }
             }
+            boolean cityDoor = city != null && (ca == city.id || cb == city.id);
             for (int i = 0; i < wy.n; i++) {
                 double px = wy.x[i], pz = wy.z[i], pf = wy.f[i], pw = wy.w[i], ph = wy.hgt[i];
                 // cell margin
@@ -3124,6 +3147,7 @@ final class NetPlanner {
                     return false;
                 }
                 if (lavaHit(px, pz, pw + sp.clearC, pf - wy.slab[i], pf + ph, 0, sp.clearCV)) return false;
+                if (!cityDoor && reserveHit(px, pz, pw, pf - wy.slab[i], pf + ph)) return false;
                 if (geodeHit(px, pz, pw, pf - wy.slab[i], pf + ph, GEODE_GAP, 4)) return false;
                 // ends near their own chambers are allowed to touch them
                 int bx = (int) Math.floor((px - x0 + Net.APRON) / CB), bz = (int) Math.floor((pz - z0 + Net.APRON) / CB);
@@ -3196,6 +3220,7 @@ final class NetPlanner {
                 return false;
             }
             if (lavaHit(s.x, s.z, s.r + 5, s.y0, s.y1, 0, 3)) return false;
+            if (!(city != null && (ca == city.id || cb == city.id)) && reserveHit(s.x, s.z, s.r + 2, s.y0, s.y1)) return false;
             if (geodeHit(s.x, s.z, s.r, s.y0, s.y1, GEODE_GAP, 4)) return false;
             for (Way o : n.ways) {
                 for (int j = 0; j < o.n; j++) {

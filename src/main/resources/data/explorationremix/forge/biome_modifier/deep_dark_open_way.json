@@ -1,6 +1,10 @@
 {
   "type": "forge:add_features",
   "biomes": "minecraft:deep_dark",
-  "features": "explorationremix:open_way",
+  "features": [
+    "explorationremix:climb_vines",
+    "explorationremix:shelf_vines",
+    "explorationremix:open_way"
+  ],
   "step": "top_layer_modification"
 }

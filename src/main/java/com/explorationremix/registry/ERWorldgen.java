@@ -3,6 +3,7 @@ package com.explorationremix.registry;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.world.feature.BrokenMachineFeature;
 import com.explorationremix.world.feature.CeilingRootsFeature;
+import com.explorationremix.world.feature.ClimbVinesFeature;
 import com.explorationremix.world.feature.ColumnClusterFeature;
 import com.explorationremix.world.feature.DaylightShaftFeature;
 import com.explorationremix.world.feature.FallbackStateProvider;
@@ -16,6 +17,7 @@ import com.explorationremix.world.feature.MushroomShelfFeature;
 import com.explorationremix.world.feature.OpenWayFeature;
 import com.explorationremix.world.feature.RootvaultsLookFilter;
 import com.explorationremix.world.feature.RootvaultsOpeningsPlacement;
+import com.explorationremix.world.feature.ShelfVinesFeature;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
 import com.explorationremix.world.feature.TerracePoolsFeature;
 import com.explorationremix.world.feature.UnderTreesPlacement;
@@ -39,6 +41,8 @@ public final class ERWorldgen {
     private ERWorldgen() {}
 
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> OPEN_WAY = FEATURES.register("open_way", () -> new OpenWayFeature(NoneFeatureConfiguration.CODEC));
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> CLIMB_VINES = FEATURES.register("climb_vines", () -> new ClimbVinesFeature(NoneFeatureConfiguration.CODEC));
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> SHELF_VINES = FEATURES.register("shelf_vines", () -> new ShelfVinesFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<SurfaceAttachFeature.Config>> SURFACE_ATTACH = FEATURES.register("surface_attach", () -> new SurfaceAttachFeature(SurfaceAttachFeature.Config.CODEC));
     public static final RegistryObject<Feature<GiantSpikeFeature.Config>> GIANT_SPIKE = FEATURES.register("giant_spike", () -> new GiantSpikeFeature(GiantSpikeFeature.Config.CODEC));
     public static final RegistryObject<Feature<TerracePoolsFeature.Config>> TERRACE_POOLS = FEATURES.register("terrace_pools", () -> new TerracePoolsFeature(TerracePoolsFeature.Config.CODEC));
