@@ -1,0 +1,21 @@
+{
+  "feature": "explorationremix:basalt_galleries/smoulder_lichen",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 6
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "basalt_galleries",
+      "inset": 2,
+      "above_water": true
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

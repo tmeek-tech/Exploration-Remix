@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/rose_tendrils_plant"
+      },
+      {
+        "model": "explorationremix:block/rose_tendrils_plant_2"
+      }
+    ]
+  }
+}

@@ -106,11 +106,17 @@
     [],
     [],
     [],
-    [],
+    [
+      "explorationremix:basalt_galleries/smoulder_lichen",
+      "explorationremix:basalt_galleries/amber_shards"
+    ],
     [
       "explorationremix:basalt_galleries/lava_falls"
     ],
-    [],
+    [
+      "explorationremix:basalt_galleries/cinder_blooms",
+      "explorationremix:basalt_galleries/ash_ferns"
+    ],
     [
       "explorationremix:open_way"
     ]

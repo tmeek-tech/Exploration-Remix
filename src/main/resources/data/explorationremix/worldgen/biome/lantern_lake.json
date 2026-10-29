@@ -7,8 +7,8 @@
     "sky_color": 12749382,
     "water_color": 3920068,
     "water_fog_color": 1205599,
-    "grass_color": 8826966,
-    "foliage_color": 7643206,
+    "grass_color": 11049578,
+    "foliage_color": 9996890,
     "mood_sound": {
       "sound": "minecraft:ambient.cave",
       "tick_delay": 6000,
@@ -117,8 +117,12 @@
       "explorationremix:lantern_lake/wisteria_pods",
       "explorationremix:lantern_lake/lantern_pods",
       "explorationremix:lantern_lake/flowers",
-      "explorationremix:lantern_lake/seagrass",
-      "explorationremix:lantern_lake/sea_pickles"
+      "explorationremix:lantern_lake/pale_wisteria",
+      "explorationremix:lantern_lake/plumes",
+      "explorationremix:lantern_lake/coral",
+      "explorationremix:lantern_lake/petals",
+      "explorationremix:lantern_lake/waterweed",
+      "explorationremix:lantern_lake/lantern_weed"
     ],
     [
       "explorationremix:open_way"

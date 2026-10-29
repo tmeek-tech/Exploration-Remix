@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/pale_wisteria_plant"
+      },
+      {
+        "model": "explorationremix:block/pale_wisteria_plant_2"
+      }
+    ]
+  }
+}

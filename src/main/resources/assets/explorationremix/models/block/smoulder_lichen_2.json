@@ -1,0 +1,8 @@
+{
+  "parent": "explorationremix:block/template/lichen_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "texture": "explorationremix:block/smoulder_lichen_2",
+    "glow": "explorationremix:block/smoulder_lichen_2_glow"
+  }
+}

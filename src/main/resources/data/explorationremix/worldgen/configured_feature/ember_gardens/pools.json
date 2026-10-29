@@ -50,7 +50,7 @@
       ]
     },
     "radius": 10,
-    "edge_chance": 0.35,
+    "edge_chance": 0.45,
     "overflow_chance": 0.08,
     "edge": {
       "type": "explorationremix:mix",
@@ -68,7 +68,25 @@
           "data": {
             "type": "minecraft:simple_state_provider",
             "state": {
+              "Name": "explorationremix:pale_coral"
+            }
+          },
+          "weight": 3
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
               "Name": "explorationremix:pale_coral_fan"
+            }
+          },
+          "weight": 2
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:ember_anemone"
             }
           },
           "weight": 3

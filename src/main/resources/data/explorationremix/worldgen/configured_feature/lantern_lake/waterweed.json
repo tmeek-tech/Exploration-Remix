@@ -4,19 +4,14 @@
     "state": {
       "type": "minecraft:simple_state_provider",
       "state": {
-        "Name": "minecraft:seagrass"
+        "Name": "explorationremix:lilac_waterweed"
       }
     },
     "faces": "floor",
-    "tries": 64,
+    "tries": 48,
     "radius": 7,
     "height": 2,
-    "on": [
-      "minecraft:sand",
-      "minecraft:clay",
-      "minecraft:gravel",
-      "minecraft:dirt"
-    ],
+    "on": "#explorationremix:lake_bed",
     "in_water": true
   }
 }

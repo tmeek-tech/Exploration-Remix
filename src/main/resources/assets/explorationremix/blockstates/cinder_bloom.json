@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/cinder_bloom"
+      },
+      {
+        "model": "explorationremix:block/cinder_bloom_2"
+      }
+    ]
+  }
+}

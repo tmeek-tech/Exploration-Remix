@@ -1,0 +1,8 @@
+{
+  "parent": "explorationremix:block/template/cross_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "cross": "explorationremix:block/ember_anemone_2",
+    "glow": "explorationremix:block/ember_anemone_2_glow"
+  }
+}

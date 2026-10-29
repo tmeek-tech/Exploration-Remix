@@ -113,12 +113,19 @@
     [],
     [],
     [
-      "explorationremix:ember_gardens/shelf_fungi"
+      "explorationremix:ember_gardens/shelf_fungi",
+      "explorationremix:ember_gardens/mushroom_shelves",
+      "explorationremix:ember_gardens/mushroom_caps",
+      "explorationremix:ember_gardens/amber_shards"
     ],
     [],
     [
       "explorationremix:ember_gardens/ember_vines",
-      "explorationremix:ember_gardens/coral"
+      "explorationremix:ember_gardens/coral",
+      "explorationremix:ember_gardens/rose_tendrils",
+      "explorationremix:ember_gardens/plumes",
+      "explorationremix:ember_gardens/ochre_grass",
+      "explorationremix:ember_gardens/brown_mushrooms"
     ],
     [
       "explorationremix:open_way"

@@ -1,19 +1,42 @@
 {
   "variants": {
-    "facing=north": {
-      "model": "explorationremix:block/orange_shelf_fungus"
-    },
-    "facing=east": {
-      "model": "explorationremix:block/orange_shelf_fungus",
-      "y": 90
-    },
-    "facing=south": {
-      "model": "explorationremix:block/orange_shelf_fungus",
-      "y": 180
-    },
-    "facing=west": {
-      "model": "explorationremix:block/orange_shelf_fungus",
-      "y": 270
-    }
+    "facing=north": [
+      {
+        "model": "explorationremix:block/orange_shelf_fungus"
+      },
+      {
+        "model": "explorationremix:block/orange_shelf_fungus_2"
+      }
+    ],
+    "facing=east": [
+      {
+        "model": "explorationremix:block/orange_shelf_fungus",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/orange_shelf_fungus_2",
+        "y": 90
+      }
+    ],
+    "facing=south": [
+      {
+        "model": "explorationremix:block/orange_shelf_fungus",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/orange_shelf_fungus_2",
+        "y": 180
+      }
+    ],
+    "facing=west": [
+      {
+        "model": "explorationremix:block/orange_shelf_fungus",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/orange_shelf_fungus_2",
+        "y": 270
+      }
+    ]
   }
 }
