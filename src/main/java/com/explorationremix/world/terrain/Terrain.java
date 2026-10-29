@@ -34,6 +34,8 @@ public final class Terrain {
     public final long seed;
     public final Plans plans;
     public final Palette palette;
+    /** The three deep layers' cave networks: every block inside a layer is theirs. */
+    public final Network network;
     /** Asked before an upper set piece is placed, so none is carved under an ocean or river. Null in tests. */
     public volatile Upper.SurfaceProbe surfaceProbe;
 
@@ -73,6 +75,7 @@ public final class Terrain {
         detail = new Perlin(Hashing.mix(s, 18, 0, 0));
         this.plans = new Plans(this, seed);
         this.palette = new Palette(this, seed);
+        this.network = new Network(this);
     }
 
     // ================================================================================================ columns
@@ -573,7 +576,7 @@ public final class Terrain {
             Column c = column(x, z);
             return passage(plans.gate(band, c.cellX, c.cellZ), x, y, z);
         }
-        return layerDensity(column(x, z), li, x, y, z);
+        return network.layerDensity(li, x, y, z);
     }
 
     private double passage(Plans.Gate g, int x, int y, int z) {
@@ -806,6 +809,12 @@ public final class Terrain {
     public double fine(int x, int y, int z, double coarse) {
         int li = shape.layerAt(y);
         if (li < 0) return coarse;
+        return network.fine(li, x, y, z, coarse);
+    }
+
+    private double routeFine(int x, int y, int z, double coarse) {
+        int li = shape.layerAt(y);
+        if (li < 0) return coarse;
         LayerCol lc = routeCol(column(x, z), li);
         double keep = mustStay(lc, x, y, z), open = mustOpen(lc, x, y, z);
         if (keep <= -SOLID && open >= SOLID) return coarse;
@@ -901,6 +910,12 @@ public final class Terrain {
     public int fluidAt(int x, int y, int z) {
         int li = shape.layerAt(y);
         if (li < 0) return AIR;
+        return network.fluidAt(li, x, y, z);
+    }
+
+    private int routeFluidAt(int x, int y, int z) {
+        int li = shape.layerAt(y);
+        if (li < 0) return AIR;
         LayerCol lc = routeCol(column(x, z), li);
         if (y >= shape.waterY(li)) {
             // The Lantern Lake's perched lakes, held in by their rims.
@@ -929,6 +944,12 @@ public final class Terrain {
             li = band > 0 ? band - 1 : shape.layerCount - 1;
             return routeBiome(li);
         }
+        return network.biomeAt(li, x, y, z);
+    }
+
+    private DeepBiome routeBiomeAt(int x, int y, int z) {
+        int li = shape.layerAt(y);
+        if (li < 0) return null;
         Column c = column(x, z);
         LayerCol lc = layerCol(c, li);
         // The refuge itself, then the route, then the refuge's own tunnel, then the hunting ground.
@@ -981,6 +1002,11 @@ public final class Terrain {
     /** Depth into the rock around the nearest refuge geode (0 at its inner surface), or a large value when none is near. */
     public double geodeShellDepth(int x, int y, int z) {
         int li = shape.layerAt(y);
+        return li < 0 ? 1e9 : network.geodeShellDepth(li, x, y, z);
+    }
+
+    private double routeGeodeShellDepth(int x, int y, int z) {
+        int li = shape.layerAt(y);
         if (li != BLUE) return 1e9;
         LayerCol lc = layerCol(column(x, z), li);
         return lc.geoN == 0 ? 1e9 : geodeDist(lc, x, y, z);
@@ -996,6 +1022,11 @@ public final class Terrain {
 
     /** Depth into the rock around the nearest obsidian tube (0 at its inner surface), or a large value when none is near. */
     public double tubeShellDepth(int x, int y, int z) {
+        int li = shape.layerAt(y);
+        return li < 0 ? 1e9 : network.tubeShellDepth(li, x, y, z);
+    }
+
+    private double routeTubeShellDepth(int x, int y, int z) {
         int li = shape.layerAt(y);
         if (li != BASALT) return 1e9;
         LayerCol lc = routeCol(column(x, z), li);
@@ -1017,6 +1048,11 @@ public final class Terrain {
 
     /** True in the bowl of the bedrock landing at the end of the last layer's route. */
     public boolean bedrockLanding(int x, int y, int z) {
+        int li = shape.layerAt(y);
+        return li >= 0 && network.bedrockLanding(li, x, y, z);
+    }
+
+    private boolean routeBedrockLanding(int x, int y, int z) {
         int li = shape.layerAt(y);
         if (li != shape.layerCount - 1) return false;
         LayerCol lc = layerCol(column(x, z), li);

@@ -122,5 +122,10 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 test {
-    useJUnitPlatform()
+    // The deep cave network's voxel tests build whole cell-layers block by block (2 x 2 Blue cells need about 400 MB).
+    // The slow sweep over 120 cell-layers runs only with -PslowTests.
+    useJUnitPlatform {
+        if (!project.hasProperty('slowTests')) excludeTags 'slow'
+    }
+    maxHeapSize = '2g'
 }
