@@ -3248,11 +3248,17 @@ final class NetPlanner {
                 int steps = Math.max(1, (int) Math.ceil(segLen / step));
                 for (int k = 0; k < steps; k++) {
                     double t = k / (double) steps;
-                    pts.add(new double[]{Plans.catmull(p0[0], p1[0], p2[0], p3[0], t), Plans.catmull(p0[1], p1[1], p2[1], p3[1], t)});
+                    pts.add(new double[]{catmull(p0[0], p1[0], p2[0], p3[0], t), catmull(p0[1], p1[1], p2[1], p3[1], t)});
                 }
             }
             pts.add(way.get(way.size() - 1));
             return pts;
+        }
+
+        /** The Catmull-Rom spline through p1..p2 at t (p0 and p3 the neighbours). */
+        static double catmull(double p0, double p1, double p2, double p3, double t) {
+            double t2 = t * t, t3 = t2 * t;
+            return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
         }
 
         static double polyLen(List<double[]> p) {

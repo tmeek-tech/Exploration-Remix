@@ -713,8 +713,7 @@ public final class Network {
             if (pts == null || NetPlanner.polyLen(cand) > NetPlanner.polyLen(pts)) pts = cand;
             if (NetPlanner.polyLen(pts) >= want) break;
         }
-        Plans.Gate en = base.plans.gate(li + 1, cx, cz), exG = base.plans.gate(li + 2, cx, cz);
-        Route rt = new Route(base, li, cx, cz, h, pts, sFloor, eFloor, en, exG, ex, ez, 14, 9, shape.waterY(li));
+        Route rt = new Route(base, li, cx, cz, h, pts, sFloor, eFloor, shape.waterY(li));
         fixGeodes(rt, cx, cz);
         levelGeodes(rt, h);
         return rt;

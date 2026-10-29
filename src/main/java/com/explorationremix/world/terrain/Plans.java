@@ -1,14 +1,13 @@
 package com.explorationremix.world.terrain;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Seeded, lazily built plans: one gate per band per cell, and per layer per cell the route from the entry landing to
- * the exit landing (with its halls, bridges and refuge geodes). Everything a plan draws stays inside its own cell
- * with a wide margin, so a block only ever needs its own cell's plan and no seam can form at a cell edge.
+ * Seeded, lazily built plans: one gate per band per cell, the first gate's ramp up into the pack's caves, and the
+ * upper set piece of a cell. Everything a plan draws stays inside its own cell with a wide margin, so a block only
+ * ever needs its own cell's plan and no seam can form at a cell edge. The layers' caves are the network's
+ * ({@link Network}).
  */
 public final class Plans {
     /** Planned geometry keeps this far from a cell edge (blocks). */
@@ -21,7 +20,6 @@ public final class Plans {
     private final double passageRadius;
     private final double landingRadius;
     private final Map<Long, Gate> gates = new ConcurrentHashMap<>();
-    private final Map<Long, Route> routes = new ConcurrentHashMap<>();
 
     Plans(Terrain terrain, long seed) {
         this.terrain = terrain;
@@ -142,8 +140,11 @@ public final class Plans {
         return prev != null ? prev : g;
     }
 
-    /** The point a layer's route starts from must be far from where it ends, so every route is a real journey. */
-    private double minRouteDistance() { return Math.min(260, cellSize * 0.42); }
+    /**
+     * A layer's way down must be far from where its way in lands, so crossing a layer is a real journey (0.2.0's
+     * rule, kept so the gates do not move).
+     */
+    private double minGateDistance() { return Math.min(260, cellSize * 0.42); }
 
     private Gate buildGate(int band, int cx, int cz) {
         long h = Hashing.mix(seed, 101 + band, cx, cz);
@@ -175,9 +176,9 @@ public final class Plans {
         return new Gate(band, cx, cz, ux, uz, uFloor, lx, lz, lFloor, c1x, c1z, c2x, c2z, passageRadius, landingRadius, half, phase, wob);
     }
 
-    /** A point in the cell at least {@link #minRouteDistance()} from (fx, fz), chosen from a few seeded candidates. */
+    /** A point in the cell at least {@link #minGateDistance()} from (fx, fz), chosen from a few seeded candidates. */
     private double[] farPoint(long h, double fx, double fz, int cx, int cz) {
-        double want = minRouteDistance();
+        double want = minGateDistance();
         double bestX = 0, bestZ = 0, bestScore = -1e9;
         for (int i = 0; i < 12; i++) {
             double x = cx * (double) cellSize + Hashing.range(Hashing.mix(h, 40 + i, 1, 0), 0.0, 1.0) * cellSize;
@@ -223,94 +224,5 @@ public final class Plans {
             double ex = clampCell(g.ux + Math.cos(angle) * run, g.cellX, MARGIN), ez = clampCell(g.uz + Math.sin(angle) * run, g.cellZ, MARGIN);
             return new Route.Link(g.ux, g.uFloor + 3, g.uz, ex, g.uFloor + rise, ez, 4.0);
         });
-    }
-
-    // ------------------------------------------------------------------------------------------------ routes
-
-    public Route route(int layer, int cx, int cz) {
-        long k = key(16 + layer, cx, cz);
-        Route r = routes.get(k);
-        if (r != null) return r;
-        r = buildRoute(layer, cx, cz);
-        Route prev = routes.putIfAbsent(k, r);
-        return prev != null ? prev : r;
-    }
-
-    private Route buildRoute(int layer, int cx, int cz) {
-        long h = Hashing.mix(seed, 500 + layer, cx, cz);
-        Gate entry = gate(layer + 1, cx, cz);
-        boolean last = layer == shape.layerCount - 1;
-        Gate exit = last ? null : gate(layer + 2, cx, cz);
-        double W = shape.waterY(layer);
-        double sx = entry.lx, sz = entry.lz, sFloor = entry.lFloor;
-        double ex, ez, eFloor;
-        double endR, endHalf;
-        if (exit != null) {
-            ex = exit.ux; ez = exit.uz; eFloor = exit.uFloor;
-            endR = exit.landR; endHalf = exit.landHalf;
-        } else {
-            double[] p = farPoint(Hashing.mix(h, 9, 9, 9), sx, sz, cx, cz);
-            ex = p[0]; ez = p[1]; eFloor = W + 2;
-            endR = landingRadius + 5; endHalf = (landingRadius + 5) / 1.5;
-        }
-
-        // Waypoints: a meandering line from the entry landing to the exit landing. Deeper layers have further to
-        // descend, so the line meanders more (and gains waypoints) until it is long enough for gentle ramps.
-        double drop = Math.max(0, sFloor - eFloor);
-        double want = layer == Terrain.GARDENS ? 40 + drop / 0.48 + 170 : (10 + drop / 0.48) / 0.92;
-        List<double[]> pts = null;
-        for (int attempt = 0; attempt < 6; attempt++) {
-            double amp = 1.0 + 0.25 * attempt;
-            List<double[]> cand = meander(h, layer, cx, cz, sx, sz, ex, ez, amp, attempt / 2);
-            if (pts == null || polyLength(cand) > polyLength(pts)) pts = cand;
-            if (polyLength(pts) >= want) break;
-        }
-        return new Route(terrain, layer, cx, cz, h, pts, sFloor, eFloor, entry, exit, ex, ez, endR, endHalf, W);
-    }
-
-    /** A smoothed meandering polyline from (sx, sz) to (ex, ez), one point every ~3 blocks, kept inside the cell. */
-    private List<double[]> meander(long h, int layer, int cx, int cz, double sx, double sz, double ex, double ez, double amp, int extra) {
-        List<double[]> way = new ArrayList<>();
-        way.add(new double[]{sx, sz});
-        double dx = ex - sx, dz = ez - sz, dist = Math.max(1, Math.hypot(dx, dz));
-        double nx = -dz / dist, nz = dx / dist;
-        int n = 3 + (int) (Hashing.unit(Hashing.mix(h, 20, 0, 0)) * 2.0) + extra;
-        double sign = Hashing.unit(Hashing.mix(h, 21, 0, 0)) < 0.5 ? -1 : 1;
-        for (int i = 0; i < n; i++) {
-            long hi = Hashing.mix(h, 30 + i, 0, 0);
-            double t = (i + 1.0) / (n + 1) + Hashing.range(Hashing.mix(hi, 1, 0, 0), -0.05, 0.05);
-            // A rift bends gently: its path runs on a ledge far from the centre line, which tight bends would fold.
-            double off = sign * amp * (layer == Terrain.BLUE ? Hashing.range(Hashing.mix(hi, 2, 0, 0), 0.08, 0.22)
-                    : Hashing.range(Hashing.mix(hi, 2, 0, 0), 0.12, 0.34)) * Math.max(dist, 220);
-            sign = -sign;
-            double wx = clampCell(sx + dx * t + nx * off, cx, MARGIN + 10);
-            double wz = clampCell(sz + dz * t + nz * off, cz, MARGIN + 10);
-            way.add(new double[]{wx, wz});
-        }
-        way.add(new double[]{ex, ez});
-        List<double[]> pts = new ArrayList<>();
-        for (int i = 0; i + 1 < way.size(); i++) {
-            double[] p0 = way.get(Math.max(0, i - 1)), p1 = way.get(i), p2 = way.get(i + 1), p3 = way.get(Math.min(way.size() - 1, i + 2));
-            double segLen = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-            int steps = Math.max(2, (int) Math.ceil(segLen / 3.0));
-            for (int k = 0; k < steps; k++) {
-                double t = k / (double) steps;
-                double x = catmull(p0[0], p1[0], p2[0], p3[0], t), z = catmull(p0[1], p1[1], p2[1], p3[1], t);
-                pts.add(new double[]{clampCell(x, cx, MARGIN), clampCell(z, cz, MARGIN)});
-            }
-        }
-        pts.add(new double[]{ex, ez});
-        return pts;
-    }
-
-    private static double polyLength(List<double[]> pts) {
-        double l = 0;
-        for (int i = 1; i < pts.size(); i++) l += Math.hypot(pts.get(i)[0] - pts.get(i - 1)[0], pts.get(i)[1] - pts.get(i - 1)[1]);
-        return l;
-    }
-
-    static double catmull(double p0, double p1, double p2, double p3, double t) {
-        double t2 = t * t, t3 = t2 * t;
-        return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
     }
 }
