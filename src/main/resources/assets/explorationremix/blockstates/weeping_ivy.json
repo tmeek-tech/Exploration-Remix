@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/weeping_ivy"
+      },
+      {
+        "model": "explorationremix:block/weeping_ivy_2"
+      }
+    ]
+  }
+}

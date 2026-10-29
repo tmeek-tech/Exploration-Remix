@@ -1,7 +1,12 @@
 {
   "variants": {
-    "": {
-      "model": "explorationremix:block/lantern_fungus"
-    }
+    "": [
+      {
+        "model": "explorationremix:block/lantern_fungus"
+      },
+      {
+        "model": "explorationremix:block/lantern_fungus_2"
+      }
+    ]
   }
 }

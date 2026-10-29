@@ -1,0 +1,73 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "particle": "explorationremix:block/ivory_bracket_2",
+    "top": "explorationremix:block/ivory_bracket_2",
+    "under": "explorationremix:block/ivory_bracket_under"
+  },
+  "elements": [
+    {
+      "from": [
+        1,
+        5,
+        6
+      ],
+      "to": [
+        15,
+        9,
+        16
+      ],
+      "faces": {
+        "up": {
+          "uv": [
+            1,
+            0,
+            15,
+            10
+          ],
+          "texture": "#top"
+        },
+        "down": {
+          "uv": [
+            1,
+            0,
+            15,
+            10
+          ],
+          "texture": "#under",
+          "forge_data": {
+            "block_light": 15
+          }
+        },
+        "north": {
+          "uv": [
+            1,
+            12,
+            15,
+            16
+          ],
+          "texture": "#top"
+        },
+        "east": {
+          "uv": [
+            0,
+            12,
+            10,
+            16
+          ],
+          "texture": "#top"
+        },
+        "west": {
+          "uv": [
+            0,
+            12,
+            10,
+            16
+          ],
+          "texture": "#top"
+        }
+      }
+    }
+  ]
+}

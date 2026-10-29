@@ -8,6 +8,7 @@ import com.explorationremix.block.HangingVinesBlock;
 import com.explorationremix.block.HangingVinesPlantBlock;
 import com.explorationremix.block.PoolPlantBlock;
 import com.explorationremix.block.ShelfFungusBlock;
+import com.explorationremix.block.TallCavePlantBlock;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
@@ -97,6 +98,64 @@ public final class ERBlocks {
     public static final RegistryObject<Block> EMBER_VINES_PLANT = BLOCKS.register("ember_vines_plant",
             () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_ORANGE, SoundType.WEEPING_VINES, 10), ERBlocks.EMBER_VINES_REF));
 
+    // =========================================================================================== vegetation rework, part A
+    // ------------------------------------------------------------------------------------------- Rootvaults
+    public static final RegistryObject<Block> AMBER_BULB_VINE = BLOCKS.register("amber_bulb_vine",
+            () -> new HangingVinesBlock(plant(MapColor.COLOR_ORANGE, SoundType.CAVE_VINES, 12), ERBlocks.AMBER_BULB_VINE_PLANT_REF));
+    public static final RegistryObject<Block> AMBER_BULB_VINE_PLANT = BLOCKS.register("amber_bulb_vine_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_ORANGE, SoundType.CAVE_VINES, 6), ERBlocks.AMBER_BULB_VINE_REF));
+    public static final RegistryObject<Block> WEEPING_IVY = BLOCKS.register("weeping_ivy",
+            () -> new HangingVinesBlock(plant(MapColor.PLANT, SoundType.VINE, 0), ERBlocks.WEEPING_IVY_PLANT_REF));
+    public static final RegistryObject<Block> WEEPING_IVY_PLANT = BLOCKS.register("weeping_ivy_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.PLANT, SoundType.VINE, 0), ERBlocks.WEEPING_IVY_REF));
+    /** Ivy over the walls and ceilings of the teal grottos and ravines: a sheet like glow lichen, giving no light. */
+    public static final RegistryObject<Block> GROTTO_IVY = block("grotto_ivy",
+            () -> new GlowLichenBlock(lichen(MapColor.COLOR_GREEN, SoundType.VINE, 0)));
+    public static final RegistryObject<Block> STARMOSS = block("starmoss",
+            () -> new CavePlantBlock(plant(MapColor.COLOR_GREEN, SoundType.MOSS_CARPET, 4).replaceable(), Block.box(0, 0, 0, 16, 1, 16)));
+
+    // ------------------------------------------------------------------------------------------- Silver Fern Rift
+    public static final RegistryObject<Block> SILVER_FROND = BLOCKS.register("silver_frond",
+            () -> new HangingVinesBlock(plant(MapColor.METAL, SoundType.GRASS, 0), ERBlocks.SILVER_FROND_PLANT_REF));
+    public static final RegistryObject<Block> SILVER_FROND_PLANT = BLOCKS.register("silver_frond_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.METAL, SoundType.GRASS, 0), ERBlocks.SILVER_FROND_REF));
+    public static final RegistryObject<Block> TALL_SILVER_FERN = tallBlock("tall_silver_fern",
+            () -> new TallCavePlantBlock(plant(MapColor.METAL, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XZ),
+                    Block.box(2, 0, 2, 14, 16, 14), Block.box(2, 0, 2, 14, 14, 14)));
+    /** Fronds growing sideways out of cracks in the walls, drawn like vanilla's coral wall fans. */
+    public static final RegistryObject<Block> SILVER_WALL_FERN = block("silver_wall_fern",
+            () -> new ShelfFungusBlock(plant(MapColor.METAL, SoundType.GRASS, 0), Block.box(0, 4, 5, 16, 12, 16)));
+
+    // ------------------------------------------------------------------------------------------- Ivory Root Cavern
+    /** A pale bracket with glowing gold gills underneath; firm enough to stand on, like the orange shelf fungus. */
+    public static final RegistryObject<Block> IVORY_BRACKET = block("ivory_bracket", () -> new ShelfFungusBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.TERRACOTTA_WHITE).strength(0.4F).noOcclusion().sound(SoundType.FUNGUS)
+                    .lightLevel(s -> 11).pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, e) -> false)));
+    public static final RegistryObject<Block> GOLD_THREADS = BLOCKS.register("gold_threads",
+            () -> new HangingVinesBlock(plant(MapColor.GOLD, SoundType.HANGING_ROOTS, 9), ERBlocks.GOLD_THREADS_PLANT_REF));
+    public static final RegistryObject<Block> GOLD_THREADS_PLANT = BLOCKS.register("gold_threads_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.GOLD, SoundType.HANGING_ROOTS, 5), ERBlocks.GOLD_THREADS_REF));
+    public static final RegistryObject<Block> SAGE_BUSH = block("sage_bush",
+            () -> new CavePlantBlock(plant(MapColor.PLANT, SoundType.AZALEA, 0).offsetType(BlockBehaviour.OffsetType.XZ), Block.box(1, 0, 1, 15, 13, 15)));
+
+    // ------------------------------------------------------------------------------------------- Blue Reaches
+    public static final RegistryObject<Block> GLOWBELL = block("glowbell",
+            () -> new CavePlantBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.SPORE_BLOSSOM, 9).offsetType(BlockBehaviour.OffsetType.XZ),
+                    Block.box(3, 0, 3, 13, 14, 13)));
+    public static final RegistryObject<Block> PAGODA_FUNGUS = tallBlock("pagoda_fungus",
+            () -> new TallCavePlantBlock(plant(MapColor.COLOR_BLUE, SoundType.FUNGUS, 7), Block.box(3, 0, 3, 13, 16, 13), Block.box(2, 0, 2, 14, 12, 14)));
+    /** Blue specks over the rift's walls: light only where it covers a face, like glow lichen. */
+    public static final RegistryObject<Block> BLUE_LICHEN = block("blue_lichen",
+            () -> new GlowLichenBlock(lichen(MapColor.COLOR_BLUE, SoundType.GLOW_LICHEN, 4)));
+    public static final RegistryObject<Block> ASURINE_BUD = block("asurine_bud", () -> new AmethystClusterBlock(3, 4,
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).forceSolidOn().noOcclusion().sound(SoundType.SMALL_AMETHYST_BUD)
+                    .strength(1.5F).lightLevel(s -> 5).pushReaction(PushReaction.DESTROY)));
+    /** The deep dark's only new plant: dark strands whose cold specks glow without giving light, so the dark stays dark. */
+    public static final RegistryObject<Block> DUSK_VINES = BLOCKS.register("dusk_vines",
+            () -> new HangingVinesBlock(plant(MapColor.COLOR_BLACK, SoundType.SCULK_VEIN, 0), ERBlocks.DUSK_VINES_PLANT_REF));
+    public static final RegistryObject<Block> DUSK_VINES_PLANT = BLOCKS.register("dusk_vines_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_BLACK, SoundType.SCULK_VEIN, 0), ERBlocks.DUSK_VINES_REF));
+
     // Vine tips and bodies point at each other, so they look each other up when first needed.
     private static final Supplier<Block> WISTERIA_REF = () -> WISTERIA.get();
     private static final Supplier<Block> WISTERIA_PLANT_REF = () -> WISTERIA_PLANT.get();
@@ -104,12 +163,29 @@ public final class ERBlocks {
     private static final Supplier<Block> BLUE_GLOW_VINES_PLANT_REF = () -> BLUE_GLOW_VINES_PLANT.get();
     private static final Supplier<Block> EMBER_VINES_REF = () -> EMBER_VINES.get();
     private static final Supplier<Block> EMBER_VINES_PLANT_REF = () -> EMBER_VINES_PLANT.get();
+    // vegetation rework, part A
+    private static final Supplier<Block> AMBER_BULB_VINE_REF = () -> AMBER_BULB_VINE.get();
+    private static final Supplier<Block> AMBER_BULB_VINE_PLANT_REF = () -> AMBER_BULB_VINE_PLANT.get();
+    private static final Supplier<Block> WEEPING_IVY_REF = () -> WEEPING_IVY.get();
+    private static final Supplier<Block> WEEPING_IVY_PLANT_REF = () -> WEEPING_IVY_PLANT.get();
+    private static final Supplier<Block> SILVER_FROND_REF = () -> SILVER_FROND.get();
+    private static final Supplier<Block> SILVER_FROND_PLANT_REF = () -> SILVER_FROND_PLANT.get();
+    private static final Supplier<Block> GOLD_THREADS_REF = () -> GOLD_THREADS.get();
+    private static final Supplier<Block> GOLD_THREADS_PLANT_REF = () -> GOLD_THREADS_PLANT.get();
+    private static final Supplier<Block> DUSK_VINES_REF = () -> DUSK_VINES.get();
+    private static final Supplier<Block> DUSK_VINES_PLANT_REF = () -> DUSK_VINES_PLANT.get();
 
     // Only the vine tips have items, like vanilla's weeping vines.
     static {
         item("wisteria", WISTERIA);
         item("blue_glow_vines", BLUE_GLOW_VINES);
         item("ember_vines", EMBER_VINES);
+        // vegetation rework, part A
+        item("amber_bulb_vine", AMBER_BULB_VINE);
+        item("weeping_ivy", WEEPING_IVY);
+        item("silver_frond", SILVER_FROND);
+        item("gold_threads", GOLD_THREADS);
+        item("dusk_vines", DUSK_VINES);
     }
 
     public static final RegistryObject<CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()

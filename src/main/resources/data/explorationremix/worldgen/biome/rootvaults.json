@@ -151,7 +151,8 @@
     [
       "explorationremix:rootvaults/moss_floor",
       "explorationremix:rootvaults/glow_lichen",
-      "explorationremix:rootvaults/moss_ceiling"
+      "explorationremix:rootvaults/moss_ceiling",
+      "explorationremix:rootvaults/grotto_ivy"
     ],
     [
       "minecraft:spring_water",
@@ -165,7 +166,12 @@
       "explorationremix:rootvaults/cave_vines",
       "explorationremix:rootvaults/ferns",
       "explorationremix:rootvaults/white_glow_flowers",
-      "explorationremix:rootvaults/white_glow_flowers_sparse"
+      "explorationremix:rootvaults/white_glow_flowers_sparse",
+      "explorationremix:rootvaults/amber_bulb_vines",
+      "explorationremix:rootvaults/weeping_ivy",
+      "explorationremix:rootvaults/starmoss",
+      "explorationremix:rootvaults/starmoss_sparse",
+      "explorationremix:rootvaults/azaleas"
     ],
     [
       "minecraft:freeze_top_layer"

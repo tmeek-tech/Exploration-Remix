@@ -22,6 +22,12 @@
                   "Name": "minecraft:grass"
                 },
                 "weight": 2
+              },
+              {
+                "data": {
+                  "Name": "minecraft:large_fern"
+                },
+                "weight": 1
               }
             ]
           }

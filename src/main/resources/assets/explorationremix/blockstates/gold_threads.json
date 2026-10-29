@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/gold_threads"
+      },
+      {
+        "model": "explorationremix:block/gold_threads_2"
+      }
+    ]
+  }
+}

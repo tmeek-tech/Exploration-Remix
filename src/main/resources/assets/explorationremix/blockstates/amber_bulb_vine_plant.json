@@ -1,0 +1,15 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/amber_bulb_vine_plant"
+      },
+      {
+        "model": "explorationremix:block/amber_bulb_vine_plant_2"
+      },
+      {
+        "model": "explorationremix:block/amber_bulb_vine_plant_3"
+      }
+    ]
+  }
+}

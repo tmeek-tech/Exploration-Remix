@@ -276,16 +276,36 @@ def build_features():
             {"type": f"{MOD}:broken_machine", "config": {}},
             [count(2), SQUARE, layer("deep_gardens", above_water=True)] + floor(through=AIR_OR_WATER) + [BIOME])
     feature("deep_blue_rift/crystals", "underground_decoration", ["deep_blue_rift"],
-            attach(simple("explorationremix:asurine_crystal"), "any", 48, f"#{MOD}:blue_rift_walls", radius=7, height=7),
-            [count(8), SQUARE, layer("blue_reaches", above_water=True), BIOME])
-    feature("asurine_geodes/crystals", "underground_decoration", ["asurine_geodes"],
-            attach(simple("explorationremix:asurine_crystal"), "any", 128, f"#{MOD}:asurine_lining", radius=8, height=8),
+            attach(mix((simple("explorationremix:asurine_crystal"), 1), (simple("explorationremix:asurine_bud"), 2)), "any", 48,
+                   f"#{MOD}:blue_rift_walls", radius=7, height=7),
             [count(10), SQUARE, layer("blue_reaches", above_water=True), BIOME])
+    feature("asurine_geodes/crystals", "underground_decoration", ["asurine_geodes"],
+            attach(mix((simple("explorationremix:asurine_crystal"), 2), (simple("explorationremix:asurine_bud"), 3)), "any", 128,
+                   f"#{MOD}:asurine_lining", radius=8, height=8),
+            [count(12), SQUARE, layer("blue_reaches", above_water=True), BIOME])
     feature("asurine_geodes/frost", "underground_decoration", ["asurine_geodes"],
             attach({"type": "minecraft:weighted_state_provider", "entries": [
                 {"data": state("minecraft:snow", layers=1), "weight": 3}, {"data": state("minecraft:snow", layers=2), "weight": 1}]},
                 "floor", 24, f"#{MOD}:asurine_lining", radius=6, height=3),
             [count(4), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+
+    # ---- vegetation rework, part A: sheets of ivy and lichen, wall ferns and brackets, before the floor and ceiling
+    # plants take their spots. Ivy covers walls and ceilings but never floors, where a climbable sheet slows walking.
+    feature("rootvaults/grotto_ivy", "underground_decoration", rv,
+            attach(simple(f"{MOD}:grotto_ivy"), "walls_ceiling", 48, f"#{MOD}:cave_rock", radius=6, height=6),
+            [count(24), SQUARE, layer(up), looks(1, 2), BIOME])
+    feature("ivory_root_cavern/grotto_ivy", "underground_decoration", ["ivory_root_cavern"],
+            attach(simple(f"{MOD}:grotto_ivy"), "walls_ceiling", 32, f"#{MOD}:cave_rock", radius=5, height=5),
+            [count(8), SQUARE, layer(up), BIOME])
+    feature("silver_fern_rift/wall_ferns", "underground_decoration", ["silver_fern_rift"],
+            attach(simple(f"{MOD}:silver_wall_fern"), "walls", 32, f"#{MOD}:cave_rock", radius=6, height=6),
+            [count(10), SQUARE, layer(up), BIOME])
+    feature("ivory_root_cavern/brackets", "underground_decoration", ["ivory_root_cavern"],
+            attach(simple(f"{MOD}:ivory_bracket"), "walls", 64, f"#{MOD}:cave_rock", radius=7, height=8),
+            [count(10), SQUARE, layer(up), BIOME])
+    feature("deep_blue_rift/lichen", "underground_decoration", ["deep_blue_rift"],
+            attach(simple(f"{MOD}:blue_lichen"), "any", 40, f"#{MOD}:blue_rift_walls", radius=6, height=6),
+            [count(12), SQUARE, layer("blue_reaches", above_water=True), BIOME])
 
     # ---- fluid springs: waterfalls and lava falls
     feature("rootvaults/waterfalls", "fluid_springs", rv, fall("minecraft:water", 6, (1, 3)),
@@ -312,37 +332,38 @@ def build_features():
             [count(8), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
     feature("rootvaults/lantern_roots", "vegetal_decoration", rv,
             hanging_column("explorationremix:lantern_roots", "explorationremix:lantern_roots", 0, 4),
-            [count(60), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
+            [count(40), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
     feature("rootvaults/cave_vines", "vegetal_decoration", rv, berry_vines(1, 10, 0.4),
-            [count(160), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(90), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("silver_fern_rift/cave_vines", "vegetal_decoration", ["silver_fern_rift"], berry_vines(1, 8, 0.5),
-            [count(80), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(45), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("rootvaults/ferns", "vegetal_decoration", rv,
             patch({"type": "minecraft:weighted_state_provider", "entries": [
-                {"data": state("minecraft:fern"), "weight": 3}, {"data": state("minecraft:grass"), "weight": 2}]},
+                {"data": state("minecraft:fern"), "weight": 3}, {"data": state("minecraft:grass"), "weight": 2},
+                {"data": state("minecraft:large_fern"), "weight": 1}]},
                 state("minecraft:fern"), tries=32, on=PLANT_FLOORS),
-            [count(24), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(30), SQUARE, layer(up)] + floor() + [BIOME])
     feature("rootvaults/white_glow_flowers", "vegetal_decoration", rv,
             patch(simple("explorationremix:white_glow_flower"), state("explorationremix:white_glow_flower"), tries=20, xz=5, on=PLANT_FLOORS),
-            [count(12), SQUARE, layer(up)] + floor() + [looks(1), BIOME])
+            [count(14), SQUARE, layer(up)] + floor() + [looks(1), BIOME])
     feature("rootvaults/white_glow_flowers_sparse", "vegetal_decoration", rv,
             patch(simple("explorationremix:white_glow_flower"), state("explorationremix:white_glow_flower"), tries=12, xz=4, on=PLANT_FLOORS),
             [count(10), SQUARE, layer(up)] + floor() + [looks(0, 2), BIOME])
     feature("silver_fern_rift/silver_ferns", "vegetal_decoration", ["silver_fern_rift"],
             patch(simple("explorationremix:silver_fern"), state("explorationremix:silver_fern"), tries=48, xz=7, y=4),
-            [count(30), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(36), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/giant_lantern_fungi", "vegetal_decoration", ["ivory_root_cavern"],
             {"type": f"{MOD}:giant_fungus", "config": {
                 "stem": state("minecraft:mushroom_stem"), "cap": state("minecraft:mushroom_stem", down=False),
                 "glow": state("minecraft:shroomlight"), "roots": state(f"{MOD}:lantern_roots"),
                 "height": uniform(2, 5), "radius": uniform(2, 3), "root_length": uniform(1, 4)}},
-            [count(4), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(5), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/lantern_fungi", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple("explorationremix:lantern_fungus"), state("explorationremix:lantern_fungus"), tries=20, xz=5, y=3),
             [count(14), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/lantern_roots", "vegetal_decoration", ["ivory_root_cavern"],
             attach(simple("explorationremix:lantern_roots"), "ceiling", 32, f"#{MOD}:cave_rock", radius=6, height=3),
-            [count(30), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(20), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("ivory_root_cavern/moss", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple("minecraft:moss_carpet"), state("minecraft:moss_carpet"), tries=24, xz=4, y=2),
             [count(6), SQUARE, layer(up)] + floor() + [BIOME])
@@ -381,7 +402,47 @@ def build_features():
             [count(56), SQUARE, layer("blue_reaches")] + ceiling() + [BIOME])
     feature("deep_blue_rift/mushrooms", "vegetal_decoration", ["deep_blue_rift"],
             patch(simple("explorationremix:blue_glow_mushroom"), state("explorationremix:blue_glow_mushroom"), tries=16, xz=4, y=2),
-            [count(24), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+            [count(20), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+
+    # ---- vegetation rework, part A: vines in clusters, floor plants. The new vines hang in patches (hanging_patch), so
+    # their light comes in pockets with dim gaps between them.
+    feature("rootvaults/amber_bulb_vines", "vegetal_decoration", rv,
+            hanging_patch(hanging_column(f"{MOD}:amber_bulb_vine_plant", f"{MOD}:amber_bulb_vine", 1, 6), tries=8, xz=4, y=2),
+            [count(10), SQUARE, layer(up)] + ceiling() + [looks(0, 1), BIOME])
+    feature("rootvaults/weeping_ivy", "vegetal_decoration", rv,
+            hanging_patch(hanging_column(f"{MOD}:weeping_ivy_plant", f"{MOD}:weeping_ivy", 2, 12), tries=10, xz=5, y=3),
+            [count(12), SQUARE, layer(up)] + ceiling() + [BIOME])
+    feature("rootvaults/starmoss", "vegetal_decoration", rv,
+            patch(simple(f"{MOD}:starmoss"), state(f"{MOD}:starmoss"), tries=32, xz=5, y=2),
+            [count(10), SQUARE, layer(up)] + floor() + [looks(1), BIOME])
+    feature("rootvaults/starmoss_sparse", "vegetal_decoration", rv,
+            patch(simple(f"{MOD}:starmoss"), state(f"{MOD}:starmoss"), tries=16, xz=4, y=2),
+            [count(4), SQUARE, layer(up)] + floor() + [looks(0), BIOME])
+    feature("rootvaults/azaleas", "vegetal_decoration", rv,
+            patch(mix((simple("minecraft:azalea"), 3), (simple("minecraft:flowering_azalea"), 1)), state("minecraft:azalea"), tries=12, xz=5, y=2,
+                  on=PLANT_FLOORS),
+            [count(6), SQUARE, layer(up)] + floor() + [looks(2), BIOME])
+    feature("silver_fern_rift/amber_bulb_vines", "vegetal_decoration", ["silver_fern_rift"],
+            hanging_patch(hanging_column(f"{MOD}:amber_bulb_vine_plant", f"{MOD}:amber_bulb_vine", 1, 6), tries=8, xz=4, y=2),
+            [count(8), SQUARE, layer(up)] + ceiling() + [BIOME])
+    feature("silver_fern_rift/fronds", "vegetal_decoration", ["silver_fern_rift"],
+            hanging_patch(hanging_column(f"{MOD}:silver_frond_plant", f"{MOD}:silver_frond", 1, 5), tries=8, xz=5, y=3),
+            [count(16), SQUARE, layer(up)] + ceiling() + [BIOME])
+    feature("silver_fern_rift/tall_ferns", "vegetal_decoration", ["silver_fern_rift"],
+            patch(simple(f"{MOD}:tall_silver_fern"), state(f"{MOD}:tall_silver_fern"), tries=24, xz=6, y=3),
+            [count(8), SQUARE, layer(up)] + floor() + [BIOME])
+    feature("ivory_root_cavern/gold_threads", "vegetal_decoration", ["ivory_root_cavern"],
+            hanging_patch(hanging_column(f"{MOD}:gold_threads_plant", f"{MOD}:gold_threads", 2, 9), tries=8, xz=4, y=2),
+            [count(14), SQUARE, layer(up)] + ceiling() + [BIOME])
+    feature("ivory_root_cavern/sage", "vegetal_decoration", ["ivory_root_cavern"],
+            patch(simple(f"{MOD}:sage_bush"), state(f"{MOD}:sage_bush"), tries=16, xz=5, y=2),
+            [count(10), SQUARE, layer(up)] + floor() + [BIOME])
+    feature("deep_blue_rift/glowbells", "vegetal_decoration", ["deep_blue_rift"],
+            patch(simple(f"{MOD}:glowbell"), state(f"{MOD}:glowbell"), tries=16, xz=4, y=2),
+            [count(10), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+    feature("deep_blue_rift/pagodas", "vegetal_decoration", ["deep_blue_rift"],
+            patch(simple(f"{MOD}:pagoda_fungus"), state(f"{MOD}:pagoda_fungus"), tries=6, xz=4, y=2),
+            [count(3), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
 
     # ---- top layer: the way down is kept open after everything else
     feature("open_way", "top_layer_modification", DEEP, {"type": f"{MOD}:open_way", "config": {}}, [])
@@ -393,6 +454,9 @@ def build_features():
 DEEP_DARK_FEATURES = [
     ("deep_dark/sculk_vein", "minecraft:sculk_vein", [count(112), SQUARE, layer("blue_reaches"), BIOME]),
     ("deep_dark/sculk_patch", "minecraft:sculk_patch_deep_dark", [count(136), SQUARE, layer("blue_reaches"), BIOME]),
+    # vegetation rework, part A: the deep dark's only plant, a few dark strands whose specks glow without giving light
+    ("deep_dark/dusk_vines", hanging_column(f"{MOD}:dusk_vines_plant", f"{MOD}:dusk_vines", 1, 5),
+     [count(4), SQUARE, layer("blue_reaches")] + ceiling() + [BIOME]),
 ]
 
 # ----------------------------------------------------------------------------------------------- block tags

@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:grotto_ivy"
+      }
+    },
+    "faces": "walls_ceiling",
+    "tries": 32,
+    "radius": 5,
+    "height": 5,
+    "on": "#explorationremix:cave_rock",
+    "in_water": false
+  }
+}

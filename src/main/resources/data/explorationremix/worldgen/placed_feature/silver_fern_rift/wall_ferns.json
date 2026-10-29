@@ -1,0 +1,21 @@
+{
+  "feature": "explorationremix:silver_fern_rift/wall_ferns",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 10
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "upper",
+      "inset": 2,
+      "above_water": false
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

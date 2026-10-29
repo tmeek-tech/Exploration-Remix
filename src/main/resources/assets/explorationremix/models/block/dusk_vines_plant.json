@@ -1,0 +1,8 @@
+{
+  "parent": "explorationremix:block/template/cross_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "cross": "explorationremix:block/dusk_vines_plant",
+    "glow": "explorationremix:block/dusk_vines_plant_glow"
+  }
+}
