@@ -81,7 +81,7 @@ def devManifest = tasks.register('devManifest') {
         dirs.each { dir ->
             def f = new File(dir, 'META-INF/MANIFEST.MF')
             f.parentFile.mkdirs()
-            f.text = "Manifest-Version: 1.0\nMixinConfigs: explorationremix.mixins.json\n\n"
+            f.text = "Manifest-Version: 1.0\nMixinConfigs: explorationremix.mixins.json,explorationremix.compat.mixins.json\n\n"
         }
     }
 }
@@ -111,7 +111,7 @@ tasks.named('jar', Jar).configure {
                 'Implementation-Version'  : project.jar.archiveVersion,
                 'Implementation-Vendor'   : mod_authors,
                 'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                'MixinConfigs'            : 'explorationremix.mixins.json'
+                'MixinConfigs'            : 'explorationremix.mixins.json,explorationremix.compat.mixins.json'
         ])
     }
     finalizedBy 'reobfJar'

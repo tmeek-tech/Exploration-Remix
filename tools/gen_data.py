@@ -242,6 +242,7 @@ def loot(bid, drop, kind):
 def block_assets():
     lang = {}
     used_glow = set()
+    glowing = set()  # blocks drawn with a glow overlay (assets/<mod>/glowing_blocks.json, read by client/ShaderGlow)
     for name, model in TEMPLATES.items():
         write(os.path.join(ASSETS, "models", "block", "template", name + ".json"), model)
     for bid, entry in BLOCKS.items():
@@ -306,11 +307,14 @@ def block_assets():
             item = {"parent": ref(bid)}
         else:
             raise ValueError(f"{bid}: unknown kind {kind}")
+        if opts.get("glow_under"):
+            glowing.add(bid)
         for mname, m in models.items():
             for key, tex in m["textures"].items():
                 painted = "block/" + tex.split("block/", 1)[1]
                 if key == "glow":
                     used_glow.add(painted[:-len("_glow")])
+                    glowing.add(bid)
                 else:
                     assert painted in textures.PAINTERS, f"{bid}: no painter for {tex}"
             write(os.path.join(ASSETS, "models", "block", mname + ".json"), m)
@@ -321,6 +325,7 @@ def block_assets():
             write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind))
     unused = set(textures.GLOW) - used_glow
     assert not unused, f"glow overlays no model draws: {sorted(unused)}"
+    write(os.path.join(ASSETS, "glowing_blocks.json"), {"blocks": sorted(glowing)})
     lang[f"itemGroup.{MOD}"] = "Exploration Remix"
     return lang
 
