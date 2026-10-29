@@ -1,0 +1,64 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:base_stone_overworld",
+    "minecraft:cobbled_deepslate",
+    "minecraft:calcite",
+    "minecraft:dripstone_block",
+    "minecraft:smooth_basalt",
+    "minecraft:basalt",
+    "minecraft:polished_basalt",
+    "minecraft:blackstone",
+    "minecraft:gilded_blackstone",
+    "minecraft:obsidian",
+    "minecraft:crying_obsidian",
+    "minecraft:magma_block",
+    "minecraft:moss_block",
+    "minecraft:rooted_dirt",
+    "minecraft:dirt",
+    "minecraft:clay",
+    "minecraft:brown_mushroom_block",
+    "#minecraft:coal_ores",
+    "#minecraft:iron_ores",
+    "#minecraft:copper_ores",
+    "#minecraft:gold_ores",
+    "#minecraft:redstone_ores",
+    "#minecraft:lapis_ores",
+    "#minecraft:diamond_ores",
+    "#minecraft:emerald_ores",
+    "minecraft:yellow_terracotta",
+    "minecraft:deepslate_tiles",
+    "minecraft:warped_wart_block",
+    "minecraft:brown_terracotta",
+    "minecraft:polished_blackstone",
+    "minecraft:red_terracotta",
+    {
+      "id": "create:limestone",
+      "required": false
+    },
+    {
+      "id": "create:veridium",
+      "required": false
+    },
+    {
+      "id": "create:asurine",
+      "required": false
+    },
+    {
+      "id": "create:crimsite",
+      "required": false
+    },
+    {
+      "id": "create:ochrum",
+      "required": false
+    },
+    {
+      "id": "create:scoria",
+      "required": false
+    },
+    {
+      "id": "create:scorchia",
+      "required": false
+    }
+  ]
+}

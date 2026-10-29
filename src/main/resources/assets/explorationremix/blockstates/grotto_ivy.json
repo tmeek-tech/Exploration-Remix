@@ -1,0 +1,230 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "north": "true"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy"
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2"
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy"
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2"
+        }
+      ]
+    },
+    {
+      "when": {
+        "east": "true"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy",
+          "y": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2",
+          "y": 90,
+          "uvlock": true
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy",
+          "y": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2",
+          "y": 90,
+          "uvlock": true
+        }
+      ]
+    },
+    {
+      "when": {
+        "south": "true"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy",
+          "y": 180,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2",
+          "y": 180,
+          "uvlock": true
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy",
+          "y": 180,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2",
+          "y": 180,
+          "uvlock": true
+        }
+      ]
+    },
+    {
+      "when": {
+        "west": "true"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy",
+          "y": 270,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2",
+          "y": 270,
+          "uvlock": true
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy",
+          "y": 270,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2",
+          "y": 270,
+          "uvlock": true
+        }
+      ]
+    },
+    {
+      "when": {
+        "up": "true"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy",
+          "x": 270,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2",
+          "x": 270,
+          "uvlock": true
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy",
+          "x": 270,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2",
+          "x": 270,
+          "uvlock": true
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "true"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy",
+          "x": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2",
+          "x": 90,
+          "uvlock": true
+        }
+      ]
+    },
+    {
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      },
+      "apply": [
+        {
+          "model": "explorationremix:block/grotto_ivy",
+          "x": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/grotto_ivy_2",
+          "x": 90,
+          "uvlock": true
+        }
+      ]
+    }
+  ]
+}

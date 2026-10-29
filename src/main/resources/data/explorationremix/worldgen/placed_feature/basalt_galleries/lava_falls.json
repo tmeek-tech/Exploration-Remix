@@ -1,0 +1,48 @@
+{
+  "feature": "explorationremix:basalt_galleries/lava_falls",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 80
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "basalt_galleries",
+      "inset": 2,
+      "above_water": true
+    },
+    {
+      "type": "minecraft:environment_scan",
+      "direction_of_search": "up",
+      "target_condition": {
+        "type": "minecraft:has_sturdy_face",
+        "direction": "down"
+      },
+      "allowed_search_condition": {
+        "type": "minecraft:matching_blocks",
+        "blocks": [
+          "minecraft:air",
+          "minecraft:cave_air"
+        ]
+      },
+      "max_steps": 32
+    },
+    {
+      "type": "minecraft:random_offset",
+      "xz_spread": 0,
+      "y_spread": {
+        "type": "minecraft:uniform",
+        "value": {
+          "min_inclusive": -6,
+          "max_inclusive": -3
+        }
+      }
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

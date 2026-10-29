@@ -1,0 +1,8 @@
+{
+  "parent": "explorationremix:block/template/cross_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "cross": "explorationremix:block/amber_shard",
+    "glow": "explorationremix:block/amber_shard_glow"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.explorationremix.mixin.compat",
+  "plugin": "com.explorationremix.mixin.compat.CompatMixinPlugin",
+  "compatibilityLevel": "JAVA_17",
+  "client": [
+    "OculusBlockIdsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

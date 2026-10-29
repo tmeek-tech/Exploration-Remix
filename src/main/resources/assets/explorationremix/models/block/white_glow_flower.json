@@ -1,0 +1,8 @@
+{
+  "parent": "explorationremix:block/template/cross_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "cross": "explorationremix:block/white_glow_flower",
+    "glow": "explorationremix:block/white_glow_flower_glow"
+  }
+}

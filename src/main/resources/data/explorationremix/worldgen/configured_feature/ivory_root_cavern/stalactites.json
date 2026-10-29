@@ -1,0 +1,57 @@
+{
+  "type": "explorationremix:giant_spike",
+  "config": {
+    "body": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "explorationremix:fallback",
+            "blocks": [
+              "create:limestone",
+              "minecraft:calcite"
+            ]
+          },
+          "weight": 3
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:calcite"
+            }
+          },
+          "weight": 2
+        }
+      ]
+    },
+    "tip": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "minecraft:dripstone_block"
+      }
+    },
+    "length": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 5,
+        "max_inclusive": 14
+      }
+    },
+    "radius": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 1.4,
+        "max_exclusive": 3.2
+      }
+    },
+    "floor_chance": 0.35,
+    "point": {
+      "Name": "minecraft:pointed_dripstone",
+      "Properties": {
+        "thickness": "tip",
+        "vertical_direction": "down"
+      }
+    }
+  }
+}

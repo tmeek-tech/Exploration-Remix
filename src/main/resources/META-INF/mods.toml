@@ -26,19 +26,12 @@ versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"
 
-# The deep layers are built from Create's stones (asurine, crimsite, ochrum, veridium, limestone, scoria, scorchia).
+# The deep layers are built from Create's stones (asurine, crimsite, ochrum, veridium, limestone, scoria, scorchia);
+# without Create they fall back to vanilla blocks.
 [[dependencies.${mod_id}]]
 modId = "create"
 mandatory = false
 versionRange = "[6.0.0,)"
-ordering = "AFTER"
-side = "BOTH"
-
-# Optional: its combo finisher becomes the On combo finisher rune trigger.
-[[dependencies.${mod_id}]]
-modId = "bettercombat"
-mandatory = false
-versionRange = "[1.8,)"
 ordering = "AFTER"
 side = "BOTH"
 

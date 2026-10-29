@@ -1,64 +1,127 @@
 {
-  "temperature": 1.2,
-  "downfall": 0.6,
   "has_precipitation": false,
+  "temperature": 1.2,
+  "downfall": 0.0,
   "effects": {
-    "fog_color": 1182732,
-    "water_color": 4864554,
-    "water_fog_color": 1708040,
-    "sky_color": 656902,
+    "fog_color": 7362379,
+    "sky_color": 7362379,
+    "water_color": 4219002,
+    "water_fog_color": 1713712,
+    "grass_color": 9075290,
+    "foliage_color": 8022602,
     "mood_sound": {
       "sound": "minecraft:ambient.cave",
       "tick_delay": 6000,
       "block_search_extent": 8,
       "offset": 2.0
     },
-    "grass_color": 8413264,
-    "foliage_color": 7360576,
-    "music": {
-      "sound": "minecraft:music.overworld.dripstone_caves",
-      "min_delay": 12000,
-      "max_delay": 24000,
-      "replace_current_music": false
+    "particle": {
+      "options": {
+        "type": "minecraft:white_ash"
+      },
+      "probability": 0.06
+    },
+    "ambient_sound": "explorationremix:ambient.basalt.loop",
+    "additions_sound": {
+      "sound": "explorationremix:ambient.basalt.additions",
+      "tick_chance": 0.012
     }
   },
+  "spawners": {
+    "monster": [
+      {
+        "type": "minecraft:spider",
+        "weight": 100,
+        "minCount": 4,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:zombie",
+        "weight": 95,
+        "minCount": 4,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:zombie_villager",
+        "weight": 5,
+        "minCount": 1,
+        "maxCount": 1
+      },
+      {
+        "type": "minecraft:skeleton",
+        "weight": 100,
+        "minCount": 4,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:creeper",
+        "weight": 100,
+        "minCount": 4,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:slime",
+        "weight": 100,
+        "minCount": 4,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:enderman",
+        "weight": 10,
+        "minCount": 1,
+        "maxCount": 4
+      },
+      {
+        "type": "minecraft:witch",
+        "weight": 5,
+        "minCount": 1,
+        "maxCount": 1
+      }
+    ],
+    "creature": [],
+    "ambient": [
+      {
+        "type": "minecraft:bat",
+        "weight": 10,
+        "minCount": 8,
+        "maxCount": 8
+      }
+    ],
+    "underground_water_creature": [],
+    "water_creature": [],
+    "water_ambient": [],
+    "misc": [],
+    "axolotls": []
+  },
+  "spawn_costs": {},
   "carvers": {},
   "features": [
     [],
     [],
-    [],
     [
-      "explorationremix:ruin"
+      "explorationremix:basalt_galleries/lava_pools",
+      "explorationremix:basalt_galleries/columns",
+      "explorationremix:basalt_galleries/hanging_columns",
+      "explorationremix:basalt_galleries/great_hanging_columns"
     ],
     [],
     [],
-    [
-      "explorationremix:ore_gold_basalt_galleries",
-      "explorationremix:ore_diamond_basalt_galleries",
-      "explorationremix:ore_emerald_basalt_galleries",
-      "explorationremix:ore_redstone_basalt_galleries"
-    ],
-    [
-      "explorationremix:glow_lichen_basalt_galleries",
-      "explorationremix:basalt_columns_galleries",
-      "explorationremix:pile_magma_galleries_basalt_galleries"
-    ],
+    [],
     [],
     [
-      "explorationremix:flock_roost_basalt_galleries",
-      "explorationremix:shelf_fungus_basalt_basalt_galleries"
+      "explorationremix:basalt_galleries/smoulder_lichen",
+      "explorationremix:basalt_galleries/amber_shards"
     ],
-    []
-  ],
-  "spawners": {
-    "monster": [],
-    "creature": [],
-    "ambient": [],
-    "axolotls": [],
-    "underground_water_creature": [],
-    "water_creature": [],
-    "water_ambient": [],
-    "misc": []
-  },
-  "spawn_costs": {}
+    [
+      "explorationremix:basalt_galleries/lava_falls"
+    ],
+    [
+      "explorationremix:basalt_galleries/cinder_blooms",
+      "explorationremix:basalt_galleries/ash_ferns"
+    ],
+    [
+      "explorationremix:climb_vines",
+      "explorationremix:open_way"
+    ]
+  ]
 }

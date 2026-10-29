@@ -1,32 +1,61 @@
 package com.explorationremix.devtools;
 
-import com.explorationremix.ExplorationRemix;
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.Layer;
-import com.explorationremix.world.plan.CellPlan;
-import com.explorationremix.world.plan.Chamber;
-import com.explorationremix.world.plan.Gate;
-import com.explorationremix.world.plan.LayerPlans;
+import com.explorationremix.world.gen.SurfaceOracle;
+import com.explorationremix.world.terrain.DeepBiome;
+import com.explorationremix.world.terrain.Net;
+import com.explorationremix.world.terrain.Network;
+import com.explorationremix.world.terrain.Overhead;
+import com.explorationremix.world.terrain.Plans;
+import com.explorationremix.world.terrain.Rootvaults;
+import com.explorationremix.world.terrain.Shape;
+import com.explorationremix.world.terrain.Terrain;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.levelgen.DensityFunction;
-import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Locale;
 
-/** /remix: debug and development commands. */
+/**
+ * /remix: commands for looking around the deep world (operators only).
+ * <ul>
+ *     <li>{@code /remix layers}: the layer table</li>
+ *     <li>{@code /remix info}: where you are; in a deep layer also the network's node and way there (the chamber you
+ *     are in or the nearest, the nearest tunnel or walk, a climb, the rift's ledge path); above the old floor the
+ *     ground and surface biome over you and the Rootvaults grotto under you</li>
+ *     <li>{@code /remix tp <1-3>}: the landing at the top of a layer, under its band</li>
+ *     <li>{@code /remix tp gate <1-3>}: the landing above a band, where its gate passage starts</li>
+ *     <li>{@code /remix tp bedrock}: the bedrock landing of the last layer's network in this cell</li>
+ *     <li>{@code /remix tp biome <name>}: a deep biome's nearest chamber in the networks of the nine cells round you
+ *     (set pieces first), standing on its floor in open air; or the Silver Fern Rift, the Ivory Root Cavern or the
+ *     Rootvaults</li>
+ *     <li>{@code /remix view <name> [n]}: a spot in that biome with a wide view into it, facing the view (for
+ *     screenshots); n picks the Rootvaults look (0 root halls, 1 teal grottos, 2 ravines) or the n-th place of a deep
+ *     biome (set pieces first, then nearest first)</li>
+ *     <li>{@code /remix slice [x|z] [half width]}: a picture of the blocks under you, written to remix_slices/</li>
+ *     <li>{@code /remix census [radius]}: how overgrown and lit the caves around you are, per biome (PlantCensus)</li>
+ * </ul>
+ */
 public final class RemixCommands {
     private RemixCommands() {}
 
@@ -34,271 +63,431 @@ public final class RemixCommands {
     public static void register(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> d = event.getDispatcher();
         d.register(Commands.literal("remix").requires(s -> s.hasPermission(2))
-                .then(Commands.literal("info").executes(RemixCommands::info))
                 .then(Commands.literal("layers").executes(RemixCommands::layers))
-                .then(Commands.literal("gate").then(Commands.argument("band", IntegerArgumentType.integer(1, 8)).executes(RemixCommands::gate)))
-                .then(Commands.literal("tp").then(Commands.argument("layer", StringArgumentType.word()).executes(RemixCommands::tp)))
-                .then(Commands.literal("cell").executes(RemixCommands::cell))
-                .then(Commands.literal("run")
-                        .then(Commands.literal("start").executes(RemixCommands::runStart))
-                        .then(Commands.literal("end").executes(RemixCommands::runEnd))
-                        .then(Commands.literal("info").executes(RemixCommands::runInfo)))
-                .then(Commands.literal("rune")
-                        .then(Commands.literal("add").then(Commands.argument("id", net.minecraft.commands.arguments.ResourceLocationArgument.id())
-                                .suggests((c, b) -> net.minecraft.commands.SharedSuggestionProvider.suggestResource(
-                                        com.explorationremix.rune.RuneRegistry.all().stream().map(com.explorationremix.rune.Rune::id), b))
-                                .executes(RemixCommands::runeAdd)))
-                        .then(Commands.literal("clear").executes(RemixCommands::runeClear))
-                        .then(Commands.literal("list").executes(RemixCommands::runeList)))
-                .then(Commands.literal("xp").then(Commands.argument("amount", IntegerArgumentType.integer()).executes(RemixCommands::xp)))
-                .then(Commands.literal("book").then(Commands.argument("attunement", StringArgumentType.word())
-                        .suggests((c, b) -> net.minecraft.commands.SharedSuggestionProvider.suggest(com.explorationremix.rune.AttunementBook.ALL, b))
-                        .executes(RemixCommands::book)))
-                .then(Commands.literal("slots").then(Commands.argument("count", IntegerArgumentType.integer(1, 64)).executes(RemixCommands::slots)))
+                .then(Commands.literal("info").executes(RemixCommands::info))
+                .then(PlantCensus.command())
+                .then(Commands.literal("tp")
+                        .then(Commands.argument("layer", IntegerArgumentType.integer(1, 8)).executes(c -> tpLayer(c, IntegerArgumentType.getInteger(c, "layer"))))
+                        .then(Commands.literal("gate").then(Commands.argument("band", IntegerArgumentType.integer(1, 8))
+                                .executes(c -> tpGate(c, IntegerArgumentType.getInteger(c, "band")))))
+                        .then(Commands.literal("bedrock").executes(RemixCommands::tpBedrock))
+                        .then(Commands.literal("biome").then(Commands.argument("name", StringArgumentType.word())
+                                .suggests((c, b) -> SharedSuggestionProvider.suggest(java.util.stream.Stream.concat(
+                                        Arrays.stream(DeepBiome.values()).map(RemixCommands::shortName), java.util.stream.Stream.of("rootvaults")), b))
+                                .executes(c -> tpBiome(c, StringArgumentType.getString(c, "name"))))))
+                .then(Commands.literal("view").then(Commands.argument("name", StringArgumentType.word())
+                        .suggests((c, b) -> SharedSuggestionProvider.suggest(java.util.stream.Stream.concat(
+                                Arrays.stream(DeepBiome.values()).map(RemixCommands::shortName), java.util.stream.Stream.of("rootvaults")), b))
+                        .executes(c -> view(c, StringArgumentType.getString(c, "name"), -1))
+                        .then(Commands.argument("n", IntegerArgumentType.integer(0, 8))
+                                .executes(c -> view(c, StringArgumentType.getString(c, "name"), IntegerArgumentType.getInteger(c, "n"))))))
                 .then(Commands.literal("slice")
-                        .executes(c -> slice(c, 256, "x"))
-                        .then(Commands.argument("width", IntegerArgumentType.integer(32, 2048))
-                                .executes(c -> slice(c, IntegerArgumentType.getInteger(c, "width"), "x"))
-                                .then(Commands.argument("axis", StringArgumentType.word())
-                                        .executes(c -> slice(c, IntegerArgumentType.getInteger(c, "width"), StringArgumentType.getString(c, "axis")))))));
+                        .executes(c -> slice(c, "x", 160))
+                        .then(Commands.argument("axis", StringArgumentType.word()).suggests((c, b) -> SharedSuggestionProvider.suggest(new String[]{"x", "z"}, b))
+                                .executes(c -> slice(c, StringArgumentType.getString(c, "axis"), 160))
+                                .then(Commands.argument("halfWidth", IntegerArgumentType.integer(16, 1024))
+                                        .executes(c -> slice(c, StringArgumentType.getString(c, "axis"), IntegerArgumentType.getInteger(c, "halfWidth")))))));
     }
 
-    private static int info(CommandContext<CommandSourceStack> c) {
-        CommandSourceStack s = c.getSource();
-        if (!DeepWorld.installed()) { s.sendSuccess(() -> Component.literal("Deep world is not installed in this overworld."), false); return 0; }
-        int y = (int) Math.floor(s.getPosition().y);
-        int x = (int) Math.floor(s.getPosition().x), z = (int) Math.floor(s.getPosition().z);
-        Layer l = DeepWorld.layerAt(y);
-        int band = DeepWorld.bandAt(y);
-        LayerPlans plans = DeepWorld.plans();
-        StringBuilder sb = new StringBuilder();
-        sb.append("Pack floor ").append(DeepWorld.packFloor()).append(", new floor ").append(DeepWorld.floorY()).append(". ");
-        if (band != 0) sb.append("You are in band ").append(band).append(". ");
-        else if (l != null) {
-            CellPlan plan = plans.cellAt(l.index(), x, z);
-            sb.append("Layer ").append(l.id()).append(" (y ").append(l.bottom()).append("..").append(l.top()).append("), cell ")
-                    .append(plan.cellX).append(",").append(plan.cellZ).append(", role ").append(plan.roleAt(x, z))
-                    .append(", biome ").append(plans.biomeAt(x, y, z)).append(", route distance ").append((int) plan.distToRouteXZ(x, z)).append(". ");
-        } else sb.append("You are above the first band. ");
-        String msg = sb.toString();
-        s.sendSuccess(() -> Component.literal(msg), false);
-        return 1;
+    static String shortName(DeepBiome b) {
+        String id = b.id;
+        int i = id.indexOf(':');
+        return i >= 0 ? id.substring(i + 1) : id;
+    }
+
+    private static Terrain terrain(CommandContext<CommandSourceStack> c) {
+        Terrain t = DeepWorld.terrain();
+        if (t == null || !DeepWorld.installed()) {
+            c.getSource().sendFailure(Component.literal("The deep world is not installed in this world (see the server log)."));
+            return null;
+        }
+        return t;
+    }
+
+    private static void say(CommandContext<CommandSourceStack> c, String msg) {
+        c.getSource().sendSuccess(() -> Component.literal(msg), false);
     }
 
     private static int layers(CommandContext<CommandSourceStack> c) {
-        for (Layer l : DeepWorld.layers()) {
-            String line = l.id() + ": y " + l.bottom() + ".." + l.top() + ", band above " + DeepWorld.bandBottomY(l.index() + 1) + ".." + DeepWorld.bandTopY(l.index() + 1)
-                    + ", fluid " + l.fluid() + " at " + (l.bottom() + l.fluidLevel()) + ", style " + l.style();
-            c.getSource().sendSuccess(() -> Component.literal(line), false);
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        Shape s = t.shape;
+        say(c, "Deep world: floor y " + s.floorY + ", pack floor y " + s.packFloor + ", bands " + s.bandThickness + " blocks thick");
+        for (int i = 0; i < s.layerCount; i++) {
+            say(c, String.format(Locale.ROOT, "  %d. %s: y %d to %d, %s at y %d; band above it y %d to %d", i + 1, s.id(i), s.top(i), s.bottom(i),
+                    s.lava(i) ? "lava" : "water", s.waterY(i) - 1, s.bandTop(i + 1), s.bandBottom(i + 1)));
         }
         return 1;
     }
 
-    private static int gate(CommandContext<CommandSourceStack> c) {
-        int band = IntegerArgumentType.getInteger(c, "band");
-        if (!DeepWorld.installed() || band > DeepWorld.bandCount()) { c.getSource().sendFailure(Component.literal("No such band")); return 0; }
-        Gate g = DeepWorld.plans().gateAt(band, c.getSource().getPosition().x, c.getSource().getPosition().z);
-        String line = String.format("Gate %d of this cell: upper landing %.0f %.0f %.0f, lower landing %.0f %.0f %.0f", band, g.upperX(), g.upperY(), g.upperZ(), g.lowerX(), g.lowerY(), g.lowerZ());
-        c.getSource().sendSuccess(() -> Component.literal(line), false);
+    private static int info(CommandContext<CommandSourceStack> c) {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        Vec3 p = c.getSource().getPosition();
+        int x = (int) Math.floor(p.x), y = (int) Math.floor(p.y), z = (int) Math.floor(p.z);
+        Shape s = t.shape;
+        int li = s.layerAt(y), band = s.bandAt(y);
+        String where = y >= s.packFloor ? "above the first band (the pack's own caves)"
+                : li >= 0 ? "layer " + (li + 1) + " (" + s.id(li) + ")" : band > 0 ? "inside band " + band : "below the floor";
+        int cx = t.plans.cellOf(x), cz = t.plans.cellOf(z);
+        say(c, "At " + x + " " + y + " " + z + ": " + where + ", cell " + cx + " " + cz);
+        DeepBiome b = t.biomeAt(x, y, z);
+        if (b != null) say(c, "  deep biome: " + shortName(b) + " (" + b.role.name().toLowerCase(Locale.ROOT) + ")");
+        if (y >= s.packFloor) upperInfo(c, x, z);
+        if (li >= 0) {
+            for (String line : t.network.describe(li, x, y, z)) say(c, "  " + line);
+            Plans.Gate exit = li + 2 <= s.layerCount ? t.plans.gate(li + 2, cx, cz) : null;
+            if (exit != null) say(c, String.format(Locale.ROOT, "  this layer's way down: gate %d at %.0f %.0f %.0f (%.0f blocks away)",
+                    li + 2, exit.ux, exit.uFloor + 1, exit.uz, Math.hypot(exit.ux - x, exit.uz - z)));
+        }
         return 1;
     }
 
-    private static int tp(CommandContext<CommandSourceStack> c) {
-        String id = StringArgumentType.getString(c, "layer");
-        ServerPlayer p = c.getSource().getPlayer();
-        if (p == null || !DeepWorld.installed()) return 0;
-        LayerPlans plans = DeepWorld.plans();
-        if (id.equals("gate") || id.equals("upper")) {
-            Gate g = plans.gateAt(1, p.getX(), p.getZ());
-            p.teleportTo(g.upperX(), g.upperY(), g.upperZ());
+    /** Above the old floor: what the pack has over the column (as the Rootvaults see it), and the grotto under it. */
+    private static void upperInfo(CommandContext<CommandSourceStack> c, int x, int z) {
+        SurfaceOracle o = DeepWorld.oracle();
+        if (o != null) {
+            Overhead.Surface s = o.at(x, z);
+            String biome = o.biome(x, z).unwrapKey().map(k -> k.location().toString()).orElse("?");
+            say(c, String.format(Locale.ROOT, "  over this column: ground y %d, %s, %s trees%s%s", s.y(), biome, s.trees().id,
+                    s.wet() ? ", wet" : "", s.ravineOk() ? ", ravines allowed" : ""));
+        }
+        Rootvaults r = DeepWorld.roots();
+        if (r == null) return;
+        Rootvaults.Grotto g = r.grottoAt(x, z);
+        if (g != null) say(c, String.format(Locale.ROOT, "  rootvaults: %s under %s trees, water y %.0f, roof at most y %.0f, ground %d to %d, %d skylight(s)",
+                g.lookName(), g.kind.id, g.water, g.top(), g.groundMin, g.groundMax, g.skylights.length));
+        else if (r.anyNear(x, z)) say(c, "  rootvaults: a tunnel or a grotto's edge runs under this column");
+    }
+
+    private static int tpLayer(CommandContext<CommandSourceStack> c, int layer) throws CommandSyntaxException {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        if (layer > t.shape.layerCount) {
+            c.getSource().sendFailure(Component.literal("There are only " + t.shape.layerCount + " layers."));
+            return 0;
+        }
+        ServerPlayer pl = c.getSource().getPlayerOrException();
+        Plans.Gate g = gateHere(t, pl, layer);
+        teleport(pl, g.lx, g.lFloor + 1, g.lz);
+        say(c, "Layer " + layer + " (" + t.shape.id(layer - 1) + "): the landing under band " + layer + ".");
+        return 1;
+    }
+
+    private static int tpGate(CommandContext<CommandSourceStack> c, int band) throws CommandSyntaxException {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        if (band > t.shape.layerCount) {
+            c.getSource().sendFailure(Component.literal("There are only " + t.shape.layerCount + " bands."));
+            return 0;
+        }
+        ServerPlayer pl = c.getSource().getPlayerOrException();
+        Plans.Gate g = gateHere(t, pl, band);
+        teleport(pl, g.ux, g.uFloor + 1, g.uz);
+        say(c, "Gate " + band + ": the landing above band " + band + ". The passage starts in its floor.");
+        return 1;
+    }
+
+    private static int tpBedrock(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        ServerPlayer pl = c.getSource().getPlayerOrException();
+        int last = t.shape.layerCount - 1;
+        Net n = t.network(last, t.plans.cellOf((int) Math.floor(pl.getX())), t.plans.cellOf((int) Math.floor(pl.getZ())));
+        Net.Chamber b = n.ch.get(n.exit);
+        int x = (int) Math.floor(b.x), z = (int) Math.floor(b.z);
+        BlockPos stand = findStand((ServerLevel) pl.level(), x, (int) Math.floor(b.f0) + 1, z);
+        if (stand != null) teleport(pl, stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+        else teleport(pl, b.x, b.f0 + 1, b.z);
+        say(c, String.format(Locale.ROOT, "The bedrock landing of %s's network in this cell, at %.0f %.0f %.0f.", t.shape.id(last), b.x, b.f0 + 1, b.z));
+        return 1;
+    }
+
+    private static int tpBiome(CommandContext<CommandSourceStack> c, String name) throws CommandSyntaxException {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        if (name.equalsIgnoreCase("rootvaults")) return tpRootvaults(c, t);
+        DeepBiome target = null;
+        for (DeepBiome b : DeepBiome.values()) if (shortName(b).equalsIgnoreCase(name)) target = b;
+        if (target == null) {
+            c.getSource().sendFailure(Component.literal("Unknown deep biome " + name));
+            return 0;
+        }
+        ServerPlayer pl = c.getSource().getPlayerOrException();
+        int px = (int) Math.floor(pl.getX()), pz = (int) Math.floor(pl.getZ());
+        if (target.role == DeepBiome.Role.SAFE) return tpUpper(c, t, pl, target, px, pz);
+        // The biome's places in the networks of the nine cells round you, set pieces first: stand on the first open
+        // floor (feet and head in air, a solid block under them) the world's blocks show there.
+        ServerLevel level = (ServerLevel) pl.level();
+        int tried = 0;
+        for (Network.Place p : t.network.places(target, px, pz)) {
+            if (tried++ >= MAX_PLACES) break;
+            BlockPos stand = standIn(t, level, p, target);
+            if (stand == null) continue;
+            teleport(pl, stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+            say(c, shortName(target) + " (" + p.what + ") at " + stand.getX() + " " + stand.getY() + " " + stand.getZ());
             return 1;
         }
-        for (Layer l : DeepWorld.layers()) {
-            if (l.id().equals(id) || String.valueOf(l.index() + 1).equals(id)) {
-                CellPlan plan = plans.cellAt(l.index(), p.getX(), p.getZ());
-                Gate g = plan.entryGate;
-                p.teleportTo(g.lowerX(), g.lowerY(), g.lowerZ());
-                return 1;
-            }
-        }
-        if (id.equals("bedrock")) {
-            Layer last = DeepWorld.layers().get(DeepWorld.layers().size() - 1);
-            CellPlan plan = plans.cellAt(last.index(), p.getX(), p.getZ());
-            if (plan.bedrockLanding != null) p.teleportTo(plan.bedrockLanding.x(), plan.bedrockLanding.y(), plan.bedrockLanding.z());
-            return 1;
-        }
-        c.getSource().sendFailure(Component.literal("Unknown layer; use gate, 1-4, a layer id, or bedrock"));
+        c.getSource().sendFailure(Component.literal("No open floor of " + name + " found in the networks of the nine cells round you"
+                + (tried == 0 ? " (none of their chambers has that biome)." : " (" + tried + " places tried).")));
         return 0;
     }
 
-    // ------------------------------------------------------------------ runs and runes
+    /** How many places of a deep biome the commands try before giving up (each may generate chunks). */
+    private static final int MAX_PLACES = 8;
 
-    private static int runStart(CommandContext<CommandSourceStack> c) {
-        ServerPlayer p = c.getSource().getPlayer();
-        if (p == null) return 0;
-        com.explorationremix.run.RunState s = com.explorationremix.run.RunManager.state(p);
-        if (s.active) { c.getSource().sendFailure(Component.literal("Already on run " + s.runId)); return 0; }
-        com.explorationremix.run.RunManager.start(p, s);
-        c.getSource().sendSuccess(() -> Component.literal("Run " + s.runId + " started"), true);
-        return 1;
-    }
-
-    private static int runEnd(CommandContext<CommandSourceStack> c) {
-        ServerPlayer p = c.getSource().getPlayer();
-        if (p == null) return 0;
-        com.explorationremix.run.RunState s = com.explorationremix.run.RunManager.state(p);
-        if (!s.active) { c.getSource().sendFailure(Component.literal("Not on a run")); return 0; }
-        com.explorationremix.run.RunManager.end(p, s, "command");
-        c.getSource().sendSuccess(() -> Component.literal("Run ended"), true);
-        return 1;
-    }
-
-    private static int runInfo(CommandContext<CommandSourceStack> c) {
-        ServerPlayer p = c.getSource().getPlayer();
-        if (p == null) return 0;
-        com.explorationremix.run.RunState s = com.explorationremix.run.RunManager.state(p);
-        String line = s.active
-                ? String.format("Run %d: deepest layer %d, gates %d, kills %d, XP earned %d spent %d (%d points held), rune blocks woken %d, slots per sentence %d",
-                        s.runId, s.deepestLayer, s.gatesPassed, s.kills, s.xpEarned, s.xpSpent, com.explorationremix.run.RunXp.points(p), s.runeBlocksWoken,
-                        com.explorationremix.run.RunManager.slotsFor(s) / Math.max(1, com.explorationremix.config.ERConfig.INSTANCE.startingSentences.get()))
-                : "Not on a run" + (s.runId > 0 ? " (last run " + s.runId + " ended: " + s.endReason + ")" : "");
-        c.getSource().sendSuccess(() -> Component.literal(line), false);
-        return 1;
-    }
-
-    private static int runeAdd(CommandContext<CommandSourceStack> c) {
-        ServerPlayer p = c.getSource().getPlayer();
-        if (p == null) return 0;
-        net.minecraft.resources.ResourceLocation id = net.minecraft.commands.arguments.ResourceLocationArgument.getId(c, "id");
-        if (com.explorationremix.rune.RuneRegistry.get(id) == null) { c.getSource().sendFailure(Component.literal("Unknown rune " + id)); return 0; }
-        net.minecraft.world.item.ItemStack held = p.getMainHandItem();
-        if (!com.explorationremix.rune.RuneTool.canHoldRunes(held)) { c.getSource().sendFailure(Component.literal("Hold a tool or weapon")); return 0; }
-        long run = com.explorationremix.run.RunManager.currentRun(p);
-        if (run == 0L) { c.getSource().sendFailure(Component.literal("Start a run first (/remix run start)")); return 0; }
-        if (!com.explorationremix.rune.RuneTool.addRune(held, id, run)) { c.getSource().sendFailure(Component.literal("No free slot on this tool")); return 0; }
-        c.getSource().sendSuccess(() -> Component.literal("Added " + id + " to " + held.getHoverName().getString()), true);
-        return 1;
-    }
-
-    private static int runeClear(CommandContext<CommandSourceStack> c) {
-        ServerPlayer p = c.getSource().getPlayer();
-        if (p == null) return 0;
-        net.minecraft.world.item.ItemStack held = p.getMainHandItem();
-        if (!com.explorationremix.rune.RuneTool.canHoldRunes(held)) { c.getSource().sendFailure(Component.literal("Hold a tool or weapon")); return 0; }
-        com.explorationremix.rune.RuneTool.setRunes(held, java.util.List.of(), com.explorationremix.run.RunManager.currentRun(p));
-        c.getSource().sendSuccess(() -> Component.literal("Runes cleared"), true);
-        return 1;
-    }
-
-    private static int runeList(CommandContext<CommandSourceStack> c) {
-        java.util.List<String> ids = new java.util.ArrayList<>();
-        for (com.explorationremix.rune.Rune r : com.explorationremix.rune.RuneRegistry.all()) ids.add(r.id().toString() + " (" + r.kind().name().toLowerCase() + ", tier " + r.tier() + ")");
-        java.util.Collections.sort(ids);
-        String line = ids.size() + " runes: " + String.join(", ", ids);
-        c.getSource().sendSuccess(() -> Component.literal(line), false);
-        return ids.size();
-    }
-
-    private static int xp(CommandContext<CommandSourceStack> c) {
-        ServerPlayer p = c.getSource().getPlayer();
-        if (p == null) return 0;
-        int amount = IntegerArgumentType.getInteger(c, "amount");
-        com.explorationremix.run.RunState s = com.explorationremix.run.RunManager.state(p);
-        if (amount >= 0) com.explorationremix.run.RunXp.award(p, amount, s.active ? s : null);
-        else com.explorationremix.run.RunXp.spend(p, -amount, s.active ? s : null);
-        int held = com.explorationremix.run.RunXp.points(p);
-        c.getSource().sendSuccess(() -> Component.literal("Run XP now " + held + " points"), true);
-        return 1;
-    }
-
-    private static int book(CommandContext<CommandSourceStack> c) {
-        ServerPlayer p = c.getSource().getPlayer();
-        if (p == null) return 0;
-        String att = StringArgumentType.getString(c, "attunement");
-        if (!java.util.Arrays.asList(com.explorationremix.rune.AttunementBook.ALL).contains(att)) { c.getSource().sendFailure(Component.literal("Unknown attunement " + att)); return 0; }
-        long run = com.explorationremix.run.RunManager.currentRun(p);
-        net.minecraft.world.item.ItemStack book = com.explorationremix.item.AttunementBookItem.of(com.explorationremix.registry.ERItems.ATTUNEMENT_BOOK.get(), att, run);
-        if (!p.getInventory().add(book)) p.drop(book, false);
-        c.getSource().sendSuccess(() -> Component.literal("Gave a " + att + " book" + (run == 0L ? " (it will crumble: no run)" : "")), true);
-        return 1;
-    }
-
-    private static int slots(CommandContext<CommandSourceStack> c) {
-        ServerPlayer p = c.getSource().getPlayer();
-        if (p == null) return 0;
-        net.minecraft.world.item.ItemStack held = p.getMainHandItem();
-        if (!com.explorationremix.rune.RuneTool.canHoldRunes(held)) { c.getSource().sendFailure(Component.literal("Hold a tool or weapon")); return 0; }
-        int n = IntegerArgumentType.getInteger(c, "count");
-        com.explorationremix.rune.RuneTool.setSlots(held, n);
-        c.getSource().sendSuccess(() -> Component.literal("Slots set to " + n), true);
-        return 1;
-    }
-
-    private static int cell(CommandContext<CommandSourceStack> c) {
-        if (!DeepWorld.installed()) return 0;
-        int x = (int) Math.floor(c.getSource().getPosition().x), z = (int) Math.floor(c.getSource().getPosition().z);
-        for (Layer l : DeepWorld.layers()) {
-            CellPlan plan = DeepWorld.plans().cellAt(l.index(), x, z);
-            StringBuilder sb = new StringBuilder(l.id()).append(": route ").append((int) plan.routeLength()).append(" blocks; ");
-            for (Chamber ch : plan.chambers) sb.append(ch.kind().name().toLowerCase()).append(String.format(" @%.0f,%.0f,%.0f ", ch.x(), ch.y(), ch.z()));
-            if (plan.bedrockLanding != null) sb.append(String.format("bedrock landing @%.0f,%.0f,%.0f", plan.bedrockLanding.x(), plan.bedrockLanding.y(), plan.bedrockLanding.z()));
-            String line = sb.toString();
-            c.getSource().sendSuccess(() -> Component.literal(line), false);
+    /** The first spot of a place that is an open floor of the biome in the world: feet and head in air, rock under. */
+    @javax.annotation.Nullable
+    private static BlockPos standIn(Terrain t, ServerLevel level, Network.Place p, DeepBiome target) {
+        for (double[] q : p.stands) {
+            BlockPos stand = findStand(level, (int) Math.floor(q[0]), (int) Math.floor(q[1]), (int) Math.floor(q[2]));
+            if (stand != null && t.biomeAt(stand.getX(), stand.getY(), stand.getZ()) == target) return stand;
         }
-        return 1;
+        return null;
     }
 
-    /** Renders a vertical cross-section of the final density around the player straight from the noise router. */
-    private static int slice(CommandContext<CommandSourceStack> c, int width, String axis) {
-        CommandSourceStack s = c.getSource();
-        ServerLevel level = s.getLevel();
-        RandomState rs = level.getChunkSource().randomState();
-        DensityFunction density = rs.router().finalDensity();
-        int cx = (int) Math.floor(s.getPosition().x), cz = (int) Math.floor(s.getPosition().z);
-        int minY = level.getMinBuildHeight(), maxY = level.getMaxBuildHeight();
-        int height = maxY - minY;
-        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        boolean alongX = !axis.equalsIgnoreCase("z");
-        long start = System.nanoTime();
-        for (int i = 0; i < width; i++) {
-            int x = alongX ? cx - width / 2 + i : cx;
-            int z = alongX ? cz : cz - width / 2 + i;
-            for (int y = minY; y < maxY; y++) {
-                double d = density.compute(new DensityFunction.SinglePointContext(x, y, z));
-                int rgb;
-                if (d > 0) {
-                    int band = DeepWorld.installed() ? DeepWorld.bandAt(y) : 0;
-                    Layer l = DeepWorld.installed() ? DeepWorld.layerAt(y) : null;
-                    if (y < DeepWorld.floorY() + 5 && DeepWorld.installed()) rgb = 0x202020;
-                    else if (band != 0) rgb = 0x101018;
-                    else if (l != null) rgb = switch (l.index()) { case 0 -> 0x6a5a40; case 1 -> 0x4a5a70; case 2 -> 0x70402a; default -> 0x3a3a40; };
-                    else rgb = 0x7a7a7a;
-                } else {
-                    rgb = 0x000000;
-                    if (DeepWorld.installed() && y < DeepWorld.packFloor()) {
-                        Layer l = DeepWorld.layerAt(y);
-                        if (l != null) {
-                            int table = com.explorationremix.world.gen.DeepFluids.tableLevel(l, DeepWorld.plans(), x, z);
-                            if (y < table && !DeepWorld.plans().cellAt(l.index(), x, z).insideRefuge(x, y, z)) rgb = l.fluid() == Layer.FluidKind.LAVA ? 0xc04010 : 0x2050c0;
-                        }
-                    }
-                }
-                img.setRGB(i, maxY - 1 - y, rgb);
-            }
+    /** The nearest Silver Fern Rift or Ivory Root Cavern: onto a ledge of the rift, or a terrace above the lake. */
+    private static int tpUpper(CommandContext<CommandSourceStack> c, Terrain t, ServerPlayer pl, DeepBiome target, int px, int pz) {
+        int pcx = t.plans.cellOf(px), pcz = t.plans.cellOf(pz);
+        com.explorationremix.world.terrain.Upper.Piece best = null;
+        double bd = 1e18;
+        for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) {
+            com.explorationremix.world.terrain.Upper.Piece p = t.plans.upper(pcx + dx, pcz + dz);
+            if (p == null || p.biome() != target) continue;
+            double d = Math.hypot(p.centerX() - px, p.centerZ() - pz);
+            if (d < bd) { bd = d; best = p; }
         }
-        long ms = (System.nanoTime() - start) / 1_000_000;
-        File dir = new File(level.getServer().getServerDirectory(), "remix_slices");
-        dir.mkdirs();
-        File out = new File(dir, "slice_" + cx + "_" + cz + "_" + axis + ".png");
-        try {
-            ImageIO.write(img, "png", out);
-        } catch (IOException e) {
-            ExplorationRemix.LOGGER.error("Could not write slice", e);
-            s.sendFailure(Component.literal("Could not write " + out));
+        if (best == null) {
+            c.getSource().sendFailure(Component.literal("No " + shortName(target) + " within three cells."));
             return 0;
         }
-        String msg = "Wrote " + out.getPath() + " (" + width + "x" + height + ", " + ms + " ms)";
-        s.sendSuccess(() -> Component.literal(msg), false);
+        ServerLevel level = (ServerLevel) pl.level();
+        double[][] tries;
+        if (best instanceof com.explorationremix.world.terrain.Upper.Cavern cv) {
+            tries = new double[][]{{cv.cx + cv.rxz * 0.72, cv.cz}, {cv.cx - cv.rxz * 0.72, cv.cz}, {cv.cx, cv.cz + cv.rxz * 0.72}, {cv.cx, cv.cz - cv.rxz * 0.72}};
+        } else {
+            com.explorationremix.world.terrain.Upper.Rift r = (com.explorationremix.world.terrain.Upper.Rift) best;
+            int m = r.points() / 2;
+            double dx = r.pointX(m + 1) - r.pointX(m - 1), dz = r.pointZ(m + 1) - r.pointZ(m - 1), l = Math.max(1e-6, Math.hypot(dx, dz));
+            double nx = -dz / l, nz = dx / l;
+            tries = new double[4][];
+            for (int k = 0; k < 4; k++) {
+                double off = (k % 2 == 0 ? 1 : -1) * (r.streamHalf + 4 + 3 * (k / 2));
+                tries[k] = new double[]{r.pointX(m) + nx * off, r.pointZ(m) + nz * off};
+            }
+        }
+        for (double[] q : tries) {
+            int x = (int) Math.floor(q[0]), z = (int) Math.floor(q[1]);
+            for (int y = (int) best.waterY + 1; y < best.topY; y += 6) {
+                BlockPos stand = findStand(level, x, y, z);
+                if (stand == null) continue;
+                teleport(pl, stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+                say(c, shortName(target) + " at " + stand.getX() + " " + stand.getY() + " " + stand.getZ());
+                return 1;
+            }
+        }
+        teleport(pl, best.centerX(), best.waterY + 3, best.centerZ());
+        say(c, shortName(target) + " around " + (int) best.centerX() + " " + (int) (best.waterY + 3) + " " + (int) best.centerZ());
+        return 1;
+    }
+
+    /** The nearest Rootvaults grotto: onto a bank beside its water. */
+    private static int tpRootvaults(CommandContext<CommandSourceStack> c, Terrain t) throws CommandSyntaxException {
+        ServerPlayer pl = c.getSource().getPlayerOrException();
+        Rootvaults roots = DeepWorld.roots();
+        if (roots == null) {
+            c.getSource().sendFailure(Component.literal("There are no Rootvaults in this world (replaceVanillaCaveBiomes is off)."));
+            return 0;
+        }
+        Rootvaults.Grotto g = nearestGrotto(roots, pl, -1);
+        if (g == null) {
+            c.getSource().sendFailure(Component.literal("No Rootvaults found within " + SEARCH_CELLS * Rootvaults.CELL + " blocks."));
+            return 0;
+        }
+        BlockPos stand = standIn((ServerLevel) pl.level(), g);
+        BlockPos at = stand != null ? stand : BlockPos.containing(g.cx, g.water + 2, g.cz);
+        teleport(pl, at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
+        say(c, String.format(Locale.ROOT, "rootvaults (%s under %s trees, ground %d to %d) at %d %d %d", g.lookName(), g.kind.id, g.groundMin, g.groundMax,
+                at.getX(), at.getY(), at.getZ()));
+        return 1;
+    }
+
+    // ============================================================================================== views
+
+    /** Moves you to a spot with a wide view into a biome and turns you to face it. */
+    private static int view(CommandContext<CommandSourceStack> c, String name, int n) throws CommandSyntaxException {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        ServerPlayer pl = c.getSource().getPlayerOrException();
+        ServerLevel level = (ServerLevel) pl.level();
+        BlockPos around;
+        net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> key;
+        int look = -1, radius = 24;
+        boolean rootvaults = name.equalsIgnoreCase("rootvaults");
+        if (rootvaults) {
+            look = n > 2 ? -1 : n;
+            key = net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, com.explorationremix.world.gen.DeepBiomes.ROOTVAULTS);
+            Rootvaults roots = DeepWorld.roots();
+            Rootvaults.Grotto g = roots != null ? nearestGrotto(roots, pl, look) : null;
+            if (g == null) {
+                c.getSource().sendFailure(Component.literal("No Rootvaults" + (look >= 0 ? " with look " + look : "") + " found within "
+                        + SEARCH_CELLS * Rootvaults.CELL + " blocks."));
+                return 0;
+            }
+            around = BlockPos.containing(g.cx, g.water + 2, g.cz);
+            radius = (int) Math.min(40, Math.max(g.a, g.b) + 6);
+        } else {
+            DeepBiome target = null;
+            for (DeepBiome b : DeepBiome.values()) if (shortName(b).equalsIgnoreCase(name)) target = b;
+            if (target == null) {
+                c.getSource().sendFailure(Component.literal("Unknown biome " + name));
+                return 0;
+            }
+            key = net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, com.explorationremix.world.gen.DeepBiomes.id(target));
+            double[] piece = setPiece(t, pl, target, Math.max(0, n));
+            if (piece != null) {
+                around = BlockPos.containing(piece[0], piece[1], piece[2]);
+                radius = (int) Math.max(12, Math.min(40, piece[3]));
+            } else {
+                if (tpBiome(c, name) == 0) return 0;
+                around = pl.blockPosition();
+            }
+        }
+        final int lk = look;
+        final net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> k = key;
+        Rootvaults rv = DeepWorld.roots();
+        ViewFinder.View v = ViewFinder.find(level, around, p -> level.getBiome(p).is(k) && (lk < 0 || (rv != null && rv.look(p.getX(), p.getZ()) == lk)),
+                radius, 14);
+        if (v == null) {
+            BlockPos stand = findStand(level, around.getX(), around.getY(), around.getZ());
+            BlockPos at = stand != null ? stand : around;
+            teleport(pl, at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
+            say(c, name + ": no wide view found near " + at.toShortString());
+            return 1;
+        }
+        level.getChunk(((int) Math.floor(v.x())) >> 4, ((int) Math.floor(v.z())) >> 4, ChunkStatus.FULL, true);
+        pl.teleportTo(level, v.x(), v.y(), v.z(), v.yaw(), v.pitch());
+        say(c, String.format(Locale.ROOT, "%s view at %.0f %.0f %.0f facing %.0f, pitch %.0f, %.0f blocks deep", name, v.x(), v.y(), v.z(), v.yaw(), v.pitch(), v.reach()));
+        return 1;
+    }
+
+    /** The set piece a biome is built around, nearest the player first: {x, y, z, search radius}, or null. */
+    private static double[] setPiece(Terrain t, ServerPlayer pl, DeepBiome target, int nth) {
+        if (target == DeepBiome.SILVER_FERN_RIFT || target == DeepBiome.IVORY_ROOT_CAVERN) {
+            // The nearest rift or cavern: the middle of the rift between its ledges, or the cavern's lake shore.
+            int px = (int) Math.floor(pl.getX()), pz = (int) Math.floor(pl.getZ());
+            int pcx = t.plans.cellOf(px), pcz = t.plans.cellOf(pz);
+            com.explorationremix.world.terrain.Upper.Piece best = null;
+            double bd = 1e18;
+            for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) {
+                com.explorationremix.world.terrain.Upper.Piece p = t.plans.upper(pcx + dx, pcz + dz);
+                if (p == null || p.biome() != target) continue;
+                double d = Math.hypot(p.centerX() - px, p.centerZ() - pz);
+                if (d < bd) { bd = d; best = p; }
+            }
+            if (best instanceof com.explorationremix.world.terrain.Upper.Cavern cv)
+                return new double[]{cv.cx, cv.waterY + 4, cv.cz, cv.rxz};
+            if (best instanceof com.explorationremix.world.terrain.Upper.Rift r)
+                return new double[]{r.centerX(), (r.waterY + r.ledgeTop) * 0.5, r.centerZ(), 28};
+            return null;
+        }
+        // The deep biomes: the n-th place of the biome in the networks round you (set pieces first, then nearest
+        // first), centred on the first open floor of it the world shows, searched over the place's reach.
+        java.util.List<Network.Place> places = t.network.places(target, pl.getX(), pl.getZ());
+        ServerLevel level = (ServerLevel) pl.level();
+        for (int i = Math.min(nth, Math.max(0, places.size() - 1)), tried = 0; i < places.size() && tried < MAX_PLACES; i++, tried++) {
+            Network.Place p = places.get(i);
+            BlockPos stand = standIn(t, level, p, target);
+            if (stand != null) return new double[]{stand.getX(), stand.getY(), stand.getZ(), Math.max(12, p.reach * 0.8)};
+        }
+        return null;
+    }
+
+    /** How far the Rootvaults commands search, in grotto cells. */
+    private static final int SEARCH_CELLS = 24;
+
+    /** The grotto nearest the player (with the given look, or any when look is -1), or null. */
+    @javax.annotation.Nullable
+    private static Rootvaults.Grotto nearestGrotto(Rootvaults roots, ServerPlayer pl, int look) {
+        int px = (int) Math.floor(pl.getX()), pz = (int) Math.floor(pl.getZ());
+        int ci = Math.floorDiv(px, Rootvaults.CELL), cj = Math.floorDiv(pz, Rootvaults.CELL);
+        Rootvaults.Grotto best = null;
+        double bd = 1e18;
+        // Rings of cells outwards; one more ring after the first find, since a grotto in it may still be nearer.
+        int found = -1;
+        for (int ring = 0; ring <= SEARCH_CELLS && (found < 0 || ring <= found + 1); ring++) {
+            for (int i = -ring; i <= ring; i++) for (int j = -ring; j <= ring; j++) {
+                if (Math.max(Math.abs(i), Math.abs(j)) != ring) continue;
+                Rootvaults.Grotto g = roots.grotto(ci + i, cj + j);
+                if (g == null || (look >= 0 && g.look != look)) continue;
+                double d = Math.hypot(g.cx - px, g.cz - pz);
+                if (d < bd) { bd = d; best = g; }
+                if (found < 0) found = ring;
+            }
+        }
+        return best;
+    }
+
+    /** A standing spot on a grotto's floor, above its water: on a bank part way out from its middle, or null. */
+    @javax.annotation.Nullable
+    private static BlockPos standIn(ServerLevel level, Rootvaults.Grotto g) {
+        Rootvaults roots = DeepWorld.roots();
+        int y = (int) Math.floor(g.water) + 1;
+        for (double f : new double[]{0.45, 0.3, 0.6, 0.15}) {
+            for (int k = 0; k < 8; k++) {
+                double th = k * Math.PI / 4;
+                int x = (int) Math.floor(g.cx + f * g.a * Math.cos(th)), z = (int) Math.floor(g.cz + f * g.a * Math.sin(th));
+                if (roots != null && roots.grottoAt(x, z) != g) continue;
+                BlockPos stand = findStand(level, x, y, z);
+                if (stand != null && stand.getY() >= g.water) return stand;
+            }
+        }
+        return null;
+    }
+
+    /** A real block position with air for feet and head and something solid underneath, near (x, y, z). */
+    private static BlockPos findStand(ServerLevel level, int x, int y, int z) {
+        ChunkAccess chunk = level.getChunk(x >> 4, z >> 4, ChunkStatus.FULL, true);
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int dy = 0; dy <= 12; dy++) {
+            for (int sgn = -1; sgn <= 1; sgn += 2) {
+                int yy = y + dy * sgn;
+                BlockState feet = chunk.getBlockState(p.set(x, yy, z)), head = chunk.getBlockState(p.set(x, yy + 1, z)), under = chunk.getBlockState(p.set(x, yy - 1, z));
+                if (feet.isAir() && head.isAir() && under.isSolid()) return new BlockPos(x, yy, z);
+            }
+        }
+        return null;
+    }
+
+    private static Plans.Gate gateHere(Terrain t, ServerPlayer pl, int band) {
+        return t.plans.gate(band, t.plans.cellOf((int) Math.floor(pl.getX())), t.plans.cellOf((int) Math.floor(pl.getZ())));
+    }
+
+    private static void teleport(ServerPlayer pl, double x, double y, double z) {
+        ServerLevel level = pl.server.getLevel(Level.OVERWORLD);
+        if (level == null) return;
+        level.getChunk(((int) Math.floor(x)) >> 4, ((int) Math.floor(z)) >> 4, ChunkStatus.FULL, true);
+        pl.teleportTo(level, x, y, z, pl.getYRot(), pl.getXRot());
+    }
+
+    private static int slice(CommandContext<CommandSourceStack> c, String axis, int half) throws CommandSyntaxException {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        if (!axis.equals("x") && !axis.equals("z")) {
+            c.getSource().sendFailure(Component.literal("Axis must be x or z"));
+            return 0;
+        }
+        ServerLevel level = c.getSource().getLevel();
+        Vec3 p = c.getSource().getPosition();
+        int x = (int) Math.floor(p.x), z = (int) Math.floor(p.z);
+        File file = new File(level.getServer().getServerDirectory(), "remix_slices/slice_" + axis + "_" + x + "_" + z + ".png");
+        try {
+            BlockImages.write(BlockImages.slice(level, axis, x, z, half, t.shape.floorY, Math.min(level.getMaxBuildHeight() - 1, 128)), file, 1);
+        } catch (IOException e) {
+            c.getSource().sendFailure(Component.literal("Could not write " + file + ": " + e.getMessage()));
+            return 0;
+        }
+        c.getSource().sendSuccess(() -> Component.literal("Wrote " + file.getPath()).withStyle(ChatFormatting.GRAY), false);
         return 1;
     }
 }

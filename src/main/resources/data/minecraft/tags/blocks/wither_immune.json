@@ -1,7 +1,6 @@
 {
   "replace": false,
   "values": [
-    "explorationremix:band_stone",
-    "explorationremix:rune_block"
+    "explorationremix:band_stone"
   ]
 }

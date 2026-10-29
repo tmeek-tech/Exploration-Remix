@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "half=lower": [
+      {
+        "model": "explorationremix:block/lilac_plume_bottom"
+      },
+      {
+        "model": "explorationremix:block/lilac_plume_bottom_2"
+      }
+    ],
+    "half=upper": [
+      {
+        "model": "explorationremix:block/lilac_plume_top"
+      },
+      {
+        "model": "explorationremix:block/lilac_plume_top_2"
+      }
+    ]
+  }
+}

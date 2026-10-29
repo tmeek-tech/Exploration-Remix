@@ -1,0 +1,15 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/lilac_waterweed"
+      },
+      {
+        "model": "explorationremix:block/lilac_waterweed_2"
+      },
+      {
+        "model": "explorationremix:block/lilac_waterweed_3"
+      }
+    ]
+  }
+}

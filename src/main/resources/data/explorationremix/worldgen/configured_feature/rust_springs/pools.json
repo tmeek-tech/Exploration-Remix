@@ -1,0 +1,56 @@
+{
+  "type": "explorationremix:terrace_pools",
+  "config": {
+    "rim": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:calcite"
+            }
+          },
+          "weight": 3
+        },
+        {
+          "data": {
+            "type": "explorationremix:fallback",
+            "blocks": [
+              "create:limestone",
+              "minecraft:calcite"
+            ]
+          },
+          "weight": 2
+        }
+      ]
+    },
+    "bed": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "explorationremix:fallback",
+            "blocks": [
+              "create:limestone",
+              "minecraft:calcite"
+            ]
+          },
+          "weight": 5
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:calcite"
+            }
+          },
+          "weight": 3
+        }
+      ]
+    },
+    "radius": 11,
+    "edge_chance": 0.3,
+    "overflow_chance": 0.12
+  }
+}

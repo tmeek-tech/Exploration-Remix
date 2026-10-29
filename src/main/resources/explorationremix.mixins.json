@@ -9,6 +9,7 @@
     "accessor.NoiseGeneratorSettingsAccessor",
     "accessor.NoiseBasedChunkGeneratorAccessor",
     "accessor.SurfaceContextAccessor",
+    "accessor.MultiNoiseBiomeSourceAccessor",
     "MinecraftServerMixin",
     "NoiseBasedChunkGeneratorMixin",
     "BiomeSourceMixin",
@@ -16,12 +17,11 @@
     "StructurePiecesBuilderMixin",
     "StructureMixin",
     "AboveBottomAnchorMixin",
-    "EnchantmentHelperMixin",
-    "AnvilMenuMixin",
-    "ElytraItemMixin",
-    "AbstractVillagerMixin"
+    "SpringFeatureMixin"
   ],
-  "client": [],
+  "client": [
+    "client.LightTextureMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

@@ -1,0 +1,54 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/wisteria_petals",
+        "y": 0
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals_2",
+        "y": 0
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals_2",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals_3",
+        "y": 0
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals_3",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals_3",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/wisteria_petals_3",
+        "y": 270
+      }
+    ]
+  }
+}

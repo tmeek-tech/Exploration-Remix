@@ -1,0 +1,18 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/ochre_grass",
+        "weight": 3
+      },
+      {
+        "model": "explorationremix:block/ochre_grass_2",
+        "weight": 2
+      },
+      {
+        "model": "explorationremix:block/ochre_grass_3",
+        "weight": 2
+      }
+    ]
+  }
+}

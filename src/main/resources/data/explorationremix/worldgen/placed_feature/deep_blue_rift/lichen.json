@@ -1,0 +1,21 @@
+{
+  "feature": "explorationremix:deep_blue_rift/lichen",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 128
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "blue_reaches",
+      "inset": 2,
+      "above_water": true
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

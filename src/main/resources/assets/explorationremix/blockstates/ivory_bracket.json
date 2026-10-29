@@ -1,0 +1,42 @@
+{
+  "variants": {
+    "facing=north": [
+      {
+        "model": "explorationremix:block/ivory_bracket"
+      },
+      {
+        "model": "explorationremix:block/ivory_bracket_2"
+      }
+    ],
+    "facing=east": [
+      {
+        "model": "explorationremix:block/ivory_bracket",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/ivory_bracket_2",
+        "y": 90
+      }
+    ],
+    "facing=south": [
+      {
+        "model": "explorationremix:block/ivory_bracket",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/ivory_bracket_2",
+        "y": 180
+      }
+    ],
+    "facing=west": [
+      {
+        "model": "explorationremix:block/ivory_bracket",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/ivory_bracket_2",
+        "y": 270
+      }
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "replace": false,
+  "values": [
+    "explorationremix:wisteria",
+    "explorationremix:wisteria_plant",
+    "explorationremix:blue_glow_vines",
+    "explorationremix:blue_glow_vines_plant",
+    "explorationremix:ember_vines",
+    "explorationremix:ember_vines_plant",
+    "explorationremix:amber_bulb_vine",
+    "explorationremix:amber_bulb_vine_plant",
+    "explorationremix:weeping_ivy",
+    "explorationremix:weeping_ivy_plant",
+    "explorationremix:silver_frond",
+    "explorationremix:silver_frond_plant",
+    "explorationremix:gold_threads",
+    "explorationremix:gold_threads_plant",
+    "explorationremix:dusk_vines",
+    "explorationremix:dusk_vines_plant",
+    "explorationremix:grotto_ivy",
+    "explorationremix:pale_wisteria",
+    "explorationremix:pale_wisteria_plant",
+    "explorationremix:rose_tendrils",
+    "explorationremix:rose_tendrils_plant"
+  ]
+}

@@ -1,10 +1,12 @@
 {
   "variants": {
-    "waterlogged=false": {
-      "model": "explorationremix:block/lantern_fungus"
-    },
-    "waterlogged=true": {
-      "model": "explorationremix:block/lantern_fungus"
-    }
+    "": [
+      {
+        "model": "explorationremix:block/lantern_fungus"
+      },
+      {
+        "model": "explorationremix:block/lantern_fungus_2"
+      }
+    ]
   }
 }

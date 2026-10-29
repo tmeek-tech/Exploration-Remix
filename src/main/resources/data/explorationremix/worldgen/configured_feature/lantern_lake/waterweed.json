@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:lilac_waterweed"
+      }
+    },
+    "faces": "floor",
+    "tries": 96,
+    "radius": 7,
+    "height": 2,
+    "on": "#explorationremix:lake_bed",
+    "in_water": true
+  }
+}

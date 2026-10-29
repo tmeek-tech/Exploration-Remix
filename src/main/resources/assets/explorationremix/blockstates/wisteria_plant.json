@@ -1,0 +1,15 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/wisteria_plant"
+      },
+      {
+        "model": "explorationremix:block/wisteria_plant_2"
+      },
+      {
+        "model": "explorationremix:block/wisteria_plant_3"
+      }
+    ]
+  }
+}

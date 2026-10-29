@@ -10,15 +10,16 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-/** Routes biome placement below the pack's floor through the layer plan. */
+/** Routes biome placement below the pack's floor through the deep terrain, and swaps in the Rootvaults above it. */
 @Mixin(NoiseBasedChunkGenerator.class)
 public abstract class NoiseBasedChunkGeneratorMixin {
     @Redirect(method = "doCreateBiomes",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/chunk/ChunkAccess;fillBiomesFromNoise(Lnet/minecraft/world/level/biome/BiomeResolver;Lnet/minecraft/world/level/biome/Climate$Sampler;)V"))
     private void er$fillBiomes(ChunkAccess chunk, BiomeResolver resolver, Climate.Sampler sampler) {
         NoiseBasedChunkGenerator self = (NoiseBasedChunkGenerator) (Object) this;
-        if (DeepWorld.installed() && DeepWorld.isDeepGenerator(self)) {
-            chunk.fillBiomesFromNoise(new DeepBiomeResolver(resolver), sampler);
+        com.explorationremix.world.terrain.Terrain terrain = DeepWorld.terrain();
+        if (terrain != null && DeepWorld.installed() && DeepWorld.isDeepGenerator(self)) {
+            chunk.fillBiomesFromNoise(new DeepBiomeResolver(resolver, terrain), sampler);
         } else {
             chunk.fillBiomesFromNoise(resolver, sampler);
         }

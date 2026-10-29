@@ -1,0 +1,53 @@
+{
+  "type": "minecraft:disk",
+  "config": {
+    "state_provider": {
+      "fallback": {
+        "type": "explorationremix:mix",
+        "entries": [
+          {
+            "data": {
+              "type": "minecraft:simple_state_provider",
+              "state": {
+                "Name": "minecraft:calcite"
+              }
+            },
+            "weight": 3
+          },
+          {
+            "data": {
+              "type": "explorationremix:fallback",
+              "blocks": [
+                "create:limestone",
+                "minecraft:calcite"
+              ]
+            },
+            "weight": 2
+          }
+        ]
+      },
+      "rules": []
+    },
+    "target": {
+      "type": "minecraft:matching_blocks",
+      "blocks": [
+        "minecraft:deepslate",
+        "minecraft:cobbled_deepslate",
+        "minecraft:stone",
+        "minecraft:tuff",
+        "minecraft:gravel",
+        "minecraft:andesite",
+        "minecraft:diorite",
+        "minecraft:granite"
+      ]
+    },
+    "radius": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 3,
+        "max_inclusive": 6
+      }
+    },
+    "half_height": 2
+  }
+}

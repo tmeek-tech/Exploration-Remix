@@ -1,0 +1,62 @@
+{
+  "type": "explorationremix:terrace_pools",
+  "config": {
+    "rim": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "explorationremix:fallback",
+            "blocks": [
+              "create:limestone",
+              "minecraft:calcite"
+            ]
+          },
+          "weight": 3
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:moss_block"
+            }
+          },
+          "weight": 1
+        }
+      ]
+    },
+    "bed": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:clay"
+            }
+          },
+          "weight": 2
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:gravel"
+            }
+          },
+          "weight": 1
+        }
+      ]
+    },
+    "radius": 6,
+    "edge_chance": 0.3,
+    "overflow_chance": 0.0,
+    "inner": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:pool_pearls"
+      }
+    },
+    "inner_chance": 0.3
+  }
+}

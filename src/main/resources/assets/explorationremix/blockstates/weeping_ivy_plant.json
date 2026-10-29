@@ -1,0 +1,15 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/weeping_ivy_plant"
+      },
+      {
+        "model": "explorationremix:block/weeping_ivy_plant_2"
+      },
+      {
+        "model": "explorationremix:block/weeping_ivy_plant_3"
+      }
+    ]
+  }
+}

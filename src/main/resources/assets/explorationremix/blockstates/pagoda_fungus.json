@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "half=lower": [
+      {
+        "model": "explorationremix:block/pagoda_fungus_bottom"
+      },
+      {
+        "model": "explorationremix:block/pagoda_fungus_bottom_2"
+      }
+    ],
+    "half=upper": [
+      {
+        "model": "explorationremix:block/pagoda_fungus_top"
+      },
+      {
+        "model": "explorationremix:block/pagoda_fungus_top_2"
+      }
+    ]
+  }
+}

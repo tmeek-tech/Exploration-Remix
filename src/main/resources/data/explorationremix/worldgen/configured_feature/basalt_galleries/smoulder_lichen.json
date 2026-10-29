@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:smoulder_lichen"
+      }
+    },
+    "faces": "walls_ceiling",
+    "tries": 32,
+    "radius": 6,
+    "height": 8,
+    "on": "#explorationremix:basalt_rock",
+    "in_water": false
+  }
+}

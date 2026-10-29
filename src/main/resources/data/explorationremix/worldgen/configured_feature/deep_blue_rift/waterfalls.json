@@ -1,0 +1,21 @@
+{
+  "type": "explorationremix:fluid_fall",
+  "config": {
+    "fluid": {
+      "Name": "minecraft:water",
+      "Properties": {
+        "level": "0"
+      }
+    },
+    "rock": "#explorationremix:cave_rock",
+    "min_drop": 16,
+    "search": 10,
+    "width": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 1,
+        "max_inclusive": 3
+      }
+    }
+  }
+}

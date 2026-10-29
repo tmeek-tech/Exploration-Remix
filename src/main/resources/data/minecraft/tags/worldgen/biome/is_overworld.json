@@ -1,6 +1,8 @@
 {
   "replace": false,
   "values": [
-    "explorationremix:rootvaults"
+    "explorationremix:rootvaults",
+    "explorationremix:silver_fern_rift",
+    "explorationremix:ivory_root_cavern"
   ]
 }

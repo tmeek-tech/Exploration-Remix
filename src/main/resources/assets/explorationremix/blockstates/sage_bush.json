@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/sage_bush"
+      },
+      {
+        "model": "explorationremix:block/sage_bush_2"
+      }
+    ]
+  }
+}

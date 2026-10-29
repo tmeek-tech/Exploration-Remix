@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/pale_coral"
+      },
+      {
+        "model": "explorationremix:block/pale_coral_2"
+      }
+    ]
+  }
+}

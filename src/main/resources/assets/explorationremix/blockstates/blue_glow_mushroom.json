@@ -1,0 +1,15 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/blue_glow_mushroom"
+      },
+      {
+        "model": "explorationremix:block/blue_glow_mushroom_2"
+      },
+      {
+        "model": "explorationremix:block/blue_glow_mushroom_3"
+      }
+    ]
+  }
+}

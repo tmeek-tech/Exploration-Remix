@@ -1,0 +1,22 @@
+{
+  "feature": "explorationremix:ivory_root_cavern/brackets",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 3
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "upper",
+      "inset": 2,
+      "above_water": false,
+      "focus": "pieces"
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

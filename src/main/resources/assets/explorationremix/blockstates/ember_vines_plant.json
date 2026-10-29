@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/ember_vines_plant"
+      },
+      {
+        "model": "explorationremix:block/ember_vines_plant_2"
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "type": "explorationremix:fluid_fall",
+  "config": {
+    "fluid": {
+      "Name": "minecraft:lava",
+      "Properties": {
+        "level": "0"
+      }
+    },
+    "rock": "#explorationremix:basalt_rock",
+    "min_drop": 6,
+    "search": 10,
+    "width": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 1,
+        "max_inclusive": 2
+      }
+    }
+  }
+}

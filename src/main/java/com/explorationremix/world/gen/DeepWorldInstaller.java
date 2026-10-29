@@ -1,21 +1,28 @@
 package com.explorationremix.world.gen;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.config.ERConfig;
 import com.explorationremix.mixin.accessor.DimensionTypeAccessor;
 import com.explorationremix.mixin.accessor.NoiseBasedChunkGeneratorAccessor;
 import com.explorationremix.mixin.accessor.NoiseGeneratorSettingsAccessor;
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.Layer;
 import com.explorationremix.world.density.DeepDensityFunction;
-import com.explorationremix.world.density.GateOneCarve;
+import com.explorationremix.world.density.DeepFineDensity;
+import com.explorationremix.world.density.UpperCarve;
+import com.explorationremix.world.density.UpperFine;
+import com.explorationremix.world.density.UpperSeal;
 import com.explorationremix.world.density.InterpolationGater;
-import com.explorationremix.world.density.MarkerStripper;
+import com.explorationremix.world.terrain.Rootvaults;
+import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.Holder;
+import net.minecraft.world.level.biome.BiomeSource;
+import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.DensityFunction;
@@ -29,9 +36,7 @@ import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Set;
 import java.util.WeakHashMap;
 
@@ -48,8 +53,7 @@ public final class DeepWorldInstaller {
 
     @SubscribeEvent
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
-        DeepWorld.clearMarks();
-        DeepWorld.setInstalled(false);
+        DeepWorld.clear();
     }
 
     /** Called by {@code MinecraftServerMixin} at the head of {@code loadLevel()}, before any level or chunk map exists. */
@@ -70,7 +74,7 @@ public final class DeepWorldInstaller {
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
         if (!DeepWorld.installed()) return;
-        net.minecraft.server.level.ServerLevel overworld = event.getServer().getLevel(net.minecraft.world.level.Level.OVERWORLD);
+        ServerLevel overworld = event.getServer().getLevel(Level.OVERWORLD);
         if (overworld == null) return;
         int minY = overworld.getMinBuildHeight();
         int noiseMin = Integer.MIN_VALUE;
@@ -87,8 +91,8 @@ public final class DeepWorldInstaller {
 
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
-        DeepWorld.setInstalled(false);
-        DeepWorld.clearMarks();
+        DeepWorld.clear();
+        DeepBiomes.clear();
     }
 
     private static void install(MinecraftServer server) {
@@ -108,9 +112,6 @@ public final class DeepWorldInstaller {
         DimensionType dimension = stem.type().value();
         if (PATCHED.contains(settings) || PATCHED.contains(dimension)) {
             ExplorationRemix.LOGGER.warn("Overworld settings were already deepened in this JVM; skipping a second install");
-            DeepWorld.setInstalled(true);
-            DeepWorld.markDeepGenerator(generator);
-            DeepWorld.markDeepBiomeSource(generator.getBiomeSource());
             return;
         }
         NoiseSettings noise = settings.noiseSettings();
@@ -120,34 +121,33 @@ public final class DeepWorldInstaller {
             currentMin = Math.max(currentMin, noise.minY());
         }
         if (!settings.aquifersEnabled()) {
-            ExplorationRemix.LOGGER.warn("Aquifers are disabled in the overworld noise settings; deep layers will use vanilla's fluid picker");
+            ExplorationRemix.LOGGER.error("Aquifers are disabled in the overworld noise settings; the deep layers need them for their water, lava and stone");
         }
 
-        DeepWorld.rebuild(currentMin);
         long seed = server.getWorldData().worldGenOptions().seed();
-        DeepWorld.setSeed(seed);
-        DeepSurfaceRules.setSeed(seed);
-        int floorY = DeepWorld.floorY();
+        Terrain terrain = DeepWorld.build(currentMin, seed);
+        // What is over each column: the pack's ground and surface biome, from its own noise before we change it. The
+        // upper set pieces are never carved under an ocean, river or beach, and the Rootvaults only under trees.
+        BiomeSource biomeSource = generator.getBiomeSource();
+        RandomState packState = RandomState.create(settings, access.lookupOrThrow(Registries.NOISE), seed);
+        SurfaceOracle oracle = new SurfaceOracle(packState, biomeSource, settings.seaLevel(), currentMin, currentMin + dimension.height());
+        terrain.surfaceProbe = oracle;
+        boolean rootvaultsOn = ERConfig.INSTANCE.replaceVanillaCaveBiomes.get();
+        DeepWorld.setRoots(rootvaultsOn ? new Rootvaults(seed, currentMin, oracle) : null, oracle);
+        if (rootvaultsOn) DeepBiomes.keepWithoutDeepDark(biomeSource);
+        DeepMaterials.resolve();
+        int floorY = terrain.shape.floorY;
+        int packFloor = terrain.shape.packFloor;
         int extra = currentMin - floorY;
-
-        // Per-layer cave noise from the datapack.
-        Registry<DensityFunction> functions = access.registryOrThrow(Registries.DENSITY_FUNCTION);
-        List<DensityFunction> caves = new ArrayList<>();
-        for (Layer layer : DeepWorld.layers()) {
-            DensityFunction f = functions.get(ResourceKey.create(Registries.DENSITY_FUNCTION, layer.caveFunction()));
-            if (f == null) {
-                ExplorationRemix.LOGGER.error("Cave density function {} for layer {} is missing; the layer will be solid apart from its planned caves", layer.caveFunction(), layer.id());
-                f = DensityFunctions.constant(1.0);
-            }
-            caves.add(f.mapAll(MarkerStripper.INSTANCE));
-        }
+        if ((extra & 15) != 0) throw new IllegalStateException("Deep world height " + extra + " is not a multiple of 16");
 
         // Density: the pack's terrain above its old floor (with its interpolators gated), the deep world below.
         NoiseRouter router = settings.noiseRouter();
-        int packFloor = DeepWorld.packFloor();
         DensityFunction original = router.finalDensity().mapAll(new InterpolationGater(packFloor - 8));
-        DensityFunction upper = DensityFunctions.min(original, DensityFunctions.interpolated(new GateOneCarve()));
-        DensityFunction deep = DensityFunctions.interpolated(new DeepDensityFunction(caves));
+        // The Rootvaults' water sits in rock the pack's caves may not open (max), then the carve opens our caves (min).
+        DensityFunction upper = DensityFunctions.min(DensityFunctions.max(original, UpperSeal.INSTANCE),
+                new UpperFine(DensityFunctions.interpolated(UpperCarve.INSTANCE)));
+        DensityFunction deep = new DeepFineDensity(DensityFunctions.interpolated(DeepDensityFunction.INSTANCE));
         DensityFunction selector = DensityFunctions.yClampedGradient(packFloor - 1, packFloor, 0.0, 1.0);
         DensityFunction composed = DensityFunctions.rangeChoice(selector, 0.5, 2.0, upper, deep);
         NoiseRouter deepened = new NoiseRouter(router.barrierNoise(), router.fluidLevelFloodednessNoise(), router.fluidLevelSpreadNoise(),
