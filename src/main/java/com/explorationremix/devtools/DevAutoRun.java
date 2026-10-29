@@ -73,7 +73,8 @@ public final class DevAutoRun {
         ServerLevel level = server.overworld();
         try (PrintWriter out = new PrintWriter(new FileWriter(new File(dir, "report.txt")))) {
             out.println("installed=" + DeepWorld.installed() + " packFloor=" + DeepWorld.packFloor() + " floorY=" + DeepWorld.floorY()
-                    + " minBuild=" + level.getMinBuildHeight() + " height=" + level.getHeight());
+                    + " minBuild=" + level.getMinBuildHeight() + " height=" + level.getHeight()
+                    + (level.getMinBuildHeight() != DeepWorld.floorY() ? "  HEIGHT MISMATCH: the world's floor is not the deep floor" : ""));
             for (Layer l : DeepWorld.layers()) out.println("layer " + l.id() + " y " + l.bottom() + ".." + l.top());
             if (!DeepWorld.installed()) return;
             BlockPos spawn = level.getSharedSpawnPos();
@@ -115,7 +116,7 @@ public final class DevAutoRun {
                 ChunkPos cp = new ChunkPos(tp);
                 level.getChunk(cp.x, cp.z, ChunkStatus.FULL, true);
                 BlockState st = level.getBlockState(tp);
-                boolean isOpen = st.isAir() || !st.getFluidState().isEmpty();
+                boolean isOpen = !level.isOutsideBuildHeight(tp) && (st.isAir() || !st.getFluidState().isEmpty());
                 if (isOpen) open++;
                 total++;
                 tube.append(isOpen ? '.' : '#');
