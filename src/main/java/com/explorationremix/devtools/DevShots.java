@@ -33,6 +33,10 @@ public final class DevShots {
     /** How many chunks around the camera must be loaded before the picture (ER_SHOTS_RADIUS): 6, or more to be sure the
      * whole view is there, up to the render distance. */
     private static final int RADIUS = envInt("ER_SHOTS_RADIUS", 6);
+    /** How many frames in a row the count of drawn sections must stand still before the picture (ER_SHOTS_FRAMES). */
+    private static final int STILL_FRAMES = Math.max(1, envInt("ER_SHOTS_FRAMES", 20));
+    /** After this many ticks at a view the picture is taken anyway, and the log and the shot list say it never settled. */
+    private static final int GIVE_UP = Math.max(12000, SETTLE + 600);
 
     private static int envInt(String name, int fallback) {
         try {
@@ -47,12 +51,18 @@ public final class DevShots {
 
     private static Phase phase = Phase.WAIT_WORLD;
     private static List<String[]> shots;
-    private static int index = -1, ticks, stable, lastChunks;
+    private static int index = -1, ticks, quiet, still, lastChunks, lastSections, frameCount, lastFrame, settleFrame;
+    private static boolean gaveUp;
     private static volatile boolean viewDone;
     private static double startX, startY, startZ;
     private static final List<String> log = new ArrayList<>();
 
     private DevShots() {}
+
+    @SubscribeEvent
+    public static void frame(TickEvent.RenderTickEvent e) {
+        if (LIST != null && e.phase == TickEvent.Phase.END) frameCount++;
+    }
 
     @SubscribeEvent
     public static void tick(TickEvent.ClientTickEvent e) {
@@ -133,24 +143,41 @@ public final class DevShots {
                 } else if (!viewDone) return;
                 phase = Phase.SETTLING;
                 ticks = 0;
-                stable = 0;
+                quiet = 0;
+                still = 0;
                 lastChunks = -1;
+                lastSections = -1;
+                lastFrame = frameCount;
+                settleFrame = frameCount;
             }
             case SETTLING -> {
-                // Let the chunks arrive and every section around the camera get built before the picture. On a busy
-                // server the chunk count can stand still for seconds while chunks are still being generated, so every
-                // chunk within RADIUS of the camera must be there too.
+                // Let the chunks arrive, get lit and every section in view get built before the picture. On a busy server
+                // the chunk count can stand still for seconds while chunks are still being generated, so every chunk
+                // within RADIUS of the camera must be there too, for more than 80 ticks. And an empty build queue says
+                // little: the renderer builds the sections in view a few at a time and finds the ones behind a section
+                // only once that one is built, so the count of drawn sections must also stand still for STILL_FRAMES
+                // frames. On a software renderer that takes minutes, and a shader shows its sky through every section
+                // not drawn yet.
                 int chunks = mc.level.getChunkSource().getLoadedChunksCount();
                 int view = mc.options.getEffectiveRenderDistance();
                 boolean all = missing(mc, Math.min(RADIUS, view)) == 0;
-                boolean quiet = all && mc.levelRenderer.hasRenderedAllChunks() && chunks == lastChunks;
+                boolean calm = all && mc.level.isLightUpdateQueueEmpty() && mc.levelRenderer.hasRenderedAllChunks() && chunks == lastChunks;
                 lastChunks = chunks;
-                stable = quiet ? stable + 1 : 0;
-                if ((ticks > SETTLE && stable > 80) || ticks > Math.max(6000, SETTLE + 600)) {
+                quiet = calm ? quiet + 1 : 0;
+                if (frameCount != lastFrame) {
+                    lastFrame = frameCount;
+                    int sections = mc.levelRenderer.countRenderedChunks();
+                    still = calm && sections == lastSections ? still + 1 : 0;
+                    lastSections = sections;
+                }
+                boolean settled = ticks > SETTLE && quiet > 80 && still >= STILL_FRAMES;
+                if (settled || ticks > GIVE_UP) {
+                    gaveUp = !settled;
                     net.minecraft.core.BlockPos eye = net.minecraft.core.BlockPos.containing(mc.player.getEyePosition());
-                    ExplorationRemix.LOGGER.info("[shots] settled after {} ticks: chunks within {} {}, missing within the render distance {}: {}, "
-                                    + "all sections built {}, light at the eye sky {} block {}",
-                            ticks, Math.min(RADIUS, view), all, view, missing(mc, view), mc.levelRenderer.hasRenderedAllChunks(),
+                    ExplorationRemix.LOGGER.info("[shots] {} after {} ticks and {} frames, {} still: chunks within {} {}, missing within the "
+                                    + "render distance {}: {}, sections drawn {}, build queue empty {}, light at the eye sky {} block {}",
+                            settled ? "settled" : "gave up waiting", ticks, frameCount - settleFrame, still, Math.min(RADIUS, view), all,
+                            view, missing(mc, view), lastSections, mc.levelRenderer.hasRenderedAllChunks(),
                             mc.level.getBrightness(net.minecraft.world.level.LightLayer.SKY, eye),
                             mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, eye));
                     phase = Phase.SHOOT;
@@ -160,8 +187,8 @@ public final class DevShots {
             case SHOOT -> {
                 String name = shots.get(index)[0] + ".png";
                 Screenshot.grab(mc.gameDirectory, name, mc.getMainRenderTarget(), msg -> {});
-                String where = String.format(java.util.Locale.ROOT, "%s %.1f %.1f %.1f yaw %.0f pitch %.0f", name, mc.player.getX(), mc.player.getY(),
-                        mc.player.getZ(), mc.player.getYRot(), mc.player.getXRot());
+                String where = String.format(java.util.Locale.ROOT, "%s %.1f %.1f %.1f yaw %.0f pitch %.0f%s", name, mc.player.getX(), mc.player.getY(),
+                        mc.player.getZ(), mc.player.getYRot(), mc.player.getXRot(), gaveUp ? " (never settled)" : "");
                 log.add(where);
                 ExplorationRemix.LOGGER.info("[shots] took {}", where);
                 phase = Phase.NEXT;
