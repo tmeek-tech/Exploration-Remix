@@ -126,6 +126,19 @@ def layer(name, inset=2, above_water=False): return {"type": f"{MOD}:layer_range
 def looks(*l): return {"type": f"{MOD}:rootvaults_look", "looks": list(l)}
 
 
+# The cave network (0.3) gives each floor and ceiling block of the Deep Gardens and the Basalt Galleries fewer of a
+# feature's tries than 0.2.0's caverns, where the plants' counts were calibrated (vegetation.md, S7): a try starts at a
+# random height in the layer and scans at most 32 blocks to a floor or a ceiling, so a floor block catches the tries
+# started in the air over it, up to 32 blocks of it, and the network's rooms and tunnels are 5 to 20 tall where 0.2.0's
+# caverns were 30 to 180. Measured on five cells of each layer (network-final.md, Implemented), a floor or ceiling block
+# catches 0.35 to 0.43 times as many tries in the Deep Gardens and 0.24 to 0.25 times in the Basalt Galleries. Their
+# plant features that scan for their spot are scaled back by these factors until the census tunes them; the Blue
+# Reaches (0.2.0's rift and deep dark), the lake beds, the wall growth and the rock features keep their counts.
+GARDENS_PLANTS = 2.5
+BASALT_PLANTS = 4.0
+def scaled(n, factor): return count(int(round(n * factor)))
+
+
 def ceiling(offset=-1, steps=32, through=AIR):
     """From a random point, up to the ceiling above it (the ceiling block itself with offset 0)."""
     out = [{"type": "minecraft:environment_scan", "direction_of_search": "up",
@@ -482,24 +495,24 @@ def build_features():
             [count(10), SQUARE, layer(up)] + floor() + [BIOME])
     feature("lantern_lake/wisteria", "vegetal_decoration", ["lantern_lake"],
             hanging_patch(hanging_column("explorationremix:wisteria_plant", LILAC_TIPS, 1, 6), tries=10, xz=5, y=2),
-            [count(64), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
+            [scaled(64, GARDENS_PLANTS), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
     feature("lantern_lake/wisteria_pods", "vegetal_decoration", ["lantern_lake"],
             hanging_column("explorationremix:wisteria_plant", "explorationremix:lantern_pod", 1, 4),
-            [count(20), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
+            [scaled(20, GARDENS_PLANTS), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
     feature("lantern_lake/lantern_pods", "vegetal_decoration", ["lantern_lake"],
             patch(simple("explorationremix:lantern_pod"), state("explorationremix:lantern_pod"), tries=20, xz=5, y=6),
-            [count(10), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
+            [scaled(10, GARDENS_PLANTS), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
     feature("lantern_lake/flowers", "vegetal_decoration", ["lantern_lake"],
             patch(mix((simple("explorationremix:lavender_flower"), 3), (simple("explorationremix:gold_flower"), 2)),
                   state("explorationremix:lavender_flower"), tries=56, xz=6, y=3, on=f"#{MOD}:garden_soil"),
-            [count(48), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
+            [scaled(48, GARDENS_PLANTS), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
     feature("ember_gardens/ember_vines", "vegetal_decoration", ["ember_gardens"],
             hanging_patch(hanging_column("explorationremix:ember_vines_plant", "explorationremix:ember_vines", 1, 10), tries=10, xz=5, y=2),
-            [count(56), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
+            [scaled(56, GARDENS_PLANTS), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
     feature("ember_gardens/coral", "vegetal_decoration", ["ember_gardens"],
             patch(mix((simple("explorationremix:lavender_coral"), 2), (simple(f"{MOD}:pale_coral"), 2), (simple("explorationremix:pale_coral_fan"), 2)),
                   state("explorationremix:lavender_coral"), tries=32, xz=5, y=2, on=f"#{MOD}:garden_soil"),
-            [count(56), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
+            [scaled(56, GARDENS_PLANTS), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
     # The rift's strands hang in groups, with dark gaps between them (deep_blue_rift.jpg).
     feature("deep_blue_rift/glow_vines", "vegetal_decoration", ["deep_blue_rift"],
             hanging_patch(hanging_column("explorationremix:blue_glow_vines_plant", "explorationremix:blue_glow_vines", 2, 10), tries=6, xz=3, y=2),
@@ -567,17 +580,17 @@ def build_features():
     soil = f"#{MOD}:garden_soil"
     feature("lantern_lake/pale_wisteria", "vegetal_decoration", ["lantern_lake"],
             hanging_patch(hanging_column(f"{MOD}:pale_wisteria_plant", CREAM_TIPS, 1, 6), tries=10, xz=5, y=2),
-            [count(48), SQUARE] + gardens_ceiling)
+            [scaled(48, GARDENS_PLANTS), SQUARE] + gardens_ceiling)
     feature("lantern_lake/plumes", "vegetal_decoration", ["lantern_lake"],
             patch(simple(f"{MOD}:lilac_plume"), state(f"{MOD}:lilac_plume"), tries=12, xz=4, y=2, on=soil),
-            [count(12), SQUARE] + gardens_floor)
+            [scaled(12, GARDENS_PLANTS), SQUARE] + gardens_floor)
     feature("lantern_lake/coral", "vegetal_decoration", ["lantern_lake"],
             patch(mix((simple(f"{MOD}:pale_coral"), 2), (simple(f"{MOD}:lavender_coral"), 2)), state(f"{MOD}:pale_coral"), tries=20, xz=4, y=2,
                   on=soil),
-            [count(32), SQUARE] + gardens_floor)
+            [scaled(32, GARDENS_PLANTS), SQUARE] + gardens_floor)
     feature("lantern_lake/petals", "vegetal_decoration", ["lantern_lake"],
             patch(simple(f"{MOD}:wisteria_petals"), state(f"{MOD}:wisteria_petals"), tries=32, xz=5, y=2, on=soil),
-            [count(32), SQUARE] + gardens_floor)
+            [scaled(32, GARDENS_PLANTS), SQUARE] + gardens_floor)
     feature("lantern_lake/waterweed", "vegetal_decoration", ["lantern_lake"],
             attach(simple(f"{MOD}:lilac_waterweed"), "floor", 96, f"#{MOD}:lake_bed", radius=7, height=2, in_water=True),
             [count(40), SQUARE] + lake_bed)
@@ -591,25 +604,25 @@ def build_features():
             [count(48), SQUARE, layer("deep_gardens")] + floor(through=AIR_OR_WATER) + [SHALLOW, BIOME])
     feature("ember_gardens/rose_tendrils", "vegetal_decoration", ["ember_gardens"],
             hanging_patch(hanging_column(f"{MOD}:rose_tendrils_plant", f"{MOD}:rose_tendrils", 2, 10), tries=10, xz=5, y=2),
-            [count(40), SQUARE] + gardens_ceiling)
+            [scaled(40, GARDENS_PLANTS), SQUARE] + gardens_ceiling)
     feature("ember_gardens/plumes", "vegetal_decoration", ["ember_gardens"],
             patch(simple(f"{MOD}:lilac_plume"), state(f"{MOD}:lilac_plume"), tries=16, xz=5, y=3, on=soil),
-            [count(32), SQUARE] + gardens_floor)
+            [scaled(32, GARDENS_PLANTS), SQUARE] + gardens_floor)
     feature("ember_gardens/ochre_grass", "vegetal_decoration", ["ember_gardens"],
             patch(simple(f"{MOD}:ochre_grass"), state(f"{MOD}:ochre_grass"), tries=40, xz=6, y=3, on=soil),
-            [count(64), SQUARE] + gardens_floor)
+            [scaled(64, GARDENS_PLANTS), SQUARE] + gardens_floor)
     feature("ember_gardens/brown_mushrooms", "vegetal_decoration", ["ember_gardens"],
             patch(simple("minecraft:brown_mushroom"), state("minecraft:brown_mushroom"), tries=16, xz=5, y=2, on=soil),
-            [count(12), SQUARE] + gardens_floor)
+            [scaled(12, GARDENS_PLANTS), SQUARE] + gardens_floor)
     basalt_floor = [layer("basalt_galleries", above_water=True)] + floor() + [BIOME]
     feature("basalt_galleries/cinder_blooms", "vegetal_decoration", ["basalt_galleries"],
             patch(simple(f"{MOD}:cinder_bloom"), state(f"{MOD}:cinder_bloom"), tries=12, xz=5, y=2, on=f"#{MOD}:basalt_rock"),
-            [count(24), SQUARE] + basalt_floor)
+            [scaled(24, BASALT_PLANTS), SQUARE] + basalt_floor)
     # One ash-fern spot in four takes a cinder bloom (both need only a sturdy face below).
     feature("basalt_galleries/ash_ferns", "vegetal_decoration", ["basalt_galleries"],
             patch(mix((simple(f"{MOD}:ash_fern"), 3), (simple(f"{MOD}:cinder_bloom"), 1)), state(f"{MOD}:ash_fern"), tries=16, xz=6, y=3,
                   on=f"#{MOD}:basalt_rock"),
-            [count(28), SQUARE] + basalt_floor)
+            [scaled(28, BASALT_PLANTS), SQUARE] + basalt_floor)
 
     # ---- top layer: roots of the trees above, once the chunk's trees have grown; the way down is kept open after
     # everything else. The roots take the wood of the trees over them (match_trees): oak, birch, spruce, jungle, dark
