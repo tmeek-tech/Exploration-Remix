@@ -211,6 +211,79 @@ class NetworkTest {
     void basaltFloorsAboveTheSurge() { overPlans(NetworkTest::basaltFloors); }
 
     @Test
+    void climbsAreStaged() { overPlans(NetworkTest::stagedClimbs); }
+
+    @Test
+    void tubesAndArches() { overPlans(NetworkTest::tubesArches); }
+
+    /**
+     * Section 10: every climb is at most 4 stages of at most 12.5, consecutive axes 2 r + 3 to 2 r + 5 apart, each next
+     * stage's foot on the floor of the ledge passage from the one below, the ledge level at that stage's top, the
+     * upper tunnel at the last top, and every vine column inside its shaft's open core.
+     */
+    static void stagedClimbs(Terrain t, Net n, String tag, List<String> fails) {
+        for (Edge e : n.edges) {
+            if (e.kind != EK.CLIMB) continue;
+            String id = tag + ": climb " + n.ch.get(e.a).kind + "#" + e.a + " to " + n.ch.get(e.b).kind + "#" + e.b;
+            Shaft[] st = e.stages;
+            if (st.length < 1 || st.length > 4 || e.ledges.length != st.length - 1 || e.sh != st[0]) { fails.add(id + " has " + st.length + " stages and " + e.ledges.length + " ledges"); continue; }
+            for (int k = 0; k < st.length; k++) {
+                Shaft s = st[k];
+                if (s.top - s.foot > 12.5 + 1e-9) fails.add(id + ": stage " + (k + 1) + " is " + fmt(s.top - s.foot) + " tall");
+                if (s.stage != k + 1 || s.stages != st.length) fails.add(id + ": stage " + (k + 1) + " is numbered " + s.stage + " of " + s.stages);
+                if (!n.shafts.contains(s)) fails.add(id + ": stage " + (k + 1) + " is not in the plan");
+                int[] v = Network.vineColumn(s);
+                if (Math.hypot(v[0] - s.x, v[1] - s.z) >= s.r - 0.6) fails.add(id + ": stage " + (k + 1) + "'s vines are outside its open core");
+                if (k > 0) {
+                    Shaft p = st[k - 1];
+                    double d = Math.hypot(s.x - p.x, s.z - p.z);
+                    if (d < 2 * s.r + 3 - 1e-6 || d > 2 * s.r + 5 + 1e-6) fails.add(id + ": stages " + k + " and " + (k + 1) + " stand " + fmt(d) + " apart");
+                    if (Math.abs(s.foot - p.top) > 1e-9) fails.add(id + ": stage " + (k + 1) + " starts " + fmt(s.foot - p.top) + " off the top of the one below");
+                    Way lg = e.ledges[k - 1];
+                    if (!n.ways.contains(lg) || !lg.ledge) fails.add(id + ": ledge " + k + " is missing");
+                    for (int i = 0; i < lg.n; i++) if (Math.abs(lg.f[i] - p.top) > 1e-9) { fails.add(id + ": ledge " + k + " is not level at the top of stage " + k); break; }
+                }
+            }
+            if (Math.abs(e.w2.f[0] - st[st.length - 1].top) > 1e-9) fails.add(id + ": the upper tunnel starts " + fmt(e.w2.f[0] - st[st.length - 1].top) + " off the last stage's top");
+            if (Math.abs(e.w1.f[e.w1.n - 1] - st[0].foot) > 1e-9) fails.add(id + ": the lower tunnel ends " + fmt(e.w1.f[e.w1.n - 1] - st[0].foot) + " off the first stage's foot");
+        }
+    }
+
+    /**
+     * Section 5: every tube hub's tunnel is a round tube, with two or three blind round tubes beside it; arches only in
+     * the Basalt Galleries, in every great hall, over W + 38, their crown at least 8 over the floor under it.
+     */
+    static void tubesArches(Terrain t, Net n, String tag, List<String> fails) {
+        for (Chamber c : n.ch) {
+            if (!c.keep || c.kind != Kind.TUBEHUB) continue;
+            int tunnels = 0, round = 0, blind = 0;
+            for (Way wy : n.ways) {
+                if (wy.inner || (wy.a != c.id && wy.b != c.id)) continue;
+                if (wy.kind == EK.STUB) { if (wy.round && wy.taper) blind++; continue; }
+                tunnels++;
+                if (wy.round) round++;
+            }
+            if (tunnels != 1 || round != 1) fails.add(tag + ": tube hub #" + c.id + " has " + tunnels + " tunnels, " + round + " round");
+            if (blind < 2 || blind > 3) fails.add(tag + ": tube hub #" + c.id + " has " + blind + " blind tubes");
+        }
+        if (n.li != Terrain.BASALT && !n.arches.isEmpty()) fails.add(tag + ": " + n.arches.size() + " arches outside the Basalt Galleries");
+        double W = t.shape.waterY(n.li);
+        for (Net.Arch a : n.arches) {
+            Chamber c = n.ch.get(a.chamber);
+            if (c.kind != Kind.GREAT && c.kind != Kind.GALLERY) fails.add(tag + ": an arch in " + c.kind + "#" + c.id);
+            if (a.deck < W + 38 - 1e-9) fails.add(tag + ": the arch in " + c.kind + "#" + c.id + " is " + fmt(W + 38 - a.deck) + " under W + 38");
+            double f = t.network.floorAt(c, t.network.e(c, a.x, a.z), a.x, a.z);
+            if (a.deck < f + 8 - 1e-9) fails.add(tag + ": the arch in " + c.kind + "#" + c.id + " is " + fmt(a.deck - f) + " over the floor");
+        }
+        for (Chamber c : n.ch) {
+            if (!c.keep || c.kind != Kind.GREAT || n.li != Terrain.BASALT) continue;
+            boolean has = false;
+            for (Net.Arch a : n.arches) if (a.chamber == c.id) has = true;
+            if (!has) fails.add(tag + ": great hall #" + c.id + " has no arch");
+        }
+    }
+
+    @Test
     void portalsMatchAcrossEdges() {
         List<String> fails = new ArrayList<>();
         int checked = 0;
@@ -378,6 +451,12 @@ class NetworkTest {
                         x = wy.x[i] + (r.nextDouble() * 2 - 1) * (wy.w[i] + 6);
                         z = wy.z[i] + (r.nextDouble() * 2 - 1) * (wy.w[i] + 6);
                         y = wy.f[i] - wy.slab[i] - 5 + r.nextDouble() * (wy.slab[i] + wy.hgt[i] + 14);
+                    } else if (pick == 3 && !n.arches.isEmpty() && (k & 4) != 0) {
+                        Net.Arch a = n.arches.get(r.nextInt(n.arches.size()));
+                        double v = (r.nextDouble() * 2 - 1) * a.span, u = (r.nextDouble() * 2 - 1) * (a.halfAlong * 2.2 + 3);
+                        x = a.x + a.vx * v + a.ux * u;
+                        z = a.z + a.vz * v + a.uz * u;
+                        y = a.deck - 18 + r.nextDouble() * 22;
                     } else if (pick == 2 || n.shafts.isEmpty()) {
                         Chamber c = n.ch.get(r.nextInt(n.ch.size()));
                         x = c.x + (r.nextDouble() * 2 - 1) * (c.R() + 6);
@@ -453,16 +532,20 @@ class NetworkTest {
                         }
                     }
                 }
-                // round tubes: the rock over the middle of each round way's line
+                // round tubes: the rock over the middle of each round way's line, out of the rooms at its ends
                 for (Way wy : nb.ways) {
                     if (!wy.round) continue;
                     for (int i = 1; i + 1 < wy.n; i += 2) {
                         int x = (int) Math.floor(wy.x[i]), z = (int) Math.floor(wy.z[i]);
+                        boolean inRoom = false;
+                        for (Chamber c : nb.ch) if (c.keep && c.kind != Kind.TUBEHUB && t.network.e(c, x, z) < 1.05) inRoom = true;
+                        if (inRoom) continue;
                         for (int y = (int) Math.ceil(wy.f[i]); y < wy.f[i] + wy.w[i] * 2 + 6; y++) {
                             if (t.rawDensity(x, y, z) <= 0) continue;
                             tubeFaces++;
                             double g = t.tubeShellDepth(x, y, z);
-                            if (g >= 1.8) fails.add(tg + ": round way #" + wy.id + " meets rock at " + x + " " + y + " " + z + " with a shell depth of " + fmt(g));
+                            DeepBiome b = t.biomeAt(x, y, z);
+                            if (g >= 1.8 || b != DeepBiome.OBSIDIAN_TUBES) fails.add(tg + ": round way #" + wy.id + " meets rock at " + x + " " + y + " " + z + " with a shell depth of " + fmt(g) + " in " + b);
                             break;
                         }
                     }
@@ -635,7 +718,7 @@ class NetworkTest {
     }
 
     // ================================================================================================ voxel tests
-    /** Built cell-layers that more than one test reads (the four of the Deep Gardens and Basalt Galleries tests). */
+    /** Built cell-layers that more than one test reads (the Deep Gardens, Basalt Galleries and Blue Reaches tests). */
     private static final Map<String, VoxelHarness> BUILT = new HashMap<>();
 
     /**
@@ -647,7 +730,8 @@ class NetworkTest {
         String key = seed + "/" + li + "/" + cx + "/" + cz + "/" + wc + "/" + hc;
         VoxelHarness v = BUILT.get(key);
         if (v != null) return v;
-        boolean keep = wc == 1 && hc == 1 && li != Terrain.BLUE;
+        // all but the neighbour pairs: the Blue 2 x 2 cells are read by two tests, the others by several
+        boolean keep = !(wc == 2 && hc == 1);
         Terrain t = terrain(seed);
         Network w = t.network;
         int cell = (int) w.cell, ap = li == Terrain.BLUE ? NetDark.APRON : 0;
@@ -718,7 +802,12 @@ class NetworkTest {
     @Tag("voxel")
     void basaltIsOneCave() { oneCave(Terrain.BASALT, 0.960); }
 
-    /** Under the highest surge, every place is a short walk from one above it. */
+    /**
+     * Under the highest surge, every place is a short walk from one above it. The steps are the harness's (4-neighbour
+     * moves and vine rungs). A surge niche is a staged climb (section 10), so its ledge passage adds about 10 steps to
+     * the design's single 25-block shaft: the bar is 98% within 80 steps (the design's single shafts: 96.9 to 100%
+     * within 64).
+     */
     @Test
     @Tag("voxel")
     void basaltSurgeHasAWayOut() {
@@ -729,11 +818,15 @@ class NetworkTest {
             int W = (int) Math.round(t.shape.waterY(Terrain.BASALT));
             int[] h = v.surge(W + Terrain.SURGE_RISE + 1);
             int under = h[6];
+            int to80 = 0;
+            for (int[] f : v.far) if (f[3] <= 80) to80++;
             double within64 = (h[0] + h[1] + h[2] + h[3]) / (double) Math.max(1, under);
+            double within80 = (h[0] + h[1] + h[2] + h[3] + to80) / (double) Math.max(1, under);
             String tg = tag(VOX_SEEDS[s], Terrain.BASALT, VOX_CELLS[s][0], VOX_CELLS[s][1]);
-            System.out.printf("%s: %d places under the surge, %.1f%% within 64 of safety, longest %d%n", tg, under, 100 * within64, h[7]);
+            System.out.printf("%s: %d places under the surge, %.1f%% within 64 of safety, %.1f%% within 80, longest %d; surge niches %d%n", tg, under,
+                    100 * within64, 100 * within80, h[7], t.network.net(Terrain.BASALT, VOX_CELLS[s][0], VOX_CELLS[s][1]).surgeNiches);
             if (under == 0) fails.add(tg + ": nothing under the surge (the bedrock landing is missing?)");
-            if (within64 < 0.95) fails.add(tg + ": only " + fmt(100 * within64) + "% of the places under the surge are within 64 of safety");
+            if (within80 < 0.98) fails.add(tg + ": only " + fmt(100 * within80) + "% of the places under the surge are within 80 of safety");
             if (h[5] > 0) fails.add(tg + ": " + h[5] + " places under the surge have no way out");
             if (h[7] > 96) fails.add(tg + ": the longest walk out from under the surge is " + h[7]);
         }
@@ -794,6 +887,69 @@ class NetworkTest {
             if (shared < 2) fails.add(tg + ": only " + shared + " portals on the shared edge");
         }
         assertTrue(fails.isEmpty(), String.join("\n", fails));
+    }
+
+    /**
+     * Section 10: no fall from a standing place in a tunnel, a climb, a ledge passage or an ordinary room lands more
+     * than 15 lower; a staged climb ends a fall on the floor of the stage it fell down. Falls into water or onto vines
+     * are safe. Falls in the rift, the deep dark, the helices and the ancient city are reported, not failed: 0.2.0's
+     * cliffs and the high ledges are meant to be dangerous.
+     */
+    @Test
+    @Tag("voxel")
+    void noLethalFalls() {
+        List<String> fails = new ArrayList<>();
+        List<Object[]> runs = new ArrayList<>();
+        for (int s = 0; s < VOX_SEEDS.length; s++) for (int li : new int[]{Terrain.GARDENS, Terrain.BASALT}) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
+        runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
+        for (Object[] run : runs) {
+            long seed = (Long) run[0];
+            int li = (Integer) run[1], cx = (Integer) run[2], cz = (Integer) run[3], wc = (Integer) run[4];
+            Terrain t = terrain(seed);
+            VoxelHarness v = built(seed, li, cx, cz, wc, wc);
+            String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "");
+            java.util.Map<String, Integer> told = new java.util.TreeMap<>();
+            int lethal = 0, deepest = 0;
+            for (int[] f : v.drops(16)) {
+                int drop = f[1] - f[5];
+                if (f[6] == 1 || f[6] == 2 || f[6] == 4) continue;
+                String why = fallPlace(t, li, f[0], f[1], f[2]);
+                if (why == null) why = fallPlace(t, li, f[3], f[1], f[4]);
+                if (f[6] == 3) why = "into lava" + (why == null ? "" : ", " + why);
+                if (why != null) { told.merge(why, 1, Integer::sum); continue; }
+                lethal++;
+                deepest = Math.max(deepest, drop);
+                if (fails.size() < 40) fails.add(tg + ": a fall of " + drop + " from " + f[0] + " " + f[1] + " " + f[2] + " (" + where(t, li, f[0], f[1], f[2]) + ")");
+            }
+            System.out.printf("%s: %d lethal falls (deepest %d); reported: %s%n", tg, lethal, deepest, told);
+        }
+        assertTrue(fails.isEmpty(), fails.size() + " lethal falls:\n" + String.join("\n", fails));
+    }
+
+    /** Why a fall at a place is allowed (the rift, the deep dark, a helix, a city, a gate's mouth), or null. */
+    static String fallPlace(Terrain t, int li, int x, int y, int z) {
+        Network w = t.network;
+        Network.LCol lc = w.layer(w.column(x, z), li);
+        for (int k = 0; k < lc.nc; k++) {
+            if (lc.e[k] > 1.2) continue;
+            if (lc.c[k].helix()) return "helix";
+            if (lc.c[k].kind == Kind.CITY) return "city";
+        }
+        if (lc.rOn && Math.abs(lc.rV) < lc.rHalfTop + 8) return "rift";
+        if (lc.darkOn && ((lc.aC > lc.aF && y > lc.aF - 6 && y < lc.aC + 6) || (lc.bC > lc.bF && y > lc.bF - 6 && y < lc.bC + 6))) return "deep dark";
+        if (gateMouth(t, lc.net, x, z)) return "gate mouth";
+        return null;
+    }
+
+    /** What a place is in, for a failure message: the rooms, ways and shafts round it. */
+    static String where(Terrain t, int li, int x, int y, int z) {
+        Network w = t.network;
+        Network.LCol lc = w.layer(w.column(x, z), li);
+        StringBuilder b = new StringBuilder();
+        for (int k = 0; k < lc.nc; k++) if (lc.e[k] < 1.1) b.append(lc.c[k].kind).append('#').append(lc.c[k].id).append(" e ").append(fmt(lc.e[k])).append(' ');
+        for (int k = 0; k < lc.nw; k++) if (lc.wd[k] < lc.ww[k] + 2) b.append(lc.w[k].inner ? "walk" : lc.w[k].ledge ? "ledge" : "way").append('#').append(lc.w[k].id).append(" floor ").append(fmt(lc.wf[k])).append(' ');
+        for (int k = 0; k < lc.ns; k++) if (lc.sd[k] < lc.s[k].r + 3) b.append("stage ").append(lc.s[k].stage).append('/').append(lc.s[k].stages).append(" foot ").append(fmt(lc.s[k].foot)).append(" top ").append(fmt(lc.s[k].top)).append(' ');
+        return b.length() == 0 ? "rock?" : b.toString().trim();
     }
 
     /** Rooms keep most of their planned interior open after interpolation, and every tube hub's centre pillar stands. */

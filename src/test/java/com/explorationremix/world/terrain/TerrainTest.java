@@ -86,6 +86,9 @@ class TerrainTest {
                             double f = wy.f[i] + (wy.f[i + 1] - wy.f[i]) * q;
                             // an inner walk across a chamber whose floor dips under the table: a flooded bay, swum across
                             if (wy.inner && f < t.shape.waterY(li)) continue;
+                            // a climb's ledge or tunnel sets out across the mouth of the stage it leaves, and a walk
+                            // from a stage that opens in a chamber's floor starts there: the hole is the way up
+                            if (overStage(n, px, f, pz)) continue;
                             wayPoint(t, li, en, ex, px, f, pz, "way #" + wy.id + " (" + wy.kind + ")", seed, counts);
                         }
                         carry = s - len;
@@ -113,6 +116,14 @@ class TerrainTest {
                 assertTrue(counts[1] <= counts[0] / 50, "layer " + li + " cell " + c[0] + "," + c[1] + " seed " + seed + ": " + counts[1] + " of " + counts[0] + " path points have no rock under them");
             }
         }
+    }
+
+    /** True when the block nearest a walking line's point lies over the hole of a climb's stage, at its mouth. */
+    private static boolean overStage(Net n, double px, double floor, double pz) {
+        int x = (int) Math.round(px), z = (int) Math.round(pz);
+        for (Net.Shaft s : n.shafts)
+            if (Math.hypot(x - s.x, z - s.z) < s.r + 0.5 && floor > s.y0 && floor < s.y1 + 1) return true;
+        return false;
     }
 
     /**
@@ -168,7 +179,8 @@ class TerrainTest {
             Terrain t = terrain(seed);
             for (int[] c : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
                 for (Net.Chamber hl : t.network.net(li, c[0], c[1]).ch) {
-                    if (!hl.keep || hl.kind != Net.Kind.LAKE || hl.lakeY <= t.shape.waterY(li) + 0.5) continue;
+                    // the perched lakes and the pools at the wells' feet
+                    if (!hl.keep || !Network.pool(hl) || hl.lakeY <= t.shape.waterY(li) + 0.5) continue;
                     lakes++;
                     int top = (int) Math.ceil(hl.lakeY) - 1, reach = (int) Math.ceil(hl.R()) + 1;
                     int cx = (int) Math.floor(hl.x), cz = (int) Math.floor(hl.z);

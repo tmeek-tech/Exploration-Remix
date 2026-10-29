@@ -1,5 +1,6 @@
 package com.explorationremix.world.terrain;
 
+import com.explorationremix.world.terrain.Net.Arch;
 import com.explorationremix.world.terrain.Net.Chamber;
 import com.explorationremix.world.terrain.Net.EK;
 import com.explorationremix.world.terrain.Net.Edge;
@@ -188,9 +189,11 @@ final class NetPlanner {
             walkWays();
             surgeNiches();
             stubs();
+            tubeStubs();
             trunk();
             biomes();
             innerWalks();
+            arches();
             for (Strand st : strands) { n.strands.add(st.nodes); n.strandLines.add(st.line); }
             if (lava != null) {
                 // added last, so no stage gives it a door or an edge and no other id moves
@@ -1246,6 +1249,12 @@ final class NetPlanner {
             c.helixDir = u(salt + 1) < 0.5 ? -1 : 1;
             c.helixSlope = 0.42;
             c.helixTop = c.top - 8;
+            if (c.kind == Kind.WELL) {
+                // a pool 3 deep at the foot of the well, out to half a block past the ledge's open edge, so a fall
+                // from the spiral lands in water (section 10)
+                c.lakeY = c.f0;
+                c.lakeE = (c.helixR - 3.4 + 0.5) / c.rx;
+            }
         }
 
         void clampIn(Chamber c) {
@@ -1285,8 +1294,25 @@ final class NetPlanner {
                 if (o != null && c.yLo() - 6 < o[1] && c.yHi() + 6 > o[0]) return false;
             }
             if (wayHit(c)) return false;
+            if (geodeHit(c.x, c.z, c.R(), c.yLo(), c.yHi(), GEODE_GAP + 2, GEODE_GAP)) return false;
             // the gates' passages and the band seals
             return !nearGatePassage(c);
+        }
+
+        /** Rock kept between a refuge geode and the network's rooms, tunnels and shafts (blocks). */
+        static final double GEODE_GAP = 6;
+
+        /**
+         * Blue Reaches: true when a space (centre, reach, heights) comes within the gaps of a refuge geode. The network
+         * keeps off the geodes, so a geode is entered by its own tunnel, as in 0.2.0, and no room or tunnel opens into
+         * its bowl from halfway up (falls of 16 to 24 onto the geode's floor).
+         */
+        boolean geodeHit(double x, double z, double R, double yLo, double yHi, double gapH, double gapV) {
+            for (Route r : n.canyons) for (Route.Geode g : r.geodes) {
+                if (yHi + gapV < g.y() - g.r() * 0.5 || g.y() + g.r() + gapV < yLo) continue;
+                if (Math.hypot(x - g.x(), z - g.z()) < R + g.r() + gapH) return true;
+            }
+            return false;
         }
 
         /** True when a planned tunnel passes through the chamber's volume (with a margin). */
@@ -1622,7 +1648,9 @@ final class NetPlanner {
                 else {
                     if (e.w1 != null) n.ways.remove(e.w1);
                     if (e.w2 != null) n.ways.remove(e.w2);
+                    for (Way l : e.ledges) n.ways.remove(l);
                     if (e.sh != null) n.shafts.remove(e.sh);
+                    for (Shaft sh : e.stages) n.shafts.remove(sh);
                 }
             }
             n.edges.clear();
@@ -1670,14 +1698,23 @@ final class NetPlanner {
         /**
          * Entry to exit by walking alone (no climbs): while no such way exists, a walking tunnel is added between what
          * the entry reaches on foot and what the exit does, the shortest feasible tunnels first (a walk needs length
-         * for its height); when none embeds, between what the entry reaches and any other space, so a later round can
-         * go on from there. Up to 6 rounds.
+         * for its height); in the Blue Reaches, when none embeds, the same again with tunnels that may cross deep dark
+         * caverns (as connectRequired's last passes do: the lower tier can box the exit's courts in, and once climbs
+         * fit, a court's only other ways may be climbs up into a cavern beside it); when none embeds either, between
+         * what the entry reaches and any other space, so a later round can go on from there. Up to 6 rounds. A pair
+         * already joined by a climb may get a walking tunnel beside it.
          */
         void walkWays() {
             for (int it = 0; it < 6; it++) {
                 if (NetGraph.maxFlow(n, n.entry, n.exit, true) >= 1) return;
                 boolean[] S = NetGraph.reach(n, n.entry, true), X = NetGraph.reach(n, n.exit, true);
-                boolean added = walkAcross(S, X, true) || walkAcross(S, X, false);
+                boolean added = walkAcross(S, X, true);
+                if (!added && n.dark != null) {
+                    relaxDark = true;
+                    added = walkAcross(S, X, true);
+                    relaxDark = false;
+                }
+                if (!added) added = walkAcross(S, X, false);
                 if (!added) return;
             }
         }
@@ -1690,7 +1727,7 @@ final class NetPlanner {
                 for (Chamber b : n.ch) {
                     if (!b.keep || S[b.id] || (toExit && !X[b.id]) || b.refuge || b.landing() || b.kind == Kind.POCKET || b.kind == Kind.CANYON) continue;
                     double gap = gapXZ(a, b, 1.0), dy = Math.abs(walkF(a) - walkF(b));
-                    if (gap > (n.dark != null ? 240 : 170) || alreadyEdge(a.id, b.id)) continue;
+                    if (gap > (n.dark != null ? 240 : 170)) continue;
                     // a walking tunnel winds to at most 2.2 times the straight way: skip what cannot be walked
                     if (dy > sp.maxSlope * (Math.max(0, gap) * 2.2 - 8) + 4) continue;
                     pairs.add(new int[]{a.id, b.id, pairs.size()});
@@ -1831,14 +1868,17 @@ final class NetPlanner {
             for (Chamber c : n.ch) if (c.keep && c.kind == Kind.BEDROCK) L = c;
             if (L == null) return;
             int made = 0;
-            for (int k = 0; k < 28 && made < 3; k++) {
+            for (int k = 0; k < 48 && made < 3; k++) {
                 double a = r(990 + k, 0, Math.PI * 2);
                 Chamber pk = new Chamber();
                 pk.kind = Kind.POCKET;
                 pk.rx = pk.rz = r(991 + k, 4.5, 6);
-                pk.h = 7; pk.rise = 1; pk.terr = 1; pk.warp = 0.15; pk.pend = 1.5; pk.parent = L.id;
-                pk.f0 = W + Terrain.SURGE_RISE + 3;
-                double d = L.R() + pk.R() + r(992 + k, 3, 8);
+                pk.h = 7; pk.rise = 0; pk.terr = 1; pk.warp = 0.15; pk.pend = 1.5; pk.parent = L.id;
+                // the climb is two stages (section 10): the floor (f0 to f0 + 2) stays within two stages of the
+                // landing's and its lowest feet are a block over the highest surge; the pocket stands far enough out
+                // for a short tunnel to the first stage, the ledge passage and the tunnel on from the second stage's top
+                pk.f0 = W + Terrain.SURGE_RISE + 0.75;
+                double d = L.R() + pk.R() + r(992 + k, 10, 18);
                 pk.x = L.x + Math.cos(a) * d; pk.z = L.z + Math.sin(a) * d;
                 pk.hash = Hashing.mix(h, 993, k, 0);
                 L.keep = false; // the niche sits just over the landing's rim: only the other spaces count
@@ -1917,6 +1957,125 @@ final class NetPlanner {
             n.stubsAdded = added;
         }
 
+        /**
+         * Blind round tubes round each Obsidian Tubes hub (section 5): two or three, 8 to 14 long, level and pinching
+         * out, so the hub reads as a junction of tubes. Each is a way of its hub (an inner walk joins it), not an edge,
+         * so the hub keeps its one tunnel.
+         */
+        void tubeStubs() {
+            for (Chamber c : n.ch) {
+                if (!c.keep || c.kind != Kind.TUBEHUB) continue;
+                int want = 2 + (Hashing.unit(Hashing.mix(h, 990, c.id, 0)) < 0.5 ? 1 : 0), made = 0;
+                for (int t = 0; t < 12 && made < want; t++) {
+                    double th = Hashing.unit(Hashing.mix(h, 991, c.id, t)) * Math.PI * 2;
+                    double[] d = door(c, th, c.f0);
+                    if (d == null || !doorFree(c.id, Math.atan2(d[1] - c.z, d[0] - c.x))) continue;
+                    Way wy = tubeStub(d, 8 + 6 * Hashing.unit(Hashing.mix(h, 992, c.id, t)));
+                    if (!clear(wy, c.id, -1)) continue;
+                    wy.a = c.id;
+                    addWay(wy);
+                    useDoor(c.id, Math.atan2(d[1] - c.z, d[0] - c.x));
+                    made++;
+                }
+                n.tubeStubs += made;
+            }
+        }
+
+        /** A straight, level round tube from 3 inside a hub's door out to {@code len} past it, pinching out at its end. */
+        Way tubeStub(double[] d, double len) {
+            double sx = d[0] - d[3] * 3, sz = d[1] - d[4] * 3, ex = d[0] + d[3] * len, ez = d[1] + d[4] * len;
+            int m = Math.max(3, (int) Math.ceil((len + 3) / 2.0) + 1);
+            Way wy = new Way();
+            wy.kind = EK.STUB;
+            wy.round = true;
+            wy.taper = true;
+            alloc(wy, m);
+            for (int i = 0; i < m; i++) {
+                double q = i / (double) (m - 1);
+                double k = q < 0.55 ? 1 : 1 - (q - 0.55) / 0.45 * 0.75;
+                wy.x[i] = sx + (ex - sx) * q;
+                wy.z[i] = sz + (ez - sz) * q;
+                wy.f[i] = d[2];
+                wy.w[i] = sp.half * 0.9 * k;
+                wy.hgt[i] = sp.hgt * 0.85 * k;
+                wy.slab[i] = Math.max(1.5, Math.min(3.5, d[2] - (B + Terrain.SEAL + 2.5)));
+            }
+            wy.bounds();
+            return wy;
+        }
+
+        /**
+         * Basalt arches (section 5): one across every great hall and about a third of the galleries longer than 30, a
+         * span of rock across the hall's short axis at a point along its long one, its feet sunk in the walls. The
+         * crown stands 8 to 14 over the floor under it, at least 10 over every floor under its middle, and over
+         * {@code W + 38}; a gallery too low for that gets none. Of four places tried, the first whose underside clears
+         * every walk and tunnel of the hall by 7 is taken; a great hall takes the one that clears most.
+         */
+        void arches() {
+            if (li != Terrain.BASALT) return;
+            for (Chamber c : n.ch) {
+                if (!c.keep) continue;
+                boolean great = c.kind == Kind.GREAT;
+                if (!great && !(c.kind == Kind.GALLERY && c.rx > 15 && Hashing.unit(Hashing.mix(h, 995, c.id, 0)) < 0.4)) continue;
+                Arch best = null;
+                int bestCuts = Integer.MAX_VALUE;
+                for (int t = 0; t < 4 && bestCuts > 0; t++) {
+                    Arch a = arch(c, t);
+                    if (a == null) continue;
+                    int cuts = archCuts(c, a);
+                    if (cuts < bestCuts) { best = a; bestCuts = cuts; }
+                }
+                if (best != null && (great || bestCuts == 0)) n.arches.add(best);
+            }
+        }
+
+        Arch arch(Chamber c, int t) {
+            double at = ((t & 1) == 0 ? 1 : -1) * c.rx * (0.18 + 0.25 * Hashing.unit(Hashing.mix(h, 996, c.id, t)));
+            double ux = c.cos, uz = c.sin, vx = -c.sin, vz = c.cos;
+            double px = c.x + ux * at, pz = c.z + uz * at;
+            // the hall's width there, wall to wall across
+            double vPlus = wallAlong(c, px, pz, vx, vz), vMinus = wallAlong(c, px, pz, -vx, -vz);
+            if (vPlus < 3 || vMinus < 3) return null;
+            double mid = (vPlus - vMinus) * 0.5;
+            Arch a = new Arch();
+            a.chamber = c.id;
+            a.x = px + vx * mid; a.z = pz + vz * mid;
+            a.ux = ux; a.uz = uz; a.vx = vx; a.vz = vz;
+            a.span = (vPlus + vMinus) * 0.5 + 3;
+            a.halfAlong = 2.5 + 1.5 * Hashing.unit(Hashing.mix(h, 997, c.id, t));
+            double fC = w.floorAt(c, w.e(c, a.x, a.z), a.x, a.z), fMax = fC;
+            for (double v = -0.6 * a.span; v <= 0.6 * a.span; v += 1) {
+                double qx = a.x + vx * v, qz = a.z + vz * v, e = w.e(c, qx, qz);
+                if (e < 1) fMax = Math.max(fMax, w.floorAt(c, e, qx, qz));
+            }
+            a.deck = Math.max(Math.max(fC + 8 + 6 * Hashing.unit(Hashing.mix(h, 998, c.id, t)), fMax + 10), W + 38);
+            if (a.deck > w.ceilAt(c, w.e(c, a.x, a.z), a.x, a.z) - 3) return null;
+            return a;
+        }
+
+        /** Distance from (x, z) along (dx, dz) to the chamber's wall line. */
+        double wallAlong(Chamber c, double x, double z, double dx, double dz) {
+            double d = 0;
+            while (d < 80 && w.e(c, x + dx * d, z + dz * d) < 1) d += 0.5;
+            return d;
+        }
+
+        /** Points of the hall's ways (its tunnels near it and its inner walks) where the arch's underside comes within 7 of the floor. */
+        int archCuts(Chamber c, Arch a) {
+            int cuts = 0;
+            for (Way wy : n.ways) {
+                if (wy.a != c.id && wy.b != c.id) continue;
+                for (int i = 0; i < wy.n; i++) {
+                    double dx = wy.x[i] - a.x, dz = wy.z[i] - a.z;
+                    double q = Math.abs(dx * a.vx + dz * a.vz) / a.span, along = Math.abs(dx * a.ux + dz * a.uz);
+                    if (q >= 1 || along > a.halfAlong * (1 + 1.2 * q * q) + wy.w[i] + 1.3) continue;
+                    double under = a.deck - 4 * q * q - (3 + 9 * q * q * q);
+                    if (under < wy.f[i] + 7) cuts++;
+                }
+            }
+            return cuts;
+        }
+
         boolean fitsLoose(Chamber pk, Chamber parent) {
             double m = EDGE_MARGIN + pk.R() + 4;
             if (pk.x < x0 + m || pk.x > x0 + cell - m || pk.z < z0 + m || pk.z > z0 + cell - m) return false;
@@ -1929,7 +2088,7 @@ final class NetPlanner {
                 return false;
             }
             if (lavaHit(pk.x, pk.z, pk.R(), pk.yLo(), pk.yHi(), 8, 6)) return false;
-            return true;
+            return !geodeHit(pk.x, pk.z, pk.R(), pk.yLo(), pk.yHi(), GEODE_GAP, GEODE_GAP);
         }
 
         /** The trunk: the strands and the courts' spokes (already built wider). */
@@ -1938,6 +2097,7 @@ final class NetPlanner {
                 if (e.strand < 0 && !(e.gate && (n.ch.get(e.a).landing() || n.ch.get(e.b).landing()))) continue;
                 e.trunk = true;
                 for (Way wy : new Way[]{e.w1, e.w2}) if (wy != null) wy.trunk = true;
+                for (Way wy : e.ledges) wy.trunk = true;
             }
         }
 
@@ -1950,7 +2110,9 @@ final class NetPlanner {
                 else if (a.hunting && b.hunting) bio = a.biome;
                 else bio = Terrain.routeBiome(li);
                 for (Way wy : new Way[]{e.w1, e.w2}) if (wy != null) wy.biome = bio;
+                for (Way wy : e.ledges) wy.biome = bio;
                 if (e.sh != null) e.sh.biome = bio;
+                for (Shaft sh : e.stages) sh.biome = bio;
             }
             for (Way wy : n.ways) if (wy.biome == null) wy.biome = wy.a >= 0 ? n.ch.get(wy.a).biome : wy.b >= 0 ? n.ch.get(wy.b).biome : Terrain.routeBiome(li);
             for (Shaft s : n.shafts) if (s.biome == null) s.biome = Terrain.routeBiome(li);
@@ -1968,8 +2130,11 @@ final class NetPlanner {
                     if (wy.b == c.id) doors.add(new double[]{wy.x[wy.n - 1], wy.z[wy.n - 1], wy.f[wy.n - 1]});
                 }
                 for (Shaft s : n.shafts) {
-                    // a shaft that opens in this chamber's floor
-                    if (Math.hypot(s.x - c.x, s.z - c.z) < c.R() && s.y1 > c.f0 - 2 && s.y1 < c.f0 + c.h) doors.add(new double[]{s.x, s.z, s.y1 - 3});
+                    // a shaft that opens in this chamber's floor: only a climb's last stage may, and only inside the
+                    // chamber's footprint (a lower stage beside a lake, within its bounding radius but outside its
+                    // shore, took a shore walk down to its own top and drained the lake into it)
+                    if (s.stage != s.stages || w.e(c, s.x, s.z) >= 1) continue;
+                    if (s.y1 > c.f0 - 2 && s.y1 < c.f0 + c.h) doors.add(new double[]{s.x, s.z, s.y1 - 3});
                 }
                 if (doors.size() == 0) continue;
                 if (c.helix()) {
@@ -2211,35 +2376,15 @@ final class NetPlanner {
                 if (walkOK && !(preferClimb && climbOK && dy >= 8)) {
                     Way wy = walkWay(da, db, hh, half, hgt, force, true);
                     if (wy == null) continue;
+                    // the Obsidian Tubes' tunnel is a round tube (section 5)
+                    wy.round = A.kind == Kind.TUBEHUB || B.kind == Kind.TUBEHUB;
                     if (!clear(wy, e.a, e.b)) { n.embedFail++; continue; }
                     wy.a = e.a; wy.b = e.b;
                     addWay(wy);
                     e.kind = EK.WALK;
                     e.w1 = wy;
                 } else if (climbOK) {
-                    // a climb: a level tunnel to the foot of a shaft, the shaft, a level tunnel on from its top
-                    boolean aLow = da[2] < db[2];
-                    double[] lo = aLow ? da : db, hi = aLow ? db : da;
-                    double t = 0.35 + 0.3 * Hashing.unit(Hashing.mix(hh, 3, 0, 0));
-                    double sx = lo[0] + (hi[0] - lo[0]) * t, sz = lo[1] + (hi[1] - lo[1]) * t;
-                    double ux = (hi[0] - lo[0]) / Math.max(1e-6, L), uz = (hi[1] - lo[1]) / Math.max(1e-6, L);
-                    double[] footEnd = {sx + ux * 1.5, sz + uz * 1.5, lo[2], -ux, -uz};
-                    double[] topStart = {sx - ux * 3.5, sz - uz * 3.5, hi[2], ux, uz};
-                    Way w1 = walkWay(lo, footEnd, hh, half * 0.9, hgt, false, false);
-                    Way w2 = walkWay(topStart, hi, Hashing.mix(hh, 9, 0, 0), half * 0.9, hgt, false, false);
-                    if (w1 == null || w2 == null) continue;
-                    Shaft s = new Shaft();
-                    s.x = sx; s.z = sz; s.r = 2.6 + 0.8 * Hashing.unit(Hashing.mix(hh, 4, 0, 0));
-                    s.y0 = lo[2] - 0.5; s.y1 = hi[2] + 3.5;
-                    if (!clear(w1, e.a, e.b) || !clear(w2, e.a, e.b) || !clearShaft(s, e.a, e.b)) { n.embedFail++; continue; }
-                    w1.a = aLow ? e.a : e.b; w1.b = -1;
-                    w2.a = -1; w2.b = aLow ? e.b : e.a;
-                    addWay(w1);
-                    addWay(w2);
-                    s.id = n.shafts.size();
-                    n.shafts.add(s);
-                    e.kind = EK.CLIMB;
-                    e.w1 = w1; e.w2 = w2; e.sh = s;
+                    if (!climb(e, da, db, hh, half, hgt)) { n.embedFail++; continue; }
                 } else {
                     continue;
                 }
@@ -2250,6 +2395,277 @@ final class NetPlanner {
                 A.deg++;
                 B.deg++;
                 n.edges.add(e);
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Stages of a climb are at most this tall, so a fall down one, even from the top of the rim round its mouth
+         * (ceil(top) + 1 over the foot's ceil), is at most 15.
+         */
+        static final double STAGE_MAX = 12.5;
+
+        /**
+         * A climb from the lower door up to the upper one (section 10): a level tunnel to the first stage's foot, stages
+         * of at most {@link #STAGE_MAX} joined by ledge passages, and a level tunnel on from the last stage's top to the
+         * upper door. Stage axes stand {@code 2 r + 3} to {@code 2 r + 5} apart along the climb's heading, each next one
+         * turned by up to 45 degrees where that is what fits, so the holes never overlap and a fall ends on the floor of
+         * the stage it fell down. The climb is checked as a whole, against the network and against itself; on success
+         * its ways and shafts are added and the edge is filled in.
+         */
+        boolean climb(Edge e, double[] da, double[] db, long hh, double half, double hgt) {
+            boolean aLow = da[2] < db[2];
+            double[] lo = aLow ? da : db, hi = aLow ? db : da;
+            int cLo = aLow ? e.a : e.b, cHi = aLow ? e.b : e.a;
+            double L = Math.hypot(hi[0] - lo[0], hi[1] - lo[1]);
+            double dy = hi[2] - lo[2];
+            int ns = Math.max(1, (int) Math.ceil(dy / STAGE_MAX - 1e-9));
+            if (ns > 4) return false;
+            double sh = dy / ns;
+            double rad = 2.6 + 0.8 * Hashing.unit(Hashing.mix(hh, 4, 0, 0));
+            double gap = 2 * rad + 3 + 2 * Hashing.unit(Hashing.mix(hh, 5, 0, 0));
+            double th0 = Math.atan2(hi[1] - lo[1], hi[0] - lo[0]);
+            double ux = Math.cos(th0), uz = Math.sin(th0);
+            // the first stage stands on the line between the doors, the chain of stages centred where the single
+            // shaft would stand
+            double d1 = L * (0.35 + 0.3 * Hashing.unit(Hashing.mix(hh, 3, 0, 0)));
+            if (ns > 1) d1 = Math.max(6, Math.min(d1 - (ns - 1) * gap * 0.5, L - (ns - 1) * gap - 6));
+            double sx = lo[0] + ux * d1, sz = lo[1] + uz * d1;
+            // a single shaft's tunnel runs on 1.5 past its axis; a staged climb's ends at the first axis, so the second
+            // stage keeps its 3 blocks of rock from the tunnel's end (the first stage's foot is the rock under its hole
+            // either way, and the tunnel's slab reaches under the vines)
+            double past = ns == 1 ? 1.5 : 0;
+            double[] footEnd = {sx + ux * past, sz + uz * past, lo[2], -ux, -uz};
+            Way w1 = climbTunnel(lo, footEnd, false, hh, half * 0.9, hgt);
+            if (w1 == null || !clear(w1, e.a, e.b)) return false;
+            List<Object> parts = new ArrayList<>();
+            parts.add(w1);
+            Shaft[] st = new Shaft[ns];
+            Way[] ledges = new Way[ns - 1];
+            st[0] = stage(sx, sz, rad, lo[2], lo[2] + sh, 1, ns);
+            if (!stageFits(st[0], -1, ns == 1 ? -1 : cHi, parts, e.a, e.b)) return false;
+            parts.add(st[0]);
+            double heading = th0;
+            Way w2 = null;
+            for (int k = 1; k < ns; k++) {
+                // stage k + 1 and the ledge passage to it from the top of stage k
+                double sgn = Hashing.unit(Hashing.mix(hh, 40 + k, 0, 0)) < 0.5 ? 1 : -1;
+                boolean placed = false;
+                for (double turn : new double[]{0, sgn * Math.PI / 8, -sgn * Math.PI / 8, sgn * Math.PI / 4, -sgn * Math.PI / 4}) {
+                    double hd = th0 + turn;
+                    Shaft p = st[k - 1];
+                    double qx = p.x + Math.cos(hd) * gap, qz = p.z + Math.sin(hd) * gap;
+                    double fl = lo[2] + k * sh;
+                    Way lg = ledgeWay(p.x, p.z, qx, qz, fl, hd);
+                    if (!clear(lg, e.a, e.b) || !selfClear(lg, parts)) continue;
+                    parts.add(lg);
+                    Shaft s = stage(qx, qz, rad, fl, lo[2] + (k + 1) * sh, k + 1, ns);
+                    Way top = null;
+                    boolean ok = stageFits(s, cLo, k + 1 == ns ? -1 : cHi, parts, e.a, e.b);
+                    if (ok) {
+                        parts.add(s);
+                        if (k + 1 == ns) {
+                            // the last stage: the upper tunnel has to fit too, or another turn is tried
+                            top = upperTunnel(s, hd, hi, hh, half, hgt);
+                            ok = top != null && clear(top, e.a, e.b) && selfClear(top, parts);
+                        }
+                        if (!ok) parts.remove(parts.size() - 1);
+                    }
+                    if (!ok) { parts.remove(parts.size() - 1); continue; }
+                    st[k - 1].vineA = hd;
+                    st[k] = s;
+                    ledges[k - 1] = lg;
+                    heading = hd;
+                    w2 = top;
+                    placed = true;
+                    break;
+                }
+                if (!placed) return false;
+            }
+            if (ns == 1) {
+                w2 = upperTunnel(st[0], th0, hi, hh, half, hgt);
+                if (w2 == null || !clear(w2, e.a, e.b) || !selfClear(w2, parts)) return false;
+            }
+            // the last stage's vines face the upper tunnel, which leaves along the last heading
+            st[ns - 1].vineA = heading;
+            for (Shaft s : st) Network.fixVines(s);
+            w1.a = cLo; w1.b = -1;
+            w2.a = -1; w2.b = cHi;
+            addWay(w1);
+            for (Way lg : ledges) { lg.a = -1; lg.b = -1; lg.ledge = true; addWay(lg); }
+            addWay(w2);
+            for (Shaft s : st) { s.id = n.shafts.size(); n.shafts.add(s); }
+            e.kind = EK.CLIMB;
+            e.w1 = w1; e.w2 = w2; e.sh = st[0];
+            e.stages = st;
+            e.ledges = ledges;
+            return true;
+        }
+
+        Shaft stage(double x, double z, double r, double foot, double top, int k, int ns) {
+            Shaft s = new Shaft();
+            s.x = x; s.z = z; s.r = r;
+            s.foot = foot; s.top = top;
+            s.y0 = foot - 0.5; s.y1 = top + 3.5;
+            s.stage = k; s.stages = ns;
+            return s;
+        }
+
+        /**
+         * The tunnel on from a climb's last stage: it starts just behind the axis (no further, so its walking core
+         * leaves the rim behind the mouth standing) and runs out along the heading, then on to the upper door.
+         */
+        Way upperTunnel(Shaft s, double hd, double[] hi, long hh, double half, double hgt) {
+            double ox = Math.cos(hd), oz = Math.sin(hd);
+            double[] topStart = {s.x + ox * 2.5, s.z + oz * 2.5, hi[2], ox, oz};
+            return climbTunnel(topStart, hi, true, Hashing.mix(hh, 9, 0, 0), half * 0.9, hgt);
+        }
+
+        /**
+         * A climb's level tunnel between a and b ({x, z, floor, outward x, outward z}): a winding one when it is long,
+         * a straight one under 16 blocks. A short one cannot wind: walkWay's handles reach 5 out of each end and 3 on
+         * past it, so they cross, the line loops back on itself (and alongside its own chamber, which clear() refuses)
+         * and the far end runs 3 blocks past b, into the next stage's rock when b is a stage's foot. The straight one
+         * starts 3 blocks behind a, and runs 3 on past b only when b is a chamber's door ({@code intoB}).
+         */
+        Way climbTunnel(double[] a, double[] b, boolean intoB, long hh, double half, double hgt) {
+            double L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+            if (L >= 16) return walkWay(a, b, hh, half, hgt, false, false);
+            double sx = a[0] - a[3] * 3, sz = a[1] - a[4] * 3;
+            double l0 = 3, l2 = intoB ? 3 : 0, tot = l0 + L + l2;
+            double ex = b[0] - b[3] * l2, ez = b[1] - b[4] * l2;
+            int m = Math.max(3, (int) Math.ceil(tot / 2.5) + 1);
+            Way wy = new Way();
+            wy.kind = EK.WALK;
+            alloc(wy, m);
+            Perlin pn = w.floorN;
+            double off = (hh & 1023) * 0.37;
+            for (int i = 0; i < m; i++) {
+                double si = tot * i / (m - 1);
+                if (si <= l0) { double t = si / l0; wy.x[i] = sx + (a[0] - sx) * t; wy.z[i] = sz + (a[1] - sz) * t; }
+                else if (si <= l0 + L) { double t = (si - l0) / Math.max(1e-6, L); wy.x[i] = a[0] + (b[0] - a[0]) * t; wy.z[i] = a[1] + (b[1] - a[1]) * t; }
+                else { double t = (si - l0 - L) / l2; wy.x[i] = b[0] + (ex - b[0]) * t; wy.z[i] = b[1] + (ez - b[1]) * t; }
+                wy.f[i] = a[2];
+                wy.w[i] = Math.max(2.6, half * (1 + 0.24 * pn.noise2(si / 17.0 + off, 3.3)));
+                wy.hgt[i] = Math.max(6.5, hgt * (1 + 0.2 * pn.noise2(si / 21.0 + off, 9.9)));
+                wy.hgt[i] = Math.max(5.0, Math.min(wy.hgt[i], T - Terrain.SEAL - 3.5 - wy.f[i]));
+                wy.slab[i] = 3.5 + 1.5 * (0.5 + 0.5 * pn.noise2(si / 13.0 + off, 5.5));
+                wy.slab[i] = Math.max(1.5, Math.min(wy.slab[i], wy.f[i] - (B + Terrain.SEAL + 2.5)));
+            }
+            wy.bounds();
+            return wy;
+        }
+
+        /**
+         * A ledge passage between two stages (section 10): straight and level at the lower stage's top, half-width 2.5,
+         * 5 high, on a slab of 3. It starts half a block behind the lower stage's axis and ends 3 past the upper
+         * stage's, so the upper stage's foot and its vines stand on its floor.
+         */
+        Way ledgeWay(double ax, double az, double bx, double bz, double fl, double hd) {
+            double ox = Math.cos(hd), oz = Math.sin(hd);
+            double sx = ax - ox * 0.5, sz = az - oz * 0.5, ex = bx + ox * 3, ez = bz + oz * 3;
+            double len = Math.hypot(ex - sx, ez - sz);
+            int m = Math.max(2, (int) Math.ceil(len / 2.0) + 1);
+            Way wy = new Way();
+            wy.kind = EK.WALK;
+            alloc(wy, m);
+            for (int i = 0; i < m; i++) {
+                double t = i / (double) (m - 1);
+                wy.x[i] = sx + (ex - sx) * t;
+                wy.z[i] = sz + (ez - sz) * t;
+                wy.f[i] = fl;
+                wy.w[i] = 2.5;
+                wy.hgt[i] = Math.max(4.0, Math.min(5.0, T - Terrain.SEAL - 3.5 - fl));
+                wy.slab[i] = Math.max(1.5, Math.min(3.0, fl - (B + Terrain.SEAL + 2.5)));
+            }
+            wy.bounds();
+            return wy;
+        }
+
+        /**
+         * A stage keeps clear of the network (as a single shaft does, its own two rooms aside), of the climb's other
+         * parts, and of the inside of its own rooms: only the first stage may open beside the lower room and only the
+         * last into the upper one ({@code lo} or {@code hi} is -1 when that room is allowed).
+         */
+        boolean stageFits(Shaft s, int lo, int hi, List<Object> parts, int ca, int cb) {
+            if (!clearShaft(s, ca, cb)) return false;
+            for (int c : new int[]{lo, hi}) {
+                if (c < 0) continue;
+                Chamber k = n.ch.get(c);
+                if (k.dark >= 0 || k.kind == Kind.CANYON) continue;
+                double R = Math.min(k.rx, k.rz);
+                if ((w.e(k, s.x, s.z) - 1) * R > s.r + 2) continue;
+                if (s.y1 + 3 < k.yLo() || k.yHi() + 3 < s.y0) continue;
+                return false;
+            }
+            return selfClear(s, parts);
+        }
+
+        /**
+         * A new part of a climb against the parts already laid ({@code parts}, in order: lower tunnel, stage, ledge,
+         * stage, ..., upper tunnel). Neighbours in that order meet by design, and so do two ways with one stage between
+         * them, at that stage (one leaves its foot, the other its top); away from it they must not {@link #meet} (an
+         * upper tunnel that turned back over the ledge under it, one stage height higher, had its floor cut by the
+         * ledge's walking core); any other two must not meet at all.
+         */
+        boolean selfClear(Object x, List<Object> parts) {
+            int m = parts.size();
+            for (int i = 0; i < m; i++) {
+                if (m - i == 1) continue;
+                if (m - i == 2 && parts.get(i + 1) instanceof Shaft s) {
+                    if (x instanceof Way p && parts.get(i) instanceof Way q && meetAway(p, q, s)) return false;
+                    continue;
+                }
+                if (meet(x, parts.get(i))) return false;
+            }
+            return true;
+        }
+
+        /** {@link #meet} for two ways of a climb with stage {@code s} between them, leaving out where they reach it. */
+        static boolean meetAway(Way p, Way q, Shaft s) {
+            for (int i = 0; i < p.n; i++) {
+                if (Math.hypot(p.x[i] - s.x, p.z[i] - s.z) < s.r + p.w[i] + 1) continue;
+                for (int j = 0; j < q.n; j++) {
+                    if (Math.hypot(q.x[j] - s.x, q.z[j] - s.z) < s.r + q.w[j] + 1) continue;
+                    if (Math.hypot(p.x[i] - q.x[j], p.z[i] - q.z[j]) > p.w[i] + q.w[j] + 1) continue;
+                    double gap = p.f[i] > q.f[j] ? p.f[i] - (q.f[j] + Math.max(q.hgt[j], 6.5)) : q.f[j] - (p.f[i] + Math.max(p.hgt[i], 6.5));
+                    if (gap < 1.5) return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * Two parts of one climb that are not neighbours in it. Holes keep 3 blocks of rock between them, so a fall ends
+         * on the floor of the stage it fell down. A tunnel may pass close to a stage or another tunnel of its climb,
+         * since the slabs between them stand (a slab is rock that must stay, which beats a tunnel's vault), but it may
+         * not cut into a stage (its wall, or the floor at its foot, which would let a fall run on into the tunnel), and
+         * the lower of two tunnels keeps 1.5 blocks of rock under the upper one's floor. A tunnel's open space reaches
+         * its height or the walking core's 6.5, whichever is more. (Against the rest of the network a climb keeps the
+         * clearances of {@link #clear} and {@link #clearShaft}; within it those 3 to 6 blocks refused most staged
+         * climbs, whose stages stand 2 r + 3 to 2 r + 5 apart over tunnels 2.6 to 5.4 wide.)
+         */
+        static boolean meet(Object a, Object b) {
+            if (a instanceof Shaft sa && b instanceof Shaft sb) {
+                if (Math.hypot(sa.x - sb.x, sa.z - sb.z) >= sa.r + sb.r + 3 - 1e-6) return false;
+                return !(sa.y1 + 2 < sb.y0 || sb.y1 + 2 < sa.y0);
+            }
+            if (a instanceof Shaft || b instanceof Shaft) {
+                Shaft s = a instanceof Shaft ? (Shaft) a : (Shaft) b;
+                Way o = a instanceof Shaft ? (Way) b : (Way) a;
+                for (int j = 0; j < o.n; j++) {
+                    if (Math.hypot(s.x - o.x[j], s.z - o.z[j]) > s.r + o.w[j] + 1) continue;
+                    if (o.f[j] + Math.max(o.hgt[j], 6.5) + 1.5 < s.y0 || s.y1 + 1 < o.f[j]) continue;
+                    return true;
+                }
+                return false;
+            }
+            Way p = (Way) a, q = (Way) b;
+            for (int i = 0; i < p.n; i++) for (int j = 0; j < q.n; j++) {
+                if (Math.hypot(p.x[i] - q.x[j], p.z[i] - q.z[j]) > p.w[i] + q.w[j] + 1) continue;
+                double gap = p.f[i] > q.f[j] ? p.f[i] - (q.f[j] + Math.max(q.hgt[j], 6.5)) : q.f[j] - (p.f[i] + Math.max(p.hgt[i], 6.5));
+                if (gap >= 1.5) continue;
                 return true;
             }
             return false;
@@ -2418,6 +2834,7 @@ final class NetPlanner {
                     return false;
                 }
                 if (lavaHit(px, pz, pw + sp.clearC, pf - wy.slab[i], pf + ph, 0, sp.clearCV)) return false;
+                if (geodeHit(px, pz, pw, pf - wy.slab[i], pf + ph, GEODE_GAP, 4)) return false;
                 // ends near their own chambers are allowed to touch them
                 int bx = (int) Math.floor((px - x0 + Net.APRON) / CB), bz = (int) Math.floor((pz - z0 + Net.APRON) / CB);
                 int rb = pw + 4.5 + sp.clearH > CB ? 2 : 1;
@@ -2466,7 +2883,8 @@ final class NetPlanner {
         }
 
         boolean sharesEnd(Way o, int ca, int cb) {
-            return o.a == ca || o.b == ca || o.a == cb || o.b == cb || (o.a == -1 && o.b == -1);
+            // ways that join no room (the Blue geode links) are no one's to keep clear of; a climb's ledges are
+            return o.a == ca || o.b == ca || o.a == cb || o.b == cb || (o.a == -1 && o.b == -1 && !o.ledge);
         }
 
         boolean nearOwnEnd(double px, double pz, int ca, int cb) {
@@ -2488,6 +2906,7 @@ final class NetPlanner {
                 return false;
             }
             if (lavaHit(s.x, s.z, s.r + 5, s.y0, s.y1, 0, 3)) return false;
+            if (geodeHit(s.x, s.z, s.r, s.y0, s.y1, GEODE_GAP, 4)) return false;
             for (Way o : n.ways) {
                 for (int j = 0; j < o.n; j++) {
                     if (Math.hypot(s.x - o.x[j], s.z - o.z[j]) > s.r + o.w[j] + 3) continue;

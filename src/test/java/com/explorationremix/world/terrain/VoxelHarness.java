@@ -153,17 +153,59 @@ final class VoxelHarness {
         return n;
     }
 
-    /** Marks the climb zones of a plan's shafts: vines go on their walls. */
-    void markShafts(Net n) {
+    /**
+     * Marks the vines of a plan's climbs as {@code ClimbVinesFeature} places them (section 10): one column per stage
+     * ({@link Network#vineColumn}), hanging from the first rock over the floor the stage climbs to (searched up to 16
+     * blocks over it) down through open air to the stage's foot. Returns the number of stages that got vines.
+     */
+    int markShafts(Net n) {
+        int made = 0;
         for (Net.Shaft s : n.shafts) {
-            int xa = (int) Math.floor(s.x - s.r - 1), xb = (int) Math.ceil(s.x + s.r + 1);
-            int za = (int) Math.floor(s.z - s.r - 1), zb = (int) Math.ceil(s.z + s.r + 1);
-            int ya = (int) Math.floor(s.y0) - 1, yb = (int) Math.ceil(s.y1) + 2;
-            for (int x = xa; x <= xb; x++) for (int z = za; z <= zb; z++) {
-                if (Math.hypot(x + 0.5 - s.x, z + 0.5 - s.z) > s.r + 0.5) continue;
-                for (int y = ya; y <= yb; y++) setClimb(x, y, z);
+            int[] c = Network.vineColumn(s);
+            int foot = Network.vineFoot(s), top = Network.vineTop(s);
+            int hold = top + 1;
+            while (hold <= top + 16 && in(c[0], hold, c[1]) && mat(c[0], hold, c[1]) == AIR) hold++;
+            if (hold > top + 16 || !in(c[0], hold, c[1]) || !solid(c[0], hold, c[1])) continue;
+            int y = hold - 1;
+            while (y >= foot && mat(c[0], y, c[1]) == AIR) setClimb(c[0], y--, c[1]);
+            made++;
+        }
+        return made;
+    }
+
+    /**
+     * One-way drops from the main component (section 14.3): from a place standing on rock, a step sideways into a
+     * column open at the feet and head with no floor within a block under it, and the fall to the first rock, water,
+     * lava or climbable block. Each drop of at least {@code min} as {x, y, z of the place, x and z of the column, the
+     * landing's feet y, what it lands on: 0 rock, 1 water, 2 climbable, 3 lava, 4 out of the box}.
+     */
+    java.util.List<int[]> drops(int min) {
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        for (int i = 0; i < nx; i++) for (int k = 0; k < nz; k++) {
+            int x = x0 + i, z = z0 + k, col = i * nz + k;
+            for (int p = colStart[col]; p < colStart[col + 1]; p++) {
+                if (comp[p] != mainComp) continue;
+                int y = y0 + placeY[p];
+                if (!solid(x, y - 1, z)) continue;
+                for (int d = 0; d < 4; d++) {
+                    int qx = x + DX[d], qz = z + DZ[d];
+                    if (!in(qx, y, qz) || !open(qx, y, qz) || !open(qx, y + 1, qz)) continue;
+                    if (place(qx, y, qz) || place(qx, y - 1, qz)) continue;
+                    int fy = y, kind;
+                    while (true) {
+                        if (mat(qx, fy, qz) == WATER) { kind = 1; break; }
+                        if (climb(qx, fy, qz)) { kind = 2; break; }
+                        if (!in(qx, fy - 1, qz)) { kind = 4; break; }
+                        int m = mat(qx, fy - 1, qz);
+                        if (m == ROCK) { kind = 0; break; }
+                        if (m == LAVA) { kind = 3; break; }
+                        fy--;
+                    }
+                    if (y - fy >= min) out.add(new int[]{x, y, z, qx, qz, fy, kind});
+                }
             }
         }
+        return out;
     }
 
     /**
@@ -413,16 +455,21 @@ final class VoxelHarness {
             }
         }
         int[] out = new int[8];
+        far.clear();
         for (int p = 0; p < P; p++) {
             if (comp[p] != mainComp || y0 + placeY[p] >= safeFeet) continue;
             int d = dist[p];
             if (d < 0) { out[5]++; continue; }
             out[7] = Math.max(out[7], d);
             out[d <= 16 ? 0 : d <= 32 ? 1 : d <= 48 ? 2 : d <= 64 ? 3 : 4]++;
+            if (d > 64) far.add(new int[]{px[p], y0 + placeY[p], pz[p], d});
         }
         out[6] = under;
         return out;
     }
+
+    /** After {@link #surge}: the places more than 64 steps from safety, {x, feet, z, steps}. */
+    final java.util.List<int[]> far = new java.util.ArrayList<>();
 
     // ================================================================================================ plan checks
     /** A main-component place inside the chamber: near its floor (or its lake's surface), in the middle of it. */

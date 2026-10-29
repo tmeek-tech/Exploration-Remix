@@ -3,6 +3,7 @@ package com.explorationremix.world.terrain;
 import com.explorationremix.world.terrain.Net.Chamber;
 import com.explorationremix.world.terrain.Net.EK;
 import com.explorationremix.world.terrain.Net.Kind;
+import com.explorationremix.world.terrain.Net.Arch;
 import com.explorationremix.world.terrain.Net.Shaft;
 import com.explorationremix.world.terrain.Net.Way;
 import com.google.common.cache.Cache;
@@ -423,7 +424,13 @@ public final class Network {
                 return c.f0 + Terrain.terraced(Math.max(0, v), c.terr);
             }
             case WELL, CHIMNEY -> {
-                return c.f0 + c.rise * e * e + 0.6 * floorN.noise2(x / 7.0, z / 7.0);
+                double f = c.f0 + c.rise * e * e + 0.6 * floorN.noise2(x / 7.0, z / 7.0);
+                if (pool(c) && e < c.lakeE + 0.04) {
+                    // the pool at the well's foot: a flat bottom 3.5 under the water, steep sides
+                    double t = Math.max(0, Math.min(1, (c.lakeE + 0.04 - e) / 0.12));
+                    f += (c.lakeY - 3.5 - f) * t;
+                }
+                return f;
             }
             case LAVA -> {
                 // a bowl whose rim stays under the lava table, so the lava reaches its walls
@@ -541,6 +548,14 @@ public final class Network {
         boolean enNear, exNear;
         /** An obsidian tube hub's footprint covers the column. */
         boolean hub;
+        /**
+         * How much of the roughness and the basalt column shift the column takes: none in a tube hub or within w + 2
+         * of a round tube's line, all of it from 4 blocks further out (section 5).
+         */
+        float roughK;
+        /** The Basalt arch over the column, with the column's place under it (q = across / span, along). */
+        Arch arch;
+        float archQ, archAlong;
         double entryD, exitD, endD;
         double lavaE;
         Chamber bed;
@@ -621,9 +636,9 @@ public final class Network {
                     if (d - c.pillars[p + 2] < lc.pd[k] - lc.pr[k]) { lc.pd[k] = (float) d; lc.pr[k] = (float) c.pillars[p + 2]; }
                 }
                 if (c.kind == Kind.LAVA) lc.lavaE = Math.min(lc.lavaE, e);
-                if (c.kind == Kind.LAKE) {
+                if (pool(c)) {
                     // the rim and the floor under the water reach 10 below the floor line
-                    lc.fLo = Math.min(lc.fLo, c.f0 - 11);
+                    lc.fLo = Math.min(lc.fLo, Math.min(c.f0, c.lakeY - 3.5) - 11);
                     lc.fHi = Math.max(lc.fHi, c.lakeY + 1);
                 }
                 if (e < 1.3 && (c.kind == Kind.TUBEHUB || protectedRoom(c))) {
@@ -707,6 +722,24 @@ public final class Network {
         // basalt columns: a per-column offset of the walls, constant over a small Voronoi cell
         lc.colShift = li == Terrain.BASALT ? 1.7 * voronoiValue(x, z, 3.3) : 0;
         lc.hub = inHub(lc);
+        lc.roughK = lc.hub ? 0 : 1;
+        for (int k = 0; k < lc.nw; k++) {
+            if (lc.w[k].round) lc.roughK = Math.min(lc.roughK, (float) Math.max(0, Math.min(1, (lc.wd[k] - lc.ww[k] - 2) / 4)));
+        }
+        lc.arch = null;
+        for (Arch a : n.arches) {
+            double dx = x - a.x, dz = z - a.z;
+            double q = Math.abs(dx * a.vx + dz * a.vz) / a.span, along = dx * a.ux + dz * a.uz;
+            if (q >= 1 || Math.abs(along) > a.halfAlong * (1 + 1.2 * q * q) + 1.3) continue;
+            lc.arch = a;
+            lc.archQ = (float) q;
+            lc.archAlong = (float) along;
+            // the arch is a per-block term: the span covers it, wobble included (section 4.4)
+            double deck = a.deck - 4 * q * q, thick = 3 + 9 * q * q * q;
+            lc.fLo = Math.min(lc.fLo, deck - thick - 2.5);
+            lc.fHi = Math.max(lc.fHi, deck + 2.5);
+            break;
+        }
         lc.done = true;
     }
 
@@ -736,9 +769,10 @@ public final class Network {
         lc.wcore[k] = wy.inner ? 1.9f : 2.4f;
         lc.wslabHalf[k] = helix ? 3.4f : (wy.inner ? 3.6f : (float) Math.min(5.0, lc.ww[k] * 0.9 + 1.2));
         if (d < lc.wslabHalf[k] + 1 || d < lc.wcore[k] + 1.5 || (!wy.inner && d < lc.ww[k] * 1.25)) {
-            // the walking core stays open up to 6.24 over the floor line, whatever the way's height
+            // the walking core stays open up to 6.24 over the floor line, whatever the way's height; a round tube's
+            // circle reaches 1.85 w + 0.5 over it
             lc.fLo = Math.min(lc.fLo, lc.wf[k] - lc.wsl[k] - 2);
-            lc.fHi = Math.max(lc.fHi, lc.wf[k] + Math.max(lc.wh[k] + 1, 7));
+            lc.fHi = Math.max(lc.fHi, lc.wf[k] + Math.max(Math.max(lc.wh[k] + 1, 7), wy.round ? 1.85 * lc.ww[k] + 1.5 : 0));
         }
     }
 
@@ -883,6 +917,16 @@ public final class Network {
         return Math.max(fl - y, y - ce);
     }
 
+    /** A tunnel's cross-section at a column: the vault, or a round tube's circle (section 5). Negative inside. */
+    static double wayDist(LCol lc, int k, int y) {
+        return lc.w[k].round ? roundDist(lc.wd[k], y, lc.wf[k], lc.ww[k]) : vault(lc.wd[k], y, lc.wf[k], lc.ww[k], lc.wh[k]);
+    }
+
+    /** A perched pool of water held in a chamber: a lake over the water table, or the pool at a well's foot. */
+    static boolean pool(Chamber c) {
+        return (c.kind == Kind.LAKE || c.kind == Kind.WELL) && !Double.isNaN(c.lakeY);
+    }
+
     double chamberDist(LCol lc, int k, int y) {
         Chamber c = lc.c[k];
         double d = Math.max(lc.F[k] - y, y - lc.C[k]);
@@ -899,7 +943,7 @@ public final class Network {
         for (int k = 0; k < lc.nw; k++) {
             Way wy = lc.w[k];
             if (wy.inner) continue;
-            d = smin(d, vault(lc.wd[k], y, lc.wf[k], lc.ww[k], lc.wh[k]), 3);
+            d = smin(d, wayDist(lc, k, y), 3);
         }
         for (int k = 0; k < lc.ns; k++) {
             Shaft s = lc.s[k];
@@ -921,11 +965,12 @@ public final class Network {
             if (lc.bC > lc.bF) d = Math.min(d, Math.max(lc.bF - y, y - lc.bC));
         }
         boolean hub = lc.hub;
-        if (d > -12 && d < 12 && !hub) {
+        if (d > -12 && d < 12 && lc.roughK > 0) {
             // the deep dark's floors stay walkable: a third of the roughness within a few blocks of a tier's floor
-            double rs = 1;
-            if (lc.darkOn && ((lc.aC > lc.aF && y > lc.aF - 3 && y < lc.aF + 4) || (lc.bC > lc.bF && y > lc.bF - 3 && y < lc.bF + 4))) rs = DARK_FLOOR_ROUGH;
-            d += rs * rough(li, x, y, z);
+            double rs = lc.roughK;
+            if (lc.darkOn && ((lc.aC > lc.aF && y > lc.aF - 3 && y < lc.aF + 4) || (lc.bC > lc.bF && y > lc.bF - 3 && y < lc.bF + 4))) rs *= DARK_FLOOR_ROUGH;
+            if (lc.ns > 0) rs *= mouthFade(lc, y);
+            if (rs > 0) d += rs * rough(li, x, y, z);
         }
         if (lc.geoN > 0) d = Math.min(d, geodeDist(lc, x, y, z));
         if (lc.darkOn) {
@@ -963,6 +1008,22 @@ public final class Network {
         double top = lc.bed.f0 - 0.75 * Math.max(0, out);
         if (top < shape.waterY(lc.net.li) - 1.6) return -SOLID;
         return Math.min(Math.min(top - y, y - (lc.bed.f0 - 7)), 5 - out);
+    }
+
+    /**
+     * How much of the roughness (and of the basalt column shift) a block takes round a climb stage's mouth: none within
+     * r + 1.5 of the axis from 2 below the stage's top floor to 6 over it, all of it 3 blocks further out. No rough
+     * ledge then stands over the hole, where a fall would be longer than the stage, and the rim stays a clean lip
+     * (section 10).
+     */
+    static double mouthFade(LCol lc, int y) {
+        double f = 1;
+        for (int k = 0; k < lc.ns; k++) {
+            Shaft s = lc.s[k];
+            double out = Math.max((lc.sd[k] - s.r - 1.5) / 3, Math.max(s.top - 2 - y, y - (s.top + 6)) / 3);
+            if (out < f) f = Math.max(0, out);
+        }
+        return f;
     }
 
     /** The column is inside an obsidian tube hub (or just round it). */
@@ -1054,17 +1115,104 @@ public final class Network {
         if (ex != null && lc.exitD < ex.landR) d = Math.max(d, Math.min(Math.min(ex.uFloor - y, y - (ex.uFloor - 7)), ex.landR - lc.exitD));
         if (lc.bed != null && lc.endD < lc.bed.rx) d = Math.max(d, Math.min(Math.min(lc.bed.f0 - y, y - (lc.bed.f0 - 7)), lc.bed.rx - lc.endD));
         if (lc.bed != null && lc.lavaE < 1.1) d = Math.max(d, lavaShore(lc, y));
-        // perched lakes: a rim of rock round the water and a floor under it
+        // perched lakes and the wells' pools: a rim of rock round the water and a floor under it
         for (int k = 0; k < lc.nc; k++) {
             Chamber c = lc.c[k];
-            if (c.kind != Kind.LAKE || Double.isNaN(c.lakeY) || c.lakeY <= shape.waterY(lc.net.li) + 0.5) continue;
+            if (!pool(c) || c.lakeY <= shape.waterY(lc.net.li) + 0.5) continue;
             if (y >= c.lakeY || y < c.f0 - 10) continue;
             double R = Math.min(c.rx, c.rz);
             double ring = (lc.e[k] - (c.lakeE + 0.06)) * R;
             if (ring > -0.5 && ring < 4) d = Math.max(d, Math.min(ring + 0.5, 4 - ring) + 0.5);
             if (lc.e[k] < c.lakeE + 0.1 && y < lc.F[k] - 1.5 && y >= lc.F[k] - 6) d = Math.max(d, Math.min(lc.F[k] - 1.5 - y, y - (lc.F[k] - 6)) + 0.5);
         }
+        // climbs: a 1-block rim round each stage's mouth, open over the vines (section 10), and the floor of the step
+        // off the top of the vines
+        for (int k = 0; k < lc.ns; k++) {
+            Shaft s = lc.s[k];
+            if (x == s.stepX && z == s.stepZ && y == vineTop(s) - 1) d = Math.max(d, 1);
+            double sd = lc.sd[k];
+            if (sd <= s.r + 0.5 || sd >= s.r + 1.5 || y != (int) Math.ceil(s.top - 1e-9)) continue;
+            double off = Math.abs(angleDiff(Math.atan2(z - s.z, x - s.x), s.vineA));
+            if (off < RIM_GAP) continue;
+            d = Math.max(d, Math.min(Math.min(sd - (s.r + 0.5), s.r + 1.5 - sd), (off - RIM_GAP) * sd) + 0.25);
+        }
+        // the helices: a parapet on the spiral ledge's open edge, 3 blocks of wall to 2 of gap (section 10)
+        for (int k = 0; k < lc.nw; k++) {
+            Way wy = lc.w[k];
+            if (!wy.inner || wy.a < 0 || lc.wd[k] < 2.4 || lc.wd[k] > 3.4 || y != (int) Math.ceil(lc.wf[k] - 1e-9)) continue;
+            Chamber c = lc.net.ch.get(wy.a);
+            if (!c.helix()) continue;
+            double dx = x - c.x, dz = z - c.z;
+            if (dx * dx + dz * dz > c.helixR * c.helixR) continue;
+            if (Math.floorMod((long) Math.floor(Math.atan2(dz, dx) * c.helixR), 5L) >= 3) continue;
+            d = Math.max(d, Math.min(lc.wd[k] - 2.4, 3.4 - lc.wd[k]) + 0.25);
+        }
+        // the Basalt arches (section 5)
+        if (lc.arch != null) {
+            Arch a = lc.arch;
+            double q = lc.archQ, deck = a.deck - 4 * q * q, thick = 3 + 9 * q * q * q;
+            if (y > deck - thick - 1.3 && y < deck + 1.3) {
+                double vert = Math.min(deck - y, y - (deck - thick));
+                double side = a.halfAlong * (1 + 1.2 * q * q) - Math.abs(lc.archAlong);
+                d = Math.max(d, Math.min(vert, side) + 1.2 * detail.noise3(x / 6.0, y / 6.0, z / 6.0));
+            }
+        }
         return d;
+    }
+
+    /**
+     * The block column a climb stage's vines hang in (section 10): inside the shaft's open core (which the per-block
+     * pass keeps open), as far towards the vine angle as that goes, so a climber steps off its top onto the floor the
+     * stage climbs to. The vines hang from the first rock over that floor ({@link #vineTop}) down to the stage's foot
+     * ({@link #vineFoot}); {@code ClimbVinesFeature} and the voxel harness both follow this rule.
+     */
+    public static int[] vineColumn(Shaft s) {
+        double ca = Math.cos(s.vineA), sa = Math.sin(s.vineA), lim = s.r - 0.65;
+        int[] out = {(int) Math.floor(s.x), (int) Math.floor(s.z)};
+        double best = -1e9;
+        for (int x = (int) Math.floor(s.x - lim); x <= (int) Math.ceil(s.x + lim); x++) {
+            for (int z = (int) Math.floor(s.z - lim); z <= (int) Math.ceil(s.z + lim); z++) {
+                double dx = x - s.x, dz = z - s.z;
+                if (dx * dx + dz * dz >= lim * lim) continue;
+                double score = dx * ca + dz * sa - 0.25 * Math.abs(dz * ca - dx * sa);
+                if (score > best) { best = score; out = new int[]{x, z}; }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Fixes a stage's vine column ({@link #vineColumn}) and its step: the next block from it towards the vine angle
+     * (along x or z, whichever is nearer that angle). The column stands at the edge of the hole's open core, so its
+     * neighbours towards the way out can lie where the hole's wall and the narrow ledge passage meet, and the
+     * interpolation may leave them rock at the top floor's level; the step is kept open there over a block of rock
+     * ({@link #mustOpen}, {@link #mustStay}), so a climber always steps straight off the top of the vines.
+     */
+    static void fixVines(Shaft s) {
+        int[] c = vineColumn(s);
+        s.vineX = c[0];
+        s.vineZ = c[1];
+        double ca = Math.cos(s.vineA), sa = Math.sin(s.vineA);
+        if (Math.abs(ca) >= Math.abs(sa)) {
+            s.stepX = c[0] + (ca > 0 ? 1 : -1);
+            s.stepZ = c[1];
+        } else {
+            s.stepX = c[0];
+            s.stepZ = c[1] + (sa > 0 ? 1 : -1);
+        }
+    }
+
+    /** The lowest block of a stage's vine column: the first over the floor at its foot. */
+    public static int vineFoot(Shaft s) { return (int) Math.ceil(s.foot - 1e-9); }
+
+    /** The feet level on the floor a stage climbs to; the vines reach past it to the rock over it. */
+    public static int vineTop(Shaft s) { return (int) Math.ceil(s.top - 1e-9); }
+
+    /** Half the opening in a stage's rim over its vines. */
+    static final double RIM_GAP = Math.toRadians(40);
+
+    static double angleDiff(double a, double b) {
+        return Math.atan2(Math.sin(a - b), Math.cos(a - b));
     }
 
     /** Space that must stay open, as a signed distance (negative inside): walking cores, shafts and the landings. */
@@ -1076,6 +1224,12 @@ public final class Network {
         }
         for (int k = 0; k < lc.ns; k++) {
             Shaft s = lc.s[k];
+            if (x == s.stepX && z == s.stepZ) {
+                // the step off the top of the vines: open for the feet and the head, its floor block left alone
+                int top = vineTop(s);
+                if (y >= top && y <= top + 1) d = Math.min(d, -1);
+                if (y == top - 1) continue;
+            }
             if (lc.sd[k] > s.r || y < s.y0 || y > s.y1) continue;
             d = Math.min(d, Math.max(lc.sd[k] - (s.r - 0.6), Math.max(s.y0 + 0.5 - y, y - s.y1)));
         }
@@ -1110,7 +1264,7 @@ public final class Network {
         LCol lc = layer(column(x, z), li);
         double c8 = coarse * 8.0;
         boolean hub = lc.hub;
-        if (lc.colShift != 0 && c8 > -3 && c8 < 3 && !hub) c8 += lc.colShift;
+        if (lc.colShift != 0 && c8 > -3 && c8 < 3) c8 += lc.colShift * lc.roughK * (lc.ns > 0 ? mouthFade(lc, y) : 1);
         Plans.Gate en = lc.en, ex = lc.ex;
         boolean enPass = lc.enNear && y > en.y1 - 3, exPass = lc.exNear && y < ex.y0 + 3;
         boolean pass = enPass || exPass;
@@ -1122,7 +1276,7 @@ public final class Network {
         for (int k = 0; k < lc.nw; k++) {
             if (lc.w[k].inner) continue;
             if (lc.wd[k] > lc.ww[k] * 1.25) continue;
-            open = Math.min(open, vault(lc.wd[k], y, lc.wf[k], lc.ww[k], lc.wh[k]) + 1.5);
+            open = Math.min(open, wayDist(lc, k, y) + 1.5);
         }
         for (int k = 0; k < lc.nc; k++) {
             if (!protectedRoom(lc.c[k]) || lc.e[k] > 1.0) continue;
@@ -1151,7 +1305,7 @@ public final class Network {
         if (y >= shape.waterY(li)) {
             for (int k = 0; k < lc.nc; k++) {
                 Chamber c = lc.c[k];
-                if (c.kind != Kind.LAKE || Double.isNaN(c.lakeY)) continue;
+                if (!pool(c)) continue;
                 if (y < c.lakeY && lc.e[k] < c.lakeE + 0.1 && y >= lc.F[k] - 2) return Terrain.WATER;
             }
             return Terrain.AIR;
@@ -1181,7 +1335,7 @@ public final class Network {
             if (d < bestD) { bestD = d; best = b; }
         }
         for (int k = 0; k < lc.nw; k++) {
-            double d = vault(lc.wd[k], y, lc.wf[k], lc.ww[k], lc.wh[k]);
+            double d = lc.w[k].round ? roundShell(lc, k, y) : wayDist(lc, k, y);
             DeepBiome b = lc.w[k].biome;
             if (b == null) continue;
             if (b.role == DeepBiome.Role.REFUGE && d < 4) return b;
@@ -1218,8 +1372,16 @@ public final class Network {
         LCol lc = layer(column(x, z), li);
         double best = 1e9;
         for (int k = 0; k < lc.nc; k++) if (lc.c[k].kind == Kind.TUBEHUB) best = Math.min(best, hubDepth(lc, k, y));
-        for (int k = 0; k < lc.nw; k++) if (lc.w[k].round) best = Math.min(best, roundDist(lc.wd[k], y, lc.wf[k], lc.ww[k]));
+        for (int k = 0; k < lc.nw; k++) if (lc.w[k].round) best = Math.min(best, roundShell(lc, k, y));
         return best;
+    }
+
+    /**
+     * The space a round tube leaves open at a column: its circle and its walking core, which stands out of a thin tube
+     * (the blind tubes' pinched ends). Negative inside.
+     */
+    static double roundShell(LCol lc, int k, int y) {
+        return Math.min(roundDist(lc.wd[k], y, lc.wf[k], lc.ww[k]), pathCore(lc.wd[k], lc.wf[k], y, lc.wcore[k]));
     }
 
     /**

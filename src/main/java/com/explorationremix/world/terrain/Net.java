@@ -62,6 +62,8 @@ public final class Net {
         public double minX, maxX, minZ, maxZ, minY, maxY, length;
         /** A blind passage that pinches out. */
         public boolean taper;
+        /** A ledge passage between two stages of a climb (it joins no room). */
+        public boolean ledge;
 
         void bounds() {
             minX = minZ = minY = 1e18;
@@ -84,11 +86,18 @@ public final class Net {
     public static final class Shaft {
         public int id;
         public double x, z, r, y0, y1;
+        /** The floor at the stage's foot and the floor it climbs to (its mouth opens in that floor). */
+        public double foot, top;
         public DeepBiome biome;
-        /** This stage's number and the climb's stage count (1 for a single shaft). */
-        public int stage, stages = 1;
+        /** This stage's number (from 1, at the bottom) and the climb's stage count (1 for a single shaft). */
+        public int stage = 1, stages = 1;
         /** Angle of the vine column round the axis (radians), towards the way out at the top. */
         public double vineA;
+        /**
+         * The vine column, and the block beside it towards the vine angle that a climber steps off onto at the top
+         * (kept open over a floor block, {@link Network#fixVines}). Set once {@code vineA} is.
+         */
+        public int vineX, vineZ, stepX = Integer.MIN_VALUE, stepZ = Integer.MIN_VALUE;
     }
 
     public static final class Edge {
@@ -97,10 +106,29 @@ public final class Net {
         public double cost, len, dy;
         public boolean tree, loop, trunk, gate, stub, forced;
         int strand = -1;
+        /** A climb: w1 runs from the lower door to the first stage's foot, w2 from the last stage's top on. */
         public Way w1, w2;
+        /** A climb's first stage. */
         public Shaft sh;
+        /** A climb's stages from the bottom up, and the ledge passages between them (one fewer). */
+        public Shaft[] stages = NO_SHAFTS;
+        public Way[] ledges = NO_WAYS;
 
         public int other(int n) { return n == a ? b : a; }
+    }
+
+    static final Shaft[] NO_SHAFTS = new Shaft[0];
+    static final Way[] NO_WAYS = new Way[0];
+
+    /**
+     * A Basalt arch (section 5): a rock span across a hall's short axis, its feet sunk in the walls. {@code ux, uz} is
+     * the hall's long axis (the arch's thickness runs along it), {@code vx, vz} the span's direction.
+     */
+    public static final class Arch {
+        public double x, z, ux, uz, vx, vz;
+        /** Half the span (to the feet, in the walls), half the crown's thickness along the hall, the crown's top. */
+        public double span, halfAlong, deck;
+        public int chamber;
     }
 
     public final int li, cx, cz;
@@ -108,6 +136,7 @@ public final class Net {
     public final List<Edge> edges = new ArrayList<>();
     public final List<Way> ways = new ArrayList<>();
     public final List<Shaft> shafts = new ArrayList<>();
+    public final List<Arch> arches = new ArrayList<>();
     final List<Route> canyons = new ArrayList<>();
     public int entry = -1, exit = -1;
     int surgeNiches;
@@ -116,7 +145,7 @@ public final class Net {
     /** Portal vestibules no tunnel could reach: removed with their stub, a blind end carved in its place. */
     public final List<Integer> droppedPortals = new ArrayList<>();
     /** Plan statistics. */
-    int attached, tries, embedFail, forced, droppedChambers, loopsAdded, stubsAdded, gateAug, cutRepairs, strandBreaks, walkRepairs;
+    int attached, tries, embedFail, forced, droppedChambers, loopsAdded, stubsAdded, gateAug, cutRepairs, strandBreaks, walkRepairs, tubeStubs;
     final List<Integer> courtsE = new ArrayList<>(), courtsX = new ArrayList<>();
     /** The strands: braided main ways between the landings, as chamber id lists (courts at both ends). */
     final List<List<Integer>> strands = new ArrayList<>();
