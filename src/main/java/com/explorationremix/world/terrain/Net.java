@@ -151,6 +151,8 @@ public final class Net {
     final List<List<Integer>> strands = new ArrayList<>();
     final List<List<double[]>> strandLines = new ArrayList<>();
     double planMs;
+    /** Of which the deep dark's view breaker (Blue Reaches). */
+    double sightMs;
     /** Blue Reaches: the rasterised deep dark of this cell (null elsewhere). */
     NetDark.Plan dark;
 

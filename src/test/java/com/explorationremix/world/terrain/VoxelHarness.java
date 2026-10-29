@@ -471,6 +471,109 @@ final class VoxelHarness {
     /** After {@link #surge}: the places more than 64 steps from safety, {x, feet, z, steps}. */
     final java.util.List<int[]> far = new java.util.ArrayList<>();
 
+    // ================================================================================================ sight lines
+    /** Ray pitches (degrees) of the sight-line check, and the number of yaws per pitch (every 15 degrees). */
+    static final int[] SIGHT_PITCHES = {-40, -30, -20, -10, 0, 10, 20, 30, 40};
+    static final int SIGHT_YAWS = 24;
+    /** Eye height over the feet. */
+    static final double EYE = 1.62;
+
+    /** What the sight-line check saw. */
+    static final class Sight {
+        long places, rays, left;
+        /** Ray lengths in 10-block bins; the last bin holds 170 and more (up to the cap). */
+        final long[] hist = new long[18];
+        double max;
+        /** The longest rays, longest first: {eye x, y, z, yaw, pitch, length, end x, y, z}. */
+        final java.util.List<double[]> longest = new java.util.ArrayList<>();
+
+        long over(double len) {
+            long n = 0;
+            for (int b = (int) Math.ceil(len / 10); b < hist.length; b++) n += hist[b];
+            return n;
+        }
+
+        void add(Sight o, int keep) {
+            places += o.places;
+            rays += o.rays;
+            left += o.left;
+            for (int b = 0; b < hist.length; b++) hist[b] += o.hist[b];
+            max = Math.max(max, o.max);
+            longest.addAll(o.longest);
+            longest.sort((a, b) -> Double.compare(b[5], a[5]));
+            while (longest.size() > keep) longest.remove(longest.size() - 1);
+        }
+    }
+
+    /**
+     * Sight lines: from the eyes of main-component places standing on rock, in every {@code every}-th column along x and
+     * z, rays at the pitches of {@link #SIGHT_PITCHES} and 24 yaws are marched block by block to the first rock (the
+     * bands over and under the layer are rock). A ray that leaves the box first is counted apart. Rays are followed up
+     * to {@code cap}; the {@code keep} longest are listed.
+     */
+    Sight sight(int every, double cap, int keep) { return sight(every, cap, keep, x0, z0, x0 + nx, z0 + nz); }
+
+    /** {@link #sight(int, double, int)} from the places in the columns xa..xb-1, za..zb-1 only (their rays run on anywhere in the box). */
+    Sight sight(int every, double cap, int keep, int xa, int za, int xb, int zb) {
+        double[] ys = new double[SIGHT_PITCHES.length], cs = new double[SIGHT_PITCHES.length];
+        for (int q = 0; q < ys.length; q++) { ys[q] = Math.sin(Math.toRadians(SIGHT_PITCHES[q])); cs[q] = Math.cos(Math.toRadians(SIGHT_PITCHES[q])); }
+        int ia = Math.max(0, xa - x0), ib = Math.min(nx, xb - x0), ka = Math.max(0, za - z0), kb = Math.min(nz, zb - z0);
+        int rows = Math.max(0, (ib - ia + every - 1) / every);
+        return IntStream.range(0, rows).parallel().mapToObj(r -> {
+            Sight s = new Sight();
+            int i = ia + r * every;
+            for (int k = ka; k < kb; k += every) {
+                int x = x0 + i, z = z0 + k, col = i * nz + k;
+                for (int p = colStart[col]; p < colStart[col + 1]; p++) {
+                    if (comp[p] != mainComp) continue;
+                    int y = y0 + placeY[p];
+                    if (!solid(x, y - 1, z)) continue;
+                    s.places++;
+                    double ox = x + 0.5, oy = y + EYE, oz = z + 0.5;
+                    for (int q = 0; q < ys.length; q++) for (int a = 0; a < SIGHT_YAWS; a++) {
+                        double yaw = a * (360.0 / SIGHT_YAWS), th = Math.toRadians(yaw);
+                        double dx = cs[q] * Math.cos(th), dy = ys[q], dz = cs[q] * Math.sin(th);
+                        double d = ray(ox, oy, oz, dx, dy, dz, cap);
+                        s.rays++;
+                        if (d < 0) { s.left++; continue; }
+                        s.hist[Math.min(s.hist.length - 1, (int) (d / 10))]++;
+                        s.max = Math.max(s.max, d);
+                        if (keep > 0 && (s.longest.size() < keep || d > s.longest.get(s.longest.size() - 1)[5])) {
+                            s.longest.add(new double[]{ox, oy, oz, yaw, SIGHT_PITCHES[q], d, ox + dx * d, oy + dy * d, oz + dz * d});
+                            s.longest.sort((u, v) -> Double.compare(v[5], u[5]));
+                            if (s.longest.size() > keep) s.longest.remove(s.longest.size() - 1);
+                        }
+                    }
+                }
+            }
+            return s;
+        }).reduce(new Sight(), (u, v) -> { Sight m = new Sight(); m.add(u, keep); m.add(v, keep); return m; });
+    }
+
+    /**
+     * The distance from (ox, oy, oz) along the unit direction (dx, dy, dz) to the first rock block it enters; the cap
+     * when it meets none that near; -1 when it leaves the box across a side first. Over and under the layer is rock.
+     */
+    double ray(double ox, double oy, double oz, double dx, double dy, double dz, double cap) {
+        int x = (int) Math.floor(ox), y = (int) Math.floor(oy), z = (int) Math.floor(oz);
+        int sx = dx > 0 ? 1 : -1, sy = dy > 0 ? 1 : -1, sz = dz > 0 ? 1 : -1;
+        double inf = Double.POSITIVE_INFINITY;
+        double ax = Math.abs(dx), ay = Math.abs(dy), az = Math.abs(dz);
+        double tx = ax < 1e-12 ? inf : (dx > 0 ? x + 1 - ox : ox - x) / ax, ty = ay < 1e-12 ? inf : (dy > 0 ? y + 1 - oy : oy - y) / ay;
+        double tz = az < 1e-12 ? inf : (dz > 0 ? z + 1 - oz : oz - z) / az;
+        double ddx = ax < 1e-12 ? inf : 1 / ax, ddy = ay < 1e-12 ? inf : 1 / ay, ddz = az < 1e-12 ? inf : 1 / az;
+        double t = 0;
+        while (t <= cap) {
+            if (y < y0 || y >= y0 + ny) return t;
+            if (x < x0 || x >= x0 + nx || z < z0 || z >= z0 + nz) return -1;
+            if (mat(x, y, z) == ROCK) return t;
+            if (tx <= ty && tx <= tz) { x += sx; t = tx; tx += ddx; }
+            else if (ty <= tz) { y += sy; t = ty; ty += ddy; }
+            else { z += sz; t = tz; tz += ddz; }
+        }
+        return cap;
+    }
+
     // ================================================================================================ plan checks
     /** A main-component place inside the chamber: near its floor (or its lake's surface), in the middle of it. */
     int[] reach(Chamber c) {

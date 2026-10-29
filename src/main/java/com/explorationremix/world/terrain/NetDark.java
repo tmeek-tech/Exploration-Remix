@@ -92,6 +92,21 @@ final class NetDark {
         out[1] = br;
     }
 
+    /** 0.2.0's pillars of tier t whose centres lie in [xa, xb) x [za, zb): {x, z, r} each. */
+    void gridPillars(int t, double xa, double za, double xb, double zb, List<double[]> out) {
+        double grid = t == 0 ? 30 : 34, prob = t == 0 ? 0.45 : 0.4, rMin = 3, rMax = t == 0 ? 6 : 6.5;
+        int salt = t == 0 ? 1003 : 1007;
+        for (int gx = (int) Math.floor(xa / grid) - 1; gx <= (int) Math.floor(xb / grid); gx++)
+            for (int gz = (int) Math.floor(za / grid) - 1; gz <= (int) Math.floor(zb / grid); gz++) {
+                long h = Hashing.mix(seed, salt, gx, gz);
+                if (Hashing.unit(h) > prob) continue;
+                double cx = (gx + Hashing.range(Hashing.mix(h, 1, 0, 0), 0.2, 0.8)) * grid;
+                double cz = (gz + Hashing.range(Hashing.mix(h, 2, 0, 0), 0.2, 0.8)) * grid;
+                if (cx < xa || cx >= xb || cz < za || cz >= zb) continue;
+                out.add(new double[]{cx, cz, Hashing.range(Hashing.mix(h, 3, 0, 0), rMin, rMax)});
+            }
+    }
+
     /** Blocks from (x, z) to the nearest edge of the cell holding it. */
     static double seamDist(double x, double z, double cell) {
         double fx = x - Math.floor(x / cell) * cell, fz = z - Math.floor(z / cell) * cell;
@@ -135,6 +150,18 @@ final class NetDark {
         final float[][] F, C;            // the tier's floor and ceiling (C <= F: closed)
         final List<Region> regions = new ArrayList<>();
         List<Route.Geode> geodes = List.of();
+        /**
+         * The columns and fins that cut long views (NetPlanner.sightBreak): per tier, and the rift's spires
+         * ({@link #RIFT}), which stand from the rift's floor to its vault; with a bucket index (SB blocks a bucket over
+         * the raster) of the shapes whose reach (2.5 r round the segment) touches each bucket.
+         */
+        final NetSight.Shapes[] sight = {new NetSight.Shapes(), new NetSight.Shapes(), new NetSight.Shapes()};
+        private final int[][][] sightBk = new int[3][][];
+        static final int SB = 32;
+        /** Index of the rift's spires in {@link #sight}. */
+        static final int RIFT = 2;
+        /** What the breaker found, per tier. */
+        final NetSight.Stats[] sightStats = {new NetSight.Stats(), new NetSight.Stats()};
 
         Plan(int cx, int cz, double cell, int N) {
             this.N = N;
@@ -156,6 +183,41 @@ final class NetDark {
         double px(int i) { return x0 + G * i + G * 0.5; }
         double pz(int k) { return z0 + G * k + G * 0.5; }
         boolean inR(int i, int k) { return i >= 0 && k >= 0 && i < N && k < N; }
+
+        void setSight(int t, NetSight.Shapes sh) {
+            sight[t] = sh;
+            int nb = (int) Math.ceil(N * G / (double) SB);
+            List<List<Integer>> tmp = new ArrayList<>();
+            for (int i = 0; i < nb * nb; i++) tmp.add(new ArrayList<>());
+            for (int j = 0; j < sh.n; j++) {
+                double reach = sh.r[j] * 2.5 + 1;
+                double xa = Math.min(sh.ax[j], sh.bx[j]) - reach, xb = Math.max(sh.ax[j], sh.bx[j]) + reach;
+                double za = Math.min(sh.az[j], sh.bz[j]) - reach, zb = Math.max(sh.az[j], sh.bz[j]) + reach;
+                int i0 = Math.max(0, (int) Math.floor((xa - x0) / SB)), i1 = Math.min(nb - 1, (int) Math.floor((xb - x0) / SB));
+                int k0 = Math.max(0, (int) Math.floor((za - z0) / SB)), k1 = Math.min(nb - 1, (int) Math.floor((zb - z0) / SB));
+                for (int i = i0; i <= i1; i++) for (int k = k0; k <= k1; k++) tmp.get(i * nb + k).add(j);
+            }
+            int[][] bk = new int[nb * nb][];
+            for (int i = 0; i < bk.length; i++) bk[i] = tmp.get(i).stream().mapToInt(Integer::intValue).toArray();
+            sightBk[t] = bk;
+        }
+
+        /**
+         * The plan's view-cutting shape of tier t (or the rift's, t = {@link #RIFT}) nearest (x, z), when nearer (by
+         * distance from its segment less its radius) than out = {d, r}; then out[2] = 1.
+         */
+        void sightPillar(int t, double x, double z, double[] out) {
+            int[][] bk = sightBk[t];
+            if (bk == null) return;
+            int nb = (int) Math.ceil(N * G / (double) SB);
+            int i = (int) Math.floor((x - x0) / SB), k = (int) Math.floor((z - z0) / SB);
+            if (i < 0 || k < 0 || i >= nb || k >= nb) return;
+            NetSight.Shapes sh = sight[t];
+            for (int j : bk[i * nb + k]) {
+                double d = sh.dist(j, x, z);
+                if (d - sh.r[j] < out[0] - out[1]) { out[0] = d; out[1] = sh.r[j]; out[2] = 1; }
+            }
+        }
 
         /** Keep factor of tier t at a column: bilinear between raster points, 0..1. */
         double keepAt(int t, double x, double z) {

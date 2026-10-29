@@ -47,6 +47,10 @@ public final class Network {
     final NetDark dark;
     private final LoadingCache<Long, Net> nets;
     private final Cache<Long, List<Portal>> portalCache;
+    /** The deep dark's seam fins per cell edge (Blue Reaches), per tier; see {@link #seamPillars}. */
+    private final Cache<Long, NetSight.Shapes[]> seamCache;
+    /** What the seams' view breakers found, per tier, over every edge planned so far (for the probes). */
+    final NetSight.Stats[] seamStats = {new NetSight.Stats(), new NetSight.Stats()};
     private final ThreadLocal<Col[]> cache;
     /** Statistics: plans made, and how often a column's lists had to grow. */
     final LongAdder plansMade = new LongAdder(), columnGrowths = new LongAdder();
@@ -81,6 +85,7 @@ public final class Network {
             return NetPlanner.plan(this, (int) (k >>> 56), unpack(k >>> 28), unpack(k));
         }));
         portalCache = CacheBuilder.newBuilder().maximumSize(PORTAL_CACHE).build();
+        seamCache = CacheBuilder.newBuilder().maximumSize(PORTAL_CACHE).build();
     }
 
     static long key(int li, int cx, int cz) { return ((long) (li & 0xFF) << 56) | ((cx & 0xFFFFFFFL) << 28) | (cz & 0xFFFFFFFL); }
@@ -238,6 +243,140 @@ public final class Network {
             if (ok && Math.abs(f[0] - f[1]) <= 3) return Math.floor(Math.max(f[0], f[1])) + 1;
         }
         return Double.NaN;
+    }
+
+    // ================================================================================================ seam pillars
+    /** Half the width of the strip a seam's own fins are planned in, and how far past its ends its lines reach. */
+    static final double SEAM_STRIP = 24, SEAM_EXT = 150;
+    /** Lines within this many blocks of a seam are the seam's to cut. */
+    static final double SEAM_FOCUS = 13.5;
+
+    /**
+     * The deep dark's fins on one cell edge (Blue Reaches): the west edge of cell (ex, ez) when {@code xEdge}, else its
+     * north edge. A cell's own view breaker ({@link NetPlanner#sightBreak}) keeps its shapes and their reach inside the
+     * cell, at least 12 blocks from its edges, so lines that run along a seam are cut here instead: lines within 14
+     * degrees of the seam that pass within {@link #SEAM_FOCUS} of it, over 0.2.0's raw tiers (which both cells carve
+     * within 16 blocks of the seam), get fins standing across the seam, clear of the edge's portals. A pure function of
+     * the seed and the edge, so both cells carve the same fins.
+     */
+    NetSight.Shapes[] seamPillars(boolean xEdge, int ex, int ez) {
+        long k = Hashing.mix(seed, 7700 + (xEdge ? 1 : 0), ex, ez);
+        try {
+            return seamCache.get(k, () -> makeSeamPillars(xEdge, ex, ez, k));
+        } catch (ExecutionException | UncheckedExecutionException e) {
+            Throwable t = e.getCause();
+            if (t instanceof RuntimeException r) throw r;
+            if (t instanceof Error r) throw r;
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** A seam fin's half length (blocks) and radius. */
+    static final double SEAM_FIN_HALF = 12, SEAM_FIN_R = 4;
+
+    private NetSight.Shapes[] makeSeamPillars(boolean xEdge, int ex, int ez, long key) {
+        double line = (xEdge ? ex : ez) * cell, u0 = (xEdge ? ez : ex) * cell;
+        double g = 2;
+        int nAcross = (int) Math.round(2 * SEAM_STRIP / g), nAlong = (int) Math.round((cell + 2 * SEAM_EXT) / g);
+        double rx0 = xEdge ? line - SEAM_STRIP : u0 - SEAM_EXT, rz0 = xEdge ? u0 - SEAM_EXT : line - SEAM_STRIP;
+        int nx = xEdge ? nAcross : nAlong, nz = xEdge ? nAlong : nAcross;
+        List<Portal> portals = portalsOfEdge(Terrain.BLUE, xEdge, ex, ez);
+        NetSight.Shapes[] out = new NetSight.Shapes[2];
+        double[] t2 = new double[2];
+        double foot = 1.65 * SEAM_FIN_R;
+        for (int t = 0; t < 2; t++) {
+            NetSight.Raster ras = new NetSight.Raster(rx0, rz0, g, nx, nz);
+            float[] oe = new float[nx * nz], hgt = new float[nx * nz];
+            for (int i = 0; i < nx; i++) for (int kk = 0; kk < nz; kk++) {
+                double x = ras.px(i), z = ras.pz(kk);
+                double o = dark.open(t, x, z);
+                if (o <= 0) continue;
+                dark.tier(o, dark.floor0(t, x, z), dark.ceil0(t, x, z), t2);
+                oe[i * nz + kk] = (float) o;
+                hgt[i * nz + kk] = (float) (t2[1] - t2[0]);
+                if (t2[1] - t2[0] >= 3) ras.see[i * nz + kk] = 1;
+            }
+            List<double[]> grid = new ArrayList<>();
+            dark.gridPillars(t, rx0, rz0, rx0 + nx * g, rz0 + nz * g, grid);
+            NetSight.Shapes blk = new NetSight.Shapes();
+            for (double[] pl : grid) {
+                int i = (int) Math.floor((pl[0] - rx0) / g), kk = (int) Math.floor((pl[1] - rz0) / g);
+                if (i >= 0 && kk >= 0 && i < nx && kk < nz && ras.see[i * nz + kk] != 0) blk.add(pl[0], pl[1], pl[0], pl[1], pl[2]);
+            }
+            // candidates: fins across the seam on the edge's own stretch, standing on a cavern's core with room round them
+            NetSight.Shapes cand = new NetSight.Shapes();
+            for (double d = -2; d <= 2; d += 2) for (double u = u0 + 2; u < u0 + cell; u += 4) {
+                boolean ok = true;
+                for (double v = -SEAM_FIN_HALF; v <= SEAM_FIN_HALF && ok; v += 4) {
+                    double x = xEdge ? line + d + v : u, z = xEdge ? u : line + d + v;
+                    int i = (int) Math.floor((x - rx0) / g), kk = (int) Math.floor((z - rz0) / g);
+                    if (oe[i * nz + kk] < NetDark.CORE || hgt[i * nz + kk] < 12) ok = false;
+                    else if (clearance(ras, i, kk, foot + 5) < foot + 4) ok = false;
+                }
+                if (!ok) continue;
+                for (Portal pt : portals) if (Math.abs(u - pt.along) < pt.vestR + foot + 12) ok = false;
+                double ax = xEdge ? line + d - SEAM_FIN_HALF : u, az = xEdge ? u : line + d - SEAM_FIN_HALF;
+                double bx = xEdge ? line + d + SEAM_FIN_HALF : u, bz = xEdge ? u : line + d + SEAM_FIN_HALF;
+                for (int j = 0; j < blk.n && ok; j++)
+                    if (NetSight.segSeg(ax, az, bx, bz, blk.ax[j], blk.az[j], blk.bx[j], blk.bz[j]) < 0.9 * 1.65 * (SEAM_FIN_R + blk.r[j])) ok = false;
+                if (ok) cand.add(ax, az, bx, bz, SEAM_FIN_R);
+            }
+            double[] ang = new double[57];
+            double base = xEdge ? Math.PI / 2 : 0;
+            for (int a = 0; a < ang.length; a++) ang[a] = base + Math.toRadians(-14 + 0.5 * a);
+            double cxr = xEdge ? line : u0 + cell / 2, czr = xEdge ? u0 + cell / 2 : line;
+            double[] focus = xEdge ? new double[]{line - SEAM_FOCUS, u0, line + SEAM_FOCUS, u0 + cell}
+                    : new double[]{u0, line - SEAM_FOCUS, u0 + cell, line + SEAM_FOCUS};
+            NetSight.Stats st = new NetSight.Stats();
+            int[] ch = NetSight.choose(ras, ang, cxr, czr, 1, focus, blk, cand, NetSight.LMAX, 1.25, 0.9, st);
+            synchronized (seamStats) { seamStats[t].add(st); }
+            NetSight.Shapes res = new NetSight.Shapes();
+            for (int j : ch) res.add(cand.get(j));
+            out[t] = res;
+        }
+        return out;
+    }
+
+    /** Blocks from raster cell (i, k) to the nearest closed cell of the raster, up to {@code max}. */
+    static double clearance(NetSight.Raster ras, int i, int k, double max) {
+        int m = (int) Math.ceil(max / ras.g);
+        double best2 = max * max / (ras.g * ras.g);
+        for (int di = -m; di <= m; di++) for (int dk = -m; dk <= m; dk++) {
+            double d2 = di * di + dk * dk;
+            if (d2 >= best2) continue;
+            int a = i + di, b = k + dk;
+            if (a < 0 || b < 0 || a >= ras.nx || b >= ras.nz) continue;
+            if (ras.see[a * ras.nz + b] == 0) best2 = d2;
+        }
+        return Math.sqrt(best2) * ras.g;
+    }
+
+    /** The seam fin of tier t nearest (x, z), when nearer (by distance from its segment less its radius) than out = {d, r}; then out[2] = 1. */
+    void seamPillar(int t, double x, double z, double[] out) {
+        int sx = (int) Math.round(x / cell), sz = (int) Math.round(z / cell);
+        double reach = SEAM_FIN_HALF + 2 + SEAM_FIN_R * 2.5 + 1;
+        if (Math.abs(x - sx * cell) < reach) {
+            int ez = cellOf(z);
+            for (int e = ez - 1; e <= ez + 1; e++) {
+                if (z < e * cell - reach || z > (e + 1) * cell + reach) continue;
+                nearestOf(seamPillars(true, sx, e)[t], x, z, out);
+            }
+        }
+        if (Math.abs(z - sz * cell) < reach) {
+            int ex = cellOf(x);
+            for (int e = ex - 1; e <= ex + 1; e++) {
+                if (x < e * cell - reach || x > (e + 1) * cell + reach) continue;
+                nearestOf(seamPillars(false, e, sz)[t], x, z, out);
+            }
+        }
+    }
+
+    private static void nearestOf(NetSight.Shapes p, double x, double z, double[] out) {
+        for (int j = 0; j < p.n; j++) {
+            if (Math.abs(x - p.ax[j]) > 30 || Math.abs(z - p.az[j]) > 30) continue;
+            double d = p.dist(j, x, z);
+            if (d - p.r[j] < out[0] - out[1]) { out[0] = d; out[1] = p.r[j]; out[2] = 1; }
+        }
     }
 
     List<Portal> portalsOfCell(int li, int cx, int cz) {
@@ -543,6 +682,10 @@ public final class Network {
         // deep dark tiers (Blue)
         boolean darkOn;
         double aF, aC, bF, bC, aPd, aPr, bPd, bPr;
+        /** The nearest pillar of tier A (B) is a view breaker's column ({@link #columnSolid}), not one of 0.2.0's hourglasses. */
+        boolean aCol, bCol;
+        /** The nearest of the rift's spires (Blue): distance from its segment and its radius (0 for none). */
+        double rPd, rPr;
         // landings; whether the gates' passages can reach the column (outside, their term is rock)
         Plans.Gate en, ex;
         boolean enNear, exNear;
@@ -706,6 +849,16 @@ public final class Network {
         if (!n.canyons.isEmpty()) canyonCol(lc, n.canyons.get(0), x, z);
         lc.darkOn = false;
         if (n.dark != null) darkCol(lc, n.dark, x, z);
+        lc.rPd = 1e9;
+        lc.rPr = 0;
+        if (n.dark != null && lc.rOn && lc.rrC > lc.rrF) {
+            double[] t = lc.tmp;
+            t[0] = 1e9;
+            t[1] = 0;
+            n.dark.sightPillar(NetDark.Plan.RIFT, x, z, t);
+            lc.rPd = t[0];
+            lc.rPr = t[1];
+        }
         // landings
         lc.en = base.plans.gate(li + 1, cx, cz);
         lc.ex = li + 2 <= shape.layerCount ? base.plans.gate(li + 2, cx, cz) : null;
@@ -799,8 +952,12 @@ public final class Network {
             if (t[1] <= t[0]) continue;
             double F = t[0], C = t[1];
             dark.pillar(k, x, z, t);
-            if (k == 0) { lc.aF = F; lc.aC = C; lc.aPd = t[0]; lc.aPr = t[1]; }
-            else { lc.bF = F; lc.bC = C; lc.bPd = t[0]; lc.bPr = t[1]; }
+            // and the columns that cut long views: on the seams, and the plan's own (t[2] = 1 when one of them is nearer)
+            t[2] = 0;
+            seamPillar(k, x, z, t);
+            p.sightPillar(k, x, z, t);
+            if (k == 0) { lc.aF = F; lc.aC = C; lc.aPd = t[0]; lc.aPr = t[1]; lc.aCol = t[2] > 0; }
+            else { lc.bF = F; lc.bC = C; lc.bPd = t[0]; lc.bPr = t[1]; lc.bCol = t[2] > 0; }
             lc.darkOn = true;
         }
     }
@@ -974,9 +1131,13 @@ public final class Network {
         }
         if (lc.geoN > 0) d = Math.min(d, geodeDist(lc, x, y, z));
         if (lc.darkOn) {
-            if (lc.aC > lc.aF && lc.aPd < lc.aPr * 2.5) d = Math.max(d, pillarSolid(lc.aPd, lc.aPr, true, y, lc.aF, lc.aC));
-            if (lc.bC > lc.bF && lc.bPd < lc.bPr * 2.5) d = Math.max(d, pillarSolid(lc.bPd, lc.bPr, true, y, lc.bF, lc.bC));
+            if (lc.aC > lc.aF && lc.aPd < lc.aPr * 2.5)
+                d = Math.max(d, lc.aCol ? columnSolid(lc.aPd, lc.aPr, y, lc.aF, lc.aC) : pillarSolid(lc.aPd, lc.aPr, true, y, lc.aF, lc.aC));
+            if (lc.bC > lc.bF && lc.bPd < lc.bPr * 2.5)
+                d = Math.max(d, lc.bCol ? columnSolid(lc.bPd, lc.bPr, y, lc.bF, lc.bC) : pillarSolid(lc.bPd, lc.bPr, true, y, lc.bF, lc.bC));
         }
+        // the rift's spires, from its floor to its vault, which cut its long views (NetPlanner.sightBreak)
+        if (lc.rPr > 0 && lc.rPd < lc.rPr * 2.5) d = Math.max(d, columnSolid(lc.rPd, lc.rPr, y, lc.rrF, lc.rrC));
         // pillars
         for (int k = 0; k < lc.nc; k++) {
             if (lc.pr[k] <= 0 || lc.pd[k] > lc.pr[k] * 2.5) continue;
@@ -1047,6 +1208,19 @@ public final class Network {
         for (int k = 0; k < lc.geoN; k++) best = Math.min(best, Terrain.geodeSdf(lc.geo[k], lc.geoD2[k], y));
         if (best > 12) return best;
         return best + 0.7 * detail.noise3(x / 6.0, y / 6.0, z / 6.0);
+    }
+
+    /**
+     * A view breaker's column (NetPlanner.sightBreak): upright at radius pr from its foot to the middle of its tier, then
+     * flaring into the ceiling (1.65 pr at it). An hourglass's lower flare turns into rings of ledges no one can climb;
+     * an upright foot holds none, and its narrowest is still wider than the 0.75 pr the breaker counts on.
+     */
+    static double columnSolid(double pd, double pr, double y, double f, double c) {
+        if (pr <= 0 || c <= f) return -SOLID;
+        double mid = (f + c) * 0.5, half = Math.max(4, (c - f) * 0.5);
+        double q = Math.max(0, (y - mid) / half);
+        double r = pr * (1 + 0.65 * q * q);
+        return Math.min(r - pd, Math.min(y - (f - 3), (c + 3) - y));
     }
 
     static double pillarSolid(double pd, double pr, boolean hour, double y, double f, double c) {

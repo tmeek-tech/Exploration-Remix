@@ -1032,4 +1032,42 @@ class NetworkTest {
         }
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
+
+    /**
+     * Sight lines: from the eyes of walkable places, rays at pitches -40 to +40 meet rock within 160 blocks, all but
+     * 0.2% of them. Places in every 4th column of the Deep Gardens' and Basalt Galleries' voxel cells and of the Blue
+     * Reaches' 2 x 2 cells (whose rays run on into the apron); rays that leave the box are not counted. Prints the
+     * lengths' distribution and the longest rays.
+     */
+    @Test
+    @Tag("voxel")
+    void sightLinesAreShort() {
+        List<String> fails = new ArrayList<>();
+        List<Object[]> runs = new ArrayList<>();
+        for (int li : new int[]{Terrain.GARDENS, Terrain.BASALT}) for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
+        runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
+        for (Object[] run : runs) {
+            long seed = (Long) run[0];
+            int li = (Integer) run[1], cx = (Integer) run[2], cz = (Integer) run[3], wc = (Integer) run[4];
+            Terrain t = terrain(seed);
+            int cell = (int) t.network.cell;
+            VoxelHarness v = built(seed, li, cx, cz, wc, wc);
+            VoxelHarness.Sight s = v.sight(4, 400, 3, cx * cell, cz * cell, (cx + wc) * cell, (cz + wc) * cell);
+            String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "");
+            long counted = s.rays - s.left;
+            double over = s.over(160) / (double) Math.max(1, counted);
+            StringBuilder b = new StringBuilder();
+            for (int lo = 0; lo < 160; lo += 40) {
+                long n = 0;
+                for (int k = lo / 10; k < lo / 10 + 4; k++) n += s.hist[k];
+                b.append(String.format(java.util.Locale.ROOT, " %d-%d %.2f%%", lo, lo + 40, 100.0 * n / Math.max(1, counted)));
+            }
+            System.out.printf("%s: %d places, %d rays (%d left the box);%s, over 160 %.3f%%, longest %.0f%n", tg, s.places, counted, s.left, b, 100 * over, s.max);
+            for (double[] r : s.longest)
+                System.out.printf("    %.0f blocks from %.0f %.0f %.0f (yaw %.0f, pitch %.0f) to %.0f %.0f %.0f%n", r[5], r[0], r[1], r[2], r[3], r[4], r[6], r[7], r[8]);
+            if (s.places < 1000) fails.add(tg + ": only " + s.places + " places looked from");
+            if (over > 0.002) fails.add(tg + ": " + String.format(java.util.Locale.ROOT, "%.3f", 100 * over) + "% of the rays run over 160 blocks");
+        }
+        assertTrue(fails.isEmpty(), String.join("\n", fails));
+    }
 }
