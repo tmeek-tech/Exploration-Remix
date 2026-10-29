@@ -407,6 +407,107 @@ class NetworkTest {
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
 
+    /**
+     * A plan depends on nothing but the seed, the layer and the cell: planned in a fresh world, planned on another
+     * thread after its neighbours, and planned again by the planner itself, it hashes the same. Eight threads asking
+     * for one new cell-layer at once get one plan, made once (single-flight).
+     */
+    @Test
+    void plansAreDeterministic() throws Exception {
+        long seed = SEEDS[0];
+        java.util.concurrent.ExecutorService ex = java.util.concurrent.Executors.newFixedThreadPool(8);
+        try {
+            for (int li = 0; li < 3; li++) {
+                final int L = li;
+                long alone = planHash(fresh(seed).network.net(L, 0, 0));
+                long afterNeighbours = ex.submit(() -> {
+                    Network w = fresh(seed).network;
+                    for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) if (dx != 0 || dz != 0) w.net(L, dx, dz);
+                    return planHash(w.net(L, 0, 0));
+                }).get();
+                Network again = fresh(seed).network;
+                long replanned = ex.submit(() -> planHash(NetPlanner.plan(again, L, 0, 0))).get();
+                assertEquals(alone, afterNeighbours, "layer " + L + ": the plan changes when its neighbours are planned first");
+                assertEquals(alone, replanned, "layer " + L + ": the plan changes when it is made again");
+
+                Network w = fresh(seed).network;
+                java.util.concurrent.CyclicBarrier go = new java.util.concurrent.CyclicBarrier(8);
+                List<java.util.concurrent.Future<Net>> asks = new ArrayList<>();
+                for (int i = 0; i < 8; i++) asks.add(ex.submit(() -> { go.await(); return w.net(L, 5, -3); }));
+                Net first = asks.get(0).get();
+                for (java.util.concurrent.Future<Net> f : asks) assertSame(first, f.get(), "layer " + L + ": two threads got different plans");
+                assertEquals(1, w.plansMade.sum(), "layer " + L + ": the planner ran more than once for one cell-layer");
+            }
+        } finally {
+            ex.shutdownNow();
+        }
+    }
+
+    static Terrain fresh(long seed) { return new Terrain(TerrainSettings.defaults(), -64, seed); }
+
+    /** A hash of what a plan carves: node centres, sizes and floors, edges, way samples and shafts, rounded to 1e-6. */
+    static long planHash(Net n) {
+        long h = 17;
+        for (Chamber c : n.ch) {
+            h = mixIn(h, c.kind.ordinal(), c.keep ? 1 : 0, c.x, c.z, c.f0, c.rx, c.rz, c.h, c.rise, c.rot, c.lakeY, c.top);
+        }
+        for (Edge e : n.edges) h = mixIn(h, e.a, e.b, e.kind.ordinal());
+        for (Way wy : n.ways) {
+            h = mixIn(h, wy.kind.ordinal(), wy.a, wy.b, wy.n, wy.inner ? 1 : 0);
+            for (int i = 0; i < wy.n; i++) h = mixIn(h, wy.x[i], wy.z[i], wy.f[i], wy.w[i], wy.hgt[i], wy.slab[i]);
+        }
+        for (Shaft sh : n.shafts) h = mixIn(h, sh.x, sh.z, sh.r, sh.y0, sh.y1);
+        return h;
+    }
+
+    static long mixIn(long h, double... vs) {
+        for (double v : vs) h = h * 1000003L + (Double.isNaN(v) ? 7 : Math.round(v * 1e6));
+        return h;
+    }
+
+    /**
+     * The network follows the config (section 2.6): graph tests 1, 2, 6 and 9 with 480 and 720 block cells, and with
+     * every layer 128 tall.
+     */
+    @Test
+    void configVariants() {
+        List<LayerSettings> d = TerrainSettings.defaults().layers();
+        List<LayerSettings> short128 = new ArrayList<>();
+        for (LayerSettings l : d) short128.add(new LayerSettings(l.id(), 128, l.fluidDepth(), l.lava(), l.heightMin(), l.heightMax(), l.widthMin(), l.widthMax()));
+        TerrainSettings[] variants = {
+                new TerrainSettings(16, 480, 4.5, 14.0, d),
+                new TerrainSettings(16, 720, 4.5, 14.0, d),
+                new TerrainSettings(16, 600, 4.5, 14.0, List.copyOf(short128))};
+        String[] names = {"480 block cells", "720 block cells", "layers 128 tall"};
+        List<String> fails = new ArrayList<>();
+        for (int v = 0; v < variants.length; v++) {
+            for (long seed : new long[]{SEEDS[0], SEEDS[2]}) {
+                Terrain t = new Terrain(variants[v], -64, seed);
+                for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
+                    Net n = t.network.net(li, cell[0], cell[1]);
+                    String tg = names[v] + ", " + tag(seed, li, cell[0], cell[1]);
+                    joinedToEntry(t, n, tg, fails);
+                    waysToGates(t, n, tg, fails);
+                    refuges(t, n, tg, fails);
+                    dropped(t, n, tg, fails);
+                }
+                // test 9 on a 3 x 3 block of Blue cells: a portal works on every interior edge
+                Network w = t.network;
+                for (int side = 0; side < 2; side++) for (int a = 1; a < 3; a++) for (int b = 0; b < 3; b++) {
+                    boolean xEdge = side == 0;
+                    int ex = xEdge ? a : b, ez = xEdge ? b : a, working = 0;
+                    for (Network.Portal p : w.portalsOfEdge(Terrain.BLUE, xEdge, ex, ez)) {
+                        Net na = w.net(Terrain.BLUE, p.acx, p.acz), nb = w.net(Terrain.BLUE, p.bcx, p.bcz);
+                        Chamber va = vestibule(na, p.ax, p.az), vb = vestibule(nb, p.bx, p.bz);
+                        if (va != null && vb != null && va.keep && vb.keep && joined(na)[va.id] && joined(nb)[vb.id]) working++;
+                    }
+                    if (working == 0) fails.add(names[v] + ", seed " + seed + ": no portal works on the " + (xEdge ? "west" : "north") + " edge of Blue cell " + ex + "," + ez);
+                }
+            }
+        }
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
+    }
+
     /** Graph tests 1, 2, 5, 6, 7 and 9 over 120 cell-layers (40 per layer) on 10 seeds the fast tests never use. */
     @Test
     @Tag("slow")

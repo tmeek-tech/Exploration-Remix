@@ -514,14 +514,15 @@ public final class Network {
         Net net;
         int nc;
         Chamber[] c = new Chamber[16];
-        double[] e = new double[16], F = new double[16], C = new double[16], pd = new double[16], pr = new double[16];
+        // per-column values are floats: 1,024 columns x 3 layers per worldgen thread (section 2.1)
+        float[] e = new float[16], F = new float[16], C = new float[16], pd = new float[16], pr = new float[16];
         int nw;
         Way[] w = new Way[48];
-        double[] wd = new double[48], wf = new double[48], ww = new double[48], wh = new double[48], wsl = new double[48];
-        double[] wcore = new double[48], wslabHalf = new double[48];
+        float[] wd = new float[48], wf = new float[48], ww = new float[48], wh = new float[48], wsl = new float[48];
+        float[] wcore = new float[48], wslabHalf = new float[48];
         int ns;
         Shaft[] s = new Shaft[8];
-        double[] sd = new double[8];
+        float[] sd = new float[8];
         // canyon (Blue)
         Route r;
         boolean rOn, wOn, w2On;
@@ -530,13 +531,16 @@ public final class Network {
         Route.Bridge bridge;
         int geoN;
         Route.Geode[] geo = new Route.Geode[12];
-        double[] geoD2 = new double[12];
+        float[] geoD2 = new float[12];
         final double[] tmp = new double[6];
         // deep dark tiers (Blue)
         boolean darkOn;
         double aF, aC, bF, bC, aPd, aPr, bPd, bPr;
-        // landings
+        // landings; whether the gates' passages can reach the column (outside, their term is rock)
         Plans.Gate en, ex;
+        boolean enNear, exNear;
+        /** An obsidian tube hub's footprint covers the column. */
+        boolean hub;
         double entryD, exitD, endD;
         double lavaE;
         Chamber bed;
@@ -605,16 +609,16 @@ public final class Network {
                 if (lc.nc == lc.c.length) { lc.growC(); columnGrowths.increment(); }
                 int k = lc.nc++;
                 lc.c[k] = c;
-                lc.e[k] = e;
-                lc.F[k] = floorAt(c, e, x, z);
-                lc.C[k] = ceilAt(c, e, x, z);
-                lc.pd[k] = 1e9;
+                lc.e[k] = (float) e;
+                lc.F[k] = (float) floorAt(c, e, x, z);
+                lc.C[k] = (float) ceilAt(c, e, x, z);
+                lc.pd[k] = 1e9f;
                 lc.pr[k] = 0;
                 for (int p = 0; p + 2 < c.pillars.length; p += 3) {
                     double px = c.kind == Kind.TUBEHUB ? c.x + c.pillars[p] : c.pillars[p];
                     double pz = c.kind == Kind.TUBEHUB ? c.z + c.pillars[p + 1] : c.pillars[p + 1];
                     double d = Math.hypot(x - px, z - pz);
-                    if (d - c.pillars[p + 2] < lc.pd[k] - lc.pr[k]) { lc.pd[k] = d; lc.pr[k] = c.pillars[p + 2]; }
+                    if (d - c.pillars[p + 2] < lc.pd[k] - lc.pr[k]) { lc.pd[k] = (float) d; lc.pr[k] = (float) c.pillars[p + 2]; }
                 }
                 if (c.kind == Kind.LAVA) lc.lavaE = Math.min(lc.lavaE, e);
                 if (c.kind == Kind.LAKE) {
@@ -673,7 +677,7 @@ public final class Network {
                 if (d > s.r + 8) continue;
                 if (lc.ns == lc.s.length) { lc.growS(); columnGrowths.increment(); }
                 lc.s[lc.ns] = s;
-                lc.sd[lc.ns++] = d;
+                lc.sd[lc.ns++] = (float) d;
                 lc.fLo = Math.min(lc.fLo, s.y0 - 2);
                 lc.fHi = Math.max(lc.fHi, s.y1 + 2);
             }
@@ -692,6 +696,9 @@ public final class Network {
         lc.ex = li + 2 <= shape.layerCount ? base.plans.gate(li + 2, cx, cz) : null;
         lc.entryD = Math.hypot(x - lc.en.lx, z - lc.en.lz);
         lc.exitD = lc.ex != null ? Math.hypot(x - lc.ex.ux, z - lc.ex.uz) : 1e9;
+        // passage() is rock beyond 1.34 radii + 8 of the centre line, which keeps inside the gate's box
+        lc.enNear = lc.en.overlaps(x, z, x, z, 8);
+        lc.exNear = lc.ex != null && lc.ex.overlaps(x, z, x, z, 8);
         lc.bed = lc.ex == null ? n.ch.get(n.exit) : null;
         lc.endD = lc.bed != null ? Math.hypot(x - lc.bed.x, z - lc.bed.z) : 1e9;
         if (lc.entryD < lc.en.landR + 6) { lc.fLo = Math.min(lc.fLo, lc.en.lFloor - 9); lc.fHi = Math.max(lc.fHi, lc.en.lCy + lc.en.landHalf + 4); }
@@ -699,6 +706,7 @@ public final class Network {
         if (lc.bed != null && lc.endD < lc.bed.rx + 6) { lc.fLo = Math.min(lc.fLo, lc.bed.f0 - 9); lc.fHi = Math.max(lc.fHi, lc.bed.f0 + 20); }
         // basalt columns: a per-column offset of the walls, constant over a small Voronoi cell
         lc.colShift = li == Terrain.BASALT ? 1.7 * voronoiValue(x, z, 3.3) : 0;
+        lc.hub = inHub(lc);
         lc.done = true;
     }
 
@@ -719,14 +727,14 @@ public final class Network {
         double t = fi - i;
         if (i >= wy.n - 1) { i = wy.n - 2; t = 1; }
         lc.w[k] = wy;
-        lc.wd[k] = d;
-        lc.wf[k] = wy.f[i] + (wy.f[i + 1] - wy.f[i]) * t;
-        lc.ww[k] = wy.w[i] + (wy.w[i + 1] - wy.w[i]) * t;
-        lc.wh[k] = wy.hgt[i] + (wy.hgt[i + 1] - wy.hgt[i]) * t;
-        lc.wsl[k] = wy.slab[i] + (wy.slab[i + 1] - wy.slab[i]) * t;
+        lc.wd[k] = (float) d;
+        lc.wf[k] = (float) (wy.f[i] + (wy.f[i + 1] - wy.f[i]) * t);
+        lc.ww[k] = (float) (wy.w[i] + (wy.w[i + 1] - wy.w[i]) * t);
+        lc.wh[k] = (float) (wy.hgt[i] + (wy.hgt[i + 1] - wy.hgt[i]) * t);
+        lc.wsl[k] = (float) (wy.slab[i] + (wy.slab[i + 1] - wy.slab[i]) * t);
         boolean helix = wy.inner && wy.slab[0] >= 3.4;
-        lc.wcore[k] = wy.inner ? 1.9 : 2.4;
-        lc.wslabHalf[k] = helix ? 3.4 : (wy.inner ? 3.6 : Math.min(5.0, lc.ww[k] * 0.9 + 1.2));
+        lc.wcore[k] = wy.inner ? 1.9f : 2.4f;
+        lc.wslabHalf[k] = helix ? 3.4f : (wy.inner ? 3.6f : (float) Math.min(5.0, lc.ww[k] * 0.9 + 1.2));
         if (d < lc.wslabHalf[k] + 1 || d < lc.wcore[k] + 1.5 || (!wy.inner && d < lc.ww[k] * 1.25)) {
             // the walking core stays open up to 6.24 over the floor line, whatever the way's height
             lc.fLo = Math.min(lc.fLo, lc.wf[k] - lc.wsl[k] - 2);
@@ -815,7 +823,7 @@ public final class Network {
             if (Math.sqrt(d2) >= g.r() + 12) continue;
             if (lc.geoN == lc.geo.length) { lc.growG(); columnGrowths.increment(); }
             lc.geo[lc.geoN] = g;
-            lc.geoD2[lc.geoN++] = d2;
+            lc.geoD2[lc.geoN++] = (float) d2;
         }
     }
 
@@ -912,7 +920,7 @@ public final class Network {
             if (lc.aC > lc.aF) d = Math.min(d, Math.max(lc.aF - y, y - lc.aC));
             if (lc.bC > lc.bF) d = Math.min(d, Math.max(lc.bF - y, y - lc.bC));
         }
-        boolean hub = inHub(lc);
+        boolean hub = lc.hub;
         if (d > -12 && d < 12 && !hub) {
             // the deep dark's floors stay walkable: a third of the roughness within a few blocks of a tier's floor
             double rs = 1;
@@ -939,8 +947,8 @@ public final class Network {
             if (pxz < ex.radius * 2.4 + 4) d = Math.max(d, ex.radius * 1.45 + 3.5 - pxz);
         }
         d = Math.min(d, mustOpen(lc, x, y, z));
-        if (y > en.y1 - 3) d = Math.min(d, passage(en, x, y, z));
-        if (ex != null && y < ex.y0 + 3) d = Math.min(d, passage(ex, x, y, z));
+        if (lc.enNear && y > en.y1 - 3) d = Math.min(d, passage(en, x, y, z));
+        if (lc.exNear && y < ex.y0 + 3) d = Math.min(d, passage(ex, x, y, z));
         if (hub) d = Math.max(d, hubPillar(lc, y));
         return d;
     }
@@ -1101,10 +1109,11 @@ public final class Network {
     double fine(int li, int x, int y, int z, double coarse) {
         LCol lc = layer(column(x, z), li);
         double c8 = coarse * 8.0;
-        boolean hub = inHub(lc);
+        boolean hub = lc.hub;
         if (lc.colShift != 0 && c8 > -3 && c8 < 3 && !hub) c8 += lc.colShift;
         Plans.Gate en = lc.en, ex = lc.ex;
-        boolean pass = y > en.y1 - 3 || (ex != null && y < ex.y0 + 3);
+        boolean enPass = lc.enNear && y > en.y1 - 3, exPass = lc.exNear && y < ex.y0 + 3;
+        boolean pass = enPass || exPass;
         if ((y < lc.fLo || y > lc.fHi) && !pass && !fullFine) {
             double d = c8 / 8.0;
             return d < -1 ? -1 : (d > 1 ? 1 : d);
@@ -1119,8 +1128,8 @@ public final class Network {
             if (!protectedRoom(lc.c[k]) || lc.e[k] > 1.0) continue;
             open = Math.min(open, chamberDist(lc, k, y) + 2.0);
         }
-        if (y > en.y1 - 3) open = Math.min(open, passage(en, x, y, z));
-        if (ex != null && y < ex.y0 + 3) open = Math.min(open, passage(ex, x, y, z));
+        if (enPass) open = Math.min(open, passage(en, x, y, z));
+        if (exPass) open = Math.min(open, passage(ex, x, y, z));
         // Only what changes a block counts: rock that must stay where the interpolation left air, space that must be
         // open where it left rock, the hub's pillar. A term that cannot turn the block leaves the interpolated value
         // as it is, so outside the fine span (where none of them can act) skipping the pass gives the same value.

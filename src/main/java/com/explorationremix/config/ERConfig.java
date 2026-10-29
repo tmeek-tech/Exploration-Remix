@@ -39,7 +39,7 @@ public final class ERConfig {
         public final ForgeConfigSpec.DoubleValue heightMin, heightMax, widthMin, widthMax;
         final boolean lava;
 
-        LayerConfig(ForgeConfigSpec.Builder b, LayerSettings d, String heightWord, String widthWord) {
+        LayerConfig(ForgeConfigSpec.Builder b, LayerSettings d, String heightWord, String widthWord, boolean sizesRead) {
             this.id = d.id();
             this.lava = d.lava();
             b.push(d.id());
@@ -47,10 +47,13 @@ public final class ERConfig {
                     .defineInRange("height", d.height(), 64, 512);
             fluidDepth = b.comment("The " + (d.lava() ? "lava" : "water") + " table sits this many blocks above the layer's floor.")
                     .defineInRange("fluidDepth", d.fluidDepth(), 6, 64);
-            heightMin = b.comment("Smallest " + heightWord + ".").defineInRange("spaceHeightMin", d.heightMin(), 8.0, 400.0);
-            heightMax = b.comment("Largest " + heightWord + ".").defineInRange("spaceHeightMax", d.heightMax(), 8.0, 400.0);
-            widthMin = b.comment("Smallest " + widthWord + ".").defineInRange("spaceWidthMin", d.widthMin(), 8.0, 400.0);
-            widthMax = b.comment("Largest " + widthWord + ".").defineInRange("spaceWidthMax", d.widthMax(), 8.0, 400.0);
+            // Since 0.3 the Deep Gardens and the Basalt Galleries are cave networks that size their own rooms; their four
+            // space sizes are kept so old config files still load, but nothing reads them.
+            String unused = sizesRead ? "" : " Not used since 0.3: the cave network sizes this layer's rooms itself.";
+            heightMin = b.comment("Smallest " + heightWord + "." + unused).defineInRange("spaceHeightMin", d.heightMin(), 8.0, 400.0);
+            heightMax = b.comment("Largest " + heightWord + "." + unused).defineInRange("spaceHeightMax", d.heightMax(), 8.0, 400.0);
+            widthMin = b.comment("Smallest " + widthWord + "." + unused).defineInRange("spaceWidthMin", d.widthMin(), 8.0, 400.0);
+            widthMax = b.comment("Largest " + widthWord + "." + unused).defineInRange("spaceWidthMax", d.widthMax(), 8.0, 400.0);
             b.pop();
         }
 
@@ -78,9 +81,9 @@ public final class ERConfig {
                 .define("upperRegions", true);
         removeCreateStriations = b.comment("Remove Create's striped stone layers from the overworld; the layers use Create's stones as patches instead.")
                 .define("removeCreateStriations", true);
-        layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width");
-        layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width");
-        layers[2] = new LayerConfig(b, d.layers().get(2), "gallery height", "gallery width");
+        layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width", true);
+        layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width", false);
+        layers[2] = new LayerConfig(b, d.layers().get(2), "gallery height", "gallery width", false);
         b.pop();
     }
 

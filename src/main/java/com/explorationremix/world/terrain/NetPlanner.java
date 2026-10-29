@@ -306,7 +306,8 @@ final class NetPlanner {
         void tiers() {
             double base = W + sp.tierBase + r(80, -4, 4);
             double top = T - Terrain.SEAL - 30;
-            int k = Math.max(1, (int) Math.floor((top - base) / sp.tierGap) + 1);
+            // a layer under 112 blocks (config) gets a single storey
+            int k = T - B + 1 < 112 ? 1 : Math.max(1, (int) Math.floor((top - base) / sp.tierGap) + 1);
             tierY = new double[k];
             for (int i = 0; i < k; i++) tierY[i] = base + i * sp.tierGap;
             tiltX = r(81, -0.02, 0.02);
@@ -329,6 +330,8 @@ final class NetPlanner {
 
         /** Blue Reaches: the ancient city's cavern, at vanilla's own start position for this cell, before anything else. */
         void city() {
+            // a city's pieces reach 116 blocks from its start: cells under 400 have no room for one (section 2.6)
+            if (cell < 400) return;
             for (int[] cs : w.citySites(cx, cz)) {
                 Chamber c = chamber(Kind.CITY, 790);
                 c.x = cs[0] + 8; c.z = cs[1] + 8; c.rx = 62; c.rz = 56; c.setRot(r(791, 0, 3.14)); c.warp = 0.12;
@@ -540,7 +543,7 @@ final class NetPlanner {
             switch (li) {
                 case Terrain.GARDENS -> {
                     Strand sw = walkStrand();
-                    well = helixAnchor(sw, Kind.WELL, 260);
+                    if (helixRoom()) well = helixAnchor(sw, Kind.WELL, 260);
                     Strand sh = strands.get(S == 3 ? (u(261) < 0.5 ? 0 : 2) : 1 - sw.s);
                     double tc = r(240, 0.32, 0.62);
                     Chamber em = chamber(Kind.TERRACE, 240);
@@ -575,7 +578,7 @@ final class NetPlanner {
                     g.rampDrop = r(327, 12, 18);
                     g.f0 -= g.rampDrop * 0.5;
                     if (anchorPlace(sg, g, tg, 326)) greatHigh = g;
-                    chimney = helixAnchor(sw, Kind.CHIMNEY, 360);
+                    if (helixRoom()) chimney = helixAnchor(sw, Kind.CHIMNEY, 360);
                 }
                 default -> {
                     if (city != null && city.keep) {
@@ -589,6 +592,12 @@ final class NetPlanner {
                 }
             }
         }
+
+        /**
+         * The helix set pieces need height (section 2.6): the well only when the Deep Gardens are at least 180 tall, the
+         * chimney only when the Basalt Galleries are at least 200 tall (the defaults are 240 and 288).
+         */
+        boolean helixRoom() { return T - B + 1 >= (li == Terrain.BASALT ? 200 : 180); }
 
         Strand walkStrand() {
             for (Strand st : strands) if (st.walkOnly) return st;
@@ -1121,7 +1130,7 @@ final class NetPlanner {
                         Chamber pl = perchedLake(W + r(224, 70, 140));
                         randomPlace(pl, 228);
                     }
-                    if (well == null) {
+                    if (well == null && helixRoom()) {
                         Chamber wl = chamber(Kind.WELL, 260);
                         wl.rx = wl.rz = r(261, 10.5, 12.5); wl.warp = 0.08;
                         wl.f0 = W + r(262, 2, 20); wl.top = Math.min(T - 26, wl.f0 + r(263, 70, 110));
@@ -1140,7 +1149,7 @@ final class NetPlanner {
                     }
                 }
                 case Terrain.BASALT -> {
-                    if (chimney == null) {
+                    if (chimney == null && helixRoom()) {
                         Chamber c = chamber(Kind.CHIMNEY, 360);
                         c.rx = c.rz = r(361, 9.5, 11.5); c.warp = 0.08;
                         c.f0 = W + Terrain.SURGE_RISE + r(362, 4, 14); c.top = Math.min(T - 26, c.f0 + r(363, 70, 110));
@@ -1202,7 +1211,8 @@ final class NetPlanner {
                     for (int k = 0; k < 2; k++) {
                         Chamber s = chamber(Kind.SPRING, 400 + 20 * k);
                         s.rx = r(401 + 20 * k, 11, 15); s.rz = s.rx * r(402 + 20 * k, 0.8, 1.0); s.setRot(r(403 + 20 * k, 0, 3.14));
-                        s.f0 = W + r(404 + 20 * k, 10, 150); s.h = r(405 + 20 * k, 14, 19); s.rise = 2; s.terr = 2;
+                        // up to 150 over the table, less in a layer too short for that (config)
+                        s.f0 = W + r(404 + 20 * k, 10, Math.min(150, T - W - 50)); s.h = r(405 + 20 * k, 14, 19); s.rise = 2; s.terr = 2;
                         double ra = r(406 + 20 * k, 0, 6.28); s.rampX = Math.cos(ra); s.rampZ = Math.sin(ra); s.rampDrop = r(407 + 20 * k, 8, 12);
                         s.refuge = true; s.pend = 3;
                         offMainPlace(s, 408 + 20 * k);
@@ -1212,7 +1222,7 @@ final class NetPlanner {
                     for (int k = 0; k < 2; k++) {
                         Chamber t = chamber(Kind.TUBEHUB, 450 + 20 * k);
                         t.rx = t.rz = r(451 + 20 * k, 8, 10); t.warp = 0.06;
-                        t.f0 = W + Terrain.SURGE_RISE + r(452 + 20 * k, 6, 90); t.h = r(453 + 20 * k, 12, 14); t.rise = 1;
+                        t.f0 = W + Terrain.SURGE_RISE + r(452 + 20 * k, 6, Math.min(90, T - W - Terrain.SURGE_RISE - 32)); t.h = r(453 + 20 * k, 12, 14); t.rise = 1;
                         t.refuge = true;
                         t.pillars = new double[]{0, 0, r(454 + 20 * k, 1.8, 2.6)};
                         offMainPlace(t, 455 + 20 * k);
@@ -1549,7 +1559,9 @@ final class NetPlanner {
                     all = false;
                     if (failed.contains(c.id)) continue;
                     tried = true;
-                    relaxDark = n.dark != null && pass >= passes - 10 && c.kind == Kind.PORTAL;
+                    // the last passes let a portal's or a landing's tunnel bridge deep dark caverns: in a short Blue
+                    // Reaches (config) the lower tier can box the exit's courts in from above
+                    relaxDark = n.dark != null && pass >= passes - 10 && (c.kind == Kind.PORTAL || c.landing() || c.court);
                     boolean joined = false;
                     int comp = find(c.id);
                     // the closest pairs between this component and the main one
