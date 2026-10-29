@@ -6,6 +6,10 @@
       "count": 140
     },
     {
+      "type": "minecraft:count",
+      "count": 2
+    },
+    {
       "type": "minecraft:in_square"
     },
     {

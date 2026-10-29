@@ -176,7 +176,7 @@ public final class Palette {
                     double m = wobN.noise3(x * 0.06, y * 0.085, z * 0.06);
                     if (floor) return m > 0.1 ? Rock.BASALT : Rock.OBSIDIAN;
                     if (m > (ceil ? 0.0 : 0.2)) return Rock.BASALT;
-                    return speck(x, y, z) < 0.05 ? Rock.CRYING_OBSIDIAN : Rock.OBSIDIAN;
+                    return speck(x, y, z) < 0.1 ? Rock.CRYING_OBSIDIAN : Rock.OBSIDIAN;
                 }
                 if (g < 3.2) return Rock.BLACKSTONE;
                 return n > 0.2 ? Rock.SMOOTH_BASALT : Rock.BASALT;
