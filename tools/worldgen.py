@@ -313,7 +313,7 @@ def build_features():
             [count(6), SQUARE, layer(up), BIOME])
     feature("ivory_root_cavern/brackets", "underground_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:ivory_bracket"), "walls", 64, f"#{MOD}:cave_rock", radius=7, height=8),
-            [count(5), SQUARE, layer(up), BIOME])
+            [count(3), SQUARE, layer(up), BIOME])
     feature("deep_blue_rift/lichen", "underground_decoration", ["deep_blue_rift"],
             attach(simple(f"{MOD}:blue_lichen"), "any", 40, f"#{MOD}:blue_rift_walls", radius=6, height=6),
             [count(12), SQUARE, layer("blue_reaches", above_water=True), BIOME])
@@ -360,7 +360,7 @@ def build_features():
     # ---- vegetal decoration: roots, vines and plants
     feature("rootvaults/hanging_roots", "vegetal_decoration", rv,
             attach(simple("minecraft:hanging_roots"), "ceiling", 32, ["minecraft:rooted_dirt", "minecraft:dirt", "minecraft:moss_block"], radius=6, height=4),
-            [count(12), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
+            [count(14), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
     feature("rootvaults/lantern_roots", "vegetal_decoration", rv,
             hanging_column("explorationremix:lantern_roots", "explorationremix:lantern_roots", 0, 4),
             [count(20), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
@@ -373,7 +373,7 @@ def build_features():
                 {"data": state("minecraft:fern"), "weight": 3}, {"data": state("minecraft:grass"), "weight": 2},
                 {"data": state("minecraft:large_fern"), "weight": 1}]},
                 state("minecraft:fern"), tries=32, on=PLANT_FLOORS),
-            [count(36), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(40), SQUARE, layer(up)] + floor() + [BIOME])
     feature("rootvaults/white_glow_flowers", "vegetal_decoration", rv,
             patch(simple("explorationremix:white_glow_flower"), state("explorationremix:white_glow_flower"), tries=20, xz=5, on=PLANT_FLOORS),
             [count(10), SQUARE, layer(up)] + floor() + [looks(1), BIOME])
@@ -388,16 +388,16 @@ def build_features():
                 "stem": state("minecraft:mushroom_stem"), "cap": state("minecraft:mushroom_stem", down=False),
                 "glow": state("minecraft:shroomlight"), "roots": state(f"{MOD}:lantern_roots"),
                 "height": uniform(2, 5), "radius": uniform(2, 3), "root_length": uniform(1, 4)}},
-            [count(3), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(2), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/lantern_fungi", "vegetal_decoration", ["ivory_root_cavern"],
-            patch(simple("explorationremix:lantern_fungus"), state("explorationremix:lantern_fungus"), tries=20, xz=5, y=3),
-            [count(6), SQUARE, layer(up)] + floor() + [BIOME])
+            patch(simple("explorationremix:lantern_fungus"), state("explorationremix:lantern_fungus"), tries=12, xz=5, y=3),
+            [count(5), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/lantern_roots", "vegetal_decoration", ["ivory_root_cavern"],
             attach(simple("explorationremix:lantern_roots"), "ceiling", 32, f"#{MOD}:cave_rock", radius=6, height=3),
-            [count(8), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(6), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("ivory_root_cavern/moss", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple("minecraft:moss_carpet"), state("minecraft:moss_carpet"), tries=24, xz=4, y=2),
-            [count(14), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(10), SQUARE, layer(up)] + floor() + [BIOME])
     feature("lantern_lake/wisteria", "vegetal_decoration", ["lantern_lake"],
             hanging_patch(hanging_column("explorationremix:wisteria_plant", "explorationremix:wisteria", 1, 6), tries=8, xz=4, y=2),
             [count(10), SQUARE, layer("deep_gardens")] + ceiling() + [BIOME])
@@ -432,7 +432,7 @@ def build_features():
             [count(5), SQUARE, layer(up)] + ceiling() + [looks(0, 1), BIOME])
     feature("rootvaults/weeping_ivy", "vegetal_decoration", rv,
             hanging_patch(hanging_column(f"{MOD}:weeping_ivy_plant", f"{MOD}:weeping_ivy", 2, 12), tries=10, xz=5, y=3),
-            [count(16), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(18), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("rootvaults/starmoss", "vegetal_decoration", rv,
             patch(simple(f"{MOD}:starmoss"), state(f"{MOD}:starmoss"), tries=32, xz=5, y=2),
             [count(10), SQUARE, layer(up)] + floor() + [looks(1), BIOME])
@@ -451,13 +451,13 @@ def build_features():
             [count(14), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("silver_fern_rift/tall_ferns", "vegetal_decoration", ["silver_fern_rift"],
             patch(simple(f"{MOD}:tall_silver_fern"), state(f"{MOD}:tall_silver_fern"), tries=24, xz=6, y=3),
-            [count(12), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(16), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/gold_threads", "vegetal_decoration", ["ivory_root_cavern"],
-            hanging_patch(hanging_column(f"{MOD}:gold_threads_plant", f"{MOD}:gold_threads", 2, 9), tries=8, xz=4, y=2),
-            [count(6), SQUARE, layer(up)] + ceiling() + [BIOME])
+            hanging_patch(hanging_column(f"{MOD}:gold_threads_plant", f"{MOD}:gold_threads", 2, 7), tries=5, xz=4, y=2),
+            [count(3), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("ivory_root_cavern/sage", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple(f"{MOD}:sage_bush"), state(f"{MOD}:sage_bush"), tries=16, xz=5, y=2),
-            [count(20), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(14), SQUARE, layer(up)] + floor() + [BIOME])
     feature("deep_blue_rift/glowbells", "vegetal_decoration", ["deep_blue_rift"],
             patch(simple(f"{MOD}:glowbell"), state(f"{MOD}:glowbell"), tries=16, xz=4, y=2),
             [count(10), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
