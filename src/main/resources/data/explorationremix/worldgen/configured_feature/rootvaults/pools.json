@@ -50,6 +50,13 @@
     },
     "radius": 6,
     "edge_chance": 0.3,
-    "overflow_chance": 0.0
+    "overflow_chance": 0.0,
+    "inner": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:pool_pearls"
+      }
+    },
+    "inner_chance": 0.3
   }
 }

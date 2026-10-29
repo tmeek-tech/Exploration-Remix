@@ -1,0 +1,19 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:base_stone_overworld",
+    "minecraft:gravel",
+    "minecraft:clay",
+    "minecraft:sand",
+    "minecraft:calcite",
+    "minecraft:moss_block",
+    {
+      "id": "create:limestone",
+      "required": false
+    },
+    {
+      "id": "create:veridium",
+      "required": false
+    }
+  ]
+}

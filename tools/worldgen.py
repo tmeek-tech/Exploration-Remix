@@ -252,7 +252,8 @@ def build_features():
             {"type": f"{MOD}:daylight_shaft", "config": {"radius": funiform(1.5, 3.0), "max_depth": 24}},
             [{"type": f"{MOD}:rootvaults_openings"}] + ceiling() + [BIOME])
     feature("rootvaults/pools", "local_modifications", rv,
-            pools(mix((LIMESTONE, 3), (simple("minecraft:moss_block"), 1)), mix((simple("minecraft:clay"), 2), (simple("minecraft:gravel"), 1)), 6),
+            pools(mix((LIMESTONE, 3), (simple("minecraft:moss_block"), 1)), mix((simple("minecraft:clay"), 2), (simple("minecraft:gravel"), 1)), 6,
+                  inner=simple(f"{MOD}:pool_pearls"), inner_chance=0.3),
             [count(2), SQUARE, layer(up)] + floor() + [looks(0, 1), BIOME])
     # A pale bed of calcite and limestone under the lake, as in its picture: the biome's cells end at the water, so the
     # rock under it was often the pack's deepslate.
@@ -490,6 +491,10 @@ def build_features():
     feature("ivory_root_cavern/pool_pearls", "vegetal_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:pool_pearls"), "floor", 64, f"#{MOD}:cave_rock", radius=6, height=2, in_water=True),
             [count(32), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, BIOME])
+    # Pool pearls light the root halls' and teal grottos' streams and pools turquoise, as in their pictures.
+    feature("rootvaults/pool_pearls", "vegetal_decoration", rv,
+            attach(simple(f"{MOD}:pool_pearls"), "floor", 32, f"#{MOD}:grotto_bed", radius=5, height=2, in_water=True),
+            [count(32), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, looks(0, 1), BIOME])
     feature("ivory_root_cavern/moss", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple("minecraft:moss_carpet"), state("minecraft:moss_carpet"), tries=24, xz=4, y=2),
             [count(10), SQUARE, layer(up)] + floor() + [BIOME])
@@ -693,6 +698,9 @@ BLOCK_TAGS = {
     # from the brown mushroom shelves; under Lantern Lake's water they grow from its bed.
     "garden_soil": ["minecraft:calcite", "minecraft:sand", "minecraft:brown_mushroom_block"] + optional(["create:limestone"]),
     "lake_bed": ["minecraft:sand", "minecraft:gravel", "minecraft:clay", "minecraft:calcite"] + optional(["create:limestone"]),
+    # The beds of the Rootvaults' streams and pools, where pool pearls grow.
+    "grotto_bed": ["#minecraft:base_stone_overworld", "minecraft:gravel", "minecraft:clay", "minecraft:sand", "minecraft:calcite",
+                   "minecraft:moss_block"] + optional(["create:limestone", "create:veridium"]),
     # The Deep Gardens' pale ceilings, which grow cream stalactites.
     "pale_rock": ["minecraft:calcite"] + optional(["create:limestone"]),
     "basalt_rock": ["minecraft:basalt", "minecraft:polished_basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:gilded_blackstone",
