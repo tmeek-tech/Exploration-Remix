@@ -236,16 +236,16 @@ public final class Palette {
         return null;
     }
 
-    // ============================================================================================== Rootvaults
+    // ============================================================================================== entrances
 
     /**
-     * Rock around the Rootvaults' grottos, by look (see {@link Rootvaults}): root halls are grey stone with limestone
+     * Rock around the Root Vaults' chambers, by look (see {@link Entrances}): root halls are grey stone with limestone
      * ledges, moss on top and rooted dirt in the ceiling where the roots come through; teal grottos are stone and
      * veridium with mossy ledges; ravines are veridium cliffs with moss and pale limestone on the ledges. Only the
-     * shell is dressed: floors, ceilings, and walls within {@code shell} 3 blocks of a grotto. Null keeps the pack's
+     * shell is dressed: floors, ceilings, and walls within {@code shell} 3 blocks of a chamber. Null keeps the pack's
      * own stone (and its ores) deeper in.
      *
-     * @param shell distance from the grotto's open space (its signed distance, positive in rock)
+     * @param shell distance from the chamber's open space (its signed distance, positive in rock)
      * @param wet   water rests on this run of rock
      */
     public Rock rootvaults(int look, int x, int y, int z, int above, int below, boolean wet, double shell) {
@@ -255,14 +255,14 @@ public final class Palette {
         if (!floor && !ceil && shell > 3) return null;
         double n = patch(x, y, z);
         switch (look) {
-            case Rootvaults.TEAL:
+            case Entrances.TEAL:
                 if (floor) {
                     if (wet) return n > 0.1 ? Rock.GRAVEL : Rock.STONE;
                     if (top) return n > -0.05 ? Rock.MOSS : Rock.STONE;
                     return n > 0.2 ? Rock.VERIDIUM : Rock.STONE;
                 }
                 return n > -0.02 ? Rock.VERIDIUM : Rock.STONE;
-            case Rootvaults.RAVINE:
+            case Entrances.RAVINE:
                 // No plain stone on the faces: the vanilla granite, diorite and andesite blobs placed after this
                 // replace stone, and turned whole cliffs brown. Veridium, moss and limestone are not theirs to replace.
                 if (floor) {
@@ -281,5 +281,104 @@ public final class Palette {
                 if (ceil) return n > -0.05 ? Rock.ROOTED_DIRT : Rock.STONE;
                 return n > 0.22 ? Rock.LIMESTONE : Rock.STONE;
         }
+    }
+
+    /**
+     * The frozen mouths of Root Vaults under snowy forests: snow and patches of packed ice on the floors, packed ice
+     * crusting the ceilings (blue ice in specks) where the icicles hang, frosted stone and limestone walls with ice in
+     * patches. Pool beds stay gravel and stone (a feature lays ice on the still water).
+     */
+    public Rock frozenVaults(int look, int x, int y, int z, int above, int below, boolean wet, double shell) {
+        boolean top = above <= 1;
+        boolean floor = above <= 3;
+        boolean ceil = !floor && below <= 2;
+        if (!floor && !ceil && shell > 3) return null;
+        double n = patch(x, y, z);
+        if (floor) {
+            if (wet) return n > 0.1 ? Rock.GRAVEL : Rock.STONE;
+            if (top) return n > -0.25 ? Rock.SNOW : (n > -0.5 ? Rock.PACKED_ICE : Rock.STONE);
+            return n > 0.2 ? Rock.LIMESTONE : Rock.STONE;
+        }
+        if (ceil) {
+            if (n > 0.1) return speck(x, y, z) < 0.07 ? Rock.BLUE_ICE : Rock.PACKED_ICE;
+            return look == Entrances.HALL && n < -0.25 ? Rock.ROOTED_DIRT : Rock.STONE;
+        }
+        if (n > 0.38) return Rock.PACKED_ICE;
+        return n < -0.35 ? Rock.LIMESTONE : Rock.STONE;
+    }
+
+    /**
+     * A sinkhole: limestone over stone in bold patches on its walls, with a seam of calcite; dripstone and limestone
+     * under its lip; moss, grass, gravel and cobbles on its talus and shore; clay, sand and gravel under its pool. Under
+     * snowy plains, snow on the talus and the shore and packed ice in the walls.
+     */
+    public Rock sinkhole(int x, int y, int z, int above, int below, boolean wet, double shell, boolean cold) {
+        boolean top = above <= 1;
+        boolean floor = above <= 3;
+        boolean ceil = !floor && below <= 2;
+        if (!floor && !ceil && shell > 3) return null;
+        double n = patch(x, y, z);
+        if (floor) {
+            if (wet) return n > 0.15 ? Rock.CLAY : (n > -0.2 ? Rock.SAND : Rock.GRAVEL);
+            if (top) {
+                if (cold && n > -0.3) return Rock.SNOW;
+                if (n > 0.3) return Rock.MOSS;
+                if (n > 0.0) return Rock.GRASS;
+                if (n > -0.25) return Rock.GRAVEL;
+                return speck(x, y, z) < 0.5 ? Rock.MOSSY_COBBLESTONE : Rock.COBBLESTONE;
+            }
+            return n > 0.1 ? Rock.DIRT : Rock.LIMESTONE;
+        }
+        if (ceil) return n < -0.3 ? Rock.DRIPSTONE : (n > 0.1 ? Rock.LIMESTONE : Rock.STONE);
+        if (cold && n > 0.45) return Rock.PACKED_ICE;
+        if (seam(x, y, z)) return Rock.CALCITE;
+        return n > -0.12 ? Rock.LIMESTONE : Rock.STONE;
+    }
+
+    /**
+     * An oasis hollow: sandstone walls with smooth sandstone and bands and patches of ochrum, sandstone ceilings, sand
+     * floors (sandstone wherever open space lies right under a floor, so no sand hangs over air), clay and sand round
+     * the spring. In the badlands (red): red sandstone, terracotta and ochrum, and red sand.
+     */
+    public Rock oasis(int x, int y, int z, int above, int below, boolean wet, double shell, boolean red) {
+        boolean top = above <= 1;
+        boolean floor = above <= 3;
+        boolean ceil = !floor && below <= 2;
+        if (!floor && !ceil && shell > 3) return null;
+        double n = patch(x, y, z);
+        Rock sandstone = red ? Rock.RED_SANDSTONE : Rock.SANDSTONE;
+        if (floor) {
+            if (below <= 1) return sandstone;
+            if (wet) return n > 0.0 ? Rock.CLAY : (red ? Rock.RED_SAND : Rock.SAND);
+            if (top) {
+                if (n < -0.4) return red ? Rock.SMOOTH_RED_SANDSTONE : Rock.SMOOTH_SANDSTONE;
+                return red ? Rock.RED_SAND : Rock.SAND;
+            }
+            return sandstone;
+        }
+        if (ceil) return red && n > 0.2 ? Rock.TERRACOTTA : sandstone;
+        if (seam(x, y, z) || n > 0.42) return Rock.OCHRUM;
+        if (red) return n < -0.2 ? Rock.ORANGE_TERRACOTTA : (n < 0.15 ? Rock.RED_SANDSTONE : Rock.TERRACOTTA);
+        return n < -0.3 ? Rock.SMOOTH_SANDSTONE : Rock.SANDSTONE;
+    }
+
+    /**
+     * The Frost Fern Grotto (the pack's caves under cold ground): ceilings crusted with packed ice and specks of blue
+     * ice, floors of moss with pale limestone ledges, gravel and clay under its water. The walls keep the pack's rock;
+     * patches of deepslate come from a feature.
+     */
+    public Rock frostGrotto(int x, int y, int z, int above, int below, boolean wet) {
+        boolean top = above <= 1;
+        boolean floor = above <= 2;
+        boolean ceil = !floor && below <= 2;
+        if (!floor && !ceil) return null;
+        double n = patch(x, y, z);
+        if (floor) {
+            if (wet) return n > 0.1 ? Rock.GRAVEL : Rock.CLAY;
+            if (top) return n > -0.3 ? Rock.MOSS : Rock.LIMESTONE;
+            return n > 0.0 ? Rock.DIRT : Rock.LIMESTONE;
+        }
+        if (n > -0.35) return speck(x, y, z) < 0.06 ? Rock.BLUE_ICE : Rock.PACKED_ICE;
+        return null;
     }
 }

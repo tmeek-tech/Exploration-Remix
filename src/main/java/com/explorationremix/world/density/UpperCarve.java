@@ -1,7 +1,7 @@
 package com.explorationremix.world.density;
 
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.terrain.Rootvaults;
+import com.explorationremix.world.terrain.Entrances;
 import com.explorationremix.world.terrain.Terrain;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.util.KeyDispatchDataCodec;
@@ -9,7 +9,7 @@ import net.minecraft.world.level.levelgen.DensityFunction;
 
 /**
  * Carves out of the pack's own terrain above its old floor: the first gate's upper landing and its ramp, the Silver
- * Fern Rift or Ivory Root Cavern of each cell, and the Rootvaults' grottos and tunnels under the trees. Combined with
+ * Fern Rift or Ivory Root Cavern of each cell, and the entrances' chambers and tunnels near the surface. Combined with
  * the pack's density through {@code min}, so it only ever removes stone. Interpolated like the pack's density;
  * {@link UpperFine} puts the thin parts back block by block.
  */
@@ -24,8 +24,8 @@ public final class UpperCarve implements DensityFunction {
         Terrain t = DeepWorld.terrain();
         if (t == null) return fallback;
         double d = t.upperCarve(x, y, z);
-        Rootvaults r = DeepWorld.roots();
-        if (r != null) d = Math.min(d, r.carve(x, y, z));
+        Entrances e = DeepWorld.entrances();
+        if (e != null) d = Math.min(d, e.carve(x, y, z));
         double v = d / 8.0;
         return v < -1 ? -1 : (v > 1 ? 1 : v);
     }

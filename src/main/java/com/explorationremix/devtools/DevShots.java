@@ -22,8 +22,9 @@ import java.util.List;
 /**
  * Development only, and only when the environment variable ER_SHOTS names a shot list: once a world is open (single
  * player, or a server where the player is an operator), takes a screenshot of each listed biome from the best view
- * /remix view finds, then quits. Each line of the list is "file-name biome [n]", or "file-name @ x y z yaw pitch" for
- * a picture from a chosen spot. Screenshots go to the game's screenshots folder.
+ * /remix view finds, then quits. Each line of the list is "file-name biome [n]", "file-name biome [n] near x z" (the
+ * view searched for round x z), or "file-name @ x y z yaw pitch" for a picture from a chosen spot. Screenshots go to
+ * the game's screenshots folder.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, value = Dist.CLIENT)
 public final class DevShots {
@@ -116,7 +117,10 @@ public final class DevShots {
                     return;
                 }
                 String[] s = shots.get(index);
+                int near = java.util.Arrays.asList(s).indexOf("near");
                 String cmd = s[1].equals("@") && s.length >= 7 ? "tp @s " + String.join(" ", java.util.Arrays.copyOfRange(s, 2, 7))
+                        : near > 0 && near + 2 < s.length
+                        ? "execute positioned " + s[near + 1] + " 64 " + s[near + 2] + " run remix view " + s[1] + (near > 2 ? " " + s[2] : "")
                         : "remix view " + s[1] + (s.length > 2 ? " " + s[2] : "");
                 ExplorationRemix.LOGGER.info("[shots] {} of {}: {}", index + 1, shots.size(), cmd);
                 viewDone = false;

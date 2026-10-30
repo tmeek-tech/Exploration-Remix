@@ -2,7 +2,7 @@ package com.explorationremix.world.feature;
 
 import com.explorationremix.registry.ERWorldgen;
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.terrain.Rootvaults;
+import com.explorationremix.world.terrain.Entrances;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * Right under the trees: for each tree trunk standing over a Rootvaults grotto in this chunk (a big tree's 2x2 trunk
+ * Right under the trees: for each tree trunk standing over a Root Vault chamber or mouth in this chunk (a big tree's 2x2 trunk
  * counts once), with the given chance, the first open block under the rock beneath it (or a plant hanging there), at
  * most {@code max_depth} blocks under the ground. Meant for the top layer step, when the chunk's own trees have grown;
  * roots placed there hang straight under the tree they belong to.
@@ -44,7 +44,7 @@ public final class UnderTreesPlacement extends PlacementModifier {
 
     @Override
     public Stream<BlockPos> getPositions(PlacementContext ctx, RandomSource random, BlockPos pos) {
-        Rootvaults r = DeepWorld.roots();
+        Entrances r = DeepWorld.entrances();
         if (r == null) return Stream.empty();
         WorldGenLevel level = ctx.getLevel();
         int x0 = pos.getX() & ~15, z0 = pos.getZ() & ~15;
@@ -52,7 +52,7 @@ public final class UnderTreesPlacement extends PlacementModifier {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         for (int dx = 0; dx < 16; dx++) for (int dz = 0; dz < 16; dz++) {
             int x = x0 + dx, z = z0 + dz;
-            if (r.grottoAt(x, z) == null) continue;
+            if (!r.underRoots(x, z)) continue;
             BlockState log = CeilingRootsFeature.trunk(level, x, z);
             if (log == null) continue;
             // One root per big tree: its trunk's corner towards negative x and z.

@@ -151,7 +151,8 @@
       "explorationremix:rootvaults/moss_floor",
       "explorationremix:rootvaults/glow_lichen",
       "explorationremix:rootvaults/moss_ceiling",
-      "explorationremix:rootvaults/grotto_ivy"
+      "explorationremix:rootvaults/grotto_ivy",
+      "explorationremix:rootvaults/ice_rims"
     ],
     [
       "minecraft:spring_water",
@@ -170,7 +171,9 @@
       "explorationremix:rootvaults/weeping_ivy",
       "explorationremix:rootvaults/starmoss",
       "explorationremix:rootvaults/starmoss_sparse",
-      "explorationremix:rootvaults/azaleas"
+      "explorationremix:rootvaults/azaleas",
+      "explorationremix:rootvaults/frost_ferns",
+      "explorationremix:rootvaults/frostberries"
     ],
     [
       "minecraft:freeze_top_layer",

@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
-/** Routes biome placement below the pack's floor through the deep terrain, and swaps in the Rootvaults above it. */
+/** Routes biome placement below the pack's floor through the deep terrain, and the Upper Caves' own biomes above it. */
 @Mixin(NoiseBasedChunkGenerator.class)
 public abstract class NoiseBasedChunkGeneratorMixin {
     @Redirect(method = "doCreateBiomes",

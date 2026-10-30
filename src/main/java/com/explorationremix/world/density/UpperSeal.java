@@ -1,15 +1,15 @@
 package com.explorationremix.world.density;
 
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.terrain.Rootvaults;
+import com.explorationremix.world.terrain.Entrances;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.world.level.levelgen.DensityFunction;
 
 /**
- * Rock the pack's own caves may not open: a bowl around the water of each Rootvaults grotto (see
- * {@link Rootvaults#seals}), so its pools and streams never drain into a cave beside or below them. Combined with the
- * pack's density through {@code max}, before {@link UpperCarve}'s {@code min} opens the grotto itself again. Not
+ * Rock the pack's own caves may not open: a bowl around the water of each entrance's chamber (see
+ * {@link Entrances#seals}), so its pools and streams never drain into a cave beside or below them. Combined with the
+ * pack's density through {@code max}, before {@link UpperCarve}'s {@code min} opens the chamber itself again. Not
  * interpolated: it is exact per block, and {@code max} only asks it where the pack's density is below 1.
  */
 public final class UpperSeal implements DensityFunction {
@@ -22,8 +22,8 @@ public final class UpperSeal implements DensityFunction {
 
     @Override
     public double compute(FunctionContext ctx) {
-        Rootvaults r = DeepWorld.roots();
-        return r != null && r.seals(ctx.blockX(), ctx.blockY(), ctx.blockZ()) ? 1.0 : NONE;
+        Entrances e = DeepWorld.entrances();
+        return e != null && e.seals(ctx.blockX(), ctx.blockY(), ctx.blockZ()) ? 1.0 : NONE;
     }
 
     @Override

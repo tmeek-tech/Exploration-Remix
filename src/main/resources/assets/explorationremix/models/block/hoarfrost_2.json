@@ -1,0 +1,7 @@
+{
+  "parent": "explorationremix:block/template/lichen",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "texture": "explorationremix:block/hoarfrost_2"
+  }
+}

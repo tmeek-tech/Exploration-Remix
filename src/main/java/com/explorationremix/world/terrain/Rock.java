@@ -42,7 +42,22 @@ public enum Rock {
     IRON_ORE(0x88807a),
     OBSIDIAN(0x15111f),
     CRYING_OBSIDIAN(0x2c0d52),
-    MUSHROOM(0x957051);
+    MUSHROOM(0x957051),
+    // ---- the Upper Caves' entrances (0.4): frozen Root Vaults, sinkholes, oasis hollows and the Frost Fern Grotto
+    SNOW(0xf4fbfb),
+    ICE(0x92b7f5),
+    PACKED_ICE(0x8db4f0),
+    BLUE_ICE(0x74a7fd),
+    COBBLESTONE(0x7a7a7a),
+    MOSSY_COBBLESTONE(0x6c7a5c),
+    COARSE_DIRT(0x775538),
+    SANDSTONE(0xd8cb9b),
+    SMOOTH_SANDSTONE(0xdfd4a7),
+    RED_SAND(0xbe6721),
+    RED_SANDSTONE(0xb5621f),
+    SMOOTH_RED_SANDSTONE(0xb5621f),
+    TERRACOTTA(0x985e44),
+    ORANGE_TERRACOTTA(0xa25426);
 
     public final int color;
 

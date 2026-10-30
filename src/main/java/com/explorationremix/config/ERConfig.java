@@ -28,6 +28,7 @@ public final class ERConfig {
     public final ForgeConfigSpec.DoubleValue landingRadius;
     public final ForgeConfigSpec.IntValue structureFloorY;
     public final ForgeConfigSpec.BooleanValue replaceVanillaCaveBiomes;
+    public final ForgeConfigSpec.BooleanValue joinDeadEnds;
     public final ForgeConfigSpec.BooleanValue removeCreateStriations;
     public final ForgeConfigSpec.BooleanValue upperRegions;
     public final LayerConfig[] layers = new LayerConfig[3];
@@ -73,10 +74,14 @@ public final class ERConfig {
         passageRadius = b.comment("Radius of the twisting gate passages.").defineInRange("passageRadius", d.passageRadius(), 2.5, 12.0);
         landingRadius = b.comment("Radius of the landing chambers at each end of a gate passage.").defineInRange("landingRadius", d.landingRadius(), 8.0, 40.0);
         structureFloorY = b.comment("Strongholds and mineshafts stay above this Y so the End stays reachable.").defineInRange("structureFloorY", -56, -64, 0);
-        replaceVanillaCaveBiomes = b.comment("Carve the Rootvaults 10 to 40 blocks under forests, jungles, taigas, swamps and cherry groves, and keep",
-                        "vanilla's deep dark out of the pack's caves above the first band (the pack's other cave biomes take its place there; the",
-                        "deep dark moved down into the Blue Reaches).")
+        replaceVanillaCaveBiomes = b.comment("The Upper Caves' entrances and plant caves: Root Vaults a few blocks under forests (frozen at their",
+                        "mouths under snowy forests), sinkholes under plains, oasis hollows under deserts and badlands, more lush caves (the Frost Fern",
+                        "Grotto under cold ground), no lava above the old floor, and vanilla's deep dark kept out of the pack's caves above the first",
+                        "band (the pack's other cave biomes take its place there; the deep dark moved down into the Blue Reaches).")
                 .define("replaceVanillaCaveBiomes", true);
+        joinDeadEnds = b.comment("Join the blind ends of the pack's caves above the old floor to a cave nearby with a short tunnel, so few",
+                        "ways end in a dead end.")
+                .define("joinDeadEnds", true);
         upperRegions = b.comment("Carve the Silver Fern Rift and the Ivory Root Cavern into the pack's caves between y -64 and about 0.")
                 .define("upperRegions", true);
         removeCreateStriations = b.comment("Remove Create's striped stone layers from the overworld; the layers use Create's stones as patches instead.")

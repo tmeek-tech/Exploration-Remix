@@ -11,16 +11,23 @@ import json, os
 MOD = "explorationremix"
 
 # ----------------------------------------------------------------------------------------------- biome list
-UPPER = ["rootvaults", "silver_fern_rift", "ivory_root_cavern"]
+UPPER = ["rootvaults", "silver_fern_rift", "ivory_root_cavern",
+         # Upper Caves rework: the frozen mouths of the Root Vaults under snowy forests, the plains' sinkholes, the
+         # deserts' and badlands' oasis hollows, and the cold plant caves
+         "frozen_rootvaults", "sinkhole", "oasis_hollow", "frost_fern_grotto"]
+# The entrances' biomes, whose features aim at their chambers (layer_range's grottos focus).
+ENTRANCE_BIOMES = {"rootvaults", "frozen_rootvaults", "sinkhole", "oasis_hollow"}
 DEEP = ["lantern_lake", "ember_gardens", "rust_springs", "deep_blue_rift", "asurine_geodes", "basalt_galleries", "obsidian_tubes"]
 OURS = UPPER + DEEP
 NAMES = {
-    "rootvaults": "Rootvaults", "silver_fern_rift": "Silver Fern Rift", "ivory_root_cavern": "Ivory Root Cavern",
+    "rootvaults": "Root Vaults", "silver_fern_rift": "Silver Fern Rift", "ivory_root_cavern": "Ivory Root Cavern",
+    "frozen_rootvaults": "Frozen Root Vaults", "sinkhole": "Sinkhole", "oasis_hollow": "Oasis Hollow", "frost_fern_grotto": "Frost Fern Grotto",
     "lantern_lake": "Lantern Lake", "ember_gardens": "Ember Gardens", "rust_springs": "Rust Springs",
     "deep_blue_rift": "Deep Blue Rift", "asurine_geodes": "Asurine Geodes",
     "basalt_galleries": "Basalt Galleries", "obsidian_tubes": "Obsidian Tubes",
 }
 LAYER = {"rootvaults": "upper", "silver_fern_rift": "upper", "ivory_root_cavern": "upper",
+         "frozen_rootvaults": "upper", "sinkhole": "upper", "oasis_hollow": "upper", "frost_fern_grotto": "upper",
          "lantern_lake": "deep_gardens", "ember_gardens": "deep_gardens", "rust_springs": "deep_gardens",
          "deep_blue_rift": "blue_reaches", "asurine_geodes": "blue_reaches",
          "basalt_galleries": "basalt_galleries", "obsidian_tubes": "basalt_galleries"}
@@ -31,6 +38,11 @@ LOOKS = {
     "rootvaults":        ("#b4c27c", "#3cc4b4", "#0f5a55", "#6fae58", "#5d9c48"),
     "silver_fern_rift":  ("#93ab98", "#3aa9c2", "#0f4a5a", "#7fa86a", "#6f985a"),
     "ivory_root_cavern": ("#c7b784", "#38cbc2", "#0e5e5a", "#8fae5a", "#7d9e4a"),
+    # The entrances open to the sky in places: their fog is near the sky's. Cold ones take snowy taiga's greens.
+    "frozen_rootvaults": ("#c4d6e8", "#3d57d6", "#0a1440", "#80b497", "#60a17b"),
+    "sinkhole":          ("#c0d8ef", "#3f76e4", "#0a2a52", "#91bd59", "#77ab2f"),
+    "oasis_hollow":      ("#dccaa0", "#32c4c8", "#0a3d3f", "#8ab54a", "#6fa83a"),
+    "frost_fern_grotto": ("#a9c8e0", "#2fb3c8", "#0e4d5c", "#7aa89a", "#64998a"),
     "lantern_lake":      ("#5f7fb2", "#3bd0c4", "#12655f", "#a89a6a", "#988a5a"),
     "ember_gardens":     ("#b5562f", "#4cbcc9", "#163f4d", "#a8904c", "#98803c"),
     "rust_springs":      ("#a9482a", "#c9662b", "#5a2a10", "#a08a50", "#907a40"),
@@ -43,6 +55,8 @@ LOOKS = {
 # Ambient particles drifting in the air: (particle, probability). Steam over hot pools, embers over lava, pollen in
 # the daylight shafts and drips under ceilings are spawned by the client (CaveAtmosphere), not here.
 PARTICLES = {
+    "frozen_rootvaults": ("minecraft:snowflake", 0.005),
+    "frost_fern_grotto": ("minecraft:snowflake", 0.002),
     "lantern_lake": ("minecraft:mycelium", 0.012),
     "ember_gardens": ("minecraft:mycelium", 0.012),
     "rust_springs": ("minecraft:mycelium", 0.008),
@@ -57,6 +71,10 @@ SOUNDS = {
     "rootvaults": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.008),
     "silver_fern_rift": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.008),
     "ivory_root_cavern": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.008),
+    "frozen_rootvaults": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.006),
+    "sinkhole": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.006),
+    "oasis_hollow": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.004),
+    "frost_fern_grotto": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.008),
     "lantern_lake": (f"{MOD}:ambient.gardens.loop", f"{MOD}:ambient.gardens.additions", 0.012),
     "ember_gardens": (f"{MOD}:ambient.springs.loop", f"{MOD}:ambient.gardens.additions", 0.012),
     "rust_springs": (f"{MOD}:ambient.springs.loop", f"{MOD}:ambient.gardens.additions", 0.008),
@@ -68,6 +86,10 @@ SOUNDS = {
 
 HOT = {"ember_gardens", "rust_springs", "basalt_galleries", "obsidian_tubes"}
 DRY = {"basalt_galleries", "obsidian_tubes"}
+# The Upper Caves rework's biomes: snow-cold, or desert-hot; rain and snow fall into the open entrances' pits and
+# skylights (the pack's own biome holds the ground over them).
+TEMPERATURE = {"frozen_rootvaults": -0.5, "frost_fern_grotto": -0.3, "oasis_hollow": 2.0, "sinkhole": 0.8}
+PRECIPITATION = {"frozen_rootvaults", "sinkhole"}
 
 # The pack's dripstone caves list these (WWOO's copy, which matches vanilla). The Rootvaults keep their ores and
 # water springs in the same order, but not the lava lakes or lava springs: the caves above the first band are safe.
@@ -123,7 +145,12 @@ PALE_CEILING = {"type": "minecraft:block_predicate_filter", "predicate": {"type"
 def count(n): return {"type": "minecraft:count", "count": n}
 def rarity(n): return {"type": "minecraft:rarity_filter", "chance": n}
 def layer(name, inset=2, above_water=False): return {"type": f"{MOD}:layer_range", "layer": name, "inset": inset, "above_water": above_water}
-def looks(*l): return {"type": f"{MOD}:rootvaults_look", "looks": list(l)}
+def looks(*l, cold=None):
+    f = {"type": f"{MOD}:rootvaults_look", "looks": list(l)}
+    if cold is not None: f["cold"] = cold
+    return f
+# The entrances' looks (Entrances.java): root halls, teal grottos, ravines, sinkholes, oasis hollows.
+HALL, TEAL, RAVINE, SINKHOLE, HOLLOW = range(5)
 
 
 # The cave network (0.3) gives each floor and ceiling block of the Deep Gardens and the Basalt Galleries fewer of a
@@ -250,7 +277,7 @@ def feature(name, step, biomes, configured, placement):
         if isinstance(p, dict) and p.get("type") == f"{MOD}:layer_range" and p.get("layer") == "upper" and "focus" not in p:
             if set(biomes) <= SET_PIECES:
                 p["focus"] = "pieces"
-            elif set(biomes) <= {"rootvaults"}:
+            elif set(biomes) <= ENTRANCE_BIOMES:
                 p["focus"] = "grottos"
     # The game's count placement takes at most 256: a larger count becomes a count of k copies of each try.
     for i, p in enumerate(list(placement)):
@@ -270,7 +297,7 @@ def build_features():
     # ---- local modifications: shafts, spikes, pools and columns shape the space before anything grows in it
     # The Rootvaults' skylights: planned per grotto (0 to 2 over a root hall, 0 or 1 over a teal grotto; ravines are
     # open to the sky by their shape) and cut here through at most 24 blocks of dry rock, between the trees.
-    feature("rootvaults/skylights", "local_modifications", rv,
+    feature("rootvaults/skylights", "local_modifications", rv + ["frozen_rootvaults"],
             {"type": f"{MOD}:daylight_shaft", "config": {"radius": funiform(1.5, 3.0), "max_depth": 24}},
             [{"type": f"{MOD}:rootvaults_openings"}] + ceiling() + [BIOME])
     feature("rootvaults/pools", "local_modifications", rv,
@@ -355,7 +382,7 @@ def build_features():
     # ---- underground decoration: moss, wall growth, crystals, machines
     feature("rootvaults/moss_floor", "underground_decoration", rv, "minecraft:moss_patch",
             [count(16), SQUARE, layer(up)] + floor() + [looks(0, 1, 2), BIOME])
-    feature("rootvaults/glow_lichen", "underground_decoration", rv + ["silver_fern_rift"],
+    feature("rootvaults/glow_lichen", "underground_decoration", rv + ["silver_fern_rift", "frozen_rootvaults", "sinkhole"],
             {"type": "minecraft:multiface_growth", "config": {
                 "block": "minecraft:glow_lichen", "search_range": 20, "can_place_on_floor": True, "can_place_on_ceiling": True,
                 "can_place_on_wall": True, "chance_of_spreading": 0.6,
@@ -448,7 +475,7 @@ def build_features():
             [count(4), SQUARE, layer("basalt_galleries", above_water=True), BIOME])
 
     # ---- fluid springs: waterfalls and lava falls
-    feature("rootvaults/waterfalls", "fluid_springs", rv, fall("minecraft:water", 6, (1, 3)),
+    feature("rootvaults/waterfalls", "fluid_springs", rv + ["frozen_rootvaults", "sinkhole", "oasis_hollow"], fall("minecraft:water", 6, (1, 3)),
             [count(10), SQUARE, layer(up), BIOME])
     feature("silver_fern_rift/waterfalls", "fluid_springs", ["silver_fern_rift"], fall("minecraft:water", 8, (1, 3)),
             [count(8), SQUARE, layer(up), BIOME])
@@ -465,7 +492,7 @@ def build_features():
             [count(80), SQUARE, layer("basalt_galleries", above_water=True)] + ceiling(offset=uniform(-6, -3)) + [BIOME])
 
     # ---- vegetal decoration: roots, vines and plants
-    feature("rootvaults/hanging_roots", "vegetal_decoration", rv,
+    feature("rootvaults/hanging_roots", "vegetal_decoration", rv + ["frozen_rootvaults"],
             attach(simple("minecraft:hanging_roots"), "ceiling", 32, ["minecraft:rooted_dirt", "minecraft:dirt", "minecraft:moss_block"], radius=6, height=4),
             [count(14), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
     feature("rootvaults/lantern_roots", "vegetal_decoration", rv,
@@ -651,6 +678,171 @@ def build_features():
                   on=f"#{MOD}:basalt_rock"),
             [scaled(28, BASALT_PLANTS * BASALT_FLOOR), SQUARE] + basalt_floor)
 
+    # ---- Upper Caves rework: the frozen Root Vaults' mouths, the inner halls of cold Root Vaults (thawing: frost
+    # ferns among the usual growth), the sinkholes (cold ones snowed in), the oasis hollows and the Frost Fern Grotto.
+    # The entrances' features aim at their chambers (the grottos focus); the grotto's at the whole of the pack's caves
+    # under the column, since the plant caves follow the ground (the caves focus).
+    fz, sk, oa, fg = ["frozen_rootvaults"], ["sinkhole"], ["oasis_hollow"], ["frost_fern_grotto"]
+    def caves(): return layer(up) | {"focus": "caves"}
+    frost_rock = f"#{MOD}:frost_rock"
+    FROST_FLOORS = PLANT_FLOORS + ["minecraft:podzol", "minecraft:coarse_dirt", "minecraft:snow_block", "minecraft:gravel"]
+    OASIS_FLOORS = ["minecraft:sand", "minecraft:red_sand", "minecraft:grass_block", "minecraft:dirt", "minecraft:coarse_dirt", "minecraft:moss_block"]
+    SNOW = {"type": "minecraft:weighted_state_provider", "entries": [
+        {"data": state("minecraft:snow", layers=1), "weight": 3}, {"data": state("minecraft:snow", layers=2), "weight": 1}]}
+    snow = patch(SNOW, state("minecraft:snow", layers=1), tries=40, xz=6, y=3)
+    def ice_sheet(lo, hi):
+        """Ice over still water: the water's top layer, round the spot."""
+        return {"type": "minecraft:disk", "config": {
+            "state_provider": {"fallback": simple("minecraft:ice"), "rules": []},
+            "target": {"type": "minecraft:all_of", "predicates": [
+                {"type": "minecraft:matching_fluids", "fluids": "minecraft:water"}, dict(AIR, offset=[0, 1, 0])]},
+            "radius": uniform(lo, hi), "half_height": 1}}
+    def ice_rim(lo, hi):
+        """Ice along the edges of still water: the water's top layer where it touches rock, round the spot."""
+        rock = {"type": "minecraft:any_of", "predicates": [{"type": "minecraft:solid", "offset": o} for o in ([1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1])]}
+        return {"type": "minecraft:disk", "config": {
+            "state_provider": {"fallback": simple("minecraft:ice"), "rules": []},
+            "target": {"type": "minecraft:all_of", "predicates": [
+                {"type": "minecraft:matching_fluids", "fluids": "minecraft:water"}, dict(AIR, offset=[0, 1, 0]), rock]},
+            "radius": uniform(lo, hi), "half_height": 1}}
+    # From a random point down through the air to the water's surface.
+    water_top = [{"type": "minecraft:environment_scan", "direction_of_search": "down",
+                  "target_condition": {"type": "minecraft:matching_fluids", "fluids": "minecraft:water"},
+                  "allowed_search_condition": AIR, "max_steps": 32}]
+    on_water = water_top + [{"type": "minecraft:random_offset", "xz_spread": 0, "y_spread": 1}]
+    icicles = hanging_patch(hanging_column(f"{MOD}:icicle_plant", f"{MOD}:icicle", 0, 2), tries=8, xz=4, y=2)
+    giant_icicle = spike(mix((simple("minecraft:packed_ice"), 3), (simple("minecraft:ice"), 1)), simple("minecraft:ice"), (4, 9), (1.0, 2.0), 0.0)
+    frostberries = hanging_patch(hanging_column(f"{MOD}:frostberry_vine_plant", f"{MOD}:frostberry_vine", 1, 7), tries=8, xz=4, y=2)
+    frost_plants = mix((simple(f"{MOD}:frost_fern"), 6), (simple(f"{MOD}:tall_frost_fern"), 2), (simple(f"{MOD}:frost_aster"), 2),
+                       (simple(f"{MOD}:snowbell"), 1))
+    def lily_pads(n, cold_filter):
+        return ([count(n), SQUARE, layer(up)] + on_water + cold_filter + [BIOME])
+
+    # Giant icicles from the frozen ceilings, before anything grows on them.
+    feature("frozen_rootvaults/giant_icicles", "local_modifications", fz, giant_icicle,
+            [count(3), SQUARE, layer(up)] + ceiling(offset=0) + [BIOME])
+    feature("frost_fern_grotto/giant_icicles", "local_modifications", fg, giant_icicle,
+            [count(6), SQUARE, caves()] + ceiling(offset=0) + [BIOME])
+
+    # Frost on the rock, snow on the floors, ice over the still water.
+    feature("frozen_rootvaults/hoarfrost", "underground_decoration", fz,
+            attach(simple(f"{MOD}:hoarfrost"), "walls_ceiling", 48, frost_rock, radius=6, height=6),
+            [count(16), SQUARE, layer(up), BIOME])
+    feature("frozen_rootvaults/rime", "underground_decoration", fz,
+            attach(simple(f"{MOD}:rime_lichen"), "walls_ceiling", 24, frost_rock, radius=6, height=6),
+            [count(5), SQUARE, layer(up), BIOME])
+    feature("frozen_rootvaults/snow", "underground_decoration", fz, snow, [count(16), SQUARE, layer(up)] + floor() + [BIOME])
+    feature("frozen_rootvaults/ice", "underground_decoration", fz, ice_sheet(2, 5), [count(10), SQUARE, layer(up)] + water_top + [BIOME])
+    # Deeper in a cold cluster the water runs again, with ice along its edges.
+    feature("rootvaults/ice_rims", "underground_decoration", rv, ice_rim(3, 6),
+            [count(10), SQUARE, layer(up)] + water_top + [looks(HALL, TEAL, RAVINE, cold=True), BIOME])
+    feature("sinkhole/moss", "underground_decoration", sk, "minecraft:moss_patch",
+            [count(6), SQUARE, layer(up)] + floor() + [looks(SINKHOLE, cold=False), BIOME])
+    feature("sinkhole/hoarfrost", "underground_decoration", sk,
+            attach(simple(f"{MOD}:hoarfrost"), "walls_ceiling", 40, frost_rock, radius=6, height=6),
+            [count(12), SQUARE, layer(up), looks(SINKHOLE, cold=True), BIOME])
+    feature("sinkhole/snow", "underground_decoration", sk, snow,
+            [count(16), SQUARE, layer(up)] + floor() + [looks(SINKHOLE, cold=True), BIOME])
+    feature("sinkhole/ice", "underground_decoration", sk, ice_sheet(2, 4),
+            [count(8), SQUARE, layer(up)] + water_top + [looks(SINKHOLE, cold=True), BIOME])
+    # The Frost Fern Grotto (frost_fern_grotto.png, the picture Taran gave): moss floors thick with frost ferns, moss
+    # ceilings hung with frostberries, rime glowing on the walls, icicles and ice over the pools.
+    feature("frost_fern_grotto/moss_floor", "underground_decoration", fg,
+            {"type": "minecraft:vegetation_patch", "config": {
+                "replaceable": "#minecraft:moss_replaceable", "ground_state": simple("minecraft:moss_block"),
+                "vegetation_feature": {"feature": {"type": "minecraft:simple_block", "config": {"to_place": mix(
+                    (simple(f"{MOD}:frost_fern"), 8), (simple("minecraft:moss_carpet"), 5), (simple(f"{MOD}:tall_frost_fern"), 2),
+                    (simple(f"{MOD}:frost_aster"), 2), (simple(f"{MOD}:snowbell"), 1))}}, "placement": []},
+                "surface": "floor", "depth": 1, "extra_bottom_block_chance": 0.0, "vertical_range": 5, "vegetation_chance": 0.45,
+                "xz_radius": uniform(4, 7), "extra_edge_column_chance": 0.3}},
+            [count(48), SQUARE, caves()] + floor() + [BIOME])
+    feature("frost_fern_grotto/moss_ceiling", "underground_decoration", fg,
+            {"type": "minecraft:vegetation_patch", "config": {
+                "replaceable": "#minecraft:moss_replaceable", "ground_state": simple("minecraft:moss_block"),
+                "vegetation_feature": {"feature": hanging_column(f"{MOD}:frostberry_vine_plant", f"{MOD}:frostberry_vine", 0, 4), "placement": []},
+                "surface": "ceiling", "depth": uniform(1, 2), "extra_bottom_block_chance": 0.0, "vertical_range": 5, "vegetation_chance": 0.08,
+                "xz_radius": uniform(4, 7), "extra_edge_column_chance": 0.3}},
+            [count(24), SQUARE, caves()] + ceiling() + [BIOME])
+    feature("frost_fern_grotto/hoarfrost", "underground_decoration", fg,
+            attach(simple(f"{MOD}:hoarfrost"), "walls_ceiling", 40, frost_rock, radius=6, height=6),
+            [count(20), SQUARE, caves(), BIOME])
+    feature("frost_fern_grotto/rime", "underground_decoration", fg,
+            attach(simple(f"{MOD}:rime_lichen"), "walls_ceiling", 32, frost_rock, radius=6, height=6),
+            [count(12), SQUARE, caves(), BIOME])
+    feature("frost_fern_grotto/snow", "underground_decoration", fg, patch(SNOW, state("minecraft:snow", layers=1), tries=16, xz=4, y=2),
+            [count(10), SQUARE, caves()] + floor() + [BIOME])
+    # Ice shelves along the water's edges; the middle stays open (the picture's stream).
+    feature("frost_fern_grotto/ice", "underground_decoration", fg, ice_rim(3, 6), [count(16), SQUARE, caves()] + water_top + [BIOME])
+
+    # Plants: icicles at the frozen mouths, frost ferns where they thaw, grass and flowers in the sinkholes' daylight,
+    # palms and lilies round the oases' pools, the grotto's ferns and frostberries.
+    feature("frozen_rootvaults/icicles", "vegetal_decoration", fz, icicles, [count(16), SQUARE, layer(up)] + ceiling() + [BIOME])
+    feature("frozen_rootvaults/frost_ferns", "vegetal_decoration", fz,
+            patch(mix((simple(f"{MOD}:frost_fern"), 5), (simple(f"{MOD}:frost_aster"), 1)), state(f"{MOD}:frost_fern"), tries=16, xz=5, y=2,
+                  on=FROST_FLOORS),
+            [count(6), SQUARE, layer(up)] + floor() + [BIOME])
+    feature("rootvaults/frost_ferns", "vegetal_decoration", rv,
+            patch(frost_plants, state(f"{MOD}:frost_fern"), tries=24, xz=5, y=2, on=FROST_FLOORS),
+            [count(12), SQUARE, layer(up)] + floor() + [looks(HALL, TEAL, RAVINE, cold=True), BIOME])
+    feature("rootvaults/frostberries", "vegetal_decoration", rv, frostberries,
+            [count(4), SQUARE, layer(up)] + ceiling() + [looks(HALL, TEAL, RAVINE, cold=True), BIOME])
+    feature("sinkhole/trailing_grass", "vegetal_decoration", sk,
+            hanging_patch(hanging_column(f"{MOD}:trailing_grass_plant", f"{MOD}:trailing_grass", 1, 7), tries=10, xz=5, y=3),
+            [count(24), SQUARE, layer(up)] + ceiling() + [looks(SINKHOLE, cold=False), BIOME])
+    feature("sinkhole/plants", "vegetal_decoration", sk,
+            patch({"type": "minecraft:weighted_state_provider", "entries": [
+                {"data": state("minecraft:grass"), "weight": 8}, {"data": state("minecraft:fern"), "weight": 3},
+                {"data": state("minecraft:tall_grass", half="lower"), "weight": 2}, {"data": state("minecraft:dandelion"), "weight": 1},
+                {"data": state("minecraft:poppy"), "weight": 1}, {"data": state("minecraft:oxeye_daisy"), "weight": 1},
+                {"data": state("minecraft:cornflower"), "weight": 1}]},
+                state("minecraft:grass"), tries=40, xz=6, y=3, on=PLANT_FLOORS + ["minecraft:grass_block"]),
+            [count(30), SQUARE, layer(up)] + floor() + [looks(SINKHOLE, cold=False), BIOME])
+    feature("sinkhole/cold_plants", "vegetal_decoration", sk,
+            patch(mix((simple(f"{MOD}:frost_fern"), 4), (simple("minecraft:fern"), 2), (simple(f"{MOD}:frost_aster"), 1)), state(f"{MOD}:frost_fern"),
+                  tries=24, xz=6, y=3, on=FROST_FLOORS + ["minecraft:grass_block"]),
+            [count(12), SQUARE, layer(up)] + floor() + [looks(SINKHOLE, cold=True), BIOME])
+    feature("sinkhole/icicles", "vegetal_decoration", sk, icicles,
+            [count(10), SQUARE, layer(up)] + ceiling() + [looks(SINKHOLE, cold=True), BIOME])
+    feature("sinkhole/cave_vines", "vegetal_decoration", sk, berry_vines(1, 5, 0.3),
+            [count(8), SQUARE, layer(up)] + ceiling() + [looks(SINKHOLE, cold=False), BIOME])
+    feature("sinkhole/lily_pads", "vegetal_decoration", sk,
+            patch(simple("minecraft:lily_pad"), state("minecraft:lily_pad"), tries=12, xz=4, y=1), lily_pads(4, [looks(SINKHOLE, cold=False)]))
+    feature("sinkhole/sugar_cane", "vegetal_decoration", sk,
+            patch(simple("minecraft:sugar_cane"), state("minecraft:sugar_cane"), tries=24, xz=5, y=2),
+            [count(4), SQUARE, layer(up)] + floor() + [looks(SINKHOLE, cold=False), BIOME])
+    feature("oasis_hollow/palms", "vegetal_decoration", oa,
+            patch(simple(f"{MOD}:fan_palm"), state(f"{MOD}:fan_palm"), tries=12, xz=6, y=2, on=OASIS_FLOORS),
+            [count(8), SQUARE, layer(up)] + floor() + [BIOME])
+    feature("oasis_hollow/grass", "vegetal_decoration", oa,
+            patch(simple(f"{MOD}:oasis_grass"), state(f"{MOD}:oasis_grass"), tries=32, xz=6, y=2, on=OASIS_FLOORS),
+            [count(20), SQUARE, layer(up)] + floor() + [BIOME])
+    feature("oasis_hollow/lilies", "vegetal_decoration", oa,
+            patch(simple(f"{MOD}:dune_lily"), state(f"{MOD}:dune_lily"), tries=10, xz=5, y=2, on=OASIS_FLOORS),
+            [count(6), SQUARE, layer(up)] + floor() + [BIOME])
+    feature("oasis_hollow/dead_bushes", "vegetal_decoration", oa,
+            patch(simple("minecraft:dead_bush"), state("minecraft:dead_bush"), tries=8, xz=6, y=2, on=["minecraft:sand", "minecraft:red_sand"]),
+            [count(6), SQUARE, layer(up)] + floor() + [BIOME])
+    feature("oasis_hollow/sugar_cane", "vegetal_decoration", oa,
+            patch(simple("minecraft:sugar_cane"), state("minecraft:sugar_cane"), tries=24, xz=5, y=2),
+            [count(6), SQUARE, layer(up)] + floor() + [BIOME])
+    feature("oasis_hollow/lily_pads", "vegetal_decoration", oa,
+            patch(simple("minecraft:lily_pad"), state("minecraft:lily_pad"), tries=10, xz=4, y=1), lily_pads(3, []))
+    feature("oasis_hollow/trailing_grass", "vegetal_decoration", oa,
+            hanging_patch(hanging_column(f"{MOD}:trailing_grass_plant", f"{MOD}:trailing_grass", 1, 5), tries=8, xz=4, y=2),
+            [count(6), SQUARE, layer(up)] + ceiling() + [BIOME])
+    # The oasis pool glows turquoise from its bed, like the Root Vaults' streams.
+    feature("oasis_hollow/pool_pearls", "vegetal_decoration", oa,
+            attach(simple(f"{MOD}:pool_pearls"), "floor", 24, f"#{MOD}:grotto_bed", radius=5, height=2, in_water=True),
+            [count(12), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, BIOME])
+    feature("frost_fern_grotto/ferns", "vegetal_decoration", fg,
+            patch(frost_plants, state(f"{MOD}:frost_fern"), tries=40, xz=6, y=3, on=FROST_FLOORS),
+            [count(40), SQUARE, caves()] + floor() + [BIOME])
+    feature("frost_fern_grotto/snowbells", "vegetal_decoration", fg,
+            patch(simple(f"{MOD}:snowbell"), state(f"{MOD}:snowbell"), tries=12, xz=4, y=2, on=FROST_FLOORS),
+            [count(10), SQUARE, caves()] + floor() + [BIOME])
+    feature("frost_fern_grotto/frostberries", "vegetal_decoration", fg, frostberries, [count(24), SQUARE, caves()] + ceiling() + [BIOME])
+    feature("frost_fern_grotto/icicles", "vegetal_decoration", fg, icicles, [count(16), SQUARE, caves()] + ceiling() + [BIOME])
+
     # ---- top layer: roots of the trees above, once the chunk's trees have grown; the way down is kept open after
     # everything else. The roots take the wood of the trees over them (match_trees): oak, birch, spruce, jungle, dark
     # oak, cherry, or mangrove roots under a mangrove swamp.
@@ -658,9 +850,9 @@ def build_features():
         return {"type": f"{MOD}:ceiling_roots", "config": {
             "log": state("minecraft:oak_log", axis="y"), "dirt": state("minecraft:rooted_dirt"), "hanging": state("minecraft:hanging_roots"),
             "length": length, "match_trees": True, "column_chance": column_chance, "branches": branches}}
-    feature("rootvaults/ceiling_roots", "top_layer_modification", rv, roots(uniform(3, 14), 0.25, uniform(0, 2)),
+    feature("rootvaults/ceiling_roots", "top_layer_modification", rv + ["frozen_rootvaults"], roots(uniform(3, 14), 0.25, uniform(0, 2)),
             [count(8), SQUARE, layer(up)] + ceiling() + [BIOME])
-    feature("rootvaults/tree_roots", "top_layer_modification", rv, roots(uniform(4, 16), 0.3, uniform(1, 3)),
+    feature("rootvaults/tree_roots", "top_layer_modification", rv + ["frozen_rootvaults"], roots(uniform(4, 16), 0.3, uniform(1, 3)),
             [{"type": f"{MOD}:under_trees", "chance": 0.7}, BIOME])
     # The network's climbs get their vines, and the Blue Reaches' lips their shelf vines (section 10 of the network
     # design), once everything else has grown; then the ways are opened (open_way never removes a climbable block).
@@ -680,6 +872,15 @@ DEEP_DARK_FEATURES = [
      [count(4), SQUARE, layer("blue_reaches")] + ceiling() + [BIOME]),
 ]
 
+# The Upper Caves rework's features added to other biomes by biome modifiers: (name, configured feature, placement,
+# biomes, step). The Root Vaults' veridium runs on into the lush caves (and the Frost Fern Grotto) their descents open
+# into, after the plants; the pack's blind cave ends are joined to other caves first of all, in every overworld chunk.
+UPPER_MODIFIER_FEATURES = [
+    ("upper/veridium_spread", {"type": f"{MOD}:veridium_spread", "config": {}}, [{"type": f"{MOD}:junctions"}],
+     ["minecraft:lush_caves", f"{MOD}:frost_fern_grotto"], "top_layer_modification"),
+    ("upper/join_dead_ends", {"type": f"{MOD}:join_dead_ends", "config": {}}, [], "#minecraft:is_overworld", "raw_generation"),
+]
+
 # ----------------------------------------------------------------------------------------------- Rootvaults tags
 # The Rootvaults grow under trees. Each tag names the surface biomes whose trees send down roots of one wood; the
 # mod checks them in the order mangrove, cherry, dark oak, birch, jungle, spruce, oak (the first match wins), and a
@@ -692,6 +893,13 @@ ROOT_KINDS = {
     "jungle": ["#minecraft:is_jungle"],
     "spruce": ["#minecraft:is_taiga", "minecraft:grove", "minecraft:windswept_forest"],
     "oak": ["minecraft:forest", "minecraft:flower_forest", "minecraft:swamp"],
+}
+# Grass without trees grows sinkholes; deserts and badlands grow oasis hollows (in red rock under the badlands).
+UPPER_COVER = {
+    "plains": ["minecraft:plains", "minecraft:sunflower_plains", "minecraft:meadow", "minecraft:savanna", "minecraft:savanna_plateau",
+               "minecraft:snowy_plains"],
+    "desert": ["minecraft:desert"],
+    "badlands": ["#minecraft:is_badlands"],
 }
 # Where a ravine may not open to the sky: biomes that grow villages and other surface structures, swamps, water.
 NO_RAVINES = ["#minecraft:has_structure/" + s for s in (
@@ -729,6 +937,8 @@ BLOCK_TAGS = {
                    "minecraft:moss_block"] + optional(["create:limestone", "create:veridium"]),
     # The Deep Gardens' pale ceilings, which grow cream stalactites.
     "pale_rock": ["minecraft:calcite"] + optional(["create:limestone"]),
+    # Upper Caves rework: rock that frost and rime grow on, ice and snow included.
+    "frost_rock": [f"#{MOD}:cave_rock", "minecraft:packed_ice", "minecraft:ice", "minecraft:blue_ice", "minecraft:snow_block"],
     "basalt_rock": ["minecraft:basalt", "minecraft:polished_basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:gilded_blackstone",
                     "minecraft:magma_block", "minecraft:deepslate_gold_ore", "minecraft:brown_terracotta", "minecraft:polished_blackstone"]
                    + optional(["create:scoria", "create:scorchia"]),
@@ -762,7 +972,7 @@ def spawners(name):
 
 
 # Biomes open to the sky in places keep a sky of the usual colour (the Rootvaults' ravines and skylights).
-SKY = {"rootvaults": "#78a7ff"}
+SKY = {"rootvaults": "#78a7ff", "frozen_rootvaults": "#7ba4ff", "sinkhole": "#78a7ff", "oasis_hollow": "#6eb1ff"}
 
 
 def effects(name):
@@ -784,7 +994,7 @@ def write_all(data_dir, res_dir, write):
     build_features()
     wg = os.path.join(data_dir, "worldgen")
     per_biome = {b: [[] for _ in STEPS] for b in OURS}
-    for b, steps in [("rootvaults", ROOTVAULTS_VANILLA)]:
+    for b, steps in [(b, ROOTVAULTS_VANILLA) for b in ("rootvaults", "frozen_rootvaults", "sinkhole", "oasis_hollow", "frost_fern_grotto")]:
         for i, ids in enumerate(steps):
             per_biome[b][i].extend(ids)
     names = set()
@@ -804,10 +1014,15 @@ def write_all(data_dir, res_dir, write):
             write(os.path.join(wg, "configured_feature", name + ".json"), cf)
             cf = f"{MOD}:{name}"
         write(os.path.join(wg, "placed_feature", name + ".json"), {"feature": cf, "placement": placement})
+    for name, cf, placement, biomes, step in UPPER_MODIFIER_FEATURES:
+        write(os.path.join(wg, "configured_feature", name + ".json"), cf)
+        write(os.path.join(wg, "placed_feature", name + ".json"), {"feature": f"{MOD}:{name}", "placement": placement})
+        write(os.path.join(data_dir, "forge", "biome_modifier", name.split("/", 1)[1] + ".json"), {
+            "type": "forge:add_features", "biomes": biomes, "features": f"{MOD}:{name}", "step": step})
     for b in OURS:
         write(os.path.join(wg, "biome", b + ".json"), {
-            "has_precipitation": False,
-            "temperature": 1.2 if b in HOT else (0.5 if b == "asurine_geodes" else 0.8),
+            "has_precipitation": b in PRECIPITATION,
+            "temperature": TEMPERATURE.get(b, 1.2 if b in HOT else (0.5 if b == "asurine_geodes" else 0.8)),
             "downfall": 0.0 if b in DRY else 0.5,
             "effects": effects(b),
             "spawners": spawners(b),
@@ -833,6 +1048,9 @@ def write_all(data_dir, res_dir, write):
     for kind, values in ROOT_KINDS.items():
         tag(MOD, "worldgen/biome", "rootvaults/" + kind, values)
     tag(MOD, "worldgen/biome", "rootvaults/no_ravines", NO_RAVINES)
+    # The other entrances' ground (SurfaceOracle): grass without trees, sand, and the badlands' red sand.
+    for kind, values in UPPER_COVER.items():
+        tag(MOD, "worldgen/biome", "upper/" + kind, values)
     for tname, values in BLOCK_TAGS.items():
         tag(MOD, "blocks", tname, values)
     return {f"biome.{MOD}.{k}": v for k, v in NAMES.items()}

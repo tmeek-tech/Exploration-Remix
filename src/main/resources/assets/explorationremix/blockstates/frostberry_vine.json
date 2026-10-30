@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/frostberry_vine"
+      },
+      {
+        "model": "explorationremix:block/frostberry_vine_2"
+      }
+    ]
+  }
+}

@@ -213,6 +213,54 @@ public final class ERBlocks {
     public static final RegistryObject<Block> SMOULDER_LICHEN = block("smoulder_lichen",
             () -> new GlowLichenBlock(lichen(MapColor.NETHER, SoundType.GLOW_LICHEN, 3)));
 
+    // =========================================================================================== Upper Caves rework
+    // ------------------------------------------------------------------------------------------- Frost Fern Grotto
+    // (and the frozen Root Vaults' thawing halls)
+    public static final RegistryObject<Block> FROST_FERN = block("frost_fern",
+            () -> new CavePlantBlock(plant(MapColor.ICE, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XYZ),
+                    Block.box(2, 0, 2, 14, 13, 14)));
+    public static final RegistryObject<Block> TALL_FROST_FERN = tallBlock("tall_frost_fern",
+            () -> new TallCavePlantBlock(plant(MapColor.ICE, SoundType.GRASS, 0).offsetType(BlockBehaviour.OffsetType.XZ),
+                    Block.box(2, 0, 2, 14, 16, 14), Block.box(2, 0, 2, 14, 14, 14)));
+    public static final RegistryObject<Block> FROST_ASTER = block("frost_aster",
+            () -> new CavePlantBlock(flower(MapColor.COLOR_LIGHT_BLUE, 0), Block.box(3, 0, 3, 13, 12, 13)));
+    /** Nodding white bells whose throats glow a cold blue. */
+    public static final RegistryObject<Block> SNOWBELL = block("snowbell",
+            () -> new CavePlantBlock(flower(MapColor.SNOW, 6), Block.box(3, 0, 3, 13, 13, 13)));
+    /** Like vanilla's cave vines, with pale blue berries that give light. */
+    public static final RegistryObject<Block> FROSTBERRY_VINE = BLOCKS.register("frostberry_vine",
+            () -> new HangingVinesBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.CAVE_VINES, 12), ERBlocks.FROSTBERRY_VINE_PLANT_REF));
+    public static final RegistryObject<Block> FROSTBERRY_VINE_PLANT = BLOCKS.register("frostberry_vine_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.CAVE_VINES, 8), ERBlocks.FROSTBERRY_VINE_REF));
+    /** Pale crystals of rime over the walls: light only where it covers a face, like glow lichen. */
+    public static final RegistryObject<Block> RIME_LICHEN = block("rime_lichen",
+            () -> new GlowLichenBlock(lichen(MapColor.ICE, SoundType.GLOW_LICHEN, 6)));
+    /** Frost feathers over the rock near the cold mouths. No light. */
+    public static final RegistryObject<Block> HOARFROST = block("hoarfrost",
+            () -> new GlowLichenBlock(lichen(MapColor.SNOW, SoundType.POWDER_SNOW, 0)));
+    /** Icicles hanging from the ceilings by the cold mouths; they grow downwards like vines but cannot be climbed. */
+    public static final RegistryObject<Block> ICICLE = BLOCKS.register("icicle",
+            () -> new HangingVinesBlock(ice(), ERBlocks.ICICLE_PLANT_REF));
+    public static final RegistryObject<Block> ICICLE_PLANT = BLOCKS.register("icicle_plant",
+            () -> new HangingVinesPlantBlock(ice(), ERBlocks.ICICLE_REF));
+
+    // ------------------------------------------------------------------------------------------- Sinkholes and oasis hollows
+    /** Grass hanging over a sinkhole's rim from the turf above. */
+    public static final RegistryObject<Block> TRAILING_GRASS = BLOCKS.register("trailing_grass",
+            () -> new HangingVinesBlock(plant(MapColor.PLANT, SoundType.GRASS, 0), ERBlocks.TRAILING_GRASS_PLANT_REF));
+    public static final RegistryObject<Block> TRAILING_GRASS_PLANT = BLOCKS.register("trailing_grass_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.PLANT, SoundType.GRASS, 0), ERBlocks.TRAILING_GRASS_REF));
+    /** A small palm in the sand of an oasis hollow. */
+    public static final RegistryObject<Block> FAN_PALM = tallBlock("fan_palm",
+            () -> new TallCavePlantBlock(plant(MapColor.PLANT, SoundType.AZALEA, 0).offsetType(BlockBehaviour.OffsetType.XZ).ignitedByLava(),
+                    Block.box(2, 0, 2, 14, 16, 14), Block.box(1, 0, 1, 15, 14, 15)));
+    public static final RegistryObject<Block> OASIS_GRASS = block("oasis_grass",
+            () -> new CavePlantBlock(plant(MapColor.PLANT, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XYZ)
+                    .ignitedByLava(), Block.box(2, 0, 2, 14, 13, 14)));
+    /** A pale lily by the oasis pools, its trumpets glowing amber. */
+    public static final RegistryObject<Block> DUNE_LILY = block("dune_lily",
+            () -> new CavePlantBlock(flower(MapColor.SAND, 9), Block.box(3, 0, 3, 13, 14, 13)));
+
     // Vine tips and bodies point at each other, so they look each other up when first needed.
     private static final Supplier<Block> WISTERIA_REF = () -> WISTERIA.get();
     private static final Supplier<Block> WISTERIA_PLANT_REF = () -> WISTERIA_PLANT.get();
@@ -236,6 +284,13 @@ public final class ERBlocks {
     private static final Supplier<Block> PALE_WISTERIA_PLANT_REF = () -> PALE_WISTERIA_PLANT.get();
     private static final Supplier<Block> ROSE_TENDRILS_REF = () -> ROSE_TENDRILS.get();
     private static final Supplier<Block> ROSE_TENDRILS_PLANT_REF = () -> ROSE_TENDRILS_PLANT.get();
+    // Upper Caves rework
+    private static final Supplier<Block> FROSTBERRY_VINE_REF = () -> FROSTBERRY_VINE.get();
+    private static final Supplier<Block> FROSTBERRY_VINE_PLANT_REF = () -> FROSTBERRY_VINE_PLANT.get();
+    private static final Supplier<Block> ICICLE_REF = () -> ICICLE.get();
+    private static final Supplier<Block> ICICLE_PLANT_REF = () -> ICICLE_PLANT.get();
+    private static final Supplier<Block> TRAILING_GRASS_REF = () -> TRAILING_GRASS.get();
+    private static final Supplier<Block> TRAILING_GRASS_PLANT_REF = () -> TRAILING_GRASS_PLANT.get();
 
     // Only the vine tips have items, like vanilla's weeping vines.
     static {
@@ -251,6 +306,10 @@ public final class ERBlocks {
         // vegetation rework, part B
         item("pale_wisteria", PALE_WISTERIA);
         item("rose_tendrils", ROSE_TENDRILS);
+        // Upper Caves rework
+        item("frostberry_vine", FROSTBERRY_VINE);
+        item("icicle", ICICLE);
+        item("trailing_grass", TRAILING_GRASS);
     }
 
     public static final RegistryObject<CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
@@ -264,6 +323,12 @@ public final class ERBlocks {
         BlockBehaviour.Properties p = BlockBehaviour.Properties.of().mapColor(color).noCollission().instabreak().sound(sound)
                 .pushReaction(PushReaction.DESTROY);
         return light > 0 ? p.lightLevel(s -> light) : p;
+    }
+
+    /** An icicle: walked through and broken with a punch, with glass's sound. */
+    private static BlockBehaviour.Properties ice() {
+        return BlockBehaviour.Properties.of().mapColor(MapColor.ICE).noCollission().instabreak().sound(SoundType.GLASS)
+                .pushReaction(PushReaction.DESTROY);
     }
 
     /** A flower: a plant set a little off the block's centre, like vanilla's, that burns. */

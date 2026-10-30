@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/icicle"
+      },
+      {
+        "model": "explorationremix:block/icicle_2"
+      }
+    ]
+  }
+}

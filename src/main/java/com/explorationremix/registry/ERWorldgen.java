@@ -10,6 +10,8 @@ import com.explorationremix.world.feature.FallbackStateProvider;
 import com.explorationremix.world.feature.FluidFallFeature;
 import com.explorationremix.world.feature.GiantFungusFeature;
 import com.explorationremix.world.feature.GiantSpikeFeature;
+import com.explorationremix.world.feature.JoinDeadEndsFeature;
+import com.explorationremix.world.feature.JunctionsPlacement;
 import com.explorationremix.world.feature.LayerHeight;
 import com.explorationremix.world.feature.LayerRangePlacement;
 import com.explorationremix.world.feature.MixStateProvider;
@@ -21,6 +23,7 @@ import com.explorationremix.world.feature.ShelfVinesFeature;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
 import com.explorationremix.world.feature.TerracePoolsFeature;
 import com.explorationremix.world.feature.UnderTreesPlacement;
+import com.explorationremix.world.feature.VeridiumSpreadFeature;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
@@ -54,6 +57,10 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> BROKEN_MACHINE = FEATURES.register("broken_machine", () -> new BrokenMachineFeature(NoneFeatureConfiguration.CODEC));
     // vegetation rework, part B: brown mushroom shelves stacked up the Ember Gardens' walls
     public static final RegistryObject<Feature<MushroomShelfFeature.Config>> MUSHROOM_SHELF = FEATURES.register("mushroom_shelf", () -> new MushroomShelfFeature(MushroomShelfFeature.Config.CODEC));
+    // Upper Caves rework: the Root Vaults' veridium into the lush caves their descents open into, and the pack's blind
+    // cave ends joined to other caves
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> VERIDIUM_SPREAD = FEATURES.register("veridium_spread", () -> new VeridiumSpreadFeature(NoneFeatureConfiguration.CODEC));
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> JOIN_DEAD_ENDS = FEATURES.register("join_dead_ends", () -> new JoinDeadEndsFeature(NoneFeatureConfiguration.CODEC));
 
     public static final RegistryObject<BlockStateProviderType<FallbackStateProvider>> FALLBACK_PROVIDER = STATE_PROVIDERS.register("fallback", () -> new BlockStateProviderType<>(FallbackStateProvider.CODEC));
     public static final RegistryObject<BlockStateProviderType<MixStateProvider>> MIX_PROVIDER = STATE_PROVIDERS.register("mix", () -> new BlockStateProviderType<>(MixStateProvider.CODEC));
@@ -61,5 +68,6 @@ public final class ERWorldgen {
     public static final RegistryObject<PlacementModifierType<RootvaultsLookFilter>> ROOTVAULTS_LOOK = PLACEMENT_TYPES.register("rootvaults_look", () -> () -> RootvaultsLookFilter.CODEC);
     public static final RegistryObject<PlacementModifierType<RootvaultsOpeningsPlacement>> ROOTVAULTS_OPENINGS = PLACEMENT_TYPES.register("rootvaults_openings", () -> () -> RootvaultsOpeningsPlacement.CODEC);
     public static final RegistryObject<PlacementModifierType<UnderTreesPlacement>> UNDER_TREES = PLACEMENT_TYPES.register("under_trees", () -> () -> UnderTreesPlacement.CODEC);
+    public static final RegistryObject<PlacementModifierType<JunctionsPlacement>> JUNCTIONS = PLACEMENT_TYPES.register("junctions", () -> () -> JunctionsPlacement.CODEC);
     public static final RegistryObject<HeightProviderType<LayerHeight>> LAYER_HEIGHT = HEIGHT_PROVIDERS.register("layer_height", () -> () -> LayerHeight.CODEC);
 }
