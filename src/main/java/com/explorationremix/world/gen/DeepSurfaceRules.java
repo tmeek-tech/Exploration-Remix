@@ -71,16 +71,17 @@ public final class DeepSurfaceRules {
                 boolean wet = a.er$waterHeight() != Integer.MIN_VALUE;
                 if (ent != null) {
                     boolean ours = b == vaults || b == frozen || b == sinkhole || b == oasis;
-                    if (ours || col.open(ent, x, z)) {
+                    // A ravine's or sinkhole's walls up to two blocks under the ground keep their rock too; anything
+                    // else under such a column (a plant cave further down) is dressed as its own biome below.
+                    if (ours || col.open(ent, x, z) && ent.openWall(x, y, z)) {
                         col.at(ent, x, z);
-                        // A ravine's or sinkhole's walls up to two blocks under the ground keep their rock too.
-                        if (!ours && !ent.openWall(x, y, z)) return null;
                         int look = col.look < 0 ? Entrances.HALL : col.look;
                         double shell = ent.shell(x, y, z);
                         Rock r;
                         if (b == oasis || look == Entrances.HOLLOW) r = t.palette.oasis(x, y, z, above, below, wet, shell, col.red);
                         else if (b == sinkhole || look == Entrances.SINKHOLE) r = t.palette.sinkhole(x, y, z, above, below, wet, shell, col.cold);
-                        else if (b == frozen) r = t.palette.frozenVaults(look, x, y, z, above, below, wet, shell);
+                        // (A cold cluster's ravine walls near the ground lie in the surface biome: frozen too.)
+                        else if (b == frozen || !ours && col.cold) r = t.palette.frozenVaults(look, x, y, z, above, below, wet, shell);
                         else r = t.palette.rootvaults(look, x, y, z, above, below, wet, shell);
                         return DeepMaterials.state(r);
                     }

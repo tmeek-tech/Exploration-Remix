@@ -17,7 +17,7 @@
           "data": {
             "type": "minecraft:simple_state_provider",
             "state": {
-              "Name": "minecraft:ice"
+              "Name": "minecraft:blue_ice"
             }
           },
           "weight": 1
@@ -27,7 +27,7 @@
     "tip": {
       "type": "minecraft:simple_state_provider",
       "state": {
-        "Name": "minecraft:ice"
+        "Name": "minecraft:packed_ice"
       }
     },
     "length": {

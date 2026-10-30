@@ -39,6 +39,8 @@ public final class DeepBiomes {
     private static final EnumMap<Entrances.Area, Holder<Biome>> AREAS = new EnumMap<>(Entrances.Area.class);
     @Nullable private static Holder<Biome> frostGrotto, lushCaves;
     private static boolean replaceCaveBiomes = true;
+    /** Placements of the surface biome's ores let into the Upper Caves' biomes since the world loaded (for checks). */
+    public static final java.util.concurrent.atomic.AtomicLong SURFACE_ORES = new java.util.concurrent.atomic.AtomicLong();
     private static Set<Holder<Biome>> lastBase, lastUnion;
     @Nullable private static volatile Climate.ParameterList<Holder<Biome>> withoutDeepDark;
 
@@ -50,6 +52,7 @@ public final class DeepBiomes {
 
     public static synchronized void resolve(Registry<Biome> registry) {
         HOLDERS.clear();
+        SURFACE_ORES.set(0);
         Set<Holder<Biome>> set = new LinkedHashSet<>();
         fallback = registry.getHolder(Biomes.DRIPSTONE_CAVES).orElse(null);
         for (DeepBiome b : DeepBiome.values()) {
@@ -105,6 +108,15 @@ public final class DeepBiomes {
     /** Vanilla's lush caves (the pack's copy), or null when switched off or missing. */
     @Nullable
     public static Holder<Biome> lushCaves() { return replaceCaveBiomes ? lushCaves : null; }
+
+    /**
+     * True for the biomes the Upper Caves give the pack's caves and the rock round them, in place of the surface biome
+     * carried underground: the entrances' biomes, the Frost Fern Grotto and lush caves.
+     */
+    public static boolean upperCave(Holder<Biome> h) {
+        if (!replaceCaveBiomes) return false;
+        return h == frostGrotto || h == lushCaves || h.is(Biomes.LUSH_CAVES) || AREAS.containsValue(h);
+    }
 
     /** The biome source's own biomes plus the deep ones, so their features are sorted and placed. */
     public static synchronized Set<Holder<Biome>> union(Set<Holder<Biome>> base) {

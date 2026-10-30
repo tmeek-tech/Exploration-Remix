@@ -68,7 +68,8 @@ public final class ERConfig {
     private ERConfig(ForgeConfigSpec.Builder b) {
         TerrainSettings d = TerrainSettings.defaults();
         b.comment("The deep world below the pack's old floor. Changes apply to newly generated chunks.").push("world");
-        worldEnabled = b.comment("Extend the overworld down through the three deep layers.").define("enabled", true);
+        worldEnabled = b.comment("Extend the overworld down through the three deep layers. Lava in the caves above the old floor turns to water.")
+                .define("enabled", true);
         bandThickness = b.comment("Thickness of the unbreakable bands between layers.").defineInRange("bandThickness", d.bandThickness(), 8, 64);
         gateSpacing = b.comment("One gate per band in every square of this many blocks.").defineInRange("gateSpacing", d.gateSpacing(), 320, 4096);
         passageRadius = b.comment("Radius of the twisting gate passages.").defineInRange("passageRadius", d.passageRadius(), 2.5, 12.0);
@@ -76,8 +77,8 @@ public final class ERConfig {
         structureFloorY = b.comment("Strongholds and mineshafts stay above this Y so the End stays reachable.").defineInRange("structureFloorY", -56, -64, 0);
         replaceVanillaCaveBiomes = b.comment("The Upper Caves' entrances and plant caves: Root Vaults a few blocks under forests (frozen at their",
                         "mouths under snowy forests), sinkholes under plains, oasis hollows under deserts and badlands, more lush caves (the Frost Fern",
-                        "Grotto under cold ground), no lava above the old floor, and vanilla's deep dark kept out of the pack's caves above the first",
-                        "band (the pack's other cave biomes take its place there; the deep dark moved down into the Blue Reaches).")
+                        "Grotto under cold ground), and vanilla's deep dark kept out of the pack's caves above the first band (the pack's other",
+                        "cave biomes take its place there; the deep dark moved down into the Blue Reaches).")
                 .define("replaceVanillaCaveBiomes", true);
         joinDeadEnds = b.comment("Join the blind ends of the pack's caves above the old floor to a cave nearby with a short tunnel, so few",
                         "ways end in a dead end.")

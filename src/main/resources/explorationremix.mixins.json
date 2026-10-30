@@ -19,7 +19,9 @@
     "AboveBottomAnchorMixin",
     "SpringFeatureMixin",
     "LakeFeatureMixin",
-    "WorldCarverMixin"
+    "WorldCarverMixin",
+    "RuinedPortalPieceMixin",
+    "BiomeFilterMixin"
   ],
   "client": [
     "client.LightTextureMixin"

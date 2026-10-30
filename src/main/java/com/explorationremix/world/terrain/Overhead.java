@@ -16,6 +16,9 @@ public interface Overhead {
      */
     default double packDensity(int x, int y, int z) { return y <= at(x, z).y() ? 1.0 : -1.0; }
 
+    /** The sea level: ground below it lies under water in swamps and wetlands even where no ocean or river is. */
+    default int seaLevel() { return 63; }
+
     /** What covers the ground, for the entrances into the caves (see {@code Entrances}). */
     enum Cover {
         /** Trees: Root Vault clusters. */

@@ -13,6 +13,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
@@ -21,9 +22,10 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
 /**
  * Where a Root Vault's descent opens into a lush cave (or the Frost Fern Grotto), the vault's veridium runs on into
  * it: the bare stone of the cave's walls, floors and ceilings within 9 to 15 blocks of the descent's end turns to
- * veridium, thinning out at the edge, so the plant cave reads as the vault's lower end. Moss, clay and plants stay. It
- * is placed at the descents' ends ({@link JunctionsPlacement}), after the plants, and does nothing where the end is not
- * in a plant cave.
+ * veridium, thinning out at the edge, and within 4 to 10 blocks the moss does too (the plant cave's moss covers most of
+ * its floors and ceilings, so stone alone hardly shows), so the plant cave reads as the vault's lower end. Plants that
+ * cannot stand on veridium go with the moss; clay and the rest of the plants stay. It is placed at the descents' ends
+ * ({@link JunctionsPlacement}), after the plants, and does nothing where the end is not in a plant cave.
  */
 public final class VeridiumSpreadFeature extends Feature<NoneFeatureConfiguration> {
     public VeridiumSpreadFeature(Codec<NoneFeatureConfiguration> codec) { super(codec); }
@@ -53,7 +55,8 @@ public final class VeridiumSpreadFeature extends Feature<NoneFeatureConfiguratio
             if (d > r - 4 && random.nextDouble() < (d - (r - 4)) / 4) continue;
             at.set(o.getX() + dx, o.getY() + dy, o.getZ() + dz);
             BlockState st = level.getBlockState(at);
-            if (!st.is(BlockTags.BASE_STONE_OVERWORLD)) continue;
+            boolean moss = st.is(Blocks.MOSS_BLOCK) && d <= r - 5;
+            if (!moss && !st.is(BlockTags.BASE_STONE_OVERWORLD)) continue;
             boolean bare = false;
             for (Direction f : Direction.values()) {
                 BlockState n = level.getBlockState(side.setWithOffset(at, f));
@@ -61,9 +64,23 @@ public final class VeridiumSpreadFeature extends Feature<NoneFeatureConfiguratio
             }
             if (!bare || !plantCave(level.getBiome(at), frost)) continue;
             level.setBlock(at, veridium, 2);
+            if (moss) {
+                dropUnsupported(level, side.setWithOffset(at, Direction.UP), Direction.UP);
+                dropUnsupported(level, side.setWithOffset(at, Direction.DOWN), Direction.DOWN);
+            }
             any = true;
         }
         return any;
+    }
+
+    /** Takes away what stood on (or hung from) moss that turned to veridium and cannot stay there, going outwards. */
+    private static void dropUnsupported(WorldGenLevel level, BlockPos from, Direction away) {
+        BlockPos.MutableBlockPos p = from.mutable();
+        for (int i = 0; i < 32; i++, p.move(away)) {
+            BlockState s = level.getBlockState(p);
+            if (s.isAir() || s.canSurvive(level, p)) return;
+            level.setBlock(p, s.getFluidState().createLegacyBlock(), 2);
+        }
     }
 
     private static boolean plantCave(Holder<Biome> b, Holder<Biome> frost) {

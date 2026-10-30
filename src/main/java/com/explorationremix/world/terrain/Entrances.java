@@ -152,7 +152,7 @@ public final class Entrances {
         public final int groundMin, groundMax;
         double rise, channel, poolU, poolV, poolR = 1, poolD, stream, step = 4;
         /** Sinkhole: rim radius, undercut radius, the lip where the undercut starts, shore width, talus half width and slope. */
-        double rim, under, lip, shore, talusHalf, talusSlope;
+        double rim, under, lip, shore, talusHalf, talusSlope, talusEnd;
         final double ox, oz;
         /** Planned skylights: {x, z}. */
         public double[][] skylights = new double[0][];
@@ -640,6 +640,26 @@ public final class Entrances {
 
     // ------------------------------------------------------------------------------------------------ sinkholes
 
+    /** How far a sinkhole talus's line may run past the edge of its pit's cell. */
+    static final double TALUS_OVER = 8;
+
+    /**
+     * How far a sinkhole's talus runs from the pit's centre along phi until its floor, rising from the shore at its
+     * slope, meets the ground, plus two blocks; -1 when it crosses water or ground under sea level, or would not meet
+     * the ground before running {@link #TALUS_OVER} blocks past the pit's cell.
+     */
+    private double talusLength(int ci, int cj, double cx, double cz, double phi, double water, double shoreOut, double slope) {
+        double cos = Math.cos(phi), sin = Math.sin(phi);
+        for (double u = shoreOut; ; u += 1) {
+            double x = cx + cos * u, z = cz + sin * u;
+            if (x < ci * CELL - TALUS_OVER || x > (ci + 1) * CELL + TALUS_OVER || z < cj * CELL - TALUS_OVER || z > (cj + 1) * CELL + TALUS_OVER)
+                return -1;
+            Overhead.Surface su = surf(x, z);
+            if (su.wet() || su.y() < overhead.seaLevel()) return -1;
+            if (water + 1 + (u - shoreOut) * slope >= su.y() + 0.5) return u + 2;
+        }
+    }
+
     private Site planSinkhole(int ci, int cj, long h, double cx, double cz, Overhead.Surface s0) {
         double rim = Hashing.range(Hashing.mix(h, 10, 0, 0), 5, 8.5);
         double under = rim * Hashing.range(Hashing.mix(h, 11, 0, 0), 1.15, 1.45);
@@ -648,25 +668,34 @@ public final class Entrances {
         cx = clamp(cx, ci * (double) CELL + m, (ci + 1) * (double) CELL - m);
         cz = clamp(cz, cj * (double) CELL + m, (cj + 1) * (double) CELL - m);
         int[] g = groundOver(cx, cz, under, under, 0);
-        if (g[2] != 0 || g[1] - g[0] > 8) return null;
+        if (g[2] != 0 || g[1] - g[0] > 8 || g[0] < overhead.seaLevel()) return null; // a pit under sea level floods
         double depth = Hashing.range(Hashing.mix(h, 13, 0, 0), 12, 20);
         double water = Math.floor(g[0] - depth);
         if (water < minWater) return null;
+        double poolR = under * 0.75, shore = Hashing.range(Hashing.mix(h, 14, 0, 0), 1.0, 2.0);
+        double talusHalf = Hashing.range(Hashing.mix(h, 16, 0, 0), 3.0, 4.5);
+        double talusSlope = Hashing.range(Hashing.mix(h, 17, 0, 0), 0.55, 0.68);
+        // The talus runs out from the shore until its floor meets the ground, walked along its line so that rising
+        // ground is met where it rises (a trench that ends in a wall cannot be climbed out of); over no water, and not
+        // far into the next cell, whose chambers know nothing of it. The planned direction first, then those round it.
+        double talusLength = -1;
+        for (int k = 0; k < 8 && talusLength < 0; k++) {
+            double phi = angle + (k % 2 == 0 ? 1 : -1) * ((k + 1) / 2) * Math.PI / 4;
+            talusLength = talusLength(ci, cj, cx, cz, phi, water, poolR + shore, talusSlope);
+            if (talusLength >= 0) angle = phi;
+        }
+        if (talusLength < 0) return null;
         double ox = Hashing.range(Hashing.mix(h, 40, 0, 0), 0, 4096), oz = Hashing.range(Hashing.mix(h, 41, 0, 0), 0, 4096);
         Chamber pit = new Chamber(SINKHOLE, LARGE, cx, cz, angle, under, under, water, depth, g[1] + 8, g[0], g[1], ox, oz);
         pit.rim = rim;
         pit.under = under;
         pit.lip = g[0] - depth / 3;
-        pit.poolR = under * 0.75;
-        pit.shore = Hashing.range(Hashing.mix(h, 14, 0, 0), 1.0, 2.0);
+        pit.poolR = poolR;
+        pit.shore = shore;
         pit.poolD = Hashing.range(Hashing.mix(h, 15, 0, 0), 2, 4);
-        pit.talusHalf = Hashing.range(Hashing.mix(h, 16, 0, 0), 3.0, 4.5);
-        pit.talusSlope = Hashing.range(Hashing.mix(h, 17, 0, 0), 0.55, 0.68);
-        // The talus runs out past the pit until its floor meets the ground: no water may lie over it.
-        double talusLength = pit.poolR + pit.shore + (g[1] + 1 - water) / pit.talusSlope + 2;
-        for (double d = pit.rim; d <= talusLength; d += 4) {
-            if (surf(cx + Math.cos(angle) * d, cz + Math.sin(angle) * d).wet()) return null;
-        }
+        pit.talusHalf = talusHalf;
+        pit.talusSlope = talusSlope;
+        pit.talusEnd = talusLength;
         pit.reachTo(talusLength + pit.talusHalf * 1.2 + 2);
         List<Chamber> chs = new ArrayList<>();
         chs.add(pit);
@@ -988,7 +1017,7 @@ public final class Entrances {
             for (double d : new double[]{12, 20, 28}) {
                 Overhead.Surface su = surf(c.cx + dx * (rho + d), c.cz + dz * (rho + d));
                 sum += su.y();
-                wet |= su.wet();
+                wet |= su.wet() || su.y() < overhead.seaLevel();
             }
             if (!wet) score[k] = sum / 3 + 4 * Hashing.unit(Hashing.mix(h, 10 + k, 0, 0));
         }
@@ -1018,6 +1047,8 @@ public final class Entrances {
             y += slope;
             Overhead.Surface su = surf(px, pz);
             if (su.wet()) return null;
+            // Where it breaks the ground it opens to the sky: never below sea level, where a swamp's water stands.
+            if (y + r >= su.y() - 1 && su.y() < overhead.seaLevel()) return null;
             if (y - 0.55 * r >= su.y() + 0.5) {
                 // Out: carry on a few blocks over the ground so the opening is clean.
                 pts.add(new double[]{px + Math.cos(ang) * 3, y + 1, pz + Math.sin(ang) * 3});
@@ -1175,6 +1206,8 @@ public final class Entrances {
         final double[] f = new double[8], c = new double[8], q = new double[8];
         /** How far outside the chamber's open footprint the column lies, in blocks (negative inside). */
         final double[] e = new double[8];
+        /** The same for the footprint whose water is sealed in: a sinkhole's pit, without its talus. */
+        final double[] s = new double[8];
         final Tunnel[] t = new Tunnel[48];
         double lo, hi;
         int ground, groundLow;
@@ -1242,7 +1275,7 @@ public final class Entrances {
     private boolean shape(Chamber g, int x, int z, Col col, int i) {
         double u = g.along(x, z), v = g.across(x, z);
         double nx = x + g.ox, nz = z + g.oz;
-        double f, ce, q, e;
+        double f, ce, q, e, seal = Double.NaN;
         switch (g.look) {
             case HALL -> {
                 double wob = 1 + 0.14 * wobN.noise2(nx / 13.0, nz / 13.0);
@@ -1288,6 +1321,9 @@ public final class Entrances {
                 ce = open * (ground + 8) + (1 - open) * Math.min(roof, groundLow(col) - COLUMN_ROOF);
                 if (q >= 1.05) ce = f - 10;
                 e = Math.max(vv - half, (q - 1) * g.a);
+                // Ranked for its look and site by how far along and across: beside its long side a neighbouring
+                // chamber keeps its own.
+                q = Math.max(q, vv / g.b);
             }
             default -> {
                 // A sinkhole: a round pit open to the sky, undercut below its lip down to a shore round its pool, and a
@@ -1304,7 +1340,7 @@ public final class Entrances {
                 double talus = g.water + 1 + Math.max(0, u - shoreOut) * g.talusSlope + 0.2 * floorN.noise2(u / 5.0 + g.ox, v / 5.0)
                         + 1.4 * Math.max(0, Math.abs(v) - half * 0.45);
                 // (It is open to the sky from the pit on: through the lip, where the undercut would roof it.)
-                boolean onTalus = band && (u >= shoreOut - 1 || rr >= g.rim - 1) && talus < ground + 0.5;
+                boolean onTalus = band && u <= g.talusEnd && (u >= shoreOut - 1 || rr >= g.rim - 1) && talus < ground + 0.5;
                 boolean inUnder = rr < g.under * 1.05;
                 if (!inUnder && !onTalus && rr >= g.under * 1.05 + 4) return false;
                 // The pit's floor: the pool's basin, the shore round it, and an apron rising to the walls under the lip.
@@ -1321,6 +1357,7 @@ public final class Entrances {
                     ce = f - 10; // rock round the undercut, listed for the seal
                 }
                 e = rr - g.under;
+                seal = e; // the pool's seal stays round the pit: the talus holds no water
                 if (onTalus) {
                     f = u >= shoreOut ? talus : Math.min(f, talus);
                     ce = ground + 8;
@@ -1334,6 +1371,7 @@ public final class Entrances {
         col.c[i] = ce;
         col.q[i] = q;
         col.e[i] = e;
+        col.s[i] = Double.isNaN(seal) ? e : seal;
         return true;
     }
 
@@ -1401,7 +1439,7 @@ public final class Entrances {
         if (c.n == 0 || y > c.hi) return false; // not c.lo: under a wall the floor is the ground
         for (int i = 0; i < c.n; i++) {
             Chamber g = c.g[i];
-            if (c.e[i] < 4 && y <= g.water + 1 && y >= g.bottom() - 4) return true;
+            if (c.s[i] < 4 && y <= g.water + 1 && y >= g.bottom() - 4) return true;
         }
         return false;
     }
@@ -1486,7 +1524,8 @@ public final class Entrances {
         double bq = 1e9;
         for (int i = 0; i < c.n; i++) if (c.q[i] < bq) { bq = c.q[i]; best = c.g[i].look; }
         if (best >= 0) return best;
-        return c.tn > 0 ? c.t[0].from.look : -1;
+        Tunnel t = nearestTunnel(c);
+        return t != null ? t.from.look : -1;
     }
 
     /** The site whose entrance runs under a column (its nearest chamber's, else a tunnel's), or null. */
@@ -1496,7 +1535,22 @@ public final class Entrances {
         double bq = 1e9;
         for (int i = 0; i < c.n; i++) if (c.q[i] < bq) { bq = c.q[i]; best = c.g[i].site; }
         if (best != null) return best;
-        return c.tn > 0 ? c.t[0].owner : null;
+        Tunnel t = nearestTunnel(c);
+        return t != null ? t.owner : null;
+    }
+
+    /** The tunnel listed for a column that runs nearest it, seen from above, or null. */
+    private static Tunnel nearestTunnel(Col c) {
+        Tunnel best = null;
+        double bd = Double.MAX_VALUE;
+        for (int i = 0; i < c.tn; i++) {
+            Tunnel t = c.t[i];
+            for (int k = 0; k + 1 < t.px.length; k++) {
+                double d = segDist2(c.x, t.py[k], c.z, t.px[k], t.py[k], t.pz[k], t.px[k + 1], t.py[k], t.pz[k + 1]);
+                if (d < bd) { bd = d; best = t; }
+            }
+        }
+        return best;
     }
 
     /** The chamber whose footprint covers a column, or null. */

@@ -98,6 +98,9 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
     @Override
     public Surface at(int x, int z) { return entry(x >> 2, z >> 2).surface; }
 
+    @Override
+    public int seaLevel() { return seaLevel; }
+
     /** The pack's surface biome over a column. */
     public Holder<Biome> biome(int x, int z) { return entry(x >> 2, z >> 2).biome; }
 

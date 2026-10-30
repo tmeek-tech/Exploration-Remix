@@ -26,6 +26,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
+import net.minecraftforge.common.Tags;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,8 +36,9 @@ import java.util.List;
  * first of all features, so ores, moss and plants dress the new tunnels like any other cave. It reads the blocks of
  * the chunk and the eight round it, finds the blind ends whose tips lie in this chunk, and carves at most three tunnels
  * of 3 to 4 blocks across through rock (never through water or beside it, never within 5 blocks of the ground, never
- * through anything but natural rock and soil), trying the next best tunnel when one is turned down. Off with the world
- * option {@code joinDeadEnds}.
+ * through anything but natural rock and soil), trying the next best tunnel when one is turned down. A neighbouring
+ * chunk may be decorated already: what stood on or hung from the rock a tunnel cuts there (moss carpets, vines, lichen,
+ * dripstone, rails) goes with it. Off with the world option {@code joinDeadEnds}.
  */
 public final class JoinDeadEndsFeature extends Feature<NoneFeatureConfiguration> {
     private static final TagKey<Block> CAVE_ROCK = TagKey.create(Registries.BLOCK, new ResourceLocation(ExplorationRemix.MOD_ID, "cave_rock"));
@@ -45,8 +47,6 @@ public final class JoinDeadEndsFeature extends Feature<NoneFeatureConfiguration>
     private static final Direction[] FLOWS_IN = {Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
     /** At most this many tunnels a chunk. */
     private static final int MAX_LINKS = 3;
-    /** The grid's highest cell row: about 220 blocks over its floor. */
-    private static final int MAX_ROWS = 110;
     /** The tunnels tried for a blind end, best first, before giving up on it. */
     private static final int TRIES = 4;
     /** Why a tunnel was not carved (see {@link #carve}). */
@@ -99,7 +99,8 @@ public final class JoinDeadEndsFeature extends Feature<NoneFeatureConfiguration>
 
     /**
      * The grid over a chunk and the eight round it, from {@code yMin} up to the highest ground: rock, air, water (any
-     * fluid) or outside (open within 4 blocks of the ground, or over it). Null if a chunk of the nine is missing.
+     * fluid) or outside (open within 4 blocks of the ground, or over it). The ground is the heightmap's, under any tree on
+     * it (see {@link #ground}). Null if a chunk of the nine is missing.
      */
     public static DeadEnds.Grid read(LevelAccessor level, ChunkPos cp, int yMin, Heightmap.Types ground) {
         return read(level, cp, yMin, ground, false);
@@ -120,13 +121,13 @@ public final class JoinDeadEndsFeature extends Feature<NoneFeatureConfiguration>
             ChunkAccess ch = level.getChunk(cx, cz);
             chunks[a * 3 + b] = ch;
             for (int lx = 0; lx < 16; lx++) for (int lz = 0; lz < 16; lz++) {
-                int h = ch.getHeight(ground, lx, lz); // the top block
+                int h = ground(ch, ch.getHeight(ground, lx, lz), x0 + a * 16 + lx, z0 + b * 16 + lz);
                 heights[(a * 16 + lx) * 48 + b * 16 + lz] = h;
                 top = Math.max(top, h);
             }
         }
         int y0 = yMin & ~1;
-        int ny = Math.min(MAX_ROWS, (top + 2 - y0) / DeadEnds.CELL);
+        int ny = Math.min(level.getMaxBuildHeight() - y0, top + 2 - y0) / DeadEnds.CELL;
         if (ny < 8) return null;
         DeadEnds.Grid g = new DeadEnds.Grid(x0, y0, z0, 24, ny, 24);
         byte[] open = new byte[24 * ny * 24], wet = new byte[open.length];
@@ -178,6 +179,7 @@ public final class JoinDeadEndsFeature extends Feature<NoneFeatureConfiguration>
         java.util.Set<Long> seen = new java.util.HashSet<>();
         int blocked = 0, total = 0;
         BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+        java.util.Map<Long, Integer> grounds = new java.util.HashMap<>();
         for (double s = 0; s <= 1.0001; s += 0.5 / len) {
             double u = 1 - s;
             double cx = u * u * ax + 2 * u * s * mx + s * s * bx, cy = u * u * ay + 2 * u * s * my + s * s * by, cz = u * u * az + 2 * u * s * mz + s * s * bz;
@@ -190,10 +192,13 @@ public final class JoinDeadEndsFeature extends Feature<NoneFeatureConfiguration>
                     if (!seen.add(at.set(x, y, z).asLong())) continue;
                     BlockState st = level.getBlockState(at);
                     if (!st.getFluidState().isEmpty()) return WET; // never through water
-                    if (y > level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, x, z) - 6) return GROUND;
+                    final int gx = x, gz = z;
+                    int ground = grounds.computeIfAbsent(((long) x << 32) ^ (z & 0xffffffffL), k ->
+                            ground(level.getChunk(gx >> 4, gz >> 4), level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, gx, gz) - 1, gx, gz));
+                    if (y > ground - 5) return GROUND;
                     total++;
                     if (st.isAir()) continue;
-                    if (st.is(BlockTags.OVERWORLD_CARVER_REPLACEABLES) || st.is(CAVE_ROCK)) cut.add(at.immutable());
+                    if (st.is(BlockTags.OVERWORLD_CARVER_REPLACEABLES) || st.is(CAVE_ROCK) || st.is(Tags.Blocks.ORES)) cut.add(at.immutable());
                     else blocked++;
                 }
         }
@@ -206,6 +211,34 @@ public final class JoinDeadEndsFeature extends Feature<NoneFeatureConfiguration>
                 if (!level.getFluidState(at).isEmpty()) return WET;
             }
         for (BlockPos p : cut) level.setBlock(p, CAVE_AIR, 2);
+        // In a neighbour decorated already, what stood on or hung from the rock cut away goes with it.
+        for (BlockPos p : cut)
+            for (Direction dir : Direction.values()) dropUnsupported(level, cp, at.setWithOffset(p, dir), dir);
         return CARVED;
+    }
+
+    /**
+     * The ground's top block under a heightmap's top block: a decorated chunk loaded back from disk has lost its
+     * world-generation heightmaps, and the game rebuilds them from its blocks, so they stand on its trees.
+     */
+    private static int ground(ChunkAccess ch, int top, int x, int z) {
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(x, top, z);
+        for (int i = 0; i < 48; i++, p.move(Direction.DOWN)) {
+            BlockState s = ch.getBlockState(p);
+            if (!(s.is(BlockTags.LEAVES) || s.is(BlockTags.LOGS) || s.is(Blocks.MUSHROOM_STEM) || s.is(Blocks.BROWN_MUSHROOM_BLOCK)
+                    || s.is(Blocks.RED_MUSHROOM_BLOCK) || !s.blocksMotion())) break;
+        }
+        return p.getY();
+    }
+
+    /** Takes away what can no longer stay where it is, from a block outwards (a plant, then the plant on top of it). */
+    private static void dropUnsupported(WorldGenLevel level, ChunkPos cp, BlockPos from, Direction away) {
+        BlockPos.MutableBlockPos p = from.mutable();
+        for (int i = 0; i < 32; i++, p.move(away)) {
+            if (Math.abs((p.getX() >> 4) - cp.x) > 1 || Math.abs((p.getZ() >> 4) - cp.z) > 1) return;
+            BlockState s = level.getBlockState(p);
+            if (s.isAir() || s.canSurvive(level, p)) return;
+            level.setBlock(p, s.getFluidState().createLegacyBlock(), 2);
+        }
     }
 }

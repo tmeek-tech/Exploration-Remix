@@ -2,6 +2,7 @@ package com.explorationremix.devtools;
 
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.feature.JoinDeadEndsFeature;
+import com.explorationremix.world.gen.DeepMaterials;
 import com.explorationremix.world.gen.SurfaceOracle;
 import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Net;
@@ -11,6 +12,7 @@ import com.explorationremix.world.terrain.Plans;
 import com.explorationremix.world.terrain.DeadEnds;
 import com.explorationremix.world.terrain.Entrances;
 import com.explorationremix.world.terrain.PlantCaves;
+import com.explorationremix.world.terrain.Rock;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import com.mojang.brigadier.CommandDispatcher;
@@ -317,6 +319,8 @@ public final class RemixCommands {
     /** The view where a Root Vault's descent opens into a lush cave, whose veridium runs on into it. */
     private static final String LUSH_VERIDIUM = "lush_veridium";
     private static final String FROST_GROTTO = "frost_fern_grotto";
+    /** How many of the Frost Fern Grotto's nearest caves its view tries. */
+    private static final int GROTTO_TRIES = 6;
 
     /** An entrance's name (its biome's), lower case, or null for any other name. */
     @javax.annotation.Nullable
@@ -376,8 +380,15 @@ public final class RemixCommands {
      */
     @javax.annotation.Nullable
     private static BlockPos findBiome(ServerLevel level, BlockPos from, net.minecraft.resources.ResourceLocation id) {
+        java.util.List<BlockPos> found = findBiomes(level, from, id, 1, 0);
+        return found.isEmpty() ? null : found.get(0);
+    }
+
+    /** Up to max blocks of a biome as {@link #findBiome} finds them, nearest first, each at least apart blocks from the others. */
+    private static java.util.List<BlockPos> findBiomes(ServerLevel level, BlockPos from, net.minecraft.resources.ResourceLocation id, int max, int apart) {
+        java.util.List<BlockPos> found = new java.util.ArrayList<>();
         Terrain t = DeepWorld.terrain();
-        if (t == null) return null;
+        if (t == null) return found;
         net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> key =
                 net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, id);
         net.minecraft.world.level.biome.BiomeSource src = level.getChunkSource().getGenerator().getBiomeSource();
@@ -391,11 +402,15 @@ public final class RemixCommands {
                 for (int y = t.shape.packFloor + 8; y <= t.shape.packFloor + 184; y += 8) {
                     var b = r.getNoiseBiome(net.minecraft.core.QuartPos.fromBlock(x), net.minecraft.core.QuartPos.fromBlock(y),
                             net.minecraft.core.QuartPos.fromBlock(z), sampler);
-                    if (b.is(key)) return new BlockPos(x, y, z);
+                    if (!b.is(key)) continue;
+                    BlockPos at = new BlockPos(x, y, z);
+                    if (found.stream().noneMatch(f -> f.closerThan(at, apart))) found.add(at);
+                    if (found.size() >= max) return found;
+                    break;
                 }
             }
         }
-        return null;
+        return found;
     }
 
     // ============================================================================================== views
@@ -409,12 +424,15 @@ public final class RemixCommands {
         BlockPos around;
         net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> key;
         int look = -1, radius = 24;
+        java.util.List<BlockPos> tries = null;
         if (name.equalsIgnoreCase("rootvaults_mouth")) return viewMouth(c, pl, level, n == 1);
         String ent = entrance(name);
         Entrances e = DeepWorld.entrances();
         if (ent != null) {
             if (ent.equals("rootvaults") && n >= 0 && n <= 2) look = n;
-            key = net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, entranceBiome(ent));
+            // Only a frozen cluster's mouth zone is frozen: with n 1, the view looks into its halls instead.
+            boolean halls = ent.equals("frozen_rootvaults") && n == 1;
+            key = net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, entranceBiome(halls ? "rootvaults" : ent));
             Entrances.Chamber g = e != null ? nearestEntrance(e, c.getSource().getPosition(), ent, n) : null;
             if (g == null) {
                 c.getSource().sendFailure(Component.literal("No " + ent + (n >= 0 ? " " + n : "") + " found within "
@@ -433,11 +451,14 @@ public final class RemixCommands {
             radius = 20;
         } else if (name.equalsIgnoreCase(FROST_GROTTO)) {
             key = net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, com.explorationremix.world.gen.DeepBiomes.FROST_FERN_GROTTO);
-            around = findBiome(level, BlockPos.containing(c.getSource().getPosition()), com.explorationremix.world.gen.DeepBiomes.FROST_FERN_GROTTO);
-            if (around == null) {
+            // The grotto's nearest caves, well apart: the widest view among them wins (the nearest is often a narrow tunnel).
+            tries = findBiomes(level, BlockPos.containing(c.getSource().getPosition()), com.explorationremix.world.gen.DeepBiomes.FROST_FERN_GROTTO,
+                    GROTTO_TRIES, 40);
+            if (tries.isEmpty()) {
                 c.getSource().sendFailure(Component.literal("No Frost Fern Grotto within 640 blocks."));
                 return 0;
             }
+            around = tries.get(0);
         } else {
             DeepBiome target = null;
             for (DeepBiome b : DeepBiome.values()) if (shortName(b).equalsIgnoreCase(name)) target = b;
@@ -457,8 +478,20 @@ public final class RemixCommands {
         }
         final int lk = look;
         final net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> k = key;
-        ViewFinder.View v = ViewFinder.find(level, around, p -> level.getBiome(p).is(k) && (lk < 0 || (e != null && e.look(p.getX(), p.getZ()) == lk)),
-                radius, 14);
+        java.util.function.Predicate<BlockPos> in = p -> level.getBiome(p).is(k) && (lk < 0 || (e != null && e.look(p.getX(), p.getZ()) == lk));
+        ViewFinder.View v = null;
+        String extra = "";
+        if (name.equalsIgnoreCase(LUSH_VERIDIUM)) {
+            // Where a descent meets a lush cave: stand in the lush cave in sight of the descent's end and face it, where
+            // the veridium runs on.
+            v = faceJunction(level, around, in);
+            extra = String.format(Locale.ROOT, ", descent's end %d %d %d, %d veridium blocks within 16 of it", around.getX(), around.getY(), around.getZ(),
+                    countBlocks(level, around, 16, DeepMaterials.state(Rock.VERIDIUM).getBlock()));
+        }
+        if (v == null) for (BlockPos at : tries != null ? tries : java.util.List.of(around)) {
+            ViewFinder.View w = ViewFinder.find(level, at, in, radius, 14);
+            if (w != null && (v == null || w.score() > v.score())) v = w;
+        }
         if (v == null) {
             BlockPos stand = findStand(level, around.getX(), around.getY(), around.getZ());
             BlockPos at = stand != null ? stand : around;
@@ -468,7 +501,7 @@ public final class RemixCommands {
         }
         level.getChunk(((int) Math.floor(v.x())) >> 4, ((int) Math.floor(v.z())) >> 4, ChunkStatus.FULL, true);
         pl.teleportTo(level, v.x(), v.y(), v.z(), v.yaw(), v.pitch());
-        say(c, String.format(Locale.ROOT, "%s view at %.0f %.0f %.0f facing %.0f, pitch %.0f, %.0f blocks deep", name, v.x(), v.y(), v.z(), v.yaw(), v.pitch(), v.reach()));
+        say(c, String.format(Locale.ROOT, "%s view at %.0f %.0f %.0f facing %.0f, pitch %.0f, %.0f blocks deep%s", name, v.x(), v.y(), v.z(), v.yaw(), v.pitch(), v.reach(), extra));
         return 1;
     }
 
@@ -505,8 +538,8 @@ public final class RemixCommands {
     }
 
     /**
-     * The nearest Root Vault mouth (a cold cluster's with n 1), seen from the ground 5 to 9 blocks past where it comes
-     * out, at a player's eye height, looking back down into it.
+     * The nearest Root Vault mouth (a cold cluster's with n 1), seen from its own floor 10 to 18 blocks in from where it
+     * comes out, looking up it at the daylight.
      */
     private static int viewMouth(CommandContext<CommandSourceStack> c, ServerPlayer pl, ServerLevel level, boolean cold) {
         Entrances e = DeepWorld.entrances();
@@ -529,37 +562,104 @@ public final class RemixCommands {
             c.getSource().sendFailure(Component.literal("No " + (cold ? "frozen " : "") + "Root Vault mouth within " + SEARCH_CELLS * Entrances.CELL + " blocks."));
             return 0;
         }
-        double[] end = best.end(), prev = best.point(Math.max(0, best.points() - 4));
+        double[] end = best.end(), prev = best.point(Math.max(0, best.points() - 2));
         double dx = end[0] - prev[0], dz = end[2] - prev[2], l = Math.max(1e-6, Math.hypot(dx, dz));
         double ux = dx / l, uz = dz / l;
-        // Stand on the ground a few blocks out from where the mouth comes out (under the trees, not in their crowns),
-        // eyes at a player's height, looking back down into it.
-        double cx = 0, cy = 0, cz = 0;
+        // Stand in the tunnel 10 to 18 blocks in from where it comes out, on its floor, looking up it at the daylight
+        // (from outside, a forest's leaves hide the opening).
+        double cx = end[0], cy = end[1], cz = end[2];
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         boolean found = false;
-        for (int out = 5; out <= 9 && !found; out++) {
-            cx = end[0] + ux * out;
-            cz = end[2] + uz * out;
-            int gx = (int) Math.floor(cx), gz = (int) Math.floor(cz);
+        for (int back = 10; back <= 18 && !found; back++) {
+            int gx = (int) Math.floor(end[0] - ux * back), gz = (int) Math.floor(end[2] - uz * back);
             level.getChunk(gx >> 4, gz >> 4, ChunkStatus.FULL, true);
-            for (int y = (int) Math.floor(end[1]) + 8; y > end[1] - 8; y--) {
-                BlockState s = level.getBlockState(p.set(gx, y, gz));
-                if (!s.blocksMotion() || s.is(net.minecraft.tags.BlockTags.LEAVES)) continue;
-                boolean clear = !level.getBlockState(p.set(gx, y + 1, gz)).blocksMotion() && !level.getBlockState(p.set(gx, y + 2, gz)).blocksMotion();
-                if (clear) {
-                    cy = y + 1;
-                    found = true;
-                }
-                break;
+            for (int y = (int) Math.floor(end[1]) + 2; y > end[1] - 20 && !found; y--) {
+                if (e.carve(gx, y, gz) >= 0) continue;
+                BlockState under = level.getBlockState(p.set(gx, y - 1, gz));
+                if (!under.blocksMotion() || level.getBlockState(p.set(gx, y, gz)).blocksMotion()
+                        || level.getBlockState(p.set(gx, y + 1, gz)).blocksMotion()) continue;
+                cx = gx + 0.5;
+                cy = y;
+                cz = gz + 0.5;
+                found = true;
             }
         }
-        if (!found) cy = end[1] + 1;
-        double[] in = best.point(Math.max(0, best.points() - 7));
-        double tx = in[0] - cx, ty = in[1] - (cy + 1.62), tz = in[2] - cz;
+        double tx = end[0] - cx, ty = end[1] - (cy + 1.62), tz = end[2] - cz;
+        if (!found) {
+            // No floor in the tunnel's last blocks: stand where it comes out, looking down into it.
+            tx = -ux;
+            ty = -0.4;
+            tz = -uz;
+        }
         float yaw = (float) Math.toDegrees(Math.atan2(-tx, tz)), pitch = (float) Math.toDegrees(Math.atan2(-ty, Math.hypot(tx, tz)));
         pl.teleportTo(level, cx, cy, cz, yaw, pitch);
         say(c, String.format(Locale.ROOT, "%sRoot Vault mouth at %.0f %.0f %.0f, seen from %.0f %.0f %.0f", cold ? "frozen " : "", end[0], end[1], end[2], cx, cy, cz));
         return 1;
+    }
+
+    /**
+     * A spot 6 to 16 blocks from a point, standing in the biome in plain sight of it, facing it; the spot about 11 blocks
+     * away with the most room across the frame wins (rock right beside the camera fills half the picture). Null if there
+     * is none.
+     */
+    @javax.annotation.Nullable
+    private static ViewFinder.View faceJunction(ServerLevel level, BlockPos j, java.util.function.Predicate<BlockPos> in) {
+        ViewFinder.View best = null;
+        double tx = j.getX() + 0.5, ty = j.getY() + 0.5, tz = j.getZ() + 0.5;
+        BlockPos.MutableBlockPos feet = new BlockPos.MutableBlockPos();
+        for (int dx = -16; dx <= 16; dx++) for (int dz = -16; dz <= 16; dz++) for (int dy = -10; dy <= 10; dy++) {
+            feet.set(j.getX() + dx, j.getY() + dy, j.getZ() + dz);
+            double ex = feet.getX() + 0.5, ey = feet.getY() + 1.62, ez = feet.getZ() + 0.5;
+            double d = Math.sqrt((tx - ex) * (tx - ex) + (ty - ey) * (ty - ey) + (tz - ez) * (tz - ez));
+            if (d < 6 || d > 16) continue;
+            double near = -0.5 * Math.abs(d - 11);
+            if (best != null && near + ROOM <= best.score()) continue;
+            if (!ViewFinder.standable(level, feet) || !in.test(feet) || !inSight(level, ex, ey, ez, tx, ty, tz)) continue;
+            float yaw = (float) Math.toDegrees(Math.atan2(-(tx - ex), tz - ez));
+            float pitch = (float) Math.toDegrees(Math.atan2(-(ty - ey), Math.hypot(tx - ex, tz - ez)));
+            double room = ROOM;
+            for (float off : new float[]{-35F, -17F, 17F, 35F}) room = Math.min(room, reach(level, ex, ey, ez, yaw + off, pitch, ROOM));
+            double score = near + room;
+            if (best == null || score > best.score()) best = new ViewFinder.View(ex, feet.getY(), ez, yaw, pitch, d, score);
+        }
+        return best;
+    }
+
+    /** How much room a junction view wants across its frame, in blocks. */
+    private static final double ROOM = 8;
+
+    /** How far one can see from a point in a direction before a block hides what is behind it, up to max blocks. */
+    private static double reach(ServerLevel level, double x, double y, double z, float yaw, float pitch, double max) {
+        double yr = Math.toRadians(yaw), pr = Math.toRadians(pitch);
+        double dx = -Math.sin(yr) * Math.cos(pr), dy = -Math.sin(pr), dz = Math.cos(yr) * Math.cos(pr);
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (double s = 0.5; s < max; s += 0.25) {
+            if (level.getBlockState(p.set(Math.floor(x + dx * s), Math.floor(y + dy * s), Math.floor(z + dz * s))).canOcclude()) return s;
+        }
+        return max;
+    }
+
+    /** Whether no block that hides what is behind it stands between two points (water and plants do not). */
+    private static boolean inSight(ServerLevel level, double ax, double ay, double az, double bx, double by, double bz) {
+        double d = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay) + (bz - az) * (bz - az));
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (double s = 0.5; s < d - 1; s += 0.25) {
+            double f = s / d;
+            p.set(Math.floor(ax + (bx - ax) * f), Math.floor(ay + (by - ay) * f), Math.floor(az + (bz - az) * f));
+            if (level.getBlockState(p).canOcclude()) return false;
+        }
+        return true;
+    }
+
+    /** How many blocks of a kind lie within r blocks of a point. */
+    private static int countBlocks(ServerLevel level, BlockPos o, int r, net.minecraft.world.level.block.Block block) {
+        int n = 0;
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int dx = -r; dx <= r; dx++) for (int dy = -r; dy <= r; dy++) for (int dz = -r; dz <= r; dz++) {
+            if (dx * dx + dy * dy + dz * dz > r * r) continue;
+            if (level.getBlockState(p.set(o.getX() + dx, o.getY() + dy, o.getZ() + dz)).is(block)) n++;
+        }
+        return n;
     }
 
     /** The end of the nearest Root Vault descent that opens into a lush cave (as the deep world picks the biome), or null. */
@@ -743,6 +843,8 @@ public final class RemixCommands {
                 tips / (double) chunks, t.shape.packFloor + 8, shallow));
         say(c, String.format(Locale.ROOT, "Lava blocks above the old floor: %d, %d of them in caves%s", lava, caveLava,
                 lavaAt == null ? "" : String.format(Locale.ROOT, " (y %d to %d; one at %d %d %d)", lavaLo, lavaHi, lavaAt[0], lavaAt[1], lavaAt[2])));
+        say(c, String.format(Locale.ROOT, "Surface-biome ore placements let into the plant caves' and entrances' rock since the world loaded: %d",
+                com.explorationremix.world.gen.DeepBiomes.SURFACE_ORES.get()));
         say(c, String.format(Locale.ROOT, "Counting only natural rock and soil as rock: %d blind ends. Round the ones left: %s; blocks there: %s", rockTips,
                 top(kinds, 6), top(round, 8)));
         for (int i = 0; i < Math.min(5, all.size()); i++) say(c, "  at " + all.get(i)[0] + " " + all.get(i)[1] + " " + all.get(i)[2]);

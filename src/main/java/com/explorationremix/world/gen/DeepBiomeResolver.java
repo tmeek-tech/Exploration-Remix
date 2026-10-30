@@ -67,7 +67,10 @@ public final class DeepBiomeResolver implements BiomeResolver {
         return plants(b, x, y, z);
     }
 
-    /** Lush caves under cold ground become the Frost Fern Grotto; ordinary caves become plant caves where they grow. */
+    /**
+     * Lush caves under cold ground become the Frost Fern Grotto; ordinary caves become plant caves where they grow. The
+     * surface biome's own ores still go into their rock (see {@code BiomeFilterMixin}).
+     */
     private Holder<Biome> plants(Holder<Biome> b, int x, int y, int z) {
         if (overhead == null || plants == null) return b;
         boolean isLush = b.is(Biomes.LUSH_CAVES);

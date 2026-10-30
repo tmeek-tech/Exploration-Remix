@@ -93,6 +93,8 @@ PRECIPITATION = {"frozen_rootvaults", "sinkhole"}
 
 # The pack's dripstone caves list these (WWOO's copy, which matches vanilla). The Rootvaults keep their ores and
 # water springs in the same order, but not the lava lakes or lava springs: the caves above the first band are safe.
+# Ordinary copper rather than dripstone's large copper: the surface biome's copper also goes into these biomes' rock
+# (BiomeFilterMixin), and the two together would triple it.
 ROOTVAULTS_VANILLA = [
     [],
     [],
@@ -104,7 +106,7 @@ ROOTVAULTS_VANILLA = [
      "minecraft:ore_diorite_lower", "minecraft:ore_andesite_upper", "minecraft:ore_andesite_lower", "minecraft:ore_tuff", "minecraft:ore_coal_upper",
      "minecraft:ore_coal_lower", "minecraft:ore_iron_upper", "minecraft:ore_iron_middle", "minecraft:ore_iron_small", "minecraft:ore_gold",
      "minecraft:ore_gold_lower", "minecraft:ore_redstone", "minecraft:ore_redstone_lower", "minecraft:ore_diamond", "minecraft:ore_diamond_large",
-     "minecraft:ore_diamond_buried", "minecraft:ore_lapis", "minecraft:ore_lapis_buried", "minecraft:ore_copper_large", "minecraft:underwater_magma",
+     "minecraft:ore_diamond_buried", "minecraft:ore_lapis", "minecraft:ore_lapis_buried", "minecraft:ore_copper", "minecraft:underwater_magma",
      "minecraft:disk_sand", "minecraft:disk_clay", "minecraft:disk_gravel"],
     [],
     ["minecraft:spring_water"],
@@ -296,8 +298,9 @@ def build_features():
 
     # ---- local modifications: shafts, spikes, pools and columns shape the space before anything grows in it
     # The Rootvaults' skylights: planned per grotto (0 to 2 over a root hall, 0 or 1 over a teal grotto; ravines are
-    # open to the sky by their shape) and cut here through at most 24 blocks of dry rock, between the trees.
-    feature("rootvaults/skylights", "local_modifications", rv + ["frozen_rootvaults"],
+    # open to the sky by their shape) and cut here through at most 24 blocks of dry rock, between the trees. The oasis
+    # hollows' one skylight over the pool is cut the same way, through the sandstone roof and the dune over it.
+    feature("rootvaults/skylights", "local_modifications", rv + ["frozen_rootvaults", "oasis_hollow"],
             {"type": f"{MOD}:daylight_shaft", "config": {"radius": funiform(1.5, 3.0), "max_depth": 24}},
             [{"type": f"{MOD}:rootvaults_openings"}] + ceiling() + [BIOME])
     feature("rootvaults/pools", "local_modifications", rv,
@@ -543,7 +546,7 @@ def build_features():
     # Pool pearls light the root halls' and teal grottos' streams and pools turquoise, as in their pictures.
     feature("rootvaults/pool_pearls", "vegetal_decoration", rv,
             attach(simple(f"{MOD}:pool_pearls"), "floor", 32, f"#{MOD}:grotto_bed", radius=5, height=2, in_water=True),
-            [count(32), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, looks(0, 1), BIOME])
+            [count(32), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, looks(0, 1, cold=False), BIOME])
     feature("ivory_root_cavern/moss", "vegetal_decoration", ["ivory_root_cavern"],
             patch(simple("minecraft:moss_carpet"), state("minecraft:moss_carpet"), tries=24, xz=4, y=2),
             [count(10), SQUARE, layer(up)] + floor() + [BIOME])
@@ -711,7 +714,8 @@ def build_features():
                   "allowed_search_condition": AIR, "max_steps": 32}]
     on_water = water_top + [{"type": "minecraft:random_offset", "xz_spread": 0, "y_spread": 1}]
     icicles = hanging_patch(hanging_column(f"{MOD}:icicle_plant", f"{MOD}:icicle", 0, 2), tries=8, xz=4, y=2)
-    giant_icicle = spike(mix((simple("minecraft:packed_ice"), 3), (simple("minecraft:ice"), 1)), simple("minecraft:ice"), (4, 9), (1.0, 2.0), 0.0)
+    # Packed and blue ice only: plain ice melts by a torch or a frostberry and would hang a water source in the air.
+    giant_icicle = spike(mix((simple("minecraft:packed_ice"), 3), (simple("minecraft:blue_ice"), 1)), simple("minecraft:packed_ice"), (4, 9), (1.0, 2.0), 0.0)
     frostberries = hanging_patch(hanging_column(f"{MOD}:frostberry_vine_plant", f"{MOD}:frostberry_vine", 1, 7), tries=8, xz=4, y=2)
     frost_plants = mix((simple(f"{MOD}:frost_fern"), 6), (simple(f"{MOD}:tall_frost_fern"), 2), (simple(f"{MOD}:frost_aster"), 2),
                        (simple(f"{MOD}:snowbell"), 1))
@@ -746,7 +750,16 @@ def build_features():
     feature("sinkhole/ice", "underground_decoration", sk, ice_sheet(2, 4),
             [count(8), SQUARE, layer(up)] + water_top + [looks(SINKHOLE, cold=True), BIOME])
     # The Frost Fern Grotto (frost_fern_grotto.png, the picture Taran gave): moss floors thick with frost ferns, moss
-    # ceilings hung with frostberries, rime glowing on the walls, icicles and ice over the pools.
+    # ceilings hung with frostberries, rime glowing on the walls, icicles and ice over the pools; and the picture's dark
+    # speckled deepslate in patches on the walls (placed through the grotto's caves and the rock round them, so a patch
+    # shows where it cuts a wall), from the old floor up to under the highest grotto.
+    for name, block, size, n in (("deepslate_patches", "minecraft:deepslate", 40, 6), ("cobbled_patches", "minecraft:cobbled_deepslate", 24, 3)):
+        feature(f"frost_fern_grotto/{name}", "underground_ores", fg,
+                {"type": "minecraft:ore", "config": {
+                    "targets": [{"target": {"predicate_type": "minecraft:tag_match", "tag": "minecraft:stone_ore_replaceables"},
+                                 "state": {"Name": block}}],
+                    "size": size, "discard_chance_on_air_exposure": 0.0}},
+                [count(n), SQUARE, caves(), BIOME])
     feature("frost_fern_grotto/moss_floor", "underground_decoration", fg,
             {"type": "minecraft:vegetation_patch", "config": {
                 "replaceable": "#minecraft:moss_replaceable", "ground_state": simple("minecraft:moss_block"),

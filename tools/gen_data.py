@@ -368,6 +368,7 @@ def tags():
 
 def biome_modifiers():
     write(os.path.join(DATA, "forge", "biome_modifier", "remove_create_striations.json"), {"type": f"{MOD}:remove_create_striations"})
+    write(os.path.join(DATA, "forge", "biome_modifier", "remove_upper_lava.json"), {"type": f"{MOD}:remove_upper_lava"})
 
 
 def lang(extra):
