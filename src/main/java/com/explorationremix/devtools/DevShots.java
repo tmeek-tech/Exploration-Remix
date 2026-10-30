@@ -55,6 +55,10 @@ public final class DevShots {
     private static int index = -1, ticks, quiet, still, lastChunks, lastSections, frameCount, lastFrame, settleFrame;
     private static boolean gaveUp;
     private static volatile boolean viewDone;
+    /** System chat lines received while the shots run (the view commands' replies), and the last of them. */
+    private static volatile int replies;
+    private static volatile String lastReply = "";
+    private static int repliesBefore;
     private static double startX, startY, startZ;
     private static final List<String> log = new ArrayList<>();
 
@@ -63,6 +67,13 @@ public final class DevShots {
     @SubscribeEvent
     public static void frame(TickEvent.RenderTickEvent e) {
         if (LIST != null && e.phase == TickEvent.Phase.END) frameCount++;
+    }
+
+    @SubscribeEvent
+    public static void chat(net.minecraftforge.client.event.ClientChatReceivedEvent e) {
+        if (LIST == null || !e.isSystem()) return;
+        lastReply = e.getMessage().getString();
+        replies++;
     }
 
     @SubscribeEvent
@@ -124,6 +135,7 @@ public final class DevShots {
                         : "remix view " + s[1] + (s.length > 2 ? " " + s[2] : "");
                 ExplorationRemix.LOGGER.info("[shots] {} of {}: {}", index + 1, shots.size(), cmd);
                 viewDone = false;
+                repliesBefore = replies;
                 startX = mc.player.getX();
                 startY = mc.player.getY();
                 startZ = mc.player.getZ();
@@ -142,9 +154,17 @@ public final class DevShots {
             }
             case VIEWING -> {
                 if (remote) {
-                    double moved = Math.abs(mc.player.getX() - startX) + Math.abs(mc.player.getY() - startY) + Math.abs(mc.player.getZ() - startZ);
-                    // A view at the spot the player already stands on, or none found: go on after 400 ticks.
-                    if (moved < 1 && ticks < 400) return;
+                    // The server answers every view command (after moving the player, if it found a view); far views
+                    // can take minutes while it generates the land round them.
+                    if (replies == repliesBefore && ticks < 6000) return;
+                    String reply = lastReply;
+                    if (reply.startsWith("No ") || reply.startsWith("Unknown") || reply.startsWith("There ")) {
+                        ExplorationRemix.LOGGER.info("[shots] skipped: {}", reply);
+                        log.add(shots.get(index)[0] + ".png skipped: " + reply);
+                        phase = Phase.NEXT;
+                        ticks = 0;
+                        return;
+                    }
                 } else if (!viewDone) return;
                 phase = Phase.SETTLING;
                 ticks = 0;

@@ -505,8 +505,8 @@ public final class RemixCommands {
     }
 
     /**
-     * The nearest Root Vault mouth (a cold cluster's with n 1), seen from the ground a few blocks past where it comes
-     * out, looking down into it.
+     * The nearest Root Vault mouth (a cold cluster's with n 1), seen from the ground 5 to 9 blocks past where it comes
+     * out, at a player's eye height, looking back down into it.
      */
     private static int viewMouth(CommandContext<CommandSourceStack> c, ServerPlayer pl, ServerLevel level, boolean cold) {
         Entrances e = DeepWorld.entrances();
@@ -529,13 +529,33 @@ public final class RemixCommands {
             c.getSource().sendFailure(Component.literal("No " + (cold ? "frozen " : "") + "Root Vault mouth within " + SEARCH_CELLS * Entrances.CELL + " blocks."));
             return 0;
         }
-        double[] end = best.end(), prev = best.point(Math.max(0, best.points() - 3));
+        double[] end = best.end(), prev = best.point(Math.max(0, best.points() - 4));
         double dx = end[0] - prev[0], dz = end[2] - prev[2], l = Math.max(1e-6, Math.hypot(dx, dz));
-        double cx = end[0] + dx / l * 7, cz = end[2] + dz / l * 7;
-        int gx = (int) Math.floor(cx), gz = (int) Math.floor(cz);
-        level.getChunk(gx >> 4, gz >> 4, ChunkStatus.FULL, true);
-        double cy = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, gx, gz) + 2.6;
-        double tx = end[0] - cx, ty = end[1] - 2 - cy, tz = end[2] - cz;
+        double ux = dx / l, uz = dz / l;
+        // Stand on the ground a few blocks out from where the mouth comes out (under the trees, not in their crowns),
+        // eyes at a player's height, looking back down into it.
+        double cx = 0, cy = 0, cz = 0;
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        boolean found = false;
+        for (int out = 5; out <= 9 && !found; out++) {
+            cx = end[0] + ux * out;
+            cz = end[2] + uz * out;
+            int gx = (int) Math.floor(cx), gz = (int) Math.floor(cz);
+            level.getChunk(gx >> 4, gz >> 4, ChunkStatus.FULL, true);
+            for (int y = (int) Math.floor(end[1]) + 8; y > end[1] - 8; y--) {
+                BlockState s = level.getBlockState(p.set(gx, y, gz));
+                if (!s.blocksMotion() || s.is(net.minecraft.tags.BlockTags.LEAVES)) continue;
+                boolean clear = !level.getBlockState(p.set(gx, y + 1, gz)).blocksMotion() && !level.getBlockState(p.set(gx, y + 2, gz)).blocksMotion();
+                if (clear) {
+                    cy = y + 1;
+                    found = true;
+                }
+                break;
+            }
+        }
+        if (!found) cy = end[1] + 1;
+        double[] in = best.point(Math.max(0, best.points() - 7));
+        double tx = in[0] - cx, ty = in[1] - (cy + 1.62), tz = in[2] - cz;
         float yaw = (float) Math.toDegrees(Math.atan2(-tx, tz)), pitch = (float) Math.toDegrees(Math.atan2(-ty, Math.hypot(tx, tz)));
         pl.teleportTo(level, cx, cy, cz, yaw, pitch);
         say(c, String.format(Locale.ROOT, "%sRoot Vault mouth at %.0f %.0f %.0f, seen from %.0f %.0f %.0f", cold ? "frozen " : "", end[0], end[1], end[2], cx, cy, cz));
