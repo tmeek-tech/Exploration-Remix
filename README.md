@@ -5,7 +5,7 @@ the pack's own caves, sealed from each other by unbreakable bands with natural g
 and Create stone and dressed to match a set of reference pictures. Made for a pack with Tectonic, Terrain Slabs,
 Immersive Weathering, Create and Better Combat.
 
-**Status: milestone 1 (0.3.0, reworked after the first play test), world generation and cave looks.** The first build's creatures, runs, runes and
+**Status: milestone 1 (0.4.0: the Upper Caves reworked), world generation and cave looks.** The first build's creatures, runs, runes and
 combat changes were removed (git history keeps them); they return in later milestones, built on these caves.
 
 ## Requirements
@@ -32,7 +32,7 @@ regenerated.
 
 | Layer | Y range | Refuge | Main biome | Hunting ground |
 |---|---|---|---|---|
-| Upper Caves | -64 and up | all safe: Rootvaults, lush caves, dripstone caves, Silver Fern Rift, Ivory Root Cavern | | |
+| Upper Caves | -64 and up | all safe: Root Vaults, sinkholes, oasis hollows, lush caves, Frost Fern Grotto, dripstone caves, Silver Fern Rift, Ivory Root Cavern | | |
 | Band 1 | -65 to -80 | | | |
 | Blue Reaches | -81 to -272 | Asurine Geodes | Deep Blue Rift | deep dark |
 | Band 2 | -273 to -288 | | | |
@@ -63,15 +63,33 @@ regenerated.
   Basalt Galleries room but the bedrock landing and its lava basin is above y -798, the highest the lava will rise
   when a later milestone adds quakes and lava surges; two terraced stairs and a few vine niches lead up from the
   landing.
-* **Upper caves:** the deep dark and its ancient cities moved down into the Blue Reaches; where the pack put the
-  deep dark above the first band, its ordinary caves are back. The **Rootvaults** are grottos 10 to 40 blocks under
-  forests, jungles, taigas, swamps and cherry groves, where the trees above push their roots (in their own wood:
-  oak, birch, spruce, jungle, dark oak, cherry or mangrove) through the ceilings, in three looks: root halls with a
-  stream and terraced walls, teal grottos around a pool, and ravines open to the sky. Most are 15 to 30 blocks
-  across; halls and teal grottos can have a skylight. Tunnels lead from each grotto down into the pack's caves and
-  join neighbouring grottos. The Silver Fern Rift and the Ivory Root Cavern are set pieces 40 to 60 blocks across,
-  carved into the pack's caves between y -64 and about y 0, never under an ocean or river. The upper caves hold no
-  lava. Strongholds and mineshafts stay above y -56 so the End stays reachable.
+* **Upper caves** are the pack's own (Tectonic's and Immersive Weathering's caves stay as they are), with entrances
+  into them from the surface and more plants. The deep dark and its ancient cities moved down into the Blue Reaches;
+  where the pack put the deep dark above the first band, its ordinary caves are back.
+  * **Root Vaults** under forests, jungles, taigas, swamps and cherry groves: clusters of 2 to 5 chambers of mixed
+    sizes (small, medium, large) close together, roofed 4 to 6 blocks under the ground, where the trees above push
+    their roots (in their own wood: oak, birch, spruce, jungle, dark oak, cherry or mangrove) through the ceilings.
+    Three looks: root halls with a stream and terraced walls, teal grottos around a pool, and ravines open to the
+    sky; halls and grottos can have a skylight. Each cluster has one or two mouths up to the surface, descents into
+    the pack's caves (most into a plant cave), passages between its chambers and links to the next cluster; every
+    chamber has at least two ways out. Under snowy forests the mouths, ravines and skylights are **frozen** (snow,
+    ice over the water, icicles, hoarfrost, giant icicles) and the halls further in thaw, with frost ferns among the
+    usual growth. Where a descent opens into a lush cave, the vault's veridium runs on into it.
+  * **Sinkholes** under plains, meadows and savannas: a pit open to the sky over a pool, undercut below its rim, with
+    a talus slope down one side; grass, flowers and trailing grass in the daylight, lily pads and sugar cane by the
+    pool. Under snowy plains they are snowed in.
+  * **Oasis hollows** under deserts (sandstone) and badlands (red sandstone and terracotta): a domed hollow round a
+    turquoise pool under a skylight, with fan palms, oasis grass, glowing dune lilies and sand trickling from the
+    ceiling.
+  * **Plant caves** are much more common: about half of the pack's ordinary caves grow plants, and nine in ten of
+    those 25 to 65 blocks under the ground, so a way down crosses one almost anywhere. Under cold ground they are the
+    **Frost Fern Grotto**: moss, frost ferns, snowbells and frostberry vines under ice, with rime glowing on the walls.
+  * **Fewer dead ends:** where one of the pack's caves ends blindly, a short tunnel (6 to 24 blocks, never steeper
+    than a walkable slope) joins it to another cave nearby, so most ways through the caves loop.
+  * **No lava** above the old floor: lava springs, lava lakes and Tectonic's lava tunnels hold water instead.
+  * The Silver Fern Rift and the Ivory Root Cavern are set pieces 40 to 60 blocks across, carved into the pack's caves
+    between y -64 and about y 0, never under an ocean or river. Strongholds and mineshafts stay above y -56 so the End
+    stays reachable.
 * **Looks:** new plants and crystals (white glow flowers, lantern fungi and roots, giant lantern fungi with glowing
   caps, wisteria, lantern pods, lavender flowers and glowing gold flowers, silver ferns, orange shelf fungi, lavender
   coral, pale coral fans, ember vines, asurine crystals, blue glow mushrooms and vines), glow berries thick in the
@@ -90,10 +108,12 @@ regenerated.
 | `/remix tp <1-3>` | the landing at the top of a layer |
 | `/remix tp gate <1-3>` | the landing above a band, where its gate starts |
 | `/remix tp bedrock` | the bedrock landing of the last layer's network in this cell |
-| `/remix tp biome <name>` | a deep biome's nearest chamber in the nine cells round you, set pieces first, on an open floor (also `rootvaults`: the nearest grotto, with its look and trees) |
-| `/remix view <name> [n]` | a spot with a wide view into a biome, facing it (n: Rootvaults look 0 to 2, or the n-th place of a deep biome) |
+| `/remix tp biome <name>` | a deep biome's nearest chamber in the nine cells round you, set pieces first, on an open floor; also the Upper Caves' `rootvaults`, `frozen_rootvaults`, `sinkhole`, `oasis_hollow` and `frost_fern_grotto` |
+| `/remix view <name> [n]` | a spot with a wide view into a biome, facing it (n: Root Vaults look 0 to 2, frozen Root Vaults 0 the frozen mouth zone or 1 the halls inside, oasis rock 0 sand or 1 red, or the n-th place of a deep biome); also `lush_veridium`, where a Root Vault's descent opens into a lush cave, and `rootvaults_mouth [1]`, the nearest Root Vault mouth (1: a frozen one) seen from inside, looking up it at the daylight |
+| `/remix entrances [cells]` | the Upper Caves' entrances in the 64-block cells round you: how many cells of each cover got one and why the others did not, and the nearest of each kind; works from the server console with `execute positioned` |
 | `/remix slice [x\|z] [half width]` | a picture of the blocks under you, in `remix_slices/` |
 | `/remix census [radius]` | how overgrown and lit the caves around you are, per biome |
+| `/remix deadends [radius]` | the blind cave ends left above the old floor in the loaded chunks round you, what lies round them, how many generation joined and why the rest were not, any lava in the caves there, and how many of the surface biome's ore placements generation let into the plant caves' and entrances' rock |
 
 ## Building
 

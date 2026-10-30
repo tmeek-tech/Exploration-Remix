@@ -1,0 +1,29 @@
+{
+  "feature": "explorationremix:sinkhole/hoarfrost",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 12
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "upper",
+      "inset": 2,
+      "above_water": false,
+      "focus": "grottos"
+    },
+    {
+      "type": "explorationremix:rootvaults_look",
+      "looks": [
+        3
+      ],
+      "cold": true
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

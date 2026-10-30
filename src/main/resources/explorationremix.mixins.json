@@ -17,7 +17,11 @@
     "StructurePiecesBuilderMixin",
     "StructureMixin",
     "AboveBottomAnchorMixin",
-    "SpringFeatureMixin"
+    "SpringFeatureMixin",
+    "LakeFeatureMixin",
+    "WorldCarverMixin",
+    "RuinedPortalPieceMixin",
+    "BiomeFilterMixin"
   ],
   "client": [
     "client.LightTextureMixin"

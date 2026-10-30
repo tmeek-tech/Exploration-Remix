@@ -1,0 +1,83 @@
+{
+  "type": "minecraft:vegetation_patch",
+  "config": {
+    "replaceable": "#minecraft:moss_replaceable",
+    "ground_state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "minecraft:moss_block"
+      }
+    },
+    "vegetation_feature": {
+      "feature": {
+        "type": "minecraft:simple_block",
+        "config": {
+          "to_place": {
+            "type": "explorationremix:mix",
+            "entries": [
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "explorationremix:frost_fern"
+                  }
+                },
+                "weight": 8
+              },
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "minecraft:moss_carpet"
+                  }
+                },
+                "weight": 5
+              },
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "explorationremix:tall_frost_fern"
+                  }
+                },
+                "weight": 2
+              },
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "explorationremix:frost_aster"
+                  }
+                },
+                "weight": 2
+              },
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "explorationremix:snowbell"
+                  }
+                },
+                "weight": 1
+              }
+            ]
+          }
+        }
+      },
+      "placement": []
+    },
+    "surface": "floor",
+    "depth": 1,
+    "extra_bottom_block_chance": 0.0,
+    "vertical_range": 5,
+    "vegetation_chance": 0.45,
+    "xz_radius": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 4,
+        "max_inclusive": 7
+      }
+    },
+    "extra_edge_column_chance": 0.3
+  }
+}

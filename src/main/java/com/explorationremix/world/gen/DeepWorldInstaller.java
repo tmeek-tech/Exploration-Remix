@@ -12,7 +12,8 @@ import com.explorationremix.world.density.UpperCarve;
 import com.explorationremix.world.density.UpperFine;
 import com.explorationremix.world.density.UpperSeal;
 import com.explorationremix.world.density.InterpolationGater;
-import com.explorationremix.world.terrain.Rootvaults;
+import com.explorationremix.world.terrain.Entrances;
+import com.explorationremix.world.terrain.PlantCaves;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.biome.BiomeSource;
@@ -127,14 +128,14 @@ public final class DeepWorldInstaller {
         long seed = server.getWorldData().worldGenOptions().seed();
         Terrain terrain = DeepWorld.build(currentMin, seed);
         // What is over each column: the pack's ground and surface biome, from its own noise before we change it. The
-        // upper set pieces are never carved under an ocean, river or beach, and the Rootvaults only under trees.
+        // upper set pieces are never carved under an ocean, river or beach, and each entrance only under its own cover.
         BiomeSource biomeSource = generator.getBiomeSource();
         RandomState packState = RandomState.create(settings, access.lookupOrThrow(Registries.NOISE), seed);
         SurfaceOracle oracle = new SurfaceOracle(packState, biomeSource, settings.seaLevel(), currentMin, currentMin + dimension.height());
         terrain.surfaceProbe = oracle;
-        boolean rootvaultsOn = ERConfig.INSTANCE.replaceVanillaCaveBiomes.get();
-        DeepWorld.setRoots(rootvaultsOn ? new Rootvaults(seed, currentMin, oracle) : null, oracle);
-        if (rootvaultsOn) DeepBiomes.keepWithoutDeepDark(biomeSource);
+        boolean upperOn = ERConfig.INSTANCE.replaceVanillaCaveBiomes.get();
+        DeepWorld.setUpper(upperOn ? new Entrances(seed, currentMin, oracle) : null, upperOn ? new PlantCaves(seed) : null, oracle);
+        if (upperOn) DeepBiomes.keepWithoutDeepDark(biomeSource);
         DeepMaterials.resolve();
         int floorY = terrain.shape.floorY;
         int packFloor = terrain.shape.packFloor;
@@ -144,7 +145,7 @@ public final class DeepWorldInstaller {
         // Density: the pack's terrain above its old floor (with its interpolators gated), the deep world below.
         NoiseRouter router = settings.noiseRouter();
         DensityFunction original = router.finalDensity().mapAll(new InterpolationGater(packFloor - 8));
-        // The Rootvaults' water sits in rock the pack's caves may not open (max), then the carve opens our caves (min).
+        // The entrances' water sits in rock the pack's caves may not open (max), then the carve opens our caves (min).
         DensityFunction upper = DensityFunctions.min(DensityFunctions.max(original, UpperSeal.INSTANCE),
                 new UpperFine(DensityFunctions.interpolated(UpperCarve.INSTANCE)));
         DensityFunction deep = new DeepFineDensity(DensityFunctions.interpolated(DeepDensityFunction.INSTANCE));

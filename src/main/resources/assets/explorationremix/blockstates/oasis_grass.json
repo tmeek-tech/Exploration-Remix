@@ -1,0 +1,18 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/oasis_grass",
+        "weight": 3
+      },
+      {
+        "model": "explorationremix:block/oasis_grass_2",
+        "weight": 2
+      },
+      {
+        "model": "explorationremix:block/oasis_grass_3",
+        "weight": 2
+      }
+    ]
+  }
+}

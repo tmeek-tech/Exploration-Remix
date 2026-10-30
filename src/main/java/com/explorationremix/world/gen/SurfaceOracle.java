@@ -4,6 +4,7 @@ import com.explorationremix.ExplorationRemix;
 import com.explorationremix.world.terrain.Overhead;
 import com.explorationremix.world.terrain.RootKind;
 import com.explorationremix.world.terrain.Upper;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
@@ -37,6 +38,11 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
     private static final int BITS = 16, SIZE = 1 << BITS;
     private static final TagKey<Biome> NO_RAVINES = tag("rootvaults/no_ravines");
+    private static final TagKey<Biome> PLAINS = tag("upper/plains"), DESERT = tag("upper/desert"), BADLANDS = tag("upper/badlands");
+    /** Snowy biomes by name (groves, snowy slopes and peaks), whatever temperature the pack gives them. */
+    private static final TagKey<Biome> SNOWY = TagKey.create(Registries.BIOME, new ResourceLocation("forge", "is_snowy"));
+    /** Snow falls on biomes this cold or colder (vanilla's line between rain and snow, before any height adjustment). */
+    private static final float SNOW_LINE = 0.15F;
     private static final EnumMap<RootKind, TagKey<Biome>> KIND_TAGS = new EnumMap<>(RootKind.class);
 
     static {
@@ -54,7 +60,7 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
 
     private record Entry(long key, Surface surface, Holder<Biome> biome) {}
 
-    private record Info(RootKind kind, boolean wet, boolean noRavine) {}
+    private record Info(RootKind kind, boolean wet, boolean noRavine, Cover cover, boolean cold) {}
 
     /**
      * @param pack   built from the pack's noise settings before the deep world changed them
@@ -92,6 +98,9 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
     @Override
     public Surface at(int x, int z) { return entry(x >> 2, z >> 2).surface; }
 
+    @Override
+    public int seaLevel() { return seaLevel; }
+
     /** The pack's surface biome over a column. */
     public Holder<Biome> biome(int x, int z) { return entry(x >> 2, z >> 2).biome; }
 
@@ -124,10 +133,17 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
                 : source.getNoiseBiome(qx, QuartPos.fromBlock(y), qz, sampler);
         Info info = infos.computeIfAbsent(b, SurfaceOracle::classify);
         boolean ravineOk = !info.wet && !info.noRavine && y >= seaLevel + 4;
-        return new Entry(key, new Surface(y, info.kind, info.wet, ravineOk), b);
+        // Snow lies where the biome is snowy or cold at the ground's height: groves and high taigas too, which the pack
+        // (WWOO) makes a little warmer than vanilla.
+        boolean cold = info.cold || b.value().coldEnoughToSnow(new BlockPos(x, y + 1, z));
+        return new Entry(key, new Surface(y, info.kind, info.wet, ravineOk, info.cover, cold), b);
     }
 
-    private boolean solid(int x, int y, int z) { return density.compute(new DensityFunction.SinglePointContext(x, y, z)) > 0.0; }
+    /** The pack's own final density at a block: positive in rock, negative in its caves and in the open air. */
+    @Override
+    public double packDensity(int x, int y, int z) { return density.compute(new DensityFunction.SinglePointContext(x, y, z)); }
+
+    private boolean solid(int x, int y, int z) { return packDensity(x, y, z) > 0.0; }
 
     /** The top solid block near y0: four-block steps up or down to where the terrain turns, then two halvings. */
     private int ground(int x, int z, int y0) {
@@ -154,7 +170,10 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
 
     private static Info classify(Holder<Biome> b) {
         boolean wet = b.is(BiomeTags.IS_OCEAN) || b.is(BiomeTags.IS_DEEP_OCEAN) || b.is(BiomeTags.IS_RIVER) || b.is(BiomeTags.IS_BEACH);
-        return new Info(wet ? RootKind.NONE : kindOf(b), wet, b.is(NO_RAVINES));
+        RootKind kind = wet ? RootKind.NONE : kindOf(b);
+        Cover cover = wet ? Cover.OTHER : kind.trees() ? Cover.FOREST : b.is(DESERT) ? Cover.DESERT : b.is(BADLANDS) ? Cover.BADLANDS
+                : b.is(PLAINS) ? Cover.PLAINS : Cover.OTHER;
+        return new Info(kind, wet, b.is(NO_RAVINES), cover, b.value().getBaseTemperature() <= SNOW_LINE || b.is(SNOWY));
     }
 
     /** The kind of trees a biome grows, by the {@code explorationremix:rootvaults/<kind>} biome tags. */

@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:rime_lichen"
+      }
+    },
+    "faces": "walls_ceiling",
+    "tries": 32,
+    "radius": 6,
+    "height": 6,
+    "on": "#explorationremix:frost_rock",
+    "in_water": false
+  }
+}

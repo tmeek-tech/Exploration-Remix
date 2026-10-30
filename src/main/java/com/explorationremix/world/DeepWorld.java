@@ -3,7 +3,8 @@ package com.explorationremix.world;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.config.ERConfig;
 import com.explorationremix.world.gen.SurfaceOracle;
-import com.explorationremix.world.terrain.Rootvaults;
+import com.explorationremix.world.terrain.Entrances;
+import com.explorationremix.world.terrain.PlantCaves;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import com.explorationremix.world.terrain.TerrainSettings;
@@ -20,7 +21,8 @@ import java.util.WeakHashMap;
  */
 public final class DeepWorld {
     private static volatile Terrain terrain;
-    private static volatile Rootvaults roots;
+    private static volatile Entrances entrances;
+    private static volatile PlantCaves plants;
     private static volatile SurfaceOracle oracle;
     private static volatile boolean installed = false;
     private static final Set<BiomeSource> DEEP_SOURCES = Collections.newSetFromMap(new WeakHashMap<>());
@@ -38,16 +40,24 @@ public final class DeepWorld {
     @Nullable
     public static Shape shape() { Terrain t = terrain; return t == null ? null : t.shape; }
 
-    /** The Rootvaults of the running world, or null when they are switched off or the deep world is not installed. */
+    /**
+     * The entrances to the Upper Caves of the running world (the Root Vaults, sinkholes and oasis hollows), or null when
+     * they are switched off or the deep world is not installed.
+     */
     @Nullable
-    public static Rootvaults roots() { return installed ? roots : null; }
+    public static Entrances entrances() { return installed ? entrances : null; }
+
+    /** Where the Upper Caves grow plants, or null when the cave biomes are left to the pack or before install. */
+    @Nullable
+    public static PlantCaves plants() { return installed ? plants : null; }
 
     /** What is over each column of the running world (the pack's ground and surface biome), or null before install. */
     @Nullable
     public static SurfaceOracle oracle() { return oracle; }
 
-    public static void setRoots(@Nullable Rootvaults r, @Nullable SurfaceOracle o) {
-        roots = r;
+    public static void setUpper(@Nullable Entrances e, @Nullable PlantCaves p, @Nullable SurfaceOracle o) {
+        entrances = e;
+        plants = p;
         oracle = o;
     }
 
@@ -79,7 +89,8 @@ public final class DeepWorld {
         synchronized (DEEP_GENERATORS) { DEEP_GENERATORS.clear(); }
         synchronized (DEEP_SOURCES) { DEEP_SOURCES.clear(); }
         installed = false;
-        roots = null;
+        entrances = null;
+        plants = null;
         oracle = null;
     }
 }

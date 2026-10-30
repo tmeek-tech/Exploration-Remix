@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/snowbell"
+      },
+      {
+        "model": "explorationremix:block/snowbell_2"
+      }
+    ]
+  }
+}

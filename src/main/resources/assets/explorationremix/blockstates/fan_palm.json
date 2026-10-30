@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "half=lower": [
+      {
+        "model": "explorationremix:block/fan_palm_bottom"
+      },
+      {
+        "model": "explorationremix:block/fan_palm_bottom_2"
+      }
+    ],
+    "half=upper": [
+      {
+        "model": "explorationremix:block/fan_palm_top"
+      },
+      {
+        "model": "explorationremix:block/fan_palm_top_2"
+      }
+    ]
+  }
+}

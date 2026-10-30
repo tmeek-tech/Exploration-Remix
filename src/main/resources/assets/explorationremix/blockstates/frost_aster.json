@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/frost_aster"
+      },
+      {
+        "model": "explorationremix:block/frost_aster_2"
+      }
+    ]
+  }
+}
