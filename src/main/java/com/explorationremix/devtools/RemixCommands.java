@@ -1,6 +1,7 @@
 package com.explorationremix.devtools;
 
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.feature.JoinDeadEndsFeature;
 import com.explorationremix.world.gen.SurfaceOracle;
 import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Net;
@@ -306,7 +307,8 @@ public final class RemixCommands {
     }
 
     /** The Upper Caves' places the commands know besides the deep biomes: the entrances and the Frost Fern Grotto. */
-    private static final String[] UPPER_PLACES = {"rootvaults", "frozen_rootvaults", "sinkhole", "oasis_hollow", "frost_fern_grotto", "lush_veridium"};
+    private static final String[] UPPER_PLACES = {"rootvaults", "frozen_rootvaults", "sinkhole", "oasis_hollow", "frost_fern_grotto", "lush_veridium",
+            "rootvaults_mouth"};
     /** The view where a Root Vault's descent opens into a lush cave, whose veridium runs on into it. */
     private static final String LUSH_VERIDIUM = "lush_veridium";
     private static final String FROST_GROTTO = "frost_fern_grotto";
@@ -402,6 +404,7 @@ public final class RemixCommands {
         BlockPos around;
         net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> key;
         int look = -1, radius = 24;
+        if (name.equalsIgnoreCase("rootvaults_mouth")) return viewMouth(c, pl, level, n == 1);
         String ent = entrance(name);
         Entrances e = DeepWorld.entrances();
         if (ent != null) {
@@ -494,6 +497,44 @@ public final class RemixCommands {
             if (stand != null) return new double[]{stand.getX(), stand.getY(), stand.getZ(), Math.max(12, p.reach * 0.8)};
         }
         return null;
+    }
+
+    /**
+     * The nearest Root Vault mouth (a cold cluster's with n 1), seen from the ground a few blocks past where it comes
+     * out, looking down into it.
+     */
+    private static int viewMouth(CommandContext<CommandSourceStack> c, ServerPlayer pl, ServerLevel level, boolean cold) {
+        Entrances e = DeepWorld.entrances();
+        if (e == null) return 0;
+        Vec3 from = c.getSource().getPosition();
+        int ci = Math.floorDiv((int) Math.floor(from.x), Entrances.CELL), cj = Math.floorDiv((int) Math.floor(from.z), Entrances.CELL);
+        Entrances.Tunnel best = null;
+        double bd = 1e18;
+        for (int i = -SEARCH_CELLS; i <= SEARCH_CELLS; i++) for (int j = -SEARCH_CELLS; j <= SEARCH_CELLS; j++) {
+            Entrances.Site s = e.site(ci + i, cj + j);
+            if (s == null || s.kind != Entrances.Kind.VAULTS || s.cold != cold) continue;
+            for (Entrances.Tunnel t : e.tunnelsOf(s)) {
+                if (t.way != Entrances.Way.MOUTH) continue;
+                double[] end = t.end();
+                double d = Math.hypot(end[0] - from.x, end[2] - from.z);
+                if (d < bd) { bd = d; best = t; }
+            }
+        }
+        if (best == null) {
+            c.getSource().sendFailure(Component.literal("No " + (cold ? "frozen " : "") + "Root Vault mouth within " + SEARCH_CELLS * Entrances.CELL + " blocks."));
+            return 0;
+        }
+        double[] end = best.end(), prev = best.point(Math.max(0, best.points() - 3));
+        double dx = end[0] - prev[0], dz = end[2] - prev[2], l = Math.max(1e-6, Math.hypot(dx, dz));
+        double cx = end[0] + dx / l * 7, cz = end[2] + dz / l * 7;
+        int gx = (int) Math.floor(cx), gz = (int) Math.floor(cz);
+        level.getChunk(gx >> 4, gz >> 4, ChunkStatus.FULL, true);
+        double cy = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, gx, gz) + 2.6;
+        double tx = end[0] - cx, ty = end[1] - 2 - cy, tz = end[2] - cz;
+        float yaw = (float) Math.toDegrees(Math.atan2(-tx, tz)), pitch = (float) Math.toDegrees(Math.atan2(-ty, Math.hypot(tx, tz)));
+        pl.teleportTo(level, cx, cy, cz, yaw, pitch);
+        say(c, String.format(Locale.ROOT, "%sRoot Vault mouth at %.0f %.0f %.0f, seen from %.0f %.0f %.0f", cold ? "frozen " : "", end[0], end[1], end[2], cx, cy, cz));
+        return 1;
     }
 
     /** The end of the nearest Root Vault descent that opens into a lush cave (as the deep world picks the biome), or null. */
@@ -590,18 +631,20 @@ public final class RemixCommands {
         ServerLevel level = c.getSource().getLevel();
         BlockPos at = BlockPos.containing(c.getSource().getPosition());
         int pcx = at.getX() >> 4, pcz = at.getZ() >> 4;
-        int chunks = 0, tips = 0, lava = 0;
+        int chunks = 0, tips = 0, shallow = 0, lava = 0, caveLava = 0, lavaLo = Integer.MAX_VALUE, lavaHi = Integer.MIN_VALUE;
         int[] lavaAt = null;
         java.util.List<int[]> all = new java.util.ArrayList<>();
+        var ground = net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES; // trees are not caves
         for (int dx = -radius; dx <= radius; dx++) for (int dz = -radius; dz <= radius; dz++) {
             net.minecraft.world.level.ChunkPos cp = new net.minecraft.world.level.ChunkPos(pcx + dx, pcz + dz);
-            DeadEnds.Grid g = com.explorationremix.world.feature.JoinDeadEndsFeature.read(level, cp, t.shape.packFloor + 8,
-                    net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR);
+            DeadEnds.Grid g = JoinDeadEndsFeature.read(level, cp, t.shape.packFloor + 8, ground);
             if (g == null) continue;
             chunks++;
             for (DeadEnds.Tip tip : DeadEnds.tips(g, 8, 15, 8, 15)) {
+                int x = g.blockX(tip.i()), y = g.blockY(tip.j()), z = g.blockZ(tip.k());
                 tips++;
-                all.add(new int[]{g.blockX(tip.i()), g.blockY(tip.j()), g.blockZ(tip.k())});
+                if (y > level.getHeight(ground, x, z) - 12) shallow++;
+                all.add(new int[]{x, y, z});
             }
             ChunkAccess ch = level.getChunk(cp.x, cp.z);
             BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
@@ -611,23 +654,36 @@ public final class RemixCommands {
                 for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
                     if (!ch.getBlockState(p.set(cp.getMinBlockX() + x, y, cp.getMinBlockZ() + z)).getFluidState().is(net.minecraft.tags.FluidTags.LAVA)) continue;
                     lava++;
+                    if (y >= ch.getHeight(ground, x, z) - 6) continue; // on the surface: lava lakes stay
+                    caveLava++;
+                    lavaLo = Math.min(lavaLo, y);
+                    lavaHi = Math.max(lavaHi, y);
                     if (lavaAt == null) lavaAt = new int[]{p.getX(), y, p.getZ()};
                 }
             }
         }
-        long seen = com.explorationremix.world.feature.JoinDeadEndsFeature.CHUNKS.get(), found = com.explorationremix.world.feature.JoinDeadEndsFeature.FOUND.get(),
-                joined = com.explorationremix.world.feature.JoinDeadEndsFeature.JOINED.get();
-        say(c, String.format(Locale.ROOT, "Generated since the server started: %d chunks, %d blind cave ends found, %d joined to another cave", seen, found, joined));
+        say(c, joinedSoFar());
         if (chunks == 0) {
             c.getSource().sendFailure(Component.literal("No loaded chunks with their neighbours round " + at.toShortString() + "."));
             return 0;
         }
         int px = at.getX(), py = at.getY(), pz = at.getZ();
         all.sort(java.util.Comparator.comparingDouble(a -> Math.hypot(Math.hypot(a[0] - px, a[1] - py), a[2] - pz)));
-        say(c, String.format(Locale.ROOT, "%d blind cave ends left in %d chunks (%.2f a chunk) above y %d; lava blocks above the old floor: %d%s", tips, chunks,
-                tips / (double) chunks, t.shape.packFloor + 8, lava, lavaAt == null ? "" : " (one at " + lavaAt[0] + " " + lavaAt[1] + " " + lavaAt[2] + ")"));
+        say(c, String.format(Locale.ROOT, "%d blind cave ends left in %d chunks (%.2f a chunk) above y %d, %d of them within 12 blocks of the ground", tips, chunks,
+                tips / (double) chunks, t.shape.packFloor + 8, shallow));
+        say(c, String.format(Locale.ROOT, "Lava blocks above the old floor: %d, %d of them in caves%s", lava, caveLava,
+                lavaAt == null ? "" : String.format(Locale.ROOT, " (y %d to %d; one at %d %d %d)", lavaLo, lavaHi, lavaAt[0], lavaAt[1], lavaAt[2])));
         for (int i = 0; i < Math.min(5, all.size()); i++) say(c, "  at " + all.get(i)[0] + " " + all.get(i)[1] + " " + all.get(i)[2]);
         return tips;
+    }
+
+    /** What the dead-end joiner did in the chunks generated since the server started. */
+    private static String joinedSoFar() {
+        long seen = JoinDeadEndsFeature.CHUNKS.get(), nanos = JoinDeadEndsFeature.NANOS.get();
+        return String.format(Locale.ROOT, "Generated since the server started: %d chunks, %d blind cave ends found, %d joined to another cave (%.1f ms a chunk); "
+                        + "no cave in reach %d; tunnels turned down: water %d, ground %d, other blocks %d, chunk edge %d",
+                seen, JoinDeadEndsFeature.FOUND.get(), JoinDeadEndsFeature.JOINED.get(), seen == 0 ? 0 : nanos / 1e6 / seen, JoinDeadEndsFeature.NO_CAVE.get(),
+                JoinDeadEndsFeature.NO_WET.get(), JoinDeadEndsFeature.NO_GROUND.get(), JoinDeadEndsFeature.NO_BLOCKED.get(), JoinDeadEndsFeature.NO_EDGE.get());
     }
 
     /** A real block position with air for feet and head and something solid underneath, near (x, y, z). */

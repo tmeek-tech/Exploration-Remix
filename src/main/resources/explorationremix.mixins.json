@@ -18,7 +18,8 @@
     "StructureMixin",
     "AboveBottomAnchorMixin",
     "SpringFeatureMixin",
-    "LakeFeatureMixin"
+    "LakeFeatureMixin",
+    "WorldCarverMixin"
   ],
   "client": [
     "client.LightTextureMixin"

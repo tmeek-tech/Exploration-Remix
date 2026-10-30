@@ -319,6 +319,11 @@ public final class Entrances {
         /** Where it ends: {x, y, z}. */
         public double[] end() { int n = px.length - 1; return new double[]{px[n], py[n], pz[n]}; }
 
+        /** Its path's points, from where it leaves its chamber. */
+        public int points() { return px.length; }
+
+        public double[] point(int i) { return new double[]{px[i], py[i], pz[i]}; }
+
         public double radius() { return r; }
 
         public Site owner() { return owner; }

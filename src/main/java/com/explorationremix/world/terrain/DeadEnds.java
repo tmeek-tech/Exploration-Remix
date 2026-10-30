@@ -219,6 +219,15 @@ public final class DeadEnds {
      * Null when there is none.
      */
     public static Link link(Grid g, Tip t) {
+        List<Link> l = links(g, t, 1);
+        return l.isEmpty() ? null : l.get(0);
+    }
+
+    /**
+     * Up to {@code max} tunnels for a tip, best first, their ends at least 3 cells apart: the next to try when the
+     * carver turns one down.
+     */
+    public static List<Link> links(Grid g, Tip t, int max) {
         // How far a walk through the caves from the tip is to each cell, up to 40 steps.
         int[] steps = new int[g.kind.length];
         Arrays.fill(steps, Integer.MAX_VALUE);
@@ -239,8 +248,7 @@ public final class DeadEnds {
                 queue[tail++] = m;
             }
         }
-        double best = Double.MAX_VALUE;
-        int bi = 0, bj = 0, bk = 0;
+        List<double[]> found = new ArrayList<>(); // {score, i, j, k}
         for (int dj = -MAX_LINK; dj <= MAX_LINK; dj++) for (int dk = -MAX_LINK; dk <= MAX_LINK; dk++) for (int di = -MAX_LINK; di <= MAX_LINK; di++) {
             int i = t.i + di, j = t.j + dj, k = t.k + dk;
             if (!g.inside(i, j, k)) continue;
@@ -253,14 +261,18 @@ public final class DeadEnds {
             if (Math.abs(dj) > 0.75 * hz + 1) continue;
             double ahead = (di * t.fx + dj * t.fy + dk * t.fz) / e;
             double score = e + 1.5 * Math.abs(dj) - 3 * ahead - 0.5 * Math.min(3, g.dist[n]);
-            if (score < best) {
-                best = score;
-                bi = i;
-                bj = j;
-                bk = k;
-            }
+            found.add(new double[]{score, i, j, k});
         }
-        return best == Double.MAX_VALUE ? null : new Link(t, bi, bj, bk);
+        found.sort((a, b) -> Double.compare(a[0], b[0]));
+        List<Link> out = new ArrayList<>();
+        for (double[] f : found) {
+            if (out.size() >= max) break;
+            int i = (int) f[1], j = (int) f[2], k = (int) f[3];
+            boolean near = false;
+            for (Link l : out) near |= sq(l.i - i) + sq(l.j - j) + sq(l.k - k) < 9;
+            if (!near) out.add(new Link(t, i, j, k));
+        }
+        return out;
     }
 
     /** Marks a planned tunnel's cells open, so the next tips see the cave it joins. */
