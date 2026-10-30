@@ -27,6 +27,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkStatus;
@@ -58,6 +59,8 @@ import java.util.Locale;
  *     searched round the command's position, so {@code execute positioned} can aim the search.</li>
  *     <li>{@code /remix slice [x|z] [half width]}: a picture of the blocks under you, written to remix_slices/</li>
  *     <li>{@code /remix census [radius]}: how overgrown and lit the caves around you are, per biome (PlantCensus)</li>
+ *     <li>{@code /remix entrances [cells]}: the entrance sites in the cells round you, why the other cells have none, and
+ *     the nearest of each kind</li>
  *     <li>{@code /remix deadends [radius]}: the blind cave ends left above the old floor in the loaded chunks round you
  *     (DeadEnds), with the nearest</li>
  * </ul>
@@ -72,6 +75,8 @@ public final class RemixCommands {
                 .then(Commands.literal("layers").executes(RemixCommands::layers))
                 .then(Commands.literal("info").executes(RemixCommands::info))
                 .then(PlantCensus.command())
+                .then(Commands.literal("entrances").executes(c -> entrances(c, 8))
+                        .then(Commands.argument("cells", IntegerArgumentType.integer(1, 24)).executes(c -> entrances(c, IntegerArgumentType.getInteger(c, "cells")))))
                 .then(Commands.literal("deadends").executes(c -> deadEnds(c, 4))
                         .then(Commands.argument("radius", IntegerArgumentType.integer(1, 12)).executes(c -> deadEnds(c, IntegerArgumentType.getInteger(c, "radius")))))
                 .then(Commands.literal("tp")
@@ -618,6 +623,47 @@ public final class RemixCommands {
         return null;
     }
 
+    // ============================================================================================== entrances
+
+    /**
+     * The entrance sites in the cells within {@code cells} of the command's position: how many cells of each cover got
+     * one and why the others did not, and the nearest sites of each kind with their positions. Works from the console.
+     */
+    private static int entrances(CommandContext<CommandSourceStack> c, int cells) {
+        Entrances e = DeepWorld.entrances();
+        if (e == null) {
+            c.getSource().sendFailure(Component.literal("There are no entrances in this world (replaceVanillaCaveBiomes is off)."));
+            return 0;
+        }
+        Vec3 from = c.getSource().getPosition();
+        int ci = Math.floorDiv((int) Math.floor(from.x), Entrances.CELL), cj = Math.floorDiv((int) Math.floor(from.z), Entrances.CELL);
+        java.util.Map<String, java.util.Map<String, Integer>> why = new java.util.TreeMap<>();
+        java.util.Map<String, java.util.List<Entrances.Site>> kinds = new java.util.TreeMap<>();
+        for (int i = -cells; i <= cells; i++) for (int j = -cells; j <= cells; j++) {
+            String[] w = e.why(ci + i, cj + j);
+            why.computeIfAbsent(w[0], k -> new java.util.TreeMap<>()).merge(w[1], 1, Integer::sum);
+            Entrances.Site s = e.site(ci + i, cj + j);
+            if (s == null) continue;
+            String k = s.kind.name().toLowerCase(Locale.ROOT) + (s.cold ? " (cold)" : "");
+            kinds.computeIfAbsent(k, x -> new java.util.ArrayList<>()).add(s);
+        }
+        int n = (2 * cells + 1) * (2 * cells + 1);
+        say(c, String.format(Locale.ROOT, "%d cells of %d blocks round %.0f %.0f, by the cover at their centres:", n, Entrances.CELL, from.x, from.z));
+        for (var w : why.entrySet()) say(c, "  " + w.getKey() + ": " + w.getValue());
+        for (var k : kinds.entrySet()) {
+            java.util.List<Entrances.Site> l = k.getValue();
+            l.sort(java.util.Comparator.comparingDouble(s -> Math.hypot(s.cx - from.x, s.cz - from.z)));
+            StringBuilder b = new StringBuilder();
+            for (int i = 0; i < Math.min(4, l.size()); i++) {
+                Entrances.Site s = l.get(i);
+                Entrances.Chamber g = s.chambers.get(0);
+                b.append(String.format(Locale.ROOT, "%s%.0f %.0f %.0f", i == 0 ? "" : ", ", s.cx, g.water, s.cz));
+            }
+            say(c, String.format(Locale.ROOT, "%s: %d, nearest at %s", k.getKey(), l.size(), b));
+        }
+        return kinds.values().stream().mapToInt(java.util.List::size).sum();
+    }
+
     // ============================================================================================== dead ends
 
     /**
@@ -631,7 +677,8 @@ public final class RemixCommands {
         ServerLevel level = c.getSource().getLevel();
         BlockPos at = BlockPos.containing(c.getSource().getPosition());
         int pcx = at.getX() >> 4, pcz = at.getZ() >> 4;
-        int chunks = 0, tips = 0, shallow = 0, lava = 0, caveLava = 0, lavaLo = Integer.MAX_VALUE, lavaHi = Integer.MIN_VALUE;
+        int chunks = 0, tips = 0, shallow = 0, rockTips = 0, lava = 0, caveLava = 0, lavaLo = Integer.MAX_VALUE, lavaHi = Integer.MIN_VALUE;
+        java.util.Map<String, Integer> round = new java.util.HashMap<>(), kinds = new java.util.HashMap<>();
         int[] lavaAt = null;
         java.util.List<int[]> all = new java.util.ArrayList<>();
         var ground = net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES; // trees are not caves
@@ -645,7 +692,10 @@ public final class RemixCommands {
                 tips++;
                 if (y > level.getHeight(ground, x, z) - 12) shallow++;
                 all.add(new int[]{x, y, z});
+                kinds.merge(roundTip(level, x, y, z, round), 1, Integer::sum);
             }
+            DeadEnds.Grid rock = JoinDeadEndsFeature.read(level, cp, t.shape.packFloor + 8, ground, true);
+            if (rock != null) rockTips += DeadEnds.tips(rock, 8, 15, 8, 15).size();
             ChunkAccess ch = level.getChunk(cp.x, cp.z);
             BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
             for (int y = t.shape.packFloor; y < level.getMaxBuildHeight(); y++) {
@@ -673,8 +723,37 @@ public final class RemixCommands {
                 tips / (double) chunks, t.shape.packFloor + 8, shallow));
         say(c, String.format(Locale.ROOT, "Lava blocks above the old floor: %d, %d of them in caves%s", lava, caveLava,
                 lavaAt == null ? "" : String.format(Locale.ROOT, " (y %d to %d; one at %d %d %d)", lavaLo, lavaHi, lavaAt[0], lavaAt[1], lavaAt[2])));
+        say(c, String.format(Locale.ROOT, "Counting only natural rock and soil as rock: %d blind ends. Round the ones left: %s; blocks there: %s", rockTips,
+                top(kinds, 6), top(round, 8)));
         for (int i = 0; i < Math.min(5, all.size()); i++) say(c, "  at " + all.get(i)[0] + " " + all.get(i)[1] + " " + all.get(i)[2]);
         return tips;
+    }
+
+    /** What lies within 3 blocks of a blind end: counts its blocks into {@code round} and names what made the end. */
+    private static String roundTip(ServerLevel level, int x, int y, int z, java.util.Map<String, Integer> round) {
+        String kind = "bare rock";
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int dx = -3; dx <= 3; dx++) for (int dy = -3; dy <= 3; dy++) for (int dz = -3; dz <= 3; dz++) {
+            BlockState s = level.getBlockState(p.set(x + dx, y + dy, z + dz));
+            if (s.isAir() || !s.getFluidState().isEmpty()) continue;
+            String id = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(s.getBlock()).getPath();
+            round.merge(id, 1, Integer::sum);
+            String k = s.is(net.minecraft.tags.BlockTags.PLANKS) || s.is(net.minecraft.tags.BlockTags.RAILS) || s.is(net.minecraft.tags.BlockTags.WOODEN_FENCES)
+                    || s.is(Blocks.COBWEB) || s.is(Blocks.COBBLESTONE) || s.is(Blocks.MOSSY_COBBLESTONE) || s.is(Blocks.SPAWNER) ? "structure"
+                    : s.is(Blocks.POINTED_DRIPSTONE) || s.is(Blocks.DRIPSTONE_BLOCK) ? "dripstone"
+                    : s.is(net.minecraft.tags.BlockTags.ICE) || s.is(net.minecraft.tags.BlockTags.SNOW) ? "ice or snow"
+                    : s.is(Blocks.AMETHYST_BLOCK) || s.is(Blocks.BUDDING_AMETHYST) || s.is(Blocks.CALCITE) || s.is(Blocks.SMOOTH_BASALT) ? "geode"
+                    : s.is(net.minecraft.tags.BlockTags.LOGS) || s.is(net.minecraft.tags.BlockTags.LEAVES) || s.is(Blocks.AZALEA) || s.is(Blocks.FLOWERING_AZALEA)
+                    || s.is(Blocks.MANGROVE_ROOTS) || s.is(Blocks.BIG_DRIPLEAF) || s.is(Blocks.BIG_DRIPLEAF_STEM) ? "plants or roots" : null;
+            if (k != null && (kind.equals("bare rock") || k.equals("structure"))) kind = k;
+        }
+        return kind;
+    }
+
+    /** The biggest counts, as "name n, name n, ...". */
+    private static String top(java.util.Map<String, Integer> m, int n) {
+        return m.entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue()).limit(n)
+                .map(e -> e.getKey() + " " + e.getValue()).collect(java.util.stream.Collectors.joining(", "));
     }
 
     /** What the dead-end joiner did in the chunks generated since the server started. */

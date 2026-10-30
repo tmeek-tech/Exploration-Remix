@@ -143,7 +143,8 @@ public final class DevShots {
             case VIEWING -> {
                 if (remote) {
                     double moved = Math.abs(mc.player.getX() - startX) + Math.abs(mc.player.getY() - startY) + Math.abs(mc.player.getZ() - startZ);
-                    if (moved < 1 && ticks < 6000) return;
+                    // A view at the spot the player already stands on, or none found: go on after 400 ticks.
+                    if (moved < 1 && ticks < 400) return;
                 } else if (!viewDone) return;
                 phase = Phase.SETTLING;
                 ticks = 0;

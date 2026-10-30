@@ -35,7 +35,7 @@ public final class Entrances {
     /** Signed distance returned where nothing is near. */
     public static final double SOLID = 64;
     /** Chance that a cell under each cover holds a site (before the ground has its say). */
-    static final double FOREST_CHANCE = 0.85, PLAINS_CHANCE = 0.22, DESERT_CHANCE = 0.22;
+    static final double FOREST_CHANCE = 0.85, PLAINS_CHANCE = 0.35, DESERT_CHANCE = 0.35;
     /** Water stays at least this far above the pack's old floor: clear of the set pieces and the gate ramp. */
     static final int FLOOR_CLEARANCE = 64;
     /** A chamber's ceiling stays this far under the lowest ground over it (oasis hollows: {@link #OASIS_ROOF}). */
@@ -411,6 +411,37 @@ public final class Entrances {
 
     private Overhead.Surface surf(double x, double z) { return overhead.at((int) Math.floor(x), (int) Math.floor(z)); }
 
+    /**
+     * Why a cell has the site it has, for /remix entrances: its centre's cover, then "wet", "mixed" (too little of the
+     * ground round it shares that cover), "chance" (the roll said no), "refused" (the planner found no room) or "built".
+     */
+    public String[] why(int ci, int cj) {
+        long h = Hashing.mix(seed, 7101, ci, cj);
+        double cx = ci * (double) CELL + Hashing.range(Hashing.mix(h, 1, 0, 0), 18, CELL - 18);
+        double cz = cj * (double) CELL + Hashing.range(Hashing.mix(h, 2, 0, 0), 18, CELL - 18);
+        Overhead.Surface s0 = surf(cx, cz);
+        String cover = s0.cover().name().toLowerCase(java.util.Locale.ROOT) + (s0.cold() ? " (cold)" : "");
+        if (s0.wet()) return new String[]{cover, "wet"};
+        if (s0.cover() == Overhead.Cover.OTHER) return new String[]{cover, "other"};
+        int same = 1;
+        for (int k = 0; k < 8; k++) {
+            double t = k * Math.PI / 4;
+            Overhead.Surface s = surf(cx + 20 * Math.cos(t), cz + 20 * Math.sin(t));
+            if (s.wet()) return new String[]{cover, "wet"};
+            if (s.cover() == s0.cover()) same++;
+        }
+        double roll = Hashing.unit(Hashing.mix(h, 3, 0, 0));
+        int need = 6;
+        double chance = switch (s0.cover()) {
+            case FOREST -> FOREST_CHANCE;
+            case PLAINS -> PLAINS_CHANCE;
+            default -> DESERT_CHANCE;
+        };
+        if (same < need) return new String[]{cover, "mixed"};
+        if (roll >= chance) return new String[]{cover, "chance"};
+        return new String[]{cover, site(ci, cj) == null ? "refused" : "built"};
+    }
+
     private Site plan(int ci, int cj) {
         long h = Hashing.mix(seed, 7101, ci, cj);
         double cx = ci * (double) CELL + Hashing.range(Hashing.mix(h, 1, 0, 0), 18, CELL - 18);
@@ -428,8 +459,8 @@ public final class Entrances {
         double roll = Hashing.unit(Hashing.mix(h, 3, 0, 0));
         return switch (s0.cover()) {
             case FOREST -> same >= 6 && roll < FOREST_CHANCE ? planVaults(ci, cj, h, cx, cz, s0) : null;
-            case PLAINS -> same >= 7 && roll < PLAINS_CHANCE ? planSinkhole(ci, cj, h, cx, cz, s0) : null;
-            case DESERT, BADLANDS -> same >= 7 && roll < DESERT_CHANCE ? planOasis(ci, cj, h, cx, cz, s0) : null;
+            case PLAINS -> same >= 6 && roll < PLAINS_CHANCE ? planSinkhole(ci, cj, h, cx, cz, s0) : null;
+            case DESERT, BADLANDS -> same >= 6 && roll < DESERT_CHANCE ? planOasis(ci, cj, h, cx, cz, s0) : null;
             default -> null;
         };
     }
