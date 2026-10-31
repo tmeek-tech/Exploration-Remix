@@ -1,0 +1,22 @@
+{
+  "feature": "explorationremix:frozen_rootvaults/rime",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 5
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "upper",
+      "inset": 2,
+      "above_water": false,
+      "focus": "grottos"
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

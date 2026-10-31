@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/dune_lily"
+      },
+      {
+        "model": "explorationremix:block/dune_lily_2"
+      }
+    ]
+  }
+}

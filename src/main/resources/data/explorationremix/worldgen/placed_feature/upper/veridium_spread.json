@@ -1,0 +1,8 @@
+{
+  "feature": "explorationremix:upper/veridium_spread",
+  "placement": [
+    {
+      "type": "explorationremix:junctions"
+    }
+  ]
+}

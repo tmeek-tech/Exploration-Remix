@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/trailing_grass"
+      },
+      {
+        "model": "explorationremix:block/trailing_grass_2"
+      }
+    ]
+  }
+}

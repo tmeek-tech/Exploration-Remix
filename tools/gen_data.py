@@ -113,6 +113,23 @@ BLOCKS = {
     "cinder_bloom": ("Cinder Bloom", "cross", {"variants": 2}),
     "ash_fern": ("Ash Fern", "cross", {"variants": 2, "shader_glow": False}),
     "smoulder_lichen": ("Smoulder Lichen", "lichen", {"variants": 2}),
+    # Upper Caves rework: the Frost Fern Grotto and the frozen Root Vaults
+    "frost_fern": ("Frost Fern", "cross", {"variants": 3}),
+    "tall_frost_fern": ("Tall Frost Fern", "tall", {"variants": 2}),
+    "frost_aster": ("Frost Aster", "cross", {"variants": 2}),
+    "snowbell": ("Snowbell", "cross", {"variants": 2}),
+    "frostberry_vine": ("Frostberry Vine", "vine", {"variants": 2}),
+    "frostberry_vine_plant": ("Frostberry Vine", "vine_body:frostberry_vine", {"variants": 3}),
+    "rime_lichen": ("Rime Lichen", "lichen", {"variants": 2}),
+    "hoarfrost": ("Hoarfrost", "lichen", {"variants": 2}),
+    "icicle": ("Icicle", "vine", {"variants": 2}),
+    "icicle_plant": ("Icicle", "vine_body:icicle", {"variants": 2}),
+    # the sinkholes and the oasis hollows
+    "trailing_grass": ("Trailing Grass", "vine", {"variants": 2}),
+    "trailing_grass_plant": ("Trailing Grass", "vine_body:trailing_grass", {"variants": 2}),
+    "fan_palm": ("Fan Palm", "tall", {"variants": 2}),
+    "oasis_grass": ("Oasis Grass", "cross", {"variants": 3, "weights": [3, 2, 2]}),
+    "dune_lily": ("Dune Lily", "cross", {"variants": 2}),
 }
 NO_DROP = {"band_stone"}
 
@@ -123,9 +140,11 @@ BLOCK_TAGS = {
                                  "amber_bulb_vine", "amber_bulb_vine_plant", "weeping_ivy", "weeping_ivy_plant", "silver_frond",
                                  "silver_frond_plant", "gold_threads", "gold_threads_plant", "dusk_vines", "dusk_vines_plant", "grotto_ivy",
                                  # vegetation rework, part B
-                                 "pale_wisteria", "pale_wisteria_plant", "rose_tendrils", "rose_tendrils_plant"],
+                                 "pale_wisteria", "pale_wisteria_plant", "rose_tendrils", "rose_tendrils_plant",
+                                 # Upper Caves rework (icicles cannot be climbed)
+                                 "frostberry_vine", "frostberry_vine_plant", "trailing_grass", "trailing_grass_plant"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard"],
-    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen"],
+    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen", "rime_lichen"],
     (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "pale_wisteria", "pale_wisteria_plant"],
 }
 # Vanilla growth that /remix census counts as plants, with every block above but band stone (tag explorationremix:plants).
@@ -349,6 +368,7 @@ def tags():
 
 def biome_modifiers():
     write(os.path.join(DATA, "forge", "biome_modifier", "remove_create_striations.json"), {"type": f"{MOD}:remove_create_striations"})
+    write(os.path.join(DATA, "forge", "biome_modifier", "remove_upper_lava.json"), {"type": f"{MOD}:remove_upper_lava"})
 
 
 def lang(extra):

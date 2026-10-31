@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "#explorationremix:cave_rock",
+    "minecraft:packed_ice",
+    "minecraft:ice",
+    "minecraft:blue_ice",
+    "minecraft:snow_block"
+  ]
+}

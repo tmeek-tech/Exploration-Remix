@@ -1,0 +1,15 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/frostberry_vine_plant"
+      },
+      {
+        "model": "explorationremix:block/frostberry_vine_plant_2"
+      },
+      {
+        "model": "explorationremix:block/frostberry_vine_plant_3"
+      }
+    ]
+  }
+}

@@ -51,7 +51,8 @@
       "looks": [
         0,
         1
-      ]
+      ],
+      "cold": false
     },
     {
       "type": "minecraft:biome"

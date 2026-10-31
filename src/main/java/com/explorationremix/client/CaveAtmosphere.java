@@ -44,7 +44,9 @@ public final class CaveAtmosphere {
     private static final ResourceKey<Biome> ROOTVAULTS = key("rootvaults"), SILVER_FERN_RIFT = key("silver_fern_rift"),
             IVORY_ROOT_CAVERN = key("ivory_root_cavern"), LANTERN_LAKE = key("lantern_lake"), EMBER_GARDENS = key("ember_gardens"),
             RUST_SPRINGS = key("rust_springs"), DEEP_BLUE_RIFT = key("deep_blue_rift"), ASURINE_GEODES = key("asurine_geodes"),
-            BASALT_GALLERIES = key("basalt_galleries"), OBSIDIAN_TUBES = key("obsidian_tubes");
+            BASALT_GALLERIES = key("basalt_galleries"), OBSIDIAN_TUBES = key("obsidian_tubes"),
+            FROZEN_ROOTVAULTS = key("frozen_rootvaults"), SINKHOLE = key("sinkhole"), OASIS_HOLLOW = key("oasis_hollow"),
+            FROST_FERN_GROTTO = key("frost_fern_grotto");
 
     /** The colour light from glowing blocks takes in a biome, and how strongly: {r, g, b, strength}. */
     private static final Map<ResourceKey<Biome>, float[]> LIGHT_TINT = new HashMap<>();
@@ -60,6 +62,10 @@ public final class CaveAtmosphere {
         FOG_REACH.put(ASURINE_GEODES, 1.2F);
         FOG_REACH.put(BASALT_GALLERIES, 0.9F); // smoke
         FOG_REACH.put(OBSIDIAN_TUBES, 1.0F);
+        FOG_REACH.put(FROZEN_ROOTVAULTS, 1.3F);
+        FOG_REACH.put(SINKHOLE, 1.4F);
+        FOG_REACH.put(OASIS_HOLLOW, 1.3F);
+        FOG_REACH.put(FROST_FERN_GROTTO, 1.2F);
         // Cold blue in the Blue Reaches, red near the heat. The Deep Gardens and the upper caves keep vanilla's warm light.
         LIGHT_TINT.put(DEEP_BLUE_RIFT, new float[]{0.42F, 0.62F, 1.0F, 0.85F});
         LIGHT_TINT.put(ASURINE_GEODES, new float[]{0.45F, 0.66F, 1.0F, 0.85F});
@@ -67,6 +73,8 @@ public final class CaveAtmosphere {
         LIGHT_TINT.put(RUST_SPRINGS, new float[]{1.0F, 0.52F, 0.32F, 0.55F});
         LIGHT_TINT.put(BASALT_GALLERIES, new float[]{1.0F, 0.5F, 0.28F, 0.5F});
         LIGHT_TINT.put(OBSIDIAN_TUBES, new float[]{1.0F, 0.5F, 0.4F, 0.45F});
+        // A cool light under the Frost Fern Grotto's ice.
+        LIGHT_TINT.put(FROST_FERN_GROTTO, new float[]{0.62F, 0.8F, 1.0F, 0.4F});
     }
 
     private static ResourceKey<Biome> key(String id) {
@@ -231,16 +239,28 @@ public final class CaveAtmosphere {
             if (!s.isAir()) continue;
             BlockState up = level.getBlockState(above);
             if (up.isAir()) {
-                // Pollen in a shaft of daylight in the Rootvaults (the biome is only underground, so no surface check).
-                if (random.nextFloat() < 0.08F && level.getBrightness(LightLayer.SKY, p) >= 13 && level.getBiome(p).is(ROOTVAULTS))
-                    level.addParticle(ERParticles.POLLEN.get(), p.getX() + random.nextDouble(), p.getY() + random.nextDouble(), p.getZ() + random.nextDouble(), 0, 0, 0);
+                // Pollen in a shaft of daylight in the Root Vaults, the sinkholes and the oasis hollows (the biomes are
+                // only underground, so no surface check).
+                if (random.nextFloat() < 0.08F && level.getBrightness(LightLayer.SKY, p) >= 13) {
+                    Holder<Biome> h = level.getBiome(p);
+                    if (h.is(ROOTVAULTS) || h.is(SINKHOLE) || h.is(OASIS_HOLLOW))
+                        level.addParticle(ERParticles.POLLEN.get(), p.getX() + random.nextDouble(), p.getY() + random.nextDouble(), p.getZ() + random.nextDouble(), 0, 0, 0);
+                }
                 continue;
             }
-            // Under a ceiling: water drips in the Deep Gardens and the upper caves.
+            // Under a ceiling: water drips in the Deep Gardens and the upper caves; sand trickles from the oasis hollows'
+            // sandstone.
             if (random.nextFloat() < 0.02F && up.isFaceSturdy(level, above, net.minecraft.core.Direction.DOWN)) {
                 Holder<Biome> h = level.getBiome(p);
-                if (h.is(LANTERN_LAKE) || h.is(EMBER_GARDENS) || h.is(RUST_SPRINGS) || h.is(IVORY_ROOT_CAVERN) || h.is(SILVER_FERN_RIFT) || h.is(ROOTVAULTS))
+                if (h.is(OASIS_HOLLOW)) {
+                    if (up.is(net.minecraft.tags.BlockTags.SAND) || up.is(net.minecraft.world.level.block.Blocks.SANDSTONE)
+                            || up.is(net.minecraft.world.level.block.Blocks.RED_SANDSTONE) || up.is(net.minecraft.world.level.block.Blocks.SMOOTH_SANDSTONE))
+                        level.addParticle(new net.minecraft.core.particles.BlockParticleOption(ParticleTypes.FALLING_DUST, up),
+                                p.getX() + 0.2 + random.nextDouble() * 0.6, p.getY() + 0.95, p.getZ() + 0.2 + random.nextDouble() * 0.6, 0, 0, 0);
+                } else if (h.is(LANTERN_LAKE) || h.is(EMBER_GARDENS) || h.is(RUST_SPRINGS) || h.is(IVORY_ROOT_CAVERN) || h.is(SILVER_FERN_RIFT)
+                        || h.is(ROOTVAULTS) || h.is(SINKHOLE) || h.is(FROST_FERN_GROTTO)) {
                     level.addParticle(ParticleTypes.DRIPPING_WATER, p.getX() + 0.2 + random.nextDouble() * 0.6, p.getY() + 0.95, p.getZ() + 0.2 + random.nextDouble() * 0.6, 0, 0, 0);
+                }
             }
         }
     }

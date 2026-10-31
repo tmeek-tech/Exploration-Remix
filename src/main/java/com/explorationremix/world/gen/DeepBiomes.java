@@ -5,6 +5,7 @@ import com.explorationremix.config.ERConfig;
 import com.explorationremix.mixin.accessor.MultiNoiseBiomeSourceAccessor;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.DeepBiome;
+import com.explorationremix.world.terrain.Entrances;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
@@ -23,15 +24,23 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Biome holders for the deep world and the Rootvaults, resolved once per server start. */
+/** Biome holders for the deep world, the Upper Caves' entrances and plant caves, resolved once per server start. */
 public final class DeepBiomes {
     public static final ResourceLocation ROOTVAULTS = new ResourceLocation(ExplorationRemix.MOD_ID, "rootvaults");
+    public static final ResourceLocation FROZEN_ROOTVAULTS = new ResourceLocation(ExplorationRemix.MOD_ID, "frozen_rootvaults");
+    public static final ResourceLocation SINKHOLE = new ResourceLocation(ExplorationRemix.MOD_ID, "sinkhole");
+    public static final ResourceLocation OASIS_HOLLOW = new ResourceLocation(ExplorationRemix.MOD_ID, "oasis_hollow");
+    public static final ResourceLocation FROST_FERN_GROTTO = new ResourceLocation(ExplorationRemix.MOD_ID, "frost_fern_grotto");
 
     private static final EnumMap<DeepBiome, Holder<Biome>> HOLDERS = new EnumMap<>(DeepBiome.class);
     private static Set<Holder<Biome>> all = Set.of();
     @Nullable private static Holder<Biome> fallback;
     @Nullable private static Holder<Biome> rootvaults;
+    private static final EnumMap<Entrances.Area, Holder<Biome>> AREAS = new EnumMap<>(Entrances.Area.class);
+    @Nullable private static Holder<Biome> frostGrotto, lushCaves;
     private static boolean replaceCaveBiomes = true;
+    /** Placements of the surface biome's ores let into the Upper Caves' biomes since the world loaded (for checks). */
+    public static final java.util.concurrent.atomic.AtomicLong SURFACE_ORES = new java.util.concurrent.atomic.AtomicLong();
     private static Set<Holder<Biome>> lastBase, lastUnion;
     @Nullable private static volatile Climate.ParameterList<Holder<Biome>> withoutDeepDark;
 
@@ -43,6 +52,7 @@ public final class DeepBiomes {
 
     public static synchronized void resolve(Registry<Biome> registry) {
         HOLDERS.clear();
+        SURFACE_ORES.set(0);
         Set<Holder<Biome>> set = new LinkedHashSet<>();
         fallback = registry.getHolder(Biomes.DRIPSTONE_CAVES).orElse(null);
         for (DeepBiome b : DeepBiome.values()) {
@@ -58,6 +68,21 @@ public final class DeepBiomes {
         if (rootvaults == null) ExplorationRemix.LOGGER.error("Biome {} is missing; the deep dark stays above the first band", ROOTVAULTS);
         replaceCaveBiomes = ERConfig.INSTANCE.replaceVanillaCaveBiomes.get();
         if (rootvaults != null && replaceCaveBiomes) set.add(rootvaults);
+        AREAS.clear();
+        ResourceLocation[] ids = {ROOTVAULTS, FROZEN_ROOTVAULTS, SINKHOLE, OASIS_HOLLOW};
+        for (Entrances.Area a : Entrances.Area.values()) {
+            Holder<Biome> h = registry.getHolder(ResourceKey.create(Registries.BIOME, ids[a.ordinal()])).orElse(null);
+            if (h == null) {
+                ExplorationRemix.LOGGER.error("Biome {} is missing; those entrances keep the pack's biomes", ids[a.ordinal()]);
+                continue;
+            }
+            AREAS.put(a, h);
+            if (replaceCaveBiomes) set.add(h);
+        }
+        frostGrotto = registry.getHolder(ResourceKey.create(Registries.BIOME, FROST_FERN_GROTTO)).orElse(null);
+        if (frostGrotto == null) ExplorationRemix.LOGGER.error("Biome {} is missing; lush caves stay under cold ground", FROST_FERN_GROTTO);
+        else if (replaceCaveBiomes) set.add(frostGrotto);
+        lushCaves = registry.getHolder(Biomes.LUSH_CAVES).orElse(null);
         all = Set.copyOf(set);
         lastBase = null;
         lastUnion = null;
@@ -71,6 +96,27 @@ public final class DeepBiomes {
     /** The Rootvaults, or null when they are switched off or missing. */
     @Nullable
     public static Holder<Biome> rootvaults() { return replaceCaveBiomes ? rootvaults : null; }
+
+    /** The biome of an entrance's area, or null when the entrances are switched off or the biome is missing. */
+    @Nullable
+    public static Holder<Biome> area(Entrances.Area a) { return replaceCaveBiomes ? AREAS.get(a) : null; }
+
+    /** The Frost Fern Grotto, or null when switched off or missing. */
+    @Nullable
+    public static Holder<Biome> frostGrotto() { return replaceCaveBiomes ? frostGrotto : null; }
+
+    /** Vanilla's lush caves (the pack's copy), or null when switched off or missing. */
+    @Nullable
+    public static Holder<Biome> lushCaves() { return replaceCaveBiomes ? lushCaves : null; }
+
+    /**
+     * True for the biomes the Upper Caves give the pack's caves and the rock round them, in place of the surface biome
+     * carried underground: the entrances' biomes, the Frost Fern Grotto and lush caves.
+     */
+    public static boolean upperCave(Holder<Biome> h) {
+        if (!replaceCaveBiomes) return false;
+        return h == frostGrotto || h == lushCaves || h.is(Biomes.LUSH_CAVES) || AREAS.containsValue(h);
+    }
 
     /** The biome source's own biomes plus the deep ones, so their features are sorted and placed. */
     public static synchronized Set<Holder<Biome>> union(Set<Holder<Biome>> base) {
@@ -117,6 +163,9 @@ public final class DeepBiomes {
             all = Set.of();
             fallback = null;
             rootvaults = null;
+            AREAS.clear();
+            frostGrotto = null;
+            lushCaves = null;
             lastBase = null;
             lastUnion = null;
             withoutDeepDark = null;

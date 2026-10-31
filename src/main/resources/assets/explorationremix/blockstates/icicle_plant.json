@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/icicle_plant"
+      },
+      {
+        "model": "explorationremix:block/icicle_plant_2"
+      }
+    ]
+  }
+}
