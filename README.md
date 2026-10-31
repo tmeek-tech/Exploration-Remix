@@ -5,7 +5,7 @@ the pack's own caves, sealed from each other by unbreakable bands with natural g
 and Create stone and dressed to match a set of reference pictures. Made for a pack with Tectonic, Terrain Slabs,
 Immersive Weathering, Create and Better Combat.
 
-**Status: milestone 1 (0.4.0: the Upper Caves reworked), world generation and cave looks.** The first build's creatures, runs, runes and
+**Status: milestone 1 (0.4.1: the cold caves reworked), world generation and cave looks.** The first build's creatures, runs, runes and
 combat changes were removed (git history keeps them); they return in later milestones, built on these caves.
 
 ## Requirements
@@ -15,6 +15,7 @@ combat changes were removed (git history keeps them); they return in later miles
 | Minecraft | 1.20.1 |
 | Forge | 47.4.x (built against 47.4.28) |
 | Java | 17 |
+| Immersive Weathering | 1.20.1-2.0.5 or later, required: the cold caves grow its frosty ferns, frost and icicles, and its frost on the snowy surface gives way to the mod's hoarfrost |
 | Create | optional: its stones (asurine, crimsite, ochrum, veridium, limestone, scoria, scorchia) build the layers; vanilla stones stand in without it |
 | mcremix | optional: rusted machine parts in the Rust Springs; Create and vanilla parts stand in without it |
 
@@ -72,9 +73,12 @@ regenerated.
     Three looks: root halls with a stream and terraced walls, teal grottos around a pool, and ravines open to the
     sky; halls and grottos can have a skylight. Each cluster has one or two mouths up to the surface, descents into
     the pack's caves (most into a plant cave), passages between its chambers and links to the next cluster; every
-    chamber has at least two ways out. Under snowy forests the mouths, ravines and skylights are **frozen** (snow,
-    ice over the water, icicles, hoarfrost, giant icicles) and the halls further in thaw, with frost ferns among the
-    usual growth. Where a descent opens into a lush cave, the vault's veridium runs on into it.
+    chamber has at least two ways out. Under jungles and mangrove swamps the teal grottos and ravines are veridium,
+    and where a descent opens into a lush cave the veridium runs on into it; elsewhere they are grey stone with pale
+    limestone ledges, and the ravines limestone cliffs. Under snowy forests a whole cluster is **frozen**: round its
+    mouths, ravines and skylights deep snow and drifts, ice over the water, packed ice in the walls, Immersive
+    Weathering's icicles in clusters, hoarfrost in big patches and giant icicles; further in it thaws to blue frost
+    moss and limestone, and only deep inside grow frosty ferns, frost asters, snowbells and frostberry vines.
   * **Sinkholes** under plains, meadows and savannas: a pit open to the sky over a pool, undercut below its rim, with
     a talus slope down one side; grass, flowers and trailing grass in the daylight, lily pads and sugar cane by the
     pool. Under snowy plains they are snowed in.
@@ -83,7 +87,10 @@ regenerated.
     ceiling.
   * **Plant caves** are much more common: about half of the pack's ordinary caves grow plants, and nine in ten of
     those 25 to 65 blocks under the ground, so a way down crosses one almost anywhere. Under cold ground they are the
-    **Frost Fern Grotto**: moss, frost ferns, snowbells and frostberry vines under ice, with rime glowing on the walls.
+    **Frost Fern Grotto**: blue frost moss, Immersive Weathering's frosty ferns, snowbells and frostberry vines, its
+    frost over the rock and its icy caves' icicle clusters on the ceilings, with rime glowing on the walls.
+  * On the snowy surface Immersive Weathering's frost gives way to the mod's hoarfrost, in bigger patches on cliffs,
+    banks and overhangs.
   * **Fewer dead ends:** where one of the pack's caves ends blindly, a short tunnel (6 to 24 blocks, never steeper
     than a walkable slope) joins it to another cave nearby, so most ways through the caves loop.
   * **No lava** above the old floor: lava springs, lava lakes and Tectonic's lava tunnels hold water instead.
@@ -109,7 +116,7 @@ regenerated.
 | `/remix tp gate <1-3>` | the landing above a band, where its gate starts |
 | `/remix tp bedrock` | the bedrock landing of the last layer's network in this cell |
 | `/remix tp biome <name>` | a deep biome's nearest chamber in the nine cells round you, set pieces first, on an open floor; also the Upper Caves' `rootvaults`, `frozen_rootvaults`, `sinkhole`, `oasis_hollow` and `frost_fern_grotto` |
-| `/remix view <name> [n]` | a spot with a wide view into a biome, facing it (n: Root Vaults look 0 to 2, frozen Root Vaults 0 the frozen mouth zone or 1 the halls inside, oasis rock 0 sand or 1 red, or the n-th place of a deep biome); also `lush_veridium`, where a Root Vault's descent opens into a lush cave, and `rootvaults_mouth [1]`, the nearest Root Vault mouth (1: a frozen one) seen from inside, looking up it at the daylight |
+| `/remix view <name> [n]` | a spot with a wide view into a biome, facing it (n: Root Vaults look 0 to 2, `tropical_rootvaults` the same in a jungle or mangrove cluster, frozen Root Vaults 0 the snowy zone round the openings or 1 the thawed halls deep inside, oasis rock 0 sand or 1 red, or the n-th place of a deep biome); also `lush_veridium`, where a Root Vault's descent opens into a lush cave, and `rootvaults_mouth [1]`, the nearest Root Vault mouth (1: a frozen one) seen from inside, looking up it at the daylight |
 | `/remix entrances [cells]` | the Upper Caves' entrances in the 64-block cells round you: how many cells of each cover got one and why the others did not, and the nearest of each kind; works from the server console with `execute positioned` |
 | `/remix slice [x\|z] [half width]` | a picture of the blocks under you, in `remix_slices/` |
 | `/remix census [radius]` | how overgrown and lit the caves around you are, per biome |

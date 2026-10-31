@@ -1,7 +1,7 @@
 {
   "type": "minecraft:random_patch",
   "config": {
-    "tries": 40,
+    "tries": 32,
     "xz_spread": 6,
     "y_spread": 3,
     "feature": {
@@ -15,19 +15,10 @@
                 "data": {
                   "type": "minecraft:simple_state_provider",
                   "state": {
-                    "Name": "explorationremix:frost_fern"
+                    "Name": "immersive_weathering:frosty_fern"
                   }
                 },
                 "weight": 6
-              },
-              {
-                "data": {
-                  "type": "minecraft:simple_state_provider",
-                  "state": {
-                    "Name": "explorationremix:tall_frost_fern"
-                  }
-                },
-                "weight": 2
               },
               {
                 "data": {
@@ -67,7 +58,7 @@
               {
                 "type": "minecraft:would_survive",
                 "state": {
-                  "Name": "explorationremix:frost_fern"
+                  "Name": "immersive_weathering:frosty_fern"
                 }
               },
               {
@@ -83,6 +74,7 @@
                   "minecraft:rooted_dirt",
                   "minecraft:dirt",
                   "minecraft:moss_carpet",
+                  "explorationremix:frost_moss",
                   "minecraft:podzol",
                   "minecraft:coarse_dirt",
                   "minecraft:snow_block",

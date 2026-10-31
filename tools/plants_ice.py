@@ -1,14 +1,13 @@
-"""Hanging plants, sheets and icicles of the Frost Fern Grotto and of frozen cave mouths (vegetation rework, part C).
+"""Hanging plants and sheets of the Frost Fern Grotto and of frozen cave mouths (vegetation rework, part C).
 
 Same rules as tools/plants.py: 16 by 16, vanilla style, colours from Taran's picture of the grotto (vaults of pale ice
 hung with icicles, green vines carrying glowing blue berries, frost ferns and blue mushrooms on mossy terraces), drawn
 with the shared helpers there. A painter registered with glow=[colours] gets an overlay of those pixels that glows in
 the dark.
 
-Vines and icicles keep their strands (or their column of ice) on the same columns in every variant: sway() repeats
-every 16 rows and the icicle's edges sit on the same columns at rows 0 and 15, so any body tile stacks on any other and
-the tip continues the body from its row 0. Leaves and berries that span two or more rows stay off rows 0, 1, 14 and 15
-of a body tile. The sheets (rime lichen, hoarfrost) are drawn as seen flat on a face and tile with copies of themselves.
+Vines keep their strands on the same columns in every variant: sway() repeats every 16 rows, so any body tile stacks
+on any other and the tip continues the body from its row 0. Leaves and berries that span two or more rows stay off rows
+0, 1, 14 and 15 of a body tile. (The icicles are Immersive Weathering's since 0.4.1.) The sheets (rime lichen, hoarfrost) are drawn as seen flat on a face and tile with copies of themselves.
 """
 import random
 from plants import hexc, blank, register, put, put_wrap, stamp, sway, ball, speckle_sheet
@@ -215,82 +214,3 @@ def _hoarfrost(seed, coverage, stars):
 
 register(PAINTERS, "hoarfrost", lambda: _hoarfrost(9812, 0.4, 2))
 register(PAINTERS, "hoarfrost_2", lambda: _hoarfrost(9840, 0.3, 2))
-
-
-# Icicles: hanging ice for a cross model, like vanilla's pointed dripstone: the body a column of ice four to six pixels
-# wide, lit on its left edge, with a darker streak down its core and a rim of light on its shaded right side; the tip
-# tapers to a point. The edges of every body sit on columns 5 and 10 at rows 0 and 15 (the tip's row 0 too), and the
-# streak on column 8, so bodies stack in any order and the tip continues them.
-ICE = {"c": "#7AA3CC", "s": "#8FB4D9", "m": "#B3D2EE", "l": "#DCEBF8", "h": "#F5FBFF"}
-# Per row: the left and right edge, the column of the core streak, and whether the highlight shows (a break in it
-# reads as a ripple in the ice). Frozen drips on the sides as (column, top row, length): a bead of ice frozen on the
-# outside of the column, on rows where the column reaches out to it.
-ICICLE_BODY = {
-    1: {"left": [5, 5, 5, 6, 6, 5, 5, 5, 5, 5, 6, 6, 6, 5, 5, 5],
-        "right": [10, 10, 10, 10, 9, 9, 10, 10, 10, 10, 10, 9, 9, 10, 10, 10],
-        "core": [8, 8, 8, 8, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8],
-        "shine": "1110111101111011",
-        "drips": [(11, 6, 3), (4, 1, 2)]},
-    2: {"left": [5, 5, 6, 6, 6, 6, 5, 5, 5, 6, 6, 5, 5, 5, 5, 5],
-        "right": [10, 10, 10, 9, 9, 10, 10, 10, 9, 9, 9, 10, 10, 10, 10, 10],
-        "core": [8, 8, 8, 8, 8, 8, 8, 9, 8, 8, 8, 8, 7, 7, 8, 8],
-        "shine": "1101111110111101",
-        "drips": [(4, 6, 3), (11, 11, 3)]},
-}
-ICICLE_TIP = {
-    1: {"left": [5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8],
-        "right": [10, 10, 10, 10, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8],
-        "core": [8, 8, 8, 8, 8, 8, 7, 8, 8, 8, 8, 8, 8, 8, 8],
-        "shine": "111011110111111",
-        "drips": [(10, 4, 3)]},
-    2: {"left": [5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 8],
-        "right": [10, 10, 10, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 8],
-        "core": [8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8],
-        "shine": "110111110111111",
-        "drips": [(4, 1, 3)]},
-}
-
-
-def _ice_row(px, y, left, right, core, shine):
-    """One row of the column: the lit left edge, a highlight beside it, the core streak, the shade right of it and the
-    rim of light on the right edge. Narrow rows keep the light edge and the shade."""
-    w = right - left + 1
-    for x in range(left, right + 1):
-        if w == 1:
-            c = "m"
-        elif w == 2:
-            c = "l" if x == left else "s"
-        elif x == left:
-            c = "l"
-        elif x == right:
-            c = "m" if w >= 4 else "s"
-        elif x == core:
-            c = "c"
-        elif x == left + 1:
-            c = "h" if shine else "l"
-        elif x < core:
-            c = "m"
-        else:
-            c = "s"
-        put(px, x, y, ICE[c])
-
-
-def _icicle(v, tip):
-    spec = ICICLE_TIP[v] if tip else ICICLE_BODY[v]
-    img = blank()
-    px = img.load()
-    for y, (lo, hi) in enumerate(zip(spec["left"], spec["right"])):
-        _ice_row(px, y, lo, hi, spec["core"][y], spec["shine"][y] == "1")
-    for x, top, n in spec["drips"]:  # lit on the left side of the column, shaded on the right
-        lit = x < 8
-        for k in range(n):
-            put(px, x, top + k, ICE[("l" if k < n - 1 else "m") if lit else ("m" if k == 0 else "s")])
-    if tip:  # the point: one pale pixel under the last row
-        y = len(spec["left"])
-        put(px, spec["left"][-1], y, ICE["l"])
-    return img
-
-
-for _k in (1, 2):
-    register(PAINTERS, variants("icicle_plant", 2)[_k - 1], (lambda k=_k: _icicle(k, False)))
-    register(PAINTERS, variants("icicle", 2)[_k - 1], (lambda k=_k: _icicle(k, True)))

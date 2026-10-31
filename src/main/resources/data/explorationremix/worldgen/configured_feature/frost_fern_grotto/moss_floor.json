@@ -5,7 +5,7 @@
     "ground_state": {
       "type": "minecraft:simple_state_provider",
       "state": {
-        "Name": "minecraft:moss_block"
+        "Name": "explorationremix:frost_moss"
       }
     },
     "vegetation_feature": {
@@ -19,16 +19,7 @@
                 "data": {
                   "type": "minecraft:simple_state_provider",
                   "state": {
-                    "Name": "explorationremix:frost_fern"
-                  }
-                },
-                "weight": 8
-              },
-              {
-                "data": {
-                  "type": "minecraft:simple_state_provider",
-                  "state": {
-                    "Name": "minecraft:moss_carpet"
+                    "Name": "immersive_weathering:frosty_fern"
                   }
                 },
                 "weight": 5
@@ -37,10 +28,10 @@
                 "data": {
                   "type": "minecraft:simple_state_provider",
                   "state": {
-                    "Name": "explorationremix:tall_frost_fern"
+                    "Name": "explorationremix:frost_moss_carpet"
                   }
                 },
-                "weight": 2
+                "weight": 5
               },
               {
                 "data": {
@@ -49,7 +40,7 @@
                     "Name": "explorationremix:frost_aster"
                   }
                 },
-                "weight": 2
+                "weight": 1
               },
               {
                 "data": {
@@ -70,7 +61,7 @@
     "depth": 1,
     "extra_bottom_block_chance": 0.0,
     "vertical_range": 5,
-    "vegetation_chance": 0.45,
+    "vegetation_chance": 0.3,
     "xz_radius": {
       "type": "minecraft:uniform",
       "value": {

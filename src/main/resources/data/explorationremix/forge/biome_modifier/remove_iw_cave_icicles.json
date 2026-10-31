@@ -1,0 +1,9 @@
+{
+  "type": "forge:remove_features",
+  "biomes": [
+    "explorationremix:frozen_rootvaults",
+    "explorationremix:frost_fern_grotto"
+  ],
+  "features": "immersive_weathering:icicles",
+  "steps": "top_layer_modification"
+}

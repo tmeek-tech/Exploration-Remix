@@ -1,8 +1,8 @@
 {
   "type": "minecraft:random_patch",
   "config": {
-    "tries": 40,
-    "xz_spread": 6,
+    "tries": 64,
+    "xz_spread": 7,
     "y_spread": 3,
     "feature": {
       "feature": {
@@ -25,6 +25,15 @@
                   "Name": "minecraft:snow",
                   "Properties": {
                     "layers": "2"
+                  }
+                },
+                "weight": 3
+              },
+              {
+                "data": {
+                  "Name": "minecraft:snow",
+                  "Properties": {
+                    "layers": "3"
                   }
                 },
                 "weight": 1

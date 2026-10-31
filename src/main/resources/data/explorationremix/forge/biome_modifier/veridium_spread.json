@@ -1,8 +1,7 @@
 {
   "type": "forge:add_features",
   "biomes": [
-    "minecraft:lush_caves",
-    "explorationremix:frost_fern_grotto"
+    "minecraft:lush_caves"
   ],
   "features": "explorationremix:upper/veridium_spread",
   "step": "top_layer_modification"

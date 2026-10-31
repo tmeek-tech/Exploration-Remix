@@ -21,7 +21,7 @@ ASSETS = os.path.join(RES, "assets", MOD)
 
 OWNED = [
     os.path.join(DATA, "worldgen"), os.path.join(DATA, "tags"), os.path.join(DATA, "forge"), os.path.join(DATA, "loot_tables"),
-    os.path.join(RES, "data", "minecraft", "tags"), os.path.join(RES, "data", "forge", "tags"),
+    os.path.join(RES, "data", "minecraft", "tags"), os.path.join(RES, "data", "forge", "tags"), os.path.join(RES, "data", "immersive_weathering"),
     os.path.join(ASSETS, "blockstates"), os.path.join(ASSETS, "models"), os.path.join(ASSETS, "textures"), os.path.join(ASSETS, "lang"),
     os.path.join(ASSETS, "sounds.json"), os.path.join(ASSETS, "particles"),
 ]
@@ -49,6 +49,7 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #   tall        a two-block plant: textures <id>_bottom and <id>_top; drops from its lower half only
 #   lichen      a sheet on any of the six faces, like glow lichen (a GlowLichenBlock); drops one per face
 #   carpet      a flat sheet lying on the floor, turned at random
+#   moss_carpet a carpet one pixel thick drawn with a block's texture, like vanilla's moss carpet (option texture)
 #   wall_plant  a plant growing sideways out of a wall, drawn with vanilla's coral wall fan model
 # Options: variants (how many textures: <id>, <id>_2, <id>_3; the game picks one per block from its position, so it
 # never changes), weights (one per variant), glow_under (shelf: the whole underside glows), shader_glow (default True;
@@ -113,17 +114,16 @@ BLOCKS = {
     "cinder_bloom": ("Cinder Bloom", "cross", {"variants": 2}),
     "ash_fern": ("Ash Fern", "cross", {"variants": 2, "shader_glow": False}),
     "smoulder_lichen": ("Smoulder Lichen", "lichen", {"variants": 2}),
-    # Upper Caves rework: the Frost Fern Grotto and the frozen Root Vaults
-    "frost_fern": ("Frost Fern", "cross", {"variants": 3}),
-    "tall_frost_fern": ("Tall Frost Fern", "tall", {"variants": 2}),
+    # Upper Caves rework: the Frost Fern Grotto and the frozen Root Vaults (their ferns, frost and icicles are
+    # Immersive Weathering's)
+    "frost_moss": ("Frost Moss", "cube"),
+    "frost_moss_carpet": ("Frost Moss Carpet", "moss_carpet", {"texture": "frost_moss"}),
     "frost_aster": ("Frost Aster", "cross", {"variants": 2}),
     "snowbell": ("Snowbell", "cross", {"variants": 2}),
     "frostberry_vine": ("Frostberry Vine", "vine", {"variants": 2}),
     "frostberry_vine_plant": ("Frostberry Vine", "vine_body:frostberry_vine", {"variants": 3}),
     "rime_lichen": ("Rime Lichen", "lichen", {"variants": 2}),
     "hoarfrost": ("Hoarfrost", "lichen", {"variants": 2}),
-    "icicle": ("Icicle", "vine", {"variants": 2}),
-    "icicle_plant": ("Icicle", "vine_body:icicle", {"variants": 2}),
     # the sinkholes and the oasis hollows
     "trailing_grass": ("Trailing Grass", "vine", {"variants": 2}),
     "trailing_grass_plant": ("Trailing Grass", "vine_body:trailing_grass", {"variants": 2}),
@@ -132,6 +132,8 @@ BLOCKS = {
     "dune_lily": ("Dune Lily", "cross", {"variants": 2}),
 }
 NO_DROP = {"band_stone"}
+# Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth.
+NOT_PLANTS = NO_DROP | {"frost_moss"}
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
@@ -141,8 +143,12 @@ BLOCK_TAGS = {
                                  "silver_frond_plant", "gold_threads", "gold_threads_plant", "dusk_vines", "dusk_vines_plant", "grotto_ivy",
                                  # vegetation rework, part B
                                  "pale_wisteria", "pale_wisteria_plant", "rose_tendrils", "rose_tendrils_plant",
-                                 # Upper Caves rework (icicles cannot be climbed)
+                                 # Upper Caves rework
                                  "frostberry_vine", "frostberry_vine_plant", "trailing_grass", "trailing_grass_plant"],
+    # Frost moss is ground, as vanilla's moss is: ferns, flowers and saplings grow on it (Immersive Weathering's frosty
+    # ferns only grow on #minecraft:dirt), and moss patches may spread over it.
+    ("minecraft", "dirt"): ["frost_moss"],
+    ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen", "rime_lichen"],
     (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "pale_wisteria", "pale_wisteria_plant"],
@@ -150,7 +156,9 @@ BLOCK_TAGS = {
 # Vanilla growth that /remix census counts as plants, with every block above but band stone (tag explorationremix:plants).
 VANILLA_PLANTS = ["minecraft:cave_vines", "minecraft:cave_vines_plant", "minecraft:glow_lichen", "minecraft:moss_carpet", "minecraft:fern",
                   "minecraft:grass", "minecraft:large_fern", "minecraft:hanging_roots", "minecraft:azalea", "minecraft:flowering_azalea",
-                  "minecraft:brown_mushroom", "minecraft:sea_pickle", "minecraft:seagrass", "minecraft:tall_seagrass", "minecraft:spore_blossom"]
+                  "minecraft:brown_mushroom", "minecraft:sea_pickle", "minecraft:seagrass", "minecraft:tall_seagrass", "minecraft:spore_blossom",
+                  # Immersive Weathering's, which the cold caves grow since 0.4.1
+                  *({"id": f"immersive_weathering:{b}", "required": False} for b in ("frosty_fern", "frosty_grass", "icicle", "frost"))]
 
 # A crystal points along its facing; the model points up. These are vanilla amethyst's turns.
 FACE6 = {"down": {"x": 180}, "east": {"x": 90, "y": 90}, "north": {"x": 90}, "south": {"x": 90, "y": 180}, "up": {}, "west": {"x": 90, "y": 270}}
@@ -299,6 +307,10 @@ def block_assets():
             states = {"variants": {"half=lower": pick([{"model": ref(t)} for t in bottoms], weights),
                                    "half=upper": pick([{"model": ref(t)} for t in tops], weights)}}
             item = {"parent": "minecraft:item/generated", "textures": {"layer0": ref(tops[0])}}
+        elif kind == "moss_carpet":
+            models[bid] = {"parent": "minecraft:block/carpet", "textures": {"wool": ref(opts["texture"])}}
+            states = {"variants": {"": {"model": ref(bid)}}}
+            item = {"parent": ref(bid)}
         elif kind == "carpet":
             for t in texs:
                 models[t] = plane_model(t, f"{MOD}:block/template/carpet", "carpet", "texture")
@@ -363,12 +375,23 @@ def tags():
         tag("minecraft", "blocks", t, [f"{MOD}:band_stone"])
     for (ns, name), ids in BLOCK_TAGS.items():
         tag(ns, "blocks", name, [f"{MOD}:{b}" for b in ids])
-    tag(MOD, "blocks", "plants", [f"{MOD}:{b}" for b in BLOCKS if b not in NO_DROP] + VANILLA_PLANTS)
+    tag(MOD, "blocks", "plants", [f"{MOD}:{b}" for b in BLOCKS if b not in NOT_PLANTS] + VANILLA_PLANTS)
 
 
 def biome_modifiers():
     write(os.path.join(DATA, "forge", "biome_modifier", "remove_create_striations.json"), {"type": f"{MOD}:remove_create_striations"})
     write(os.path.join(DATA, "forge", "biome_modifier", "remove_upper_lava.json"), {"type": f"{MOD}:remove_upper_lava"})
+    # Immersive Weathering's surface frost gives way to the mod's hoarfrost (worldgen.UPPER_MODIFIER_FEATURES). Forge
+    # removes features after every mod has added its own, whatever the load order.
+    write(os.path.join(DATA, "forge", "biome_modifier", "remove_iw_surface_frost.json"), {
+        "type": "forge:remove_features", "biomes": "#immersive_weathering:icy", "features": "immersive_weathering:frost_patch",
+        "steps": "top_layer_modification"})
+    # Being in #immersive_weathering:icy (so their icicles never melt) also gives the mod's two cold caves IW's own
+    # icicle clusters, wherever they lie above y 92: in a frozen Root Vault's thawed halls too. Their ice is placed by
+    # the mod (worldgen.py, near the openings only), so IW's go.
+    write(os.path.join(DATA, "forge", "biome_modifier", "remove_iw_cave_icicles.json"), {
+        "type": "forge:remove_features", "biomes": [f"{MOD}:frozen_rootvaults", f"{MOD}:frost_fern_grotto"],
+        "features": "immersive_weathering:icicles", "steps": "top_layer_modification"})
 
 
 def lang(extra):

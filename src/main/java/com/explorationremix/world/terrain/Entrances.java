@@ -12,7 +12,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *     <li>under forests, the Root Vaults: a cluster of two to five chambers of mixed sizes (root halls, teal grottos and
  *     ravines), 15 to 40 blocks apart, their ceilings 4 to 6 blocks under the roots of the trees, joined by passages,
  *     with one or two mouths up to the surface and tunnels (descents) down into the pack's caves. Under snowy forests the
- *     same shapes, frozen round their openings ({@link Area#FROZEN_ROOTVAULTS});</li>
+ *     same shapes, frozen ({@link Area#FROZEN_ROOTVAULTS}): snowed in round their openings, thawing further in
+ *     ({@link #chill});</li>
  *     <li>under plains, sinkholes: a daylit pit over a pool, undercut below its rim, with a talus slope down one side;</li>
  *     <li>under deserts and badlands, oasis hollows: a sandstone hollow round a spring, with a mouth up to the dunes and a
  *     skylight over the water.</li>
@@ -43,8 +44,16 @@ public final class Entrances {
     static final double OASIS_ROOF_MIN = 7, OASIS_ROOF_MAX = 10;
     /** No column's ceiling comes closer to its own ground than this (oasis hollows: 7, so sand rests on sandstone). */
     static final int COLUMN_ROOF = 4, OASIS_COLUMN_ROOF = 7;
-    /** The frozen part of a cold Root Vault cluster: within this of a mouth's upper half, or of a skylight. */
-    static final double FROZEN_REACH = 10, SKYLIGHT_REACH = 8;
+    /**
+     * The snowy zone of a cold Root Vault cluster ({@link #chill}): within this of a mouth's upper half, of a skylight
+     * (seen from above, over its chamber's water) or of a ravine's open footprint. About half of a cold cluster's floors.
+     */
+    static final double FROZEN_REACH = 12, SKYLIGHT_REACH = 8, RAVINE_REACH = 4;
+    /**
+     * How far past the snowy zone a frozen Root Vault has thawed: frost moss and rooted dirt, and plants. About a quarter
+     * of a cold cluster's floors lie this deep, in two clusters of three.
+     */
+    public static final double THAW_REACH = 8;
 
     /** The kind of site, from the cover over it. */
     public enum Kind { VAULTS, SINKHOLE, OASIS }
@@ -121,9 +130,13 @@ public final class Entrances {
             }
         }
 
+        /** A Root Vault cluster under tropical trees (jungles, mangrove swamps): its teal grottos and ravines are veridium. */
+        public boolean tropical() { return kind == Kind.VAULTS && trees.tropical(); }
+
         public String describe() {
             return switch (kind) {
-                case VAULTS -> (cold ? "frozen " : "") + "Root Vaults (" + chambers.size() + " chambers under " + trees.id + " trees)";
+                case VAULTS -> (cold ? "frozen " : "") + (tropical() ? "tropical " : "") + "Root Vaults (" + chambers.size() + " chambers under "
+                        + trees.id + " trees)";
                 case SINKHOLE -> (cold ? "frozen " : "") + "sinkhole" + (chambers.size() > 1 ? " with a side grotto" : "");
                 case OASIS -> (red ? "red " : "") + "oasis hollow" + (chambers.size() > 1 ? " with a second hollow" : "");
             };
@@ -260,7 +273,7 @@ public final class Entrances {
         final Site owner;
         /** The chambers it leaves and reaches (null for a mouth's or a descent's far end, which open elsewhere). */
         final Chamber from, to;
-        /** A mouth's upper half, where cold air reaches: its points, or null. */
+        /** A mouth's upper half, where the cold air reaches: its points, or null. */
         final double[] zx, zy, zz;
         final double minX, maxX, minZ, maxZ, minY, maxY;
 
@@ -285,7 +298,8 @@ public final class Entrances {
                 z0 = Math.min(z0, pz[i]); z1 = Math.max(z1, pz[i]);
                 y0 = Math.min(y0, py[i]); y1 = Math.max(y1, py[i]);
             }
-            double m = r + (way == Way.MOUTH ? FROZEN_REACH + 2 : 6);
+            // (A mouth's margin is the 0.4.0 one, kept so the columns list the same tunnels.)
+            double m = r + (way == Way.MOUTH ? 12 : 6);
             minX = x0 - m; maxX = x1 + m; minZ = z0 - m; maxZ = z1 + m; minY = y0 - m; maxY = y1 + m;
             if (way == Way.MOUTH) {
                 // The upper half by length along it.
@@ -1448,7 +1462,7 @@ public final class Entrances {
      * The biome the entrances give a block, or null to leave it to the pack: within 5 blocks of a chamber's open space or
      * 3 of a tunnel (a descent only in its upper part), or one biome cell (4 blocks) to the side of such a place, so the
      * walls get their own rock instead of the soil the pack puts on every ledge; and never within 6 blocks of the ground.
-     * A cold Root Vault cluster is frozen near its mouths' upper halves, its ravines and its skylights.
+     * A cold Root Vault cluster is frozen throughout: snowed in round its openings and thawing further in ({@link #chill}).
      */
     public Area areaAt(int x, int y, int z) {
         Site s = inArea(x, y, z);
@@ -1460,7 +1474,7 @@ public final class Entrances {
             if (s == null || y > ground(column(x, z)) - 6) return null;
         }
         return switch (s.kind) {
-            case VAULTS -> s.cold && frozen(x, y, z) ? Area.FROZEN_ROOTVAULTS : Area.ROOTVAULTS;
+            case VAULTS -> s.cold ? Area.FROZEN_ROOTVAULTS : Area.ROOTVAULTS;
             case SINKHOLE -> Area.SINKHOLE;
             case OASIS -> Area.OASIS_HOLLOW;
         };
@@ -1481,21 +1495,33 @@ public final class Entrances {
         return null;
     }
 
-    /** True near the openings of a cold Root Vault cluster: its mouths' upper halves, its ravines and its skylights. */
-    public boolean frozen(int x, int y, int z) {
-        Col c = column(x, z);
-        for (int i = 0; i < c.tn; i++) {
-            Tunnel t = c.t[i];
-            if (t.way == Way.MOUTH && t.owner.cold && t.zoneDist(x, y, z) < FROZEN_REACH) return true;
+    /**
+     * How far a block lies beyond the snowy zone round a cold Root Vault cluster's openings, in blocks: 0 or less within
+     * {@value #FROZEN_REACH} of a mouth's upper half, {@value #SKYLIGHT_REACH} of a skylight (seen from above, over its
+     * chamber's water) or {@value #RAVINE_REACH} of a ravine's open footprint, more further in. The frozen Root Vaults'
+     * rock and growth follow it: snow and ice in the snowy zone, frost moss past it, plants only deep inside. Infinite
+     * where the column's site is not a cold Root Vault cluster.
+     */
+    public double chill(int x, int y, int z) {
+        Site s = siteAt(x, z);
+        return s == null || !s.cold || s.kind != Kind.VAULTS ? Double.POSITIVE_INFINITY : chill(s, x, y, z);
+    }
+
+    /** {@link #chill(int, int, int)} for a block of this site. */
+    public double chill(Site s, double x, double y, double z) {
+        double best = Double.POSITIVE_INFINITY;
+        for (Tunnel t : tunnels(s.cellX, s.cellZ))
+            if (t.way == Way.MOUTH && t.owner == s) best = Math.min(best, t.zoneDist(x, y, z) - FROZEN_REACH);
+        for (Chamber g : s.chambers) {
+            if (g.look == RAVINE) {
+                double u = Math.abs(g.along(x, z)) - g.a * 1.05, v = Math.abs(g.across(x, z)) - g.b * 1.1;
+                double d = u > 0 || v > 0 ? Math.hypot(Math.max(u, 0), Math.max(v, 0)) : Math.max(u, v);
+                best = Math.min(best, d - RAVINE_REACH);
+            }
+            if (y > g.water - 3)
+                for (double[] k : g.skylights) best = Math.min(best, Math.hypot(k[0] - x, k[1] - z) - SKYLIGHT_REACH);
         }
-        for (int i = 0; i < c.n; i++) {
-            Chamber g = c.g[i];
-            if (!g.site.cold) continue;
-            if (g.look == RAVINE && c.e[i] < 4) return true;
-            for (double[] s : g.skylights)
-                if (Math.hypot(s[0] - x, s[1] - z) < SKYLIGHT_REACH && y > g.water - 3) return true;
-        }
-        return false;
+        return best;
     }
 
     /**
@@ -1612,12 +1638,19 @@ public final class Entrances {
     }
 
     /** Where the Root Vaults' descents end in the pack's caves, for those ends in a chunk: {x, y, z}. */
-    public List<int[]> junctions(int chunkX, int chunkZ) {
+    public List<int[]> junctions(int chunkX, int chunkZ) { return junctions(chunkX, chunkZ, false); }
+
+    /**
+     * Where the Root Vaults' descents end in the pack's caves, for those ends in a chunk: {x, y, z}; only the tropical
+     * clusters' descents when {@code tropicalOnly}.
+     */
+    public List<int[]> junctions(int chunkX, int chunkZ, boolean tropicalOnly) {
         List<int[]> out = new ArrayList<>();
         int ci = Math.floorDiv(chunkX << 4, CELL), cj = Math.floorDiv(chunkZ << 4, CELL);
         for (int di = -1; di <= 1; di++) for (int dj = -1; dj <= 1; dj++) {
             for (Tunnel t : tunnels(ci + di, cj + dj)) {
                 if (t.way != Way.DESCENT || t.owner.kind != Kind.VAULTS) continue;
+                if (tropicalOnly && !t.owner.tropical()) continue;
                 double[] e = t.end();
                 int x = (int) Math.floor(e[0]), z = (int) Math.floor(e[2]);
                 if (x >> 4 == chunkX && z >> 4 == chunkZ) out.add(new int[]{x, (int) Math.floor(e[1]), z});

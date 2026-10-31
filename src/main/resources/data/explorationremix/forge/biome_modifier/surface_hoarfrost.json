@@ -1,0 +1,6 @@
+{
+  "type": "forge:add_features",
+  "biomes": "#immersive_weathering:icy",
+  "features": "explorationremix:upper/surface_hoarfrost",
+  "step": "top_layer_modification"
+}

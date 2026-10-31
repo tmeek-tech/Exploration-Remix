@@ -89,6 +89,8 @@ public final class DeepMaterials {
                 case SMOOTH_RED_SANDSTONE -> Blocks.SMOOTH_RED_SANDSTONE.defaultBlockState();
                 case TERRACOTTA -> Blocks.TERRACOTTA.defaultBlockState();
                 case ORANGE_TERRACOTTA -> Blocks.ORANGE_TERRACOTTA.defaultBlockState();
+                case ANDESITE -> Blocks.ANDESITE.defaultBlockState();
+                case FROST_MOSS -> ERBlocks.FROST_MOSS.get().defaultBlockState();
             };
             STATES.put(r, s);
             BY_ORDINAL[r.ordinal()] = s;

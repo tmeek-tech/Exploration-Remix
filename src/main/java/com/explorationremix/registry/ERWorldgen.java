@@ -1,6 +1,7 @@
 package com.explorationremix.registry;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.world.feature.BiomeAroundFilter;
 import com.explorationremix.world.feature.BrokenMachineFeature;
 import com.explorationremix.world.feature.CeilingRootsFeature;
 import com.explorationremix.world.feature.ClimbVinesFeature;
@@ -69,5 +70,6 @@ public final class ERWorldgen {
     public static final RegistryObject<PlacementModifierType<RootvaultsOpeningsPlacement>> ROOTVAULTS_OPENINGS = PLACEMENT_TYPES.register("rootvaults_openings", () -> () -> RootvaultsOpeningsPlacement.CODEC);
     public static final RegistryObject<PlacementModifierType<UnderTreesPlacement>> UNDER_TREES = PLACEMENT_TYPES.register("under_trees", () -> () -> UnderTreesPlacement.CODEC);
     public static final RegistryObject<PlacementModifierType<JunctionsPlacement>> JUNCTIONS = PLACEMENT_TYPES.register("junctions", () -> () -> JunctionsPlacement.CODEC);
+    public static final RegistryObject<PlacementModifierType<BiomeAroundFilter>> BIOME_AROUND = PLACEMENT_TYPES.register("biome_around", () -> () -> BiomeAroundFilter.CODEC);
     public static final RegistryObject<HeightProviderType<LayerHeight>> LAYER_HEIGHT = HEIGHT_PROVIDERS.register("layer_height", () -> () -> LayerHeight.CODEC);
 }

@@ -35,6 +35,15 @@ versionRange = "[6.0.0,)"
 ordering = "AFTER"
 side = "BOTH"
 
+# The cold caves grow Immersive Weathering's frosty ferns, frost and icicles (its icy caves' icicle clusters), and
+# swap its surface frost for the mod's hoarfrost.
+[[dependencies.${mod_id}]]
+modId = "immersive_weathering"
+mandatory = true
+versionRange = "[1.20.1-2.0.5,)"
+ordering = "AFTER"
+side = "BOTH"
+
 # Optional worldgen neighbours: the deep world reads their results at server start, so they load first.
 [[dependencies.${mod_id}]]
 modId = "tectonic"

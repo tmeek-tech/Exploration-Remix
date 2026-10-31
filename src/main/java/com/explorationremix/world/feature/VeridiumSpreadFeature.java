@@ -1,7 +1,6 @@
 package com.explorationremix.world.feature;
 
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.gen.DeepBiomes;
 import com.explorationremix.world.gen.DeepMaterials;
 import com.explorationremix.world.terrain.Rock;
 import com.mojang.serialization.Codec;
@@ -20,8 +19,8 @@ import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 
 /**
- * Where a Root Vault's descent opens into a lush cave (or the Frost Fern Grotto), the vault's veridium runs on into
- * it: the bare stone of the cave's walls, floors and ceilings within 9 to 15 blocks of the descent's end turns to
+ * Where a tropical Root Vault's descent (under a jungle or a mangrove swamp) opens into a lush cave, the vault's
+ * veridium runs on into it: the bare stone of the cave's walls, floors and ceilings within 9 to 15 blocks of the descent's end turns to
  * veridium, thinning out at the edge, and within 4 to 10 blocks the moss does too (the plant cave's moss covers most of
  * its floors and ceilings, so stone alone hardly shows), so the plant cave reads as the vault's lower end. Plants that
  * cannot stand on veridium go with the moss; clay and the rest of the plants stay. It is placed at the descents' ends
@@ -36,11 +35,10 @@ public final class VeridiumSpreadFeature extends Feature<NoneFeatureConfiguratio
         WorldGenLevel level = ctx.level();
         BlockPos o = ctx.origin();
         RandomSource random = ctx.random();
-        Holder<Biome> frost = DeepBiomes.frostGrotto();
         // The end may lie at the plant cave's edge: look at it and a few blocks round it.
         boolean plants = false;
         for (int[] d : new int[][]{{0, 0, 0}, {4, 0, 0}, {-4, 0, 0}, {0, 0, 4}, {0, 0, -4}, {0, -4, 0}, {0, 4, 0}}) {
-            if (plantCave(level.getBiome(o.offset(d[0], d[1], d[2])), frost)) { plants = true; break; }
+            if (plantCave(level.getBiome(o.offset(d[0], d[1], d[2])))) { plants = true; break; }
         }
         if (!plants) return false;
         BlockState veridium = DeepMaterials.state(Rock.VERIDIUM);
@@ -62,7 +60,7 @@ public final class VeridiumSpreadFeature extends Feature<NoneFeatureConfiguratio
                 BlockState n = level.getBlockState(side.setWithOffset(at, f));
                 if (n.isAir() || !n.getFluidState().isEmpty() || !n.blocksMotion()) { bare = true; break; }
             }
-            if (!bare || !plantCave(level.getBiome(at), frost)) continue;
+            if (!bare || !plantCave(level.getBiome(at))) continue;
             level.setBlock(at, veridium, 2);
             if (moss) {
                 dropUnsupported(level, side.setWithOffset(at, Direction.UP), Direction.UP);
@@ -83,7 +81,5 @@ public final class VeridiumSpreadFeature extends Feature<NoneFeatureConfiguratio
         }
     }
 
-    private static boolean plantCave(Holder<Biome> b, Holder<Biome> frost) {
-        return b.is(Biomes.LUSH_CAVES) || (frost != null && b == frost);
-    }
+    private static boolean plantCave(Holder<Biome> b) { return b.is(Biomes.LUSH_CAVES); }
 }

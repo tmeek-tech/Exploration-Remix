@@ -7,8 +7,8 @@
     "sky_color": 8103167,
     "water_color": 4020182,
     "water_fog_color": 660544,
-    "grass_color": 8434839,
-    "foliage_color": 6332795,
+    "grass_color": 9417668,
+    "foliage_color": 8036275,
     "mood_sound": {
       "sound": "minecraft:ambient.cave",
       "tick_delay": 6000,
@@ -108,7 +108,9 @@
     [
       "minecraft:amethyst_geode",
       "explorationremix:rootvaults/skylights",
-      "explorationremix:frozen_rootvaults/giant_icicles"
+      "explorationremix:frozen_rootvaults/giant_icicles",
+      "explorationremix:frozen_rootvaults/icicle_clusters",
+      "explorationremix:frozen_rootvaults/pools"
     ],
     [
       "minecraft:monster_room",
@@ -147,10 +149,10 @@
       "minecraft:disk_gravel"
     ],
     [
-      "explorationremix:rootvaults/glow_lichen",
       "explorationremix:frozen_rootvaults/hoarfrost",
       "explorationremix:frozen_rootvaults/rime",
       "explorationremix:frozen_rootvaults/snow",
+      "explorationremix:frozen_rootvaults/frost_moss",
       "explorationremix:frozen_rootvaults/ice"
     ],
     [
@@ -158,10 +160,9 @@
       "explorationremix:rootvaults/waterfalls"
     ],
     [
-      "minecraft:glow_lichen",
       "explorationremix:rootvaults/hanging_roots",
-      "explorationremix:frozen_rootvaults/icicles",
-      "explorationremix:frozen_rootvaults/frost_ferns"
+      "explorationremix:frozen_rootvaults/plants",
+      "explorationremix:frozen_rootvaults/frostberries"
     ],
     [
       "minecraft:freeze_top_layer",

@@ -1,0 +1,6 @@
+{
+  "type": "forge:remove_features",
+  "biomes": "#immersive_weathering:icy",
+  "features": "immersive_weathering:frost_patch",
+  "steps": "top_layer_modification"
+}
