@@ -120,6 +120,11 @@ regenerated.
 | `/remix entrances [cells]` | the Upper Caves' entrances in the 64-block cells round you: how many cells of each cover got one and why the others did not, and the nearest of each kind; works from the server console with `execute positioned` |
 | `/remix slice [x\|z] [half width]` | a picture of the blocks under you, in `remix_slices/` |
 | `/remix census [radius]` | how overgrown and lit the caves around you are, per biome |
+| `/remix lava` | the Basalt Galleries' lava cycle: its phase, the time left in it, the lava's height, how many chunks round the players are still catching up, and what the flood costs per tick |
+| `/remix lava set <phase> [seconds]` | jumps the cycle to that far into `calm`, `warning`, `rise`, `full` or `drain` |
+| `/remix lava level <0-40>` | jumps the lava to that height over its table and holds the cycle there |
+| `/remix lava freeze`, `/remix lava unfreeze` | holds the cycle where it is, or lets it run on |
+| `/remix lava length <minutes>` | the cycle's length from now on, keeping its place in the phase (0: back to the config's) |
 | `/remix deadends [radius]` | the blind cave ends left above the old floor in the loaded chunks round you, what lies round them, how many generation joined and why the rest were not, any lava in the caves there, and how many of the surface biome's ore placements generation let into the plant caves' and entrances' rock |
 
 ## Building
@@ -128,6 +133,7 @@ regenerated.
 ./gradlew build                 # jar in build/libs, runs the terrain tests
 python3 tools/gen_data.py       # regenerates every datapack JSON, model, texture and lang file from tools/*.py
 python3 tools/synth_sounds.py   # regenerates the ambient sound recordings
+python3 tools/synth_lava_sounds.py  # regenerates the lava cycle's rumbles and surge
 ```
 
 `src/preview` holds an offline preview (`TerrainPreview`) that draws each deep layer's network, sections through its

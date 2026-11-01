@@ -11,6 +11,9 @@ import com.explorationremix.registry.ERRemaps;
 import com.explorationremix.registry.ERSounds;
 import com.explorationremix.registry.ERWorldgen;
 import com.explorationremix.world.gen.DeepWorldInstaller;
+import com.explorationremix.world.lava.LavaChunk;
+import com.explorationremix.world.lava.LavaFlood;
+import com.explorationremix.world.lava.LavaNet;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -46,6 +49,10 @@ public final class ExplorationRemix {
         MinecraftForge.EVENT_BUS.register(DeepWorldInstaller.class);
         MinecraftForge.EVENT_BUS.register(RemixCommands.class);
         MinecraftForge.EVENT_BUS.register(ERRemaps.class);
+        // The Basalt Galleries' lava cycle: its per-chunk record, the server side and the channel to the clients.
+        modBus.addListener(LavaChunk::register);
+        MinecraftForge.EVENT_BUS.register(LavaFlood.class);
+        LavaNet.register();
         if (DevAutoRun.enabled()) MinecraftForge.EVENT_BUS.register(DevAutoRun.class);
     }
 }

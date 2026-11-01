@@ -53,12 +53,23 @@ SUBTITLES = {
 }
 
 
+# The Basalt Galleries' lava cycle, played by each client (LavaWarnings.java), not by a biome: the rumbles that warn of
+# a rise (synth_lava_sounds.py makes them) and the rise's continuous surge.
+LAVA_EVENTS = {
+    "lava.rumble": [own(f"lava_rumble{i}", 1.0) for i in range(1, 4)],
+    "lava.surge": [own("lava_surge", 1.0, stream=True)],
+}
+
+LAVA_SUBTITLES = {"lava.rumble": "The deep rock rumbles", "lava.surge": "Lava surges up"}
+
+
 def write_all(assets_dir, write):
     out = {}
     lang = {}
-    for ev, sounds in EVENTS.items():
+    subtitles = {**SUBTITLES, **LAVA_SUBTITLES}
+    for ev, sounds in {**EVENTS, **LAVA_EVENTS}.items():
         sub = f"subtitles.{MOD}.{ev}"
         out[ev] = {"sounds": sounds, "subtitle": sub}
-        lang[sub] = SUBTITLES[ev]
+        lang[sub] = subtitles[ev]
     write(os.path.join(assets_dir, "sounds.json"), out)
     return lang

@@ -32,6 +32,10 @@ public final class ERConfig {
     public final ForgeConfigSpec.BooleanValue removeCreateStriations;
     public final ForgeConfigSpec.BooleanValue upperRegions;
     public final LayerConfig[] layers = new LayerConfig[4];
+    // The Basalt Galleries' lava cycle (world.lava.LavaFlood), read while the server runs.
+    public final ForgeConfigSpec.BooleanValue lavaCycleEnabled;
+    public final ForgeConfigSpec.DoubleValue lavaCycleMinutes, lavaCalm, lavaWarning, lavaRise, lavaFull, lavaDrain;
+    public final ForgeConfigSpec.IntValue lavaChecksPerTick, lavaChangesPerTick, lavaRadius;
 
     public static final class LayerConfig {
         public final String id;
@@ -93,6 +97,25 @@ public final class ERConfig {
         layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width", false, 512);
         layers[2] = new LayerConfig(b, d.layers().get(2), "cave height", "cave width", false, 512);
         layers[3] = new LayerConfig(b, d.layers().get(3), "hall height", "hall width", false, 256);
+        b.pop();
+
+        b.comment("The Basalt Galleries' lava cycle: one lava sea that rises 40 blocks over the layer's lava table and falls again on the",
+                "layer's own clock, the same for every player, with warning signs before it rises. Read while the server runs.").push("lavaCycle");
+        lavaCycleEnabled = b.comment("Run the cycle. Turned off, the lava goes back down to its table round the players in the Galleries and stays there.")
+                .define("enabled", true);
+        lavaCycleMinutes = b.comment("Length of one cycle in minutes of game time. A change takes effect when the next cycle begins.")
+                .defineInRange("cycleMinutes", 20.0, 1.0, 240.0);
+        lavaCalm = b.comment("How the cycle is shared out between its phases, in proportion (the defaults are minutes of the 20-minute cycle):",
+                "calm, with the lava at its table.").defineInRange("calm", 13.5, 0.0, 1000.0);
+        lavaWarning = b.comment("Warning: rumbles, shaking and smoke, the lava still at its table.").defineInRange("warning", 1.5, 0.0, 1000.0);
+        lavaRise = b.comment("Rise: the lava climbs 40 blocks at an even pace.").defineInRange("rise", 2.0, 0.0, 1000.0);
+        lavaFull = b.comment("Full: the lava stays at its height.").defineInRange("full", 1.0, 0.0, 1000.0);
+        lavaDrain = b.comment("Drain: the lava goes back down to its table at an even pace.").defineInRange("drain", 2.0, 0.0, 1000.0);
+        lavaChecksPerTick = b.comment("Most blocks the lava looks at in one tick, over all players.").defineInRange("checksPerTick", 16384, 256, 1_000_000);
+        lavaChangesPerTick = b.comment("Most blocks the lava changes in one tick, over all players (each one is re-lit and sent to the players",
+                "watching it). Both are halved while the server is falling behind.").defineInRange("changesPerTick", 1500, 16, 100_000);
+        lavaRadius = b.comment("The lava is kept up to date in the chunks this far round every player in or near the Galleries; other chunks catch",
+                "up when a player comes near. 0: the server's view distance.").defineInRange("playerRadius", 0, 0, 64);
         b.pop();
     }
 
