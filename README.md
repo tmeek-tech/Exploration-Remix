@@ -5,7 +5,7 @@ the pack's own caves, sealed from each other by unbreakable bands with natural g
 and Create stone and dressed to match a set of reference pictures. Made for a pack with Tectonic, Terrain Slabs,
 Immersive Weathering, Create and Better Combat.
 
-**Status: milestone 1 (0.4.1: the cold caves reworked), world generation and cave looks.** The first build's creatures, runs, runes and
+**Status: milestone 1 (0.4.2: fluffier silver ferns that also hang on walls), world generation and cave looks.** The first build's creatures, runs, runes and
 combat changes were removed (git history keeps them); they return in later milestones, built on these caves.
 
 ## Requirements
@@ -98,7 +98,8 @@ regenerated.
     between y -64 and about y 0, never under an ocean or river. Strongholds and mineshafts stay above y -56 so the End
     stays reachable.
 * **Looks:** new plants and crystals (white glow flowers, lantern fungi and roots, giant lantern fungi with glowing
-  caps, wisteria, lantern pods, lavender flowers and glowing gold flowers, silver ferns, orange shelf fungi, lavender
+  caps, wisteria, lantern pods, lavender flowers and glowing gold flowers, silver ferns (placed on the side of a block
+  they hang down it, as in the Silver Fern Rift), orange shelf fungi, lavender
   coral, pale coral fans, ember vines, asurine crystals, blue glow mushrooms and vines), glow berries thick in the
   upper caves, lantern weed on the lake beds, lava pools and falls in the Basalt Galleries, each biome's own fog, water
   colour, particles and ambient sound, steam over hot pools, embers over lava, and pollen in daylight shafts. Tuned

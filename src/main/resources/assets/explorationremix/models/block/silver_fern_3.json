@@ -1,7 +1,9 @@
 {
-  "parent": "minecraft:block/cross",
+  "parent": "explorationremix:block/template/fern",
   "render_type": "minecraft:cutout",
   "textures": {
-    "cross": "explorationremix:block/silver_fern_3"
+    "fern": "explorationremix:block/silver_fern_3",
+    "fan_a": "explorationremix:block/silver_fern_fan_3",
+    "fan_b": "explorationremix:block/silver_fern_fan"
   }
 }

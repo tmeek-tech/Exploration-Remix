@@ -10,6 +10,7 @@ import com.explorationremix.block.PoolPlantBlock;
 import com.explorationremix.block.ShelfFungusBlock;
 import com.explorationremix.block.SubmergedPlantBlock;
 import com.explorationremix.block.TallCavePlantBlock;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
@@ -17,6 +18,7 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.DoubleHighBlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.StandingAndWallBlockItem;
 import net.minecraft.world.level.block.AmethystClusterBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.CarpetBlock;
@@ -84,9 +86,12 @@ public final class ERBlocks {
             () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_BLUE, SoundType.CAVE_VINES, 6), ERBlocks.BLUE_GLOW_VINES_REF));
 
     // ------------------------------------------------------------------------------------------- Silver Fern Rift
-    public static final RegistryObject<Block> SILVER_FERN = block("silver_fern",
+    public static final RegistryObject<Block> SILVER_FERN = BLOCKS.register("silver_fern",
             () -> new CavePlantBlock(plant(MapColor.METAL, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XYZ),
                     Block.box(2, 0, 2, 14, 13, 14)));
+    /** Stands the fern on a floor, or hangs it on the side of a block (the silver wall fern), as a torch goes on a wall. */
+    public static final RegistryObject<Item> SILVER_FERN_ITEM = ITEMS.register("silver_fern", () -> new StandingAndWallBlockItem(
+            SILVER_FERN.get(), ERBlocks.SILVER_WALL_FERN.get(), new Item.Properties(), Direction.DOWN));
 
     // ------------------------------------------------------------------------------------------- Ember Gardens
     public static final RegistryObject<Block> ORANGE_SHELF_FUNGUS = block("orange_shelf_fungus", () -> new ShelfFungusBlock(
@@ -125,9 +130,13 @@ public final class ERBlocks {
     public static final RegistryObject<Block> TALL_SILVER_FERN = tallBlock("tall_silver_fern",
             () -> new TallCavePlantBlock(plant(MapColor.METAL, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XZ),
                     Block.box(2, 0, 2, 14, 16, 14), Block.box(2, 0, 2, 14, 14, 14)));
-    /** Fronds growing sideways out of cracks in the walls, drawn like vanilla's coral wall fans. */
-    public static final RegistryObject<Block> SILVER_WALL_FERN = block("silver_wall_fern",
-            () -> new ShelfFungusBlock(plant(MapColor.METAL, SoundType.GRASS, 0), Block.box(0, 4, 5, 16, 12, 16)));
+    /**
+     * A silver fern hanging down the side of a block, its fronds falling a block and a half from near the top, into the
+     * block below (the outline stays in its own block). No item of its own: it is the silver fern's, placed on a wall,
+     * and drops it.
+     */
+    public static final RegistryObject<Block> SILVER_WALL_FERN = BLOCKS.register("silver_wall_fern",
+            () -> new ShelfFungusBlock(plant(MapColor.METAL, SoundType.GRASS, 0), Block.box(1, 0, 8, 15, 14, 16)));
 
     // ------------------------------------------------------------------------------------------- Ivory Root Cavern
     /** A pale bracket with glowing gold gills underneath; firm enough to stand on, like the orange shelf fungus. */

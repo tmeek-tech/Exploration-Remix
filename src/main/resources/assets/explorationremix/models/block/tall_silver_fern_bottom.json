@@ -1,7 +1,9 @@
 {
-  "parent": "minecraft:block/cross",
+  "parent": "explorationremix:block/template/tall_fern_lower",
   "render_type": "minecraft:cutout",
   "textures": {
-    "cross": "explorationremix:block/tall_silver_fern_bottom"
+    "fern": "explorationremix:block/tall_silver_fern_bottom",
+    "fan": "explorationremix:block/tall_silver_fern_fan_bottom",
+    "skirt": "explorationremix:block/silver_fern_fan"
   }
 }

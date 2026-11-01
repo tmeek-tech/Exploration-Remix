@@ -21,7 +21,7 @@ import java.util.Map;
 /**
  * Bracket fungus growing out of a wall. {@code facing} points away from the wall it grows on. The shelves are firm
  * enough to stand on, so a wall of them is a way up. With an outline of its own it is anything else that grows out of
- * a wall, like the silver wall ferns.
+ * a wall, like the hanging silver ferns.
  */
 public class ShelfFungusBlock extends HorizontalDirectionalBlock {
     private static final Map<Direction, VoxelShape> SHAPES = new EnumMap<>(Direction.class);

@@ -34,12 +34,20 @@ SHEET = [
                                ("gold_threads", "Gold threads, tip", 9), ("gold_threads_2", "Gold threads, tip 2", 9),
                                ("sage_bush", "Sage bush", 0), ("sage_bush_2", "Sage bush 2", 0)]),
         ("Silver Fern Rift", [("silver_fern", "Silver fern", 0), ("silver_fern_2", "Silver fern 2", 0), ("silver_fern_3", "Silver fern 3", 0),
+                              ("silver_fern_fan", "Silver fern, fan", 0), ("silver_fern_fan_2", "Silver fern, fan 2", 0),
+                              ("silver_fern_fan_3", "Silver fern, fan 3", 0),
                               ("silver_frond_plant", "Silver frond", 0), ("silver_frond_plant_2", "Silver frond 2", 0),
                               ("silver_frond", "Silver frond, tip", 0), ("silver_frond_2", "Silver frond, tip 2", 0),
                               ("tall_silver_fern_top", "Tall silver fern, top", 0), ("tall_silver_fern_bottom", "Tall silver fern, bottom", 0),
                               ("tall_silver_fern_top_2", "Tall silver fern, top 2", 0),
                               ("tall_silver_fern_bottom_2", "Tall silver fern, bottom 2", 0),
-                              ("silver_wall_fern", "Silver wall fern", 0), ("silver_wall_fern_2", "Silver wall fern 2", 0)]),
+                              ("tall_silver_fern_fan_top", "Tall silver fern, fan top", 0),
+                              ("tall_silver_fern_fan_bottom", "Tall silver fern, fan bottom", 0),
+                              ("silver_wall_fern", "Hanging silver fern", 0), ("silver_wall_fern_2", "Hanging silver fern 2", 0),
+                              ("silver_wall_fern_front", "Hanging silver fern, front", 0),
+                              ("silver_wall_fern_front_2", "Hanging silver fern, front 2", 0),
+                              ("silver_wall_fern_side", "Hanging silver fern, side", 0),
+                              ("silver_wall_fern_side_2", "Hanging silver fern, side 2", 0)]),
     ]),
     ("Deep Gardens", [
         ("Lantern Lake", [("wisteria_plant", "Wisteria", 0), ("wisteria_plant_2", "Wisteria 2", 0), ("wisteria_plant_3", "Wisteria 3", 0),
@@ -114,6 +122,12 @@ def dark_view(name):
     return img
 
 
+def fit(img, tile):
+    """Scaled up to fill the tile, keeping its shape (the hanging fern's 16 x 32 textures stand at half width)."""
+    k = tile // max(img.size)
+    return img.resize((img.size[0] * k, img.size[1] * k), Image.NEAREST)
+
+
 def variant(base, k):
     return base if k == 1 else f"{base}_{k}"
 
@@ -137,7 +151,7 @@ def main(out_path, only=None):
             h += 30 + ((len(items) + cols - 1) // cols) * (tile + 56)
     img = Image.new("RGB", (width, h + pad), (29, 29, 33))
     d = ImageDraw.Draw(img)
-    d.text((pad, pad), "Exploration Remix: plants and crystals (16 by 16, shown 8x; glowing ones also in the dark)", font=f_layer,
+    d.text((pad, pad), "Exploration Remix: plants and crystals (16 by 16, some 16 by 32, shown 8x; glowing ones also in the dark)", font=f_layer,
            fill=(240, 240, 240))
     y = pad + 50
     for layer, biomes in sheet:
@@ -150,13 +164,13 @@ def main(out_path, only=None):
                 x = pad + (i % cols) * col_w
                 yy = y + (i // cols) * (tile + 56)
                 d.rectangle([x - 2, yy - 2, x + tile + 1, yy + tile + 1], fill=(52, 52, 58))
-                t = paint(tex).resize((tile, tile), Image.NEAREST)
-                img.paste(t, (x, yy), t)
+                t = fit(paint(tex), tile)
+                img.paste(t, (x + (tile - t.size[0]) // 2, yy), t)
                 if "block/" + tex in textures.GLOW:
                     xd = x + tile + 8
                     d.rectangle([xd - 2, yy - 2, xd + tile + 1, yy + tile + 1], fill=(8, 8, 10))
-                    t = dark_view(tex).resize((tile, tile), Image.NEAREST)
-                    img.paste(t, (xd, yy), t)
+                    t = fit(dark_view(tex), tile)
+                    img.paste(t, (xd + (tile - t.size[0]) // 2, yy), t)
                 d.text((x, yy + tile + 6), label, font=f_name, fill=(235, 235, 235))
                 d.text((x, yy + tile + 26), f"light {light}" if light else "no light", font=f_light,
                        fill=(247, 196, 98) if light else (150, 150, 160))
