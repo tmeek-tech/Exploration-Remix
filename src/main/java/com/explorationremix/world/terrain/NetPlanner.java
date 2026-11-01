@@ -317,7 +317,7 @@ final class NetPlanner {
             c.rx = r(9471, 18, 24); c.rz = r(9472, 14, 20); c.setRot(a); c.warp = 0.12;
             double d = c.rx + 15;
             c.x = L.x + Math.cos(a) * d; c.z = L.z + Math.sin(a) * d;
-            c.f0 = Math.max(W - 5, B + Terrain.SEAL + 1);
+            c.f0 = lakeBed();
             c.rise = Math.max(0, W - LAVA_RIM - c.f0);
             c.h = W + r(9473, 14, 20) - c.f0;
             c.pend = 3; c.set = true; c.required = false;
@@ -1880,8 +1880,8 @@ final class NetPlanner {
                 if (c.x < x0 + m || c.x > x0 + cell - m || c.z < z0 + m || c.z > z0 + cell - m) return false;
             }
             // a set piece, and a flight court (its floor kept block by block, the bedrock landing's beside it), may stand
-            // on the seal's last block over the bedrock: with the Basalt Galleries' lava under the default 10 deep
-            // (config), the flights' floor at W + 2 is no higher than that
+            // on the block over the seal: with the Basalt Galleries' lava under the default 10 deep (config), the
+            // flights' floor at W + 2 is no higher than that
             if (c.yLo() < B + Terrain.SEAL + (c.set || c.flight ? 1 : 4) && !c.landing()) return false;
             if (c.yHi() > T - Terrain.SEAL - 6 && !c.landing()) return false;
             if (n.dark != null && c.dark < 0 && n.dark.hit(c.x, c.z, c.R() + sp.gapH, c.yLo() - sp.gapV, c.yHi() + sp.gapV, -1, -1)) return false;
@@ -4658,10 +4658,11 @@ final class NetPlanner {
         double hallScale() { return Math.min(1, cell / 600.0); }
 
         /**
-         * The bed of a hall's lava: 5 under the lava's table, or as deep as the seal over the bedrock leaves, whichever
-         * is higher, as the lava basin's. With lava less than the default 10 deep (config), W - 5 lies in that seal and
-         * no hall would fit ({@link #fits}): no column hall, Caldera, Causeway or rift, and so no tube hub, as the
-         * tubes stand by a hall.
+         * The bed of a hall's lava and of the bedrock landing's basin: 5 under the lava's table, or as deep as the seal
+         * over the bedrock leaves, whichever is higher. With lava less than the default 10 deep (config), W - 5 lies in
+         * that seal: no hall would fit ({@link #fits}), so no column hall, Caldera, Causeway or rift and no tube hub (the
+         * tubes stand by a hall). A hall's lava stands as high over the bed as it does at the default depth ({@link
+         * Network#HALL_LAVA}).
          */
         double lakeBed() { return Math.max(W - 5, B + Terrain.SEAL + 1); }
 

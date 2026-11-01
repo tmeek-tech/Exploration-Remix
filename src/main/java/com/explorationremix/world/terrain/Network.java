@@ -2366,6 +2366,7 @@ public final class Network {
         if (y >= shape.waterY(li)) {
             for (int k = 0; k < lc.nc; k++) {
                 Chamber c = lc.c[k];
+                if (c.hall() && y < c.base + HALL_LAVA && lc.e[k] < 1.1) return Terrain.LAVA;
                 if (!pool(c)) continue;
                 if (y < c.lakeY && lc.e[k] < c.lakeE + 0.1 && y >= lc.F[k] - 2) return Terrain.WATER;
             }
@@ -2378,6 +2379,14 @@ public final class Network {
         }
         return shape.lava(li) ? Terrain.LAVA : Terrain.WATER;
     }
+
+    /**
+     * How high a hall's lava stands over its bed (blocks): to the lava's table at the default depth of 10, and as high
+     * where the Basalt Galleries' lava is shallower (config). There the bed cannot go deeper (the seal over the bedrock
+     * is under it), and the table would leave the lake a block or two deep, dry in patches where the rough bed stands
+     * up, a floor 40 or 50 under the ledges.
+     */
+    static final double HALL_LAVA = 5;
 
     /** The biome at a block of layer li: the nearest chamber's or way's, a refuge first, then the deep dark and the rift. */
     DeepBiome biomeAt(int li, int x, int y, int z) {

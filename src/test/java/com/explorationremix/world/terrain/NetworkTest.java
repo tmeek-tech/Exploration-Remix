@@ -1151,24 +1151,30 @@ class NetworkTest {
             fails.add(tag + ": " + halls + " column halls" + (caldera ? "" : ", no Caldera") + (causeway ? "" : ", no Causeway") + (rift ? "" : ", no rift"));
     }
 
+    /** The default settings with the Basalt Galleries' lava {@code depth} deep (config: 6 to 64). */
+    static TerrainSettings galleriesLava(int depth) {
+        TerrainSettings ts = TerrainSettings.defaults();
+        List<LayerSettings> ls = new ArrayList<>();
+        for (LayerSettings l : ts.layers()) ls.add(!l.id().equals("basalt_galleries") ? l
+                : new LayerSettings(l.id(), l.height(), depth, l.lava(), l.heightMin(), l.heightMax(), l.widthMin(), l.widthMax()));
+        return new TerrainSettings(ts.bandThickness(), ts.gateSpacing(), ts.passageRadius(), ts.landingRadius(), List.copyOf(ls));
+    }
+
     /**
      * The network follows the config (section 2.6): graph tests 1, 2, 6 and 9 with 480 and 720 block cells, with
-     * every layer 128 tall, and with the Basalt Galleries' lava 6 deep (their halls and tube hubs still there).
+     * every layer 128 tall, and with the Basalt Galleries' lava 6 deep, the least the config allows (their halls and
+     * tube hubs still there).
      */
     @Test
     void configVariants() {
         List<LayerSettings> d = TerrainSettings.defaults().layers();
         List<LayerSettings> short128 = new ArrayList<>();
         for (LayerSettings l : d) short128.add(new LayerSettings(l.id(), 128, l.fluidDepth(), l.lava(), l.heightMin(), l.heightMax(), l.widthMin(), l.widthMax()));
-        // the Galleries' lava 6 deep, the least the config allows (the halls' lava beds stay over the bedrock's seal)
-        List<LayerSettings> shallow = new ArrayList<>();
-        for (LayerSettings l : d) shallow.add(!l.id().equals("basalt_galleries") ? l
-                : new LayerSettings(l.id(), l.height(), 6, l.lava(), l.heightMin(), l.heightMax(), l.widthMin(), l.widthMax()));
         TerrainSettings[] variants = {
                 new TerrainSettings(16, 480, 4.5, 14.0, d),
                 new TerrainSettings(16, 720, 4.5, 14.0, d),
                 new TerrainSettings(16, 600, 4.5, 14.0, List.copyOf(short128)),
-                new TerrainSettings(16, 600, 4.5, 14.0, List.copyOf(shallow))};
+                galleriesLava(6)};
         String[] names = {"480 block cells", "720 block cells", "layers 128 tall", "Galleries lava 6 deep"};
         List<String> fails = new ArrayList<>();
         for (int v = 0; v < variants.length; v++) {
@@ -1661,7 +1667,8 @@ class NetworkTest {
      * than 15 lower; a staged climb ends a fall on the floor of the stage it fell down. Falls into water or onto vines
      * are safe. Falls in the rift, the deep dark, the helices and the ancient city are reported, not failed: 0.2.0's
      * cliffs and the high ledges are meant to be dangerous. The Basalt Galleries are checked in the {@link
-     * #GALLERIES_FALL_CELLS} too.
+     * #GALLERIES_FALL_CELLS} too, and in their first voxel cell with their lava 6 deep (config), where a hall's lava
+     * stands over its bed as at the default depth.
      */
     @Test
     @Tag("voxel")
@@ -1671,13 +1678,14 @@ class NetworkTest {
         for (int s = 0; s < VOX_SEEDS.length; s++) for (int li : new int[]{Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES}) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
         // more Basalt Galleries cells, built one at a time and not kept
         for (long[] c : GALLERIES_FALL_CELLS) runs.add(new Object[]{c[0], Terrain.GALLERIES, (int) c[1], (int) c[2], -1});
+        runs.add(new Object[]{VOX_SEEDS[0], Terrain.GALLERIES, VOX_CELLS[0][0], VOX_CELLS[0][1], -1, new Terrain(galleriesLava(6), -64, VOX_SEEDS[0])});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
         for (Object[] run : runs) {
             long seed = (Long) run[0];
             int li = (Integer) run[1], cx = (Integer) run[2], cz = (Integer) run[3], wc = (Integer) run[4];
-            Terrain t = terrain(seed);
+            Terrain t = run.length > 5 ? (Terrain) run[5] : terrain(seed);
             VoxelHarness v = wc < 0 ? unbuilt(t, li, cx, cz) : built(seed, li, cx, cz, wc, wc);
-            String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "");
+            String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "") + (run.length > 5 ? " (lava 6 deep)" : "");
             java.util.Map<String, Integer> told = new java.util.TreeMap<>();
             int lethal = 0, deepest = 0;
             for (int[] f : v.drops(16)) {
