@@ -135,8 +135,11 @@ BLOCKS = {
     # the chain gives none, and its embers only glint (an overlay kept out of glowing_blocks.json).
     "ember_crust": ("Ember Crust", "cube"),
     "cinder_chain": ("Cinder Chain", "cross", {"shader_glow": False}),
+    # The Galleries' lava glow: invisible light in the air along the halls' rock (HallGlowFeature). Nothing is drawn and
+    # there is no item.
+    "glow": ("Lava Glow", "invisible"),
 }
-NO_DROP = {"band_stone"}
+NO_DROP = {"band_stone", "glow"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, and the
 # lifeless blocks of the Galleries.
 NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain"}
@@ -344,6 +347,10 @@ def block_assets():
             for t in texs:
                 models[t] = {"parent": "minecraft:block/coral_fan", "render_type": "minecraft:cutout", "textures": {"fan": ref(t)}}
             states = {"variants": {"": pick([{"model": ref(t)} for t in texs], weights)}}
+        elif kind == "invisible":
+            # Drawn as nothing (RenderShape.INVISIBLE): vanilla's empty air model stands in for every state.
+            states = {"variants": {"": {"model": "minecraft:block/air"}}}
+            item = None
         elif kind == "shelf":
             for t in texs:
                 models[t] = shelf_model(ref(t), ref(bid + "_under"), opts.get("glow_under", False))

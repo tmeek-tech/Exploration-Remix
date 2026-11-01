@@ -10,25 +10,30 @@ package com.explorationremix.world.lava;
  * the band is ever touched.
  *
  * <ul>
- *     <li><b>Rising</b>, the lava takes every block of the slice that is air, fire, or flowing lava (a fall or a
- *     spill, which the sea swallows), putting a lava source there, and records it in the chunk's {@link Mask}.
+ *     <li><b>Rising</b>, the lava takes every block of the slice that is air, fire, flowing lava (a fall or a
+ *     spill, which the sea swallows) or the halls' invisible glow, putting a lava source there, and records it in the
+ *     chunk's {@link Mask}; a glow it takes is also marked in a second mask, so the drain can put it back.
  *     Everything else stays as it is: rock, water, natural lava sources (pools, which join the sea while it covers
  *     them), and anything else that is not air, so the terrain's own decoration and players' torches, rungs and signs
  *     come through a flood (the lava closes round them, as vanilla lava does round a ladder). Every open block under
  *     the lava's height is filled, connected to the sea or not: lava seeps through the rock into sealed pockets.</li>
- *     <li><b>Draining</b>, the lava leaves only the blocks it recorded that still hold lava; natural lava, players'
- *     lava, and whatever a player put in its place stay. Then the lava next to each block it left is woken (a fluid
- *     tick) so lava falls whose foot the sea swallowed flow down again.</li>
+ *     <li><b>Draining</b>, the lava leaves only the blocks it recorded that still hold lava, putting back air, or the
+ *     glow where it took one; natural lava, players' lava, and whatever a player put in its place stay. Then the lava
+ *     next to each block it left is woken (a fluid tick) so lava falls whose foot the sea swallowed flow down
+ *     again.</li>
  * </ul>
  */
 public final class Flood {
     private Flood() {}
 
-    /** What the flood sees in a block: something it leaves alone, air, fire, a lava source, flowing lava. */
-    public static final int OTHER = 0, AIR = 1, FIRE = 2, LAVA = 3, FLOWING = 4;
+    /**
+     * What the flood sees in a block: something it leaves alone, air, fire, a lava source, flowing lava, or the
+     * Galleries' invisible glow (explorationremix:glow).
+     */
+    public static final int OTHER = 0, AIR = 1, FIRE = 2, LAVA = 3, FLOWING = 4, GLOW = 5;
 
     /** Rising: true when the lava takes a block of this kind (a lava source goes there). */
-    public static boolean takes(int kind) { return kind == AIR || kind == FIRE || kind == FLOWING; }
+    public static boolean takes(int kind) { return kind == AIR || kind == FIRE || kind == FLOWING || kind == GLOW; }
 
     /** Draining: true when the lava leaves a block of this kind that it put there (it becomes air). */
     public static boolean leaves(int kind) { return kind == LAVA || kind == FLOWING; }
@@ -45,12 +50,17 @@ public final class Flood {
 
     /** One slice of one chunk, as the flood sees and changes it; x and z are 0 to 15 within the chunk. */
     public interface Slice {
-        /** The kind of block at (x, z): one of {@link #OTHER}, {@link #AIR}, {@link #FIRE}, {@link #LAVA}, {@link #FLOWING}. */
+        /**
+         * The kind of block at (x, z): one of {@link #OTHER}, {@link #AIR}, {@link #FIRE}, {@link #LAVA}, {@link #FLOWING},
+         * {@link #GLOW}.
+         */
         int kind(int x, int z);
         /** Puts a lava source at (x, z). */
         void fill(int x, int z);
         /** Puts air at (x, z). */
         void clear(int x, int z);
+        /** Puts the halls' glow back at (x, z), where the lava took one; air when the slice has no glow to give. */
+        default void glow(int x, int z) { clear(x, z); }
         /**
          * After a drain: wakes the lava next to (x, z), above it, below it (unless that is the sea's own) and on its four
          * sides, so falls flow again and lava the sea fed downward drains away.
@@ -58,38 +68,50 @@ public final class Flood {
         void wake(int x, int z);
     }
 
+    /** {@link #rise(Slice, Mask, Mask, int)} with no glow to keep. */
+    public static int rise(Slice s, Mask m, int i) { return rise(s, m, null, i); }
+
     /**
-     * Floods slice i of a chunk: every block the lava takes gets a lava source and its bit in the mask. Returns how
-     * many blocks changed.
+     * Floods slice i of a chunk: every block the lava takes gets a lava source and its bit in the mask, and a glow it
+     * takes its bit in {@code glow} too (when given). Returns how many blocks changed.
      */
-    public static int rise(Slice s, Mask m, int i) {
+    public static int rise(Slice s, Mask m, Mask glow, int i) {
         int n = 0;
         for (int z = 0; z < 16; z++) {
             for (int x = 0; x < 16; x++) {
-                if (!takes(s.kind(x, z))) continue;
+                int k = s.kind(x, z);
+                if (!takes(k)) continue;
                 s.fill(x, z);
                 m.set(i, x, z);
+                if (k == GLOW && glow != null) glow.set(i, x, z);
                 n++;
             }
         }
         return n;
     }
 
+    /** {@link #drain(Slice, Mask, Mask, int)} with no glow to put back. */
+    public static int drain(Slice s, Mask m, int i) { return drain(s, m, null, i); }
+
     /**
-     * Drains slice i of a chunk: every block whose bit is set loses its bit, and if it still holds lava becomes air;
-     * then the lava round each block that became air is woken. Returns how many blocks changed.
+     * Drains slice i of a chunk: every block whose bit is set loses its bit (in {@code glow} too), and if it still holds
+     * lava becomes air, or the glow again where the lava took one; then the lava round each block it left is woken.
+     * Returns how many blocks changed.
      */
-    public static int drain(Slice s, Mask m, int i) {
+    public static int drain(Slice s, Mask m, Mask glow, int i) {
         if (!m.any(i)) return 0;
-        // the blocks that became air, one bit each as in the mask (z << 4 | x)
+        // the blocks the lava left, one bit each as in the mask (z << 4 | x)
         long[] cleared = new long[4];
         int n = 0;
         for (int z = 0; z < 16; z++) {
             for (int x = 0; x < 16; x++) {
                 if (!m.get(i, x, z)) continue;
                 m.unset(i, x, z);
+                boolean lit = glow != null && glow.get(i, x, z);
+                if (lit) glow.unset(i, x, z);
                 if (!leaves(s.kind(x, z))) continue;
-                s.clear(x, z);
+                if (lit) s.glow(x, z);
+                else s.clear(x, z);
                 int b = z << 4 | x;
                 cleared[b >>> 6] |= 1L << (b & 63);
                 n++;

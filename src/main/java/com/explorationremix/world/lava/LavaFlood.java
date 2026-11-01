@@ -1,8 +1,10 @@
 package com.explorationremix.world.lava;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.block.GlowBlock;
 import com.explorationremix.config.ERConfig;
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.feature.HallGlowFeature;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -313,7 +315,7 @@ public final class LavaFlood {
             int changed;
             if (up) {
                 if (sec.maybeHas(TAKEN)) {
-                    changed = Flood.rise(SLICE, d.mask, i);
+                    changed = Flood.rise(SLICE, d.mask, d.glow, i);
                     w.checks += 256;
                 } else {
                     changed = 0;
@@ -322,7 +324,7 @@ public final class LavaFlood {
                 d.level++;
             } else {
                 w.checks += Math.max(1, d.mask.count(i));
-                changed = Flood.drain(SLICE, d.mask, i);
+                changed = Flood.drain(SLICE, d.mask, d.glow, i);
                 d.level--;
             }
             SLICE.end();
@@ -334,6 +336,7 @@ public final class LavaFlood {
     /** What the flood sees in a block state. */
     static int kindOf(BlockState s) {
         if (s.isAir()) return Flood.AIR;
+        if (s.getBlock() instanceof GlowBlock) return Flood.GLOW;
         if (s.getBlock() instanceof LiquidBlock) {
             Fluid f = s.getFluidState().getType();
             if (f == Fluids.LAVA) return Flood.LAVA;
@@ -396,6 +399,9 @@ public final class LavaFlood {
 
         @Override
         public void clear(int x, int z) { put(x, z, AIR); }
+
+        @Override
+        public void glow(int x, int z) { put(x, z, HallGlowFeature.bandGlow()); }
 
         private void put(int x, int z, BlockState s) {
             sec.setBlockState(x, ly, z, s);

@@ -23,9 +23,10 @@ import javax.annotation.Nullable;
  * data, so after a crash or an unload the record can never disagree with the blocks: a chunk is never left with a dry
  * gap under the lava, or with lava the cycle will not take away.
  *
- * <p>Saved as {@code {v, base, level, mask}}: the format version, the lava table's Y it was written against (a changed
- * config moves the table; the record is moved with it), the height, and the bits (left out when empty). The next build
- * keeps its change log for the terrain reset here too, under new keys.
+ * <p>Saved as {@code {v, base, level, mask, glow}}: the format version, the lava table's Y it was written against (a
+ * changed config moves the table; the record is moved with it), the height, the bits, and the bits of the blocks among
+ * them that held the halls' invisible glow before the lava took them (both left out when empty; a record saved before
+ * there was a glow mask has none). The next build keeps its change log for the terrain reset here too, under new keys.
  */
 public final class LavaChunk {
     public static final Capability<LavaChunk> CAP = CapabilityManager.get(new CapabilityToken<>() {});
@@ -39,8 +40,13 @@ public final class LavaChunk {
     /** The lava table's Y this record was written against, or {@link #NO_BASE}. */
     int base = NO_BASE;
     final Flood.Mask mask;
+    /** Which of the blocks in {@link #mask} held the glow when the lava took them: the drain puts the glow back there. */
+    final Flood.Mask glow;
 
-    LavaChunk(int rise) { this.mask = new Flood.Mask(rise); }
+    LavaChunk(int rise) {
+        this.mask = new Flood.Mask(rise);
+        this.glow = new Flood.Mask(rise);
+    }
 
     /** The record of a chunk, or null for chunks that have none (other dimensions, the client). */
     @Nullable
@@ -57,6 +63,7 @@ public final class LavaChunk {
         if (base != NO_BASE) {
             int by = base - tableY;
             mask.shift(by);
+            glow.shift(by);
             level = Math.max(0, Math.min(mask.slices(), level + by));
         }
         base = tableY;
@@ -70,6 +77,8 @@ public final class LavaChunk {
         t.putInt("level", level);
         long[] bits = mask.toArray();
         if (bits != null) t.putLongArray("mask", bits);
+        long[] lit = glow.toArray();
+        if (lit != null) t.putLongArray("glow", lit);
         return t;
     }
 
@@ -77,6 +86,7 @@ public final class LavaChunk {
         level = Math.max(0, Math.min(mask.slices(), t.getInt("level")));
         base = t.contains("base", Tag.TAG_INT) ? t.getInt("base") : NO_BASE;
         mask.fromArray(t.contains("mask", Tag.TAG_LONG_ARRAY) ? t.getLongArray("mask") : null);
+        glow.fromArray(t.contains("glow", Tag.TAG_LONG_ARRAY) ? t.getLongArray("glow") : null);
     }
 
     // ============================================================================================== registration
