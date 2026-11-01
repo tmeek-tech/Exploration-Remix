@@ -2773,17 +2773,18 @@ final class NetPlanner {
         // ------------------------------------------------------------------------------------------- no dead ends
         /**
          * The Wasteland has no dead ends (Taran: "avoid it generating with dead ends"): every kept chamber has at least
-         * two ways ({@link #waysNeeded}), and no way is a bridge, whose loss would cut part of the network off, so every
-         * tunnel is part of a loop. Rounds of: each chamber short of ways gets tunnels to the nearest chambers that take
-         * one ({@link #addWays}), else to a junction room cut into a tunnel near it ({@link #joinViaJunction}); a
-         * chamber still left with one way or none is dropped unless it is required (as dropOrphans drops what cannot be
-         * joined); then each bridge gets a tunnel across it, between two chambers ({@link #joinAcross}) or from a
+         * two ways ({@link NetGraph#waysNeeded}), and no way is a bridge, whose loss would cut part of the network off,
+         * so every tunnel is part of a loop. Rounds of: each chamber short of ways gets tunnels to the nearest chambers
+         * that take one ({@link #addWays}), else to a junction room cut into a tunnel near it ({@link #joinViaJunction});
+         * a chamber still left with one way or none is dropped unless it is required (as dropOrphans drops what cannot
+         * be joined); then each bridge gets a tunnel across it, between two chambers ({@link #joinAcross}) or from a
          * chamber on its far side to a junction on the near side, and a bridge that takes none goes, with everything on
          * its far side from the entry, when nothing required is there. A drop can leave a neighbour short, so the
          * rounds go on until nothing changes. The landings are left to their courts (gateWays and landingSpoke give
          * them their ways). What may be left: a portal vestibule nothing else reaches keeps one tunnel and its stub to
          * the next cell (about one in sixteen, measured over 20 cells), and the tunnels on the way to it are bridges
-         * inside the cell, though not in the world, where the stub goes on.
+         * inside the cell, though not in the world, where the stub goes on; and junction rooms left with two ways, which
+         * {@link #forkJunctions} sees to.
          */
         void closeDeadEnds() {
             java.util.Set<Integer> failed = new java.util.HashSet<>();
@@ -2793,19 +2794,19 @@ final class NetPlanner {
                 int[] deg = NetGraph.wayCounts(n);
                 for (int id = 0; id < n.ch.size(); id++) {
                     Chamber c = n.ch.get(id);
-                    if (!c.keep || c.landing() || deg[c.id] >= waysNeeded(c) || failed.contains(c.id)) continue;
+                    if (!c.keep || c.landing() || deg[c.id] >= NetGraph.waysNeeded(c) || failed.contains(c.id)) continue;
                     // a required chamber (a portal's vestibule, a court) cannot be dropped: its tunnels may run long,
                     // and splitLong cuts junction rooms into them
                     longOK = c.required;
-                    int added = addWays(c, waysNeeded(c) - deg[c.id], 8, 3);
-                    while (deg[c.id] + added < waysNeeded(c) && joinViaJunction(c, null, 3)) added++;
+                    int added = addWays(c, NetGraph.waysNeeded(c) - deg[c.id], 8, 3);
+                    while (deg[c.id] + added < NetGraph.waysNeeded(c) && joinViaJunction(c, null, 3)) added++;
                     longOK = false;
                     if (added > 0) {
                         n.deadEndWays += added;
                         changed = true;
                         deg = NetGraph.wayCounts(n);
                     }
-                    if (deg[c.id] < waysNeeded(c)) failed.add(c.id);
+                    if (deg[c.id] < NetGraph.waysNeeded(c)) failed.add(c.id);
                 }
                 boolean dropped = false;
                 for (Chamber c : n.ch) {
@@ -2852,13 +2853,6 @@ final class NetPlanner {
             }
         }
 
-        /**
-         * The ways a Wasteland chamber needs: a junction room three (it is a fork), everything else two (a portal
-         * vestibule two inside the cell besides its stub, so its tunnel is no bridge either).
-         */
-        static int waysNeeded(Chamber c) {
-            return c.kind == Kind.JUNCTION ? 3 : 2;
-        }
 
         /** Chambers whose gap is under this can be joined by one Wasteland tunnel or climb: the tunnel limit. */
         double joinGap() { return sp.wayMax * reach; }
@@ -3201,13 +3195,21 @@ final class NetPlanner {
          * refuge is passed over: it keeps its two ways.
          */
         void branchOut() {
+            List<List<Edge>> runs = null;
+            double[] walks = null;
             for (int it = 0; it < BRANCH_TRIES; it++) {
+                // a branch that was not added left the network as it was, and its runs with it
+                if (runs == null) {
+                    runs = NetGraph.runs(n);
+                    walks = new double[runs.size()];
+                    for (int i = 0; i < walks.length; i++) walks[i] = NetGraph.runWalk(n, runs.get(i));
+                }
                 List<Edge> worst = null;
                 double longest = sp.runMax;
-                for (List<Edge> run : NetGraph.runs(n)) {
-                    double len = NetGraph.runWalk(n, run);
-                    if (len <= longest || !(workable(run, spent.get(0), uncut.get(0)) || workable(run, spent.get(1), uncut.get(1)))) continue;
-                    longest = len;
+                for (int i = 0; i < walks.length; i++) {
+                    List<Edge> run = runs.get(i);
+                    if (walks[i] <= longest || !(workable(run, spent.get(0), uncut.get(0)) || workable(run, spent.get(1), uncut.get(1)))) continue;
+                    longest = walks[i];
                     worst = run;
                 }
                 if (worst == null) return;
@@ -3217,7 +3219,10 @@ final class NetPlanner {
                     ok = branch(worst, spent.get(lv), uncut.get(lv));
                     reach = 1;
                 }
-                if (ok) n.branchWays++;
+                if (ok) {
+                    n.branchWays++;
+                    runs = null;
+                }
             }
         }
 
@@ -3353,7 +3358,7 @@ final class NetPlanner {
         void forkJunctions() {
             for (int id = 0; id < n.ch.size(); id++) {
                 Chamber j = n.ch.get(id);
-                if (!j.keep || j.kind != Kind.JUNCTION || NetGraph.wayCounts(n)[id] >= waysNeeded(j)) continue;
+                if (!j.keep || j.kind != Kind.JUNCTION || NetGraph.wayCounts(n)[id] >= NetGraph.waysNeeded(j)) continue;
                 boolean ok = false;
                 for (int lv = 0; lv < 2 && !ok; lv++) {
                     reach = lv == 0 ? 1 : BRANCH_REACH;
@@ -3471,11 +3476,20 @@ final class NetPlanner {
         /** A run branchOut could not branch that walks more than this many times {@code runMax} goes ({@link #dropRuns}). */
         static final double DROP_MUL = 4;
 
+        /** How far the last branch of a run that cannot go may reach, as a share of the tunnel limit ({@link #dropRuns}). */
+        static final double FAR_REACH = 2;
+
+        /** The rooms and tunnels of runs dropRuns has tried its far branches from. */
+        final java.util.Set<Integer> spentFar = new java.util.HashSet<>();
+        final java.util.Set<Edge> uncutFar = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+
         /**
          * The last resort for the runs branchOut could not branch: a run that still walks more than {@link #DROP_MUL}
          * times the limit, through rooms that offer no other way on, goes, its rooms and their tunnels, when nothing but
-         * the run is lost ({@link #dropRun}), the longest first. A room at either end of a dropped run that is left with
-         * two ways joins the runs on its other sides into one; branchOut then goes on over those. True when one went.
+         * the run is lost ({@link #dropRun}), the longest first. A run that cannot go (one from a portal's vestibule, or
+         * one whose loss would leave a fork with two ways or make a bridge) gets one more branch, reaching
+         * {@link #FAR_REACH} times the tunnel limit. A room at either end of a dropped run that is left with two ways
+         * joins the runs on its other sides into one; branchOut then goes on over those. True when one went or branched.
          */
         boolean dropRuns() {
             java.util.Set<Edge> failed = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
@@ -3489,8 +3503,17 @@ final class NetPlanner {
                     if (len > longest) { longest = len; worst = run; }
                 }
                 if (worst == null) break;
-                if (dropRun(worst)) any = true;
-                else failed.add(worst.get(0));
+                if (dropRun(worst)) {
+                    any = true;
+                    continue;
+                }
+                reach = FAR_REACH;
+                boolean ok = branch(worst, spentFar, uncutFar);
+                reach = 1;
+                if (ok) {
+                    n.branchWays++;
+                    any = true;
+                } else failed.add(worst.get(0));
             }
             if (any) pruneEdges();
             // a single tunnel walking more than twice the limit is one long passage (splitLong found no junction for it)
@@ -3512,7 +3535,7 @@ final class NetPlanner {
             Chamber A = n.ch.get(e.a), B = n.ch.get(e.b);
             if (A.landing() || B.landing() || e.a == e.b) return false;
             int[] deg = NetGraph.wayCounts(n);
-            if (deg[e.a] - 1 < waysNeeded(A) || deg[e.b] - 1 < waysNeeded(B)) return false;
+            if (deg[e.a] - 1 < NetGraph.waysNeeded(A) || deg[e.b] - 1 < NetGraph.waysNeeded(B)) return false;
             List<Edge> br = NetGraph.bridges(n);
             if (br.contains(e)) return false;
             int flow = NetGraph.maxFlow(n, n.entry, n.exit, false);
@@ -3546,10 +3569,10 @@ final class NetPlanner {
          * Drops run r's rooms (they are left unkept; the caller prunes their tunnels) when nothing but the run is lost:
          * its rooms are ordinary ones (no refuge, court, portal vestibule or other required room), its tunnels no part of
          * the trunk (the strands, the gates' ways), the rooms at its ends are no landings and keep the ways they need
-         * ({@link #waysNeeded}), none of its tunnels is a bridge and no other tunnel becomes one, the gates keep as many
-         * edge-disjoint ways between them (and a walk without climbs if they had one), no single room comes to stand
-         * between them, and the runs that come to pass through its end rooms walk no more than {@link #DROP_MUL} times
-         * the limit. A run with no room inside it, or a ring, is kept.
+         * ({@link NetGraph#waysNeeded}), none of its tunnels is a bridge and no other tunnel becomes one, the gates keep
+         * as many edge-disjoint ways between them (and a walk without climbs if they had one), no single room comes to
+         * stand between them, and the runs that come to pass through its end rooms walk no more than {@link #DROP_MUL}
+         * times the limit. A run with no room inside it, or a ring, is kept.
          */
         boolean dropRun(List<Edge> r) {
             if (r.size() < 2) return false;
@@ -3568,7 +3591,8 @@ final class NetPlanner {
             }
             Chamber A = n.ch.get(a), B = n.ch.get(b);
             if (A.landing() || B.landing()) return false;
-            if (a == b ? deg[a] - 2 < waysNeeded(A) : deg[a] - 1 < waysNeeded(A) || deg[b] - 1 < waysNeeded(B)) return false;
+            int needA = NetGraph.waysNeeded(A), needB = NetGraph.waysNeeded(B);
+            if (a == b ? deg[a] - 2 < needA : deg[a] - 1 < needA || deg[b] - 1 < needB) return false;
             // the strands and the gates' ways are the trunk, the walk from gate to gate: it stays whole
             for (Edge e : r) if (e.strand >= 0 || e.gate) return false;
             List<Edge> br = NetGraph.bridges(n);
@@ -5678,8 +5702,13 @@ final class NetPlanner {
          * of at most {@link #STAGE_MAX} joined by ledge passages, and a level tunnel on from the last stage's top to the
          * upper door. Stage axes stand {@code 2 r + 3} to {@code 2 r + 5} apart along the climb's heading, each next one
          * turned by up to 45 degrees where that is what fits, so the holes never overlap and a fall ends on the floor of
-         * the stage it fell down. The climb is checked as a whole, against the network and against itself; on success
-         * its ways and shafts are added and the edge is filled in.
+         * the stage it fell down. The stages are as tall as each other, but for a last stage that would let a fall run
+         * deeper ({@link #fallSafe(Shaft)}), most often by opening in the upper room's floor under the rock by its wall:
+         * the climb is then laid again with the last stage as short as the others let it be ({@link #LAST_MIN} at
+         * least), one stage more where that is what it takes, and the chain {@link #RETRY_BACK} further back towards
+         * the lower door, so the last stage keeps further from the upper room (the first may then open beside the lower
+         * room, as {@link #stageFits} lets it). The climb is checked as a whole, against the network and against itself;
+         * on success its ways and shafts are added and the edge is filled in.
          */
         boolean climb(Edge e, double[] da, double[] db, long hh, double half, double hgt) {
             boolean aLow = da[2] < db[2];
@@ -5687,73 +5716,109 @@ final class NetPlanner {
             int cLo = aLow ? e.a : e.b, cHi = aLow ? e.b : e.a;
             double L = Math.hypot(hi[0] - lo[0], hi[1] - lo[1]);
             double dy = hi[2] - lo[2];
-            int ns = Math.max(1, (int) Math.ceil(dy / STAGE_MAX - 1e-9));
-            if (ns > 4) return false;
-            double sh = dy / ns;
+            int ns0 = Math.max(1, (int) Math.ceil(dy / STAGE_MAX - 1e-9));
+            if (ns0 > 4) return false;
             double rad = 2.6 + 0.8 * Hashing.unit(Hashing.mix(hh, 4, 0, 0));
             double gap = 2 * rad + 3 + 2 * Hashing.unit(Hashing.mix(hh, 5, 0, 0));
             double th0 = Math.atan2(hi[1] - lo[1], hi[0] - lo[0]);
             double ux = Math.cos(th0), uz = Math.sin(th0);
-            // the first stage stands on the line between the doors, the chain of stages centred where the single
-            // shaft would stand
-            double d1 = L * (0.35 + 0.3 * Hashing.unit(Hashing.mix(hh, 3, 0, 0)));
-            if (ns > 1) d1 = Math.max(6, Math.min(d1 - (ns - 1) * gap * 0.5, L - (ns - 1) * gap - 6));
-            double sx = lo[0] + ux * d1, sz = lo[1] + uz * d1;
-            // a single shaft's tunnel runs on 1.5 past its axis; a staged climb's ends at the first axis, so the second
-            // stage keeps its 3 blocks of rock from the tunnel's end (the first stage's foot is the rock under its hole
-            // either way, and the tunnel's slab reaches under the vines)
-            double past = ns == 1 ? 1.5 : 0;
-            double[] footEnd = {sx + ux * past, sz + uz * past, lo[2], -ux, -uz};
-            Way w1 = climbTunnel(lo, footEnd, false, hh, half * 0.9, hgt);
-            if (w1 == null || !clear(w1, e.a, e.b)) return false;
-            List<Object> parts = new ArrayList<>();
-            parts.add(w1);
-            Shaft[] st = new Shaft[ns];
-            Way[] ledges = new Way[ns - 1];
-            st[0] = stage(sx, sz, rad, lo[2], lo[2] + sh, 1, ns);
-            if (!stageFits(st[0], -1, ns == 1 ? -1 : cHi, parts, e.a, e.b)) return false;
-            parts.add(st[0]);
+            double at = L * (0.35 + 0.3 * Hashing.unit(Hashing.mix(hh, 3, 0, 0)));
+            Way w1 = null, w2 = null;
+            Shaft[] st = null;
+            Way[] ledges = null;
             double heading = th0;
-            Way w2 = null;
-            for (int k = 1; k < ns; k++) {
-                // stage k + 1 and the ledge passage to it from the top of stage k
-                double sgn = Hashing.unit(Hashing.mix(hh, 40 + k, 0, 0)) < 0.5 ? 1 : -1;
-                boolean placed = false;
-                for (double turn : new double[]{0, sgn * Math.PI / 8, -sgn * Math.PI / 8, sgn * Math.PI / 4, -sgn * Math.PI / 4}) {
-                    double hd = th0 + turn;
-                    Shaft p = st[k - 1];
-                    double qx = p.x + Math.cos(hd) * gap, qz = p.z + Math.sin(hd) * gap;
-                    double fl = lo[2] + k * sh;
-                    Way lg = ledgeWay(p.x, p.z, qx, qz, fl, hd);
-                    if (!clear(lg, e.a, e.b) || !selfClear(lg, parts)) continue;
-                    parts.add(lg);
-                    Shaft s = stage(qx, qz, rad, fl, lo[2] + (k + 1) * sh, k + 1, ns);
-                    Way top = null;
-                    boolean ok = stageFits(s, cLo, k + 1 == ns ? -1 : cHi, parts, e.a, e.b);
-                    if (ok) {
-                        parts.add(s);
-                        if (k + 1 == ns) {
-                            // the last stage: the upper tunnel has to fit too, or another turn is tried
-                            top = upperTunnel(s, hd, hi, hh, half, hgt);
-                            ok = top != null && clear(top, e.a, e.b) && selfClear(top, parts);
-                        }
-                        if (!ok) parts.remove(parts.size() - 1);
+            boolean laid = false, lastFell = false;
+            for (int round = 0; round < 2 && !laid; round++) {
+                int ns = ns0;
+                // stage k + 1 climbs from floor fl[k] to fl[k + 1]
+                double[] fl = new double[ns + 1];
+                if (round == 0) {
+                    double sh = dy / ns;
+                    for (int k = 0; k <= ns; k++) fl[k] = lo[2] + k * sh;
+                } else {
+                    // laid again (see above) only when the last stage was turned down by fallSafe
+                    if (!lastFell || ns0 == 1) break;
+                    double hl = Math.max(LAST_MIN, dy - (ns - 1) * STAGE_MAX);
+                    if (hl > dy / ns - 1 && ns < 4) {
+                        ns++;
+                        hl = Math.max(LAST_MIN, dy - (ns - 1) * STAGE_MAX);
+                        fl = new double[ns + 1];
                     }
-                    if (!ok) { parts.remove(parts.size() - 1); continue; }
-                    st[k - 1].vineA = hd;
-                    st[k] = s;
-                    ledges[k - 1] = lg;
-                    heading = hd;
-                    w2 = top;
-                    placed = true;
-                    break;
+                    if (hl > dy / ns0 - 1) break;
+                    double sh = (dy - hl) / (ns - 1);
+                    for (int k = 0; k < ns; k++) fl[k] = lo[2] + k * sh;
+                    fl[ns] = hi[2];
                 }
-                if (!placed) return false;
+                lastFell = false;
+                st = new Shaft[ns];
+                ledges = new Way[ns - 1];
+                // the first stage stands on the line between the doors, the chain of stages centred where the single
+                // shaft would stand
+                double d1 = at;
+                if (ns > 1) d1 = Math.max(6, Math.min(d1 - (ns - 1) * gap * 0.5, L - (ns - 1) * gap - 6));
+                // laid again, the chain starts further back (see above)
+                if (round == 1) d1 = Math.max(1, Math.min(at - (ns - 1) * gap * 0.5, L - (ns - 1) * gap - 6) - RETRY_BACK);
+                double sx = lo[0] + ux * d1, sz = lo[1] + uz * d1;
+                // a single shaft's tunnel runs on 1.5 past its axis; a staged climb's ends at the first axis, so the
+                // second stage keeps its 3 blocks of rock from the tunnel's end (the first stage's foot is the rock
+                // under its hole either way, and the tunnel's slab reaches under the vines)
+                double past = ns == 1 ? 1.5 : 0;
+                double[] footEnd = {sx + ux * past, sz + uz * past, lo[2], -ux, -uz};
+                w1 = climbTunnel(lo, footEnd, false, hh, half * 0.9, hgt);
+                if (w1 == null || !clear(w1, e.a, e.b)) continue;
+                List<Object> parts = new ArrayList<>();
+                parts.add(w1);
+                st[0] = stage(sx, sz, rad, fl[0], fl[1], 1, ns);
+                if (!stageFits(st[0], -1, ns == 1 ? -1 : cHi, parts, e.a, e.b) || !fallSafe(st[0])) continue;
+                parts.add(st[0]);
+                heading = th0;
+                w2 = null;
+                boolean placed = true;
+                for (int k = 1; k < ns && placed; k++) {
+                    // stage k + 1 and the ledge passage to it from the top of stage k
+                    double sgn = Hashing.unit(Hashing.mix(hh, 40 + k, 0, 0)) < 0.5 ? 1 : -1;
+                    placed = false;
+                    for (double turn : new double[]{0, sgn * Math.PI / 8, -sgn * Math.PI / 8, sgn * Math.PI / 4, -sgn * Math.PI / 4}) {
+                        double hd = th0 + turn;
+                        Shaft p = st[k - 1];
+                        double qx = p.x + Math.cos(hd) * gap, qz = p.z + Math.sin(hd) * gap;
+                        Way lg = ledgeWay(p.x, p.z, qx, qz, fl[k], hd);
+                        if (!clear(lg, e.a, e.b) || !selfClear(lg, parts) || !fallSafe(lg)) continue;
+                        parts.add(lg);
+                        Shaft s = stage(qx, qz, rad, fl[k], fl[k + 1], k + 1, ns);
+                        Way top = null;
+                        boolean ok = stageFits(s, cLo, k + 1 == ns ? -1 : cHi, parts, e.a, e.b);
+                        if (ok && !fallSafe(s)) {
+                            ok = false;
+                            if (k + 1 == ns) lastFell = true;
+                        }
+                        if (ok) {
+                            parts.add(s);
+                            if (k + 1 == ns) {
+                                // the last stage: the upper tunnel has to fit too, or another turn is tried
+                                top = upperTunnel(s, hd, hi, hh, half, hgt);
+                                ok = top != null && clear(top, e.a, e.b) && selfClear(top, parts);
+                            }
+                            if (!ok) parts.remove(parts.size() - 1);
+                        }
+                        if (!ok) { parts.remove(parts.size() - 1); continue; }
+                        st[k - 1].vineA = hd;
+                        st[k] = s;
+                        ledges[k - 1] = lg;
+                        heading = hd;
+                        w2 = top;
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) continue;
+                if (ns == 1) {
+                    w2 = upperTunnel(st[0], th0, hi, hh, half, hgt);
+                    if (w2 == null || !clear(w2, e.a, e.b) || !selfClear(w2, parts)) continue;
+                }
+                laid = true;
             }
-            if (ns == 1) {
-                w2 = upperTunnel(st[0], th0, hi, hh, half, hgt);
-                if (w2 == null || !clear(w2, e.a, e.b) || !selfClear(w2, parts)) return false;
-            }
+            if (!laid) return false;
             if (sp.wayMax > 0) {
                 // the Wasteland: the climb's tunnels and ledges together walk no further than one tunnel may, even
                 // under longOK (no junction room is ever cut into a climb)
@@ -5762,7 +5827,7 @@ final class NetPlanner {
                 if (walk - 2 * NetGraph.RUN_IN > sp.wayMax * reach) return false;
             }
             // the last stage's vines face the upper tunnel, which leaves along the last heading
-            st[ns - 1].vineA = heading;
+            st[st.length - 1].vineA = heading;
             for (Shaft s : st) Network.fixVines(s);
             w1.a = cLo; w1.b = -1;
             w2.a = -1; w2.b = cHi;
@@ -5774,6 +5839,97 @@ final class NetPlanner {
             e.w1 = w1; e.w2 = w2; e.sh = st[0];
             e.stages = st;
             e.ledges = ledges;
+            return true;
+        }
+
+        /** The Wasteland: a last stage laid again shorter (see {@link #climb}) is at least this tall. */
+        static final double LAST_MIN = 5;
+
+        /**
+         * The Wasteland: how much further back towards the lower door a climb laid again (see {@link #climb}) starts its
+         * chain of stages; its first stage stands at least a block out from that door.
+         */
+        static final double RETRY_BACK = 8;
+
+        /**
+         * The Wasteland: the most a floor beside a climb's stage may stand over its foot, and the most a way under its
+         * foot may lie under its top, so a fall into the stage or on through it is at most 15 blocks, as one down the
+         * stage is ({@link #STAGE_MAX}).
+         */
+        static final double STAGE_FALL = 14;
+
+        /**
+         * True when nothing beside stage s makes its hole deeper than {@link #STAGE_FALL}: within its radius and 1.5
+         * more, no room whose floor there is no higher than the stage's open space is so tall that a walker in it could
+         * stand higher over the foot (a walker stands up to two under a room's vault: on its floor, or on the rock left
+         * where floor and vault close in by its wall and round the vault's pendants), and no way reaching the stage's
+         * open space has its floor higher over the foot, or lower under its top. The climb's own rooms are not spared
+         * ({@link #stageFits} lets the first and the last stage stand at their doors, and a last stage's hole may open
+         * in its room's floor), and neither are the other tunnels of those rooms ({@link #clearShaft} lets them by: they
+         * meet at the doors). From such a place a walker steps off into the hole, and one who lets go at the top falls
+         * on through the foot into such a way under it: 16 and 17 blocks. Elsewhere a stage keeps clear of the network
+         * anyway, so this holds.
+         */
+        boolean fallSafe(Shaft s) {
+            if (sp.wayMax <= 0) return true;
+            double hiF = s.foot + STAGE_FALL, loF = s.top - STAGE_FALL, rr = s.r + 1.5;
+            for (Chamber c : n.ch) {
+                if (!c.keep || c.kind == Kind.CANYON || c.dark >= 0 || c.yHi() < hiF) continue;
+                if (Math.hypot(s.x - c.x, s.z - c.z) > Math.max(c.rx, c.rz) * (1 + c.warp) + rr) continue;
+                for (double dx = -rr; dx <= rr; dx += 1) for (double dz = -rr; dz <= rr; dz += 1) {
+                    if (dx * dx + dz * dz > rr * rr) continue;
+                    double x = s.x + dx, z = s.z + dz, ce = w.e(c, x, z);
+                    if (ce >= 1) continue;
+                    // under a room whose floor stands higher than the stage's open space, rock parts them
+                    if (w.floorAt(c, ce, x, z) > s.y1 + 1.5) continue;
+                    // a walker in the room may stand up to two under its vault: the rock where floor and vault close in
+                    // by its wall, and the vault's pendants, leave pockets and ledges over the floor
+                    if (w.ceilAt(c, ce, x, z) - 2 > hiF) return false;
+                }
+            }
+            int bx = (int) Math.floor((s.x - x0 + Net.APRON) / CB), bz = (int) Math.floor((s.z - z0 + Net.APRON) / CB);
+            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+                int qx = bx + dx, qz = bz + dz;
+                if (qx < 0 || qz < 0 || qx >= cn || qz >= cn) continue;
+                for (int[] q : pts[qx * cn + qz]) {
+                    Way o = n.ways.get(q[0]);
+                    int j = q[1];
+                    if (Math.hypot(s.x - o.x[j], s.z - o.z[j]) > rr + o.w[j]) continue;
+                    if (o.f[j] - o.slab[j] > s.y1 + 1.5 || o.f[j] + Math.max(o.hgt[j], 6.5) < s.y0 - 1.5) continue;
+                    if (o.f[j] > hiF || o.f[j] < loF) return false;
+                }
+            }
+            return true;
+        }
+
+        /**
+         * The same for a ledge passage between two stages: no way it hangs over (with no slab of rock between) lies
+         * more than {@link #STAGE_FALL} under its floor, and none over it stands that much higher. clear() lets the
+         * other tunnels of the climb's rooms come close near those rooms' doors.
+         */
+        boolean fallSafe(Way lg) {
+            if (sp.wayMax <= 0) return true;
+            for (int i = 0; i < lg.n; i++) {
+                int b0 = bucket(lg.x[i], lg.z[i]);
+                if (b0 < 0) continue;
+                int bx = b0 / cn, bz = b0 % cn;
+                for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+                    int qx = bx + dx, qz = bz + dz;
+                    if (qx < 0 || qz < 0 || qx >= cn || qz >= cn) continue;
+                    for (int[] q : pts[qx * cn + qz]) {
+                        Way o = n.ways.get(q[0]);
+                        int j = q[1];
+                        if (Math.hypot(lg.x[i] - o.x[j], lg.z[i] - o.z[j]) > lg.w[i] + o.w[j]) continue;
+                        double lo = Math.min(lg.f[i], o.f[j]), hi = Math.max(lg.f[i], o.f[j]);
+                        if (hi - lo <= STAGE_FALL) continue;
+                        Way up = lg.f[i] > o.f[j] ? lg : o, dn = up == lg ? o : lg;
+                        int iu = up == lg ? i : j, id = up == lg ? j : i;
+                        // rock between them when the lower one's open space ends under the upper one's slab
+                        if (dn.f[id] + Math.max(dn.hgt[id], 6.5) < up.f[iu] - up.slab[iu] - 1.5) continue;
+                        return false;
+                    }
+                }
+            }
             return true;
         }
 

@@ -453,46 +453,69 @@ class NetworkTest {
     // ================================================================================================ the Wasteland
     /** The Wasteland's longest walk between two branches (blocks, door to door; the planner's {@code runMax}). */
     static final double RUN_MAX = 40;
-    /** The share of the Wasteland's passages allowed over {@link #RUN_MAX}, and the longest passage allowed. */
-    static final double PASSAGE_OVER = 0.015, PASSAGE_LONGEST = 80;
-    /** What the planner reaches on the runs through two-way rooms (a guard, not the goal: see the test). */
-    static final double RUN_OVER = 0.20, RUN_LONGEST = 240;
+    /**
+     * The share of the Wasteland's passages allowed over {@link #RUN_MAX} (about one in fifty walks more: a junction room
+     * cut into a long run leaves passages on either side of it), and the longest passage allowed.
+     */
+    static final double PASSAGE_OVER = 0.03, PASSAGE_LONGEST = 80;
+    /**
+     * What the planner reaches on the runs through two-way rooms: the share allowed over {@link #RUN_MAX}, the share
+     * allowed over twice that, and the longest run allowed (a guard, not the goal: see the test).
+     */
+    static final double RUN_OVER = 0.07, RUN_FAR_OVER = 0.01, RUN_LONGEST = 160;
+
+    /**
+     * The Wasteland's plans the branch and dead-end tests read besides the fast tests' nine: {seed, cx, cz} of cells
+     * where the longest runs and passages and the junction rooms left with two ways were found (seed 777's -1,0 and
+     * seed 23's 0,0 had runs of 300 and 500 blocks).
+     */
+    static final long[][] WASTE_EXTRA = {{777, -1, 0}, {777, 0, 0}, {23, 0, 0}, {15, 1, -1}, {8, 0, 0}, {2, -2, 3}, {12, 1, -1}, {9, 0, 0}, {17, 0, 0}, {4, 0, 0}};
+
+    /** The fast tests' nine cells of the Wasteland and {@link #WASTE_EXTRA}: {seed, cx, cz}. */
+    static List<long[]> wastePlans() {
+        List<long[]> out = new ArrayList<>();
+        for (long seed : SEEDS) for (int[] cell : CELLS) out.add(new long[]{seed, cell[0], cell[1]});
+        out.addAll(java.util.Arrays.asList(WASTE_EXTRA));
+        return out;
+    }
 
     /**
      * No dead end in the Wasteland's plans (Taran, 2026-11-01): no blind passage or blind tube, no pocket, surge niche,
      * tube hub or lava basin; every kept chamber has two ways or more (a portal vestibule's stub across the seam counts:
-     * it goes on into the next cell's network); and no way is a bridge, so every tunnel lies on a loop. The bridges are
-     * found with the two landings and the kept vestibules joined to one node outside the cell that stands for the rest
-     * of the world (the gates go on to the layers above and below, the stubs into the next cells). The bridges of the
-     * cell on its own, each cutting off a part of it that the world joins through a portal or a gate, are printed, and
-     * so are the vestibules with one tunnel in the cell besides their stub.
+     * it goes on into the next cell's network), a junction room three (it is a fork); and no way is a bridge, so every
+     * tunnel lies on a loop. Over the fast tests' nine cells and {@link #WASTE_EXTRA}. The bridges are found with the
+     * two landings and the kept vestibules joined to one node outside the cell that stands for the rest of the world
+     * (the gates go on to the layers above and below, the stubs into the next cells). The bridges of the cell on its
+     * own, each cutting off a part of it that the world joins through a portal or a gate, are printed, and so are the
+     * vestibules with one tunnel in the cell besides their stub.
      */
     @Test
     void wastelandHasNoDeadEnds() {
         List<String> fails = new ArrayList<>();
         int plans = 0, inCell = 0, onStub = 0;
-        for (long seed : SEEDS) {
-            Terrain t = terrain(seed);
-            for (int[] cell : CELLS) {
-                Net n = t.network.net(Terrain.WASTELAND, cell[0], cell[1]);
-                String tg = tag(seed, Terrain.WASTELAND, cell[0], cell[1]);
-                plans++;
-                for (Edge e : n.edges) if (e.kind == EK.STUB) fails.add(tg + ": a blind stub from " + n.ch.get(e.a).kind + "#" + e.a);
-                for (Way wy : n.ways) if (wy.kind == EK.STUB) fails.add(tg + ": blind way #" + wy.id);
-                int[] deg = NetGraph.wayCounts(n);
-                for (Chamber c : n.ch) {
-                    if (!c.keep) continue;
-                    String id = c.kind + "#" + c.id + " at " + (int) c.x + " " + (int) c.f0 + " " + (int) c.z;
-                    if (c.kind == Kind.POCKET || c.kind == Kind.TUBEHUB || c.kind == Kind.LAVA) fails.add(tg + ": " + id + " is a blind room");
-                    int ways = deg[c.id] + (c.kind == Kind.PORTAL ? 1 : 0);
-                    if (c.kind == Kind.PORTAL && deg[c.id] < 2) onStub++;
-                    if (ways < 2) fails.add(tg + ": " + id + " has " + ways + " way(s)");
-                }
-                inCell += NetGraph.bridges(n).size();
-                for (int[] b : outsideBridges(n)) {
-                    String a = n.ch.get(b[0]).kind + "#" + b[0], o = b[1] < n.ch.size() ? n.ch.get(b[1]).kind + "#" + b[1] : "the world outside";
-                    fails.add(tg + ": the way from " + a + " to " + o + " is a bridge");
-                }
+        for (long[] pl : wastePlans()) {
+            Terrain t = terrain(pl[0]);
+            int cx = (int) pl[1], cz = (int) pl[2];
+            Net n = t.network.net(Terrain.WASTELAND, cx, cz);
+            String tg = tag(pl[0], Terrain.WASTELAND, cx, cz);
+            plans++;
+            for (Edge e : n.edges) if (e.kind == EK.STUB) fails.add(tg + ": a blind stub from " + n.ch.get(e.a).kind + "#" + e.a);
+            for (Way wy : n.ways) if (wy.kind == EK.STUB) fails.add(tg + ": blind way #" + wy.id);
+            int[] deg = NetGraph.wayCounts(n);
+            for (Chamber c : n.ch) {
+                if (!c.keep) continue;
+                String id = c.kind + "#" + c.id + " at " + (int) c.x + " " + (int) c.f0 + " " + (int) c.z;
+                if (c.kind == Kind.POCKET || c.kind == Kind.TUBEHUB || c.kind == Kind.LAVA) fails.add(tg + ": " + id + " is a blind room");
+                int ways = deg[c.id] + (c.kind == Kind.PORTAL ? 1 : 0);
+                if (c.kind == Kind.PORTAL && deg[c.id] < 2) onStub++;
+                // a portal vestibule's stub is a way on; a junction room is a fork, with three
+                int need = c.kind == Kind.PORTAL ? 2 : NetGraph.waysNeeded(c);
+                if (ways < need) fails.add(tg + ": " + id + " has " + ways + " way(s), not " + need);
+            }
+            inCell += NetGraph.bridges(n).size();
+            for (int[] b : outsideBridges(n)) {
+                String a = n.ch.get(b[0]).kind + "#" + b[0], o = b[1] < n.ch.size() ? n.ch.get(b[1]).kind + "#" + b[1] : "the world outside";
+                fails.add(tg + ": the way from " + a + " to " + o + " is a bridge");
             }
         }
         System.out.printf("wastelandHasNoDeadEnds: %d plans; %d bridges in the cells on their own, %d vestibules whose second way is their stub%n", plans, inCell, onStub);
@@ -541,41 +564,44 @@ class NetworkTest {
      * passages, its stretches of tunnel between two rooms or forks ({@link NetGraph#passages}), walk at most
      * {@link #RUN_MAX} from door to door, but for a share of {@link #PASSAGE_OVER}, and none more than
      * {@link #PASSAGE_LONGEST}. The runs through rooms with only two ways ({@link NetGraph#runs}: through such a room
-     * the walker has no other way on either) are what the planner aims at, and fall short of: a sixth of them walk
-     * more than the limit, mostly through one room between two tunnels of 20 to 36. They are printed, and held to what
-     * the planner reaches ({@link #RUN_OVER} over the limit, none over {@link #RUN_LONGEST}), so a change that makes them
-     * worse is seen.
+     * the walker has no other way on either), walked as a walker goes them ({@link NetGraph#runWalk}: the tunnels and
+     * each such room's floor from door to door), are what the planner aims at, and fall short of: about one in twenty
+     * walks more than the limit, mostly through one room between two tunnels of 20 to 36. They are printed, and held to
+     * what the planner reaches ({@link #RUN_OVER} over the limit, {@link #RUN_FAR_OVER} over twice it, none over
+     * {@link #RUN_LONGEST}), so a change that makes them worse is seen. Over the fast tests' nine cells and
+     * {@link #WASTE_EXTRA}.
      */
     @Test
     void wastelandBranchSpacing() {
-        long passages = 0, passOver = 0, runs = 0, runOver = 0;
+        long passages = 0, passOver = 0, runs = 0, runOver = 0, runFar = 0;
         double passLongest = 0, runLongest = 0;
         String passWorst = "", runWorst = "";
-        for (long seed : SEEDS) {
-            Terrain t = terrain(seed);
-            for (int[] cell : CELLS) {
-                Net n = t.network.net(Terrain.WASTELAND, cell[0], cell[1]);
-                String tg = tag(seed, Terrain.WASTELAND, cell[0], cell[1]);
-                for (List<Edge> p : NetGraph.passages(n)) {
-                    double l = NetGraph.runLength(p);
-                    passages++;
-                    if (l > RUN_MAX) passOver++;
-                    if (l > passLongest) { passLongest = l; passWorst = tg + ", " + chain(n, p); }
-                }
-                for (List<Edge> r : NetGraph.runs(n)) {
-                    double l = NetGraph.runLength(r);
-                    runs++;
-                    if (l > RUN_MAX) runOver++;
-                    if (l > runLongest) { runLongest = l; runWorst = tg + ", " + chain(n, r); }
-                }
+        for (long[] pl : wastePlans()) {
+            Terrain t = terrain(pl[0]);
+            int cx = (int) pl[1], cz = (int) pl[2];
+            Net n = t.network.net(Terrain.WASTELAND, cx, cz);
+            String tg = tag(pl[0], Terrain.WASTELAND, cx, cz);
+            for (List<Edge> p : NetGraph.passages(n)) {
+                double l = NetGraph.runLength(p);
+                passages++;
+                if (l > RUN_MAX) passOver++;
+                if (l > passLongest) { passLongest = l; passWorst = tg + ", " + chain(n, p); }
+            }
+            for (List<Edge> r : NetGraph.runs(n)) {
+                double l = NetGraph.runWalk(n, r);
+                runs++;
+                if (l > RUN_MAX) runOver++;
+                if (l > 2 * RUN_MAX) runFar++;
+                if (l > runLongest) { runLongest = l; runWorst = tg + ", " + chain(n, r); }
             }
         }
         System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: passages %d, %d over %.0f (%.2f%%), longest %.0f (%s)%n", passages, passOver, RUN_MAX, 100.0 * passOver / passages, passLongest, passWorst);
-        System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: runs through two-way rooms %d, %d over %.0f (%.1f%%), longest %.0f (%s)%n", runs, runOver, RUN_MAX, 100.0 * runOver / runs, runLongest, runWorst);
+        System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: runs through two-way rooms %d, %d over %.0f (%.1f%%), %d over %.0f (%.2f%%), longest %.0f (%s)%n", runs, runOver, RUN_MAX, 100.0 * runOver / runs, runFar, 2 * RUN_MAX, 100.0 * runFar / runs, runLongest, runWorst);
         List<String> fails = new ArrayList<>();
         if (passOver > PASSAGE_OVER * passages) fails.add(passOver + " of " + passages + " passages walk more than " + RUN_MAX);
         if (passLongest > PASSAGE_LONGEST) fails.add("a passage walks " + fmt(passLongest) + ": " + passWorst);
         if (runOver > RUN_OVER * runs) fails.add(runOver + " of " + runs + " runs walk more than " + RUN_MAX);
+        if (runFar > RUN_FAR_OVER * runs) fails.add(runFar + " of " + runs + " runs walk more than " + 2 * RUN_MAX);
         if (runLongest > RUN_LONGEST) fails.add("a run walks " + fmt(runLongest) + ": " + runWorst);
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
@@ -1205,11 +1231,15 @@ class NetworkTest {
      * raster's) keeps the Blue Reaches' caverns that run across a seam joined as they are in the world.
      */
     static synchronized VoxelHarness built(long seed, int li, int cx, int cz, int wc, int hc) {
+        // all but the neighbour pairs: the Blue 2 x 2 cells are read by two tests, the others by several
+        return built(seed, li, cx, cz, wc, hc, !(wc == 2 && hc == 1));
+    }
+
+    /** The same, kept for the other tests to read only when {@code keep} is set. */
+    static synchronized VoxelHarness built(long seed, int li, int cx, int cz, int wc, int hc, boolean keep) {
         String key = seed + "/" + li + "/" + cx + "/" + cz + "/" + wc + "/" + hc;
         VoxelHarness v = BUILT.get(key);
         if (v != null) return v;
-        // all but the neighbour pairs: the Blue 2 x 2 cells are read by two tests, the others by several
-        boolean keep = !(wc == 2 && hc == 1);
         Terrain t = terrain(seed);
         Network w = t.network;
         int cell = (int) w.cell, ap = li == Terrain.BLUE ? NetDark.APRON : 0;
@@ -1227,6 +1257,13 @@ class NetworkTest {
     /** The cell-layers of the Deep Gardens and Basalt Galleries voxel tests. */
     static final long[] VOX_SEEDS = {8675309L, 2000023L};
     static final int[][] VOX_CELLS = {{0, -3}, {-1, 1}};
+
+    /**
+     * Wasteland cells {@link #noLethalFalls} builds besides those: {seed, cx, cz} of cells where falls of 16 and 17 were
+     * found beside the climbs' stages (from a room's pockets by its wall, from a tunnel of the same room at the stage's
+     * mouth, and on through a stage's foot into a tunnel under it).
+     */
+    static final long[][] WASTE_FALLS = {{17, 0, 0}, {11, 0, 0}, {13, 1, -1}, {15, 0, 0}};
 
     /** True for a way's point next to a landing, where the gate's own passage and landing shape the floor. */
     static boolean gateMouth(Terrain t, Net n, double x, double z) {
@@ -1619,20 +1656,23 @@ class NetworkTest {
      * Section 10: no fall from a standing place in a tunnel, a climb, a ledge passage or an ordinary room lands more
      * than 15 lower; a staged climb ends a fall on the floor of the stage it fell down. Falls into water or onto vines
      * are safe. Falls in the rift, the deep dark, the helices and the ancient city are reported, not failed: 0.2.0's
-     * cliffs and the high ledges are meant to be dangerous.
+     * cliffs and the high ledges are meant to be dangerous. Over the voxel tests' cells of the Deep Gardens, the
+     * Wasteland and the Basalt Galleries, 2 x 2 cells of the Blue Reaches, and the Wasteland's {@link #WASTE_FALLS}.
      */
     @Test
     @Tag("voxel")
     void noLethalFalls() {
         List<String> fails = new ArrayList<>();
         List<Object[]> runs = new ArrayList<>();
-        for (int s = 0; s < VOX_SEEDS.length; s++) for (int li : new int[]{Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES}) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
-        runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
+        for (int s = 0; s < VOX_SEEDS.length; s++) for (int li : new int[]{Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES}) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1, true});
+        runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2, true});
+        // the Wasteland's extra cells are read here only: built, checked and let go
+        for (long[] c : WASTE_FALLS) runs.add(new Object[]{c[0], Terrain.WASTELAND, (int) c[1], (int) c[2], 1, false});
         for (Object[] run : runs) {
             long seed = (Long) run[0];
             int li = (Integer) run[1], cx = (Integer) run[2], cz = (Integer) run[3], wc = (Integer) run[4];
             Terrain t = terrain(seed);
-            VoxelHarness v = built(seed, li, cx, cz, wc, wc);
+            VoxelHarness v = built(seed, li, cx, cz, wc, wc, (Boolean) run[5]);
             String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "");
             java.util.Map<String, Integer> told = new java.util.TreeMap<>();
             int lethal = 0, deepest = 0;

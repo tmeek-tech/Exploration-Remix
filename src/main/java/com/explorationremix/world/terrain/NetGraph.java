@@ -271,6 +271,15 @@ final class NetGraph {
     /** How far a tunnel's line runs on past its door into the chamber (walkWay's first and last 3 blocks). */
     static final double RUN_IN = 3;
 
+    /**
+     * The ways a Wasteland chamber needs so that it is no dead end: a junction room three (it is a fork; with two it
+     * would only be a bulge in one passage), everything else two (a portal vestibule two inside the cell besides its
+     * stub, so its tunnel is no bridge either).
+     */
+    static int waysNeeded(Chamber c) {
+        return c.kind == Net.Kind.JUNCTION ? 3 : 2;
+    }
+
     /** The network's ways: edges between two different kept chambers, blind stubs left out. */
     static List<Edge> ways(Net n) {
         List<Edge> out = new ArrayList<>();
