@@ -70,15 +70,18 @@ PAINTERS = {
 # The plant and crystal textures live in their own files: plants.py (the first plants and the shared helpers), then
 # plants_upper.py (Upper Caves and Blue Reaches) and plants_deep.py (Deep Gardens and Basalt Galleries). plants_deep
 # goes last because it may repaint a plant of plants.py. The Upper Caves rework added plants_frost.py and plants_ice.py
-# (the Frost Fern Grotto and the frozen Root Vaults) and plants_entries.py (the sinkholes and the oasis hollows).
+# (the Frost Fern Grotto and the frozen Root Vaults) and plants_entries.py (the sinkholes and the oasis hollows);
+# plants_fern.py has the Silver Fern Rift's ferns, redrawn fluffier for their 3D models.
 import plants  # noqa: E402
 import plants_upper  # noqa: E402
+import plants_fern  # noqa: E402
 import plants_frost  # noqa: E402
 import plants_ice  # noqa: E402
 import plants_entries  # noqa: E402
 import plants_deep  # noqa: E402
 PAINTERS.update(plants.PAINTERS)
 PAINTERS.update(plants_upper.PAINTERS)
+PAINTERS.update(plants_fern.PAINTERS)
 PAINTERS.update(plants_frost.PAINTERS)
 PAINTERS.update(plants_ice.PAINTERS)
 PAINTERS.update(plants_entries.PAINTERS)

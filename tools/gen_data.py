@@ -5,7 +5,7 @@ Run from anywhere: python3 tools/gen_data.py
 Everything this script writes lives in folders it owns, which it clears first, so delete a block or biome here and
 its files disappear on the next run. Edit this script, not the JSON.
 """
-import json, os, shutil
+import json, math, os, shutil
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import textures
@@ -51,10 +51,16 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #   carpet      a flat sheet lying on the floor, turned at random
 #   moss_carpet a carpet one pixel thick drawn with a block's texture, like vanilla's moss carpet (option texture)
 #   wall_plant  a plant growing sideways out of a wall, drawn with vanilla's coral wall fan model
+#   fern        a bushy fern: crossed planes (textures <id>) and four planes leaning out (<id>_fan), wider than a block
+#   tall_fern   a two-block fern drawn the same way: <id>_bottom, <id>_top, and <id>_fan_bottom, <id>_fan_top for the
+#               leaning planes, which run on from the lower half into the upper
+#   hanging_fern  a fern hanging down the side of a block (textures <id> along the wall, <id>_side square to it),
+#               turned to face away from the wall; it has no item, and drops the item named by option drop
 # Options: variants (how many textures: <id>, <id>_2, <id>_3; the game picks one per block from its position, so it
-# never changes), weights (one per variant), glow_under (shelf: the whole underside glows), shader_glow (default True;
-# False keeps the glow overlay but leaves the block out of glowing_blocks.json, so under Complementary only the overlay
-# shines and the rest is lit like rock). A texture with an entry in textures.GLOW gets an emissive overlay.
+# never changes), weights (one per variant), drop (hanging_fern: the item it drops), glow_under (shelf: the whole
+# underside glows), shader_glow (default True; False keeps the glow overlay but leaves the block out of
+# glowing_blocks.json, so under Complementary only the overlay shines and the rest is lit like rock). A texture with an
+# entry in textures.GLOW gets an emissive overlay.
 BLOCKS = {
     "band_stone": ("Band Stone", "cube"),
     "white_glow_flower": ("White Glow Flower", "cross"),
@@ -69,7 +75,8 @@ BLOCKS = {
     "blue_glow_mushroom": ("Blue Glow Mushroom", "cross", {"variants": 3}),
     "blue_glow_vines": ("Blue Glow Vines", "vine"),
     "blue_glow_vines_plant": ("Blue Glow Vines", "vine_body:blue_glow_vines", {"variants": 2}),
-    "silver_fern": ("Silver Fern", "cross", {"variants": 3}),
+    # the silver fern's item stands it on a floor or hangs it on a wall (silver_wall_fern), like a torch
+    "silver_fern": ("Silver Fern", "fern", {"variants": 3}),
     "orange_shelf_fungus": ("Orange Shelf Fungus", "shelf", {"variants": 2}),
     "lavender_coral": ("Lavender Coral", "cross", {"variants": 2}),
     "pale_coral_fan": ("Pale Coral Fan", "coral_fan"),
@@ -84,8 +91,8 @@ BLOCKS = {
     "starmoss": ("Starmoss", "carpet", {"variants": 2}),
     "silver_frond": ("Silver Frond", "vine", {"variants": 2}),
     "silver_frond_plant": ("Silver Frond", "vine_body:silver_frond", {"variants": 2}),
-    "tall_silver_fern": ("Tall Silver Fern", "tall", {"variants": 2}),
-    "silver_wall_fern": ("Silver Wall Fern", "wall_plant", {"variants": 2}),
+    "tall_silver_fern": ("Tall Silver Fern", "tall_fern", {"variants": 2}),
+    "silver_wall_fern": ("Hanging Silver Fern", "hanging_fern", {"variants": 2, "drop": "silver_fern"}),
     "ivory_bracket": ("Ivory Bracket", "shelf", {"variants": 2, "glow_under": True}),
     "gold_threads": ("Gold Threads", "vine", {"variants": 2}),
     "gold_threads_plant": ("Gold Threads", "vine_body:gold_threads", {"variants": 2}),
@@ -196,7 +203,69 @@ def _sheet(key, extra):
                   "faces": {"north": {"uv": [16, 0, 0, 16], "texture": key}, "south": {"uv": [0, 0, 16, 16], "texture": key}}}, **extra)]
 
 
+# The silver ferns (Taran, 1 Nov: fluffier, like the picture, and hanging on walls). Model planes can only turn
+# 22.5 or 45 degrees about one axis, so fronds that lean out are planes hinged at their foot.
+FERN_LEAN = 45        # the small fern's outer planes lean this far out: a low, wide clump (about 1.4 blocks across)
+TALL_FERN_LEAN = 22.5  # the tall fern's: a vase of fronds two blocks high
+HANGING_FERN_TOP = 10  # the hanging fern grows out of the wall this high in its block and hangs a block's length
+
+
+def _plane(frm, to, key, rotation=None, uv=(0, 0, 16, 16), faces=None):
+    """A flat, unshaded, two-sided plane: square to z when frm and to share z, else square to x."""
+    faces = faces or (("north", "south") if frm[2] == to[2] else ("west", "east"))
+    el = {"from": list(frm), "to": list(to), "shade": False,
+          "faces": {f: {"uv": list(uv), "texture": key} for f in faces}}
+    if rotation:
+        el["rotation"] = rotation
+    return el
+
+
+def _fern():
+    """The small fern: the crossed planes of an upright clump (#fern), and four planes hinged at the middle of the
+    block leaning out north and south (#fan_a) and east and west (#fan_b)."""
+    els = _cross_planes("#fern", {})
+    for a in (FERN_LEAN, -FERN_LEAN):
+        els.append(_plane((0, 0, 8), (16, 16, 8), "#fan_a", {"origin": [8, 0, 8], "axis": "x", "angle": a}))
+        els.append(_plane((8, 0, 0), (8, 16, 16), "#fan_b", {"origin": [8, 0, 8], "axis": "z", "angle": a}))
+    return {"ambientocclusion": False, "textures": {"particle": "#fern"}, "elements": els}
+
+
+def _tall_fern(half):
+    """A half of the tall fern: crossed planes (#fern), and four planes leaning out (#fan); the upper half's four start
+    where the lower half's end, so each frond runs on through both."""
+    els = _cross_planes("#fern", {})
+    out = round(16 * math.sin(math.radians(TALL_FERN_LEAN)), 3)
+    y0 = 0 if half == "lower" else round(16 * math.cos(math.radians(TALL_FERN_LEAN)) - 16, 3)
+    for sign in (1, -1):
+        z = 8 if half == "lower" else 8 + sign * out
+        els.append(_plane((0, y0, z), (16, y0 + 16, z), "#fan", {"origin": [8, y0, z], "axis": "x", "angle": sign * TALL_FERN_LEAN}))
+        x = 8 if half == "lower" else 8 - sign * out
+        els.append(_plane((x, y0, 0), (x, y0 + 16, 16), "#fan", {"origin": [x, y0, 8], "axis": "z", "angle": sign * TALL_FERN_LEAN}))
+    return {"ambientocclusion": False, "textures": {"particle": "#fern"}, "elements": els}
+
+
+def _hanging_fern():
+    """The hanging fern facing north, on a wall to its south (z = 16): fronds (#hang) hanging from HANGING_FERN_TOP
+    down a block's length, one plane against the rock, one swung out 22.5 degrees and a shorter one 45, and two side
+    planes square to the wall (#side, the rock on the texture's right edge) reaching 8 pixels out."""
+    top = HANGING_FERN_TOP
+    low = top - 16
+    return {"ambientocclusion": False, "textures": {"particle": "#hang"}, "elements": [
+        _plane((0, low, 15.6), (16, top, 15.6), "#hang"),
+        _plane((0, low, 15.2), (16, top, 15.2), "#hang", {"origin": [8, top, 15.2], "axis": "x", "angle": 22.5}),
+        _plane((0, low + 4, 15), (16, top, 15), "#hang", {"origin": [8, top, 15], "axis": "x", "angle": 45}, uv=(0, 0, 16, 12)),
+        _plane((4, low, 8), (4, top, 16), "#side", uv=(8, 0, 16, 16), faces=("west",)),
+        _plane((4, low, 8), (4, top, 16), "#side", uv=(16, 0, 8, 16), faces=("east",)),
+        _plane((12, low, 8), (12, top, 16), "#side", uv=(8, 0, 16, 16), faces=("west",)),
+        _plane((12, low, 8), (12, top, 16), "#side", uv=(16, 0, 8, 16), faces=("east",)),
+    ]}
+
+
 TEMPLATES = {
+    "fern": _fern(),
+    "tall_fern_lower": _tall_fern("lower"),
+    "tall_fern_upper": _tall_fern("upper"),
+    "hanging_fern": _hanging_fern(),
     "cross_glow": {"ambientocclusion": False, "textures": {"particle": "#cross"},
                    "elements": _cross_planes("#cross", {}) + _cross_planes("#glow", EMISSIVE)},
     "carpet": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _flat("#texture", {})},
@@ -257,7 +326,7 @@ def plane_model(tex, plain_parent, template, key):
 
 def loot(bid, drop, kind):
     entry = {"type": "minecraft:item", "name": f"{MOD}:{drop}"}
-    if kind == "tall":
+    if kind in ("tall", "tall_fern"):
         # both halves break together; only the lower half's table drops the plant
         entry["conditions"] = [{"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"half": "lower"}}]
     elif kind == "lichen":
@@ -326,6 +395,34 @@ def block_assets():
                 parts.append({"when": {face: "true"}, "apply": apply})
                 parts.append({"when": {f: "false" for f in FACES}, "apply": apply})
             states = {"multipart": parts}
+        elif kind == "fern":
+            fans = variant_names(bid + "_fan", len(texs))
+            for k, t in enumerate(texs):
+                models[t] = {"parent": f"{MOD}:block/template/fern", "render_type": "minecraft:cutout",
+                             "textures": {"fern": ref(t), "fan_a": ref(fans[k]), "fan_b": ref(fans[(k + 1) % len(fans)])}}
+            # each look also turned four ways, as its two fans differ
+            states = {"variants": {"": pick([{"model": ref(t), "y": r} if r else {"model": ref(t)} for t in texs for r in (0, 90, 180, 270)],
+                                            [w for w in weights for _ in range(4)] if weights else None)}}
+        elif kind == "tall_fern":
+            bottoms, tops = variant_names(bid + "_bottom", len(texs)), variant_names(bid + "_top", len(texs))
+            fan_bottoms, fan_tops = variant_names(bid + "_fan_bottom", len(texs)), variant_names(bid + "_fan_top", len(texs))
+            for k in range(len(texs)):
+                models[bottoms[k]] = {"parent": f"{MOD}:block/template/tall_fern_lower", "render_type": "minecraft:cutout",
+                                      "textures": {"fern": ref(bottoms[k]), "fan": ref(fan_bottoms[k])}}
+                models[tops[k]] = {"parent": f"{MOD}:block/template/tall_fern_upper", "render_type": "minecraft:cutout",
+                                   "textures": {"fern": ref(tops[k]), "fan": ref(fan_tops[k])}}
+            # as for "tall": both halves are seeded from the lower half's position, so variant k's top sits on its bottom
+            states = {"variants": {"half=lower": pick([{"model": ref(t)} for t in bottoms], weights),
+                                   "half=upper": pick([{"model": ref(t)} for t in tops], weights)}}
+            item = {"parent": "minecraft:item/generated", "textures": {"layer0": ref(tops[0])}}
+        elif kind == "hanging_fern":
+            sides = variant_names(bid + "_side", len(texs))
+            for k, t in enumerate(texs):
+                models[t] = {"parent": f"{MOD}:block/template/hanging_fern", "render_type": "minecraft:cutout",
+                             "textures": {"hang": ref(t), "side": ref(sides[k])}}
+            states = {"variants": {f"facing={f}": pick([dict({"model": ref(t)}, **turn) for t in texs], weights) for f, turn in FACE4.items()}}
+            item = None
+            drop = opts["drop"]
         elif kind == "wall_plant":
             for t in texs:
                 models[t] = {"parent": "minecraft:block/coral_wall_fan", "render_type": "minecraft:cutout", "textures": {"fan": ref(t)}}
