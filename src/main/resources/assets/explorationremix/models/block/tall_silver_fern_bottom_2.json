@@ -3,6 +3,7 @@
   "render_type": "minecraft:cutout",
   "textures": {
     "fern": "explorationremix:block/tall_silver_fern_bottom_2",
-    "fan": "explorationremix:block/tall_silver_fern_fan_bottom_2"
+    "fan": "explorationremix:block/tall_silver_fern_fan_bottom_2",
+    "skirt": "explorationremix:block/silver_fern_fan_2"
   }
 }

@@ -3,6 +3,7 @@
   "render_type": "minecraft:cutout",
   "textures": {
     "hang": "explorationremix:block/silver_wall_fern",
+    "front": "explorationremix:block/silver_wall_fern_front",
     "side": "explorationremix:block/silver_wall_fern_side"
   }
 }

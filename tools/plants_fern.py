@@ -14,8 +14,10 @@ The textures, by model plane:
   silver_fern_fan[_2, _3]              small fern, the four planes leaning out: a fan of fronds from the bottom middle
   tall_silver_fern_{top,bottom}[_2]    tall fern, crossed planes: one 16 x 32 drawing cut in two
   tall_silver_fern_fan_{top,bottom}[_2]  tall fern, leaning planes that carry on through the upper half
-  silver_wall_fern[_2]                 hanging fern, the planes along the wall: fronds hanging from the top edge
+  silver_wall_fern[_2]                 hanging fern, the plane against the rock: fronds hanging from the top edge
+  silver_wall_fern_front[_2]           hanging fern, the plane swung out from the rock
   silver_wall_fern_side[_2]            hanging fern, the planes square to the wall (the wall on the right edge)
+The hanging fern's are 16 x 32, the fronds in the top 24 rows (a block and a half).
 """
 from PIL import Image
 from plants import hexc, register
@@ -86,24 +88,24 @@ class Drawing:
 
 # ------------------------------------------------------------------------------------------------ small fern
 def _fern(v):
-    """An upright clump: fronds rising from the base and bending out, two low ones behind."""
+    """An upright clump: fronds rising from the base and arching over at their tips, two low ones behind."""
     d = Drawing()
     if v == 1:
         d.frond(stalk((5, 15), (UP_LEFT, 4), (LEFT, 2)), [1, 2, 2, 1], back=True, first=-1)
         d.frond(stalk((10, 15), (UP_RIGHT, 4), (RIGHT, 2)), [1, 2, 2, 1], back=True)
         d.frond(stalk((6, 15), (UP, 3), (UP_LEFT, 4), (UP, 5)), [1, 2, 2, 3, 3, 2, 1])
         d.frond(stalk((9, 15), (UP, 3), (UP_RIGHT, 4), (UP, 5)), [1, 2, 2, 3, 3, 2, 1], first=-1)
-        d.frond(stalk((7, 15), (UP, 14)), [0, 1, 2, 2, 3, 3, 2, 2, 1])
+        d.frond(stalk((7, 15), (UP, 8), (UP_RIGHT, 3), (RIGHT, 1)), [0, 1, 2, 2, 3, 3, 2, 2, 1])
     elif v == 2:
         d.frond(stalk((6, 15), (UP_LEFT, 6), (UP, 3)), [1, 2, 2, 3, 2, 1], back=True)
         d.frond(stalk((9, 15), (UP_RIGHT, 6), (UP, 3)), [1, 2, 2, 3, 2, 1], back=True, first=-1)
-        d.frond(stalk((7, 15), (UP, 5), (UP_LEFT, 3), (UP, 6)), [1, 2, 3, 3, 3, 2, 1])
-        d.frond(stalk((8, 15), (UP, 7), (UP_RIGHT, 3), (UP, 4)), [1, 2, 2, 3, 2, 1], first=-1)
+        d.frond(stalk((7, 15), (UP, 5), (UP_LEFT, 3), (UP, 3), (UP_LEFT, 2), (LEFT, 1)), [1, 2, 3, 3, 3, 2, 1])
+        d.frond(stalk((8, 15), (UP, 6), (UP_RIGHT, 3), (UP, 2), (UP_RIGHT, 2), (RIGHT, 1)), [1, 2, 2, 3, 2, 1], first=-1)
     else:
         d.frond(stalk((7, 15), (UP_LEFT, 7), (LEFT, 1)), [1, 2, 2, 2, 1], back=True)
         d.frond(stalk((8, 15), (UP_RIGHT, 7), (RIGHT, 1)), [1, 2, 2, 2, 1], back=True, first=-1)
-        d.frond(stalk((7, 15), (UP, 2), (UP_LEFT, 2), (UP, 10)), [1, 2, 2, 3, 3, 2, 2, 1])
-        d.frond(stalk((8, 15), (UP, 2), (UP_RIGHT, 2), (UP, 9)), [1, 2, 3, 3, 2, 2, 1], first=-1)
+        d.frond(stalk((7, 15), (UP, 2), (UP_LEFT, 2), (UP, 6), (UP_LEFT, 2), (LEFT, 1)), [1, 2, 2, 3, 3, 2, 2, 1])
+        d.frond(stalk((8, 15), (UP, 2), (UP_RIGHT, 2), (UP, 6), (UP_RIGHT, 2)), [1, 2, 3, 3, 2, 2, 1], first=-1)
     return d.img
 
 
@@ -137,12 +139,13 @@ def _tall(v):
     if v == 1:
         d.frond(stalk((5, 31), (UP, 6), (UP_LEFT, 4), (UP, 12)), [1, 2, 2, 3, 3, 3, 3, 2, 2, 1], back=True)
         d.frond(stalk((10, 31), (UP, 8), (UP_RIGHT, 4), (UP, 10)), [1, 2, 2, 3, 3, 3, 2, 2, 1], back=True, first=-1)
-        d.frond(stalk((7, 31), (UP, 29)), [0, 1, 1, 2, 2, 3, 3, 3, 3, 3, 2, 2, 1])
+        d.frond(stalk((7, 31), (UP, 23), (UP_RIGHT, 3), (RIGHT, 1)), [0, 1, 1, 2, 2, 3, 3, 3, 3, 3, 2, 2, 1])
         d.frond(stalk((6, 31), (UP_LEFT, 4), (LEFT, 1)), [1, 2, 2, 1], first=-1)
         d.frond(stalk((9, 31), (UP_RIGHT, 4), (RIGHT, 1)), [1, 2, 2, 1])
     else:
-        d.frond(stalk((6, 31), (UP, 10), (UP_LEFT, 4), (UP, 10)), [1, 2, 2, 3, 3, 3, 3, 2, 1])
-        d.frond(stalk((9, 31), (UP, 5), (UP_RIGHT, 5), (UP, 13)), [1, 2, 2, 3, 3, 3, 3, 2, 1], first=-1)
+        d.frond(stalk((6, 31), (UP, 10), (UP_LEFT, 4), (UP, 7), (UP_LEFT, 2), (LEFT, 1)), [1, 2, 2, 3, 3, 3, 3, 2, 1])
+        d.frond(stalk((9, 31), (UP, 5), (UP_RIGHT, 5), (UP, 10), (UP_RIGHT, 2), (RIGHT, 1)), [1, 2, 2, 3, 3, 3, 3, 2, 1],
+                first=-1)
         d.frond(stalk((8, 31), (UP, 26)), [0, 1, 2, 2, 3, 3, 3, 2, 2, 1], back=True)
     return d.img
 
@@ -168,33 +171,50 @@ for _v in (1, 2):
 
 
 # ------------------------------------------------------------------------------------------------ hanging fern
+# 16 x 32 drawings, of which the model shows the top 24 rows: the fronds fall a block and a half. (Without a .mcmeta
+# the game keeps a tall texture whole; only an animation's .mcmeta cuts it into frames.)
 def _hanging(v):
-    """Fronds hanging from the top edge, bending out a little on their way down; lit on their outer sides."""
-    d = Drawing()
+    """The plane against the rock: fronds hanging from the top edge, the outer ones a shade darker behind."""
+    d = Drawing(16, 32)
     if v == 1:
-        d.frond(stalk((8, 0), (DOWN, 13)), [1, 2, 2, 3, 3, 3, 2, 1], back=True)
-        d.frond(stalk((5, 0), (DOWN, 3), (DOWN_LEFT, 3), (DOWN, 9)), [1, 2, 2, 3, 3, 3, 2, 2, 1], lit_side=1)
-        d.frond(stalk((10, 0), (DOWN, 2), (DOWN_RIGHT, 3), (DOWN, 9)), [1, 2, 2, 3, 3, 2, 2, 1], lit_side=-1, first=-1)
+        d.frond(stalk((5, 0), (DOWN, 2), (DOWN_LEFT, 2), (DOWN, 15)), [1, 2, 2, 3, 3, 3, 2, 2, 1], back=True, lit_side=1)
+        d.frond(stalk((11, 0), (DOWN, 3), (DOWN_RIGHT, 2), (DOWN, 12)), [1, 2, 2, 3, 3, 2, 2, 1], back=True, lit_side=-1,
+                first=-1)
+        d.frond(stalk((8, 0), (DOWN, 22)), [1, 2, 2, 3, 3, 3, 3, 2, 2, 1], lit_side=1)
     else:
-        d.frond(stalk((4, 0), (DOWN_LEFT, 3), (DOWN, 10)), [1, 2, 2, 3, 3, 2, 1], back=True)
-        d.frond(stalk((11, 0), (DOWN_RIGHT, 2), (DOWN, 11)), [1, 2, 2, 3, 3, 2, 1], back=True, first=-1)
-        d.frond(stalk((8, 0), (DOWN, 4), (DOWN_LEFT, 2), (DOWN, 9)), [1, 2, 3, 3, 3, 3, 2, 2, 1], lit_side=1)
+        d.frond(stalk((3, 0), (DOWN_LEFT, 1), (DOWN, 17)), [1, 2, 2, 3, 3, 2, 2, 1], back=True, lit_side=1)
+        d.frond(stalk((13, 0), (DOWN_RIGHT, 1), (DOWN, 14)), [1, 2, 3, 3, 2, 2, 1], back=True, lit_side=-1, first=-1)
+        d.frond(stalk((7, 0), (DOWN, 6), (DOWN_LEFT, 1), (DOWN, 15)), [1, 2, 2, 3, 3, 3, 3, 2, 2, 1], lit_side=1)
+        d.frond(stalk((10, 0), (DOWN, 4), (DOWN_RIGHT, 1), (DOWN, 12)), [1, 2, 3, 3, 3, 2, 1], lit_side=-1, first=-1)
+    return d.img
+
+
+def _hanging_front(v):
+    """The plane swung out from the rock: two long fronds falling clear of the others, lit on their outer sides."""
+    d = Drawing(16, 32)
+    if v == 1:
+        d.frond(stalk((4, 0), (DOWN, 5), (DOWN_LEFT, 2), (DOWN, 13)), [1, 2, 2, 3, 3, 3, 3, 2, 1], lit_side=1)
+        d.frond(stalk((11, 0), (DOWN, 4), (DOWN_RIGHT, 2), (DOWN, 11)), [1, 2, 2, 3, 3, 3, 2, 1], lit_side=-1, first=-1)
+    else:
+        d.frond(stalk((6, 0), (DOWN, 3), (DOWN_LEFT, 3), (DOWN, 14)), [1, 2, 3, 3, 3, 3, 2, 2, 1], lit_side=1)
+        d.frond(stalk((10, 0), (DOWN, 8), (DOWN_RIGHT, 2), (DOWN, 9)), [1, 2, 2, 3, 3, 2, 1], lit_side=-1, first=-1)
     return d.img
 
 
 def _hanging_side(v):
-    """Side on, the wall on the right edge: fronds leave the rock near the top, arch out and fall."""
-    d = Drawing()
+    """Side on, the wall on the right edge (the model shows the right half): fronds leave the rock, arch out and fall."""
+    d = Drawing(16, 32)
     if v == 1:
-        d.frond(stalk((15, 1), (LEFT, 2), (DOWN_LEFT, 3), (DOWN, 9)), [1, 2, 2, 3, 3, 2, 2, 1], lit_side=-1)
-        d.frond(stalk((15, 4), (DOWN_LEFT, 2), (DOWN, 9)), [1, 2, 2, 2, 1], back=True, first=-1)
+        d.frond(stalk((15, 1), (LEFT, 1), (DOWN_LEFT, 2), (DOWN, 17)), [1, 2, 2, 3, 3, 2, 2, 1], lit_side=-1)
+        d.frond(stalk((15, 4), (DOWN_LEFT, 1), (DOWN, 14)), [1, 2, 2, 2, 1], back=True, first=-1)
     else:
-        d.frond(stalk((15, 2), (LEFT, 1), (DOWN_LEFT, 4), (DOWN, 9)), [1, 2, 2, 3, 3, 2, 1], lit_side=-1)
-        d.frond(stalk((15, 0), (DOWN_LEFT, 1), (DOWN, 13)), [1, 2, 2, 2, 1], back=True, first=-1)
+        d.frond(stalk((15, 2), (DOWN_LEFT, 3), (DOWN, 18)), [1, 2, 2, 3, 3, 2, 1], lit_side=-1)
+        d.frond(stalk((15, 0), (DOWN, 15)), [1, 2, 2, 2, 1], back=True, first=-1)
     return d.img
 
 
 for _v in (1, 2):
     _s = "" if _v == 1 else f"_{_v}"
     register(PAINTERS, "silver_wall_fern" + _s, lambda v=_v: _hanging(v))
+    register(PAINTERS, "silver_wall_fern_front" + _s, lambda v=_v: _hanging_front(v))
     register(PAINTERS, "silver_wall_fern_side" + _s, lambda v=_v: _hanging_side(v))

@@ -131,11 +131,12 @@ public final class ERBlocks {
             () -> new TallCavePlantBlock(plant(MapColor.METAL, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XZ),
                     Block.box(2, 0, 2, 14, 16, 14), Block.box(2, 0, 2, 14, 14, 14)));
     /**
-     * A silver fern hanging down the side of a block, its fronds falling a block's length from two thirds of the way up.
-     * No item of its own: it is the silver fern's, placed on a wall, and drops it.
+     * A silver fern hanging down the side of a block, its fronds falling a block and a half from near the top, into the
+     * block below (the outline stays in its own block). No item of its own: it is the silver fern's, placed on a wall,
+     * and drops it.
      */
     public static final RegistryObject<Block> SILVER_WALL_FERN = BLOCKS.register("silver_wall_fern",
-            () -> new ShelfFungusBlock(plant(MapColor.METAL, SoundType.GRASS, 0), Block.box(1, 0, 8, 15, 10, 16)));
+            () -> new ShelfFungusBlock(plant(MapColor.METAL, SoundType.GRASS, 0), Block.box(1, 0, 8, 15, 14, 16)));
 
     // ------------------------------------------------------------------------------------------- Ivory Root Cavern
     /** A pale bracket with glowing gold gills underneath; firm enough to stand on, like the orange shelf fungus. */
