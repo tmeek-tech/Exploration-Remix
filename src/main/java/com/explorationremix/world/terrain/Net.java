@@ -9,10 +9,14 @@ import java.util.List;
  */
 public final class Net {
     /**
-     * Chamber kinds. JUNCTION (the Wasteland, since 0.5) is a small fork room where three or more tunnels meet, so a
-     * branch point need not be a whole cave; appended, so the older kinds keep their numbers.
+     * Chamber kinds, appended over time so the older kinds keep their numbers. JUNCTION (the Wasteland, since 0.5) is
+     * a small fork room where three or more tunnels meet, so a branch point need not be a whole cave. The last four are
+     * the Basalt Galleries' halls (since 0.5): a column hall's ledge round a lava lake, the Caldera's crater, the
+     * Causeway's column field and the Scoria Canyons' rift. Their walking floors are ledges at the dry level, their
+     * bottoms the lava sea.
      */
-    public enum Kind { ENTRY, EXIT, BEDROCK, PORTAL, GROTTO, LAKE, TERRACE, SPRING, WELL, GALLERY, GREAT, CHIMNEY, TUBEHUB, CAVERN, CITY, POCKET, CANYON, GEODE, LAVA, JUNCTION }
+    public enum Kind { ENTRY, EXIT, BEDROCK, PORTAL, GROTTO, LAKE, TERRACE, SPRING, WELL, GALLERY, GREAT, CHIMNEY, TUBEHUB, CAVERN, CITY, POCKET, CANYON, GEODE, LAVA,
+        JUNCTION, HALL, CALDERA, CAUSEWAY, RIFT }
 
     /**
      * Edge kinds. DARK_DOOR joins a Blue Reaches portal vestibule standing on a deep dark cavern's floor to that
@@ -43,11 +47,34 @@ public final class Net {
         /** Blue Reaches: the deep dark region ({@link NetDark}) this node stands for, or -1. */
         public int dark = -1;
         double canyonS, doorDX, doorDZ;
+        /**
+         * The Basalt Galleries' halls ({@link #hall()}): the bed of the lava under them (NaN for every other chamber),
+         * and the shape numbers of each kind (see {@link Network#floorAt}). {@code f0} is the dry walking level: a
+         * column hall's ledge, the Caldera's outer ring, the Causeway's wall ledge, the rift's upper ledges.
+         */
+        public double base = Double.NaN;
+        /** Column hall: where the lake ends and the ledge begins (in e), and the shelf's thickness at its lip. */
+        double lakeEdge, shelf;
+        /** Caldera: the crest of the crater rim (its height and where it stands, in e). Rift: the low ledges' level. */
+        public double crest;
+        double crestE;
+        /**
+         * Causeway: the side of its wall ledge (+1 or -1 across), the ledge's width, the end ramps' depth, the column
+         * path's line across and its heights (middle and ends), the column lattice's spacing. Rift: the river's half
+         * width, the low ledges' width, and per side the ramp's top (along), its direction and the low ledge's length.
+         */
+        double side = 1, ledgeW, endW, pathV, pathMid, pathEnd, hexS;
+        double riverW, lowW;
+        double[] rampU = new double[2], rampDir = new double[2], lowLen = new double[2];
+        /** A flight court (Basalt Galleries): a long stair from the bedrock landing up to the dry level. */
+        boolean flight;
 
         public double R() { return Math.max(rx, rz) * (1 + warp) + 2; }
         public boolean helix() { return kind == Kind.WELL || kind == Kind.CHIMNEY; }
         public boolean landing() { return kind == Kind.ENTRY || kind == Kind.EXIT || kind == Kind.BEDROCK; }
-        double yLo() { return f0 - 3; }
+        /** One of the Basalt Galleries' halls: a column hall, the Caldera, the Causeway or a rift. */
+        public boolean hall() { return kind == Kind.HALL || kind == Kind.CALDERA || kind == Kind.CAUSEWAY || kind == Kind.RIFT; }
+        double yLo() { return Double.isNaN(base) ? f0 - 3 : base; }
         double yHi() { return helix() ? top : f0 + h + rise + rampDrop + 2; }
 
         void setRot(double r) { rot = r; cos = Math.cos(r); sin = Math.sin(r); }
@@ -138,6 +165,25 @@ public final class Net {
         /** Half the span (to the feet, in the walls), half the crown's thickness along the hall, the crown's top. */
         public double span, halfAlong, deck;
         public int chamber;
+        /**
+         * How far the top falls from the crown to the feet ({@code deck - drop q^2}). A walkable arch (the Basalt
+         * Galleries' crossings and the Scoria Canyons' bridges) falls 2, so its top meets the ledges at both ends and a
+         * walk runs over it; the Wasteland's arches fall 4.
+         */
+        public double drop = 4;
+        public boolean walk;
+    }
+
+    /**
+     * A vent of the Caldera (Basalt Galleries): where eruptions will break out, on the crater's lava lake and on its
+     * crest. The runtime asks for them with {@link Network#ventsNear}.
+     */
+    public static final class Vent {
+        /** Centre, radius, and the top of the rock (or the lava's surface) there. */
+        public double x, z, r, y;
+        public int chamber;
+        /** On the crest of the crater rim, not in the lake. */
+        public boolean crest;
     }
 
     /**
@@ -186,6 +232,8 @@ public final class Net {
     public final List<Pool> pools = new ArrayList<>();
     /** Blind tube ends whose pool could not be held by rock: {x, floor block y, z}; their floor is magma instead. */
     public final List<double[]> magmaEnds = new ArrayList<>();
+    /** The Basalt Galleries' Caldera vents (3 to 6 per caldera). */
+    public final List<Vent> vents = new ArrayList<>();
     final List<Route> canyons = new ArrayList<>();
     public int entry = -1, exit = -1;
     int surgeNiches;

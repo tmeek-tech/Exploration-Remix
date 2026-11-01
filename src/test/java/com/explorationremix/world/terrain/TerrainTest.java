@@ -268,7 +268,7 @@ class TerrainTest {
         }
         assertTrue(tallest[Terrain.BLUE] > 140, "the Deep Blue Rift is only " + tallest[Terrain.BLUE] + " blocks deep");
         assertTrue(tallest[Terrain.GARDENS] > 60, "the Deep Gardens' tallest hall is only " + tallest[Terrain.GARDENS] + " blocks");
-        // the chimney: its drop can be as little as about 95
-        assertTrue(tallest[Terrain.GALLERIES] > 40, "the Basalt Galleries' tallest open space is only " + tallest[Terrain.GALLERIES] + " blocks");
+        // the Basalt Galleries' halls (0.5): about 100 from the lava to the vault
+        assertTrue(tallest[Terrain.GALLERIES] >= 60, "the Basalt Galleries' tallest open space is only " + tallest[Terrain.GALLERIES] + " blocks");
     }
 }

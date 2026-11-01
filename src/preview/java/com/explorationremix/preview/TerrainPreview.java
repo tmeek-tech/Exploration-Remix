@@ -25,7 +25,7 @@ import java.util.Map;
  * 4 corners, interpolated, then the network's per-block pass), without starting Minecraft. Per layer of cell (0, 0):
  * the longest tunnel unrolled with its walking floor, sections across the six longest tunnels, a map and the same map
  * with the plan drawn over it, x and z sections through each set piece, and straight sections through the cell; then
- * the stack of layers through a gate. Usage: TerrainPreview outDir [seed] [all|0|1|2|mat].
+ * the stack of layers through a gate. Usage: TerrainPreview outDir [seed] [all|0|1|2|3|mat].
  */
 public final class TerrainPreview {
     private final Terrain t;
