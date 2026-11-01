@@ -22,6 +22,8 @@ class FloodTest {
     private static final class FakeChunk {
         final int[][][] kind = new int[RISE][16][16];
         final Mask mask = new Mask(RISE);
+        /** The blocks of the mask that held the halls' glow (LavaChunk.glow). */
+        final Mask glow = new Mask(RISE);
         int level;
         /** The blocks the drain asked to wake round, as {slice, x, z}. */
         final List<int[]> wakes = new ArrayList<>();
@@ -37,6 +39,10 @@ class FloodTest {
                     assertTrue(leaves(kind[i][z][x]), "lava taken from " + kind[i][z][x]);
                     kind[i][z][x] = AIR;
                 }
+                @Override public void glow(int x, int z) {
+                    assertTrue(leaves(kind[i][z][x]), "glow put back on " + kind[i][z][x]);
+                    kind[i][z][x] = GLOW;
+                }
                 @Override public void wake(int x, int z) {
                     // the whole slice is dry by the first wake: none of the sea's lava is left in it to flow out
                     for (int zz = 0; zz < 16; zz++) for (int xx = 0; xx < 16; xx++) assertFalse(mask.get(i, xx, zz));
@@ -51,10 +57,10 @@ class FloodTest {
             assertTrue(i >= 0 && i < RISE, "slice " + i + " outside the band");
             int n;
             if (level < target) {
-                n = rise(slice(i), mask, i);
+                n = rise(slice(i), mask, glow, i);
                 level++;
             } else {
-                n = drain(slice(i), mask, i);
+                n = drain(slice(i), mask, glow, i);
                 level--;
             }
             return n;
@@ -73,16 +79,22 @@ class FloodTest {
         }
     }
 
-    /** A chunk of Galleries: mostly rock and air, with a little fire, a lava fall's flowing lava and a natural pool. */
+    /**
+     * A chunk of Galleries: mostly rock and air, with the halls' glow along the rock, a little fire, a lava fall's flowing
+     * lava and a natural pool.
+     */
     private static FakeChunk randomChunk(long seed) {
         Random r = new Random(seed);
         FakeChunk c = new FakeChunk();
         for (int i = 0; i < RISE; i++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
             double p = r.nextDouble();
-            c.kind[i][z][x] = p < 0.45 ? OTHER : p < 0.9 ? AIR : p < 0.93 ? FIRE : p < 0.97 ? FLOWING : LAVA;
+            c.kind[i][z][x] = p < 0.45 ? OTHER : p < 0.88 ? AIR : p < 0.9 ? GLOW : p < 0.93 ? FIRE : p < 0.97 ? FLOWING : LAVA;
         }
         return c;
     }
+
+    /** What a block that was {@code was} is after the lava came and went: fire and a fall's flowing lava are gone. */
+    private static int afterFlood(int was) { return was == GLOW ? GLOW : takes(was) ? AIR : was; }
 
     @Test
     void risingTakesOnlyAirFireAndFlowingLava() {
@@ -144,6 +156,41 @@ class FloodTest {
     }
 
     @Test
+    void theGlowGoesUnderTheLavaAndComesBack() {
+        FakeChunk c = new FakeChunk();
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) c.kind[0][z][x] = (x + z) % 4 == 0 ? GLOW : AIR;
+        c.kind[0][0][1] = OTHER;                   // rock
+        int glows = 0;
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) if (c.kind[0][z][x] == GLOW) glows++;
+        assertEquals(255, c.step(1), "the glow is taken with the air");
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+            boolean was = (x + z) % 4 == 0;
+            assertEquals(was, c.glow.get(0, x, z), "only the glow's blocks are marked");
+            if (x == 1 && z == 0) assertEquals(OTHER, c.kind[0][z][x]);
+            else assertEquals(LAVA, c.kind[0][z][x]);
+        }
+        assertEquals(glows, c.glow.count(0));
+        // while the sea is up, a player builds over one glow's place and scoops the lava from another
+        c.kind[0][0][4] = OTHER;
+        c.kind[0][4][0] = AIR;
+        assertEquals(253, c.step(0));
+        assertTrue(c.mask.isEmpty());
+        assertTrue(c.glow.isEmpty(), "the drained slice keeps no glow marks");
+        assertEquals(OTHER, c.kind[0][0][4], "what a player built stays");
+        assertEquals(AIR, c.kind[0][4][0], "a place a player emptied stays empty");
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+            if (x == 1 && z == 0 || x == 4 && z == 0 || x == 0 && z == 4) continue;
+            assertEquals((x + z) % 4 == 0 ? GLOW : AIR, c.kind[0][z][x], "at " + x + " " + z);
+        }
+        // without a glow mask (an older caller) the glow's places drain to air
+        FakeChunk d = new FakeChunk();
+        d.kind[0][3][3] = GLOW;
+        assertEquals(1, rise(d.slice(0), d.mask, 0));
+        assertEquals(1, drain(d.slice(0), d.mask, 0));
+        assertEquals(AIR, d.kind[0][3][3]);
+    }
+
+    @Test
     void aFullRiseAndDrainGivesTheChunkBackAsItWas() {
         for (long seed = 1; seed <= 20; seed++) {
             FakeChunk c = randomChunk(seed);
@@ -161,10 +208,12 @@ class FloodTest {
             for (int h = RISE - 1; h >= 0; h--) drained += c.step(h);
             assertEquals(filled, drained, "the drain takes away what the rise put there");
             assertTrue(c.mask.isEmpty());
+            assertTrue(c.glow.isEmpty());
             for (int i = 0; i < RISE; i++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
                 int was = before[i][z][x], now = c.kind[i][z][x];
-                // fire burnt out and a fall's flowing lava swallowed come back as air (the fall flows again when woken)
-                assertEquals(takes(was) ? AIR : was, now, "seed " + seed + " at " + i + " " + x + " " + z);
+                // fire burnt out and a fall's flowing lava swallowed come back as air (the fall flows again when woken),
+                // and the glow comes back where it was
+                assertEquals(afterFlood(was), now, "seed " + seed + " at " + i + " " + x + " " + z);
             }
             assertEquals(drained, c.wakes.size());
         }
@@ -183,6 +232,7 @@ class FloodTest {
         assertEquals(10, b.level);
         for (int i = 0; i < RISE; i++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
             assertEquals(a.mask.get(i, x, z), b.mask.get(i, x, z));
+            assertEquals(a.glow.get(i, x, z), b.glow.get(i, x, z));
             int was = before[i][z][x];
             if (i < 10) {
                 assertEquals(a.kind[i][z][x], b.kind[i][z][x], "under the lava both are flooded alike");
@@ -190,7 +240,7 @@ class FloodTest {
             } else {
                 // over it, where the lava went and left again, fire is burnt out and flowing lava swallowed
                 assertEquals(was, b.kind[i][z][x]);
-                assertEquals(i < 25 && takes(was) ? AIR : was, a.kind[i][z][x]);
+                assertEquals(i < 25 ? afterFlood(was) : was, a.kind[i][z][x]);
                 assertFalse(b.mask.get(i, x, z));
             }
         }

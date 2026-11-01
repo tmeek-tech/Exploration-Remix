@@ -1,5 +1,6 @@
 package com.explorationremix.devtools;
 
+import com.explorationremix.block.GlowBlock;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.feature.JoinDeadEndsFeature;
 import com.explorationremix.world.gen.DeepMaterials;
@@ -886,7 +887,7 @@ public final class RemixCommands {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         for (int dx = -3; dx <= 3; dx++) for (int dy = -3; dy <= 3; dy++) for (int dz = -3; dz <= 3; dz++) {
             BlockState s = level.getBlockState(p.set(x + dx, y + dy, z + dz));
-            if (s.isAir() || !s.getFluidState().isEmpty()) continue;
+            if (GlowBlock.open(s) || !s.getFluidState().isEmpty()) continue;
             String id = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(s.getBlock()).getPath();
             round.merge(id, 1, Integer::sum);
             String k = s.is(net.minecraft.tags.BlockTags.PLANKS) || s.is(net.minecraft.tags.BlockTags.RAILS) || s.is(net.minecraft.tags.BlockTags.WOODEN_FENCES)
@@ -924,7 +925,7 @@ public final class RemixCommands {
             for (int sgn = -1; sgn <= 1; sgn += 2) {
                 int yy = y + dy * sgn;
                 BlockState feet = chunk.getBlockState(p.set(x, yy, z)), head = chunk.getBlockState(p.set(x, yy + 1, z)), under = chunk.getBlockState(p.set(x, yy - 1, z));
-                if (feet.isAir() && head.isAir() && under.isSolid()) return new BlockPos(x, yy, z);
+                if (GlowBlock.open(feet) && GlowBlock.open(head) && under.isSolid()) return new BlockPos(x, yy, z);
             }
         }
         return null;

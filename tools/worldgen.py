@@ -1042,6 +1042,12 @@ def build_features():
     feature("climb_vines", "top_layer_modification", DEEP, {"type": f"{MOD}:climb_vines", "config": {}}, [])
     feature("shelf_vines", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:shelf_vines", "config": {}}, [])
     feature("open_way", "top_layer_modification", DEEP, {"type": f"{MOD}:open_way", "config": {}}, [])
+    # The Galleries' lava glow (HallGlowFeature, after everything else, the ways included): invisible light along the rock
+    # above the flood band, one try in every 4-block cube, so the halls read lit by their lava under Complementary, which
+    # leaves unlit rock near black. Level 15 just over the flood band, fading to 11 sixty blocks higher, two up or down
+    # in slow patches; 9 in the Obsidian Tubes, the refuge, whose crying obsidian keeps its purple.
+    feature("basalt_galleries/glow", "top_layer_modification", GALLERIES,
+            {"type": f"{MOD}:hall_glow", "config": {"spacing": 4, "reach": 4, "low": 15, "high": 11, "fade": 60, "patch": 2, "tubes": 9}}, [])
 
 
 # The vanilla deep dark, moved down into the Blue Reaches: its sculk, which vanilla only places relative to the old

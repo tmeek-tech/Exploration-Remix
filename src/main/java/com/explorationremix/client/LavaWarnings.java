@@ -1,6 +1,7 @@
 package com.explorationremix.client;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.block.GlowBlock;
 import com.explorationremix.config.ERClientConfig;
 import com.explorationremix.registry.ERParticles;
 import com.explorationremix.registry.ERSounds;
@@ -247,9 +248,9 @@ public final class LavaWarnings {
             int y = surface + random.nextInt(full - surface);
             POS.set(player.getBlockX() + random.nextInt(49) - 24, y, player.getBlockZ() + random.nextInt(49) - 24);
             BlockState s = level.getBlockState(POS);
-            if (s.isAir() || !s.getFluidState().isEmpty() || !s.isFaceSturdy(level, POS, Direction.UP)) continue;
+            if (GlowBlock.open(s) || !s.getFluidState().isEmpty() || !s.isFaceSturdy(level, POS, Direction.UP)) continue;
             ABOVE.setWithOffset(POS, Direction.UP);
-            if (!level.getBlockState(ABOVE).isAir()) continue;
+            if (!GlowBlock.open(level.getBlockState(ABOVE))) continue;
             double x = POS.getX() + random.nextDouble(), z = POS.getZ() + random.nextDouble(), top = y + 1.05;
             if (particles && random.nextFloat() < 0.3F * strength) level.addParticle(ERParticles.STEAM.get(), x, top, z, 0, 0, 0);
             if (hisses > 0 && random.nextFloat() < 0.02F * strength) {
@@ -265,7 +266,7 @@ public final class LavaWarnings {
         POS.set(x, y, z);
         if (!level.getFluidState(POS).is(FluidTags.LAVA)) return false;
         ABOVE.set(x, y + 1, z);
-        return level.getBlockState(ABOVE).isAir();
+        return GlowBlock.open(level.getBlockState(ABOVE));
     }
 
     /**

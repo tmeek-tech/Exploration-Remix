@@ -1,5 +1,6 @@
 package com.explorationremix.devtools;
 
+import com.explorationremix.block.GlowBlock;
 import com.explorationremix.world.gen.DeepMaterials;
 import com.explorationremix.world.terrain.Rock;
 import net.minecraft.core.BlockPos;
@@ -25,7 +26,7 @@ public final class BlockImages {
     private BlockImages() {}
 
     static int color(ServerLevel level, BlockPos pos, BlockState s) {
-        if (s.isAir()) return 0x0b0b10;
+        if (GlowBlock.open(s)) return 0x0b0b10;
         if (s.is(Blocks.WATER)) return 0x2f6fbf;
         if (s.is(Blocks.LAVA)) return 0xff7a10;
         if (COLORS.isEmpty()) {
@@ -72,7 +73,7 @@ public final class BlockImages {
             boolean open = false;
             for (int yy = y; yy >= y - dy; yy--) {
                 BlockState s = chunk.getBlockState(pos.set(x, yy, z));
-                if (s.isAir()) { open = true; continue; }
+                if (GlowBlock.open(s)) { open = true; continue; }
                 if (!open) { col = 0x202020; break; }
                 int c = color(level, pos, s);
                 double shade = 1.0 - 0.6 * (y - yy) / (double) dy;

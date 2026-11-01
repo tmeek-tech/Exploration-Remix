@@ -1,6 +1,7 @@
 package com.explorationremix.client;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.block.GlowBlock;
 import com.explorationremix.config.ERClientConfig;
 import com.explorationremix.registry.ERParticles;
 import net.minecraft.client.Camera;
@@ -243,7 +244,7 @@ public final class CaveAtmosphere {
             above.setWithOffset(p, 0, 1, 0);
             FluidState f = s.getFluidState();
             if (!f.isEmpty()) {
-                if (!level.getBlockState(above).isAir()) continue;
+                if (!GlowBlock.open(level.getBlockState(above))) continue;
                 Holder<Biome> h = level.getBiome(p);
                 if (f.is(FluidTags.WATER) && (h.is(EMBER_GARDENS) || h.is(RUST_SPRINGS))) {
                     // Steam off every hot pool.
@@ -260,9 +261,9 @@ public final class CaveAtmosphere {
                 }
                 continue;
             }
-            if (!s.isAir()) continue;
+            if (!GlowBlock.open(s)) continue;
             BlockState up = level.getBlockState(above);
-            if (up.isAir()) {
+            if (GlowBlock.open(up)) {
                 // Pollen in a shaft of daylight in the Root Vaults, the sinkholes and the oasis hollows (the biomes are
                 // only underground, so no surface check).
                 if (random.nextFloat() < 0.08F && level.getBrightness(LightLayer.SKY, p) >= 13) {
@@ -316,7 +317,7 @@ public final class CaveAtmosphere {
             boolean open = false;
             for (int y = py + 16; y >= py - 96; y--) {
                 BlockState s = level.getBlockState(p.set(x, y, z));
-                if (s.isAir()) { open = true; continue; }
+                if (GlowBlock.open(s)) { open = true; continue; }
                 if (open && s.getFluidState().is(FluidTags.LAVA)) {
                     if (random.nextFloat() < 0.75F)
                         level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, true, x + 0.3 + random.nextDouble() * 0.4, y + 1.1,
