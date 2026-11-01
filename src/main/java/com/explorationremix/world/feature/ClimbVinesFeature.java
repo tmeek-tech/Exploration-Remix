@@ -49,7 +49,8 @@ public final class ClimbVinesFeature extends Feature<NoneFeatureConfiguration> {
                 int hold = top + 1;
                 while (hold <= top + HOLD && level.getBlockState(p.set(s.vineX, hold, s.vineZ)).isAir()) hold++;
                 if (hold > top + HOLD || !level.getBlockState(p.set(s.vineX, hold, s.vineZ)).isFaceSturdy(level, p, Direction.DOWN)) continue;
-                Block[] vine = vine(s.biome, Hashing.mix(t.seed, 8812, s.vineX, s.vineZ));
+                // a climb the plan gave no biome takes its layer's route biome, so none in the Galleries is ever alive
+                Block[] vine = vine(s.biome != null ? s.biome : Terrain.routeBiome(li), Hashing.mix(t.seed, 8812, s.vineX, s.vineZ));
                 any |= hang(level, s.vineX, hold - 1, foot, s.vineZ, vine[0], vine[1]);
             }
         }

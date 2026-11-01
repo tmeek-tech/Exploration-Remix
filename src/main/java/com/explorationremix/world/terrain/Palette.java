@@ -101,6 +101,13 @@ public final class Palette {
         return shell(t.biomeAt(x, y, z), li, x, y, z, above, below, wet);
     }
 
+    /**
+     * A span of rock in the Scoria Canyons thin enough to have open space over and under it within a few blocks: a
+     * natural bridge or the lip of a ledge, which is basalt rather than banded scoria (in the flood band too, but for its
+     * magma rim and high-water line).
+     */
+    private static boolean canyonSpan(int above, int below) { return above + below <= 8; }
+
     /** {@link #shell} in biome {@code b} of layer {@code li}, whatever the plan puts there (offline swatches use it). */
     Rock shell(DeepBiome b, int li, int x, int y, int z, int above, int below, boolean wet) {
         Shape s = t.shape;
@@ -120,7 +127,7 @@ public final class Palette {
             if (y < high) {
                 if (y <= W + 1) return n > -0.3 ? Rock.MAGMA : Rock.BLACKSTONE;
                 if (y >= high - 2) return n > -0.25 ? Rock.MAGMA : Rock.POLISHED_BLACKSTONE;
-                if (b == DeepBiome.SCORIA_CANYONS) return scoriaBand(x, y, z, true);
+                if (b == DeepBiome.SCORIA_CANYONS) return canyonSpan(above, below) ? (n > 0.3 ? Rock.POLISHED_BASALT : Rock.BASALT) : scoriaBand(x, y, z, true);
                 if (speck(x, y, z) < 0.03) return Rock.MAGMA;
                 if (n < -0.38) return Rock.POLISHED_BLACKSTONE;
                 return n > 0.02 ? Rock.BLACKSTONE : Rock.BASALT;
@@ -300,7 +307,7 @@ public final class Palette {
                 // Red rifts of scoria banded with scorchia and both stones' layered forms (scoriaBand), magma along the lava
                 // river, a few cracks of ember crust, and basalt bridges: any span of rock thin enough to have open space
                 // over and under it within a few blocks (a natural bridge, or the lip of a ledge).
-                if (above + below <= 8) return n > 0.3 ? Rock.POLISHED_BASALT : Rock.BASALT;
+                if (canyonSpan(above, below)) return n > 0.3 ? Rock.POLISHED_BASALT : Rock.BASALT;
                 if (floor) {
                     if (wet) return n > -0.1 ? Rock.MAGMA : Rock.SCORCHIA;
                     if (y <= W + 2 && n > -0.15) return Rock.MAGMA;

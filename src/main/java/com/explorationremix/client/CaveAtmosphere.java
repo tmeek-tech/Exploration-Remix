@@ -206,11 +206,20 @@ public final class CaveAtmosphere {
         if (!ERClientConfig.INSTANCE.caveFog.get() || weight < 0.01F) return;
         if (event.getMode() != FogRenderer.FogMode.FOG_TERRAIN || event.getType() != FogType.NONE) return;
         float far = (float) (ERClientConfig.INSTANCE.fogDistance.get() * reach);
-        float vanillaFar = event.getFarPlaneDistance();
-        if (far >= vanillaFar) return;
-        float near = far * 0.3F;
+        float vanillaFar = event.getFarPlaneDistance(), vanillaNear = event.getNearPlaneDistance();
+        float near;
+        if (far < vanillaFar) near = far * 0.3F;
+        else {
+            // A fog that would reach past the edge of the drawn world hands over to vanilla's edge fog across the next
+            // quarter of the view distance, so the near plane never jumps when the smoothed reach crosses the edge (the
+            // Basalt Galleries' reach of 1.2 to 1.45 sits right on it at render distance 12 and the default distance).
+            float t = (far - vanillaFar) / (0.25F * vanillaFar);
+            if (t >= 1) return;
+            far = vanillaFar;
+            near = Mth.lerp(t, vanillaFar * 0.3F, vanillaNear);
+        }
         event.setFarPlaneDistance(Mth.lerp(weight, vanillaFar, far));
-        event.setNearPlaneDistance(Mth.lerp(weight, event.getNearPlaneDistance(), near));
+        event.setNearPlaneDistance(Mth.lerp(weight, vanillaNear, near));
         event.setCanceled(true);
     }
 
