@@ -4,6 +4,7 @@ import com.explorationremix.ExplorationRemix;
 import com.explorationremix.world.terrain.Overhead;
 import com.explorationremix.world.terrain.RootKind;
 import com.explorationremix.world.terrain.Upper;
+import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
@@ -11,11 +12,13 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.DensityFunctions;
 import net.minecraft.world.level.levelgen.RandomState;
 
 import javax.annotation.Nullable;
@@ -34,6 +37,14 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
  * 0, as vanilla's spawn finder asks it. All of it comes from a {@link RandomState} built from the pack's settings before
  * the deep world patched them, so the answer never includes our own carving, and outside a noise chunk its density
  * functions are plain, stateless functions of position.
+ *
+ * <p>The density is read the way the world's noise chunks read it in two respects. Flat caches are filled at y 0 on
+ * the quart corner: outside a noise chunk a flat cache would pass the asked height through, and Tectonic flat-caches a
+ * 3D noise (its mountain ridges), so on the peaks a point sample read another ridge field than the world builds and
+ * put the ground up to 22 blocks too high (a Frost Fern Grotto then reached the top of a mountain). And for what must
+ * stay under the ground in every block column of a 4x4 column (the plant caves), {@link #low} takes the ground at the
+ * column's noise-cell corners, where the world's terrain is exactly the density, with straight lines between the
+ * grid heights as the world interpolates them.
  */
 public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
     private static final int BITS = 16, SIZE = 1 << BITS;
@@ -53,27 +64,34 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
     private final DensityFunction density;
     private final BiomeSource source;
     @Nullable private final MultiNoiseBiomeSource multiNoise;
-    private final int seaLevel, minY, maxY;
+    private final int seaLevel, minY, maxY, cellW, cellH;
     private final boolean linearDepth;
     private final AtomicReferenceArray<Entry> cache = new AtomicReferenceArray<>(SIZE);
+    private final AtomicReferenceArray<Corner> corners = new AtomicReferenceArray<>(SIZE);
     private final ConcurrentHashMap<Holder<Biome>, Info> infos = new ConcurrentHashMap<>();
 
-    private record Entry(long key, Surface surface, Holder<Biome> biome) {}
+    private record Entry(long key, Surface surface, int low, Holder<Biome> biome) {}
+
+    /** The ground in one noise-cell corner column. */
+    private record Corner(long key, int ground) {}
 
     private record Info(RootKind kind, boolean wet, boolean noRavine, Cover cover, boolean cold) {}
 
     /**
      * @param pack   built from the pack's noise settings before the deep world changed them
      * @param source the overworld's biome source
+     * @param cellW  the pack's noise cell width and height in blocks (4 and 8 for vanilla and Tectonic)
      */
-    public SurfaceOracle(RandomState pack, BiomeSource source, int seaLevel, int minY, int maxY) {
+    public SurfaceOracle(RandomState pack, BiomeSource source, int seaLevel, int minY, int maxY, int cellW, int cellH) {
         this.sampler = pack.sampler();
-        this.density = pack.router().finalDensity();
+        this.density = pack.router().finalDensity().mapAll(FlatCachesAtY0.INSTANCE);
         this.source = source;
         this.multiNoise = source instanceof MultiNoiseBiomeSource m ? m : null;
         this.seaLevel = seaLevel;
         this.minY = minY;
         this.maxY = maxY;
+        this.cellW = Math.max(4, cellW & ~3);
+        this.cellH = Math.max(1, cellH);
         this.linearDepth = checkDepth();
         ExplorationRemix.LOGGER.info("Surface oracle: depth {} linear in y, biomes {}", linearDepth ? "is" : "is NOT (scanning the density instead)",
                 multiNoise != null ? "asked at depth 0" : "asked at the ground (not a multi-noise biome source)");
@@ -98,6 +116,14 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
     @Override
     public Surface at(int x, int z) { return entry(x >> 2, z >> 2).surface; }
 
+    /**
+     * The lowest ground of the 4x4 column over (x, z): the least of the grounds at the corners of the noise cell that
+     * holds it. The world blends its terrain between those corners, so wherever all four corner columns are rock, so
+     * is everything between them.
+     */
+    @Override
+    public int low(int x, int z) { return entry(x >> 2, z >> 2).low; }
+
     @Override
     public int seaLevel() { return seaLevel; }
 
@@ -121,12 +147,14 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
     private Entry compute(int qx, int qz, long key) {
         int x = QuartPos.toBlock(qx) + 2, z = QuartPos.toBlock(qz) + 2;
         Climate.TargetPoint t = sampler.sample(qx, 0, qz);
-        int y;
+        int y, low;
         if (linearDepth) {
-            int y0 = (int) Math.round(128.0 * Climate.unquantizeCoord(t.depth()));
-            y = ground(x, z, Math.max(minY + 8, Math.min(maxY - 8, y0)));
+            y = ground(x, z, levelOf(t));
+            int x0 = Math.floorDiv(x, cellW) * cellW, z0 = Math.floorDiv(z, cellW) * cellW;
+            low = Math.min(Math.min(corner(x0, z0), corner(x0 + cellW, z0)), Math.min(corner(x0, z0 + cellW), corner(x0 + cellW, z0 + cellW)));
         } else {
             y = scan(x, z);
+            low = y;
         }
         Holder<Biome> b = multiNoise != null
                 ? multiNoise.getNoiseBiome(new Climate.TargetPoint(t.temperature(), t.humidity(), t.continentalness(), t.erosion(), 0L, t.weirdness()))
@@ -136,12 +164,92 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
         // Snow lies where the biome is snowy or cold at the ground's height: groves and high taigas too, which the pack
         // (WWOO) makes a little warmer than vanilla.
         boolean cold = info.cold || b.value().coldEnoughToSnow(new BlockPos(x, y + 1, z));
-        return new Entry(key, new Surface(y, info.kind, info.wet, ravineOk, info.cover, cold), b);
+        return new Entry(key, new Surface(y, info.kind, info.wet, ravineOk, info.cover, cold), Math.min(low, y), b);
+    }
+
+    /** Where the pack puts its ground for a climate: 128 times its depth at y 0, kept inside the world. */
+    private int levelOf(Climate.TargetPoint t) {
+        int y0 = (int) Math.round(128.0 * Climate.unquantizeCoord(t.depth()));
+        return Math.max(minY + 8, Math.min(maxY - 8, y0));
+    }
+
+    /** The ground in the noise-cell corner column at (x, z), cached: each corner serves four columns. */
+    private int corner(int x, int z) {
+        long key = ((long) x << 32) ^ (z & 0xffffffffL);
+        int i = (int) ((key * 0x9E3779B97F4A7C15L) >>> (64 - BITS));
+        Corner c = corners.get(i);
+        if (c != null && c.key == key) return c.ground;
+        int g = cornerGround(x, z, levelOf(sampler.sample(QuartPos.fromBlock(x), 0, QuartPos.fromBlock(z))));
+        corners.set(i, new Corner(key, g));
+        return g;
+    }
+
+    /**
+     * The top solid block of the pack's terrain in a noise-cell corner column, as the world builds it: the density at
+     * the grid heights (minY plus whole cells), straight between them. From the grid height at or under y0, one cell at
+     * a time: up while the next grid height is rock, or down to the first one that is (16 cells either way).
+     */
+    private int cornerGround(int x, int z, int y0) {
+        int h = cellH, y = minY + Math.floorDiv(y0 - minY, h) * h;
+        double d = packDensity(x, y, z), up;
+        if (d > 0) {
+            up = packDensity(x, y + h, z);
+            for (int i = 0; i < 16 && up > 0 && y + 2 * h <= maxY; i++) {
+                y += h;
+                d = up;
+                up = packDensity(x, y + h, z);
+            }
+            if (up > 0) return y + h;
+        } else {
+            up = d;
+            for (int i = 0; ; i++) {
+                if (i == 16 || y - h < minY) return y;
+                d = packDensity(x, y - h, z);
+                y -= h;
+                if (d > 0) break;
+                up = d;
+            }
+        }
+        return Overhead.topBetween(y, h, d, up);
     }
 
     /** The pack's own final density at a block: positive in rock, negative in its caves and in the open air. */
     @Override
     public double packDensity(int x, int y, int z) { return density.compute(new DensityFunction.SinglePointContext(x, y, z)); }
+
+    /** Turns every flat cache into {@link FlatAtY0}, as a noise chunk would fill it. */
+    private enum FlatCachesAtY0 implements DensityFunction.Visitor {
+        INSTANCE;
+
+        @Override
+        public DensityFunction apply(DensityFunction f) {
+            return f instanceof DensityFunctions.Marker m && m.type() == DensityFunctions.Marker.Type.FlatCache ? new FlatAtY0(m.wrapped()) : f;
+        }
+    }
+
+    /**
+     * A flat cache read as {@code NoiseChunk.FlatCache} fills it: the wrapped function at y 0 on the quart corner of the
+     * asked block, whatever height is asked. Stateless, so safe on any thread; never serialised.
+     */
+    private record FlatAtY0(DensityFunction wrapped) implements DensityFunction {
+        @Override
+        public double compute(FunctionContext c) { return wrapped.compute(new SinglePointContext(c.blockX() & ~3, 0, c.blockZ() & ~3)); }
+
+        @Override
+        public void fillArray(double[] a, ContextProvider p) { p.fillAllDirectly(a, this); }
+
+        @Override
+        public DensityFunction mapAll(Visitor v) { return v.apply(new FlatAtY0(wrapped.mapAll(v))); }
+
+        @Override
+        public double minValue() { return wrapped.minValue(); }
+
+        @Override
+        public double maxValue() { return wrapped.maxValue(); }
+
+        @Override
+        public KeyDispatchDataCodec<? extends DensityFunction> codec() { return KeyDispatchDataCodec.of(MapCodec.unit(this)); }
+    }
 
     private boolean solid(int x, int y, int z) { return packDensity(x, y, z) > 0.0; }
 

@@ -19,6 +19,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.AmethystClusterBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.CarpetBlock;
 import net.minecraft.world.level.block.GlowLichenBlock;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -215,13 +216,12 @@ public final class ERBlocks {
 
     // =========================================================================================== Upper Caves rework
     // ------------------------------------------------------------------------------------------- Frost Fern Grotto
-    // (and the frozen Root Vaults' thawing halls)
-    public static final RegistryObject<Block> FROST_FERN = block("frost_fern",
-            () -> new CavePlantBlock(plant(MapColor.ICE, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XYZ),
-                    Block.box(2, 0, 2, 14, 13, 14)));
-    public static final RegistryObject<Block> TALL_FROST_FERN = tallBlock("tall_frost_fern",
-            () -> new TallCavePlantBlock(plant(MapColor.ICE, SoundType.GRASS, 0).offsetType(BlockBehaviour.OffsetType.XZ),
-                    Block.box(2, 0, 2, 14, 16, 14), Block.box(2, 0, 2, 14, 14, 14)));
+    // (and the frozen Root Vaults' inner halls). The frosty ferns, frost and icicles are Immersive Weathering's.
+    /** Moss with a cold blue cast, in place of vanilla's green moss in the cold caves; ferns and flowers grow on it. */
+    public static final RegistryObject<Block> FROST_MOSS = block("frost_moss", () -> new Block(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).strength(0.1F).sound(SoundType.MOSS).pushReaction(PushReaction.DESTROY)));
+    public static final RegistryObject<Block> FROST_MOSS_CARPET = block("frost_moss_carpet", () -> new CarpetBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).strength(0.1F).sound(SoundType.MOSS_CARPET).pushReaction(PushReaction.DESTROY)));
     public static final RegistryObject<Block> FROST_ASTER = block("frost_aster",
             () -> new CavePlantBlock(flower(MapColor.COLOR_LIGHT_BLUE, 0), Block.box(3, 0, 3, 13, 12, 13)));
     /** Nodding white bells whose throats glow a cold blue. */
@@ -238,11 +238,6 @@ public final class ERBlocks {
     /** Frost feathers over the rock near the cold mouths. No light. */
     public static final RegistryObject<Block> HOARFROST = block("hoarfrost",
             () -> new GlowLichenBlock(lichen(MapColor.SNOW, SoundType.POWDER_SNOW, 0)));
-    /** Icicles hanging from the ceilings by the cold mouths; they grow downwards like vines but cannot be climbed. */
-    public static final RegistryObject<Block> ICICLE = BLOCKS.register("icicle",
-            () -> new HangingVinesBlock(ice(), ERBlocks.ICICLE_PLANT_REF));
-    public static final RegistryObject<Block> ICICLE_PLANT = BLOCKS.register("icicle_plant",
-            () -> new HangingVinesPlantBlock(ice(), ERBlocks.ICICLE_REF));
 
     // ------------------------------------------------------------------------------------------- Sinkholes and oasis hollows
     /** Grass hanging over a sinkhole's rim from the turf above. */
@@ -287,8 +282,6 @@ public final class ERBlocks {
     // Upper Caves rework
     private static final Supplier<Block> FROSTBERRY_VINE_REF = () -> FROSTBERRY_VINE.get();
     private static final Supplier<Block> FROSTBERRY_VINE_PLANT_REF = () -> FROSTBERRY_VINE_PLANT.get();
-    private static final Supplier<Block> ICICLE_REF = () -> ICICLE.get();
-    private static final Supplier<Block> ICICLE_PLANT_REF = () -> ICICLE_PLANT.get();
     private static final Supplier<Block> TRAILING_GRASS_REF = () -> TRAILING_GRASS.get();
     private static final Supplier<Block> TRAILING_GRASS_PLANT_REF = () -> TRAILING_GRASS_PLANT.get();
 
@@ -308,7 +301,6 @@ public final class ERBlocks {
         item("rose_tendrils", ROSE_TENDRILS);
         // Upper Caves rework
         item("frostberry_vine", FROSTBERRY_VINE);
-        item("icicle", ICICLE);
         item("trailing_grass", TRAILING_GRASS);
     }
 
@@ -323,12 +315,6 @@ public final class ERBlocks {
         BlockBehaviour.Properties p = BlockBehaviour.Properties.of().mapColor(color).noCollission().instabreak().sound(sound)
                 .pushReaction(PushReaction.DESTROY);
         return light > 0 ? p.lightLevel(s -> light) : p;
-    }
-
-    /** An icicle: walked through and broken with a punch, with glass's sound. */
-    private static BlockBehaviour.Properties ice() {
-        return BlockBehaviour.Properties.of().mapColor(MapColor.ICE).noCollission().instabreak().sound(SoundType.GLASS)
-                .pushReaction(PushReaction.DESTROY);
     }
 
     /** A flower: a plant set a little off the block's centre, like vanilla's, that burns. */

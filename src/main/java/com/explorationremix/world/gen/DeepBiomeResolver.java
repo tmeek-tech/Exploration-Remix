@@ -23,7 +23,8 @@ import net.minecraft.world.level.biome.Climate;
  * would put the deep dark (which moved down into the Blue Reaches) it gets what the pack would have chosen without the
  * deep dark; lush caves under cold ground become the Frost Fern Grotto; and the pack's ordinary caves (its surface
  * biome carried underground) become plant caves wherever the growth field says so ({@link PlantCaves}), lush caves or,
- * under cold ground, the Frost Fern Grotto. The pack's other cave biomes (dripstone caves) keep their places.
+ * under cold ground, the Frost Fern Grotto, never within 18 blocks of the ground. The pack's other cave biomes
+ * (dripstone caves) keep their places.
  */
 public final class DeepBiomeResolver implements BiomeResolver {
     private static final TagKey<Biome> FORGE_CAVE = TagKey.create(Registries.BIOME, new ResourceLocation("forge", "is_cave"));
@@ -68,16 +69,24 @@ public final class DeepBiomeResolver implements BiomeResolver {
     }
 
     /**
-     * Lush caves under cold ground become the Frost Fern Grotto; ordinary caves become plant caves where they grow. The
-     * surface biome's own ores still go into their rock (see {@code BiomeFilterMixin}).
+     * Lush caves under cold ground become the Frost Fern Grotto; ordinary caves become plant caves where they grow. Both
+     * only where the cell's top lies {@link PlantCaves#MIN_DEPTH} or more under the lowest ground of its column: the
+     * pack's lush caves that come up nearer to cold ground take the surface biome, as its other caves do. The surface
+     * biome's own ores still go into their rock (see {@code BiomeFilterMixin}).
      */
     private Holder<Biome> plants(Holder<Biome> b, int x, int y, int z) {
         if (overhead == null || plants == null) return b;
         boolean isLush = b.is(Biomes.LUSH_CAVES);
         if (!isLush && (b.is(FORGE_CAVE) || b.is(FORGE_UNDERGROUND) || b.is(Biomes.DRIPSTONE_CAVES))) return b;
         Overhead.Surface s = overhead.at(x, z);
-        if (isLush) return s.cold() && frost != null ? frost : b;
-        if (y < terrain.shape.packFloor + 10 || plants.growth(x, y, z, s.y() - y) <= 0) return b;
+        int low = overhead.low(x, z);
+        if (isLush) {
+            if (!s.cold() || frost == null) return b;
+            if (low - (y + 1) >= PlantCaves.MIN_DEPTH) return frost;
+            SurfaceOracle o = DeepWorld.oracle();
+            return o != null ? o.biome(x, z) : b;
+        }
+        if (y < terrain.shape.packFloor + 10 || !plants.grows(x, y, z, s.y(), low)) return b;
         if (s.cold()) return frost != null ? frost : b;
         return lush != null ? lush : b;
     }

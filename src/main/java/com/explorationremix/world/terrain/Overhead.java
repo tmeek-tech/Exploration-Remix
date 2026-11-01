@@ -10,6 +10,21 @@ public interface Overhead {
     Surface at(int x, int z);
 
     /**
+     * The lowest ground anywhere in the 4x4 column over (x, z), for what must stay under the ground in all sixteen of its
+     * block columns (the plant caves). The game reads it at the corners of the column's noise cell; a made-up world
+     * answers its ground.
+     */
+    default int low(int x, int z) { return at(x, z).y(); }
+
+    /**
+     * The top solid block between grid heights {@code y} (density {@code d > 0}) and {@code y + h} (density
+     * {@code up <= 0}), with the density straight between them as the world interpolates it.
+     */
+    static int topBetween(int y, int h, double d, double up) {
+        return y + Math.min(h - 1, (int) Math.ceil(h * d / (d - up)) - 1);
+    }
+
+    /**
      * The pack's own final density at a block, before the deep world changed it: positive in rock, negative in the
      * pack's caves (and in the air over the ground). Used to aim tunnels at the pack's caves. Not cached: ask sparingly.
      * A made-up world without caves answers 1 everywhere under its ground.

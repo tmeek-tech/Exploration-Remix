@@ -7,6 +7,7 @@ import com.explorationremix.devtools.RemixCommands;
 import com.explorationremix.registry.ERBiomeModifiers;
 import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.registry.ERParticles;
+import com.explorationremix.registry.ERRemaps;
 import com.explorationremix.registry.ERSounds;
 import com.explorationremix.registry.ERWorldgen;
 import com.explorationremix.world.gen.DeepWorldInstaller;
@@ -44,6 +45,7 @@ public final class ExplorationRemix {
         ERParticles.PARTICLES.register(modBus);
         MinecraftForge.EVENT_BUS.register(DeepWorldInstaller.class);
         MinecraftForge.EVENT_BUS.register(RemixCommands.class);
+        MinecraftForge.EVENT_BUS.register(ERRemaps.class);
         if (DevAutoRun.enabled()) MinecraftForge.EVENT_BUS.register(DevAutoRun.class);
     }
 }

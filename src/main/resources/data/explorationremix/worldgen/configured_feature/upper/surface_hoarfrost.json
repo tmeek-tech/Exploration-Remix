@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:hoarfrost"
+      }
+    },
+    "faces": "walls_ceiling",
+    "tries": 96,
+    "radius": 7,
+    "height": 6,
+    "on": "#explorationremix:surface_frost_rock",
+    "in_water": false
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "type": "minecraft:random_patch",
+  "config": {
+    "tries": 24,
+    "xz_spread": 5,
+    "y_spread": 2,
+    "feature": {
+      "feature": {
+        "type": "minecraft:simple_block",
+        "config": {
+          "to_place": {
+            "type": "explorationremix:mix",
+            "entries": [
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "immersive_weathering:frosty_fern"
+                  }
+                },
+                "weight": 6
+              },
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "explorationremix:frost_aster"
+                  }
+                },
+                "weight": 2
+              },
+              {
+                "data": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "explorationremix:snowbell"
+                  }
+                },
+                "weight": 1
+              }
+            ]
+          }
+        }
+      },
+      "placement": [
+        {
+          "type": "minecraft:block_predicate_filter",
+          "predicate": {
+            "type": "minecraft:all_of",
+            "predicates": [
+              {
+                "type": "minecraft:matching_blocks",
+                "blocks": [
+                  "minecraft:air",
+                  "minecraft:cave_air"
+                ]
+              },
+              {
+                "type": "minecraft:would_survive",
+                "state": {
+                  "Name": "immersive_weathering:frosty_fern"
+                }
+              },
+              {
+                "type": "minecraft:matching_blocks",
+                "offset": [
+                  0,
+                  -1,
+                  0
+                ],
+                "blocks": [
+                  "minecraft:moss_block",
+                  "minecraft:grass_block",
+                  "minecraft:rooted_dirt",
+                  "minecraft:dirt",
+                  "minecraft:moss_carpet",
+                  "explorationremix:frost_moss",
+                  "minecraft:podzol",
+                  "minecraft:coarse_dirt",
+                  "minecraft:snow_block",
+                  "minecraft:gravel"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

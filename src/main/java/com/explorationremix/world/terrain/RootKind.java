@@ -24,6 +24,12 @@ public enum RootKind {
     /** Big trees with thick trunks send down thick roots. */
     public boolean thick() { return this == JUNGLE || this == DARK_OAK; }
 
+    /**
+     * Jungle and mangrove trees grow in the tropics (jungles, sparse and bamboo jungles, mangrove swamps): only their Root
+     * Vaults are built of veridium, and only theirs run it on into the lush caves below.
+     */
+    public boolean tropical() { return this == JUNGLE || this == MANGROVE; }
+
     /** The kinds that have a biome tag, in the order they are checked (the first match wins). */
     public static final RootKind[] TAGGED = {MANGROVE, CHERRY, DARK_OAK, BIRCH, JUNGLE, SPRUCE, OAK};
 

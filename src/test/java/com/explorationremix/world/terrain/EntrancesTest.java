@@ -287,4 +287,45 @@ class EntrancesTest {
         }
         return seen;
     }
+
+    /**
+     * A cold Root Vault cluster is frozen throughout, snowed in round its openings and thawed deep inside (Taran's ask
+     * for 0.4.1: snowier, with the plants hidden deeper in). Over the open floors of the cold clusters (sampled every
+     * other block), a good share lies in the snowy zone and a share deep enough for plants, and most clusters have some.
+     */
+    @Test
+    void coldClustersThawDeepInside() {
+        long snowy = 0, band = 0, thawed = 0;
+        int clusters = 0, withThaw = 0;
+        for (long seed : SEEDS) {
+            Entrances e = new Entrances(seed, PACK_FLOOR, WORLD);
+            for (Entrances.Site s : sites(e, 12)) {
+                if (s.kind != Entrances.Kind.VAULTS || !s.cold) continue;
+                clusters++;
+                long before = thawed;
+                for (Entrances.Chamber g : s.chambers) {
+                    int r = (int) Math.ceil(Math.max(g.a, g.b) * 1.3);
+                    for (int x = (int) g.cx - r; x <= g.cx + r; x += 2) for (int z = (int) g.cz - r; z <= g.cz + r; z += 2) {
+                        if (e.chamberAt(x, z) != g) continue;
+                        for (int y = (int) Math.floor(g.water) + 1; y < g.top(); y++) {
+                            if (e.carve(x, y, z) >= 0 || e.carve(x, y - 1, z) < 0) continue;
+                            double c = e.chill(s, x, y, z);
+                            if (c <= 0) snowy++;
+                            else if (c < Entrances.THAW_REACH) band++;
+                            else thawed++;
+                            break;
+                        }
+                    }
+                }
+                if (thawed > before) withThaw++;
+            }
+        }
+        long all = snowy + band + thawed;
+        System.out.printf("cold clusters %d (%d with thawed floor); floors: snowy %.0f %%, thawing %.0f %%, thawed %.0f %%%n", clusters, withThaw,
+                100.0 * snowy / all, 100.0 * band / all, 100.0 * thawed / all);
+        assertTrue(clusters >= 6, "cold clusters: " + clusters);
+        assertTrue(snowy >= 0.25 * all, "snowy floors: " + snowy + " of " + all);
+        assertTrue(thawed >= 0.12 * all, "thawed floors: " + thawed + " of " + all);
+        assertTrue(withThaw * 2 >= clusters, withThaw + " of " + clusters + " clusters thaw somewhere");
+    }
 }

@@ -16,6 +16,15 @@
       "focus": "grottos"
     },
     {
+      "type": "explorationremix:rootvaults_look",
+      "looks": [
+        0,
+        1,
+        2
+      ],
+      "max_chill": 8.0
+    },
+    {
       "type": "minecraft:biome"
     }
   ]

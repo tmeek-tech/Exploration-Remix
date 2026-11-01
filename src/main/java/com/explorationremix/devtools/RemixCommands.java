@@ -54,9 +54,11 @@ import java.util.Locale;
  *     <li>{@code /remix tp bedrock}: the bedrock landing of the last layer's network in this cell</li>
  *     <li>{@code /remix tp biome <name>}: a deep biome's nearest chamber in the networks of the nine cells round you
  *     (set pieces first), standing on its floor in open air; or the Silver Fern Rift, the Ivory Root Cavern, an
- *     entrance (rootvaults, frozen_rootvaults, sinkhole, oasis_hollow) or the Frost Fern Grotto</li>
+ *     entrance (rootvaults, tropical_rootvaults, frozen_rootvaults, sinkhole, oasis_hollow) or the Frost Fern Grotto</li>
  *     <li>{@code /remix view <name> [n]}: a spot in that biome with a wide view into it, facing the view (for
- *     screenshots); n picks the Root Vaults' look (0 root halls, 1 teal grottos, 2 ravines), an oasis' rock (0 sand,
+ *     screenshots); n picks the Root Vaults' look (0 root halls, 1 teal grottos, 2 ravines; rootvaults outside the
+ *     tropics, tropical_rootvaults under jungles and mangrove swamps), the frozen Root Vaults' snowy zone (0) or
+ *     thawed inner halls (1), an oasis' rock (0 sand,
  *     1 red) or the n-th place of a deep biome (set pieces first, then nearest first). The Upper Caves' places are
  *     searched round the command's position, so {@code execute positioned} can aim the search.</li>
  *     <li>{@code /remix slice [x|z] [half width]}: a picture of the blocks under you, written to remix_slices/</li>
@@ -165,12 +167,17 @@ public final class RemixCommands {
         if (o != null) {
             s = o.at(x, z);
             String biome = o.biome(x, z).unwrapKey().map(k -> k.location().toString()).orElse("?");
-            say(c, String.format(Locale.ROOT, "  over this column: ground y %d, %s, %s trees, cover %s%s%s%s", s.y(), biome, s.trees().id,
-                    s.cover().name().toLowerCase(Locale.ROOT), s.cold() ? ", cold" : "", s.wet() ? ", wet" : "", s.ravineOk() ? ", ravines allowed" : ""));
+            say(c, String.format(Locale.ROOT, "  over this column: ground y %d (lowest %d), %s, %s trees, cover %s%s%s%s", s.y(), o.low(x, z), biome,
+                    s.trees().id, s.cover().name().toLowerCase(Locale.ROOT), s.cold() ? ", cold" : "", s.wet() ? ", wet" : "",
+                    s.ravineOk() ? ", ravines allowed" : ""));
         }
         PlantCaves plants = DeepWorld.plants();
-        if (plants != null && s != null) say(c, String.format(Locale.ROOT, "  plant caves here: growth %.2f (%d under the ground; above 0 grows plants)",
-                plants.growth(x, y, z, s.y() - y), s.y() - y));
+        if (plants != null && s != null) {
+            int cy = (y & ~3) + 2, low = o.low(x, z);
+            say(c, String.format(Locale.ROOT, "  plant caves here: %s (growth %.2f, %d under the ground, the cell's top %d under the lowest ground; "
+                    + "plants need growth above 0 and %d or more)", plants.grows(x, cy, z, s.y(), low) ? "yes" : "no",
+                    plants.growth(x, cy, z, s.y() - cy), s.y() - cy, low - (cy + 1), PlantCaves.MIN_DEPTH));
+        }
         Entrances e = DeepWorld.entrances();
         if (e == null) return;
         Entrances.Chamber g = e.chamberAt(x, z);
@@ -314,9 +321,11 @@ public final class RemixCommands {
     }
 
     /** The Upper Caves' places the commands know besides the deep biomes: the entrances and the Frost Fern Grotto. */
-    private static final String[] UPPER_PLACES = {"rootvaults", "frozen_rootvaults", "sinkhole", "oasis_hollow", "frost_fern_grotto", "lush_veridium",
-            "rootvaults_mouth"};
-    /** The view where a Root Vault's descent opens into a lush cave, whose veridium runs on into it. */
+    private static final String[] UPPER_PLACES = {"rootvaults", "tropical_rootvaults", "frozen_rootvaults", "sinkhole", "oasis_hollow",
+            "frost_fern_grotto", "lush_veridium", "rootvaults_mouth"};
+    /** How many of {@link #UPPER_PLACES}, from the first, are entrances. */
+    private static final int ENTRANCES = 5;
+    /** The view where a tropical Root Vault's descent opens into a lush cave, whose veridium runs on into it. */
     private static final String LUSH_VERIDIUM = "lush_veridium";
     private static final String FROST_GROTTO = "frost_fern_grotto";
     /** How many of the Frost Fern Grotto's nearest caves its view tries. */
@@ -325,7 +334,7 @@ public final class RemixCommands {
     /** An entrance's name (its biome's), lower case, or null for any other name. */
     @javax.annotation.Nullable
     private static String entrance(String name) {
-        for (int i = 0; i < 4; i++) if (UPPER_PLACES[i].equalsIgnoreCase(name)) return UPPER_PLACES[i];
+        for (int i = 0; i < ENTRANCES; i++) if (UPPER_PLACES[i].equalsIgnoreCase(name)) return UPPER_PLACES[i];
         return null;
     }
 
@@ -423,16 +432,17 @@ public final class RemixCommands {
         ServerLevel level = (ServerLevel) pl.level();
         BlockPos around;
         net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> key;
-        int look = -1, radius = 24;
+        int look = -1, radius = 24, chill = -1;
         java.util.List<BlockPos> tries = null;
         if (name.equalsIgnoreCase("rootvaults_mouth")) return viewMouth(c, pl, level, n == 1);
         String ent = entrance(name);
         Entrances e = DeepWorld.entrances();
         if (ent != null) {
-            if (ent.equals("rootvaults") && n >= 0 && n <= 2) look = n;
-            // Only a frozen cluster's mouth zone is frozen: with n 1, the view looks into its halls instead.
-            boolean halls = ent.equals("frozen_rootvaults") && n == 1;
-            key = net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, entranceBiome(halls ? "rootvaults" : ent));
+            if ((ent.equals("rootvaults") || ent.equals("tropical_rootvaults")) && n >= 0 && n <= 2) look = n;
+            // A frozen cluster is snowed in round its openings and thaws further in: n 0 views the snowy zone, n 1 the
+            // thawed halls deep inside.
+            if (ent.equals("frozen_rootvaults") && (n == 0 || n == 1)) chill = n;
+            key = net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME, entranceBiome(ent));
             Entrances.Chamber g = e != null ? nearestEntrance(e, c.getSource().getPosition(), ent, n) : null;
             if (g == null) {
                 c.getSource().sendFailure(Component.literal("No " + ent + (n >= 0 ? " " + n : "") + " found within "
@@ -445,7 +455,8 @@ public final class RemixCommands {
             key = net.minecraft.world.level.biome.Biomes.LUSH_CAVES;
             around = lushJunction(level, e, c.getSource().getPosition());
             if (around == null) {
-                c.getSource().sendFailure(Component.literal("No Root Vault descent into a lush cave within " + SEARCH_CELLS * Entrances.CELL + " blocks."));
+                c.getSource().sendFailure(Component.literal("No tropical Root Vault descent into a lush cave within " + SEARCH_CELLS * Entrances.CELL
+                        + " blocks."));
                 return 0;
             }
             radius = 20;
@@ -476,9 +487,10 @@ public final class RemixCommands {
                 around = pl.blockPosition();
             }
         }
-        final int lk = look;
+        final int lk = look, ch = chill;
         final net.minecraft.resources.ResourceKey<net.minecraft.world.level.biome.Biome> k = key;
-        java.util.function.Predicate<BlockPos> in = p -> level.getBiome(p).is(k) && (lk < 0 || (e != null && e.look(p.getX(), p.getZ()) == lk));
+        java.util.function.Predicate<BlockPos> in = p -> level.getBiome(p).is(k) && (lk < 0 || (e != null && e.look(p.getX(), p.getZ()) == lk))
+                && (ch < 0 || e != null && thawed(e, p) == (ch == 1));
         ViewFinder.View v = null;
         String extra = "";
         if (name.equalsIgnoreCase(LUSH_VERIDIUM)) {
@@ -662,7 +674,10 @@ public final class RemixCommands {
         return n;
     }
 
-    /** The end of the nearest Root Vault descent that opens into a lush cave (as the deep world picks the biome), or null. */
+    /**
+     * The end of the nearest tropical Root Vault descent (under a jungle or a mangrove swamp: the only ones whose veridium
+     * runs on) that opens into a lush cave (as the deep world picks the biome), or null.
+     */
     @javax.annotation.Nullable
     private static BlockPos lushJunction(ServerLevel level, @javax.annotation.Nullable Entrances e, Vec3 from) {
         Terrain t = DeepWorld.terrain();
@@ -675,7 +690,7 @@ public final class RemixCommands {
         double bd = 1e18;
         for (int i = -SEARCH_CELLS; i <= SEARCH_CELLS; i++) for (int j = -SEARCH_CELLS; j <= SEARCH_CELLS; j++) {
             Entrances.Site s = e.site(ci + i, cj + j);
-            if (s == null || s.kind != Entrances.Kind.VAULTS) continue;
+            if (s == null || s.kind != Entrances.Kind.VAULTS || !s.tropical()) continue;
             for (Entrances.Tunnel tn : e.tunnelsOf(s)) {
                 if (tn.way != Entrances.Way.DESCENT) continue;
                 double[] end = tn.end();
@@ -689,12 +704,19 @@ public final class RemixCommands {
         return best;
     }
 
+    /** Deep inside a frozen Root Vault cluster, where it has thawed (true), or in the snowy zone round its openings (false). */
+    private static boolean thawed(Entrances e, BlockPos p) {
+        return e.chill(p.getX(), p.getY(), p.getZ()) >= Entrances.THAW_REACH;
+    }
+
     /** How far the entrance commands search, in cells of 64 blocks. */
     private static final int SEARCH_CELLS = 12;
 
     /**
-     * The nearest entrance chamber of a kind ("rootvaults" a warm Root Vault, n picks its look; "frozen_rootvaults" a
-     * cold one; "sinkhole"; "oasis_hollow", n 0 for sand and 1 for red rock), or null.
+     * The nearest entrance chamber of a kind ("rootvaults" a warm Root Vault outside the tropics, n picks its look;
+     * "tropical_rootvaults" one under a jungle or a mangrove swamp, likewise; "frozen_rootvaults" a cold one, n 0 in the
+     * snowy zone round its openings and 1 thawed deep inside; "sinkhole"; "oasis_hollow", n 0 for sand and 1 for red
+     * rock), or null.
      */
     @javax.annotation.Nullable
     private static Entrances.Chamber nearestEntrance(Entrances e, Vec3 from, String name, int n) {
@@ -710,14 +732,17 @@ public final class RemixCommands {
                 Entrances.Site s = e.site(ci + i, cj + j);
                 if (s == null) continue;
                 boolean kind = switch (name) {
-                    case "rootvaults" -> s.kind == Entrances.Kind.VAULTS && !s.cold;
+                    case "rootvaults" -> s.kind == Entrances.Kind.VAULTS && !s.cold && !s.tropical();
+                    case "tropical_rootvaults" -> s.kind == Entrances.Kind.VAULTS && !s.cold && s.tropical();
                     case "frozen_rootvaults" -> s.kind == Entrances.Kind.VAULTS && s.cold;
                     case "sinkhole" -> s.kind == Entrances.Kind.SINKHOLE;
                     default -> s.kind == Entrances.Kind.OASIS && (n < 0 || s.red == (n == 1));
                 };
                 if (!kind) continue;
                 for (Entrances.Chamber g : s.chambers) {
-                    if (name.equals("rootvaults") && n >= 0 && n <= 2 && g.look != n) continue;
+                    if ((name.equals("rootvaults") || name.equals("tropical_rootvaults")) && n >= 0 && n <= 2 && g.look != n) continue;
+                    if (name.equals("frozen_rootvaults") && (n == 0 || n == 1)
+                            && (e.chill(s, g.cx, g.water + 2, g.cz) >= Entrances.THAW_REACH) != (n == 1)) continue;
                     double d = Math.hypot(g.cx - px, g.cz - pz);
                     if (d < bd) { bd = d; best = g; }
                     if (found < 0) found = ring;

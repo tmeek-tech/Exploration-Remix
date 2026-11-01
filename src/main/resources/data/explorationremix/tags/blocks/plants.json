@@ -56,16 +56,13 @@
     "explorationremix:cinder_bloom",
     "explorationremix:ash_fern",
     "explorationremix:smoulder_lichen",
-    "explorationremix:frost_fern",
-    "explorationremix:tall_frost_fern",
+    "explorationremix:frost_moss_carpet",
     "explorationremix:frost_aster",
     "explorationremix:snowbell",
     "explorationremix:frostberry_vine",
     "explorationremix:frostberry_vine_plant",
     "explorationremix:rime_lichen",
     "explorationremix:hoarfrost",
-    "explorationremix:icicle",
-    "explorationremix:icicle_plant",
     "explorationremix:trailing_grass",
     "explorationremix:trailing_grass_plant",
     "explorationremix:fan_palm",
@@ -85,6 +82,22 @@
     "minecraft:sea_pickle",
     "minecraft:seagrass",
     "minecraft:tall_seagrass",
-    "minecraft:spore_blossom"
+    "minecraft:spore_blossom",
+    {
+      "id": "immersive_weathering:frosty_fern",
+      "required": false
+    },
+    {
+      "id": "immersive_weathering:frosty_grass",
+      "required": false
+    },
+    {
+      "id": "immersive_weathering:icicle",
+      "required": false
+    },
+    {
+      "id": "immersive_weathering:frost",
+      "required": false
+    }
   ]
 }

@@ -19,6 +19,7 @@ import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 
 import javax.annotation.Nullable;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -83,7 +84,7 @@ public final class DeepBiomes {
         if (frostGrotto == null) ExplorationRemix.LOGGER.error("Biome {} is missing; lush caves stay under cold ground", FROST_FERN_GROTTO);
         else if (replaceCaveBiomes) set.add(frostGrotto);
         lushCaves = registry.getHolder(Biomes.LUSH_CAVES).orElse(null);
-        all = Set.copyOf(set);
+        all = Collections.unmodifiableSet(set); // insertion order: see union()
         lastBase = null;
         lastUnion = null;
     }
@@ -118,14 +119,19 @@ public final class DeepBiomes {
         return h == frostGrotto || h == lushCaves || h.is(Biomes.LUSH_CAVES) || AREAS.containsValue(h);
     }
 
-    /** The biome source's own biomes plus the deep ones, so their features are sorted and placed. */
+    /**
+     * The biome source's own biomes plus the deep ones, so their features are sorted and placed. Kept in a fixed order:
+     * the game numbers the features in the order it meets them in this set, and each feature's random seed follows its
+     * number, so a set that iterates differently from run to run (Set.copyOf's does) put trees, ores and the rest
+     * elsewhere in every new world of the same seed.
+     */
     public static synchronized Set<Holder<Biome>> union(Set<Holder<Biome>> base) {
         if (all.isEmpty()) return base;
         if (base == lastBase && lastUnion != null) return lastUnion;
         Set<Holder<Biome>> out = new LinkedHashSet<>(base);
         out.addAll(all);
         lastBase = base;
-        lastUnion = Set.copyOf(out);
+        lastUnion = Collections.unmodifiableSet(out);
         return lastUnion;
     }
 

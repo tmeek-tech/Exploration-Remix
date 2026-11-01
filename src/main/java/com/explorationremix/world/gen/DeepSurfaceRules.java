@@ -14,6 +14,7 @@ import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.SurfaceRules;
 
 /**
@@ -80,13 +81,17 @@ public final class DeepSurfaceRules {
                         Rock r;
                         if (b == oasis || look == Entrances.HOLLOW) r = t.palette.oasis(x, y, z, above, below, wet, shell, col.red);
                         else if (b == sinkhole || look == Entrances.SINKHOLE) r = t.palette.sinkhole(x, y, z, above, below, wet, shell, col.cold);
-                        // (A cold cluster's ravine walls near the ground lie in the surface biome: frozen too.)
-                        else if (b == frozen || !ours && col.cold) r = t.palette.frozenVaults(look, x, y, z, above, below, wet, shell);
-                        else r = t.palette.rootvaults(look, x, y, z, above, below, wet, shell);
+                        // A cold cluster is frozen throughout (its ravine walls near the ground lie in the surface
+                        // biome: frozen too), thawing with distance from its openings.
+                        else if (b == frozen || col.cold) r = t.palette.frozenVaults(look, col.chill(ent, x, y, z), x, y, z, above, below, wet, shell);
+                        else r = t.palette.rootvaults(look, col.tropical, x, y, z, above, below, wet, shell);
                         return DeepMaterials.state(r);
                     }
                 }
-                if (b == frost && frost != null) return DeepMaterials.state(t.palette.frostGrotto(x, y, z, above, below, wet));
+                // The grotto's rock only under a roof: never on the top three blocks of a column (its open ground), should
+                // a grotto cell reach it next to a shaft of our own.
+                if (b == frost && frost != null && y < chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z) - 2)
+                    return DeepMaterials.state(t.palette.frostGrotto(x, y, z, above, below, wet));
                 if (b == fernRift || b == rootCavern) {
                     DeepBiome db = b == fernRift ? DeepBiome.SILVER_FERN_RIFT : DeepBiome.IVORY_ROOT_CAVERN;
                     return DeepMaterials.state(t.palette.upperShell(db, x, y, z, above, below, wet));
@@ -102,7 +107,8 @@ public final class DeepSurfaceRules {
     private static final class Column {
         int x = Integer.MIN_VALUE, z = Integer.MIN_VALUE;
         int look = -1;
-        boolean cold, red, open;
+        boolean cold, red, open, tropical;
+        Entrances.Site site;
 
         void at(Entrances ent, int x, int z) {
             if (x == this.x && z == this.z) return;
@@ -110,9 +116,16 @@ public final class DeepSurfaceRules {
             this.z = z;
             look = ent.look(x, z);
             Entrances.Site s = ent.siteAt(x, z);
+            site = s;
             cold = s != null && s.cold;
             red = s != null && s.red;
+            tropical = s != null && s.tropical();
             open = look == Entrances.RAVINE || look == Entrances.SINKHOLE;
+        }
+
+        /** How far the block lies past the snowy zone of the column's cold Root Vault cluster ({@link Entrances#chill}). */
+        double chill(Entrances ent, int x, int y, int z) {
+            return site != null && site.cold && site.kind == Entrances.Kind.VAULTS ? ent.chill(site, x, y, z) : ent.chill(x, y, z);
         }
 
         /** A ravine or a sinkhole runs under this column (its walls are dressed up to near the ground). */

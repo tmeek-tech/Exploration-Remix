@@ -131,7 +131,8 @@ public final class DeepWorldInstaller {
         // upper set pieces are never carved under an ocean, river or beach, and each entrance only under its own cover.
         BiomeSource biomeSource = generator.getBiomeSource();
         RandomState packState = RandomState.create(settings, access.lookupOrThrow(Registries.NOISE), seed);
-        SurfaceOracle oracle = new SurfaceOracle(packState, biomeSource, settings.seaLevel(), currentMin, currentMin + dimension.height());
+        SurfaceOracle oracle = new SurfaceOracle(packState, biomeSource, settings.seaLevel(), currentMin, currentMin + dimension.height(),
+                noise.getCellWidth(), noise.getCellHeight());
         terrain.surfaceProbe = oracle;
         boolean upperOn = ERConfig.INSTANCE.replaceVanillaCaveBiomes.get();
         DeepWorld.setUpper(upperOn ? new Entrances(seed, currentMin, oracle) : null, upperOn ? new PlantCaves(seed) : null, oracle);

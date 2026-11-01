@@ -1,0 +1,14 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:base_stone_overworld",
+    "#minecraft:dirt",
+    "minecraft:packed_ice",
+    "minecraft:ice",
+    "minecraft:blue_ice",
+    "minecraft:gravel",
+    "minecraft:calcite",
+    "minecraft:cobblestone",
+    "minecraft:mossy_cobblestone"
+  ]
+}

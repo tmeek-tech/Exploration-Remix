@@ -15,19 +15,19 @@
                 "data": {
                   "type": "minecraft:simple_state_provider",
                   "state": {
-                    "Name": "explorationremix:frost_fern"
+                    "Name": "immersive_weathering:frosty_fern"
                   }
                 },
-                "weight": 4
+                "weight": 3
               },
               {
                 "data": {
                   "type": "minecraft:simple_state_provider",
                   "state": {
-                    "Name": "minecraft:fern"
+                    "Name": "immersive_weathering:frosty_grass"
                   }
                 },
-                "weight": 2
+                "weight": 3
               },
               {
                 "data": {
@@ -58,7 +58,7 @@
               {
                 "type": "minecraft:would_survive",
                 "state": {
-                  "Name": "explorationremix:frost_fern"
+                  "Name": "immersive_weathering:frosty_fern"
                 }
               },
               {
@@ -74,6 +74,7 @@
                   "minecraft:rooted_dirt",
                   "minecraft:dirt",
                   "minecraft:moss_carpet",
+                  "explorationremix:frost_moss",
                   "minecraft:podzol",
                   "minecraft:coarse_dirt",
                   "minecraft:snow_block",

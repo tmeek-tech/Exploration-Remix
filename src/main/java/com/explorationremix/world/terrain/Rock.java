@@ -57,7 +57,10 @@ public enum Rock {
     RED_SANDSTONE(0xb5621f),
     SMOOTH_RED_SANDSTONE(0xb5621f),
     TERRACOTTA(0x985e44),
-    ORANGE_TERRACOTTA(0xa25426);
+    ORANGE_TERRACOTTA(0xa25426),
+    // ---- 0.4.1: Root Vault ravines outside the tropics, and the cold caves' blue moss
+    ANDESITE(0x888889),
+    FROST_MOSS(0x5d8a96);
 
     public final int color;
 

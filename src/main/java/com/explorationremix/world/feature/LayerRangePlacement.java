@@ -11,6 +11,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacementModifierType;
@@ -25,7 +26,7 @@ import java.util.stream.Stream;
  * the old floor up to 128 blocks above it, where the Silver Fern Rift and the Ivory Root Cavern are. Its
  * {@code focus} aims the tries: {@code pieces} only into the open space of a set piece over the column (none
  * elsewhere), {@code grottos} as just described, {@code caves} anywhere from the old floor up to 6 blocks under the
- * pack's ground (for the plant caves, which follow the ground), {@code auto} (the default) into a set piece three times
+ * lowest ground of the column (for the plant caves, which follow the ground), {@code auto} (the default) into a set piece three times
  * in four where there is one, as described otherwise.
  */
 public final class LayerRangePlacement extends PlacementModifier {
@@ -60,8 +61,11 @@ public final class LayerRangePlacement extends PlacementModifier {
         if (layer.equals("upper")) {
             int x = pos.getX(), z = pos.getZ();
             if (focus.equals("caves")) {
+                // From the lowest ground of the column (or the real ground, if our own carving took it lower), so a try
+                // never starts above the ground and scans down onto it.
                 SurfaceOracle o = DeepWorld.oracle();
-                int lo = s.packFloor + 6 + inset, hi = o != null ? o.at(x, z).y() - 6 : lo + 128;
+                int lo = s.packFloor + 6 + inset;
+                int hi = o != null ? Math.min(o.low(x, z), ctx.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, x, z)) - 6 : lo + 128;
                 if (hi <= lo) return Stream.empty();
                 return Stream.of(new BlockPos(x, lo + random.nextInt(hi - lo + 1), z));
             }
