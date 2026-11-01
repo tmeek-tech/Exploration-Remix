@@ -115,7 +115,7 @@ public final class ERConfig {
         lavaChangesPerTick = b.comment("Most blocks the lava changes in one tick, over all players (each one is re-lit and sent to the players",
                 "watching it). Both are halved while the server is falling behind.").defineInRange("changesPerTick", 1500, 16, 100_000);
         lavaRadius = b.comment("The lava is kept up to date in the chunks this far round every player in or near the Galleries; other chunks catch",
-                "up when a player comes near. 0: the server's view distance.").defineInRange("playerRadius", 0, 0, 64);
+                "up when a player comes near. 0: one chunk past the server's view distance (every chunk a client can see).").defineInRange("playerRadius", 0, 0, 64);
         b.pop();
     }
 
