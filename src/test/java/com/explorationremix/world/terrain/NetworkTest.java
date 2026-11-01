@@ -454,8 +454,11 @@ class NetworkTest {
     /** The Wasteland's longest walk between two branches (blocks, door to door; the planner's {@code runMax}). */
     static final double RUN_MAX = 40;
     /**
-     * The share of the Wasteland's passages allowed over {@link #RUN_MAX} (about one in fifty walks more: a junction room
-     * cut into a long run leaves passages on either side of it), and the longest passage allowed.
+     * The share of the Wasteland's passages allowed over {@link #RUN_MAX}, and the longest passage allowed. The share was
+     * 0.015 and is loosened on purpose, with the runs through two-way rooms: a walker meets such a run as one long
+     * passage whatever the rooms along it, and the runs are now broken up by junction rooms cut into their tunnels and
+     * by branches that reach further than the limit, which leave passages of up to twice it on either side of them.
+     * About one in fifty walks more than the limit (2.0% to 2.2% over 362 plans of seeds 1 to 120), none more than 74.
      */
     static final double PASSAGE_OVER = 0.03, PASSAGE_LONGEST = 80;
     /**
@@ -463,6 +466,15 @@ class NetworkTest {
      * allowed over twice that, and the longest run allowed (a guard, not the goal: see the test).
      */
     static final double RUN_OVER = 0.07, RUN_FAR_OVER = 0.01, RUN_LONGEST = 160;
+
+    /**
+     * The longest walk allowed from a run's far end on through a portal vestibule with no other tunnel and its stub, to
+     * the next cell's vestibule (a guard, as {@link #RUN_LONGEST} is). The planner weighs such a run with its stub and
+     * gives the vestibule a second tunnel first, and most such walks stay under {@link #RUN_LONGEST}, but not all: of the
+     * 31 such vestibules in this test's plans one walks 192 (seed 777, cell 0,0), and of 150 in 360 plans of seeds 1 to
+     * 120 one walks 171, where 8 of 221 walked more than 160 before, the longest 430.
+     */
+    static final double SEAM_LONGEST = 200;
 
     /**
      * The Wasteland's plans the branch and dead-end tests read besides the fast tests' nine: {seed, cx, cz} of cells
@@ -480,10 +492,49 @@ class NetworkTest {
     }
 
     /**
+     * More of the Wasteland's plans for the branch and dead-end tests, on seeds no other test uses: {@link #WIDE_SEEDS}
+     * by {@link #WIDE_CELLS}, and {@link #WIDE_EXTRA}.
+     */
+    static final long[] WIDE_SEEDS = {31, 32, 33, 34, 35, 36, 37, 38, 39, 40};
+    static final int[][] WIDE_CELLS = {{2, 2}, {-3, -5}, {4, 1}};
+    /**
+     * {seed, cx, cz} of cells where runs of 180 to 380 blocks through two-way rooms (two of them through a refuge, one
+     * with a tunnel of 93), a vestibule's run on through its stub into the next cell of 210, and portal vestibules left
+     * unjoined (their stubs blind at the seam) were found.
+     */
+    static final long[][] WIDE_EXTRA = {{82, 7, -6}, {60, -3, -5}, {120, 7, -6}, {47, 4, 1}, {14, -2, 3}, {106, 7, -6}, {63, 0, 0}};
+
+    private static List<Object[]> wide;
+
+    /**
+     * The Wasteland's plans of the branch and dead-end tests, {tag, plan}: the fast tests' nine cells and
+     * {@link #WASTE_EXTRA}, then the wide set ({@link #WIDE_SEEDS}), made once for both tests (its terrains are let go,
+     * the plans kept).
+     */
+    static synchronized List<Object[]> wasteNets() {
+        List<Object[]> out = new ArrayList<>();
+        for (long[] pl : wastePlans()) out.add(new Object[]{tag(pl[0], Terrain.WASTELAND, (int) pl[1], (int) pl[2]), terrain(pl[0]).network.net(Terrain.WASTELAND, (int) pl[1], (int) pl[2])});
+        if (wide == null) {
+            List<long[]> cells = new ArrayList<>();
+            for (long seed : WIDE_SEEDS) for (int[] c : WIDE_CELLS) cells.add(new long[]{seed, c[0], c[1]});
+            cells.addAll(java.util.Arrays.asList(WIDE_EXTRA));
+            wide = new ArrayList<>();
+            Terrain t = null;
+            for (long[] c : cells) {
+                if (t == null || t.seed != c[0]) t = new Terrain(TerrainSettings.defaults(), -64, c[0]);
+                wide.add(new Object[]{tag(c[0], Terrain.WASTELAND, (int) c[1], (int) c[2]), t.network.net(Terrain.WASTELAND, (int) c[1], (int) c[2])});
+            }
+        }
+        out.addAll(wide);
+        return out;
+    }
+
+    /**
      * No dead end in the Wasteland's plans (Taran, 2026-11-01): no blind passage or blind tube, no pocket, surge niche,
      * tube hub or lava basin; every kept chamber has two ways or more (a portal vestibule's stub across the seam counts:
      * it goes on into the next cell's network), a junction room three (it is a fork); and no way is a bridge, so every
-     * tunnel lies on a loop. Over the fast tests' nine cells and {@link #WASTE_EXTRA}. The bridges are found with the
+     * tunnel lies on a loop. Over the fast tests' nine cells, {@link #WASTE_EXTRA} and the wide set
+     * ({@link #wasteNets}). The bridges are found with the
      * two landings and the kept vestibules joined to one node outside the cell that stands for the rest of the world
      * (the gates go on to the layers above and below, the stubs into the next cells). The bridges of the cell on its
      * own, each cutting off a part of it that the world joins through a portal or a gate, are printed, and so are the
@@ -493,11 +544,9 @@ class NetworkTest {
     void wastelandHasNoDeadEnds() {
         List<String> fails = new ArrayList<>();
         int plans = 0, inCell = 0, onStub = 0;
-        for (long[] pl : wastePlans()) {
-            Terrain t = terrain(pl[0]);
-            int cx = (int) pl[1], cz = (int) pl[2];
-            Net n = t.network.net(Terrain.WASTELAND, cx, cz);
-            String tg = tag(pl[0], Terrain.WASTELAND, cx, cz);
+        for (Object[] pl : wasteNets()) {
+            String tg = (String) pl[0];
+            Net n = (Net) pl[1];
             plans++;
             for (Edge e : n.edges) if (e.kind == EK.STUB) fails.add(tg + ": a blind stub from " + n.ch.get(e.a).kind + "#" + e.a);
             for (Way wy : n.ways) if (wy.kind == EK.STUB) fails.add(tg + ": blind way #" + wy.id);
@@ -568,42 +617,91 @@ class NetworkTest {
      * each such room's floor from door to door), are what the planner aims at, and fall short of: about one in twenty
      * walks more than the limit, mostly through one room between two tunnels of 20 to 36. They are printed, and held to
      * what the planner reaches ({@link #RUN_OVER} over the limit, {@link #RUN_FAR_OVER} over twice it, none over
-     * {@link #RUN_LONGEST}), so a change that makes them worse is seen. Over the fast tests' nine cells and
-     * {@link #WASTE_EXTRA}.
+     * {@link #RUN_LONGEST}), so a change that makes them worse is seen. A run that ends at a portal vestibule with no
+     * other tunnel goes on through the stub with no other way on: walked on to the next cell's vestibule, it walks no
+     * more than {@link #SEAM_LONGEST}. Over the fast tests' nine cells, {@link #WASTE_EXTRA} and the wide set
+     * ({@link #wasteNets}).
      */
     @Test
     void wastelandBranchSpacing() {
-        long passages = 0, passOver = 0, runs = 0, runOver = 0, runFar = 0;
-        double passLongest = 0, runLongest = 0;
-        String passWorst = "", runWorst = "";
-        for (long[] pl : wastePlans()) {
-            Terrain t = terrain(pl[0]);
-            int cx = (int) pl[1], cz = (int) pl[2];
-            Net n = t.network.net(Terrain.WASTELAND, cx, cz);
-            String tg = tag(pl[0], Terrain.WASTELAND, cx, cz);
+        long passages = 0, passOver = 0, runs = 0, runOver = 0, runFar = 0, lone = 0;
+        double passLongest = 0, runLongest = 0, seamLongest = 0;
+        String passWorst = "", runWorst = "", seamWorst = "";
+        for (Object[] pl : wasteNets()) {
+            String tg = (String) pl[0];
+            Net n = (Net) pl[1];
             for (List<Edge> p : NetGraph.passages(n)) {
                 double l = NetGraph.runLength(p);
                 passages++;
                 if (l > RUN_MAX) passOver++;
                 if (l > passLongest) { passLongest = l; passWorst = tg + ", " + chain(n, p); }
             }
+            int[] deg = NetGraph.wayCounts(n);
             for (List<Edge> r : NetGraph.runs(n)) {
                 double l = NetGraph.runWalk(n, r);
                 runs++;
                 if (l > RUN_MAX) runOver++;
                 if (l > 2 * RUN_MAX) runFar++;
                 if (l > runLongest) { runLongest = l; runWorst = tg + ", " + chain(n, r); }
+                // on through the stub of a vestibule with no other tunnel at either end
+                double seam = l;
+                boolean any = false;
+                int a = r.size() == 1 ? r.get(0).a : NetGraph.runStart(n, r), b = a;
+                for (Edge e : r) b = e.other(b);
+                for (int v : a == b ? new int[]{a} : new int[]{a, b}) {
+                    if (n.ch.get(v).kind != Kind.PORTAL || deg[v] != 1) continue;
+                    for (Way wy : n.ways) if (wy.kind == EK.PORTAL && (wy.a == v || wy.b == v)) { seam += wy.length; any = true; lone++; }
+                }
+                if (any && seam > seamLongest) { seamLongest = seam; seamWorst = tg + ", " + chain(n, r) + " and the stub"; }
             }
         }
         System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: passages %d, %d over %.0f (%.2f%%), longest %.0f (%s)%n", passages, passOver, RUN_MAX, 100.0 * passOver / passages, passLongest, passWorst);
         System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: runs through two-way rooms %d, %d over %.0f (%.1f%%), %d over %.0f (%.2f%%), longest %.0f (%s)%n", runs, runOver, RUN_MAX, 100.0 * runOver / runs, runFar, 2 * RUN_MAX, 100.0 * runFar / runs, runLongest, runWorst);
+        System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: %d vestibules with no other tunnel; the longest run on through one's stub %.0f (%s)%n", lone, seamLongest, seamWorst);
         List<String> fails = new ArrayList<>();
         if (passOver > PASSAGE_OVER * passages) fails.add(passOver + " of " + passages + " passages walk more than " + RUN_MAX);
         if (passLongest > PASSAGE_LONGEST) fails.add("a passage walks " + fmt(passLongest) + ": " + passWorst);
         if (runOver > RUN_OVER * runs) fails.add(runOver + " of " + runs + " runs walk more than " + RUN_MAX);
         if (runFar > RUN_FAR_OVER * runs) fails.add(runFar + " of " + runs + " runs walk more than " + 2 * RUN_MAX);
         if (runLongest > RUN_LONGEST) fails.add("a run walks " + fmt(runLongest) + ": " + runWorst);
+        if (seamLongest > SEAM_LONGEST) fails.add("a run walks " + fmt(seamLongest) + " on through a stub: " + seamWorst);
         assertTrue(fails.isEmpty(), String.join("\n", fails));
+    }
+
+    /**
+     * The most a Wasteland plan may cost against a Deep Gardens plan of the same cell (the ratio of their medians): a
+     * guard against a cost that runs away, not the goal. A Deep Gardens plan takes 50 to 70 ms here; a Wasteland plan,
+     * whose branch stages embed far more tunnels, 6 to 8 times that (5 to 6.5 times before its long runs were broken
+     * by branches sought with doors turned further round).
+     */
+    static final double PLAN_RATIO = 10;
+
+    /**
+     * A Wasteland plan should not take much longer than a Deep Gardens plan (the brief): over the fast tests' nine
+     * cells, planned afresh, the median of the Wasteland's plan times is at most {@link #PLAN_RATIO} times the Deep
+     * Gardens'. The two layers are planned in turn, cell by cell, so that the machine's load falls on both alike, after
+     * a round of each over the nine cells to warm the code.
+     */
+    @Test
+    void wastelandPlanCost() {
+        List<Double> waste = new ArrayList<>(), gardens = new ArrayList<>();
+        for (int round = 0; round < 2; round++) {
+            waste.clear();
+            gardens.clear();
+            for (long seed : SEEDS) {
+                Terrain t = terrain(seed);
+                for (int[] c : CELLS) {
+                    gardens.add(NetPlanner.plan(t.network, Terrain.GARDENS, c[0], c[1]).planMs);
+                    waste.add(NetPlanner.plan(t.network, Terrain.WASTELAND, c[0], c[1]).planMs);
+                }
+            }
+        }
+        java.util.Collections.sort(waste);
+        java.util.Collections.sort(gardens);
+        double mw = waste.get(waste.size() / 2), mg = gardens.get(gardens.size() / 2);
+        System.out.printf(java.util.Locale.ROOT, "wastelandPlanCost: median plan %.0f ms in the Wasteland (worst %.0f), %.0f ms in the Deep Gardens (worst %.0f): %.1f times%n",
+                mw, waste.get(waste.size() - 1), mg, gardens.get(gardens.size() - 1), mw / mg);
+        assertTrue(mw <= PLAN_RATIO * mg, "a Wasteland plan takes " + fmt(mw / mg) + " times a Deep Gardens plan");
     }
 
     /** A chain of edges for a message: its chambers in order and the blocks walked along each edge. */
@@ -1261,9 +1359,10 @@ class NetworkTest {
     /**
      * Wasteland cells {@link #noLethalFalls} builds besides those: {seed, cx, cz} of cells where falls of 16 and 17 were
      * found beside the climbs' stages (from a room's pockets by its wall, from a tunnel of the same room at the stage's
-     * mouth, and on through a stage's foot into a tunnel under it).
+     * mouth, on through a stage's foot into a tunnel under it, and from the steps of a passage's rough walls where they
+     * met the hole's edge).
      */
-    static final long[][] WASTE_FALLS = {{17, 0, 0}, {11, 0, 0}, {13, 1, -1}, {15, 0, 0}};
+    static final long[][] WASTE_FALLS = {{17, 0, 0}, {11, 0, 0}, {13, 1, -1}, {15, 0, 0}, {37, 2, 2}, {62, 7, -6}, {14, 0, 0}};
 
     /** True for a way's point next to a landing, where the gate's own passage and landing shape the floor. */
     static boolean gateMouth(Terrain t, Net n, double x, double z) {
@@ -1293,14 +1392,24 @@ class NetworkTest {
         }
     }
 
-    static void oneCave(int li, double minShare) {
+    static void oneCave(int li, double minShare) { oneCave(li, minShare, new long[0][]); }
+
+    /**
+     * One cave over the voxel tests' cells of layer li and over {@code extra} cells of it ({seed, cx, cz}; built, checked
+     * and let go): the main component holds at least {@code minShare} of the standing places, and every room and way
+     * is reached ({@link #reachAll}).
+     */
+    static void oneCave(int li, double minShare, long[][] extra) {
         List<String> fails = new ArrayList<>();
-        for (int s = 0; s < VOX_SEEDS.length; s++) {
-            long seed = VOX_SEEDS[s];
-            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
+        List<long[]> cells = new ArrayList<>();
+        for (int s = 0; s < VOX_SEEDS.length; s++) cells.add(new long[]{VOX_SEEDS[s], VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
+        for (long[] c : extra) cells.add(new long[]{c[0], c[1], c[2], 0});
+        for (long[] c : cells) {
+            long seed = c[0];
+            int cx = (int) c[1], cz = (int) c[2];
             Terrain t = terrain(seed);
             Net n = t.network.net(li, cx, cz);
-            VoxelHarness v = built(seed, li, cx, cz, 1, 1);
+            VoxelHarness v = built(seed, li, cx, cz, 1, 1, c[3] == 1);
             String tg = tag(seed, li, cx, cz);
             System.out.printf("%s: main component %.2f%% of %d places, %d components%n", tg, 100 * v.mainShare(), v.places(), v.components());
             if (v.mainShare() < minShare) fails.add(tg + ": the main component holds " + fmt(100 * v.mainShare()) + "% of the standing places");
@@ -1354,9 +1463,16 @@ class NetworkTest {
     @Tag("voxel")
     void basaltIsOneCave() { oneCave(Terrain.GALLERIES, 0.960); }
 
+    /**
+     * Wasteland cells wastelandIsOneCave builds besides the voxel tests' two: {seed, cx, cz} of cells where the last
+     * stage of a climb, laid again 5 to 6.6 tall, had lost the floor of the step off its vines, and the rooms the climb
+     * alone reached were cut off (the main component held 95.2% and 95.8%).
+     */
+    static final long[][] WASTE_CAVES = {{33, -3, -5}, {63, -5, 9}};
+
     @Test
     @Tag("voxel")
-    void wastelandIsOneCave() { oneCave(Terrain.WASTELAND, 0.960); }
+    void wastelandIsOneCave() { oneCave(Terrain.WASTELAND, 0.960, WASTE_CAVES); }
 
     /**
      * No blind end in the Wasteland's blocks (Taran, 2026-11-01: no dead ends): the Upper Caves' blind-end finder
