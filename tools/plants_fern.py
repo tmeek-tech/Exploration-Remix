@@ -24,12 +24,14 @@ from plants import hexc, register
 
 PAINTERS = {}
 
-STALK = ("#4B6845", "#5E7C57")                       # lower stalk, upper stalk
-LIT = ("#7F9D85", "#9FBA9F", "#BED3BC", "#D6E5D2")   # a leaflet on the lit side, from the stalk out to its pale tip
-DIM = ("#5E7B64", "#7F9D85", "#9FBA9F", "#9FBA9F")   # on the shadow side
-BACK_STALK = "#4A6350"
-BACK_LIT = ("#5F7C66", "#7A977F", "#93AF96", "#93AF96")
-BACK_DIM = ("#4A6350", "#5F7C66", "#7A977F", "#7A977F")
+# Silver-green, a little blue: the first in-game pictures showed the darker greens of the first palette as teal shadow
+# inside the clumps, far from the pale silver of the picture and of the old silver fern.
+STALK = ("#62806A", "#769478")                       # lower stalk, upper stalk
+LIT = ("#9DB9A8", "#B8D0BF", "#CFE1D3", "#E8F2EA")   # a leaflet on the lit side, from the stalk out to its pale tip
+DIM = ("#7C9A87", "#9DB9A8", "#B8D0BF", "#B8D0BF")   # on the shadow side
+BACK_STALK = "#5F7A68"
+BACK_LIT = ("#7C9A87", "#97B3A1", "#AFC9B6", "#AFC9B6")
+BACK_DIM = ("#66826F", "#7C9A87", "#97B3A1", "#97B3A1")
 
 UP, DOWN, LEFT, RIGHT = (0, -1), (0, 1), (-1, 0), (1, 0)
 UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT = (-1, -1), (1, -1), (-1, 1), (1, 1)
