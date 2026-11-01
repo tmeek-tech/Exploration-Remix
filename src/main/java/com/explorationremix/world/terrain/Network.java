@@ -940,7 +940,9 @@ public final class Network {
         double p;
         switch (c.kind) {
             case GALLERY, GREAT, CITY -> p = 4;
-            case TERRACE, SPRING, CAVERN, LAVA, GROTTO -> p = 3;
+            case TERRACE, SPRING, CAVERN, LAVA -> p = 3;
+            // a Wasteland refuge (an Ash Hollow) is a dome; refuges elsewhere are other kinds
+            case GROTTO -> p = c.refuge ? 2 : 3;
             case WELL, CHIMNEY -> {
                 return c.top - 5 * e * e + 2 * ceilN.noise2(x / 9.0, z / 9.0);
             }
@@ -1566,6 +1568,24 @@ public final class Network {
         return f;
     }
 
+    /**
+     * How much of the basalt column shift a block of the Wasteland takes near a floor: {@link #FLOOR_FADE}, from 2
+     * under to 2 over the floor of a room (inside its footprint) or of a way (within its half-width and 2) in its
+     * column; all of it elsewhere and in the other layers. The columns still show in the floors, with half their steps:
+     * the Wasteland has many more rooms than the Basalt Galleries had, and at the full shift so many patches of their
+     * floors were cut off by two-block steps that the walkable cave held under 96% of the standing places (95.6 and
+     * 96.1% in the two cells of wastelandIsOneCave; 96.5 and 96.7% with this).
+     */
+    static double floorFade(int li, LCol lc, int y) {
+        if (li != Terrain.WASTELAND) return 1;
+        for (int k = 0; k < lc.nc; k++) if (lc.e[k] < 1 && Math.abs(y - lc.F[k]) < 2.5) return FLOOR_FADE;
+        for (int k = 0; k < lc.nw; k++) if (lc.wd[k] < lc.ww[k] + 2 && Math.abs(y - lc.wf[k]) < 2.5) return FLOOR_FADE;
+        return 1;
+    }
+
+    /** The share of the basalt column shift the Wasteland's floors take ({@link #floorFade}). */
+    static final double FLOOR_FADE = 0.5;
+
     /** The column is inside an obsidian tube hub (or just round it). */
     static boolean inHub(LCol lc) {
         for (int k = 0; k < lc.nc; k++) if (lc.c[k].kind == Kind.TUBEHUB && lc.e[k] < 1.3) return true;
@@ -1857,7 +1877,7 @@ public final class Network {
         LCol lc = layer(column(x, z), li);
         double c8 = coarse * 8.0;
         boolean hub = lc.hub;
-        if (lc.colShift != 0 && c8 > -3 && c8 < 3) c8 += lc.colShift * lc.roughK * (lc.ns > 0 ? mouthFade(lc, y) : 1);
+        if (lc.colShift != 0 && c8 > -3 && c8 < 3) c8 += lc.colShift * lc.roughK * (lc.ns > 0 ? mouthFade(lc, y) : 1) * floorFade(li, lc, y);
         Plans.Gate en = lc.en, ex = lc.ex;
         boolean enPass = lc.enNear && y > en.y1 - 3, exPass = lc.exNear && y < ex.y0 + 3;
         boolean pass = enPass || exPass;
