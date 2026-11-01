@@ -8,7 +8,11 @@ import java.util.List;
  * {@link NetPlanner}, read-only afterwards, so any number of worldgen threads can read it.
  */
 public final class Net {
-    public enum Kind { ENTRY, EXIT, BEDROCK, PORTAL, GROTTO, LAKE, TERRACE, SPRING, WELL, GALLERY, GREAT, CHIMNEY, TUBEHUB, CAVERN, CITY, POCKET, CANYON, GEODE, LAVA }
+    /**
+     * Chamber kinds. JUNCTION (the Wasteland, since 0.5) is a small fork room where three or more tunnels meet, so a
+     * branch point need not be a whole cave; appended, so the older kinds keep their numbers.
+     */
+    public enum Kind { ENTRY, EXIT, BEDROCK, PORTAL, GROTTO, LAKE, TERRACE, SPRING, WELL, GALLERY, GREAT, CHIMNEY, TUBEHUB, CAVERN, CITY, POCKET, CANYON, GEODE, LAVA, JUNCTION }
 
     /**
      * Edge kinds. DARK_DOOR joins a Blue Reaches portal vestibule standing on a deep dark cavern's floor to that
@@ -191,6 +195,11 @@ public final class Net {
     public final List<Integer> droppedPortals = new ArrayList<>();
     /** Plan statistics. */
     int attached, tries, embedFail, forced, droppedChambers, loopsAdded, stubsAdded, gateAug, cutRepairs, strandBreaks, walkRepairs, tubeStubs, chokeRepairs;
+    /**
+     * The Wasteland's: tunnels added to close dead ends and bridges, chambers dropped as dead ends, tunnels added to
+     * branch, junction rooms cut into tunnels.
+     */
+    int deadEndWays, deadEndDrops, branchWays, junctionsCut;
     final List<Integer> courtsE = new ArrayList<>(), courtsX = new ArrayList<>();
     /** The strands: braided main ways between the landings, as chamber id lists (courts at both ends). */
     final List<List<Integer>> strands = new ArrayList<>();

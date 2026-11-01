@@ -157,6 +157,10 @@ class NetworkTest {
                 if (across < 36 - 1e-6 || across > 60 + 1e-6) fails.add(id + " is " + fmt(across) + " across, not 36 to 60");
             } else if (c.kind == Kind.TUBEHUB) {
                 if (c.h < 12 - 1e-6 || c.h > 14 + 1e-6) fails.add(id + " is " + fmt(c.h) + " tall, not 12 to 14");
+            } else if (c.kind == Kind.JUNCTION) {
+                // the Wasteland's forks: small rooms cut into tunnels, a little taller than the tunnel
+                if (across < 8 - 1e-6 || across > 11 + 1e-6) fails.add(id + " is " + fmt(across) + " across, not 8 to 11");
+                if (c.h < 8 - 1e-6 || c.h > 11 + 1e-6) fails.add(id + " is " + fmt(c.h) + " tall, not 8 to 11");
             } else if (n.li == Terrain.BLUE) {
                 if (across < 20 - 1e-6 || across > 32 + 1e-6) fails.add(id + " is " + fmt(across) + " across, not 20 to 32");
                 if (c.h < hMin - 1e-6 || c.h > hMax + 1e-6) fails.add(id + " is " + fmt(c.h) + " tall, not " + hMin + " to " + hMax);
@@ -169,18 +173,30 @@ class NetworkTest {
 
     static String fmt(double v) { return String.format(java.util.Locale.ROOT, "%.1f", v); }
 
+    /**
+     * Two refuges in every layer but the Blue Reaches, each reached by walking only, never from a landing, a portal
+     * vestibule or a court: by one tunnel of its own, but in the Wasteland, where nothing is a dead end and each refuge
+     * (an Ash Hollow) is cut into a tunnel, by the two halves of it. The Ash Hollows are plain domed rooms 15 to 20
+     * across (the tube hubs are the Galleries').
+     */
     static void refuges(Terrain t, Net n, String tag, List<String> fails) {
-        int count = 0;
+        int count = 0, want = n.li == Terrain.WASTELAND ? 2 : 1;
         for (Chamber c : n.ch) {
             if (!c.keep || !c.refuge) continue;
             count++;
             List<Edge> es = new ArrayList<>();
             for (Edge e : n.edges) if ((e.a == c.id || e.b == c.id) && n.ch.get(e.a).keep && n.ch.get(e.b).keep) es.add(e);
-            if (es.size() != 1) { fails.add(tag + ": refuge " + c.kind + "#" + c.id + " has " + es.size() + " edges"); continue; }
-            Edge e = es.get(0);
-            Chamber o = n.ch.get(e.other(c.id));
-            if (e.kind != EK.WALK) fails.add(tag + ": refuge " + c.kind + "#" + c.id + " is joined by a " + e.kind);
-            if (o.landing() || o.kind == Kind.PORTAL || o.court) fails.add(tag + ": refuge " + c.kind + "#" + c.id + " opens on " + o.kind + "#" + o.id);
+            if (es.size() != want) { fails.add(tag + ": refuge " + c.kind + "#" + c.id + " has " + es.size() + " edges, not " + want); continue; }
+            for (Edge e : es) {
+                Chamber o = n.ch.get(e.other(c.id));
+                if (e.kind != EK.WALK) fails.add(tag + ": refuge " + c.kind + "#" + c.id + " is joined by a " + e.kind);
+                if (o.landing() || o.kind == Kind.PORTAL || o.court) fails.add(tag + ": refuge " + c.kind + "#" + c.id + " opens on " + o.kind + "#" + o.id);
+            }
+            if (n.li == Terrain.WASTELAND) {
+                double across = 2 * Math.max(c.rx, c.rz);
+                if (c.kind != Kind.GROTTO) fails.add(tag + ": refuge #" + c.id + " is a " + c.kind + ", not a plain room");
+                if (across < 15 - 1e-6 || across > 20 + 1e-6) fails.add(tag + ": refuge #" + c.id + " is " + fmt(across) + " across, not 15 to 20");
+            }
         }
         if (n.li != Terrain.BLUE && count != 2) fails.add(tag + ": " + count + " refuges, not 2");
     }
@@ -333,6 +349,148 @@ class NetworkTest {
             for (Net.Arch a : n.arches) if (a.chamber == c.id) has = true;
             if (!has) fails.add(tag + ": great hall #" + c.id + " has no arch");
         }
+    }
+
+    // ================================================================================================ the Wasteland
+    /** The Wasteland's longest walk between two branches (blocks, door to door; the planner's {@code runMax}). */
+    static final double RUN_MAX = 40;
+    /** The share of the Wasteland's passages allowed over {@link #RUN_MAX}, and the longest passage allowed. */
+    static final double PASSAGE_OVER = 0.015, PASSAGE_LONGEST = 80;
+    /** What the planner reaches on the runs through two-way rooms (a guard, not the goal: see the test). */
+    static final double RUN_OVER = 0.20, RUN_LONGEST = 240;
+
+    /**
+     * No dead end in the Wasteland's plans (Taran, 2026-11-01): no blind passage or blind tube, no pocket, surge niche,
+     * tube hub or lava basin; every kept chamber has two ways or more (a portal vestibule's stub across the seam counts:
+     * it goes on into the next cell's network); and no way is a bridge, so every tunnel lies on a loop. The bridges are
+     * found with the two landings and the kept vestibules joined to one node outside the cell that stands for the rest
+     * of the world (the gates go on to the layers above and below, the stubs into the next cells). The bridges of the
+     * cell on its own, each cutting off a part of it that the world joins through a portal or a gate, are printed, and
+     * so are the vestibules with one tunnel in the cell besides their stub.
+     */
+    @Test
+    void wastelandHasNoDeadEnds() {
+        List<String> fails = new ArrayList<>();
+        int plans = 0, inCell = 0, onStub = 0;
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            for (int[] cell : CELLS) {
+                Net n = t.network.net(Terrain.WASTELAND, cell[0], cell[1]);
+                String tg = tag(seed, Terrain.WASTELAND, cell[0], cell[1]);
+                plans++;
+                for (Edge e : n.edges) if (e.kind == EK.STUB) fails.add(tg + ": a blind stub from " + n.ch.get(e.a).kind + "#" + e.a);
+                for (Way wy : n.ways) if (wy.kind == EK.STUB) fails.add(tg + ": blind way #" + wy.id);
+                int[] deg = NetGraph.wayCounts(n);
+                for (Chamber c : n.ch) {
+                    if (!c.keep) continue;
+                    String id = c.kind + "#" + c.id + " at " + (int) c.x + " " + (int) c.f0 + " " + (int) c.z;
+                    if (c.kind == Kind.POCKET || c.kind == Kind.TUBEHUB || c.kind == Kind.LAVA) fails.add(tg + ": " + id + " is a blind room");
+                    int ways = deg[c.id] + (c.kind == Kind.PORTAL ? 1 : 0);
+                    if (c.kind == Kind.PORTAL && deg[c.id] < 2) onStub++;
+                    if (ways < 2) fails.add(tg + ": " + id + " has " + ways + " way(s)");
+                }
+                inCell += NetGraph.bridges(n).size();
+                for (int[] b : outsideBridges(n)) {
+                    String a = n.ch.get(b[0]).kind + "#" + b[0], o = b[1] < n.ch.size() ? n.ch.get(b[1]).kind + "#" + b[1] : "the world outside";
+                    fails.add(tg + ": the way from " + a + " to " + o + " is a bridge");
+                }
+            }
+        }
+        System.out.printf("wastelandHasNoDeadEnds: %d plans; %d bridges in the cells on their own, %d vestibules whose second way is their stub%n", plans, inCell, onStub);
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
+    }
+
+    /**
+     * The bridges among a plan's ways ({@link NetGraph#ways}) with one more node, past the end of the chamber list,
+     * joined to both landings and every kept portal vestibule: {a, b} of each (Tarjan's low links; a plan has a few
+     * hundred chambers, so the recursion stays shallow).
+     */
+    static List<int[]> outsideBridges(Net n) {
+        int N = n.ch.size() + 1, out = n.ch.size();
+        List<int[]> es = new ArrayList<>();
+        for (Edge e : NetGraph.ways(n)) es.add(new int[]{e.a, e.b});
+        es.add(new int[]{n.entry, out});
+        es.add(new int[]{n.exit, out});
+        for (int id : n.portals) if (n.ch.get(id).keep) es.add(new int[]{id, out});
+        List<List<int[]>> adj = new ArrayList<>();
+        for (int i = 0; i < N; i++) adj.add(new ArrayList<>());
+        for (int i = 0; i < es.size(); i++) {
+            adj.get(es.get(i)[0]).add(new int[]{es.get(i)[1], i});
+            adj.get(es.get(i)[1]).add(new int[]{es.get(i)[0], i});
+        }
+        int[] tin = new int[N], low = new int[N], timer = {0};
+        java.util.Arrays.fill(tin, -1);
+        List<int[]> bridges = new ArrayList<>();
+        for (int s = 0; s < N; s++) if (tin[s] < 0 && !adj.get(s).isEmpty()) lowLinks(adj, es, s, -1, tin, low, timer, bridges);
+        return bridges;
+    }
+
+    private static void lowLinks(List<List<int[]>> adj, List<int[]> es, int v, int via, int[] tin, int[] low, int[] timer, List<int[]> bridges) {
+        tin[v] = low[v] = timer[0]++;
+        for (int[] nb : adj.get(v)) {
+            if (nb[1] == via) continue;
+            int u = nb[0];
+            if (tin[u] >= 0) { low[v] = Math.min(low[v], tin[u]); continue; }
+            lowLinks(adj, es, u, nb[1], tin, low, timer, bridges);
+            low[v] = Math.min(low[v], low[u]);
+            if (low[u] > tin[v]) bridges.add(es.get(nb[1]));
+        }
+    }
+
+    /**
+     * Branch often (Taran, 2026-11-01: no "passages that go on for too long without branching"). The Wasteland's
+     * passages, its stretches of tunnel between two rooms or forks ({@link NetGraph#passages}), walk at most
+     * {@link #RUN_MAX} from door to door, but for a share of {@link #PASSAGE_OVER}, and none more than
+     * {@link #PASSAGE_LONGEST}. The runs through rooms with only two ways ({@link NetGraph#runs}: through such a room
+     * the walker has no other way on either) are what the planner aims at, and fall short of: a sixth of them walk
+     * more than the limit, mostly through one room between two tunnels of 20 to 36. They are printed, and held to what
+     * the planner reaches ({@link #RUN_OVER} over the limit, none over {@link #RUN_LONGEST}), so a change that makes them
+     * worse is seen.
+     */
+    @Test
+    void wastelandBranchSpacing() {
+        long passages = 0, passOver = 0, runs = 0, runOver = 0;
+        double passLongest = 0, runLongest = 0;
+        String passWorst = "", runWorst = "";
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            for (int[] cell : CELLS) {
+                Net n = t.network.net(Terrain.WASTELAND, cell[0], cell[1]);
+                String tg = tag(seed, Terrain.WASTELAND, cell[0], cell[1]);
+                for (List<Edge> p : NetGraph.passages(n)) {
+                    double l = NetGraph.runLength(p);
+                    passages++;
+                    if (l > RUN_MAX) passOver++;
+                    if (l > passLongest) { passLongest = l; passWorst = tg + ", " + chain(n, p); }
+                }
+                for (List<Edge> r : NetGraph.runs(n)) {
+                    double l = NetGraph.runLength(r);
+                    runs++;
+                    if (l > RUN_MAX) runOver++;
+                    if (l > runLongest) { runLongest = l; runWorst = tg + ", " + chain(n, r); }
+                }
+            }
+        }
+        System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: passages %d, %d over %.0f (%.2f%%), longest %.0f (%s)%n", passages, passOver, RUN_MAX, 100.0 * passOver / passages, passLongest, passWorst);
+        System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: runs through two-way rooms %d, %d over %.0f (%.1f%%), longest %.0f (%s)%n", runs, runOver, RUN_MAX, 100.0 * runOver / runs, runLongest, runWorst);
+        List<String> fails = new ArrayList<>();
+        if (passOver > PASSAGE_OVER * passages) fails.add(passOver + " of " + passages + " passages walk more than " + RUN_MAX);
+        if (passLongest > PASSAGE_LONGEST) fails.add("a passage walks " + fmt(passLongest) + ": " + passWorst);
+        if (runOver > RUN_OVER * runs) fails.add(runOver + " of " + runs + " runs walk more than " + RUN_MAX);
+        if (runLongest > RUN_LONGEST) fails.add("a run walks " + fmt(runLongest) + ": " + runWorst);
+        assertTrue(fails.isEmpty(), String.join("\n", fails));
+    }
+
+    /** A chain of edges for a message: its chambers in order and the blocks walked along each edge. */
+    static String chain(Net n, List<Edge> c) {
+        Edge e0 = c.get(0);
+        int v = c.size() > 1 && (e0.a == c.get(1).a || e0.a == c.get(1).b) ? e0.b : e0.a;
+        StringBuilder b = new StringBuilder(n.ch.get(v).kind + "#" + v);
+        for (Edge e : c) {
+            v = e.other(v);
+            b.append(" -").append(Math.round(NetGraph.walkLength(e))).append("- ").append(n.ch.get(v).kind).append('#').append(v);
+        }
+        return b.toString();
     }
 
     @Test
@@ -1061,6 +1219,185 @@ class NetworkTest {
     @Test
     @Tag("voxel")
     void wastelandIsOneCave() { oneCave(Terrain.WASTELAND, 0.960); }
+
+    /**
+     * No blind end in the Wasteland's blocks (Taran, 2026-11-01: no dead ends): the Upper Caves' blind-end finder
+     * ({@link DeadEnds}) over the built cell-layers of the voxel tests finds no tip that one can walk into but where
+     * the finder, made for the Upper Caves' lone tunnels, is fooled. The tips it finds are counted by where they lie:
+     * out of reach (no standing place of the main component at the tip's height, {@link #walkable}: pockets in the
+     * rough roofs); in a room (the corners at its edge, where its floor rises into its roof, have one way out); at a
+     * climb (the foot or the mouth of a stage); in the middle of a tunnel that goes on both ways ({@link #throughTunnel}:
+     * there a tunnel or a room beside it, or a crossing, joins the finder's two ways out of the tip's sphere into one);
+     * and near the gates (whose passages the box cuts off). Within {@link #SEAM} of the cell's edges none are looked for
+     * (the box cuts off the ways across the seam there, and the finder needs 12 blocks of window past a tip). Any other
+     * tip fails: a blind passage, the end of a tunnel that reaches no room, a pocket the plan does not know. The
+     * finder's 2-block cells are read as JoinDeadEndsFeature reads the world: open where 4 of a cell's 8 blocks are,
+     * wet where most of those hold a fluid.
+     */
+    @Test
+    @Tag("voxel")
+    void wastelandNoBlindEndsInBlocks() {
+        List<String> fails = new ArrayList<>();
+        int li = Terrain.WASTELAND;
+        for (int s = 0; s < VOX_SEEDS.length; s++) {
+            long seed = VOX_SEEDS[s];
+            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
+            Terrain t = terrain(seed);
+            Net n = t.network.net(li, cx, cz);
+            VoxelHarness v = built(seed, li, cx, cz, 1, 1);
+            DeadEnds.Grid g = deadEndGrid(v);
+            int m = SEAM / DeadEnds.CELL;
+            List<DeadEnds.Tip> tips = DeadEnds.tips(g, m, g.nx - 1 - m, m, g.nz - 1 - m);
+            int roofs = 0, rooms = 0, climbs = 0, through = 0, mouths = 0;
+            String tg = tag(seed, li, cx, cz);
+            for (DeadEnds.Tip tp : tips) {
+                int x = g.blockX(tp.i()), y = g.blockY(tp.j()), z = g.blockZ(tp.k());
+                Network.LCol lc = t.network.layer(t.network.column(x, z), li);
+                if (!walkable(v, g, tp)) roofs++;
+                else if (inRoom(lc)) rooms++;
+                else if (atClimb(lc, y)) climbs++;
+                else if (throughTunnel(n, x, y, z)) through++;
+                else if (nearGate(t, n, x, z)) mouths++;
+                else fails.add(tg + ": a blind end at " + x + " " + y + " " + z + " (" + where(t, li, x, y, z) + ")");
+            }
+            System.out.printf("%s: %d tips: %d out of reach, %d in rooms, %d at climbs, %d in tunnels going on both ways, %d by the gates%n",
+                    tg, tips.size(), roofs, rooms, climbs, through, mouths);
+        }
+        assertTrue(fails.isEmpty(), fails.size() + " blind ends:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
+    }
+
+    /** True inside a room's footprint in the column, or in its wall (its rough walls stand a little past e = 1). */
+    static boolean inRoom(Network.LCol lc) {
+        for (int k = 0; k < lc.nc; k++) if (lc.e[k] < 1.1) return true;
+        return false;
+    }
+
+    /**
+     * True in a tunnel, within its half-width and 1.5 of its line and between its floor and its roof, at least 8 blocks
+     * along the line from both of its ends: there the tunnel goes on both ways.
+     */
+    static boolean throughTunnel(Net n, int x, int y, int z) {
+        for (Way wy : n.ways) {
+            if (wy.kind != EK.WALK || wy.inner) continue;
+            double s = 0;
+            for (int i = 0; i < wy.n; i++) {
+                if (i > 0) s += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
+                if (s < 8 || wy.length - s < 8) continue;
+                if (Math.hypot(x + 0.5 - wy.x[i], z + 0.5 - wy.z[i]) > wy.w[i] + 1.5) continue;
+                if (y >= wy.f[i] - 1 && y <= wy.f[i] + wy.hgt[i] + 1) return true;
+            }
+        }
+        return false;
+    }
+
+    /** True within 4 blocks of a climb stage's shaft, from 3 under its foot to 4 over its top. */
+    static boolean atClimb(Network.LCol lc, int y) {
+        for (int k = 0; k < lc.ns; k++) {
+            Shaft s = lc.s[k];
+            if (lc.sd[k] < s.r + 4 && y > s.foot - 3 && y < s.top + 4) return true;
+        }
+        return false;
+    }
+
+    /**
+     * True when a player can stand in a tip's cell: a standing place of the main component a block round its two
+     * columns by two, its feet from two blocks under the cell's lowest block to its highest.
+     */
+    static boolean walkable(VoxelHarness v, DeadEnds.Grid g, DeadEnds.Tip tp) {
+        int bx = g.x0 + tp.i() * DeadEnds.CELL, by = g.y0 + tp.j() * DeadEnds.CELL, bz = g.z0 + tp.k() * DeadEnds.CELL;
+        for (int x = bx - 1; x <= bx + DeadEnds.CELL; x++) for (int z = bz - 1; z <= bz + DeadEnds.CELL; z++)
+            for (int y = by - 2; y <= by + DeadEnds.CELL - 1; y++) if (v.inMain(x, y, z)) return true;
+        return false;
+    }
+
+    /** Blind ends within this many blocks of a cell's edge are not looked for (see wastelandNoBlindEndsInBlocks). */
+    static final int SEAM = 16;
+
+    /** True within 24 blocks of a gate's landing (by its reach), where the gate's passage leaves the box. */
+    static boolean nearGate(Terrain t, Net n, double x, double z) {
+        for (int id : new int[]{n.entry, n.exit}) {
+            Chamber c = n.ch.get(id);
+            if (Math.hypot(x - c.x, z - c.z) < c.R() + 24) return true;
+        }
+        return gateMouth(t, n, x, z);
+    }
+
+    /**
+     * A built box's 2-block cells as JoinDeadEndsFeature reads the world's blocks: open where at least 4 of a cell's 8
+     * blocks are (air, water or lava), and then water where most of those hold a fluid; rock elsewhere.
+     */
+    static DeadEnds.Grid deadEndGrid(VoxelHarness v) {
+        int C = DeadEnds.CELL;
+        DeadEnds.Grid g = new DeadEnds.Grid(v.x0, v.y0, v.z0, v.nx / C, v.ny / C, v.nz / C);
+        for (int i = 0; i < g.nx; i++) for (int k = 0; k < g.nz; k++) for (int j = 0; j < g.ny; j++) {
+            int open = 0, wet = 0;
+            for (int a = 0; a < C; a++) for (int b = 0; b < C; b++) for (int c = 0; c < C; c++) {
+                int mt = v.mat(v.x0 + i * C + a, v.y0 + j * C + b, v.z0 + k * C + c);
+                if (mt == VoxelHarness.ROCK) continue;
+                open++;
+                if (mt != VoxelHarness.AIR) wet++;
+            }
+            if (open >= 4) g.set(i, j, k, wet * 2 > open ? DeadEnds.WATER : DeadEnds.AIR);
+        }
+        return g;
+    }
+
+    /**
+     * Tight sight lines in the Wasteland (Taran, 2026-11-01: tight encounters with predators): from the eyes of the
+     * standing places in every 4th column of the voxel cells (as {@link #sightLinesAreShort} looks), the longest of the
+     * 216 rays (9 pitches by 24 yaws) runs at most {@link #TIGHT} blocks for 90% of the places. A ray that leaves the
+     * box counts what it ran inside it.
+     */
+    @Test
+    @Tag("voxel")
+    void wastelandIsTight() {
+        List<String> fails = new ArrayList<>();
+        int li = Terrain.WASTELAND;
+        for (int s = 0; s < VOX_SEEDS.length; s++) {
+            long seed = VOX_SEEDS[s];
+            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
+            VoxelHarness v = built(seed, li, cx, cz, 1, 1);
+            double[] far = longestViews(v, 4);
+            java.util.Arrays.sort(far);
+            String tg = tag(seed, li, cx, cz);
+            double p50 = far[far.length / 2], p90 = far[(int) (0.9 * far.length)], p99 = far[(int) (0.99 * far.length)];
+            System.out.printf(java.util.Locale.ROOT, "%s: %d places, longest view per place p50 %.0f, p90 %.0f, p99 %.0f, max %.0f%n",
+                    tg, far.length, p50, p90, p99, far[far.length - 1]);
+            if (far.length < 1000) fails.add(tg + ": only " + far.length + " places looked from");
+            else if (p90 > TIGHT) fails.add(tg + ": a tenth of the places see further than " + fmt(p90));
+        }
+        assertTrue(fails.isEmpty(), String.join("\n", fails));
+    }
+
+    /** The Wasteland's longest view from 90% of its places (blocks). */
+    static final double TIGHT = 40;
+
+    /**
+     * The longest view from each main-component place standing on rock in every {@code every}-th column: the longest of
+     * the rays at the pitches of {@link VoxelHarness#SIGHT_PITCHES} and 24 yaws, to the first rock or out of the box.
+     */
+    static double[] longestViews(VoxelHarness v, int every) {
+        double[] ys = new double[VoxelHarness.SIGHT_PITCHES.length], cs = new double[ys.length];
+        for (int q = 0; q < ys.length; q++) {
+            ys[q] = Math.sin(Math.toRadians(VoxelHarness.SIGHT_PITCHES[q]));
+            cs[q] = Math.cos(Math.toRadians(VoxelHarness.SIGHT_PITCHES[q]));
+        }
+        return java.util.stream.IntStream.range(0, (v.nx + every - 1) / every).parallel().mapToObj(r -> {
+            List<Double> out = new ArrayList<>();
+            int x = v.x0 + r * every;
+            for (int z = v.z0; z < v.z0 + v.nz; z += every) for (int y = v.y0 + 1; y < v.y0 + v.ny - 1; y++) {
+                if (!v.place(x, y, z) || !v.solid(x, y - 1, z) || !v.inMain(x, y, z)) continue;
+                double best = 0;
+                for (int q = 0; q < ys.length; q++) for (int a = 0; a < VoxelHarness.SIGHT_YAWS; a++) {
+                    double th = Math.toRadians(a * (360.0 / VoxelHarness.SIGHT_YAWS));
+                    double d = v.ray(x + 0.5, y + VoxelHarness.EYE, z + 0.5, cs[q] * Math.cos(th), ys[q], cs[q] * Math.sin(th), 400);
+                    best = Math.max(best, d < 0 ? -1 - d : d);
+                }
+                out.add(best);
+            }
+            return out;
+        }).flatMap(List::stream).mapToDouble(Double::doubleValue).toArray();
+    }
 
     /**
      * Under the highest surge, every place is a short walk from one above it. The steps are the harness's (4-neighbour
