@@ -197,5 +197,32 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.ambient.hollows.additions"
+  },
+  "lava.rumble": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/lava_rumble1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/lava_rumble2",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/lava_rumble3",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.lava.rumble"
+  },
+  "lava.surge": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/lava_surge",
+        "volume": 1.0,
+        "stream": true
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.lava.surge"
   }
 }

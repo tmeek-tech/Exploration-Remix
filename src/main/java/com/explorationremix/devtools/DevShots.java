@@ -102,8 +102,10 @@ public final class DevShots {
                 }
                 mc.options.hideGui = true;
                 mc.options.fov().set(80);
+                // the Basalt Galleries' lava is held at its table too: rising lava and the warnings' shake never let a
+                // view settle
                 String[] setup = {"time set noon", "gamerule doDaylightCycle false", "gamerule doWeatherCycle false",
-                        "gamerule doMobSpawning false", "weather clear"};
+                        "gamerule doMobSpawning false", "weather clear", "remix lava level 0"};
                 if (remote) {
                     // /remix view generates chunks on the server thread, which can go quiet for longer than the
                     // client's 30 second read timeout. Give this test connection ten minutes instead.
