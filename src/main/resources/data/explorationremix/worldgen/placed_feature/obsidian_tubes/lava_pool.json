@@ -1,9 +1,9 @@
 {
-  "feature": "explorationremix:obsidian_tubes/still_pool",
+  "feature": "explorationremix:obsidian_tubes/lava_pool",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 64
+      "count": 16
     },
     {
       "type": "minecraft:in_square"

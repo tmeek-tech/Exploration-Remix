@@ -1,0 +1,21 @@
+{
+  "feature": "explorationremix:basalt_galleries/vault_falls",
+  "placement": [
+    {
+      "type": "minecraft:rarity_filter",
+      "chance": 4
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:open_span",
+      "layer": "basalt_galleries",
+      "anchor": "ceiling",
+      "min_span": 24
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

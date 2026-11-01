@@ -68,6 +68,11 @@ public final class TerrainPreview {
             case EMBER_GARDENS -> 0xF09A50;
             case BASALT_GALLERIES -> 0xC0A090;
             case OBSIDIAN_TUBES -> 0x7A3FB0;
+            case WASTELAND -> 0x8C6F5A;
+            case ASH_HOLLOWS -> 0xD8D2C8;
+            case CALDERA -> 0xF0562A;
+            case CAUSEWAY -> 0x8E93A8;
+            case SCORIA_CANYONS -> 0xB8603E;
         };
     }
 

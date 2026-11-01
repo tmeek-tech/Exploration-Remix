@@ -60,7 +60,15 @@ public enum Rock {
     ORANGE_TERRACOTTA(0xa25426),
     // ---- 0.4.1: Root Vault ravines outside the tropics, and the cold caves' blue moss
     ANDESITE(0x888889),
-    FROST_MOSS(0x5d8a96);
+    FROST_MOSS(0x5d8a96),
+    // ---- 0.5: the Basalt Galleries' column caps and crater rims, the Scoria Canyons' layered bands (Create's layered
+    // scoria and scorchia, with terracotta and blackstone standing in), and the ember crust, a mod block: the glowing
+    // seams that light the lifeless Galleries where lava cannot reach
+    POLISHED_BASALT(0x6a696e),
+    POLISHED_BLACKSTONE(0x3a3440),
+    LAYERED_SCORIA(0x7a5444),
+    LAYERED_SCORCHIA(0x46403c),
+    EMBER_CRUST(0xe0782e);
 
     public final int color;
 

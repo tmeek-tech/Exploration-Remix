@@ -12,7 +12,7 @@ package com.explorationremix.world.terrain;
 public final class Palette {
     private final Terrain t;
     private final long seed;
-    private final Perlin interiorN, patchN, veinN, veinMask, seamN, seamMask, wobN;
+    private final Perlin interiorN, patchN, veinN, veinMask, seamN, seamMask, wobN, bandN;
 
     Palette(Terrain t, long seed) {
         this.t = t;
@@ -25,6 +25,7 @@ public final class Palette {
         seamN = new Perlin(Hashing.mix(s, 5, 0, 0));
         seamMask = new Perlin(Hashing.mix(s, 6, 0, 0));
         wobN = new Perlin(Hashing.mix(s, 7, 0, 0));
+        bandN = new Perlin(Hashing.mix(s, 8, 0, 0));
     }
 
     private double speck(int x, int y, int z) { return Hashing.unit(Hashing.mix(seed, x, y, z)); }
@@ -44,6 +45,17 @@ public final class Palette {
         return Math.abs(seamN.noise3(x * 0.012, y * 0.075, z * 0.012)) < 0.022;
     }
 
+    /**
+     * The Galleries' glowing seams: the same flat-lying sheets as {@link #seam}, a little thicker, so a cliff 60 or more
+     * tall has a few of them to light it where no lava reaches. {@code reach} is the mask below which no seam runs: the
+     * lower it is, the further the seams run on through the rock (at 0.06 about one wall block in thirty is ember crust,
+     * at -0.12 about one in eighteen).
+     */
+    private boolean emberSeam(int x, int y, int z, double reach) {
+        if (seamMask.noise3(x * 0.015, y * 0.02, z * 0.015) < reach) return false;
+        return Math.abs(seamN.noise3(x * 0.012, y * 0.075, z * 0.012)) < 0.03;
+    }
+
     // ============================================================================================== deep rock
 
     /** Rock more than a few blocks from any open space. */
@@ -59,7 +71,14 @@ public final class Palette {
                 if (n > 0.28) return Rock.TUFF;
                 if (n < -0.28) return Rock.ASURINE;
                 return Rock.DEEPSLATE;
+            case Terrain.GALLERIES:
+                // Basalt with bold patches of blackstone and smooth basalt. No scoria: in the Galleries only the Scoria
+                // Canyons' walls show it.
+                if (n > 0.22) return Rock.BLACKSTONE;
+                if (n < -0.3) return Rock.SMOOTH_BASALT;
+                return Rock.BASALT;
             default:
+                // the Wasteland
                 if (n > 0.22) return Rock.BLACKSTONE;
                 if (n < -0.28) return n < -0.45 ? Rock.SCORIA : Rock.SCORCHIA;
                 return Rock.BASALT;
@@ -79,7 +98,12 @@ public final class Palette {
         Shape s = t.shape;
         int li = s.layerAt(y);
         if (li < 0) return s.bandAt(y) > 0 ? Rock.BAND_STONE : Rock.DEEPSLATE;
-        DeepBiome b = t.biomeAt(x, y, z);
+        return shell(t.biomeAt(x, y, z), li, x, y, z, above, below, wet);
+    }
+
+    /** {@link #shell} in biome {@code b} of layer {@code li}, whatever the plan puts there (offline swatches use it). */
+    Rock shell(DeepBiome b, int li, int x, int y, int z, int above, int below, boolean wet) {
+        Shape s = t.shape;
         double n = patch(x, y, z);
         boolean top = above <= 1;
         boolean floor = above <= 3;
@@ -87,6 +111,21 @@ public final class Palette {
         int W = s.waterY(li);
         // a blind tube's end whose lava pool could not be held by rock: a magma floor instead (Network.tubeStubEnd)
         if (floor && Terrain.basaltLook(li) && t.tubeStubEnd(x, y, z)) return Rock.MAGMA;
+        // The Galleries' lava rises Terrain.FLOOD_RISE over its table at the height of its cycle. The walls it reaches
+        // are scorched dark (the Scoria Canyons' bands turn to scorchia), magma rims the calm lava, and the high-water
+        // line is drawn round every low hall in magma and polished blackstone, so the safe height reads from across a
+        // hall. The Obsidian Tubes lie above it.
+        if (li == Terrain.GALLERIES && !floor && !ceil && y >= W && b != DeepBiome.OBSIDIAN_TUBES) {
+            int high = W + Terrain.surge(li);   // the lowest block the lava never reaches
+            if (y < high) {
+                if (y <= W + 1) return n > -0.3 ? Rock.MAGMA : Rock.BLACKSTONE;
+                if (y >= high - 2) return n > -0.25 ? Rock.MAGMA : Rock.POLISHED_BLACKSTONE;
+                if (b == DeepBiome.SCORIA_CANYONS) return scoriaBand(x, y, z, true);
+                if (speck(x, y, z) < 0.03) return Rock.MAGMA;
+                if (n < -0.38) return Rock.POLISHED_BLACKSTONE;
+                return n > 0.02 ? Rock.BLACKSTONE : Rock.BASALT;
+            }
+        }
         switch (b) {
             case LANTERN_LAKE: {
                 // A still lake with islands: pale shores, ceilings and shallows, a dark bed under the open water, and
@@ -169,20 +208,111 @@ public final class Palette {
                 return n > 0.36 ? Rock.TUFF : Rock.DEEPSLATE;
             }
             case OBSIDIAN_TUBES: {
-                // Tubes lined with obsidian, crying obsidian only as glints in the walls and vault, patches of pale basalt
-                // (about 17 blocks across, so a hub shows both), and obsidian with pebbly basalt tops underfoot.
+                // Tubes lined with obsidian, patches of pale basalt (about 17 blocks across, so a hub shows both), and
+                // obsidian with pebbly basalt tops underfoot. Crying obsidian glints in the walls and vault (one block of
+                // the lining's obsidian in four) and in a few blocks underfoot: nothing glows in the lifeless Galleries
+                // but rock and lava, so this refuge is lit by its own lining.
                 double g = t.tubeShellDepth(x, y, z);
                 if (g < 1.8) {
                     double m = wobN.noise3(x * 0.06, y * 0.085, z * 0.06);
-                    if (floor) return m > 0.1 ? Rock.BASALT : Rock.OBSIDIAN;
+                    if (floor) return m > 0.1 ? Rock.BASALT : (speck(x, y, z) < 0.06 ? Rock.CRYING_OBSIDIAN : Rock.OBSIDIAN);
                     if (m > (ceil ? 0.0 : 0.2)) return Rock.BASALT;
-                    return speck(x, y, z) < 0.1 ? Rock.CRYING_OBSIDIAN : Rock.OBSIDIAN;
+                    return speck(x, y, z) < 0.25 ? Rock.CRYING_OBSIDIAN : Rock.OBSIDIAN;
                 }
                 if (g < 3.2) return Rock.BLACKSTONE;
                 return n > 0.2 ? Rock.SMOOTH_BASALT : Rock.BASALT;
             }
+            case ASH_HOLLOWS: {
+                // The Wasteland's refuge: pale, bare rock that reads as safe against the dark, overgrown tunnels round it.
+                // Smooth basalt and tuff flecked and seamed with calcite; pale floors of tuff and calcite with smooth basalt
+                // and dripstone; no magma underfoot.
+                if (floor) {
+                    if (wet) return n > 0 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+                    if (top) {
+                        if (n > 0.3) return Rock.CALCITE;
+                        if (n < -0.4) return Rock.DRIPSTONE;
+                        return n < -0.15 ? Rock.SMOOTH_BASALT : Rock.TUFF;
+                    }
+                    return n > -0.05 ? Rock.TUFF : Rock.SMOOTH_BASALT;
+                }
+                if (speck(x, y, z) < 0.02 || seam(x, y, z)) return Rock.CALCITE;
+                return n > (ceil ? -0.2 : -0.1) ? Rock.TUFF : Rock.SMOOTH_BASALT;
+            }
+            case BASALT_GALLERIES: {
+                // The Galleries' halls (basalt_galleries.jpg): basalt cliffs, smooth and polished basalt where the columns
+                // show, blackstone floors with gilded blackstone, magma by the lava, gold in the rock, and seams and cracks
+                // of ember crust that light the cliffs and vaults no lava reaches. No scoria.
+                if (floor) {
+                    if (wet) return n > 0.1 ? Rock.MAGMA : (n < -0.25 ? Rock.BLACKSTONE : Rock.BASALT);
+                    if (y <= W + 2 && n > -0.12) return Rock.MAGMA;
+                    if (top && speck(x, y, z) < 0.04) return Rock.GILDED_BLACKSTONE;
+                    if (top && n < -0.38) return Rock.POLISHED_BLACKSTONE;
+                    return n > -0.15 ? Rock.BLACKSTONE : Rock.BASALT;
+                }
+                if (ceil) {
+                    if (vein(x, y, z, 0.032)) return Rock.EMBER_CRUST;
+                    return n > 0.25 ? Rock.BLACKSTONE : Rock.BASALT;
+                }
+                if (emberSeam(x, y, z, 0.06)) return Rock.EMBER_CRUST;
+                if (n > 0.3) return speck(x, y, z) < 0.04 ? Rock.GILDED_BLACKSTONE : Rock.BLACKSTONE;
+                if (speck(x, y, z) < 0.003) return Rock.DEEPSLATE_GOLD_ORE;
+                if (n < -0.3) return Rock.POLISHED_BASALT;
+                return n > 0.08 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            }
+            case CALDERA: {
+                // The crater where the eruptions will start, and the brightest place in the Galleries: a floor of glowing
+                // crust, plates of ember crust and magma between blackstone and basalt; rims of polished blackstone
+                // cracked with magma; ember crust seamed through the rims and cracking the vault.
+                if (floor) {
+                    if (wet) return n > -0.2 ? Rock.MAGMA : Rock.BLACKSTONE;
+                    if (y <= W + 2 && n > -0.25) return Rock.MAGMA;
+                    if (top) {
+                        if (n > 0.32) return Rock.MAGMA;
+                        if (n > 0.04) return Rock.EMBER_CRUST;
+                        return n > -0.32 ? Rock.BLACKSTONE : Rock.BASALT;
+                    }
+                    return n > 0 ? Rock.MAGMA : Rock.BLACKSTONE;
+                }
+                if (ceil) {
+                    if (vein(x, y, z, 0.045)) return Rock.EMBER_CRUST;
+                    return n > 0 ? Rock.BLACKSTONE : Rock.BASALT;
+                }
+                if (vein(x, y, z, 0.03)) return Rock.MAGMA;
+                if (emberSeam(x, y, z, -0.12)) return Rock.EMBER_CRUST;
+                if (n > 0.2) return Rock.POLISHED_BLACKSTONE;
+                return n < -0.3 ? Rock.BASALT : Rock.BLACKSTONE;
+            }
+            case CAUSEWAY: {
+                // Basalt columns standing out of the lava: polished and smooth basalt caps on their tops, sheer basalt
+                // faces, magma where the lava laps them, and a few cracks of ember crust.
+                if (floor) {
+                    if (wet) return n > 0 ? Rock.MAGMA : Rock.BASALT;
+                    if (y <= W + 1) return n > -0.2 ? Rock.MAGMA : Rock.BASALT;
+                    if (top) return n > -0.1 ? Rock.POLISHED_BASALT : Rock.SMOOTH_BASALT;
+                    return Rock.BASALT;
+                }
+                if (vein(x, y, z, ceil ? 0.032 : 0.016)) return Rock.EMBER_CRUST;
+                if (ceil) return Rock.BASALT;
+                if (n > 0.38) return Rock.POLISHED_BASALT;
+                return n < -0.4 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            }
+            case SCORIA_CANYONS: {
+                // Red rifts of scoria banded with scorchia and both stones' layered forms (scoriaBand), magma along the lava
+                // river, a few cracks of ember crust, and basalt bridges: any span of rock thin enough to have open space
+                // over and under it within a few blocks (a natural bridge, or the lip of a ledge).
+                if (above + below <= 8) return n > 0.3 ? Rock.POLISHED_BASALT : Rock.BASALT;
+                if (floor) {
+                    if (wet) return n > -0.1 ? Rock.MAGMA : Rock.SCORCHIA;
+                    if (y <= W + 2 && n > -0.15) return Rock.MAGMA;
+                    if (top) return n > 0.3 ? Rock.SCORCHIA : Rock.SCORIA;
+                    return Rock.SCORIA;
+                }
+                if (vein(x, y, z, 0.014)) return Rock.EMBER_CRUST;
+                return scoriaBand(x, y, z, false);
+            }
             default: {
-                // Basalt galleries: basalt columns and blackstone floors, gilded blackstone and gold.
+                // The Wasteland, with the old Basalt Galleries' look: basalt columns and blackstone floors, gilded
+                // blackstone and gold.
                 if (floor) {
                     if (wet) return n > 0.18 ? Rock.MAGMA : (n < -0.2 ? Rock.BLACKSTONE : Rock.BASALT);
                     if (y <= W + 2 && n > -0.12) return Rock.MAGMA;
@@ -194,6 +324,28 @@ public final class Palette {
                 return n > 0.12 ? Rock.SMOOTH_BASALT : Rock.BASALT;
             }
         }
+    }
+
+    /**
+     * The Scoria Canyons' walls: scoria with flat-lying bands of scorchia and of the layered forms of both, about nine
+     * blocks apart, wavering a few blocks over a hundred and thickening and thinning along their length. Under the
+     * Galleries' high-water line ({@code scorched}) the scoria gives way to scorchia, Create's scorched scoria, banded
+     * with its layered form and with blackstone.
+     */
+    private Rock scoriaBand(int x, int y, int z, boolean scorched) {
+        double v = (y + 5.0 * bandN.noise3(x * 0.012, y * 0.02, z * 0.012)) / 9.0;
+        double f = v - Math.floor(v);
+        double w = 0.1 * bandN.noise3(x * 0.03 + 50.5, y * 0.05, z * 0.03 + 50.5);
+        if (scorched) {
+            if (f < 0.5 + w) return Rock.SCORCHIA;
+            if (f < 0.62 + w) return Rock.LAYERED_SCORCHIA;
+            return f < 0.82 ? Rock.BLACKSTONE : Rock.SCORCHIA;
+        }
+        if (f < 0.46 + w) return Rock.SCORIA;
+        if (f < 0.56 + w) return Rock.LAYERED_SCORIA;
+        if (f < 0.78 + w) return Rock.SCORCHIA;
+        if (f < 0.86 + w) return Rock.LAYERED_SCORCHIA;
+        return Rock.SCORIA;
     }
 
     // ============================================================================================== upper caves

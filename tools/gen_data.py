@@ -130,10 +130,16 @@ BLOCKS = {
     "fan_palm": ("Fan Palm", "tall", {"variants": 2}),
     "oasis_grass": ("Oasis Grass", "cross", {"variants": 3, "weights": [3, 2, 2]}),
     "dune_lily": ("Dune Lily", "cross", {"variants": 2}),
+    # 0.5: the lifeless Basalt Galleries' glowing rock, and the chains their climbs hang in place of vines (also in the
+    # Wasteland's bare refuges). The ember crust gives light, so under Complementary its whole face glows (ShaderGlow);
+    # the chain gives none, and its embers only glint (an overlay kept out of glowing_blocks.json).
+    "ember_crust": ("Ember Crust", "cube"),
+    "cinder_chain": ("Cinder Chain", "cross", {"shader_glow": False}),
 }
 NO_DROP = {"band_stone"}
-# Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth.
-NOT_PLANTS = NO_DROP | {"frost_moss"}
+# Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, and the
+# lifeless blocks of the Galleries.
+NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain"}
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
@@ -144,16 +150,20 @@ BLOCK_TAGS = {
                                  # vegetation rework, part B
                                  "pale_wisteria", "pale_wisteria_plant", "rose_tendrils", "rose_tendrils_plant",
                                  # Upper Caves rework
-                                 "frostberry_vine", "frostberry_vine_plant", "trailing_grass", "trailing_grass_plant"],
+                                 "frostberry_vine", "frostberry_vine_plant", "trailing_grass", "trailing_grass_plant",
+                                 # 0.5: the Galleries' climbs
+                                 "cinder_chain"],
     # Frost moss is ground, as vanilla's moss is: ferns, flowers and saplings grow on it (Immersive Weathering's frosty
     # ferns only grow on #minecraft:dirt), and moss patches may spread over it.
     ("minecraft", "dirt"): ["frost_moss"],
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
-    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard"],
+    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen", "rime_lichen"],
-    (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "pale_wisteria", "pale_wisteria_plant"],
+    # A cinder chain hangs from the chain above it, so a climb's whole column holds.
+    (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "pale_wisteria", "pale_wisteria_plant", "cinder_chain"],
 }
-# Vanilla growth that /remix census counts as plants, with every block above but band stone (tag explorationremix:plants).
+# Vanilla growth that /remix census counts as plants, with every block above but those in NOT_PLANTS (tag
+# explorationremix:plants).
 VANILLA_PLANTS = ["minecraft:cave_vines", "minecraft:cave_vines_plant", "minecraft:glow_lichen", "minecraft:moss_carpet", "minecraft:fern",
                   "minecraft:grass", "minecraft:large_fern", "minecraft:hanging_roots", "minecraft:azalea", "minecraft:flowering_azalea",
                   "minecraft:brown_mushroom", "minecraft:sea_pickle", "minecraft:seagrass", "minecraft:tall_seagrass", "minecraft:spore_blossom",

@@ -1,0 +1,21 @@
+{
+  "feature": "explorationremix:basalt_galleries/lava_pools",
+  "placement": [
+    {
+      "type": "minecraft:rarity_filter",
+      "chance": 2
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:open_span",
+      "layer": "basalt_galleries",
+      "anchor": "floor",
+      "min_span": 6
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

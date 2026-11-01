@@ -199,12 +199,12 @@ public final class ERBlocks {
             () -> new HangingVinesBlock(plant(MapColor.COLOR_BROWN, SoundType.WEEPING_VINES, 0), ERBlocks.ROSE_TENDRILS_PLANT_REF));
     public static final RegistryObject<Block> ROSE_TENDRILS_PLANT = BLOCKS.register("rose_tendrils_plant",
             () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_BROWN, SoundType.WEEPING_VINES, 0), ERBlocks.ROSE_TENDRILS_REF));
-    /** Amber crystals in the rock, in the Ember Gardens and the Basalt Galleries. */
+    /** Amber crystals in the rock, in the Ember Gardens, the Wasteland and its refuge, the Ash Hollows. */
     public static final RegistryObject<Block> AMBER_SHARD = block("amber_shard", () -> new AmethystClusterBlock(5, 3,
             BlockBehaviour.Properties.of().mapColor(MapColor.GOLD).forceSolidOn().noOcclusion().sound(SoundType.LARGE_AMETHYST_BUD)
                     .strength(1.5F).lightLevel(s -> 7).pushReaction(PushReaction.DESTROY)));
 
-    // ------------------------------------------------------------------------------------------- Basalt Galleries
+    // ------------------------------------------------------------------- the Wasteland (the old Basalt Galleries)
     public static final RegistryObject<Block> CINDER_BLOOM = block("cinder_bloom",
             () -> new CavePlantBlock(plant(MapColor.COLOR_RED, SoundType.NETHER_SPROUTS, 5), Block.box(3, 0, 3, 13, 10, 13)));
     public static final RegistryObject<Block> ASH_FERN = block("ash_fern",
@@ -213,6 +213,29 @@ public final class ERBlocks {
     /** A dark crust over the basalt with glowing cracks: light only where it covers a face, like glow lichen. */
     public static final RegistryObject<Block> SMOULDER_LICHEN = block("smoulder_lichen",
             () -> new GlowLichenBlock(lichen(MapColor.NETHER, SoundType.GLOW_LICHEN, 3)));
+
+    // =========================================================================================== 0.5: the lifeless Galleries
+    // Nothing grows in the Basalt Galleries (since 0.5 the bottom layer, under the Wasteland): their light and their climbs
+    // come from rock. Neither block is a plant (gen_data.NOT_PLANTS), so /remix census counts neither as growth.
+    /**
+     * Rock still glowing from the heat under it, in seams through the Galleries' walls and vaults and in plates over the
+     * Caldera's floor: it lights the halls where no lava reaches. Under Complementary a mod block that gives light glows
+     * over its whole face ({@code client/ShaderGlow}), and without the shader it is drawn at full brightness like magma,
+     * so its texture is glowing plates with dark seams between them. Unlike magma it is safe to walk on.
+     */
+    public static final RegistryObject<Block> EMBER_CRUST = block("ember_crust", () -> new Block(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_ORANGE).strength(1.5F, 6.0F).sound(SoundType.BASALT)
+                    .requiresCorrectToolForDrops().lightLevel(s -> 11).emissiveRendering((s, l, p) -> true)
+                    .isValidSpawn((s, l, p, e) -> false)));
+    /**
+     * Beads of cinder fused into a hanging chain: the climbs of the Galleries and of the Wasteland's bare refuges, where no
+     * vine may grow ({@code ClimbVinesFeature}). It climbs like a vine (minecraft:climbable) and hangs from a sturdy
+     * ceiling or from the chain above it (explorationremix:hanging_supports). No light: a few embers caught between its
+     * beads only glint (a glow overlay left out of the shader's glowing blocks).
+     */
+    public static final RegistryObject<Block> CINDER_CHAIN = block("cinder_chain", () -> new HangingPlantBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).noCollission().strength(0.5F).sound(SoundType.BASALT)
+                    .pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, e) -> false), Block.box(5, 0, 5, 11, 16, 11)));
 
     // =========================================================================================== Upper Caves rework
     // ------------------------------------------------------------------------------------------- Frost Fern Grotto
