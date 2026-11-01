@@ -957,10 +957,11 @@ def build_features():
     # lava alone: lava falls from the vaults and down the cliffs, lava pools on the terraces, the lava sea, magma, and the
     # palette's ember crust and crying obsidian (Palette.shell). Their halls are 60 to 110 across and 60 to 100 tall, where
     # a try that scans at most 32 blocks for a floor or a vault mostly misses: their features aim with span()
-    # (OpenSpanPlacement), which reads the column for its tall runs of air, floors and vaults alike. So nearly every try
-    # that falls in a hall finds its place, and the counts are per chunk of hall, mostly rarities: a hall 100 across (about
-    # 40 chunks) gets about 10 lava pools, 6 clusters of columns on its floor, 13 hanging from its vault and 4 great ones,
-    # 7 lava falls from the vault and 15 to 20 down its cliffs (six or more in any view of it).
+    # (OpenSpanPlacement), which reads the column for its tall runs of air, floors and vaults alike. So most tries that
+    # fall in a hall find a place, and the counts are per chunk of hall, mostly rarities: a hall 100 across (about 40
+    # chunks) gets about 10 lava pools, 6 clusters of columns on its floor, 13 hanging from its vault and 4 great ones.
+    # Lava falls are the exception: a fall's source must be sealed by rock, which the halls' rough vaults and terraced,
+    # undercut cliffs give at only some spots, so their counts are set from the share of tries that place (below).
     gal = "basalt_galleries"
     halls = ["basalt_galleries", "caldera", "causeway", "scoria_canyons"]   # all but the Obsidian Tubes, the refuge
     hall_rock = f"#{MOD}:basalt_rock"
@@ -1013,18 +1014,22 @@ def build_features():
             attach(simple(f"{MOD}:amber_shard"), "any", 8, f"#{MOD}:cave_rock", radius=5, height=4),
             [count(2), SQUARE, layer("wasteland", above_water=True), BIOME])
     # Lava falls, many more than the Wasteland's: from the high vaults straight down into the middle of the halls, and
-    # down the cliffs from the nearest wall (a try in the middle of a hall finds no wall within 15 and gives no fall); the
-    # Caldera has twice the cliff falls. Every one ends in lava, in the lava sea, a pool or its own sump, and none pours
-    # onto a walk (FluidFallFeature).
+    # down the cliffs from the nearest wall (a try in the middle of a hall finds no wall within 15 and gives no fall).
+    # Every one ends in lava, in the lava sea, a pool or its own sump, and none pours onto a walk (FluidFallFeature).
+    # Measured over whole cells, about a quarter of the vault tries place a fall and about one cliff try in seven (the
+    # rest find their source open to the air, no wall in reach, a walk below or too short a drop), so a hall 100 across
+    # gets about 8 falls from its vault and 15 down its cliffs, six or more in any view of it. The Caldera's walls
+    # overhang and its ring walk runs along their foot, so wall falls almost never place there (about one try in 40);
+    # its falls come from the dome instead, about 18 to a crater, into the crater's lava and onto its terraces.
     feature("basalt_galleries/vault_falls", "fluid_springs", halls,
             fall("minecraft:lava", 16, (1, 2), rock=hall_rock, mode="ceiling"),
-            [rarity(4), SQUARE] + hall("ceiling", 24) + [BIOME])
+            [count(1), SQUARE] + hall("ceiling", 24) + [BIOME])
     feature("basalt_galleries/cliff_falls", "fluid_springs", halls,
             fall("minecraft:lava", 10, (1, 3), search=15, rock=hall_rock, mode="nearest_wall"),
-            [count(1), SQUARE] + hall("any", 20) + [BIOME])
+            [count(4), SQUARE] + hall("any", 20) + [BIOME])
     feature("caldera/lava_falls", "fluid_springs", ["caldera"],
-            fall("minecraft:lava", 8, (1, 3), search=15, rock=hall_rock, mode="nearest_wall"),
-            [count(1), SQUARE] + hall("any", 12) + [BIOME])
+            fall("minecraft:lava", 16, (1, 2), rock=hall_rock, mode="ceiling"),
+            [count(12), SQUARE] + hall("ceiling", 24) + [BIOME])
 
     # ---- top layer: roots of the trees above, once the chunk's trees have grown; the way down is kept open after
     # everything else. The roots take the wood of the trees over them (match_trees): oak, birch, spruce, jungle, dark

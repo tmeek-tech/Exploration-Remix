@@ -3,7 +3,7 @@
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 1
+      "count": 12
     },
     {
       "type": "minecraft:in_square"
@@ -11,8 +11,8 @@
     {
       "type": "explorationremix:open_span",
       "layer": "basalt_galleries",
-      "anchor": "any",
-      "min_span": 12
+      "anchor": "ceiling",
+      "min_span": 24
     },
     {
       "type": "minecraft:biome"

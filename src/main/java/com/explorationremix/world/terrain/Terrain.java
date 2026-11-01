@@ -345,7 +345,8 @@ public final class Terrain {
     // ------------------------------------------------------------------------------- the network's queries (12.1)
     /**
      * Every walking line of layer li within {@code reach} of column (x, z), nearest first: tunnels, inner walks, ledge
-     * passages, stubs and the rift's ledge path ({@link Network#wayLinesAt}). A per-thread result.
+     * passages, stubs, the rift's ledge path and the Causeway's column path ({@link Network#wayLinesAt}). A per-thread
+     * result.
      */
     public Network.WayLines wayLinesAt(int li, int x, int z, double reach) { return network.wayLinesAt(li, x, z, reach); }
 
