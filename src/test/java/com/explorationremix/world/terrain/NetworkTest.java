@@ -1086,6 +1086,14 @@ class NetworkTest {
     static final double BLUE_LONG = 0.025;
     /** The share of the Basalt Galleries' places that see {@link VoxelHarness#WIDE} blocks or more (measured 37 and 50%). */
     static final double GALLERIES_WIDE = 0.30;
+    /**
+     * Basalt Galleries cells {seed, cx, cz} whose views {@link #sightLinesAreShort} checks besides the voxel cells.
+     * Each has a line of 161 to 232 blocks unless the plan bends it: across a hall and down a tunnel in line with it,
+     * from one tunnel across a hall into another, through a nearly straight tunnel from hall to hall, along a chain of
+     * gallery rooms, or past the walls of a short tunnel between two halls.
+     */
+    static final long[][] GALLERIES_SIGHT_CELLS = {{4000029, -4, -6}, {33000128, 2, 7}, {18000083, -9, 4}, {16000077, 13, -13}, {777, 2, 2},
+            {12000053, 7, 9}, {18000083, 0, -7}, {-42, -1, 0}, {5000032, 11, -7}};
 
     /**
      * A hash of what a plan carves: node centres, sizes and floors, edges, way samples and shafts, and the Basalt
@@ -1125,19 +1133,43 @@ class NetworkTest {
     }
 
     /**
-     * The network follows the config (section 2.6): graph tests 1, 2, 6 and 9 with 480 and 720 block cells, and with
-     * every layer 128 tall.
+     * The Basalt Galleries' halls in a plan: at least three column halls, and the Caldera, the Causeway and the
+     * Scoria Canyons' rift, as in every cell of the default settings (the tube hubs, which stand by halls, are the
+     * refuges {@link #refuges} counts).
+     */
+    static void galleriesHalls(Net n, String tag, List<String> fails) {
+        int halls = 0;
+        boolean caldera = false, causeway = false, rift = false;
+        for (Chamber c : n.ch) {
+            if (!c.keep) continue;
+            if (c.kind == Kind.HALL) halls++;
+            caldera |= c.kind == Kind.CALDERA;
+            causeway |= c.kind == Kind.CAUSEWAY;
+            rift |= c.kind == Kind.RIFT;
+        }
+        if (halls < 3 || !caldera || !causeway || !rift)
+            fails.add(tag + ": " + halls + " column halls" + (caldera ? "" : ", no Caldera") + (causeway ? "" : ", no Causeway") + (rift ? "" : ", no rift"));
+    }
+
+    /**
+     * The network follows the config (section 2.6): graph tests 1, 2, 6 and 9 with 480 and 720 block cells, with
+     * every layer 128 tall, and with the Basalt Galleries' lava 6 deep (their halls and tube hubs still there).
      */
     @Test
     void configVariants() {
         List<LayerSettings> d = TerrainSettings.defaults().layers();
         List<LayerSettings> short128 = new ArrayList<>();
         for (LayerSettings l : d) short128.add(new LayerSettings(l.id(), 128, l.fluidDepth(), l.lava(), l.heightMin(), l.heightMax(), l.widthMin(), l.widthMax()));
+        // the Galleries' lava 6 deep, the least the config allows (the halls' lava beds stay over the bedrock's seal)
+        List<LayerSettings> shallow = new ArrayList<>();
+        for (LayerSettings l : d) shallow.add(!l.id().equals("basalt_galleries") ? l
+                : new LayerSettings(l.id(), l.height(), 6, l.lava(), l.heightMin(), l.heightMax(), l.widthMin(), l.widthMax()));
         TerrainSettings[] variants = {
                 new TerrainSettings(16, 480, 4.5, 14.0, d),
                 new TerrainSettings(16, 720, 4.5, 14.0, d),
-                new TerrainSettings(16, 600, 4.5, 14.0, List.copyOf(short128))};
-        String[] names = {"480 block cells", "720 block cells", "layers 128 tall"};
+                new TerrainSettings(16, 600, 4.5, 14.0, List.copyOf(short128)),
+                new TerrainSettings(16, 600, 4.5, 14.0, List.copyOf(shallow))};
+        String[] names = {"480 block cells", "720 block cells", "layers 128 tall", "Galleries lava 6 deep"};
         List<String> fails = new ArrayList<>();
         for (int v = 0; v < variants.length; v++) {
             for (long seed : new long[]{SEEDS[0], SEEDS[2]}) {
@@ -1149,6 +1181,7 @@ class NetworkTest {
                     waysToGates(t, n, tg, fails);
                     refuges(t, n, tg, fails);
                     dropped(t, n, tg, fails);
+                    if (li == Terrain.GALLERIES) galleriesHalls(n, tg, fails);
                 }
                 // test 9 on a 3 x 3 block of Blue cells: a portal works on every interior edge
                 Network w = t.network;
@@ -1616,10 +1649,19 @@ class NetworkTest {
     }
 
     /**
+     * Basalt Galleries cells {seed, cx, cz} whose falls {@link #noLethalFalls} checks besides the voxel cells. Each has
+     * a place where a careless plan leaves a fall of 16 to 22: a step off a rift bridge's side onto a low ledge, a step
+     * past an upper ledge's end by the wall into a pocket, or a fall through a tunnel's floor into the tunnel under it
+     * (another tunnel, or the same one where it loops over itself).
+     */
+    static final long[][] GALLERIES_FALL_CELLS = {{33000128, 2, 7}, {424242, -3, 8}, {9000056, 14, 1}, {1000020, -8, -12}, {11000050, -1, -4}};
+
+    /**
      * Section 10: no fall from a standing place in a tunnel, a climb, a ledge passage or an ordinary room lands more
      * than 15 lower; a staged climb ends a fall on the floor of the stage it fell down. Falls into water or onto vines
      * are safe. Falls in the rift, the deep dark, the helices and the ancient city are reported, not failed: 0.2.0's
-     * cliffs and the high ledges are meant to be dangerous.
+     * cliffs and the high ledges are meant to be dangerous. The Basalt Galleries are checked in the {@link
+     * #GALLERIES_FALL_CELLS} too.
      */
     @Test
     @Tag("voxel")
@@ -1627,12 +1669,14 @@ class NetworkTest {
         List<String> fails = new ArrayList<>();
         List<Object[]> runs = new ArrayList<>();
         for (int s = 0; s < VOX_SEEDS.length; s++) for (int li : new int[]{Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES}) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
+        // more Basalt Galleries cells, built one at a time and not kept
+        for (long[] c : GALLERIES_FALL_CELLS) runs.add(new Object[]{c[0], Terrain.GALLERIES, (int) c[1], (int) c[2], -1});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
         for (Object[] run : runs) {
             long seed = (Long) run[0];
             int li = (Integer) run[1], cx = (Integer) run[2], cz = (Integer) run[3], wc = (Integer) run[4];
             Terrain t = terrain(seed);
-            VoxelHarness v = built(seed, li, cx, cz, wc, wc);
+            VoxelHarness v = wc < 0 ? unbuilt(t, li, cx, cz) : built(seed, li, cx, cz, wc, wc);
             String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "");
             java.util.Map<String, Integer> told = new java.util.TreeMap<>();
             int lethal = 0, deepest = 0;
@@ -1905,7 +1949,8 @@ class NetworkTest {
      * and the Basalt Galleries have none; in the Blue Reaches, the share of places with a long view is held under
      * {@link #BLUE_LONG}, apart from the places in a city's reserve, which are reported (the city's pieces, which the
      * harness does not build, stand in the way of many of their views). The Basalt Galleries' halls (0.5) are meant to
-     * be wide: at least {@link #GALLERIES_WIDE} of their places see {@link VoxelHarness#WIDE} blocks or more.
+     * be wide: at least {@link #GALLERIES_WIDE} of their places see {@link VoxelHarness#WIDE} blocks or more; they are
+     * checked in the {@link #GALLERIES_SIGHT_CELLS} too.
      */
     @Test
     @Tag("voxel")
@@ -1913,6 +1958,8 @@ class NetworkTest {
         List<String> fails = new ArrayList<>();
         List<Object[]> runs = new ArrayList<>();
         for (int li : new int[]{Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES}) for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
+        // more Basalt Galleries cells, built one at a time and not kept: long views through their tunnels
+        for (long[] c : GALLERIES_SIGHT_CELLS) runs.add(new Object[]{c[0], Terrain.GALLERIES, (int) c[1], (int) c[2], -1});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
         runs.add(new Object[]{2000023L, Terrain.BLUE, -1, 1, 0});
         for (Object[] run : runs) {
@@ -1922,7 +1969,10 @@ class NetworkTest {
             Network w = t.network;
             int cell = (int) w.cell;
             VoxelHarness v;
-            if (wc > 0) v = built(seed, li, cx, cz, wc, wc);
+            if (wc < 0) {
+                v = unbuilt(t, li, cx, cz);
+                wc = 1;
+            } else if (wc > 0) v = built(seed, li, cx, cz, wc, wc);
             else {
                 // one cell with an apron wide enough that its places' rays rarely leave the box
                 int ap = 170;

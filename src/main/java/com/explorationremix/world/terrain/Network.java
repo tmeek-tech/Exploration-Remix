@@ -1165,14 +1165,14 @@ public final class Network {
      * where nothing overhangs. Under a column hall's ledge and the Causeway's wall ledge, from the lip to the wall;
      * under every other lip over the lava, {@link #UNDER_REACH} blocks in: the Causeway's end ramps, the Caldera's
      * crest, the rift's ledges and ramps beside its river. The underside is {@code shelf} under the floor at the lip
-     * and curves down to the lava, so the floor is thick enough for the 4 x 8 x 4 interpolation and a fall from its lip
-     * lands in the lava. Without it, the interpolated cliff leans out at its foot: a floor's height is no distance
-     * across a cliff, so the lowest blocks of the face stand three or four out from the lip, a slope of rock over the
-     * lava that every fall from the lip lands on.
+     * ({@link #RIFT_LOW_SHELF} under the rift's low ledges) and curves down to the lava, so the floor is thick enough
+     * for the 4 x 8 x 4 interpolation and a fall from its lip lands in the lava. Without it, the interpolated cliff
+     * leans out at its foot: a floor's height is no distance across a cliff, so the lowest blocks of the face stand
+     * three or four out from the lip, a slope of rock over the lava that every fall from the lip lands on.
      */
     double shelfUnder(Chamber c, double e, double x, double z) {
         if (e >= 1.02) return Double.NaN;
-        double t, top = c.f0;
+        double t, top = c.f0, shelf = c.shelf;
         switch (c.kind) {
             case HALL -> {
                 if (e < c.lakeEdge) return Double.NaN;
@@ -1203,15 +1203,25 @@ public final class Network {
                 if (d <= 0 || d >= UNDER_REACH) return Double.NaN;
                 t = d / UNDER_REACH;
                 top = riftFloor(c, uv[0], uv[1], x, z);
+                if (top < c.f0 - 6) shelf = RIFT_LOW_SHELF;
             }
             default -> {
                 return Double.NaN;
             }
         }
         t = Math.min(1, t);
-        double lip = top - c.shelf;
+        double lip = top - shelf;
         return lip - (lip - (c.base + 2)) * t * t;
     }
+
+    /**
+     * The Scoria Canyons: the shelf under the low ledges and the lower half of their ramps (blocks), where it meets the
+     * undercut at their lips. Their floors stand {@link #HALL_FLOOR_DEPTH} thick block by block all the same ({@link
+     * #hallFloor}); with the hall's shelf of 10, the rock between the undercut and the floor bulges out of a low
+     * ledge's end at the interpolation corners, 4 under its floor and right under the upper ledge's lip, and a fall
+     * from the lip lands on it 16 or 17 down.
+     */
+    static final double RIFT_LOW_SHELF = 3;
 
     /**
      * The Scoria Canyons: how far local (u, v) lies from the lava river as {@link #riftFloor} lays it out (0 on it):
@@ -1852,8 +1862,19 @@ public final class Network {
         float u = lc.U[k];
         // under a hall's ledge: open from the lava's bed to the ledge's underside as well
         if (u == u) d = Math.min(d, Math.max(c.base - y, y - u));
-        return Math.max(d, wallTerm(lc, k));
+        double wall = wallTerm(lc, k);
+        if (c.kind == Kind.RIFT && y < c.f0 - 6) wall -= Math.min(RIFT_LEAN, (c.f0 - 6 - y) * 0.5);
+        return Math.max(d, wall);
     }
+
+    /**
+     * The Scoria Canyons: how far their walls lean back under the upper ledges (blocks), from nothing 6 under the
+     * ledges' floor, 1 in 2, to this 16 under it, where a fall from a ledge starts to hurt too much. Under the ledges
+     * the rock is their own; past their ends the river reaches the walls, and a fall from a ledge's last block by an
+     * upright wall runs down its rough face onto a knob 16 under the ledge, a pocket with no way out. Leaning back,
+     * the walls let such a fall go on into the river.
+     */
+    static final double RIFT_LEAN = 5;
 
     /** Density in blocks (positive is rock) of layer li at a block, as sampled at the interpolation corners. */
     double layerDensity(int li, int x, int y, int z) {
