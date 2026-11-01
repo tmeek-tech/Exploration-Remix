@@ -17,7 +17,11 @@ UPPER = ["rootvaults", "silver_fern_rift", "ivory_root_cavern",
          "frozen_rootvaults", "sinkhole", "oasis_hollow", "frost_fern_grotto"]
 # The entrances' biomes, whose features aim at their chambers (layer_range's grottos focus).
 ENTRANCE_BIOMES = {"rootvaults", "frozen_rootvaults", "sinkhole", "oasis_hollow"}
-DEEP = ["lantern_lake", "ember_gardens", "rust_springs", "deep_blue_rift", "asurine_geodes", "basalt_galleries", "obsidian_tubes"]
+# Since 0.5 the old bottom layer is the Wasteland (its look: basalt columns, ash ferns and cinder blooms) over a band and
+# the Basalt Galleries, which are lifeless: the new biomes are appended so the older ones keep their feature order.
+DEEP = ["lantern_lake", "ember_gardens", "rust_springs", "deep_blue_rift", "asurine_geodes", "basalt_galleries", "obsidian_tubes",
+        "wasteland", "ash_hollows", "caldera", "causeway", "scoria_canyons"]
+GALLERIES = ["basalt_galleries", "obsidian_tubes", "caldera", "causeway", "scoria_canyons"]
 OURS = UPPER + DEEP
 NAMES = {
     "rootvaults": "Root Vaults", "silver_fern_rift": "Silver Fern Rift", "ivory_root_cavern": "Ivory Root Cavern",
@@ -25,12 +29,16 @@ NAMES = {
     "lantern_lake": "Lantern Lake", "ember_gardens": "Ember Gardens", "rust_springs": "Rust Springs",
     "deep_blue_rift": "Deep Blue Rift", "asurine_geodes": "Asurine Geodes",
     "basalt_galleries": "Basalt Galleries", "obsidian_tubes": "Obsidian Tubes",
+    "wasteland": "Wasteland", "ash_hollows": "Ash Hollows",
+    "caldera": "Caldera", "causeway": "Causeway", "scoria_canyons": "Scoria Canyons",
 }
 LAYER = {"rootvaults": "upper", "silver_fern_rift": "upper", "ivory_root_cavern": "upper",
          "frozen_rootvaults": "upper", "sinkhole": "upper", "oasis_hollow": "upper", "frost_fern_grotto": "upper",
          "lantern_lake": "deep_gardens", "ember_gardens": "deep_gardens", "rust_springs": "deep_gardens",
          "deep_blue_rift": "blue_reaches", "asurine_geodes": "blue_reaches",
-         "basalt_galleries": "basalt_galleries", "obsidian_tubes": "basalt_galleries"}
+         "basalt_galleries": "basalt_galleries", "obsidian_tubes": "basalt_galleries",
+         "wasteland": "wasteland", "ash_hollows": "wasteland",
+         "caldera": "basalt_galleries", "causeway": "basalt_galleries", "scoria_canyons": "basalt_galleries"}
 
 # Fog is the colour of the distance, water and water fog tint the water, grass and foliage tint ferns and leaves.
 #                       fog        water      water fog  grass      foliage
@@ -51,6 +59,11 @@ LOOKS = {
     "asurine_geodes":    ("#2a4a86", "#3e72d8", "#0b1f4a", "#6f8fa8", "#5f7f98"),
     "basalt_galleries":  ("#70574b", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     "obsidian_tubes":    ("#4d3b42", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    "wasteland":         ("#70574b", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    "ash_hollows":       ("#6a625c", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    "caldera":           ("#7a4a32", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    "causeway":          ("#70574b", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    "scoria_canyons":    ("#7a4a3a", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
 }
 
 # Ambient particles drifting in the air: (particle, probability). Steam over hot pools, embers over lava, pollen in
@@ -65,6 +78,11 @@ PARTICLES = {
     "asurine_geodes": ("minecraft:warped_spore", 0.004),
     "basalt_galleries": ("minecraft:white_ash", 0.06),
     "obsidian_tubes": ("minecraft:ash", 0.02),
+    "wasteland": ("minecraft:white_ash", 0.06),
+    "ash_hollows": ("minecraft:white_ash", 0.01),
+    "caldera": ("minecraft:white_ash", 0.03),
+    "causeway": ("minecraft:white_ash", 0.03),
+    "scoria_canyons": ("minecraft:white_ash", 0.03),
 }
 
 # Ambient sound: (loop, additions, additions chance per tick). Our sound events are registered by the mod (ERSounds).
@@ -83,10 +101,15 @@ SOUNDS = {
     "asurine_geodes": (f"{MOD}:ambient.blue.loop", f"{MOD}:ambient.blue.additions", 0.003),
     "basalt_galleries": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
     "obsidian_tubes": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.004),
+    "wasteland": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
+    "ash_hollows": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.003),
+    "caldera": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
+    "causeway": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
+    "scoria_canyons": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
 }
 
-HOT = {"ember_gardens", "rust_springs", "basalt_galleries", "obsidian_tubes"}
-DRY = {"basalt_galleries", "obsidian_tubes"}
+HOT = {"ember_gardens", "rust_springs", "wasteland", "ash_hollows"} | set(GALLERIES)
+DRY = {"wasteland", "ash_hollows"} | set(GALLERIES)
 # The Upper Caves rework's biomes: snow-cold, or desert-hot; rain and snow fall into the open entrances' pits and
 # skylights (the pack's own biome holds the ground over them).
 TEMPERATURE = {"frozen_rootvaults": -0.5, "frost_fern_grotto": -0.3, "oasis_hollow": 2.0, "sinkhole": 0.8}
@@ -358,27 +381,27 @@ def build_features():
                   mix((LIMESTONE, 5), (simple("minecraft:calcite"), 3)), 11, overflow=0.12),
             [count(20), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
     # Small lava pools flush with the floor, in about every second or third gallery (basalt_galleries.jpg).
-    feature("basalt_galleries/lava_pools", "local_modifications", ["basalt_galleries"],
+    feature("wasteland/lava_pools", "local_modifications", ["wasteland"],
             pools(mix((simple("minecraft:blackstone"), 2), (simple("minecraft:basalt", axis="y"), 3)), simple("minecraft:magma_block"), 4, lava=True),
-            [count(32), SQUARE, layer("basalt_galleries", above_water=True)] + floor() + [BIOME])
-    feature("basalt_galleries/columns", "local_modifications", ["basalt_galleries"],
+            [count(32), SQUARE, layer("wasteland", above_water=True)] + floor() + [BIOME])
+    feature("wasteland/columns", "local_modifications", ["wasteland"],
             {"type": f"{MOD}:column_cluster", "config": {
                 "block": mix((simple("minecraft:basalt", axis="y"), 4), (simple("minecraft:polished_basalt", axis="y"), 1)),
                 "radius": 6, "count": 26, "height": uniform(3, 16)}},
-            [count(8), SQUARE, layer("basalt_galleries", above_water=True)] + floor() + [BIOME])
+            [count(8), SQUARE, layer("wasteland", above_water=True)] + floor() + [BIOME])
     # Columns hanging from the vaults, longest in the middle of a cluster; the longest under the great hall's vault, the
     # chimney and the tallest galleries, where the floor is more than 16 below.
-    feature("basalt_galleries/hanging_columns", "local_modifications", ["basalt_galleries"],
+    feature("wasteland/hanging_columns", "local_modifications", ["wasteland"],
             {"type": f"{MOD}:column_cluster", "config": {
                 "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:polished_basalt", axis="y"), 1)),
                 "radius": 4, "count": 20, "height": uniform(3, 10), "hang_chance": 1.0}},
-            [count(12), SQUARE, layer("basalt_galleries", above_water=True)] + ceiling() + [BIOME])
+            [count(12), SQUARE, layer("wasteland", above_water=True)] + ceiling() + [BIOME])
     tall = {"type": "minecraft:block_predicate_filter", "predicate": dict(AIR, offset=[0, -16, 0])}
-    feature("basalt_galleries/great_hanging_columns", "local_modifications", ["basalt_galleries"],
+    feature("wasteland/great_hanging_columns", "local_modifications", ["wasteland"],
             {"type": f"{MOD}:column_cluster", "config": {
                 "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:polished_basalt", axis="y"), 1)),
                 "radius": 6, "count": 34, "height": uniform(8, 18), "hang_chance": 1.0}},
-            [count(6), SQUARE, layer("basalt_galleries", above_water=True)] + ceiling() + [tall, BIOME])
+            [count(6), SQUARE, layer("wasteland", above_water=True)] + ceiling() + [tall, BIOME])
     # A still pool in the tube hubs, between obsidian and pebbly basalt, its bed glinting with crying obsidian.
     feature("obsidian_tubes/still_pool", "local_modifications", ["obsidian_tubes"],
             pools(mix((simple("minecraft:obsidian"), 3), (simple("minecraft:basalt", axis="y"), 1)),
@@ -481,12 +504,12 @@ def build_features():
     feature("ember_gardens/amber_shards", "underground_decoration", ["ember_gardens"],
             attach(simple(f"{MOD}:amber_shard"), "any", 24, f"#{MOD}:cave_rock", radius=6, height=6),
             [count(6), SQUARE, layer("deep_gardens", above_water=True), BIOME])
-    feature("basalt_galleries/smoulder_lichen", "underground_decoration", ["basalt_galleries"],
+    feature("wasteland/smoulder_lichen", "underground_decoration", ["wasteland"],
             attach(simple(f"{MOD}:smoulder_lichen"), "walls_ceiling", 32, f"#{MOD}:basalt_rock", radius=6, height=8),
-            [count(6), SQUARE, layer("basalt_galleries", above_water=True), BIOME])
-    feature("basalt_galleries/amber_shards", "underground_decoration", ["basalt_galleries"],
+            [count(6), SQUARE, layer("wasteland", above_water=True), BIOME])
+    feature("wasteland/amber_shards", "underground_decoration", ["wasteland"],
             attach(simple(f"{MOD}:amber_shard"), "any", 16, f"#{MOD}:basalt_rock", radius=6, height=6),
-            [count(4), SQUARE, layer("basalt_galleries", above_water=True), BIOME])
+            [count(4), SQUARE, layer("wasteland", above_water=True), BIOME])
 
     # ---- fluid springs: waterfalls and lava falls
     feature("rootvaults/waterfalls", "fluid_springs", rv + ["frozen_rootvaults", "sinkhole", "oasis_hollow"], fall("minecraft:water", 6, (1, 3)),
@@ -501,9 +524,9 @@ def build_features():
             [count(1), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
     # Lava falls lighting the galleries (basalt_galleries.jpg), each from 3 to 6 blocks under a vault; every one ends in
     # lava, in a pool or in its own sump, so none runs onto a walk.
-    feature("basalt_galleries/lava_falls", "fluid_springs", ["basalt_galleries"],
+    feature("wasteland/lava_falls", "fluid_springs", ["wasteland"],
             fall("minecraft:lava", 6, (1, 2), rock=f"#{MOD}:basalt_rock"),
-            [count(80), SQUARE, layer("basalt_galleries", above_water=True)] + ceiling(offset=uniform(-6, -3)) + [BIOME])
+            [count(80), SQUARE, layer("wasteland", above_water=True)] + ceiling(offset=uniform(-6, -3)) + [BIOME])
 
     # ---- vegetal decoration: roots, vines and plants
     feature("rootvaults/hanging_roots", "vegetal_decoration", rv + ["frozen_rootvaults"],
@@ -682,12 +705,12 @@ def build_features():
     feature("ember_gardens/brown_mushrooms", "vegetal_decoration", ["ember_gardens"],
             patch(simple("minecraft:brown_mushroom"), state("minecraft:brown_mushroom"), tries=16, xz=5, y=2, on=soil),
             [scaled(12, GARDENS_PLANTS * EMBER_FLOOR), SQUARE] + gardens_floor)
-    basalt_floor = [layer("basalt_galleries", above_water=True)] + floor() + [BIOME]
-    feature("basalt_galleries/cinder_blooms", "vegetal_decoration", ["basalt_galleries"],
+    basalt_floor = [layer("wasteland", above_water=True)] + floor() + [BIOME]
+    feature("wasteland/cinder_blooms", "vegetal_decoration", ["wasteland"],
             patch(simple(f"{MOD}:cinder_bloom"), state(f"{MOD}:cinder_bloom"), tries=12, xz=5, y=2, on=f"#{MOD}:basalt_rock"),
             [scaled(24, BASALT_PLANTS * BASALT_FLOOR), SQUARE] + basalt_floor)
     # One ash-fern spot in four takes a cinder bloom (both need only a sturdy face below).
-    feature("basalt_galleries/ash_ferns", "vegetal_decoration", ["basalt_galleries"],
+    feature("wasteland/ash_ferns", "vegetal_decoration", ["wasteland"],
             patch(mix((simple(f"{MOD}:ash_fern"), 3), (simple(f"{MOD}:cinder_bloom"), 1)), state(f"{MOD}:ash_fern"), tries=16, xz=6, y=3,
                   on=f"#{MOD}:basalt_rock"),
             [scaled(28, BASALT_PLANTS * BASALT_FLOOR), SQUARE] + basalt_floor)

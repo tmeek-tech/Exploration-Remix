@@ -76,16 +76,17 @@ final class NetPlanner {
         Spec sp = new Spec();
         double W = s.waterY(li), T = s.top(li);
         switch (li) {
-            case Terrain.GARDENS, Terrain.BASALT -> {
-                boolean basalt = li == Terrain.BASALT;
+            case Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES -> {
+                boolean basalt = Terrain.basaltLook(li);
+                int surge = Terrain.surge(li);
                 sp.half = basalt ? 3.2 : 3.0; sp.halfVar = basalt ? 0.22 : 0.25;
                 sp.hgt = basalt ? 8.0 : 7.5; sp.hgtVar = 0.18;
                 sp.maxSlope = 0.62;
                 sp.fill = 160; sp.gapH = 12; sp.gapV = 10;
-                sp.yLo = basalt ? Terrain.SURGE_RISE + 2 : -3; sp.yHi = (T - W) - 30;
+                sp.yLo = basalt ? surge + 2 : -3; sp.yHi = (T - W) - 30;
                 sp.climbMax = 50; sp.climbL = 46;
                 sp.spacing = basalt ? 48 : 44;
-                sp.tierBase = basalt ? Terrain.SURGE_RISE + 6 : 3; sp.tierGap = 46;
+                sp.tierBase = basalt ? surge + 6 : 3; sp.tierGap = 46;
                 sp.rampP = basalt ? 0.4 : 0.45; sp.rampMax = basalt ? 0.4 : 0.42;
                 sp.candK = 7; sp.candMax = 170;
                 sp.clearH = 6; sp.clearV = 4; sp.clearC = 7; sp.clearCV = 4;
@@ -114,6 +115,8 @@ final class NetPlanner {
         final int li, cx, cz;
         final long h;
         final double W, T, B, x0, z0, cell;
+        /** How far the layer's lava rises over its table at the height of its cycle (the Galleries only, else 0). */
+        final int surge;
         final Spec sp;
         final List<double[]> doorAngles = new ArrayList<>(); // per chamber: used door angles (radians)
         // collision index for way points and shafts: 12-block buckets
@@ -135,6 +138,7 @@ final class NetPlanner {
             W = s.waterY(li);
             T = s.top(li);
             B = s.bottom(li);
+            surge = Terrain.surge(li);
             x0 = cx * cell;
             z0 = cz * cell;
             sp = spec(li, s, cell);
@@ -164,7 +168,7 @@ final class NetPlanner {
         // ------------------------------------------------------------------------------------------- run
         void run() {
             landings();
-            if (li == Terrain.BASALT) lavaBasin();
+            if (li == Terrain.GALLERIES) lavaBasin();
             portals();
             tiers();
             if (li == Terrain.BLUE) city();
@@ -429,18 +433,18 @@ final class NetPlanner {
             q.f0 = entry ? L.f0 - r(s + 5, 6, 12) : Math.max(W + 2, L.f0 + r(s + 5, 2, 6));
             // under the band: the seal and a margin stay rock above the court's ceiling
             q.h = Math.max(7.5, Math.min(q.h, T - Terrain.SEAL - 6.5 - q.f0 - q.rise - 2));
-            if (li == Terrain.BASALT && !entry && q.f0 + 2 < W + Terrain.SURGE_RISE + 3) {
+            if (surge > 0 && !entry && q.f0 + 2 < W + surge + 3) {
                 // surge stair: the court by the bedrock landing climbs away from it in 1-block terraces to above the
                 // highest surge, so its other doors (and the network) start where a surge cannot reach
                 double sdia = r(s + 6, 26, 30);
                 q.rx = sdia / 2; q.rz = q.rx * r(s + 2, 0.85, 1.0);
-                q.rampDrop = W + Terrain.SURGE_RISE + 3 - q.f0;
+                q.rampDrop = W + surge + 3 - q.f0;
                 q.rampX = -Math.cos(a); q.rampZ = -Math.sin(a);
                 q.h = Math.max(q.h, 11);
                 d = L.R() + q.R() + r(s + 4, 7, 12);
                 q.x = L.x + Math.cos(a) * d; q.z = L.z + Math.sin(a) * d;
             }
-            q.low = li == Terrain.BASALT && q.f0 < W + Terrain.SURGE_RISE;
+            q.low = surge > 0 && q.f0 < W + surge;
             return q;
         }
 
@@ -589,13 +593,13 @@ final class NetPlanner {
                         if (anchorPlace(sm, pl, tp, 228)) perched = pl;
                     }
                 }
-                case Terrain.BASALT -> {
+                case Terrain.WASTELAND, Terrain.GALLERIES -> {
                     Strand sw = walkStrand();
                     Strand sg = strands.get(S == 3 ? (u(320) < 0.5 ? 0 : 2) : 1 - sw.s);
                     double tg = r(321, 0.3, 0.62);
                     Chamber g = chamber(Kind.GREAT, 320);
                     g.rx = r(321, 24, 28); g.rz = r(322, 19, 25); // v12: as the low great hall
-                    g.sq = 2.4; g.f0 = Math.max(W + Terrain.SURGE_RISE + 2, fT(sg, tg) - 4);
+                    g.sq = 2.4; g.f0 = Math.max(W + surge + 2, fT(sg, tg) - 4);
                     g.h = r(325, 40, 52); g.rise = 9; g.terr = 3; g.set = true;
                     double[] d0 = slotPoint(sg, tg - 0.05), d1 = slotPoint(sg, tg + 0.05);
                     g.setRot(Math.atan2(d1[1] - d0[1], d1[0] - d0[0]));
@@ -623,7 +627,7 @@ final class NetPlanner {
          * The helix set pieces need height (section 2.6): the well only when the Deep Gardens are at least 180 tall, the
          * chimney only when the Basalt Galleries are at least 200 tall (the defaults are 240 and 288).
          */
-        boolean helixRoom() { return T - B + 1 >= (li == Terrain.BASALT ? 200 : 180); }
+        boolean helixRoom() { return T - B + 1 >= (Terrain.basaltLook(li) ? 200 : 180); }
 
         Strand walkStrand() {
             for (Strand st : strands) if (st.walkOnly) return st;
@@ -648,7 +652,7 @@ final class NetPlanner {
             c.warp = 0.08;
             double mid = fT(st, tw);
             c.f0 = mid - drop / 2;
-            if (kind == Kind.CHIMNEY) c.f0 = Math.max(c.f0, W + Terrain.SURGE_RISE + 4);
+            if (kind == Kind.CHIMNEY) c.f0 = Math.max(c.f0, W + surge + 4);
             c.top = Math.min(T - 26, c.f0 + drop + 12);
             c.h = c.top - c.f0;
             c.rise = 2;
@@ -845,7 +849,7 @@ final class NetPlanner {
                         c.sq = r(s + 8, 2.0, 2.8);
                     }
                 }
-                case Terrain.BASALT -> {
+                case Terrain.WASTELAND, Terrain.GALLERIES -> {
                     if (u(s + 9) < 0.5) {
                         c.kind = Kind.GALLERY;
                         // v9: galleries at Taran's sizes, 26-36 long and 14-22 wide (were 36-60 by 16-26)
@@ -889,7 +893,7 @@ final class NetPlanner {
                 c.f0 = fm - c.rampDrop * 0.5 - 1;
                 // Basalt Galleries: the whole floor stays above the highest surge, as in fill (near the bedrock landing
                 // the strand's line comes down to the surge stairs, and a ramp's low end fell under the surge)
-                if (li == Terrain.BASALT) c.f0 = Math.max(c.f0, W + Terrain.SURGE_RISE + 2);
+                if (surge > 0) c.f0 = Math.max(c.f0, W + surge + 2);
                 c.strand = st.s;
                 if (fits(c)) {
                     add(c);
@@ -1551,11 +1555,11 @@ final class NetPlanner {
                         if (em.id > 0 && n.ch.size() > em.id && n.ch.get(em.id) == em) cascade = em;
                     }
                 }
-                case Terrain.BASALT -> {
+                case Terrain.WASTELAND, Terrain.GALLERIES -> {
                     if (chimney == null && helixRoom()) {
                         Chamber c = chamber(Kind.CHIMNEY, 360);
                         c.rx = c.rz = r(361, 9.5, 11.5); c.warp = 0.08;
-                        c.f0 = W + Terrain.SURGE_RISE + r(362, 4, 14); c.top = Math.min(T - 26, c.f0 + r(363, 70, 110));
+                        c.f0 = W + surge + r(362, 4, 14); c.top = Math.min(T - 26, c.f0 + r(363, 70, 110));
                         c.h = c.top - c.f0; c.rise = 2; c.set = true;
                         helix(c, 364);
                         randomPlace(c, 365);
@@ -1621,11 +1625,11 @@ final class NetPlanner {
                         offMainPlace(s, 408 + 20 * k);
                     }
                 }
-                case Terrain.BASALT -> {
+                case Terrain.WASTELAND, Terrain.GALLERIES -> {
                     for (int k = 0; k < 2; k++) {
                         Chamber t = chamber(Kind.TUBEHUB, 450 + 20 * k);
                         t.rx = t.rz = r(451 + 20 * k, 8, 10); t.warp = 0.06;
-                        t.f0 = W + Terrain.SURGE_RISE + r(452 + 20 * k, 6, Math.min(90, T - W - Terrain.SURGE_RISE - 32)); t.h = r(453 + 20 * k, 12, 14); t.rise = 1;
+                        t.f0 = W + surge + r(452 + 20 * k, 6, Math.min(90, T - W - surge - 32)); t.h = r(453 + 20 * k, 12, 14); t.rise = 1;
                         t.refuge = true;
                         t.pillars = new double[]{0, 0, r(454 + 20 * k, 1.8, 2.6)};
                         offMainPlace(t, 455 + 20 * k);
@@ -1838,7 +1842,7 @@ final class NetPlanner {
                             c.sq = r(s + 8, 2.0, 2.8);
                         }
                     }
-                    case Terrain.BASALT -> {
+                    case Terrain.WASTELAND, Terrain.GALLERIES -> {
                         if (u(s + 9) < 0.45) {
                             c.kind = Kind.GALLERY;
                             // v9: galleries at Taran's sizes, 26-36 long and 14-22 wide (were 36-68 by 16-28)
@@ -1850,7 +1854,7 @@ final class NetPlanner {
                             c.rx = dia / 2; c.rz = c.rx * r(s + 4, 0.65, 1.0);
                             c.h = heightDraw(s + 5, 10, 18); c.rise = r(s + 6, 2, 4); c.terr = 1.5; c.sq = r(s + 8, 2.0, 2.8);
                         }
-                        c.low = fy < W + Terrain.SURGE_RISE;
+                        c.low = surge > 0 && fy < W + surge;
                     }
                     default -> {
                         // Blue Reaches: junction rooms between the rift, the caverns and the landings
@@ -1870,9 +1874,9 @@ final class NetPlanner {
                     c.rampX = Math.cos(ra); c.rampZ = Math.sin(ra);
                     c.f0 = fy - c.rampDrop * 0.5;
                 }
-                if (li == Terrain.BASALT) {
+                if (surge > 0) {
                     // every ordinary chamber floor stays above the highest surge (the storeys' tilt and jitter included)
-                    c.f0 = Math.max(c.f0, W + Terrain.SURGE_RISE + 2);
+                    c.f0 = Math.max(c.f0, W + surge + 2);
                     c.low = false;
                 }
                 underSeal(c);
@@ -2312,7 +2316,7 @@ final class NetPlanner {
          * from the landing's bowl, so that wherever the surge can reach there is somewhere close to climb to.
          */
         void surgeNiches() {
-            if (li != Terrain.BASALT) return;
+            if (surge <= 0) return;
             Chamber L = null;
             for (Chamber c : n.ch) if (c.keep && c.kind == Kind.BEDROCK) L = c;
             if (L == null) return;
@@ -2326,7 +2330,7 @@ final class NetPlanner {
                 // the climb is two stages (section 10): the floor (f0 to f0 + 2) stays within two stages of the
                 // landing's and its lowest feet are a block over the highest surge; the pocket stands far enough out
                 // for a short tunnel to the first stage, the ledge passage and the tunnel on from the second stage's top
-                pk.f0 = W + Terrain.SURGE_RISE + 0.75;
+                pk.f0 = W + surge + 0.75;
                 double d = L.R() + pk.R() + r(992 + k, 10, 18);
                 pk.x = L.x + Math.cos(a) * d; pk.z = L.z + Math.sin(a) * d;
                 pk.hash = Hashing.mix(h, 993, k, 0);
@@ -2361,7 +2365,7 @@ final class NetPlanner {
                     double ey = d[2] + (Hashing.unit(Hashing.mix(h, 974, c.id, t)) - 0.5) * len * 0.5;
                     // no blind end runs under water, as no tunnel does (its door is at W + 1 or higher); Basalt
                     // Galleries: no blind end or pocket under the highest surge
-                    ey = Math.max(ey, li == Terrain.BASALT ? W + Terrain.SURGE_RISE + 2 : W + 1);
+                    ey = Math.max(ey, surge > 0 ? W + surge + 2 : W + 1);
                     Chamber pk = null;
                     if (pocket) {
                         pk = new Chamber();
@@ -2461,7 +2465,7 @@ final class NetPlanner {
          * every walk and tunnel of the hall by 7 is taken; a great hall takes the one that clears most.
          */
         void arches() {
-            if (li != Terrain.BASALT) return;
+            if (!Terrain.basaltLook(li)) return;
             for (Chamber c : n.ch) {
                 if (!c.keep) continue;
                 boolean great = c.kind == Kind.GREAT;
@@ -2485,7 +2489,7 @@ final class NetPlanner {
          * blind tube of an Obsidian Tubes hub ends in lava over its last 3 blocks ({@link #tubeEnd}).
          */
         void lavaPools() {
-            if (li != Terrain.BASALT || !POOLS) return;
+            if (!Terrain.basaltLook(li) || !POOLS) return;
             for (Chamber c : n.ch) if (c.keep && c.kind == Kind.GREAT) channel(c);
             for (Way wy : new ArrayList<>(n.ways))
                 if (wy.kind == EK.STUB && wy.round && wy.a >= 0 && n.ch.get(wy.a).kind == Kind.TUBEHUB) tubeEnd(wy);

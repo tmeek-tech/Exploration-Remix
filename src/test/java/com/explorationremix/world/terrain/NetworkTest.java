@@ -186,8 +186,8 @@ class NetworkTest {
     }
 
     static void basaltFloors(Terrain t, Net n, String tag, List<String> fails) {
-        if (n.li != Terrain.BASALT) return;
-        double min = t.shape.waterY(n.li) + Terrain.SURGE_RISE + 2;
+        if (n.li != Terrain.GALLERIES) return;
+        double min = t.shape.waterY(n.li) + Terrain.surge(n.li) + 2;
         for (Chamber c : n.ch) {
             if (!c.keep || c.kind == Kind.BEDROCK || c.kind == Kind.LAVA || n.courtsX.contains(c.id)) continue;
             if (c.kind == Kind.POCKET && c.parent == n.exit) continue; // a surge niche
@@ -318,7 +318,7 @@ class NetworkTest {
             if (tunnels != 1 || round != 1) fails.add(tag + ": tube hub #" + c.id + " has " + tunnels + " tunnels, " + round + " round");
             if (blind < 2 || blind > 3) fails.add(tag + ": tube hub #" + c.id + " has " + blind + " blind tubes");
         }
-        if (n.li != Terrain.BASALT && !n.arches.isEmpty()) fails.add(tag + ": " + n.arches.size() + " arches outside the Basalt Galleries");
+        if (!Terrain.basaltLook(n.li) && !n.arches.isEmpty()) fails.add(tag + ": " + n.arches.size() + " arches outside the Wasteland and the Basalt Galleries");
         double W = t.shape.waterY(n.li);
         for (Net.Arch a : n.arches) {
             Chamber c = n.ch.get(a.chamber);
@@ -328,7 +328,7 @@ class NetworkTest {
             if (a.deck < f + 8 - 1e-9) fails.add(tag + ": the arch in " + c.kind + "#" + c.id + " is " + fmt(a.deck - f) + " over the floor");
         }
         for (Chamber c : n.ch) {
-            if (!c.keep || c.kind != Kind.GREAT || n.li != Terrain.BASALT) continue;
+            if (!c.keep || c.kind != Kind.GREAT || !Terrain.basaltLook(n.li)) continue;
             boolean has = false;
             for (Net.Arch a : n.arches) if (a.chamber == c.id) has = true;
             if (!has) fails.add(tag + ": great hall #" + c.id + " has no arch");
@@ -696,8 +696,8 @@ class NetworkTest {
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
             for (int[] cell : CELLS) {
-                Net nb = t.network.net(Terrain.BASALT, cell[0], cell[1]);
-                String tg = tag(seed, Terrain.BASALT, cell[0], cell[1]);
+                Net nb = t.network.net(Terrain.GALLERIES, cell[0], cell[1]);
+                String tg = tag(seed, Terrain.GALLERIES, cell[0], cell[1]);
                 for (Chamber c : nb.ch) {
                     if (!c.keep || c.kind != Kind.TUBEHUB) continue;
                     double r0 = c.pillars.length >= 3 ? c.pillars[2] + 2 : 1;
@@ -1056,7 +1056,11 @@ class NetworkTest {
 
     @Test
     @Tag("voxel")
-    void basaltIsOneCave() { oneCave(Terrain.BASALT, 0.960); }
+    void basaltIsOneCave() { oneCave(Terrain.GALLERIES, 0.960); }
+
+    @Test
+    @Tag("voxel")
+    void wastelandIsOneCave() { oneCave(Terrain.WASTELAND, 0.960); }
 
     /**
      * Under the highest surge, every place is a short walk from one above it. The steps are the harness's (4-neighbour
@@ -1070,17 +1074,17 @@ class NetworkTest {
         List<String> fails = new ArrayList<>();
         for (int s = 0; s < VOX_SEEDS.length; s++) {
             Terrain t = terrain(VOX_SEEDS[s]);
-            VoxelHarness v = built(VOX_SEEDS[s], Terrain.BASALT, VOX_CELLS[s][0], VOX_CELLS[s][1], 1, 1);
-            int W = (int) Math.round(t.shape.waterY(Terrain.BASALT));
-            int[] h = v.surge(W + Terrain.SURGE_RISE + 1);
+            VoxelHarness v = built(VOX_SEEDS[s], Terrain.GALLERIES, VOX_CELLS[s][0], VOX_CELLS[s][1], 1, 1);
+            int W = (int) Math.round(t.shape.waterY(Terrain.GALLERIES));
+            int[] h = v.surge(W + Terrain.FLOOD_RISE + 1);
             int under = h[6];
             int to80 = 0;
             for (int[] f : v.far) if (f[3] <= 80) to80++;
             double within64 = (h[0] + h[1] + h[2] + h[3]) / (double) Math.max(1, under);
             double within80 = (h[0] + h[1] + h[2] + h[3] + to80) / (double) Math.max(1, under);
-            String tg = tag(VOX_SEEDS[s], Terrain.BASALT, VOX_CELLS[s][0], VOX_CELLS[s][1]);
+            String tg = tag(VOX_SEEDS[s], Terrain.GALLERIES, VOX_CELLS[s][0], VOX_CELLS[s][1]);
             System.out.printf("%s: %d places under the surge, %.1f%% within 64 of safety, %.1f%% within 80, longest %d; surge niches %d%n", tg, under,
-                    100 * within64, 100 * within80, h[7], t.network.net(Terrain.BASALT, VOX_CELLS[s][0], VOX_CELLS[s][1]).surgeNiches);
+                    100 * within64, 100 * within80, h[7], t.network.net(Terrain.GALLERIES, VOX_CELLS[s][0], VOX_CELLS[s][1]).surgeNiches);
             if (under == 0) fails.add(tg + ": nothing under the surge (the bedrock landing is missing?)");
             if (within80 < 0.98) fails.add(tg + ": only " + fmt(100 * within80) + "% of the places under the surge are within 80 of safety");
             if (h[5] > 0) fails.add(tg + ": " + h[5] + " places under the surge have no way out");
@@ -1156,7 +1160,7 @@ class NetworkTest {
     void noLethalFalls() {
         List<String> fails = new ArrayList<>();
         List<Object[]> runs = new ArrayList<>();
-        for (int s = 0; s < VOX_SEEDS.length; s++) for (int li : new int[]{Terrain.GARDENS, Terrain.BASALT}) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
+        for (int s = 0; s < VOX_SEEDS.length; s++) for (int li : new int[]{Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES}) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
         for (Object[] run : runs) {
             long seed = (Long) run[0];
@@ -1215,7 +1219,7 @@ class NetworkTest {
         List<String> fails = new ArrayList<>();
         Map<Kind, List<Double>> share = new EnumMap<>(Kind.class);
         int hubs = 0;
-        for (int li = Terrain.GARDENS; li <= Terrain.BASALT; li++) for (int s = 0; s < VOX_SEEDS.length; s++) {
+        for (int li = Terrain.GARDENS; li <= Terrain.GALLERIES; li++) for (int s = 0; s < VOX_SEEDS.length; s++) {
             long seed = VOX_SEEDS[s];
             int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
             Terrain t = terrain(seed);
@@ -1266,10 +1270,10 @@ class NetworkTest {
             long seed = VOX_SEEDS[s];
             int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
             Terrain t = terrain(seed);
-            Net n = t.network.net(Terrain.BASALT, cx, cz);
-            VoxelHarness v = built(seed, Terrain.BASALT, cx, cz, 1, 1);
+            Net n = t.network.net(Terrain.GALLERIES, cx, cz);
+            VoxelHarness v = built(seed, Terrain.GALLERIES, cx, cz, 1, 1);
             Chamber bed = n.ch.get(n.exit);
-            int W = (int) Math.round(t.shape.waterY(Terrain.BASALT));
+            int W = (int) Math.round(t.shape.waterY(Terrain.GALLERIES));
             long lava = 0, high = 0, steps = 0;
             for (int x = v.x0; x < v.x0 + v.nx; x++) for (int z = v.z0; z < v.z0 + v.nz; z++) {
                 double d = Math.hypot(x + 0.5 - bed.x, z + 0.5 - bed.z);
@@ -1282,7 +1286,7 @@ class NetworkTest {
                     }
                 }
             }
-            String tg = tag(seed, Terrain.BASALT, cx, cz);
+            String tg = tag(seed, Terrain.GALLERIES, cx, cz);
             System.out.printf("%s: %d lava blocks within 70 of the bedrock landing, %d at or above the table, %d step-outs%n", tg, lava, high, steps);
             if (lava < 1000) fails.add(tg + ": only " + lava + " lava blocks within 70 of the bedrock landing");
             if (high > 0) fails.add(tg + ": " + high + " lava blocks at or above the lava table");
@@ -1309,7 +1313,7 @@ class NetworkTest {
         int channels = 0, ends = 0, magma = 0;
         for (int s = 0; s < seeds.length; s++) {
             long seed = seeds[s];
-            int cx = cells[s][0], cz = cells[s][1], li = Terrain.BASALT;
+            int cx = cells[s][0], cz = cells[s][1], li = Terrain.GALLERIES;
             String tg = tag(seed, li, cx, cz);
             Terrain t = terrain(seed);
             Network w = t.network;
@@ -1441,7 +1445,7 @@ class NetworkTest {
     void sightLinesAreShort() {
         List<String> fails = new ArrayList<>();
         List<Object[]> runs = new ArrayList<>();
-        for (int li : new int[]{Terrain.GARDENS, Terrain.BASALT}) for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
+        for (int li : new int[]{Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES}) for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
         runs.add(new Object[]{2000023L, Terrain.BLUE, -1, 1, 0});
         for (Object[] run : runs) {

@@ -46,7 +46,9 @@ public final class CaveAtmosphere {
             RUST_SPRINGS = key("rust_springs"), DEEP_BLUE_RIFT = key("deep_blue_rift"), ASURINE_GEODES = key("asurine_geodes"),
             BASALT_GALLERIES = key("basalt_galleries"), OBSIDIAN_TUBES = key("obsidian_tubes"),
             FROZEN_ROOTVAULTS = key("frozen_rootvaults"), SINKHOLE = key("sinkhole"), OASIS_HOLLOW = key("oasis_hollow"),
-            FROST_FERN_GROTTO = key("frost_fern_grotto");
+            FROST_FERN_GROTTO = key("frost_fern_grotto"),
+            WASTELAND = key("wasteland"), ASH_HOLLOWS = key("ash_hollows"),
+            CALDERA = key("caldera"), CAUSEWAY = key("causeway"), SCORIA_CANYONS = key("scoria_canyons");
 
     /** The colour light from glowing blocks takes in a biome, and how strongly: {r, g, b, strength}. */
     private static final Map<ResourceKey<Biome>, float[]> LIGHT_TINT = new HashMap<>();
@@ -62,6 +64,11 @@ public final class CaveAtmosphere {
         FOG_REACH.put(ASURINE_GEODES, 1.2F);
         FOG_REACH.put(BASALT_GALLERIES, 0.9F); // smoke
         FOG_REACH.put(OBSIDIAN_TUBES, 1.0F);
+        FOG_REACH.put(WASTELAND, 0.9F);        // smoke, as the old Basalt Galleries
+        FOG_REACH.put(ASH_HOLLOWS, 1.0F);
+        FOG_REACH.put(CALDERA, 1.0F);
+        FOG_REACH.put(CAUSEWAY, 1.1F);
+        FOG_REACH.put(SCORIA_CANYONS, 1.1F);
         FOG_REACH.put(FROZEN_ROOTVAULTS, 1.3F);
         FOG_REACH.put(SINKHOLE, 1.4F);
         FOG_REACH.put(OASIS_HOLLOW, 1.3F);
@@ -73,6 +80,10 @@ public final class CaveAtmosphere {
         LIGHT_TINT.put(RUST_SPRINGS, new float[]{1.0F, 0.52F, 0.32F, 0.55F});
         LIGHT_TINT.put(BASALT_GALLERIES, new float[]{1.0F, 0.5F, 0.28F, 0.5F});
         LIGHT_TINT.put(OBSIDIAN_TUBES, new float[]{1.0F, 0.5F, 0.4F, 0.45F});
+        LIGHT_TINT.put(WASTELAND, new float[]{1.0F, 0.5F, 0.28F, 0.5F});
+        LIGHT_TINT.put(CALDERA, new float[]{1.0F, 0.5F, 0.28F, 0.5F});
+        LIGHT_TINT.put(CAUSEWAY, new float[]{1.0F, 0.5F, 0.28F, 0.5F});
+        LIGHT_TINT.put(SCORIA_CANYONS, new float[]{1.0F, 0.5F, 0.28F, 0.5F});
         // A cool light under the Frost Fern Grotto's ice.
         LIGHT_TINT.put(FROST_FERN_GROTTO, new float[]{0.62F, 0.8F, 1.0F, 0.4F});
     }
@@ -226,7 +237,8 @@ public final class CaveAtmosphere {
                     // Steam off every hot pool.
                     if (random.nextFloat() < 0.35F)
                         level.addParticle(ERParticles.STEAM.get(), p.getX() + random.nextDouble(), p.getY() + 0.9, p.getZ() + random.nextDouble(), 0, 0, 0);
-                } else if (f.is(FluidTags.LAVA) && (h.is(BASALT_GALLERIES) || h.is(OBSIDIAN_TUBES))) {
+                } else if (f.is(FluidTags.LAVA) && (h.is(BASALT_GALLERIES) || h.is(OBSIDIAN_TUBES) || h.is(WASTELAND)
+                        || h.is(ASH_HOLLOWS) || h.is(CALDERA) || h.is(CAUSEWAY) || h.is(SCORIA_CANYONS))) {
                     // Embers, and now and then a column of smoke, off the lava.
                     if (random.nextFloat() < 0.3F)
                         level.addParticle(ERParticles.EMBER.get(), p.getX() + random.nextDouble(), p.getY() + 1.0, p.getZ() + random.nextDouble(), 0, 0, 0);

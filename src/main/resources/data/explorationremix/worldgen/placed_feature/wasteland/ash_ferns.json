@@ -1,25 +1,25 @@
 {
-  "feature": "explorationremix:basalt_galleries/lava_falls",
+  "feature": "explorationremix:wasteland/ash_ferns",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 80
+      "count": 224
     },
     {
       "type": "minecraft:in_square"
     },
     {
       "type": "explorationremix:layer_range",
-      "layer": "basalt_galleries",
+      "layer": "wasteland",
       "inset": 2,
       "above_water": true
     },
     {
       "type": "minecraft:environment_scan",
-      "direction_of_search": "up",
+      "direction_of_search": "down",
       "target_condition": {
         "type": "minecraft:has_sturdy_face",
-        "direction": "down"
+        "direction": "up"
       },
       "allowed_search_condition": {
         "type": "minecraft:matching_blocks",
@@ -33,13 +33,7 @@
     {
       "type": "minecraft:random_offset",
       "xz_spread": 0,
-      "y_spread": {
-        "type": "minecraft:uniform",
-        "value": {
-          "min_inclusive": -6,
-          "max_inclusive": -3
-        }
-      }
+      "y_spread": 1
     },
     {
       "type": "minecraft:biome"

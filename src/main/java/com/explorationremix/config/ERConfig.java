@@ -31,7 +31,7 @@ public final class ERConfig {
     public final ForgeConfigSpec.BooleanValue joinDeadEnds;
     public final ForgeConfigSpec.BooleanValue removeCreateStriations;
     public final ForgeConfigSpec.BooleanValue upperRegions;
-    public final LayerConfig[] layers = new LayerConfig[3];
+    public final LayerConfig[] layers = new LayerConfig[4];
 
     public static final class LayerConfig {
         public final String id;
@@ -40,12 +40,14 @@ public final class ERConfig {
         public final ForgeConfigSpec.DoubleValue heightMin, heightMax, widthMin, widthMax;
         final boolean lava;
 
-        LayerConfig(ForgeConfigSpec.Builder b, LayerSettings d, String heightWord, String widthWord, boolean sizesRead) {
+        LayerConfig(ForgeConfigSpec.Builder b, LayerSettings d, String heightWord, String widthWord, boolean sizesRead, int maxHeight) {
             this.id = d.id();
             this.lava = d.lava();
             b.push(d.id());
+            // maxHeight: the Basalt Galleries were 288 tall before 0.5; their range ends at 256 so an older file's 288 is
+            // out of range and Forge puts back the new default instead of moving the world's floor down to -976
             height = b.comment("Height of the layer in blocks (rounded down to a multiple of 16).")
-                    .defineInRange("height", d.height(), 64, 512);
+                    .defineInRange("height", d.height(), 64, maxHeight);
             fluidDepth = b.comment("The " + (d.lava() ? "lava" : "water") + " table sits this many blocks above the layer's floor.")
                     .defineInRange("fluidDepth", d.fluidDepth(), 6, 64);
             // Since 0.3 the Deep Gardens and the Basalt Galleries are cave networks that size their own rooms; their four
@@ -68,7 +70,7 @@ public final class ERConfig {
     private ERConfig(ForgeConfigSpec.Builder b) {
         TerrainSettings d = TerrainSettings.defaults();
         b.comment("The deep world below the pack's old floor. Changes apply to newly generated chunks.").push("world");
-        worldEnabled = b.comment("Extend the overworld down through the three deep layers. Lava in the caves above the old floor turns to water.")
+        worldEnabled = b.comment("Extend the overworld down through the four deep layers. Lava in the caves above the old floor turns to water.")
                 .define("enabled", true);
         bandThickness = b.comment("Thickness of the unbreakable bands between layers.").defineInRange("bandThickness", d.bandThickness(), 8, 64);
         gateSpacing = b.comment("One gate per band in every square of this many blocks.").defineInRange("gateSpacing", d.gateSpacing(), 320, 4096);
@@ -87,9 +89,10 @@ public final class ERConfig {
                 .define("upperRegions", true);
         removeCreateStriations = b.comment("Remove Create's striped stone layers from the overworld; the layers use Create's stones as patches instead.")
                 .define("removeCreateStriations", true);
-        layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width", true);
-        layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width", false);
-        layers[2] = new LayerConfig(b, d.layers().get(2), "gallery height", "gallery width", false);
+        layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width", true, 512);
+        layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width", false, 512);
+        layers[2] = new LayerConfig(b, d.layers().get(2), "cave height", "cave width", false, 512);
+        layers[3] = new LayerConfig(b, d.layers().get(3), "hall height", "hall width", false, 256);
         b.pop();
     }
 

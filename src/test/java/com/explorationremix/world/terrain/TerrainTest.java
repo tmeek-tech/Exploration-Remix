@@ -15,13 +15,16 @@ class TerrainTest {
     void layersSitWhereTheSpecSays() {
         Shape s = terrain(1).shape;
         assertEquals(-832, s.floorY);
-        // Blue Reaches, Deep Gardens, Basalt Galleries (Taran swapped the two middle layers on 2026-10-28).
-        int[][] expected = {{-81, -272}, {-289, -528}, {-545, -832}};
-        assertEquals(3, s.layerCount);
+        // Blue Reaches, Deep Gardens, Wasteland, Basalt Galleries (Taran swapped the two middle layers on 2026-10-28
+        // and split the bottom one into the Wasteland and the Galleries on 2026-11-01, keeping bedrock at -832).
+        int[][] expected = {{-81, -272}, {-289, -528}, {-545, -672}, {-689, -832}};
+        assertEquals(4, s.layerCount);
         assertEquals("blue_reaches", s.id(0));
         assertEquals("deep_gardens", s.id(1));
-        assertEquals("basalt_galleries", s.id(2));
-        for (int i = 0; i < 3; i++) {
+        assertEquals("wasteland", s.id(2));
+        assertEquals("basalt_galleries", s.id(3));
+        assertEquals(-822, s.waterY(Terrain.GALLERIES), "the Galleries' lava table (its top block at -823, as before 0.5)");
+        for (int i = 0; i < 4; i++) {
             assertEquals(expected[i][0], s.top(i), "top of layer " + i);
             assertEquals(expected[i][1], s.bottom(i), "bottom of layer " + i);
             assertEquals(16, s.bandTop(i + 1) - s.bandBottom(i + 1) + 1, "band " + (i + 1) + " thickness");
@@ -266,6 +269,6 @@ class TerrainTest {
         assertTrue(tallest[Terrain.BLUE] > 140, "the Deep Blue Rift is only " + tallest[Terrain.BLUE] + " blocks deep");
         assertTrue(tallest[Terrain.GARDENS] > 60, "the Deep Gardens' tallest hall is only " + tallest[Terrain.GARDENS] + " blocks");
         // the chimney: its drop can be as little as about 95
-        assertTrue(tallest[Terrain.BASALT] > 90, "the Basalt Galleries' tallest open space is only " + tallest[Terrain.BASALT] + " blocks");
+        assertTrue(tallest[Terrain.GALLERIES] > 40, "the Basalt Galleries' tallest open space is only " + tallest[Terrain.GALLERIES] + " blocks");
     }
 }

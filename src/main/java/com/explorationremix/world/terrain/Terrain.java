@@ -11,13 +11,24 @@ package com.explorationremix.world.terrain;
  * landing and ramp and the cell's upper set piece (the Silver Fern Rift or the Ivory Root Cavern).
  */
 public final class Terrain {
-    public static final int BLUE = 0, GARDENS = 1, BASALT = 2;
     /**
-     * How far above its lava table the Basalt Galleries' lava rises at the height of a surge (a later milestone's
-     * quake cycle). The natural arches, the obsidian tubes and the high benches along the gallery walls all sit above
-     * this, so there is always somewhere to climb to.
+     * The deep layers, top down. Since 0.5 the old bottom layer is two: the Wasteland (the old Basalt Galleries' look,
+     * winding tunnels and medium caves) above a fourth band, and the Basalt Galleries under it (wide bright halls over a
+     * lava sea that rises and falls).
      */
-    public static final int SURGE_RISE = 24;
+    public static final int BLUE = 0, GARDENS = 1, WASTELAND = 2, GALLERIES = 3;
+    /**
+     * How far above its lava table the Basalt Galleries' lava rises at the height of its cycle (Taran, 2026-11-01: "the
+     * low halls; high ground stays dry"). The low halls and paths flood; the ledges, arches, the Obsidian Tubes and both
+     * landings' ways up stay above it.
+     */
+    public static final int FLOOD_RISE = 40;
+
+    /** Layers with the basalt look (columns in the walls, basalt rock, lava below): the Wasteland and the Galleries. */
+    public static boolean basaltLook(int li) { return li == WASTELAND || li == GALLERIES; }
+
+    /** How far the layer's lava rises over its table at the height of its cycle: only the Galleries' does. */
+    public static int surge(int li) { return li == GALLERIES ? FLOOD_RISE : 0; }
     public static final int AIR = 0, WATER = 1, LAVA = 2;
     static final double SOLID = 64;
     /** Blocks of layer rock kept between any cave and the band above or the bedrock below. */
@@ -30,7 +41,7 @@ public final class Terrain {
     public final long seed;
     public final Plans plans;
     public final Palette palette;
-    /** The three deep layers' cave networks: every block inside a layer is theirs. */
+    /** The deep layers' cave networks: every block inside a layer is theirs. */
     public final Network network;
     /** Asked before an upper set piece is placed, so none is carved under an ocean or river. Null in tests. */
     public volatile Upper.SurfaceProbe surfaceProbe;
@@ -300,6 +311,7 @@ public final class Terrain {
         return switch (li) {
             case GARDENS -> DeepBiome.LANTERN_LAKE;
             case BLUE -> DeepBiome.DEEP_BLUE_RIFT;
+            case WASTELAND -> DeepBiome.WASTELAND;
             default -> DeepBiome.BASALT_GALLERIES;
         };
     }

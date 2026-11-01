@@ -257,7 +257,8 @@ public final class Network {
         return switch (b) {
             case DEEP_BLUE_RIFT, DEEP_DARK, ASURINE_GEODES -> Terrain.BLUE;
             case LANTERN_LAKE, EMBER_GARDENS, RUST_SPRINGS -> Terrain.GARDENS;
-            case BASALT_GALLERIES, OBSIDIAN_TUBES -> Terrain.BASALT;
+            case WASTELAND, ASH_HOLLOWS -> Terrain.WASTELAND;
+            case BASALT_GALLERIES, OBSIDIAN_TUBES, CALDERA, CAUSEWAY, SCORIA_CANYONS -> Terrain.GALLERIES;
             default -> -1;
         };
     }
@@ -428,7 +429,7 @@ public final class Network {
         double lineV = (xEdge ? ex : ez) * cell;
         // portals keep a sixth of the edge from each corner, so no vestibule crowds a corner where four cells meet
         double corner = cell / 6;
-        double yLo = W + (li == Terrain.BLUE ? 14 : li == Terrain.BASALT ? Terrain.SURGE_RISE + 3 : 6), yHi = T - 52;
+        double yLo = W + (li == Terrain.BLUE ? 14 : li == Terrain.GALLERIES ? Terrain.surge(li) + 3 : 6), yHi = T - 52;
         List<double[]> chosen = new ArrayList<>();
         // Blue Reaches: the eligible city sites of the two cells, whose reserves no vestibule or stub may enter
         List<double[]> sites = new ArrayList<>();
@@ -976,9 +977,14 @@ public final class Network {
                 if (c.kind == Kind.CAVERN || c.kind == Kind.CITY) return DeepBiome.DEEP_DARK;
                 if (c.kind == Kind.GEODE) return DeepBiome.ASURINE_GEODES;
                 return DeepBiome.DEEP_BLUE_RIFT;
-            default:
+            case Terrain.WASTELAND:
+                if (c.refuge) return DeepBiome.ASH_HOLLOWS;
+                return DeepBiome.WASTELAND;
+            case Terrain.GALLERIES:
                 if (c.kind == Kind.TUBEHUB) return DeepBiome.OBSIDIAN_TUBES;
                 return DeepBiome.BASALT_GALLERIES;
+            default:
+                throw new IllegalArgumentException("no biomes for layer " + li);
         }
     }
 
@@ -1225,7 +1231,7 @@ public final class Network {
         if (lc.ex != null && lc.exitD < lc.ex.landR + 6) { lc.fLo = Math.min(lc.fLo, lc.ex.uFloor - 9); lc.fHi = Math.max(lc.fHi, lc.ex.uCy + lc.ex.landHalf + 4); }
         if (lc.bed != null && lc.endD < lc.bed.rx + 6) { lc.fLo = Math.min(lc.fLo, lc.bed.f0 - 9); lc.fHi = Math.max(lc.fHi, lc.bed.f0 + 20); }
         // basalt columns: a per-column offset of the walls, constant over a small Voronoi cell
-        lc.colShift = li == Terrain.BASALT ? 1.7 * voronoiValue(x, z, 3.3) : 0;
+        lc.colShift = Terrain.basaltLook(li) ? 1.7 * voronoiValue(x, z, 3.3) : 0;
         lc.hub = inHub(lc);
         lc.roughK = lc.hub ? 0 : 1;
         for (int k = 0; k < lc.nw; k++) {
@@ -1434,7 +1440,7 @@ public final class Network {
         switch (li) {
             case Terrain.GARDENS -> { a = 2.6; s = 12; }
             case Terrain.BLUE -> { a = 4.0; s = 20; }
-            default -> { a = 2.4; s = 14; }
+            default -> { a = 2.4; s = 14; } // the Wasteland and the Galleries: the basalt look
         }
         return a * rough1.noise3(x / s, y / (s * 0.75), z / s) + a * 0.35 * rough2.noise3(x / (s * 0.4), y / (s * 0.4), z / (s * 0.4));
     }
@@ -1956,7 +1962,7 @@ public final class Network {
      * hubs' tunnels and blind tubes), or 1e9 when none is near.
      */
     double tubeShellDepth(int li, int x, int y, int z) {
-        if (li != Terrain.BASALT) return 1e9;
+        if (!Terrain.basaltLook(li)) return 1e9;
         LCol lc = layer(column(x, z), li);
         double best = 1e9;
         for (int k = 0; k < lc.nc; k++) if (lc.c[k].kind == Kind.TUBEHUB) best = Math.min(best, hubDepth(lc, k, y));
@@ -1969,7 +1975,7 @@ public final class Network {
      * top block or the one under it: the palette lays magma there instead.
      */
     boolean tubeStubEnd(int li, int x, int y, int z) {
-        if (li != Terrain.BASALT) return false;
+        if (!Terrain.basaltLook(li)) return false;
         LCol lc = layer(column(x, z), li);
         for (double[] m : lc.net.magmaEnds)
             if (Math.hypot(x + 0.5 - m[0], z + 0.5 - m[2]) <= 2 && y <= m[1] && y >= m[1] - 1) return true;
