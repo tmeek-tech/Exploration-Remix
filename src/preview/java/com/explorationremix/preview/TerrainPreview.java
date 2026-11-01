@@ -25,7 +25,7 @@ import java.util.Map;
  * 4 corners, interpolated, then the network's per-block pass), without starting Minecraft. Per layer of cell (0, 0):
  * the longest tunnel unrolled with its walking floor, sections across the six longest tunnels, a map and the same map
  * with the plan drawn over it, x and z sections through each set piece, and straight sections through the cell; then
- * the stack of layers through a gate. Usage: TerrainPreview outDir [seed] [all|0|1|2|mat].
+ * the stack of layers through a gate. Usage: TerrainPreview outDir [seed] [all|0|1|2|3|mat].
  */
 public final class TerrainPreview {
     private final Terrain t;
@@ -68,6 +68,11 @@ public final class TerrainPreview {
             case EMBER_GARDENS -> 0xF09A50;
             case BASALT_GALLERIES -> 0xC0A090;
             case OBSIDIAN_TUBES -> 0x7A3FB0;
+            case WASTELAND -> 0x8C8070;
+            case ASH_HOLLOWS -> 0xB8B4AC;
+            case CALDERA -> 0xE07040;
+            case CAUSEWAY -> 0x6A7484;
+            case SCORIA_CANYONS -> 0xA03C30;
         };
     }
 

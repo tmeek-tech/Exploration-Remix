@@ -359,6 +359,18 @@ public final class Terrain {
     public Net network(int li, int cx, int cz) { return network.network(li, cx, cz); }
 
     /**
+     * The Basalt Galleries' Caldera vents within {@code r} of (x, z): where eruptions break out ({@link
+     * Network#ventsNear}). Each has a centre, a radius and the top of the rock or lava there.
+     */
+    public java.util.List<Net.Vent> ventsNear(int x, int z, double r) { return network.ventsNear(GALLERIES, x, z, r); }
+
+    /**
+     * The Basalt Galleries' hall over column (x, z): {floor, ceiling, lava bed} there, or null outside the halls
+     * ({@link Network#hallSpanAt}). The decoration's aim at the halls' vaults and walls.
+     */
+    public double[] hallSpanAt(int x, int z) { return network.hallSpanAt(GALLERIES, x, z); }
+
+    /**
      * True when a structure starting at (x, y, z) is a planned ancient city: a CITY chamber's centre within 24 blocks
      * of (x, z), y within 30 of its floor (section 11.1).
      */

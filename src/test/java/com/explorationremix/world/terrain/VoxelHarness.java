@@ -493,11 +493,16 @@ final class VoxelHarness {
     static final double EYE = 1.62;
     /** A view longer than this (blocks) shows the sky past the render distance under the shader. */
     static final double LONG = 160;
+    /** A place whose longest ray runs at least this far (blocks) has a wide view (the Basalt Galleries' halls). */
+    static final double WIDE = 80;
 
     /** What the sight-line check saw. */
     static final class Sight {
-        /** left: rays that left the box first; leftLong: those of them that had run more than {@link #LONG} by then. */
-        long places, rays, left, leftLong;
+        /**
+         * left: rays that left the box first; leftLong: those of them that had run more than {@link #LONG} by then;
+         * wide: the places with a ray of {@link #WIDE} or more (a ray that left the box counts what it ran).
+         */
+        long places, rays, left, leftLong, wide;
         /** The places with a view longer than {@link #LONG} (a ray that left the box after that counts): {x, y, z}. */
         final java.util.List<int[]> longPlaces = new java.util.ArrayList<>();
         /** Ray lengths in 10-block bins; the last bin holds 170 and more (up to the cap). */
@@ -514,6 +519,7 @@ final class VoxelHarness {
 
         void add(Sight o, int keep) {
             places += o.places;
+            wide += o.wide;
             rays += o.rays;
             left += o.left;
             leftLong += o.leftLong;
@@ -552,12 +558,13 @@ final class VoxelHarness {
                     if (!solid(x, y - 1, z)) continue;
                     s.places++;
                     boolean far = false;
-                    double ox = x + 0.5, oy = y + EYE, oz = z + 0.5;
+                    double ox = x + 0.5, oy = y + EYE, oz = z + 0.5, best = 0;
                     for (int q = 0; q < ys.length; q++) for (int a = 0; a < SIGHT_YAWS; a++) {
                         double yaw = a * (360.0 / SIGHT_YAWS), th = Math.toRadians(yaw);
                         double dx = cs[q] * Math.cos(th), dy = ys[q], dz = cs[q] * Math.sin(th);
                         double d = ray(ox, oy, oz, dx, dy, dz, cap);
                         s.rays++;
+                        best = Math.max(best, d < 0 ? -1 - d : d);
                         if (d < 0) {
                             s.left++;
                             if (-1 - d > LONG) { s.leftLong++; far = true; }
@@ -573,6 +580,7 @@ final class VoxelHarness {
                         }
                     }
                     if (far) s.longPlaces.add(new int[]{x, y, z});
+                    if (best >= WIDE) s.wide++;
                 }
             }
             return s;

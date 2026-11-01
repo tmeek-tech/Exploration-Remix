@@ -235,6 +235,32 @@ public final class Network {
         return out;
     }
 
+    /**
+     * The Caldera vents of the Basalt Galleries within {@code r} of (x, z) (their edge within reach), from the plans of
+     * every cell the circle touches: where the runtime's eruptions break out. Empty for the other layers. A read-only
+     * query; it plans the cells it needs, so keep {@code r} under a cell.
+     */
+    public List<Net.Vent> ventsNear(int li, double x, double z, double r) {
+        List<Net.Vent> out = new ArrayList<>();
+        if (li != Terrain.GALLERIES) return out;
+        for (int cx = cellOf(x - r); cx <= cellOf(x + r); cx++) for (int cz = cellOf(z - r); cz <= cellOf(z + r); cz++)
+            for (Net.Vent v : net(li, cx, cz).vents) if (Math.hypot(v.x - x, v.z - z) <= r + v.r) out.add(v);
+        return out;
+    }
+
+    /**
+     * The hall of the Basalt Galleries over column (x, z) (a column hall, the Caldera, the Causeway or a rift): {floor,
+     * ceiling, the bed of its lava} there, the floor being the ledge's or terrace's top (or the lava's bed), or null when
+     * the column is not inside one. For the decoration, which aims its hanging columns and lava falls at the halls'
+     * vaults and walls.
+     */
+    public double[] hallSpanAt(int li, int x, int z) {
+        if (li != Terrain.GALLERIES) return null;
+        LCol lc = layer(column(x, z), li);
+        for (int k = 0; k < lc.nc; k++) if (lc.c[k].hall() && lc.e[k] < 1) return new double[]{lc.F[k], lc.C[k], lc.c[k].base};
+        return null;
+    }
+
     /** The plan of layer li in cell (cx, cz), for the dev tools. */
     public Net network(int li, int cx, int cz) { return net(li, cx, cz); }
 
@@ -282,9 +308,10 @@ public final class Network {
                 if (cb != b) continue;
                 boolean set = c.set || c.kind == Kind.CITY || c.kind == Kind.LAKE || c.kind == Kind.TUBEHUB || c.kind == Kind.SPRING;
                 Place p = new Place(c.x, c.z, c.R(), set, c.kind.name().toLowerCase(java.util.Locale.ROOT) + " #" + c.id + " of cell " + cx + " " + cz);
-                for (int ring = 0; ring < 3; ring++) {
-                    int k = ring == 0 ? 1 : 6;
-                    double f = ring == 0 ? 0 : ring == 1 ? 0.45 : 0.75;
+                // a hall's walking floors are its ledges and terraces, out by the walls: a fourth ring there
+                for (int ring = 0; ring < (c.hall() ? 4 : 3); ring++) {
+                    int k = ring == 0 ? 1 : ring == 3 ? 8 : 6;
+                    double f = ring == 0 ? 0 : ring == 1 ? 0.45 : ring == 2 ? 0.75 : 0.88;
                     for (int j = 0; j < k; j++) {
                         double a = (j + (ring == 2 ? 0.5 : 0)) * Math.PI * 2 / k, u = Math.cos(a) * f * c.rx, v = Math.sin(a) * f * c.rz;
                         double px = c.x + u * c.cos - v * c.sin, pz = c.z + u * c.sin + v * c.cos;
@@ -295,6 +322,7 @@ public final class Network {
                             if (e >= 0.95) continue;
                             fl = floorAt(c, e, px, pz);
                             if (c.kind == Kind.LAKE && fl < c.lakeY) continue; // under the water
+                            if (c.hall() && fl < shape.waterY(li) + 1) continue; // in the lava
                         }
                         p.stands.add(new double[]{px, Math.ceil(fl - 1e-9), pz});
                     }
@@ -902,9 +930,7 @@ public final class Network {
                 return c.lakeY + 0.05 + Terrain.stairs(t * c.rise + 0.8 * ledgeN.noise2(x / 9.0, z / 9.0), 1.0, 0.7);
             }
             case TERRACE, SPRING -> {
-                double R = Math.max(c.rx, c.rz);
-                double t = ((x - c.x) * c.rampX + (z - c.z) * c.rampZ) / R;
-                t = t < -1 ? -1 : (t > 1 ? 1 : t);
+                double t = rampT(c, x, z);
                 double v = c.rampDrop * 0.5 * (1 - t) + c.rise * e * e + 1.1 * floorN.noise2(x / 11.0, z / 11.0) + 1.1;
                 return c.f0 + Terrain.terraced(Math.max(0, v), c.terr);
             }
@@ -921,14 +947,29 @@ public final class Network {
                 // a bowl whose rim stays under the lava table, so the lava reaches its walls
                 return c.f0 + c.rise * e * e;
             }
+            case HALL -> {
+                // the lava lake inside the lip, the ledge from the lip to the wall, rising a terrace or two to the wall
+                if (e < c.lakeEdge) return c.base;
+                double t = (e - c.lakeEdge) / Math.max(0.05, 1 - c.lakeEdge);
+                return c.f0 + Terrain.terraced(Math.max(0, c.rise * t * t + 0.7 * floorN.noise2(x / 9.0, z / 9.0) + 0.7), 1);
+            }
+            case CALDERA -> {
+                return calderaFloor(c, e, x, z);
+            }
+            case CAUSEWAY -> {
+                double[] uv = hallUV(c, x, z);
+                return causewayFloor(c, uv[0], uv[1] * c.side, x, z);
+            }
+            case RIFT -> {
+                double[] uv = hallUV(c, x, z);
+                return riftFloor(c, uv[0], uv[1], x, z);
+            }
             default -> {
-                double v = c.rise * e * e + 1.0 * floorN.noise2(x / 9.0, z / 9.0) + 1.0;
+                // a flight court's stair has no noise: each step along it climbs at most one block
+                double v = c.flight ? c.rise * e * e + 1.0 : c.rise * e * e + 1.0 * floorN.noise2(x / 9.0, z / 9.0) + 1.0;
                 if (c.rampDrop > 0) {
                     // a strand chamber steps down along the way through it
-                    double R = Math.max(c.rx, c.rz);
-                    double t = ((x - c.x) * c.rampX + (z - c.z) * c.rampZ) / R;
-                    t = t < -1 ? -1 : (t > 1 ? 1 : t);
-                    v += c.rampDrop * 0.5 * (1 - t);
+                    v += c.rampDrop * 0.5 * (1 - rampT(c, x, z));
                 }
                 return c.f0 + (c.terr > 0 ? Terrain.terraced(Math.max(0, v), Math.max(1, c.terr)) : v);
             }
@@ -944,16 +985,19 @@ public final class Network {
             case WELL, CHIMNEY -> {
                 return c.top - 5 * e * e + 2 * ceilN.noise2(x / 9.0, z / 9.0);
             }
+            // the Galleries' halls: flat vaults that keep their height out over the ledges by the walls
+            case HALL -> p = 8;
+            case CAUSEWAY, RIFT -> p = 6;
             default -> p = 2;
         }
-        double ep = p == 2 ? e * e : (p == 4 ? e * e * e * e : e * e * e);
-        double C = c.f0 + c.h * Math.sqrt(Math.max(0, 1 - ep));
-        if (c.rampDrop > 0 && c.kind != Kind.LAKE) {
-            double R = Math.max(c.rx, c.rz);
-            double t = ((x - c.x) * c.rampX + (z - c.z) * c.rampZ) / R;
-            t = t < -1 ? -1 : (t > 1 ? 1 : t);
-            C += c.rampDrop * 0.5 * (1 - t);
+        double ep;
+        if (p <= 4) ep = p == 2 ? e * e : (p == 4 ? e * e * e * e : e * e * e);
+        else {
+            double e2 = e * e, e4 = e2 * e2;
+            ep = p == 6 ? e4 * e2 : e4 * e4;
         }
+        double C = c.f0 + c.h * Math.sqrt(Math.max(0, 1 - ep));
+        if (c.rampDrop > 0 && c.kind != Kind.LAKE) C += c.rampDrop * 0.5 * (1 - rampT(c, x, z));
         if (c.pend > 0) {
             double n = pendN.noise2(x / 4.5, z / 4.5);
             if (n > 0.25) C -= c.pend * Math.pow((n - 0.25) / 0.75, 1.3) * 2.2 * Math.min(1, (1 - e) / 0.25);
@@ -961,9 +1005,282 @@ public final class Network {
         return C + 1.5 * ceilN.noise2(x / 13.0, z / 13.0);
     }
 
+    /** A flight court's level foot: the stair starts this many blocks in from the end by the landing. */
+    static final double FLIGHT_FOOT = 4;
+
+    /**
+     * Where a block stands along a chamber's ramp: 1 at the low end, -1 at the high end, clamped. A flight court's
+     * stair starts {@link #FLIGHT_FOOT} blocks in from its low end, so the spoke from the landing ends on a level floor.
+     */
+    static double rampT(Chamber c, double x, double z) {
+        double R = Math.max(c.rx, c.rz);
+        double t = ((x - c.x) * c.rampX + (z - c.z) * c.rampZ) / R;
+        if (c.flight) t = (t + 1) * R / (R - FLIGHT_FOOT / 2) - 1;
+        return t < -1 ? -1 : (t > 1 ? 1 : t);
+    }
+
     /** Wall term: everything closes where the footprint ends. */
     static double wallTerm(Chamber c, double e) {
         return (e - 1) * Math.min(c.rx, c.rz);
+    }
+
+    /**
+     * The wall term at a column: a hall's scales (e - 1) by its footprint's gradient there ({@link #wallScale}), every
+     * other chamber's by its short radius ({@link #wallTerm}).
+     */
+    static double wallTerm(LCol lc, int k) {
+        return lc.c[k].hall() ? (lc.e[k] - 1) * lc.ws[k] : wallTerm(lc.c[k], lc.e[k]);
+    }
+
+    /**
+     * A hall's wall scale at its local (u, v), footprint coordinate e: the inverse of the footprint's gradient, between
+     * the short and the long radius, so (e - 1) times it is about the distance to the wall line at the ends of a long
+     * hall as at its sides. With the short radius, the far ends of the Causeway and the rift were barely open even
+     * on their centre line, and their lava and ledges came out as blobs of rock.
+     */
+    static double wallScale(Chamber c, double u, double v, double e) {
+        double lo = Math.min(c.rx, c.rz), hi = Math.max(c.rx, c.rz);
+        if (e < 0.05) return lo;
+        double p = c.sq, a = Math.abs(u) / c.rx, b = Math.abs(v) / c.rz;
+        double g = Math.pow(e, 1 - p) * Math.hypot(Math.pow(a, p - 1) / c.rx, Math.pow(b, p - 1) / c.rz);
+        return g * hi <= 1 ? hi : g * lo >= 1 ? lo : 1 / g;
+    }
+
+    // ------------------------------------------------------------------------------------- the Basalt Galleries' halls
+    /** A hall's dry floor, per block: rock this far under it, open this far over it ({@link #hallFloor}). */
+    static final double HALL_FLOOR_DEPTH = 8, HALL_FLOOR_ROOM = 6;
+
+    /**
+     * True where a hall's floor is kept exactly as planned, per block: its dry floors (over the lava's table) inside
+     * 0.96 of the footprint, and a flight court's stair. The interpolation would
+     * round every lip and terrace edge and the roughness and the columns' offsets would step the floors by two or
+     * three blocks: on floors this wide, each step leaves standing places no one can reach, and on a stair it is a
+     * step no one can climb. Rock stays {@link #HALL_FLOOR_DEPTH} under the floor and the air {@link #HALL_FLOOR_ROOM}
+     * over it, whatever tunnel ends there (the end of a tunnel's carve reaches a width past its last point, and on a
+     * stair it dug a pit); the walls, vaults and the lava's beds keep the interpolated shape.
+     */
+    static boolean hallFloor(Chamber c, double e, double F, int li) {
+        if (c.flight) return e < 0.96 && li == Terrain.GALLERIES;
+        if (!c.hall() || e >= 0.96 || li != Terrain.GALLERIES) return false;
+        return F >= c.base + 5;
+    }
+
+    /** How steeply the Scoria Canyons' ramps climb from a low ledge to the upper one (blocks up per block along). */
+    static final double RIFT_RAMP = 0.72;
+    /** Causeway columns: no column at a block (the lava, or a floor of the hall's own there). */
+    static final int NO_COLUMN = Integer.MIN_VALUE;
+    /** Causeway columns: a column from the lava's bed into the vault. */
+    static final int TO_VAULT = Integer.MAX_VALUE;
+    /**
+     * The roughness's share inside the Basalt Galleries' halls. Their walls stand 40 to 100 tall: the full roughness
+     * steps them into ledges of a block or two, and each is a standing place no one can reach (the columns' offsets
+     * keep the basalt look).
+     */
+    static final float HALL_ROUGH = 0.35f;
+    private static final double SQ3 = Math.sqrt(3);
+
+    /**
+     * A hall's local coordinates at (x, z), warped as {@link #e} warps them: along its long axis and across it. The
+     * Causeway's and the rift's zones (ledges, ramps, the river, the column field) are laid out in these, so they
+     * follow the walls the footprint draws.
+     */
+    double[] hallUV(Chamber c, double x, double z) {
+        double dx = x - c.x, dz = z - c.z;
+        double u = dx * c.cos + dz * c.sin, v = -dx * c.sin + dz * c.cos;
+        if (c.warp > 0) {
+            double R = Math.max(c.rx, c.rz), sc = R * 0.75 + 6, off = (c.hash & 255) * 0.731;
+            u += c.warp * R * warpA.noise2(x / sc + off, z / sc);
+            v += c.warp * R * warpB.noise2(x / sc, z / sc + off);
+        }
+        return new double[]{u, v};
+    }
+
+    /**
+     * The Caldera's floor: the crater's lava lake inside, its inner wall sheer from the lava's bed to the crest of the
+     * rim (W + 15 to W + 28) and undercut under the lip ({@link #shelfUnder}), a shallow moat behind the crest, then
+     * 1-block terraces up to the outer ring at the dry level, where the doors are. The terraces climb at most about
+     * 0.85 a block ({@code NetPlanner} sizes the crater for that), so every one of them can be walked up from the crest.
+     */
+    double calderaFloor(Chamber c, double e, double x, double z) {
+        double eW = 0.86;
+        if (e < c.crestE) return c.base;
+        double n = 0.6 * floorN.noise2(x / 8.0, z / 8.0);
+        if (e < eW) {
+            double t = (e - c.crestE) / (eW - c.crestE);
+            double moat = t < 0.3 ? 2.2 * Math.sin(Math.PI * t / 0.3) : 0;
+            return c.crest + Terrain.terraced((c.f0 - c.crest) * t - moat + n + 3, 1) - 3;
+        }
+        return c.f0 + Terrain.terraced(Math.max(0, c.rise * (e - eW) / (1 - eW) + n + 0.6), 1);
+    }
+
+    /**
+     * The Causeway's floor at local (u, sv), sv across with the wall ledge on its positive side: the ledge along that
+     * wall at the dry level; at both ends a ramp of 1-block terraces across the hall from the column path's level on
+     * the far side up to the ledge; elsewhere the lava, the columns standing in it ({@link #hexTop}).
+     */
+    double causewayFloor(Chamber c, double u, double sv, double x, double z) {
+        double ledgeV = c.rz - c.ledgeW, endU = c.rx - c.endW;
+        double n = 0.5 * floorN.noise2(x / 8.0, z / 8.0);
+        if (Math.abs(u) >= endU) {
+            double t = (sv - c.pathV) / Math.max(1, ledgeV - c.pathV);
+            t = t < 0 ? 0 : (t > 1 ? 1 : t);
+            return c.pathEnd + Terrain.terraced(Math.max(0, (c.f0 - c.pathEnd) * t + n * t), 1);
+        }
+        if (sv >= ledgeV) {
+            double t = (sv - ledgeV) / Math.max(1, c.ledgeW);
+            return c.f0 + Terrain.terraced(Math.max(0, c.rise * t * t + n + 0.5), 1);
+        }
+        return c.base;
+    }
+
+    /**
+     * The Scoria Canyons' floor at local (u, v): the lava river down the middle; beside it on each side a low ledge
+     * (12 under the upper one, so it floods) reached by a ramp of 1-block terraces down from the upper ledge along the
+     * canyon, and the river again past the low ledge's ends; the upper ledges from there to the walls at the dry level,
+     * as far along as they are {@link #RIFT_LEDGE_MIN} wide ({@link #riftLedgeEnd}): past that the river reaches the
+     * walls where they close in at the canyon's ends.
+     */
+    double riftFloor(Chamber c, double u, double v, double x, double z) {
+        double av = Math.abs(v);
+        if (av < c.riverW || Math.abs(u) > riftLedgeEnd(c)) return c.base;
+        double n = 0.5 * floorN.noise2(x / 8.0, z / 8.0);
+        if (av < c.riverW + c.lowW) {
+            int s = v >= 0 ? 0 : 1;
+            double d = (c.rampU[s] - u) * c.rampDir[s], ramp = (c.f0 - c.crest) / RIFT_RAMP;
+            if (d < 0 || d > ramp + c.lowLen[s]) return c.base;
+            if (d < ramp) return c.crest + Terrain.terraced((c.f0 - c.crest) * (1 - d / ramp), 1);
+            return c.crest + Terrain.terraced(Math.max(0, n + 0.5), 1);
+        }
+        double t = (av - c.riverW - c.lowW) / Math.max(1, c.rz - c.riverW - c.lowW);
+        return c.f0 + Terrain.terraced(Math.max(0, c.rise * t * t + n + 0.5), 1);
+    }
+
+    /** How far in under a lip over the lava an undercut reaches (blocks): past one interpolation cell. */
+    static final double UNDER_REACH = 6;
+
+    /**
+     * Under a floor that stands over the lava: the top of the open space between its underside and the lava, or NaN
+     * where nothing overhangs. Under a column hall's ledge and the Causeway's wall ledge, from the lip to the wall;
+     * under every other lip over the lava, {@link #UNDER_REACH} blocks in: the Causeway's end ramps, the Caldera's
+     * crest, the rift's ledges and ramps beside its river. The underside is {@code shelf} under the floor at the lip
+     * and curves down to the lava, so the floor is thick enough for the 4 x 8 x 4 interpolation and a fall from its lip
+     * lands in the lava. Without it, the interpolated cliff leans out at its foot: a floor's height is no distance
+     * across a cliff, so the lowest blocks of the face stand three or four out from the lip, a slope of rock over the
+     * lava that every fall from the lip lands on.
+     */
+    double shelfUnder(Chamber c, double e, double x, double z) {
+        if (e >= 1.02) return Double.NaN;
+        double t, top = c.f0;
+        switch (c.kind) {
+            case HALL -> {
+                if (e < c.lakeEdge) return Double.NaN;
+                t = (e - c.lakeEdge) / (1 - c.lakeEdge);
+            }
+            case CAUSEWAY -> {
+                double[] uv = hallUV(c, x, z);
+                double ledgeV = c.rz - c.ledgeW, sv = uv[1] * c.side, au = Math.abs(uv[0]), endU = c.rx - c.endW;
+                if (au < endU) {
+                    if (sv < ledgeV) return Double.NaN;
+                    t = (sv - ledgeV) / Math.max(1, c.ledgeW);
+                } else {
+                    // an end ramp's face over the column field
+                    if (au >= endU + UNDER_REACH) return Double.NaN;
+                    t = (au - endU) / UNDER_REACH;
+                    top = causewayFloor(c, uv[0], sv, x, z);
+                }
+            }
+            case CALDERA -> {
+                double reach = UNDER_REACH / Math.min(c.rx, c.rz);
+                if (e < c.crestE || e >= c.crestE + reach) return Double.NaN;
+                t = (e - c.crestE) / reach;
+                top = c.crest;
+            }
+            case RIFT -> {
+                double[] uv = hallUV(c, x, z);
+                double d = riverDist(c, uv[0], uv[1]);
+                if (d <= 0 || d >= UNDER_REACH) return Double.NaN;
+                t = d / UNDER_REACH;
+                top = riftFloor(c, uv[0], uv[1], x, z);
+            }
+            default -> {
+                return Double.NaN;
+            }
+        }
+        t = Math.min(1, t);
+        double lip = top - c.shelf;
+        return lip - (lip - (c.base + 2)) * t * t;
+    }
+
+    /**
+     * The Scoria Canyons: how far local (u, v) lies from the lava river as {@link #riftFloor} lays it out (0 on it):
+     * the river down the middle, and the low ledges' band past the ramp's top and the low ledge's end.
+     */
+    static double riverDist(Chamber c, double u, double v) {
+        double a = Math.abs(v), r1 = c.riverW, r2 = c.riverW + c.lowW, end = riftLedgeEnd(c) - Math.abs(u);
+        if (a < r1 || end < 0) return 0;
+        int s = v >= 0 ? 0 : 1;
+        double d = (c.rampU[s] - u) * c.rampDir[s], D = (c.f0 - c.crest) / RIFT_RAMP + c.lowLen[s], da = Math.max(0, a - r2);
+        return Math.min(Math.min(a - r1, end), Math.min(Math.hypot(da, Math.max(0, d)), Math.hypot(da, Math.max(0, D - d))));
+    }
+
+    /** The Scoria Canyons: the narrowest an upper ledge runs (blocks). */
+    static final double RIFT_LEDGE_MIN = 5;
+
+    /**
+     * The Scoria Canyons: how far from the middle along the canyon (in u) the upper ledges run, to where the walls
+     * close in on them to {@link #RIFT_LEDGE_MIN}. A narrower ledge has no room under its lip for the undercut, and
+     * the wall's own term leaves too little open there for the interpolation: every fall from it landed on rock.
+     */
+    static double riftLedgeEnd(Chamber c) {
+        double q = Math.pow((c.riverW + c.lowW + RIFT_LEDGE_MIN) / c.rz, c.sq);
+        return c.rx * Math.pow(Math.max(0, 1 - q), 1 / c.sq);
+    }
+
+    /**
+     * The top block of the Causeway's column at (x, z), or {@link #NO_COLUMN}. The columns are hexagonal prisms on a
+     * lattice in the hall's local coordinates, {@code hexS} apart (radius 1.5 to 2.3): the column path's two rows touch
+     * edge to edge, their tops following a gentle swell from the middle to the end ramps that never steps more than a
+     * block from one column to the next; beside the path about every other place holds a column a step off it; one in
+     * five of the rest, away from the path, the ledge's lip and the end ramps, stands from the lava into the vault
+     * ({@link #TO_VAULT}, out of the flood). Nothing stands alone with a top of its own: such a top would be a standing
+     * place no one can walk to.
+     */
+    int hexTop(Chamber c, double x, double z) {
+        double[] uv = hallUV(c, x, z);
+        double u = uv[0], sv = uv[1] * c.side;
+        double ledgeV = c.rz - c.ledgeW, endU = c.rx - c.endW;
+        if (Math.abs(u) > endU + 1 || sv > ledgeV - 1) return NO_COLUMN;
+        // pointy-top hexagons of circumradius s / sqrt 3: rows along u, s sqrt 3 / 2 apart across
+        double s = c.hexS, R = s / SQ3;
+        double qf = (SQ3 / 3 * u - sv / 3) / R, rf = (2.0 / 3 * sv) / R, yf = -qf - rf;
+        long qi = Math.round(qf), ri = Math.round(rf), yi = Math.round(yf);
+        double dq = Math.abs(qi - qf), dr = Math.abs(ri - rf), dy = Math.abs(yi - yf);
+        if (dq > dr && dq > dy) qi = -ri - yi;
+        else if (dr > dy) ri = -qi - yi;
+        double hu = R * (SQ3 * qi + SQ3 / 2 * ri), hv = R * 1.5 * ri;
+        double px = u - hu, py = sv - hv;
+        double hd = Math.max(Math.abs(px), Math.max(Math.abs(px * 0.5 + py * SQ3 / 2), Math.abs(px * 0.5 - py * SQ3 / 2)));
+        long hh = Hashing.mix(c.hash, 8800, qi, ri);
+        double a = Hashing.unit(hh), b = Hashing.unit(Hashing.mix(hh, 1, 0, 0));
+        double ap = Math.abs(hv - c.pathV), half = s / 2;
+        int pathTop = (int) Math.round(pathHeight(c, hu)), top;
+        // past the path's ends the end ramp has its own floor
+        if (Math.abs(hu) > endU - 0.5 * s && ap >= 0.5 * s) return NO_COLUMN;
+        if (ap < 0.5 * s) top = pathTop;
+        else if (ap < 1.4 * s) top = a < 0.5 ? pathTop + (b < 0.35 ? -1 : b < 0.7 ? 0 : 1) : NO_COLUMN;
+        else {
+            // a column into the vault where it leaves room round it, never by the ledge's lip or the end ramps
+            boolean buffer = hv > ledgeV - 6 || Math.abs(hu) > endU - 6 || ap < 2.2 * s;
+            top = buffer || a < 0.8 ? NO_COLUMN : TO_VAULT;
+            half *= 0.72 + 0.26 * b;
+        }
+        return hd <= half + 1e-9 ? top : NO_COLUMN;
+    }
+
+    /** The column path's height along the Causeway: lowest in the middle, rising to the end ramps' foot. */
+    static double pathHeight(Chamber c, double u) {
+        double endU = c.rx - c.endW, t = Math.min(1, Math.abs(u) / endU);
+        return c.pathMid + (c.pathEnd - c.pathMid) * (1 - Math.cos(Math.PI * t)) * 0.5;
     }
 
     DeepBiome biomeOf(int li, Chamber c) {
@@ -981,8 +1298,13 @@ public final class Network {
                 if (c.refuge) return DeepBiome.ASH_HOLLOWS;
                 return DeepBiome.WASTELAND;
             case Terrain.GALLERIES:
-                if (c.kind == Kind.TUBEHUB) return DeepBiome.OBSIDIAN_TUBES;
-                return DeepBiome.BASALT_GALLERIES;
+                switch (c.kind) {
+                    case TUBEHUB: return DeepBiome.OBSIDIAN_TUBES;
+                    case CALDERA: return DeepBiome.CALDERA;
+                    case CAUSEWAY: return DeepBiome.CAUSEWAY;
+                    case RIFT: return DeepBiome.SCORIA_CANYONS;
+                    default: return DeepBiome.BASALT_GALLERIES;
+                }
             default:
                 throw new IllegalArgumentException("no biomes for layer " + li);
         }
@@ -1013,6 +1335,10 @@ public final class Network {
         Chamber[] c = new Chamber[16];
         // per-column values are floats: 1,024 columns x 3 layers per worldgen thread (section 2.1)
         float[] e = new float[16], F = new float[16], C = new float[16], pd = new float[16], pr = new float[16];
+        /** Under a hall's ledge: the top of the open space over the lava ({@link #shelfUnder}), else NaN. */
+        float[] U = new float[16];
+        /** A hall's wall scale at the column ({@link #wallScale}); unused for every other chamber. */
+        float[] ws = new float[16];
         int nw;
         Way[] w = new Way[48];
         float[] wd = new float[48], wf = new float[48], ww = new float[48], wh = new float[48], wsl = new float[48];
@@ -1047,6 +1373,8 @@ public final class Network {
          * of a round tube's line, all of it from 4 blocks further out (section 5).
          */
         float roughK;
+        /** The roughness's share in the Basalt Galleries' halls ({@link #HALL_ROUGH}), 1 elsewhere. */
+        float hallK = 1;
         /** The Basalt arch over the column, with the column's place under it (q = across / span, along). */
         Arch arch;
         float archQ, archAlong;
@@ -1060,6 +1388,14 @@ public final class Network {
         double entryD, exitD, endD;
         double lavaE;
         Chamber bed;
+        /**
+         * The Basalt Galleries: the column lies in the shore notch from the bedrock landing to its lava basin ({@link
+         * #shoreNotch}): how far across the notch's line it is, and the tread's top there.
+         */
+        boolean notch;
+        float notchAcross, notchTop;
+        /** A Causeway column at the column: its top block and the lowest block it stands on ({@link #hexTop}). */
+        int colTop = NO_COLUMN, colLo;
         /** The heights the per-block pass must look at; outside them the interpolated density stands. */
         double fLo, fHi;
         double colShift;
@@ -1067,7 +1403,7 @@ public final class Network {
         void growC() {
             int n = c.length * 2;
             c = Arrays.copyOf(c, n); e = Arrays.copyOf(e, n); F = Arrays.copyOf(F, n); C = Arrays.copyOf(C, n);
-            pd = Arrays.copyOf(pd, n); pr = Arrays.copyOf(pr, n);
+            pd = Arrays.copyOf(pd, n); pr = Arrays.copyOf(pr, n); U = Arrays.copyOf(U, n); ws = Arrays.copyOf(ws, n);
         }
 
         void growW() {
@@ -1116,6 +1452,7 @@ public final class Network {
         lc.fLo = 1e9;
         lc.lavaE = 9;
         lc.fHi = -1e9;
+        lc.colTop = NO_COLUMN;
         int b = NetIndex.bucket(n, x, z);
         if (b >= 0) {
             for (int id : n.bCh[b]) {
@@ -1128,6 +1465,22 @@ public final class Network {
                 lc.e[k] = (float) e;
                 lc.F[k] = (float) floorAt(c, e, x, z);
                 lc.C[k] = (float) ceilAt(c, e, x, z);
+                lc.U[k] = c.hall() ? (float) shelfUnder(c, e, x, z) : Float.NaN;
+                if (c.hall()) {
+                    double[] uv = hallUV(c, x, z);
+                    lc.ws[k] = (float) wallScale(c, uv[0], uv[1], e);
+                }
+                if (c.kind == Kind.CAUSEWAY && e < 1.02) {
+                    // the column is a per-block term: the span reaches from the lava's bed to its top
+                    int top = hexTop(c, x, z);
+                    if (top == TO_VAULT) top = (int) Math.ceil(lc.C[k]) + 3;
+                    if (top != NO_COLUMN && top > lc.colTop) {
+                        lc.colTop = top;
+                        lc.colLo = (int) Math.floor(c.base) - 1;
+                        lc.fLo = Math.min(lc.fLo, lc.colLo - 1);
+                        lc.fHi = Math.max(lc.fHi, top + 1);
+                    }
+                }
                 lc.pd[k] = 1e9f;
                 lc.pr[k] = 0;
                 for (int p = 0; p + 2 < c.pillars.length; p += 3) {
@@ -1135,6 +1488,11 @@ public final class Network {
                     double pz = c.kind == Kind.TUBEHUB ? c.z + c.pillars[p + 1] : c.pillars[p + 1];
                     double d = Math.hypot(x - px, z - pz);
                     if (d - c.pillars[p + 2] < lc.pd[k] - lc.pr[k]) { lc.pd[k] = (float) d; lc.pr[k] = (float) c.pillars[p + 2]; }
+                }
+                if (hallFloor(c, e, lc.F[k], li)) {
+                    // a hall's dry floor is a per-block term (hallFloor): the span covers its band
+                    lc.fLo = Math.min(lc.fLo, lc.F[k] - HALL_FLOOR_DEPTH - 1);
+                    lc.fHi = Math.max(lc.fHi, lc.F[k] + HALL_FLOOR_ROOM + 1);
                 }
                 if (c.kind == Kind.LAVA) lc.lavaE = Math.min(lc.lavaE, e);
                 if (pool(c)) {
@@ -1187,6 +1545,26 @@ public final class Network {
                 }
                 prevD = d;
             }
+            // the Basalt Galleries: a flight's own tunnels end at the stair's floor a few blocks in from their doors, and
+            // their carve runs on a width past the end. At the stair's foot (a bedrock flight's spoke from the landing,
+            // an entry flight's doors on its level foot) it ran on into the stair as it climbs and cut a pit with a
+            // 3-block step at its edge: inside the flight those tunnels keep to the stair's floor. At the stair's top
+            // (a bedrock flight's other doors, an entry flight's spoke from the landing) the tunnel has to cut through
+            // the stair's top end down to its floor there
+            for (int k = 0; k < lc.nw; k++) {
+                Way wy = lc.w[k];
+                if (wy.inner) continue;
+                for (int j = 0; j < lc.nc; j++) {
+                    Chamber c = lc.c[j];
+                    if (!c.flight || lc.e[j] >= 1 || (wy.a != c.id && wy.b != c.id)) continue;
+                    int end = wy.a == c.id ? 0 : wy.n - 1;
+                    if (rampT(c, wy.x[end], wy.z[end]) < 0) continue;
+                    if (lc.F[j] > lc.wf[k] && lc.F[j] < lc.wf[k] + 12) {
+                        lc.wf[k] = lc.F[j];
+                        lc.fHi = Math.max(lc.fHi, lc.wf[k] + Math.max(lc.wh[k] + 1, 7));
+                    }
+                }
+            }
             for (int id : n.bSh[b]) {
                 Shaft s = n.shafts.get(id);
                 double d = Math.hypot(x - s.x, z - s.z);
@@ -1230,10 +1608,13 @@ public final class Network {
         if (lc.entryD < lc.en.landR + 6) { lc.fLo = Math.min(lc.fLo, lc.en.lFloor - 9); lc.fHi = Math.max(lc.fHi, lc.en.lCy + lc.en.landHalf + 4); }
         if (lc.ex != null && lc.exitD < lc.ex.landR + 6) { lc.fLo = Math.min(lc.fLo, lc.ex.uFloor - 9); lc.fHi = Math.max(lc.fHi, lc.ex.uCy + lc.ex.landHalf + 4); }
         if (lc.bed != null && lc.endD < lc.bed.rx + 6) { lc.fLo = Math.min(lc.fLo, lc.bed.f0 - 9); lc.fHi = Math.max(lc.fHi, lc.bed.f0 + 20); }
+        shoreNotch(lc, n, x, z);
         // basalt columns: a per-column offset of the walls, constant over a small Voronoi cell
         lc.colShift = Terrain.basaltLook(li) ? 1.7 * voronoiValue(x, z, 3.3) : 0;
         lc.hub = inHub(lc);
         lc.roughK = lc.hub ? 0 : 1;
+        lc.hallK = 1;
+        for (int k = 0; k < lc.nc; k++) if (lc.c[k].hall() && lc.e[k] < 1.15) lc.hallK = HALL_ROUGH;
         for (int k = 0; k < lc.nw; k++) {
             if (lc.w[k].round) lc.roughK = Math.min(lc.roughK, (float) Math.max(0, Math.min(1, (lc.wd[k] - lc.ww[k] - 2) / 4)));
         }
@@ -1246,7 +1627,7 @@ public final class Network {
             lc.archQ = (float) q;
             lc.archAlong = (float) along;
             // the arch is a per-block term: the span covers it, wobble included (section 4.4)
-            double deck = a.deck - 4 * q * q, thick = 3 + 9 * q * q * q;
+            double deck = a.deck - a.drop * q * q, thick = 3 + 9 * q * q * q;
             lc.fLo = Math.min(lc.fLo, deck - thick - 2.5);
             lc.fHi = Math.max(lc.fHi, deck + 2.5);
             break;
@@ -1466,7 +1847,10 @@ public final class Network {
     double chamberDist(LCol lc, int k, int y) {
         Chamber c = lc.c[k];
         double d = Math.max(lc.F[k] - y, y - lc.C[k]);
-        return Math.max(d, wallTerm(c, lc.e[k]));
+        float u = lc.U[k];
+        // under a hall's ledge: open from the lava's bed to the ledge's underside as well
+        if (u == u) d = Math.min(d, Math.max(c.base - y, y - u));
+        return Math.max(d, wallTerm(lc, k));
     }
 
     /** Density in blocks (positive is rock) of layer li at a block, as sampled at the interpolation corners. */
@@ -1503,7 +1887,7 @@ public final class Network {
         boolean hub = lc.hub;
         if (d > -12 && d < 12 && lc.roughK > 0) {
             // the deep dark's floors stay walkable: a third of the roughness within a few blocks of a tier's floor
-            double rs = lc.roughK;
+            double rs = lc.roughK * lc.hallK;
             if (lc.darkOn && ((lc.aC > lc.aF && y > lc.aF - 3 && y < lc.aF + 4) || (lc.bC > lc.bF && y > lc.bF - 3 && y < lc.bF + 4))) rs *= DARK_FLOOR_ROUGH;
             if (lc.ns > 0) rs *= mouthFade(lc, y);
             if (rs > 0) d += rs * rough(li, x, y, z);
@@ -1520,7 +1904,8 @@ public final class Network {
         // pillars
         for (int k = 0; k < lc.nc; k++) {
             if (lc.pr[k] <= 0 || lc.pd[k] > lc.pr[k] * 2.5) continue;
-            d = Math.max(d, pillarSolid(lc.pd[k], lc.pr[k], lc.c[k].kind != Kind.TUBEHUB, y, lc.F[k], lc.C[k]));
+            // a column hall's columns are straight (a waist's flanks step out into ledges no one can reach)
+            d = Math.max(d, pillarSolid(lc.pd[k], lc.pr[k], lc.c[k].kind != Kind.TUBEHUB && lc.c[k].kind != Kind.HALL, y, lc.F[k], lc.C[k]));
         }
         d = Math.max(d, mustStay(lc, x, y, z));
         if (top - y < Terrain.SEAL) d = Math.max(d, Terrain.SEAL - (top - y));
@@ -1537,6 +1922,36 @@ public final class Network {
         if (hub) d = Math.max(d, hubPillar(lc, y));
         return d;
     }
+
+    /**
+     * The Basalt Galleries' shore notch: their bedrock landing is small (its flights up are close from all of it) and
+     * stands clear of its lava basin, so a notch {@link #SHORE_HALF} blocks either side of the line between their
+     * centres runs from 3 blocks inside the plate's edge to 3 past the basin's near wall, open 5 blocks over treads
+     * that step down from the landing's floor to the lava (0.75 down per block out, as {@link #lavaShore} steps the
+     * plate's edge inside the basin): the shore can be walked to from the landing and climbed out of. The basin is the
+     * plan's last chamber.
+     */
+    void shoreNotch(LCol lc, Net n, double x, double z) {
+        lc.notch = false;
+        if (lc.bed == null || n.li != Terrain.GALLERIES || lc.endD > lc.bed.rx + 12) return;
+        Chamber b = n.ch.get(n.ch.size() - 1);
+        if (b.kind != Kind.LAVA) return;
+        double ux = b.x - lc.bed.x, uz = b.z - lc.bed.z, ul = Math.hypot(ux, uz);
+        ux /= ul;
+        uz /= ul;
+        double along = (x - lc.bed.x) * ux + (z - lc.bed.z) * uz;
+        double across = Math.abs((z - lc.bed.z) * ux - (x - lc.bed.x) * uz);
+        if (across > SHORE_HALF + 1 || along < lc.bed.rx - 3 || along > ul - b.rx + 3) return;
+        double W = shape.waterY(n.li);
+        lc.notch = true;
+        lc.notchAcross = (float) across;
+        lc.notchTop = (float) Math.max(W - 1, lc.bed.f0 - 0.75 * Math.max(0, along - lc.bed.rx));
+        lc.fLo = Math.min(lc.fLo, lc.notchTop - 7);
+        lc.fHi = Math.max(lc.fHi, lc.notchTop + 8);
+    }
+
+    /** Half the width of the Basalt Galleries' shore notch (blocks, {@link #shoreNotch}). */
+    static final double SHORE_HALF = 3;
 
     /**
      * Where the lava basin cuts into the bedrock landing's plate, the plate's edge steps down to the lava in 1-block
@@ -1668,6 +2083,7 @@ public final class Network {
         if (ex != null && lc.exitD < ex.landR) d = Math.max(d, Math.min(Math.min(ex.uFloor - y, y - (ex.uFloor - 7)), ex.landR - lc.exitD));
         if (lc.bed != null && lc.endD < lc.bed.rx) d = Math.max(d, Math.min(Math.min(lc.bed.f0 - y, y - (lc.bed.f0 - 7)), lc.bed.rx - lc.endD));
         if (lc.bed != null && lc.lavaE < 1.1) d = Math.max(d, lavaShore(lc, y));
+        if (lc.notch && lc.notchTop > shape.waterY(lc.net.li) - 0.5) d = Math.max(d, Math.min(Math.min(lc.notchTop - y, y - (lc.notchTop - 6)), SHORE_HALF + 1 - lc.notchAcross));
         // perched lakes and the wells' pools: a rim of rock round the water and a floor under it
         for (int k = 0; k < lc.nc; k++) {
             Chamber c = lc.c[k];
@@ -1703,7 +2119,7 @@ public final class Network {
         // the Basalt arches (section 5)
         if (lc.arch != null) {
             Arch a = lc.arch;
-            double q = lc.archQ, deck = a.deck - 4 * q * q, thick = 3 + 9 * q * q * q;
+            double q = lc.archQ, deck = a.deck - a.drop * q * q, thick = 3 + 9 * q * q * q;
             if (y > deck - thick - 1.3 && y < deck + 1.3) {
                 double vert = Math.min(deck - y, y - (deck - thick));
                 double side = a.halfAlong * (1 + 1.2 * q * q) - Math.abs(lc.archAlong);
@@ -1829,6 +2245,7 @@ public final class Network {
             d = Math.min(d, landing(lc.exitD, ex.landR, ex.uCy, ex.landHalf, ex.uFloor, x, y, z));
         if (lc.bed != null && lc.endD < lc.bed.rx + 4 && y > lc.bed.f0 - 2 && y < lc.bed.f0 + 20)
             d = Math.min(d, landing(lc.endD, lc.bed.rx, lc.bed.f0 + 7, 12, lc.bed.f0, x, y, z));
+        if (lc.notch) d = Math.min(d, Math.max(lc.notchAcross - SHORE_HALF, Math.max(lc.notchTop - 0.01 - y, y - (lc.notchTop + 5))));
         // a lava pool: its own block cut out of the floor and the air over it (in a tube, only the feet's block, which
         // the tube leaves open there anyway); a channel's banks open two over them too, so the tread runs level to the
         // lava's edge with no rim
@@ -1866,6 +2283,15 @@ public final class Network {
             return d < -1 ? -1 : (d > 1 ? 1 : d);
         }
         double keep = mustStay(lc, x, y, z), open = mustOpen(lc, x, y, z);
+        // a Causeway column, from the lava's bed to its top block: per block only (at the corners, 4 apart, its rock
+        // would spread into a plate over the lava)
+        if (lc.colTop != NO_COLUMN && y <= lc.colTop && y >= lc.colLo) keep = Math.max(keep, 1);
+        for (int k = 0; k < lc.nc; k++) {
+            if (!hallFloor(lc.c[k], lc.e[k], lc.F[k], li)) continue;
+            double F = lc.F[k];
+            keep = Math.max(keep, Math.min(F - y, y - (F - HALL_FLOOR_DEPTH)));
+            open = Math.min(open, Math.max(F - y, y - (F + HALL_FLOOR_ROOM)));
+        }
         for (int k = 0; k < lc.nw; k++) {
             if (lc.w[k].inner) continue;
             if (lc.wd[k] > lc.ww[k] * 1.25) continue;
@@ -1919,7 +2345,7 @@ public final class Network {
         double bestD = 7;
         for (int k = 0; k < lc.nc; k++) {
             double d = Math.max(lc.F[k] - y, y - lc.C[k]);
-            d = Math.max(d, wallTerm(lc.c[k], lc.e[k]));
+            d = Math.max(d, wallTerm(lc, k));
             // a hub's biome (and so its obsidian) reaches round its dome past the wall line, as 0.2.0's tubes did
             if (lc.c[k].kind == Kind.TUBEHUB) d = hubDepth(lc, k, y);
             DeepBiome b = lc.c[k].biome;

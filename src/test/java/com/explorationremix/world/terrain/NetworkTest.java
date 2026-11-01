@@ -124,10 +124,10 @@ class NetworkTest {
         if (de < 2 || (n.courtsE.size() >= 3 && de < 3)) fails.add(tag + ": the entry landing has " + de + " ways out and " + n.courtsE.size() + " courts");
         if (dx < 2 || (n.courtsX.size() >= 3 && dx < 3)) fails.add(tag + ": the exit landing has " + dx + " ways out and " + n.courtsX.size() + " courts");
         if (!NetGraph.reach(n, n.entry, true)[n.exit]) fails.add(tag + ": no way from the entry to the exit without climbing");
-        // edge-disjoint ways can still meet in one room: then they are one way in (a cavern, the rift or the city are
-        // open spaces with many doors, and may be passed by every way)
+        // edge-disjoint ways can still meet in one room: then they are one way in (a cavern, the rift, the city or a
+        // Basalt Galleries hall are open spaces with many doors, and may be passed by every way)
         for (Chamber c : n.ch) {
-            if (!c.keep || c.landing() || c.kind == Kind.CAVERN || c.kind == Kind.CANYON || c.kind == Kind.CITY) continue;
+            if (!c.keep || c.landing() || c.kind == Kind.CAVERN || c.kind == Kind.CANYON || c.kind == Kind.CITY || c.hall()) continue;
             if (!NetGraph.reachWithout(n, n.entry, c.id)[n.exit])
                 fails.add(tag + ": every way from the entry to the exit passes through " + c.kind + "#" + c.id + (c.court ? " (court)" : ""));
         }
@@ -144,6 +144,7 @@ class NetworkTest {
             if (!c.keep || c.landing() || c.helix() || c.kind == Kind.PORTAL || c.kind == Kind.POCKET || c.kind == Kind.CANYON || c.dark >= 0) continue;
             double across = 2 * Math.max(c.rx, c.rz);
             String id = tag + ": " + c.kind + "#" + c.id + (c.set ? " (set piece)" : c.court ? " (court)" : "");
+            if (n.li == Terrain.GALLERIES && (c.hall() || c.flight || c.kind == Kind.GALLERY)) { hallSizes(t, n, c, id, fails); continue; }
             // courts 9 to 14 (Blue 12 to 18), grottos 10 to 20 (Blue 12 to 20), the rest 9 to 20; 7.5 where the seal
             // under the band above leaves less room
             double hMin = n.li == Terrain.BLUE ? 12 : c.court ? 9 : c.kind == Kind.GROTTO ? 10 : 9;
@@ -167,6 +168,36 @@ class NetworkTest {
         }
     }
 
+    /**
+     * The Basalt Galleries' rooms (0.5): column halls 60 to 110 across, the Caldera 70 to 100, the Causeway 100 to 140
+     * long and 35 to 55 wide, the Scoria Canyons' rift 120 to 200 long and 25 to 45 wide, each 50 to 110 from the lava's
+     * table to its vault; the flights 40 to 56 long and 12 to 18 wide with 7.5 to 14 of headroom over the stair; the
+     * gallery rooms 26 to 44 long, 10 to 16 wide and 9 to 25 tall (7.5 where the seal under the band leaves less).
+     */
+    static void hallSizes(Terrain t, Net n, Chamber c, String id, List<String> fails) {
+        double along = 2 * Math.max(c.rx, c.rz), wide = 2 * Math.min(c.rx, c.rz);
+        double[] r;
+        if (c.hall()) {
+            r = switch (c.kind) {
+                case CALDERA -> new double[]{70, 100, 0, 100};
+                case CAUSEWAY -> new double[]{100, 140, 35, 55};
+                case RIFT -> new double[]{120, 200, 25, 45};
+                default -> new double[]{60, 110, 0, 110};
+            };
+            double tall = c.yHi() - t.shape.waterY(n.li);
+            if (tall < 50 - 1e-6 || tall > 110 + 1e-6) fails.add(id + " is " + fmt(tall) + " tall over the lava's table, not 50 to 110");
+        } else if (c.flight) {
+            r = new double[]{40, 56, 12, 18};
+            if (c.h < 7.5 - 1e-6 || c.h > 14 + 1e-6) fails.add(id + " (flight) has " + fmt(c.h) + " of headroom, not 7.5 to 14");
+        } else {
+            r = new double[]{26, 44, 10, 16};
+            double hMin = sealCapped(t, n, c) ? 7.5 : 9;
+            if (c.h < hMin - 1e-6 || c.h > 25 + 1e-6) fails.add(id + " is " + fmt(c.h) + " tall, not " + hMin + " to 25");
+        }
+        if (along < r[0] - 1e-6 || along > r[1] + 1e-6) fails.add(id + " is " + fmt(along) + " long, not " + fmt(r[0]) + " to " + fmt(r[1]));
+        if (wide < r[2] - 1e-6 || wide > r[3] + 1e-6) fails.add(id + " is " + fmt(wide) + " wide, not " + fmt(r[2]) + " to " + fmt(r[3]));
+    }
+
     static String fmt(double v) { return String.format(java.util.Locale.ROOT, "%.1f", v); }
 
     static void refuges(Terrain t, Net n, String tag, List<String> fails) {
@@ -185,13 +216,30 @@ class NetworkTest {
         if (n.li != Terrain.BLUE && count != 2) fails.add(tag + ": " + count + " refuges, not 2");
     }
 
+    /**
+     * The Basalt Galleries' flood rules: the lava rises {@link Terrain#FLOOD_RISE} over its table, so every room's floor
+     * but the bedrock landing's and its flights' stands 2 over that, and every walkable arch and every tunnel between
+     * the rooms (but those of the bedrock landing and its flights) has its feet at W + 41 or higher. The halls' own low
+     * walks (the Causeway's column path, the rift's low ledges, the Caldera's rim) flood, each a short walk below a dry
+     * floor ({@link #basaltSurgeHasAWayOut}).
+     */
     static void basaltFloors(Terrain t, Net n, String tag, List<String> fails) {
         if (n.li != Terrain.GALLERIES) return;
-        double min = t.shape.waterY(n.li) + Terrain.surge(n.li) + 2;
+        double W = t.shape.waterY(n.li), min = W + Terrain.surge(n.li) + 2, dry = W + Terrain.FLOOD_RISE + 1;
         for (Chamber c : n.ch) {
             if (!c.keep || c.kind == Kind.BEDROCK || c.kind == Kind.LAVA || n.courtsX.contains(c.id)) continue;
             if (c.kind == Kind.POCKET && c.parent == n.exit) continue; // a surge niche
             if (c.f0 < min - 1e-9) fails.add(tag + ": " + c.kind + "#" + c.id + " has its floor " + fmt(min - c.f0) + " under the surge line");
+        }
+        for (Net.Arch a : n.arches)
+            if (a.walk && a.deck < dry - 1e-9) fails.add(tag + ": the walkable arch in " + n.ch.get(a.chamber).kind + "#" + a.chamber + " is " + fmt(dry - a.deck) + " under the flood");
+        for (Way wy : n.ways) {
+            if (wy.inner || wy.kind == EK.STUB) continue;
+            boolean low = false;
+            for (int id : new int[]{wy.a, wy.b}) low |= id == n.exit || n.courtsX.contains(id);
+            if (low) continue;
+            for (int i = 0; i < wy.n; i++)
+                if (wy.f[i] < dry - 1e-9) { fails.add(tag + ": way #" + wy.id + " (" + wy.kind + ") runs " + fmt(dry - wy.f[i]) + " under the flood at " + (int) wy.x[i] + " " + (int) wy.z[i]); break; }
         }
     }
 
@@ -225,6 +273,56 @@ class NetworkTest {
 
     @Test
     void queriesSeeEveryWayAndClimb() { overPlans(NetworkTest::queries); }
+
+    /**
+     * The Basalt Galleries' sub-biomes (0.5): the Caldera, the Causeway and the Scoria Canyons' rift in most cells (they
+     * are placed first, so in every cell so far), column halls and the two Obsidian Tubes, each kind with its biome;
+     * each Caldera has 3 to 6 vents (its centre, 1 or 2 on its lake, 1 to 3 on its crest), inside it, and
+     * {@link Network#ventsNear} finds every one.
+     */
+    @Test
+    void galleriesSubBiomes() {
+        List<String> fails = new ArrayList<>();
+        Map<Kind, Integer> cells = new EnumMap<>(Kind.class);
+        int plans = 0;
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            Network w = t.network;
+            for (int[] cell : CELLS) {
+                Net n = w.net(Terrain.GALLERIES, cell[0], cell[1]);
+                String tg = tag(seed, Terrain.GALLERIES, cell[0], cell[1]);
+                plans++;
+                java.util.Set<Kind> here = java.util.EnumSet.noneOf(Kind.class);
+                for (Chamber c : n.ch) {
+                    if (!c.keep) continue;
+                    DeepBiome want = switch (c.kind) {
+                        case CALDERA -> DeepBiome.CALDERA;
+                        case CAUSEWAY -> DeepBiome.CAUSEWAY;
+                        case RIFT -> DeepBiome.SCORIA_CANYONS;
+                        case TUBEHUB -> DeepBiome.OBSIDIAN_TUBES;
+                        case HALL -> DeepBiome.BASALT_GALLERIES;
+                        default -> null;
+                    };
+                    if (want == null) continue;
+                    here.add(c.kind);
+                    if (c.biome != want) fails.add(tg + ": " + c.kind + "#" + c.id + " is " + c.biome + ", not " + want);
+                    if (c.kind != Kind.CALDERA) continue;
+                    List<Net.Vent> vs = new ArrayList<>();
+                    for (Net.Vent v : n.vents) if (v.chamber == c.id) vs.add(v);
+                    if (vs.size() < 3 || vs.size() > 6) fails.add(tg + ": the Caldera #" + c.id + " has " + vs.size() + " vents");
+                    for (Net.Vent v : vs) {
+                        if (w.e(c, v.x, v.z) >= 1) fails.add(tg + ": a vent of the Caldera #" + c.id + " stands outside it at " + (int) v.x + " " + (int) v.z);
+                        if (!w.ventsNear(Terrain.GALLERIES, v.x, v.z, 1).contains(v)) fails.add(tg + ": ventsNear misses the vent at " + (int) v.x + " " + (int) v.z);
+                    }
+                }
+                for (Kind k : here) cells.merge(k, 1, Integer::sum);
+            }
+        }
+        System.out.println("galleriesSubBiomes: cells with each kind, of " + plans + ": " + cells);
+        for (Kind k : new Kind[]{Kind.CALDERA, Kind.CAUSEWAY, Kind.RIFT, Kind.HALL, Kind.TUBEHUB})
+            if (3 * cells.getOrDefault(k, 0) < 2 * plans) fails.add(k + " in only " + cells.getOrDefault(k, 0) + " of " + plans + " cells");
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
+    }
 
     /**
      * Section 12.1: wayLinesAt and carvedLinesAt find every point of every way that lies in the plan's own cell, on that
@@ -303,7 +401,8 @@ class NetworkTest {
 
     /**
      * Section 5: every tube hub's tunnel is a round tube, with two or three blind round tubes beside it; arches only in
-     * the Basalt Galleries, in every great hall, over W + 38, their crown at least 8 over the floor under it.
+     * the Wasteland and the Basalt Galleries, in every great hall and in the Galleries' halls, over W + 38, their crown
+     * at least 8 over the floor under it.
      */
     static void tubesArches(Terrain t, Net n, String tag, List<String> fails) {
         for (Chamber c : n.ch) {
@@ -322,7 +421,7 @@ class NetworkTest {
         double W = t.shape.waterY(n.li);
         for (Net.Arch a : n.arches) {
             Chamber c = n.ch.get(a.chamber);
-            if (c.kind != Kind.GREAT && c.kind != Kind.GALLERY) fails.add(tag + ": an arch in " + c.kind + "#" + c.id);
+            if (c.kind != Kind.GREAT && c.kind != Kind.GALLERY && !c.hall()) fails.add(tag + ": an arch in " + c.kind + "#" + c.id);
             if (a.deck < W + 38 - 1e-9) fails.add(tag + ": the arch in " + c.kind + "#" + c.id + " is " + fmt(W + 38 - a.deck) + " under W + 38");
             double f = t.network.floorAt(c, t.network.e(c, a.x, a.z), a.x, a.z);
             if (a.deck < f + 8 - 1e-9) fails.add(tag + ": the arch in " + c.kind + "#" + c.id + " is " + fmt(a.deck - f) + " over the floor");
@@ -827,6 +926,8 @@ class NetworkTest {
 
     /** The share of the Blue Reaches' places (outside the cities' reserves) allowed a view over 160 blocks. */
     static final double BLUE_LONG = 0.025;
+    /** The share of the Basalt Galleries' places that see {@link VoxelHarness#WIDE} blocks or more (measured 37 and 50%). */
+    static final double GALLERIES_WIDE = 0.30;
 
     /**
      * A hash of what a plan carves: node centres, sizes and floors, edges, way samples and shafts, and the Basalt
@@ -908,12 +1009,12 @@ class NetworkTest {
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
     }
 
-    /** Graph tests 1, 2, 5, 6, 7 and 9 over 120 cell-layers (40 per layer) on 10 seeds the fast tests never use. */
+    /** Graph tests 1, 2, 5, 6, 7 and 9 over 160 cell-layers (40 per layer) on 10 seeds the fast tests never use. */
     @Test
     @Tag("slow")
     void manyCells() {
         List<String> fails = new ArrayList<>();
-        int[] drops = new int[3], cells = new int[3];
+        int[] drops = new int[Terrain.GALLERIES + 1], cells = new int[Terrain.GALLERIES + 1];
         for (int si = 0; si < 10; si++) {
             long seed = 1000003L * (si + 1) + 17;
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
@@ -1063,10 +1164,38 @@ class NetworkTest {
     void wastelandIsOneCave() { oneCave(Terrain.WASTELAND, 0.960); }
 
     /**
-     * Under the highest surge, every place is a short walk from one above it. The steps are the harness's (4-neighbour
-     * moves and vine rungs). A surge niche is a staged climb (section 10), so its ledge passage adds about 10 steps to
-     * the design's single 25-block shaft: the bar is 98% within 80 steps (the design's single shafts: 96.9 to 100%
-     * within 64).
+     * The Basalt Galleries' halls (0.5) open the layer up: the share of open blocks (air or lava) between the lava's
+     * table and 100 over it, in the voxel cells. The old network of small rooms had about 1%; the halls give 13 to 15%
+     * (they fill about a fifth of a cell's area, their ledges 44 to 62 over the lava, under the brief's aim of 20 to
+     * 35%), and the bar is 10%.
+     */
+    @Test
+    @Tag("voxel")
+    void galleriesAreOpen() {
+        List<String> fails = new ArrayList<>();
+        for (int s = 0; s < VOX_SEEDS.length; s++) {
+            long seed = VOX_SEEDS[s];
+            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
+            Terrain t = terrain(seed);
+            int cell = (int) t.network.cell, W = (int) Math.round(t.shape.waterY(Terrain.GALLERIES));
+            VoxelHarness v = built(seed, Terrain.GALLERIES, cx, cz, 1, 1);
+            long open = 0, all = 0;
+            for (int x = cx * cell; x < (cx + 1) * cell; x++) for (int z = cz * cell; z < (cz + 1) * cell; z++)
+                for (int y = W; y < W + 100; y++) { all++; if (v.mat(x, y, z) != VoxelHarness.ROCK) open++; }
+            double share = open / (double) all;
+            String tg = tag(seed, Terrain.GALLERIES, cx, cz);
+            System.out.printf(java.util.Locale.ROOT, "%s: open share between W and W + 100 %.1f%%%n", tg, 100 * share);
+            if (share < 0.10) fails.add(tg + ": only " + fmt(100 * share) + "% of the blocks between W and W + 100 are open");
+        }
+        assertTrue(fails.isEmpty(), String.join("\n", fails));
+    }
+
+    /**
+     * Under the highest flood, every place is a short walk from one above it. The steps are the harness's (4-neighbour
+     * moves and vine rungs). In the Basalt Galleries' halls (0.5) the low places are the bedrock landing and its two
+     * flights, the Causeway's column path, the rift's low ledges and the Caldera's crater rim, each a stair or a ramp
+     * below a dry floor: the bar is 98% within 80 steps (measured 99.8 and 100%, the longest 85 and 79; the brief asked
+     * for 95%), none without a way out.
      */
     @Test
     @Tag("voxel")
@@ -1408,7 +1537,7 @@ class NetworkTest {
                     tg, n.pools.size(), lava, banks, cores, same, lost, v.mainSize(), v0.mainSize());
         }
         System.out.printf("lavaPoolsHold: %d channels, %d blind tubes, %d of them on magma%n", channels, ends, magma);
-        if (channels == 0) fails.add("no channel to check");
+        // the Galleries' halls (0.5) have no great hall, so no channel: their lava is the lakes and rivers at the table
         if (ends == 0) fails.add("no blind tube to check");
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
     }
@@ -1438,7 +1567,8 @@ class NetworkTest {
      * with a 170-block apron. A ray that leaves the box after running 160 blocks counts as a long view. The Deep Gardens
      * and the Basalt Galleries have none; in the Blue Reaches, the share of places with a long view is held under
      * {@link #BLUE_LONG}, apart from the places in a city's reserve, which are reported (the city's pieces, which the
-     * harness does not build, stand in the way of many of their views).
+     * harness does not build, stand in the way of many of their views). The Basalt Galleries' halls (0.5) are meant to
+     * be wide: at least {@link #GALLERIES_WIDE} of their places see {@link VoxelHarness#WIDE} blocks or more.
      */
     @Test
     @Tag("voxel")
@@ -1483,13 +1613,15 @@ class NetworkTest {
             for (int[] p : s.longPlaces) for (Chamber c : cities) if (Math.hypot(p[0] + 0.5 - c.x, p[2] + 0.5 - c.z) < Network.CITY_RESERVE) { byCity++; break; }
             long others = s.longPlaces.size() - byCity;
             double share = others / (double) Math.max(1, s.places);
-            System.out.printf(java.util.Locale.ROOT, "%s: %d places, %d rays (%d left the box, %d of them after 160);%s, over 160 %.3f%%, longest %.0f; places with a view over 160: %d (%.2f%%) and %d in a city's reserve (%d cities)%n",
-                    tg, s.places, counted, s.left, s.leftLong, b, 100.0 * s.over(160) / Math.max(1, counted), s.max, others, 100 * share, byCity, cities.size());
+            double wide = s.wide / (double) Math.max(1, s.places);
+            System.out.printf(java.util.Locale.ROOT, "%s: %d places, %d rays (%d left the box, %d of them after 160);%s, over 160 %.3f%%, longest %.0f; places with a view over 160: %d (%.2f%%) and %d in a city's reserve (%d cities); a view of 80 or more from %.1f%%%n",
+                    tg, s.places, counted, s.left, s.leftLong, b, 100.0 * s.over(160) / Math.max(1, counted), s.max, others, 100 * share, byCity, cities.size(), 100 * wide);
             for (double[] r : s.longest)
                 System.out.printf("    %.0f blocks from %.0f %.0f %.0f (yaw %.0f, pitch %.0f) to %.0f %.0f %.0f%n", r[5], r[0], r[1], r[2], r[3], r[4], r[6], r[7], r[8]);
             if (s.places < 1000) fails.add(tg + ": only " + s.places + " places looked from");
             if (li != Terrain.BLUE && !s.longPlaces.isEmpty()) fails.add(tg + ": " + s.longPlaces.size() + " places with a view over 160 blocks");
             if (li == Terrain.BLUE && share > BLUE_LONG) fails.add(tg + ": " + String.format(java.util.Locale.ROOT, "%.2f", 100 * share) + "% of the places outside the cities' reserves have a view over 160 blocks");
+            if (li == Terrain.GALLERIES && wide < GALLERIES_WIDE) fails.add(tg + ": only " + fmt(100 * wide) + "% of the places have a view of 80 blocks or more");
         }
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
