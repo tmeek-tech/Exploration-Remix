@@ -187,6 +187,7 @@ public final class LavaWarnings {
     private static void surface(ClientLevel level, Player player, RandomSource random, int surface, double above, int samples, float u) {
         if (above > 56) return;
         boolean particles = ERClientConfig.INSTANCE.caveParticles.get();
+        float share = smokeShare();
         int y = surface - 1;
         for (int k = 0; k < samples; k++) {
             if (!lavaTop(level, player.getBlockX() + random.nextInt(57) - 28, y, player.getBlockZ() + random.nextInt(57) - 28)) continue;
@@ -194,9 +195,11 @@ public final class LavaWarnings {
             if (random.nextFloat() < 0.06F + 0.25F * u) {
                 // a burst: a bubble breaking, throwing up lava and smoke
                 if (particles) {
-                    for (int j = 1 + random.nextInt(2); j > 0; j--) level.addParticle(ParticleTypes.LAVA, true, x, top, z, 0, 0, 0);
-                    for (int j = 0; j < 2; j++) level.addParticle(ParticleTypes.LARGE_SMOKE, true, x, top + 0.2, z, 0, 0.04 + 0.03 * random.nextDouble(), 0);
-                    for (int j = 0; j < 3; j++) level.addParticle(ERParticles.EMBER.get(), true, x, top + 0.1, z, 0, 0, 0);
+                    // small particles follow the player's Particles option and distance limit; the smoke, seen from the
+                    // ledges far above, is forced and thinned by the option by hand
+                    for (int j = 1 + random.nextInt(2); j > 0; j--) level.addParticle(ParticleTypes.LAVA, x, top, z, 0, 0, 0);
+                    for (int j = 0; j < 2; j++) if (random.nextFloat() < share) level.addParticle(ParticleTypes.LARGE_SMOKE, true, x, top + 0.2, z, 0, 0.04 + 0.03 * random.nextDouble(), 0);
+                    for (int j = 0; j < 3; j++) level.addParticle(ERParticles.EMBER.get(), x, top + 0.1, z, 0, 0, 0);
                 }
                 if (pops > 0 && random.nextFloat() < 0.5F) {
                     pops--;
@@ -204,21 +207,34 @@ public final class LavaWarnings {
                             0.5F + 0.4F * u, 0.7F + 0.4F * random.nextFloat(), false);
                 }
             } else if (particles && random.nextFloat() < 0.2F) {
-                level.addParticle(ParticleTypes.SMOKE, true, x, top + 0.1, z, 0, 0.02, 0);
+                level.addParticle(ParticleTypes.SMOKE, x, top + 0.1, z, 0, 0.02, 0);
             }
         }
+    }
+
+    /**
+     * The share of the forced (far-seen) smoke to spawn: forced particles skip the vanilla Particles option, so they
+     * follow it by hand.
+     */
+    private static float smokeShare() {
+        return switch (Minecraft.getInstance().options.particles().get()) {
+            case ALL -> 1F;
+            case DECREASED -> 0.4F;
+            case MINIMAL -> 0.1F;
+        };
     }
 
     /** Heavy smoke over the full lava. */
     private static void smoke(ClientLevel level, Player player, RandomSource random, int surface, double above) {
         if (above > 56 || !ERClientConfig.INSTANCE.caveParticles.get()) return;
+        float share = smokeShare();
         int y = surface - 1;
         for (int k = 0; k < 96; k++) {
             if (!lavaTop(level, player.getBlockX() + random.nextInt(65) - 32, y, player.getBlockZ() + random.nextInt(65) - 32)) continue;
             double x = POS.getX() + random.nextDouble(), z = POS.getZ() + random.nextDouble();
             float r = random.nextFloat();
             ParticleOptions p = r < 0.12F ? ParticleTypes.CAMPFIRE_COSY_SMOKE : r < 0.42F ? ParticleTypes.LARGE_SMOKE : null;
-            if (p == null) continue;
+            if (p == null || random.nextFloat() >= share) continue;
             level.addAlwaysVisibleParticle(p, true, x, y + 1.1, z, 0, 0.03 + 0.03 * random.nextDouble(), 0);
         }
     }
@@ -235,7 +251,7 @@ public final class LavaWarnings {
             ABOVE.setWithOffset(POS, Direction.UP);
             if (!level.getBlockState(ABOVE).isAir()) continue;
             double x = POS.getX() + random.nextDouble(), z = POS.getZ() + random.nextDouble(), top = y + 1.05;
-            if (particles && random.nextFloat() < 0.3F * strength) level.addParticle(ERParticles.STEAM.get(), true, x, top, z, 0, 0, 0);
+            if (particles && random.nextFloat() < 0.3F * strength) level.addParticle(ERParticles.STEAM.get(), x, top, z, 0, 0, 0);
             if (hisses > 0 && random.nextFloat() < 0.02F * strength) {
                 hisses--;
                 level.playLocalSound(x, top, z, SoundEvents.LAVA_EXTINGUISH, SoundSource.BLOCKS, 0.25F + 0.25F * strength,

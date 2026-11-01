@@ -154,17 +154,33 @@ public final class LavaCycle {
 
     /**
      * The first cycle tick at which the lava stands {@code h} blocks over its table: the start of the calm for 0, the
-     * start of the full phase for the whole rise, and the step of the rise in between (or the nearest one to it, when
-     * the rise is too short to take every height).
+     * start of the full phase for the whole rise, and the step of the rise in between. When the rise is empty or too
+     * short to take every height, the drain's first tick at or under h is used if it comes nearer; when neither stands
+     * at h, the nearest height under it.
      */
     public int tickForLevel(int h) {
         if (h <= 0) return tickOf(Phase.CALM, 0);
-        int len = length(Phase.RISE);
-        if (h >= rise || len == 0) return tickOf(Phase.FULL, 0);
-        int into = (int) Math.min(len - 1L, ((long) h * len + rise - 1) / rise);
-        // with fewer ticks than blocks the rise skips heights: step back to the nearest tick at or under h
-        while (into > 0 && level(Phase.RISE, into, len) > h) into--;
-        return tickOf(Phase.RISE, into);
+        if (h >= rise) return tickOf(Phase.FULL, 0);
+        int rl = length(Phase.RISE), dl = length(Phase.DRAIN);
+        int best = -1, bestLevel = -1;
+        if (rl > 0) {
+            int into = (int) Math.min(rl - 1L, ((long) h * rl + rise - 1) / rise);
+            // with fewer ticks than blocks the rise skips heights: step back to the nearest tick at or under h
+            while (into > 0 && level(Phase.RISE, into, rl) > h) into--;
+            best = tickOf(Phase.RISE, into);
+            bestLevel = level(Phase.RISE, into, rl);
+            if (bestLevel == h) return best;
+        }
+        if (dl > 0) {
+            // the drain stands at rise - rise * into / dl: its first tick at or under h
+            int into = (int) Math.min(dl - 1L, ((long) (rise - h) * dl + rise - 1) / rise);
+            int got = level(Phase.DRAIN, into, dl);
+            if (got <= h && got > bestLevel) {
+                best = tickOf(Phase.DRAIN, into);
+                bestLevel = got;
+            }
+        }
+        return best >= 0 ? best : tickOf(Phase.CALM, 0);
     }
 
     /**

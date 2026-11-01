@@ -51,7 +51,10 @@ public final class Flood {
         void fill(int x, int z);
         /** Puts air at (x, z). */
         void clear(int x, int z);
-        /** After a drain: wakes the lava next to (x, z), above it and on its four sides, so falls flow again. */
+        /**
+         * After a drain: wakes the lava next to (x, z), above it, below it (unless that is the sea's own) and on its four
+         * sides, so falls flow again and lava the sea fed downward drains away.
+         */
         void wake(int x, int z);
     }
 

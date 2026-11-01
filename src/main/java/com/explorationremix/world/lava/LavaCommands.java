@@ -109,8 +109,14 @@ public final class LavaCommands {
         if (clock == null) return 0;
         long now = level.getGameTime();
         LavaCycle cycle = clock.cycle(LavaFlood.band().rise());
+        int t = cycle.tickForLevel(h);
+        if (cycle.level(t) != Math.min(h, cycle.rise())) {
+            c.getSource().sendFailure(Component.literal("There is no moment in this cycle with the lava " + h
+                    + " blocks over its table (its rise and drain are empty or too short); the nearest under it is " + cycle.level(t) + "."));
+            return 0;
+        }
         clock.freeze(now);
-        clock.set(now, cycle.tickForLevel(h));
+        clock.set(now, t);
         LavaFlood.clockChanged(level);
         return report(c, level, clock, "Lava held");
     }

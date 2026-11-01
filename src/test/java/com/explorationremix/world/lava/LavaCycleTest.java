@@ -141,4 +141,17 @@ class LavaCycleTest {
             assertTrue(got <= h && got >= h - 2, "height " + h + " in a 20-tick rise: " + got);
         }
     }
+
+    @Test
+    void heightsAreFoundInTheDrainWhenTheRiseIsEmpty() {
+        // a config may give the rise (or the rise and the full phase) no share: /remix lava level must still find each
+        // height, in the drain
+        for (double[] shares : new double[][]{{13.5, 1.5, 0, 1, 2}, {13.5, 1.5, 0, 0, 2}}) {
+            LavaCycle c = new LavaCycle(LavaCycle.scale(24000, shares), RISE);
+            for (int h = 0; h <= RISE; h++) assertEquals(h, c.level(c.tickForLevel(h)), "height " + h + " with shares " + Arrays.toString(shares));
+        }
+        // a 1-tick rise skips every height between 0 and full; the drain has them
+        LavaCycle blink = new LavaCycle(new int[]{17999, 2000, 1, 1333, 2667}, RISE);
+        for (int h = 0; h <= RISE; h++) assertEquals(h, blink.level(blink.tickForLevel(h)), "height " + h + " after a 1-tick rise");
+    }
 }

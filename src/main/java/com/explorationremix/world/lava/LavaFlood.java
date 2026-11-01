@@ -146,6 +146,7 @@ public final class LavaFlood {
         pending = 0;
         nearChunks = 0;
         STATS.clear();
+        SLICE.release();
     }
 
     // ================================================================================================ setup
@@ -308,7 +309,7 @@ public final class LavaFlood {
             int y = b.tableY() + i;
             int si = chunk.getSectionIndex(y);
             LevelChunkSection sec = chunk.getSection(si);
-            SLICE.begin(level, chunk, sec, si, y, i);
+            SLICE.begin(level, chunk, sec, si, y, i, d.mask);
             int changed;
             if (up) {
                 if (sec.maybeHas(TAKEN)) {
@@ -350,12 +351,14 @@ public final class LavaFlood {
         private ThreadedLevelLightEngine light;
         private LevelChunk chunk;
         private LevelChunkSection sec;
+        private Flood.Mask mask;
         private int si, y, ly, x0, z0, i;
         private boolean wasEmpty;
         private final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
-        void begin(ServerLevel level, LevelChunk chunk, LevelChunkSection sec, int si, int y, int i) {
+        void begin(ServerLevel level, LevelChunk chunk, LevelChunkSection sec, int si, int y, int i, Flood.Mask mask) {
             this.level = level;
+            this.mask = mask;
             this.source = level.getChunkSource();
             this.light = source.getLightEngine();
             this.chunk = chunk;
@@ -372,9 +375,17 @@ public final class LavaFlood {
         void end() {
             boolean empty = sec.hasOnlyAir();
             if (empty != wasEmpty) light.updateSectionStatus(SectionPos.of(chunk.getPos(), chunk.getSectionYFromSectionIndex(si)), empty);
+            release();
+        }
+
+        /** Lets go of the level, its chunk source and light engine, so this static slice never keeps a stopped server in memory. */
+        void release() {
             level = null;
+            source = null;
+            light = null;
             chunk = null;
             sec = null;
+            mask = null;
         }
 
         @Override
@@ -398,6 +409,12 @@ public final class LavaFlood {
             // above: the slices over this one were drained before it, so lava there is never the sea's
             BlockState up = ly < 15 ? sec.getBlockState(x, ly + 1, z) : chunk.getBlockState(pos.set(x0 + x, y + 1, z0 + z));
             tickIfLava(up, x0 + x, y + 1, z0 + z);
+            // below: lava the sea fed downward into a block that was not open when that slice rose (a shaft dug under the
+            // sea) has nothing over it now; the chunk's own sea there goes with the next slice, and sources need no tick
+            if (!mask.get(i - 1, x, z)) {
+                BlockState down = ly > 0 ? sec.getBlockState(x, ly - 1, z) : chunk.getBlockState(pos.set(x0 + x, y - 1, z0 + z));
+                if (down.getFluidState().getType() == Fluids.FLOWING_LAVA) tickIfLava(down, x0 + x, y - 1, z0 + z);
+            }
             side(x - 1, z);
             side(x + 1, z);
             side(x, z - 1);
