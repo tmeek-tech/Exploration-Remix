@@ -41,7 +41,8 @@ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfigur
  * ({@code Flood}, {@code LavaChunk}), so the low halls come out of every flood lit as before. Runs once per chunk after
  * every other feature (top_layer_modification, after open_way), on its own chunk's columns and again on the neighbours
  * decorated before it, whose tries must see the columns this chunk built into them. The other features of the layer ask
- * {@link GlowBlock#open} where they look for open space across a border, so a neighbour's glow never stops them.
+ * {@link GlowBlock#open} where they look for open space across a border, so a neighbour's glow never stops them. The
+ * second pass only adds glow, so next to lava a later neighbour laid the glow can still differ by generation order.
  */
 public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
     public HallGlowFeature(Codec<Config> codec) { super(codec); }
@@ -78,8 +79,11 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
         // Neighbours are decorated in no fixed order, and a feature writes up to a chunk over its border (a column
         // cluster reaches 9 blocks). A neighbour decorated before this chunk ran its pass before this chunk's columns
         // stood in it, so its tries go again now and see them: a try already holding its glow is not air, added rock
-        // only makes a spot nearer rock, and columns overwrite a glow in their way (GlowBlock.open), so the glow comes
-        // out the same whichever chunk was decorated first. A neighbour not yet decorated is still at CARVERS.
+        // only makes a spot nearer rock, and columns overwrite a glow in their way (GlowBlock.open), so columns built
+        // into a neighbour later are lit as if they had stood first. The second pass only adds, though: where this
+        // chunk's lava pool or fall put lava between a neighbour's glow and its only rock, the glow placed first stays,
+        // while the other order leaves that spot dark, so beside such lava (which lights the spot anyway) the glow still
+        // follows the order by a light or two. A neighbour not yet decorated is still at CARVERS.
         for (int dx = -1; dx <= 1; dx++)
             for (int dz = -1; dz <= 1; dz++)
                 if ((dx != 0 || dz != 0) && level.getChunk(cp.x + dx, cp.z + dz).getStatus().isOrAfter(ChunkStatus.FEATURES))
@@ -110,10 +114,15 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
                     if (!level.getBlockState(pos.set(x, y, z)).isAir()) continue;
                     if (!nearRock(level, pos, probe, c.reach(), glow)) continue;
                     DeepBiome b = t.biomeAt(x, y, z);
-                    // the refuge's biome reaches 4 blocks round a tube (6 round a hub) through the rock, for its
-                    // obsidian lining: only the tube's own air is the refuge, and hall air at a tube's mouth takes the
-                    // hall's light
-                    if (b == DeepBiome.OBSIDIAN_TUBES && t.tubeShellDepth(x, y, z) > 0) b = DeepBiome.BASALT_GALLERIES;
+                    // The refuge's biome reaches 4 blocks round a tube (6 round a hub) through the rock, for its
+                    // obsidian lining, so hall air at a tube's mouth is in it too: that air takes the hall's light.
+                    // Hall air is air over 1 block out of the tube's shell (the carved wall lies up to a block off it)
+                    // or inside a hall's floor-to-ceiling span (a tube's round end runs 3 blocks into the hall).
+                    if (b == DeepBiome.OBSIDIAN_TUBES) {
+                        double[] span;
+                        if (t.tubeShellDepth(x, y, z) > 1 || (span = t.hallSpanAt(x, z)) != null && y >= span[0] && y <= span[1])
+                            b = DeepBiome.BASALT_GALLERIES;
+                    }
                     int lv;
                     if (y < y0) lv = galleries(b) ? BAND_LEVEL : 0;
                     else if (b == DeepBiome.OBSIDIAN_TUBES) lv = c.tubes();

@@ -31,8 +31,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * grows through it ({@code #minecraft:replaceable_by_trees}). Vanilla code that asks for air elsewhere still sees it as
  * a block, as it sees vanilla's light block: {@code /fill ... keep}, {@code /setblock ... keep} and
  * {@code replace minecraft:air} skip it (fill with {@code replace explorationremix:glow}), and sugar cane, cactus,
- * bamboo, stems, a hoe or shovel under it, and fire spreading into it stop at it. It drops nothing, makes no sound and
- * has no item.
+ * bamboo, stems, a hoe or shovel under it, fire spreading into it, a fireball (a dispensed fire charge, a blaze's) and
+ * lava setting things alight stop at it. It drops nothing, makes no sound and has no item.
  * <p>
  * Once something else has taken a glow's place (a block placed and later mined, a bucket, a flow that recedes, an
  * explosion, a piston, a falling block) nothing puts it back; only the flood band's glow, which the rising lava takes and
@@ -44,9 +44,9 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * state)} writes air at {@code pos}, so debris spawned under a ceiling must start only where {@code isAir()} holds, or
  * it erases a glow. A falling block that lands in a glow, a placed block and an explosion ({@code onBlockExploded} sets
  * air) take it for good, so a change log records a glow like any other block and the reset puts it back from that log.
- * Where the glow goes depends on the blocks round it after every feature ran, so it cannot be worked out again from
- * {@code Terrain}; and in a slice the lava holds, the reset puts a glow back as lava with its mask and glow bits set
- * ({@code LavaChunk}), never as the block.
+ * Where the glow goes depends on the blocks round it when its chunk's pass ran (and the second pass a neighbour
+ * decorated later gave it), so it cannot be worked out again from {@code Terrain}; and in a slice the lava holds, the
+ * reset puts a glow back as lava with its mask and glow bits set ({@code LavaChunk}), never as the block.
  */
 public class GlowBlock extends Block implements LiquidBlockContainer {
     public static final IntegerProperty LEVEL = BlockStateProperties.LEVEL;

@@ -1,7 +1,14 @@
 package com.explorationremix.world.feature;
 
 import com.explorationremix.world.terrain.Perlin;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
 import org.junit.jupiter.api.Test;
+
+import java.io.Reader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -46,12 +53,19 @@ class HallGlowFeatureTest {
     }
 
     @Test
-    void theShippedFadeKeepsTheVaultsLit() {
-        // tools/worldgen.py: a face gets 3 to 4 levels under its glow, so the vaults need 14 to read lit under the shader
-        HallGlowFeature.Config shipped = new HallGlowFeature.Config(4, 4, 15, 14, 60, 1, 9);
+    void theShippedFadeKeepsTheVaultsLit() throws Exception {
+        // tools/worldgen.py: a face gets 3 to 4 levels under its glow, so the vaults need 14 to read lit under the
+        // shader (the first fade, to 11, left them at 8 on average with a third of the faces under 8)
+        HallGlowFeature.Config shipped;
+        try (Reader r = Files.newBufferedReader(Path.of(
+                "src/main/resources/data/explorationremix/worldgen/configured_feature/basalt_galleries/glow.json"))) {
+            JsonElement cfg = JsonParser.parseReader(r).getAsJsonObject().get("config");
+            shipped = HallGlowFeature.Config.CODEC.parse(JsonOps.INSTANCE, cfg).result().orElseThrow();
+        }
+        assertEquals(HallGlow.BAND_LEVEL, shipped.low(), "the band's glow and the glow just over it meet without a step");
         assertEquals(15, HallGlow.levelAt(shipped, 0, null, 0, 0, 0));
-        assertEquals(14, HallGlow.levelAt(shipped, 60, null, 0, 0, 0));
-        assertEquals(14, HallGlow.levelAt(shipped, 200, null, 0, 0, 0));
+        assertTrue(HallGlow.levelAt(shipped, 60, null, 0, 0, 0) >= 14, "under the vaults");
+        assertTrue(HallGlow.levelAt(shipped, 200, null, 0, 0, 0) >= 14);
         Perlin n = new Perlin(42);
         for (int x = 0; x < 300; x += 7) for (int over = 0; over < 120; over += 3) {
             int lv = HallGlow.levelAt(shipped, over, n, x, over, 3);

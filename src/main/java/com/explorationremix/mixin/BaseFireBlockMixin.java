@@ -12,10 +12,12 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Fire may be lit where the Basalt Galleries' invisible glow stands, as in air: flint and steel, a fire charge and a
- * dispenser all ask this first and then set the fire there, which takes the glow's place. Vanilla allows only air, and
- * the glow is not air to the game, so about one floor spot in 64 there would refuse the flint and steel with nothing to
- * show why.
+ * Fire may be lit where the Basalt Galleries' invisible glow stands, as in air: flint and steel or a fire charge used on
+ * a block, and a dispenser holding flint and steel, all ask this first and then set the fire there, which takes the
+ * glow's place. Vanilla allows only air, and the glow is not air to the game, so about one floor spot in 64 there would
+ * refuse the flint and steel with nothing to show why. A fire charge shot from a dispenser or by a blaze
+ * ({@code SmallFireball.onHitBlock} asks {@code isEmptyBlock}) and lava setting things alight still stop at a glow, as
+ * at vanilla's light block; a portal still lights from fire set anywhere else in its frame ({@code PortalShapeMixin}).
  */
 @Mixin(BaseFireBlock.class)
 public abstract class BaseFireBlockMixin {
