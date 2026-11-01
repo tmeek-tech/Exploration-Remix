@@ -70,7 +70,10 @@ regenerated.
   natural bridges; two **Obsidian Tubes** hubs per cell. Walkable arches and bridges cross the halls, and flights of
   stairs lead from the bedrock landing up out of the flood and from the entry landing down to the halls; there are no
   climbs. Nothing lives here: no plants and no mobs. Light comes from the lava, many lava falls, magma, glowing ember
-  crust and an unseen glow along the rock that lights the halls' walls, ledges and vaults as their lava would.
+  crust and an unseen glow along the rock that lights the halls' walls, ledges and vaults as their lava would. The
+  glow (`explorationremix:glow`) is light with nothing to see or hit: a placed block, fire, a nether portal, a growing
+  tree or the lava takes its place, and a glow taken that way stays gone (only the flood band's comes back after each
+  flood). `/fill ... keep` and `replace minecraft:air` skip it; fill with `replace explorationremix:glow` to clear it.
 * **Blue Reaches** keep 0.2.0's sizes: the Deep Blue Rift, up to 160 blocks deep, with its ledge path, natural bridges
   and the Asurine Geodes beside it; the deep dark's caverns on two tiers, with an ancient city in about one cell in
   seven. The network's rooms and tunnels join them. Columns, fins and spires stand in the widest spaces, so a view
