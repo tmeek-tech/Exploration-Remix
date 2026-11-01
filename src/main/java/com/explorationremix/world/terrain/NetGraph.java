@@ -402,6 +402,66 @@ final class NetGraph {
         return l;
     }
 
+    /**
+     * The blocks a walker covers along a run ({@link #runs}): its tunnels ({@link #runLength}) and, in each chamber
+     * inside it, the way across the floor from the door it comes in by to the door it leaves by. A room with only two
+     * ways offers no other way on, so to the walker it is part of the same long passage.
+     */
+    static double runWalk(Net n, List<Edge> run) {
+        double l = runLength(run);
+        if (run.size() < 2) return l;
+        int v = runStart(n, run);
+        for (int i = 0; i + 1 < run.size(); i++) {
+            v = run.get(i).other(v);
+            double[] p = doorOf(n, run.get(i), v), q = doorOf(n, run.get(i + 1), v);
+            l += Math.hypot(p[0] - q[0], p[1] - q[1]);
+        }
+        return l;
+    }
+
+    /**
+     * The chamber a run of two or more edges starts from: the end of its first edge that the second does not share,
+     * or, where the two join the same two chambers, the one of them that ends runs.
+     */
+    static int runStart(Net n, List<Edge> run) {
+        Edge e0 = run.get(0), e1 = run.get(1);
+        boolean a = e0.a == e1.a || e0.a == e1.b, b = e0.b == e1.a || e0.b == e1.b;
+        if (a != b) return a ? e0.b : e0.a;
+        int[] ways = wayCounts(n);
+        return runEnd(n.ch.get(e0.a), ways[e0.a]) ? e0.a : e0.b;
+    }
+
+    /**
+     * Where edge e leaves chamber v, {x, z}: the point of its tunnel's line {@link #RUN_IN} back from the end that lies
+     * in v (a climb's lower tunnel starts at the lower chamber, its upper one ends at the upper chamber). An edge with
+     * no tunnel leaves from the chamber's centre.
+     */
+    static double[] doorOf(Net n, Edge e, int v) {
+        Chamber c = n.ch.get(v);
+        Net.Way wy = e.w1;
+        if (wy == null) return new double[]{c.x, c.z};
+        boolean fromStart;
+        if (e.kind == EK.CLIMB && e.w2 != null) {
+            Net.Way up = e.w2;
+            fromStart = Math.hypot(wy.x[0] - c.x, wy.z[0] - c.z) <= Math.hypot(up.x[up.n - 1] - c.x, up.z[up.n - 1] - c.z);
+            if (!fromStart) wy = up;
+        } else {
+            fromStart = Math.hypot(wy.x[0] - c.x, wy.z[0] - c.z) <= Math.hypot(wy.x[wy.n - 1] - c.x, wy.z[wy.n - 1] - c.z);
+        }
+        double s = 0;
+        for (int j = 1; j < wy.n; j++) {
+            int i = fromStart ? j : wy.n - 1 - j, ip = fromStart ? j - 1 : wy.n - j;
+            double l = Math.hypot(wy.x[i] - wy.x[ip], wy.z[i] - wy.z[ip]);
+            if (s + l >= RUN_IN) {
+                double t = (RUN_IN - s) / Math.max(1e-9, l);
+                return new double[]{wy.x[ip] + (wy.x[i] - wy.x[ip]) * t, wy.z[ip] + (wy.z[i] - wy.z[ip]) * t};
+            }
+            s += l;
+        }
+        int i = fromStart ? wy.n - 1 : 0;
+        return new double[]{wy.x[i], wy.z[i]};
+    }
+
     /** Cyclomatic number of the walkable graph (edges minus nodes plus components), stubs left out. */
     static int cycles(Net n) {
         int V = 0, E = 0;

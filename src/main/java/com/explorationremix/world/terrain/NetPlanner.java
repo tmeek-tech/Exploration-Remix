@@ -186,6 +186,8 @@ final class NetPlanner {
         final List<double[]> doorAngles = new ArrayList<>(); // per chamber: used door angles (radians)
         /** The Wasteland: the chamber pairs embed has tried in the plain mode (low id in the high half). */
         final java.util.Set<Long> triedPairs = new java.util.HashSet<>();
+        /** The same while ways may reach further ({@link #reach} over 1): a pair too far before may join now. */
+        final java.util.Set<Long> triedFar = new java.util.HashSet<>();
         // collision index for way points and shafts: 12-block buckets
         static final int CB = 12;
         final int cn;
@@ -281,6 +283,8 @@ final class NetPlanner {
                 refugeCut();
                 splitLong();
                 branchOut();
+                if (dropRuns()) branchOut();
+                forkJunctions();
             } else {
                 surgeNiches();
                 stubs();
@@ -2374,20 +2378,26 @@ final class NetPlanner {
             List<Edge> keep = new ArrayList<>();
             for (Edge e : n.edges) {
                 if (n.ch.get(e.a).keep && n.ch.get(e.b).keep) keep.add(e);
-                else {
-                    n.ch.get(e.a).deg--;
-                    n.ch.get(e.b).deg--;
-                    if (sp.wayMax > 0) freeDoors(e);
-                    if (e.w1 != null) n.ways.remove(e.w1);
-                    if (e.w2 != null) n.ways.remove(e.w2);
-                    for (Way l : e.ledges) n.ways.remove(l);
-                    if (e.sh != null) n.shafts.remove(e.sh);
-                    for (Shaft sh : e.stages) n.shafts.remove(sh);
-                }
+                else unplan(e);
             }
             n.edges.clear();
             n.edges.addAll(keep);
             rebuildPointIndex();
+        }
+
+        /**
+         * Takes edge e's tunnels, ledges and shafts out of the plan and gives its chambers their doors back (the caller
+         * takes e out of the edge list and rebuilds the point index).
+         */
+        void unplan(Edge e) {
+            n.ch.get(e.a).deg--;
+            n.ch.get(e.b).deg--;
+            if (sp.wayMax > 0) freeDoors(e);
+            if (e.w1 != null) n.ways.remove(e.w1);
+            if (e.w2 != null) n.ways.remove(e.w2);
+            for (Way l : e.ledges) n.ways.remove(l);
+            if (e.sh != null) n.shafts.remove(e.sh);
+            for (Shaft sh : e.stages) n.shafts.remove(sh);
         }
 
         /**
@@ -2398,21 +2408,37 @@ final class NetPlanner {
          */
         void freeDoors(Edge e) {
             if (e.kind == EK.WALK && e.w1 != null) {
-                freeDoor(e.w1.a, e.w1.x[0], e.w1.z[0]);
-                freeDoor(e.w1.b, e.w1.x[e.w1.n - 1], e.w1.z[e.w1.n - 1]);
+                freeWayDoor(e.w1.a, e.w1, true);
+                freeWayDoor(e.w1.b, e.w1, false);
             } else if (e.kind == EK.CLIMB && e.w1 != null && e.w2 != null) {
                 // the lower tunnel starts at the lower door, the upper one ends at the upper door
-                freeDoor(e.w1.a, e.w1.x[0], e.w1.z[0]);
-                freeDoor(e.w2.b, e.w2.x[e.w2.n - 1], e.w2.z[e.w2.n - 1]);
+                freeWayDoor(e.w1.a, e.w1, true);
+                freeWayDoor(e.w2.b, e.w2, false);
             }
         }
 
         /**
-         * Frees chamber c's door towards a way's end at (x, z): the way's line starts on the ray from the chamber's
-         * centre through its door ({@link #walkWay}), so the door is the one at that angle (within 0.05).
+         * Frees the door chamber c had for way wy, at the way's start or its end. A junction room's doors onto the two
+         * halves of the tunnel it was cut into point at each half's third point from the room ({@link #cutJunction}),
+         * not at its end, which lies on the cut, off the room's centre: that point is tried first. (A tunnel the room
+         * got later starts on its door's ray, so that point frees its door too, or no door, and its end then does.)
          */
-        void freeDoor(int c, double x, double z) {
-            if (c < 0 || !n.ch.get(c).keep) return;
+        void freeWayDoor(int c, Way wy, boolean atStart) {
+            if (c >= 0 && n.ch.get(c).keep && n.ch.get(c).kind == Kind.JUNCTION && wy.n > 2) {
+                int k = atStart ? 2 : wy.n - 3;
+                if (freeDoor(c, wy.x[k], wy.z[k])) return;
+            }
+            int i = atStart ? 0 : wy.n - 1;
+            freeDoor(c, wy.x[i], wy.z[i]);
+        }
+
+        /**
+         * Frees chamber c's door towards a way's end at (x, z): the way's line starts on the ray from the chamber's
+         * centre through its door ({@link #walkWay}), so the door is the one at that angle (within 0.05). True when
+         * one was freed.
+         */
+        boolean freeDoor(int c, double x, double z) {
+            if (c < 0 || !n.ch.get(c).keep) return false;
             Chamber k = n.ch.get(c);
             double th = Math.atan2(z - k.z, x - k.x);
             double[] o = doorAngles.get(c);
@@ -2422,10 +2448,11 @@ final class NetPlanner {
                 double d = Math.abs(Math.atan2(Math.sin(th - o[i]), Math.cos(th - o[i])));
                 if (d < bd) { bd = d; best = i; }
             }
-            if (best < 0) return;
+            if (best < 0) return false;
             double[] nn = new double[o.length - 1];
             for (int i = 0, j = 0; i < o.length; i++) if (i != best) nn[j++] = o[i];
             doorAngles.set(c, nn);
+            return true;
         }
 
         /**
@@ -2834,7 +2861,24 @@ final class NetPlanner {
         }
 
         /** Chambers whose gap is under this can be joined by one Wasteland tunnel or climb: the tunnel limit. */
-        double joinGap() { return sp.wayMax; }
+        double joinGap() { return sp.wayMax * reach; }
+
+        /**
+         * How far a Wasteland tunnel or climb may walk, as a share of the limit {@code wayMax}: 1, but
+         * {@link #BRANCH_REACH} where nothing nearer was found for a branch: a long run's ({@link #branchOut}), a long
+         * tunnel's junction room ({@link #splitLong}) or a junction room left with two ways ({@link #forkJunctions}).
+         */
+        double reach = 1;
+
+        /**
+         * The tallest climb a tunnel may be: {@code climbMax}, but while {@link #reach} is over 1, the four stages a
+         * climb may have ({@link #STAGE_MAX} each): a long run's rooms often stand a storey and more above the rooms
+         * round them.
+         */
+        double climbTop() { return reach > 1 ? 4 * STAGE_MAX : sp.climbMax; }
+
+        /** The pairs embed has tried in the plain mode at the current {@link #reach}. */
+        java.util.Set<Long> tried() { return reach > 1 ? triedFar : triedPairs; }
 
         /**
          * True when a tunnel line this long (both run-ins into its chambers included) walks further than the Wasteland
@@ -2842,7 +2886,7 @@ final class NetPlanner {
          * is set the limit is {@link #LONG_MUL} times as long.
          */
         boolean overLimit(double line) {
-            return sp.wayMax > 0 && line - 2 * NetGraph.RUN_IN > sp.wayMax * (longOK ? LONG_MUL : 1);
+            return sp.wayMax > 0 && line - 2 * NetGraph.RUN_IN > sp.wayMax * (longOK ? LONG_MUL : reach);
         }
 
         /**
@@ -2857,7 +2901,7 @@ final class NetPlanner {
         /** True when two chambers might take one tunnel or climb: near enough, and their floors within a climb. */
         boolean joinable(Chamber a, Chamber b) {
             if (a.id == b.id || !a.keep || !b.keep || a.landing() || b.landing()) return false;
-            if (Math.abs(walkF(a) - walkF(b)) > sp.climbMax + 4) return false;
+            if (Math.abs(walkF(a) - walkF(b)) > climbTop() + 4) return false;
             return gapXZ(a, b, 1.0) <= joinGap();
         }
 
@@ -2949,21 +2993,21 @@ final class NetPlanner {
          */
         boolean joinViaJunction(Chamber v, boolean[] side, int tries) {
             List<Spot> spots = new ArrayList<>();
-            double reach = v.R() + joinGap();
+            double span = v.R() + joinGap();
             for (Edge e : n.edges) {
                 if (e.kind != EK.WALK || e.w1 == null || e.a == v.id || e.b == v.id) continue;
                 if (!n.ch.get(e.a).keep || !n.ch.get(e.b).keep) continue;
                 // a junction added since the side was measured is on neither side
                 if (side != null && (e.a >= side.length || e.b >= side.length || !side[e.a] || !side[e.b])) continue;
                 Way wy = e.w1;
-                if (v.x < wy.minX - reach || v.x > wy.maxX + reach || v.z < wy.minZ - reach || v.z > wy.maxZ + reach) continue;
+                if (v.x < wy.minX - span || v.x > wy.maxX + span || v.z < wy.minZ - span || v.z > wy.maxZ + span) continue;
                 double s = 0;
                 List<double[]> pts = new ArrayList<>();
                 for (int i = 1; i + 1 < wy.n; i++) {
                     s += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
                     if (s < JUNCTION_END + NetGraph.RUN_IN || wy.length - s < JUNCTION_END + NetGraph.RUN_IN) continue;
                     double d = Math.hypot(wy.x[i] - v.x, wy.z[i] - v.z) - v.R(), dy = Math.abs(wy.f[i] + 1 - walkF(v));
-                    if (d > joinGap() || dy > sp.climbMax + 4) continue;
+                    if (d > joinGap() || dy > climbTop() + 4) continue;
                     // v needs a free door that way
                     if (!doorFree(v.id, Math.atan2(wy.z[i] - v.z, wy.x[i] - v.x))) continue;
                     pts.add(new double[]{i, d + 2.5 * dy});
@@ -2995,7 +3039,7 @@ final class NetPlanner {
                     return true;
                 }
                 // the junction's id is given out again if it goes, so the pair it tried is forgotten
-                triedPairs.remove(((long) Math.min(v.id, j.id) << 32) | Math.max(v.id, j.id));
+                tried().remove(((long) Math.min(v.id, j.id) << 32) | Math.max(v.id, j.id));
                 return false;
             });
         }
@@ -3144,37 +3188,59 @@ final class NetPlanner {
         }
 
         /**
-         * Branch often (Taran: no "passages that go on for too long without branching"): no run of tunnels through
-         * chambers with two ways ({@link NetGraph#runs}) walks more than {@code runMax}. The longest run over it gets a
-         * branch: a new way out of one of its chambers, those nearest the run's middle first, to the nearest chamber
-         * that takes one or to a junction room cut into a tunnel near it; failing that, a junction room cut into the
-         * run's longest tunnel, joined to the nearest chamber ({@link #splitTunnel}). The run ends there, and runs are
-         * measured again. A chamber or tunnel that took nothing is not tried again; a run with nothing left to try is
-         * left as it is, and so is everything after {@link #BRANCH_TRIES} branches tried. A refuge is passed over: it
-         * keeps its two ways.
+         * Branch often (Taran: no "passages that go on for too long without branching"): no run through chambers with
+         * two ways ({@link NetGraph#runs}) walks more than {@code runMax}, measured as a walker goes it
+         * ({@link NetGraph#runWalk}: its tunnels, and the floor of each room inside it from door to door, since such a
+         * room offers no other way on). The longest run over it gets a branch: a new way out of one of its chambers,
+         * those nearest the run's middle first, to the nearest chamber that takes one or to a junction room cut into a
+         * tunnel near it; failing that, a junction room cut into one of the run's tunnels, the longest first, joined to
+         * the nearest chamber ({@link #splitTunnel}). What finds nothing within the tunnel limit is tried again with
+         * ways that may walk {@link #BRANCH_REACH} times as far ({@link #reach}). The run ends there, and runs are
+         * measured again. A chamber or tunnel that took nothing at a reach is not tried again at it; a run with nothing
+         * left to try is left to {@link #dropRuns}, and so is everything after {@link #BRANCH_TRIES} branches tried. A
+         * refuge is passed over: it keeps its two ways.
          */
         void branchOut() {
-            java.util.Set<Integer> spent = new java.util.HashSet<>();
-            java.util.Set<Edge> uncut = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
             for (int it = 0; it < BRANCH_TRIES; it++) {
                 List<Edge> worst = null;
                 double longest = sp.runMax;
                 for (List<Edge> run : NetGraph.runs(n)) {
-                    double len = NetGraph.runLength(run);
-                    if (len <= longest || !workable(run, spent, uncut)) continue;
+                    double len = NetGraph.runWalk(n, run);
+                    if (len <= longest || !(workable(run, spent.get(0), uncut.get(0)) || workable(run, spent.get(1), uncut.get(1)))) continue;
                     longest = len;
                     worst = run;
                 }
                 if (worst == null) return;
-                if (branch(worst, longest, spent, uncut)) n.branchWays++;
+                boolean ok = false;
+                for (int lv = 0; lv < 2 && !ok; lv++) {
+                    reach = lv == 0 ? 1 : BRANCH_REACH;
+                    ok = branch(worst, spent.get(lv), uncut.get(lv));
+                    reach = 1;
+                }
+                if (ok) n.branchWays++;
             }
         }
 
         /**
-         * The most branches branchOut tries in one plan. Measured over 20 cells, the runs over the limit were the same
-         * after 120 tries as after 400, which took a fifth longer to plan; after 40 there were a fifth more of them.
+         * What branchOut has tried, at each reach (1, then {@link #BRANCH_REACH}): the chambers it tried to branch from
+         * and the tunnels it tried to cut. Kept for the plan, so branchOut called again tries only what is new.
          */
-        static final int BRANCH_TRIES = 120;
+        final List<java.util.Set<Integer>> spent = List.of(new java.util.HashSet<>(), new java.util.HashSet<>());
+        final List<java.util.Set<Edge>> uncut = List.of(java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()),
+                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()));
+
+        /**
+         * The most branches branchOut tries in one plan. Measured over 92 plans (seeds 1 to 30, three cells each, and
+         * two more), none tried them all; with 120, two plans in three did, and a fifth more of their runs walked more
+         * than the limit (6.3% against 5.2%).
+         */
+        static final int BRANCH_TRIES = 300;
+
+        /**
+         * A branch may walk this many times the tunnel limit (and climb four stages): a long run's rooms seldom have a
+         * neighbour nearer that takes a way.
+         */
+        static final double BRANCH_REACH = 1.5;
 
         /** True when a run still has a chamber or a tunnel that branchOut has not tried. */
         static boolean workable(List<Edge> run, java.util.Set<Integer> spent, java.util.Set<Edge> uncut) {
@@ -3185,14 +3251,14 @@ final class NetPlanner {
         }
 
         /** One branch in a run (see branchOut); what was tried is marked spent or uncut. True when one was added. */
-        boolean branch(List<Edge> run, double len, java.util.Set<Integer> spent, java.util.Set<Edge> uncut) {
+        boolean branch(List<Edge> run, java.util.Set<Integer> spent, java.util.Set<Edge> uncut) {
             if (run.size() >= 2) {
-                for (int v : innerByMiddle(run, len)) {
+                for (int v : innerByMiddle(run, NetGraph.runLength(run))) {
                     if (!spent.add(v)) continue;
                     Chamber c = n.ch.get(v);
                     // a refuge keeps its two ways
                     if (c.refuge) continue;
-                    if (addWays(c, 1, 5, 1) > 0 || joinViaJunction(c, null, 3)) return true;
+                    if (addWays(c, 1, 12, 4) > 0 || joinViaJunction(c, null, 8)) return true;
                 }
             }
             List<Edge> byLen = new ArrayList<>(run);
@@ -3207,14 +3273,20 @@ final class NetPlanner {
         /** Where splitTunnel tries a junction room, as shares of the tunnel's line: the middle first. */
         static final double[] SPLIT_AT = {0.5, 0.36, 0.64};
 
+        /** Where splitLong tries one on a tunnel that still walks more than twice the run limit: more places. */
+        static final double[] SPLIT_MORE = {0.5, 0.36, 0.64, 0.43, 0.57, 0.28, 0.72, 0.2, 0.8};
+
         /**
          * A junction room cut into tunnel e (at the shares of its line in {@link #SPLIT_AT}, the middle first), joined
          * to the nearest chamber that takes a way (not one of the tunnel's own two), the three nearest tried at each.
          * True when one was.
          */
-        boolean splitTunnel(Edge e) {
+        boolean splitTunnel(Edge e) { return splitTunnel(e, SPLIT_AT); }
+
+        /** The same at the shares of the tunnel's line in {@code shares}, in order. */
+        boolean splitTunnel(Edge e, double[] shares) {
             Way wy = e.w1;
-            for (double at : SPLIT_AT) {
+            for (double at : shares) {
                 double want = wy.length * at, s = 0;
                 int mid = -1;
                 for (int i = 1; i + 1 < wy.n; i++) {
@@ -3226,7 +3298,7 @@ final class NetPlanner {
                 List<Chamber> near = new ArrayList<>();
                 for (Chamber c : n.ch) {
                     if (!c.keep || c.landing() || c.refuge || c.id == e.a || c.id == e.b || c.kind == Kind.CANYON) continue;
-                    if (Math.hypot(c.x - mx, c.z - mz) - c.R() > joinGap() || Math.abs(walkF(c) - mf) > sp.climbMax + 4) continue;
+                    if (Math.hypot(c.x - mx, c.z - mz) - c.R() > joinGap() || Math.abs(walkF(c) - mf) > climbTop() + 4) continue;
                     if (!doorFree(c.id, Math.atan2(mz - c.z, mx - c.x))) continue;
                     near.add(c);
                 }
@@ -3253,8 +3325,277 @@ final class NetPlanner {
                     if (splitTunnel(e)) any = true;
                     else uncut.add(e);
                 }
-                if (!any) return;
+                if (!any) break;
             }
+            // a tunnel still walking more than twice the run limit is one long passage with no way off: it is tried at
+            // more places along it, and the junction's third way may reach as far as a branch does
+            uncut.clear();
+            reach = BRANCH_REACH;
+            for (int round = 0; round < 3; round++) {
+                boolean any = false;
+                for (Edge e : new ArrayList<>(n.edges)) {
+                    if (e.kind != EK.WALK || e.w1 == null || uncut.contains(e) || NetGraph.walkLength(e) <= 2 * sp.runMax) continue;
+                    if (!n.ch.get(e.a).keep || !n.ch.get(e.b).keep) continue;
+                    if (splitTunnel(e, SPLIT_MORE)) any = true;
+                    else uncut.add(e);
+                }
+                if (!any) break;
+            }
+            reach = 1;
+        }
+
+        /**
+         * A junction room is a fork: one left with two ways (the chamber at the end of its third way, or of one of its
+         * halves, went as a dead end) is only a bulge in one passage. It is given a third way once more, as branchOut
+         * gives one (at either reach); failing that, its two ways become one through where it stood ({@link #mergeAt})
+         * and it goes. The passage through it is as long either way (passages are measured through such a room).
+         */
+        void forkJunctions() {
+            for (int id = 0; id < n.ch.size(); id++) {
+                Chamber j = n.ch.get(id);
+                if (!j.keep || j.kind != Kind.JUNCTION || NetGraph.wayCounts(n)[id] >= waysNeeded(j)) continue;
+                boolean ok = false;
+                for (int lv = 0; lv < 2 && !ok; lv++) {
+                    reach = lv == 0 ? 1 : BRANCH_REACH;
+                    ok = addWays(j, 1, 12, 4) > 0 || joinViaJunction(j, null, 8);
+                    reach = 1;
+                }
+                if (ok) n.branchWays++;
+                else mergeAt(j);
+            }
+        }
+
+        /**
+         * Joins the two ways of junction room j into one and drops the room. Two tunnels become one tunnel: their lines
+         * joined end to end, through the room's floor (both ends lie inside the room, a block or two apart, so the
+         * joined line runs where the room was cut and touches nothing else). A tunnel and a climb become the climb, its
+         * tunnel at that end longer by the other. The same chambers stay joined, so the network's runs, bridges and
+         * ways between the gates are as they were. Kept as it is: a room whose two ways lead to the same chamber, and
+         * one beside a refuge whose other way is a climb or leads to a chamber a refuge may not open on.
+         */
+        boolean mergeAt(Chamber j) {
+            List<Edge> es = new ArrayList<>();
+            for (Edge e : NetGraph.ways(n)) if (e.a == j.id || e.b == j.id) es.add(e);
+            if (es.size() != 2) return false;
+            Edge p = es.get(0), q = es.get(1);
+            if (p.kind != EK.WALK) { Edge t = p; p = q; q = t; }
+            if (p.kind != EK.WALK || p.w1 == null || q.w1 == null || (q.kind == EK.CLIMB && q.w2 == null)) return false;
+            if (q.kind != EK.WALK && q.kind != EK.CLIMB) return false;
+            int y = p.other(j.id), z = q.other(j.id);
+            Chamber Y = n.ch.get(y), Z = n.ch.get(z);
+            if (y == z) return false;
+            if (Y.refuge || Z.refuge) {
+                Chamber o = Y.refuge ? Z : Y;
+                if (q.kind != EK.WALK || o.refuge || o.landing() || o.kind == Kind.PORTAL || o.court) return false;
+            }
+            // p's line, from y to the room
+            boolean pRev = startsAt(p.w1, j);
+            Way merged;
+            Edge out;
+            if (q.kind == EK.WALK) {
+                merged = joinLines(p.w1, pRev, q.w1, !startsAt(q.w1, j));
+                merged.a = y;
+                merged.b = z;
+                out = edge(y, z);
+                out.kind = EK.WALK;
+                out.w1 = merged;
+                n.ways.remove(q.w1);
+                n.edges.set(n.edges.indexOf(q), out);
+            } else if (q.w1.a == j.id) {
+                // the room is the climb's lower end: its lower tunnel starts at y now
+                merged = joinLines(p.w1, pRev, q.w1, false);
+                merged.a = y;
+                merged.b = -1;
+                n.ways.remove(q.w1);
+                q.w1 = merged;
+                out = q;
+            } else {
+                // the room is the climb's upper end: its upper tunnel ends at y now
+                merged = joinLines(q.w2, false, p.w1, !pRev);
+                merged.a = -1;
+                merged.b = y;
+                n.ways.remove(q.w2);
+                q.w2 = merged;
+                out = q;
+            }
+            if (out == q) {
+                Edge fresh = edge(y, z);
+                q.a = fresh.a;
+                q.b = fresh.b;
+                q.len = fresh.len;
+                q.dy = fresh.dy;
+                q.cost = fresh.cost;
+            }
+            out.tree = p.tree || q.tree;
+            out.loop = p.loop || q.loop;
+            out.gate = p.gate || q.gate;
+            out.forced = p.forced || q.forced;
+            out.strand = p.strand >= 0 ? p.strand : q.strand;
+            n.ways.remove(p.w1);
+            n.ways.add(merged);
+            n.edges.remove(p);
+            j.keep = false;
+            j.deg = 0;
+            rebuildPointIndex();
+            return true;
+        }
+
+        /** True when way wy's line starts nearer chamber c's centre than it ends. */
+        static boolean startsAt(Way wy, Chamber c) {
+            return Math.hypot(wy.x[0] - c.x, wy.z[0] - c.z) < Math.hypot(wy.x[wy.n - 1] - c.x, wy.z[wy.n - 1] - c.z);
+        }
+
+        /**
+         * One way from two lines laid end to end: a's points (reversed if {@code ra}), then b's (reversed if
+         * {@code rb}); b's first point is left out where it stands on a's last. Kind and look are a's.
+         */
+        Way joinLines(Way a, boolean ra, Way b, boolean rb) {
+            int ia = ra ? 0 : a.n - 1, ib = rb ? b.n - 1 : 0;
+            int skip = Math.hypot(a.x[ia] - b.x[ib], a.z[ia] - b.z[ib]) < 0.5 ? 1 : 0;
+            Way wy = new Way();
+            wy.kind = a.kind;
+            wy.round = a.round;
+            wy.trunk = a.trunk || b.trunk;
+            wy.keyhole = a.keyhole;
+            alloc(wy, a.n + b.n - skip);
+            for (int k = 0; k < wy.n; k++) {
+                Way src = k < a.n ? a : b;
+                int i = k < a.n ? (ra ? a.n - 1 - k : k) : (rb ? b.n - 1 - (k - a.n + skip) : k - a.n + skip);
+                wy.x[k] = src.x[i]; wy.z[k] = src.z[i]; wy.f[k] = src.f[i];
+                wy.w[k] = src.w[i]; wy.hgt[k] = src.hgt[i]; wy.slab[k] = src.slab[i];
+            }
+            wy.bounds();
+            return wy;
+        }
+
+        /** A run branchOut could not branch that walks more than this many times {@code runMax} goes ({@link #dropRuns}). */
+        static final double DROP_MUL = 4;
+
+        /**
+         * The last resort for the runs branchOut could not branch: a run that still walks more than {@link #DROP_MUL}
+         * times the limit, through rooms that offer no other way on, goes, its rooms and their tunnels, when nothing but
+         * the run is lost ({@link #dropRun}), the longest first. A room at either end of a dropped run that is left with
+         * two ways joins the runs on its other sides into one; branchOut then goes on over those. True when one went.
+         */
+        boolean dropRuns() {
+            java.util.Set<Edge> failed = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+            boolean any = false;
+            for (int it = 0; it < 8; it++) {
+                List<Edge> worst = null;
+                double longest = DROP_MUL * sp.runMax;
+                for (List<Edge> run : NetGraph.runs(n)) {
+                    if (failed.contains(run.get(0))) continue;
+                    double len = NetGraph.runWalk(n, run);
+                    if (len > longest) { longest = len; worst = run; }
+                }
+                if (worst == null) break;
+                if (dropRun(worst)) any = true;
+                else failed.add(worst.get(0));
+            }
+            if (any) pruneEdges();
+            // a single tunnel walking more than twice the limit is one long passage (splitLong found no junction for it)
+            for (Edge e : new ArrayList<>(n.edges)) {
+                if ((e.kind != EK.WALK && e.kind != EK.CLIMB) || NetGraph.walkLength(e) <= 2 * sp.runMax) continue;
+                if (!n.ch.get(e.a).keep || !n.ch.get(e.b).keep) continue;
+                if (dropTunnel(e)) any = true;
+            }
+            return any;
+        }
+
+        /**
+         * Drops tunnel e on the same terms as a run ({@link #dropRun}): the chambers at its ends keep the ways they need
+         * and are no landings, it is no bridge and nothing else becomes one, the gates keep their ways, no room comes to
+         * stand between them, and the runs that come to pass through its ends stay within {@link #DROP_MUL} times the
+         * limit. A strand or a gate's way may go too: both its ends keep other ways on, which the checks hold.
+         */
+        boolean dropTunnel(Edge e) {
+            Chamber A = n.ch.get(e.a), B = n.ch.get(e.b);
+            if (A.landing() || B.landing() || e.a == e.b) return false;
+            int[] deg = NetGraph.wayCounts(n);
+            if (deg[e.a] - 1 < waysNeeded(A) || deg[e.b] - 1 < waysNeeded(B)) return false;
+            List<Edge> br = NetGraph.bridges(n);
+            if (br.contains(e)) return false;
+            int flow = NetGraph.maxFlow(n, n.entry, n.exit, false);
+            boolean walk = NetGraph.reach(n, n.entry, true)[n.exit];
+            java.util.Set<Integer> chokes = chokes();
+            int at = n.edges.indexOf(e);
+            n.edges.remove(at);
+            boolean ok = NetGraph.bridges(n).size() == br.size() && NetGraph.maxFlow(n, n.entry, n.exit, false) >= flow
+                    && (!walk || NetGraph.reach(n, n.entry, true)[n.exit]) && chokes.containsAll(chokes())
+                    && endRunsWithin(e.a, e.b);
+            if (!ok) {
+                n.edges.add(at, e);
+                return false;
+            }
+            unplan(e);
+            rebuildPointIndex();
+            return true;
+        }
+
+        /** True when every run through chamber a or b walks no more than {@link #DROP_MUL} times the limit. */
+        boolean endRunsWithin(int a, int b) {
+            for (List<Edge> o : NetGraph.runs(n)) {
+                boolean mine = false;
+                for (Edge e : o) mine |= e.a == a || e.b == a || e.a == b || e.b == b;
+                if (mine && NetGraph.runWalk(n, o) > DROP_MUL * sp.runMax) return false;
+            }
+            return true;
+        }
+
+        /**
+         * Drops run r's rooms (they are left unkept; the caller prunes their tunnels) when nothing but the run is lost:
+         * its rooms are ordinary ones (no refuge, court, portal vestibule or other required room), its tunnels no part of
+         * the trunk (the strands, the gates' ways), the rooms at its ends are no landings and keep the ways they need
+         * ({@link #waysNeeded}), none of its tunnels is a bridge and no other tunnel becomes one, the gates keep as many
+         * edge-disjoint ways between them (and a walk without climbs if they had one), no single room comes to stand
+         * between them, and the runs that come to pass through its end rooms walk no more than {@link #DROP_MUL} times
+         * the limit. A run with no room inside it, or a ring, is kept.
+         */
+        boolean dropRun(List<Edge> r) {
+            if (r.size() < 2) return false;
+            int a = NetGraph.runStart(n, r), v = a;
+            int[] deg = NetGraph.wayCounts(n);
+            if (!NetGraph.runEnd(n.ch.get(a), deg[a])) return false;
+            List<Integer> inner = new ArrayList<>();
+            for (int i = 0; i + 1 < r.size(); i++) {
+                v = r.get(i).other(v);
+                inner.add(v);
+            }
+            int b = r.get(r.size() - 1).other(v);
+            for (int id : inner) {
+                Chamber c = n.ch.get(id);
+                if (c.required || c.refuge || c.court || c.landing() || c.kind == Kind.PORTAL) return false;
+            }
+            Chamber A = n.ch.get(a), B = n.ch.get(b);
+            if (A.landing() || B.landing()) return false;
+            if (a == b ? deg[a] - 2 < waysNeeded(A) : deg[a] - 1 < waysNeeded(A) || deg[b] - 1 < waysNeeded(B)) return false;
+            // the strands and the gates' ways are the trunk, the walk from gate to gate: it stays whole
+            for (Edge e : r) if (e.strand >= 0 || e.gate) return false;
+            List<Edge> br = NetGraph.bridges(n);
+            for (Edge e : r) if (br.contains(e)) return false;
+            int flow = NetGraph.maxFlow(n, n.entry, n.exit, false);
+            boolean walk = NetGraph.reach(n, n.entry, true)[n.exit];
+            java.util.Set<Integer> chokes = chokes();
+            for (int id : inner) n.ch.get(id).keep = false;
+            boolean ok = NetGraph.bridges(n).size() == br.size() && NetGraph.maxFlow(n, n.entry, n.exit, false) >= flow
+                    && (!walk || NetGraph.reach(n, n.entry, true)[n.exit]) && chokes.containsAll(chokes())
+                    && endRunsWithin(a, b);
+            if (!ok) {
+                for (int id : inner) n.ch.get(id).keep = true;
+                return false;
+            }
+            n.droppedChambers += inner.size();
+            return true;
+        }
+
+        /** The kept rooms whose loss would cut the entry from the exit (the open spaces of {@link #chokeFree} aside). */
+        java.util.Set<Integer> chokes() {
+            java.util.Set<Integer> out = new java.util.HashSet<>();
+            for (Chamber c : n.ch) {
+                if (!c.keep || chokeFree(c)) continue;
+                if (!NetGraph.reachWithout(n, n.entry, c.id)[n.exit]) out.add(c.id);
+            }
+            return out;
         }
 
         /** The chambers inside a run (between its edges), nearest the run's middle (by walking length) first. */
@@ -5239,7 +5580,7 @@ final class NetPlanner {
             // the Wasteland tries a pair once in the plain mode: the network only fills up, so a pair that did not
             // embed seldom does later, and its many stages ask again and again (one that did is never asked again)
             boolean plain = sp.wayMax > 0 && !force && !noClimb && !preferClimb && widthMul == 1 && !longOK;
-            if (plain && !triedPairs.add(((long) e.a << 32) | e.b)) return false;
+            if (plain && !tried().add(((long) e.a << 32) | e.b)) return false;
             double th = Math.atan2(B.z - A.z, B.x - A.x);
             boolean climbTried = false;
             for (int attempt = 0; attempt < (force ? 6 : 3); attempt++) {
@@ -5275,7 +5616,7 @@ final class NetPlanner {
                 // each chamber past the doors), or steep enough to need such a line, is a climb or nothing
                 if (overLimit(L + 2 * NetGraph.RUN_IN) || overLimit(dy / sp.maxSlope + 10)) walkOK = false;
                 // v9: no climb into a refuge (its way takes the refuge's biome, and refuges hold no vines)
-                boolean climbOK = !noClimb && !landingEnd && !A.refuge && !B.refuge && dy <= (preferClimb ? Math.max(32, sp.climbMax) : sp.climbMax) && dy >= 5 && L <= sp.climbL;
+                boolean climbOK = !noClimb && !landingEnd && !A.refuge && !B.refuge && dy <= (preferClimb ? Math.max(32, sp.climbMax) : climbTop()) && dy >= 5 && L <= sp.climbL * reach;
                 // the Wasteland tries one climb per call: the next attempts' doors move a little, and a climb that
                 // did not fit seldom fits a few blocks over, while each try costs as much as a dozen tunnels
                 if (climbTried && sp.wayMax > 0) climbOK = false;
@@ -5418,7 +5759,7 @@ final class NetPlanner {
                 // under longOK (no junction room is ever cut into a climb)
                 double walk = w1.length + w2.length;
                 for (Way lg : ledges) walk += lg.length;
-                if (walk - 2 * NetGraph.RUN_IN > sp.wayMax) return false;
+                if (walk - 2 * NetGraph.RUN_IN > sp.wayMax * reach) return false;
             }
             // the last stage's vines face the upper tunnel, which leaves along the last heading
             st[ns - 1].vineA = heading;
