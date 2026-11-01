@@ -11,7 +11,8 @@ import com.explorationremix.world.terrain.Terrain;
  * chunk: a feature decorating a neighbouring chunk later can still reach across into it. So every feature that builds
  * something solid asks here first and leaves the corridors alone: no column, spike, root, pool rim, machine part or
  * waterfall stands on a way or hangs into its headroom. The ways are the network's (section 12.2): every tunnel, inner
- * walk, ledge passage and stub of every cell, the rift's ledge path, and the gates' passages and landings.
+ * walk, ledge passage and stub of every cell, the rift's ledge path, the Causeway's column path (a walking line for this
+ * guard only: nothing carves it), and the gates' passages and landings.
  */
 public final class Walkway {
     /** How far from a walking line its corridor reaches sideways, at least. */

@@ -44,16 +44,18 @@ public final class ERConfig {
         public final ForgeConfigSpec.DoubleValue heightMin, heightMax, widthMin, widthMax;
         final boolean lava;
 
-        LayerConfig(ForgeConfigSpec.Builder b, LayerSettings d, String heightWord, String widthWord, boolean sizesRead, int maxHeight) {
+        LayerConfig(ForgeConfigSpec.Builder b, LayerSettings d, String heightWord, String widthWord, boolean sizesRead,
+                    int minHeight, int maxHeight, int maxFluidDepth) {
             this.id = d.id();
             this.lava = d.lava();
             b.push(d.id());
-            // maxHeight: the Basalt Galleries were 288 tall before 0.5; their range ends at 256 so an older file's 288 is
-            // out of range and Forge puts back the new default instead of moving the world's floor down to -976
+            // The ranges are what each layer's cave planner can build in (see the layers below). A value outside its range
+            // is put back to the default by Forge, which also keeps an older file's 288 for the Basalt Galleries (their
+            // height before 0.5) from moving the world's floor down to -976.
             height = b.comment("Height of the layer in blocks (rounded down to a multiple of 16).")
-                    .defineInRange("height", d.height(), 64, maxHeight);
+                    .defineInRange("height", d.height(), minHeight, maxHeight);
             fluidDepth = b.comment("The " + (d.lava() ? "lava" : "water") + " table sits this many blocks above the layer's floor.")
-                    .defineInRange("fluidDepth", d.fluidDepth(), 6, 64);
+                    .defineInRange("fluidDepth", d.fluidDepth(), 6, maxFluidDepth);
             // Since 0.3 the Deep Gardens and the Basalt Galleries are cave networks that size their own rooms; their four
             // space sizes are kept so old config files still load, but nothing reads them.
             String unused = sizesRead ? "" : " Not used since 0.3: the cave network sizes this layer's rooms itself.";
@@ -93,10 +95,15 @@ public final class ERConfig {
                 .define("upperRegions", true);
         removeCreateStriations = b.comment("Remove Create's striped stone layers from the overworld; the layers use Create's stones as patches instead.")
                 .define("removeCreateStriations", true);
-        layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width", true, 512);
-        layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width", false, 512);
-        layers[2] = new LayerConfig(b, d.layers().get(2), "cave height", "cave width", false, 512);
-        layers[3] = new LayerConfig(b, d.layers().get(3), "hall height", "hall width", false, 256);
+        layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width", true, 64, 512, 64);
+        layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width", false, 64, 512, 64);
+        // The Wasteland plans a fixed number of rooms per cell over a storey for every 25 blocks of height: above 160 they
+        // stand too far apart to join, and portal tunnels and the way down start to break.
+        layers[2] = new LayerConfig(b, d.layers().get(2), "cave height", "cave width", false, 64, 160, 64);
+        // The Basalt Galleries' halls stand on ledges 43 to 62 blocks over the lava table under vaults up to 108 over it,
+        // and the lava cycle floods 40 blocks: under 128 the halls lose their headroom and the band's landing stands in
+        // the flood, and a lava table more than 24 over the floor leaves a 128-tall layer too little room above it.
+        layers[3] = new LayerConfig(b, d.layers().get(3), "hall height", "hall width", false, 128, 256, 24);
         b.pop();
 
         b.comment("The Basalt Galleries' lava cycle: one lava sea that rises 40 blocks over the layer's lava table and falls again on the",

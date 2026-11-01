@@ -141,8 +141,9 @@ public final class Network {
 
     /**
      * Every walking line of layer li that passes within {@code reach} of (x, z): the tunnels, inner walks, ledge
-     * passages and stubs of the plans (the neighbouring cells' too), and the rift's ledge path. A way that passes the
-     * column more than once (a helix's turns, a hairpin) is listed once per pass. No cap (section 12.1).
+     * passages and stubs of the plans (the neighbouring cells' too), the rift's ledge path, and the Basalt Galleries'
+     * Causeway column paths ({@link #causewayPaths}). A way that passes the column more than once (a helix's turns, a
+     * hairpin) is listed once per pass. No cap (section 12.1).
      */
     public WayLines wayLinesAt(int li, double x, double z, double reach) {
         WayLines out = LINES.get();
@@ -152,9 +153,35 @@ public final class Network {
             double ex = Math.max(0, Math.max((cx + i) * cell - x, x - (cx + i + 1) * cell));
             double ez = Math.max(0, Math.max((cz + k) * cell - z, z - (cz + k + 1) * cell));
             if (Math.hypot(ex, ez) > reach + Net.APRON) continue;
-            linesOf(net(li, cx + i, cz + k), x, z, reach, out);
+            Net n = net(li, cx + i, cz + k);
+            linesOf(n, x, z, reach, out);
+            if (li == Terrain.GALLERIES) causewayPaths(n, x, z, reach, out);
         }
         return out;
+    }
+
+    /**
+     * The Causeway's column path as a walking line, for the features that keep off the ways ({@code Walkway}) and for
+     * nothing else. No way is laid on the path ({@code NetPlanner.hallWalks}: a way's slab would fill the gaps between
+     * its columns), so without this the lava pools, lava falls and column clusters that keep off every way would land on
+     * its column tops. The line runs down the path's middle (sv = pathV, in the hall's warped coordinates, as
+     * {@link #hexTop} lays the columns out) between the end ramps' feet. Its floor is one block under the path's top
+     * block, so the corridor (four blocks up from there) holds the top blocks themselves (a pool or a fall's sump in
+     * them), the one-block steps either way from one column top to the next, and the room over them; 0.6 of its
+     * half-width covers the path's two rows of columns. It is not in {@link #carvedLinesAt}: nothing may cut a corridor
+     * along it.
+     */
+    private void causewayPaths(Net n, double x, double z, double reach, WayLines out) {
+        for (Chamber c : n.ch) {
+            if (c.kind != Kind.CAUSEWAY || !c.keep) continue;
+            double r = c.R() + reach;
+            if (Math.abs(x - c.x) > r || Math.abs(z - c.z) > r) continue;
+            double[] uv = hallUV(c, x, z);
+            double endU = c.rx - c.endW, u = uv[0], sv = uv[1] * c.side;
+            double d = Math.hypot(Math.max(0, Math.abs(u) - endU), sv - c.pathV);
+            if (d > reach) continue;
+            out.add(d, Math.round(pathHeight(c, Math.max(-endU, Math.min(endU, u)))) - 1, 1.75 * c.hexS / SQ3 / 0.6);
+        }
     }
 
     /**
