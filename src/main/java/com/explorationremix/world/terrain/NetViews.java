@@ -82,11 +82,6 @@ final class NetViews {
     private final double[] bt = new double[MAX_CELLS], bl = new double[MAX_CELLS], bh = new double[MAX_CELLS], bm = new double[MAX_CELLS];
     private final double[] fLo = new double[MAX_CELLS], fHi = new double[MAX_CELLS], bLo = new double[MAX_CELLS], bHi = new double[MAX_CELLS];
     private final double[] slopes;
-    /**
-     * The longest view the last {@link #longest} found, and its line: a point on it and its direction {x, z, dx, dz}.
-     */
-    double lastRun;
-    final double[] lastLine = new double[4];
 
     /** One space's cells and the span of heights open in each, and the shape they were made for ({@link #shape}). */
     private record Space(int[] cells, float[] lo, float[] hi, long shape) {}
@@ -333,7 +328,6 @@ final class NetViews {
                 for (int j = 1; j <= k; j++) mids.add(sa + (sb - sa) * j / (k + 1));
             }
             double best = 0;
-            lastRun = 0;
             for (double m : mouths) {
                 best = Math.max(best, window(wy, s, m, MOUTH_ANGLE, MOUTH_OFFSETS, flat, stop));
                 if (best > stop) return best;
@@ -373,10 +367,7 @@ final class NetViews {
             for (double o : offsets) {
                 double ox = px - tz * o * half, oz = pz + tx * o * half;
                 double run = view(ox, oz, dx, dz, flat, stop);
-                if (run > best) {
-                    best = run;
-                    if (run > lastRun) { lastRun = run; lastLine[0] = ox; lastLine[1] = oz; lastLine[2] = dx; lastLine[3] = dz; }
-                }
+                if (run > best) best = run;
                 if (best > stop) return best;
             }
         }

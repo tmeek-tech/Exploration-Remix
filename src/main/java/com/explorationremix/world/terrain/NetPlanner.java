@@ -4991,8 +4991,14 @@ final class NetPlanner {
             return out;
         }
 
-        /** A walk from a door (the inner end of its tunnel) to a point of a hall's walks. */
+        /**
+         * A walk from a door (the inner end of its tunnel) to a point of a hall's walks. A door within a thousandth of a
+         * block of the point stands on it, and its spoke is the door's spot alone: the way queries ({@link
+         * Network#wayLinesAt}) read a stretch much shorter than that as its first point, which leaves its last off the
+         * line.
+         */
         Way spoke(Chamber c, double[] d, double[] p) {
+            if (Math.hypot(p[0] - d[0], p[1] - d[1]) < 1e-3) p = new double[]{d[0], d[1]};
             return hallWalk(c, List.of(new double[]{d[0], d[1]}, p), d[2], Double.NaN, null);
         }
 
@@ -5815,10 +5821,11 @@ final class NetPlanner {
         /**
          * A Basalt Galleries tunnel from door da of A to door db of B ({@link #embed}'s walking case), or null: the
          * first of the {@link #VIEW_LEVELS} shapes that is long enough for its descent, keeps clear of the network
-         * ({@link #clear}) and has no straight line through it longer than {@link NetViews#LIMIT} across what is open
-         * so far ({@link NetViews#clear}). Each door of a hall or a flight has a leg ({@link #capLeg}). A sight bend
-         * ({@link #sightBend}) needs a stretch between the legs to turn off the doors' line in: two bends' worth and a
-         * tunnel's width, or the bend folds into a hairpin a straight line passes across; shorter, the legs give way.
+         * ({@link #clear}) and of itself ({@link #crossesItself}, {@link #turnsBack}) and has no straight line through
+         * it longer than {@link NetViews#LIMIT} across what is open so far ({@link NetViews#clear}). Each door of a hall
+         * or a flight has a leg ({@link #capLeg}). A sight bend ({@link #sightBend}) needs a stretch between the legs to
+         * turn off the doors' line in: two bends' worth and a tunnel's width, or the bend folds into a hairpin a
+         * straight line passes across; shorter, the legs give way.
          */
         Way galleryWay(Edge e, Chamber A, Chamber B, double[] da, double[] db, long hh, double half, double hgt, boolean force, double L) {
             double bend = sightBend(A, B, da, db, half);
@@ -5846,7 +5853,7 @@ final class NetPlanner {
                 if (wy == null) continue;
                 // the Obsidian Tubes' tunnel is a round tube (section 5)
                 wy.round = A.kind == Kind.TUBEHUB || B.kind == Kind.TUBEHUB;
-                if (!clear(wy, e.a, e.b) || crossesItself(wy)) continue;
+                if (!clear(wy, e.a, e.b) || crossesItself(wy) || (!spoke && turnsBack(wy))) continue;
                 if (views.clear(wy, A, B)) return wy;
             }
             return null;
@@ -5873,6 +5880,23 @@ final class NetPlanner {
                     if (d >= wy.w[lo] || arc[j] - arc[i] < d + Math.max(wy.w[i], wy.w[j])) continue;
                     if (rise - wy.slab[hi] - wy.hgt[lo] < sp.clearV) return true;
                 }
+            }
+            return false;
+        }
+
+        /**
+         * True when the tunnel's line turns straight back on itself (from one point to the next, to within about 26
+         * degrees of reversed: a cusp where the winding's points crowd together) between floors more than a block
+         * apart. It passes the same spot twice there and the blocks keep one floor for both, the higher, so the lower
+         * pass's walk meets a step of 2 or more. A landing's spoke is left to its flight: where it turns back into the
+         * stair, the stair's floor is its floor ({@link Network}).
+         */
+        boolean turnsBack(Way wy) {
+            for (int i = 1; i + 1 < wy.n; i++) {
+                double ux = wy.x[i] - wy.x[i - 1], uz = wy.z[i] - wy.z[i - 1], vx = wy.x[i + 1] - wy.x[i], vz = wy.z[i + 1] - wy.z[i];
+                double lu = Math.hypot(ux, uz), lv = Math.hypot(vx, vz);
+                if (lu < 0.3 || lv < 0.3) continue;
+                if ((ux * vx + uz * vz) / (lu * lv) < -0.9 && Math.abs(wy.f[i + 1] - wy.f[i - 1]) > 1) return true;
             }
             return false;
         }
