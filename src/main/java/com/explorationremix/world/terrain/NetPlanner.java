@@ -5801,11 +5801,16 @@ final class NetPlanner {
          * for none), the winding's swing (times), one more bend (1) or not, the legs (times)}. A tunnel leaves a hall
          * straight for 15 to 25 blocks to clear its capsule; running on in line with its mouth, it would let a view from
          * the hall's far side (80 to 120 blocks) or from a tunnel facing it across the hall run 50 to 70 blocks into it.
+         * The last is the plain tunnel, with no swing aside, for a portal vestibule's tunnel alone: where every swing
+         * past a leg turns the tunnel back alongside its own room's capsule (a rift's or a Causeway's, long and
+         * narrow), the plain tunnel may still keep the views short. A vestibule no tunnel reaches is left out and its
+         * portal ends blind, while any other room has other pairs to try.
          */
         static final double[][] VIEW_LEVELS = {
                 {1.4, 0, 1, 0, 1},
                 {1.8, 1.8, 1.6, 0, 1},
-                {2.2, 2.2, 2.2, 1, 0.75}};
+                {2.2, 2.2, 2.2, 1, 0.75},
+                {0, 0, 1, 0, 1}};
 
         /**
          * A Basalt Galleries tunnel from door da of A to door db of B ({@link #embed}'s walking case), or null: the
@@ -5827,6 +5832,7 @@ final class NetPlanner {
             }
             views.sync(n.ch, n.ways);
             for (int level = 0; level < VIEW_LEVELS.length; level++) {
+                if (level == VIEW_LEVELS.length - 1 && A.kind != Kind.PORTAL && B.kind != Kind.PORTAL) break;
                 double[] v = VIEW_LEVELS[level];
                 wayBend = bend;
                 legA = la * v[4]; legB = lb * v[4];

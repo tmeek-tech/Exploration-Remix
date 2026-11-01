@@ -269,8 +269,24 @@ class NetworkTest {
     @Test
     void everyNodeIsJoinedToTheEntry() { overPlans(NetworkTest::joinedToEntry); }
 
+    /**
+     * Basalt Galleries cells {seed, cx, cz} whose ways between the gates {@link #twoOrThreeWaysToEachGate} checks too.
+     * In each a careless plan leaves a single way: the bedrock landing's two flights end in one hall with one tunnel
+     * on, or the entry landing's flight ends blind and every way passes through one court.
+     */
+    static final long[][] GALLERIES_GATE_CELLS = {{18000083, -9, 4}, {33000128, 2, 7}};
+
     @Test
-    void twoOrThreeWaysToEachGate() { overPlans(NetworkTest::waysToGates); }
+    void twoOrThreeWaysToEachGate() {
+        overPlans(NetworkTest::waysToGates);
+        List<String> fails = new ArrayList<>();
+        for (long[] c : GALLERIES_GATE_CELLS) {
+            Terrain t = terrain(c[0]);
+            int cx = (int) c[1], cz = (int) c[2];
+            waysToGates(t, t.network.net(Terrain.GALLERIES, cx, cz), tag(c[0], Terrain.GALLERIES, cx, cz), fails);
+        }
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
+    }
 
     @Test
     void sizesFollowTaran() { overPlans(NetworkTest::sizes); }

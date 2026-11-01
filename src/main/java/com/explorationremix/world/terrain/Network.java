@@ -2435,14 +2435,16 @@ public final class Network {
 
     /**
      * Depth into the rock round the nearest obsidian tube (0 at its inner surface): a tube hub or a round way (the
-     * hubs' tunnels and blind tubes), or 1e9 when none is near.
+     * hubs' tunnels and blind tubes), or 1e9 when none is near. A round way's depth joins the rest smoothly, as the
+     * density joins a way to its room ({@link #smin}, 3): where a tube meets its hub's dome at a slant, the rock the
+     * blend rounds off in the crease between them stands up to 2 from both surfaces, and the lining would break there.
      */
     double tubeShellDepth(int li, int x, int y, int z) {
         if (!Terrain.basaltLook(li)) return 1e9;
         LCol lc = layer(column(x, z), li);
         double best = 1e9;
         for (int k = 0; k < lc.nc; k++) if (lc.c[k].kind == Kind.TUBEHUB) best = Math.min(best, hubDepth(lc, k, y));
-        for (int k = 0; k < lc.nw; k++) if (lc.w[k].round) best = Math.min(best, roundShell(lc, k, y));
+        for (int k = 0; k < lc.nw; k++) if (lc.w[k].round) best = smin(best, roundShell(lc, k, y), 3);
         return best;
     }
 
