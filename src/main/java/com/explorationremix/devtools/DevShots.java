@@ -23,8 +23,10 @@ import java.util.List;
  * Development only, and only when the environment variable ER_SHOTS names a shot list: once a world is open (single
  * player, or a server where the player is an operator), takes a screenshot of each listed biome from the best view
  * /remix view finds, then quits. Each line of the list is "file-name biome [n]", "file-name biome [n] near x z" (the
- * view searched for round x z), or "file-name @ x y z yaw pitch" for a picture from a chosen spot. Screenshots go to
- * the game's screenshots folder.
+ * view searched for round x z), or "file-name @ x y z yaw pitch" for a picture from a chosen spot. Two more kinds of
+ * line take no picture: "! command" runs a command (for example "! remix lava level 40", to set the Basalt Galleries'
+ * flood before the next pictures) and waits for its reply, and "! wait ticks" idles that many client ticks (to let the
+ * server finish work the last command started). Screenshots go to the game's screenshots folder.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, value = Dist.CLIENT)
 public final class DevShots {
@@ -48,11 +50,11 @@ public final class DevShots {
         }
     }
 
-    private enum Phase { WAIT_WORLD, SETUP, NEXT, VIEWING, SETTLING, SHOOT, DONE }
+    private enum Phase { WAIT_WORLD, SETUP, NEXT, VIEWING, SETTLING, SHOOT, COMMAND, WAITING, DONE }
 
     private static Phase phase = Phase.WAIT_WORLD;
     private static List<String[]> shots;
-    private static int index = -1, ticks, quiet, still, lastChunks, lastSections, frameCount, lastFrame, settleFrame;
+    private static int index = -1, ticks, quiet, still, lastChunks, lastSections, frameCount, lastFrame, settleFrame, waitTicks;
     private static boolean gaveUp;
     private static volatile boolean viewDone;
     /** System chat lines received while the shots run (the view commands' replies), and the last of them. */
@@ -128,6 +130,27 @@ public final class DevShots {
                     return;
                 }
                 String[] s = shots.get(index);
+                if (s[0].equals("!")) {
+                    // a step without a picture: a command, or a pause
+                    if (s.length == 3 && s[1].equals("wait")) {
+                        try {
+                            waitTicks = Math.max(0, Integer.parseInt(s[2]));
+                        } catch (NumberFormatException ex) {
+                            waitTicks = 0;
+                        }
+                        ExplorationRemix.LOGGER.info("[shots] {} of {}: waiting {} ticks", index + 1, shots.size(), waitTicks);
+                        phase = Phase.WAITING;
+                    } else if (s.length > 1) {
+                        String command = String.join(" ", java.util.Arrays.copyOfRange(s, 1, s.length));
+                        ExplorationRemix.LOGGER.info("[shots] {} of {}: command {}", index + 1, shots.size(), command);
+                        repliesBefore = replies;
+                        if (remote) mc.getConnection().sendCommand(command);
+                        else server.execute(() -> run(server, server.getPlayerList().getPlayer(mc.player.getUUID()), command));
+                        phase = Phase.COMMAND;
+                    }
+                    ticks = 0;
+                    return;
+                }
                 int near = java.util.Arrays.asList(s).indexOf("near");
                 String cmd = s[1].equals("@") && s.length >= 7 ? "tp @s " + String.join(" ", java.util.Arrays.copyOfRange(s, 2, 7))
                         : near > 0 && near + 2 < s.length
@@ -216,6 +239,20 @@ public final class DevShots {
                         mc.player.getZ(), mc.player.getYRot(), mc.player.getXRot(), gaveUp ? " (never settled)" : "");
                 log.add(where);
                 ExplorationRemix.LOGGER.info("[shots] took {}", where);
+                phase = Phase.NEXT;
+                ticks = 0;
+            }
+            case COMMAND -> {
+                // the command's reply (most commands answer at once; stop waiting after 200 ticks)
+                if (replies == repliesBefore && ticks < 200) return;
+                String reply = replies == repliesBefore ? "(no reply)" : lastReply;
+                ExplorationRemix.LOGGER.info("[shots] command replied: {}", reply);
+                log.add("! " + String.join(" ", java.util.Arrays.copyOfRange(shots.get(index), 1, shots.get(index).length)) + ": " + reply);
+                phase = Phase.NEXT;
+                ticks = 0;
+            }
+            case WAITING -> {
+                if (ticks < waitTicks) return;
                 phase = Phase.NEXT;
                 ticks = 0;
             }
