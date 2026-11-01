@@ -22,6 +22,9 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> BLUE_ADDITIONS = register("ambient.blue.additions");
     public static final RegistryObject<SoundEvent> BASALT_LOOP = register("ambient.basalt.loop");
     public static final RegistryObject<SoundEvent> BASALT_ADDITIONS = register("ambient.basalt.additions");
+    // 0.5: the Ash Hollows, the Wasteland's refuge, hear the rock only from far off
+    public static final RegistryObject<SoundEvent> HOLLOWS_LOOP = register("ambient.hollows.loop");
+    public static final RegistryObject<SoundEvent> HOLLOWS_ADDITIONS = register("ambient.hollows.additions");
 
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ExplorationRemix.MOD_ID, name)));

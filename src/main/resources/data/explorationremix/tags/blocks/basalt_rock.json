@@ -10,12 +10,22 @@
     "minecraft:deepslate_gold_ore",
     "minecraft:brown_terracotta",
     "minecraft:polished_blackstone",
+    "explorationremix:ember_crust",
+    "minecraft:terracotta",
     {
       "id": "create:scoria",
       "required": false
     },
     {
       "id": "create:scorchia",
+      "required": false
+    },
+    {
+      "id": "create:layered_scoria",
+      "required": false
+    },
+    {
+      "id": "create:layered_scorchia",
       "required": false
     }
   ]

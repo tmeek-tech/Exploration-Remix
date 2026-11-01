@@ -33,6 +33,7 @@
     "minecraft:brown_terracotta",
     "minecraft:polished_blackstone",
     "minecraft:red_terracotta",
+    "minecraft:terracotta",
     {
       "id": "create:limestone",
       "required": false
@@ -59,6 +60,14 @@
     },
     {
       "id": "create:scorchia",
+      "required": false
+    },
+    {
+      "id": "create:layered_scoria",
+      "required": false
+    },
+    {
+      "id": "create:layered_scorchia",
       "required": false
     }
   ]

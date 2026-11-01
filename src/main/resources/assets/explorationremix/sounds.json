@@ -166,5 +166,36 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.ambient.basalt.additions"
+  },
+  "ambient.hollows.loop": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/basalt_rumble",
+        "volume": 0.35,
+        "stream": true,
+        "pitch": 0.8
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.hollows.loop"
+  },
+  "ambient.hollows.additions": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/rumble1",
+        "volume": 0.35,
+        "pitch": 0.75
+      },
+      {
+        "name": "explorationremix:ambient/rumble2",
+        "volume": 0.35,
+        "pitch": 0.75
+      },
+      {
+        "name": "minecraft:block/lava/pop",
+        "volume": 0.25,
+        "pitch": 0.8
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.hollows.additions"
   }
 }

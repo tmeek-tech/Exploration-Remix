@@ -4,7 +4,9 @@ Every biome's look is set here: fog, water and grass colours, ambient particles 
 dress its caves. Features are listed once, in one master order (FEATURES), and each biome takes the ones it names in
 that order, so feature sorting never finds a cycle between biomes.
 
-Refuges hold no plants. Routes have some growth. Hunting grounds are the most overgrown places in their layer.
+Refuges hold no plants. Routes have some growth. Hunting grounds are the most overgrown places in their layer. The
+Basalt Galleries (since 0.5 the bottom layer) hold no life of any kind: no plant, lichen, vine or creature in any of their
+biomes; rock and lava light them.
 """
 import json, os
 
@@ -57,13 +59,15 @@ LOOKS = {
     "rust_springs":      ("#a9482a", "#c9662b", "#5a2a10", "#a08a50", "#907a40"),
     "deep_blue_rift":    ("#1f3f7c", "#2554ba", "#08183d", "#6a8aa8", "#5a7a98"),
     "asurine_geodes":    ("#2a4a86", "#3e72d8", "#0b1f4a", "#6f8fa8", "#5f7f98"),
-    "basalt_galleries":  ("#70574b", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    # The Galleries' haze is lava-lit smoke: warm, reddest over the Caldera and the Scoria Canyons. The Ash Hollows'
+    # still air is a pale ash grey against the Wasteland's smoke.
+    "basalt_galleries":  ("#7c5040", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     "obsidian_tubes":    ("#4d3b42", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     "wasteland":         ("#70574b", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
-    "ash_hollows":       ("#6a625c", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
-    "caldera":           ("#7a4a32", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
-    "causeway":          ("#70574b", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
-    "scoria_canyons":    ("#7a4a3a", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    "ash_hollows":       ("#78726c", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    "caldera":           ("#8a4630", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    "causeway":          ("#72544a", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    "scoria_canyons":    ("#80463a", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
 }
 
 # Ambient particles drifting in the air: (particle, probability). Steam over hot pools, embers over lava, pollen in
@@ -76,13 +80,15 @@ PARTICLES = {
     "rust_springs": ("minecraft:mycelium", 0.008),
     "deep_blue_rift": ("minecraft:warped_spore", 0.01),
     "asurine_geodes": ("minecraft:warped_spore", 0.004),
-    "basalt_galleries": ("minecraft:white_ash", 0.06),
-    "obsidian_tubes": ("minecraft:ash", 0.02),
+    # Less ash in the Galleries than in the Wasteland, so their wide views carry; smoke columns over the lava are the
+    # client's (CaveAtmosphere).
+    "basalt_galleries": ("minecraft:white_ash", 0.02),
+    "obsidian_tubes": ("minecraft:ash", 0.008),
     "wasteland": ("minecraft:white_ash", 0.06),
-    "ash_hollows": ("minecraft:white_ash", 0.01),
-    "caldera": ("minecraft:white_ash", 0.03),
-    "causeway": ("minecraft:white_ash", 0.03),
-    "scoria_canyons": ("minecraft:white_ash", 0.03),
+    "ash_hollows": ("minecraft:white_ash", 0.004),
+    "caldera": ("minecraft:white_ash", 0.025),
+    "causeway": ("minecraft:white_ash", 0.012),
+    "scoria_canyons": ("minecraft:white_ash", 0.015),
 }
 
 # Ambient sound: (loop, additions, additions chance per tick). Our sound events are registered by the mod (ERSounds).
@@ -102,7 +108,7 @@ SOUNDS = {
     "basalt_galleries": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
     "obsidian_tubes": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.004),
     "wasteland": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
-    "ash_hollows": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.003),
+    "ash_hollows": (f"{MOD}:ambient.hollows.loop", f"{MOD}:ambient.hollows.additions", 0.004),
     "caldera": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
     "causeway": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
     "scoria_canyons": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
@@ -274,9 +280,26 @@ def attach(provider, faces, tries, on, radius=6, height=6, in_water=False):
                                                       "height": height, "on": on, "in_water": in_water}}
 
 
-def fall(fluid, min_drop, width=(1, 1), search=10, rock=f"#{MOD}:cave_rock"):
-    return {"type": f"{MOD}:fluid_fall", "config": {"fluid": state(fluid, level=0), "rock": rock, "min_drop": min_drop,
-                                                  "search": search, "width": uniform(*width) if width[0] != width[1] else width[0]}}
+def fall(fluid, min_drop, width=(1, 1), search=10, rock=f"#{MOD}:cave_rock", mode=None):
+    """A waterfall or lava fall (FluidFallFeature). mode: where its source goes, "wall" (the default: the wall the try
+    faces in a random direction), "nearest_wall" or "ceiling" (the vault right over the try)."""
+    c = {"fluid": state(fluid, level=0), "rock": rock, "min_drop": min_drop, "search": search,
+         "width": uniform(*width) if width[0] != width[1] else width[0]}
+    if mode:
+        c["mode"] = mode
+    return {"type": f"{MOD}:fluid_fall", "config": c}
+
+
+def span(name, anchor="any", min_span=16, inset=2, above_water=False):
+    """Aims a try at a tall open space of a deep layer (OpenSpanPlacement), past the 32 steps of an environment scan:
+    one of the column's runs of air at least min_span tall, at its top (anchor "ceiling": the block under the vault), its
+    bottom ("floor": the block on a rock floor, never on lava) or anywhere in it ("any")."""
+    s = {"type": f"{MOD}:open_span", "layer": name, "anchor": anchor, "min_span": min_span}
+    if inset != 2:
+        s["inset"] = inset
+    if above_water:
+        s["above_water"] = True
+    return s
 
 
 def spike(body, tip, length, radius, floor_chance, point=None):
@@ -380,33 +403,33 @@ def build_features():
             pools(mix((simple("minecraft:calcite"), 3), (LIMESTONE, 2)),
                   mix((LIMESTONE, 5), (simple("minecraft:calcite"), 3)), 11, overflow=0.12),
             [count(20), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
-    # Small lava pools flush with the floor, in about every second or third gallery (basalt_galleries.jpg).
+    # The Wasteland keeps the old Basalt Galleries' rock features, but in a layer 128 tall instead of 288: a try that
+    # starts at a random height in it (114 blocks to pick from above its lava, where the old layer had 274) lands within
+    # a scan's reach of a floor or a vault about 2.4 times as often. So the rock features are about halved, which leaves
+    # the caves a little fuller than the old galleries; the plants (below) keep their counts and so grow about 2.4 times
+    # as thick, the overgrowth of a hunting ground. The columns keep off the ways (Walkway), and open_way clears them.
+    # Small lava pools flush with the floor, in about every second or third cave (basalt_galleries.jpg).
     feature("wasteland/lava_pools", "local_modifications", ["wasteland"],
             pools(mix((simple("minecraft:blackstone"), 2), (simple("minecraft:basalt", axis="y"), 3)), simple("minecraft:magma_block"), 4, lava=True),
-            [count(32), SQUARE, layer("wasteland", above_water=True)] + floor() + [BIOME])
+            [count(16), SQUARE, layer("wasteland", above_water=True)] + floor() + [BIOME])
     feature("wasteland/columns", "local_modifications", ["wasteland"],
             {"type": f"{MOD}:column_cluster", "config": {
                 "block": mix((simple("minecraft:basalt", axis="y"), 4), (simple("minecraft:polished_basalt", axis="y"), 1)),
                 "radius": 6, "count": 26, "height": uniform(3, 16)}},
-            [count(8), SQUARE, layer("wasteland", above_water=True)] + floor() + [BIOME])
-    # Columns hanging from the vaults, longest in the middle of a cluster; the longest under the great hall's vault, the
-    # chimney and the tallest galleries, where the floor is more than 16 below.
+            [count(4), SQUARE, layer("wasteland", above_water=True)] + floor() + [BIOME])
+    # Columns hanging from the vaults, longest in the middle of a cluster; the longest under the tallest caves' vaults,
+    # where the floor is more than 16 below.
     feature("wasteland/hanging_columns", "local_modifications", ["wasteland"],
             {"type": f"{MOD}:column_cluster", "config": {
                 "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:polished_basalt", axis="y"), 1)),
                 "radius": 4, "count": 20, "height": uniform(3, 10), "hang_chance": 1.0}},
-            [count(12), SQUARE, layer("wasteland", above_water=True)] + ceiling() + [BIOME])
+            [count(6), SQUARE, layer("wasteland", above_water=True)] + ceiling() + [BIOME])
     tall = {"type": "minecraft:block_predicate_filter", "predicate": dict(AIR, offset=[0, -16, 0])}
     feature("wasteland/great_hanging_columns", "local_modifications", ["wasteland"],
             {"type": f"{MOD}:column_cluster", "config": {
                 "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:polished_basalt", axis="y"), 1)),
                 "radius": 6, "count": 34, "height": uniform(8, 18), "hang_chance": 1.0}},
-            [count(6), SQUARE, layer("wasteland", above_water=True)] + ceiling() + [tall, BIOME])
-    # A still pool in the tube hubs, between obsidian and pebbly basalt, its bed glinting with crying obsidian.
-    feature("obsidian_tubes/still_pool", "local_modifications", ["obsidian_tubes"],
-            pools(mix((simple("minecraft:obsidian"), 3), (simple("minecraft:basalt", axis="y"), 1)),
-                  mix((simple("minecraft:obsidian"), 5), (simple("minecraft:crying_obsidian"), 1)), 3),
-            [count(64), SQUARE, layer("basalt_galleries", above_water=True)] + floor() + [BIOME])
+            [count(4), SQUARE, layer("wasteland", above_water=True)] + ceiling() + [tall, BIOME])
     # Short basalt columns hanging only from the basalt patches of the tubes' vaults.
     under_basalt = {"type": "minecraft:block_predicate_filter",
                     "predicate": {"type": "minecraft:matching_blocks", "offset": [0, 1, 0], "blocks": "minecraft:basalt"}}
@@ -507,9 +530,10 @@ def build_features():
     feature("wasteland/smoulder_lichen", "underground_decoration", ["wasteland"],
             attach(simple(f"{MOD}:smoulder_lichen"), "walls_ceiling", 32, f"#{MOD}:basalt_rock", radius=6, height=8),
             [count(6), SQUARE, layer("wasteland", above_water=True), BIOME])
+    # The lichen keeps its count, the overgrowth of a hunting ground; the shards, rock features, go down to three.
     feature("wasteland/amber_shards", "underground_decoration", ["wasteland"],
             attach(simple(f"{MOD}:amber_shard"), "any", 16, f"#{MOD}:basalt_rock", radius=6, height=6),
-            [count(4), SQUARE, layer("wasteland", above_water=True), BIOME])
+            [count(3), SQUARE, layer("wasteland", above_water=True), BIOME])
 
     # ---- fluid springs: waterfalls and lava falls
     feature("rootvaults/waterfalls", "fluid_springs", rv + ["frozen_rootvaults", "sinkhole", "oasis_hollow"], fall("minecraft:water", 6, (1, 3)),
@@ -522,11 +546,12 @@ def build_features():
             [count(8), SQUARE, layer("blue_reaches", above_water=True), BIOME])
     feature("asurine_geodes/meltwater", "fluid_springs", ["asurine_geodes"], fall("minecraft:water", 0, (1, 1), search=12),
             [count(1), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
-    # Lava falls lighting the galleries (basalt_galleries.jpg), each from 3 to 6 blocks under a vault; every one ends in
-    # lava, in a pool or in its own sump, so none runs onto a walk.
+    # Lava falls lighting the Wasteland's caves (basalt_galleries.jpg), each from 3 to 6 blocks under a vault; every one
+    # ends in lava, in a pool or in its own sump, so none runs onto a walk. 48 tries where the old galleries had 80: the
+    # shorter layer finds a vault 2.4 times as often, so a little more light than they had, and the tunnels stay clear.
     feature("wasteland/lava_falls", "fluid_springs", ["wasteland"],
             fall("minecraft:lava", 6, (1, 2), rock=f"#{MOD}:basalt_rock"),
-            [count(80), SQUARE, layer("wasteland", above_water=True)] + ceiling(offset=uniform(-6, -3)) + [BIOME])
+            [count(48), SQUARE, layer("wasteland", above_water=True)] + ceiling(offset=uniform(-6, -3)) + [BIOME])
 
     # ---- vegetal decoration: roots, vines and plants
     feature("rootvaults/hanging_roots", "vegetal_decoration", rv + ["frozen_rootvaults"],
@@ -927,6 +952,80 @@ def build_features():
             [count(8), SQUARE, caves()] + floor() + [BIOME])
     feature("frost_fern_grotto/frostberries", "vegetal_decoration", fg, frostberries, [count(24), SQUARE, caves()] + ceiling() + [BIOME])
 
+    # ---- 0.5: the Basalt Galleries and the Ash Hollows. The Galleries are lifeless: no plant, lichen, vine, moss or
+    # creature in any of their biomes (their climbs hang cinder chains, ClimbVinesFeature), and brightly lit by rock and
+    # lava alone: lava falls from the vaults and down the cliffs, lava pools on the terraces, the lava sea, magma, and the
+    # palette's ember crust and crying obsidian (Palette.shell). Their halls are 60 to 110 across and 60 to 100 tall, where
+    # a try that scans at most 32 blocks for a floor or a vault mostly misses: their features aim with span()
+    # (OpenSpanPlacement), which reads the column for its tall runs of air, floors and vaults alike. So nearly every try
+    # that falls in a hall finds its place, and the counts are per chunk of hall, mostly rarities: a hall 100 across (about
+    # 40 chunks) gets about 10 lava pools, 6 clusters of columns on its floor, 13 hanging from its vault and 4 great ones,
+    # 7 lava falls from the vault and 15 to 20 down its cliffs (six or more in any view of it).
+    gal = "basalt_galleries"
+    halls = ["basalt_galleries", "caldera", "causeway", "scoria_canyons"]   # all but the Obsidian Tubes, the refuge
+    hall_rock = f"#{MOD}:basalt_rock"
+    def hall(anchor, min_span, *offset):
+        """span() in the Galleries, then the origin moved up or down by uniform(*offset), off the vault or the floor."""
+        out = [span(gal, anchor, min_span)]
+        if offset:
+            out.append({"type": "minecraft:random_offset", "xz_spread": 0, "y_spread": uniform(*offset)})
+        return out
+    # Lava pools on the halls' terraces and the Causeway's column tops, their rims flush with the floor.
+    feature("basalt_galleries/lava_pools", "local_modifications", halls,
+            pools(mix((simple("minecraft:polished_blackstone"), 2), (simple("minecraft:blackstone"), 2), (simple("minecraft:basalt", axis="y"), 1)),
+                  simple("minecraft:magma_block"), 5, lava=True),
+            [rarity(2), SQUARE] + hall("floor", 6) + [BIOME])
+    # Clusters of basalt columns on the floors of the main halls and of the Causeway, and hanging from every vault.
+    feature("basalt_galleries/columns", "local_modifications", ["basalt_galleries", "causeway"],
+            {"type": f"{MOD}:column_cluster", "config": {
+                "block": mix((simple("minecraft:basalt", axis="y"), 4), (simple("minecraft:polished_basalt", axis="y"), 2), (simple("minecraft:smooth_basalt"), 1)),
+                "radius": 7, "count": 30, "height": uniform(4, 22), "hang_chance": 0.0}},
+            [rarity(6), SQUARE] + hall("floor", 12, 1, 4) + [BIOME])
+    feature("basalt_galleries/hanging_columns", "local_modifications", halls,
+            {"type": f"{MOD}:column_cluster", "config": {
+                "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:polished_basalt", axis="y"), 1)),
+                "radius": 5, "count": 24, "height": uniform(4, 14), "hang_chance": 1.0}},
+            [rarity(3), SQUARE] + hall("ceiling", 16, -5, -1) + [BIOME])
+    # The great hanging columns of basalt_galleries.jpg: organ pipes up to 36 long under the tallest vaults, only where
+    # the hall under them is at least 50 tall, so they end high over its floor.
+    feature("basalt_galleries/great_hanging_columns", "local_modifications", ["basalt_galleries", "causeway"],
+            {"type": f"{MOD}:column_cluster", "config": {
+                "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:polished_basalt", axis="y"), 1)),
+                "radius": 9, "count": 48, "height": uniform(12, 36), "hang_chance": 1.0}},
+            [rarity(10), SQUARE] + hall("ceiling", 50, -6, -2) + [BIOME])
+    # Vent cones on the Caldera's floor: low stepped mounds of blackstone and magma, tallest in the middle, about five to a
+    # crater.
+    feature("caldera/vent_cones", "local_modifications", ["caldera"],
+            {"type": f"{MOD}:column_cluster", "config": {
+                "block": mix((simple("minecraft:blackstone"), 3), (simple("minecraft:magma_block"), 2), (simple("minecraft:basalt", axis="y"), 1)),
+                "radius": 5, "count": 60, "height": uniform(3, 9), "hang_chance": 0.0}},
+            [rarity(4), SQUARE] + hall("floor", 10, 1, 3) + [BIOME])
+    # A small still pool of lava in the tube hubs, in place of 0.4's water: the refuge's warm glow.
+    feature("obsidian_tubes/lava_pool", "local_modifications", ["obsidian_tubes"],
+            pools(mix((simple("minecraft:obsidian"), 3), (simple("minecraft:basalt", axis="y"), 1)), simple("minecraft:magma_block"), 3, lava=True),
+            [count(16), SQUARE, layer(gal, above_water=True)] + floor() + [BIOME])
+    # The Ash Hollows, the Wasteland's refuge: bare and pale (Palette.shell), a still lava pool and a few amber shards
+    # (crystal) their only light.
+    feature("ash_hollows/lava_pool", "local_modifications", ["ash_hollows"],
+            pools(mix((simple("minecraft:smooth_basalt"), 2), (simple("minecraft:tuff"), 1)), simple("minecraft:magma_block"), 3, lava=True),
+            [count(3), SQUARE, layer("wasteland", above_water=True)] + floor() + [BIOME])
+    feature("ash_hollows/amber_shards", "underground_decoration", ["ash_hollows"],
+            attach(simple(f"{MOD}:amber_shard"), "any", 8, f"#{MOD}:cave_rock", radius=5, height=4),
+            [count(2), SQUARE, layer("wasteland", above_water=True), BIOME])
+    # Lava falls, many more than the Wasteland's: from the high vaults straight down into the middle of the halls, and
+    # down the cliffs from the nearest wall (a try in the middle of a hall finds no wall within 15 and gives no fall); the
+    # Caldera has twice the cliff falls. Every one ends in lava, in the lava sea, a pool or its own sump, and none pours
+    # onto a walk (FluidFallFeature).
+    feature("basalt_galleries/vault_falls", "fluid_springs", halls,
+            fall("minecraft:lava", 16, (1, 2), rock=hall_rock, mode="ceiling"),
+            [rarity(4), SQUARE] + hall("ceiling", 24) + [BIOME])
+    feature("basalt_galleries/cliff_falls", "fluid_springs", halls,
+            fall("minecraft:lava", 10, (1, 3), search=15, rock=hall_rock, mode="nearest_wall"),
+            [count(1), SQUARE] + hall("any", 20) + [BIOME])
+    feature("caldera/lava_falls", "fluid_springs", ["caldera"],
+            fall("minecraft:lava", 8, (1, 3), search=15, rock=hall_rock, mode="nearest_wall"),
+            [count(1), SQUARE] + hall("any", 12) + [BIOME])
+
     # ---- top layer: roots of the trees above, once the chunk's trees have grown; the way down is kept open after
     # everything else. The roots take the wood of the trees over them (match_trees): oak, birch, spruce, jungle, dark
     # oak, cherry, or mangrove roots under a mangrove swamp.
@@ -999,9 +1098,11 @@ NO_RAVINES = ["#minecraft:has_structure/" + s for s in (
     {"id": "#forge:is_swamp", "required": False}, "#minecraft:is_river", "#minecraft:is_ocean", "#minecraft:is_beach"]
 
 # ----------------------------------------------------------------------------------------------- block tags
-CREATE_STONES = ["create:limestone", "create:veridium", "create:asurine", "create:crimsite", "create:ochrum", "create:scoria", "create:scorchia"]
+CREATE_STONES = ["create:limestone", "create:veridium", "create:asurine", "create:crimsite", "create:ochrum", "create:scoria", "create:scorchia",
+                 # 0.5: the Scoria Canyons' layered bands
+                 "create:layered_scoria", "create:layered_scorchia"]
 STAND_INS = ["minecraft:yellow_terracotta", "minecraft:deepslate_tiles", "minecraft:warped_wart_block", "minecraft:brown_terracotta",
-             "minecraft:polished_blackstone", "minecraft:red_terracotta"]
+             "minecraft:polished_blackstone", "minecraft:red_terracotta", "minecraft:terracotta"]
 
 
 def optional(ids): return [{"id": i, "required": False} for i in ids]
@@ -1035,9 +1136,12 @@ BLOCK_TAGS = {
     # blocks: white frost on white snow did not show (half the patches on the jagged peaks were on snow).
     "surface_frost_rock": ["#minecraft:base_stone_overworld", "#minecraft:dirt", "minecraft:packed_ice", "minecraft:ice",
                            "minecraft:blue_ice", "minecraft:gravel", "minecraft:calcite", "minecraft:cobblestone", "minecraft:mossy_cobblestone"],
+    # The Wasteland's and the Galleries' rock: lava falls pour out of it, lichen and shards grow on it. Since 0.5 with the
+    # Galleries' ember crust and the Scoria Canyons' layered stones (terracotta stands in for layered scoria).
     "basalt_rock": ["minecraft:basalt", "minecraft:polished_basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:gilded_blackstone",
-                    "minecraft:magma_block", "minecraft:deepslate_gold_ore", "minecraft:brown_terracotta", "minecraft:polished_blackstone"]
-                   + optional(["create:scoria", "create:scorchia"]),
+                    "minecraft:magma_block", "minecraft:deepslate_gold_ore", "minecraft:brown_terracotta", "minecraft:polished_blackstone",
+                    f"{MOD}:ember_crust", "minecraft:terracotta"]
+                   + optional(["create:scoria", "create:scorchia", "create:layered_scoria", "create:layered_scorchia"]),
 }
 
 # ----------------------------------------------------------------------------------------------- writing
@@ -1060,6 +1164,9 @@ CAVE_MONSTERS = [
 def spawners(name):
     s = {"monster": CAVE_MONSTERS, "creature": [], "ambient": [{"type": "minecraft:bat", "weight": 10, "minCount": 8, "maxCount": 8}],
          "underground_water_creature": [], "water_creature": [], "water_ambient": [], "misc": [], "axolotls": []}
+    if name in GALLERIES:
+        # Nothing lives in the Basalt Galleries: no monster, bat or squid spawns in any of their biomes.
+        return {group: [] for group in s}
     if name not in DRY:
         s["underground_water_creature"] = [{"type": "minecraft:glow_squid", "weight": 10, "minCount": 4, "maxCount": 6}]
     if name == "rootvaults":
@@ -1141,8 +1248,11 @@ def write_all(data_dir, res_dir, write):
     tag("immersive_weathering", "worldgen/biome", "icy", [f"{MOD}:frozen_rootvaults", f"{MOD}:frost_fern_grotto"])
     tag(MOD, "worldgen/biome", "is_upper", [f"{MOD}:{b}" for b in UPPER])
     tag("minecraft", "worldgen/biome", "is_overworld", [f"{MOD}:{b}" for b in UPPER])
-    tag("forge", "worldgen/biome", "is_cave", [f"{MOD}:{b}" for b in OURS])
-    tag("forge", "worldgen/biome", "is_underground", [f"{MOD}:{b}" for b in OURS])
+    # Not the Galleries' biomes: other mods add their cave creatures and plants to biomes through these two tags, and
+    # nothing may live in the Galleries. (The mod reads them only above the pack's floor, DeepBiomeResolver.)
+    caves = [f"{MOD}:{b}" for b in OURS if b not in GALLERIES]
+    tag("forge", "worldgen/biome", "is_cave", caves)
+    tag("forge", "worldgen/biome", "is_underground", caves)
     for kind, values in ROOT_KINDS.items():
         tag(MOD, "worldgen/biome", "rootvaults/" + kind, values)
     tag(MOD, "worldgen/biome", "rootvaults/no_ravines", NO_RAVINES)

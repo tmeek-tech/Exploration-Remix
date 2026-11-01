@@ -1,0 +1,32 @@
+{
+  "feature": "explorationremix:basalt_galleries/great_hanging_columns",
+  "placement": [
+    {
+      "type": "minecraft:rarity_filter",
+      "chance": 10
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:open_span",
+      "layer": "basalt_galleries",
+      "anchor": "ceiling",
+      "min_span": 50
+    },
+    {
+      "type": "minecraft:random_offset",
+      "xz_spread": 0,
+      "y_spread": {
+        "type": "minecraft:uniform",
+        "value": {
+          "min_inclusive": -6,
+          "max_inclusive": -2
+        }
+      }
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

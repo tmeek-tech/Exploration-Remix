@@ -3,8 +3,8 @@
   "temperature": 1.2,
   "downfall": 0.0,
   "effects": {
-    "fog_color": 6971996,
-    "sky_color": 6971996,
+    "fog_color": 7893612,
+    "sky_color": 7893612,
     "water_color": 4219002,
     "water_fog_color": 1713712,
     "grass_color": 9075290,
@@ -19,12 +19,12 @@
       "options": {
         "type": "minecraft:white_ash"
       },
-      "probability": 0.01
+      "probability": 0.004
     },
-    "ambient_sound": "explorationremix:ambient.basalt.loop",
+    "ambient_sound": "explorationremix:ambient.hollows.loop",
     "additions_sound": {
-      "sound": "explorationremix:ambient.basalt.additions",
-      "tick_chance": 0.003
+      "sound": "explorationremix:ambient.hollows.additions",
+      "tick_chance": 0.004
     }
   },
   "spawners": {
@@ -98,12 +98,16 @@
   "features": [
     [],
     [],
+    [
+      "explorationremix:ash_hollows/lava_pool"
+    ],
     [],
     [],
     [],
     [],
-    [],
-    [],
+    [
+      "explorationremix:ash_hollows/amber_shards"
+    ],
     [],
     [],
     [
