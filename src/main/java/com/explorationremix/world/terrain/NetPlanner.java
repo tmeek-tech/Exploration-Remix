@@ -2524,6 +2524,52 @@ final class NetPlanner {
             for (Way wy : n.ways) indexWay(wy);
         }
 
+        /**
+         * Puts the two pieces of tunnel wy in its place (a junction room or a refuge cut into it): w1, its points 0 to
+         * k0, takes wy's place and number among the plan's ways, and w2 goes last. Only what changed is indexed again
+         * (wy's points past k0 out, w2's in), so the index is what {@link #rebuildPointIndex} would make: rebuilt whole
+         * after every junction room tried, it took a third of a Wasteland plan's time.
+         */
+        void splitWay(Way wy, Way w1, int k0, Way w2) {
+            int at = n.ways.indexOf(wy);
+            unindex(wy, k0 + 1, wy.n - 1);
+            n.ways.set(at, w1);
+            w1.id = at;
+            addWay(w2);
+        }
+
+        /** Undoes {@link #splitWay} once nothing else was added: wy back in w1's place, w2 (the last way) gone. */
+        void unsplitWay(Way wy, Way w1, int k0, Way w2) {
+            if (n.ways.get(n.ways.size() - 1) != w2) {
+                n.ways.set(n.ways.indexOf(w1), wy);
+                n.ways.remove(w2);
+                rebuildPointIndex();
+                return;
+            }
+            unindex(w2, 0, w2.n - 1);
+            n.ways.remove(n.ways.size() - 1);
+            int at = n.ways.indexOf(w1);
+            n.ways.set(at, wy);
+            wy.id = at;
+            for (int k = k0 + 1; k < wy.n; k++) {
+                int b = bucket(wy.x[k], wy.z[k]);
+                if (b >= 0) pts[b].add(new int[]{wy.id, k});
+            }
+        }
+
+        /** Takes points k0 to k1 of way wy (under its number) out of the point index. */
+        void unindex(Way wy, int k0, int k1) {
+            for (int k = k0; k <= k1; k++) {
+                int b = bucket(wy.x[k], wy.z[k]);
+                if (b < 0) continue;
+                List<int[]> l = pts[b];
+                for (int i = l.size() - 1; i >= 0; i--) {
+                    int[] q = l.get(i);
+                    if (q[0] == wy.id && q[1] == k) { l.remove(i); break; }
+                }
+            }
+        }
+
         /** Extra edges that close long loops: the tree's way round between their ends is much longer than the edge. */
         void loops(List<Edge> cand) {
             int V = 0;
@@ -2985,9 +3031,7 @@ final class NetPlanner {
             Edge e1 = halfEdge(e, wy.a, j.id, w1), e2 = halfEdge(e, j.id, wy.b, w2);
             n.edges.set(n.edges.indexOf(e), e1);
             n.edges.add(e2);
-            n.ways.set(n.ways.indexOf(wy), w1);
-            n.ways.add(w2);
-            rebuildPointIndex();
+            splitWay(wy, w1, i, w2);
             j.deg = 2;
             int ib = Math.max(0, i - 2), ia = Math.min(wy.n - 1, i + 2);
             useDoor(j.id, Math.atan2(wy.z[ib] - j.z, wy.x[ib] - j.x));
@@ -2998,9 +3042,7 @@ final class NetPlanner {
             }
             n.edges.set(n.edges.indexOf(e1), e);
             n.edges.remove(e2);
-            n.ways.set(n.ways.indexOf(w1), wy);
-            n.ways.remove(w2);
-            rebuildPointIndex();
+            unsplitWay(wy, w1, i, w2);
             n.ch.remove(n.ch.size() - 1);
             doorAngles.remove(doorAngles.size() - 1);
             return false;
@@ -3320,9 +3362,7 @@ final class NetPlanner {
                 Edge e1 = halfEdge(e, wy.a, c.id, w1), e2 = halfEdge(e, c.id, wy.b, w2);
                 n.edges.set(n.edges.indexOf(e), e1);
                 n.edges.add(e2);
-                n.ways.set(n.ways.indexOf(wy), w1);
-                n.ways.add(w2);
-                rebuildPointIndex();
+                splitWay(wy, w1, k[0], w2);
                 c.deg = 2;
                 useDoor(c.id, Math.atan2(wy.z[k[0]] - c.z, wy.x[k[0]] - c.x));
                 useDoor(c.id, Math.atan2(wy.z[k[1]] - c.z, wy.x[k[1]] - c.x));
@@ -5822,21 +5862,39 @@ final class NetPlanner {
                 }
             }
             boolean cityDoor = city != null && (ca == city.id || cb == city.id);
+            // the chambers and shafts the way can come near, found once: any other lies further off in x or z, from
+            // every point of the way, than the tests below let one stand, so leaving it out changes no answer
+            double lx = 1e18, hx = -1e18, lz = 1e18, hz = -1e18, wMax = 0;
+            for (int i = 0; i < wy.n; i++) {
+                lx = Math.min(lx, wy.x[i]); hx = Math.max(hx, wy.x[i]);
+                lz = Math.min(lz, wy.z[i]); hz = Math.max(hz, wy.z[i]);
+                wMax = Math.max(wMax, wy.w[i]);
+            }
+            List<Chamber> nearC = new ArrayList<>();
+            for (Chamber c : n.ch) {
+                if (!c.keep || c.kind == Kind.CANYON || c.dark >= 0 || c.id == ca || c.id == cb) continue;
+                double m = c.R() + wMax + sp.clearC + 1;
+                if (!capsule(c) && (c.x < lx - m || c.x > hx + m || c.z < lz - m || c.z > hz + m)) continue;
+                nearC.add(c);
+            }
+            List<Shaft> nearS = new ArrayList<>();
+            for (Shaft s : n.shafts) {
+                double m = s.r + wMax + 4;
+                if (s.x < lx - m || s.x > hx + m || s.z < lz - m || s.z > hz + m) continue;
+                nearS.add(s);
+            }
             for (int i = 0; i < wy.n; i++) {
                 double px = wy.x[i], pz = wy.z[i], pf = wy.f[i], pw = wy.w[i], ph = wy.hgt[i];
                 // cell margin
                 if (px < x0 + EDGE_MARGIN + pw || px > x0 + cell - EDGE_MARGIN - pw || pz < z0 + EDGE_MARGIN + pw || pz > z0 + cell - EDGE_MARGIN - pw) return false;
                 if (pf - wy.slab[i] < B + Terrain.SEAL + 2 || pf + ph > T - Terrain.SEAL - 3) return false;
                 if (n.dark != null && !relaxDark && (i & 1) == 0 && n.dark.hit(px, pz, pw + 2, pf - wy.slab[i] - 2, pf + ph + 2, darkOf(ca), darkOf(cb))) return false;
-                for (Chamber c : n.ch) {
-                    if (!c.keep) continue;
-                    if (c.kind == Kind.CANYON || c.dark >= 0) continue;
-                    if (c.id == ca || c.id == cb) continue;
+                for (Chamber c : nearC) {
                     if (capsule(c)) {
                         if (capGap(c, px, pz) > pw + sp.clearC) continue;
                     } else {
-                        double d = Math.hypot(px - c.x, pz - c.z);
-                        if (d > c.R() + pw + sp.clearC) continue;
+                        double dx = px - c.x, dz = pz - c.z, lim = c.R() + pw + sp.clearC;
+                        if (far(dx, dz, lim) || Math.hypot(dx, dz) > lim) continue;
                     }
                     if (pf + ph + sp.clearCV < c.yLo() || c.yHi() + sp.clearCV < pf - wy.slab[i]) continue;
                     return false;
@@ -5854,8 +5912,8 @@ final class NetPlanner {
                         Way o = n.ways.get(q[0]);
                         if (o == wy) continue;
                         int j = q[1];
-                        double d = Math.hypot(px - o.x[j], pz - o.z[j]);
-                        if (d > pw + o.w[j] + sp.clearH) continue;
+                        double ex = px - o.x[j], ez = pz - o.z[j], lim = pw + o.w[j] + sp.clearH;
+                        if (far(ex, ez, lim) || Math.hypot(ex, ez) > lim) continue;
                         // two ways leaving the same chamber may share its mouth
                         if (sharesEnd(o, ca, cb) && nearOwnEnd(px, pz, ca, cb)) continue;
                         double gap = pf > o.f[j] ? pf - wy.slab[i] - (o.f[j] + o.hgt[j]) : o.f[j] - o.slab[j] - (pf + ph);
@@ -5863,9 +5921,9 @@ final class NetPlanner {
                         return false;
                     }
                 }
-                for (Shaft s : n.shafts) {
-                    double d = Math.hypot(px - s.x, pz - s.z);
-                    if (d > s.r + pw + 3) continue;
+                for (Shaft s : nearS) {
+                    double dx = px - s.x, dz = pz - s.z, lim = s.r + pw + 3;
+                    if (far(dx, dz, lim) || Math.hypot(dx, dz) > lim) continue;
                     if (pf + ph + 2 < s.y0 || s.y1 + 2 < pf - wy.slab[i]) continue;
                     return false;
                 }
@@ -5889,6 +5947,16 @@ final class NetPlanner {
                 }
             }
             return true;
+        }
+
+        /**
+         * True when (dx, dz) lies surely further than lim from the origin, by its larger part alone: the distance is at
+         * least that much, and the margin is far more than Math.hypot's rounding, so a test of
+         * {@code far(dx, dz, lim) || Math.hypot(dx, dz) > lim} answers as the hypot alone does, at a fraction of the
+         * cost (most of what clear() measures lies far off).
+         */
+        static boolean far(double dx, double dz, double lim) {
+            return Math.abs(dx) > lim + 1e-6 || Math.abs(dz) > lim + 1e-6;
         }
 
         boolean sharesEnd(Way o, int ca, int cb) {
