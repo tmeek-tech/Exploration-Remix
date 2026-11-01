@@ -24,10 +24,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Sticks blocks onto the faces of rock around the origin: crystals on any face, shelf fungi on walls, sheets of lichen
- * and ivy. A block with a {@code facing} property points away from the face it grows on; a sheet (a MultifaceBlock)
- * covers every allowed face it touches. Either is waterlogged when it grows in water. Vanilla's multiface_growth only
- * looks at the blocks next to its origin; this scatters its tries over a radius by height box, so sheets form patches.
+ * Sticks blocks onto the faces of rock around the origin: crystals on any face, shelf fungi on walls, hanging ferns on
+ * walls with room below them, sheets of lichen and ivy. A block with a {@code facing} property points away from the
+ * face it grows on; a sheet (a MultifaceBlock) covers every allowed face it touches. Either is waterlogged when it grows
+ * in water. Vanilla's multiface_growth only looks at the blocks next to its origin; this scatters its tries over a
+ * radius by height box, so sheets form patches.
  */
 public final class SurfaceAttachFeature extends Feature<SurfaceAttachFeature.Config> {
     public record Config(BlockStateProvider state, String faces, int tries, int radius, int height, HolderSet<Block> on,
@@ -60,6 +61,8 @@ public final class SurfaceAttachFeature extends Feature<SurfaceAttachFeature.Con
             BlockState here = level.getBlockState(pos);
             boolean water = here.is(net.minecraft.world.level.block.Blocks.WATER) && here.getFluidState().isSource();
             if (!here.isAir() && !(water && c.inWater())) continue;
+            // a hanging plant's fronds reach below its block: only where they hang free
+            if (c.faces().equals("walls_hanging") && !level.getBlockState(pos.below()).isAir()) continue;
             supports.clear();
             for (Direction d : Direction.values()) {
                 if (!allowed(c.faces(), d)) continue;
@@ -90,12 +93,13 @@ public final class SurfaceAttachFeature extends Feature<SurfaceAttachFeature.Con
     }
 
     /**
-     * "any", "walls", "floor" (resting on the block below), "ceiling" (hanging from the block above), "floor_walls", or
-     * "walls_ceiling" (climbable sheets, which would slow anyone walking over a floor of them).
+     * "any", "walls", "walls_hanging" (walls, with air below the spot), "floor" (resting on the block below), "ceiling"
+     * (hanging from the block above), "floor_walls", or "walls_ceiling" (climbable sheets, which would slow anyone
+     * walking over a floor of them).
      */
     private static boolean allowed(String faces, Direction d) {
         return switch (faces) {
-            case "walls" -> d.getAxis().isHorizontal();
+            case "walls", "walls_hanging" -> d.getAxis().isHorizontal();
             case "floor" -> d == Direction.DOWN;
             case "ceiling" -> d == Direction.UP;
             case "floor_walls" -> d != Direction.UP;

@@ -7,7 +7,7 @@
         "Name": "explorationremix:silver_wall_fern"
       }
     },
-    "faces": "walls",
+    "faces": "walls_hanging",
     "tries": 32,
     "radius": 6,
     "height": 6,

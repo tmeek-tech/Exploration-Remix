@@ -6,8 +6,9 @@ and Create stone and dressed to match a set of reference pictures. Made for a pa
 Immersive Weathering, Create and Better Combat.
 
 **Status: milestone 1 (0.5.0: the bottom layer split into the Wasteland and the Basalt Galleries, with the Galleries'
-lava cycle), world generation and cave looks.** The first build's creatures, runs, runes and
-combat changes were removed (git history keeps them); they return in later milestones, built on these caves.
+lava cycle; with 0.4.2's fluffier silver ferns that also hang on walls), world generation and cave looks.** The first
+build's creatures, runs, runes and combat changes were removed (git history keeps them); they return in later
+milestones, built on these caves.
 
 ## Requirements
 
@@ -68,8 +69,8 @@ regenerated.
   lava with a path across their tops; the **Scoria Canyons**, a rift of banded Create scoria over a lava river with
   natural bridges; two **Obsidian Tubes** hubs per cell. Walkable arches and bridges cross the halls, and flights of
   stairs lead from the bedrock landing up out of the flood and from the entry landing down to the halls; there are no
-  climbs. Nothing lives here: no plants and no mobs. Light comes from the lava, many lava falls, magma and glowing
-  ember crust.
+  climbs. Nothing lives here: no plants and no mobs. Light comes from the lava, many lava falls, magma, glowing ember
+  crust and an unseen glow along the rock that lights the halls' walls, ledges and vaults as their lava would.
 * **Blue Reaches** keep 0.2.0's sizes: the Deep Blue Rift, up to 160 blocks deep, with its ledge path, natural bridges
   and the Asurine Geodes beside it; the deep dark's caverns on two tiers, with an ancient city in about one cell in
   seven. The network's rooms and tunnels join them. Columns, fins and spires stand in the widest spaces, so a view
@@ -119,12 +120,13 @@ regenerated.
     between y -64 and about y 0, never under an ocean or river. Strongholds and mineshafts stay above y -56 so the End
     stays reachable.
 * **Looks:** new plants and crystals (white glow flowers, lantern fungi and roots, giant lantern fungi with glowing
-  caps, wisteria, lantern pods, lavender flowers and glowing gold flowers, silver ferns, orange shelf fungi, lavender
-  coral, pale coral fans, ember vines, asurine crystals, blue glow mushrooms and vines), glow berries thick in the
-  upper caves, lantern weed on the lake beds, lava falls, magma and glowing ember crust in the Wasteland and the
-  Basalt Galleries, cinder chains instead of vines in the lifeless biomes, each biome's own fog, water colour,
-  particles and ambient sound, steam over hot pools, embers over lava, and pollen in daylight shafts. Tuned for
-  vanilla lighting without shaders: every biome carries enough glowing things to see by.
+  caps, wisteria, lantern pods, lavender flowers and glowing gold flowers, silver ferns (placed on the side of a block
+  they hang down it, as in the Silver Fern Rift), orange shelf fungi, lavender coral, pale coral fans, ember vines,
+  asurine crystals, blue glow mushrooms and vines), glow berries thick in the upper caves, lantern weed on the lake
+  beds, lava falls, magma and glowing ember crust in the Wasteland and the Basalt Galleries, cinder chains instead of
+  vines in the lifeless biomes, each biome's own fog, water colour, particles and ambient sound, steam over hot pools,
+  embers over lava, and pollen in daylight shafts. Tuned for vanilla lighting without shaders: every biome carries
+  enough glowing things to see by.
 
 ## Commands
 
