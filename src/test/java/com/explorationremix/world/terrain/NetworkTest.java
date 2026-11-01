@@ -272,9 +272,11 @@ class NetworkTest {
     /**
      * Basalt Galleries cells {seed, cx, cz} whose ways between the gates {@link #twoOrThreeWaysToEachGate} checks too.
      * In each a careless plan leaves a single way: the bedrock landing's two flights end in one hall with one tunnel
-     * on, or the entry landing's flight ends blind and every way passes through one court.
+     * on, or the entry landing's flight ends blind and every way passes through one court, or (123456789) the bedrock
+     * landing's second flight runs out by the cell's edge and the flight put in its place finds a vestibule's tunnel
+     * where its own would go.
      */
-    static final long[][] GALLERIES_GATE_CELLS = {{18000083, -9, 4}, {33000128, 2, 7}};
+    static final long[][] GALLERIES_GATE_CELLS = {{18000083, -9, 4}, {33000128, 2, 7}, {123456789, 15, 2}};
 
     @Test
     void twoOrThreeWaysToEachGate() {
@@ -300,8 +302,23 @@ class NetworkTest {
     @Test
     void climbsAreStaged() { overPlans(NetworkTest::stagedClimbs); }
 
+    /**
+     * Basalt Galleries cells {seed, cx, cz} whose tube hubs {@link #tubesAndArches} checks too: in each a hub stands
+     * crowded by its tunnel and the rooms round it, and found room for one blind tube in its first dozen places.
+     */
+    static final long[][] GALLERIES_TUBE_CELLS = {{6745344390125L, 10, 5}, {8579632657643L, -16, 0}, {874869860, -3, 9}};
+
     @Test
-    void tubesAndArches() { overPlans(NetworkTest::tubesArches); }
+    void tubesAndArches() {
+        overPlans(NetworkTest::tubesArches);
+        List<String> fails = new ArrayList<>();
+        for (long[] c : GALLERIES_TUBE_CELLS) {
+            Terrain t = terrain(c[0]);
+            int cx = (int) c[1], cz = (int) c[2];
+            tubesArches(t, t.network.net(Terrain.GALLERIES, cx, cz), tag(c[0], Terrain.GALLERIES, cx, cz), fails);
+        }
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
+    }
 
     @Test
     void queriesSeeEveryWayAndClimb() { overPlans(NetworkTest::queries); }
@@ -685,8 +702,26 @@ class NetworkTest {
         // the other layers never drop one
         for (long seed : SEEDS) for (int[] cell : CELLS) for (int l = 1; l < t.shape.layerCount; l++)
             dropped(terrain(seed), terrain(seed).network.net(l, cell[0], cell[1]), tag(seed, l, cell[0], cell[1]), fails);
+        for (long[] c : GALLERIES_PORTAL_CELLS) {
+            Terrain tc = terrain(c[0]);
+            int cx = (int) c[1], cz = (int) c[2];
+            Net n = tc.network.net(Terrain.GALLERIES, cx, cz);
+            String tg = tag(c[0], Terrain.GALLERIES, cx, cz);
+            dropped(tc, n, tg, fails);
+            joinedToEntry(tc, n, tg, fails);
+            refuges(tc, n, tg, fails);
+        }
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
+
+    /**
+     * Basalt Galleries cells {seed, cx, cz} whose portal vestibules {@link #portalsAreJoined} checks too. In each a
+     * vestibule is boxed in, 30 blocks in from the cell's edge: a tunnel or a long hall runs along the edge in front of
+     * it, a gallery stands close by 30 blocks higher, or (3422002863124) a hall's only way in coils over itself on its
+     * way down and the hall, its tube and three vestibules round the cell's corner hang on it.
+     */
+    static final long[][] GALLERIES_PORTAL_CELLS = {{54162964, 4, -7}, {124039, 0, -10}, {3638729150490L, 16, 0}, {713448, -17, -14},
+            {-693432904, 16, -4}, {3422002863124L, 17, 12}};
 
     /**
      * Section 11.1, over 3 seeds x 4 x 4 Blue cells: every eligible city site is at least 150 inside its cell and 140
@@ -1587,15 +1622,19 @@ class NetworkTest {
      * moves and vine rungs). In the Basalt Galleries' halls (0.5) the low places are the bedrock landing and its two
      * flights, the Causeway's column path, the rift's low ledges and the Caldera's crater rim, each a stair or a ramp
      * below a dry floor: the bar is 98% within 80 steps (measured 99.8 and 100%, the longest 85 and 79; the brief asked
-     * for 95%), none without a way out.
+     * for 95%), none without a way out. So too in {@link #GALLERIES_LAVA6_SURGE_CELL} with the lava 6 deep (config),
+     * where the bedrock landing's basin held its lava a block deep over a rough bed.
      */
     @Test
     @Tag("voxel")
     void basaltSurgeHasAWayOut() {
         List<String> fails = new ArrayList<>();
-        for (int s = 0; s < VOX_SEEDS.length; s++) {
-            Terrain t = terrain(VOX_SEEDS[s]);
-            VoxelHarness v = built(VOX_SEEDS[s], Terrain.GALLERIES, VOX_CELLS[s][0], VOX_CELLS[s][1], 1, 1);
+        for (int s = 0; s <= VOX_SEEDS.length; s++) {
+            boolean lava6 = s == VOX_SEEDS.length;
+            long seed = lava6 ? GALLERIES_LAVA6_SURGE_CELL[0] : VOX_SEEDS[s];
+            int cx = lava6 ? (int) GALLERIES_LAVA6_SURGE_CELL[1] : VOX_CELLS[s][0], cz = lava6 ? (int) GALLERIES_LAVA6_SURGE_CELL[2] : VOX_CELLS[s][1];
+            Terrain t = lava6 ? new Terrain(galleriesLava(6), -64, seed) : terrain(seed);
+            VoxelHarness v = lava6 ? unbuilt(t, Terrain.GALLERIES, cx, cz) : built(seed, Terrain.GALLERIES, cx, cz, 1, 1);
             int W = (int) Math.round(t.shape.waterY(Terrain.GALLERIES));
             int[] h = v.surge(W + Terrain.FLOOD_RISE + 1);
             int under = h[6];
@@ -1603,9 +1642,9 @@ class NetworkTest {
             for (int[] f : v.far) if (f[3] <= 80) to80++;
             double within64 = (h[0] + h[1] + h[2] + h[3]) / (double) Math.max(1, under);
             double within80 = (h[0] + h[1] + h[2] + h[3] + to80) / (double) Math.max(1, under);
-            String tg = tag(VOX_SEEDS[s], Terrain.GALLERIES, VOX_CELLS[s][0], VOX_CELLS[s][1]);
+            String tg = tag(seed, Terrain.GALLERIES, cx, cz) + (lava6 ? " (lava 6 deep)" : "");
             System.out.printf("%s: %d places under the surge, %.1f%% within 64 of safety, %.1f%% within 80, longest %d; surge niches %d%n", tg, under,
-                    100 * within64, 100 * within80, h[7], t.network.net(Terrain.GALLERIES, VOX_CELLS[s][0], VOX_CELLS[s][1]).surgeNiches);
+                    100 * within64, 100 * within80, h[7], t.network.net(Terrain.GALLERIES, cx, cz).surgeNiches);
             if (under == 0) fails.add(tg + ": nothing under the surge (the bedrock landing is missing?)");
             if (within80 < 0.98) fails.add(tg + ": only " + fmt(100 * within80) + "% of the places under the surge are within 80 of safety");
             if (h[5] > 0) fails.add(tg + ": " + h[5] + " places under the surge have no way out");
@@ -1613,6 +1652,11 @@ class NetworkTest {
         }
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
+
+    /**
+     * A Basalt Galleries cell {seed, cx, cz} whose surge {@link #basaltSurgeHasAWayOut} checks with the lava 6 deep.
+     */
+    static final long[] GALLERIES_LAVA6_SURGE_CELL = {-1280804115, 2, 13};
 
     /** The share of the standing places in the main component, every node and every portal of 2 x 2 cells reached. */
     @Test
@@ -1673,18 +1717,27 @@ class NetworkTest {
     /**
      * Basalt Galleries cells {seed, cx, cz} whose falls {@link #noLethalFalls} checks besides the voxel cells. Each has
      * a place where a careless plan leaves a fall of 16 to 22: a step off a rift bridge's side onto a low ledge, a step
-     * past an upper ledge's end by the wall into a pocket, or a fall through a tunnel's floor into the tunnel under it
-     * (another tunnel, or the same one where it loops over itself).
+     * past an upper ledge's end by the wall into a pocket, a fall through a tunnel's floor into the tunnel under it
+     * (another tunnel, or the same one where it loops over itself), beside a tunnel's walk where it coils 13 to 18
+     * down over itself (871161, 1163980495), or off the Causeway's column path's far side into the slot by the wall,
+     * or off the rock behind the path into a slit by the wall (-1618033, 457252, -31415).
      */
-    static final long[][] GALLERIES_FALL_CELLS = {{33000128, 2, 7}, {424242, -3, 8}, {9000056, 14, 1}, {1000020, -8, -12}, {11000050, -1, -4}};
+    static final long[][] GALLERIES_FALL_CELLS = {{33000128, 2, 7}, {424242, -3, 8}, {9000056, 14, 1}, {1000020, -8, -12}, {11000050, -1, -4},
+            {871161, 4, 19}, {1163980495, 6, -7}, {-1618033, -14, 5}, {457252, -12, -15}, {-31415, -10, -5}};
+
+    /**
+     * Basalt Galleries cells {seed, cx, cz} whose falls {@link #noLethalFalls} checks with the lava 6 deep (config): in
+     * each a hall's lava stood a block deep over its bed there, its rough bed standing up in spikes and islands.
+     */
+    static final long[][] GALLERIES_LAVA6_FALL_CELLS = {{-1958069311, 16, 17}, {-1618033, -8, -7}};
 
     /**
      * Section 10: no fall from a standing place in a tunnel, a climb, a ledge passage or an ordinary room lands more
      * than 15 lower; a staged climb ends a fall on the floor of the stage it fell down. Falls into water or onto vines
      * are safe. Falls in the rift, the deep dark, the helices and the ancient city are reported, not failed: 0.2.0's
      * cliffs and the high ledges are meant to be dangerous. The Basalt Galleries are checked in the {@link
-     * #GALLERIES_FALL_CELLS} too, and in their first voxel cell with their lava 6 deep (config), where a hall's lava
-     * stands over its bed as at the default depth.
+     * #GALLERIES_FALL_CELLS} too, and in their first voxel cell and the {@link #GALLERIES_LAVA6_FALL_CELLS} with their
+     * lava 6 deep (config), where a hall's lava stands over its bed as at the default depth.
      */
     @Test
     @Tag("voxel")
@@ -1695,6 +1748,7 @@ class NetworkTest {
         // more Basalt Galleries cells, built one at a time and not kept
         for (long[] c : GALLERIES_FALL_CELLS) runs.add(new Object[]{c[0], Terrain.GALLERIES, (int) c[1], (int) c[2], -1});
         runs.add(new Object[]{VOX_SEEDS[0], Terrain.GALLERIES, VOX_CELLS[0][0], VOX_CELLS[0][1], -1, new Terrain(galleriesLava(6), -64, VOX_SEEDS[0])});
+        for (long[] c : GALLERIES_LAVA6_FALL_CELLS) runs.add(new Object[]{c[0], Terrain.GALLERIES, (int) c[1], (int) c[2], -1, new Terrain(galleriesLava(6), -64, c[0])});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
         for (Object[] run : runs) {
             long seed = (Long) run[0];
