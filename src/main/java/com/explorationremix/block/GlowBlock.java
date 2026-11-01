@@ -22,12 +22,31 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * {@code HallGlowFeature} so the halls read lit by their lava. Complementary leaves unlit rock near black and shows a
  * block's light only a few blocks out, so the lava alone lights a thin rim of a hall 100 blocks tall.
  * <p>
- * It behaves like air in nearly every way but its light ({@link #LEVEL}, 0 to 15): nothing is drawn, nothing collides
- * with it or can aim at it, a placed block or a falling one takes its place, a fluid flows into it quietly (it is a
- * {@link LiquidBlockContainer} only so that lava does not fizz as it would taking any other block), and an explosion
- * takes it as it takes tall grass (it has no resistance). It is not air to the game ({@code isAir()} is false, as for
- * vanilla's light block), so the chunk's light still finds it in a section with nothing else; the mod's own looks and
- * tools ask {@link #open} instead. It drops nothing, makes no sound and has no item.
+ * Nothing is drawn but its light ({@link #LEVEL}, 0 to 15): nothing collides with it or can aim at it, a placed block or
+ * a falling one takes its place, a fluid flows into it quietly (it is a {@link LiquidBlockContainer} only so that lava
+ * does not fizz as it would taking any other block), and an explosion takes it as it takes tall grass (it has no
+ * resistance). It is not air to the game ({@code isAir()} is false, as for vanilla's light block), so the chunk's light
+ * still finds it in a section with nothing else; the mod's own looks, tools and features ask {@link #open} instead. A
+ * nether portal and fire may take its place ({@code PortalShapeMixin}, {@code BaseFireBlockMixin}) and a growing tree
+ * grows through it ({@code #minecraft:replaceable_by_trees}). Vanilla code that asks for air elsewhere still sees it as
+ * a block, as it sees vanilla's light block: {@code /fill ... keep}, {@code /setblock ... keep} and
+ * {@code replace minecraft:air} skip it (fill with {@code replace explorationremix:glow}), and sugar cane, cactus,
+ * bamboo, stems, a hoe or shovel under it, and fire spreading into it stop at it. It drops nothing, makes no sound and
+ * has no item.
+ * <p>
+ * Once something else has taken a glow's place (a block placed and later mined, a bucket, a flow that recedes, an
+ * explosion, a piston, a falling block) nothing puts it back; only the flood band's glow, which the rising lava takes and
+ * marks, comes back with the drain ({@code Flood}, {@code LavaChunk} "glow"), always at {@code HallGlowFeature.BAND_LEVEL}
+ * (the mask keeps no level, and worldgen gives the band no other).
+ * <p>
+ * For the quakes, eruptions and the terrain reset: ask {@link #open}, not {@code isAir()}, whether a spot is empty
+ * (under a placed block, under a ceiling); never count a glow as support. {@code FallingBlockEntity.fall(level, pos,
+ * state)} writes air at {@code pos}, so debris spawned under a ceiling must start only where {@code isAir()} holds, or
+ * it erases a glow. A falling block that lands in a glow, a placed block and an explosion ({@code onBlockExploded} sets
+ * air) take it for good, so a change log records a glow like any other block and the reset puts it back from that log.
+ * Where the glow goes depends on the blocks round it after every feature ran, so it cannot be worked out again from
+ * {@code Terrain}; and in a slice the lava holds, the reset puts a glow back as lava with its mask and glow bits set
+ * ({@code LavaChunk}), never as the block.
  */
 public class GlowBlock extends Block implements LiquidBlockContainer {
     public static final IntegerProperty LEVEL = BlockStateProperties.LEVEL;

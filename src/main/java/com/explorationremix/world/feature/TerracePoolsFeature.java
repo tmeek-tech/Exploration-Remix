@@ -1,5 +1,6 @@
 package com.explorationremix.world.feature;
 
+import com.explorationremix.block.GlowBlock;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -113,7 +114,7 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
                 // anyone who fell in would stand two blocks under its top with no way out. Water pools keep the
                 // raised rim.
                 pos.set(x, fy + 1, z);
-                if (!c.lava() && level.getBlockState(pos).isAir()) level.setBlock(pos, c.rim().getState(random, pos), 2);
+                if (!c.lava() && GlowBlock.open(level.getBlockState(pos))) level.setBlock(pos, c.rim().getState(random, pos), 2);
             }
         }
         // Where the rim stands over a drop, the pool may spill over it, down to the next step.
@@ -128,7 +129,7 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
                 if (inside && water[(nz + r) * size + nx + r]) byPool = true;
                 if (!inside || cell[(nz + r) * size + nx + r] != 1) {
                     pos.set(o.getX() + nx, fy, o.getZ() + nz);
-                    if (level.getBlockState(pos).isAir()) overDrop = true;
+                    if (GlowBlock.open(level.getBlockState(pos))) overDrop = true;
                 }
             }
             if (!byPool || !overDrop) continue;
@@ -175,6 +176,6 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
     private static boolean isFloor(WorldGenLevel level, int x, int y, int z) {
         BlockPos p = new BlockPos(x, y, z);
         BlockState s = level.getBlockState(p);
-        return s.isSolid() && !s.hasBlockEntity() && level.getBlockState(p.above()).isAir() && level.getBlockState(p.above(2)).isAir();
+        return s.isSolid() && !s.hasBlockEntity() && GlowBlock.open(level.getBlockState(p.above())) && GlowBlock.open(level.getBlockState(p.above(2)));
     }
 }

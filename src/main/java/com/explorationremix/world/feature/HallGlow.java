@@ -1,5 +1,6 @@
 package com.explorationremix.world.feature;
 
+import com.explorationremix.world.terrain.Hashing;
 import com.explorationremix.world.terrain.Perlin;
 import net.minecraft.util.Mth;
 
@@ -9,6 +10,15 @@ final class HallGlow {
 
     /** The level of every glow in the flood band, the one the lava's drain puts back. */
     static final int BAND_LEVEL = 15;
+
+    /**
+     * The hash that places the glow's spot in the cube (cx, cy, cz): its offsets along x, y and z are read from bits 0,
+     * 16 and 32. Mixed twice, as {@code Hashing.mix} mixes its last argument with one multiply only, which lined the
+     * spots of cubes next to each other along z up in rows.
+     */
+    static long spotHash(long seed, int cx, int cy, int cz) {
+        return Hashing.mix(Hashing.mix(seed ^ 0x61C8864680B583EBL, cx, cy, cz), 0, 0, 0);
+    }
 
     /**
      * The glow's level at {@code over} blocks above the flood band: {@code low} fading to {@code high} at {@code fade}

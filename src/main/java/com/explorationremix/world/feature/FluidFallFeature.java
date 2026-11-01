@@ -1,5 +1,6 @@
 package com.explorationremix.world.feature;
 
+import com.explorationremix.block.GlowBlock;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -67,7 +68,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         RandomSource random = ctx.random();
         BlockPos origin = ctx.origin();
         if (!(c.fluid().getFluidState().getType() instanceof FlowingFluid fluid)) return false;
-        if (!level.getBlockState(origin).isAir()) return false;
+        if (!GlowBlock.open(level.getBlockState(origin))) return false;
         Direction dir = Direction.Plane.HORIZONTAL.getRandomDirection(random);
         boolean ceiling = c.mode() == Mode.CEILING;
         BlockPos wall;
@@ -108,7 +109,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         for (int k = 1; k <= c.search(); k++) {
             p.move(dir);
             BlockState s = level.getBlockState(p);
-            if (s.isAir()) continue;
+            if (GlowBlock.open(s)) continue;
             return s.is(c.rock()) ? k : Integer.MAX_VALUE;
         }
         return Integer.MAX_VALUE;
@@ -117,7 +118,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
     private static boolean placeOne(WorldGenLevel level, Config c, FlowingFluid fluid, BlockPos src, Direction dir, boolean ceiling) {
         // The open face: in front of the wall, or under the vault.
         BlockPos front = ceiling ? src.below() : src.relative(dir.getOpposite());
-        if (!level.getBlockState(src).is(c.rock()) || !level.getBlockState(front).isAir()) return false;
+        if (!level.getBlockState(src).is(c.rock()) || !GlowBlock.open(level.getBlockState(front))) return false;
         // Sealed on every side but the open face, so the fluid only pours out of the rock.
         if (ceiling) {
             if (!sealed(level, c, src.above())) return false;
@@ -135,7 +136,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         // The drop below the open face.
         BlockPos.MutableBlockPos p = front.mutable();
         int drop = 0;
-        while (drop < 300 && level.getBlockState(p.move(Direction.DOWN)).isAir()) drop++;
+        while (drop < 300 && GlowBlock.open(level.getBlockState(p.move(Direction.DOWN)))) drop++;
         if (drop < c.minDrop()) return false;
         // A fall never pours onto the way down.
         if (Walkway.near(front.getX(), front.getZ(), front.getY() - drop, front.getY(), 2)) return false;

@@ -248,7 +248,8 @@ public final class ERBlocks {
                     .pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, e) -> false), Block.box(5, 0, 5, 11, 16, 11)));
     /**
      * The Galleries' lava glow: invisible light in the air near the halls' rock ({@code HallGlowFeature}), which nothing
-     * collides with, aims at or keeps out (a placed block, a falling block or a fluid takes its place). No item.
+     * collides with or aims at (a placed block, a falling block, a fluid or an explosion takes its place). Not air to the
+     * game: see {@link GlowBlock} for what still treats it as a block. No item.
      */
     public static final RegistryObject<Block> GLOW = BLOCKS.register("glow", () -> new GlowBlock(
             BlockBehaviour.Properties.of().mapColor(MapColor.NONE).replaceable().noCollission().noOcclusion().noLootTable().instabreak()

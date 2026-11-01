@@ -12,10 +12,12 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
@@ -37,7 +39,9 @@ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfigur
  * In the flood band (the {@code Terrain.surge} blocks over the lava table) every glow is {@link #BAND_LEVEL}: the
  * rising sea takes it with the air and marks it, and the drain puts {@link #bandGlow()} back where it was
  * ({@code Flood}, {@code LavaChunk}), so the low halls come out of every flood lit as before. Runs once per chunk after
- * every other feature (top_layer_modification, after open_way), on its own chunk's columns.
+ * every other feature (top_layer_modification, after open_way), on its own chunk's columns and again on the neighbours
+ * decorated before it, whose tries must see the columns this chunk built into them. The other features of the layer ask
+ * {@link GlowBlock#open} where they look for open space across a border, so a neighbour's glow never stops them.
  */
 public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
     public HallGlowFeature(Codec<Config> codec) { super(codec); }
@@ -67,16 +71,29 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
     @Override
     public boolean place(FeaturePlaceContext<Config> ctx) {
         Terrain t = DeepWorld.terrain();
-        if (t == null || !DeepWorld.installed()) return false;
+        if (t == null || !DeepWorld.installed() || Terrain.GALLERIES >= t.shape.layerCount) return false;
+        WorldGenLevel level = ctx.level();
+        ChunkPos cp = new ChunkPos(ctx.origin());
+        boolean any = lightChunk(level, t, ctx.config(), cp.x, cp.z);
+        // Neighbours are decorated in no fixed order, and a feature writes up to a chunk over its border (a column
+        // cluster reaches 9 blocks). A neighbour decorated before this chunk ran its pass before this chunk's columns
+        // stood in it, so its tries go again now and see them: a try already holding its glow is not air, added rock
+        // only makes a spot nearer rock, and columns overwrite a glow in their way (GlowBlock.open), so the glow comes
+        // out the same whichever chunk was decorated first. A neighbour not yet decorated is still at CARVERS.
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dz = -1; dz <= 1; dz++)
+                if ((dx != 0 || dz != 0) && level.getChunk(cp.x + dx, cp.z + dz).getStatus().isOrAfter(ChunkStatus.FEATURES))
+                    any |= lightChunk(level, t, ctx.config(), cp.x + dx, cp.z + dz);
+        return any;
+    }
+
+    /** One chunk's tries: every cube with its spot in the chunk, from the lava table to the layer's top. */
+    static boolean lightChunk(WorldGenLevel level, Terrain t, Config c, int chunkX, int chunkZ) {
         Shape s = t.shape;
         int g = Terrain.GALLERIES;
-        if (g >= s.layerCount) return false;
-        Config c = ctx.config();
-        WorldGenLevel level = ctx.level();
         int table = s.waterY(g), y0 = table + Terrain.surge(g), y1 = s.top(g);
         if (y1 < table) return false;
-        ChunkPos cp = new ChunkPos(ctx.origin());
-        int minX = cp.getMinBlockX(), minZ = cp.getMinBlockZ(), maxX = minX + 15, maxZ = minZ + 15;
+        int minX = chunkX << 4, minZ = chunkZ << 4, maxX = minX + 15, maxZ = minZ + 15;
         int n = c.spacing();
         Perlin noise = c.patch() > 0 ? patches(t.seed) : null;
         Block glow = ERBlocks.GLOW.get();
@@ -85,7 +102,7 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
         for (int cx = Math.floorDiv(minX, n); cx <= Math.floorDiv(maxX, n); cx++) {
             for (int cz = Math.floorDiv(minZ, n); cz <= Math.floorDiv(maxZ, n); cz++) {
                 for (int cy = Math.floorDiv(table, n); cy <= Math.floorDiv(y1, n); cy++) {
-                    long h = Hashing.mix(t.seed ^ 0x61C8864680B583EBL, cx, cy, cz);
+                    long h = HallGlow.spotHash(t.seed, cx, cy, cz);
                     int x = cx * n + (int) Long.remainderUnsigned(h, n);
                     int y = cy * n + (int) Long.remainderUnsigned(h >>> 16, n);
                     int z = cz * n + (int) Long.remainderUnsigned(h >>> 32, n);
@@ -93,6 +110,10 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
                     if (!level.getBlockState(pos.set(x, y, z)).isAir()) continue;
                     if (!nearRock(level, pos, probe, c.reach(), glow)) continue;
                     DeepBiome b = t.biomeAt(x, y, z);
+                    // the refuge's biome reaches 4 blocks round a tube (6 round a hub) through the rock, for its
+                    // obsidian lining: only the tube's own air is the refuge, and hall air at a tube's mouth takes the
+                    // hall's light
+                    if (b == DeepBiome.OBSIDIAN_TUBES && t.tubeShellDepth(x, y, z) > 0) b = DeepBiome.BASALT_GALLERIES;
                     int lv;
                     if (y < y0) lv = galleries(b) ? BAND_LEVEL : 0;
                     else if (b == DeepBiome.OBSIDIAN_TUBES) lv = c.tubes();
@@ -108,7 +129,7 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
     }
 
     /** Whether rock lies within {@code reach} of {@code pos} along one of the six axes. */
-    static boolean nearRock(WorldGenLevel level, BlockPos pos, BlockPos.MutableBlockPos probe, int reach, Block glow) {
+    static boolean nearRock(BlockGetter level, BlockPos pos, BlockPos.MutableBlockPos probe, int reach, Block glow) {
         for (Direction d : Direction.values()) {
             probe.set(pos);
             for (int k = 1; k <= reach; k++) {

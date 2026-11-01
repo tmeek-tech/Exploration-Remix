@@ -27,6 +27,12 @@ import javax.annotation.Nullable;
  * changed config moves the table; the record is moved with it), the height, the bits, and the bits of the blocks among
  * them that held the halls' invisible glow before the lava took them (both left out when empty; a record saved before
  * there was a glow mask has none). The next build keeps its change log for the terrain reset here too, under new keys.
+ *
+ * <p>The reset and the glow: in a slice the lava holds ({@code i < level}), put a glow back as a lava source with its
+ * bits set in both {@link #mask} and {@link #glow} (the drain then restores it), never as the glow block. A glow in the
+ * sea is an open gap the lava draws its faces round, and one set with block updates lets the lava flow into it, which
+ * the drain then clears to air. A spot put back to rock, or to anything else the flood does not take, gets both bits
+ * unset.
  */
 public final class LavaChunk {
     public static final Capability<LavaChunk> CAP = CapabilityManager.get(new CapabilityToken<>() {});

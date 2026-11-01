@@ -171,6 +171,9 @@ BLOCK_TAGS = {
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen", "rime_lichen"],
+    # The Galleries' lava glow is open space to a growing tree (TreeFeature asks isAir() or this tag): a sapling grows
+    # through it, and its logs, leaves and roots take its place.
+    ("minecraft", "replaceable_by_trees"): ["glow"],
     # A cinder chain hangs from the chain above it, so a climb's whole column holds.
     (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "pale_wisteria", "pale_wisteria_plant", "cinder_chain"],
 }

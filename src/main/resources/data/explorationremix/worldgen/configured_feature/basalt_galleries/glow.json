@@ -4,9 +4,9 @@
     "spacing": 4,
     "reach": 4,
     "low": 15,
-    "high": 11,
+    "high": 14,
     "fade": 60,
-    "patch": 2,
+    "patch": 1,
     "tubes": 9
   }
 }
