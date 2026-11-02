@@ -30,6 +30,9 @@ regenerated.
 2. Create a new world. The server log says `Deep world installed: overworld now spans y -832 to 319`.
 3. Settings are in `config/explorationremix-world.toml` (world shape, read when a server starts) and
    `config/explorationremix-client.toml` (fog and particles, per player).
+4. If the server log ever shows `[Exploration Remix] The cave plan of layer ... threw`, the world kept generating: that
+   cell's caves were planned again with their layout moved, or left as rock round their landings. Please report the
+   line; it names the seed and the cell.
 
 ## The world below
 
