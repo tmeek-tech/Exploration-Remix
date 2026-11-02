@@ -274,9 +274,18 @@ class NetworkTest {
      * In each a careless plan leaves a single way: the bedrock landing's two flights end in one hall with one tunnel
      * on, or the entry landing's flight ends blind and every way passes through one court, or (123456789) the bedrock
      * landing's second flight runs out by the cell's edge and the flight put in its place finds a vestibule's tunnel
-     * where its own would go.
+     * where its own would go, or (-1241284054, 1694927964, 389949) one flight's hall reaches the rest only through the
+     * landing's other flight, its tunnels on taken by the vestibules and the tubes, or a flight ends blind.
      */
-    static final long[][] GALLERIES_GATE_CELLS = {{18000083, -9, 4}, {33000128, 2, 7}, {123456789, 15, 2}};
+    static final long[][] GALLERIES_GATE_CELLS = {{18000083, -9, 4}, {33000128, 2, 7}, {123456789, 15, 2},
+            {-1241284054, 17, 15}, {1694927964, 4, -19}, {389949, -3, 3}};
+
+    /**
+     * Basalt Galleries cells {seed, cx, cz, lava depth} whose ways between the gates {@link #twoOrThreeWaysToEachGate}
+     * checks with the lava shallower than the default (config), which plans them otherwise, as in the
+     * {@link #GALLERIES_GATE_CELLS}.
+     */
+    static final long[][] GALLERIES_SHALLOW_GATE_CELLS = {{-1241284054, 17, 15, 9}, {-31415, 5, 0, 6}};
 
     @Test
     void twoOrThreeWaysToEachGate() {
@@ -287,14 +296,47 @@ class NetworkTest {
             int cx = (int) c[1], cz = (int) c[2];
             waysToGates(t, t.network.net(Terrain.GALLERIES, cx, cz), tag(c[0], Terrain.GALLERIES, cx, cz), fails);
         }
+        for (long[] c : GALLERIES_SHALLOW_GATE_CELLS) {
+            Terrain t = new Terrain(galleriesLava((int) c[3]), -64, c[0]);
+            int cx = (int) c[1], cz = (int) c[2];
+            String tg = tag(c[0], Terrain.GALLERIES, cx, cz) + " (lava " + c[3] + " deep)";
+            waysToGates(t, t.network.net(Terrain.GALLERIES, cx, cz), tg, fails);
+        }
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
     }
 
     @Test
     void sizesFollowTaran() { overPlans(NetworkTest::sizes); }
 
+    /**
+     * Basalt Galleries cells {seed, cx, cz, lava depth, 0 for the default} whose refuges {@link #refugesAreQuiet}
+     * and halls {@link #galleriesSubBiomes} check too: in each a set piece stands boxed in by column halls, with an
+     * Obsidian Tube that hangs on it (25379437606363, the Causeway) or a vestibule beside it (464347, the rift), and
+     * no tunnel of the tree reaches it.
+     */
+    static final long[][] GALLERIES_PIECE_CELLS = {{25379437606363L, 10, -15, 0}, {25379437606363L, 10, -15, 7},
+            {25379437606363L, 10, -15, 8}, {464347, 10, -9, 0}, {464347, 10, -9, 9}};
+
+    /** The world of one of the {@link #GALLERIES_PIECE_CELLS}. */
+    static Terrain pieceTerrain(long[] c) {
+        return c[3] == 0 ? terrain(c[0]) : new Terrain(galleriesLava((int) c[3]), -64, c[0]);
+    }
+
+    /** The tag of one of the {@link #GALLERIES_PIECE_CELLS}. */
+    static String pieceTag(long[] c) {
+        return tag(c[0], Terrain.GALLERIES, (int) c[1], (int) c[2]) + (c[3] == 0 ? "" : " (lava " + c[3] + " deep)");
+    }
+
     @Test
-    void refugesAreQuiet() { overPlans(NetworkTest::refuges); }
+    void refugesAreQuiet() {
+        overPlans(NetworkTest::refuges);
+        List<String> fails = new ArrayList<>();
+        for (long[] c : GALLERIES_PIECE_CELLS) {
+            Terrain t = pieceTerrain(c);
+            refuges(t, t.network.net(Terrain.GALLERIES, (int) c[1], (int) c[2]), pieceTag(c), fails);
+        }
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
+    }
 
     @Test
     void basaltFloorsAboveTheSurge() { overPlans(NetworkTest::basaltFloors); }
@@ -367,6 +409,8 @@ class NetworkTest {
                 for (Kind k : here) cells.merge(k, 1, Integer::sum);
             }
         }
+        for (long[] c : GALLERIES_PIECE_CELLS)
+            galleriesHalls(pieceTerrain(c).network.net(Terrain.GALLERIES, (int) c[1], (int) c[2]), pieceTag(c), fails);
         System.out.println("galleriesSubBiomes: cells with each kind, of " + plans + ": " + cells);
         for (Kind k : new Kind[]{Kind.CALDERA, Kind.CAUSEWAY, Kind.RIFT, Kind.HALL, Kind.TUBEHUB})
             if (3 * cells.getOrDefault(k, 0) < 2 * plans) fails.add(k + " in only " + cells.getOrDefault(k, 0) + " of " + plans + " cells");
@@ -726,10 +770,12 @@ class NetworkTest {
      * Basalt Galleries cells {seed, cx, cz} whose portal vestibules {@link #portalsAreJoined} checks too. In each a
      * vestibule is boxed in, 30 blocks in from the cell's edge: a tunnel or a long hall runs along the edge in front of
      * it, a gallery stands close by 30 blocks higher, or (3422002863124) a hall's only way in coils over itself on its
-     * way down and the hall, its tube and three vestibules round the cell's corner hang on it.
+     * way down and the hall, its tube and three vestibules round the cell's corner hang on it, or (464347) the
+     * vestibule's only tunnel goes to a rift boxed in by column halls, or (2074276771) an Obsidian Tube placed beside
+     * the vestibule took the way its tunnel needed.
      */
     static final long[][] GALLERIES_PORTAL_CELLS = {{54162964, 4, -7}, {124039, 0, -10}, {3638729150490L, 16, 0}, {713448, -17, -14},
-            {-693432904, 16, -4}, {3422002863124L, 17, 12}};
+            {-693432904, 16, -4}, {3422002863124L, 17, 12}, {464347, 10, -9}, {2074276771, 6, 5}};
 
     /**
      * Basalt Galleries cells {seed, cx, cz, lava depth} whose portal vestibules {@link #portalsAreJoined} checks with
@@ -738,7 +784,7 @@ class NetworkTest {
      * tunnel, from none of which a tunnel reaches it.
      */
     static final long[][] GALLERIES_SHALLOW_PORTAL_CELLS = {{54162964, 4, -7, 6}, {54162964, 4, -7, 9}, {2071831583, 12, -15, 6},
-            {2071831583, 12, -15, 9}};
+            {2071831583, 12, -15, 9}, {464347, 10, -9, 9}};
 
     /**
      * Section 11.1, over 3 seeds x 4 x 4 Blue cells: every eligible city site is at least 150 inside its cell and 140
@@ -1229,6 +1275,14 @@ class NetworkTest {
     }
 
     /**
+     * Basalt Galleries cells {variant of {@link #configVariants}, seed, cx, cz} that test checks too: with 480-block
+     * cells (1694927964) the bedrock landing's flights end in halls that reach the rest only through one portal
+     * vestibule, and with every layer 128 tall (13298101198609) one flight's hall reaches the rest only through the
+     * landing's other flight.
+     */
+    static final long[][] GALLERIES_VARIANT_CELLS = {{0, 1694927964, 4, -19}, {2, 13298101198609L, 14, 19}};
+
+    /**
      * The network follows the config (section 2.6): graph tests 1, 2, 6 and 9 with 480 and 720 block cells, with
      * every layer 128 tall, and with the Basalt Galleries' lava 6 deep, the least the config allows (their halls and
      * tube hubs still there).
@@ -1270,6 +1324,17 @@ class NetworkTest {
                     if (working == 0) fails.add(names[v] + ", seed " + seed + ": no portal works on the " + (xEdge ? "west" : "north") + " edge of Blue cell " + ex + "," + ez);
                 }
             }
+        }
+        for (long[] c : GALLERIES_VARIANT_CELLS) {
+            Terrain t = new Terrain(variants[(int) c[0]], -64, c[1]);
+            int cx = (int) c[2], cz = (int) c[3];
+            Net n = t.network.net(Terrain.GALLERIES, cx, cz);
+            String tg = names[(int) c[0]] + ", " + tag(c[1], Terrain.GALLERIES, cx, cz);
+            joinedToEntry(t, n, tg, fails);
+            waysToGates(t, n, tg, fails);
+            refuges(t, n, tg, fails);
+            dropped(t, n, tg, fails);
+            galleriesHalls(n, tg, fails);
         }
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
     }

@@ -607,6 +607,12 @@ final class NetPlanner {
         int viewLevel;
         /** While {@link #galleryWay} lays a tunnel again: its winding's bends swing to the other sides. */
         boolean mirrorWind;
+        /**
+         * While {@link #joinRequired} lays a tunnel for a room the network left out, or {@link #gateRescue} one round a
+         * single way between the gates: the plain tunnel (the last of the {@link #VIEW_LEVELS}) is tried for any pair,
+         * not only from a portal vestibule.
+         */
+        boolean plainAny;
         /** The Basalt Galleries: the open space planned so far, against which each new tunnel's views are checked. */
         NetViews views;
 
@@ -2388,67 +2394,182 @@ final class NetPlanner {
          */
         void vestibuleJunctions() {
             for (int id : n.portals) {
-                int root = find(n.entry), comp = find(id);
-                if (!n.ch.get(id).keep || comp == root) continue;
-                // {edge index, point, arc, cost, room}
-                List<double[]> spots = new ArrayList<>();
-                for (Chamber v : n.ch) {
-                    if (!v.keep || find(v.id) != comp) continue;
-                    double reach = v.R() + VEST_JUNCTION_REACH, near = 6.5 + sp.clearC;
-                    for (int k = 0; k < n.edges.size(); k++) {
-                        Edge e = n.edges.get(k);
-                        if (e.kind != EK.WALK || e.w1 == null || find(e.a) != root || find(e.b) != root) continue;
-                        if (!n.ch.get(e.a).keep || !n.ch.get(e.b).keep) continue;
-                        Way wy = e.w1;
-                        if (v.x < wy.minX - reach || v.x > wy.maxX + reach || v.z < wy.minZ - reach || v.z > wy.maxZ + reach) continue;
-                        double s = 0;
-                        for (int i = 1; i + 1 < wy.n; i++) {
-                            s += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
-                            if (s < JUNCTION_END + NetGraph.RUN_IN || wy.length - s < JUNCTION_END + NetGraph.RUN_IN) continue;
-                            // the gap from the room's wall (a hall's or a flight's capsule, else its reach)
-                            double c = capsule(v) ? capGap(v, wy.x[i], wy.z[i]) : Math.hypot(wy.x[i] - v.x, wy.z[i] - v.z) - v.R();
-                            double dy = Math.abs(wy.f[i] - v.f0);
-                            if (c > VEST_JUNCTION_REACH || c < near || !doorFree(v.id, Math.atan2(wy.z[i] - v.z, wy.x[i] - v.x))) continue;
-                            // as steep as embed's forced tunnels go, from the room's wall to the junction's
-                            if (dy > sp.maxSlope * (2.2 * (c - 6) - 8)) continue;
-                            spots.add(new double[]{k, i, s, c + 2.5 * dy, v.id});
-                        }
-                    }
-                }
-                spots.sort(Comparator.comparingDouble(q -> q[3]));
-                List<double[]> tried = new ArrayList<>();
-                boolean done = false;
-                for (int round = 0; round < 2 && !done; round++) {
-                    double apart = round == 0 ? 5 : 12;
-                    int most = round == 0 ? 16 : 32, perRoom = round == 0 ? 6 : 12;
-                    for (double[] q : spots) {
-                        if (tried.size() == most) break;
-                        int fromRoom = 0;
-                        boolean close = false;
-                        for (double[] o : tried) {
-                            close |= o[0] == q[0] && Math.abs(o[2] - q[2]) < apart;
-                            if (o[4] == q[4]) fromRoom++;
-                        }
-                        if (close || fromRoom >= perRoom) continue;
-                        tried.add(q);
-                        Chamber v = n.ch.get((int) q[4]);
-                        int[] joined = {-1};
-                        boolean ok = cutJunction(n.edges.get((int) q[0]), (int) q[1], v.x, v.z, 1.5, j -> {
-                            Edge ne = edge(v.id, j.id);
-                            if (!embed(ne, true)) return false;
-                            ne.tree = true; ne.forced = true; n.forced++;
-                            joined[0] = j.id;
-                            return true;
-                        });
-                        if (ok) {
-                            union(joined[0], root);
-                            union(comp, root);
-                            done = true;
-                            break;
-                        }
+                if (n.ch.get(id).keep && find(id) != find(n.entry)) junctionsFor(find(id), false);
+            }
+        }
+
+        /**
+         * Joins the rooms of component {@code comp} (by the union-find) to the entry's through a junction room cut
+         * into a tunnel near one of them, as {@link #vestibuleJunctions} describes, with {@code plain} the plain tunnel
+         * among the joining tunnel's shapes ({@link #plainAny}); true once joined.
+         */
+        boolean junctionsFor(int comp, boolean plain) {
+            int root = find(n.entry);
+            boolean[] from = new boolean[n.ch.size()], to = new boolean[n.ch.size()];
+            for (Chamber c : n.ch) {
+                from[c.id] = c.keep && find(c.id) == comp;
+                to[c.id] = c.keep && find(c.id) == root;
+            }
+            int j = cutAcross(from, to, -1, false, plain);
+            if (j < 0) return false;
+            union(j, root);
+            union(comp, root);
+            return true;
+        }
+
+        /**
+         * A junction room cut into a walking tunnel between two rooms of {@code to} (never at room {@code skip}),
+         * joined by a forced tunnel to a room of {@code from} within {@link #VEST_JUNCTION_REACH} of it, the places
+         * tried as {@link #vestibuleJunctions} describes; with {@code open}, never from a refuge or a landing (which
+         * take no more tunnels); with {@code plain}, the plain tunnel among the joining tunnel's shapes ({@link
+         * #plainAny}). The junction's id once one stays, else -1.
+         */
+        int cutAcross(boolean[] from, boolean[] to, int skip, boolean open, boolean plain) {
+            // {edge index, point, arc, cost, room}
+            List<double[]> spots = new ArrayList<>();
+            for (Chamber v : n.ch) {
+                if (!v.keep || v.id >= from.length || !from[v.id] || v.id == skip) continue;
+                if (open && (v.refuge || v.landing())) continue;
+                double reach = v.R() + VEST_JUNCTION_REACH, near = 6.5 + sp.clearC;
+                for (int k = 0; k < n.edges.size(); k++) {
+                    Edge e = n.edges.get(k);
+                    if (e.kind != EK.WALK || e.w1 == null || e.a >= to.length || e.b >= to.length) continue;
+                    if (!to[e.a] || !to[e.b] || e.a == skip || e.b == skip) continue;
+                    if (!n.ch.get(e.a).keep || !n.ch.get(e.b).keep) continue;
+                    Way wy = e.w1;
+                    if (v.x < wy.minX - reach || v.x > wy.maxX + reach || v.z < wy.minZ - reach || v.z > wy.maxZ + reach) continue;
+                    double s = 0;
+                    for (int i = 1; i + 1 < wy.n; i++) {
+                        s += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
+                        if (s < JUNCTION_END + NetGraph.RUN_IN || wy.length - s < JUNCTION_END + NetGraph.RUN_IN) continue;
+                        // the gap from the room's wall (a hall's or a flight's capsule, else its reach)
+                        double c = capsule(v) ? capGap(v, wy.x[i], wy.z[i]) : Math.hypot(wy.x[i] - v.x, wy.z[i] - v.z) - v.R();
+                        double dy = Math.abs(wy.f[i] - v.f0);
+                        if (c > VEST_JUNCTION_REACH || c < near || !doorFree(v.id, Math.atan2(wy.z[i] - v.z, wy.x[i] - v.x))) continue;
+                        // as steep as embed's forced tunnels go, from the room's wall to the junction's
+                        if (dy > sp.maxSlope * (2.2 * (c - 6) - 8)) continue;
+                        // the junction's floor (a block under the tunnel's) at the dry level, as every room's but
+                        // the bedrock landing's and its flights'
+                        if (wy.f[i] - 1 < W + surge + 2) continue;
+                        spots.add(new double[]{k, i, s, c + 2.5 * dy, v.id});
                     }
                 }
             }
+            spots.sort(Comparator.comparingDouble(q -> q[3]));
+            List<double[]> tried = new ArrayList<>();
+            for (int round = 0; round < 2; round++) {
+                double apart = round == 0 ? 5 : 12;
+                int most = round == 0 ? 16 : 32, perRoom = round == 0 ? 6 : 12;
+                for (double[] q : spots) {
+                    if (tried.size() == most) break;
+                    int fromRoom = 0;
+                    boolean close = false;
+                    for (double[] o : tried) {
+                        close |= o[0] == q[0] && Math.abs(o[2] - q[2]) < apart;
+                        if (o[4] == q[4]) fromRoom++;
+                    }
+                    if (close || fromRoom >= perRoom) continue;
+                    tried.add(q);
+                    Chamber v = n.ch.get((int) q[4]);
+                    int[] joined = {-1};
+                    boolean ok = cutJunction(n.edges.get((int) q[0]), (int) q[1], v.x, v.z, 1.5, j -> {
+                        Edge ne = edge(v.id, j.id);
+                        plainAny = plain;
+                        boolean laid = allowed(v, j) && embed(ne, true);
+                        plainAny = false;
+                        if (!laid) return false;
+                        ne.tree = true; ne.forced = true; n.forced++;
+                        joined[0] = j.id;
+                        return true;
+                    });
+                    if (ok) return joined[0];
+                }
+            }
+            return -1;
+        }
+
+        /**
+         * The Basalt Galleries: a required room still not joined to the entry once the tree, {@link #connectRequired}
+         * and {@link #vestibuleJunctions} are done (a set piece, an Obsidian Tube, a flight or a portal vestibule),
+         * together with the rooms it did reach, gets a forced tunnel from one of them to a room of the entry's part of
+         * the network, the 40 nearest pairs tried as connectRequired tries them but with the plain tunnel among the
+         * shapes ({@link #plainAny}); when none embeds, the rooms it reached that are not required are taken out
+         * ({@link #shed}) and the pairs tried again; when still none embeds, and no vestibule is among them
+         * (vestibuleJunctions tried those), a junction room cut into a tunnel near them ({@link #junctionsFor}). A
+         * Causeway or a rift boxed in by column halls had no tunnel left whose swing past its leg did not turn it back
+         * alongside its own capsule, and was left out with the tube that hung on it: a cell without its Causeway, or
+         * its rift, and with one refuge.
+         */
+        void joinRequired() {
+            int N = n.ch.size();
+            for (int id = 0; id < N; id++) {
+                Chamber c = n.ch.get(id);
+                if (!c.keep || !c.required || find(id) == find(n.entry)) continue;
+                if (plainJoin(find(id)) || (shed(find(id)) && plainJoin(find(id)))) continue;
+                int comp = find(id);
+                boolean portal = false;
+                for (Chamber o : n.ch) portal |= o.keep && o.kind == Kind.PORTAL && find(o.id) == comp;
+                if (!portal) junctionsFor(comp, true);
+            }
+        }
+
+        /**
+         * Takes the rooms of component {@code comp} that are not required out of the plan, with their tunnels (they
+         * would go with it when it stays apart, {@link #dropOrphans}): a gallery room the tree joined to a boxed-in set
+         * piece took one of its few doors and the space its other tunnels needed. Never the exit's component, which is
+         * the far half of the network rather than a boxed-in corner. True when one was taken out.
+         */
+        boolean shed(int comp) {
+            if (find(n.exit) == comp) return false;
+            boolean any = false;
+            for (Chamber o : n.ch) {
+                if (!o.keep || o.required || find(o.id) != comp) continue;
+                for (Edge e : new ArrayList<>(n.edges)) if (e.a == o.id || e.b == o.id) unlink(e);
+                o.keep = false;
+                n.droppedChambers++;
+                any = true;
+            }
+            if (any) reunion();
+            return any;
+        }
+
+        /**
+         * A forced tunnel, the plain tunnel among its shapes, from a room of component {@code comp} to one of the
+         * entry's component: the 40 nearest pairs (a block of height counting 2.5); true once one embeds.
+         */
+        boolean plainJoin(int comp) {
+            int root = find(n.entry);
+            List<int[]> pairs = new ArrayList<>();
+            for (Chamber a : n.ch) {
+                if (!a.keep || find(a.id) != comp) continue;
+                for (Chamber b : n.ch) {
+                    if (!b.keep || b.refuge || find(b.id) != root) continue;
+                    pairs.add(new int[]{a.id, b.id});
+                }
+            }
+            pairs.sort(Comparator.comparingDouble(q -> {
+                Chamber a = n.ch.get(q[0]), b = n.ch.get(q[1]);
+                return Math.hypot(a.x - b.x, a.z - b.z) + 2.5 * Math.abs(a.f0 - b.f0);
+            }));
+            plainAny = true;
+            try {
+                for (int k = 0; k < Math.min(40, pairs.size()); k++) {
+                    Edge e = new Edge();
+                    e.a = Math.min(pairs.get(k)[0], pairs.get(k)[1]); e.b = Math.max(pairs.get(k)[0], pairs.get(k)[1]);
+                    Chamber oa = n.ch.get(e.a), ob = n.ch.get(e.b);
+                    if (!allowed(oa, ob) || alreadyEdge(e.a, e.b)) continue;
+                    e.len = Math.max(6, Math.hypot(oa.x - ob.x, oa.z - ob.z) - 0.8 * (oa.R() + ob.R()));
+                    e.dy = Math.abs(oa.f0 - ob.f0);
+                    if (embed(e, true)) {
+                        e.tree = true; e.forced = true; n.forced++;
+                        union(e.a, e.b);
+                        return true;
+                    }
+                }
+            } finally {
+                plainAny = false;
+            }
+            return false;
         }
 
         void dropOrphans() {
@@ -2750,6 +2871,96 @@ final class NetPlanner {
                 if (repairAcross(A, B, v)) n.chokeRepairs++;
                 else failed.add(v);
             }
+        }
+
+        /**
+         * The Basalt Galleries: where {@link #gateWays} and {@link #chokeRooms} left the gates a single way (every way
+         * through one flight, court or vestibule: the flight's hall boxed in, its tunnels on taken by the vestibules
+         * and the tubes), a way round it, from the side that holds the entry to the side that holds the exit: a forced
+         * tunnel between the two, the plain tunnel among its shapes ({@link #plainAcross}), else a junction room cut
+         * into a tunnel of one side and joined to a room of the other ({@link #cutAcross}), the exit's side's rooms
+         * first, else one more flight from a landing ({@link #extraFlight}). Up to 6 rounds; a room nothing gets round
+         * is left.
+         */
+        void gateRescue() {
+            java.util.Set<Integer> failed = new java.util.HashSet<>();
+            for (int it = 0; it < 6; it++) {
+                boolean[] A, B;
+                int skip = -1;
+                if (NetGraph.maxFlow(n, n.entry, n.exit, false) < 2) {
+                    A = NetGraph.minCutSide(n, n.entry, n.exit, false);
+                    B = new boolean[A.length];
+                    for (int i = 0; i < A.length; i++) B[i] = !A[i];
+                } else {
+                    skip = chokeRoom(n, failed);
+                    if (skip < 0) return;
+                    A = NetGraph.reachWithout(n, n.entry, skip);
+                    B = NetGraph.reachWithout(n, n.exit, skip);
+                }
+                if (plainAcross(A, B, skip) || cutAcross(B, A, skip, true, true) >= 0
+                        || cutAcross(A, B, skip, true, true) >= 0
+                        || extraFlight(n.exit, skip) || extraFlight(n.entry, skip)) {
+                    n.chokeRepairs++;
+                    continue;
+                }
+                if (skip < 0) return;
+                failed.add(skip);
+            }
+        }
+
+        /**
+         * One more flight from landing L ({@link #newFlight}, 30 to 90 degrees off one of its flights, joined to a
+         * hall), kept only when the gates then have more ways than before, or room {@code skip} no longer stands on
+         * every way: a flight whose hall reaches the rest of the network only through the landing's other flight left
+         * that one the only way, and the side of the landing away from its lava basin is often free.
+         */
+        boolean extraFlight(int L, int skip) {
+            int flow = NetGraph.maxFlow(n, n.entry, n.exit, false);
+            List<Integer> courts = L == n.entry ? n.courtsE : n.courtsX;
+            for (int fid : new ArrayList<>(courts)) {
+                Chamber f = n.ch.get(fid);
+                if (!f.keep || !f.flight) continue;
+                if (!newFlight(n.ch.get(L), f, courts, 30, false)) continue;
+                int now = NetGraph.maxFlow(n, n.entry, n.exit, false);
+                if (now > flow || (now == flow && skip >= 0 && NetGraph.reachWithout(n, n.entry, skip)[n.exit])) return true;
+                Chamber q = n.ch.get(courts.remove(courts.size() - 1));
+                for (Edge o : new ArrayList<>(n.edges)) if (o.a == q.id || o.b == q.id) unlink(o);
+                q.keep = false;
+            }
+            return false;
+        }
+
+        /**
+         * A forced tunnel from side A to side B, never at room {@code skip}, the plain tunnel among its shapes ({@link
+         * #plainAny}): the 40 nearest pairs within 170 (as {@link #repairAcross} chooses them); true once one embeds.
+         */
+        boolean plainAcross(boolean[] A, boolean[] B, int skip) {
+            List<int[]> pairs = new ArrayList<>();
+            for (Chamber a : n.ch) {
+                if (a.id == skip || !a.keep || a.id >= A.length || !A[a.id]) continue;
+                if (a.refuge || a.landing() || a.kind == Kind.POCKET) continue;
+                for (Chamber b : n.ch) {
+                    if (b.id == skip || !b.keep || b.id >= B.length || !B[b.id]) continue;
+                    if (b.refuge || b.landing() || b.kind == Kind.POCKET) continue;
+                    if (gapXZ(a, b, 1.0) > 170 || alreadyEdge(a.id, b.id)) continue;
+                    pairs.add(new int[]{a.id, b.id});
+                }
+            }
+            pairs.sort(Comparator.comparingDouble(q -> {
+                Chamber a = n.ch.get(q[0]), b = n.ch.get(q[1]);
+                return gapXZ(a, b, 1.0) + 2.5 * Math.abs(a.f0 - b.f0);
+            }));
+            plainAny = true;
+            try {
+                for (int k = 0; k < Math.min(40, pairs.size()); k++) {
+                    Edge e = edge(pairs.get(k)[0], pairs.get(k)[1]);
+                    if (!allowed(n.ch.get(e.a), n.ch.get(e.b))) continue;
+                    if (embed(e, true)) { e.loop = true; e.gate = true; n.cutRepairs++; return true; }
+                }
+            } finally {
+                plainAny = false;
+            }
+            return false;
         }
 
         /** True for the chambers a single way may pass through without counting as a choke: big open spaces. */
@@ -4175,11 +4386,13 @@ final class NetPlanner {
             kruskal(cand);
             connectRequired(cand);
             vestibuleJunctions();
+            joinRequired();
             dropOrphans();
             portalFallback();
             loops(cand);
             gateWays();
             chokeRooms();
+            gateRescue();
             walkWays();
             tubeStubs();
             trunk();
@@ -4690,7 +4903,8 @@ final class NetPlanner {
          * tube at any height up to 90 over the dry level stood by a hall's sheer wall, and the way from the hall's
          * ledge up to it wound back into the hall ({@link #leavesCapsule}) or found no room, so a tube was often left
          * with no way in. Where no column hall has room by it (a small cell, config), any hall within 45 will do, then
-         * any within 80 and 60 from the landings. Required, as a portal is: the tubes are the only refuges.
+         * any within 80 and 60 from the landings. Never beside a portal vestibule no tunnel has reached yet ({@link
+         * #nearLoneVestibule}). Required, as a portal is: the tubes are the only refuges.
          */
         void tubes() {
             Chamber a = n.ch.get(n.entry), b = n.ch.get(n.exit);
@@ -4712,6 +4926,7 @@ final class NetPlanner {
                         double d = Math.min(segDistXZ(t.x, t.z, a.x, a.z, b.x, b.z) + 30, strandDist(t.x, t.z));
                         if (d < 75 - i * 0.5) continue;
                         if (Math.hypot(t.x - a.x, t.z - a.z) < fromLanding || Math.hypot(t.x - b.x, t.z - b.z) < fromLanding) continue;
+                        if (nearLoneVestibule(t)) continue;
                         Chamber h = null;
                         double best = 1e9;
                         for (Chamber o : n.ch) {
@@ -4726,6 +4941,22 @@ final class NetPlanner {
                 }
             }
         }
+
+        /**
+         * True when tube t would stand within {@link #VEST_ROOM} of a portal vestibule no tunnel has reached yet: its
+         * tunnel still has to find a way in from the vestibule's side, and a tube beside the vestibule, with its own
+         * tunnel to a hall, took that way (the vestibule was left out, and its portal ended blind past the seam).
+         */
+        boolean nearLoneVestibule(Chamber t) {
+            for (int id : n.portals) {
+                Chamber v = n.ch.get(id);
+                if (v.keep && v.deg == 0 && Math.hypot(t.x - v.x, t.z - v.z) < t.R() + v.R() + VEST_ROOM) return true;
+            }
+            return false;
+        }
+
+        /** The room a tube leaves round a portal vestibule no tunnel has reached yet ({@link #nearLoneVestibule}). */
+        static final double VEST_ROOM = 40;
 
         /**
          * Places a hall at random (up to {@code tries} places), the long ones turned along the grid; true once placed.
@@ -5914,10 +6145,10 @@ final class NetPlanner {
          * for none), the winding's swing (times), one more bend (1) or not, the legs (times)}. A tunnel leaves a hall
          * straight for 15 to 25 blocks to clear its capsule; running on in line with its mouth, it would let a view from
          * the hall's far side (80 to 120 blocks) or from a tunnel facing it across the hall run 50 to 70 blocks into it.
-         * The last is the plain tunnel, with no swing aside, for a portal vestibule's tunnel alone: where every swing
-         * past a leg turns the tunnel back alongside its own room's capsule (a rift's or a Causeway's, long and
-         * narrow), the plain tunnel may still keep the views short. A vestibule no tunnel reaches is left out and its
-         * portal ends blind, while any other room has other pairs to try.
+         * The last is the plain tunnel, with no swing aside, for a portal vestibule's tunnel and for the last tries
+         * ({@link #plainAny}) alone: where every swing past a leg turns the tunnel back alongside its own room's capsule
+         * (a rift's or a Causeway's, long and narrow), the plain tunnel may still keep the views short. A vestibule no
+         * tunnel reaches is left out and its portal ends blind, while any other room has other pairs to try first.
          */
         static final double[][] VIEW_LEVELS = {
                 {1.4, 0, 1, 0, 1},
@@ -5947,7 +6178,7 @@ final class NetPlanner {
             }
             views.sync(n.ch, n.ways);
             for (int level = 0; level < VIEW_LEVELS.length; level++) {
-                if (level == VIEW_LEVELS.length - 1 && A.kind != Kind.PORTAL && B.kind != Kind.PORTAL) break;
+                if (level == VIEW_LEVELS.length - 1 && A.kind != Kind.PORTAL && B.kind != Kind.PORTAL && !plainAny) break;
                 double[] v = VIEW_LEVELS[level];
                 for (int mirror = 0; mirror < 2; mirror++) {
                     wayBend = bend;
