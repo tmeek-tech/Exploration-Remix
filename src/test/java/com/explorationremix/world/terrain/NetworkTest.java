@@ -6,6 +6,8 @@ import com.explorationremix.world.terrain.Net.Edge;
 import com.explorationremix.world.terrain.Net.Kind;
 import com.explorationremix.world.terrain.Net.Shaft;
 import com.explorationremix.world.terrain.Net.Way;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -36,6 +38,25 @@ class NetworkTest {
 
     static String tag(long seed, int li, int cx, int cz) { return "seed " + seed + " layer " + li + " cell " + cx + "," + cz; }
 
+    /** The plans that had thrown when the test began ({@link NetPlanner#FAULTS}). */
+    private final java.util.Set<String> faultsBefore = new java.util.TreeSet<>();
+
+    @BeforeEach
+    void countFaults() { faultsBefore.addAll(NetPlanner.FAULTS); }
+
+    /**
+     * No plan the test made needed the planner's safety net ({@link NetPlanner#plan}): a plan that throws fails the test
+     * that made it, however well its salted plan or its rock passes the test's checks.
+     */
+    @AfterEach
+    void noPlanThrew() { noNewFaults(faultsBefore); }
+
+    static void noNewFaults(java.util.Set<String> before) {
+        java.util.Set<String> now = new java.util.TreeSet<>(NetPlanner.FAULTS);
+        now.removeAll(before);
+        assertTrue(now.isEmpty(), "plans threw and needed the safety net (seed/layer/cx/cz): " + now);
+    }
+
     interface PlanCheck { void check(Terrain t, Net n, String tag, List<String> fails); }
 
     /** Runs a check over every cell-layer of the fast tests (3 seeds x 3 cells x 3 layers) and fails with every miss. */
@@ -43,8 +64,12 @@ class NetworkTest {
         List<String> fails = new ArrayList<>();
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
-            for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount; li++)
-                c.check(t, t.network.net(li, cell[0], cell[1]), tag(seed, li, cell[0], cell[1]), fails);
+            for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
+                Net n = t.network.net(li, cell[0], cell[1]);
+                String tg = tag(seed, li, cell[0], cell[1]);
+                PlanSafetyTest.firstAttempt(n, tg, fails);
+                c.check(t, n, tg, fails);
+            }
         }
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
     }
@@ -526,6 +551,9 @@ class NetworkTest {
             }
         }
         out.addAll(wide);
+        List<String> fails = new ArrayList<>();
+        for (Object[] o : out) PlanSafetyTest.firstAttempt((Net) o[1], (String) o[0], fails);
+        assertTrue(fails.isEmpty(), String.join("\n", fails));
         return out;
     }
 
@@ -1357,12 +1385,16 @@ class NetworkTest {
     static final int[][] VOX_CELLS = {{0, -3}, {-1, 1}};
 
     /**
-     * Wasteland cells {@link #noLethalFalls} builds besides those: {seed, cx, cz} of cells where falls of 16 and 17 were
+     * Wasteland cells {@link #noLethalFalls} builds besides those: {seed, cx, cz} of cells where falls of 16 to 20 were
      * found beside the climbs' stages (from a room's pockets by its wall, from a tunnel of the same room at the stage's
-     * mouth, on through a stage's foot into a tunnel under it, and from the steps of a passage's rough walls where they
-     * met the hole's edge).
+     * mouth, on through a stage's foot into a tunnel under it, from the steps of a passage's rough walls where they
+     * met the hole's edge, where a tunnel standing apart from the hole had kept the passage over it narrow, and from
+     * a knob in the roof of a passage widened over the hole, beside the top of the vines), and one (233 -6,1) where a
+     * tunnel whose open space reaches the hole's edge must keep the passage over the hole narrow: widened, it left a
+     * step of that tunnel's wall over the hole and a fall of 17.
      */
-    static final long[][] WASTE_FALLS = {{17, 0, 0}, {11, 0, 0}, {13, 1, -1}, {15, 0, 0}, {37, 2, 2}, {62, 7, -6}, {14, 0, 0}};
+    static final long[][] WASTE_FALLS = {{17, 0, 0}, {11, 0, 0}, {13, 1, -1}, {15, 0, 0}, {37, 2, 2}, {62, 7, -6}, {14, 0, 0},
+            {239, -6, 1}, {221, -6, 1}, {239, 3, -2}, {233, -6, 1}};
 
     /** True for a way's point next to a landing, where the gate's own passage and landing shape the floor. */
     static boolean gateMouth(Terrain t, Net n, double x, double z) {
@@ -1466,9 +1498,11 @@ class NetworkTest {
     /**
      * Wasteland cells wastelandIsOneCave builds besides the voxel tests' two: {seed, cx, cz} of cells where the last
      * stage of a climb, laid again 5 to 6.6 tall, had lost the floor of the step off its vines, and the rooms the climb
-     * alone reached were cut off (the main component held 95.2% and 95.8%).
+     * alone reached were cut off (the main component held 95.2% and 95.8%), and where the step off a last stage's
+     * vines stood in a niche of the hole's wall, the upper tunnel turning away at once, and seven rooms were cut off
+     * (93.9%).
      */
-    static final long[][] WASTE_CAVES = {{33, -3, -5}, {63, -5, 9}};
+    static final long[][] WASTE_CAVES = {{33, -3, -5}, {63, -5, 9}, {215, -6, 1}};
 
     @Test
     @Tag("voxel")
