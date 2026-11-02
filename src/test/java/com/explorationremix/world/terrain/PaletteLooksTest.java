@@ -10,7 +10,6 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The 0.5.1 looks of the two bottom layers (Palette.shell): natural stone only, no stripe at the high-water mark, the
@@ -101,8 +100,8 @@ class PaletteLooksTest {
         Terrain t = terrain();
         Shape s = t.shape;
         Random r = new Random(5);
-        // (not t.palette: its interim look queries ask the planned network, which would plan a hundred cells here)
-        for (Palette p : new Palette[]{new Palette(t, SEED, LookQueries.NONE), new Palette(t, SEED, new Stand())}) {
+        // no look queries, stand-ins that put columns, tubes and cones everywhere, and the noise fields' own (t.palette)
+        for (Palette p : new Palette[]{new Palette(t, SEED, LookQueries.NONE), new Palette(t, SEED, new Stand()), t.palette}) {
             for (int k = 0; k < 200000; k++) {
                 boolean gal = r.nextBoolean();
                 int li = gal ? Terrain.GALLERIES : Terrain.WASTELAND;
@@ -142,7 +141,7 @@ class PaletteLooksTest {
         Terrain t = terrain();
         Shape s = t.shape;
         int gal = Terrain.GALLERIES, was = Terrain.WASTELAND, join = s.top(gal);
-        assumeTrue(s.bottom(was) == join + 1, "no band between the Wasteland and the Galleries (band 4 removed)");
+        assertEquals(join + 1, s.bottom(was), "the Wasteland stands right on the Galleries (no band between them)");
         Palette p = t.palette;
         double last = -1;
         for (int d = -Palette.JOIN_BLEND - 2; d <= Palette.JOIN_BLEND + 2; d++) {

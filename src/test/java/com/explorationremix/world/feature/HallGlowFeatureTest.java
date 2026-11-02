@@ -1,6 +1,10 @@
 package com.explorationremix.world.feature;
 
+import com.explorationremix.world.terrain.DeepBiome;
+import com.explorationremix.world.terrain.GalleriesField;
 import com.explorationremix.world.terrain.Perlin;
+import com.explorationremix.world.terrain.Terrain;
+import com.explorationremix.world.terrain.TerrainSettings;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
@@ -9,6 +13,9 @@ import org.junit.jupiter.api.Test;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -97,6 +104,68 @@ class HallGlowFeatureTest {
                 int lv = HallGlow.levelAt(shipped, over, side, n, x, over, 3);
                 assertTrue(lv >= 11 && lv <= 15, "level " + lv + " at " + over + " over the band, side " + side);
             }
+    }
+
+    /**
+     * Spec-tubes 12: a spot in a tube's air takes {@code tubes}, whatever its side; a spot of hall air at a tube's mouth,
+     * within the old 4-block shell round the tube's air, takes the hall's level (the flood band's under the band's top).
+     * The tube's air is flooded from the tube spots of standing countries (/remix tp's), and the hall air met within 4
+     * blocks of it, through hall air, is the mouths'.
+     */
+    @Test
+    void tubeAirTakesTheTubesLevelAndHallAirAtAMouthTheHalls() {
+        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 8675309);
+        GalleriesField g = t.galleries;
+        int y0 = t.shape.waterY(Terrain.GALLERIES) + Terrain.surge(Terrain.GALLERIES);
+        int spots = 0, tubeAir = 0, hallAir = 0;
+        Set<Long> seen = new HashSet<>();
+        for (int ci = -3; ci < 3; ci++) for (int cj = -3; cj < 3; cj++) {
+            int[] s = g.tubeSpot(ci, cj);
+            if (s == null || !tubeOpen(g, s[0], s[1], s[2]) || !seen.add(key(s[0], s[1], s[2]))) continue;
+            spots++;
+            // flood the tube's open blocks from the spot (a pool's water too), and from each hall block met, 4 more
+            // blocks through hall air
+            ArrayDeque<int[]> q = new ArrayDeque<>();
+            q.add(new int[]{s[0], s[1], s[2], 0});
+            int flooded = 0;
+            while (!q.isEmpty() && flooded < 150_000) {
+                int[] b = q.poll();
+                flooded++;
+                boolean inTube = b[3] == 0;
+                if (g.fluid(b[0], b[1], b[2]) == Terrain.AIR) {
+                    for (int side : new int[]{HallGlow.FLOOR, HallGlow.WALL, HallGlow.VAULT}) {
+                        int lv = HallGlow.spotLevel(t, C, y0, side, null, b[0], b[1], b[2]);
+                        if (inTube) assertEquals(C.tubes(), lv, "a spot in a tube's air at " + b[0] + " " + b[1] + " " + b[2]);
+                        else {
+                            int hall = b[1] < y0 ? HallGlow.BAND_LEVEL : HallGlow.levelAt(C, b[1] - y0, side, null, b[0], b[1], b[2]);
+                            assertEquals(hall, lv, "a spot of hall air " + b[3] + " from a mouth at " + b[0] + " " + b[1] + " " + b[2]);
+                            assertNotEquals(DeepBiome.OBSIDIAN_TUBES, t.biomeAt(b[0], b[1], b[2]), "hall air in the tubes' biome at " + b[0] + " " + b[1] + " " + b[2]);
+                        }
+                    }
+                    if (inTube) tubeAir++;
+                    else hallAir++;
+                }
+                for (int[] d : new int[][]{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}) {
+                    int x = b[0] + d[0], y = b[1] + d[1], z = b[2] + d[2];
+                    if (g.density(x, y, z) > 0) {
+                        if (inTube && tubeOpen(g, x, y, z) && seen.add(key(x, y, z))) q.add(new int[]{x, y, z, 0});
+                    } else if (b[3] < 4 && g.fluid(x, y, z) == Terrain.AIR && seen.add(key(x, y, z))) q.add(new int[]{x, y, z, b[3] + 1});
+                }
+            }
+        }
+        System.out.println("HallGlowFeatureTest: " + spots + " tube spots, " + tubeAir + " spots of tube air, " + hallAir + " of hall air at mouths");
+        assertTrue(spots >= 2, "too few tube spots: " + spots);
+        assertTrue(tubeAir > 20_000, "too few spots of tube air: " + tubeAir);
+        assertTrue(hallAir > 1000, "too few spots of hall air at the mouths: " + hallAir);
+    }
+
+    /** A block the tube opens in the cavern's rock (air or a pool's water). */
+    private static boolean tubeOpen(GalleriesField g, int x, int y, int z) {
+        return g.density(x, y, z) > 0 && g.tube(x, y, z) < 0;
+    }
+
+    private static long key(int x, int y, int z) {
+        return ((long) (x + (1 << 22)) << 34) | ((long) (y + 4096) << 22) | (z + (1 << 21));
     }
 
     @Test

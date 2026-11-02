@@ -3,7 +3,6 @@ package com.explorationremix.world.feature;
 import com.explorationremix.block.GlowBlock;
 import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Hashing;
 import com.explorationremix.world.terrain.Perlin;
 import com.explorationremix.world.terrain.Shape;
@@ -122,15 +121,7 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
                     if (!level.getBlockState(pos.set(x, y, z)).isAir()) continue;
                     int side = rockSide(level, pos, probe, c.reach(), glow);
                     if (side < 0) continue;
-                    DeepBiome b = t.biomeAt(x, y, z);
-                    // The refuge's biome reaches through the rock round a tube for its obsidian lining, so hall air at
-                    // a tube's mouth can be in it too: air outside the tube field's tubes takes the hall's light.
-                    if (b == DeepBiome.OBSIDIAN_TUBES && t.looks.tube(x, y, z) >= 0) b = DeepBiome.BASALT_GALLERIES;
-                    int lv;
-                    if (y < y0) lv = galleries(b) ? BAND_LEVEL : 0;
-                    else if (b == DeepBiome.OBSIDIAN_TUBES) lv = c.tubes();
-                    else if (galleries(b)) lv = HallGlow.levelAt(c, y - y0, side, noise, x, y, z);
-                    else continue;
+                    int lv = HallGlow.spotLevel(t, c, y0, side, noise, x, y, z);
                     if (lv <= 0) continue;
                     level.setBlock(pos, glow.defaultBlockState().setValue(GlowBlock.LEVEL, lv), 2);
                     any = true;
@@ -160,11 +151,6 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
             return st.getFluidState().isEmpty();
         }
         return false;
-    }
-
-    /** The Galleries' biomes that glow with the halls' light (the Obsidian Tubes take their own). */
-    static boolean galleries(DeepBiome b) {
-        return b == DeepBiome.BASALT_GALLERIES || b == DeepBiome.CALDERA || b == DeepBiome.CAUSEWAY || b == DeepBiome.SCORIA_CANYONS;
     }
 
     private static Perlin patches(long seed) {

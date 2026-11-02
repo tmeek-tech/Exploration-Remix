@@ -1,7 +1,9 @@
 package com.explorationremix.world.feature;
 
+import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Hashing;
 import com.explorationremix.world.terrain.Perlin;
+import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.util.Mth;
 
 /** How bright the Galleries' lava glow is ({@link HallGlowFeature}): pure, so it is tested without Minecraft. */
@@ -35,6 +37,25 @@ final class HallGlow {
     /** {@link #levelAt(HallGlowFeature.Config, int, int, Perlin, int, int, int)} for a spot over a floor. */
     static int levelAt(HallGlowFeature.Config c, int over, Perlin noise, int x, int y, int z) {
         return levelAt(c, over, FLOOR, noise, x, y, z);
+    }
+
+    /** The Galleries' biomes that glow with the halls' light (the Obsidian Tubes take their own). */
+    static boolean galleries(DeepBiome b) {
+        return b == DeepBiome.BASALT_GALLERIES || b == DeepBiome.CALDERA || b == DeepBiome.CAUSEWAY || b == DeepBiome.SCORIA_CANYONS;
+    }
+
+    /**
+     * The glow's level at a spot of air (x, y, z) of the Galleries whose rock lies on {@code side}, or 0 for none:
+     * {@link #BAND_LEVEL} in the flood band (under {@code y0}, the band's top), {@code tubes} in a tube's air, the halls'
+     * {@link #levelAt} over the band. Air outside the tube field's tubes takes the hall's light whatever its biome (the
+     * Galleries keep the Obsidian Tubes' biome to the cavern's rock, so hall air at a tube's mouth is the hall's anyway).
+     */
+    static int spotLevel(Terrain t, HallGlowFeature.Config c, int y0, int side, Perlin noise, int x, int y, int z) {
+        DeepBiome b = t.biomeAt(x, y, z);
+        if (b == DeepBiome.OBSIDIAN_TUBES && t.looks.tube(x, y, z) >= 0) b = DeepBiome.BASALT_GALLERIES;
+        if (y < y0) return galleries(b) ? BAND_LEVEL : 0;
+        if (b == DeepBiome.OBSIDIAN_TUBES) return c.tubes();
+        return galleries(b) ? levelAt(c, y - y0, side, noise, x, y, z) : 0;
     }
 
     /**
