@@ -155,8 +155,6 @@ public final class Net {
     final List<List<Integer>> strands = new ArrayList<>();
     final List<List<double[]>> strandLines = new ArrayList<>();
     double planMs;
-    /** Of which the deep dark's view breaker (Blue Reaches). */
-    double sightMs;
     /**
      * The planner's attempts that threw before this plan was made ({@link NetPlanner#plan}): 0 for a plan made at the
      * first, 1 or 2 for one made again with its layout salted, all of them ({@link NetPlanner#ATTEMPTS}) when

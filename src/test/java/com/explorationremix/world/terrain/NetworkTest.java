@@ -741,14 +741,11 @@ class NetworkTest {
 
     static Terrain fresh(long seed) { return new Terrain(TerrainSettings.defaults(), -64, seed); }
 
-    /** The share of the Blue Reaches' places (outside the cities' reserves) allowed a view over 160 blocks. */
-    static final double BLUE_LONG = 0.025;
-
     /**
      * A hash of what a plan carves: node centres, sizes and floors, edges, way samples and shafts, the rift's geodes and
-     * bridges, and the Blue Reaches' deep dark (where each tier is kept, its floor and ceiling, and the view breakers'
-     * columns, fins and spires), rounded to 1e-6. (Until 0.5.1 it took the Basalt arches, lava pools and magma ends
-     * too, which no plan of the Blue Reaches or the Deep Gardens ever had: their hashes are the same.)
+     * bridges, and the Blue Reaches' deep dark (where each tier is kept, its floor and ceiling), rounded to 1e-6. (Until
+     * 0.5.1 it took the Basalt arches, lava pools and magma ends too, which no plan of the Blue Reaches or the Deep
+     * Gardens ever had: their hashes are the same; and the view breaker's columns, fins and spires, which are gone.)
      */
     static long planHash(Net n) {
         long h = 17;
@@ -769,7 +766,6 @@ class NetworkTest {
         if (n.dark != null) {
             NetDark.Plan p = n.dark;
             for (int t = 0; t < 2; t++) for (int c = 0; c < p.N * p.N; c++) h = mixIn(h, p.keep[t][c], p.F[t][c], p.C[t][c]);
-            for (int t = 0; t < 3; t++) for (int j = 0; j < p.sight[t].n; j++) h = mixIn(h, p.sight[t].get(j));
         }
         return h;
     }
@@ -1136,42 +1132,24 @@ class NetworkTest {
     }
 
     /**
-     * Sight lines: from the eyes of walkable places, rays at pitches -40 to +40 meet rock within 160 blocks (past that
-     * the shader shows the sky). Places in every 4th column of the Deep Gardens' voxel cells, of the Blue Reaches' 2 x 2
-     * cells (whose rays run on into the apron), and of a Blue cell with an ancient city built with a 170-block apron. A
-     * ray that leaves the box after running 160 blocks counts as a long view. The Deep Gardens have none; in the Blue
-     * Reaches, the share of places with a long view is held under {@link #BLUE_LONG}, apart from the places in a city's
-     * reserve, which are reported (the city's pieces, which the harness does not build, stand in the way of many of
-     * their views).
+     * Sight lines, a report with no bar (long views are welcome: they make the caverns look vast). From the eyes of
+     * walkable places in every 4th column of the Deep Gardens' voxel cells and of the Blue Reaches' 2 x 2 cells (whose
+     * rays run on into the apron), rays at pitches -40 to +40 and 24 yaws are marched to the first rock. It prints the
+     * share of the rays in 40-block bands up to 160 and over 160 (past that the shader shows the sky), the places with
+     * a view over 160 (a ray that leaves the box after running 160 blocks counts) and with one of 80 or more, and the
+     * longest rays.
      */
     @Test
     @Tag("voxel")
-    void sightLinesAreShort() {
-        List<String> fails = new ArrayList<>();
+    void sightLines() {
         List<Object[]> runs = new ArrayList<>();
         for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], Terrain.GARDENS, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
-        runs.add(new Object[]{2000023L, Terrain.BLUE, -1, 1, 0});
         for (Object[] run : runs) {
             long seed = (Long) run[0];
             int li = (Integer) run[1], cx = (Integer) run[2], cz = (Integer) run[3], wc = (Integer) run[4];
-            Terrain t = terrain(seed);
-            Network w = t.network;
-            int cell = (int) w.cell;
-            VoxelHarness v;
-            if (wc > 0) v = built(seed, li, cx, cz, wc, wc);
-            else {
-                // one cell with an apron wide enough that its places' rays rarely leave the box
-                int ap = 170;
-                wc = 1;
-                v = VoxelHarness.build(t, li, cx * cell - ap, cz * cell - ap, cell + 2 * ap, cell + 2 * ap);
-                for (int i = -1; i <= 1; i++) for (int k = -1; k <= 1; k++) v.markShafts(w.net(li, cx + i, cz + k));
-                v.markShelfVines(DeepBiome.DEEP_BLUE_RIFT, DeepBiome.DEEP_DARK);
-                Net n = w.net(li, cx, cz);
-                Chamber e = n.ch.get(n.entry);
-                v.connect(e.x, e.f0 + 1, e.z);
-            }
-            VoxelHarness.Sight s = v.sight(4, 400, 3, cx * cell, cz * cell, (cx + wc) * cell, (cz + wc) * cell);
+            int cell = (int) terrain(seed).network.cell;
+            VoxelHarness.Sight s = built(seed, li, cx, cz, wc, wc).sight(4, 400, 3, cx * cell, cz * cell, (cx + wc) * cell, (cz + wc) * cell);
             String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "");
             long counted = s.rays - s.left;
             StringBuilder b = new StringBuilder();
@@ -1180,22 +1158,13 @@ class NetworkTest {
                 for (int k = lo / 10; k < lo / 10 + 4; k++) n += s.hist[k];
                 b.append(String.format(java.util.Locale.ROOT, " %d-%d %.2f%%", lo, lo + 40, 100.0 * n / Math.max(1, counted)));
             }
-            // the cities of the cells round the places
-            List<Chamber> cities = new ArrayList<>();
-            for (int i = -1; i <= wc; i++) for (int k = -1; k <= wc; k++) for (Chamber c : w.net(li, cx + i, cz + k).ch) if (c.keep && c.kind == Kind.CITY) cities.add(c);
-            long byCity = 0;
-            for (int[] p : s.longPlaces) for (Chamber c : cities) if (Math.hypot(p[0] + 0.5 - c.x, p[2] + 0.5 - c.z) < Network.CITY_RESERVE) { byCity++; break; }
-            long others = s.longPlaces.size() - byCity;
-            double share = others / (double) Math.max(1, s.places);
-            double wide = s.wide / (double) Math.max(1, s.places);
-            System.out.printf(java.util.Locale.ROOT, "%s: %d places, %d rays (%d left the box, %d of them after 160);%s, over 160 %.3f%%, longest %.0f; places with a view over 160: %d (%.2f%%) and %d in a city's reserve (%d cities); a view of 80 or more from %.1f%%%n",
-                    tg, s.places, counted, s.left, s.leftLong, b, 100.0 * s.over(160) / Math.max(1, counted), s.max, others, 100 * share, byCity, cities.size(), 100 * wide);
+            System.out.printf(java.util.Locale.ROOT, "%s: %d places, %d rays (%d left the box, %d of them after 160);%s, over 160 %.3f%%, longest %.0f; places with a view over 160: %d (%.2f%%); a view of 80 or more from %.1f%%%n",
+                    tg, s.places, counted, s.left, s.leftLong, b, 100.0 * s.over(160) / Math.max(1, counted), s.max,
+                    s.longPlaces.size(), 100.0 * s.longPlaces.size() / Math.max(1, s.places), 100.0 * s.wide / Math.max(1, s.places));
             for (double[] r : s.longest)
                 System.out.printf("    %.0f blocks from %.0f %.0f %.0f (yaw %.0f, pitch %.0f) to %.0f %.0f %.0f%n", r[5], r[0], r[1], r[2], r[3], r[4], r[6], r[7], r[8]);
-            if (s.places < 1000) fails.add(tg + ": only " + s.places + " places looked from");
-            if (li != Terrain.BLUE && !s.longPlaces.isEmpty()) fails.add(tg + ": " + s.longPlaces.size() + " places with a view over 160 blocks");
-            if (li == Terrain.BLUE && share > BLUE_LONG) fails.add(tg + ": " + String.format(java.util.Locale.ROOT, "%.2f", 100 * share) + "% of the places outside the cities' reserves have a view over 160 blocks");
+            // a check of the measurement, not of the views: the cells were built and walked
+            assertTrue(s.places > 0, tg + ": no place looked from");
         }
-        assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
 }

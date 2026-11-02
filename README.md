@@ -79,8 +79,8 @@ regenerated.
   flood). `/fill ... keep` and `replace minecraft:air` skip it; fill with `replace explorationremix:glow` to clear it.
 * **Blue Reaches** keep 0.2.0's sizes: the Deep Blue Rift, up to 160 blocks deep, with its ledge path, natural bridges
   and the Asurine Geodes beside it; the deep dark's caverns on two tiers, with an ancient city in about one cell in
-  seven. The network's rooms and tunnels join them. Columns, fins and spires stand in the widest spaces, so a view
-  along the floor rarely runs past 160 blocks.
+  seven. The network's rooms and tunnels join them. The long views stay open: nothing stands in the deep dark's
+  caverns or in the rift only to cut them.
 * Each layer has a flat water table (lava in the Wasteland, at y -663, and in the Basalt Galleries, at y -823), with
   lakes perched above it.
 * **The Basalt Galleries' lava cycle:** every 20 minutes the lava sea rises 40 blocks, to y -783, and drains again, on
