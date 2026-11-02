@@ -345,6 +345,11 @@ public final class ERBlocks {
         item("trailing_grass", TRAILING_GRASS);
     }
 
+    /** A Mossback's den (creature.MossbackDen): trampled moss and gnawed bone that keeps one lizard. Drops nothing. */
+    public static final RegistryObject<Block> MOSSBACK_DEN = block("mossback_den", () -> new com.explorationremix.creature.MossbackDen(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_GREEN).strength(0.6F).sound(SoundType.MOSS_CARPET).noLootTable()
+                    .pushReaction(PushReaction.BLOCK)));
+
     public static final RegistryObject<CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup." + ExplorationRemix.MOD_ID))
             .icon(() -> new ItemStack(LANTERN_FUNGUS.get()))
