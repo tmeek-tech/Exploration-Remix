@@ -711,6 +711,14 @@ class NetworkTest {
             joinedToEntry(tc, n, tg, fails);
             refuges(tc, n, tg, fails);
         }
+        for (long[] c : GALLERIES_SHALLOW_PORTAL_CELLS) {
+            Terrain tc = new Terrain(galleriesLava((int) c[3]), -64, c[0]);
+            int cx = (int) c[1], cz = (int) c[2];
+            Net n = tc.network.net(Terrain.GALLERIES, cx, cz);
+            String tg = tag(c[0], Terrain.GALLERIES, cx, cz) + " (lava " + c[3] + " deep)";
+            dropped(tc, n, tg, fails);
+            joinedToEntry(tc, n, tg, fails);
+        }
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
 
@@ -722,6 +730,15 @@ class NetworkTest {
      */
     static final long[][] GALLERIES_PORTAL_CELLS = {{54162964, 4, -7}, {124039, 0, -10}, {3638729150490L, 16, 0}, {713448, -17, -14},
             {-693432904, 16, -4}, {3422002863124L, 17, 12}};
+
+    /**
+     * Basalt Galleries cells {seed, cx, cz, lava depth} whose portal vestibules {@link #portalsAreJoined} checks with
+     * the lava shallower than the default (config), which plans them otherwise: in each a vestibule is boxed in as in
+     * the {@link #GALLERIES_PORTAL_CELLS}, and in 54162964 the places for a junction nearest it crowd one stretch of one
+     * tunnel, from none of which a tunnel reaches it.
+     */
+    static final long[][] GALLERIES_SHALLOW_PORTAL_CELLS = {{54162964, 4, -7, 6}, {54162964, 4, -7, 9}, {2071831583, 12, -15, 6},
+            {2071831583, 12, -15, 9}};
 
     /**
      * Section 11.1, over 3 seeds x 4 x 4 Blue cells: every eligible city site is at least 150 inside its cell and 140

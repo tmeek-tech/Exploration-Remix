@@ -2382,7 +2382,9 @@ final class NetPlanner {
          * The points of the entry's tunnels within {@link #VEST_JUNCTION_REACH} of such a room's wall, far enough from
          * it for the junction to keep its clearance and near enough to its floor for a tunnel, are tried, the nearest
          * first (a block of height counting 2.5): 16 of them, at least 5 blocks apart along each tunnel and at most 6
-         * from each room.
+         * from each room; when none takes, 16 more, at least 12 apart from every one tried and at most 12 from each
+         * room. The nearest places can crowd one stretch of one tunnel, where every tunnel to them winds into that
+         * tunnel's halves or turns back beside the vestibule.
          */
         void vestibuleJunctions() {
             for (int id : n.portals) {
@@ -2415,29 +2417,35 @@ final class NetPlanner {
                 }
                 spots.sort(Comparator.comparingDouble(q -> q[3]));
                 List<double[]> tried = new ArrayList<>();
-                for (double[] q : spots) {
-                    if (tried.size() == 16) break;
-                    int fromRoom = 0;
-                    boolean close = false;
-                    for (double[] o : tried) {
-                        close |= o[0] == q[0] && Math.abs(o[2] - q[2]) < 5;
-                        if (o[4] == q[4]) fromRoom++;
-                    }
-                    if (close || fromRoom == 6) continue;
-                    tried.add(q);
-                    Chamber v = n.ch.get((int) q[4]);
-                    int[] joined = {-1};
-                    boolean ok = cutJunction(n.edges.get((int) q[0]), (int) q[1], v.x, v.z, 1.5, j -> {
-                        Edge ne = edge(v.id, j.id);
-                        if (!embed(ne, true)) return false;
-                        ne.tree = true; ne.forced = true; n.forced++;
-                        joined[0] = j.id;
-                        return true;
-                    });
-                    if (ok) {
-                        union(joined[0], root);
-                        union(comp, root);
-                        break;
+                boolean done = false;
+                for (int round = 0; round < 2 && !done; round++) {
+                    double apart = round == 0 ? 5 : 12;
+                    int most = round == 0 ? 16 : 32, perRoom = round == 0 ? 6 : 12;
+                    for (double[] q : spots) {
+                        if (tried.size() == most) break;
+                        int fromRoom = 0;
+                        boolean close = false;
+                        for (double[] o : tried) {
+                            close |= o[0] == q[0] && Math.abs(o[2] - q[2]) < apart;
+                            if (o[4] == q[4]) fromRoom++;
+                        }
+                        if (close || fromRoom >= perRoom) continue;
+                        tried.add(q);
+                        Chamber v = n.ch.get((int) q[4]);
+                        int[] joined = {-1};
+                        boolean ok = cutJunction(n.edges.get((int) q[0]), (int) q[1], v.x, v.z, 1.5, j -> {
+                            Edge ne = edge(v.id, j.id);
+                            if (!embed(ne, true)) return false;
+                            ne.tree = true; ne.forced = true; n.forced++;
+                            joined[0] = j.id;
+                            return true;
+                        });
+                        if (ok) {
+                            union(joined[0], root);
+                            union(comp, root);
+                            done = true;
+                            break;
+                        }
                     }
                 }
             }
