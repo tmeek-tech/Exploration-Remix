@@ -13,8 +13,8 @@
     "width": {
       "type": "minecraft:uniform",
       "value": {
-        "min_inclusive": 1,
-        "max_inclusive": 3
+        "min_inclusive": 2,
+        "max_inclusive": 4
       }
     },
     "mode": "nearest_wall"

@@ -1,7 +1,10 @@
 {
   "replace": false,
   "values": [
-    {"id": "#forge:ores", "required": false},
+    {
+      "id": "#forge:ores",
+      "required": false
+    },
     "minecraft:gilded_blackstone"
   ]
 }

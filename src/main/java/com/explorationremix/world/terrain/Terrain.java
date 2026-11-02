@@ -27,6 +27,13 @@ public final class Terrain {
     /** Layers with the basalt look (columns in the walls, basalt rock, lava below): the Wasteland and the Galleries. */
     public static boolean basaltLook(int li) { return li == WASTELAND || li == GALLERIES; }
 
+    /**
+     * Layers whose caves come from the network's plans, with ways, climbs and gates the features keep clear (Walkway,
+     * OpenWayFeature, ClimbVinesFeature): the Blue Reaches and the Deep Gardens. Since 0.5.1 the Wasteland and the
+     * Galleries are noise fields with no planned ways, so nothing guards a way there (players can always dig).
+     */
+    public static boolean planned(int li) { return li < WASTELAND; }
+
     /** How far the layer's lava rises over its table at the height of its cycle: only the Galleries' does. */
     public static int surge(int li) { return li == GALLERIES ? FLOOD_RISE : 0; }
     public static final int AIR = 0, WATER = 1, LAVA = 2;
@@ -41,6 +48,11 @@ public final class Terrain {
     public final long seed;
     public final Plans plans;
     public final Palette palette;
+    /**
+     * What the two bottom layers' noise fields tell the rock dressing and the Galleries' glow: column cells, hanging
+     * clusters, tubes, cones ({@link LookQueries}). The Galleries' field answers once it replaces the planned network.
+     */
+    public final LookQueries looks;
     /** The deep layers' cave networks: every block inside a layer is theirs. */
     public final Network network;
     /** Asked before an upper set piece is placed, so none is carved under an ocean or river. Null in tests. */
@@ -62,7 +74,8 @@ public final class Terrain {
         long s = seed ^ 0x6A09E667F3BCC909L;
         detail = new Perlin(Hashing.mix(s, 18, 0, 0));
         this.plans = new Plans(this, seed);
-        this.palette = new Palette(this, seed);
+        this.looks = LookQueries.planned(this);
+        this.palette = new Palette(this, seed, looks);
         this.network = new Network(this);
     }
 

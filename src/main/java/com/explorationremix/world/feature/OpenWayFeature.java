@@ -52,6 +52,7 @@ public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
             }
         }
         for (int li = 0; li < s.layerCount; li++) {
+            if (!Terrain.planned(li)) continue;
             List<Net.Shaft> shafts = t.shaftsIn(minX, minZ, maxX, maxZ, li);
             // The walking corridor along every way: the feet and two blocks over them.
             for (int x = minX; x <= maxX; x++) {

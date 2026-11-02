@@ -7,7 +7,6 @@
     "minecraft:dripstone_block",
     "minecraft:smooth_basalt",
     "minecraft:basalt",
-    "minecraft:polished_basalt",
     "minecraft:blackstone",
     "minecraft:gilded_blackstone",
     "minecraft:obsidian",
@@ -31,7 +30,6 @@
     "minecraft:deepslate_tiles",
     "minecraft:warped_wart_block",
     "minecraft:brown_terracotta",
-    "minecraft:polished_blackstone",
     "minecraft:red_terracotta",
     "minecraft:terracotta",
     {

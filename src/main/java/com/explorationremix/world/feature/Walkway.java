@@ -38,7 +38,7 @@ public final class Walkway {
         if (lo >= t.shape.packFloor) return false;
         int li0 = t.shape.layerAt(Math.min(hi, t.shape.packFloor - 1)), li1 = t.shape.layerAt(lo);
         for (int li = 0; li < t.shape.layerCount; li++) {
-            if (li != li0 && li != li1) continue;
+            if (li != li0 && li != li1 || !Terrain.planned(li)) continue;
             Network.WayLines w = t.wayLinesAt(li, x, z, 8 + margin);
             for (int k = 0; k < w.n; k++) {
                 if (w.d[k] > Math.max(0.6 * w.half[k], HALF_WIDTH) + margin) continue;

@@ -61,11 +61,9 @@ public enum Rock {
     // ---- 0.4.1: Root Vault ravines outside the tropics, and the cold caves' blue moss
     ANDESITE(0x888889),
     FROST_MOSS(0x5d8a96),
-    // ---- 0.5: the Basalt Galleries' column caps and crater rims, the Scoria Canyons' layered bands (Create's layered
-    // scoria and scorchia, with terracotta and blackstone standing in), and the ember crust, a mod block: the glowing
-    // seams that light the lifeless Galleries where lava cannot reach
-    POLISHED_BASALT(0x6a696e),
-    POLISHED_BLACKSTONE(0x3a3440),
+    // ---- 0.5: the Scoria Canyons' layered bands (Create's layered scoria and scorchia, with terracotta and blackstone
+    // standing in), and the ember crust, a mod block: the glowing seams that light the lifeless Galleries where lava
+    // cannot reach. (0.5.1: polished basalt and polished blackstone are gone; the two bottom layers are natural stone.)
     LAYERED_SCORIA(0x7a5444),
     LAYERED_SCORCHIA(0x46403c),
     EMBER_CRUST(0xe0782e);

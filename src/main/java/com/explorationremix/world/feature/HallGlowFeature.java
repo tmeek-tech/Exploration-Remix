@@ -32,9 +32,11 @@ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfigur
  * try at a spot hashed from the world seed and the cube: it lights if that spot is air with rock (any block that is not
  * air, a fluid or another glow) within {@code reach} along one of the six axes, so the light sits along the rock and
  * none in the middle of a hall. Over the flood band its level is {@code low} at the band's top and fades to
- * {@code high} at {@code fade} blocks above it, brightest near the lava as the lava's own glow would be, and a slow noise
- * moves it up to {@code patch} either way so the light comes in warmer and duller stretches. The Obsidian Tubes, the
- * refuge, take {@code tubes} (0: none).
+ * {@code high} at {@code fade} blocks above it, brightest near the lava as the lava's own glow would be; a spot with no
+ * floor under it within reach is {@code wall} darker beside a wall and {@code vault} darker under a vault, so the halls
+ * read lit from the lava and the floor up (0.5.1, Taran: "brightly lit", but not flat); and a slow noise moves it up to
+ * {@code patch} either way so the light comes in warmer and duller stretches. The Obsidian Tubes, the refuge, take
+ * {@code tubes} (0: none).
  * <p>
  * In the flood band (the {@code Terrain.surge} blocks over the lava table) every glow is {@link #BAND_LEVEL}: the
  * rising sea takes it with the air and marks it, and the drain puts {@link #bandGlow()} back where it was
@@ -53,7 +55,11 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
     /** The glow the drain puts back in the flood band. */
     public static BlockState bandGlow() { return ERBlocks.GLOW.get().defaultBlockState().setValue(GlowBlock.LEVEL, BAND_LEVEL); }
 
-    public record Config(int spacing, int reach, int low, int high, int fade, int patch, int tubes) implements FeatureConfiguration {
+    /**
+     * {@code wall} and {@code vault} (0.5.1): how many levels a spot whose nearest rock is a wall, or only a vault over
+     * it, is under a spot over a floor at the same height (HallGlow.side), so the halls are lit from the floor up.
+     */
+    public record Config(int spacing, int reach, int low, int high, int fade, int patch, int wall, int vault, int tubes) implements FeatureConfiguration {
         public static final Codec<Config> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.intRange(2, 8).fieldOf("spacing").forGetter(Config::spacing),
                 Codec.intRange(1, 8).fieldOf("reach").forGetter(Config::reach),
@@ -61,6 +67,8 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
                 Codec.intRange(1, 15).fieldOf("high").forGetter(Config::high),
                 Codec.intRange(1, 384).fieldOf("fade").forGetter(Config::fade),
                 Codec.intRange(0, 6).optionalFieldOf("patch", 0).forGetter(Config::patch),
+                Codec.intRange(0, 6).optionalFieldOf("wall", 0).forGetter(Config::wall),
+                Codec.intRange(0, 6).optionalFieldOf("vault", 0).forGetter(Config::vault),
                 Codec.intRange(0, 15).optionalFieldOf("tubes", 0).forGetter(Config::tubes)
         ).apply(i, Config::new));
     }
@@ -112,21 +120,16 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
                     int z = cz * n + (int) Long.remainderUnsigned(h >>> 32, n);
                     if (x < minX || x > maxX || z < minZ || z > maxZ || y < table || y > y1) continue;
                     if (!level.getBlockState(pos.set(x, y, z)).isAir()) continue;
-                    if (!nearRock(level, pos, probe, c.reach(), glow)) continue;
+                    int side = rockSide(level, pos, probe, c.reach(), glow);
+                    if (side < 0) continue;
                     DeepBiome b = t.biomeAt(x, y, z);
-                    // The refuge's biome reaches 4 blocks round a tube (6 round a hub) through the rock, for its
-                    // obsidian lining, so hall air at a tube's mouth is in it too: that air takes the hall's light.
-                    // Hall air is air over 1 block out of the tube's shell (the carved wall lies up to a block off it)
-                    // or inside a hall's floor-to-ceiling span (a tube's round end runs 3 blocks into the hall).
-                    if (b == DeepBiome.OBSIDIAN_TUBES) {
-                        double[] span;
-                        if (t.tubeShellDepth(x, y, z) > 1 || (span = t.hallSpanAt(x, z)) != null && y >= span[0] && y <= span[1])
-                            b = DeepBiome.BASALT_GALLERIES;
-                    }
+                    // The refuge's biome reaches through the rock round a tube for its obsidian lining, so hall air at
+                    // a tube's mouth can be in it too: air outside the tube field's tubes takes the hall's light.
+                    if (b == DeepBiome.OBSIDIAN_TUBES && t.looks.tube(x, y, z) >= 0) b = DeepBiome.BASALT_GALLERIES;
                     int lv;
                     if (y < y0) lv = galleries(b) ? BAND_LEVEL : 0;
                     else if (b == DeepBiome.OBSIDIAN_TUBES) lv = c.tubes();
-                    else if (galleries(b)) lv = HallGlow.levelAt(c, y - y0, noise, x, y, z);
+                    else if (galleries(b)) lv = HallGlow.levelAt(c, y - y0, side, noise, x, y, z);
                     else continue;
                     if (lv <= 0) continue;
                     level.setBlock(pos, glow.defaultBlockState().setValue(GlowBlock.LEVEL, lv), 2);
@@ -137,16 +140,24 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
         return any;
     }
 
-    /** Whether rock lies within {@code reach} of {@code pos} along one of the six axes. */
-    static boolean nearRock(BlockGetter level, BlockPos pos, BlockPos.MutableBlockPos probe, int reach, Block glow) {
-        for (Direction d : Direction.values()) {
-            probe.set(pos);
-            for (int k = 1; k <= reach; k++) {
-                BlockState st = level.getBlockState(probe.move(d));
-                if (st.isAir() || st.is(glow)) continue;
-                if (!st.getFluidState().isEmpty()) break;
-                return true;
-            }
+    /**
+     * Where rock lies within {@code reach} of {@code pos} along the six axes ({@link HallGlow#side}: under it first, then
+     * beside it, then over it), or -1 for none. A fluid stops the look along its axis.
+     */
+    static int rockSide(BlockGetter level, BlockPos pos, BlockPos.MutableBlockPos probe, int reach, Block glow) {
+        boolean under = rockAlong(level, pos, probe, Direction.DOWN, reach, glow);
+        boolean beside = !under && (rockAlong(level, pos, probe, Direction.NORTH, reach, glow) || rockAlong(level, pos, probe, Direction.SOUTH, reach, glow)
+                || rockAlong(level, pos, probe, Direction.WEST, reach, glow) || rockAlong(level, pos, probe, Direction.EAST, reach, glow));
+        boolean over = !under && !beside && rockAlong(level, pos, probe, Direction.UP, reach, glow);
+        return HallGlow.side(under, beside, over);
+    }
+
+    private static boolean rockAlong(BlockGetter level, BlockPos pos, BlockPos.MutableBlockPos probe, Direction d, int reach, Block glow) {
+        probe.set(pos);
+        for (int k = 1; k <= reach; k++) {
+            BlockState st = level.getBlockState(probe.move(d));
+            if (st.isAir() || st.is(glow)) continue;
+            return st.getFluidState().isEmpty();
         }
         return false;
     }

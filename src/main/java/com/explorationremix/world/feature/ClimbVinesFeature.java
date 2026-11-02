@@ -43,6 +43,7 @@ public final class ClimbVinesFeature extends Feature<NoneFeatureConfiguration> {
         boolean any = false;
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         for (int li = 0; li < t.shape.layerCount; li++) {
+            if (!Terrain.planned(li)) continue;
             for (Net.Shaft s : t.shaftsIn(minX, minZ, maxX, maxZ, li)) {
                 if (s.vineX < minX || s.vineX > maxX || s.vineZ < minZ || s.vineZ > maxZ) continue;
                 int foot = Network.vineFoot(s), top = Network.vineTop(s);

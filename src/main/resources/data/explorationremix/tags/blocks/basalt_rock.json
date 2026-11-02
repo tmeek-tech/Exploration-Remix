@@ -2,14 +2,12 @@
   "replace": false,
   "values": [
     "minecraft:basalt",
-    "minecraft:polished_basalt",
     "minecraft:smooth_basalt",
     "minecraft:blackstone",
     "minecraft:gilded_blackstone",
     "minecraft:magma_block",
     "minecraft:deepslate_gold_ore",
     "minecraft:brown_terracotta",
-    "minecraft:polished_blackstone",
     "explorationremix:ember_crust",
     "minecraft:terracotta",
     {

@@ -148,7 +148,81 @@ def main():
             b = v["id"] if isinstance(v, dict) else v
             if b.startswith(MOD + ":") and b not in removed:
                 errors.append(f"immersive_weathering icy tag: {b} keeps Immersive Weathering's own icicle clusters")
+    errors += bottom_layers(configured, placed)
     return sorted(set(errors))
+
+
+# 0.5.1: the two bottom layers. Natural stone only (Taran, 2026-11-02: "Polished blackstone doesn't fit. It looks too
+# unnatural"), and nothing alive in the Basalt Galleries' five biomes (2026-11-01: "none of them should have life of any
+# kind").
+BOTTOM = ["wasteland", "ash_hollows", "basalt_galleries", "obsidian_tubes", "caldera", "causeway", "scoria_canyons"]
+GALLERIES = ["basalt_galleries", "obsidian_tubes", "caldera", "causeway", "scoria_canyons"]
+WORKED = re.compile(r"polished|bricks?\b|chiseled|_tiles\b|cut_|_slab|_stairs|_wall\b|smooth_stone")
+# every block a feature may place in the Galleries: rock, fluids, and the mod's light and stand-ins
+GALLERIES_BLOCKS = {"minecraft:" + b for b in (
+    "basalt", "smooth_basalt", "blackstone", "gilded_blackstone", "magma_block", "obsidian", "crying_obsidian", "tuff", "calcite",
+    "lava", "water", "air", "cave_air", "deepslate_gold_ore", "brown_terracotta", "terracotta")} | {
+    "create:scoria", "create:scorchia", "create:layered_scoria", "create:layered_scorchia", f"{MOD}:ember_crust", f"{MOD}:glow",
+    f"{MOD}:cinder_chain"}
+
+
+def blocks_in(obj, out):
+    """Every block id named in a feature's or placement's JSON: state "Name"s, block lists, and plain ids."""
+    if isinstance(obj, dict):
+        if isinstance(obj.get("Name"), str):
+            out.add(obj["Name"])
+        for k, v in obj.items():
+            if k in ("blocks", "block", "fluid", "rock") and isinstance(v, str) and ":" in v:
+                out.add(v)
+            blocks_in(v, out)
+    elif isinstance(obj, list):
+        for v in obj:
+            if isinstance(v, str) and ":" in v and not v.startswith("#"):
+                out.add(v)
+            blocks_in(v, out)
+    return out
+
+
+def bottom_layers(configured, placed):
+    errors = []
+    for name in BOTTOM:
+        path = os.path.join(DATA, "worldgen", "biome", name + ".json")
+        if not os.path.exists(path):
+            errors.append(f"biome/{name}: missing")
+            continue
+        biome = load(path)
+        for step in biome.get("features", []):
+            for f in step:
+                ns, _, p = f.partition(":")
+                if ns != MOD or p not in placed:
+                    continue
+                pf = load(placed[p])
+                found = blocks_in(pf, set())
+                feat = pf["feature"]
+                if isinstance(feat, str) and feat.partition(":")[2] in configured:
+                    found |= blocks_in(load(configured[feat.partition(":")[2]]), set())
+                for b in sorted(found):
+                    if WORKED.search(b.split(":")[-1]):
+                        errors.append(f"biome/{name}: {f} places worked stone {b}")
+                    if name in GALLERIES and b not in GALLERIES_BLOCKS and not b.startswith("#"):
+                        errors.append(f"biome/{name}: {f} places {b}, which is not lifeless rock, fluid or light")
+        if name in GALLERIES:
+            for group, entries in biome.get("spawners", {}).items():
+                if entries:
+                    errors.append(f"biome/{name}: something spawns ({group})")
+            if biome.get("spawn_costs"):
+                errors.append(f"biome/{name}: spawn costs")
+            particle = biome.get("effects", {}).get("particle", {}).get("options", {}).get("type")
+            if particle not in (None, "minecraft:ash", "minecraft:white_ash"):
+                errors.append(f"biome/{name}: ambient particle {particle} is not ash")
+    for tag in ("basalt_rock", "cave_rock"):
+        path = os.path.join(DATA, "tags", "blocks", tag + ".json")
+        if os.path.exists(path):
+            for v in load(path)["values"]:
+                b = v["id"] if isinstance(v, dict) else v
+                if WORKED.search(b.split(":")[-1]) and "deepslate_tiles" not in b:
+                    errors.append(f"tags/blocks/{tag}: worked stone {b}")
+    return errors
 
 
 if __name__ == "__main__":

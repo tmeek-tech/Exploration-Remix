@@ -63,15 +63,16 @@ public final class CaveAtmosphere {
         FOG_REACH.put(RUST_SPRINGS, 1.0F);    // steam
         FOG_REACH.put(DEEP_BLUE_RIFT, 1.2F);
         FOG_REACH.put(ASURINE_GEODES, 1.2F);
-        // The Galleries' halls are 60 to 110 across: their haze is the smoke rising off the lava, and the fog keeps the
-        // far wall in sight (the Caldera smokiest, the Causeway's open lava the clearest).
-        FOG_REACH.put(BASALT_GALLERIES, 1.35F);
-        FOG_REACH.put(OBSIDIAN_TUBES, 1.2F);
+        // The Galleries' haze is the smoke rising off the lava (0.5.1: "Volcanic Smoke"): the fog ends about 175 blocks
+        // out and thickens from about 50, so the far side of the cavern (80 to 160 blocks) reads hazy but in sight. The
+        // Caldera is the smokiest, the Causeway's open lava the clearest.
+        FOG_REACH.put(BASALT_GALLERIES, 1.1F);
+        FOG_REACH.put(OBSIDIAN_TUBES, 1.0F);
         FOG_REACH.put(WASTELAND, 0.9F);        // smoke, as the old Basalt Galleries
         FOG_REACH.put(ASH_HOLLOWS, 1.1F);      // the refuge's still air, clearer than the tunnels' smoke
-        FOG_REACH.put(CALDERA, 1.2F);
-        FOG_REACH.put(CAUSEWAY, 1.45F);
-        FOG_REACH.put(SCORIA_CANYONS, 1.3F);
+        FOG_REACH.put(CALDERA, 1.0F);
+        FOG_REACH.put(CAUSEWAY, 1.25F);
+        FOG_REACH.put(SCORIA_CANYONS, 1.15F);
         FOG_REACH.put(FROZEN_ROOTVAULTS, 1.3F);
         FOG_REACH.put(SINKHOLE, 1.4F);
         FOG_REACH.put(OASIS_HOLLOW, 1.3F);
@@ -237,7 +238,11 @@ public final class CaveAtmosphere {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos above = new BlockPos.MutableBlockPos();
         int px = player.getBlockX(), py = player.getBlockY(), pz = player.getBlockZ();
-        if (galleries(level.getBiome(player.blockPosition()))) smokeColumns(level, random, px, py, pz, p);
+        Holder<Biome> here = level.getBiome(player.blockPosition());
+        // The Galleries' smoke, and from the Wasteland the smoke rising out of the Galleries under its openings (and
+        // off its own lava): scanned deeper, as the Galleries' lava lies up to about 150 under a Wasteland ledge.
+        if (galleries(here)) smokeColumns(level, random, px, pz, 32, py + 24, py - 120, p);
+        else if (here.is(WASTELAND) || here.is(ASH_HOLLOWS)) smokeColumns(level, random, px, pz, 16, py + 8, py - 150, p);
         for (int i = 0; i < 400; i++) {
             p.set(px + random.nextInt(49) - 24, py + random.nextInt(25) - 12, pz + random.nextInt(49) - 24);
             BlockState s = level.getBlockState(p);
@@ -306,23 +311,27 @@ public final class CaveAtmosphere {
      * spot of it, so its puffs stack into a column, now and then a tall one; the smoke takes the lava's light as it rises,
      * the orange haze of the halls.
      */
-    private static void smokeColumns(ClientLevel level, RandomSource random, int px, int py, int pz, BlockPos.MutableBlockPos p) {
+    private static void smokeColumns(ClientLevel level, RandomSource random, int px, int pz, int tries, int yTop, int yBottom,
+                                     BlockPos.MutableBlockPos p) {
         int cx = Math.floorDiv(px, SMOKE_CELL), cz = Math.floorDiv(pz, SMOKE_CELL);
-        for (int i = 0; i < 24; i++) {
+        for (int i = 0; i < tries; i++) {
             int gx = cx + random.nextInt(2 * SMOKE_CELLS + 1) - SMOKE_CELLS, gz = cz + random.nextInt(2 * SMOKE_CELLS + 1) - SMOKE_CELLS;
             long h = (gx * 0x9E3779B97F4A7C15L) ^ (gz * 0xC2B2AE3D27D4EB4FL);
             h ^= h >>> 29;
             int x = gx * SMOKE_CELL + (int) Long.remainderUnsigned(h, SMOKE_CELL);
             int z = gz * SMOKE_CELL + (int) Long.remainderUnsigned(h >>> 17, SMOKE_CELL);
             boolean open = false;
-            for (int y = py + 16; y >= py - 96; y--) {
+            for (int y = yTop; y >= yBottom; y--) {
                 BlockState s = level.getBlockState(p.set(x, y, z));
                 if (GlowBlock.open(s)) { open = true; continue; }
                 if (open && s.getFluidState().is(FluidTags.LAVA)) {
-                    if (random.nextFloat() < 0.75F)
+                    // 0.5.1: denser, and one puff in eight a tall signal column (cosy smoke lives 80 to 130 ticks,
+                    // signal smoke 280 to 330): about 900 and 350 particles at once over a lava-floored cavern, where
+                    // 0.5.0 had about 570 and 130 (estimates, at a third of the cells finding lava)
+                    if (random.nextFloat() < 0.9F)
                         level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, true, x + 0.3 + random.nextDouble() * 0.4, y + 1.1,
                                 z + 0.3 + random.nextDouble() * 0.4, 0, 0.06, 0);
-                    if (random.nextFloat() < 0.06F)
+                    if (random.nextFloat() < 0.12F)
                         level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, true, x + 0.5, y + 1.1, z + 0.5, 0, 0.07, 0);
                     break;
                 }
