@@ -1,6 +1,7 @@
 package com.explorationremix.client.model;
 
 import com.explorationremix.creature.MossbackEntity;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.HierarchicalModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.util.Mth;
@@ -10,7 +11,7 @@ import net.minecraft.util.Mth;
  * a sprawling walk with the legs in diagonal pairs, the spine bending from side to side in an S with the tail
  * following a beat behind, slow breathing at the throat, the head turning towards what it watches, and for the hunt
  * the frills fanning out, the throat swelling, the front rearing and the jaw gaping. While it holds its catch the
- * head and neck thrash.
+ * head and neck thrash; carrying one home, the jaw stays a little open round it.
  */
 public class MossbackModel extends HierarchicalModel<MossbackEntity> {
     private final ModelPart root, chest, hips, neck, head, jaw, throat, frillLeft, frillRight;
@@ -115,6 +116,20 @@ public class MossbackModel extends HierarchicalModel<MossbackEntity> {
             head.zRot += thrash * 0.25F;
             chest.yRot -= thrash * 0.15F;
         }
+    }
+
+    /**
+     * Moves the pose from the model's root to the gap between its jaws, as posed for this frame (for what it carries
+     * there: see MossbackRenderer). The lower jaw runs 10 pixels forward from its hinge; the gap lies about 7 along it,
+     * just above the lower jaw's top. The pose is still the model's: y down, the snout towards -z.
+     */
+    public void translateToJaw(PoseStack pose) {
+        root.translateAndRotate(pose);
+        chest.translateAndRotate(pose);
+        neck.translateAndRotate(pose);
+        head.translateAndRotate(pose);
+        jaw.translateAndRotate(pose);
+        pose.translate(0.0F, -0.5F / 16.0F, -7.0F / 16.0F);
     }
 
     /** A sprawling leg: the upper leg sweeps forward and back about the shoulder and lifts while it swings forward. */

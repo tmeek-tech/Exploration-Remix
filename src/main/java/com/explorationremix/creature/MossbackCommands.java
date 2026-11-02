@@ -39,16 +39,21 @@ import java.util.Locale;
  *     driver): even n from its side, odd n from in front; 4 + n / 2 blocks away</li>
  *     <li>{@code /remix mossback freeze|unfreeze}: holds the Mossbacks within 64 blocks still where they are, in the
  *     state they are in, or lets them go on (for pictures)</li>
- *     <li>{@code /remix mossback dens [chunks]}: the dens in the loaded chunks round you, nearest first, and how each stands</li>
- *     <li>{@code /remix mossback den}: takes you to the nearest den in the loaded chunks within 8 chunks</li>
+ *     <li>{@code /remix mossback dens [chunks]}: the dens in the loaded chunks round you, nearest first, how each stands
+ *     and its family (each member's role, and where it is or was last seen)</li>
+ *     <li>{@code /remix mossback den}: takes you to the nearest den in the loaded chunks within 8 chunks, and lists its family</li>
  *     <li>{@code /remix mossback away <blocks>}: puts you on open floor about that far from the nearest den, in sight of
- *     it (far enough for the den to bring out its lizard, near enough for it to come for you)</li>
+ *     it (far enough for the den to bring out its family, near enough for them to come for you)</li>
+ *     <li>{@code /remix mossback catch}: gives the nearest roamer a chicken in its jaws and sends it home with it (to try
+ *     following one home)</li>
+ *     <li>{@code /remix mossback foray}: sends the nearest roamer out on a foray now (a guard stays at home)</li>
  * </ul>
  */
 public final class MossbackCommands {
     private MossbackCommands() {}
 
-    private static final String[] STATES = {"roam", "wait", "alert", "chase", "rear", "lunge", "grab", "recoil", "search", "eat", "drop"};
+    /** The state names by id: the list {@link MossbackEntity#describe} reads too, so the two never drift apart. */
+    private static final String[] STATES = MossbackEntity.STATE_NAMES;
 
     public static LiteralArgumentBuilder<CommandSourceStack> command() {
         return Commands.literal("mossback")
@@ -70,8 +75,10 @@ public final class MossbackCommands {
                 .then(Commands.literal("dens").executes(c -> dens(c, 6, false))
                         .then(Commands.argument("chunks", IntegerArgumentType.integer(1, 16)).executes(c -> dens(c, IntegerArgumentType.getInteger(c, "chunks"), false))))
                 .then(Commands.literal("den").executes(c -> dens(c, 8, true)))
-                .then(Commands.literal("away").then(Commands.argument("blocks", IntegerArgumentType.integer(17, 60))
-                        .executes(c -> away(c, IntegerArgumentType.getInteger(c, "blocks")))));
+                .then(Commands.literal("away").then(Commands.argument("blocks", IntegerArgumentType.integer(17, 90))
+                        .executes(c -> away(c, IntegerArgumentType.getInteger(c, "blocks")))))
+                .then(Commands.literal("catch").executes(MossbackCommands::giveCatch))
+                .then(Commands.literal("foray").executes(MossbackCommands::foray));
     }
 
     private static void say(CommandContext<CommandSourceStack> c, String msg) {
@@ -137,6 +144,30 @@ public final class MossbackCommands {
         }
         m.forceState((byte) s, ticks);
         say(c, "Now: " + m.describe());
+        return 1;
+    }
+
+    /** The nearest roamer of a den within 64 blocks, or null (with a message why). */
+    @javax.annotation.Nullable
+    private static MossbackEntity nearestRoamer(CommandContext<CommandSourceStack> c) {
+        for (MossbackEntity m : near(c, 64)) if (m.isRoamer()) return m;
+        c.getSource().sendFailure(Component.literal("No roamer within 64 blocks (a guard stays at home, and a stray has no den)."));
+        return null;
+    }
+
+    /** Gives the nearest roamer a chicken in its jaws and sends it home with it, to follow it to its den. */
+    private static int giveCatch(CommandContext<CommandSourceStack> c) {
+        MossbackEntity m = nearestRoamer(c);
+        if (m == null || !m.giveCatch(net.minecraft.world.entity.EntityType.CHICKEN)) return 0;
+        say(c, "Carrying a chicken home: " + m.describe());
+        return 1;
+    }
+
+    /** Sends the nearest roamer out on a foray now. */
+    private static int foray(CommandContext<CommandSourceStack> c) {
+        MossbackEntity m = nearestRoamer(c);
+        if (m == null || !m.sendOut()) return 0;
+        say(c, "Out on a foray: " + m.describe());
         return 1;
     }
 
@@ -315,12 +346,15 @@ public final class MossbackCommands {
             BlockPos at = f.pos;
             if (c.getSource().getEntity() != null)
                 c.getSource().getEntity().teleportTo(at.getX() + 0.5, at.getY() + 0.1, at.getZ() + 0.5);
-            say(c, "Den at " + at.toShortString() + " (" + level.getBiome(at).unwrapKey().map(k -> k.location().getPath()).orElse("?") + "): " + f.tile.describe(now));
+            say(c, "Den at " + at.toShortString() + " (" + level.getBiome(at).unwrapKey().map(k -> k.location().getPath()).orElse("?") + "): " + f.tile.describe(level, now));
+            for (String line : f.tile.describeMembers(level)) say(c, "  " + line);
             return 1;
         }
-        for (Found f : found)
+        for (Found f : found) {
             say(c, String.format(Locale.ROOT, "%s, %.0f blocks, %s: %s", f.pos.toShortString(), Math.sqrt(f.pos.distToCenterSqr(p)),
-                    level.getBiome(f.pos).unwrapKey().map(k -> k.location().getPath()).orElse("?"), f.tile.describe(now)));
+                    level.getBiome(f.pos).unwrapKey().map(k -> k.location().getPath()).orElse("?"), f.tile.describe(level, now)));
+            for (String line : f.tile.describeMembers(level)) say(c, "  " + line);
+        }
         return found.size();
     }
 }
