@@ -312,10 +312,11 @@ class NetworkTest {
      * Basalt Galleries cells {seed, cx, cz, lava depth, 0 for the default} whose refuges {@link #refugesAreQuiet}
      * and halls {@link #galleriesSubBiomes} check too: in each a set piece stands boxed in by column halls, with an
      * Obsidian Tube that hangs on it (25379437606363, the Causeway) or a vestibule beside it (464347, the rift), and
-     * no tunnel of the tree reaches it.
+     * no tunnel of the tree reaches it. In -1615428297 -14,16 the rift was drawn as narrow as its river and low ledges
+     * together, which left its upper ledges no length and its plan throwing.
      */
     static final long[][] GALLERIES_PIECE_CELLS = {{25379437606363L, 10, -15, 0}, {25379437606363L, 10, -15, 7},
-            {25379437606363L, 10, -15, 8}, {464347, 10, -9, 0}, {464347, 10, -9, 9}};
+            {25379437606363L, 10, -15, 8}, {464347, 10, -9, 0}, {464347, 10, -9, 9}, {-1615428297L, -14, 16, 0}};
 
     /** The world of one of the {@link #GALLERIES_PIECE_CELLS}. */
     static Terrain pieceTerrain(long[] c) {

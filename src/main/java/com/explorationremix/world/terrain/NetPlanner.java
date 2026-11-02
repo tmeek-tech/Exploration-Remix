@@ -5106,6 +5106,11 @@ final class NetPlanner {
             c.crest = c.f0 - 12;
             c.riverW = r(s + 4, 4.5, 6);
             c.lowW = r(s + 5, 6, 7.5);
+            // a canyon drawn narrow (rz near 18) with a wide river and low ledges leaves the upper ledges no length
+            // (Network.riftLedgeEnd near 0), and the walks along them none: about one rift in three hundred. Such a
+            // rift narrows its low ledges (to 6 or a little more) until the upper ones run about two thirds of the way
+            // to the canyon's ends; every other rift keeps what it drew
+            if (Network.riftLedgeEnd(c) <= 4) c.lowW = Math.max(6, 0.95 * c.rz - Network.RIFT_LEDGE_MIN - c.riverW);
             // the low ledges and their ramps keep 2 inside the upper ledges' ends; the second side's stands across the
             // river from the first's (within 4 along), and where it can the pair leaves room at both ends of the
             // bridges' reach for the bridges, which keep clear of it ({@link #riftBridges}): one fits on each side
