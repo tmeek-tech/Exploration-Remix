@@ -93,8 +93,12 @@ public final class Network {
     /** The low 28 bits of v as a signed number. */
     private static int unpack(long v) { return (int) (v << 36 >> 36); }
 
-    /** The plan of layer li in cell (cx, cz), made on first use. */
+    /**
+     * The plan of layer li in cell (cx, cz), made on first use. Only the {@link Terrain#planned} layers have plans: the
+     * planner's code for the noise layers is dead until it is removed, and a stray caller is caught here.
+     */
     Net net(int li, int cx, int cz) {
+        if (!Terrain.planned(li)) throw new IllegalArgumentException("layer " + li + " is a noise field: it has no plan");
         try {
             return nets.getUnchecked(key(li, cx, cz));
         } catch (UncheckedExecutionException e) {
