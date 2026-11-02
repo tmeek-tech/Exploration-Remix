@@ -601,7 +601,7 @@ public final class GalleriesField {
             C += F2 - F;
             F = F2;
             int ix = (int) Math.floor(x), iz = (int) Math.floor(z);
-            if (tubes.spanLo(ix, iz) <= tubes.spanHi(ix, iz)) mouth = ap;
+            if (tubes.runs(ix, iz)) mouth = ap;
             C = Math.max(C, F + TubeField.APRON_HEAD * mouth);
         }
         // ---- the join: under the Wasteland's breakthroughs the domes rise into the band (the pinches stay)
