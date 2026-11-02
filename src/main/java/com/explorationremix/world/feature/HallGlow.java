@@ -59,6 +59,21 @@ final class HallGlow {
     }
 
     /**
+     * What a try does at its spot ({@code HallGlowFeature.lightChunk}), from what the spot holds: {@code held} is 0 for
+     * air, the level of a glow already there, -1 for any other block; {@code lv} is the level the spot would take now
+     * ({@link #spotLevel}). Air takes lv. A glow over the flood band (y at or over {@code y0}) goes up to lv when lv is
+     * higher and never down: a neighbour decorated before this chunk lit its tries before this chunk's columns stood in
+     * it, and a column added in reach can only move a spot's side from vault to wall or floor, so the most a spot is given
+     * over its passes is the level it gets when the columns stood first, whatever the order. The band's glow is the
+     * flood's and is always {@link #BAND_LEVEL}, so it is left. Returns the level to set, or 0 to leave the spot.
+     */
+    static int tryLevel(int held, int lv, int y, int y0) {
+        if (held < 0 || lv <= 0) return 0;
+        if (held == 0) return lv;
+        return y >= y0 && lv > held ? lv : 0;
+    }
+
+    /**
      * The glow's level at {@code over} blocks above the flood band: {@code low} fading to {@code high} at {@code fade}
      * blocks up, {@code wall} less for a spot by a wall and {@code vault} less for one under a vault, moved by the slow
      * patch noise up to {@code patch} either way; always 1 to 15.

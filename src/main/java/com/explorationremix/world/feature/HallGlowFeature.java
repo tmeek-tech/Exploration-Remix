@@ -43,7 +43,8 @@ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfigur
  * every other feature (top_layer_modification, after open_way), on its own chunk's columns and again on the neighbours
  * decorated before it, whose tries must see the columns this chunk built into them. The other features of the layer ask
  * {@link GlowBlock#open} where they look for open space across a border, so a neighbour's glow never stops them. The
- * second pass only adds glow, so next to lava a later neighbour laid the glow can still differ by generation order.
+ * second pass lights new spots and raises a glow over the band that the new rock brightens, never lowers one, so the
+ * glow is the one it would be had every neighbour's columns stood first, except next to lava a later neighbour laid.
  */
 public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
     public HallGlowFeature(Codec<Config> codec) { super(codec); }
@@ -85,12 +86,14 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
         boolean any = lightChunk(level, t, ctx.config(), cp.x, cp.z);
         // Neighbours are decorated in no fixed order, and a feature writes up to a chunk over its border (a column
         // cluster reaches 9 blocks). A neighbour decorated before this chunk ran its pass before this chunk's columns
-        // stood in it, so its tries go again now and see them: a try already holding its glow is not air, added rock
-        // only makes a spot nearer rock, and columns overwrite a glow in their way (GlowBlock.open), so columns built
-        // into a neighbour later are lit as if they had stood first. The second pass only adds, though: where this
-        // chunk's lava pool or fall put lava between a neighbour's glow and its only rock, the glow placed first stays,
-        // while the other order leaves that spot dark, so beside such lava (which lights the spot anyway) the glow still
-        // follows the order by a light or two. A neighbour not yet decorated is still at CARVERS.
+        // stood in it, so its tries go again now and see them: a try still air is lit if the new rock is in its reach,
+        // and a try already holding its glow over the flood band is weighed again and raised when the new rock gives it
+        // a brighter side (a floor or a wall where it had only a vault), never lowered (HallGlow.tryLevel). Added rock
+        // only brightens a spot and columns overwrite a glow in their way (GlowBlock.open), so every spot ends at the
+        // most of its passes: the level it has when the columns stood first. One case still follows the order: where
+        // this chunk's lava pool or fall put lava between a neighbour's glow and its only rock, the glow placed first
+        // stays, while the other order leaves that spot dark (the lava lights it anyway). A neighbour not yet decorated
+        // is still at CARVERS.
         for (int dx = -1; dx <= 1; dx++)
             for (int dz = -1; dz <= 1; dz++)
                 if ((dx != 0 || dz != 0) && level.getChunk(cp.x + dx, cp.z + dz).getStatus().isOrAfter(ChunkStatus.FEATURES))
@@ -118,10 +121,12 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
                     int y = cy * n + (int) Long.remainderUnsigned(h >>> 16, n);
                     int z = cz * n + (int) Long.remainderUnsigned(h >>> 32, n);
                     if (x < minX || x > maxX || z < minZ || z > maxZ || y < table || y > y1) continue;
-                    if (!level.getBlockState(pos.set(x, y, z)).isAir()) continue;
+                    BlockState st = level.getBlockState(pos.set(x, y, z));
+                    int held = st.isAir() ? 0 : st.is(glow) ? st.getValue(GlowBlock.LEVEL) : -1;
+                    if (held < 0 || (held > 0 && y < y0)) continue;   // rock, a fluid, or the band's glow
                     int side = rockSide(level, pos, probe, c.reach(), glow);
                     if (side < 0) continue;
-                    int lv = HallGlow.spotLevel(t, c, y0, side, noise, x, y, z);
+                    int lv = HallGlow.tryLevel(held, HallGlow.spotLevel(t, c, y0, side, noise, x, y, z), y, y0);
                     if (lv <= 0) continue;
                     level.setBlock(pos, glow.defaultBlockState().setValue(GlowBlock.LEVEL, lv), 2);
                     any = true;
