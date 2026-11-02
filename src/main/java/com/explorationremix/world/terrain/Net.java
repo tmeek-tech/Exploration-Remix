@@ -255,6 +255,13 @@ public final class Net {
     double planMs;
     /** Of which the deep dark's view breaker (Blue Reaches). */
     double sightMs;
+    /**
+     * The planner's attempts that threw before this plan was made ({@link NetPlanner#plan}): 0 for a plan made at the
+     * first, 1 or 2 for one made again with its layout salted, all of them ({@link NetPlanner#ATTEMPTS}) when
+     * {@code failed}: then this plan holds the two landings and nothing else, and the cell-layer is solid rock.
+     */
+    public int attempts;
+    public boolean failed;
     /** Blue Reaches: the rasterised deep dark of this cell (null elsewhere). */
     NetDark.Plan dark;
 

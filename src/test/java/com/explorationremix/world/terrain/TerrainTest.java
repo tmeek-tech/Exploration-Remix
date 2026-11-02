@@ -1,5 +1,7 @@
 package com.explorationremix.world.terrain;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -10,6 +12,16 @@ class TerrainTest {
     private static final int[][] CELLS = {{0, 0}, {-1, 0}, {3, -2}};
 
     private static Terrain terrain(long seed) { return new Terrain(TerrainSettings.defaults(), -64, seed); }
+
+    /** The plans that had thrown when the test began ({@link NetPlanner#FAULTS}). */
+    private final java.util.Set<String> faultsBefore = new java.util.TreeSet<>();
+
+    @BeforeEach
+    void countFaults() { faultsBefore.addAll(NetPlanner.FAULTS); }
+
+    /** No plan the test made needed the planner's safety net ({@link NetPlanner#plan}). */
+    @AfterEach
+    void noPlanThrew() { NetworkTest.noNewFaults(faultsBefore); }
 
     @Test
     void layersSitWhereTheSpecSays() {
