@@ -65,8 +65,9 @@ import java.util.function.Predicate;
  * when they join, on each phase change, after a command and every five seconds while in or near the Galleries, and
  * count on with their own game time in between ({@code client.LavaWarnings} plays the warning signs).
  *
- * <p>The next build's quakes, eruptions and terrain reset run on this clock ({@link #phaseChanged} is their hook, and
- * {@link LavaClock#cycles} their epoch) and keep their per-chunk change log in {@link LavaChunk}.
+ * <p><b>0.5.1.</b> The quakes, eruptions and the terrain reset run on this clock, each tick after the flood. The reset's
+ * generation (kept with the clock, {@link LavaCycleData#resetGen}) goes up once a cycle as the lava stands full: every
+ * change the Galleries' change logs ({@link ChangeLog}, kept in {@link LavaChunk}) hold from before then is put back.
  */
 public final class LavaFlood {
     private LavaFlood() {}
@@ -212,6 +213,16 @@ public final class LavaFlood {
             send(level, PacketDistributor.DIMENSION.with(() -> Level.OVERWORLD));
         } else if (now % SYNC_EVERY == 0) {
             for (ServerPlayer p : level.players()) if (p.getY() < band.nearY()) send(level, PacketDistributor.PLAYER.with(() -> p));
+        }
+        // the terrain is put back once a cycle, from when the lava stands full (or from the drain, if a command skipped
+        // the full phase); the cycle count keeps a restart or a clock command inside that cycle from adding another
+        if (on && (s.phase() == LavaCycle.Phase.FULL || s.phase() == LavaCycle.Phase.DRAIN) && data.resetCycle != clock.cycles()) {
+            data.resetCycle = clock.cycles();
+            data.resetGen++;
+            data.setDirty();
+            if (ERConfig.INSTANCE.resetEnabled.get()) {
+                ExplorationRemix.LOGGER.info("Terrain reset: the lava stands full, so everything changed in the Basalt Galleries since the last reset goes back (generation {})", data.resetGen);
+            }
         }
         STATS.tick();
         flood(level, target, now);
@@ -504,6 +515,27 @@ public final class LavaFlood {
         data.setDirty();
         wake = true;
         send(level, PacketDistributor.DIMENSION.with(() -> Level.OVERWORLD));
+    }
+
+    /**
+     * The terrain reset's generation (0.5.1): the change logs put back everything recorded before it. 0 when the cycle
+     * cannot run in this world.
+     */
+    public static long resetGen(ServerLevel level) {
+        if (!setUp) setUp(level);
+        return data == null ? 0 : data.resetGen;
+    }
+
+    /** The cycle count the reset's generation last went up in for a full lava, or -1 (for the reset's status). */
+    static long resetCycle() { return data == null ? -1 : data.resetCycle; }
+
+    /** {@code /remix reset now}: the reset's generation goes up, so everything changed so far is put back now. */
+    static long resetNow(ServerLevel level) {
+        if (!setUp) setUp(level);
+        if (data == null) return -1;
+        data.resetGen++;
+        data.setDirty();
+        return data.resetGen;
     }
 
     /** Phase lengths for a cycle of {@code totalTicks} (0: the config's length), shared out by the config's shares. */

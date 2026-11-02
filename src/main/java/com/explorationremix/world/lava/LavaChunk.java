@@ -1,11 +1,17 @@
 package com.explorationremix.world.lava;
 
 import com.explorationremix.ExplorationRemix;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderGetter;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityManager;
@@ -26,7 +32,12 @@ import javax.annotation.Nullable;
  * <p>Saved as {@code {v, base, level, mask, glow}}: the format version, the lava table's Y it was written against (a
  * changed config moves the table; the record is moved with it), the height, the bits, and the bits of the blocks among
  * them that held the halls' invisible glow before the lava took them (both left out when empty; a record saved before
- * there was a glow mask has none). The next build keeps its change log for the terrain reset here too, under new keys.
+ * there was a glow mask has none). All of them are left out while the chunk's lava stands at its table.
+ *
+ * <p>The chunk's {@link ChangeLog} for the terrain reset (0.5.1) is saved beside them under {@code log}, whatever the
+ * lava's height (left out when empty): {@code {ybase, palette, keys, states, gens}}, the Galleries' bottom the keys
+ * count from, the blocks the log holds as block state data (so a log outlives the game's block ids), and for each
+ * entry its key, its first block's place in the palette and its generation.
  *
  * <p>The reset and the glow: in a slice the lava holds ({@code i < level}), put a glow back as a lava source with its
  * bits set in both {@link #mask} and {@link #glow} (the drain then restores it), never as the glow block. A glow in the
@@ -48,6 +59,8 @@ public final class LavaChunk {
     final Flood.Mask mask;
     /** Which of the blocks in {@link #mask} held the glow when the lava took them: the drain puts the glow back there. */
     final Flood.Mask glow;
+    /** What the chunk's part of the Galleries looked like before it changed since the last terrain reset (0.5.1). */
+    final ChangeLog log = new ChangeLog();
 
     LavaChunk(int rise) {
         this.mask = new Flood.Mask(rise);
@@ -77,14 +90,16 @@ public final class LavaChunk {
 
     CompoundTag save() {
         CompoundTag t = new CompoundTag();
-        if (level == 0 && mask.isEmpty()) return t;
-        t.putInt("v", VERSION);
-        t.putInt("base", base);
-        t.putInt("level", level);
-        long[] bits = mask.toArray();
-        if (bits != null) t.putLongArray("mask", bits);
-        long[] lit = glow.toArray();
-        if (lit != null) t.putLongArray("glow", lit);
+        if (level != 0 || !mask.isEmpty()) {
+            t.putInt("v", VERSION);
+            t.putInt("base", base);
+            t.putInt("level", level);
+            long[] bits = mask.toArray();
+            if (bits != null) t.putLongArray("mask", bits);
+            long[] lit = glow.toArray();
+            if (lit != null) t.putLongArray("glow", lit);
+        }
+        if (!log.isEmpty()) t.put("log", saveLog(log));
         return t;
     }
 
@@ -93,6 +108,45 @@ public final class LavaChunk {
         base = t.contains("base", Tag.TAG_INT) ? t.getInt("base") : NO_BASE;
         mask.fromArray(t.contains("mask", Tag.TAG_LONG_ARRAY) ? t.getLongArray("mask") : null);
         glow.fromArray(t.contains("glow", Tag.TAG_LONG_ARRAY) ? t.getLongArray("glow") : null);
+        if (t.contains("log", Tag.TAG_COMPOUND)) loadLog(log, t.getCompound("log"));
+        else log.clear();
+    }
+
+    /** The change log as {@code {ybase, palette, keys, states, gens}} (see the class comment). */
+    static CompoundTag saveLog(ChangeLog log) {
+        int[][] a = log.toArrays();
+        int[] ids = a[1], idx = new int[ids.length];
+        Int2IntOpenHashMap index = new Int2IntOpenHashMap();
+        index.defaultReturnValue(-1);
+        ListTag palette = new ListTag();
+        for (int k = 0; k < ids.length; k++) {
+            int p = index.get(ids[k]);
+            if (p < 0) {
+                p = palette.size();
+                index.put(ids[k], p);
+                palette.add(NbtUtils.writeBlockState(Block.stateById(ids[k])));
+            }
+            idx[k] = p;
+        }
+        CompoundTag t = new CompoundTag();
+        t.putInt("ybase", log.base());
+        t.put("palette", palette);
+        t.putIntArray("keys", a[0]);
+        t.putIntArray("states", idx);
+        t.putIntArray("gens", a[2]);
+        return t;
+    }
+
+    /** Reads a change log saved by {@link #saveLog} back into {@code log}; a block no longer in the game reads as air. */
+    static void loadLog(ChangeLog log, CompoundTag t) {
+        ListTag palette = t.getList("palette", Tag.TAG_COMPOUND);
+        HolderGetter<Block> blocks = BuiltInRegistries.BLOCK.asLookup();
+        int[] ids = new int[palette.size()];
+        for (int k = 0; k < ids.length; k++) ids[k] = Block.getId(NbtUtils.readBlockState(blocks, palette.getCompound(k)));
+        int[] idx = t.getIntArray("states"), states = new int[idx.length];
+        // a palette place out of range comes back as -1, which the log skips
+        for (int k = 0; k < idx.length; k++) states[k] = idx[k] >= 0 && idx[k] < ids.length ? ids[idx[k]] : -1;
+        log.load(t.contains("ybase", Tag.TAG_INT) ? t.getInt("ybase") : ChangeLog.NO_BASE, t.getIntArray("keys"), states, t.getIntArray("gens"));
     }
 
     // ============================================================================================== registration

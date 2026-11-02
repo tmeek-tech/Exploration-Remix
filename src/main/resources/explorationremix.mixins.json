@@ -23,7 +23,8 @@
     "RuinedPortalPieceMixin",
     "BiomeFilterMixin",
     "PortalShapeMixin",
-    "BaseFireBlockMixin"
+    "BaseFireBlockMixin",
+    "LevelChunkMixin"
   ],
   "client": [
     "client.LightTextureMixin"
