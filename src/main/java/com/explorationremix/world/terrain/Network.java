@@ -1427,6 +1427,14 @@ public final class Network {
         // landings; whether the gates' passages can reach the column (outside, their term is rock)
         Plans.Gate en, ex;
         boolean enNear, exNear;
+        /**
+         * The Blue Reaches: the cell's other den gates ({@link Plans#denGates} past the first) whose passage or lower
+         * landing can reach the column (as {@link #enNear} tells of the entry's), and the column's distance to each
+         * one's lower landing (as {@link #entryD}).
+         */
+        int nd;
+        Plans.Gate[] dg = new Plans.Gate[4];
+        double[] dgD = new double[4];
         /** An obsidian tube hub's footprint covers the column. */
         boolean hub;
         /**
@@ -1670,6 +1678,25 @@ public final class Network {
         if (lc.entryD < lc.en.landR + 6) { lc.fLo = Math.min(lc.fLo, lc.en.lFloor - 9); lc.fHi = Math.max(lc.fHi, lc.en.lCy + lc.en.landHalf + 4); }
         if (lc.ex != null && lc.exitD < lc.ex.landR + 6) { lc.fLo = Math.min(lc.fLo, lc.ex.uFloor - 9); lc.fHi = Math.max(lc.fHi, lc.ex.uCy + lc.ex.landHalf + 4); }
         if (lc.bed != null && lc.endD < lc.bed.rx + 6) { lc.fLo = Math.min(lc.fLo, lc.bed.f0 - 9); lc.fHi = Math.max(lc.fHi, lc.bed.f0 + 20); }
+        // the other den gates' landings and passages, carved as the entry's are, whatever the plan (the planner joins
+        // each landing to the network). The box test covers the landing too: its pad is past the landing's radius.
+        lc.nd = 0;
+        if (li == Terrain.BLUE) {
+            List<Plans.Gate> dens = base.plans.denGates(cx, cz);
+            for (int i = 1; i < dens.size(); i++) {
+                Plans.Gate g = dens.get(i);
+                if (!g.overlaps(x, z, x, z, 8)) continue;
+                if (lc.nd == lc.dg.length) {
+                    lc.dg = Arrays.copyOf(lc.dg, lc.nd * 2);
+                    lc.dgD = Arrays.copyOf(lc.dgD, lc.nd * 2);
+                    columnGrowths.increment();
+                }
+                double d = Math.hypot(x - g.lx, z - g.lz);
+                lc.dg[lc.nd] = g;
+                lc.dgD[lc.nd++] = d;
+                if (d < g.landR + 6) { lc.fLo = Math.min(lc.fLo, g.lFloor - 9); lc.fHi = Math.max(lc.fHi, g.lCy + g.landHalf + 4); }
+            }
+        }
         shoreNotch(lc, n, x, z);
         // basalt columns: a per-column offset of the walls, constant over a small Voronoi cell
         lc.colShift = Terrain.basaltLook(li) ? 1.7 * voronoiValue(x, z, 3.3) : 0;
@@ -1992,6 +2019,7 @@ public final class Network {
         d = Math.min(d, mustOpen(lc, x, y, z));
         if (lc.enNear && y > en.y1 - 3) d = Math.min(d, passage(en, x, y, z));
         if (lc.exNear && y < ex.y0 + 3) d = Math.min(d, passage(ex, x, y, z));
+        for (int k = 0; k < lc.nd; k++) if (y > lc.dg[k].y1 - 3) d = Math.min(d, passage(lc.dg[k], x, y, z));
         if (hub) d = Math.max(d, hubPillar(lc, y));
         return d;
     }
@@ -2171,6 +2199,10 @@ public final class Network {
         }
         Plans.Gate en = lc.en, ex = lc.ex;
         if (lc.entryD < en.landR) d = Math.max(d, Math.min(Math.min(en.lFloor - y, y - (en.lFloor - 7)), en.landR - lc.entryD));
+        for (int k = 0; k < lc.nd; k++) {
+            Plans.Gate g = lc.dg[k];
+            if (lc.dgD[k] < g.landR) d = Math.max(d, Math.min(Math.min(g.lFloor - y, y - (g.lFloor - 7)), g.landR - lc.dgD[k]));
+        }
         if (ex != null && lc.exitD < ex.landR) d = Math.max(d, Math.min(Math.min(ex.uFloor - y, y - (ex.uFloor - 7)), ex.landR - lc.exitD));
         if (lc.bed != null && lc.endD < lc.bed.rx) d = Math.max(d, Math.min(Math.min(lc.bed.f0 - y, y - (lc.bed.f0 - 7)), lc.bed.rx - lc.endD));
         if (lc.bed != null && lc.lavaE < 1.1) d = Math.max(d, lavaShore(lc, y));
@@ -2332,6 +2364,11 @@ public final class Network {
         Plans.Gate en = lc.en, ex = lc.ex;
         if (lc.entryD < en.landR + 4 && y > en.lFloor - 2 && y < en.lCy + en.landHalf + 4)
             d = Math.min(d, landing(lc.entryD, en.landR, en.lCy, en.landHalf, en.lFloor, x, y, z));
+        for (int k = 0; k < lc.nd; k++) {
+            Plans.Gate g = lc.dg[k];
+            if (lc.dgD[k] < g.landR + 4 && y > g.lFloor - 2 && y < g.lCy + g.landHalf + 4)
+                d = Math.min(d, landing(lc.dgD[k], g.landR, g.lCy, g.landHalf, g.lFloor, x, y, z));
+        }
         if (ex != null && lc.exitD < ex.landR + 4 && y > ex.uFloor - 2 && y < ex.uCy + ex.landHalf + 4)
             d = Math.min(d, landing(lc.exitD, ex.landR, ex.uCy, ex.landHalf, ex.uFloor, x, y, z));
         if (lc.bed != null && lc.endD < lc.bed.rx + 4 && y > lc.bed.f0 - 2 && y < lc.bed.f0 + 20)
@@ -2369,6 +2406,7 @@ public final class Network {
         Plans.Gate en = lc.en, ex = lc.ex;
         boolean enPass = lc.enNear && y > en.y1 - 3, exPass = lc.exNear && y < ex.y0 + 3;
         boolean pass = enPass || exPass;
+        for (int k = 0; k < lc.nd && !pass; k++) pass = y > lc.dg[k].y1 - 3;
         if ((y < lc.fLo || y > lc.fHi) && !pass && !fullFine) {
             double d = c8 / 8.0;
             return d < -1 ? -1 : (d > 1 ? 1 : d);
@@ -2394,6 +2432,7 @@ public final class Network {
         }
         if (enPass) open = Math.min(open, passage(en, x, y, z));
         if (exPass) open = Math.min(open, passage(ex, x, y, z));
+        for (int k = 0; k < lc.nd; k++) if (y > lc.dg[k].y1 - 3) open = Math.min(open, passage(lc.dg[k], x, y, z));
         // Only what changes a block counts: rock that must stay where the interpolation left air, space that must be
         // open where it left rock, the hub's pillar. A term that cannot turn the block leaves the interpolated value
         // as it is, so outside the fine span (where none of them can act) skipping the pass gives the same value.

@@ -248,7 +248,17 @@ public final class Net {
      * branch, junction rooms cut into tunnels.
      */
     int deadEndWays, deadEndDrops, branchWays, junctionsCut;
+    /** The Blue Reaches: den landings joined after connectRequired, and tunnels added so one walks to the exit. */
+    int denJoins, denWalks;
     final List<Integer> courtsE = new ArrayList<>(), courtsX = new ArrayList<>();
+    /**
+     * Blue Reaches: the lower landings of the cell's other den gates ({@link Plans#denGates} past the first, in their
+     * order), ENTRY chambers as the entry is, each with its own courts ({@link #courtsD}, kept apart from the entry's,
+     * which the strands and the ways between the gates count). Each is joined to the network and walked to the exit
+     * (NetPlanner's {@code joinDens} and {@code denWays}).
+     */
+    public final List<Integer> dens = new ArrayList<>();
+    final List<Integer> courtsD = new ArrayList<>();
     /** The strands: braided main ways between the landings, as chamber id lists (courts at both ends). */
     final List<List<Integer>> strands = new ArrayList<>();
     final List<List<double[]>> strandLines = new ArrayList<>();
