@@ -1388,13 +1388,15 @@ class NetworkTest {
      * Wasteland cells {@link #noLethalFalls} builds besides those: {seed, cx, cz} of cells where falls of 16 to 20 were
      * found beside the climbs' stages (from a room's pockets by its wall, from a tunnel of the same room at the stage's
      * mouth, on through a stage's foot into a tunnel under it, from the steps of a passage's rough walls where they
-     * met the hole's edge, where a tunnel standing apart from the hole had kept the passage over it narrow, and from
-     * a knob in the roof of a passage widened over the hole, beside the top of the vines), and one (233 -6,1) where a
-     * tunnel whose open space reaches the hole's edge must keep the passage over the hole narrow: widened, it left a
-     * step of that tunnel's wall over the hole and a fall of 17.
+     * met the hole's edge, where a tunnel standing apart from the hole had kept the passage over it narrow, from a
+     * knob in the roof of a passage widened over the hole, beside the top of the vines, from a pocket in the roof of
+     * an upper tunnel over vines turned to it (8004 4,6), and from a step of a room's tunnel whose open space reached
+     * into the hole, 2 over that tunnel's floor (6929 5,-4)), and one (233 -6,1) where a tunnel whose open space
+     * reaches the hole's edge must keep the passage over the hole narrow: widened, it left a step of that tunnel's
+     * wall over the hole and a fall of 17.
      */
     static final long[][] WASTE_FALLS = {{17, 0, 0}, {11, 0, 0}, {13, 1, -1}, {15, 0, 0}, {37, 2, 2}, {62, 7, -6}, {14, 0, 0},
-            {239, -6, 1}, {221, -6, 1}, {239, 3, -2}, {233, -6, 1}};
+            {239, -6, 1}, {221, -6, 1}, {239, 3, -2}, {233, -6, 1}, {8004, 4, 6}, {6929, 5, -4}};
 
     /** True for a way's point next to a landing, where the gate's own passage and landing shape the floor. */
     static boolean gateMouth(Terrain t, Net n, double x, double z) {
@@ -1816,11 +1818,14 @@ class NetworkTest {
         List<Object[]> runs = new ArrayList<>();
         for (int s = 0; s < VOX_SEEDS.length; s++) for (int li : new int[]{Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES}) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1, true});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2, true});
-        // the Wasteland's extra cells are read here only: built, checked and let go
+        // the Wasteland's extra cells are read here only: built, checked and let go, with the terrain of a seed no other
+        // test had asked for (its plan cache holds the cell's and its neighbours' plans, which the later tests in this
+        // JVM would otherwise carry)
         for (long[] c : WASTE_FALLS) runs.add(new Object[]{c[0], Terrain.WASTELAND, (int) c[1], (int) c[2], 1, false});
         for (Object[] run : runs) {
             long seed = (Long) run[0];
             int li = (Integer) run[1], cx = (Integer) run[2], cz = (Integer) run[3], wc = (Integer) run[4];
+            boolean letGo = !(Boolean) run[5] && !TERRAINS.containsKey(seed);
             Terrain t = terrain(seed);
             VoxelHarness v = built(seed, li, cx, cz, wc, wc, (Boolean) run[5]);
             String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "");
@@ -1838,6 +1843,7 @@ class NetworkTest {
                 if (fails.size() < 40) fails.add(tg + ": a fall of " + drop + " from " + f[0] + " " + f[1] + " " + f[2] + " (" + where(t, li, f[0], f[1], f[2]) + ")");
             }
             System.out.printf("%s: %d lethal falls (deepest %d); reported: %s%n", tg, lethal, deepest, told);
+            if (letGo) TERRAINS.remove(seed);
         }
         assertTrue(fails.isEmpty(), fails.size() + " lethal falls:\n" + String.join("\n", fails));
     }

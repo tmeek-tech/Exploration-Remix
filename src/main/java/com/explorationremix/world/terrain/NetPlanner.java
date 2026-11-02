@@ -106,7 +106,7 @@ final class NetPlanner {
         java.io.PrintWriter out = new java.io.PrintWriter(s);
         out.printf(java.util.Locale.ROOT, "[Exploration Remix] The cave plan of layer %d (%s) in cell %d,%d of seed %d threw; %s%n", n.li,
                 w.shape.id(n.li), n.cx, n.cz, w.seed, n.failed ? "every one of its " + ATTEMPTS + " attempts threw, so the cell is left as solid rock round its landings."
-                        : "it was planned again with its layout salted (attempt " + n.attempts + "); its portals, stubs and landings are where they were.");
+                        : "it was planned again with its layout salted (attempt " + n.attempts + "); its portals' places, their stubs and its landings are where they were, though a vestibule inside the cell may differ.");
         fault.printStackTrace(out);
         out.flush();
         System.err.println(s.toString().trim());
@@ -246,6 +246,8 @@ final class NetPlanner {
          * attempt salts {@code h}: its rooms, tunnels, climbs, junctions, refuges, pools and sub-biomes all move. What
          * the cell shares with its neighbours is drawn from the seed instead (the portals' vestibules and their stubs,
          * the gates' landings), or from {@code h0} (the Basalt Galleries' bedrock landing), so it stays where it was.
+         * A vestibule inside the cell may still differ: a salted plan can drop one its rooms do not reach
+         * ({@link #portalFallback}), where the first plan kept it.
          */
         final long h, h0;
         final double W, T, B, x0, z0, cell;
@@ -6041,8 +6043,14 @@ final class NetPlanner {
             }
             // the last stage's vines face the upper tunnel, which leaves along the last heading
             st[st.length - 1].vineA = heading;
-            // the Wasteland: turned, where they must be, so the step off their top lands in the passage on
-            if (sp.wayMax > 0) for (int k = 0; k < st.length; k++) st[k].vineA = stepAngle(st[k], k + 1 < st.length ? ledges[k] : w2);
+            // the Wasteland: turned, where they must be, so the step off their top lands in the passage on, which then
+            // keeps its vault low over the hole (lowVault)
+            if (sp.wayMax > 0) for (int k = 0; k < st.length; k++) {
+                Way out = k + 1 < st.length ? ledges[k] : w2;
+                double hd = st[k].vineA;
+                st[k].vineA = stepAngle(st[k], out);
+                if (st[k].vineA != hd) lowVault(out, st[k]);
+            }
             for (Shaft s : st) Network.fixVines(s);
             w1.a = cLo; w1.b = -1;
             w2.a = -1; w2.b = cHi;
@@ -6067,6 +6075,8 @@ final class NetPlanner {
          * the hole's wall, and the rooms the climb alone reached were cut off. So the heading stays when its step lies
          * on the passage ({@link #stepOn}); else the vines face where the passage's line leaves the hole, or up to 30
          * degrees either side of that, the first angle whose step does; failing all of them, where the line leaves.
+         * Turned, the vines hang under the passage's line, and {@link #climb} keeps its vault over the hole low
+         * ({@link #lowVault}).
          */
         double stepAngle(Shaft s, Way out) {
             double lead = leaveAngle(s, out), d = Math.toRadians(10);
@@ -6153,22 +6163,29 @@ final class NetPlanner {
                 if (Math.hypot(wy.x[i] - s.x, wy.z[i] - s.z) < s.r + 2) wy.w[i] = Math.max(wy.w[i], s.r + 1.5);
             wy.bounds();
             if (stepsApart(wy, w0, s) && clear(wy, ca, cb)) {
-                for (int i = 0; i < wy.n; i++)
-                    if (Math.hypot(wy.x[i] - s.x, wy.z[i] - s.z) < s.r + 2) wy.hgt[i] = Math.min(wy.hgt[i], HOLE_VAULT);
-                wy.bounds();
+                lowVault(wy, s);
                 return;
             }
             System.arraycopy(w0, 0, wy.w, 0, w0.length);
             wy.bounds();
         }
 
+        /** Passage wy's vault no higher than {@link #HOLE_VAULT} over its floor within 2 of stage s's hole. */
+        void lowVault(Way wy, Shaft s) {
+            for (int i = 0; i < wy.n; i++)
+                if (Math.hypot(wy.x[i] - s.x, wy.z[i] - s.z) < s.r + 2) wy.hgt[i] = Math.min(wy.hgt[i], HOLE_VAULT);
+            wy.bounds();
+        }
+
         /**
-         * The Wasteland: the height of a passage's vault where {@link #clearOfHole} widened it over a stage's hole.
-         * Up to 6 over the top floor no roughness reaches the rock round the mouth ({@link Network#mouthFade}). A
-         * widened tunnel's vault 7 high reached past that, and its roof over the hole, rough there, held a knob 7 over
-         * the floor beside the vines, which hang from the first rock over the floor and so went on up past it: a
-         * climber who left the vines for the knob could fall 20 into the hole. The walking core stays open to 6.24
-         * over the floor all the same ({@link Network#pathCore}).
+         * The Wasteland: the height of a passage's vault over a stage's hole where {@link #clearOfHole} widened it, or
+         * where the stage's vines were turned to it ({@link #stepAngle}). Up to 6 over the top floor no roughness
+         * reaches the rock round the mouth ({@link Network#mouthFade}). A widened tunnel's vault 7 high reached past
+         * that, and its roof over the hole, rough there, held a knob 7 over the floor beside the vines, which hang from
+         * the first rock over the floor and so went on up past it: a climber who left the vines for the knob could fall
+         * 20 into the hole. Vines turned to an upper tunnel that bends away from the climb's heading hang under its
+         * line, where its vault stood 8 high, and a pocket in its roof 7.5 over the floor beside them let a climber fall
+         * 17. The walking core stays open to 6.24 over the floor all the same ({@link Network#pathCore}).
          */
         static final double HOLE_VAULT = 6;
 
@@ -6200,12 +6217,7 @@ final class NetPlanner {
                         int j = q[1];
                         if (o.f[j] <= s.foot + HOLE_TALL || o.f[j] - o.slab[j] >= wy.f[i] + wy.hgt[i]) continue;
                         if (Math.hypot(wy.x[i] - o.x[j], wy.z[i] - o.z[j]) > wy.w[i] + o.w[j] + 2) continue;
-                        // how near the hole's axis that tunnel's line comes beside this point (its segments to either side)
-                        double fromAxis = Double.MAX_VALUE;
-                        for (int jj = Math.max(0, j - 1); jj < Math.min(o.n - 1, j + 1); jj++)
-                            fromAxis = Math.min(fromAxis, segDistXZ(s.x, s.z, o.x[jj], o.z[jj], o.x[jj + 1], o.z[jj + 1]));
-                        if (fromAxis - 1.25 * o.w[j] >= s.r + 1) continue;
-                        return false;
+                        if (nearRim(o, j, s)) return false;
                     }
                 }
             }
@@ -6271,7 +6283,8 @@ final class NetPlanner {
          * more, no room whose floor there is no higher than the stage's open space is so tall that a walker in it could
          * stand higher over the foot (a walker stands up to two under a room's vault: on its floor, or on the rock left
          * where floor and vault close in by its wall and round the vault's pendants), and no way reaching the stage's
-         * open space has its floor higher over the foot, or lower under its top. The climb's own rooms are not spared
+         * open space has its floor higher over the foot (its feet a block lower where its open space comes to the
+         * hole's edge, {@link #nearRim}), or lower under its top. The climb's own rooms are not spared
          * ({@link #stageFits} lets the first and the last stage stand at their doors, and a last stage's hole may open
          * in its room's floor), and neither are the other tunnels of those rooms ({@link #clearShaft} lets them by: they
          * meet at the doors). From such a place a walker steps off into the hole, and one who lets go at the top falls
@@ -6305,9 +6318,28 @@ final class NetPlanner {
                     if (Math.hypot(s.x - o.x[j], s.z - o.z[j]) > rr + o.w[j]) continue;
                     if (o.f[j] - o.slab[j] > s.y1 + 1.5 || o.f[j] + Math.max(o.hgt[j], 6.5) < s.y0 - 1.5) continue;
                     if (o.f[j] > hiF || o.f[j] < loF) return false;
+                    // feet on a way whose open space comes to the hole's edge stand up to 2 higher there (nearRim)
+                    if (Math.ceil(o.f[j] - 1e-9) - Math.ceil(s.foot - 1e-9) > STAGE_FALL - 1 && nearRim(o, j, s)) return false;
                 }
             }
             return true;
+        }
+
+        /**
+         * True when way o's open space (out to 1.25 times its half-width from its line, on either side of its point j)
+         * comes within a block of the edge of stage s's hole. There the way's floor rises to its wall and meets the
+         * hole's, and a walker stands on that rock up to 2 higher than on the floor, so {@link #fallSafe(Shaft)} keeps
+         * the feet on such a way's floor at most {@link #STAGE_FALL} - 1 blocks over those at the stage's foot, and a
+         * fall from that rock at most 15: a room's tunnel at its door, its feet 14 over the foot's and its open space
+         * reaching 1.6 into the hole, left a step 2 over its floor from which a walker fell 16. (Measured out to its
+         * half-width alone, a tunnel whose open space stopped short of that block left such a step all the same.)
+         * Beside such a way the passage over the hole stays narrow ({@link #stepsApart}).
+         */
+        boolean nearRim(Way o, int j, Shaft s) {
+            double fromAxis = Double.MAX_VALUE;
+            for (int jj = Math.max(0, j - 1); jj < Math.min(o.n - 1, j + 1); jj++)
+                fromAxis = Math.min(fromAxis, segDistXZ(s.x, s.z, o.x[jj], o.z[jj], o.x[jj + 1], o.z[jj + 1]));
+            return fromAxis - 1.25 * o.w[j] < s.r + 1;
         }
 
         /**
