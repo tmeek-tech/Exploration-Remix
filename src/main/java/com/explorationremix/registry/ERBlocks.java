@@ -2,6 +2,7 @@ package com.explorationremix.registry;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.block.BandStoneBlock;
+import com.explorationremix.block.BoneScrapsBlock;
 import com.explorationremix.block.CavePlantBlock;
 import com.explorationremix.block.GlowBlock;
 import com.explorationremix.block.HangingPlantBlock;
@@ -345,10 +346,17 @@ public final class ERBlocks {
         item("trailing_grass", TRAILING_GRASS);
     }
 
-    /** A Mossback's den (creature.MossbackDen): trampled moss and gnawed bone that keeps one lizard. Drops nothing. */
+    /** A Mossback's den (creature.MossbackDen): trampled moss and gnawed bone on a den gate's landing. Drops nothing. */
     public static final RegistryObject<Block> MOSSBACK_DEN = block("mossback_den", () -> new com.explorationremix.creature.MossbackDen(
             BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_GREEN).strength(0.6F).sound(SoundType.MOSS_CARPET).noLootTable()
                     .pushReaction(PushReaction.BLOCK)));
+    /**
+     * Bones and scraps round a den (world.feature.DenLairFeature, and the lizards' own leavings): thin litter with no
+     * collision, so nothing's path ever catches on it. Breaks like a carpet and sometimes gives a bone.
+     */
+    public static final RegistryObject<Block> BONE_SCRAPS = block("bone_scraps", () -> new BoneScrapsBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.SAND).replaceable().noCollission().noOcclusion().strength(0.1F)
+                    .sound(SoundType.BONE_BLOCK).pushReaction(PushReaction.DESTROY)));
 
     public static final RegistryObject<CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup." + ExplorationRemix.MOD_ID))

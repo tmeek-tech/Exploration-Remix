@@ -1048,6 +1048,10 @@ def build_features():
     feature("climb_vines", "top_layer_modification", DEEP, {"type": f"{MOD}:climb_vines", "config": {}}, [])
     feature("shelf_vines", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:shelf_vines", "config": {}}, [])
     feature("open_way", "top_layer_modification", DEEP, {"type": f"{MOD}:open_way", "config": {}}, [])
+    # The Mossback lairs on the den gates' upper landings (DenLairFeature): each den, and the bones and scraps within 30
+    # blocks of it, once the ways are open. Band 1 is the Deep Blue Rift under every column, so this reaches every
+    # chunk, and the feature works out from the plan which chunks hold a lair.
+    feature("den_lair", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:den_lair", "config": {}}, [])
     # The Galleries' lava glow (HallGlowFeature, after everything else, the ways included): invisible light along the rock
     # above the flood band, one try in every 4-block cube, so the halls read lit by their lava under Complementary, which
     # leaves unlit rock near black. Level 15 just over the flood band, fading to 14 sixty blocks higher, one up or down
@@ -1081,9 +1085,6 @@ UPPER_MODIFIER_FEATURES = [
     ("upper/veridium_spread", {"type": f"{MOD}:veridium_spread", "config": {}}, [{"type": f"{MOD}:junctions", "tropical": True}],
      ["minecraft:lush_caves"], "top_layer_modification"),
     ("upper/join_dead_ends", {"type": f"{MOD}:join_dead_ends", "config": {}}, [], "#minecraft:is_overworld", "raw_generation"),
-    # Mossback dens, about one to a plant cave (MossbackDenFeature picks one chunk in each 3 x 3 and a floor in it)
-    ("upper/mossback_den", {"type": f"{MOD}:mossback_den", "config": {}}, [],
-     ["minecraft:lush_caves", f"{MOD}:frost_fern_grotto"], "top_layer_modification"),
     ("upper/surface_hoarfrost", attach(simple(f"{MOD}:hoarfrost"), "walls_ceiling", 96, f"#{MOD}:surface_frost_rock", radius=7, height=6),
      [count(4), SQUARE, {"type": "minecraft:heightmap", "heightmap": "WORLD_SURFACE_WG"}, BIOME], "#immersive_weathering:icy", "top_layer_modification"),
 ]
