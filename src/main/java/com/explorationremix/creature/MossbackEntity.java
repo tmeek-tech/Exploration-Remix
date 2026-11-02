@@ -90,6 +90,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     static final double FORAY_OUT = 120.0;
     /** This near its den, the way home is a straight path to it rather than the crumbs. */
     static final double DIRECT_HOME = 32.0;
+    /** This long (five minutes) on the way home without reaching a crumb or getting nearer the den: it is lost. */
+    static final int LOST_TICKS = 6000;
     /** Carrying, it turns only on a player this close in front of it (or on what hurts it). */
     static final double CARRY_NOTICE = 5.0;
     static final int MEAL_TICKS = 240;
@@ -156,6 +158,10 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     @Nullable private BlockPos legGoal;
     private int legStart, crumbFails, denFails, homeStall;
     private double homeBest = Double.MAX_VALUE;
+    // ticks since the walk home last got anywhere (a crumb reached, or the den a few blocks nearer than at the last
+    // crumb reached), and that distance
+    private int homeLost;
+    private double lostBest = Double.MAX_VALUE;
 
     // client-side animation state (see MossbackModel and MossbackRenderer)
     public float glow, glowO, jaw, jawO, rear, rearO, frill, frillO;
@@ -1027,7 +1033,11 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     /** The catch it brought home is eaten: its bones go among the den's scraps, and a roamer rests before going out again. */
     private void finishMeal() {
         setCarried("");
-        if (nearDen(MossbackDen.SCRAPS_REACH)) MossbackDen.leaveScraps(this);
+        if (nearDen(MossbackDen.SCRAPS_REACH)) {
+            MossbackDen.leaveScraps(this);
+            // its guard died while it ate: it takes the guard's place now, rather than after another foray
+            if (calledHome) MossbackDen.arrivedHome(this);
+        }
         if (isRoamer()) restAtHome(400 + random.nextInt(800));
     }
 
@@ -1072,10 +1082,15 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         Vec3 at = position();
         if (Mth.square(at.x - goal.x) + Mth.square(at.z - goal.z) < 2.5 * 2.5 && Math.abs(at.y - goal.y) < 2.0) { arriveHome(); return; }
         // past any crumb it now stands near (and every later one: the trail behind it)
-        if (crumbs.reached(nodeX(), nodeY(), nodeZ(), 3.0)) { crumbFails = 0; denFails = 0; legGoal = null; }
+        if (crumbs.reached(nodeX(), nodeY(), nodeZ(), 3.0)) { crumbFails = 0; denFails = 0; legGoal = null; homeLost = 0; lostBest = Double.MAX_VALUE; }
+        double toDen = at.distanceTo(goal);
+        if (toDen < lostBest - 4.0) { lostBest = toDen; homeLost = 0; }
+        if (++homeLost > LOST_TICKS) { lostOnWayHome(); return; }
         PathNavigation nav = getNavigation();
         double speed = carrying() ? CARRY_SPEED : HOME_SPEED;
         if (!nav.isDone() && !nav.isStuck() && stateTicks - legStart < 200) return;      // on its way (a fresh look every ten seconds)
+        // a path used up at once (it stands at the end of the nearest it can get) waits a moment before the next
+        if (stateTicks - legStart < 10) return;
         if (nav.isStuck()) nav.stop();
         // the last leg ended short of its goal: a crumb missed twice is skipped, and the next one tried
         if (legGoal != null) {
@@ -1083,12 +1098,12 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
             else if (!crumbs.isEmpty() && legGoal.equals(lastCrumb()) && ++crumbFails >= 2) { crumbs.pop(); crumbFails = 0; }
         }
         legStart = stateTicks;
-        double toDen = at.distanceTo(goal);
-        BlockPos target = toDen < DIRECT_HOME && denFails < 3 ? den : !crumbs.isEmpty() ? lastCrumb() : null;
+        // the first crumb is the den itself: once only that is left, the greedy legs below take over
+        BlockPos target = toDen < DIRECT_HOME && denFails < 3 ? den : crumbs.size() > 1 ? lastCrumb() : null;
         if (target != null) {
             legGoal = target;
             Path p = nav.createPath(target.offset(1, 0, 1), 1);
-            if (p == null || !nav.moveTo(p, speed)) legStart -= 200;           // no way at all from here: count it missed now
+            if (p != null) nav.moveTo(p, speed);         // no way at all from here: missed, and counted on the next look
             return;
         }
         legGoal = null;
@@ -1124,9 +1139,24 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
 
     private void resetHoming() {
         legGoal = null;
-        legStart = 0;
+        legStart = -10;
         crumbFails = denFails = homeStall = 0;
         homeBest = Double.MAX_VALUE;
+        homeLost = 0;
+        lostBest = Double.MAX_VALUE;
+    }
+
+    /**
+     * {@link #LOST_TICKS} on the way home without getting anywhere: it has lost the way. It eats what it carries where
+     * it stands and leaves its family to roam on alone, and the den brings out another in its place a day later.
+     */
+    private void lostOnWayHome() {
+        getNavigation().stop();
+        boolean meal = carrying();
+        MossbackDen.lizardStrayed(this);
+        becomeStray();
+        if (meal) toState(EAT, MEAL_TICKS);
+        else toState(ROAM, 0);
     }
 
     /** At the den: a catch is eaten there; a roamer rests; one called home may find it is the guard now. */

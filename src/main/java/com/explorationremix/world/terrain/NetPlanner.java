@@ -595,6 +595,14 @@ final class NetPlanner {
          * plan's hash (the entry's and the exit's courts draw from 990 and 1000 on, by the landing's id).
          */
         static final long DEN_COURT_SALT = 5_000_000L;
+        /** What a rift try that cuts through a den gate's landing scores, against 3 for a court and 1 for a city. */
+        static final int DEN_HIT = 1000;
+        /**
+         * Rounds of six rift tries (see canyonStrand): past 0.2.0's first, only while every try cuts a den gate's landing.
+         * A den landing keeps the same 16 blocks clear of the rift as a court: tries that passed closer (2 to 10) kept
+         * the rift in a few more cells but left drops of up to 44 beside the ways round those landings.
+         */
+        static final int RIFT_ROUNDS = 4;
 
         void courtsFor(int L, int other, boolean entry, List<Integer> out) { courtsFor(L, other, entry, out, 990 + L, 1000 + L * 50L); }
 
@@ -1006,7 +1014,12 @@ final class NetPlanner {
 
         /** Lays one strand: its line through its anchors, chambers along it, and the tunnels joining them in order. */
         void buildStrand(Strand st) {
-            if (st.canyon) { canyonStrand(st); return; }
+            if (st.canyon) {
+                // a rift that would cut through a den gate's landing is left out; the strand is then laid as an
+                // ordinary walked one with the others
+                if (!canyonStrand(st)) st.canyon = false;
+                return;
+            }
             Chamber a = n.ch.get(st.a), b = n.ch.get(st.b);
             // keys: the entry court, the anchors in order, the exit court; each with the floor the way enters and leaves at
             List<Object[]> keys = new ArrayList<>();
@@ -1254,8 +1267,12 @@ final class NetPlanner {
             return link(st, from, to);
         }
 
-        /** Blue Reaches: one strand is the rift, 0.2.0's canyon with its ledge path, bridges and geodes. */
-        void canyonStrand(Strand st) {
+        /**
+         * Blue Reaches: one strand is the rift, 0.2.0's canyon with its ledge path, bridges and geodes. False, with
+         * nothing laid, when every try would cut through a den gate's landing (their passages are carved whatever the
+         * plan, so a rift there would leave the landing a disc hanging over the canyon).
+         */
+        boolean canyonStrand(Strand st) {
             Chamber a = n.ch.get(st.a), b = n.ch.get(st.b);
             double t0 = r(600, 0.16, 0.24), t1 = r(601, 0.78, 0.86);
             // 0.2.0's rift starts at the entry landing's floor: its ledge path comes down from near the top of the layer
@@ -1264,21 +1281,28 @@ final class NetPlanner {
             double sFloor = Math.max(walkF(a) - r(606, 8, 16), n.ch.get(n.entry).f0), eFloor = W + 3;
             Route best = null;
             int bestHits = Integer.MAX_VALUE;
-            double push = 0;
-            double sgn = st.off >= 0 ? 1 : -1;
-            for (int attempt = 0; attempt < 6; attempt++) {
-                double[] hp = slotPoint(st, t0 + 0.02 * attempt), fp = slotPoint(st, t1 - 0.02 * attempt);
+            double side = st.off >= 0 ? 1 : -1;
+            for (int attempt = 0; attempt < 6 * RIFT_ROUNDS; attempt++) {
+                // six tries pushed one way, as 0.2.0 made them; then, only while every try so far cuts through a den
+                // gate's landing, six pushed the other way, and six more each way further out
+                int round = attempt / 6, k = attempt % 6;
+                if (round > 0 && k == 0 && bestHits < DEN_HIT) break;
+                double push = 25 * k + 25 * (round % 2) + 150 * (round / 2);
+                double sgn = round % 2 == 0 ? side : -side;
+                double[] hp = slotPoint(st, t0 + 0.02 * k), fp = slotPoint(st, t1 - 0.02 * k);
                 hp[0] += axNx * push * sgn; hp[1] += axNz * push * sgn;
                 fp[0] += axNx * push * sgn; fp[1] += axNz * push * sgn;
                 hp = clampP(hp, 100);
                 fp = clampP(fp, 100);
                 Route rt = w.canyon(li, cx, cz, Hashing.mix(h, 610 + attempt, 0, 0), hp[0], hp[1], fp[0], fp[1], sFloor, eFloor);
                 int hits = 0;
-                for (Chamber c : n.ch) if (c.keep && c.kind != Kind.CANYON && canyonHits(rt, c)) hits += c.kind == Kind.CITY ? 1 : 3;
+                for (Chamber c : n.ch)
+                    if (c.keep && c.kind != Kind.CANYON && canyonHits(rt, c))
+                        hits += c.kind == Kind.CITY ? 1 : (c.kind == Kind.ENTRY && c.id != n.entry ? DEN_HIT : 3);
                 if (hits < bestHits) { bestHits = hits; best = rt; }
                 if (hits == 0) break;
-                push += 25;
             }
+            if (bestHits >= DEN_HIT) { n.riftsDropped++; return false; }
             Route rt = best;
             if (bestHits > 0) for (Chamber c : n.ch) if (c.keep && c.kind == Kind.CITY && canyonHits(rt, c)) { c.keep = false; n.droppedChambers++; }
             n.canyons.add(rt);
@@ -1339,6 +1363,7 @@ final class NetPlanner {
             ok = false;
             for (int i = cn.size() - 1; i >= Math.max(0, cn.size() - 5) && !ok; i--) ok = linkVia(st, cn.get(i), st.b);
             st.nodes.add(st.b);
+            return true;
         }
 
         double[] clampP(double[] p, double m) {
@@ -2326,6 +2351,7 @@ final class NetPlanner {
             for (Route.Geode g : r.geodes) if (Math.hypot(g.x() - c.x, g.z() - c.z) < g.r() + (isCity ? Network.CITY_RESERVE : c.R() + 10)) return true;
             return false;
         }
+
 
         // ------------------------------------------------------------------------------------------- edges
         /** Candidate edges: each node to its nearest neighbours (vertical distance counts 2.5 times). */

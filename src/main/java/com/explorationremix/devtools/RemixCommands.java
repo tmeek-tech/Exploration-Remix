@@ -61,6 +61,8 @@ import java.util.Locale;
  *     middle, facing the mouth of its passage down</li>
  *     <li>{@code /remix dengates}: the den gates in the nine cells round you, nearest first: each one's index in its
  *     cell, the middle of its upper landing, how far away it is and the top of its ramp up into the pack's caves</li>
+ *     <li>{@code /remix dengates reach}: for each of those whose landing is loaded, whether a flood through open blocks
+ *     from its landing (loaded chunks only, never down its passage) gets out into the pack's caves or stays blind</li>
  *     <li>{@code /remix tp bedrock}: the bedrock landing of the last layer's network in this cell</li>
  *     <li>{@code /remix tp biome <name>}: a deep biome's nearest chamber in the networks of the nine cells round you
  *     (set pieces first), standing on its floor in open air; or the Silver Fern Rift, the Ivory Root Cavern, an
@@ -98,7 +100,8 @@ public final class RemixCommands {
                         .then(Commands.argument("cells", IntegerArgumentType.integer(1, 24)).executes(c -> entrances(c, IntegerArgumentType.getInteger(c, "cells")))))
                 .then(Commands.literal("deadends").executes(c -> deadEnds(c, 4))
                         .then(Commands.argument("radius", IntegerArgumentType.integer(1, 12)).executes(c -> deadEnds(c, IntegerArgumentType.getInteger(c, "radius")))))
-                .then(Commands.literal("dengates").executes(RemixCommands::denGates))
+                .then(Commands.literal("dengates").executes(RemixCommands::denGates)
+                        .then(Commands.literal("reach").executes(RemixCommands::denReach)))
                 .then(Commands.literal("tp")
                         .then(Commands.argument("layer", IntegerArgumentType.integer(1, 8)).executes(c -> tpLayer(c, IntegerArgumentType.getInteger(c, "layer"))))
                         .then(Commands.literal("gate").then(Commands.argument("band", IntegerArgumentType.integer(1, 8))
@@ -305,6 +308,68 @@ public final class RemixCommands {
                     g.den, g.ux, g.uFloor + 1, g.uz, Math.hypot(g.ux - from.x, g.uz - from.z), r.x2(), r.y2(), r.z2()));
         }
         return all.size();
+    }
+
+    /**
+     * Whether each den gate in the nine cells round you whose landing is loaded opens into the pack's caves: a flood
+     * through open blocks from its landing floor, in loaded chunks only, kept above the landing floor (so never down the
+     * passage) and within 110 blocks across. It counts the open blocks it reaches outside the gate's own plumbing (more
+     * than 7 blocks from the landing, the ramp's line and the passage mouth); a few thousand means real caves.
+     */
+    private static int denReach(CommandContext<CommandSourceStack> c) {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        ServerLevel level = c.getSource().getLevel();
+        Vec3 from = c.getSource().getPosition();
+        int cx = t.plans.cellOf(from.x), cz = t.plans.cellOf(from.z);
+        java.util.List<Plans.Gate> all = new java.util.ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) all.addAll(t.plans.denGates(cx + dx, cz + dz));
+        all.sort(java.util.Comparator.comparingDouble(g -> Math.hypot(g.ux - from.x, g.uz - from.z)));
+        int open = 0, blind = 0;
+        for (Plans.Gate g : all) {
+            BlockPos start = BlockPos.containing(g.ux + 8, g.uFloor + 2, g.uz);
+            if (level.getChunkSource().getChunkNow(start.getX() >> 4, start.getZ() >> 4) == null) continue;
+            Route.Link r = t.plans.ramp(g);
+            java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
+            java.util.HashSet<Long> seen = new java.util.HashSet<>();
+            // start from any open block of the landing's floor ring (the middle is the passage mouth)
+            for (int a = 0; a < 16; a++) {
+                double ang = a * Math.PI / 8;
+                for (int dy = 1; dy <= 4; dy++) {
+                    BlockPos p = BlockPos.containing(g.ux + Math.cos(ang) * 9, g.uFloor + dy, g.uz + Math.sin(ang) * 9);
+                    if (openAt(level, p) && seen.add(p.asLong())) queue.add(p);
+                }
+            }
+            int outside = 0, visited = 0, edge = 0;
+            double far = 0;
+            int floorY = (int) Math.floor(g.uFloor) - 1;
+            while (!queue.isEmpty() && visited < 400_000 && outside < 4000) {
+                BlockPos p = queue.poll();
+                visited++;
+                double dxz = Math.hypot(p.getX() + 0.5 - g.ux, p.getZ() + 0.5 - g.uz);
+                boolean plumbing = (dxz < g.landR + 7 && p.getY() < g.uCy + g.landHalf + 7) || r.dist(p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5) < 7;
+                if (!plumbing) { outside++; far = Math.max(far, dxz); }
+                for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
+                    BlockPos q = p.relative(d);
+                    if (q.getY() < floorY || Math.abs(q.getX() + 0.5 - g.ux) > 110 || Math.abs(q.getZ() + 0.5 - g.uz) > 110) continue;
+                    if (!seen.add(q.asLong())) continue;
+                    if (level.getChunkSource().getChunkNow(q.getX() >> 4, q.getZ() >> 4) == null) { edge++; continue; }
+                    if (openAt(level, q)) queue.add(q);
+                }
+            }
+            boolean ok = outside >= 1500;
+            if (ok) open++; else blind++;
+            say(c, String.format(Locale.ROOT, "  cell %d %d #%d at %.0f %.0f %.0f: %s (%d open blocks beyond its own tunnels, %d visited, farthest %.0f across%s)",
+                    g.cellX, g.cellZ, g.den, g.ux, g.uFloor + 1, g.uz, ok ? "opens into the caves" : "BLIND", outside, visited, far,
+                    edge > 0 ? ", reached unloaded chunks" : ""));
+        }
+        say(c, String.format(Locale.ROOT, "%d den gates with loaded landings: %d open into the caves, %d blind", open + blind, open, blind));
+        return open;
+    }
+
+    private static boolean openAt(ServerLevel level, BlockPos p) {
+        BlockState s = level.getBlockState(p);
+        return s.getCollisionShape(level, p).isEmpty() && !s.getFluidState().is(net.minecraft.tags.FluidTags.LAVA);
     }
 
     /** For a band 1 gate, which den gate it is (" (den gate i of cell x z)"); nothing for a deeper gate. */

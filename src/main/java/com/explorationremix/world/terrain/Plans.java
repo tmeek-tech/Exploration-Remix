@@ -252,6 +252,8 @@ public final class Plans {
     static final double DEN_EDGE = MARGIN + 20;
     /** Their lower landings in the Blue Reaches keep at least this far apart (blocks). */
     static final double DEN_LOWER_SPACING = 90;
+    /** A den gate's passage runs at least this far across from its upper landing to its lower one (blocks). */
+    static final double DEN_MIN_RUN = 46;
     private static final int DEN_TRIES = 48, DEN_MAX = 9;
     private final Map<Long, List<Gate>> denGateLists = new ConcurrentHashMap<>();
     private final Map<Long, Route.Link> denRamps = new ConcurrentHashMap<>();
@@ -305,6 +307,9 @@ public final class Plans {
             if (Math.hypot(x - (r.x1() + r.x2()) * 0.5, z - (r.z1() + r.z2()) * 0.5) < landingRadius + 40) continue;
             if (piece != null && piece.distXZ(x, z) < landingRadius + 40) continue;
             Gate g = buildDenGate(Hashing.mix(h, 100 + i, 0, 0), out.size(), cx, cz, x, z);
+            // near a cell edge the clamp can pull the lower landing back under the upper one, and the passage would
+            // be a straight shaft: keep only those that run as far across as the first gates do
+            if (Math.hypot(g.lx - g.ux, g.lz - g.uz) < DEN_MIN_RUN) continue;
             // the lower landings, each with its courts in the top of the Blue Reaches, keep room between them too
             for (Gate o : out) if (Math.hypot(g.lx - o.lx, g.lz - o.lz) < DEN_LOWER_SPACING) { ok = false; break; }
             if (ok) out.add(g);

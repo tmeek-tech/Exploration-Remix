@@ -1116,6 +1116,44 @@ class NetworkTest {
     }
 
     /**
+     * The rift and the den gates' landings (0.6.1): a landing's passage is carved whatever the plan, so the rift may not
+     * cut into one; it keeps the 16 blocks clear of a landing it keeps of a court. Over 3 seeds x 4 x 4 Blue cells the
+     * rift is left out of few cells for them (2 to 4 of 48 when this was written), and where it is kept its edge stays well
+     * clear of every den landing (sampled every 2 blocks along it, against every 6 in the planner, so a little under 16).
+     */
+    @Test
+    void riftsKeepClearOfDenLandings() {
+        List<String> fails = new ArrayList<>();
+        int cells = 0, dropped = 0, kept = 0, near = 0;
+        double minClear = Double.MAX_VALUE;
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            for (int cx = -2; cx <= 1; cx++) for (int cz = -2; cz <= 1; cz++) {
+                Net n = t.network.net(Terrain.BLUE, cx, cz);
+                cells++;
+                dropped += n.riftsDropped;
+                kept += n.canyons.size();
+                for (Route r : n.canyons) for (int d : n.dens) {
+                    Chamber c = n.ch.get(d);
+                    double clear = Double.MAX_VALUE;
+                    for (double s = 0; s < r.length; s += 2) {
+                        double[] p = r.pointAt(s);
+                        clear = Math.min(clear, Math.hypot(p[0] - c.x, p[1] - c.z) - r.at(r.riftHalf, s) - c.R());
+                    }
+                    for (Route.Geode g : r.geodes) clear = Math.min(clear, Math.hypot(g.x() - c.x, g.z() - c.z) - g.r() - c.R());
+                    minClear = Math.min(minClear, clear);
+                    if (clear < 30) near++;
+                    if (clear < 8) fails.add(tag(seed, Terrain.BLUE, cx, cz) + ": the rift passes " + fmt(clear) + " from den landing #" + c.id + "'s reach");
+                }
+            }
+        }
+        System.out.printf(java.util.Locale.ROOT, "riftsKeepClearOfDenLandings: %d cells, %d rifts kept, %d left out for den landings; %d landings within 30 of a rift, nearest %.1f%n",
+                cells, kept, dropped, near, minClear);
+        if (dropped * 8 > cells) fails.add("the rift is left out of " + dropped + " of " + cells + " cells for den landings");
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
+    }
+
+    /**
      * Section 6.3, over 2 seeds x 3 x 3 Blue cells: along every seam between them, every 2 blocks, both tiers, the deep
      * dark carved at the last column of one cell and at the first column of the next is the raw tier field's span there
      * (within 16 blocks of a seam both cells carve the raw field, whatever their plans kept), and where the raw field is

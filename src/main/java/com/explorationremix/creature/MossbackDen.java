@@ -53,6 +53,8 @@ public class MossbackDen extends BaseEntityBlock {
     private static final VoxelShape SHAPE = Block.box(0, 0, 0, 16, 1, 16);
     /** How long a den lies empty after its whole family is gone: three in-game days. */
     public static final long EMPTY_TICKS = 3 * 24000L;
+    /** A member killed while the rest of its family lives is replaced after this long (an in-game day). */
+    public static final long REFILL_TICKS = 24000L;
     /**
      * A member the den has looked for this long, where it was last seen and with that place loaded, without finding it
      * is lost (gone without dying where the den would hear of it). One frozen in an unloaded chunk is never lost.
@@ -166,20 +168,25 @@ public class MossbackDen extends BaseEntityBlock {
 
     /** Killed: it leaves its family, wherever it died (the record is the level's, so the den need not be loaded). */
     static void lizardDied(MossbackEntity lizard) {
-        leave(lizard, true);
+        leave(lizard, DenRegistry.Loss.KILLED);
     }
 
     /** Taken out of the level without dying (Peaceful, the void, another dimension): it leaves its family too. */
     static void lizardGone(MossbackEntity lizard) {
-        leave(lizard, false);
+        leave(lizard, DenRegistry.Loss.REMOVED);
     }
 
-    private static void leave(MossbackEntity lizard, boolean killed) {
+    /** It lost its way home and roams on alone: it leaves its family, and its place is filled a day later. */
+    static void lizardStrayed(MossbackEntity lizard) {
+        leave(lizard, DenRegistry.Loss.STRAYED);
+    }
+
+    private static void leave(MossbackEntity lizard, DenRegistry.Loss why) {
         if (!(lizard.level() instanceof ServerLevel level) || lizard.den() == null) return;
         DenRegistry reg = DenRegistry.get(level);
         DenRegistry.Den rec = reg.den(lizard.den());
         if (rec == null || rec.member(lizard.getUUID()) == null) return;
-        rec.gone(lizard.getUUID(), level.getGameTime(), killed);
+        rec.gone(lizard.getUUID(), level.getGameTime(), why);
         reg.setDirty();
     }
 
@@ -204,14 +211,26 @@ public class MossbackDen extends BaseEntityBlock {
             for (int dy = 3; dy >= -3; dy--) {
                 BlockPos p = d.offset(dx, dy, dz);
                 if (!level.isLoaded(p)) break;
-                if (!openFloor(level, p) || !scraps.canSurvive(level, p)) continue;
-                level.setBlock(p, scraps, Block.UPDATE_ALL);
+                BlockState s = varied(block, scraps, r);
+                if (!openFloor(level, p) || !s.canSurvive(level, p)) continue;
+                level.setBlock(p, s, Block.UPDATE_ALL);
                 rec.scraps++;
                 reg.setDirty();
                 return true;
             }
         }
         return false;
+    }
+
+    /** One of the scraps' looks, turned any way (its properties found by name, so the den needs no scraps class). */
+    private static BlockState varied(Block block, BlockState s, RandomSource r) {
+        if (block.getStateDefinition().getProperty("look") instanceof net.minecraft.world.level.block.state.properties.IntegerProperty look) {
+            List<Integer> v = List.copyOf(look.getPossibleValues());
+            s = s.setValue(look, v.get(r.nextInt(v.size())));
+        }
+        if (s.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING))
+            s = s.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING, Direction.Plane.HORIZONTAL.getRandomDirection(r));
+        return s;
     }
 
     /** Open air on top of solid ground (never over a plant, a carpet or another scrap). */
@@ -277,7 +296,7 @@ public class MossbackDen extends BaseEntityBlock {
             for (DenRegistry.Member m : new ArrayList<>(rec.members)) {
                 Entity e = level.getEntity(m.id);
                 if (e instanceof MossbackEntity lz && lz.isAlive()) {
-                    if (!worldPosition.equals(lz.den())) rec.gone(m.id, now, false);    // it has left the family
+                    if (!worldPosition.equals(lz.den())) rec.gone(m.id, now, DenRegistry.Loss.STRAYED);    // it has left the family
                     else { m.last = lz.blockPosition(); m.missing = 0; }
                     changed = true;
                     continue;
@@ -287,7 +306,7 @@ public class MossbackDen extends BaseEntityBlock {
                 m.missing += PASS;
                 changed = true;
                 // lost: most likely killed where the den could not hear of it, so the den lies empty as after a death
-                if (m.missing >= LOST_TICKS) rec.gone(m.id, now, true);
+                if (m.missing >= LOST_TICKS) rec.gone(m.id, now, DenRegistry.Loss.KILLED);
             }
             return changed;
         }
@@ -307,7 +326,7 @@ public class MossbackDen extends BaseEntityBlock {
         private boolean bringOut(ServerLevel level, DenRegistry.Den rec, long now) {
             int size = familySize(worldPosition);
             if (rec.members.size() >= size || rec.spawned >= size) return false;
-            if (now < rec.emptyUntil || level.getDifficulty() == Difficulty.PEACEFUL) return false;
+            if (now < rec.emptyUntil || now < rec.refillAt || level.getDifficulty() == Difficulty.PEACEFUL) return false;
             double cx = worldPosition.getX() + 1.0, cy = worldPosition.getY(), cz = worldPosition.getZ() + 1.0;
             Player near = level.getNearestPlayer(cx, cy, cz, SPAWN_FAR, p -> !p.isSpectator());
             if (near == null || near.distanceToSqr(cx, cy, cz) < SPAWN_NEAR * SPAWN_NEAR) return false;

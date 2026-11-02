@@ -250,6 +250,8 @@ public final class Net {
     int deadEndWays, deadEndDrops, branchWays, junctionsCut;
     /** The Blue Reaches: den landings joined after connectRequired, and tunnels added so one walks to the exit. */
     int denJoins, denWalks;
+    /** Blue Reaches: 1 when the rift was left out because every try cut through a den gate's landing. */
+    int riftsDropped;
     final List<Integer> courtsE = new ArrayList<>(), courtsX = new ArrayList<>();
     /**
      * Blue Reaches: the lower landings of the cell's other den gates ({@link Plans#denGates} past the first, in their

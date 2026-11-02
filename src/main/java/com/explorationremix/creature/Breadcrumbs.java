@@ -46,8 +46,9 @@ public final class Breadcrumbs {
     public boolean record(int x, int y, int z) {
         if (size == 0) { add(x, y, z); return true; }
         if (dist(size - 1, x, y, z) < SPACING) return false;
-        // back near an older crumb: the way since then was a loop, and that crumb stands for where it is now
-        for (int i = 0; i < size - 1; i++) {
+        // back near an older crumb: the way since then was a loop, and that crumb stands for where it is now (never
+        // the den itself: passing it through a wall, or above it, is no way home, and it would wipe out the way out)
+        for (int i = 1; i < size - 1; i++) {
             if (dist(i, x, y, z) < LOOP) { size = i + 1; return true; }
         }
         add(x, y, z);

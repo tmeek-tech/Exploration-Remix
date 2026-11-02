@@ -33,7 +33,7 @@ class DenRegistryTest {
         d.join(guard, DEN, true);
         d.join(r1, FAR, true);
         d.join(r2, FAR, true);
-        d.gone(guard, 1000, true);
+        d.gone(guard, 1000, DenRegistry.Loss.KILLED);
         assertTrue(d.comeHome, "no guard: the roamers are called home");
         assertFalse(d.hasGuard());
         assertEquals(0, d.emptyUntil, "the family lives on: the den is not empty");
@@ -46,7 +46,7 @@ class DenRegistryTest {
         assertFalse(d.promote(r1), "the second back stays a roamer");
         assertEquals(DenRegistry.Role.ROAMER, d.member(r1).role);
         // a roamer's death calls nobody home
-        d.gone(r1, 2000, true);
+        d.gone(r1, 2000, DenRegistry.Loss.KILLED);
         assertFalse(d.comeHome);
     }
 
@@ -57,8 +57,8 @@ class DenRegistryTest {
         d.join(a, DEN, true);
         d.join(b, DEN, true);
         d.spawned = 2;
-        d.gone(a, 5000, true);
-        d.gone(b, 6000, true);
+        d.gone(a, 5000, DenRegistry.Loss.KILLED);
+        d.gone(b, 6000, DenRegistry.Loss.KILLED);
         assertTrue(d.members.isEmpty());
         assertEquals(6000 + MossbackDen.EMPTY_TICKS, d.emptyUntil);
         assertEquals(0, d.spawned, "a new family is brought out whole");
@@ -67,8 +67,40 @@ class DenRegistryTest {
         DenRegistry.Den e = new DenRegistry().open(DEN);
         UUID c = UUID.randomUUID();
         e.join(c, DEN, true);
-        e.gone(c, 7000, false);
+        e.gone(c, 7000, DenRegistry.Loss.REMOVED);
         assertEquals(0, e.emptyUntil);
+    }
+
+    @Test
+    void aLossIsReplacedADayLaterAndNeverSooner() {
+        DenRegistry.Den d = new DenRegistry().open(DEN);
+        UUID g = UUID.randomUUID(), r = UUID.randomUUID(), s = UUID.randomUUID();
+        d.join(g, DEN, true);
+        d.join(r, FAR, true);
+        d.join(s, FAR, true);
+        d.spawned = 3;
+        // a killed roamer while the rest live: the den brings out another a day later
+        d.gone(s, 1000, DenRegistry.Loss.KILLED);
+        assertEquals(2, d.spawned);
+        assertEquals(1000 + MossbackDen.REFILL_TICKS, d.refillAt);
+        // the guard killed: the last roamer loses its way home and strays; the den is empty, but the day owed for the
+        // deaths still holds the new family back (and a stray holds it back a day of its own)
+        d.gone(g, 2000, DenRegistry.Loss.KILLED);
+        assertEquals(2000 + MossbackDen.REFILL_TICKS, d.refillAt);
+        d.gone(r, 3000, DenRegistry.Loss.STRAYED);
+        assertTrue(d.members.isEmpty());
+        assertEquals(0, d.spawned);
+        assertEquals(2000 + MossbackDen.REFILL_TICKS, d.refillAt, "the day owed is still owed");
+        assertEquals(3000 + MossbackDen.REFILL_TICKS, d.emptyUntil, "a stray holds the den back a day, not three");
+        // one only taken out of the level is replaced at once
+        DenRegistry.Den e = new DenRegistry().open(DEN);
+        UUID a = UUID.randomUUID(), b = UUID.randomUUID();
+        e.join(a, DEN, true);
+        e.join(b, FAR, true);
+        e.spawned = 2;
+        e.gone(b, 4000, DenRegistry.Loss.REMOVED);
+        assertEquals(1, e.spawned);
+        assertEquals(0, e.refillAt);
     }
 
     @Test
@@ -81,6 +113,7 @@ class DenRegistryTest {
         d.scraps = 7;
         d.spawned = 2;
         d.emptyUntil = 99;
+        d.refillAt = 55;
         d.comeHome = true;
         r.open(FAR);
         DenRegistry back = DenRegistry.load(r.save(new CompoundTag()));
@@ -93,6 +126,7 @@ class DenRegistryTest {
         assertEquals(FAR, e.member(m).last);
         assertEquals(120, e.member(m).missing);
         assertEquals(7, e.scraps);
+        assertEquals(55, e.refillAt);
         assertEquals(2, e.spawned);
         assertEquals(99, e.emptyUntil);
         assertTrue(e.comeHome);

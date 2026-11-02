@@ -42,6 +42,7 @@ class DenGatesTest {
                             assertTrue(Math.hypot(g.ux - o.ux, g.uz - o.uz) >= Plans.DEN_SPACING - 1e-6, "den gates keep apart");
                         }
                         if (i > 0) assertSame(r, p.ramp(g), "den ramps are cached");
+                        if (i > 0) assertTrue(Math.hypot(g.lx - g.ux, g.lz - g.uz) >= Plans.DEN_MIN_RUN - 1e-6, "no straight shafts: the passage runs across");
                         for (int j = 0; j < i; j++)
                             assertTrue(Math.hypot(g.lx - l.get(j).lx, g.lz - l.get(j).lz) >= Plans.DEN_LOWER_SPACING - 1e-6, "lower landings keep apart");
                     }

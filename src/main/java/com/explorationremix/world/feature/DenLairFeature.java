@@ -30,8 +30,21 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
  * chunk holding its column.
  */
 public final class DenLairFeature extends Feature<NoneFeatureConfiguration> {
-    /** Bone blocks look this far round their planned column (inside the chunk) for floor they can be set into. */
-    private static final int[][] AROUND = {{0, 0}, {1, 0}, {0, 1}, {-1, 0}, {0, -1}, {1, 1}, {-1, 1}, {-1, -1}, {1, -1}};
+    /**
+     * Bone blocks look this far round their planned column (inside the chunk) for floor they can be set into: out to
+     * three blocks, nearest first, since much of a landing's floor is the bands' stone, which they never replace.
+     */
+    private static final int[][] AROUND = around(3);
+
+    private static int[][] around(int r) {
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        for (int dx = -r; dx <= r; dx++)
+            for (int dz = -r; dz <= r; dz++) out.add(new int[]{dx, dz});
+        // nearest first (ring by ring, then the straight-across ones before the diagonals); a stable sort keeps it fixed
+        out.sort(java.util.Comparator.comparingInt((int[] o) -> Math.max(Math.abs(o[0]), Math.abs(o[1])))
+                .thenComparingInt(o -> o[0] * o[0] + o[1] * o[1]));
+        return out.toArray(new int[0][]);
+    }
 
     public DenLairFeature(Codec<NoneFeatureConfiguration> codec) { super(codec); }
 
@@ -71,21 +84,24 @@ public final class DenLairFeature extends Feature<NoneFeatureConfiguration> {
     }
 
     /**
-     * A scrap on the first floor down its column, from {@link DenLair#SCAN_ABOVE} over the den's height to
-     * {@link DenLair#SCAN_BELOW} under it: open air over a block with a sturdy top. Only into air, so it never takes a
-     * plant's place, and never in the passage's mouth.
+     * A scrap on the lowest floor of its column, from {@link DenLair#SCAN_BELOW} under the den's height up to no more
+     * than {@link DenLair#REACH} from the lair's centre (and at most {@link DenLair#SCAN_ABOVE} up): open air over a
+     * block with a sturdy top. The lowest, so a ledge high over the landing never takes the scrap from the landing's
+     * own floor. Only into air, so it never takes a plant's place, and never in the passage's mouth.
      */
     private static boolean strew(WorldGenLevel level, DenLair lair, DenLair.Point s, BlockPos.MutableBlockPos pos) {
-        int top = Math.min(level.getMaxBuildHeight() - 1, lair.floorY + DenLair.SCAN_ABOVE);
+        double dx = s.x() + 0.5 - lair.centreX, dz = s.z() + 0.5 - lair.centreZ;
+        double up = Math.sqrt(Math.max(0.0, DenLair.REACH * DenLair.REACH - dx * dx - dz * dz));
+        int top = Math.min(level.getMaxBuildHeight() - 1, lair.floorY + Math.min(DenLair.SCAN_ABOVE, (int) Math.floor(up)));
         int bottom = Math.max(level.getMinBuildHeight() + 1, lair.floorY - DenLair.SCAN_BELOW);
-        for (int y = top; y >= bottom; y--) {
+        for (int y = bottom; y <= top; y++) {
             pos.set(s.x(), y, s.z());
             BlockState here = level.getBlockState(pos);
             if (!here.getCollisionShape(level, pos).isEmpty()) continue;
             pos.setY(y - 1);
             BlockState below = level.getBlockState(pos);
             if (!below.isFaceSturdy(level, pos, Direction.UP) || !below.getFluidState().isEmpty()) continue;
-            // the first floor down the column: strewn here or not at all
+            // the lowest floor up the column: strewn here or not at all
             if (!here.isAir() || !here.getFluidState().isEmpty() || lair.mouth(s.x(), y, s.z())) return false;
             BlockState scrap = ERBlocks.BONE_SCRAPS.get().defaultBlockState()
                     .setValue(BoneScrapsBlock.LOOK, s.look()).setValue(BoneScrapsBlock.FACING, Direction.from2DDataValue(s.turn()));
@@ -112,7 +128,8 @@ public final class DenLairFeature extends Feature<NoneFeatureConfiguration> {
                 BlockState floor = level.getBlockState(pos);
                 if (!floor.isFaceSturdy(level, pos, Direction.UP)) continue;
                 // the floor of this column: set the bone into it, or try the next column
-                if (floor.isCollisionShapeFullBlock(level, pos) && !floor.hasBlockEntity() && floor.getFluidState().isEmpty()
+                // (a column another bone took is passed over, so each planned bone is its own block)
+                if (floor.isCollisionShapeFullBlock(level, pos) && !floor.is(Blocks.BONE_BLOCK) && !floor.hasBlockEntity() && floor.getFluidState().isEmpty()
                         && !floor.is(BlockTags.FEATURES_CANNOT_REPLACE) && !floor.is(Blocks.BEDROCK) && !lair.mouth(x, y, z)) {
                     level.setBlock(pos, Blocks.BONE_BLOCK.defaultBlockState(), 2);
                     return true;

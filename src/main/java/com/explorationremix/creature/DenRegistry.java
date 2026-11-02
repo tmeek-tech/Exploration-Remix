@@ -33,6 +33,16 @@ public final class DenRegistry extends SavedData {
         ROAMER
     }
 
+    /** How a member left its family. */
+    public enum Loss {
+        /** Killed (or lost where the den could not hear of it, which is most often killed). */
+        KILLED,
+        /** Alive, but no longer of the family: it lost its way home, or its den. It roams on alone. */
+        STRAYED,
+        /** Taken out of the level without dying (Peaceful, the void, another dimension). */
+        REMOVED
+    }
+
     /** One lizard of a family. */
     public static final class Member {
         public final UUID id;
@@ -59,8 +69,10 @@ public final class DenRegistry extends SavedData {
         public boolean comeHome;
         /** Scraps of bone its meals have left round it (never more than {@link MossbackDen#MAX_SCRAPS}). */
         public int scraps;
-        /** How many of this family the den has brought out so far (a family is brought out once, not refilled). */
+        /** How many of its family the den has out now, counting those away (a killed one is replaced, see refillAt). */
         public int spawned;
+        /** No member killed while the rest of the family lives is replaced before this game time. */
+        public long refillAt;
 
         Den(BlockPos pos) { this.pos = pos; }
 
@@ -90,18 +102,27 @@ public final class DenRegistry extends SavedData {
         /**
          * A member is gone. A lost guard calls the roamers home. A family killed off (or lost, which is most often
          * killed out of the den's hearing) leaves the den empty for {@link MossbackDen#EMPTY_TICKS}, after which a new
-         * family moves in; one only taken out of the level (Peaceful) is brought out again as soon as it may be.
+         * family moves in. One that strays (alive, out of the family) holds the den's next lizard back a day, as a
+         * killed one does while the rest of its family lives, so a den whose lizards keep losing their way never fills
+         * the caves with strays. One only taken out of the level (Peaceful) is brought out again as soon as it may be.
          */
-        void gone(UUID id, long now, boolean killed) {
+        void gone(UUID id, long now, Loss why) {
             Member m = member(id);
             if (m == null) return;
             members.remove(m);
             if (members.isEmpty()) {
-                if (killed) emptyUntil = Math.max(emptyUntil, now + MossbackDen.EMPTY_TICKS);
+                if (why == Loss.KILLED) emptyUntil = Math.max(emptyUntil, now + MossbackDen.EMPTY_TICKS);
+                else if (why == Loss.STRAYED) emptyUntil = Math.max(emptyUntil, now + MossbackDen.REFILL_TICKS);
+                // refillAt stays: a lizard owed after an earlier death is still owed no sooner
                 spawned = 0;
                 comeHome = false;
-            } else if (m.role == Role.GUARD && !hasGuard()) {
-                comeHome = true;
+            } else {
+                // the rest of the family lives on: the den brings out another in its place, a day later if this one
+                // was killed or strayed (so a den never runs out of roamers to follow home), at once if it only left
+                // the level
+                spawned = Math.max(0, spawned - 1);
+                if (why != Loss.REMOVED) refillAt = Math.max(refillAt, now + MossbackDen.REFILL_TICKS);
+                if (m.role == Role.GUARD && !hasGuard()) comeHome = true;
             }
         }
 
@@ -163,6 +184,7 @@ public final class DenRegistry extends SavedData {
             t.putBoolean("ComeHome", d.comeHome);
             t.putInt("Scraps", d.scraps);
             t.putInt("Spawned", d.spawned);
+            t.putLong("RefillAt", d.refillAt);
             ListTag ms = new ListTag();
             for (Member m : d.members) {
                 CompoundTag mt = new CompoundTag();
@@ -189,6 +211,7 @@ public final class DenRegistry extends SavedData {
             d.comeHome = t.getBoolean("ComeHome");
             d.scraps = t.getInt("Scraps");
             d.spawned = t.getInt("Spawned");
+            d.refillAt = t.getLong("RefillAt");
             ListTag ms = t.getList("Members", Tag.TAG_COMPOUND);
             for (int j = 0; j < ms.size(); j++) {
                 CompoundTag mt = ms.getCompound(j);

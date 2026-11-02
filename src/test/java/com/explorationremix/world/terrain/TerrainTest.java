@@ -344,19 +344,23 @@ class TerrainTest {
 
     /**
      * Spaces are sized to each biome's picture, not grown with depth (Taran, 2026-10-28): the Deep Blue Rift keeps its
-     * full depth inside the shorter Blue Reaches, and the Basalt Galleries keep their cathedral halls.
+     * full depth inside the shorter Blue Reaches, and the Basalt Galleries keep their cathedral halls. The rift is looked
+     * for in three cells: where 0.2.0's rift would cut a den gate's landing (0.6.1) it is laid on another line, and
+     * there it can stand a little less deep (136 in cell 0,0 of the first seed).
      */
     @Test
     void spacesFollowTheirBiomes() {
         Terrain t = terrain(SEEDS[0]);
         int[] tallest = new int[t.shape.layerCount];
         for (int li = 0; li < t.shape.layerCount; li++) {
-            for (int x = 0; x < 600; x += 6) for (int z = 0; z < 600; z += 6) {
-                int run = 0;
-                for (int y = t.shape.bottom(li); y <= t.shape.top(li); y++) {
-                    if (t.rawDensity(x, y, z) < 0) { run++; tallest[li] = Math.max(tallest[li], run); } else run = 0;
+            int[][] cells = li == Terrain.BLUE ? new int[][]{{0, 0}, {-1, 0}, {0, -1}} : new int[][]{{0, 0}};
+            for (int[] c : cells)
+                for (int x = c[0] * 600; x < c[0] * 600 + 600; x += 6) for (int z = c[1] * 600; z < c[1] * 600 + 600; z += 6) {
+                    int run = 0;
+                    for (int y = t.shape.bottom(li); y <= t.shape.top(li); y++) {
+                        if (t.rawDensity(x, y, z) < 0) { run++; tallest[li] = Math.max(tallest[li], run); } else run = 0;
+                    }
                 }
-            }
         }
         assertTrue(tallest[Terrain.BLUE] > 140, "the Deep Blue Rift is only " + tallest[Terrain.BLUE] + " blocks deep");
         assertTrue(tallest[Terrain.GARDENS] > 60, "the Deep Gardens' tallest hall is only " + tallest[Terrain.GARDENS] + " blocks");
