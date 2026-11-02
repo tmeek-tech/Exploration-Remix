@@ -6,6 +6,7 @@ import com.explorationremix.world.terrain.Net.Edge;
 import com.explorationremix.world.terrain.Net.Kind;
 import com.explorationremix.world.terrain.Net.Shaft;
 import com.explorationremix.world.terrain.Net.Way;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -34,6 +35,16 @@ class NetworkTest {
 
     static Terrain terrain(long seed) {
         return TERRAINS.computeIfAbsent(seed, s -> new Terrain(TerrainSettings.defaults(), -64, s));
+    }
+
+    /**
+     * Lets go of the terrains and built cells the tests shared, with their plan caches: the test classes run in one
+     * JVM of 2 GB, and the ones after this would otherwise start with all of them held.
+     */
+    @AfterAll
+    static synchronized void releaseShared() {
+        TERRAINS.clear();
+        BUILT.clear();
     }
 
     static String tag(long seed, int li, int cx, int cz) { return "seed " + seed + " layer " + li + " cell " + cx + "," + cz; }
