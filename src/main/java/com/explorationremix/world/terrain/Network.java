@@ -1086,10 +1086,15 @@ public final class Network {
      * three blocks: on floors this wide, each step leaves standing places no one can reach, and on a stair it is a
      * step no one can climb. Rock stays {@link #HALL_FLOOR_DEPTH} under the floor and the air {@link #HALL_FLOOR_ROOM}
      * over it, whatever tunnel ends there (the end of a tunnel's carve reaches a width past its last point, and on a
-     * stair it dug a pit); the walls, vaults and the lava's beds keep the interpolated shape.
+     * stair it dug a pit); the walls, vaults and the lava's beds keep the interpolated shape. So does the bedrock
+     * landing's lava basin over a table shallower than the default (config, W its height), whose bed lies within a
+     * few blocks of the seal over the bedrock: interpolated between the seal and the open basin, the bed comes out a
+     * block or two high and rough, and stands out of the lava it holds ({@link #fluidAt}) in islands a flood would
+     * catch far from any stair.
      */
-    static boolean hallFloor(Chamber c, double e, double F, int li) {
+    static boolean hallFloor(Chamber c, double e, double F, int li, double W) {
         if (c.flight) return e < 0.96 && li == Terrain.GALLERIES;
+        if (c.kind == Kind.LAVA) return e < 0.96 && li == Terrain.GALLERIES && c.f0 + HALL_LAVA > W;
         if (!c.hall() || e >= 0.96 || li != Terrain.GALLERIES) return false;
         return F >= c.base + 5;
     }
@@ -1192,14 +1197,14 @@ public final class Network {
      * where nothing overhangs. Under a column hall's ledge and the Causeway's wall ledge, from the lip to the wall;
      * under every other lip over the lava, {@link #UNDER_REACH} blocks in: the Causeway's end ramps, the Caldera's
      * crest, the rift's ledges and ramps beside its river. The underside is {@code shelf} under the floor at the lip
-     * and curves down to the lava, so the floor is thick enough for the 4 x 8 x 4 interpolation and a fall from its lip
-     * lands in the lava. Without it, the interpolated cliff leans out at its foot: a floor's height is no distance
-     * across a cliff, so the lowest blocks of the face stand three or four out from the lip, a slope of rock over the
-     * lava that every fall from the lip lands on.
+     * ({@link #RIFT_LOW_SHELF} under the rift's low ledges) and curves down to the lava, so the floor is thick enough
+     * for the 4 x 8 x 4 interpolation and a fall from its lip lands in the lava. Without it, the interpolated cliff
+     * leans out at its foot: a floor's height is no distance across a cliff, so the lowest blocks of the face stand
+     * three or four out from the lip, a slope of rock over the lava that every fall from the lip lands on.
      */
     double shelfUnder(Chamber c, double e, double x, double z) {
         if (e >= 1.02) return Double.NaN;
-        double t, top = c.f0;
+        double t, top = c.f0, shelf = c.shelf;
         switch (c.kind) {
             case HALL -> {
                 if (e < c.lakeEdge) return Double.NaN;
@@ -1230,15 +1235,25 @@ public final class Network {
                 if (d <= 0 || d >= UNDER_REACH) return Double.NaN;
                 t = d / UNDER_REACH;
                 top = riftFloor(c, uv[0], uv[1], x, z);
+                if (top < c.f0 - 6) shelf = RIFT_LOW_SHELF;
             }
             default -> {
                 return Double.NaN;
             }
         }
         t = Math.min(1, t);
-        double lip = top - c.shelf;
+        double lip = top - shelf;
         return lip - (lip - (c.base + 2)) * t * t;
     }
+
+    /**
+     * The Scoria Canyons: the shelf under the low ledges and the lower half of their ramps (blocks), where it meets the
+     * undercut at their lips. Their floors stand {@link #HALL_FLOOR_DEPTH} thick block by block all the same ({@link
+     * #hallFloor}); with the hall's shelf of 10, the rock between the undercut and the floor bulges out of a low
+     * ledge's end at the interpolation corners, 4 under its floor and right under the upper ledge's lip, and a fall
+     * from the lip lands on it 16 or 17 down.
+     */
+    static final double RIFT_LOW_SHELF = 3;
 
     /**
      * The Scoria Canyons: how far local (u, v) lies from the lava river as {@link #riftFloor} lays it out (0 on it):
@@ -1272,7 +1287,10 @@ public final class Network {
      * block from one column to the next; beside the path about every other place holds a column a step off it; one in
      * five of the rest, away from the path, the ledge's lip and the end ramps, stands from the lava into the vault
      * ({@link #TO_VAULT}, out of the flood). Nothing stands alone with a top of its own: such a top would be a standing
-     * place no one can walk to.
+     * place no one can walk to. Behind the path, from the middle of its far row to the far wall, the rock stands a
+     * block under the path's tops ({@link #backTop}): the path keeps 2 to 5 blocks from that wall, and the slot between
+     * them, too narrow for the interpolation, came out a crack with a rough floor at the lava's top, where a step off
+     * the path's far side fell 16 to 20 onto rock.
      */
     int hexTop(Chamber c, double x, double z) {
         double[] uv = hallUV(c, x, z);
@@ -1294,16 +1312,30 @@ public final class Network {
         double ap = Math.abs(hv - c.pathV), half = s / 2;
         int pathTop = (int) Math.round(pathHeight(c, hu)), top;
         // past the path's ends the end ramp has its own floor
-        if (Math.abs(hu) > endU - 0.5 * s && ap >= 0.5 * s) return NO_COLUMN;
-        if (ap < 0.5 * s) top = pathTop;
-        else if (ap < 1.4 * s) top = a < 0.5 ? pathTop + (b < 0.35 ? -1 : b < 0.7 ? 0 : 1) : NO_COLUMN;
+        if (Math.abs(hu) > endU - 0.5 * s && ap >= 0.5 * s) top = NO_COLUMN;
         else {
-            // a column into the vault where it leaves room round it, never by the ledge's lip or the end ramps
-            boolean buffer = hv > ledgeV - 6 || Math.abs(hu) > endU - 6 || ap < 2.2 * s;
-            top = buffer || a < 0.8 ? NO_COLUMN : TO_VAULT;
-            half *= 0.72 + 0.26 * b;
+            if (ap < 0.5 * s) top = pathTop;
+            else if (ap < 1.4 * s) top = a < 0.5 ? pathTop + (b < 0.35 ? -1 : b < 0.7 ? 0 : 1) : NO_COLUMN;
+            else {
+                // a column into the vault where it leaves room round it, never by the ledge's lip or the end ramps
+                boolean buffer = hv > ledgeV - 6 || Math.abs(hu) > endU - 6 || ap < 2.2 * s;
+                top = buffer || a < 0.8 ? NO_COLUMN : TO_VAULT;
+                half *= 0.72 + 0.26 * b;
+            }
+            if (hd > half + 1e-9) top = NO_COLUMN;
         }
-        return hd <= half + 1e-9 ? top : NO_COLUMN;
+        return Math.max(top, backTop(c, u, sv));
+    }
+
+    /**
+     * The rock behind the Causeway's column path at (u, sv) on its axes ({@link #hallUV}, sv on the path's side
+     * positive): from the middle of the path's far row (SQ3 / 4 of a column's width off its line) to the far wall, a
+     * block under the path's tops; elsewhere {@link #NO_COLUMN}. It reaches to e 1.15, past the columns' 1.02: there
+     * the hall's interpolated wall left a slit a block wide between the rock and the wall, 16 deep.
+     */
+    static int backTop(Chamber c, double u, double sv) {
+        if (sv >= c.pathV - SQ3 / 4 * c.hexS || Math.abs(u) > c.rx - c.endW) return NO_COLUMN;
+        return (int) Math.round(pathHeight(c, u)) - 1;
     }
 
     /** The column path's height along the Causeway: lowest in the middle, rising to the end ramps' foot. */
@@ -1499,9 +1531,10 @@ public final class Network {
                     double[] uv = hallUV(c, x, z);
                     lc.ws[k] = (float) wallScale(c, uv[0], uv[1], e);
                 }
-                if (c.kind == Kind.CAUSEWAY && e < 1.02) {
+                if (c.kind == Kind.CAUSEWAY && e < 1.15) {
                     // the column is a per-block term: the span reaches from the lava's bed to its top
-                    int top = hexTop(c, x, z);
+                    double[] uv = hallUV(c, x, z);
+                    int top = e < 1.02 ? hexTop(c, x, z) : backTop(c, uv[0], uv[1] * c.side);
                     if (top == TO_VAULT) top = (int) Math.ceil(lc.C[k]) + 3;
                     if (top != NO_COLUMN && top > lc.colTop) {
                         lc.colTop = top;
@@ -1518,7 +1551,7 @@ public final class Network {
                     double d = Math.hypot(x - px, z - pz);
                     if (d - c.pillars[p + 2] < lc.pd[k] - lc.pr[k]) { lc.pd[k] = (float) d; lc.pr[k] = (float) c.pillars[p + 2]; }
                 }
-                if (hallFloor(c, e, lc.F[k], li)) {
+                if (hallFloor(c, e, lc.F[k], li, shape.waterY(li))) {
                     // a hall's dry floor is a per-block term (hallFloor): the span covers its band
                     lc.fLo = Math.min(lc.fLo, lc.F[k] - HALL_FLOOR_DEPTH - 1);
                     lc.fHi = Math.max(lc.fHi, lc.F[k] + HALL_FLOOR_ROOM + 1);
@@ -1879,8 +1912,19 @@ public final class Network {
         float u = lc.U[k];
         // under a hall's ledge: open from the lava's bed to the ledge's underside as well
         if (u == u) d = Math.min(d, Math.max(c.base - y, y - u));
-        return Math.max(d, wallTerm(lc, k));
+        double wall = wallTerm(lc, k);
+        if (c.kind == Kind.RIFT && y < c.f0 - 6) wall -= Math.min(RIFT_LEAN, (c.f0 - 6 - y) * 0.5);
+        return Math.max(d, wall);
     }
+
+    /**
+     * The Scoria Canyons: how far their walls lean back under the upper ledges (blocks), from nothing 6 under the
+     * ledges' floor, 1 in 2, to this 16 under it, where a fall from a ledge starts to hurt too much. Under the ledges
+     * the rock is their own; past their ends the river reaches the walls, and a fall from a ledge's last block by an
+     * upright wall runs down its rough face onto a knob 16 under the ledge, a pocket with no way out. Leaning back,
+     * the walls let such a fall go on into the river.
+     */
+    static final double RIFT_LEAN = 5;
 
     /** Density in blocks (positive is rock) of layer li at a block, as sampled at the interpolation corners. */
     double layerDensity(int li, int x, int y, int z) {
@@ -2334,7 +2378,7 @@ public final class Network {
         // would spread into a plate over the lava)
         if (lc.colTop != NO_COLUMN && y <= lc.colTop && y >= lc.colLo) keep = Math.max(keep, 1);
         for (int k = 0; k < lc.nc; k++) {
-            if (!hallFloor(lc.c[k], lc.e[k], lc.F[k], li)) continue;
+            if (!hallFloor(lc.c[k], lc.e[k], lc.F[k], li, shape.waterY(li))) continue;
             double F = lc.F[k];
             keep = Math.max(keep, Math.min(F - y, y - (F - HALL_FLOOR_DEPTH)));
             open = Math.min(open, Math.max(F - y, y - (F + HALL_FLOOR_ROOM)));
@@ -2372,6 +2416,8 @@ public final class Network {
         if (y >= shape.waterY(li)) {
             for (int k = 0; k < lc.nc; k++) {
                 Chamber c = lc.c[k];
+                if (c.hall() && y < c.base + HALL_LAVA && lc.e[k] < 1.1) return Terrain.LAVA;
+                if (c.kind == Kind.LAVA && lc.bed != null && y < Math.min(c.f0 + HALL_LAVA, lc.bed.f0) && lc.e[k] < 1.1) return Terrain.LAVA;
                 if (!pool(c)) continue;
                 if (y < c.lakeY && lc.e[k] < c.lakeE + 0.1 && y >= lc.F[k] - 2) return Terrain.WATER;
             }
@@ -2384,6 +2430,16 @@ public final class Network {
         }
         return shape.lava(li) ? Terrain.LAVA : Terrain.WATER;
     }
+
+    /**
+     * How high a hall's lava stands over its bed (blocks): to the lava's table at the default depth of 10, and as high
+     * where the Basalt Galleries' lava is shallower (config). There the bed cannot go deeper (the seal over the bedrock
+     * is under it), and the table would leave the lake a block or two deep, dry in patches where the rough bed stands
+     * up, a floor 40 or 50 under the ledges. The bedrock landing's basin holds its lava as high, but never over the
+     * landing's floor (2 over the table), which it would spill onto: a block or two over the table, over a bed kept
+     * flat ({@link #hallFloor}).
+     */
+    static final double HALL_LAVA = 5;
 
     /** The biome at a block of layer li: the nearest chamber's or way's, a refuge first, then the deep dark and the rift. */
     DeepBiome biomeAt(int li, int x, int y, int z) {
@@ -2432,14 +2488,16 @@ public final class Network {
 
     /**
      * Depth into the rock round the nearest obsidian tube (0 at its inner surface): a tube hub or a round way (the
-     * hubs' tunnels and blind tubes), or 1e9 when none is near.
+     * hubs' tunnels and blind tubes), or 1e9 when none is near. A round way's depth joins the rest smoothly, as the
+     * density joins a way to its room ({@link #smin}, 3): where a tube meets its hub's dome at a slant, the rock the
+     * blend rounds off in the crease between them stands up to 2 from both surfaces, and the lining would break there.
      */
     double tubeShellDepth(int li, int x, int y, int z) {
         if (!Terrain.basaltLook(li)) return 1e9;
         LCol lc = layer(column(x, z), li);
         double best = 1e9;
         for (int k = 0; k < lc.nc; k++) if (lc.c[k].kind == Kind.TUBEHUB) best = Math.min(best, hubDepth(lc, k, y));
-        for (int k = 0; k < lc.nw; k++) if (lc.w[k].round) best = Math.min(best, roundShell(lc, k, y));
+        for (int k = 0; k < lc.nw; k++) if (lc.w[k].round) best = smin(best, roundShell(lc, k, y), 3);
         return best;
     }
 
