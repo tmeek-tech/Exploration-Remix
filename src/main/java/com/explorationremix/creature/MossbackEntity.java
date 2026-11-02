@@ -175,6 +175,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     public int heldId() { return entityData.get(DATA_HELD); }
     @Nullable public BlockPos den() { return den; }
     public void setDen(@Nullable BlockPos pos) { this.den = pos; if (pos != null) this.home = pos; }
+    /** No den any more: its patch becomes wherever it is now (so a newcomer at its old den is a rival). */
+    void becomeStray() { this.den = null; this.home = blockPosition(); }
 
     @Override public boolean onFloor() { return surface() == Direction.DOWN; }
     @Override public boolean canSteer() { byte s = state(); return s != LUNGE && s != DROP && hurtTime < 6; }
@@ -325,7 +327,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         stateTicks++;
         if (hunger > 0) hunger--;
         LivingEntity t = getTarget();
-        if (t != null && state() == GRAB && t.getId() == heldId() && !t.isAlive()) {
+        if (t != null && state() == GRAB && t.getId() == heldId() && t.isDeadOrDying()) {
             // the shake killed its catch: it eats
             release(false);
             afterKill(t);
@@ -460,7 +462,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
                     toState(ROAM, 0);                      // it got as near as it could: not near enough, so it moves on
                 } else if (stateTicks > 10) {
                     waitPathSent = true;
-                    if (!nav.moveTo(waitSpot.getX() + 1.0, waitSpot.getY(), waitSpot.getZ() + 1.0, ROAM_SPEED)) toState(ROAM, 0);
+                    // to the spot's own node (moveTo's usual reach of one node would stop it a step short)
+                    if (!nav.moveTo(nav.createPath(waitSpot.offset(1, 0, 1), 0), ROAM_SPEED)) toState(ROAM, 0);
                 }
             }
             return;
@@ -698,7 +701,9 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
             t.setDeltaMovement(v.x, t.getDeltaMovement().y, v.z);
             t.hurtMarked = true;
         } else {
-            t.setPos(m.x, Math.max(t.getY(), m.y - t.getBbHeight() * 0.5), m.z);
+            double y = m.y - t.getBbHeight() * 0.5;
+            // falling with it, the catch goes down in its jaws; on rock it is never pushed into the ground
+            t.setPos(m.x, surface() == null ? y : Math.max(t.getY(), y), m.z);
             t.setDeltaMovement(Vec3.ZERO);
             if (t instanceof Mob mob) mob.getNavigation().stop();
         }
@@ -972,7 +977,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         // orientation: its belly to its rock, its head the way it goes
         Direction d = surface();
         Vec3 upT = d == null ? new Vec3(0, 1, 0) : Vec3.atLowerCornerOf(d.getOpposite().getNormal());
-        if (clientUp.dot(upT) < -0.99) clientUp = clientUp.add(clientForward.scale(0.3));   // turn over through the side
+        if (clientUp.dot(upT) < -0.99) clientUp = clientUp.add(clientForward.cross(clientUp).scale(0.3));   // roll over, keeping its heading
         clientUp = clientUp.lerp(upT, 0.35);
         if (clientUp.lengthSqr() < 1.0E-4) clientUp = upT;
         clientUp = clientUp.normalize();

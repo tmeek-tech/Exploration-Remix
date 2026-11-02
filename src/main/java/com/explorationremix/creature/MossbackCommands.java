@@ -142,9 +142,11 @@ public final class MossbackCommands {
             }
         if (den == null) { c.getSource().sendFailure(Component.literal("No den in the loaded chunks within 8 chunks.")); return 0; }
         Vec3 seen = Vec3.atCenterOf(den).add(0, 0.6, 0);
-        for (int ring = 0; ring < 3; ring++)
+        // open floor in sight of the den first, then any open floor, then the air above it
+        for (int pass = 0; pass < 2; pass++)
+        for (int ring = 0; ring < 6; ring++)
             for (int k = 0; k < 24; k++) {
-                double a = Math.toRadians(15 * k), r = blocks + ring * 3;
+                double a = Math.toRadians(15 * k), r = blocks + ring * 2;
                 int x = den.getX() + (int) Math.round(Math.cos(a) * r), z = den.getZ() + (int) Math.round(Math.sin(a) * r);
                 if (!level.hasChunk(x >> 4, z >> 4)) continue;
                 for (int dy = -8; dy <= 8; dy++) {
@@ -153,7 +155,7 @@ public final class MossbackCommands {
                     if (!level.getBlockState(f).getCollisionShape(level, f).isEmpty() || !level.getBlockState(f.above()).getCollisionShape(level, f.above()).isEmpty()) continue;
                     if (!level.getFluidState(f).isEmpty()) continue;
                     Vec3 eye = new Vec3(x + 0.5, f.getY() + 1.62, z + 0.5);
-                    if (level.clip(new ClipContext(eye, seen, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, pl)).getType() != HitResult.Type.MISS) continue;
+                    if (pass == 0 && level.clip(new ClipContext(eye, seen, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, pl)).getType() != HitResult.Type.MISS) continue;
                     Vec3 to = seen.subtract(eye);
                     float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
                     pl.teleportTo(level, x + 0.5, f.getY(), z + 0.5, yaw, 10.0F);
@@ -161,8 +163,9 @@ public final class MossbackCommands {
                     return 1;
                 }
             }
-        c.getSource().sendFailure(Component.literal("No open floor in sight " + blocks + " blocks from the den at " + den.toShortString()));
-        return 0;
+        pl.teleportTo(level, den.getX() + 0.5, den.getY() + blocks, den.getZ() + 0.5, pl.getYRot(), 90.0F);
+        say(c, "Away from the den at " + den.toShortString() + ": no open floor near, so " + blocks + " blocks above it");
+        return 1;
     }
 
     /** Sets the nearest Mossback on the nearest floor, wall or ceiling node near it and freezes it there. */

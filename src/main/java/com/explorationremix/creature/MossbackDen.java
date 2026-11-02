@@ -66,7 +66,7 @@ public class MossbackDen extends BaseEntityBlock {
             t.lastSeen = lizard.level().getGameTime();
             t.setChanged();
         } else {
-            lizard.setDen(null);                                // its den has taken in another: it roams on alone
+            lizard.becomeStray();          // its den has taken in another: it roams on alone, a rival to the newcomer
         }
     }
 
@@ -90,6 +90,8 @@ public class MossbackDen extends BaseEntityBlock {
         long lastSeen, emptyUntil;
         /** False until its first tick after loading: time spent unloaded never counts towards losing its lizard. */
         private boolean awake;
+        /** The game time of its last tick: a den can stop ticking without being unloaded (out of simulation range). */
+        private long lastTick;
 
         public Tile(BlockPos pos, BlockState state) {
             super(EREntities.DEN_TILE.get(), pos, state);
@@ -97,10 +99,12 @@ public class MossbackDen extends BaseEntityBlock {
 
         void tick(ServerLevel level) {
             long now = level.getGameTime();
-            if (!awake) {
+            if (!awake || now - lastTick > 20) {
+                // waking (loaded again, or back in range): its lizard gets the full time to turn up again
                 awake = true;
                 if (lizard != null) lastSeen = Math.max(lastSeen, now);
             }
+            lastTick = now;
             if (Math.floorMod(now + worldPosition.hashCode(), 40L) != 0) return;
             if (lizard != null) {
                 Entity e = level.getEntity(lizard);
