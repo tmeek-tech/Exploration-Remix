@@ -20,6 +20,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
@@ -90,6 +91,14 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     static final double FORAY_OUT = 120.0;
     /** This near its den, the way home is a straight path to it rather than the crumbs. */
     static final double DIRECT_HOME = 32.0;
+    /** Within this of its den and stuck {@link #HOME_NEAR_TICKS} on the way home, it counts as home. */
+    static final double HOME_NEAR = 8.0;
+    static final int HOME_NEAR_TICKS = 300;
+    /** How far and how long it may touch nothing (rounding an edge) before it falls. */
+    static final double AIR_REACH = 1.5;
+    static final int AIR_GRACE = 40;
+    /** A den's lizards never choose a spot more than this far under the den's own height (the gate's passage). */
+    static final int BELOW_DEN = 3;
     /** This long (five minutes) on the way home without reaching a crumb or getting nearer the den: it is lost. */
     static final int LOST_TICKS = 6000;
     /** Carrying, it turns only on a player this close in front of it (or on what hurts it). */
@@ -140,6 +149,9 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     private int unreachable;                 // CHASE: paths in a row that could not reach the quarry
     private Vec3 lungeDir = Vec3.ZERO;
     private int detachTicks;
+    private int airTicks;                    // ticks in a row touching no rock and no water
+    private double airDist;                  // how far it has gone in that time
+    @Nullable private BlockPos kinDen;       // a stray's old den: it and that den's family leave each other be
     private Vec3 forward = new Vec3(0, 0, 1);
     private long ignoreRivalsUntil;
     private float stepDist;
@@ -227,12 +239,13 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     @Nullable public BlockPos den() { return den; }
     /** A den's lizards all take the den as home, so den-mates are never rivals. */
     public void setDen(@Nullable BlockPos pos) {
+        if (pos == null && den != null) kinDen = den;      // its den is gone: its old family are still kin
         this.den = pos;
         if (pos != null) this.home = pos;
         else leaveFamily();
     }
     /** No den any more: its patch becomes wherever it is now (so a newcomer at its old den is a rival). */
-    void becomeStray() { this.den = null; this.home = blockPosition(); leaveFamily(); }
+    void becomeStray() { this.kinDen = den != null ? den : kinDen; this.den = null; this.home = blockPosition(); leaveFamily(); }
 
     private void leaveFamily() {
         role = null;
@@ -281,6 +294,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
 
     @Override public boolean onFloor() { return surface() == Direction.DOWN; }
     @Override public boolean canSteer() { byte s = state(); return s != LUNGE && s != DROP && hurtTime < 6; }
+    /** Rounding an edge it touches nothing for a moment; further than {@link #AIR_REACH} or longer than that, it falls. */
+    @Override public boolean airborne() { return airDist > AIR_REACH || airTicks > AIR_GRACE; }
     @Override public boolean holdStill() {
         Direction d = surface();
         return d != null && d != Direction.DOWN && !(state() == RECOIL && stateTicks < 10);
@@ -352,6 +367,12 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
             next = best != null ? best : (touching(box, Direction.UP) ? Direction.UP : null);
         }
         entityData.set(DATA_SURFACE, (byte) (next == null ? -1 : next.get3DDataValue()));
+        // the distance it goes while touching nothing is added up after each move (in tick)
+        if (next == null && !isInWater()) airTicks++;
+        else {
+            airTicks = 0;
+            airDist = 0.0;
+        }
         setNoGravity(next != null && next != Direction.DOWN);
         if (next != null && next != Direction.DOWN) resetFallDistance();
     }
@@ -429,6 +450,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
             return;
         }
         updateSurface();
+        // in water deeper than its legs it swims up and keeps its head out, as other land beasts do
+        if (isInWater() && getFluidHeight(FluidTags.WATER) > getFluidJumpThreshold()) getJumpControl().jump();
         if (home == null) home = blockPosition();
         stateTicks++;
         if (hunger > 0) hunger--;
@@ -527,6 +550,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
      */
     @Nullable
     private Vec3 roamTarget() {
+        // a den's lizard down its gate's passage (after a chase): back up to the den first
+        if (den != null && belowDen(blockPosition())) return new Vec3(den.getX() + 1.0, den.getY(), den.getZ() + 1.0);
         if (onForay()) {
             Vec3 leg = forayTarget();
             return leg != null ? leg : spotNear(blockPosition(), 12, 4);
@@ -571,8 +596,16 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     private Vec3 walkableNear(BlockPos c) {
         if (!loadedAround(c)) return null;
         BlockPos n = nearestWalkable(c, 6);
-        if (n == null || !level().isLoaded(n) || isRefuge(n)) return null;
+        if (n == null || !level().isLoaded(n) || isRefuge(n) || belowDen(n)) return null;
         return new Vec3(n.getX() + 1.0, n.getY(), n.getZ() + 1.0);
+    }
+
+    /**
+     * Under its den's floor: down the gate's passage, or the Blue Reaches beyond it. A den's lizards hunt the Upper
+     * Caves round the den and never choose to walk down there, so the way they lead a player home ends at the gate.
+     */
+    private boolean belowDen(BlockPos p) {
+        return den != null && p.getY() < den.getY() - BELOW_DEN;
     }
 
     /** Whether the columns a node test round {@code c} reads are all loaded (reading others would load them). */
@@ -607,7 +640,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
             BlockPos c = me.offset(random.nextInt(21) - 10, random.nextInt(9) - 4, random.nextInt(21) - 10);
             if (!loadedAround(c)) continue;
             BlockPos n = nearestWalkable(c, 3);
-            if (n == null || isRefuge(n)) continue;
+            if (n == null || isRefuge(n) || belowDen(n)) continue;
             // at home it waits by its den: never further out than a guard roams
             if (den != null && !onForay() && n.distSqr(den) > (double) GUARD_RANGE * GUARD_RANGE) continue;
             int score = plantsAround(n);
@@ -683,7 +716,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         long now = level().getGameTime();
         if (now >= ignoreRivalsUntil && home != null) {
             for (MossbackEntity m : level().getEntitiesOfClass(MossbackEntity.class, getBoundingBox().inflate(12), m -> m != this && m.isAlive())) {
-                if (m.home != null && !m.home.equals(home) && m.blockPosition().distSqr(home) < (double) TERRITORY * TERRITORY && canSee(m)) return m;
+                if (m.home != null && !m.home.equals(home) && !denMate(m) && m.blockPosition().distSqr(home) < (double) TERRITORY * TERRITORY && canSee(m)) return m;
             }
         }
         // out on a foray a roamer takes any cave animal it sees, hungry or not: it is hunting for the den
@@ -1085,8 +1118,12 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         if (crumbs.reached(nodeX(), nodeY(), nodeZ(), 3.0)) { crumbFails = 0; denFails = 0; legGoal = null; homeLost = 0; lostBest = Double.MAX_VALUE; }
         double toDen = at.distanceTo(goal);
         if (toDen < lostBest - 4.0) { lostBest = toDen; homeLost = 0; }
-        if (++homeLost > LOST_TICKS) { lostOnWayHome(); return; }
         PathNavigation nav = getNavigation();
+        // stuck a while close to home (a ledge it cannot get down from, say), with no way on: near enough
+        Path way = nav.getPath();
+        boolean noWay = nav.isDone() || nav.isStuck() || (way != null && !way.canReach());
+        if (++homeLost > HOME_NEAR_TICKS && toDen < HOME_NEAR && noWay) { arriveHome(); return; }
+        if (homeLost > LOST_TICKS) { lostOnWayHome(); return; }
         double speed = carrying() ? CARRY_SPEED : HOME_SPEED;
         if (!nav.isDone() && !nav.isStuck() && stateTicks - legStart < 200) return;      // on its way (a fresh look every ten seconds)
         // a path used up at once (it stands at the end of the nearest it can get) waits a moment before the next
@@ -1207,9 +1244,11 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         return hurt;
     }
 
-    /** One of its own family (they share the den as home). */
+    /** One of its own family (they share the den as home), or of the family one of them left: kin never fight. */
     private boolean denMate(Entity e) {
-        return e instanceof MossbackEntity m && den != null && den.equals(m.den);
+        if (!(e instanceof MossbackEntity m)) return false;
+        BlockPos mine = den != null ? den : kinDen, theirs = m.den != null ? m.den : m.kinDen;
+        return mine != null && mine.equals(theirs);
     }
 
     @Override
@@ -1276,6 +1315,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
 
     @Override public boolean removeWhenFarAway(double distance) { return false; }
     @Override public boolean canBeLeashed(Player player) { return false; }
+    /** It holds its breath twice as long as a player (it surfaces long before that). */
+    @Override public int getMaxAirSupply() { return 600; }
     @Override public int getMaxHeadYRot() { return 50; }
 
     @Override
@@ -1283,6 +1324,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         super.addAdditionalSaveData(tag);
         tag.putByte("Variant", variant());
         if (den != null) tag.put("Den", NbtUtils.writeBlockPos(den));
+        if (kinDen != null) tag.put("KinDen", NbtUtils.writeBlockPos(kinDen));
         if (home != null) tag.put("Home", NbtUtils.writeBlockPos(home));
         tag.putInt("Hunger", hunger);
         // the synced catch and the trip are not saved with the state (it reloads roaming, and goes on from there)
@@ -1300,6 +1342,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         super.readAdditionalSaveData(tag);
         setVariant(tag.getByte("Variant"));
         den = tag.contains("Den") ? NbtUtils.readBlockPos(tag.getCompound("Den")) : null;
+        kinDen = tag.contains("KinDen") ? NbtUtils.readBlockPos(tag.getCompound("KinDen")) : null;
         home = tag.contains("Home") ? NbtUtils.readBlockPos(tag.getCompound("Home")) : den;
         hunger = tag.getInt("Hunger");
         setCarried(tag.getString("Carry"));
@@ -1323,7 +1366,25 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
                 + " on " + (d == null ? "nothing" : d == Direction.DOWN ? "floor" : d == Direction.UP ? "ceiling" : "wall " + d.getName())
                 + ", health " + Math.round(getHealth()) + ", target " + (getTarget() == null ? "none" : getTarget().getName().getString())
                 + ", den " + (den == null ? "none" : den.toShortString()) + family() + (carrying() ? ", carrying " + carried() : "")
-                + ", hunger " + hunger / 20 + "s";
+                + ", hunger " + hunger / 20 + "s" + motionNote();
+    }
+
+    /** How it is moving, for {@link #describe}: in water or in the air, wedged, and where its path leads next. */
+    private String motionNote() {
+        StringBuilder b = new StringBuilder();
+        if (isInWater()) b.append(String.format(java.util.Locale.ROOT, ", in water %.2f deep", getFluidHeight(FluidTags.WATER)));
+        if (airborne()) b.append(", falling");
+        if (getMoveControl() instanceof ClimbMoveControl mc && mc.wedged() > 0) b.append(", wedged ").append(mc.wedged());
+        PathNavigation nav = getNavigation();
+        Path p = nav.getPath();
+        if (p == null || p.isDone()) b.append(", no path");
+        else {
+            net.minecraft.core.Vec3i n = p.getNextNodePos();
+            b.append(", next ").append(n.getX()).append(' ').append(n.getY()).append(' ').append(n.getZ())
+                    .append(" (").append(p.getNextNodeIndex()).append('/').append(p.getNodeCount())
+                    .append(p.canReach() ? "" : ", short").append(nav.isStuck() ? ", stuck" : "").append(')');
+        }
+        return b.toString();
     }
 
     /** Its place in its family, for {@link #describe}. */
@@ -1394,6 +1455,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         super.tick();
         if (level().isClientSide) clientTick();
         else if (isAlive()) {
+            if (airTicks > 0) airDist += Math.sqrt(Mth.square(getX() - xo) + Mth.square(getY() - yo) + Mth.square(getZ() - zo));
             updateForward();
             stepSounds();
         }

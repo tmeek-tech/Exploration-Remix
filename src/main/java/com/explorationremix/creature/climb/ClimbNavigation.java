@@ -70,7 +70,11 @@ public class ClimbNavigation extends net.minecraft.world.entity.ai.navigation.Pa
         // close enough to the next node in all three directions: on to the one after it
         float reach = Math.max(0.55F, this.mob.getBbWidth() / 2.0F);
         Vec3 next = againstRock(this.path, this.path.getNextEntityPos(this.mob));
-        if (Math.abs(pos.x - next.x) < reach && Math.abs(pos.z - next.z) < reach && Math.abs(pos.y - next.y) < 0.75) {
+        // swimming it floats a little above a water node
+        Vec3i n = this.path.getNextNodePos();
+        double reachY = this.mob.isInWater()
+                && ClimbNodeEvaluator.classify(level, n.getX(), n.getY(), n.getZ(), 2, 1, 2) == ClimbNodeEvaluator.WATER ? 1.2 : 0.75;
+        if (Math.abs(pos.x - next.x) < reach && Math.abs(pos.z - next.z) < reach && Math.abs(pos.y - next.y) < reachY) {
             this.path.advance();
         }
         doStuckDetection(pos);
