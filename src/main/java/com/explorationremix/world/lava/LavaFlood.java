@@ -74,8 +74,12 @@ public final class LavaFlood {
 
     /** How many blocks the Galleries' lava climbs over its table at the height of its cycle. */
     public static final int RISE = Terrain.surge(Terrain.GALLERIES);
-    /** A player up to this many blocks over the band above the Galleries counts as near them. */
-    static final int NEAR = 32;
+    /**
+     * A player up to this many blocks over the Galleries' top counts as near them: 0.5.0's reach (the band's 16 rows and
+     * 32 over them), kept since 0.5.1 removed the band, as the Wasteland's two lowest sheets look down into the Galleries
+     * through its openings.
+     */
+    static final int NEAR = 48;
     /** How often the clients of players in or near the Galleries hear where the cycle is, in ticks. */
     static final int SYNC_EVERY = 100;
     /** How often, with nothing left to do, the chunks round players are looked over again (as well as whenever a chunk loads). */
@@ -179,7 +183,7 @@ public final class LavaFlood {
                 return;
             }
         }
-        band = new Band(table, rise, s.top(g), s.bottom(g), s.bandTop(g + 1) + NEAR);
+        band = new Band(table, rise, s.top(g), s.bottom(g), s.top(g) + NEAR);
         data = LavaCycleData.get(level, nextLengths(0));
         LavaClock c = data.clock;
         ExplorationRemix.LOGGER.info("Lava cycle: the Galleries' lava rises from its table at y {} to y {} on a {} cycle ({}){}; {} cycles so far",

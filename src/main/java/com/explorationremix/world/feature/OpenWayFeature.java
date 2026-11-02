@@ -44,6 +44,9 @@ public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
         Shape s = t.shape;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int band = 1; band <= s.layerCount; band++) {
+            // a band with no rows has no gate (since 0.5.1 the Wasteland opens into the Galleries): Plans would still
+            // make one, and its passage would be carved down through both layers
+            if (s.bandThickness(band) == 0) continue;
             for (int dcx = -1; dcx <= 1; dcx++) for (int dcz = -1; dcz <= 1; dcz++) {
                 Plans.Gate g = plans.gate(band, cellX + dcx, cellZ + dcz);
                 if (!g.overlaps(minX, minZ, maxX, maxZ, 24)) continue;

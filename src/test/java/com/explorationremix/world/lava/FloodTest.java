@@ -334,10 +334,12 @@ class FloodTest {
         int table = s.waterY(g);
         assertEquals(-822, table);
         for (int y = table; y < table + RISE; y++) assertEquals(g, s.layerAt(y), "band y " + y);
-        // the lava's top block at full height, -783, is far under the Galleries' roof and the band above them
+        // the lava's top block at full height, -783, is far under the Galleries' roof: it never reaches the Wasteland
         assertTrue(table + RISE - 1 < s.top(g) - 64);
-        // players count as near the Galleries a little way up into the Wasteland
-        int near = s.bandTop(g + 1) + LavaFlood.NEAR;
+        assertTrue(table + RISE - 1 < s.bottom(Terrain.WASTELAND));
+        // players count as near the Galleries a little way up into the Wasteland (its two lowest sheets), as in 0.5.0
+        int near = s.top(g) + LavaFlood.NEAR;
+        assertEquals(-641, near);
         assertEquals(Terrain.WASTELAND, s.layerAt(near));
         assertTrue(near > s.top(g));
     }

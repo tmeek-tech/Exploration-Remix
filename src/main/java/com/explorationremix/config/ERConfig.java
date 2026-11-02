@@ -107,9 +107,10 @@ public final class ERConfig {
                 .define("removeCreateStriations", true);
         layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width", true, 64, 512, 64);
         layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width", false, 64, 512, 64);
-        // The Wasteland plans a fixed number of rooms per cell over a storey for every 25 blocks of height: above 160 they
-        // stand too far apart to join, and portal tunnels and the way down start to break.
-        layers[2] = new LayerConfig(b, d.layers().get(2), "cave height", "cave width", false, 64, 160, 64);
+        // The Wasteland's sheets of tunnels adapt to its height: 64 gives 2, 128 gives 5, 160 gives 6. Its openings into
+        // the Galleries fall from 4 over its lava table to 4 under its floor, so a deep table makes them deep pits: 16 at
+        // most (10 is what was measured).
+        layers[2] = new LayerConfig(b, d.layers().get(2), "cave height", "cave width", false, 64, 160, 16);
         // The Basalt Galleries' halls stand on ledges 43 to 62 blocks over the lava table under vaults up to 108 over it,
         // and the lava cycle floods 40 blocks: under 128 the halls lose their headroom and the band's landing stands in
         // the flood, and a lava table more than 24 over the floor leaves a 128-tall layer too little room above it.

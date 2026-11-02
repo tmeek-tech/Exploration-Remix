@@ -55,6 +55,7 @@ public final class Walkway {
         Plans plans = t.plans;
         int cx = plans.cellOf(x), cz = plans.cellOf(z);
         for (int band = 1; band <= t.shape.layerCount; band++) {
+            if (t.shape.bandThickness(band) == 0) continue;   // no rows, no gate (the Wasteland opens into the Galleries)
             Plans.Gate g = plans.gate(band, cx, cz);
             if (!g.overlaps(x, z, x, z, margin + 6)) continue;
             double r = g.landR + margin;
