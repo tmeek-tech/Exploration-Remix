@@ -647,11 +647,35 @@ public final class TubeField {
      * Depth into the rock from the tube's smooth (ribbed) section: about 0 at the tube's surface, rising into the rock;
      * under 0 for rock standing inside the smooth section (hanging column ends, floor steps, the ribs' edges); 1e9 where
      * no tube is near. The lining's palette reads it (obsidian skin, basalt and scoria behind).
+     *
+     * <p>The open rows are quantised (a column cell's floor is its site's, the ribs' jambs stand per block), so near the
+     * walls the tube's air reaches outside the smooth section: a cell's floor up to 3 rows under the bowl beside it, a
+     * rib's flank facing the bay up to the rib's depth from the rib's own section. So the depth is never more than the
+     * distance to the nearest open row of the block's column and the 8 round it ({@link #openReach}): every face of the
+     * tube is lined.
      */
     public double shellDepth(int x, int y, int z) {
         Col c = column(x, z);
         if (!c.near) return 1e9;
-        return envelope(c, y);
+        double e = envelope(c, y);
+        return e <= -0.5 ? e : Math.min(e, openReach(x, y, z));
+    }
+
+    /**
+     * Distance (about blocks) from the block to the nearest open row (air or a pool's water) of its own column or of the
+     * 8 columns round it, between block centres less half a block: -0.5 in the open rows, 0.5 for rock beside them, 9
+     * when none is within reach.
+     */
+    private double openReach(int x, int y, int z) {
+        double best = 9;
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+            Col n = column(x + dx, z + dz);
+            if (!n.near || n.C <= n.F) continue;
+            int v = y < n.F ? n.F - y : (y >= n.C ? y - n.C + 1 : 0);
+            double dd = Math.sqrt(dx * dx + dz * dz + v * v) - 0.5;
+            if (dd < best) best = dd;
+        }
+        return best;
     }
 
     /** True for a block of still water in a pool's dip. */
@@ -664,10 +688,14 @@ public final class TubeField {
     public int spanLo(int x, int z) { Col c = column(x, z); return c.near ? c.spanLo : 1; }
     public int spanHi(int x, int z) { Col c = column(x, z); return c.near ? c.spanHi : 0; }
 
-    /** True in the tube's lining or air: the Obsidian Tubes' biome, where the cave itself is rock. */
+    /**
+     * True in the tube's lining or air ({@link #shellDepth} under {@link #SHELL_BIOME}): the Obsidian Tubes' biome, where
+     * the cave itself is rock.
+     */
     public boolean inLining(int x, int y, int z) {
         Col c = column(x, z);
-        return c.near && envelope(c, y) < SHELL_BIOME;
+        if (!c.near) return false;
+        return envelope(c, y) < SHELL_BIOME || openReach(x, y, z) < SHELL_BIOME;
     }
 
     /** The rib's share (0..1) over column (x, z): the palette lines the ribs with obsidian, the bays' vaults paler. */
