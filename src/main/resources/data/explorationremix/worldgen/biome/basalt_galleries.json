@@ -3,8 +3,8 @@
   "temperature": 1.2,
   "downfall": 0.0,
   "effects": {
-    "fog_color": 7362379,
-    "sky_color": 7362379,
+    "fog_color": 8147008,
+    "sky_color": 8147008,
     "water_color": 4219002,
     "water_fog_color": 1713712,
     "grass_color": 9075290,
@@ -19,7 +19,7 @@
       "options": {
         "type": "minecraft:white_ash"
       },
-      "probability": 0.06
+      "probability": 0.02
     },
     "ambient_sound": "explorationremix:ambient.basalt.loop",
     "additions_sound": {
@@ -28,65 +28,9 @@
     }
   },
   "spawners": {
-    "monster": [
-      {
-        "type": "minecraft:spider",
-        "weight": 100,
-        "minCount": 4,
-        "maxCount": 4
-      },
-      {
-        "type": "minecraft:zombie",
-        "weight": 95,
-        "minCount": 4,
-        "maxCount": 4
-      },
-      {
-        "type": "minecraft:zombie_villager",
-        "weight": 5,
-        "minCount": 1,
-        "maxCount": 1
-      },
-      {
-        "type": "minecraft:skeleton",
-        "weight": 100,
-        "minCount": 4,
-        "maxCount": 4
-      },
-      {
-        "type": "minecraft:creeper",
-        "weight": 100,
-        "minCount": 4,
-        "maxCount": 4
-      },
-      {
-        "type": "minecraft:slime",
-        "weight": 100,
-        "minCount": 4,
-        "maxCount": 4
-      },
-      {
-        "type": "minecraft:enderman",
-        "weight": 10,
-        "minCount": 1,
-        "maxCount": 4
-      },
-      {
-        "type": "minecraft:witch",
-        "weight": 5,
-        "minCount": 1,
-        "maxCount": 1
-      }
-    ],
+    "monster": [],
     "creature": [],
-    "ambient": [
-      {
-        "type": "minecraft:bat",
-        "weight": 10,
-        "minCount": 8,
-        "maxCount": 8
-      }
-    ],
+    "ambient": [],
     "underground_water_creature": [],
     "water_creature": [],
     "water_ambient": [],
@@ -108,20 +52,16 @@
     [],
     [],
     [],
+    [],
     [
-      "explorationremix:basalt_galleries/smoulder_lichen",
-      "explorationremix:basalt_galleries/amber_shards"
+      "explorationremix:basalt_galleries/vault_falls",
+      "explorationremix:basalt_galleries/cliff_falls"
     ],
-    [
-      "explorationremix:basalt_galleries/lava_falls"
-    ],
-    [
-      "explorationremix:basalt_galleries/cinder_blooms",
-      "explorationremix:basalt_galleries/ash_ferns"
-    ],
+    [],
     [
       "explorationremix:climb_vines",
-      "explorationremix:open_way"
+      "explorationremix:open_way",
+      "explorationremix:basalt_galleries/glow"
     ]
   ]
 }

@@ -11,13 +11,24 @@ package com.explorationremix.world.terrain;
  * landing and ramp and the cell's upper set piece (the Silver Fern Rift or the Ivory Root Cavern).
  */
 public final class Terrain {
-    public static final int BLUE = 0, GARDENS = 1, BASALT = 2;
     /**
-     * How far above its lava table the Basalt Galleries' lava rises at the height of a surge (a later milestone's
-     * quake cycle). The natural arches, the obsidian tubes and the high benches along the gallery walls all sit above
-     * this, so there is always somewhere to climb to.
+     * The deep layers, top down. Since 0.5 the old bottom layer is two: the Wasteland (the old Basalt Galleries' look,
+     * winding tunnels and medium caves) above a fourth band, and the Basalt Galleries under it (wide bright halls over a
+     * lava sea that rises and falls).
      */
-    public static final int SURGE_RISE = 24;
+    public static final int BLUE = 0, GARDENS = 1, WASTELAND = 2, GALLERIES = 3;
+    /**
+     * How far above its lava table the Basalt Galleries' lava rises at the height of its cycle (Taran, 2026-11-01: "the
+     * low halls; high ground stays dry"). The low halls and paths flood; the ledges, arches, the Obsidian Tubes and both
+     * landings' ways up stay above it.
+     */
+    public static final int FLOOD_RISE = 40;
+
+    /** Layers with the basalt look (columns in the walls, basalt rock, lava below): the Wasteland and the Galleries. */
+    public static boolean basaltLook(int li) { return li == WASTELAND || li == GALLERIES; }
+
+    /** How far the layer's lava rises over its table at the height of its cycle: only the Galleries' does. */
+    public static int surge(int li) { return li == GALLERIES ? FLOOD_RISE : 0; }
     public static final int AIR = 0, WATER = 1, LAVA = 2;
     static final double SOLID = 64;
     /** Blocks of layer rock kept between any cave and the band above or the bedrock below. */
@@ -30,7 +41,7 @@ public final class Terrain {
     public final long seed;
     public final Plans plans;
     public final Palette palette;
-    /** The three deep layers' cave networks: every block inside a layer is theirs. */
+    /** The deep layers' cave networks: every block inside a layer is theirs. */
     public final Network network;
     /** Asked before an upper set piece is placed, so none is carved under an ocean or river. Null in tests. */
     public volatile Upper.SurfaceProbe surfaceProbe;
@@ -300,6 +311,7 @@ public final class Terrain {
         return switch (li) {
             case GARDENS -> DeepBiome.LANTERN_LAKE;
             case BLUE -> DeepBiome.DEEP_BLUE_RIFT;
+            case WASTELAND -> DeepBiome.WASTELAND;
             default -> DeepBiome.BASALT_GALLERIES;
         };
     }
@@ -333,7 +345,8 @@ public final class Terrain {
     // ------------------------------------------------------------------------------- the network's queries (12.1)
     /**
      * Every walking line of layer li within {@code reach} of column (x, z), nearest first: tunnels, inner walks, ledge
-     * passages, stubs and the rift's ledge path ({@link Network#wayLinesAt}). A per-thread result.
+     * passages, stubs, the rift's ledge path and the Causeway's column path ({@link Network#wayLinesAt}). A per-thread
+     * result.
      */
     public Network.WayLines wayLinesAt(int li, int x, int z, double reach) { return network.wayLinesAt(li, x, z, reach); }
 
@@ -345,6 +358,18 @@ public final class Terrain {
 
     /** The plan of layer li in cell (cx, cz). */
     public Net network(int li, int cx, int cz) { return network.network(li, cx, cz); }
+
+    /**
+     * The Basalt Galleries' Caldera vents within {@code r} of (x, z): where eruptions break out ({@link
+     * Network#ventsNear}). Each has a centre, a radius and the top of the rock or lava there.
+     */
+    public java.util.List<Net.Vent> ventsNear(int x, int z, double r) { return network.ventsNear(GALLERIES, x, z, r); }
+
+    /**
+     * The Basalt Galleries' hall over column (x, z): {floor, ceiling, lava bed} there, or null outside the halls
+     * ({@link Network#hallSpanAt}). The decoration's aim at the halls' vaults and walls.
+     */
+    public double[] hallSpanAt(int x, int z) { return network.hallSpanAt(GALLERIES, x, z); }
 
     /**
      * True when a structure starting at (x, y, z) is a planned ancient city: a CITY chamber's centre within 24 blocks

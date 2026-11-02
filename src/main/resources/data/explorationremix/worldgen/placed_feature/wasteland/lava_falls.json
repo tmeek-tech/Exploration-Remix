@@ -1,16 +1,16 @@
 {
-  "feature": "explorationremix:basalt_galleries/lava_falls",
+  "feature": "explorationremix:wasteland/lava_falls",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 80
+      "count": 48
     },
     {
       "type": "minecraft:in_square"
     },
     {
       "type": "explorationremix:layer_range",
-      "layer": "basalt_galleries",
+      "layer": "wasteland",
       "inset": 2,
       "above_water": true
     },

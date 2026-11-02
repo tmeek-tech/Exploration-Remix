@@ -8,6 +8,15 @@
           "data": {
             "type": "minecraft:simple_state_provider",
             "state": {
+              "Name": "minecraft:polished_blackstone"
+            }
+          },
+          "weight": 2
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
               "Name": "minecraft:blackstone"
             }
           },
@@ -23,7 +32,7 @@
               }
             }
           },
-          "weight": 3
+          "weight": 1
         }
       ]
     },
@@ -33,7 +42,7 @@
         "Name": "minecraft:magma_block"
       }
     },
-    "radius": 4,
+    "radius": 5,
     "edge_chance": 0.3,
     "overflow_chance": 0.0,
     "lava": true

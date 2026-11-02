@@ -139,10 +139,19 @@ BLOCKS = {
     "fan_palm": ("Fan Palm", "tall", {"variants": 2}),
     "oasis_grass": ("Oasis Grass", "cross", {"variants": 3, "weights": [3, 2, 2]}),
     "dune_lily": ("Dune Lily", "cross", {"variants": 2}),
+    # 0.5: the lifeless Basalt Galleries' glowing rock, and the chains their climbs hang in place of vines (also in the
+    # Wasteland's bare refuges). The ember crust gives light, so under Complementary its whole face glows (ShaderGlow);
+    # the chain gives none, and its embers only glint (an overlay kept out of glowing_blocks.json).
+    "ember_crust": ("Ember Crust", "cube"),
+    "cinder_chain": ("Cinder Chain", "cross", {"shader_glow": False}),
+    # The Galleries' lava glow: invisible light in the air along the halls' rock (HallGlowFeature). Nothing is drawn and
+    # there is no item.
+    "glow": ("Lava Glow", "invisible"),
 }
-NO_DROP = {"band_stone"}
-# Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth.
-NOT_PLANTS = NO_DROP | {"frost_moss"}
+NO_DROP = {"band_stone", "glow"}
+# Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, and the
+# lifeless blocks of the Galleries.
+NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain"}
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
@@ -153,16 +162,23 @@ BLOCK_TAGS = {
                                  # vegetation rework, part B
                                  "pale_wisteria", "pale_wisteria_plant", "rose_tendrils", "rose_tendrils_plant",
                                  # Upper Caves rework
-                                 "frostberry_vine", "frostberry_vine_plant", "trailing_grass", "trailing_grass_plant"],
+                                 "frostberry_vine", "frostberry_vine_plant", "trailing_grass", "trailing_grass_plant",
+                                 # 0.5: the Galleries' climbs
+                                 "cinder_chain"],
     # Frost moss is ground, as vanilla's moss is: ferns, flowers and saplings grow on it (Immersive Weathering's frosty
     # ferns only grow on #minecraft:dirt), and moss patches may spread over it.
     ("minecraft", "dirt"): ["frost_moss"],
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
-    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard"],
+    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen", "rime_lichen"],
-    (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "pale_wisteria", "pale_wisteria_plant"],
+    # The Galleries' lava glow is open space to a growing tree (TreeFeature asks isAir() or this tag): a sapling grows
+    # through it, and its logs, leaves and roots take its place.
+    ("minecraft", "replaceable_by_trees"): ["glow"],
+    # A cinder chain hangs from the chain above it, so a climb's whole column holds.
+    (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "pale_wisteria", "pale_wisteria_plant", "cinder_chain"],
 }
-# Vanilla growth that /remix census counts as plants, with every block above but band stone (tag explorationremix:plants).
+# Vanilla growth that /remix census counts as plants, with every block above but those in NOT_PLANTS (tag
+# explorationremix:plants).
 VANILLA_PLANTS = ["minecraft:cave_vines", "minecraft:cave_vines_plant", "minecraft:glow_lichen", "minecraft:moss_carpet", "minecraft:fern",
                   "minecraft:grass", "minecraft:large_fern", "minecraft:hanging_roots", "minecraft:azalea", "minecraft:flowering_azalea",
                   "minecraft:brown_mushroom", "minecraft:sea_pickle", "minecraft:seagrass", "minecraft:tall_seagrass", "minecraft:spore_blossom",
@@ -446,6 +462,10 @@ def block_assets():
             for t in texs:
                 models[t] = {"parent": "minecraft:block/coral_fan", "render_type": "minecraft:cutout", "textures": {"fan": ref(t)}}
             states = {"variants": {"": pick([{"model": ref(t)} for t in texs], weights)}}
+        elif kind == "invisible":
+            # Drawn as nothing (RenderShape.INVISIBLE): vanilla's empty air model stands in for every state.
+            states = {"variants": {"": {"model": "minecraft:block/air"}}}
+            item = None
         elif kind == "shelf":
             for t in texs:
                 models[t] = shelf_model(ref(t), ref(bid + "_under"), opts.get("glow_under", False))

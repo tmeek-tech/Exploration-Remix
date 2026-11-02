@@ -1,25 +1,25 @@
 {
-  "feature": "explorationremix:obsidian_tubes/still_pool",
+  "feature": "explorationremix:wasteland/great_hanging_columns",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 64
+      "count": 4
     },
     {
       "type": "minecraft:in_square"
     },
     {
       "type": "explorationremix:layer_range",
-      "layer": "basalt_galleries",
+      "layer": "wasteland",
       "inset": 2,
       "above_water": true
     },
     {
       "type": "minecraft:environment_scan",
-      "direction_of_search": "down",
+      "direction_of_search": "up",
       "target_condition": {
         "type": "minecraft:has_sturdy_face",
-        "direction": "up"
+        "direction": "down"
       },
       "allowed_search_condition": {
         "type": "minecraft:matching_blocks",
@@ -33,7 +33,22 @@
     {
       "type": "minecraft:random_offset",
       "xz_spread": 0,
-      "y_spread": 1
+      "y_spread": -1
+    },
+    {
+      "type": "minecraft:block_predicate_filter",
+      "predicate": {
+        "type": "minecraft:matching_blocks",
+        "blocks": [
+          "minecraft:air",
+          "minecraft:cave_air"
+        ],
+        "offset": [
+          0,
+          -16,
+          0
+        ]
+      }
     },
     {
       "type": "minecraft:biome"

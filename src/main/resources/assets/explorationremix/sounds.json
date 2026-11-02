@@ -166,5 +166,63 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.ambient.basalt.additions"
+  },
+  "ambient.hollows.loop": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/basalt_rumble",
+        "volume": 0.35,
+        "stream": true,
+        "pitch": 0.8
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.hollows.loop"
+  },
+  "ambient.hollows.additions": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/rumble1",
+        "volume": 0.35,
+        "pitch": 0.75
+      },
+      {
+        "name": "explorationremix:ambient/rumble2",
+        "volume": 0.35,
+        "pitch": 0.75
+      },
+      {
+        "name": "minecraft:block/lava/pop",
+        "volume": 0.25,
+        "pitch": 0.8
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.hollows.additions"
+  },
+  "lava.rumble": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/lava_rumble1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/lava_rumble2",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/lava_rumble3",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.lava.rumble"
+  },
+  "lava.surge": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/lava_surge",
+        "volume": 1.0,
+        "stream": true
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.lava.surge"
   }
 }

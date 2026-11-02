@@ -11,12 +11,14 @@ import com.explorationremix.world.feature.FallbackStateProvider;
 import com.explorationremix.world.feature.FluidFallFeature;
 import com.explorationremix.world.feature.GiantFungusFeature;
 import com.explorationremix.world.feature.GiantSpikeFeature;
+import com.explorationremix.world.feature.HallGlowFeature;
 import com.explorationremix.world.feature.JoinDeadEndsFeature;
 import com.explorationremix.world.feature.JunctionsPlacement;
 import com.explorationremix.world.feature.LayerHeight;
 import com.explorationremix.world.feature.LayerRangePlacement;
 import com.explorationremix.world.feature.MixStateProvider;
 import com.explorationremix.world.feature.MushroomShelfFeature;
+import com.explorationremix.world.feature.OpenSpanPlacement;
 import com.explorationremix.world.feature.OpenWayFeature;
 import com.explorationremix.world.feature.RootvaultsLookFilter;
 import com.explorationremix.world.feature.RootvaultsOpeningsPlacement;
@@ -62,6 +64,7 @@ public final class ERWorldgen {
     // cave ends joined to other caves
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> VERIDIUM_SPREAD = FEATURES.register("veridium_spread", () -> new VeridiumSpreadFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> JOIN_DEAD_ENDS = FEATURES.register("join_dead_ends", () -> new JoinDeadEndsFeature(NoneFeatureConfiguration.CODEC));
+    public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
 
     public static final RegistryObject<BlockStateProviderType<FallbackStateProvider>> FALLBACK_PROVIDER = STATE_PROVIDERS.register("fallback", () -> new BlockStateProviderType<>(FallbackStateProvider.CODEC));
     public static final RegistryObject<BlockStateProviderType<MixStateProvider>> MIX_PROVIDER = STATE_PROVIDERS.register("mix", () -> new BlockStateProviderType<>(MixStateProvider.CODEC));
@@ -71,5 +74,7 @@ public final class ERWorldgen {
     public static final RegistryObject<PlacementModifierType<UnderTreesPlacement>> UNDER_TREES = PLACEMENT_TYPES.register("under_trees", () -> () -> UnderTreesPlacement.CODEC);
     public static final RegistryObject<PlacementModifierType<JunctionsPlacement>> JUNCTIONS = PLACEMENT_TYPES.register("junctions", () -> () -> JunctionsPlacement.CODEC);
     public static final RegistryObject<PlacementModifierType<BiomeAroundFilter>> BIOME_AROUND = PLACEMENT_TYPES.register("biome_around", () -> () -> BiomeAroundFilter.CODEC);
+    // 0.5: tries aimed at the Basalt Galleries' tall halls, their vaults and floors, past the 32 steps of an environment scan
+    public static final RegistryObject<PlacementModifierType<OpenSpanPlacement>> OPEN_SPAN = PLACEMENT_TYPES.register("open_span", () -> () -> OpenSpanPlacement.CODEC);
     public static final RegistryObject<HeightProviderType<LayerHeight>> LAYER_HEIGHT = HEIGHT_PROVIDERS.register("layer_height", () -> () -> LayerHeight.CODEC);
 }

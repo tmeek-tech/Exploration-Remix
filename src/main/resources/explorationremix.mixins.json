@@ -21,7 +21,9 @@
     "LakeFeatureMixin",
     "WorldCarverMixin",
     "RuinedPortalPieceMixin",
-    "BiomeFilterMixin"
+    "BiomeFilterMixin",
+    "PortalShapeMixin",
+    "BaseFireBlockMixin"
   ],
   "client": [
     "client.LightTextureMixin"

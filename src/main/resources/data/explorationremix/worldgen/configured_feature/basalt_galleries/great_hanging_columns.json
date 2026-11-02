@@ -30,13 +30,13 @@
         }
       ]
     },
-    "radius": 6,
-    "count": 34,
+    "radius": 9,
+    "count": 48,
     "height": {
       "type": "minecraft:uniform",
       "value": {
-        "min_inclusive": 8,
-        "max_inclusive": 18
+        "min_inclusive": 12,
+        "max_inclusive": 36
       }
     },
     "hang_chance": 1.0

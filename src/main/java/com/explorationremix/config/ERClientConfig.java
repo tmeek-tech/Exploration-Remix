@@ -17,6 +17,8 @@ public final class ERClientConfig {
     public final ForgeConfigSpec.DoubleValue fogDistance;
     public final ForgeConfigSpec.BooleanValue caveParticles;
     public final ForgeConfigSpec.BooleanValue caveLight;
+    /** The view shakes a little while the Basalt Galleries' lava is about to rise and rising (client.LavaWarnings). */
+    public final ForgeConfigSpec.BooleanValue screenShake;
 
     private ERClientConfig(ForgeConfigSpec.Builder b) {
         b.push("caves");
@@ -25,6 +27,10 @@ public final class ERClientConfig {
         caveParticles = b.comment("Steam over hot pools, embers and ash in the Basalt Galleries.").define("caveParticles", true);
         caveLight = b.comment("Tint the light of glowing blocks with each deep biome's own colour: cold blue in the Blue Reaches, red in",
                 "the Rust Springs and the Basalt Galleries.").define("caveLight", true);
+        b.pop();
+        b.push("lavaCycle");
+        screenShake = b.comment("Shake the view a little in the Basalt Galleries while the lava is about to rise and while it rises (scaled by",
+                "the game's Distortion Effects setting).").define("screenShake", true);
         b.pop();
     }
 }

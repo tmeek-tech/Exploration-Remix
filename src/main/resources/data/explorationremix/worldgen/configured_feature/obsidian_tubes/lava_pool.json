@@ -28,30 +28,14 @@
       ]
     },
     "bed": {
-      "type": "explorationremix:mix",
-      "entries": [
-        {
-          "data": {
-            "type": "minecraft:simple_state_provider",
-            "state": {
-              "Name": "minecraft:obsidian"
-            }
-          },
-          "weight": 5
-        },
-        {
-          "data": {
-            "type": "minecraft:simple_state_provider",
-            "state": {
-              "Name": "minecraft:crying_obsidian"
-            }
-          },
-          "weight": 1
-        }
-      ]
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "minecraft:magma_block"
+      }
     },
     "radius": 3,
     "edge_chance": 0.3,
-    "overflow_chance": 0.0
+    "overflow_chance": 0.0,
+    "lava": true
   }
 }

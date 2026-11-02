@@ -71,7 +71,8 @@ PAINTERS = {
 # plants_upper.py (Upper Caves and Blue Reaches) and plants_deep.py (Deep Gardens and Basalt Galleries). plants_deep
 # goes last because it may repaint a plant of plants.py. The Upper Caves rework added plants_frost.py and plants_ice.py
 # (the Frost Fern Grotto and the frozen Root Vaults) and plants_entries.py (the sinkholes and the oasis hollows);
-# plants_fern.py has the Silver Fern Rift's ferns, redrawn fluffier for their 3D models.
+# plants_fern.py has the Silver Fern Rift's ferns, redrawn fluffier for their 3D models. 0.5's lifeless Galleries added
+# minerals.py (the ember crust and the cinder chain), which is no plant file.
 import plants  # noqa: E402
 import plants_upper  # noqa: E402
 import plants_fern  # noqa: E402
@@ -79,6 +80,7 @@ import plants_frost  # noqa: E402
 import plants_ice  # noqa: E402
 import plants_entries  # noqa: E402
 import plants_deep  # noqa: E402
+import minerals  # noqa: E402
 PAINTERS.update(plants.PAINTERS)
 PAINTERS.update(plants_upper.PAINTERS)
 PAINTERS.update(plants_fern.PAINTERS)
@@ -86,6 +88,7 @@ PAINTERS.update(plants_frost.PAINTERS)
 PAINTERS.update(plants_ice.PAINTERS)
 PAINTERS.update(plants_entries.PAINTERS)
 PAINTERS.update(plants_deep.PAINTERS)
+PAINTERS.update(minerals.PAINTERS)
 
 # Emissive overlays: texture -> the colours lifted into <texture>_glow.png, which the models draw a second time at full
 # block light (gen_data.py), so those pixels glow even where the plant gives little or no light. The plant files add

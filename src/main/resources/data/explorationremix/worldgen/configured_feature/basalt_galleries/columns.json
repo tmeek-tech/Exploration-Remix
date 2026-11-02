@@ -26,18 +26,28 @@
               }
             }
           },
+          "weight": 2
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:smooth_basalt"
+            }
+          },
           "weight": 1
         }
       ]
     },
-    "radius": 6,
-    "count": 26,
+    "radius": 7,
+    "count": 30,
     "height": {
       "type": "minecraft:uniform",
       "value": {
-        "min_inclusive": 3,
-        "max_inclusive": 16
+        "min_inclusive": 4,
+        "max_inclusive": 22
       }
-    }
+    },
+    "hang_chance": 0.0
   }
 }

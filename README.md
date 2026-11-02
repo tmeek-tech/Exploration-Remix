@@ -1,12 +1,14 @@
 # Exploration Remix
 
-A Forge mod for Minecraft 1.20.1 that digs the overworld's underground much deeper: three new cave layers under
+A Forge mod for Minecraft 1.20.1 that digs the overworld's underground much deeper: four new cave layers under
 the pack's own caves, sealed from each other by unbreakable bands with natural gates, each layer built from vanilla
 and Create stone and dressed to match a set of reference pictures. Made for a pack with Tectonic, Terrain Slabs,
 Immersive Weathering, Create and Better Combat.
 
-**Status: milestone 1 (0.4.2: fluffier silver ferns that also hang on walls), world generation and cave looks.** The first build's creatures, runs, runes and
-combat changes were removed (git history keeps them); they return in later milestones, built on these caves.
+**Status: milestone 1 (0.5.0: the bottom layer split into the Wasteland and the Basalt Galleries, with the Galleries'
+lava cycle; with 0.4.2's fluffier silver ferns that also hang on walls), world generation and cave looks.** The first
+build's creatures, runs, runes and combat changes were removed (git history keeps them); they return in later
+milestones, built on these caves.
 
 ## Requirements
 
@@ -28,6 +30,9 @@ regenerated.
 2. Create a new world. The server log says `Deep world installed: overworld now spans y -832 to 319`.
 3. Settings are in `config/explorationremix-world.toml` (world shape, read when a server starts) and
    `config/explorationremix-client.toml` (fog and particles, per player).
+4. If the server log ever shows `[Exploration Remix] The cave plan of layer ... threw`, the world kept generating: that
+   cell's caves were planned again with their layout moved, or left as rock round their landings. Please report the
+   line; it names the seed and the cell.
 
 ## The world below
 
@@ -39,7 +44,9 @@ regenerated.
 | Band 2 | -273 to -288 | | | |
 | Deep Gardens | -289 to -528 | Rust Springs | Lantern Lake | Ember Gardens |
 | Band 3 | -529 to -544 | | | |
-| Basalt Galleries | -545 to -832 | Obsidian Tubes | Basalt Galleries | |
+| Wasteland | -545 to -672 | Ash Hollows | Wasteland | the whole layer (nothing hunts yet) |
+| Band 4 | -673 to -688 | | | |
+| Basalt Galleries | -689 to -832 | Obsidian Tubes | Basalt Galleries; also the Caldera, the Causeway and the Scoria Canyons | none: nothing lives there |
 
 * **Bands** are 16 blocks of unbreakable band stone. Each has one **gate** per 600 by 600 block cell: a twisting
   passage between two landing chambers. The first gate's upper landing sits on the pack's old floor, with a ramp up
@@ -51,19 +58,40 @@ regenerated.
   stages, with vines up one wall, so no fall is longer than 15 blocks. **Refuges** are bare, calm rooms with no
   plants; the **hunting ground** is the most overgrown part of a layer (nothing hunts yet); everything else is the
   layer's main biome.
-* **Deep Gardens and Basalt Galleries:** about 200 chambers per cell, most 15 to 30 blocks across and 8 to 20 tall,
-  joined by tunnels 4 to 6 wide. Their set pieces: the Lantern Lake halls, the Ember Gardens' terraced district, the
-  Rust Springs and a spiral well in the Deep Gardens; galleries, a great hall of terraces (about one in twenty with a
-  lava channel on its lowest tread), a spiral chimney, arches, the Obsidian Tubes' hubs with round tubes (most blind
-  ones end in lava) and a lava basin behind the bedrock landing in the Basalt Galleries.
+* **Deep Gardens:** about 200 chambers per cell, most 15 to 30 blocks across and 8 to 20 tall, joined by tunnels 4 to
+  6 wide. Its set pieces: the Lantern Lake halls, the Ember Gardens' terraced district, the Rust Springs and a spiral
+  well.
+* **Wasteland** (0.5): the old Basalt Galleries' look in a tighter network made for close encounters. Winding tunnels
+  about 5 wide and 6 to 8 tall bend every 14 blocks or so and run at most 36 blocks from door to door between caves 15
+  to 30 across, small fork rooms where three ways meet, a few short galleries and a great hall with an arch, on four
+  storeys 25 apart joined by staged climbs. There are no dead ends: every room has at least two ways out. Its refuge,
+  the **Ash Hollows**, is two pale, bare domed rooms per cell, each cut into a quiet tunnel.
+* **Basalt Galleries** (0.5): a few great halls per cell, 60 to 100 blocks across and up to about 100 tall, each a ring
+  of ledges round a lava lake, joined by galleries 8 to 16 wide; the **Caldera**, a crater of magma and ember crust
+  round a lava lake with the vents where eruptions will start; the **Causeway**, a field of basalt columns over the
+  lava with a path across their tops; the **Scoria Canyons**, a rift of banded Create scoria over a lava river with
+  natural bridges; two **Obsidian Tubes** hubs per cell. Walkable arches and bridges cross the halls, and flights of
+  stairs lead from the bedrock landing up out of the flood and from the entry landing down to the halls; there are no
+  climbs. Nothing lives here: no plants and no mobs. Light comes from the lava, many lava falls, magma, glowing ember
+  crust and an unseen glow along the rock that lights the halls' walls, ledges and vaults as their lava would. The
+  glow (`explorationremix:glow`) is light with nothing to see or hit: a placed block, fire, a nether portal, a growing
+  tree or the lava takes its place, and a glow taken that way stays gone (only the flood band's comes back after each
+  flood). `/fill ... keep` and `replace minecraft:air` skip it; fill with `replace explorationremix:glow` to clear it.
 * **Blue Reaches** keep 0.2.0's sizes: the Deep Blue Rift, up to 160 blocks deep, with its ledge path, natural bridges
   and the Asurine Geodes beside it; the deep dark's caverns on two tiers, with an ancient city in about one cell in
   seven. The network's rooms and tunnels join them. Columns, fins and spires stand in the widest spaces, so a view
   along the floor rarely runs past 160 blocks.
-* Each layer has a flat water table (lava in the Basalt Galleries, at y -823), with lakes perched above it. Every
-  Basalt Galleries room but the bedrock landing and its lava basin is above y -798, the highest the lava will rise
-  when a later milestone adds quakes and lava surges; two terraced stairs and a few vine niches lead up from the
-  landing.
+* Each layer has a flat water table (lava in the Wasteland, at y -663, and in the Basalt Galleries, at y -823), with
+  lakes perched above it.
+* **The Basalt Galleries' lava cycle:** every 20 minutes the lava sea rises 40 blocks, to y -783, and drains again, on
+  one clock for everyone on the server: about 13.5 calm minutes, a minute and a half of warnings (deep rumbles closer
+  and closer together, the view trembling, the lava bubbling and smoking), a 2-minute rise (a block every 3 seconds),
+  a minute at full under heavy smoke and a 2-minute drain with hissing steam. There is no timer on screen. The low
+  halls, the Causeway's column path, the canyon floors, the bedrock landing and its flights flood; the ledges, arches,
+  the Obsidian Tubes and the way down from the entry landing stay dry, and from any low place dry ground is a short
+  walk away. The lava fills only air (and fire and spilled lava) and takes back only what it brought, so placed
+  blocks, torches and the world's own lava pools stay. The shake can be turned off (`screenShake` in
+  `explorationremix-client.toml`). Quakes, eruptions and the terrain's reset come in the next build.
 * **Upper caves** are the pack's own (Tectonic's and Immersive Weathering's caves stay as they are), with entrances
   into them from the surface and more plants. The deep dark and its ancient cities moved down into the Blue Reaches;
   where the pack put the deep dark above the first band, its ordinary caves are back.
@@ -99,11 +127,12 @@ regenerated.
     stays reachable.
 * **Looks:** new plants and crystals (white glow flowers, lantern fungi and roots, giant lantern fungi with glowing
   caps, wisteria, lantern pods, lavender flowers and glowing gold flowers, silver ferns (placed on the side of a block
-  they hang down it, as in the Silver Fern Rift), orange shelf fungi, lavender
-  coral, pale coral fans, ember vines, asurine crystals, blue glow mushrooms and vines), glow berries thick in the
-  upper caves, lantern weed on the lake beds, lava pools and falls in the Basalt Galleries, each biome's own fog, water
-  colour, particles and ambient sound, steam over hot pools, embers over lava, and pollen in daylight shafts. Tuned
-  for vanilla lighting without shaders: every biome carries enough glowing things to see by.
+  they hang down it, as in the Silver Fern Rift), orange shelf fungi, lavender coral, pale coral fans, ember vines,
+  asurine crystals, blue glow mushrooms and vines), glow berries thick in the upper caves, lantern weed on the lake
+  beds, lava falls, magma and glowing ember crust in the Wasteland and the Basalt Galleries, cinder chains instead of
+  vines in the lifeless biomes, each biome's own fog, water colour, particles and ambient sound, steam over hot pools,
+  embers over lava, and pollen in daylight shafts. Tuned for vanilla lighting without shaders: every biome carries
+  enough glowing things to see by.
 
 ## Commands
 
@@ -113,14 +142,19 @@ regenerated.
 |---|---|
 | `/remix layers` | lists the layers and bands |
 | `/remix info` | where you are: layer, biome, and in a deep layer the network's chamber, tunnel, climb or rift there and the way down |
-| `/remix tp <1-3>` | the landing at the top of a layer |
-| `/remix tp gate <1-3>` | the landing above a band, where its gate starts |
+| `/remix tp <1-4>` | the landing at the top of a layer |
+| `/remix tp gate <1-4>` | the landing above a band, where its gate starts |
 | `/remix tp bedrock` | the bedrock landing of the last layer's network in this cell |
 | `/remix tp biome <name>` | a deep biome's nearest chamber in the nine cells round you, set pieces first, on an open floor; also the Upper Caves' `rootvaults`, `frozen_rootvaults`, `sinkhole`, `oasis_hollow` and `frost_fern_grotto` |
 | `/remix view <name> [n]` | a spot with a wide view into a biome, facing it (n: Root Vaults look 0 to 2, `tropical_rootvaults` the same in a jungle or mangrove cluster, frozen Root Vaults 0 the snowy zone round the openings or 1 the thawed halls deep inside, oasis rock 0 sand or 1 red, or the n-th place of a deep biome); also `lush_veridium`, where a Root Vault's descent opens into a lush cave, and `rootvaults_mouth [1]`, the nearest Root Vault mouth (1: a frozen one) seen from inside, looking up it at the daylight |
 | `/remix entrances [cells]` | the Upper Caves' entrances in the 64-block cells round you: how many cells of each cover got one and why the others did not, and the nearest of each kind; works from the server console with `execute positioned` |
 | `/remix slice [x\|z] [half width]` | a picture of the blocks under you, in `remix_slices/` |
 | `/remix census [radius]` | how overgrown and lit the caves around you are, per biome |
+| `/remix lava` | the Basalt Galleries' lava cycle: its phase, the time left in it, the lava's height, how many chunks round the players are still catching up, and what the flood costs per tick |
+| `/remix lava set <phase> [seconds]` | jumps the cycle to that far into `calm`, `warning`, `rise`, `full` or `drain` |
+| `/remix lava level <0-40>` | jumps the lava to that height over its table and holds the cycle there |
+| `/remix lava freeze`, `/remix lava unfreeze` | holds the cycle where it is, or lets it run on |
+| `/remix lava length <minutes>` | the cycle's length from now on, keeping its place in the phase (0: back to the config's) |
 | `/remix deadends [radius]` | the blind cave ends left above the old floor in the loaded chunks round you, what lies round them, how many generation joined and why the rest were not, any lava in the caves there, and how many of the surface biome's ore placements generation let into the plant caves' and entrances' rock |
 
 ## Building
@@ -129,6 +163,7 @@ regenerated.
 ./gradlew build                 # jar in build/libs, runs the terrain tests
 python3 tools/gen_data.py       # regenerates every datapack JSON, model, texture and lang file from tools/*.py
 python3 tools/synth_sounds.py   # regenerates the ambient sound recordings
+python3 tools/synth_lava_sounds.py  # regenerates the lava cycle's rumbles and surge
 ```
 
 `src/preview` holds an offline preview (`TerrainPreview`) that draws each deep layer's network, sections through its

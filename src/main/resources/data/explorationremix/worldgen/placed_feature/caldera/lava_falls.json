@@ -1,18 +1,18 @@
 {
-  "feature": "explorationremix:basalt_galleries/amber_shards",
+  "feature": "explorationremix:caldera/lava_falls",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 4
+      "count": 12
     },
     {
       "type": "minecraft:in_square"
     },
     {
-      "type": "explorationremix:layer_range",
+      "type": "explorationremix:open_span",
       "layer": "basalt_galleries",
-      "inset": 2,
-      "above_water": true
+      "anchor": "ceiling",
+      "min_span": 24
     },
     {
       "type": "minecraft:biome"

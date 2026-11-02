@@ -31,7 +31,11 @@ public final class ERConfig {
     public final ForgeConfigSpec.BooleanValue joinDeadEnds;
     public final ForgeConfigSpec.BooleanValue removeCreateStriations;
     public final ForgeConfigSpec.BooleanValue upperRegions;
-    public final LayerConfig[] layers = new LayerConfig[3];
+    public final LayerConfig[] layers = new LayerConfig[4];
+    // The Basalt Galleries' lava cycle (world.lava.LavaFlood), read while the server runs.
+    public final ForgeConfigSpec.BooleanValue lavaCycleEnabled;
+    public final ForgeConfigSpec.DoubleValue lavaCycleMinutes, lavaCalm, lavaWarning, lavaRise, lavaFull, lavaDrain;
+    public final ForgeConfigSpec.IntValue lavaChecksPerTick, lavaChangesPerTick, lavaRadius;
 
     public static final class LayerConfig {
         public final String id;
@@ -40,14 +44,18 @@ public final class ERConfig {
         public final ForgeConfigSpec.DoubleValue heightMin, heightMax, widthMin, widthMax;
         final boolean lava;
 
-        LayerConfig(ForgeConfigSpec.Builder b, LayerSettings d, String heightWord, String widthWord, boolean sizesRead) {
+        LayerConfig(ForgeConfigSpec.Builder b, LayerSettings d, String heightWord, String widthWord, boolean sizesRead,
+                    int minHeight, int maxHeight, int maxFluidDepth) {
             this.id = d.id();
             this.lava = d.lava();
             b.push(d.id());
+            // The ranges are what each layer's cave planner can build in (see the layers below). A value outside its range
+            // is put back to the default by Forge, which also keeps an older file's 288 for the Basalt Galleries (their
+            // height before 0.5) from moving the world's floor down to -976.
             height = b.comment("Height of the layer in blocks (rounded down to a multiple of 16).")
-                    .defineInRange("height", d.height(), 64, 512);
+                    .defineInRange("height", d.height(), minHeight, maxHeight);
             fluidDepth = b.comment("The " + (d.lava() ? "lava" : "water") + " table sits this many blocks above the layer's floor.")
-                    .defineInRange("fluidDepth", d.fluidDepth(), 6, 64);
+                    .defineInRange("fluidDepth", d.fluidDepth(), 6, maxFluidDepth);
             // Since 0.3 the Deep Gardens and the Basalt Galleries are cave networks that size their own rooms; their four
             // space sizes are kept so old config files still load, but nothing reads them.
             String unused = sizesRead ? "" : " Not used since 0.3: the cave network sizes this layer's rooms itself.";
@@ -68,7 +76,7 @@ public final class ERConfig {
     private ERConfig(ForgeConfigSpec.Builder b) {
         TerrainSettings d = TerrainSettings.defaults();
         b.comment("The deep world below the pack's old floor. Changes apply to newly generated chunks.").push("world");
-        worldEnabled = b.comment("Extend the overworld down through the three deep layers. Lava in the caves above the old floor turns to water.")
+        worldEnabled = b.comment("Extend the overworld down through the four deep layers. Lava in the caves above the old floor turns to water.")
                 .define("enabled", true);
         bandThickness = b.comment("Thickness of the unbreakable bands between layers.").defineInRange("bandThickness", d.bandThickness(), 8, 64);
         gateSpacing = b.comment("One gate per band in every square of this many blocks.").defineInRange("gateSpacing", d.gateSpacing(), 320, 4096);
@@ -87,9 +95,34 @@ public final class ERConfig {
                 .define("upperRegions", true);
         removeCreateStriations = b.comment("Remove Create's striped stone layers from the overworld; the layers use Create's stones as patches instead.")
                 .define("removeCreateStriations", true);
-        layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width", true);
-        layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width", false);
-        layers[2] = new LayerConfig(b, d.layers().get(2), "gallery height", "gallery width", false);
+        layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width", true, 64, 512, 64);
+        layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width", false, 64, 512, 64);
+        // The Wasteland plans a fixed number of rooms per cell over a storey for every 25 blocks of height: above 160 they
+        // stand too far apart to join, and portal tunnels and the way down start to break.
+        layers[2] = new LayerConfig(b, d.layers().get(2), "cave height", "cave width", false, 64, 160, 64);
+        // The Basalt Galleries' halls stand on ledges 43 to 62 blocks over the lava table under vaults up to 108 over it,
+        // and the lava cycle floods 40 blocks: under 128 the halls lose their headroom and the band's landing stands in
+        // the flood, and a lava table more than 24 over the floor leaves a 128-tall layer too little room above it.
+        layers[3] = new LayerConfig(b, d.layers().get(3), "hall height", "hall width", false, 128, 256, 24);
+        b.pop();
+
+        b.comment("The Basalt Galleries' lava cycle: one lava sea that rises 40 blocks over the layer's lava table and falls again on the",
+                "layer's own clock, the same for every player, with warning signs before it rises. Read while the server runs.").push("lavaCycle");
+        lavaCycleEnabled = b.comment("Run the cycle. Turned off, the lava goes back down to its table round the players in the Galleries and stays there.")
+                .define("enabled", true);
+        lavaCycleMinutes = b.comment("Length of one cycle in minutes of game time. A change takes effect when the next cycle begins.")
+                .defineInRange("cycleMinutes", 20.0, 1.0, 240.0);
+        lavaCalm = b.comment("How the cycle is shared out between its phases, in proportion (the defaults are minutes of the 20-minute cycle):",
+                "calm, with the lava at its table.").defineInRange("calm", 13.5, 0.0, 1000.0);
+        lavaWarning = b.comment("Warning: rumbles, shaking and smoke, the lava still at its table.").defineInRange("warning", 1.5, 0.0, 1000.0);
+        lavaRise = b.comment("Rise: the lava climbs 40 blocks at an even pace.").defineInRange("rise", 2.0, 0.0, 1000.0);
+        lavaFull = b.comment("Full: the lava stays at its height.").defineInRange("full", 1.0, 0.0, 1000.0);
+        lavaDrain = b.comment("Drain: the lava goes back down to its table at an even pace.").defineInRange("drain", 2.0, 0.0, 1000.0);
+        lavaChecksPerTick = b.comment("Most blocks the lava looks at in one tick, over all players.").defineInRange("checksPerTick", 16384, 256, 1_000_000);
+        lavaChangesPerTick = b.comment("Most blocks the lava changes in one tick, over all players (each one is re-lit and sent to the players",
+                "watching it). Both are halved while the server is falling behind.").defineInRange("changesPerTick", 1500, 16, 100_000);
+        lavaRadius = b.comment("The lava is kept up to date in the chunks this far round every player in or near the Galleries; other chunks catch",
+                "up when a player comes near. 0: one chunk past the server's view distance (every chunk a client can see).").defineInRange("playerRadius", 0, 0, 64);
         b.pop();
     }
 

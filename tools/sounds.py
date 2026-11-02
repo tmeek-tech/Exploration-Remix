@@ -42,6 +42,10 @@ EVENTS = {
     "ambient.basalt.additions": [vanilla("block/lava/pop", 0.7, 0.9, 3)]
                                 + [vanilla(f"ambient/nether/basalt_deltas/debris{i}", 0.5) for i in range(1, 4)]
                                 + [own(f"rumble{i}", 0.8) for i in range(1, 3)],
+    # Ash Hollows (0.5), the Wasteland's refuge: the same rock heard from far off, lower and much quieter, and now and
+    # then a distant rumble or a lava pop; no debris rattling down.
+    "ambient.hollows.loop": [own("basalt_rumble", 0.35, stream=True, pitch=0.8)],
+    "ambient.hollows.additions": [own(f"rumble{i}", 0.35, pitch=0.75) for i in range(1, 3)] + [vanilla("block/lava/pop", 0.25, 0.8)],
 }
 
 SUBTITLES = {
@@ -50,15 +54,27 @@ SUBTITLES = {
     "ambient.springs.loop": "Hot springs bubble", "ambient.blue.loop": "Water roars far below",
     "ambient.blue.additions": "A drip echoes", "ambient.basalt.loop": "The rock rumbles",
     "ambient.basalt.additions": "Lava pops",
+    "ambient.hollows.loop": "The rock rumbles far off", "ambient.hollows.additions": "A distant rumble",
 }
+
+
+# The Basalt Galleries' lava cycle, played by each client (LavaWarnings.java), not by a biome: the rumbles that warn of
+# a rise (synth_lava_sounds.py makes them) and the rise's continuous surge.
+LAVA_EVENTS = {
+    "lava.rumble": [own(f"lava_rumble{i}", 1.0) for i in range(1, 4)],
+    "lava.surge": [own("lava_surge", 1.0, stream=True)],
+}
+
+LAVA_SUBTITLES = {"lava.rumble": "The deep rock rumbles", "lava.surge": "Lava surges up"}
 
 
 def write_all(assets_dir, write):
     out = {}
     lang = {}
-    for ev, sounds in EVENTS.items():
+    subtitles = {**SUBTITLES, **LAVA_SUBTITLES}
+    for ev, sounds in {**EVENTS, **LAVA_EVENTS}.items():
         sub = f"subtitles.{MOD}.{ev}"
         out[ev] = {"sounds": sounds, "subtitle": sub}
-        lang[sub] = SUBTITLES[ev]
+        lang[sub] = subtitles[ev]
     write(os.path.join(assets_dir, "sounds.json"), out)
     return lang

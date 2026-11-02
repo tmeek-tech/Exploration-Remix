@@ -1,9 +1,9 @@
 {
-  "feature": "explorationremix:basalt_galleries/cinder_blooms",
+  "feature": "explorationremix:obsidian_tubes/lava_pool",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 192
+      "count": 16
     },
     {
       "type": "minecraft:in_square"
