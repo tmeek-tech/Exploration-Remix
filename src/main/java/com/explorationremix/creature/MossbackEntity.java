@@ -149,6 +149,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     private int unreachable;                 // CHASE: paths in a row that could not reach the quarry
     private Vec3 lungeDir = Vec3.ZERO;
     private int detachTicks;
+    private int legFails;                    // foray legs in a row that got it nowhere
+    @Nullable private Vec3 legFrom;          // where the last foray leg began
     private int airTicks;                    // ticks in a row touching no rock and no water
     private double airDist;                  // how far it has gone in that time
     @Nullable private BlockPos kinDen;       // a stray's old den: it and that den's family leave each other be
@@ -524,6 +526,11 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
                 if (random.nextFloat() < waits && findWaitSpot()) { toState(WAIT, out ? 200 + random.nextInt(400) : 600 + random.nextInt(1200)); return; }
                 pauseTicks = out ? 10 + random.nextInt(25) : 20 + random.nextInt(50);
                 stateTicks = 0;
+                // a foray leg that got it nowhere (water or rock it cannot cross that way): the next one fans wider
+                if (out) {
+                    legFails = legFrom != null && position().distanceTo(legFrom) < 4.0 ? legFails + 1 : 0;
+                    legFrom = position();
+                }
                 Vec3 to = roamTarget();
                 if (to != null) nav.moveTo(to.x, to.y, to.z, ROAM_SPEED);
             } else if (stateTicks == 1) {
@@ -539,6 +546,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     private void startForay() {
         trip = OUT;
         forayTicks = 0;
+        legFails = 0;
+        legFrom = null;
         if (den != null) crumbs.start(den.getX(), den.getY(), den.getZ());
         else crumbs.clear();
         legHeading = random.nextDouble() * Math.PI * 2.0;
@@ -583,7 +592,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         double out = Math.sqrt(dx * dx + dz * dz);
         double away = out > 2.0 ? Math.atan2(dz, dx) : legHeading;
         for (int i = 0; i < 12; i++) {
-            double a = out < FORAY_OUT ? away + (random.nextDouble() - 0.5) * Math.toRadians(100 + 15 * i) : random.nextDouble() * Math.PI * 2.0;
+            double spread = 100 + 15 * i + 70 * legFails;
+            double a = out < FORAY_OUT && spread < 360 ? away + (random.nextDouble() - 0.5) * Math.toRadians(spread) : random.nextDouble() * Math.PI * 2.0;
             double len = LEG_MIN + random.nextInt(LEG_MAX - LEG_MIN + 1);
             Vec3 v = walkableNear(BlockPos.containing(getX() + Math.cos(a) * len, getY() + random.nextInt(9) - 4, getZ() + Math.sin(a) * len));
             if (v != null) { legHeading = a; return v; }
