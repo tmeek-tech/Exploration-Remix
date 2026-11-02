@@ -65,6 +65,8 @@ public class MossbackDen extends BaseEntityBlock {
             t.lizard = lizard.getUUID();
             t.lastSeen = lizard.level().getGameTime();
             t.setChanged();
+        } else {
+            lizard.setDen(null);                                // its den has taken in another: it roams on alone
         }
     }
 
@@ -86,6 +88,8 @@ public class MossbackDen extends BaseEntityBlock {
     public static class Tile extends BlockEntity {
         @Nullable UUID lizard;
         long lastSeen, emptyUntil;
+        /** False until its first tick after loading: time spent unloaded never counts towards losing its lizard. */
+        private boolean awake;
 
         public Tile(BlockPos pos, BlockState state) {
             super(EREntities.DEN_TILE.get(), pos, state);
@@ -93,6 +97,10 @@ public class MossbackDen extends BaseEntityBlock {
 
         void tick(ServerLevel level) {
             long now = level.getGameTime();
+            if (!awake) {
+                awake = true;
+                if (lizard != null) lastSeen = Math.max(lastSeen, now);
+            }
             if (Math.floorMod(now + worldPosition.hashCode(), 40L) != 0) return;
             if (lizard != null) {
                 Entity e = level.getEntity(lizard);
@@ -101,8 +109,12 @@ public class MossbackDen extends BaseEntityBlock {
                     return;
                 }
                 if (now - lastSeen < LOST_TICKS) return;
-                lizard = null;                                   // lost: a new one may come
+                // lost (killed out of reach of its den, or gone for good): the den lies empty as after a death, and
+                // takes it back if it ever returns
+                lizard = null;
+                emptyUntil = Math.max(emptyUntil, lastSeen + EMPTY_TICKS);
                 setChanged();
+                return;
             }
             if (now < emptyUntil || level.getDifficulty() == Difficulty.PEACEFUL) return;
             // only when a player is near enough to meet it, and none close enough to watch it appear
@@ -111,7 +123,8 @@ public class MossbackDen extends BaseEntityBlock {
             if (near == null || near.distanceToSqr(cx, cy, cz) < 16 * 16) return;
             MossbackEntity m = EREntities.MOSSBACK.get().create(level);
             if (m == null) return;
-            m.moveTo(cx, cy + 0.1, cz, level.random.nextFloat() * 360.0F, 0.0F);
+            // the middle of the 2 x 2 the world generation checked (the den is its low corner)
+            m.moveTo(worldPosition.getX() + 1.0, cy + 0.1, worldPosition.getZ() + 1.0, level.random.nextFloat() * 360.0F, 0.0F);
             if (!level.noCollision(m)) return;
             m.setDen(worldPosition);
             m.finalizeSpawn(level, level.getCurrentDifficultyAt(worldPosition), MobSpawnType.STRUCTURE, null, null);

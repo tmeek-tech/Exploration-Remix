@@ -23,8 +23,9 @@ public final class HeldShake {
         for (MossbackEntity m : mc.level.getEntitiesOfClass(MossbackEntity.class, me.getBoundingBox().inflate(6))) {
             if (m.heldId() != me.getId() || m.state() != MossbackEntity.GRAB) continue;
             float t = (float) (m.tickCount + event.getPartialTick());
-            event.setRoll(event.getRoll() + Mth.sin(t * 1.1F) * 9.0F);
-            event.setYaw(event.getYaw() + Mth.sin(t * 0.55F) * 4.0F);
+            float scale = mc.options.screenEffectScale().get().floatValue();      // the Distortion Effects slider
+            event.setRoll(event.getRoll() + Mth.sin(t * 1.1F) * 9.0F * scale);
+            event.setYaw(event.getYaw() + Mth.sin(t * 0.55F) * 4.0F * scale);
             return;
         }
     }

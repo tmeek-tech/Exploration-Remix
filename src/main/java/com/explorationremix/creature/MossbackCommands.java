@@ -9,12 +9,12 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -33,8 +33,16 @@ import java.util.Locale;
  *     <li>{@code /remix mossback spawn [moss|frost]}: one on the floor where you look (no den)</li>
  *     <li>{@code /remix mossback list [radius]}: the Mossbacks round you and what each is doing</li>
  *     <li>{@code /remix mossback state <name> [ticks]}: sets the nearest one's state (roam, wait, chase, search...)</li>
- *     <li>{@code /remix mossback dens [chunks]}: the dens in the chunks round you, nearest first, and how each stands</li>
- *     <li>{@code /remix mossback den}: takes you to the nearest den within 8 chunks</li>
+ *     <li>{@code /remix mossback put floor|wall|ceiling}: sets the nearest one on the nearest floor, wall or ceiling
+ *     within 10 blocks (heading up a wall) and freezes it there (for pictures)</li>
+ *     <li>{@code /remix view mossback [n]}: puts you a few blocks from the nearest one, looking at it (for the shot
+ *     driver): even n from its side, odd n from in front; 4 + n / 2 blocks away</li>
+ *     <li>{@code /remix mossback freeze|unfreeze}: holds the Mossbacks within 64 blocks still where they are, in the
+ *     state they are in, or lets them go on (for pictures)</li>
+ *     <li>{@code /remix mossback dens [chunks]}: the dens in the loaded chunks round you, nearest first, and how each stands</li>
+ *     <li>{@code /remix mossback den}: takes you to the nearest den in the loaded chunks within 8 chunks</li>
+ *     <li>{@code /remix mossback away <blocks>}: puts you on open floor about that far from the nearest den, in sight of
+ *     it (far enough for the den to bring out its lizard, near enough for it to come for you)</li>
  * </ul>
  */
 public final class MossbackCommands {
@@ -54,9 +62,16 @@ public final class MossbackCommands {
                         .executes(c -> state(c, StringArgumentType.getString(c, "name"), 200))
                         .then(Commands.argument("ticks", IntegerArgumentType.integer(1, 12000))
                                 .executes(c -> state(c, StringArgumentType.getString(c, "name"), IntegerArgumentType.getInteger(c, "ticks"))))))
+                .then(Commands.literal("put").then(Commands.argument("where", StringArgumentType.word())
+                        .suggests((c, b) -> SharedSuggestionProvider.suggest(new String[]{"floor", "wall", "ceiling"}, b))
+                        .executes(c -> put(c, StringArgumentType.getString(c, "where")))))
+                .then(Commands.literal("freeze").executes(c -> freeze(c, true)))
+                .then(Commands.literal("unfreeze").executes(c -> freeze(c, false)))
                 .then(Commands.literal("dens").executes(c -> dens(c, 6, false))
                         .then(Commands.argument("chunks", IntegerArgumentType.integer(1, 16)).executes(c -> dens(c, IntegerArgumentType.getInteger(c, "chunks"), false))))
-                .then(Commands.literal("den").executes(c -> dens(c, 8, true)));
+                .then(Commands.literal("den").executes(c -> dens(c, 8, true)))
+                .then(Commands.literal("away").then(Commands.argument("blocks", IntegerArgumentType.integer(17, 60))
+                        .executes(c -> away(c, IntegerArgumentType.getInteger(c, "blocks")))));
     }
 
     private static void say(CommandContext<CommandSourceStack> c, String msg) {
@@ -110,6 +125,157 @@ public final class MossbackCommands {
         return 1;
     }
 
+    /** Puts the player on open floor about {@code blocks} from the nearest loaded den, in sight of it. */
+    private static int away(CommandContext<CommandSourceStack> c, int blocks) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        net.minecraft.server.level.ServerPlayer pl = c.getSource().getPlayerOrException();
+        ServerLevel level = c.getSource().getLevel();
+        Vec3 p = c.getSource().getPosition();
+        ChunkPos centre = new ChunkPos(BlockPos.containing(p));
+        BlockPos den = null;
+        double bestD = Double.MAX_VALUE;
+        for (int dx = -8; dx <= 8; dx++)
+            for (int dz = -8; dz <= 8; dz++) {
+                LevelChunk chunk = level.getChunkSource().getChunkNow(centre.x + dx, centre.z + dz);
+                if (chunk == null) continue;
+                for (BlockEntity be : chunk.getBlockEntities().values())
+                    if (be instanceof MossbackDen.Tile && be.getBlockPos().distToCenterSqr(p) < bestD) { bestD = be.getBlockPos().distToCenterSqr(p); den = be.getBlockPos(); }
+            }
+        if (den == null) { c.getSource().sendFailure(Component.literal("No den in the loaded chunks within 8 chunks.")); return 0; }
+        Vec3 seen = Vec3.atCenterOf(den).add(0, 0.6, 0);
+        for (int ring = 0; ring < 3; ring++)
+            for (int k = 0; k < 24; k++) {
+                double a = Math.toRadians(15 * k), r = blocks + ring * 3;
+                int x = den.getX() + (int) Math.round(Math.cos(a) * r), z = den.getZ() + (int) Math.round(Math.sin(a) * r);
+                if (!level.hasChunk(x >> 4, z >> 4)) continue;
+                for (int dy = -8; dy <= 8; dy++) {
+                    BlockPos f = new BlockPos(x, den.getY() + dy, z);
+                    if (!level.getBlockState(f.below()).isFaceSturdy(level, f.below(), Direction.UP)) continue;
+                    if (!level.getBlockState(f).getCollisionShape(level, f).isEmpty() || !level.getBlockState(f.above()).getCollisionShape(level, f.above()).isEmpty()) continue;
+                    if (!level.getFluidState(f).isEmpty()) continue;
+                    Vec3 eye = new Vec3(x + 0.5, f.getY() + 1.62, z + 0.5);
+                    if (level.clip(new ClipContext(eye, seen, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, pl)).getType() != HitResult.Type.MISS) continue;
+                    Vec3 to = seen.subtract(eye);
+                    float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
+                    pl.teleportTo(level, x + 0.5, f.getY(), z + 0.5, yaw, 10.0F);
+                    say(c, "Away from the den at " + den.toShortString() + ": at " + f.toShortString());
+                    return 1;
+                }
+            }
+        c.getSource().sendFailure(Component.literal("No open floor in sight " + blocks + " blocks from the den at " + den.toShortString()));
+        return 0;
+    }
+
+    /** Sets the nearest Mossback on the nearest floor, wall or ceiling node near it and freezes it there. */
+    private static int put(CommandContext<CommandSourceStack> c, String where) {
+        List<MossbackEntity> all = near(c, 64);
+        if (all.isEmpty()) { c.getSource().sendFailure(Component.literal("No Mossback within 64 blocks.")); return 0; }
+        MossbackEntity m = all.get(0);
+        byte want = switch (where) {
+            case "wall" -> com.explorationremix.creature.climb.ClimbNodeEvaluator.WALL;
+            case "ceiling" -> com.explorationremix.creature.climb.ClimbNodeEvaluator.CEILING;
+            default -> com.explorationremix.creature.climb.ClimbNodeEvaluator.FLOOR;
+        };
+        ServerLevel level = c.getSource().getLevel();
+        BlockPos at = m.blockPosition();
+        BlockPos best = null;
+        double bestD = Double.MAX_VALUE;
+        for (int dx = -10; dx <= 10; dx++)
+            for (int dy = -6; dy <= 6; dy++)
+                for (int dz = -10; dz <= 10; dz++) {
+                    BlockPos n = at.offset(dx, dy, dz);
+                    if (!level.isLoaded(n)) continue;
+                    if (com.explorationremix.creature.climb.ClimbNodeEvaluator.classify(level, n.getX(), n.getY(), n.getZ(), 2, 1, 2) != want) continue;
+                    double d = n.distSqr(at);
+                    if (d < bestD) { bestD = d; best = n; }
+                }
+        if (best == null) { c.getSource().sendFailure(Component.literal("No " + where + " within 10 blocks of it.")); return 0; }
+        // which side the rock is on, and where the box sits against it
+        Direction rock = Direction.DOWN;
+        double x = best.getX() + 1.0, y = best.getY(), z = best.getZ() + 1.0;
+        if (want == com.explorationremix.creature.climb.ClimbNodeEvaluator.CEILING) {
+            rock = Direction.UP;
+            y = best.getY() + 1.0 - m.getBbHeight() - 0.01;
+        } else if (want == com.explorationremix.creature.climb.ClimbNodeEvaluator.WALL) {
+            double half = m.getBbWidth() / 2.0;
+            rock = rockSide(level, best);
+            switch (rock) {
+                case WEST -> x = best.getX() + half + 0.01;
+                case EAST -> x = best.getX() + 2.0 - half - 0.01;
+                case NORTH -> z = best.getZ() + half + 0.01;
+                default -> z = best.getZ() + 2.0 - half - 0.01;
+            }
+            y = best.getY() + 0.05;
+        }
+        Vec3 fwd = rock == Direction.DOWN || rock == Direction.UP ? Vec3.directionFromRotation(0, m.getYRot()) : new Vec3(0, 1, 0);
+        m.pose(new Vec3(x, y, z), rock, fwd);
+        say(c, "Put it on the " + where + " at " + BlockPos.containing(x, y, z).toShortString() + " (rock " + rock.getName() + "), frozen");
+        return 1;
+    }
+
+    private static Direction rockSide(ServerLevel level, BlockPos n) {
+        for (Direction d : Direction.Plane.HORIZONTAL) {
+            int ox = d == Direction.WEST ? -1 : d == Direction.EAST ? 2 : 0;
+            int oz = d == Direction.NORTH ? -1 : d == Direction.SOUTH ? 2 : 0;
+            for (int i = 0; i < 2; i++) {
+                BlockPos q = new BlockPos(n.getX() + (ox != 0 ? ox : i), n.getY(), n.getZ() + (oz != 0 ? oz : i));
+                if (!level.getBlockState(q).getCollisionShape(level, q).isEmpty()) return d;
+            }
+        }
+        return Direction.SOUTH;
+    }
+
+    /** Puts the player a few blocks from the nearest Mossback, in open air with a clear view, looking at it. */
+    public static int look(CommandContext<CommandSourceStack> c, net.minecraft.server.level.ServerPlayer pl, int n) {
+        List<MossbackEntity> all = near(c, 96);
+        if (all.isEmpty()) { c.getSource().sendFailure(Component.literal("No Mossback within 96 blocks.")); return 0; }
+        MossbackEntity m = all.get(0);
+        ServerLevel level = c.getSource().getLevel();
+        Vec3 body = m.bodyCentre();
+        Vec3 up = m.up(), fwd = m.lookDir();
+        Vec3 side = fwd.cross(up);
+        if (side.lengthSqr() < 1.0E-4) side = new Vec3(1, 0, 0);
+        side = side.normalize();
+        double dist = 4.0 + n / 2;
+        boolean front = n % 2 == 1;
+        java.util.List<Vec3> dirs = new java.util.ArrayList<>();
+        // side (or front) first, a little above its back; then round about it
+        Vec3 main = front ? fwd.scale(0.8).add(side.scale(0.6)) : side;
+        for (double lift : new double[]{0.45, 0.25, 0.7, 0.0})
+            for (int k = 0; k < 12; k++) {
+                double a = Math.toRadians(30 * ((k + 1) / 2) * (k % 2 == 0 ? 1 : -1));
+                Vec3 d = rotate(main.normalize(), up, a).add(up.scale(lift));
+                dirs.add(d.normalize());
+            }
+        for (Vec3 d : dirs) {
+            Vec3 eye = body.add(d.scale(dist));
+            BlockPos eb = BlockPos.containing(eye);
+            if (!level.getBlockState(eb).getCollisionShape(level, eb).isEmpty()) continue;
+            BlockHitResult hit = level.clip(new ClipContext(eye, body, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, m));
+            if (hit.getType() != HitResult.Type.MISS && hit.getLocation().distanceTo(body) > 0.9) continue;
+            Vec3 to = body.subtract(eye);
+            float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
+            float pitch = (float) -Math.toDegrees(Math.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z)));
+            pl.teleportTo(level, eye.x, eye.y - pl.getEyeHeight(), eye.z, yaw, pitch);
+            say(c, String.format(Locale.ROOT, "Looking at the Mossback at %s from %.1f %.1f %.1f (%s)", m.blockPosition().toShortString(), eye.x, eye.y, eye.z, m.describe()));
+            return 1;
+        }
+        c.getSource().sendFailure(Component.literal("No clear view of the Mossback at " + m.blockPosition().toShortString()));
+        return 0;
+    }
+
+    /** Rotates v about the unit axis k by angle a (Rodrigues). */
+    private static Vec3 rotate(Vec3 v, Vec3 k, double a) {
+        double cos = Math.cos(a), sin = Math.sin(a);
+        return v.scale(cos).add(k.cross(v).scale(sin)).add(k.scale(k.dot(v) * (1 - cos)));
+    }
+
+    private static int freeze(CommandContext<CommandSourceStack> c, boolean on) {
+        List<MossbackEntity> all = near(c, 64);
+        for (MossbackEntity m : all) m.setFrozen(on);
+        say(c, (on ? "Froze " : "Let go of ") + all.size() + " Mossback" + (all.size() == 1 ? "" : "s"));
+        return all.size();
+    }
+
     private static int dens(CommandContext<CommandSourceStack> c, int radius, boolean go) {
         ServerLevel level = c.getSource().getLevel();
         Vec3 p = c.getSource().getPosition();
@@ -118,7 +284,8 @@ public final class MossbackCommands {
         java.util.ArrayList<Found> found = new java.util.ArrayList<>();
         for (int dx = -radius; dx <= radius; dx++)
             for (int dz = -radius; dz <= radius; dz++) {
-                if (!(level.getChunk(centre.x + dx, centre.z + dz, ChunkStatus.FULL, true) instanceof LevelChunk chunk)) continue;
+                LevelChunk chunk = level.getChunkSource().getChunkNow(centre.x + dx, centre.z + dz);   // loaded chunks only
+                if (chunk == null) continue;
                 for (BlockEntity be : chunk.getBlockEntities().values())
                     if (be instanceof MossbackDen.Tile t) found.add(new Found(be.getBlockPos(), t));
             }

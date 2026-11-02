@@ -154,8 +154,11 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
                     if (s.getFluidState().is(FluidTags.WATER)) water = true;
                     VoxelShape shape = s.getCollisionShape(level, p);
                     if (shape.isEmpty()) continue;
-                    // a carpet, snow layer or slab on the floor raises it a little; anything taller blocks
-                    if (dy == 0 && shape.max(net.minecraft.core.Direction.Axis.Y) <= 0.5) { raised = true; continue; }
+                    double top = shape.max(net.minecraft.core.Direction.Axis.Y);
+                    // a carpet (or a den) under its feet: the box still fits in the cell on top of it
+                    if (dy == 0 && top <= THIN) continue;
+                    // a snow layer or slab on the floor raises it a little; anything taller blocks
+                    if (dy == 0 && top <= 0.5) { raised = true; continue; }
                     return BLOCKED;
                 }
         if (raised) {
@@ -190,10 +193,16 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
         return OPEN;
     }
 
+    /** Rock to cling to: something with a real collision shape (not a carpet), neither harmful nor wet. */
     private static boolean solid(BlockGetter level, BlockPos p) {
         BlockState s = level.getBlockState(p);
-        return !harmful(s) && !s.getCollisionShape(level, p).isEmpty() && s.getFluidState().isEmpty();
+        if (harmful(s) || !s.getFluidState().isEmpty()) return false;
+        VoxelShape shape = s.getCollisionShape(level, p);
+        return !shape.isEmpty() && shape.max(net.minecraft.core.Direction.Axis.Y) > THIN;
     }
+
+    /** A collision shape no taller than this (carpets, the den) lies under the box without lifting it. */
+    private static final double THIN = 0.1;
 
     private static boolean harmful(BlockState s) {
         return s.is(Blocks.MAGMA_BLOCK) || s.is(Blocks.CACTUS) || s.is(Blocks.SWEET_BERRY_BUSH) || s.is(Blocks.POWDER_SNOW)

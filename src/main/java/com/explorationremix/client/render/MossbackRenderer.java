@@ -58,8 +58,11 @@ public class MossbackRenderer extends MobRenderer<MossbackEntity, MossbackModel>
         pose.translate(-up.x * ext, h - up.y * ext, -up.z * ext);
         pose.mulPose(q);
         if (e.deathTime > 0) {
+            // it rolls onto its back about the middle of its body, so it ends lying on its rock, not sunk into it
             float f = Mth.sqrt(Math.min(1.0F, (e.deathTime + partialTick - 1.0F) / 20.0F * 1.6F));
+            pose.translate(0.0F, 0.5F, 0.0F);
             pose.mulPose(Axis.ZP.rotationDegrees(f * getFlipDegrees(e)));
+            pose.translate(0.0F, -0.5F, 0.0F);
         }
     }
 

@@ -50,6 +50,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -90,6 +91,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     private static final EntityDataAccessor<Byte> DATA_SURFACE = SynchedEntityData.defineId(MossbackEntity.class, EntityDataSerializers.BYTE);
     private static final EntityDataAccessor<Byte> DATA_VARIANT = SynchedEntityData.defineId(MossbackEntity.class, EntityDataSerializers.BYTE);
     private static final EntityDataAccessor<Integer> DATA_HELD = SynchedEntityData.defineId(MossbackEntity.class, EntityDataSerializers.INT);
+    /** The way its head points along a wall or ceiling (the server's {@code forward}), for drawing it there. */
+    private static final EntityDataAccessor<Vector3f> DATA_FORWARD = SynchedEntityData.defineId(MossbackEntity.class, EntityDataSerializers.VECTOR3);
 
     public static final byte MOSS = 0, FROST = 1;
 
@@ -103,12 +106,16 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     private long lastSeenTime, chaseStart;
     private int hunger = 1200;
     private float grabDamage;
+    @Nullable private LivingEntity heldRef;  // the catch itself, so it can be let go even after it left this level
+    private boolean waitPathSent;
+    private int unreachable;                 // CHASE: paths in a row that could not reach the quarry
     private Vec3 lungeDir = Vec3.ZERO;
     private int detachTicks;
     private Vec3 forward = new Vec3(0, 0, 1);
     private long ignoreRivalsUntil;
     private float stepDist;
     private boolean throatHit;
+    private boolean frozen;                  // /remix mossback freeze: holds still where it is, in the state it is in
 
     // client-side animation state (see MossbackModel and MossbackRenderer)
     public float glow, glowO, jaw, jawO, rear, rearO, frill, frillO;
@@ -141,6 +148,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         entityData.define(DATA_SURFACE, (byte) Direction.DOWN.get3DDataValue());
         entityData.define(DATA_VARIANT, MOSS);
         entityData.define(DATA_HELD, -1);
+        entityData.define(DATA_FORWARD, new Vector3f(0, 0, 1));
     }
 
     @Override
@@ -170,6 +178,14 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
 
     @Override public boolean onFloor() { return surface() == Direction.DOWN; }
     @Override public boolean canSteer() { byte s = state(); return s != LUNGE && s != DROP && hurtTime < 6; }
+    @Override public boolean holdStill() {
+        Direction d = surface();
+        return d != null && d != Direction.DOWN && !(state() == RECOIL && stateTicks < 10);
+    }
+    /** It climbs on its own; vines and ladders must not lift it the way they lift a player. */
+    @Override public boolean onClimbable() { return false; }
+    /** Its snout and long tail reach well past its box: keep drawing it while any of it is on screen. */
+    @Override public AABB getBoundingBoxForCulling() { return getBoundingBox().inflate(2.5); }
 
     // ------------------------------------------------------------------------------------------------ geometry
 
@@ -204,10 +220,11 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         AABB slab = switch (d) {
             case DOWN -> new AABB(box.minX + m, box.minY - e, box.minZ + m, box.maxX - m, box.minY, box.maxZ - m);
             case UP -> new AABB(box.minX + m, box.maxY, box.minZ + m, box.maxX - m, box.maxY + e, box.maxZ - m);
-            case WEST -> new AABB(box.minX - e, box.minY + 0.1, box.minZ + m, box.minX, box.maxY - 0.1, box.maxZ - m);
-            case EAST -> new AABB(box.maxX, box.minY + 0.1, box.minZ + m, box.maxX + e, box.maxY - 0.1, box.maxZ - m);
-            case NORTH -> new AABB(box.minX + m, box.minY + 0.1, box.minZ - e, box.maxX - m, box.maxY - 0.1, box.minZ);
-            case SOUTH -> new AABB(box.minX + m, box.minY + 0.1, box.maxZ, box.maxX - m, box.maxY - 0.1, box.maxZ + e);
+            // the sides reach almost to the box's bottom and top, so it keeps hold of a wall until it is over its edge
+            case WEST -> new AABB(box.minX - e, box.minY + 0.02, box.minZ + m, box.minX, box.maxY - 0.02, box.maxZ - m);
+            case EAST -> new AABB(box.maxX, box.minY + 0.02, box.minZ + m, box.maxX + e, box.maxY - 0.02, box.maxZ - m);
+            case NORTH -> new AABB(box.minX + m, box.minY + 0.02, box.minZ - e, box.maxX - m, box.maxY - 0.02, box.minZ);
+            case SOUTH -> new AABB(box.minX + m, box.minY + 0.02, box.maxZ, box.maxX - m, box.maxY - 0.02, box.maxZ + e);
         };
         return !level().noCollision(this, slab);
     }
@@ -234,13 +251,34 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         entityData.set(DATA_SURFACE, (byte) (next == null ? -1 : next.get3DDataValue()));
         setNoGravity(next != null && next != Direction.DOWN);
         if (next != null && next != Direction.DOWN) resetFallDistance();
-        // the way it points: along its rock, the way it moves
+    }
+
+    /**
+     * The way it points along its rock: the way it moved this tick, or, while it faces its quarry (alert, rearing,
+     * holding), turning towards it. Runs after travel, when this tick's motion is known.
+     */
+    private void updateForward() {
         Vec3 up = up();
         Vec3 mv = position().subtract(xo, yo, zo);
         Vec3 along = mv.subtract(up.scale(mv.dot(up)));
-        if (along.lengthSqr() > 1.0E-4) forward = along.normalize();
-        else forward = forward.subtract(up.scale(forward.dot(up))).lengthSqr() > 1.0E-3
-                ? forward.subtract(up.scale(forward.dot(up))).normalize() : Vec3.directionFromRotation(0, getYRot());
+        LivingEntity t = getTarget();
+        byte s = state();
+        Vec3 want = null;
+        double rate = 1.0;
+        if (t != null && (s == ALERT || s == REAR || s == GRAB)) {
+            Vec3 to = t.getBoundingBox().getCenter().subtract(bodyCentre());
+            Vec3 flat = to.subtract(up.scale(to.dot(up)));
+            if (flat.lengthSqr() > 1.0E-4) { want = flat.normalize(); rate = 0.35; }
+        } else if (along.lengthSqr() > 1.0E-4) want = along.normalize();
+        if (want != null) {
+            if (forward.dot(want) < -0.99) forward = forward.add(up.cross(forward).scale(0.3));   // never lerp through zero
+            forward = forward.lerp(want, rate);
+        }
+        Vec3 f = forward.subtract(up.scale(forward.dot(up)));
+        forward = f.lengthSqr() > 1.0E-3 ? f.normalize() : Vec3.directionFromRotation(0, getYRot());
+        Vector3f synced = entityData.get(DATA_FORWARD);
+        if (synced.x * forward.x + synced.y * forward.y + synced.z * forward.z < 0.995)
+            entityData.set(DATA_FORWARD, new Vector3f((float) forward.x, (float) forward.y, (float) forward.z));
     }
 
     @Override
@@ -270,17 +308,29 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         entityData.set(DATA_STATE, s);
         stateTicks = 0;
         stateLength = length;
+        waitPathSent = false;
+        if (s != CHASE) unreachable = 0;
         if (s != WAIT) { ambushing = false; waitSpot = null; }
     }
 
     @Override
     protected void customServerAiStep() {
+        if (frozen) {                                   // held in place for a picture (/remix mossback freeze)
+            getNavigation().stop();
+            setDeltaMovement(Vec3.ZERO);
+            return;
+        }
         updateSurface();
         if (home == null) home = blockPosition();
         stateTicks++;
         if (hunger > 0) hunger--;
         LivingEntity t = getTarget();
-        if (t != null && !huntable(t)) {
+        if (t != null && state() == GRAB && t.getId() == heldId() && !t.isAlive()) {
+            // the shake killed its catch: it eats
+            release(false);
+            afterKill(t);
+            t = null;
+        } else if (t != null && !huntable(t)) {
             release(false);
             setTarget(null);
             t = null;
@@ -301,7 +351,6 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
             default -> toState(ROAM, 0);
         }
         if (den != null && tickCount % 100 == 0) MossbackDen.checkIn(this);
-        stepSounds();
     }
 
     // --- roaming and waiting
@@ -333,12 +382,18 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         for (int i = 0; i < 12; i++) {
             BlockPos c = strayed ? h.offset(random.nextInt(9) - 4, random.nextInt(5) - 2, random.nextInt(9) - 4)
                     : h.offset(random.nextInt(2 * TERRITORY + 1) - TERRITORY, random.nextInt(17) - 8, random.nextInt(2 * TERRITORY + 1) - TERRITORY);
+            if (!loadedAround(c)) continue;
             BlockPos n = nearestWalkable(c, 6);
             if (n == null || !level().isLoaded(n)) continue;
             if (isRefuge(n)) continue;
             return new Vec3(n.getX() + 1.0, n.getY(), n.getZ() + 1.0);
         }
         return null;
+    }
+
+    /** Whether the columns a node test round {@code c} reads are all loaded (reading others would load them). */
+    private boolean loadedAround(BlockPos c) {
+        return level().hasChunksAt(c.getX() - 1, c.getZ() - 1, c.getX() + 2, c.getZ() + 2);
     }
 
     @Nullable
@@ -366,6 +421,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         BlockPos me = blockPosition();
         for (int i = 0; i < 24; i++) {
             BlockPos c = me.offset(random.nextInt(21) - 10, random.nextInt(9) - 4, random.nextInt(21) - 10);
+            if (!loadedAround(c)) continue;
             BlockPos n = nearestWalkable(c, 3);
             if (n == null || isRefuge(n)) continue;
             int score = plantsAround(n);
@@ -395,12 +451,16 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         PathNavigation nav = getNavigation();
         if (!ambushing) {
             if (tickCount % 5 == 0 && spot(true)) return;
+            if (stateTicks > 400) { toState(ROAM, 0); return; }
             if (nav.isDone()) {
                 if (position().distanceToSqr(waitSpot.getX() + 1.0, waitSpot.getY(), waitSpot.getZ() + 1.0) < 2.5) {
                     ambushing = true;
                     stateTicks = 0;
+                } else if (waitPathSent) {
+                    toState(ROAM, 0);                      // it got as near as it could: not near enough, so it moves on
                 } else if (stateTicks > 10) {
-                    if (!nav.moveTo(waitSpot.getX() + 1.0, waitSpot.getY(), waitSpot.getZ() + 1.0, ROAM_SPEED) || stateTicks > 400) toState(ROAM, 0);
+                    waitPathSent = true;
+                    if (!nav.moveTo(waitSpot.getX() + 1.0, waitSpot.getY(), waitSpot.getZ() + 1.0, ROAM_SPEED)) toState(ROAM, 0);
                 }
             }
             return;
@@ -478,10 +538,20 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         if (fromAmbush) {
             // from the plants: it strikes at once if the quarry is close, dropping on it from a wall or ceiling
             if (s != null && s != Direction.DOWN && t.getY() < getY() - 0.5 && horizontalDistance(t) < 3.0) { startDrop(t); return; }
-            if (mouth().distanceTo(t.getBoundingBox().getCenter()) < LUNGE_RANGE + 1.0) { toState(REAR, AMBUSH_REAR_TICKS); return; }
+            if (inStrikingReach(t, LUNGE_RANGE + 1.0)) { toState(REAR, AMBUSH_REAR_TICKS); return; }
         }
         toState(ALERT, 15);
         playSound(ERSounds.MOSSBACK_HISS.get(), 1.4F, 0.9F + random.nextFloat() * 0.2F);
+    }
+
+    /**
+     * Close enough to lunge, and not round an edge of the rock it clings to: from a wall, quarry standing on top of
+     * that wall lies behind the wall's own plane, and a lunge would only drive it into the rock. It climbs over first.
+     */
+    private boolean inStrikingReach(LivingEntity t, double range) {
+        Vec3 c = t.getBoundingBox().getCenter();
+        if (mouth().distanceTo(c) >= range) return false;
+        return !clingsOffFloor() || c.subtract(bodyCentre()).dot(up()) > -0.3;
     }
 
     private double horizontalDistance(Entity e) {
@@ -504,7 +574,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         boolean sees = canSee(t);
         if (sees) { lastSeen = t.position(); lastSeenTime = now; }
         if (t instanceof MossbackEntity && getHealth() < getMaxHealth() * 0.4F) { flee(); return; }
-        if (sees && mouth().distanceTo(t.getBoundingBox().getCenter()) < LUNGE_RANGE) {
+        if (sees && inStrikingReach(t, LUNGE_RANGE)) {
             toState(REAR, REAR_TICKS);
             playSound(ERSounds.MOSSBACK_HISS.get(), 1.2F, 1.15F);
             return;
@@ -512,10 +582,15 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         if (now - lastSeenTime > SEARCH_AFTER_TICKS) { toState(SEARCH, 0); return; }
         if (home != null && blockPosition().distSqr(home) > (double) LEASH * LEASH && !sees) { giveUp(); return; }
         PathNavigation nav = getNavigation();
-        if (stateTicks % 10 == 1 || nav.isDone()) {
+        // a fresh path every half second, or as soon as one that reached its goal is walked; when the quarry is out of
+        // reach (up a pillar, behind a crack) only every two seconds
+        Path cur = nav.getPath();
+        int every = unreachable >= 2 ? 40 : 10;
+        if (stateTicks % every == 1 || (nav.isDone() && (cur == null || cur.canReach()) && unreachable == 0)) {
             Vec3 at = sees ? t.position() : lastSeen;
             Path p = nav.createPath(BlockPos.containing(at), 1);
             if (p != null) nav.moveTo(p, CHASE_SPEED);
+            unreachable = p != null && p.canReach() ? 0 : unreachable + 1;
         }
     }
 
@@ -524,7 +599,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         if (t == null) { toState(ROAM, 0); return; }
         getLookControl().setLookAt(t, 60.0F, 60.0F);
         Vec3 dm = getDeltaMovement();
-        setDeltaMovement(0, onFloor() ? dm.y : 0, 0);
+        setDeltaMovement(0, clingsOffFloor() ? 0 : dm.y, 0);
         if (stateTicks >= stateLength) {
             Vec3 to = t.getBoundingBox().getCenter().subtract(mouth());
             lungeDir = to.lengthSqr() > 1.0E-4 ? to.normalize() : lookDir();
@@ -532,6 +607,12 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
             toState(LUNGE, LUNGE_TICKS);
             playSound(ERSounds.MOSSBACK_BITE.get(), 1.2F, 0.8F + random.nextFloat() * 0.2F);
         }
+    }
+
+    /** On a wall or ceiling (gravity off), not on the floor and not falling. */
+    private boolean clingsOffFloor() {
+        Direction d = surface();
+        return d != null && d != Direction.DOWN;
     }
 
     private void lunge(@Nullable LivingEntity t) {
@@ -566,7 +647,6 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         DamageSource src = damageSources().mobAttack(this);
         if (t instanceof Player p && p.isBlocking() && p.isDamageSourceBlocked(src)) {
             p.disableShield(true);
-            level().broadcastEntityEvent(p, (byte) 30);
             p.knockback(0.6, getX() - p.getX(), getZ() - p.getZ());
             p.hurtMarked = true;
             toState(RECOIL, 25);
@@ -580,6 +660,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         if (!t.hurt(src, BITE)) { toState(RECOIL, 15); return; }
         if (!t.isAlive()) { afterKill(t); return; }
         entityData.set(DATA_HELD, t.getId());
+        heldRef = t;
         grabDamage = 0;
         AttributeInstance speed = t.getAttribute(Attributes.MOVEMENT_SPEED);
         if (speed != null && speed.getModifier(HELD_SLOW) == null)
@@ -600,9 +681,9 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         }
         getLookControl().setLookAt(t, 60.0F, 60.0F);
         Vec3 dm = getDeltaMovement();
-        setDeltaMovement(0, onFloor() ? dm.y : 0, 0);
+        setDeltaMovement(0, clingsOffFloor() ? 0 : dm.y, 0);
         Vec3 m = mouth();
-        if (t.position().distanceTo(new Vec3(m.x, t.getY(), m.z)) > 3.5 || grabDamage >= BREAK_FREE || stateTicks >= stateLength) {
+        if (t.getBoundingBox().getCenter().distanceTo(m) > 3.5 || grabDamage >= BREAK_FREE || stateTicks >= stateLength) {
             release(true);
             return;
         }
@@ -622,17 +703,23 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
             if (t instanceof Mob mob) mob.getNavigation().stop();
         }
         if (stateTicks % 20 == 0) {
+            if (t instanceof Player p && p.isBlocking()) p.disableShield(true);     // no shielding from inside its jaws
             t.hurt(damageSources().mobAttack(this), t instanceof Player ? SHAKE_PLAYER : SHAKE_PREY);
             playSound(ERSounds.MOSSBACK_SHAKE.get(), 1.0F, 0.85F + random.nextFloat() * 0.3F);
         }
     }
 
     private void release(boolean backOff) {
-        Entity e = held();
-        if (e instanceof LivingEntity t) {
+        LivingEntity t = heldRef;
+        if (t == null && held() instanceof LivingEntity le) t = le;
+        if (t != null) {
             AttributeInstance speed = t.getAttribute(Attributes.MOVEMENT_SPEED);
-            if (speed != null) speed.removeModifier(HELD_SLOW);
+            int id = t.getId();
+            boolean heldByAnother = !t.level().getEntitiesOfClass(MossbackEntity.class, t.getBoundingBox().inflate(6),
+                    m -> m != this && m.heldId() == id).isEmpty();
+            if (speed != null && !heldByAnother) speed.removeModifier(HELD_SLOW);
         }
+        heldRef = null;
         entityData.set(DATA_HELD, -1);
         if (backOff) {
             Vec3 back = lookDir().scale(-0.35);
@@ -718,9 +805,10 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
                 throatHit = true;
             }
         }
+        float before = getHealth();
         boolean hurt = super.hurt(source, amount);
         if (hurt && !level().isClientSide && isAlive()) {
-            if (state() == GRAB) grabDamage += amount;
+            if (state() == GRAB && attacker != null && attacker.getId() == heldId()) grabDamage += Math.max(0.0F, before - getHealth());
             if (throatHit) {
                 toState(RECOIL, 25);
                 playSound(ERSounds.MOSSBACK_HURT.get(), 1.5F, 1.3F);
@@ -828,12 +916,35 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
 
     public void forceState(byte s, int length) { toState(s, length); }
 
+    /** For /remix mossback freeze: holds it still where it is, gravity off, in the state it is in (for pictures). */
+    public void setFrozen(boolean f) {
+        frozen = f;
+        if (f) setNoGravity(true);
+        else setNoGravity(surface() != null && surface() != Direction.DOWN);
+    }
+    public boolean frozen() { return frozen; }
+
+    /** For /remix mossback put: sets it on a rock face, heading along {@code fwd}, and freezes it there (for pictures). */
+    public void pose(Vec3 pos, Direction rock, Vec3 fwd) {
+        moveTo(pos.x, pos.y, pos.z, getYRot(), 0.0F);
+        setDeltaMovement(Vec3.ZERO);
+        entityData.set(DATA_SURFACE, (byte) rock.get3DDataValue());
+        forward = fwd.normalize();
+        entityData.set(DATA_FORWARD, new Vector3f((float) forward.x, (float) forward.y, (float) forward.z));
+        if (rock == Direction.DOWN) { setYRot((float) (Mth.atan2(fwd.z, fwd.x) * Mth.RAD_TO_DEG) - 90.0F); yBodyRot = getYRot(); yHeadRot = getYRot(); }
+        setFrozen(true);
+    }
+
     // ------------------------------------------------------------------------------------------------ client
 
     @Override
     public void tick() {
         super.tick();
         if (level().isClientSide) clientTick();
+        else if (isAlive()) {
+            updateForward();
+            stepSounds();
+        }
     }
 
     private void clientTick() {
@@ -861,15 +972,15 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         // orientation: its belly to its rock, its head the way it goes
         Direction d = surface();
         Vec3 upT = d == null ? new Vec3(0, 1, 0) : Vec3.atLowerCornerOf(d.getOpposite().getNormal());
+        if (clientUp.dot(upT) < -0.99) clientUp = clientUp.add(clientForward.scale(0.3));   // turn over through the side
         clientUp = clientUp.lerp(upT, 0.35);
         if (clientUp.lengthSqr() < 1.0E-4) clientUp = upT;
         clientUp = clientUp.normalize();
-        Vec3 mv = new Vec3(getX() - xo, getY() - yo, getZ() - zo);
-        Vec3 along = mv.subtract(clientUp.scale(mv.dot(clientUp)));
+        Vector3f sf = entityData.get(DATA_FORWARD);
         Vec3 want;
         if (d == Direction.DOWN || d == null) want = Vec3.directionFromRotation(0, yBodyRot);
-        else if (along.lengthSqr() > 2.5E-4) want = along.normalize();
-        else want = clientForward;
+        else want = new Vec3(sf.x, sf.y, sf.z);
+        if (clientForward.dot(want) < -0.99) clientForward = clientForward.add(clientUp.cross(clientForward).scale(0.3));
         clientForward = clientForward.lerp(want, 0.3);
         Vec3 f = clientForward.subtract(clientUp.scale(clientForward.dot(clientUp)));
         if (f.lengthSqr() < 1.0E-4) f = Vec3.directionFromRotation(0, yBodyRot).subtract(clientUp.scale(0.0));

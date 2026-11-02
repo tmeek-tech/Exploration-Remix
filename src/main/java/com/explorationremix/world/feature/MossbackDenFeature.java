@@ -2,9 +2,11 @@ package com.explorationremix.world.feature;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.registry.ERBlocks;
+import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.Hashing;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -15,6 +17,7 @@ import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
@@ -47,11 +50,12 @@ public class MossbackDenFeature extends Feature<NoneFeatureConfiguration> {
         RandomSource random = ctx.random();
         List<BlockPos> spots = new ArrayList<>();
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-        int bottom = level.getMinBuildHeight() + 2;
+        // plant caves reach down to the pack's own floor (the deep world below it has none of these biomes)
+        int bottom = Math.max(level.getMinBuildHeight() + 2, DeepWorld.installed() ? DeepWorld.packFloor() : level.getMinBuildHeight());
         for (int i = 0; i < TRIES && spots.size() < 8; i++) {
             int x = chunk.getMinBlockX() + 1 + random.nextInt(14), z = chunk.getMinBlockZ() + 1 + random.nextInt(14);
             int top = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, x, z) - 18;
-            for (int y = top; y > Math.max(bottom, -64); y--) {
+            for (int y = top; y > bottom; y--) {
                 p.set(x, y, z);
                 if (!plantCave(level.getBiome(p))) continue;
                 if (fits(level, p)) { spots.add(p.immutable()); break; }
@@ -73,10 +77,13 @@ public class MossbackDenFeature extends Feature<NoneFeatureConfiguration> {
         for (int dx = 0; dx < 2; dx++)
             for (int dz = 0; dz < 2; dz++) {
                 q.set(at.getX() + dx, at.getY() - 1, at.getZ() + dz);
-                if (!level.getBlockState(q).isFaceSturdy(level, q, net.minecraft.core.Direction.UP)) return false;
+                if (!level.getBlockState(q).isFaceSturdy(level, q, Direction.UP)) return false;
                 q.set(at.getX() + dx, at.getY(), at.getZ() + dz);
                 BlockState s = level.getBlockState(q);
                 if (!(s.isAir() || s.canBeReplaced()) || !s.getFluidState().isEmpty()) return false;
+                // nothing the lizard's box would catch on (thick snow), and no tall plant whose top would be left floating
+                if (s.getCollisionShape(level, q).max(Direction.Axis.Y) > 0.1) return false;
+                if (dx == 0 && dz == 0 && s.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) return false;
                 for (int dy = 1; dy <= 2; dy++) {
                     q.set(at.getX() + dx, at.getY() + dy, at.getZ() + dz);
                     BlockState above = level.getBlockState(q);

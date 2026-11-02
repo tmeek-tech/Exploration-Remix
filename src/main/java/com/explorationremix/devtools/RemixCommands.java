@@ -442,6 +442,7 @@ public final class RemixCommands {
         int look = -1, radius = 24, chill = -1;
         java.util.List<BlockPos> tries = null;
         if (name.equalsIgnoreCase("rootvaults_mouth")) return viewMouth(c, pl, level, n == 1);
+        if (name.equalsIgnoreCase("mossback")) return com.explorationremix.creature.MossbackCommands.look(c, pl, Math.max(0, n));
         String ent = entrance(name);
         Entrances e = DeepWorld.entrances();
         if (ent != null) {

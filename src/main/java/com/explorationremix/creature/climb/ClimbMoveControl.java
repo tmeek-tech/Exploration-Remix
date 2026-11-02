@@ -17,6 +17,8 @@ public class ClimbMoveControl extends MoveControl {
         boolean onFloor();
         /** False while something else (a lunge, a knock, a fall) drives the creature's motion. */
         boolean canSteer();
+        /** True when, with nowhere to go, it should hold still where it clings (on a wall or ceiling nothing else stops it). */
+        boolean holdStill();
     }
 
     private final Climber climber;
@@ -32,6 +34,8 @@ public class ClimbMoveControl extends MoveControl {
             mob.setSpeed(0.0F);
             mob.setZza(0.0F);
             if (this.operation == Operation.MOVE_TO && !climber.canSteer()) this.operation = Operation.WAIT;
+            // off the floor no friction stops it: without this it would coast on for blocks
+            else if (climber.canSteer() && climber.holdStill()) mob.setDeltaMovement(Vec3.ZERO);
             return;
         }
         this.operation = Operation.WAIT;
@@ -44,9 +48,18 @@ public class ClimbMoveControl extends MoveControl {
         boolean floor = climber.onFloor() && Math.abs(dy) < 0.6;
         if (!floor) speed *= 0.85;
         if (mob.isInWater()) speed *= 0.8;
+        // the navigation's stuck check and path timeout read the mob's speed; the input stays zero (the velocity is set
+        // straight below), so travel adds nothing of its own
+        mob.setSpeed((float) speed);
+        mob.setZza(0.0F);
         double step = Math.min(speed, len);
         Vec3 v = new Vec3(dx / len * step, dy / len * step, dz / len * step);
-        if (floor) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
+        // rounding the top of what it climbs: while the way across is still blocked by the edge, it climbs straight up
+        // first (aiming straight at the waypoint would leave it hanging just under the edge)
+        if (dy > -0.1 && v.horizontalDistanceSqr() > 1.0E-6
+                && !mob.level().noCollision(mob, mob.getBoundingBox().move(v.x, 0.0, v.z).deflate(1.0E-4)))
+            v = new Vec3(v.x * 0.1, speed, v.z * 0.1);
+        else if (floor) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
         mob.setDeltaMovement(v);
         if (dx * dx + dz * dz > 1.0E-4) {
             float yaw = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
