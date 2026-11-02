@@ -1489,6 +1489,65 @@ class NetworkTest {
     @Tag("voxel")
     void basaltIsOneCave() { oneCave(Terrain.GALLERIES, 0.960); }
 
+    /**
+     * Basalt Galleries cells {seed, cx, cz, lava depth, 0 for the default} that {@link #galleriesAreWalkedFromTheEntry}
+     * builds block by block. In 673596 the only tunnel from the bedrock landing's flights to the rest of the cell coiled
+     * up over itself, and its lower turn's vault took the floor of the upper one: the plan had a way, but on foot the
+     * landing, its two courts and the Causeway were cut off from the entry.
+     */
+    static final long[][] GALLERIES_REACH_CELLS = {{673596, -10, -19, 0}};
+
+    /**
+     * From the entry, on foot (the blocks the game makes): the bedrock landing, every court and set piece reached and
+     * every tunnel walked along its line ({@link #reachAll}), in the {@link #GALLERIES_REACH_CELLS}. The Causeway's
+     * middle lies over its lava, between the column path and the wall ledge, so its column path stands for it: nine in
+     * ten of the path's columns have a top of the main component.
+     */
+    @Test
+    @Tag("voxel")
+    void galleriesAreWalkedFromTheEntry() {
+        List<String> fails = new ArrayList<>();
+        for (long[] c : GALLERIES_REACH_CELLS) {
+            Terrain t = pieceTerrain(c);
+            Network w = t.network;
+            int cx = (int) c[1], cz = (int) c[2], cell = (int) w.cell;
+            Net n = w.net(Terrain.GALLERIES, cx, cz);
+            VoxelHarness v = VoxelHarness.build(t, Terrain.GALLERIES, cx * cell, cz * cell, cell, cell);
+            v.markShafts(n);
+            Chamber e = n.ch.get(n.entry);
+            v.connect(e.x, e.f0 + 1, e.z);
+            String tg = pieceTag(c);
+            System.out.printf("%s: main component %.2f%% of %d places%n", tg, 100 * v.mainShare(), v.places());
+            List<String> f = new ArrayList<>();
+            reachAll(v, t, n, tg, f);
+            for (Chamber k : n.ch) {
+                if (!k.keep || k.kind != Kind.CAUSEWAY) continue;
+                String miss = tg + ": " + k.kind + "#" + k.id + " at ";
+                double walked = causewayWalked(v, w, k);
+                if (walked >= 0.9) f.removeIf(s -> s.startsWith(miss));
+                else f.add(tg + ": the Causeway's column path is " + fmt(100 * walked) + "% walkable from the entry");
+            }
+            fails.addAll(f);
+        }
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
+    }
+
+    /** The share of the Causeway's column path whose top (within a few blocks) is a place of the main component. */
+    static double causewayWalked(VoxelHarness v, Network w, Chamber c) {
+        int cols = 0, ok = 0, R = (int) Math.ceil(c.R());
+        double endU = c.rx - c.endW;
+        for (int x = (int) c.x - R; x <= c.x + R; x++) for (int z = (int) c.z - R; z <= c.z + R; z++) {
+            double[] uv = w.hallUV(c, x + 0.5, z + 0.5);
+            if (Math.abs(uv[1] * c.side - c.pathV) > 0.3 * c.hexS || Math.abs(uv[0]) > endU - 2) continue;
+            int top = (int) Math.round(Network.pathHeight(c, uv[0]));
+            cols++;
+            for (int y = top - 2; y <= top + 3; y++) {
+                if (v.in(x, y, z) && v.place(x, y, z) && v.inMain(x, y, z)) { ok++; break; }
+            }
+        }
+        return ok / (double) Math.max(1, cols);
+    }
+
     @Test
     @Tag("voxel")
     void wastelandIsOneCave() { oneCave(Terrain.WASTELAND, 0.960); }

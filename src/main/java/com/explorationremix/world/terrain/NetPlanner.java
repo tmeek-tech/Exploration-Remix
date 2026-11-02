@@ -2410,7 +2410,7 @@ final class NetPlanner {
                 from[c.id] = c.keep && find(c.id) == comp;
                 to[c.id] = c.keep && find(c.id) == root;
             }
-            int j = cutAcross(from, to, -1, false, plain);
+            int j = cutAcross(from, to, -1, false, plain, -1);
             if (j < 0) return false;
             union(j, root);
             union(comp, root);
@@ -2422,9 +2422,10 @@ final class NetPlanner {
          * joined by a forced tunnel to a room of {@code from} within {@link #VEST_JUNCTION_REACH} of it, the places
          * tried as {@link #vestibuleJunctions} describes; with {@code open}, never from a refuge or a landing (which
          * take no more tunnels); with {@code plain}, the plain tunnel among the joining tunnel's shapes ({@link
-         * #plainAny}). The junction's id once one stays, else -1.
+         * #plainAny}); with {@code flow} 0 or more ({@link #gateRescue}, the gates' ways so far), only a junction by
+         * which the gates gain a way ({@link #gained}). The junction's id once one stays, else -1.
          */
-        int cutAcross(boolean[] from, boolean[] to, int skip, boolean open, boolean plain) {
+        int cutAcross(boolean[] from, boolean[] to, int skip, boolean open, boolean plain, int flow) {
             // {edge index, point, arc, cost, room}
             List<double[]> spots = new ArrayList<>();
             for (Chamber v : n.ch) {
@@ -2478,6 +2479,9 @@ final class NetPlanner {
                         boolean laid = allowed(v, j) && embed(ne, true);
                         plainAny = false;
                         if (!laid) return false;
+                        // gateRescue's junction stays only when the gates gain a way by it (cutJunction then mends
+                        // the tunnel it was cut into)
+                        if (flow >= 0 && !gained(flow, skip)) { unlay(ne); return false; }
                         ne.tree = true; ne.forced = true; n.forced++;
                         joined[0] = j.id;
                         return true;
@@ -2879,15 +2883,18 @@ final class NetPlanner {
          * and the tubes), a way round it, from the side that holds the entry to the side that holds the exit: a forced
          * tunnel between the two, the plain tunnel among its shapes ({@link #plainAcross}), else a junction room cut
          * into a tunnel of one side and joined to a room of the other ({@link #cutAcross}), the exit's side's rooms
-         * first, else one more flight from a landing ({@link #extraFlight}). Up to 6 rounds; a room nothing gets round
-         * is left.
+         * first, else one more flight from a landing ({@link #extraFlight}). A junction or a flight is kept only when
+         * the gates gain a way by it ({@link #gained}), else taken out again and the next place tried: a junction that
+         * joins the two sides into a tunnel only it reaches gains nothing, and stands on every way itself. A tunnel
+         * across stays: it may be the first of two steps, the next round's junction cut into it the second way. Up to 6
+         * rounds; a room nothing gets round is left.
          */
         void gateRescue() {
             java.util.Set<Integer> failed = new java.util.HashSet<>();
             for (int it = 0; it < 6; it++) {
                 boolean[] A, B;
-                int skip = -1;
-                if (NetGraph.maxFlow(n, n.entry, n.exit, false) < 2) {
+                int skip = -1, flow = NetGraph.maxFlow(n, n.entry, n.exit, false);
+                if (flow < 2) {
                     A = NetGraph.minCutSide(n, n.entry, n.exit, false);
                     B = new boolean[A.length];
                     for (int i = 0; i < A.length; i++) B[i] = !A[i];
@@ -2897,8 +2904,8 @@ final class NetPlanner {
                     A = NetGraph.reachWithout(n, n.entry, skip);
                     B = NetGraph.reachWithout(n, n.exit, skip);
                 }
-                if (plainAcross(A, B, skip) || cutAcross(B, A, skip, true, true) >= 0
-                        || cutAcross(A, B, skip, true, true) >= 0
+                if (plainAcross(A, B, skip) || cutAcross(B, A, skip, true, true, flow) >= 0
+                        || cutAcross(A, B, skip, true, true, flow) >= 0
                         || extraFlight(n.exit, skip) || extraFlight(n.entry, skip)) {
                     n.chokeRepairs++;
                     continue;
@@ -2921,13 +2928,29 @@ final class NetPlanner {
                 Chamber f = n.ch.get(fid);
                 if (!f.keep || !f.flight) continue;
                 if (!newFlight(n.ch.get(L), f, courts, 30, false)) continue;
-                int now = NetGraph.maxFlow(n, n.entry, n.exit, false);
-                if (now > flow || (now == flow && skip >= 0 && NetGraph.reachWithout(n, n.entry, skip)[n.exit])) return true;
+                if (gained(flow, skip)) return true;
                 Chamber q = n.ch.get(courts.remove(courts.size() - 1));
                 for (Edge o : new ArrayList<>(n.edges)) if (o.a == q.id || o.b == q.id) unlink(o);
                 q.keep = false;
             }
             return false;
+        }
+
+        /**
+         * {@link #gateRescue}: true when the gates now have more than {@code flow} ways between them, or room {@code
+         * skip} (when one is named) no longer stands on every way.
+         */
+        boolean gained(int flow, int skip) {
+            int now = NetGraph.maxFlow(n, n.entry, n.exit, false);
+            return now > flow || (now == flow && skip >= 0 && NetGraph.reachWithout(n, n.entry, skip)[n.exit]);
+        }
+
+        /** Takes an edge just embedded out again, with its ways, a climb's ledges and shafts, and its doors. */
+        void unlay(Edge e) {
+            for (Way l : e.ledges) n.ways.remove(l);
+            if (e.sh != null) n.shafts.remove(e.sh);
+            for (Shaft sh : e.stages) n.shafts.remove(sh);
+            unlink(e);
         }
 
         /**
@@ -2954,8 +2977,9 @@ final class NetPlanner {
             try {
                 for (int k = 0; k < Math.min(40, pairs.size()); k++) {
                     Edge e = edge(pairs.get(k)[0], pairs.get(k)[1]);
-                    if (!allowed(n.ch.get(e.a), n.ch.get(e.b))) continue;
-                    if (embed(e, true)) { e.loop = true; e.gate = true; n.cutRepairs++; return true; }
+                    if (!allowed(n.ch.get(e.a), n.ch.get(e.b)) || !embed(e, true)) continue;
+                    e.loop = true; e.gate = true; n.cutRepairs++;
+                    return true;
                 }
             } finally {
                 plainAny = false;
@@ -6214,7 +6238,11 @@ final class NetPlanner {
          * winding down 9 within a few blocks, a tunnel loses its upper floor to the vault under it and cannot be walked
          * up. Beside the walk, where the upper floor curls up toward its wall, the rough vault (15 to 19 tall) leaves a
          * hole as deep as the drop and 2 or 3 more, a fall of 16 to 19 from a coil of 13 to 18. A kink of a few blocks
-         * in a short tunnel by its doors, a step of up to 6, keeps its floor.
+         * in a short tunnel by its doors, a step of up to 6, keeps its floor. Where the line itself crosses over an
+         * earlier stretch, a loop rather than a kink, any drop of more than {@link #SELF_STEP} at the crossing counts:
+         * the lower stretch's vault takes the upper one's floor over its whole width there, and the upper walk meets a
+         * step as high as the drop. Coiling up 4 from a flight's top to a hall's door, such a tunnel was the only way
+         * from the bedrock landing and its flights to the rest of the cell, and in the blocks no one could walk it.
          */
         boolean crossesItself(Way wy) {
             double[] arc = new double[wy.n];
@@ -6230,8 +6258,29 @@ final class NetPlanner {
                     if (rise - wy.slab[hi] - wy.hgt[lo] < sp.clearV) return true;
                 }
             }
+            // stretches i and j (not neighbours) whose lines cross in plan
+            for (int i = 0; i + 1 < wy.n; i++) {
+                double ax = wy.x[i], az = wy.z[i], bx = wy.x[i + 1] - ax, bz = wy.z[i + 1] - az;
+                for (int j = i + 2; j + 1 < wy.n; j++) {
+                    double cx = wy.x[j] - ax, cz = wy.z[j] - az, ex = wy.x[j + 1] - wy.x[j], ez = wy.z[j + 1] - wy.z[j];
+                    double den = bx * ez - bz * ex;
+                    if (Math.abs(den) < 1e-9) continue;
+                    double s = (cx * ez - cz * ex) / den, t = (cx * bz - cz * bx) / den;
+                    if (s < 0 || s > 1 || t < 0 || t > 1) continue;
+                    double fi = wy.f[i] + (wy.f[i + 1] - wy.f[i]) * s, fj = wy.f[j] + (wy.f[j + 1] - wy.f[j]) * t;
+                    int lo = fi < fj ? i : j, hi = lo == i ? j : i;
+                    double rise = Math.abs(fj - fi);
+                    if (rise > SELF_STEP && rise - wy.slab[hi] - wy.hgt[lo] < sp.clearV) return true;
+                }
+            }
             return false;
         }
+
+        /**
+         * The most a tunnel may climb between two of its stretches whose lines cross in plan ({@link #crossesItself}):
+         * past it, the step at the crossing is 2 blocks or more however the floors round, more than a player steps up.
+         */
+        static final double SELF_STEP = 2;
 
         /**
          * The most a tunnel may drop between two of its stretches whose footprints overlap ({@link #crossesItself}):
