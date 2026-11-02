@@ -87,7 +87,22 @@ public final class MossbackCommands {
         Vec3 at = hit.getType() == HitResult.Type.MISS ? eye.add(look.scale(6)) : hit.getLocation().subtract(look.scale(1.2));
         MossbackEntity m = EREntities.MOSSBACK.get().create(level);
         if (m == null) return 0;
+        // on the nearest open floor round that point, where its whole box fits (never half in the rock)
+        BlockPos near = BlockPos.containing(at);
+        BlockPos best = null;
+        double bestD = Double.MAX_VALUE;
+        for (int dx = -5; dx <= 5; dx++)
+            for (int dy = -4; dy <= 4; dy++)
+                for (int dz = -5; dz <= 5; dz++) {
+                    BlockPos n = near.offset(dx, dy, dz);
+                    if (com.explorationremix.creature.climb.ClimbNodeEvaluator.classify(level, n.getX(), n.getY(), n.getZ(), 2, 1, 2)
+                            != com.explorationremix.creature.climb.ClimbNodeEvaluator.FLOOR) continue;
+                    double d = Vec3.atLowerCornerOf(n).add(1.0, 0.0, 1.0).distanceToSqr(at);
+                    if (d < bestD) { bestD = d; best = n; }
+                }
+        if (best != null) at = new Vec3(best.getX() + 1.0, best.getY(), best.getZ() + 1.0);
         m.moveTo(at.x, at.y, at.z, c.getSource().getRotation().y + 180.0F, 0.0F);
+        if (!level.noCollision(m)) { c.getSource().sendFailure(Component.literal("No room for a Mossback near " + near.toShortString())); return 0; }
         m.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(at)), MobSpawnType.COMMAND, null, null);
         m.setVariant(variant);
         level.addFreshEntity(m);
