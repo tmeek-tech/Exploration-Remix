@@ -15,6 +15,7 @@ import com.explorationremix.world.terrain.DeadEnds;
 import com.explorationremix.world.terrain.Entrances;
 import com.explorationremix.world.terrain.PlantCaves;
 import com.explorationremix.world.terrain.Rock;
+import com.explorationremix.world.terrain.Route;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import com.mojang.brigadier.CommandDispatcher;
@@ -50,9 +51,16 @@ import java.util.Locale;
  *     <li>{@code /remix layers}: the layer table</li>
  *     <li>{@code /remix info}: where you are; in a deep layer also the network's node and way there (the chamber you
  *     are in or the nearest, the nearest tunnel or walk, a climb, the rift's ledge path); above the old floor the
- *     ground and surface biome over you, the entrance under you and how the plant caves grow there</li>
- *     <li>{@code /remix tp <1-3>}: the landing at the top of a layer, under its band</li>
- *     <li>{@code /remix tp gate <1-3>}: the landing above a band, where its gate passage starts</li>
+ *     ground and surface biome over you, the entrance under you, how the plant caves grow there and the nearest den
+ *     gate, the way down to the Blue Reaches</li>
+ *     <li>{@code /remix tp <1-3>}: the landing at the top of a layer, under its band (the Blue Reaches': the nearest
+ *     den gate's)</li>
+ *     <li>{@code /remix tp gate <1-3>}: the landing above a band, where its gate passage starts (band 1: the nearest
+ *     den gate's)</li>
+ *     <li>{@code /remix tp den}: onto the floor of the nearest den gate's upper landing, about 8 blocks from its
+ *     middle, facing the mouth of its passage down</li>
+ *     <li>{@code /remix dengates}: the den gates in the nine cells round you, nearest first: each one's index in its
+ *     cell, the middle of its upper landing, how far away it is and the top of its ramp up into the pack's caves</li>
  *     <li>{@code /remix tp bedrock}: the bedrock landing of the last layer's network in this cell</li>
  *     <li>{@code /remix tp biome <name>}: a deep biome's nearest chamber in the networks of the nine cells round you
  *     (set pieces first), standing on its floor in open air; or the Silver Fern Rift, the Ivory Root Cavern, an
@@ -90,10 +98,12 @@ public final class RemixCommands {
                         .then(Commands.argument("cells", IntegerArgumentType.integer(1, 24)).executes(c -> entrances(c, IntegerArgumentType.getInteger(c, "cells")))))
                 .then(Commands.literal("deadends").executes(c -> deadEnds(c, 4))
                         .then(Commands.argument("radius", IntegerArgumentType.integer(1, 12)).executes(c -> deadEnds(c, IntegerArgumentType.getInteger(c, "radius")))))
+                .then(Commands.literal("dengates").executes(RemixCommands::denGates))
                 .then(Commands.literal("tp")
                         .then(Commands.argument("layer", IntegerArgumentType.integer(1, 8)).executes(c -> tpLayer(c, IntegerArgumentType.getInteger(c, "layer"))))
                         .then(Commands.literal("gate").then(Commands.argument("band", IntegerArgumentType.integer(1, 8))
                                 .executes(c -> tpGate(c, IntegerArgumentType.getInteger(c, "band")))))
+                        .then(Commands.literal("den").executes(RemixCommands::tpDen))
                         .then(Commands.literal("bedrock").executes(RemixCommands::tpBedrock))
                         .then(Commands.literal("biome").then(Commands.argument("name", StringArgumentType.word())
                                 .suggests((c, b) -> SharedSuggestionProvider.suggest(java.util.stream.Stream.concat(
@@ -157,7 +167,12 @@ public final class RemixCommands {
         say(c, "At " + x + " " + y + " " + z + ": " + where + ", cell " + cx + " " + cz);
         DeepBiome b = t.biomeAt(x, y, z);
         if (b != null) say(c, "  deep biome: " + shortName(b) + " (" + b.role.name().toLowerCase(Locale.ROOT) + ")");
-        if (y >= s.packFloor) upperInfo(c, x, y, z);
+        if (y >= s.packFloor) {
+            upperInfo(c, x, y, z);
+            Plans.Gate den = t.plans.nearestDenGate(x, z);
+            say(c, String.format(Locale.ROOT, "  the way down to the Blue Reaches: den gate %d of cell %d %d, its landing at %.0f %.0f %.0f (%.0f blocks away)",
+                    den.den, den.cellX, den.cellZ, den.ux, den.uFloor + 1, den.uz, Math.hypot(den.ux - x, den.uz - z)));
+        }
         if (li >= 0) {
             for (String line : t.network.describe(li, x, y, z)) say(c, "  " + line);
             Plans.Gate exit = li + 2 <= s.layerCount ? t.plans.gate(li + 2, cx, cz) : null;
@@ -205,7 +220,7 @@ public final class RemixCommands {
         ServerPlayer pl = c.getSource().getPlayerOrException();
         Plans.Gate g = gateHere(t, pl, layer);
         teleport(pl, g.lx, g.lFloor + 1, g.lz);
-        say(c, "Layer " + layer + " (" + t.shape.id(layer - 1) + "): the landing under band " + layer + ".");
+        say(c, "Layer " + layer + " (" + t.shape.id(layer - 1) + "): the landing under band " + layer + which(g) + ".");
         return 1;
     }
 
@@ -219,8 +234,82 @@ public final class RemixCommands {
         ServerPlayer pl = c.getSource().getPlayerOrException();
         Plans.Gate g = gateHere(t, pl, band);
         teleport(pl, g.ux, g.uFloor + 1, g.uz);
-        say(c, "Gate " + band + ": the landing above band " + band + ". The passage starts in its floor.");
+        say(c, "Gate " + band + which(g) + ": the landing above band " + band + ". The passage starts in its floor.");
         return 1;
+    }
+
+    /**
+     * Onto the floor of the nearest den gate's upper landing: the ring round the mouth of its passage, about 8 blocks
+     * from the landing's middle, as far round from where the passage heads and where the ramp leaves as the floor
+     * allows, facing the mouth.
+     */
+    private static int tpDen(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        ServerPlayer pl = c.getSource().getPlayerOrException();
+        ServerLevel level = pl.server.getLevel(Level.OVERWORLD);
+        if (level == null) return 0;
+        Plans.Gate g = t.plans.nearestDenGate(pl.getX(), pl.getZ());
+        Route.Link ramp = t.plans.ramp(g);
+        // the mouth: the passage's middle where it leaves the landing's floor
+        double tm = g.tAt(g.uFloor), mx = g.px(tm), mz = g.pz(tm);
+        double down = Math.atan2(mz - g.uz, mx - g.ux), up = Math.atan2(ramp.z2() - ramp.z1(), ramp.x2() - ramp.x1());
+        if (Math.hypot(mx - g.ux, mz - g.uz) < 0.5) down = Math.atan2(g.lz - g.uz, g.lx - g.ux);
+        // twelve places round the ring, those furthest round from the passage's way and the ramp's first
+        Integer[] order = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+        final double dn = down, ra = up;
+        Arrays.sort(order, java.util.Comparator.comparingDouble(k -> -Math.min(Math.abs(Math.IEEEremainder(k * Math.PI / 6 - dn, 2 * Math.PI)),
+                Math.abs(Math.IEEEremainder(k * Math.PI / 6 - ra, 2 * Math.PI)))));
+        double sx = g.ux + Math.cos(order[0] * Math.PI / 6) * DEN_RING, sz = g.uz + Math.sin(order[0] * Math.PI / 6) * DEN_RING, sy = g.uFloor + 1;
+        for (int k : order) {
+            double a = k * Math.PI / 6;
+            int x = (int) Math.floor(g.ux + Math.cos(a) * DEN_RING), z = (int) Math.floor(g.uz + Math.sin(a) * DEN_RING);
+            BlockPos stand = findStand(level, x, (int) Math.floor(g.uFloor) + 1, z);
+            // on the landing's own floor, not down the passage or up on a ledge of the pack's caves
+            if (stand == null || Math.abs(stand.getY() - (g.uFloor + 1)) > 3) continue;
+            sx = x + 0.5;
+            sy = stand.getY();
+            sz = z + 0.5;
+            break;
+        }
+        double tx = mx - sx, ty = g.uFloor - (sy + 1.62), tz = mz - sz;
+        float yaw = (float) Math.toDegrees(Math.atan2(-tx, tz)), pitch = (float) Math.toDegrees(Math.atan2(-ty, Math.hypot(tx, tz)));
+        level.getChunk(((int) Math.floor(sx)) >> 4, ((int) Math.floor(sz)) >> 4, ChunkStatus.FULL, true);
+        pl.teleportTo(level, sx, sy, sz, yaw, pitch);
+        say(c, String.format(Locale.ROOT, "Den gate %d of cell %d %d: on its landing's floor at %.0f %.0f %.0f, facing the mouth of its passage down; "
+                + "its ramp climbs to %.0f %.0f %.0f.", g.den, g.cellX, g.cellZ, sx, sy, sz, ramp.x2(), ramp.y2(), ramp.z2()));
+        return 1;
+    }
+
+    /** How far from the middle of a den gate's upper landing {@code /remix tp den} stands. */
+    private static final double DEN_RING = 8;
+
+    /**
+     * The den gates in the nine cells round the command's position, nearest first: each one's index in its cell, the
+     * middle of its upper landing (over its floor), how far away it is, and the top of its ramp up into the pack's
+     * caves. Works from the console.
+     */
+    private static int denGates(CommandContext<CommandSourceStack> c) {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        Vec3 from = c.getSource().getPosition();
+        int cx = t.plans.cellOf(from.x), cz = t.plans.cellOf(from.z);
+        java.util.List<Plans.Gate> all = new java.util.ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) all.addAll(t.plans.denGates(cx + dx, cz + dz));
+        all.sort(java.util.Comparator.comparingDouble(g -> Math.hypot(g.ux - from.x, g.uz - from.z)));
+        say(c, String.format(Locale.ROOT, "%d den gates in the nine cells round %.0f %.0f (cells %d to %d, %d to %d), nearest first:", all.size(),
+                from.x, from.z, cx - 1, cx + 1, cz - 1, cz + 1));
+        for (Plans.Gate g : all) {
+            Route.Link r = t.plans.ramp(g);
+            say(c, String.format(Locale.ROOT, "  cell %d %d #%d: landing %.0f %.0f %.0f, %.0f blocks away; ramp top %.0f %.0f %.0f", g.cellX, g.cellZ,
+                    g.den, g.ux, g.uFloor + 1, g.uz, Math.hypot(g.ux - from.x, g.uz - from.z), r.x2(), r.y2(), r.z2()));
+        }
+        return all.size();
+    }
+
+    /** For a band 1 gate, which den gate it is (" (den gate i of cell x z)"); nothing for a deeper gate. */
+    private static String which(Plans.Gate g) {
+        return g.band == 1 ? String.format(Locale.ROOT, " (den gate %d of cell %d %d)", g.den, g.cellX, g.cellZ) : "";
     }
 
     private static int tpBedrock(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
@@ -934,7 +1023,9 @@ public final class RemixCommands {
         return null;
     }
 
+    /** The gate through a band for the player: band 1's is the nearest den gate, a deeper band's its cell's. */
     private static Plans.Gate gateHere(Terrain t, ServerPlayer pl, int band) {
+        if (band == 1) return t.plans.nearestDenGate(pl.getX(), pl.getZ());
         return t.plans.gate(band, t.plans.cellOf((int) Math.floor(pl.getX())), t.plans.cellOf((int) Math.floor(pl.getZ())));
     }
 

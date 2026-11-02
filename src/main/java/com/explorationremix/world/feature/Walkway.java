@@ -12,7 +12,7 @@ import com.explorationremix.world.terrain.Terrain;
  * something solid asks here first and leaves the corridors alone: no column, spike, root, pool rim, machine part or
  * waterfall stands on a way or hangs into its headroom. The ways are the network's (section 12.2): every tunnel, inner
  * walk, ledge passage and stub of every cell, the rift's ledge path, the Causeway's column path (a walking line for this
- * guard only: nothing carves it), and the gates' passages and landings.
+ * guard only: nothing carves it), the gates' passages and landings, and the den gates' ramps up into the pack's caves.
  */
 public final class Walkway {
     /** How far from a walking line its corridor reaches sideways, at least. */
@@ -49,24 +49,34 @@ public final class Walkway {
         return false;
     }
 
-    /** The gate passages through the bands, their landings, and the first gate's ramp up into the pack's caves. */
+    /**
+     * The gate passages through the bands and their landings: in band 1 every den gate's ({@link Plans#denGates}), each
+     * with its ramp up into the pack's caves.
+     */
     private static boolean nearGate(Terrain t, int x, int z, int lo, int hi, double margin) {
         if (lo > t.shape.packFloor + 48) return false;
         Plans plans = t.plans;
         int cx = plans.cellOf(x), cz = plans.cellOf(z);
-        for (int band = 1; band <= t.shape.layerCount; band++) {
-            Plans.Gate g = plans.gate(band, cx, cz);
-            if (!g.overlaps(x, z, x, z, margin + 6)) continue;
-            double r = g.landR + margin;
-            if (Math.hypot(x - g.ux, z - g.uz) < r && hi >= g.uFloor && lo <= g.uFloor + 6) return true;
-            if (Math.hypot(x - g.lx, z - g.lz) < r && hi >= g.lFloor && lo <= g.lFloor + 6) return true;
-            for (int y = lo; y <= hi; y += 2) {
-                if (g.passageXZ(x + 0.5, y, z + 0.5) < g.radius * 1.4 + margin) return true;
-            }
-            if (band == 1) {
-                Route.Link ramp = plans.ramp(g);
-                for (int y = lo; y <= hi; y += 2) if (ramp.dist(x + 0.5, y + 0.5, z + 0.5) < margin + 1.5) return true;
-            }
+        for (Plans.Gate g : plans.denGates(cx, cz)) {
+            if (nearPassage(g, x, z, lo, hi, margin)) return true;
+            // a ramp runs far past the box round its gate's passage and landings, so it has its own
+            Route.Link ramp = plans.ramp(g);
+            if (!Terrain.rampNear(ramp, x, z, margin + 6)) continue;
+            for (int y = lo; y <= hi; y += 2) if (ramp.dist(x + 0.5, y + 0.5, z + 0.5) < margin + 1.5) return true;
+        }
+        for (int band = 2; band <= t.shape.layerCount; band++)
+            if (nearPassage(plans.gate(band, cx, cz), x, z, lo, hi, margin)) return true;
+        return false;
+    }
+
+    /** A gate's two landings (their floors and six blocks over them) and its passage. */
+    private static boolean nearPassage(Plans.Gate g, int x, int z, int lo, int hi, double margin) {
+        if (!g.overlaps(x, z, x, z, margin + 6)) return false;
+        double r = g.landR + margin;
+        if (Math.hypot(x - g.ux, z - g.uz) < r && hi >= g.uFloor && lo <= g.uFloor + 6) return true;
+        if (Math.hypot(x - g.lx, z - g.lz) < r && hi >= g.lFloor && lo <= g.lFloor + 6) return true;
+        for (int y = lo; y <= hi; y += 2) {
+            if (g.passageXZ(x + 0.5, y, z + 0.5) < g.radius * 1.4 + margin) return true;
         }
         return false;
     }
