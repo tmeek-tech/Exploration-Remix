@@ -512,6 +512,11 @@ public final class LavaFlood {
     /** After a command changed the clock: save it, tell every client, and look the chunks over on the next tick. */
     static void clockChanged(ServerLevel level) {
         if (data == null) return;
+        // a command that puts the cycle back before its full lava lets that full lava reset the terrain again
+        if (band != null) {
+            LavaCycle.Phase p = data.clock.cycle(band.rise()).at(data.clock.tick(level.getGameTime())).phase();
+            if (p == LavaCycle.Phase.CALM || p == LavaCycle.Phase.WARNING || p == LavaCycle.Phase.RISE) data.resetCycle = -1;
+        }
         data.setDirty();
         wake = true;
         send(level, PacketDistributor.DIMENSION.with(() -> Level.OVERWORLD));

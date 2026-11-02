@@ -89,7 +89,7 @@ public final class GalleryChanges {
         if (level.isClientSide || quiet) return;
         int y = pos.getY();
         if (!ready) setUp();
-        if (y < lo || y > hi) return;
+        if (y < lo || y > hi || !ChangeLog.holds(y - lo)) return;
         if (level.dimension() != Level.OVERWORLD || !(level instanceof ServerLevel sl)) return;
         // the chunk's own thread only: a change made elsewhere (a mod writing from a worker) is left out rather than racing
         if (!sl.getServer().isSameThread()) return;
@@ -138,6 +138,20 @@ public final class GalleryChanges {
 
     private static int kindOf(BlockState s) { return LavaFlood.kindOf(s); }
 
+    /**
+     * Breaks the block the way a player's pick would (its loot, a container's contents and a shulker box's with it, the
+     * break sound and particles) without recording the change, or any change it sets off.
+     */
+    static void destroyQuietly(ServerLevel level, BlockPos pos) {
+        boolean was = quiet;
+        quiet = true;
+        try {
+            level.destroyBlock(pos, true);
+        } finally {
+            quiet = was;
+        }
+    }
+
     // ================================================================================================ reading the log
 
     /**
@@ -146,7 +160,7 @@ public final class GalleryChanges {
      */
     @Nullable
     public static BlockState original(LevelChunk chunk, BlockPos pos) {
-        if (!inLayer(pos.getY())) return null;
+        if (!inLayer(pos.getY()) || !ChangeLog.holds(pos.getY() - lo)) return null;
         LavaChunk d = LavaChunk.of(chunk);
         if (d == null) return null;
         d.log.align(lo);

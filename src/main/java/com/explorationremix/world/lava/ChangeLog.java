@@ -11,9 +11,10 @@ import it.unimi.dsi.fastutil.longs.LongIterator;
  * (blocks are ints: the game's block state ids at run time), so it is tested offline; {@link GalleryChanges} feeds it
  * real blocks, {@link LavaChunk} saves it with the chunk and {@link TerrainReset} puts the blocks back.
  *
- * <p>A position is a 16-bit key: x and z in the chunk (0 to 15) and dy, its height over the Galleries' bottom (0 to
- * 255; the layer is at most 256 tall). The record keeps the bottom it was written against ({@link #base}); a changed
- * config moves the layer, and {@link #align} moves the keys with it, dropping those that leave the layer.
+ * <p>A position is a 17-bit key: x and z in the chunk (0 to 15) and dy, its height over the Galleries' bottom (0 to
+ * {@link #MAX_DY}; the layer is never that tall, even when the bands' thickness adds rows to it). The record keeps the
+ * bottom it was written against ({@link #base}); a changed config moves the layer, and {@link #align} moves the keys
+ * with it, dropping those that leave 0 to {@link #MAX_DY}.
  *
  * <p>Only the first change of a position is kept (the terrain's own block), until the reset puts it back or a later
  * change happens to bring it back by itself ({@link GalleryChanges} then removes it).
@@ -23,6 +24,10 @@ public final class ChangeLog {
     public static final int NO_BASE = Integer.MIN_VALUE;
     /** What {@link #state} and {@link #gen} answer for a position the log does not hold. */
     public static final int NONE = -1;
+    /** The highest height over the Galleries' bottom a key holds. */
+    public static final int MAX_DY = 511;
+    /** Keys are below this. */
+    static final int KEYS = 1 << 17;
     private static final long ABSENT = Long.MIN_VALUE;
 
     private final Int2LongOpenHashMap map = new Int2LongOpenHashMap();
@@ -35,15 +40,21 @@ public final class ChangeLog {
 
     // ================================================================================================ keys
 
-    /** The key of the block at x, z in the chunk (0 to 15) and dy over the Galleries' bottom (0 to 255). */
+    /**
+     * The key of the block at x, z in the chunk (0 to 15) and dy over the Galleries' bottom (0 to {@link #MAX_DY}).
+     * Callers check dy first ({@link #holds}): this throws, and it runs inside the game's block changes.
+     */
     public static int key(int x, int dy, int z) {
-        if ((x | z) >>> 4 != 0 || dy >>> 8 != 0) throw new IllegalArgumentException("position " + x + ", " + dy + ", " + z);
+        if ((x | z) >>> 4 != 0 || !holds(dy)) throw new IllegalArgumentException("position " + x + ", " + dy + ", " + z);
         return x | z << 4 | dy << 8;
     }
 
+    /** True for a height over the Galleries' bottom that a key can hold. */
+    public static boolean holds(int dy) { return dy >= 0 && dy <= MAX_DY; }
+
     public static int x(int key) { return key & 15; }
     public static int z(int key) { return key >> 4 & 15; }
-    public static int dy(int key) { return key >> 8 & 255; }
+    public static int dy(int key) { return key >> 8 & MAX_DY; }
 
     private static long pack(int state, int gen) { return (long) state << 32 | (gen & 0xFFFFFFFFL); }
     private static int stateOf(long v) { return (int) (v >> 32); }
@@ -125,7 +136,7 @@ public final class ChangeLog {
         IntArrayList out = new IntArrayList();
         for (Int2LongMap.Entry e : map.int2LongEntrySet()) if (genOf(e.getLongValue()) < gen) out.add(e.getIntKey());
         int[] a = out.toIntArray();
-        // a key is x | z << 4 | dy << 8: dy is its most significant field, so sorting the keys orders them by dy, z, x
+        // a key is x | z << 4 | dy << 8 (non-negative): dy is its most significant field, so sorting orders them by dy, z, x
         java.util.Arrays.sort(a);
         return a;
     }
@@ -148,8 +159,8 @@ public final class ChangeLog {
 
     /**
      * Lines the log up with the Galleries' bottom at {@code bottomY}: a log written against another bottom has its
-     * keys moved by the difference, and those that leave 0 to 255 are dropped (that part of the world moved out of the
-     * layer when the config changed).
+     * keys moved by the difference, and those that leave 0 to {@link #MAX_DY} are dropped (that part of the world moved
+     * out of the layer when the config changed).
      */
     public void align(int bottomY) {
         if (base == bottomY) return;
@@ -159,7 +170,7 @@ public final class ChangeLog {
             moved.defaultReturnValue(ABSENT);
             for (Int2LongMap.Entry e : map.int2LongEntrySet()) {
                 int k = e.getIntKey(), dy = dy(k) + by;
-                if (dy < 0 || dy > 255) continue;
+                if (!holds(dy)) continue;
                 moved.put(x(k) | z(k) << 4 | dy << 8, e.getLongValue());
             }
             map.clear();
@@ -187,14 +198,14 @@ public final class ChangeLog {
 
     /**
      * Reads saved entries back (replacing what the log held), written against the bottom {@code base}. Arrays of
-     * different lengths keep what they have in common; keys outside 16 bits and negative states are skipped.
+     * different lengths keep what they have in common; keys outside 17 bits and negative states are skipped.
      */
     public void load(int base, int[] keys, int[] states, int[] gens) {
         clear();
         this.base = base;
         int n = Math.min(keys.length, Math.min(states.length, gens.length));
         for (int i = 0; i < n; i++) {
-            if (keys[i] >>> 16 != 0 || states[i] < 0) continue;
+            if (keys[i] < 0 || keys[i] >= KEYS || states[i] < 0) continue;
             record(keys[i], states[i], gens[i]);
         }
     }
