@@ -6,10 +6,11 @@ package com.explorationremix.world.terrain;
  * a pure, thread-safe function of the seed and the position, like the fields' density, and costs about one field
  * lookup (a field answers from the same per-column caches its density uses).
  *
- * <p>The Galleries' field ({@code GalleriesField}) answers for the Basalt Galleries and its sub-biomes, and passes the
- * tube queries on to the tube field ({@code TubeField}). The Wasteland asks nothing: its look is the old Galleries',
- * patches and seams of noise. {@link #NONE} answers "no columns, no clusters, no tubes, no cones" everywhere, which the
- * palette reads as plain rock: the look of a field that has none of these.
+ * <p>The Galleries' field ({@link GalleriesField}) answers for the Basalt Galleries and its sub-biomes, and passes the
+ * tube queries on to the tube field ({@link TubeField}) behind its country veto. The Wasteland's look is the old
+ * Galleries', patches and seams of noise: it asks only {@link #lavaKept}, which the Wasteland's field
+ * ({@link WastelandField}) answers. {@link #NONE} answers "no columns, no clusters, no tubes, no cones" everywhere, which
+ * the palette reads as plain rock: the look of a field that has none of these.
  */
 public interface LookQueries {
     /**
@@ -52,12 +53,6 @@ public interface LookQueries {
      */
     boolean lavaKept(int x, int y, int z);
 
-    /**
-     * Interim, while the planned network still makes layers 2 and 3: the floor of a planned blind tube's end that has
-     * magma instead of a lava pool (Network.tubeStubEnd). Goes with the planned tubes; the noise fields have no such ends.
-     */
-    default boolean tubeStubEnd(int x, int y, int z) { return false; }
-
     /** No columns, clusters, tubes or cones anywhere. */
     LookQueries NONE = new LookQueries() {
         @Override public long columnCell(int x, int z) { return 0; }
@@ -71,20 +66,20 @@ public interface LookQueries {
     };
 
     /**
-     * The interim answers while the planned network still makes layers 2 and 3: the planned tubes' shell depth, nothing
-     * else. Replaced by the Galleries' field when it lands.
+     * The noise fields' answers: the Galleries' field ({@code g}) for its column cells, hanging clusters, tubes and cones,
+     * the Wasteland's ({@code w}) for its lava rule. A null field (a layout without that layer) answers as {@link #NONE}.
      */
-    static LookQueries planned(Terrain t) {
+    static LookQueries of(GalleriesField g, WastelandField w) {
+        if (g == null && w == null) return NONE;
         return new LookQueries() {
-            @Override public long columnCell(int x, int z) { return 0; }
-            @Override public double columnEdge(int x, int z) { return 1e9; }
-            @Override public double hang(int x, int y, int z) { return 0; }
-            @Override public double tube(int x, int y, int z) { return t.tubeShellDepth(x, y, z) > 1 ? 1 : -1; }
-            @Override public double tubeShellDepth(int x, int y, int z) { return t.tubeShellDepth(x, y, z); }
-            @Override public boolean tubeRib(int x, int y, int z) { return false; }
-            @Override public double cone(int x, int z) { return 1e9; }
-            @Override public boolean lavaKept(int x, int y, int z) { return false; }
-            @Override public boolean tubeStubEnd(int x, int y, int z) { return t.tubeStubEnd(x, y, z); }
+            @Override public long columnCell(int x, int z) { return g != null ? g.columnCell(x, z) : 0; }
+            @Override public double columnEdge(int x, int z) { return g != null ? g.columnEdge(x, z) : 1e9; }
+            @Override public double hang(int x, int y, int z) { return g != null ? g.hang(x, y, z) : 0; }
+            @Override public double tube(int x, int y, int z) { return g != null ? g.tube(x, y, z) : 1e9; }
+            @Override public double tubeShellDepth(int x, int y, int z) { return g != null ? g.tubeShellDepth(x, y, z) : 1e9; }
+            @Override public boolean tubeRib(int x, int y, int z) { return g != null && g.tubeRib(x, y, z); }
+            @Override public double cone(int x, int z) { return g != null ? g.cone(x, z) : 1e9; }
+            @Override public boolean lavaKept(int x, int y, int z) { return w != null && w.lavaKept(x, y, z); }
         };
     }
 }

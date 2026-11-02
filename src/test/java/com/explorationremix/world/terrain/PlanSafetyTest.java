@@ -1,7 +1,6 @@
 package com.explorationremix.world.terrain;
 
 import com.explorationremix.world.terrain.Net.Chamber;
-import com.explorationremix.world.terrain.Net.Kind;
 import com.explorationremix.world.terrain.Net.Way;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -25,11 +24,12 @@ class PlanSafetyTest {
     void unhook() { NetPlanner.failHook = null; }
 
     /**
-     * Every attempt of every layer's plan in cell 0,0 throws: each plan is the two landings and nothing else, the fault
-     * is recorded, the neighbours plan as ever, and every query of the terrain over the cell and its eight neighbours
-     * answers (density, fine density, fluid, biome, the materials' and features' queries, the walking lines, climbs,
-     * vents, hall spans, and the dev tools' places, descriptions and bedrock landing). In the cell, every block sampled
-     * away from the landings and the gates is rock.
+     * Every attempt of every planned layer's plan in cell 0,0 throws: each plan is the two landings and nothing else, the
+     * fault is recorded, the neighbours plan as ever, and every query of the terrain over the cell and its eight
+     * neighbours answers, in every layer (density, fine density, fluid, biome, the materials' and features' queries, the
+     * walking lines, climbs, vents, and the dev tools' places and descriptions). In the cell, every block of a planned
+     * layer sampled away from the landings and the gates is rock. The noise layers (the Wasteland, the Galleries) have no
+     * plan to fail, no walking lines and no climbs.
      */
     @Test
     void aCellWhosePlansAllThrowIsRock() {
@@ -39,6 +39,7 @@ class PlanSafetyTest {
         int cell = (int) w.cell, layers = t.shape.layerCount;
         List<String> fails = new ArrayList<>();
         for (int li = 0; li < layers; li++) {
+            if (!Terrain.planned(li)) continue;
             Net n = w.net(li, 0, 0);
             String tg = "layer " + li + " cell 0,0";
             if (!n.failed || n.attempts != NetPlanner.ATTEMPTS) fails.add(tg + ": failed " + n.failed + " after " + n.attempts + " attempts");
@@ -59,34 +60,37 @@ class PlanSafetyTest {
         for (int x = -cell / 2; x < cell + cell / 2; x += 23) for (int z = -cell / 2; z < cell + cell / 2; z += 29) {
             boolean inCell = x >= 0 && x < cell && z >= 0 && z < cell;
             for (int li = 0; li < layers; li++) {
-                t.wayLinesAt(li, x, z, 24);
-                t.carvedLinesAt(li, x, z, 24);
+                int lines = t.wayLinesAt(li, x, z, 24).n + t.carvedLinesAt(li, x, z, 24).n;
+                if (!Terrain.planned(li) && lines != 0) fails.add("walking lines in noise layer " + li + " at " + x + " " + z);
                 for (int y = t.shape.bottom(li); y <= t.shape.top(li); y += 7) {
                     double d = t.density(x, y, z), f = t.fine(x, y, z, d);
                     t.fluidAt(x, y, z);
                     if (t.biomeAt(x, y, z) == null) fails.add("no biome at " + x + " " + y + " " + z);
                     t.geodeShellDepth(x, y, z);
                     t.tubeShellDepth(x, y, z);
-                    t.tubeStubEnd(x, y, z);
-                    t.bedrockLanding(x, y, z);
+                    t.looks.tube(x, y, z);
+                    t.looks.hang(x, y, z);
+                    t.looks.lavaKept(x, y, z);
                     t.citySite(x, y, z);
                     samples++;
-                    if (!inCell || f > 0) continue;
+                    if (!inCell || f > 0 || !Terrain.planned(li)) continue;
                     open++;
                     if (!nearLanding(t, w.net(li, 0, 0), li, x, z) && fails.size() < 40) fails.add("open at " + x + " " + y + " " + z + " in the failed cell (layer " + li + ")");
                 }
             }
-            t.hallSpanAt(x, z);
             t.ventsNear(x, z, 48);
         }
         for (int li = 0; li < layers; li++) {
-            t.shaftsIn(-16, -16, cell + 15, cell + 15, li);
-            for (String line : w.describe(li, cell / 2, t.shape.waterY(li) + 10, cell / 2)) assertNotNull(line);
+            List<Net.Shaft> shafts = t.shaftsIn(-16, -16, cell + 15, cell + 15, li);
+            if (!Terrain.planned(li) && !shafts.isEmpty()) fails.add("climbs in noise layer " + li);
+            for (String line : t.describe(cell / 2, t.shape.waterY(li) + 10, cell / 2)) assertNotNull(line);
         }
-        for (DeepBiome b : DeepBiome.values()) w.places(b, cell / 2.0, cell / 2.0);
-        // /remix tp bedrock stands on the last layer's bedrock landing
-        Net bottom = t.network(layers - 1, 0, 0);
-        assertEquals(Kind.BEDROCK, bottom.ch.get(bottom.exit).kind);
+        for (DeepBiome b : DeepBiome.values()) t.places(b, cell / 2.0, cell / 2.0);
+        // the noise layers have no plan: asking for one is a mistake
+        for (int li = 0; li < layers; li++) {
+            int l = li;
+            if (!Terrain.planned(li)) assertThrows(IllegalArgumentException.class, () -> t.network(l, 0, 0));
+        }
         System.out.printf("aCellWhosePlansAllThrowIsRock: %d samples, %d open in the failed cell (at its landings)%n", samples, open);
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
     }
@@ -103,20 +107,19 @@ class PlanSafetyTest {
     }
 
     /**
-     * Attempt 0 of every layer's plan in cell 0,0 throws, and attempt 1 is kept: its layout moves (another plan hash),
-     * and what the cell shares with its neighbours stays where it was: the portal vestibules (place, floor, size,
-     * look), their stubs across the seams, and the landings, the Basalt Galleries' bedrock landing too. In the Deep
-     * Gardens, the Wasteland and the Basalt Galleries no block within {@link #SEAM_SAME} of the cell's edges changes
-     * either (the cell's own tunnels start at the vestibules' inner doors). Two things may change at a seam, as they
-     * may in any plan: a vestibule that no tunnel of the salted plan reaches goes with its stub, and the stub ends
-     * blind at the seam (its blocks are not compared); and the Blue Reaches' deep dark, faded by the rift's geodes and
-     * closed where the plan did not join it, both the cell's own layout, may move a few blocks at the seams there (its
-     * blocks are not compared).
+     * Attempt 0 of every planned layer's plan in cell 0,0 throws, and attempt 1 is kept: its layout moves (another plan
+     * hash), and what the cell shares with its neighbours stays where it was: the portal vestibules (place, floor, size,
+     * look), their stubs across the seams, and the landings. In the Deep Gardens no block within {@link #SEAM_SAME} of
+     * the cell's edges changes either (the cell's own tunnels start at the vestibules' inner doors). Two things may
+     * change at a seam, as they may in any plan: a vestibule that no tunnel of the salted plan reaches goes with its stub,
+     * and the stub ends blind at the seam (its blocks are not compared); and the Blue Reaches' deep dark, faded by the
+     * rift's geodes and closed where the plan did not join it, both the cell's own layout, may move a few blocks at the
+     * seams there (its blocks are not compared).
      */
     @Test
     void aPlanThatThrowsIsMadeAgainWithWhatItSharesInPlace() {
         Terrain plain = new Terrain(TerrainSettings.defaults(), -64, SALT_SEED);
-        int layers = plain.shape.layerCount;
+        int layers = Terrain.WASTELAND;   // the planned layers
         Net[] a = new Net[layers], b = new Net[layers];
         for (int li = 0; li < layers; li++) a[li] = plain.network.net(li, 0, 0);
         NetPlanner.failHook = (seed, li, cx, cz, attempt) -> seed == SALT_SEED && cx == 0 && cz == 0 && attempt == 0;
@@ -179,20 +182,14 @@ class PlanSafetyTest {
         return false;
     }
 
-    /**
-     * {seed, cx, cz} of Wasteland cells whose plans threw (an IndexOutOfBoundsException in a junction room cut into a
-     * tunnel that an earlier junction had already cut in two): seed 496 at the default config, and seed 268 with the
-     * Wasteland 160 tall.
-     */
-    static final long[][] FAULT_CELLS = {{496, -1, -1, 0}, {268, -1, 0, 160}};
-
     /** Seeds and cells the sweep plans: no other test plans them. */
     static final long[] SWEEP_SEEDS = {900, 901, 902, 903, 904, 905, 906, 907, 908, 909, 910, 911, 912, 913, 914, 915, 916, 917, 918, 919};
     static final int[][] SWEEP_CELLS = {{1, 2}, {-4, 0}, {6, -3}};
 
     /**
-     * No plan of the deep layers below the Deep Gardens throws, over 60 cells each that no other test plans and the cells
-     * where plans were found to throw ({@link #FAULT_CELLS}): every one is made at the first attempt.
+     * No plan of the planned layers (the Blue Reaches and the Deep Gardens) throws, over 60 cells each that no other test
+     * plans: every one is made at the first attempt. (The Wasteland and the Basalt Galleries, whose plans threw, are
+     * noise fields now and have no plan.)
      */
     @Test
     void sweepFindsNoFault() {
@@ -201,16 +198,10 @@ class PlanSafetyTest {
         int plans = 0;
         for (long seed : SWEEP_SEEDS) {
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
-            for (int[] c : SWEEP_CELLS) for (int li : new int[]{Terrain.WASTELAND, Terrain.GALLERIES}) {
+            for (int[] c : SWEEP_CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
                 plans++;
                 firstAttempt(NetPlanner.plan(t.network, li, c[0], c[1]), NetworkTest.tag(seed, li, c[0], c[1]), fails);
             }
-        }
-        for (long[] c : FAULT_CELLS) {
-            plans++;
-            Terrain t = new Terrain(c[3] == 0 ? TerrainSettings.defaults() : wastelandTall((int) c[3]), -64, c[0]);
-            firstAttempt(NetPlanner.plan(t.network, Terrain.WASTELAND, (int) c[1], (int) c[2]), NetworkTest.tag(c[0], Terrain.WASTELAND, (int) c[1], (int) c[2])
-                    + (c[3] == 0 ? "" : " (the Wasteland " + c[3] + " tall)"), fails);
         }
         System.out.printf("sweepFindsNoFault: %d plans in %.1f s%n", plans, (System.nanoTime() - t0) / 1e9);
         assertTrue(fails.isEmpty(), String.join("\n", fails));
@@ -219,14 +210,5 @@ class PlanSafetyTest {
     /** A plan made at its first attempt, as every plan of the tests must be. */
     static void firstAttempt(Net n, String tag, List<String> fails) {
         if (n.attempts != 0 || n.failed) fails.add(tag + ": the plan threw " + n.attempts + " times" + (n.failed ? " and is left as rock" : " and was made again"));
-    }
-
-    /** The default settings with the Wasteland {@code height} tall. */
-    static TerrainSettings wastelandTall(int height) {
-        TerrainSettings d = TerrainSettings.defaults();
-        List<LayerSettings> ls = new ArrayList<>();
-        for (LayerSettings l : d.layers())
-            ls.add(l.id().equals("wasteland") ? new LayerSettings(l.id(), height, l.fluidDepth(), l.lava(), l.heightMin(), l.heightMax(), l.widthMin(), l.widthMax()) : l);
-        return new TerrainSettings(d.bandThickness(), d.gateSpacing(), d.passageRadius(), d.landingRadius(), List.copyOf(ls));
     }
 }

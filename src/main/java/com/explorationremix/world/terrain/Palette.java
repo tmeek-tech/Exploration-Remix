@@ -336,8 +336,6 @@ public final class Palette {
         boolean floor = above <= 3;
         boolean ceil = !floor && below <= 2;
         int W = s.waterY(look);
-        // a planned blind tube's end whose lava pool could not be held by rock: a magma floor (interim, LookQueries)
-        if (floor && looks.tubeStubEnd(x, y, z)) return Rock.MAGMA;
         // The tide. The Galleries' lava rises Terrain.surge over its table at the height of its cycle and scorches the
         // walls and overhangs it covers. Its mark is not drawn: the scorched rock reaches 1 to 6 blocks under the
         // highest reach, wandering over a few dozen blocks and ragged block by block, so the safe height reads roughly,

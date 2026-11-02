@@ -26,7 +26,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * The deep cave networks' promises (design: network-final.md, section 14). The graph tests plan cell-layers and check
- * the plans; the voxel tests (tag "voxel") build cells block by block exactly as the game does and walk them.
+ * the plans; the voxel tests (tag "voxel") build cells block by block exactly as the game does and walk them. Only the
+ * Blue Reaches and the Deep Gardens have plans ({@link Terrain#planned}): the Wasteland and the Basalt Galleries are
+ * noise fields, tested with their fields.
  */
 class NetworkTest {
     static final long[] SEEDS = {8675309L, 12345L, -42L};
@@ -70,12 +72,15 @@ class NetworkTest {
 
     interface PlanCheck { void check(Terrain t, Net n, String tag, List<String> fails); }
 
-    /** Runs a check over every cell-layer of the fast tests (3 seeds x 3 cells x 3 layers) and fails with every miss. */
+    /**
+     * Runs a check over every planned cell-layer of the fast tests (3 seeds x 3 cells x the Blue Reaches and the Deep
+     * Gardens) and fails with every miss.
+     */
     static void overPlans(PlanCheck c) {
         List<String> fails = new ArrayList<>();
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
-            for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
+            for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
                 Net n = t.network.net(li, cell[0], cell[1]);
                 String tg = tag(seed, li, cell[0], cell[1]);
                 PlanSafetyTest.firstAttempt(n, tg, fails);
@@ -180,7 +185,6 @@ class NetworkTest {
             if (!c.keep || c.landing() || c.helix() || c.kind == Kind.PORTAL || c.kind == Kind.POCKET || c.kind == Kind.CANYON || c.dark >= 0) continue;
             double across = 2 * Math.max(c.rx, c.rz);
             String id = tag + ": " + c.kind + "#" + c.id + (c.set ? " (set piece)" : c.court ? " (court)" : "");
-            if (n.li == Terrain.GALLERIES && (c.hall() || c.flight || c.kind == Kind.GALLERY)) { hallSizes(t, n, c, id, fails); continue; }
             // courts 9 to 14 (Blue 12 to 18), grottos 10 to 20 (Blue 12 to 20), the rest 9 to 20; 7.5 where the seal
             // under the band above leaves less room
             double hMin = n.li == Terrain.BLUE ? 12 : c.court ? 9 : c.kind == Kind.GROTTO ? 10 : 9;
@@ -206,36 +210,6 @@ class NetworkTest {
                 if (c.h < hMin - 1e-6 || c.h > hMax + 1e-6) fails.add(id + " is " + fmt(c.h) + " tall, not " + hMin + " to " + hMax);
             }
         }
-    }
-
-    /**
-     * The Basalt Galleries' rooms (0.5): column halls 60 to 110 across, the Caldera 70 to 100, the Causeway 100 to 140
-     * long and 35 to 55 wide, the Scoria Canyons' rift 120 to 200 long and 25 to 45 wide, each 50 to 110 from the lava's
-     * table to its vault; the flights 40 to 56 long and 12 to 18 wide with 7.5 to 14 of headroom over the stair; the
-     * gallery rooms 26 to 44 long, 10 to 16 wide and 9 to 25 tall (7.5 where the seal under the band leaves less).
-     */
-    static void hallSizes(Terrain t, Net n, Chamber c, String id, List<String> fails) {
-        double along = 2 * Math.max(c.rx, c.rz), wide = 2 * Math.min(c.rx, c.rz);
-        double[] r;
-        if (c.hall()) {
-            r = switch (c.kind) {
-                case CALDERA -> new double[]{70, 100, 0, 100};
-                case CAUSEWAY -> new double[]{100, 140, 35, 55};
-                case RIFT -> new double[]{120, 200, 25, 45};
-                default -> new double[]{60, 110, 0, 110};
-            };
-            double tall = c.yHi() - t.shape.waterY(n.li);
-            if (tall < 50 - 1e-6 || tall > 110 + 1e-6) fails.add(id + " is " + fmt(tall) + " tall over the lava's table, not 50 to 110");
-        } else if (c.flight) {
-            r = new double[]{40, 56, 12, 18};
-            if (c.h < 7.5 - 1e-6 || c.h > 14 + 1e-6) fails.add(id + " (flight) has " + fmt(c.h) + " of headroom, not 7.5 to 14");
-        } else {
-            r = new double[]{26, 44, 10, 16};
-            double hMin = sealCapped(t, n, c) ? 7.5 : 9;
-            if (c.h < hMin - 1e-6 || c.h > 25 + 1e-6) fails.add(id + " is " + fmt(c.h) + " tall, not " + hMin + " to 25");
-        }
-        if (along < r[0] - 1e-6 || along > r[1] + 1e-6) fails.add(id + " is " + fmt(along) + " long, not " + fmt(r[0]) + " to " + fmt(r[1]));
-        if (wide < r[2] - 1e-6 || wide > r[3] + 1e-6) fails.add(id + " is " + fmt(wide) + " wide, not " + fmt(r[2]) + " to " + fmt(r[3]));
     }
 
     static String fmt(double v) { return String.format(java.util.Locale.ROOT, "%.1f", v); }
@@ -268,33 +242,6 @@ class NetworkTest {
         if (n.li != Terrain.BLUE && count != 2) fails.add(tag + ": " + count + " refuges, not 2");
     }
 
-    /**
-     * The Basalt Galleries' flood rules: the lava rises {@link Terrain#FLOOD_RISE} over its table, so every room's floor
-     * but the bedrock landing's and its flights' stands 2 over that, and every walkable arch and every tunnel between
-     * the rooms (but those of the bedrock landing and its flights) has its feet at W + 41 or higher. The halls' own low
-     * walks (the Causeway's column path, the rift's low ledges, the Caldera's rim) flood, each a short walk below a dry
-     * floor ({@link #basaltSurgeHasAWayOut}).
-     */
-    static void basaltFloors(Terrain t, Net n, String tag, List<String> fails) {
-        if (n.li != Terrain.GALLERIES) return;
-        double W = t.shape.waterY(n.li), min = W + Terrain.surge(n.li) + 2, dry = W + Terrain.FLOOD_RISE + 1;
-        for (Chamber c : n.ch) {
-            if (!c.keep || c.kind == Kind.BEDROCK || c.kind == Kind.LAVA || n.courtsX.contains(c.id)) continue;
-            if (c.kind == Kind.POCKET && c.parent == n.exit) continue; // a surge niche
-            if (c.f0 < min - 1e-9) fails.add(tag + ": " + c.kind + "#" + c.id + " has its floor " + fmt(min - c.f0) + " under the surge line");
-        }
-        for (Net.Arch a : n.arches)
-            if (a.walk && a.deck < dry - 1e-9) fails.add(tag + ": the walkable arch in " + n.ch.get(a.chamber).kind + "#" + a.chamber + " is " + fmt(dry - a.deck) + " under the flood");
-        for (Way wy : n.ways) {
-            if (wy.inner || wy.kind == EK.STUB) continue;
-            boolean low = false;
-            for (int id : new int[]{wy.a, wy.b}) low |= id == n.exit || n.courtsX.contains(id);
-            if (low) continue;
-            for (int i = 0; i < wy.n; i++)
-                if (wy.f[i] < dry - 1e-9) { fails.add(tag + ": way #" + wy.id + " (" + wy.kind + ") runs " + fmt(dry - wy.f[i]) + " under the flood at " + (int) wy.x[i] + " " + (int) wy.z[i]); break; }
-        }
-    }
-
     /** Portal vestibules dropped: none outside the Blue Reaches, and never with a stub left behind. */
     static void dropped(Terrain t, Net n, String tag, List<String> fails) {
         for (int id : n.droppedPortals) if (portalStub(n, id) != null) fails.add(tag + ": dropped vestibule #" + id + " left its stub");
@@ -305,154 +252,20 @@ class NetworkTest {
     @Test
     void everyNodeIsJoinedToTheEntry() { overPlans(NetworkTest::joinedToEntry); }
 
-    /**
-     * Basalt Galleries cells {seed, cx, cz} whose ways between the gates {@link #twoOrThreeWaysToEachGate} checks too.
-     * In each a careless plan leaves a single way: the bedrock landing's two flights end in one hall with one tunnel
-     * on, or the entry landing's flight ends blind and every way passes through one court, or (123456789) the bedrock
-     * landing's second flight runs out by the cell's edge and the flight put in its place finds a vestibule's tunnel
-     * where its own would go, or (-1241284054, 1694927964, 389949) one flight's hall reaches the rest only through the
-     * landing's other flight, its tunnels on taken by the vestibules and the tubes, or a flight ends blind.
-     */
-    static final long[][] GALLERIES_GATE_CELLS = {{18000083, -9, 4}, {33000128, 2, 7}, {123456789, 15, 2},
-            {-1241284054, 17, 15}, {1694927964, 4, -19}, {389949, -3, 3}};
-
-    /**
-     * Basalt Galleries cells {seed, cx, cz, lava depth} whose ways between the gates {@link #twoOrThreeWaysToEachGate}
-     * checks with the lava shallower than the default (config), which plans them otherwise, as in the
-     * {@link #GALLERIES_GATE_CELLS}.
-     */
-    static final long[][] GALLERIES_SHALLOW_GATE_CELLS = {{-1241284054, 17, 15, 9}, {-31415, 5, 0, 6}};
-
     @Test
-    void twoOrThreeWaysToEachGate() {
-        overPlans(NetworkTest::waysToGates);
-        List<String> fails = new ArrayList<>();
-        for (long[] c : GALLERIES_GATE_CELLS) {
-            Terrain t = terrain(c[0]);
-            int cx = (int) c[1], cz = (int) c[2];
-            waysToGates(t, t.network.net(Terrain.GALLERIES, cx, cz), tag(c[0], Terrain.GALLERIES, cx, cz), fails);
-        }
-        for (long[] c : GALLERIES_SHALLOW_GATE_CELLS) {
-            Terrain t = new Terrain(galleriesLava((int) c[3]), -64, c[0]);
-            int cx = (int) c[1], cz = (int) c[2];
-            String tg = tag(c[0], Terrain.GALLERIES, cx, cz) + " (lava " + c[3] + " deep)";
-            waysToGates(t, t.network.net(Terrain.GALLERIES, cx, cz), tg, fails);
-        }
-        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
-    }
+    void twoOrThreeWaysToEachGate() { overPlans(NetworkTest::waysToGates); }
 
     @Test
     void sizesFollowTaran() { overPlans(NetworkTest::sizes); }
 
-    /**
-     * Basalt Galleries cells {seed, cx, cz, lava depth, 0 for the default} whose refuges {@link #refugesAreQuiet}
-     * and halls {@link #galleriesSubBiomes} check too: in each a set piece stands boxed in by column halls, with an
-     * Obsidian Tube that hangs on it (25379437606363, the Causeway) or a vestibule beside it (464347, the rift), and
-     * no tunnel of the tree reaches it. In -1615428297 -14,16 the rift was drawn as narrow as its river and low ledges
-     * together, which left its upper ledges no length and its plan throwing.
-     */
-    static final long[][] GALLERIES_PIECE_CELLS = {{25379437606363L, 10, -15, 0}, {25379437606363L, 10, -15, 7},
-            {25379437606363L, 10, -15, 8}, {464347, 10, -9, 0}, {464347, 10, -9, 9}, {-1615428297L, -14, 16, 0}};
-
-    /** The world of one of the {@link #GALLERIES_PIECE_CELLS}. */
-    static Terrain pieceTerrain(long[] c) {
-        return c[3] == 0 ? terrain(c[0]) : new Terrain(galleriesLava((int) c[3]), -64, c[0]);
-    }
-
-    /** The tag of one of the {@link #GALLERIES_PIECE_CELLS}. */
-    static String pieceTag(long[] c) {
-        return tag(c[0], Terrain.GALLERIES, (int) c[1], (int) c[2]) + (c[3] == 0 ? "" : " (lava " + c[3] + " deep)");
-    }
-
     @Test
-    void refugesAreQuiet() {
-        overPlans(NetworkTest::refuges);
-        List<String> fails = new ArrayList<>();
-        for (long[] c : GALLERIES_PIECE_CELLS) {
-            Terrain t = pieceTerrain(c);
-            refuges(t, t.network.net(Terrain.GALLERIES, (int) c[1], (int) c[2]), pieceTag(c), fails);
-        }
-        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
-    }
-
-    @Test
-    void basaltFloorsAboveTheSurge() { overPlans(NetworkTest::basaltFloors); }
+    void refugesAreQuiet() { overPlans(NetworkTest::refuges); }
 
     @Test
     void climbsAreStaged() { overPlans(NetworkTest::stagedClimbs); }
 
-    /**
-     * Basalt Galleries cells {seed, cx, cz} whose tube hubs {@link #tubesAndArches} checks too: in each a hub stands
-     * crowded by its tunnel and the rooms round it, and found room for one blind tube in its first dozen places.
-     */
-    static final long[][] GALLERIES_TUBE_CELLS = {{6745344390125L, 10, 5}, {8579632657643L, -16, 0}, {874869860, -3, 9}};
-
-    @Test
-    void tubesAndArches() {
-        overPlans(NetworkTest::tubesArches);
-        List<String> fails = new ArrayList<>();
-        for (long[] c : GALLERIES_TUBE_CELLS) {
-            Terrain t = terrain(c[0]);
-            int cx = (int) c[1], cz = (int) c[2];
-            tubesArches(t, t.network.net(Terrain.GALLERIES, cx, cz), tag(c[0], Terrain.GALLERIES, cx, cz), fails);
-        }
-        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
-    }
-
     @Test
     void queriesSeeEveryWayAndClimb() { overPlans(NetworkTest::queries); }
-
-    /**
-     * The Basalt Galleries' sub-biomes (0.5): the Caldera, the Causeway and the Scoria Canyons' rift in most cells (they
-     * are placed first, so in every cell so far), column halls and the two Obsidian Tubes, each kind with its biome;
-     * each Caldera has 3 to 6 vents (its centre, 1 or 2 on its lake, 1 to 3 on its crest), inside it, and
-     * {@link Network#ventsNear} finds every one.
-     */
-    @Test
-    void galleriesSubBiomes() {
-        List<String> fails = new ArrayList<>();
-        Map<Kind, Integer> cells = new EnumMap<>(Kind.class);
-        int plans = 0;
-        for (long seed : SEEDS) {
-            Terrain t = terrain(seed);
-            Network w = t.network;
-            for (int[] cell : CELLS) {
-                Net n = w.net(Terrain.GALLERIES, cell[0], cell[1]);
-                String tg = tag(seed, Terrain.GALLERIES, cell[0], cell[1]);
-                plans++;
-                java.util.Set<Kind> here = java.util.EnumSet.noneOf(Kind.class);
-                for (Chamber c : n.ch) {
-                    if (!c.keep) continue;
-                    DeepBiome want = switch (c.kind) {
-                        case CALDERA -> DeepBiome.CALDERA;
-                        case CAUSEWAY -> DeepBiome.CAUSEWAY;
-                        case RIFT -> DeepBiome.SCORIA_CANYONS;
-                        case TUBEHUB -> DeepBiome.OBSIDIAN_TUBES;
-                        case HALL -> DeepBiome.BASALT_GALLERIES;
-                        default -> null;
-                    };
-                    if (want == null) continue;
-                    here.add(c.kind);
-                    if (c.biome != want) fails.add(tg + ": " + c.kind + "#" + c.id + " is " + c.biome + ", not " + want);
-                    if (c.kind != Kind.CALDERA) continue;
-                    List<Net.Vent> vs = new ArrayList<>();
-                    for (Net.Vent v : n.vents) if (v.chamber == c.id) vs.add(v);
-                    if (vs.size() < 3 || vs.size() > 6) fails.add(tg + ": the Caldera #" + c.id + " has " + vs.size() + " vents");
-                    for (Net.Vent v : vs) {
-                        if (w.e(c, v.x, v.z) >= 1) fails.add(tg + ": a vent of the Caldera #" + c.id + " stands outside it at " + (int) v.x + " " + (int) v.z);
-                        if (!w.ventsNear(Terrain.GALLERIES, v.x, v.z, 1).contains(v)) fails.add(tg + ": ventsNear misses the vent at " + (int) v.x + " " + (int) v.z);
-                    }
-                }
-                for (Kind k : here) cells.merge(k, 1, Integer::sum);
-            }
-        }
-        for (long[] c : GALLERIES_PIECE_CELLS)
-            galleriesHalls(pieceTerrain(c).network.net(Terrain.GALLERIES, (int) c[1], (int) c[2]), pieceTag(c), fails);
-        System.out.println("galleriesSubBiomes: cells with each kind, of " + plans + ": " + cells);
-        for (Kind k : new Kind[]{Kind.CALDERA, Kind.CAUSEWAY, Kind.RIFT, Kind.HALL, Kind.TUBEHUB})
-            if (3 * cells.getOrDefault(k, 0) < 2 * plans) fails.add(k + " in only " + cells.getOrDefault(k, 0) + " of " + plans + " cells");
-        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
-    }
 
     /**
      * Section 12.1: wayLinesAt and carvedLinesAt find every point of every way that lies in the plan's own cell, on that
@@ -529,310 +342,6 @@ class NetworkTest {
         }
     }
 
-    /**
-     * Section 5: every tube hub's tunnel is a round tube, with two or three blind round tubes beside it; arches only in
-     * the Wasteland and the Basalt Galleries, in every great hall and in the Galleries' halls, over W + 38, their crown
-     * at least 8 over the floor under it.
-     */
-    static void tubesArches(Terrain t, Net n, String tag, List<String> fails) {
-        for (Chamber c : n.ch) {
-            if (!c.keep || c.kind != Kind.TUBEHUB) continue;
-            int tunnels = 0, round = 0, blind = 0;
-            for (Way wy : n.ways) {
-                if (wy.inner || (wy.a != c.id && wy.b != c.id)) continue;
-                if (wy.kind == EK.STUB) { if (wy.round && wy.taper) blind++; continue; }
-                tunnels++;
-                if (wy.round) round++;
-            }
-            if (tunnels != 1 || round != 1) fails.add(tag + ": tube hub #" + c.id + " has " + tunnels + " tunnels, " + round + " round");
-            if (blind < 2 || blind > 3) fails.add(tag + ": tube hub #" + c.id + " has " + blind + " blind tubes");
-        }
-        if (!Terrain.basaltLook(n.li) && !n.arches.isEmpty()) fails.add(tag + ": " + n.arches.size() + " arches outside the Wasteland and the Basalt Galleries");
-        double W = t.shape.waterY(n.li);
-        for (Net.Arch a : n.arches) {
-            Chamber c = n.ch.get(a.chamber);
-            if (c.kind != Kind.GREAT && c.kind != Kind.GALLERY && !c.hall()) fails.add(tag + ": an arch in " + c.kind + "#" + c.id);
-            if (a.deck < W + 38 - 1e-9) fails.add(tag + ": the arch in " + c.kind + "#" + c.id + " is " + fmt(W + 38 - a.deck) + " under W + 38");
-            double f = t.network.floorAt(c, t.network.e(c, a.x, a.z), a.x, a.z);
-            if (a.deck < f + 8 - 1e-9) fails.add(tag + ": the arch in " + c.kind + "#" + c.id + " is " + fmt(a.deck - f) + " over the floor");
-        }
-        for (Chamber c : n.ch) {
-            if (!c.keep || c.kind != Kind.GREAT || !Terrain.basaltLook(n.li)) continue;
-            boolean has = false;
-            for (Net.Arch a : n.arches) if (a.chamber == c.id) has = true;
-            if (!has) fails.add(tag + ": great hall #" + c.id + " has no arch");
-        }
-    }
-
-    // ================================================================================================ the Wasteland
-    /** The Wasteland's longest walk between two branches (blocks, door to door; the planner's {@code runMax}). */
-    static final double RUN_MAX = 40;
-    /**
-     * The share of the Wasteland's passages allowed over {@link #RUN_MAX}, and the longest passage allowed. The share was
-     * 0.015 and is loosened on purpose, with the runs through two-way rooms: a walker meets such a run as one long
-     * passage whatever the rooms along it, and the runs are now broken up by junction rooms cut into their tunnels and
-     * by branches that reach further than the limit, which leave passages of up to twice it on either side of them.
-     * About one in fifty walks more than the limit (2.0% to 2.2% over 362 plans of seeds 1 to 120), none more than 74.
-     */
-    static final double PASSAGE_OVER = 0.03, PASSAGE_LONGEST = 80;
-    /**
-     * What the planner reaches on the runs through two-way rooms: the share allowed over {@link #RUN_MAX}, the share
-     * allowed over twice that, and the longest run allowed (a guard, not the goal: see the test).
-     */
-    static final double RUN_OVER = 0.07, RUN_FAR_OVER = 0.01, RUN_LONGEST = 160;
-
-    /**
-     * The longest walk allowed from a run's far end on through a portal vestibule with no other tunnel and its stub, to
-     * the next cell's vestibule (a guard, as {@link #RUN_LONGEST} is). The planner weighs such a run with its stub and
-     * gives the vestibule a second tunnel first, and most such walks stay under {@link #RUN_LONGEST}, but not all: of the
-     * 31 such vestibules in this test's plans one walks 192 (seed 777, cell 0,0), and of 150 in 360 plans of seeds 1 to
-     * 120 one walks 171, where 8 of 221 walked more than 160 before, the longest 430.
-     */
-    static final double SEAM_LONGEST = 200;
-
-    /**
-     * The Wasteland's plans the branch and dead-end tests read besides the fast tests' nine: {seed, cx, cz} of cells
-     * where the longest runs and passages and the junction rooms left with two ways were found (seed 777's -1,0 and
-     * seed 23's 0,0 had runs of 300 and 500 blocks).
-     */
-    static final long[][] WASTE_EXTRA = {{777, -1, 0}, {777, 0, 0}, {23, 0, 0}, {15, 1, -1}, {8, 0, 0}, {2, -2, 3}, {12, 1, -1}, {9, 0, 0}, {17, 0, 0}, {4, 0, 0}};
-
-    /** The fast tests' nine cells of the Wasteland and {@link #WASTE_EXTRA}: {seed, cx, cz}. */
-    static List<long[]> wastePlans() {
-        List<long[]> out = new ArrayList<>();
-        for (long seed : SEEDS) for (int[] cell : CELLS) out.add(new long[]{seed, cell[0], cell[1]});
-        out.addAll(java.util.Arrays.asList(WASTE_EXTRA));
-        return out;
-    }
-
-    /**
-     * More of the Wasteland's plans for the branch and dead-end tests, on seeds no other test uses: {@link #WIDE_SEEDS}
-     * by {@link #WIDE_CELLS}, and {@link #WIDE_EXTRA}.
-     */
-    static final long[] WIDE_SEEDS = {31, 32, 33, 34, 35, 36, 37, 38, 39, 40};
-    static final int[][] WIDE_CELLS = {{2, 2}, {-3, -5}, {4, 1}};
-    /**
-     * {seed, cx, cz} of cells where runs of 180 to 380 blocks through two-way rooms (two of them through a refuge, one
-     * with a tunnel of 93), a vestibule's run on through its stub into the next cell of 210, and portal vestibules left
-     * unjoined (their stubs blind at the seam) were found.
-     */
-    static final long[][] WIDE_EXTRA = {{82, 7, -6}, {60, -3, -5}, {120, 7, -6}, {47, 4, 1}, {14, -2, 3}, {106, 7, -6}, {63, 0, 0}};
-
-    private static List<Object[]> wide;
-
-    /**
-     * The Wasteland's plans of the branch and dead-end tests, {tag, plan}: the fast tests' nine cells and
-     * {@link #WASTE_EXTRA}, then the wide set ({@link #WIDE_SEEDS}), made once for both tests (its terrains are let go,
-     * the plans kept).
-     */
-    static synchronized List<Object[]> wasteNets() {
-        List<Object[]> out = new ArrayList<>();
-        for (long[] pl : wastePlans()) out.add(new Object[]{tag(pl[0], Terrain.WASTELAND, (int) pl[1], (int) pl[2]), terrain(pl[0]).network.net(Terrain.WASTELAND, (int) pl[1], (int) pl[2])});
-        if (wide == null) {
-            List<long[]> cells = new ArrayList<>();
-            for (long seed : WIDE_SEEDS) for (int[] c : WIDE_CELLS) cells.add(new long[]{seed, c[0], c[1]});
-            cells.addAll(java.util.Arrays.asList(WIDE_EXTRA));
-            wide = new ArrayList<>();
-            Terrain t = null;
-            for (long[] c : cells) {
-                if (t == null || t.seed != c[0]) t = new Terrain(TerrainSettings.defaults(), -64, c[0]);
-                wide.add(new Object[]{tag(c[0], Terrain.WASTELAND, (int) c[1], (int) c[2]), t.network.net(Terrain.WASTELAND, (int) c[1], (int) c[2])});
-            }
-        }
-        out.addAll(wide);
-        List<String> fails = new ArrayList<>();
-        for (Object[] o : out) PlanSafetyTest.firstAttempt((Net) o[1], (String) o[0], fails);
-        assertTrue(fails.isEmpty(), String.join("\n", fails));
-        return out;
-    }
-
-    /**
-     * No dead end in the Wasteland's plans (Taran, 2026-11-01): no blind passage or blind tube, no pocket, surge niche,
-     * tube hub or lava basin; every kept chamber has two ways or more (a portal vestibule's stub across the seam counts:
-     * it goes on into the next cell's network), a junction room three (it is a fork); and no way is a bridge, so every
-     * tunnel lies on a loop. Over the fast tests' nine cells, {@link #WASTE_EXTRA} and the wide set
-     * ({@link #wasteNets}). The bridges are found with the
-     * two landings and the kept vestibules joined to one node outside the cell that stands for the rest of the world
-     * (the gates go on to the layers above and below, the stubs into the next cells). The bridges of the cell on its
-     * own, each cutting off a part of it that the world joins through a portal or a gate, are printed, and so are the
-     * vestibules with one tunnel in the cell besides their stub.
-     */
-    @Test
-    void wastelandHasNoDeadEnds() {
-        List<String> fails = new ArrayList<>();
-        int plans = 0, inCell = 0, onStub = 0;
-        for (Object[] pl : wasteNets()) {
-            String tg = (String) pl[0];
-            Net n = (Net) pl[1];
-            plans++;
-            for (Edge e : n.edges) if (e.kind == EK.STUB) fails.add(tg + ": a blind stub from " + n.ch.get(e.a).kind + "#" + e.a);
-            for (Way wy : n.ways) if (wy.kind == EK.STUB) fails.add(tg + ": blind way #" + wy.id);
-            int[] deg = NetGraph.wayCounts(n);
-            for (Chamber c : n.ch) {
-                if (!c.keep) continue;
-                String id = c.kind + "#" + c.id + " at " + (int) c.x + " " + (int) c.f0 + " " + (int) c.z;
-                if (c.kind == Kind.POCKET || c.kind == Kind.TUBEHUB || c.kind == Kind.LAVA) fails.add(tg + ": " + id + " is a blind room");
-                int ways = deg[c.id] + (c.kind == Kind.PORTAL ? 1 : 0);
-                if (c.kind == Kind.PORTAL && deg[c.id] < 2) onStub++;
-                // a portal vestibule's stub is a way on; a junction room is a fork, with three
-                int need = c.kind == Kind.PORTAL ? 2 : NetGraph.waysNeeded(c);
-                if (ways < need) fails.add(tg + ": " + id + " has " + ways + " way(s), not " + need);
-            }
-            inCell += NetGraph.bridges(n).size();
-            for (int[] b : outsideBridges(n)) {
-                String a = n.ch.get(b[0]).kind + "#" + b[0], o = b[1] < n.ch.size() ? n.ch.get(b[1]).kind + "#" + b[1] : "the world outside";
-                fails.add(tg + ": the way from " + a + " to " + o + " is a bridge");
-            }
-        }
-        System.out.printf("wastelandHasNoDeadEnds: %d plans; %d bridges in the cells on their own, %d vestibules whose second way is their stub%n", plans, inCell, onStub);
-        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
-    }
-
-    /**
-     * The bridges among a plan's ways ({@link NetGraph#ways}) with one more node, past the end of the chamber list,
-     * joined to both landings and every kept portal vestibule: {a, b} of each (Tarjan's low links; a plan has a few
-     * hundred chambers, so the recursion stays shallow).
-     */
-    static List<int[]> outsideBridges(Net n) {
-        int N = n.ch.size() + 1, out = n.ch.size();
-        List<int[]> es = new ArrayList<>();
-        for (Edge e : NetGraph.ways(n)) es.add(new int[]{e.a, e.b});
-        es.add(new int[]{n.entry, out});
-        es.add(new int[]{n.exit, out});
-        for (int id : n.portals) if (n.ch.get(id).keep) es.add(new int[]{id, out});
-        List<List<int[]>> adj = new ArrayList<>();
-        for (int i = 0; i < N; i++) adj.add(new ArrayList<>());
-        for (int i = 0; i < es.size(); i++) {
-            adj.get(es.get(i)[0]).add(new int[]{es.get(i)[1], i});
-            adj.get(es.get(i)[1]).add(new int[]{es.get(i)[0], i});
-        }
-        int[] tin = new int[N], low = new int[N], timer = {0};
-        java.util.Arrays.fill(tin, -1);
-        List<int[]> bridges = new ArrayList<>();
-        for (int s = 0; s < N; s++) if (tin[s] < 0 && !adj.get(s).isEmpty()) lowLinks(adj, es, s, -1, tin, low, timer, bridges);
-        return bridges;
-    }
-
-    private static void lowLinks(List<List<int[]>> adj, List<int[]> es, int v, int via, int[] tin, int[] low, int[] timer, List<int[]> bridges) {
-        tin[v] = low[v] = timer[0]++;
-        for (int[] nb : adj.get(v)) {
-            if (nb[1] == via) continue;
-            int u = nb[0];
-            if (tin[u] >= 0) { low[v] = Math.min(low[v], tin[u]); continue; }
-            lowLinks(adj, es, u, nb[1], tin, low, timer, bridges);
-            low[v] = Math.min(low[v], low[u]);
-            if (low[u] > tin[v]) bridges.add(es.get(nb[1]));
-        }
-    }
-
-    /**
-     * Branch often (Taran, 2026-11-01: no "passages that go on for too long without branching"). The Wasteland's
-     * passages, its stretches of tunnel between two rooms or forks ({@link NetGraph#passages}), walk at most
-     * {@link #RUN_MAX} from door to door, but for a share of {@link #PASSAGE_OVER}, and none more than
-     * {@link #PASSAGE_LONGEST}. The runs through rooms with only two ways ({@link NetGraph#runs}: through such a room
-     * the walker has no other way on either), walked as a walker goes them ({@link NetGraph#runWalk}: the tunnels and
-     * each such room's floor from door to door), are what the planner aims at, and fall short of: about one in twenty
-     * walks more than the limit, mostly through one room between two tunnels of 20 to 36. They are printed, and held to
-     * what the planner reaches ({@link #RUN_OVER} over the limit, {@link #RUN_FAR_OVER} over twice it, none over
-     * {@link #RUN_LONGEST}), so a change that makes them worse is seen. A run that ends at a portal vestibule with no
-     * other tunnel goes on through the stub with no other way on: walked on to the next cell's vestibule, it walks no
-     * more than {@link #SEAM_LONGEST}. Over the fast tests' nine cells, {@link #WASTE_EXTRA} and the wide set
-     * ({@link #wasteNets}).
-     */
-    @Test
-    void wastelandBranchSpacing() {
-        long passages = 0, passOver = 0, runs = 0, runOver = 0, runFar = 0, lone = 0;
-        double passLongest = 0, runLongest = 0, seamLongest = 0;
-        String passWorst = "", runWorst = "", seamWorst = "";
-        for (Object[] pl : wasteNets()) {
-            String tg = (String) pl[0];
-            Net n = (Net) pl[1];
-            for (List<Edge> p : NetGraph.passages(n)) {
-                double l = NetGraph.runLength(p);
-                passages++;
-                if (l > RUN_MAX) passOver++;
-                if (l > passLongest) { passLongest = l; passWorst = tg + ", " + chain(n, p); }
-            }
-            int[] deg = NetGraph.wayCounts(n);
-            for (List<Edge> r : NetGraph.runs(n)) {
-                double l = NetGraph.runWalk(n, r);
-                runs++;
-                if (l > RUN_MAX) runOver++;
-                if (l > 2 * RUN_MAX) runFar++;
-                if (l > runLongest) { runLongest = l; runWorst = tg + ", " + chain(n, r); }
-                // on through the stub of a vestibule with no other tunnel at either end
-                double seam = l;
-                boolean any = false;
-                int a = r.size() == 1 ? r.get(0).a : NetGraph.runStart(n, r), b = a;
-                for (Edge e : r) b = e.other(b);
-                for (int v : a == b ? new int[]{a} : new int[]{a, b}) {
-                    if (n.ch.get(v).kind != Kind.PORTAL || deg[v] != 1) continue;
-                    for (Way wy : n.ways) if (wy.kind == EK.PORTAL && (wy.a == v || wy.b == v)) { seam += wy.length; any = true; lone++; }
-                }
-                if (any && seam > seamLongest) { seamLongest = seam; seamWorst = tg + ", " + chain(n, r) + " and the stub"; }
-            }
-        }
-        System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: passages %d, %d over %.0f (%.2f%%), longest %.0f (%s)%n", passages, passOver, RUN_MAX, 100.0 * passOver / passages, passLongest, passWorst);
-        System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: runs through two-way rooms %d, %d over %.0f (%.1f%%), %d over %.0f (%.2f%%), longest %.0f (%s)%n", runs, runOver, RUN_MAX, 100.0 * runOver / runs, runFar, 2 * RUN_MAX, 100.0 * runFar / runs, runLongest, runWorst);
-        System.out.printf(java.util.Locale.ROOT, "wastelandBranchSpacing: %d vestibules with no other tunnel; the longest run on through one's stub %.0f (%s)%n", lone, seamLongest, seamWorst);
-        List<String> fails = new ArrayList<>();
-        if (passOver > PASSAGE_OVER * passages) fails.add(passOver + " of " + passages + " passages walk more than " + RUN_MAX);
-        if (passLongest > PASSAGE_LONGEST) fails.add("a passage walks " + fmt(passLongest) + ": " + passWorst);
-        if (runOver > RUN_OVER * runs) fails.add(runOver + " of " + runs + " runs walk more than " + RUN_MAX);
-        if (runFar > RUN_FAR_OVER * runs) fails.add(runFar + " of " + runs + " runs walk more than " + 2 * RUN_MAX);
-        if (runLongest > RUN_LONGEST) fails.add("a run walks " + fmt(runLongest) + ": " + runWorst);
-        if (seamLongest > SEAM_LONGEST) fails.add("a run walks " + fmt(seamLongest) + " on through a stub: " + seamWorst);
-        assertTrue(fails.isEmpty(), String.join("\n", fails));
-    }
-
-    /**
-     * The most a Wasteland plan may cost against a Deep Gardens plan of the same cell (the ratio of their medians): a
-     * guard against a cost that runs away, not the goal. A Deep Gardens plan takes 50 to 70 ms here; a Wasteland plan,
-     * whose branch stages embed far more tunnels, 6 to 8 times that (5 to 6.5 times before its long runs were broken
-     * by branches sought with doors turned further round).
-     */
-    static final double PLAN_RATIO = 10;
-
-    /**
-     * A Wasteland plan should not take much longer than a Deep Gardens plan (the brief): over the fast tests' nine
-     * cells, planned afresh, the median of the Wasteland's plan times is at most {@link #PLAN_RATIO} times the Deep
-     * Gardens'. The two layers are planned in turn, cell by cell, so that the machine's load falls on both alike, after
-     * a round of each over the nine cells to warm the code.
-     */
-    @Test
-    void wastelandPlanCost() {
-        List<Double> waste = new ArrayList<>(), gardens = new ArrayList<>();
-        for (int round = 0; round < 2; round++) {
-            waste.clear();
-            gardens.clear();
-            for (long seed : SEEDS) {
-                Terrain t = terrain(seed);
-                for (int[] c : CELLS) {
-                    gardens.add(NetPlanner.plan(t.network, Terrain.GARDENS, c[0], c[1]).planMs);
-                    waste.add(NetPlanner.plan(t.network, Terrain.WASTELAND, c[0], c[1]).planMs);
-                }
-            }
-        }
-        java.util.Collections.sort(waste);
-        java.util.Collections.sort(gardens);
-        double mw = waste.get(waste.size() / 2), mg = gardens.get(gardens.size() / 2);
-        System.out.printf(java.util.Locale.ROOT, "wastelandPlanCost: median plan %.0f ms in the Wasteland (worst %.0f), %.0f ms in the Deep Gardens (worst %.0f): %.1f times%n",
-                mw, waste.get(waste.size() - 1), mg, gardens.get(gardens.size() - 1), mw / mg);
-        assertTrue(mw <= PLAN_RATIO * mg, "a Wasteland plan takes " + fmt(mw / mg) + " times a Deep Gardens plan");
-    }
-
-    /** A chain of edges for a message: its chambers in order and the blocks walked along each edge. */
-    static String chain(Net n, List<Edge> c) {
-        Edge e0 = c.get(0);
-        int v = c.size() > 1 && (e0.a == c.get(1).a || e0.a == c.get(1).b) ? e0.b : e0.a;
-        StringBuilder b = new StringBuilder(n.ch.get(v).kind + "#" + v);
-        for (Edge e : c) {
-            v = e.other(v);
-            b.append(" -").append(Math.round(NetGraph.walkLength(e))).append("- ").append(n.ch.get(v).kind).append('#').append(v);
-        }
-        return b.toString();
-    }
-
     @Test
     void portalsMatchAcrossEdges() {
         List<String> fails = new ArrayList<>();
@@ -840,7 +349,7 @@ class NetworkTest {
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
             Network w = t.network;
-            for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount; li++) for (int side = 0; side < 2; side++) {
+            for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) for (int side = 0; side < 2; side++) {
                 boolean xEdge = side == 0;
                 int ex = xEdge ? cell[0] + 1 : cell[0], ez = xEdge ? cell[1] : cell[1] + 1;
                 for (Network.Portal p : w.portalsOfEdge(li, xEdge, ex, ez)) {
@@ -907,48 +416,11 @@ class NetworkTest {
         }
         assertEquals(24, edges);
         if (drops > cells) fails.add(drops + " portal vestibules dropped in " + cells + " cell-layers (at most one each on average)");
-        // the other layers never drop one
-        for (long seed : SEEDS) for (int[] cell : CELLS) for (int l = 1; l < t.shape.layerCount; l++)
+        // the other planned layers never drop one
+        for (long seed : SEEDS) for (int[] cell : CELLS) for (int l = 1; l < t.shape.layerCount && Terrain.planned(l); l++)
             dropped(terrain(seed), terrain(seed).network.net(l, cell[0], cell[1]), tag(seed, l, cell[0], cell[1]), fails);
-        for (long[] c : GALLERIES_PORTAL_CELLS) {
-            Terrain tc = terrain(c[0]);
-            int cx = (int) c[1], cz = (int) c[2];
-            Net n = tc.network.net(Terrain.GALLERIES, cx, cz);
-            String tg = tag(c[0], Terrain.GALLERIES, cx, cz);
-            dropped(tc, n, tg, fails);
-            joinedToEntry(tc, n, tg, fails);
-            refuges(tc, n, tg, fails);
-        }
-        for (long[] c : GALLERIES_SHALLOW_PORTAL_CELLS) {
-            Terrain tc = new Terrain(galleriesLava((int) c[3]), -64, c[0]);
-            int cx = (int) c[1], cz = (int) c[2];
-            Net n = tc.network.net(Terrain.GALLERIES, cx, cz);
-            String tg = tag(c[0], Terrain.GALLERIES, cx, cz) + " (lava " + c[3] + " deep)";
-            dropped(tc, n, tg, fails);
-            joinedToEntry(tc, n, tg, fails);
-        }
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
-
-    /**
-     * Basalt Galleries cells {seed, cx, cz} whose portal vestibules {@link #portalsAreJoined} checks too. In each a
-     * vestibule is boxed in, 30 blocks in from the cell's edge: a tunnel or a long hall runs along the edge in front of
-     * it, a gallery stands close by 30 blocks higher, or (3422002863124) a hall's only way in coils over itself on its
-     * way down and the hall, its tube and three vestibules round the cell's corner hang on it, or (464347) the
-     * vestibule's only tunnel goes to a rift boxed in by column halls, or (2074276771) an Obsidian Tube placed beside
-     * the vestibule took the way its tunnel needed.
-     */
-    static final long[][] GALLERIES_PORTAL_CELLS = {{54162964, 4, -7}, {124039, 0, -10}, {3638729150490L, 16, 0}, {713448, -17, -14},
-            {-693432904, 16, -4}, {3422002863124L, 17, 12}, {464347, 10, -9}, {2074276771, 6, 5}};
-
-    /**
-     * Basalt Galleries cells {seed, cx, cz, lava depth} whose portal vestibules {@link #portalsAreJoined} checks with
-     * the lava shallower than the default (config), which plans them otherwise: in each a vestibule is boxed in as in
-     * the {@link #GALLERIES_PORTAL_CELLS}, and in 54162964 the places for a junction nearest it crowd one stretch of one
-     * tunnel, from none of which a tunnel reaches it.
-     */
-    static final long[][] GALLERIES_SHALLOW_PORTAL_CELLS = {{54162964, 4, -7, 6}, {54162964, 4, -7, 9}, {2071831583, 12, -15, 6},
-            {2071831583, 12, -15, 9}, {464347, 10, -9, 9}};
 
     /**
      * Section 11.1, over 3 seeds x 4 x 4 Blue cells: every eligible city site is at least 150 inside its cell and 140
@@ -1099,7 +571,7 @@ class NetworkTest {
         long growthsBefore = w.columnGrowths.sum();
         List<String> fails = new ArrayList<>();
         int columns = 0;
-        for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
+        for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
             Net n = w.net(li, cell[0], cell[1]);
             int x0 = (int) (cell[0] * w.cell), z0 = (int) (cell[1] * w.cell);
             for (int x = x0; x < x0 + w.cell; x += 4) for (int z = z0; z < z0 + w.cell; z += 4) {
@@ -1160,7 +632,7 @@ class NetworkTest {
         Network w = t.network;
         List<String> fails = new ArrayList<>();
         try {
-            for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
+            for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
                 Net n = w.net(li, cell[0], cell[1]);
                 Random r = new Random(Hashing.mix(SEEDS[0], li, cell[0], cell[1]));
                 int bot = t.shape.bottom(li), top = t.shape.top(li);
@@ -1220,75 +692,17 @@ class NetworkTest {
     }
 
     /**
-     * The rock palette reads the plan through three queries (sections 5, 6 and 9): where the rock meets a tube hub or a
-     * round tube it is lined with obsidian (shell depth under 1.8), where it meets a geode it takes the geode's layers
-     * (under 1.7), and the bedrock landing's plate is bedrock.
+     * The rock palette reads the plan through its geode query (section 9): where the rock meets a geode of the Blue
+     * Reaches' rift it takes the geode's layers (shell depth under 1.7). (The Basalt Galleries' tube shells are the tube
+     * field's, and the Galleries have no bedrock landing: they are noise fields.)
      */
     @Test
     void paletteQueriesFollowThePlan() {
         List<String> fails = new ArrayList<>();
-        int hubFaces = 0, tubeFaces = 0, geodeFaces = 0, landings = 0;
+        int geodeFaces = 0;
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
             for (int[] cell : CELLS) {
-                Net nb = t.network.net(Terrain.GALLERIES, cell[0], cell[1]);
-                String tg = tag(seed, Terrain.GALLERIES, cell[0], cell[1]);
-                for (Chamber c : nb.ch) {
-                    if (!c.keep || c.kind != Kind.TUBEHUB) continue;
-                    double r0 = c.pillars.length >= 3 ? c.pillars[2] + 2 : 1;
-                    // rays out from the pillar at the floor, the dome's middle and high in it; a ray that leaves the
-                    // footprint in the open has gone out through a door and is not a face of the hub
-                    for (double fy : new double[]{2, c.h * 0.4, c.h * 0.7}) {
-                        int y = (int) Math.floor(c.f0 + fy);
-                        for (int a = 0; a < 16; a++) {
-                            double ang = a * Math.PI / 8 + 0.1;
-                            // the open block before the rock must be inside the hub's own space: otherwise the ray
-                            // has gone out through a door, and the rock is a tunnel's
-                            boolean open = false, inHub = false;
-                            for (double r = r0; r < c.R() + 6; r += 0.5) {
-                                int x = (int) Math.floor(c.x + Math.cos(ang) * r), z = (int) Math.floor(c.z + Math.sin(ang) * r);
-                                if (t.rawDensity(x, y, z) <= 0) {
-                                    open = true;
-                                    inHub = t.tubeShellDepth(x, y, z) < 0;
-                                    continue;
-                                }
-                                if (!open) continue;
-                                if (!inHub) break;
-                                hubFaces++;
-                                double g = t.tubeShellDepth(x, y, z);
-                                DeepBiome b = t.biomeAt(x, y, z);
-                                if (g >= 1.8 || b != DeepBiome.OBSIDIAN_TUBES) {
-                                    fails.add(tg + ": tube hub #" + c.id + " meets rock at " + x + " " + y + " " + z + " with a shell depth of " + fmt(g) + " in " + b);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-                // round tubes: the rock over the middle of each round way's line, out of the rooms at its ends
-                for (Way wy : nb.ways) {
-                    if (!wy.round) continue;
-                    for (int i = 1; i + 1 < wy.n; i += 2) {
-                        int x = (int) Math.floor(wy.x[i]), z = (int) Math.floor(wy.z[i]);
-                        boolean inRoom = false;
-                        for (Chamber c : nb.ch) if (c.keep && c.kind != Kind.TUBEHUB && t.network.e(c, x, z) < 1.05) inRoom = true;
-                        if (inRoom) continue;
-                        for (int y = (int) Math.ceil(wy.f[i]); y < wy.f[i] + wy.w[i] * 2 + 6; y++) {
-                            if (t.rawDensity(x, y, z) <= 0) continue;
-                            tubeFaces++;
-                            double g = t.tubeShellDepth(x, y, z);
-                            DeepBiome b = t.biomeAt(x, y, z);
-                            if (g >= 1.8 || b != DeepBiome.OBSIDIAN_TUBES) fails.add(tg + ": round way #" + wy.id + " meets rock at " + x + " " + y + " " + z + " with a shell depth of " + fmt(g) + " in " + b);
-                            break;
-                        }
-                    }
-                }
-                Chamber bed = nb.ch.get(nb.exit);
-                landings++;
-                int bx = (int) Math.floor(bed.x), bz = (int) Math.floor(bed.z), by = (int) Math.floor(bed.f0) - 1;
-                if (bed.kind != Kind.BEDROCK || !t.bedrockLanding(bx, by, bz)) fails.add(tg + ": no bedrock under the bedrock landing at " + bx + " " + by + " " + bz);
-                if (t.bedrockLanding(bx + (int) bed.rx + 12, by, bz)) fails.add(tg + ": bedrock 12 blocks past the bedrock landing's rim");
-
                 Net nu = t.network.net(Terrain.BLUE, cell[0], cell[1]);
                 // geodes: rays out from each geode's centre a little under its equator, to the first rock
                 for (Route r : nu.canyons) for (Route.Geode ge : r.geodes) {
@@ -1317,8 +731,8 @@ class NetworkTest {
                 }
             }
         }
-        System.out.println("paletteQueriesFollowThePlan: " + hubFaces + " hub faces, " + tubeFaces + " round tube faces, " + geodeFaces + " geode faces, " + landings + " bedrock landings");
-        assertTrue(hubFaces > 100 && geodeFaces > 100, "too few faces checked");
+        System.out.println("paletteQueriesFollowThePlan: " + geodeFaces + " geode faces");
+        assertTrue(geodeFaces > 100, "too few faces checked");
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(30, fails.size()))));
     }
 
@@ -1332,7 +746,7 @@ class NetworkTest {
         long seed = SEEDS[0];
         java.util.concurrent.ExecutorService ex = java.util.concurrent.Executors.newFixedThreadPool(8);
         try {
-            for (int li = 0; li < 3; li++) {
+            for (int li = 0; Terrain.planned(li); li++) {
                 final int L = li;
                 long alone = planHash(fresh(seed).network.net(L, 0, 0));
                 long afterNeighbours = ex.submit(() -> {
@@ -1362,16 +776,6 @@ class NetworkTest {
 
     /** The share of the Blue Reaches' places (outside the cities' reserves) allowed a view over 160 blocks. */
     static final double BLUE_LONG = 0.025;
-    /** The share of the Basalt Galleries' places that see {@link VoxelHarness#WIDE} blocks or more (measured 37 and 50%). */
-    static final double GALLERIES_WIDE = 0.30;
-    /**
-     * Basalt Galleries cells {seed, cx, cz} whose views {@link #sightLinesAreShort} checks besides the voxel cells.
-     * Each has a line of 161 to 232 blocks unless the plan bends it: across a hall and down a tunnel in line with it,
-     * from one tunnel across a hall into another, through a nearly straight tunnel from hall to hall, along a chain of
-     * gallery rooms, or past the walls of a short tunnel between two halls.
-     */
-    static final long[][] GALLERIES_SIGHT_CELLS = {{4000029, -4, -6}, {33000128, 2, 7}, {18000083, -9, 4}, {16000077, 13, -13}, {777, 2, 2},
-            {12000053, 7, 9}, {18000083, 0, -7}, {-42, -1, 0}, {5000032, 11, -7}};
 
     /**
      * A hash of what a plan carves: node centres, sizes and floors, edges, way samples and shafts, and the Basalt
@@ -1411,45 +815,8 @@ class NetworkTest {
     }
 
     /**
-     * The Basalt Galleries' halls in a plan: at least three column halls, and the Caldera, the Causeway and the
-     * Scoria Canyons' rift, as in every cell of the default settings (the tube hubs, which stand by halls, are the
-     * refuges {@link #refuges} counts).
-     */
-    static void galleriesHalls(Net n, String tag, List<String> fails) {
-        int halls = 0;
-        boolean caldera = false, causeway = false, rift = false;
-        for (Chamber c : n.ch) {
-            if (!c.keep) continue;
-            if (c.kind == Kind.HALL) halls++;
-            caldera |= c.kind == Kind.CALDERA;
-            causeway |= c.kind == Kind.CAUSEWAY;
-            rift |= c.kind == Kind.RIFT;
-        }
-        if (halls < 3 || !caldera || !causeway || !rift)
-            fails.add(tag + ": " + halls + " column halls" + (caldera ? "" : ", no Caldera") + (causeway ? "" : ", no Causeway") + (rift ? "" : ", no rift"));
-    }
-
-    /** The default settings with the Basalt Galleries' lava {@code depth} deep (config: 6 to 64). */
-    static TerrainSettings galleriesLava(int depth) {
-        TerrainSettings ts = TerrainSettings.defaults();
-        List<LayerSettings> ls = new ArrayList<>();
-        for (LayerSettings l : ts.layers()) ls.add(!l.id().equals("basalt_galleries") ? l
-                : new LayerSettings(l.id(), l.height(), depth, l.lava(), l.heightMin(), l.heightMax(), l.widthMin(), l.widthMax()));
-        return new TerrainSettings(ts.bandThickness(), ts.gateSpacing(), ts.passageRadius(), ts.landingRadius(), List.copyOf(ls));
-    }
-
-    /**
-     * Basalt Galleries cells {variant of {@link #configVariants}, seed, cx, cz} that test checks too: with 480-block
-     * cells (1694927964) the bedrock landing's flights end in halls that reach the rest only through one portal
-     * vestibule, and with every layer 128 tall (13298101198609) one flight's hall reaches the rest only through the
-     * landing's other flight.
-     */
-    static final long[][] GALLERIES_VARIANT_CELLS = {{0, 1694927964, 4, -19}, {2, 13298101198609L, 14, 19}};
-
-    /**
-     * The network follows the config (section 2.6): graph tests 1, 2, 6 and 9 with 480 and 720 block cells, with
-     * every layer 128 tall, and with the Basalt Galleries' lava 6 deep, the least the config allows (their halls and
-     * tube hubs still there).
+     * The network follows the config (section 2.6): graph tests 1, 2, 6 and 9 with 480 and 720 block cells and with
+     * every layer 128 tall.
      */
     @Test
     void configVariants() {
@@ -1459,21 +826,19 @@ class NetworkTest {
         TerrainSettings[] variants = {
                 new TerrainSettings(16, 480, 4.5, 14.0, d),
                 new TerrainSettings(16, 720, 4.5, 14.0, d),
-                new TerrainSettings(16, 600, 4.5, 14.0, List.copyOf(short128)),
-                galleriesLava(6)};
-        String[] names = {"480 block cells", "720 block cells", "layers 128 tall", "Galleries lava 6 deep"};
+                new TerrainSettings(16, 600, 4.5, 14.0, List.copyOf(short128))};
+        String[] names = {"480 block cells", "720 block cells", "layers 128 tall"};
         List<String> fails = new ArrayList<>();
         for (int v = 0; v < variants.length; v++) {
             for (long seed : new long[]{SEEDS[0], SEEDS[2]}) {
                 Terrain t = new Terrain(variants[v], -64, seed);
-                for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
+                for (int[] cell : CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
                     Net n = t.network.net(li, cell[0], cell[1]);
                     String tg = names[v] + ", " + tag(seed, li, cell[0], cell[1]);
                     joinedToEntry(t, n, tg, fails);
                     waysToGates(t, n, tg, fails);
                     refuges(t, n, tg, fails);
                     dropped(t, n, tg, fails);
-                    if (li == Terrain.GALLERIES) galleriesHalls(n, tg, fails);
                 }
                 // test 9 on a 3 x 3 block of Blue cells: a portal works on every interior edge
                 Network w = t.network;
@@ -1489,21 +854,10 @@ class NetworkTest {
                 }
             }
         }
-        for (long[] c : GALLERIES_VARIANT_CELLS) {
-            Terrain t = new Terrain(variants[(int) c[0]], -64, c[1]);
-            int cx = (int) c[2], cz = (int) c[3];
-            Net n = t.network.net(Terrain.GALLERIES, cx, cz);
-            String tg = names[(int) c[0]] + ", " + tag(c[1], Terrain.GALLERIES, cx, cz);
-            joinedToEntry(t, n, tg, fails);
-            waysToGates(t, n, tg, fails);
-            refuges(t, n, tg, fails);
-            dropped(t, n, tg, fails);
-            galleriesHalls(n, tg, fails);
-        }
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
     }
 
-    /** Graph tests 1, 2, 5, 6, 7 and 9 over 160 cell-layers (40 per layer) on 10 seeds the fast tests never use. */
+    /** Graph tests 1, 2, 5, 6 and 9 over 80 cell-layers (40 per planned layer) on 10 seeds the fast tests never use. */
     @Test
     @Tag("slow")
     void manyCells() {
@@ -1512,7 +866,7 @@ class NetworkTest {
         for (int si = 0; si < 10; si++) {
             long seed = 1000003L * (si + 1) + 17;
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
-            for (int li = 0; li < t.shape.layerCount; li++) for (int c = 0; c < 4; c++) {
+            for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) for (int c = 0; c < 4; c++) {
                 int cx = (int) Math.floorMod(Hashing.mix(seed, c, 11, 3), 21) - 10, cz = (int) Math.floorMod(Hashing.mix(seed, c, 12, 3), 21) - 10;
                 Net n = t.network.net(li, cx, cz);
                 String tg = tag(seed, li, cx, cz);
@@ -1520,7 +874,6 @@ class NetworkTest {
                 waysToGates(t, n, tg, fails);
                 sizes(t, n, tg, fails);
                 refuges(t, n, tg, fails);
-                basaltFloors(t, n, tg, fails);
                 dropped(t, n, tg, fails);
                 drops[li] += n.droppedPortals.size();
                 cells[li]++;
@@ -1531,7 +884,7 @@ class NetworkTest {
     }
 
     // ================================================================================================ voxel tests
-    /** Built cell-layers that more than one test reads (the Deep Gardens, Basalt Galleries and Blue Reaches tests). */
+    /** Built cell-layers that more than one test reads (the Deep Gardens and Blue Reaches tests). */
     private static final Map<String, VoxelHarness> BUILT = new HashMap<>();
 
     /**
@@ -1564,23 +917,9 @@ class NetworkTest {
         return v;
     }
 
-    /** The cell-layers of the Deep Gardens and Basalt Galleries voxel tests. */
+    /** The cells of the Deep Gardens' voxel tests. */
     static final long[] VOX_SEEDS = {8675309L, 2000023L};
     static final int[][] VOX_CELLS = {{0, -3}, {-1, 1}};
-
-    /**
-     * Wasteland cells {@link #noLethalFalls} builds besides those: {seed, cx, cz} of cells where falls of 16 to 20 were
-     * found beside the climbs' stages (from a room's pockets by its wall, from a tunnel of the same room at the stage's
-     * mouth, on through a stage's foot into a tunnel under it, from the steps of a passage's rough walls where they
-     * met the hole's edge, where a tunnel standing apart from the hole had kept the passage over it narrow, from a
-     * knob in the roof of a passage widened over the hole, beside the top of the vines, from a pocket in the roof of
-     * an upper tunnel over vines turned to it (8004 4,6), and from a step of a room's tunnel whose open space reached
-     * into the hole, 2 over that tunnel's floor (6929 5,-4)), and one (233 -6,1) where a tunnel whose open space
-     * reaches the hole's edge must keep the passage over the hole narrow: widened, it left a step of that tunnel's
-     * wall over the hole and a fall of 17.
-     */
-    static final long[][] WASTE_FALLS = {{17, 0, 0}, {11, 0, 0}, {13, 1, -1}, {15, 0, 0}, {37, 2, 2}, {62, 7, -6}, {14, 0, 0},
-            {239, -6, 1}, {221, -6, 1}, {239, 3, -2}, {233, -6, 1}, {8004, 4, 6}, {6929, 5, -4}};
 
     /** True for a way's point next to a landing, where the gate's own passage and landing shape the floor. */
     static boolean gateMouth(Terrain t, Net n, double x, double z) {
@@ -1677,329 +1016,6 @@ class NetworkTest {
     @Tag("voxel")
     void gardensAreOneCave() { oneCave(Terrain.GARDENS, 0.980); }
 
-    @Test
-    @Tag("voxel")
-    void basaltIsOneCave() { oneCave(Terrain.GALLERIES, 0.960); }
-
-    /**
-     * Wasteland cells wastelandIsOneCave builds besides the voxel tests' two: {seed, cx, cz} of cells where the last
-     * stage of a climb, laid again 5 to 6.6 tall, had lost the floor of the step off its vines, and the rooms the climb
-     * alone reached were cut off (the main component held 95.2% and 95.8%), and where the step off a last stage's
-     * vines stood in a niche of the hole's wall, the upper tunnel turning away at once, and seven rooms were cut off
-     * (93.9%).
-     */
-    static final long[][] WASTE_CAVES = {{33, -3, -5}, {63, -5, 9}, {215, -6, 1}};
-
-    /**
-     * Basalt Galleries cells {seed, cx, cz, lava depth, 0 for the default} that {@link #galleriesAreWalkedFromTheEntry}
-     * builds block by block. In 673596 the only tunnel from the bedrock landing's flights to the rest of the cell coiled
-     * up over itself, and its lower turn's vault took the floor of the upper one: the plan had a way, but on foot the
-     * landing, its two courts and the Causeway were cut off from the entry.
-     */
-    static final long[][] GALLERIES_REACH_CELLS = {{673596, -10, -19, 0}};
-
-    /**
-     * From the entry, on foot (the blocks the game makes): the bedrock landing, every court and set piece reached and
-     * every tunnel walked along its line ({@link #reachAll}), in the {@link #GALLERIES_REACH_CELLS}. The Causeway's
-     * middle lies over its lava, between the column path and the wall ledge, so its column path stands for it: nine in
-     * ten of the path's columns have a top of the main component.
-     */
-    @Test
-    @Tag("voxel")
-    void galleriesAreWalkedFromTheEntry() {
-        List<String> fails = new ArrayList<>();
-        for (long[] c : GALLERIES_REACH_CELLS) {
-            Terrain t = pieceTerrain(c);
-            Network w = t.network;
-            int cx = (int) c[1], cz = (int) c[2], cell = (int) w.cell;
-            Net n = w.net(Terrain.GALLERIES, cx, cz);
-            VoxelHarness v = VoxelHarness.build(t, Terrain.GALLERIES, cx * cell, cz * cell, cell, cell);
-            v.markShafts(n);
-            Chamber e = n.ch.get(n.entry);
-            v.connect(e.x, e.f0 + 1, e.z);
-            String tg = pieceTag(c);
-            System.out.printf("%s: main component %.2f%% of %d places%n", tg, 100 * v.mainShare(), v.places());
-            List<String> f = new ArrayList<>();
-            reachAll(v, t, n, tg, f);
-            for (Chamber k : n.ch) {
-                if (!k.keep || k.kind != Kind.CAUSEWAY) continue;
-                String miss = tg + ": " + k.kind + "#" + k.id + " at ";
-                double walked = causewayWalked(v, w, k);
-                if (walked >= 0.9) f.removeIf(s -> s.startsWith(miss));
-                else f.add(tg + ": the Causeway's column path is " + fmt(100 * walked) + "% walkable from the entry");
-            }
-            fails.addAll(f);
-        }
-        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
-    }
-
-    /** The share of the Causeway's column path whose top (within a few blocks) is a place of the main component. */
-    static double causewayWalked(VoxelHarness v, Network w, Chamber c) {
-        int cols = 0, ok = 0, R = (int) Math.ceil(c.R());
-        double endU = c.rx - c.endW;
-        for (int x = (int) c.x - R; x <= c.x + R; x++) for (int z = (int) c.z - R; z <= c.z + R; z++) {
-            double[] uv = w.hallUV(c, x + 0.5, z + 0.5);
-            if (Math.abs(uv[1] * c.side - c.pathV) > 0.3 * c.hexS || Math.abs(uv[0]) > endU - 2) continue;
-            int top = (int) Math.round(Network.pathHeight(c, uv[0]));
-            cols++;
-            for (int y = top - 2; y <= top + 3; y++) {
-                if (v.in(x, y, z) && v.place(x, y, z) && v.inMain(x, y, z)) { ok++; break; }
-            }
-        }
-        return ok / (double) Math.max(1, cols);
-    }
-
-    @Test
-    @Tag("voxel")
-    void wastelandIsOneCave() { oneCave(Terrain.WASTELAND, 0.960, WASTE_CAVES); }
-
-    /**
-     * No blind end in the Wasteland's blocks (Taran, 2026-11-01: no dead ends): the Upper Caves' blind-end finder
-     * ({@link DeadEnds}) over the built cell-layers of the voxel tests finds no tip that one can walk into but where
-     * the finder, made for the Upper Caves' lone tunnels, is fooled. The tips it finds are counted by where they lie:
-     * out of reach (no standing place of the main component at the tip's height, {@link #walkable}: pockets in the
-     * rough roofs); in a room (the corners at its edge, where its floor rises into its roof, have one way out); at a
-     * climb (the foot or the mouth of a stage); in the middle of a tunnel that goes on both ways ({@link #throughTunnel}:
-     * there a tunnel or a room beside it, or a crossing, joins the finder's two ways out of the tip's sphere into one);
-     * and near the gates (whose passages the box cuts off). Within {@link #SEAM} of the cell's edges none are looked for
-     * (the box cuts off the ways across the seam there, and the finder needs 12 blocks of window past a tip). Any other
-     * tip fails: a blind passage, the end of a tunnel that reaches no room, a pocket the plan does not know. The
-     * finder's 2-block cells are read as JoinDeadEndsFeature reads the world: open where 4 of a cell's 8 blocks are,
-     * wet where most of those hold a fluid.
-     */
-    @Test
-    @Tag("voxel")
-    void wastelandNoBlindEndsInBlocks() {
-        List<String> fails = new ArrayList<>();
-        int li = Terrain.WASTELAND;
-        for (int s = 0; s < VOX_SEEDS.length; s++) {
-            long seed = VOX_SEEDS[s];
-            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
-            Terrain t = terrain(seed);
-            Net n = t.network.net(li, cx, cz);
-            VoxelHarness v = built(seed, li, cx, cz, 1, 1);
-            DeadEnds.Grid g = deadEndGrid(v);
-            int m = SEAM / DeadEnds.CELL;
-            List<DeadEnds.Tip> tips = DeadEnds.tips(g, m, g.nx - 1 - m, m, g.nz - 1 - m);
-            int roofs = 0, rooms = 0, climbs = 0, through = 0, mouths = 0;
-            String tg = tag(seed, li, cx, cz);
-            for (DeadEnds.Tip tp : tips) {
-                int x = g.blockX(tp.i()), y = g.blockY(tp.j()), z = g.blockZ(tp.k());
-                Network.LCol lc = t.network.layer(t.network.column(x, z), li);
-                if (!walkable(v, g, tp)) roofs++;
-                else if (inRoom(lc)) rooms++;
-                else if (atClimb(lc, y)) climbs++;
-                else if (throughTunnel(n, x, y, z)) through++;
-                else if (nearGate(t, n, x, z)) mouths++;
-                else fails.add(tg + ": a blind end at " + x + " " + y + " " + z + " (" + where(t, li, x, y, z) + ")");
-            }
-            System.out.printf("%s: %d tips: %d out of reach, %d in rooms, %d at climbs, %d in tunnels going on both ways, %d by the gates%n",
-                    tg, tips.size(), roofs, rooms, climbs, through, mouths);
-        }
-        assertTrue(fails.isEmpty(), fails.size() + " blind ends:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
-    }
-
-    /** True inside a room's footprint in the column, or in its wall (its rough walls stand a little past e = 1). */
-    static boolean inRoom(Network.LCol lc) {
-        for (int k = 0; k < lc.nc; k++) if (lc.e[k] < 1.1) return true;
-        return false;
-    }
-
-    /**
-     * True in a tunnel, within its half-width and 1.5 of its line and between its floor and its roof, at least 8 blocks
-     * along the line from both of its ends: there the tunnel goes on both ways.
-     */
-    static boolean throughTunnel(Net n, int x, int y, int z) {
-        for (Way wy : n.ways) {
-            if (wy.kind != EK.WALK || wy.inner) continue;
-            double s = 0;
-            for (int i = 0; i < wy.n; i++) {
-                if (i > 0) s += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
-                if (s < 8 || wy.length - s < 8) continue;
-                if (Math.hypot(x + 0.5 - wy.x[i], z + 0.5 - wy.z[i]) > wy.w[i] + 1.5) continue;
-                if (y >= wy.f[i] - 1 && y <= wy.f[i] + wy.hgt[i] + 1) return true;
-            }
-        }
-        return false;
-    }
-
-    /** True within 4 blocks of a climb stage's shaft, from 3 under its foot to 4 over its top. */
-    static boolean atClimb(Network.LCol lc, int y) {
-        for (int k = 0; k < lc.ns; k++) {
-            Shaft s = lc.s[k];
-            if (lc.sd[k] < s.r + 4 && y > s.foot - 3 && y < s.top + 4) return true;
-        }
-        return false;
-    }
-
-    /**
-     * True when a player can stand in a tip's cell: a standing place of the main component a block round its two
-     * columns by two, its feet from two blocks under the cell's lowest block to its highest.
-     */
-    static boolean walkable(VoxelHarness v, DeadEnds.Grid g, DeadEnds.Tip tp) {
-        int bx = g.x0 + tp.i() * DeadEnds.CELL, by = g.y0 + tp.j() * DeadEnds.CELL, bz = g.z0 + tp.k() * DeadEnds.CELL;
-        for (int x = bx - 1; x <= bx + DeadEnds.CELL; x++) for (int z = bz - 1; z <= bz + DeadEnds.CELL; z++)
-            for (int y = by - 2; y <= by + DeadEnds.CELL - 1; y++) if (v.inMain(x, y, z)) return true;
-        return false;
-    }
-
-    /** Blind ends within this many blocks of a cell's edge are not looked for (see wastelandNoBlindEndsInBlocks). */
-    static final int SEAM = 16;
-
-    /** True within 24 blocks of a gate's landing (by its reach), where the gate's passage leaves the box. */
-    static boolean nearGate(Terrain t, Net n, double x, double z) {
-        for (int id : new int[]{n.entry, n.exit}) {
-            Chamber c = n.ch.get(id);
-            if (Math.hypot(x - c.x, z - c.z) < c.R() + 24) return true;
-        }
-        return gateMouth(t, n, x, z);
-    }
-
-    /**
-     * A built box's 2-block cells as JoinDeadEndsFeature reads the world's blocks: open where at least 4 of a cell's 8
-     * blocks are (air, water or lava), and then water where most of those hold a fluid; rock elsewhere.
-     */
-    static DeadEnds.Grid deadEndGrid(VoxelHarness v) {
-        int C = DeadEnds.CELL;
-        DeadEnds.Grid g = new DeadEnds.Grid(v.x0, v.y0, v.z0, v.nx / C, v.ny / C, v.nz / C);
-        for (int i = 0; i < g.nx; i++) for (int k = 0; k < g.nz; k++) for (int j = 0; j < g.ny; j++) {
-            int open = 0, wet = 0;
-            for (int a = 0; a < C; a++) for (int b = 0; b < C; b++) for (int c = 0; c < C; c++) {
-                int mt = v.mat(v.x0 + i * C + a, v.y0 + j * C + b, v.z0 + k * C + c);
-                if (mt == VoxelHarness.ROCK) continue;
-                open++;
-                if (mt != VoxelHarness.AIR) wet++;
-            }
-            if (open >= 4) g.set(i, j, k, wet * 2 > open ? DeadEnds.WATER : DeadEnds.AIR);
-        }
-        return g;
-    }
-
-    /**
-     * Tight sight lines in the Wasteland (Taran, 2026-11-01: tight encounters with predators): from the eyes of the
-     * standing places in every 4th column of the voxel cells (as {@link #sightLinesAreShort} looks), the longest of the
-     * 216 rays (9 pitches by 24 yaws) runs at most {@link #TIGHT} blocks for 90% of the places. A ray that leaves the
-     * box counts what it ran inside it.
-     */
-    @Test
-    @Tag("voxel")
-    void wastelandIsTight() {
-        List<String> fails = new ArrayList<>();
-        int li = Terrain.WASTELAND;
-        for (int s = 0; s < VOX_SEEDS.length; s++) {
-            long seed = VOX_SEEDS[s];
-            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
-            VoxelHarness v = built(seed, li, cx, cz, 1, 1);
-            double[] far = longestViews(v, 4);
-            java.util.Arrays.sort(far);
-            String tg = tag(seed, li, cx, cz);
-            double p50 = far[far.length / 2], p90 = far[(int) (0.9 * far.length)], p99 = far[(int) (0.99 * far.length)];
-            System.out.printf(java.util.Locale.ROOT, "%s: %d places, longest view per place p50 %.0f, p90 %.0f, p99 %.0f, max %.0f%n",
-                    tg, far.length, p50, p90, p99, far[far.length - 1]);
-            if (far.length < 1000) fails.add(tg + ": only " + far.length + " places looked from");
-            else if (p90 > TIGHT) fails.add(tg + ": a tenth of the places see further than " + fmt(p90));
-        }
-        assertTrue(fails.isEmpty(), String.join("\n", fails));
-    }
-
-    /** The Wasteland's longest view from 90% of its places (blocks). */
-    static final double TIGHT = 40;
-
-    /**
-     * The longest view from each main-component place standing on rock in every {@code every}-th column: the longest of
-     * the rays at the pitches of {@link VoxelHarness#SIGHT_PITCHES} and 24 yaws, to the first rock or out of the box.
-     */
-    static double[] longestViews(VoxelHarness v, int every) {
-        double[] ys = new double[VoxelHarness.SIGHT_PITCHES.length], cs = new double[ys.length];
-        for (int q = 0; q < ys.length; q++) {
-            ys[q] = Math.sin(Math.toRadians(VoxelHarness.SIGHT_PITCHES[q]));
-            cs[q] = Math.cos(Math.toRadians(VoxelHarness.SIGHT_PITCHES[q]));
-        }
-        return java.util.stream.IntStream.range(0, (v.nx + every - 1) / every).parallel().mapToObj(r -> {
-            List<Double> out = new ArrayList<>();
-            int x = v.x0 + r * every;
-            for (int z = v.z0; z < v.z0 + v.nz; z += every) for (int y = v.y0 + 1; y < v.y0 + v.ny - 1; y++) {
-                if (!v.place(x, y, z) || !v.solid(x, y - 1, z) || !v.inMain(x, y, z)) continue;
-                double best = 0;
-                for (int q = 0; q < ys.length; q++) for (int a = 0; a < VoxelHarness.SIGHT_YAWS; a++) {
-                    double th = Math.toRadians(a * (360.0 / VoxelHarness.SIGHT_YAWS));
-                    double d = v.ray(x + 0.5, y + VoxelHarness.EYE, z + 0.5, cs[q] * Math.cos(th), ys[q], cs[q] * Math.sin(th), 400);
-                    best = Math.max(best, d < 0 ? -1 - d : d);
-                }
-                out.add(best);
-            }
-            return out;
-        }).flatMap(List::stream).mapToDouble(Double::doubleValue).toArray();
-    }
-
-    /**
-     * The Basalt Galleries' halls (0.5) open the layer up: the share of open blocks (air or lava) between the lava's
-     * table and 100 over it, in the voxel cells. The old network of small rooms had about 1%; the halls give 13 to 15%
-     * (they fill about a fifth of a cell's area, their ledges 44 to 62 over the lava, under the brief's aim of 20 to
-     * 35%), and the bar is 10%.
-     */
-    @Test
-    @Tag("voxel")
-    void galleriesAreOpen() {
-        List<String> fails = new ArrayList<>();
-        for (int s = 0; s < VOX_SEEDS.length; s++) {
-            long seed = VOX_SEEDS[s];
-            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
-            Terrain t = terrain(seed);
-            int cell = (int) t.network.cell, W = (int) Math.round(t.shape.waterY(Terrain.GALLERIES));
-            VoxelHarness v = built(seed, Terrain.GALLERIES, cx, cz, 1, 1);
-            long open = 0, all = 0;
-            for (int x = cx * cell; x < (cx + 1) * cell; x++) for (int z = cz * cell; z < (cz + 1) * cell; z++)
-                for (int y = W; y < W + 100; y++) { all++; if (v.mat(x, y, z) != VoxelHarness.ROCK) open++; }
-            double share = open / (double) all;
-            String tg = tag(seed, Terrain.GALLERIES, cx, cz);
-            System.out.printf(java.util.Locale.ROOT, "%s: open share between W and W + 100 %.1f%%%n", tg, 100 * share);
-            if (share < 0.10) fails.add(tg + ": only " + fmt(100 * share) + "% of the blocks between W and W + 100 are open");
-        }
-        assertTrue(fails.isEmpty(), String.join("\n", fails));
-    }
-
-    /**
-     * Under the highest flood, every place is a short walk from one above it. The steps are the harness's (4-neighbour
-     * moves and vine rungs). In the Basalt Galleries' halls (0.5) the low places are the bedrock landing and its two
-     * flights, the Causeway's column path, the rift's low ledges and the Caldera's crater rim, each a stair or a ramp
-     * below a dry floor: the bar is 98% within 80 steps (measured 99.8 and 100%, the longest 85 and 79; the brief asked
-     * for 95%), none without a way out. So too in {@link #GALLERIES_LAVA6_SURGE_CELL} with the lava 6 deep (config),
-     * where the bedrock landing's basin held its lava a block deep over a rough bed.
-     */
-    @Test
-    @Tag("voxel")
-    void basaltSurgeHasAWayOut() {
-        List<String> fails = new ArrayList<>();
-        for (int s = 0; s <= VOX_SEEDS.length; s++) {
-            boolean lava6 = s == VOX_SEEDS.length;
-            long seed = lava6 ? GALLERIES_LAVA6_SURGE_CELL[0] : VOX_SEEDS[s];
-            int cx = lava6 ? (int) GALLERIES_LAVA6_SURGE_CELL[1] : VOX_CELLS[s][0], cz = lava6 ? (int) GALLERIES_LAVA6_SURGE_CELL[2] : VOX_CELLS[s][1];
-            Terrain t = lava6 ? new Terrain(galleriesLava(6), -64, seed) : terrain(seed);
-            VoxelHarness v = lava6 ? unbuilt(t, Terrain.GALLERIES, cx, cz) : built(seed, Terrain.GALLERIES, cx, cz, 1, 1);
-            int W = (int) Math.round(t.shape.waterY(Terrain.GALLERIES));
-            int[] h = v.surge(W + Terrain.FLOOD_RISE + 1);
-            int under = h[6];
-            int to80 = 0;
-            for (int[] f : v.far) if (f[3] <= 80) to80++;
-            double within64 = (h[0] + h[1] + h[2] + h[3]) / (double) Math.max(1, under);
-            double within80 = (h[0] + h[1] + h[2] + h[3] + to80) / (double) Math.max(1, under);
-            String tg = tag(seed, Terrain.GALLERIES, cx, cz) + (lava6 ? " (lava 6 deep)" : "");
-            System.out.printf("%s: %d places under the surge, %.1f%% within 64 of safety, %.1f%% within 80, longest %d; surge niches %d%n", tg, under,
-                    100 * within64, 100 * within80, h[7], t.network.net(Terrain.GALLERIES, cx, cz).surgeNiches);
-            if (under == 0) fails.add(tg + ": nothing under the surge (the bedrock landing is missing?)");
-            if (within80 < 0.98) fails.add(tg + ": only " + fmt(100 * within80) + "% of the places under the surge are within 80 of safety");
-            if (h[5] > 0) fails.add(tg + ": " + h[5] + " places under the surge have no way out");
-            if (h[7] > 96) fails.add(tg + ": the longest walk out from under the surge is " + h[7]);
-        }
-        assertTrue(fails.isEmpty(), String.join("\n", fails));
-    }
-
-    /**
-     * A Basalt Galleries cell {seed, cx, cz} whose surge {@link #basaltSurgeHasAWayOut} checks with the lava 6 deep.
-     */
-    static final long[] GALLERIES_LAVA6_SURGE_CELL = {-1280804115, 2, 13};
-
     /** The share of the standing places in the main component, every node and every portal of 2 x 2 cells reached. */
     @Test
     @Tag("voxel")
@@ -2027,7 +1043,7 @@ class NetworkTest {
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
 
-    /** Two neighbouring cells per layer: the second's entry landing is reached from the first's, every shared portal joined. */
+    /** Two neighbouring cells per planned layer: the second's entry landing is reached from the first's, every shared portal joined. */
     @Test
     @Tag("voxel")
     void neighboursJoin() {
@@ -2036,7 +1052,7 @@ class NetworkTest {
         Terrain t = terrain(seed);
         Network w = t.network;
         List<String> fails = new ArrayList<>();
-        for (int li = 0; li < t.shape.layerCount; li++) {
+        for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
             VoxelHarness v = built(seed, li, cx, cz, 2, 1);
             Net b = w.net(li, cx + 1, cz);
             Chamber eb = b.ch.get(b.entry);
@@ -2057,54 +1073,25 @@ class NetworkTest {
     }
 
     /**
-     * Basalt Galleries cells {seed, cx, cz} whose falls {@link #noLethalFalls} checks besides the voxel cells. Each has
-     * a place where a careless plan leaves a fall of 16 to 22: a step off a rift bridge's side onto a low ledge, a step
-     * past an upper ledge's end by the wall into a pocket, a fall through a tunnel's floor into the tunnel under it
-     * (another tunnel, or the same one where it loops over itself), beside a tunnel's walk where it coils 13 to 18
-     * down over itself (871161, 1163980495), or off the Causeway's column path's far side into the slot by the wall,
-     * or off the rock behind the path into a slit by the wall (-1618033, 457252, -31415).
-     */
-    static final long[][] GALLERIES_FALL_CELLS = {{33000128, 2, 7}, {424242, -3, 8}, {9000056, 14, 1}, {1000020, -8, -12}, {11000050, -1, -4},
-            {871161, 4, 19}, {1163980495, 6, -7}, {-1618033, -14, 5}, {457252, -12, -15}, {-31415, -10, -5}};
-
-    /**
-     * Basalt Galleries cells {seed, cx, cz} whose falls {@link #noLethalFalls} checks with the lava 6 deep (config): in
-     * each a hall's lava stood a block deep over its bed there, its rough bed standing up in spikes and islands.
-     */
-    static final long[][] GALLERIES_LAVA6_FALL_CELLS = {{-1958069311, 16, 17}, {-1618033, -8, -7}};
-
-    /**
      * Section 10: no fall from a standing place in a tunnel, a climb, a ledge passage or an ordinary room lands more
      * than 15 lower; a staged climb ends a fall on the floor of the stage it fell down. Falls into water or onto vines
      * are safe. Falls in the rift, the deep dark, the helices and the ancient city are reported, not failed: 0.2.0's
-     * cliffs and the high ledges are meant to be dangerous. Over the voxel tests' cells of the Deep Gardens, the
-     * Wasteland and the Basalt Galleries, 2 x 2 cells of the Blue Reaches, and the Wasteland's {@link #WASTE_FALLS}.
-     * The Basalt Galleries are checked in the {@link #GALLERIES_FALL_CELLS} too, and in their first voxel cell and the
-     * {@link #GALLERIES_LAVA6_FALL_CELLS} with their lava 6 deep (config), where a hall's lava stands over its bed as at
-     * the default depth.
+     * cliffs and the high ledges are meant to be dangerous. Over the voxel tests' cells of the Deep Gardens and 2 x 2
+     * cells of the Blue Reaches (the layers under them are noise fields, tested with their fields).
      */
     @Test
     @Tag("voxel")
     void noLethalFalls() {
         List<String> fails = new ArrayList<>();
         List<Object[]> runs = new ArrayList<>();
-        for (int s = 0; s < VOX_SEEDS.length; s++) for (int li : new int[]{Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES}) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1, true});
-        runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2, true});
-        // the Wasteland's extra cells are read here only: built, checked and let go, with the terrain of a seed no other
-        // test had asked for (its plan cache holds the cell's and its neighbours' plans, which the later tests in this
-        // JVM would otherwise carry)
-        for (long[] c : WASTE_FALLS) runs.add(new Object[]{c[0], Terrain.WASTELAND, (int) c[1], (int) c[2], 1, false});
-        // more Basalt Galleries cells, built one at a time and not kept
-        for (long[] c : GALLERIES_FALL_CELLS) runs.add(new Object[]{c[0], Terrain.GALLERIES, (int) c[1], (int) c[2], -1, false});
-        runs.add(new Object[]{VOX_SEEDS[0], Terrain.GALLERIES, VOX_CELLS[0][0], VOX_CELLS[0][1], -1, false, new Terrain(galleriesLava(6), -64, VOX_SEEDS[0])});
-        for (long[] c : GALLERIES_LAVA6_FALL_CELLS) runs.add(new Object[]{c[0], Terrain.GALLERIES, (int) c[1], (int) c[2], -1, false, new Terrain(galleriesLava(6), -64, c[0])});
+        for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], Terrain.GARDENS, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
+        runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
         for (Object[] run : runs) {
             long seed = (Long) run[0];
             int li = (Integer) run[1], cx = (Integer) run[2], cz = (Integer) run[3], wc = (Integer) run[4];
-            boolean letGo = !(Boolean) run[5] && !TERRAINS.containsKey(seed);
-            Terrain t = run.length > 6 ? (Terrain) run[6] : terrain(seed);
-            VoxelHarness v = wc < 0 ? unbuilt(t, li, cx, cz) : built(seed, li, cx, cz, wc, wc, (Boolean) run[5]);
-            String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "") + (run.length > 6 ? " (lava 6 deep)" : "");
+            Terrain t = terrain(seed);
+            VoxelHarness v = built(seed, li, cx, cz, wc, wc, true);
+            String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "");
             java.util.Map<String, Integer> told = new java.util.TreeMap<>();
             int lethal = 0, deepest = 0;
             for (int[] f : v.drops(16)) {
@@ -2119,7 +1106,6 @@ class NetworkTest {
                 if (fails.size() < 40) fails.add(tg + ": a fall of " + drop + " from " + f[0] + " " + f[1] + " " + f[2] + " (" + where(t, li, f[0], f[1], f[2]) + ")");
             }
             System.out.printf("%s: %d lethal falls (deepest %d); reported: %s%n", tg, lethal, deepest, told);
-            if (letGo) TERRAINS.remove(seed);
         }
         assertTrue(fails.isEmpty(), fails.size() + " lethal falls:\n" + String.join("\n", fails));
     }
@@ -2150,14 +1136,13 @@ class NetworkTest {
         return b.length() == 0 ? "rock?" : b.toString().trim();
     }
 
-    /** Rooms keep most of their planned interior open after interpolation, and every tube hub's centre pillar stands. */
+    /** Rooms keep most of their planned interior open after interpolation. */
     @Test
     @Tag("voxel")
     void roomsStayOpen() {
         List<String> fails = new ArrayList<>();
         Map<Kind, List<Double>> share = new EnumMap<>(Kind.class);
-        int hubs = 0;
-        for (int li = Terrain.GARDENS; li <= Terrain.GALLERIES; li++) for (int s = 0; s < VOX_SEEDS.length; s++) {
+        for (int li = Terrain.GARDENS; Terrain.planned(li); li++) for (int s = 0; s < VOX_SEEDS.length; s++) {
             long seed = VOX_SEEDS[s];
             int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
             Terrain t = terrain(seed);
@@ -2169,15 +1154,6 @@ class NetworkTest {
                 long[] o = v.openShare(w, c);
                 if (o[1] < 50) continue;
                 share.computeIfAbsent(c.kind, k -> new ArrayList<>()).add(o[0] / (double) o[1]);
-                if (c.kind != Kind.TUBEHUB || c.pillars.length < 3) continue;
-                hubs++;
-                int px = (int) Math.floor(c.x + c.pillars[0]), pz = (int) Math.floor(c.z + c.pillars[1]);
-                Network.LCol lc = w.layer(w.column(px, pz), li);
-                for (int k = 0; k < lc.nc; k++) {
-                    if (lc.c[k] != c) continue;
-                    for (int y = (int) Math.ceil(lc.F[k] + 1); y <= Math.floor(lc.C[k] - 1); y++)
-                        if (v.mat(px, y, pz) != VoxelHarness.ROCK) { fails.add(tag(seed, li, cx, cz) + ": the pillar of tube hub #" + c.id + " is open at " + px + " " + y + " " + pz); break; }
-                }
             }
         }
         for (Map.Entry<Kind, List<Double>> e : share.entrySet()) {
@@ -2185,209 +1161,30 @@ class NetworkTest {
             Collections.sort(l);
             double p10 = l.get((int) (0.1 * l.size()));
             double min = switch (e.getKey()) {
-                case TUBEHUB -> 0.60;
                 case POCKET -> 0.50;
                 default -> 0.70;
             };
             System.out.printf("roomsStayOpen: %s n %d open share p10 %.2f%n", e.getKey(), l.size(), p10);
             if (p10 < min) fails.add(e.getKey() + ": open share p10 " + fmt(p10) + " (n " + l.size() + "), under " + min);
         }
-        if (hubs == 0) fails.add("no tube hub to check");
         assertTrue(fails.isEmpty(), String.join("\n", fails));
-    }
-
-    /**
-     * Lava fills the bottom of the Basalt Galleries round the bedrock landing, never above the table (but for the
-     * pools cut into floors: {@link #lavaPoolsHold}), with a way out.
-     */
-    @Test
-    @Tag("voxel")
-    void lavaAtTheBottom() {
-        List<String> fails = new ArrayList<>();
-        for (int s = 0; s < VOX_SEEDS.length; s++) {
-            long seed = VOX_SEEDS[s];
-            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
-            Terrain t = terrain(seed);
-            Net n = t.network.net(Terrain.GALLERIES, cx, cz);
-            VoxelHarness v = built(seed, Terrain.GALLERIES, cx, cz, 1, 1);
-            Chamber bed = n.ch.get(n.exit);
-            int W = (int) Math.round(t.shape.waterY(Terrain.GALLERIES));
-            long lava = 0, high = 0, steps = 0;
-            for (int x = v.x0; x < v.x0 + v.nx; x++) for (int z = v.z0; z < v.z0 + v.nz; z++) {
-                double d = Math.hypot(x + 0.5 - bed.x, z + 0.5 - bed.z);
-                for (int y = v.y0; y < v.y0 + v.ny; y++) {
-                    if (v.mat(x, y, z) != VoxelHarness.LAVA) continue;
-                    if (y >= W && !inPool(n, x, y, z)) high++;
-                    if (d <= 70) lava++;
-                    if (y == W - 1 && v.mat(x, y + 1, z) == VoxelHarness.AIR) {
-                        for (int k = 0; k < 4; k++) if (v.inMain(x + VoxelHarness.DX[k], W, z + VoxelHarness.DZ[k])) { steps++; break; }
-                    }
-                }
-            }
-            String tg = tag(seed, Terrain.GALLERIES, cx, cz);
-            System.out.printf("%s: %d lava blocks within 70 of the bedrock landing, %d at or above the table, %d step-outs%n", tg, lava, high, steps);
-            if (lava < 1000) fails.add(tg + ": only " + lava + " lava blocks within 70 of the bedrock landing");
-            if (high > 0) fails.add(tg + ": " + high + " lava blocks at or above the lava table");
-            if (steps == 0) fails.add(tg + ": nowhere to step out of the lava onto the landing's side");
-            if (v.nearestPlace(bed.x, bed.f0 + 1, bed.z, 6, 3, true) == null) fails.add(tg + ": the bedrock landing is not reached");
-        }
-        assertTrue(fails.isEmpty(), String.join("\n", fails));
-    }
-
-    /**
-     * The Basalt Galleries' lava pools (the lead's list, 2026-10-29), built block by block: every block of a pool's
-     * footprint is lava at its level, rock under it and air over it, and its four side neighbours at that level are
-     * rock or lava; a great hall channel's banks are rock level with the lava, open two blocks over them (no rim);
-     * every blind tube of a tube hub ends in a pool or on magma; no way's walking core (up to its walkTo) has lava in
-     * it; and the walk graph is the one built without the pools, but for the pools and their banks. The Basalt voxel
-     * cells, and a cell whose great hall has a channel (most have no room for one: the Implemented section).
-     */
-    @Test
-    @Tag("voxel")
-    void lavaPoolsHold() {
-        List<String> fails = new ArrayList<>();
-        long[] seeds = {VOX_SEEDS[0], VOX_SEEDS[1], 8675309L};
-        int[][] cells = {VOX_CELLS[0], VOX_CELLS[1], {-1, -1}};
-        int channels = 0, ends = 0, magma = 0;
-        for (int s = 0; s < seeds.length; s++) {
-            long seed = seeds[s];
-            int cx = cells[s][0], cz = cells[s][1], li = Terrain.GALLERIES;
-            String tg = tag(seed, li, cx, cz);
-            Terrain t = terrain(seed);
-            Network w = t.network;
-            Net n = w.net(li, cx, cz);
-            VoxelHarness v = s < VOX_SEEDS.length ? built(seed, li, cx, cz, 1, 1) : unbuilt(t, li, cx, cz);
-            int W = (int) Math.round(t.shape.waterY(li));
-            long lava = 0, banks = 0;
-            for (Net.Pool p : n.pools) {
-                if (p.channel) channels++;
-                int x0 = (int) Math.floor(Math.min(p.ax, p.bx) - p.half - 3), x1 = (int) Math.ceil(Math.max(p.ax, p.bx) + p.half + 3);
-                int z0 = (int) Math.floor(Math.min(p.az, p.bz) - p.half - 3), z1 = (int) Math.ceil(Math.max(p.az, p.bz) + p.half + 3);
-                int y = p.y, here = 0;
-                for (int x = x0; x <= x1; x++) for (int z = z0; z <= z1; z++) {
-                    double d = p.dist(x + 0.5, z + 0.5);
-                    if (d > p.bank()) continue;
-                    if (w.cellOf(x) != cx || w.cellOf(z) != cz) { fails.add(tg + ": a pool reaches across the seam at " + x + " " + z); continue; }
-                    String at = (p.channel ? "channel" : "tube end") + " at " + x + " " + y + " " + z;
-                    if (d <= 0) {
-                        // a blind tube's lava lies only under its open space at the feet: the pinched end's corners are rock
-                        if (!p.channel && v.mat(x, y, z) == VoxelHarness.ROCK) continue;
-                        lava++;
-                        here++;
-                        if (v.mat(x, y, z) != VoxelHarness.LAVA) fails.add(tg + ": no lava in the " + at);
-                        if (v.mat(x, y - 1, z) != VoxelHarness.ROCK) fails.add(tg + ": no rock under the " + at);
-                        if (v.mat(x, y + 1, z) != VoxelHarness.AIR) fails.add(tg + ": no air over the " + at);
-                        for (int k = 0; k < 4; k++) {
-                            int m = v.mat(x + VoxelHarness.DX[k], y, z + VoxelHarness.DZ[k]);
-                            if (m != VoxelHarness.ROCK && m != VoxelHarness.LAVA) fails.add(tg + ": the " + at + " can flow out sideways");
-                        }
-                    } else if (p.channel) {
-                        banks++;
-                        if (v.mat(x, y, z) != VoxelHarness.ROCK || !v.open(x, y + 1, z) || !v.open(x, y + 2, z))
-                            fails.add(tg + ": the bank of the " + at + " is not level with the lava");
-                    }
-                }
-                if (here < (p.channel ? 30 : 3)) fails.add(tg + ": only " + here + " lava blocks in the " + (p.channel ? "channel" : "tube end") + " at " + (int) p.ax + " " + y + " " + (int) p.az);
-            }
-            for (Way wy : n.ways) {
-                if (wy.kind != EK.STUB || !wy.round || wy.a < 0 || n.ch.get(wy.a).kind != Kind.TUBEHUB) continue;
-                ends++;
-                boolean pool = false;
-                for (Net.Pool p : n.pools) pool |= p.way == wy.id;
-                if (pool) continue;
-                double ex = wy.x[wy.n - 1], ez = wy.z[wy.n - 1];
-                int x = (int) Math.floor(ex), z = (int) Math.floor(ez), y = (int) Math.ceil(wy.f[wy.n - 1] - 1e-9) - 1;
-                magma++;
-                if (!t.tubeStubEnd(x, y, z) || t.palette.shell(x, y, z, 1, 12, false) != Rock.MAGMA)
-                    fails.add(tg + ": the blind tube #" + wy.id + " ends with neither lava nor magma at " + x + " " + y + " " + z);
-            }
-            // no lava on a walking core: the feet's block, the one under and the one over, a block round every line
-            int cores = 0;
-            for (Way wy : n.ways) {
-                double acc = 0;
-                for (int i = 0; i + 1 < wy.n; i++) {
-                    double dx = wy.x[i + 1] - wy.x[i], dz = wy.z[i + 1] - wy.z[i], len = Math.hypot(dx, dz);
-                    for (double q = 0; q < len && acc + q <= wy.walkTo; q += 1) {
-                        double px = wy.x[i] + dx * q / len, pz = wy.z[i] + dz * q / len, f = wy.f[i] + (wy.f[i + 1] - wy.f[i]) * q / len;
-                        if (f < W + 2) continue;
-                        int feet = (int) Math.ceil(f - 1e-9);
-                        for (int ox = -1; ox <= 1; ox++) for (int oz = -1; oz <= 1; oz++) for (int y = feet - 1; y <= feet + 1; y++) {
-                            int x = (int) Math.floor(px) + ox, z = (int) Math.floor(pz) + oz;
-                            if (!v.in(x, y, z)) continue;
-                            cores++;
-                            if (v.mat(x, y, z) == VoxelHarness.LAVA && fails.size() < 40)
-                                fails.add(tg + ": lava on the walking core of way #" + wy.id + " (" + wy.kind + ") at " + x + " " + y + " " + z);
-                        }
-                    }
-                    acc += len;
-                }
-            }
-            // the walk graph without the pools: every place of its main component, away from the pools, is still one
-            boolean was = NetPlanner.POOLS;
-            VoxelHarness v0;
-            try {
-                NetPlanner.POOLS = false;
-                v0 = unbuilt(new Terrain(TerrainSettings.defaults(), -64, seed), li, cx, cz);
-            } finally {
-                NetPlanner.POOLS = was;
-            }
-            long same = 0, lost = 0;
-            for (int x = v0.x0; x < v0.x0 + v0.nx; x++) for (int z = v0.z0; z < v0.z0 + v0.nz; z++) {
-                int near = Integer.MIN_VALUE;
-                for (Net.Pool p : n.pools) if (p.dist(x + 0.5, z + 0.5) <= p.bank() + 1) near = p.y;
-                for (int y = v0.y0 + 1; y < v0.y0 + v0.ny - 1; y++) {
-                    if (!v0.place(x, y, z) || !v0.inMain(x, y, z)) continue;
-                    if (near != Integer.MIN_VALUE && y >= near - 1 && y <= near + 3) continue;
-                    if (v.place(x, y, z) && v.inMain(x, y, z)) same++;
-                    else if (lost++ < 10) fails.add(tg + ": the place " + x + " " + y + " " + z + " left the main component with the pools");
-                }
-            }
-            System.out.printf("%s: %d pools (%d lava blocks, %d bank blocks), %d walking-core blocks checked, %d main places kept, %d lost; main %d with pools, %d without%n",
-                    tg, n.pools.size(), lava, banks, cores, same, lost, v.mainSize(), v0.mainSize());
-        }
-        System.out.printf("lavaPoolsHold: %d channels, %d blind tubes, %d of them on magma%n", channels, ends, magma);
-        // the Galleries' halls (0.5) have no great hall, so no channel: their lava is the lakes and rivers at the table
-        if (ends == 0) fails.add("no blind tube to check");
-        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
-    }
-
-    /** True in the footprint of one of the plan's lava pools, at its level. */
-    static boolean inPool(Net n, int x, int y, int z) {
-        for (Net.Pool p : n.pools) if (y == p.y && p.dist(x + 0.5, z + 0.5) <= 0) return true;
-        return false;
-    }
-
-    /** A Basalt cell built as {@link #built} builds it, not kept. */
-    static VoxelHarness unbuilt(Terrain t, int li, int cx, int cz) {
-        Network w = t.network;
-        int cell = (int) w.cell;
-        VoxelHarness v = VoxelHarness.build(t, li, cx * cell, cz * cell, cell, cell);
-        v.markShafts(w.net(li, cx, cz));
-        Net n = w.net(li, cx, cz);
-        Chamber e = n.ch.get(n.entry);
-        v.connect(e.x, e.f0 + 1, e.z);
-        return v;
     }
 
     /**
      * Sight lines: from the eyes of walkable places, rays at pitches -40 to +40 meet rock within 160 blocks (past that
-     * the shader shows the sky). Places in every 4th column of the Deep Gardens' and Basalt Galleries' voxel cells, of
-     * the Blue Reaches' 2 x 2 cells (whose rays run on into the apron), and of a Blue cell with an ancient city built
-     * with a 170-block apron. A ray that leaves the box after running 160 blocks counts as a long view. The Deep Gardens
-     * and the Basalt Galleries have none; in the Blue Reaches, the share of places with a long view is held under
-     * {@link #BLUE_LONG}, apart from the places in a city's reserve, which are reported (the city's pieces, which the
-     * harness does not build, stand in the way of many of their views). The Basalt Galleries' halls (0.5) are meant to
-     * be wide: at least {@link #GALLERIES_WIDE} of their places see {@link VoxelHarness#WIDE} blocks or more; they are
-     * checked in the {@link #GALLERIES_SIGHT_CELLS} too.
+     * the shader shows the sky). Places in every 4th column of the Deep Gardens' voxel cells, of the Blue Reaches' 2 x 2
+     * cells (whose rays run on into the apron), and of a Blue cell with an ancient city built with a 170-block apron. A
+     * ray that leaves the box after running 160 blocks counts as a long view. The Deep Gardens have none; in the Blue
+     * Reaches, the share of places with a long view is held under {@link #BLUE_LONG}, apart from the places in a city's
+     * reserve, which are reported (the city's pieces, which the harness does not build, stand in the way of many of
+     * their views).
      */
     @Test
     @Tag("voxel")
     void sightLinesAreShort() {
         List<String> fails = new ArrayList<>();
         List<Object[]> runs = new ArrayList<>();
-        for (int li : new int[]{Terrain.GARDENS, Terrain.WASTELAND, Terrain.GALLERIES}) for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], li, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
-        // more Basalt Galleries cells, built one at a time and not kept: long views through their tunnels
-        for (long[] c : GALLERIES_SIGHT_CELLS) runs.add(new Object[]{c[0], Terrain.GALLERIES, (int) c[1], (int) c[2], -1});
+        for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], Terrain.GARDENS, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
         runs.add(new Object[]{2000023L, Terrain.BLUE, -1, 1, 0});
         for (Object[] run : runs) {
@@ -2397,10 +1194,7 @@ class NetworkTest {
             Network w = t.network;
             int cell = (int) w.cell;
             VoxelHarness v;
-            if (wc < 0) {
-                v = unbuilt(t, li, cx, cz);
-                wc = 1;
-            } else if (wc > 0) v = built(seed, li, cx, cz, wc, wc);
+            if (wc > 0) v = built(seed, li, cx, cz, wc, wc);
             else {
                 // one cell with an apron wide enough that its places' rays rarely leave the box
                 int ap = 170;
@@ -2436,7 +1230,6 @@ class NetworkTest {
             if (s.places < 1000) fails.add(tg + ": only " + s.places + " places looked from");
             if (li != Terrain.BLUE && !s.longPlaces.isEmpty()) fails.add(tg + ": " + s.longPlaces.size() + " places with a view over 160 blocks");
             if (li == Terrain.BLUE && share > BLUE_LONG) fails.add(tg + ": " + String.format(java.util.Locale.ROOT, "%.2f", 100 * share) + "% of the places outside the cities' reserves have a view over 160 blocks");
-            if (li == Terrain.GALLERIES && wide < GALLERIES_WIDE) fails.add(tg + ": only " + fmt(100 * wide) + "% of the places have a view of 80 blocks or more");
         }
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }

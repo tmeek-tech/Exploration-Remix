@@ -224,7 +224,6 @@ public final class TerrainPreview {
             }
             int li = shape.layerAt(y);
             if (li < 0) { m[i] = Rock.BAND_STONE.ordinal(); continue; }
-            if (li == shape.layerCount - 1 && y < shape.waterY(li) + 4 && t.bedrockLanding(x, y, z)) { m[i] = Rock.BEDROCK.ordinal(); continue; }
             if (d > 0.75) m[i] = t.palette.interior(li, x, y, z).ordinal();
         }
         // surface pass, top down, as SurfaceSystem.buildSurface does it
@@ -320,6 +319,7 @@ public final class TerrainPreview {
         if (what.equals("mat")) {
             // Rock across each layer's four longest tunnels, as the game would place it.
             for (int li = 0; li < s.layerCount; li++) {
+                if (!Terrain.planned(li)) continue;   // the noise layers have no tunnels to fan across
                 save(scale(p.fan(t.network(li, 0, 0), li, 4, 60, true), 2, 2), new File(out, "mat_fan_" + li + ".png"));
                 p.corners.clear();
             }
@@ -332,6 +332,15 @@ public final class TerrainPreview {
         while (t.plans.cellOf(size) == 0) size++;   // the cell size
         for (int li = 0; li < s.layerCount; li++) {
             if (!what.equals("all") && !what.equals(String.valueOf(li))) continue;
+            if (!Terrain.planned(li)) {
+                // a noise field (the Wasteland, the Galleries): no plan to draw, only its blocks
+                System.out.printf("layer %d: a noise field%n", li);
+                save(p.topDown(li, -size / 4, -size / 4, size * 3 / 2, 2), new File(out, "map_" + li + ".png"));
+                save(p.section(0, size / 2.0, size, size / 2.0, s.bottom(li) - 8, s.top(li) + 20), new File(out, "secx_" + li + ".png"));
+                save(p.section(size / 2.0, 0, size / 2.0, size, s.bottom(li) - 8, s.top(li) + 20), new File(out, "secz_" + li + ".png"));
+                p.corners.clear();
+                continue;
+            }
             Net n = t.network(li, 0, 0);
             List<Net.Way> ts = tunnels(n);
             System.out.printf("layer %d: %d chambers, %d ways (%d tunnels, longest %.0f), %d climbs, %d pools%s%n", li, n.ch.size(), n.ways.size(), ts.size(),

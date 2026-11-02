@@ -120,8 +120,8 @@ public final class DeepMaterials {
 
     /**
      * Rock below the pack's old floor, as decided while the noise is filled: bedrock at the very bottom, band stone in
-     * the bands, the bedrock landing's bowl, and the layer's deep rock far from any open space. Returns null for rock
-     * near open space, which is left as plain stone for the surface pass to dress per biome.
+     * the bands, and the layer's deep rock far from any open space. Returns null for rock near open space, which is left
+     * as plain stone for the surface pass to dress per biome.
      */
     @Nullable
     public static BlockState solid(Terrain t, int x, int y, int z, double density) {
@@ -133,7 +133,6 @@ public final class DeepMaterials {
         }
         int li = s.layerAt(y);
         if (li < 0) return BY_ORDINAL[Rock.BAND_STONE.ordinal()];
-        if (li == s.layerCount - 1 && y < s.waterY(li) + 4 && t.bedrockLanding(x, y, z)) return BY_ORDINAL[Rock.BEDROCK.ordinal()];
         if (density > 0.75) return BY_ORDINAL[t.palette.interior(li, x, y, z).ordinal()];
         return null;
     }
