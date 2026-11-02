@@ -48,15 +48,20 @@ import java.util.Locale;
  * /remix: commands for looking around the deep world (operators only).
  * <ul>
  *     <li>{@code /remix layers}: the layer table</li>
- *     <li>{@code /remix info}: where you are; in a deep layer also the network's node and way there (the chamber you
- *     are in or the nearest, the nearest tunnel or walk, a climb, the rift's ledge path); above the old floor the
- *     ground and surface biome over you, the entrance under you and how the plant caves grow there</li>
- *     <li>{@code /remix tp <1-3>}: the landing at the top of a layer, under its band</li>
+ *     <li>{@code /remix info}: where you are; in a deep layer also what makes the caves there: in the Blue Reaches and
+ *     the Deep Gardens the network's node and way (the chamber you are in or the nearest, the nearest tunnel or walk, a
+ *     climb, the rift's ledge path), in the Wasteland and the Galleries the noise field's values (Terrain.describe);
+ *     above the old floor the ground and surface biome over you, the entrance under you and how the plant caves grow
+ *     there</li>
+ *     <li>{@code /remix tp <1-3>}: the landing at the top of a layer, under its band (the Galleries have none: the
+ *     Wasteland opens into them)</li>
  *     <li>{@code /remix tp gate <1-3>}: the landing above a band, where its gate passage starts</li>
- *     <li>{@code /remix tp bedrock}: the bedrock landing of the last layer's network in this cell</li>
- *     <li>{@code /remix tp biome <name>}: a deep biome's nearest chamber in the networks of the nine cells round you
- *     (set pieces first), standing on its floor in open air; or the Silver Fern Rift, the Ivory Root Cavern, an
- *     entrance (rootvaults, tropical_rootvaults, frozen_rootvaults, sinkhole, oasis_hollow) or the Frost Fern Grotto</li>
+ *     <li>{@code /remix tp bedrock}: the bedrock landing of the last layer's network in this cell, when the last layer
+ *     is planned (since 0.5.1 the Galleries are not, and have no landing on the bedrock)</li>
+ *     <li>{@code /remix tp biome <name>}: a deep biome's nearest place (Terrain.places: the networks' chambers of the
+ *     nine cells round you, set pieces first, or the noise layers' sampled floors), standing on its floor in open air;
+ *     or the Silver Fern Rift, the Ivory Root Cavern, an entrance (rootvaults, tropical_rootvaults, frozen_rootvaults,
+ *     sinkhole, oasis_hollow) or the Frost Fern Grotto</li>
  *     <li>{@code /remix view <name> [n]}: a spot in that biome with a wide view into it, facing the view (for
  *     screenshots); n picks the Root Vaults' look (0 root halls, 1 teal grottos, 2 ravines; rootvaults outside the
  *     tropics, tropical_rootvaults under jungles and mangrove swamps), the frozen Root Vaults' snowy zone (0) or
@@ -139,8 +144,10 @@ public final class RemixCommands {
         Shape s = t.shape;
         say(c, "Deep world: floor y " + s.floorY + ", pack floor y " + s.packFloor + ", bands " + s.bandThickness + " blocks thick");
         for (int i = 0; i < s.layerCount; i++) {
-            say(c, String.format(Locale.ROOT, "  %d. %s: y %d to %d, %s at y %d; band above it y %d to %d", i + 1, s.id(i), s.top(i), s.bottom(i),
-                    s.lava(i) ? "lava" : "water", s.waterY(i) - 1, s.bandTop(i + 1), s.bandBottom(i + 1)));
+            String band = s.bandThickness(i + 1) > 0 ? String.format(Locale.ROOT, "band above it y %d to %d", s.bandTop(i + 1), s.bandBottom(i + 1))
+                    : "no band above it: " + (i > 0 ? s.id(i - 1) : "the pack's caves") + " opens into it";
+            say(c, String.format(Locale.ROOT, "  %d. %s: y %d to %d, %s at y %d; %s", i + 1, s.id(i), s.top(i), s.bottom(i),
+                    s.lava(i) ? "lava" : "water", s.waterY(i) - 1, band));
         }
         return 1;
     }
@@ -160,10 +167,14 @@ public final class RemixCommands {
         if (b != null) say(c, "  deep biome: " + shortName(b) + " (" + b.role.name().toLowerCase(Locale.ROOT) + ")");
         if (y >= s.packFloor) upperInfo(c, x, y, z);
         if (li >= 0) {
-            for (String line : t.network.describe(li, x, y, z)) say(c, "  " + line);
-            Plans.Gate exit = li + 2 <= s.layerCount ? t.plans.gate(li + 2, cx, cz) : null;
-            if (exit != null) say(c, String.format(Locale.ROOT, "  this layer's way down: gate %d at %.0f %.0f %.0f (%.0f blocks away)",
-                    li + 2, exit.ux, exit.uFloor + 1, exit.uz, Math.hypot(exit.ux - x, exit.uz - z)));
+            for (String line : t.describe(x, y, z)) say(c, "  " + line);
+            if (li + 2 <= s.layerCount && s.bandThickness(li + 2) > 0) {
+                Plans.Gate exit = t.plans.gate(li + 2, cx, cz);
+                say(c, String.format(Locale.ROOT, "  this layer's way down: gate %d at %.0f %.0f %.0f (%.0f blocks away)",
+                        li + 2, exit.ux, exit.uFloor + 1, exit.uz, Math.hypot(exit.ux - x, exit.uz - z)));
+            } else if (li + 2 <= s.layerCount) {
+                say(c, "  this layer's way down: its openings into " + s.id(li + 1) + " (no band between them)");
+            }
         }
         return 1;
     }
@@ -205,6 +216,11 @@ public final class RemixCommands {
         }
         ServerPlayer pl = c.getSource().getPlayerOrException();
         Plans.Gate g = gateHere(t, pl, layer);
+        if (g == null) {
+            c.getSource().sendFailure(Component.literal("Layer " + layer + " (" + t.shape.id(layer - 1) + ") has no landing: the layer above"
+                    + " opens into it with no band between them. Try /remix tp biome."));
+            return 0;
+        }
         teleport(pl, g.lx, g.lFloor + 1, g.lz);
         say(c, "Layer " + layer + " (" + t.shape.id(layer - 1) + "): the landing under band " + layer + ".");
         return 1;
@@ -219,6 +235,10 @@ public final class RemixCommands {
         }
         ServerPlayer pl = c.getSource().getPlayerOrException();
         Plans.Gate g = gateHere(t, pl, band);
+        if (g == null) {
+            c.getSource().sendFailure(Component.literal("There is no band " + band + ": the layer above it opens into " + t.shape.id(band - 1) + "."));
+            return 0;
+        }
         teleport(pl, g.ux, g.uFloor + 1, g.uz);
         say(c, "Gate " + band + ": the landing above band " + band + ". The passage starts in its floor.");
         return 1;
@@ -229,6 +249,11 @@ public final class RemixCommands {
         if (t == null) return 0;
         ServerPlayer pl = c.getSource().getPlayerOrException();
         int last = t.shape.layerCount - 1;
+        if (!Terrain.planned(last)) {
+            c.getSource().sendFailure(Component.literal(t.shape.id(last) + " has no bedrock landing: its caves are a noise field over the bedrock."
+                    + " Try /remix tp biome."));
+            return 0;
+        }
         Net n = t.network(last, t.plans.cellOf((int) Math.floor(pl.getX())), t.plans.cellOf((int) Math.floor(pl.getZ())));
         Net.Chamber b = n.ch.get(n.exit);
         int x = (int) Math.floor(b.x), z = (int) Math.floor(b.z);
@@ -253,11 +278,12 @@ public final class RemixCommands {
         ServerPlayer pl = c.getSource().getPlayerOrException();
         int px = (int) Math.floor(pl.getX()), pz = (int) Math.floor(pl.getZ());
         if (target.role == DeepBiome.Role.SAFE) return tpUpper(c, t, pl, target, px, pz);
-        // The biome's places in the networks of the nine cells round you, set pieces first: stand on the first open
-        // floor (feet and head in air, a solid block under them) the world's blocks show there.
+        // The biome's places near you (the networks' chambers of the nine cells round you, set pieces first, or the
+        // noise layers' sampled floors): stand on the first open floor (feet and head in air, a solid block under them)
+        // the world's blocks show there.
         ServerLevel level = (ServerLevel) pl.level();
         int tried = 0;
-        for (Network.Place p : t.network.places(target, px, pz)) {
+        for (Network.Place p : t.places(target, px, pz)) {
             if (tried++ >= MAX_PLACES) break;
             BlockPos stand = standIn(t, level, p, target);
             if (stand == null) continue;
@@ -265,8 +291,8 @@ public final class RemixCommands {
             say(c, shortName(target) + " (" + p.what + ") at " + stand.getX() + " " + stand.getY() + " " + stand.getZ());
             return 1;
         }
-        c.getSource().sendFailure(Component.literal("No open floor of " + name + " found in the networks of the nine cells round you"
-                + (tried == 0 ? " (none of their chambers has that biome)." : " (" + tried + " places tried).")));
+        c.getSource().sendFailure(Component.literal("No open floor of " + name + " found near you"
+                + (tried == 0 ? " (no place of that biome)." : " (" + tried + " places tried).")));
         return 0;
     }
 
@@ -545,9 +571,9 @@ public final class RemixCommands {
                 return new double[]{r.centerX(), (r.waterY + r.ledgeTop) * 0.5, r.centerZ(), 28};
             return null;
         }
-        // The deep biomes: the n-th place of the biome in the networks round you (set pieces first, then nearest
-        // first), centred on the first open floor of it the world shows, searched over the place's reach.
-        java.util.List<Network.Place> places = t.network.places(target, pl.getX(), pl.getZ());
+        // The deep biomes: the n-th place of the biome round you (Terrain.places: set pieces first in the networks, then
+        // nearest first), centred on the first open floor of it the world shows, searched over the place's reach.
+        java.util.List<Network.Place> places = t.places(target, pl.getX(), pl.getZ());
         ServerLevel level = (ServerLevel) pl.level();
         for (int i = Math.min(nth, Math.max(0, places.size() - 1)), tried = 0; i < places.size() && tried < MAX_PLACES; i++, tried++) {
             Network.Place p = places.get(i);
@@ -934,7 +960,10 @@ public final class RemixCommands {
         return null;
     }
 
+    /** Band b's gate in the player's cell, or null for a band with no rows (no gate: the layers meet). */
+    @javax.annotation.Nullable
     private static Plans.Gate gateHere(Terrain t, ServerPlayer pl, int band) {
+        if (t.shape.bandThickness(band) == 0) return null;
         return t.plans.gate(band, t.plans.cellOf((int) Math.floor(pl.getX())), t.plans.cellOf((int) Math.floor(pl.getZ())));
     }
 
