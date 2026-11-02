@@ -377,6 +377,7 @@ class TubeFieldTest {
         java.util.Set<Long> mixed = new java.util.HashSet<>();
         TubeField.Pt pb = new TubeField.Pt();
         int[] cell = new int[2];
+        int yb = t.shape.bottom(Terrain.GALLERIES), yt = t.shape.top(Terrain.GALLERIES);
         for (int x = x0; x <= x1; x++) for (int z = z0; z <= z1; z++) {
             double u = c.u(x + 0.5, z + 0.5) / c.b, v = c.v(x + 0.5, z + 0.5) / c.a;
             if (u * u + v * v > 1.69) continue;
@@ -389,6 +390,9 @@ class TubeFieldTest {
             s.spanCols++;
             for (int y = lo - 4; y <= hi + 4; y++) finite(s, x, z, y, tf.tube(x, y, z), "tube");
             for (int y = lo - 12; y <= hi + 12; y += 2) finite(s, x, z, y, tf.shellDepth(x, y, z), "shellDepth");
+            // the palette and the biome read the lining at any row of the layer (Terrain.tubeShellDepth): every 9th row of
+            // it, the phase moving from column to column, so every row is read somewhere
+            for (int y = yb + Math.floorMod(3 * x + 5 * z, 9); y <= yt; y += 9) finite(s, x, z, y, tf.shellDepth(x, y, z), "shellDepth");
             if (!g.tubesAt(x + 0.5, z + 0.5)) continue;
             int[] r = tf.rows(x, z);
             if (r == null || r[1] <= r[0]) continue;
@@ -558,8 +562,9 @@ class TubeFieldTest {
     /**
      * Every value of the field is finite (critique T1, T4): a NaN density reads as open in the game (the aquifer's
      * {@code density > 0}), and the old envelope gave NaN on every ribbed tube end. Over the columns of the standing
-     * countries: tube() over each span and 4 rows past it, shellDepth() over the span and 12 rows past it, the massif, the
-     * apron, the apron's floor and the region; and the Galleries' per-block density over boxes round the old NaN columns.
+     * countries: tube() over each span and 4 rows past it, shellDepth() over the span and 12 rows past it and on every
+     * 9th row of the whole layer (the palette and the biome read it at any row), the massif, the apron, the apron's floor
+     * and the region; and the Galleries' per-block density over boxes round the old NaN columns.
      */
     @Test
     void finite() {
