@@ -6,6 +6,7 @@ import com.explorationremix.devtools.DevAutoRun;
 import com.explorationremix.devtools.RemixCommands;
 import com.explorationremix.registry.ERBiomeModifiers;
 import com.explorationremix.registry.ERBlocks;
+import com.explorationremix.registry.EREntities;
 import com.explorationremix.registry.ERParticles;
 import com.explorationremix.registry.ERRemaps;
 import com.explorationremix.registry.ERSounds;
@@ -39,6 +40,9 @@ public final class ExplorationRemix {
         ERBlocks.BLOCKS.register(modBus);
         ERBlocks.ITEMS.register(modBus);
         ERBlocks.TABS.register(modBus);
+        EREntities.ENTITIES.register(modBus);
+        EREntities.BLOCK_ENTITIES.register(modBus);
+        modBus.addListener(EREntities::onAttributes);
         ERWorldgen.FEATURES.register(modBus);
         ERWorldgen.PLACEMENT_TYPES.register(modBus);
         ERWorldgen.STATE_PROVIDERS.register(modBus);

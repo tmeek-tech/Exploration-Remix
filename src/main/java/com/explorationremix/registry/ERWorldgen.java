@@ -64,6 +64,7 @@ public final class ERWorldgen {
     // cave ends joined to other caves
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> VERIDIUM_SPREAD = FEATURES.register("veridium_spread", () -> new VeridiumSpreadFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> JOIN_DEAD_ENDS = FEATURES.register("join_dead_ends", () -> new JoinDeadEndsFeature(NoneFeatureConfiguration.CODEC));
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> MOSSBACK_DEN = FEATURES.register("mossback_den", () -> new com.explorationremix.world.feature.MossbackDenFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
 
     public static final RegistryObject<BlockStateProviderType<FallbackStateProvider>> FALLBACK_PROVIDER = STATE_PROVIDERS.register("fallback", () -> new BlockStateProviderType<>(FallbackStateProvider.CODEC));

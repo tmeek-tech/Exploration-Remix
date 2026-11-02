@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import textures
 import worldgen
 import sounds
+import creatures
 import check_data
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,7 +24,7 @@ OWNED = [
     os.path.join(DATA, "worldgen"), os.path.join(DATA, "tags"), os.path.join(DATA, "forge"), os.path.join(DATA, "loot_tables"),
     os.path.join(RES, "data", "minecraft", "tags"), os.path.join(RES, "data", "forge", "tags"), os.path.join(RES, "data", "immersive_weathering"),
     os.path.join(ASSETS, "blockstates"), os.path.join(ASSETS, "models"), os.path.join(ASSETS, "textures"), os.path.join(ASSETS, "lang"),
-    os.path.join(ASSETS, "sounds.json"), os.path.join(ASSETS, "particles"),
+    os.path.join(ASSETS, "sounds.json"), os.path.join(ASSETS, "particles"), os.path.join(ASSETS, "geometry"),
 ]
 
 
@@ -147,8 +148,11 @@ BLOCKS = {
     # The Galleries' lava glow: invisible light in the air along the halls' rock (HallGlowFeature). Nothing is drawn and
     # there is no item.
     "glow": ("Lava Glow", "invisible"),
+    # A Mossback's den (creature.MossbackDen): trampled moss and gnawed bone on a plant cave's floor. It drops nothing,
+    # so nobody can carry one off to farm lizards.
+    "mossback_den": ("Mossback Den", "moss_carpet", {"texture": "mossback_den"}),
 }
-NO_DROP = {"band_stone", "glow"}
+NO_DROP = {"band_stone", "glow", "mossback_den"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, and the
 # lifeless blocks of the Galleries.
 NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain"}
@@ -526,6 +530,21 @@ def biome_modifiers():
         "features": "immersive_weathering:icicles", "steps": "top_layer_modification"})
 
 
+def creature_data():
+    """The Mossback's drops and what it hunts."""
+    write(os.path.join(DATA, "loot_tables", "entities", "mossback.json"), {
+        "type": "minecraft:entity",
+        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:mossback_hide", "functions": [
+            {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}},
+            {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]}]})
+    # cave animals it catches when hungry (creepers live in the lush caves and Root Vaults)
+    tag(MOD, "entity_types", "mossback_prey", ["minecraft:bat", "minecraft:axolotl", "minecraft:glow_squid", "minecraft:creeper",
+                                               "minecraft:frog", "minecraft:rabbit", "minecraft:chicken", "minecraft:fox",
+                                               "minecraft:goat", "minecraft:sheep", "minecraft:pig", "minecraft:silverfish"])
+    write(os.path.join(ASSETS, "models", "item", "mossback_hide.json"),
+          {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/mossback_hide"}})
+
+
 def lang(extra):
     out = dict(extra)
     write(os.path.join(ASSETS, "lang", "en_us.json"), dict(sorted(out.items())))
@@ -554,6 +573,8 @@ def main():
     tags()
     biome_modifiers()
     names.update(sounds.write_all(ASSETS, write))
+    names.update(creatures.write_all(ASSETS, write))
+    creature_data()
     particles()
     lang(names)
     print("data written")

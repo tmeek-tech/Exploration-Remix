@@ -224,5 +224,118 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.lava.surge"
+  },
+  "mossback.call": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/mossback/call1",
+        "volume": 1.0,
+        "attenuation_distance": 28
+      },
+      {
+        "name": "explorationremix:creature/mossback/call2",
+        "volume": 1.0,
+        "attenuation_distance": 28
+      },
+      {
+        "name": "explorationremix:creature/mossback/call3",
+        "volume": 1.0,
+        "attenuation_distance": 28
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.mossback.call"
+  },
+  "mossback.step": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/mossback/step1",
+        "volume": 0.9
+      },
+      {
+        "name": "explorationremix:creature/mossback/step2",
+        "volume": 0.9
+      },
+      {
+        "name": "explorationremix:creature/mossback/step3",
+        "volume": 0.9
+      },
+      {
+        "name": "explorationremix:creature/mossback/step4",
+        "volume": 0.9
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.mossback.step"
+  },
+  "mossback.hiss": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/mossback/hiss1",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:creature/mossback/hiss2",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.mossback.hiss"
+  },
+  "mossback.bite": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/mossback/bite1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:creature/mossback/bite2",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.mossback.bite"
+  },
+  "mossback.shake": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/mossback/shake1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:creature/mossback/shake2",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:creature/mossback/shake3",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.mossback.shake"
+  },
+  "mossback.hurt": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/mossback/hurt1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:creature/mossback/hurt2",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:creature/mossback/hurt3",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.mossback.hurt"
+  },
+  "mossback.death": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/mossback/death1",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.mossback.death"
   }
 }

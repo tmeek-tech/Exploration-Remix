@@ -1081,6 +1081,9 @@ UPPER_MODIFIER_FEATURES = [
     ("upper/veridium_spread", {"type": f"{MOD}:veridium_spread", "config": {}}, [{"type": f"{MOD}:junctions", "tropical": True}],
      ["minecraft:lush_caves"], "top_layer_modification"),
     ("upper/join_dead_ends", {"type": f"{MOD}:join_dead_ends", "config": {}}, [], "#minecraft:is_overworld", "raw_generation"),
+    # Mossback dens, about one to a plant cave (MossbackDenFeature picks one chunk in each 3 x 3 and a floor in it)
+    ("upper/mossback_den", {"type": f"{MOD}:mossback_den", "config": {}}, [],
+     ["minecraft:lush_caves", f"{MOD}:frost_fern_grotto"], "top_layer_modification"),
     ("upper/surface_hoarfrost", attach(simple(f"{MOD}:hoarfrost"), "walls_ceiling", 96, f"#{MOD}:surface_frost_rock", radius=7, height=6),
      [count(4), SQUARE, {"type": "minecraft:heightmap", "heightmap": "WORLD_SURFACE_WG"}, BIOME], "#immersive_weathering:icy", "top_layer_modification"),
 ]

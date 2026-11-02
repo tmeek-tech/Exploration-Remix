@@ -68,11 +68,37 @@ LAVA_EVENTS = {
 LAVA_SUBTITLES = {"lava.rumble": "The deep rock rumbles", "lava.surge": "Lava surges up"}
 
 
+# The Mossback (tools/synth_creature_sounds.py makes the files): its call carries far, so you hear it coming.
+def creature(name, count, volume=1.0, attenuation=None):
+    out = []
+    for i in range(1, count + 1):
+        e = {"name": f"{MOD}:creature/mossback/{name}{i}", "volume": volume}
+        if attenuation: e["attenuation_distance"] = attenuation
+        out.append(e)
+    return out
+
+
+CREATURE_EVENTS = {
+    "mossback.call": creature("call", 3, 1.0, 28),
+    "mossback.step": creature("step", 4, 0.9),
+    "mossback.hiss": creature("hiss", 2, 1.0, 24),
+    "mossback.bite": creature("bite", 2, 1.0),
+    "mossback.shake": creature("shake", 3, 1.0),
+    "mossback.hurt": creature("hurt", 3, 1.0),
+    "mossback.death": creature("death", 1, 1.0, 24),
+}
+CREATURE_SUBTITLES = {
+    "mossback.call": "Mossback clicks", "mossback.step": "Heavy footsteps", "mossback.hiss": "Mossback hisses",
+    "mossback.bite": "Jaws snap", "mossback.shake": "Mossback growls", "mossback.hurt": "Mossback hurts",
+    "mossback.death": "Mossback dies",
+}
+
+
 def write_all(assets_dir, write):
     out = {}
     lang = {}
-    subtitles = {**SUBTITLES, **LAVA_SUBTITLES}
-    for ev, sounds in {**EVENTS, **LAVA_EVENTS}.items():
+    subtitles = {**SUBTITLES, **LAVA_SUBTITLES, **CREATURE_SUBTITLES}
+    for ev, sounds in {**EVENTS, **LAVA_EVENTS, **CREATURE_EVENTS}.items():
         sub = f"subtitles.{MOD}.{ev}"
         out[ev] = {"sounds": sounds, "subtitle": sub}
         lang[sub] = subtitles[ev]
