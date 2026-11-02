@@ -89,7 +89,8 @@ class NoiseLayersTest {
     /**
      * Nothing plans the Wasteland or the Galleries (Terrain.planned is the one switch): every query the game, the
      * features and the dev commands make of their rows is answered with no plan made at all, the plan queries come back
-     * empty, and asking for a noise layer's plan throws.
+     * empty, and asking for a noise layer's plan throws. So does every query of the network itself for a noise layer,
+     * so a caller that goes round Terrain fails as loudly.
      */
     @Test
     void noiseLayersPlanNothing() {
@@ -125,9 +126,18 @@ class NoiseLayersTest {
                 DeepBiome.CAUSEWAY, DeepBiome.SCORIA_CANYONS, DeepBiome.OBSIDIAN_TUBES})
             sink += t.places(b, 100, -300).size();
         assertTrue(Double.isFinite(sink), "a query came back NaN");
+        Network w = t.network;
         for (int li = Terrain.WASTELAND; li < s.layerCount; li++) {
-            final int L = li;
+            final int L = li, y = s.waterY(li) + 20;
+            final DeepBiome b = Terrain.routeBiome(li);
             assertThrows(IllegalArgumentException.class, () -> t.network(L, 0, 0), "a plan of noise layer " + li);
+            List<org.junit.jupiter.api.function.Executable> asks = List.of(() -> w.net(L, 0, 0), () -> w.wayLinesAt(L, 0, 0, 8),
+                    () -> w.carvedLinesAt(L, 0, 0, 8), () -> w.shaftsIn(L, -8, -8, 8, 8), () -> w.portalsOfEdge(L, true, 0, 0),
+                    () -> w.layerDensity(L, 0, y, 0), () -> w.fine(L, 0, y, 0, 0.5), () -> w.fluidAt(L, 0, y, 0),
+                    () -> w.biomeAt(L, 0, y, 0), () -> w.describe(L, 0, y, 0), () -> w.geodeShellDepth(L, 0, y, 0),
+                    () -> w.rough(L, 0, y, 0), () -> w.places(b, 0, 0));
+            for (int i = 0; i < asks.size(); i++)
+                assertThrows(IllegalArgumentException.class, asks.get(i), "network query " + i + " answered for noise layer " + li);
         }
         assertEquals(0, t.network.plansMade.sum(), "plans made for the noise layers");
     }

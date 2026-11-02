@@ -23,7 +23,6 @@ final class NetIndex {
         for (Chamber c : n.ch) {
             if (!c.keep || c.landing() || c.kind == Net.Kind.CANYON || c.dark >= 0) continue;
             double r = c.R() + REACH;
-            if (c.pillars.length > 0) r += 4;
             cover(n, c.x - r, c.z - r, c.x + r, c.z + r, bc, c.id, -1, null);
         }
         for (Way wy : n.ways) {

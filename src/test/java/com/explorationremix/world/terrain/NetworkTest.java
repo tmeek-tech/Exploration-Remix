@@ -143,7 +143,7 @@ class NetworkTest {
     static void joinedToEntry(Terrain t, Net n, String tag, List<String> fails) {
         boolean[] r = joined(n);
         for (Chamber c : n.ch) {
-            if (!c.keep || c.kind == Kind.LAVA) continue;
+            if (!c.keep) continue;
             if (!r[c.id]) fails.add(tag + ": " + c.kind + "#" + c.id + " at " + (int) c.x + " " + (int) c.f0 + " " + (int) c.z + " is not joined to the entry");
         }
         // the portals as the pure rule lays them out, not as the plan kept them
@@ -165,10 +165,10 @@ class NetworkTest {
         if (de < 2 || (n.courtsE.size() >= 3 && de < 3)) fails.add(tag + ": the entry landing has " + de + " ways out and " + n.courtsE.size() + " courts");
         if (dx < 2 || (n.courtsX.size() >= 3 && dx < 3)) fails.add(tag + ": the exit landing has " + dx + " ways out and " + n.courtsX.size() + " courts");
         if (!NetGraph.reach(n, n.entry, true)[n.exit]) fails.add(tag + ": no way from the entry to the exit without climbing");
-        // edge-disjoint ways can still meet in one room: then they are one way in (a cavern, the rift, the city or a
-        // Basalt Galleries hall are open spaces with many doors, and may be passed by every way)
+        // edge-disjoint ways can still meet in one room: then they are one way in (a cavern, the rift and the city are
+        // open spaces with many doors, and may be passed by every way)
         for (Chamber c : n.ch) {
-            if (!c.keep || c.landing() || c.kind == Kind.CAVERN || c.kind == Kind.CANYON || c.kind == Kind.CITY || c.hall()) continue;
+            if (!c.keep || c.landing() || c.kind == Kind.CAVERN || c.kind == Kind.CANYON || c.kind == Kind.CITY) continue;
             if (!NetGraph.reachWithout(n, n.entry, c.id)[n.exit])
                 fails.add(tag + ": every way from the entry to the exit passes through " + c.kind + "#" + c.id + (c.court ? " (court)" : ""));
         }
@@ -190,18 +190,10 @@ class NetworkTest {
             double hMin = n.li == Terrain.BLUE ? 12 : c.court ? 9 : c.kind == Kind.GROTTO ? 10 : 9;
             if (sealCapped(t, n, c)) hMin = 7.5;
             double hMax = c.court ? (n.li == Terrain.BLUE ? 18 : 14) : 20;
-            if (c.kind == Kind.LAVA) {
-                if (across < 36 - 1e-6 || across > 48 + 1e-6) fails.add(id + " is " + fmt(across) + " across, not 36 to 48");
-            } else if (c.kind == Kind.CITY) {
+            if (c.kind == Kind.CITY) {
                 continue;
             } else if (c.set) {
                 if (across < 36 - 1e-6 || across > 60 + 1e-6) fails.add(id + " is " + fmt(across) + " across, not 36 to 60");
-            } else if (c.kind == Kind.TUBEHUB) {
-                if (c.h < 12 - 1e-6 || c.h > 14 + 1e-6) fails.add(id + " is " + fmt(c.h) + " tall, not 12 to 14");
-            } else if (c.kind == Kind.JUNCTION) {
-                // the Wasteland's forks: small rooms cut into tunnels, a little taller than the tunnel
-                if (across < 8 - 1e-6 || across > 11 + 1e-6) fails.add(id + " is " + fmt(across) + " across, not 8 to 11");
-                if (c.h < 8 - 1e-6 || c.h > 11 + 1e-6) fails.add(id + " is " + fmt(c.h) + " tall, not 8 to 11");
             } else if (n.li == Terrain.BLUE) {
                 if (across < 20 - 1e-6 || across > 32 + 1e-6) fails.add(id + " is " + fmt(across) + " across, not 20 to 32");
                 if (c.h < hMin - 1e-6 || c.h > hMax + 1e-6) fails.add(id + " is " + fmt(c.h) + " tall, not " + hMin + " to " + hMax);
@@ -215,28 +207,21 @@ class NetworkTest {
     static String fmt(double v) { return String.format(java.util.Locale.ROOT, "%.1f", v); }
 
     /**
-     * Two refuges in every layer but the Blue Reaches, each reached by walking only, never from a landing, a portal
-     * vestibule or a court: by one tunnel of its own, but in the Wasteland, where nothing is a dead end and each refuge
-     * (an Ash Hollow) is cut into a tunnel, by the two halves of it. The Ash Hollows are plain domed rooms 15 to 20
-     * across (the tube hubs are the Galleries').
+     * The Deep Gardens' two refuges (its Rust Springs; the Blue Reaches have none), each reached by walking only, never
+     * from a landing, a portal vestibule or a court: by one tunnel of its own.
      */
     static void refuges(Terrain t, Net n, String tag, List<String> fails) {
-        int count = 0, want = n.li == Terrain.WASTELAND ? 2 : 1;
+        int count = 0;
         for (Chamber c : n.ch) {
             if (!c.keep || !c.refuge) continue;
             count++;
             List<Edge> es = new ArrayList<>();
             for (Edge e : n.edges) if ((e.a == c.id || e.b == c.id) && n.ch.get(e.a).keep && n.ch.get(e.b).keep) es.add(e);
-            if (es.size() != want) { fails.add(tag + ": refuge " + c.kind + "#" + c.id + " has " + es.size() + " edges, not " + want); continue; }
+            if (es.size() != 1) { fails.add(tag + ": refuge " + c.kind + "#" + c.id + " has " + es.size() + " edges, not 1"); continue; }
             for (Edge e : es) {
                 Chamber o = n.ch.get(e.other(c.id));
                 if (e.kind != EK.WALK) fails.add(tag + ": refuge " + c.kind + "#" + c.id + " is joined by a " + e.kind);
                 if (o.landing() || o.kind == Kind.PORTAL || o.court) fails.add(tag + ": refuge " + c.kind + "#" + c.id + " opens on " + o.kind + "#" + o.id);
-            }
-            if (n.li == Terrain.WASTELAND) {
-                double across = 2 * Math.max(c.rx, c.rz);
-                if (c.kind != Kind.GROTTO) fails.add(tag + ": refuge #" + c.id + " is a " + c.kind + ", not a plain room");
-                if (across < 15 - 1e-6 || across > 20 + 1e-6) fails.add(tag + ": refuge #" + c.id + " is " + fmt(across) + " across, not 15 to 20");
             }
         }
         if (n.li != Terrain.BLUE && count != 2) fails.add(tag + ": " + count + " refuges, not 2");
@@ -272,18 +257,14 @@ class NetworkTest {
      * way's floor and half-width there (so Walkway protects and the open way pass re-opens every way), and shaftsIn
      * finds every climb stage from its axis, its vine column and its step. (A switchback that comes back past a point
      * within 4 blocks along the way is one pass, as in the density's column lookup, and its half-width there may be
-     * that of the nearest stretch, up to a few tenths off. A blind tube ending in lava is walked up to its walkTo.)
+     * that of the nearest stretch, up to a few tenths off.)
      */
     static void queries(Terrain t, Net n, String tag, List<String> fails) {
         Network w = t.network;
         int missed = 0, total = 0;
         String first = null;
         for (Way wy : n.ways) {
-            double acc = 0;
             for (int i = 0; i < wy.n; i++) {
-                if (i > 0) acc += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
-                // a blind tube ending in lava: its walking line stops 3 blocks short of the pool
-                if (acc > wy.walkTo) break;
                 if (w.cellOf(wy.x[i]) != n.cx || w.cellOf(wy.z[i]) != n.cz) continue;
                 for (int pass = 0; pass < 2; pass++) {
                     total++;
@@ -648,20 +629,6 @@ class NetworkTest {
                         x = wy.x[i] + (r.nextDouble() * 2 - 1) * (wy.w[i] + 6);
                         z = wy.z[i] + (r.nextDouble() * 2 - 1) * (wy.w[i] + 6);
                         y = wy.f[i] - wy.slab[i] - 5 + r.nextDouble() * (wy.slab[i] + wy.hgt[i] + 14);
-                    } else if (pick == 3 && !n.pools.isEmpty() && (k & 8) != 0) {
-                        // round a lava pool: its bed, its banks and the air over them
-                        Net.Pool p = n.pools.get(r.nextInt(n.pools.size()));
-                        double reach = p.half + p.bank() + 3;
-                        double q = r.nextDouble() * 1.4 - 0.2;
-                        x = p.ax + (p.bx - p.ax) * q + (r.nextDouble() * 2 - 1) * reach;
-                        z = p.az + (p.bz - p.az) * q + (r.nextDouble() * 2 - 1) * reach;
-                        y = p.y - 6 + r.nextDouble() * 12;
-                    } else if (pick == 3 && !n.arches.isEmpty() && (k & 4) != 0) {
-                        Net.Arch a = n.arches.get(r.nextInt(n.arches.size()));
-                        double v = (r.nextDouble() * 2 - 1) * a.span, u = (r.nextDouble() * 2 - 1) * (a.halfAlong * 2.2 + 3);
-                        x = a.x + a.vx * v + a.ux * u;
-                        z = a.z + a.vz * v + a.uz * u;
-                        y = a.deck - 18 + r.nextDouble() * 22;
                     } else if (pick == 2 || n.shafts.isEmpty()) {
                         Chamber c = n.ch.get(r.nextInt(n.ch.size()));
                         x = c.x + (r.nextDouble() * 2 - 1) * (c.R() + 6);
@@ -778,9 +745,10 @@ class NetworkTest {
     static final double BLUE_LONG = 0.025;
 
     /**
-     * A hash of what a plan carves: node centres, sizes and floors, edges, way samples and shafts, and the Basalt
-     * arches, lava pools and magma ends, the rift's geodes and bridges, and the Blue Reaches' deep dark (where each tier
-     * is kept, its floor and ceiling, and the view breakers' columns, fins and spires), rounded to 1e-6.
+     * A hash of what a plan carves: node centres, sizes and floors, edges, way samples and shafts, the rift's geodes and
+     * bridges, and the Blue Reaches' deep dark (where each tier is kept, its floor and ceiling, and the view breakers'
+     * columns, fins and spires), rounded to 1e-6. (Until 0.5.1 it took the Basalt arches, lava pools and magma ends
+     * too, which no plan of the Blue Reaches or the Deep Gardens ever had: their hashes are the same.)
      */
     static long planHash(Net n) {
         long h = 17;
@@ -793,9 +761,6 @@ class NetworkTest {
             for (int i = 0; i < wy.n; i++) h = mixIn(h, wy.x[i], wy.z[i], wy.f[i], wy.w[i], wy.hgt[i], wy.slab[i]);
         }
         for (Shaft sh : n.shafts) h = mixIn(h, sh.x, sh.z, sh.r, sh.y0, sh.y1);
-        for (Net.Arch a : n.arches) h = mixIn(h, a.x, a.z, a.ux, a.uz, a.span, a.halfAlong, a.deck, a.chamber);
-        for (Net.Pool p : n.pools) h = mixIn(h, p.ax, p.az, p.bx, p.bz, p.half, p.y, p.channel ? 1 : 0, p.chamber, p.way);
-        for (double[] m : n.magmaEnds) h = mixIn(h, m);
         for (Route r : n.canyons) {
             h = mixIn(h, r.length, r.walkLength);
             for (Route.Geode g : r.geodes) h = mixIn(h, g.x(), g.y(), g.z(), g.r());
@@ -862,7 +827,7 @@ class NetworkTest {
     @Tag("slow")
     void manyCells() {
         List<String> fails = new ArrayList<>();
-        int[] drops = new int[Terrain.GALLERIES + 1], cells = new int[Terrain.GALLERIES + 1];
+        int[] drops = new int[Terrain.WASTELAND], cells = new int[Terrain.WASTELAND];
         for (int si = 0; si < 10; si++) {
             long seed = 1000003L * (si + 1) + 17;
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
@@ -935,7 +900,7 @@ class NetworkTest {
     /** Every non-pocket chamber reached, the exit landing reached, every walk way walkable along its line. */
     static void reachAll(VoxelHarness v, Terrain t, Net n, String tg, List<String> fails) {
         for (Chamber c : n.ch) {
-            if (!c.keep || c.kind == Kind.CANYON || c.kind == Kind.LAVA || c.kind == Kind.POCKET) continue;
+            if (!c.keep || c.kind == Kind.CANYON || c.kind == Kind.POCKET) continue;
             if (v.reach(c) == null) fails.add(tg + ": " + c.kind + "#" + c.id + " at " + (int) c.x + " " + (int) c.f0 + " " + (int) c.z + " not reached");
         }
         for (Edge e : n.edges) {
@@ -1150,7 +1115,7 @@ class NetworkTest {
             Net n = w.net(li, cx, cz);
             VoxelHarness v = built(seed, li, cx, cz, 1, 1);
             for (Chamber c : n.ch) {
-                if (!c.keep || c.helix() || c.landing() || c.kind == Kind.LAKE || c.kind == Kind.LAVA) continue;
+                if (!c.keep || c.helix() || c.landing() || c.kind == Kind.LAKE) continue;
                 long[] o = v.openShare(w, c);
                 if (o[1] < 50) continue;
                 share.computeIfAbsent(c.kind, k -> new ArrayList<>()).add(o[0] / (double) o[1]);

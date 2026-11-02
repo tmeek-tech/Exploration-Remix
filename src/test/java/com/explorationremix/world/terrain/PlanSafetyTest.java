@@ -46,7 +46,7 @@ class PlanSafetyTest {
             if (!NetPlanner.FAULTS.contains(ROCK_SEED + "/" + li + "/0/0")) fails.add(tg + ": the fault is not recorded");
             if (n.ch.size() != 2 || n.entry < 0 || n.exit < 0 || !n.ch.get(n.entry).landing() || !n.ch.get(n.exit).landing())
                 fails.add(tg + ": " + n.ch.size() + " chambers, not the two landings");
-            if (!n.edges.isEmpty() || !n.ways.isEmpty() || !n.shafts.isEmpty() || !n.arches.isEmpty() || !n.pools.isEmpty() || !n.vents.isEmpty()
+            if (!n.edges.isEmpty() || !n.ways.isEmpty() || !n.shafts.isEmpty()
                     || !n.canyons.isEmpty() || n.dark != null || !n.portals.isEmpty())
                 fails.add(tg + ": the plan is not empty");
             for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {

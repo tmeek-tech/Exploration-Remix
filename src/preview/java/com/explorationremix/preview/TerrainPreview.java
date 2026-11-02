@@ -343,8 +343,8 @@ public final class TerrainPreview {
             }
             Net n = t.network(li, 0, 0);
             List<Net.Way> ts = tunnels(n);
-            System.out.printf("layer %d: %d chambers, %d ways (%d tunnels, longest %.0f), %d climbs, %d pools%s%n", li, n.ch.size(), n.ways.size(), ts.size(),
-                    ts.isEmpty() ? 0 : ts.get(0).length, n.shafts.size(), n.pools.size(), n.ch.stream().anyMatch(c -> c.kind == Net.Kind.CANYON) ? ", the rift" : "");
+            System.out.printf("layer %d: %d chambers, %d ways (%d tunnels, longest %.0f), %d climbs%s%n", li, n.ch.size(), n.ways.size(), ts.size(),
+                    ts.isEmpty() ? 0 : ts.get(0).length, n.shafts.size(), n.ch.stream().anyMatch(c -> c.kind == Net.Kind.CANYON) ? ", the rift" : "");
             if (!ts.isEmpty()) save(p.waySection(ts.get(0), li), new File(out, "way_" + li + ".png"));
             // cross-sections across the longest tunnels
             save(p.fan(n, li, 6, 80, false), new File(out, "fan_" + li + ".png"));

@@ -235,9 +235,9 @@ public final class Terrain {
     /**
      * Minecraft only samples the density every 8 blocks up and every 4 across, and interpolates in between, which
      * rounds off anything thinner than that. The network puts the thin pieces back block by block ({@link
-     * Network#fine}): rock that has to be there (walking floors, bridges, arches, landing floors, pool rims) and space
-     * that has to stay open (the walking cores, the climbs, the landings and the way down). The noise layers have their
-     * own per-block passes ({@link WastelandField#fine}, {@link GalleriesField#fine}, {@link Join#fine} where they meet).
+     * Network#fine}): rock that has to be there (walking floors, bridges, landing floors, pool rims) and space that
+     * has to stay open (the walking cores, the climbs, the landings and the way down). The noise layers have their own
+     * per-block passes ({@link WastelandField#fine}, {@link GalleriesField#fine}, {@link Join#fine} where they meet).
      * {@code coarse} is the interpolated density on Minecraft's scale; so is the result.
      */
     public double fine(int x, int y, int z, double coarse) {
@@ -375,12 +375,11 @@ public final class Terrain {
 
     /**
      * Depth into the rock around the nearest obsidian tube (0 at its inner surface), or a large value when none is near.
-     * The Galleries' tubes answer through the Galleries' field, which ignores a tube country it does not let stand.
+     * Only the Galleries have tubes, and they answer through the Galleries' field, which ignores a tube country it does
+     * not let stand.
      */
     public double tubeShellDepth(int x, int y, int z) {
-        int li = shape.layerAt(y);
-        if (li == GALLERIES) return galleries.tubeShellDepth(x, y, z);
-        return li < 0 || !planned(li) ? 1e9 : network.tubeShellDepth(li, x, y, z);
+        return shape.layerAt(y) == GALLERIES ? galleries.tubeShellDepth(x, y, z) : 1e9;
     }
 
     // ------------------------------------------------------------------------------- the network's queries (12.1)
@@ -395,8 +394,8 @@ public final class Terrain {
 
     /**
      * Every walking line of layer li within {@code reach} of column (x, z), nearest first: tunnels, inner walks, ledge
-     * passages, stubs, the rift's ledge path and the Causeway's column path ({@link Network#wayLinesAt}). A per-thread
-     * result. None in a layer that is not {@link #planned}.
+     * passages, stubs and the rift's ledge path ({@link Network#wayLinesAt}). A per-thread result. None in a layer
+     * that is not {@link #planned}.
      */
     public Network.WayLines wayLinesAt(int li, int x, int z, double reach) {
         return planned(li) ? network.wayLinesAt(li, x, z, reach) : noLines();

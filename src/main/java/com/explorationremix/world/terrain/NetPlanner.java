@@ -1,6 +1,5 @@
 package com.explorationremix.world.terrain;
 
-import com.explorationremix.world.terrain.Net.Arch;
 import com.explorationremix.world.terrain.Net.Chamber;
 import com.explorationremix.world.terrain.Net.EK;
 import com.explorationremix.world.terrain.Net.Edge;
@@ -17,9 +16,9 @@ import java.util.List;
  * Plans one layer's network in one cell: landings, portals, set pieces, refuges, ordinary chambers, then a graph built
  * by Kruskal over candidate edges where an edge only counts once its tunnel embeds without hitting anything already
  * built; then loops, extra ways to the gates, blind passages, the trunk and the inner walks (network-final.md, 2.4).
- * The Wasteland (0.5) has no blind passage: in their place its dead ends are closed, its refuges cut into tunnels and
- * its long runs of tunnel branched (see {@link Spec} and {@code spec}). A plan reads only pure functions of the seed
- * (gates, portals, city sites, 0.2.0's deep dark), never another plan.
+ * Only the Blue Reaches and the Deep Gardens are planned ({@link Terrain#planned}): since 0.5.1 the Wasteland and the
+ * Basalt Galleries are noise fields. A plan reads only pure functions of the seed (gates, portals, city sites, 0.2.0's
+ * deep dark), never another plan.
  */
 final class NetPlanner {
     /** Every planned space stays this far plus its own half-width inside the cell (portal stubs excepted). */
@@ -38,9 +37,6 @@ final class NetPlanner {
         t = t < 0 ? 0 : (t > 1 ? 1 : t);
         return Math.hypot(x - (x1 + dx * t), z - (z1 + dz * t));
     }
-
-    /** Lava pools on (the default); off only for the voxel test that compares the walk graph without them. */
-    static boolean POOLS = true;
 
     /** How many times a cell-layer is planned before it is given up as rock: the first plan and two salted ones. */
     static final int ATTEMPTS = 3;
@@ -112,10 +108,7 @@ final class NetPlanner {
         System.err.println(s.toString().trim());
     }
 
-    /**
-     * Layer sizes. Blue keeps 0.2.0's sizes; the Deep Gardens, the Wasteland and the Basalt Galleries follow Taran's
-     * 15-30 / 8-20.
-     */
+    /** Layer sizes. Blue keeps 0.2.0's sizes; the Deep Gardens follow Taran's 15-30 / 8-20. */
     static final class Spec {
         double half, halfVar, hgt, hgtVar, maxSlope = 0.5;
         int fill;
@@ -137,18 +130,6 @@ final class NetPlanner {
         double loopDetour = 2.2;
         /** The strands' and the courts' tunnels are this much wider than the others (the trunk). */
         double trunkMul = 1.2;
-        /**
-         * The Wasteland's branching rules (0 elsewhere): no tunnel's line is longer than {@code wayMax} (a climb's
-         * tunnels and ledges together), and no run of tunnels through chambers with two ways walks more than
-         * {@code runMax} before a branch ({@link NetGraph#runs}).
-         */
-        double wayMax = 0, runMax = 0;
-        /**
-         * Winding: a tunnel bends about every {@code windStep} blocks of its straight way, swinging out by
-         * {@code windAmp} of that step to alternate sides. 0 keeps the older rule: one to three bends whatever the
-         * length, swinging out by 0.1 to 0.18 of the way.
-         */
-        double windStep = 0, windAmp = 0;
     }
 
     /**
@@ -156,54 +137,12 @@ final class NetPlanner {
      * per 600-block cell, 12 blocks of rock between chambers (10 vertically), 6 between tunnels (4 vertically), storeys
      * 46 apart.
      * <p>
-     * The Wasteland (0.5) is tighter, for close encounters: narrow, low tunnels (4.5 to 6.5 wide, 6 to 8 tall, the
-     * trunk's the widest) that bend about every 14 blocks and walk at most 36 blocks from door to door
-     * ({@code wayMax}), so the caves stand close: 8 blocks of rock between chambers, 8 vertically, about 260 kept per
-     * cell with the junction rooms, on four storeys 25 apart in the 117 blocks its default height leaves between the
-     * lava table and the band above. Its candidates are a Gabriel graph ({@code gabriel}), its loops a mesh that gives
-     * every chamber a fork where one fits ({@code mesh}), and it has no blind passage: the dead ends are closed, the
-     * refuges cut into tunnels and the long runs branched instead ({@code closeDeadEnds}, {@code refugeCut},
-     * {@code splitLong}, {@code branchOut}).
-     * <p>
-     * The Basalt Galleries (since 0.5) are a few great halls joined by wide galleries ({@link P#runHalls}): tunnels 8
-     * to 16 wide and 12 to 21 tall, 14 gallery rooms per 600-block cell between the halls, every floor of the network
-     * at the dry level over the highest flood, and no climbs (nothing alive grows there, so no vines).
+     * The Wasteland and the Basalt Galleries have none: since 0.5.1 they are noise fields, never planned.
      */
     static Spec spec(int li, Shape s, double cell) {
         Spec sp = new Spec();
         double W = s.waterY(li), T = s.top(li);
         switch (li) {
-            case Terrain.WASTELAND -> {
-                sp.half = 2.6; sp.halfVar = 0.12;
-                sp.hgt = 6.8; sp.hgtVar = 0.12;
-                sp.maxSlope = 0.62;
-                sp.fill = 420; sp.gapH = 8; sp.gapV = 8;
-                // floors from 4 over the lava table up to 30 under the band
-                sp.yLo = 4; sp.yHi = (T - W) - 30;
-                sp.climbMax = 36; sp.climbL = 34;
-                sp.spacing = 36; sp.strandGap = 10;
-                sp.tierBase = 6; sp.tierGap = 25;
-                sp.rampP = 0.4; sp.rampMax = 0.4;
-                sp.candK = 8; sp.candMax = 90;
-                sp.clearH = 4; sp.clearV = 4; sp.clearC = 3; sp.clearCV = 4;
-                sp.loopShare = 0.5; sp.loopP = 1; sp.stubP = 0; sp.loopDetour = 1.3;
-                sp.trunkMul = 1.08;
-                sp.wayMax = 36; sp.runMax = 40;
-                sp.windStep = 14; sp.windAmp = 0.4;
-            }
-            case Terrain.GALLERIES -> {
-                int surge = Terrain.surge(li);
-                sp.half = 5.2; sp.halfVar = 0.25;
-                sp.hgt = 15; sp.hgtVar = 0.2;
-                sp.maxSlope = 0.62;
-                sp.fill = 14; sp.gapH = 12; sp.gapV = 10;
-                sp.yLo = surge + 4; sp.yHi = (T - W) - 30;
-                sp.climbMax = 0; sp.climbL = 0;
-                sp.spacing = 60; sp.tierBase = surge + 6; sp.tierGap = 30;
-                sp.candK = 7; sp.candMax = 300;
-                sp.clearH = 6; sp.clearV = 4; sp.clearC = 7; sp.clearCV = 4;
-                sp.loopShare = 0.3; sp.loopP = 0.8; sp.stubP = 0;
-            }
             case Terrain.GARDENS -> {
                 sp.half = 3.0; sp.halfVar = 0.25;
                 sp.hgt = 7.5; sp.hgtVar = 0.18;
@@ -241,26 +180,17 @@ final class NetPlanner {
         final Net n;
         final int li, cx, cz;
         /**
-         * The plan's hash, which every choice of the cell's own layout is drawn from, and the cell-layer's hash it starts
-         * from ({@code h0}). They are one hash but for a plan made again after a fault ({@link NetPlanner#plan}), whose
-         * attempt salts {@code h}: its rooms, tunnels, climbs, junctions, refuges, pools and sub-biomes all move. What
-         * the cell shares with its neighbours is drawn from the seed instead (the portals' vestibules and their stubs,
-         * the gates' landings), or from {@code h0} (the Basalt Galleries' bedrock landing), so it stays where it was.
-         * A vestibule inside the cell may still differ: a salted plan can drop one its rooms do not reach
-         * ({@link #portalFallback}), where the first plan kept it.
+         * The plan's hash, which every choice of the cell's own layout is drawn from: the cell-layer's hash, but for a
+         * plan made again after a fault ({@link NetPlanner#plan}), whose attempt salts it, so its rooms, tunnels,
+         * climbs, refuges and sub-biomes all move. What the cell shares with its neighbours is drawn from the seed
+         * instead (the portals' vestibules and their stubs, the gates' landings), so it stays where it was. A vestibule
+         * inside the cell may still differ: a salted plan can drop one its rooms do not reach ({@link #portalFallback}),
+         * where the first plan kept it.
          */
-        final long h, h0;
+        final long h;
         final double W, T, B, x0, z0, cell;
-        /** How far the layer's lava rises over its table at the height of its cycle (the Galleries only, else 0). */
-        final int surge;
         final Spec sp;
         final List<double[]> doorAngles = new ArrayList<>(); // per chamber: used door angles (radians)
-        /**
-         * The Wasteland: the chamber pairs embed has tried in the plain mode (low id in the high half), a set for each
-         * {@link #reach} with door seeking off and on ({@link #seek}): a pair too far at one reach may join at a further
-         * one, and one whose door was taken may join with a door sought.
-         */
-        final java.util.Map<Double, java.util.Set<Long>> triedPairs = new java.util.HashMap<>();
         // collision index for way points and shafts: 12-block buckets
         static final int CB = 12;
         final int cn;
@@ -274,14 +204,13 @@ final class NetPlanner {
             this.li = n.li;
             this.cx = n.cx;
             this.cz = n.cz;
-            this.h0 = Hashing.mix(w.seed, 7100 + li, cx, cz);
+            long h0 = Hashing.mix(w.seed, 7100 + li, cx, cz);
             this.h = attempt == 0 ? h0 : Hashing.mix(h0, 7190, attempt, 0);
             Shape s = w.shape;
             cell = w.cell;
             W = s.waterY(li);
             T = s.top(li);
             B = s.bottom(li);
-            surge = Terrain.surge(li);
             x0 = cx * cell;
             z0 = cz * cell;
             sp = spec(li, s, cell);
@@ -310,10 +239,6 @@ final class NetPlanner {
 
         // ------------------------------------------------------------------------------------------- run
         void run() {
-            if (li == Terrain.GALLERIES) {
-                runHalls();
-                return;
-            }
             landings();
             portals();
             tiers();
@@ -321,8 +246,6 @@ final class NetPlanner {
             courts();
             slots();
             anchors();
-            // the Wasteland's tunnel limit gives way where a way must exist (see longOK); elsewhere this changes nothing
-            longOK = true;
             strandMode = true;
             meander();
             // Blue Reaches: the rift first; its geodes fade the deep dark, whose regions then become nodes
@@ -330,96 +253,30 @@ final class NetPlanner {
             if (li == Terrain.BLUE) { darkPlan(); attachPortalsToDark(); }
             for (Strand st : strands) if (!st.canyon) buildStrand(st);
             strandMode = false;
-            longOK = false;
             offStrandSetPieces();
             refuges();
-            if (li == Terrain.WASTELAND) portalRooms();
             fill();
             List<Edge> cand = candidates();
             kruskal(cand);
-            longOK = true;
             connectRequired(cand);
-            longOK = false;
             dropOrphans();
             portalFallback();
             if (n.dark != null) closeUnjoined();
-            if (li == Terrain.WASTELAND) mesh(cand);
-            else loops(cand);
-            longOK = true;
+            loops(cand);
             gateWays();
             chokeRooms();
             walkWays();
-            longOK = false;
-            if (li == Terrain.WASTELAND) {
-                // no blind passages, niches or tubes: every way goes on (Taran: no dead ends), and none runs long
-                // without a branch
-                closeDeadEnds();
-                refugeCut();
-                // the branches and the junction rooms' third ways take a door further round where the straight one is
-                // taken (see seek)
-                seek = true;
-                splitLong();
-                branchOut();
-                if (dropRuns()) branchOut();
-                forkJunctions();
-                seek = false;
-                // the passages over the climbs' holes are widened once no tunnel is still to be laid
-                clearHoles();
-            } else {
-                surgeNiches();
-                stubs();
-                tubeStubs();
-            }
+            stubs();
             trunk();
             biomes();
             innerWalks();
-            arches();
-            lavaPools();
             if (n.dark != null) {
                 long s0 = System.nanoTime();
                 sightBreak();
                 n.sightMs = (System.nanoTime() - s0) / 1e6;
             }
             for (Strand st : strands) { n.strands.add(st.nodes); n.strandLines.add(st.line); }
-            if (lava != null) {
-                // added last, so no stage gives it a door or an edge and no other id moves
-                lava.biome = w.biomeOf(li, lava);
-                add(lava);
-            }
             NetIndex.build(w, n);
-        }
-
-        // ------------------------------------------------------------------------------------------- the lava basin
-        /** The lava basin behind the bedrock landing (section 11.3); an obstacle for every later stage. */
-        Chamber lava;
-
-        void lavaBasin() {
-            // straight on from the entry, past the landing, along the grid direction nearest that (hallAxes)
-            double a = basinA;
-            Chamber L = n.ch.get(n.exit);
-            Chamber c = chamber(Kind.LAVA, 9470);
-            c.rx = r(9471, 18, 24); c.rz = r(9472, 14, 20); c.setRot(a); c.warp = 0.12;
-            double d = c.rx + 15;
-            c.x = L.x + Math.cos(a) * d; c.z = L.z + Math.sin(a) * d;
-            c.f0 = lakeBed();
-            c.rise = Math.max(0, W - LAVA_RIM - c.f0);
-            c.h = W + r(9473, 14, 20) - c.f0;
-            c.pend = 3; c.set = true; c.required = false;
-            lava = c;
-        }
-
-        /** The basin's floor at its wall, below the lava table (blocks): the lava reaches the walls all round. */
-        static final double LAVA_RIM = 2.5;
-        /** Courts at the bedrock landing: two, so the basin behind and the surge niches at the sides fit. */
-        static final int LAVA_COURTS = 2;
-
-        /** True when a space (centre, reach, heights) would come within the gaps of the lava basin. */
-        boolean lavaHit(double x, double z, double R, double yLo, double yHi, double gapH, double gapV) {
-            if (lava == null) return false;
-            if (yHi + gapV < lava.yLo() || lava.yHi() + gapV < yLo) return false;
-            if (Math.hypot(x - lava.x, z - lava.z) > R + lava.R() + gapH) return false;
-            // by its footprint, not its bounding circle: the space's centre must lie (R + gap) beyond the basin's wall
-            return w.e(lava, x, z) < 1 + (R + gapH) / Math.min(lava.rx, lava.rz);
         }
 
         // ------------------------------------------------------------------------------------------- nodes
@@ -431,27 +288,13 @@ final class NetPlanner {
             e.rx = e.rz = gin.landR; e.warp = 0; e.required = true;
             add(e);
             n.entry = e.id;
+            // the exit landing, at the gate down to the next layer: a planned layer always has one (the noise layers
+            // lie under both)
             Chamber x = new Chamber();
-            if (li < w.shape.layerCount - 1) {
-                Plans.Gate gout = w.base.plans.gate(li + 2, cx, cz);
-                x.kind = Kind.EXIT;
-                x.x = gout.ux; x.z = gout.uz; x.f0 = gout.uFloor; x.h = gout.landHalf * 1.6;
-                x.rx = x.rz = gout.landR;
-            } else {
-                // The bedrock landing: far from the entry, on the lava shore (as in 0.2.0); drawn from the cell-layer's
-                // own hash, so a plan made again after a fault keeps it where it was
-                double best = -1;
-                for (int i = 0; i < 16; i++) {
-                    double px = x0 + 110 + Hashing.unit(Hashing.mix(h0, 40 + i, 0, 0)) * (cell - 220);
-                    double pz = z0 + 110 + Hashing.unit(Hashing.mix(h0, 60 + i, 0, 0)) * (cell - 220);
-                    double d = Math.hypot(px - e.x, pz - e.z);
-                    double score = d >= 250 ? 1000 - Math.abs(d - 300) : d;
-                    if (score > best) { best = score; x.x = px; x.z = pz; }
-                }
-                x.kind = Kind.BEDROCK;
-                // the Basalt Galleries' landing floods at high lava: small, so the flights up are close from all of it
-                x.f0 = W + 2; x.rx = x.rz = li == Terrain.GALLERIES ? 13 : 19; x.h = 20;
-            }
+            Plans.Gate gout = w.base.plans.gate(li + 2, cx, cz);
+            x.kind = Kind.EXIT;
+            x.x = gout.ux; x.z = gout.uz; x.f0 = gout.uFloor; x.h = gout.landHalf * 1.6;
+            x.rx = x.rz = gout.landR;
             x.warp = 0; x.required = true;
             add(x);
             n.exit = x.id;
@@ -558,9 +401,6 @@ final class NetPlanner {
         void courtsFor(int L, int other, boolean entry, List<Integer> out) {
             Chamber c = n.ch.get(L), o = n.ch.get(other);
             int k = u(990 + L) < 0.62 ? 3 : 2;
-            // with the lava basin behind the bedrock landing, two courts in front leave the sides to the surge niches
-            // (three courts, the niches and the basin do not fit round one landing)
-            if (lava != null && !entry) k = Math.min(k, LAVA_COURTS);
             double axis = Math.atan2(o.z - c.z, o.x - c.x);
             double fan = Math.toRadians(r(992 + L, 64, 84));
             double[] base = k == 3 ? new double[]{-fan, 0, fan} : new double[]{-fan * 0.62, fan * 0.62};
@@ -598,7 +438,6 @@ final class NetPlanner {
         }
 
         Chamber courtChamber(Chamber L, double a, boolean entry, long s) {
-            if (li == Terrain.GALLERIES && entry) return entryFlight(L, a, s);
             Chamber q = chamber(Kind.GROTTO, s);
             q.court = true; q.required = true;
             double dia = li == Terrain.BLUE ? r(s + 1, 20, 28) : r(s + 1, 16, 24);
@@ -610,18 +449,6 @@ final class NetPlanner {
             q.f0 = entry ? L.f0 - r(s + 5, 6, 12) : Math.max(W + 2, L.f0 + r(s + 5, 2, 6));
             // under the band: the seal and a margin stay rock above the court's ceiling
             q.h = Math.max(7.5, Math.min(q.h, T - Terrain.SEAL - 6.5 - q.f0 - q.rise - 2));
-            if (surge > 0 && !entry && q.f0 + 2 < W + surge + 3) {
-                // surge stair: the court by the bedrock landing climbs away from it in 1-block terraces to above the
-                // highest surge, so its other doors (and the network) start where a surge cannot reach
-                double sdia = r(s + 6, 26, 30);
-                q.rx = sdia / 2; q.rz = q.rx * r(s + 2, 0.85, 1.0);
-                q.rampDrop = W + surge + 3 - q.f0;
-                q.rampX = -Math.cos(a); q.rampZ = -Math.sin(a);
-                q.h = Math.max(q.h, 11);
-                d = L.R() + q.R() + r(s + 4, 7, 12);
-                q.x = L.x + Math.cos(a) * d; q.z = L.z + Math.sin(a) * d;
-            }
-            q.low = surge > 0 && q.f0 < W + surge;
             return q;
         }
 
@@ -643,8 +470,6 @@ final class NetPlanner {
         /** Floor height a way walks at through a chamber. */
         double walkF(Chamber c) {
             if (c.kind == Kind.LAKE) return c.lakeY + 1.5;
-            // a flight court's ways leave from the end away from its landing: the bedrock flights' top, the entry's foot
-            if (c.flight) return flightEnd(c) > 0 ? c.f0 + c.rampDrop * 0.93 + 1 : c.f0 + 1;
             return c.f0 + 1;
         }
 
@@ -681,26 +506,6 @@ final class NetPlanner {
         double axUx, axUz, axNx, axNz, axLen;
         boolean noClimb, preferClimb, strandMode;
         double widthMul = 1;
-        /** While {@link #embed} lays a tunnel: the least sideways bend its winding must have ({@link #sightBend}), or 0. */
-        double wayBend;
-        /** While {@link #embed} lays a tunnel: how far it runs straight out of each door ({@link #capLeg}), or 0. */
-        double legA, legB;
-        /**
-         * While {@link #embed} lays a Basalt Galleries tunnel: how far it swings to the side just past each door's leg
-         * ({@link #turnPoint}), or 0; and how hard its winding bends ({@link #VIEW_LEVELS}).
-         */
-        double turnA, turnB;
-        int viewLevel;
-        /** While {@link #galleryWay} lays a tunnel again: its winding's bends swing to the other sides. */
-        boolean mirrorWind;
-        /**
-         * While {@link #joinRequired} lays a tunnel for a room the network left out, or {@link #gateRescue} one round a
-         * single way between the gates: the plain tunnel (the last of the {@link #VIEW_LEVELS}) is tried for any pair,
-         * not only from a portal vestibule.
-         */
-        boolean plainAny;
-        /** The Basalt Galleries: the open space planned so far, against which each new tunnel's views are checked. */
-        NetViews views;
 
         /** Pairs entry courts with exit courts by side and gives each strand a lateral slot. */
         void slots() {
@@ -764,7 +569,7 @@ final class NetPlanner {
         }
 
         /** Set pieces that sit on strands: the strand's line passes through them. */
-        Chamber well, cascade, perched, greatHigh, chimney;
+        Chamber well, cascade, perched;
 
         void anchors() {
             if (strands.isEmpty()) return;
@@ -772,7 +577,7 @@ final class NetPlanner {
             switch (li) {
                 case Terrain.GARDENS -> {
                     Strand sw = walkStrand();
-                    if (helixRoom()) well = helixAnchor(sw, Kind.WELL, 260);
+                    if (helixRoom()) well = helixAnchor(sw, 260);
                     Strand sh = strands.get(S == 3 ? (u(261) < 0.5 ? 0 : 2) : 1 - sw.s);
                     double tc = r(240, 0.32, 0.62);
                     Chamber em = chamber(Kind.TERRACE, 240);
@@ -792,37 +597,6 @@ final class NetPlanner {
                         if (anchorPlace(sm, pl, tp, 228)) perched = pl;
                     }
                 }
-                case Terrain.WASTELAND -> {
-                    // the landmark hall on a strand that may climb; no chimney, whose spiral would be one long walk
-                    // with no branch
-                    Strand sw = walkStrand();
-                    Strand sg = strands.get(S == 3 ? (u(330) < 0.5 ? 0 : 2) : 1 - sw.s);
-                    double tg = r(331, 0.3, 0.55);
-                    Chamber g = wasteHall(332);
-                    double[] d0 = slotPoint(sg, tg - 0.05), d1 = slotPoint(sg, tg + 0.05);
-                    g.setRot(Math.atan2(d1[1] - d0[1], d1[0] - d0[0]));
-                    double dl = Math.max(1e-6, Math.hypot(d1[0] - d0[0], d1[1] - d0[1]));
-                    g.rampX = (d1[0] - d0[0]) / dl; g.rampZ = (d1[1] - d0[1]) / dl;
-                    g.f0 = Math.max(W + HALL_FLOOR, fT(sg, tg) - 4 - g.rampDrop * 0.5);
-                    if (anchorPlace(sg, g, tg, 338)) greatHigh = g;
-                }
-                case Terrain.GALLERIES -> {
-                    Strand sw = walkStrand();
-                    Strand sg = strands.get(S == 3 ? (u(320) < 0.5 ? 0 : 2) : 1 - sw.s);
-                    double tg = r(321, 0.3, 0.62);
-                    Chamber g = chamber(Kind.GREAT, 320);
-                    g.rx = r(321, 24, 28); g.rz = r(322, 19, 25); // v12: as the low great hall
-                    g.sq = 2.4; g.f0 = Math.max(W + surge + 2, fT(sg, tg) - 4);
-                    g.h = r(325, 40, 52); g.rise = 9; g.terr = 3; g.set = true;
-                    double[] d0 = slotPoint(sg, tg - 0.05), d1 = slotPoint(sg, tg + 0.05);
-                    g.setRot(Math.atan2(d1[1] - d0[1], d1[0] - d0[0]));
-                    double dl = Math.max(1e-6, Math.hypot(d1[0] - d0[0], d1[1] - d0[1]));
-                    g.rampX = (d1[0] - d0[0]) / dl; g.rampZ = (d1[1] - d0[1]) / dl;
-                    g.rampDrop = r(327, 12, 18);
-                    g.f0 -= g.rampDrop * 0.5;
-                    if (anchorPlace(sg, g, tg, 326)) greatHigh = g;
-                    if (helixRoom()) chimney = helixAnchor(sw, Kind.CHIMNEY, 360);
-                }
                 case Terrain.BLUE -> {
                     if (city != null && city.keep) {
                         for (Strand st : strands) {
@@ -837,34 +611,8 @@ final class NetPlanner {
             }
         }
 
-        /**
-         * The Wasteland's landmark hall floor stays at least this far over the lava table, so the hall's arch (over
-         * W + 38, as in the Basalt Galleries, and 3 under its ceiling) fits under a 22 to 26 block ceiling.
-         */
-        static final double HALL_FLOOR = 22;
-
-        /** Wasteland chamber floors (f0) stay at least this far over the lava table: no room reaches down into it. */
-        static final double WASTE_FLOOR = 3;
-
-        /**
-         * The Wasteland's landmark hall: a great hall at the Wasteland's scale, 36 to 40 long, 28 to 34 wide and 22 to
-         * 26 tall, its floor in terraces of 3 (as the Basalt Galleries' halls, so its lava channel can lie on the lowest)
-         * that step down 6 to 10 along its length. The rest is set by the caller: its heading, the ramp's direction, its
-         * floor.
-         */
-        Chamber wasteHall(long salt) {
-            Chamber g = chamber(Kind.GREAT, salt);
-            g.rx = r(salt + 1, 18, 20); g.rz = r(salt + 2, 14, 17);
-            g.sq = 2.4; g.h = r(salt + 3, 22, 26); g.rise = 4; g.terr = 3; g.set = true;
-            g.rampDrop = r(salt + 4, 6, 10);
-            return g;
-        }
-
-        /**
-         * The helix set pieces need height (section 2.6): the well only when the Deep Gardens are at least 180 tall, the
-         * chimney only when the Basalt Galleries are at least 200 tall (the defaults are 240 and 288).
-         */
-        boolean helixRoom() { return T - B + 1 >= (Terrain.basaltLook(li) ? 200 : 180); }
+        /** The well needs height (section 2.6): only when the Deep Gardens are at least 180 tall (the default is 240). */
+        boolean helixRoom() { return T - B + 1 >= 180; }
 
         Strand walkStrand() {
             for (Strand st : strands) if (st.walkOnly) return st;
@@ -879,17 +627,16 @@ final class NetPlanner {
             return pl;
         }
 
-        /** A well or chimney on a strand: the strand comes in at the top of its spiral and leaves at the bottom. */
-        Chamber helixAnchor(Strand st, Kind kind, long salt) {
+        /** The well on a strand: the strand comes in at the top of its spiral and leaves at the bottom. */
+        Chamber helixAnchor(Strand st, long salt) {
             double tw = r(salt + 1, 0.38, 0.58);
             double total = fT(st, 0) - fT(st, 1);
-            double drop = kind == Kind.CHIMNEY ? Math.min(r(salt + 2, 95, 130), total * 0.55) : Math.min(r(salt + 2, 70, 100), total * 0.5);
-            Chamber c = chamber(kind, salt + 3);
+            double drop = Math.min(r(salt + 2, 70, 100), total * 0.5);
+            Chamber c = chamber(Kind.WELL, salt + 3);
             c.rx = c.rz = r(salt + 4, 10.5, 12.5);
             c.warp = 0.08;
             double mid = fT(st, tw);
             c.f0 = mid - drop / 2;
-            if (kind == Kind.CHIMNEY) c.f0 = Math.max(c.f0, W + surge + 4);
             c.top = Math.min(T - 26, c.f0 + drop + 12);
             c.h = c.top - c.f0;
             c.rise = 2;
@@ -974,7 +721,7 @@ final class NetPlanner {
                 Chamber c = st.anchors.get(i);
                 double fin, fout;
                 if (c.helix()) { fin = c.helixTop - 2; fout = c.f0 + 1; }
-                else if (c.kind == Kind.TERRACE || (c.kind == Kind.GREAT && c.rampDrop > 0)) { fin = c.f0 + c.rampDrop * 0.8; fout = c.f0 + 1; }
+                else if (c.kind == Kind.TERRACE) { fin = c.f0 + c.rampDrop * 0.8; fout = c.f0 + 1; }
                 else { fin = fout = walkF(c); }
                 keys.add(new Object[]{c, st.anchorT.get(i), fin, fout});
             }
@@ -1086,20 +833,6 @@ final class NetPlanner {
                         c.sq = r(s + 8, 2.0, 2.8);
                     }
                 }
-                case Terrain.WASTELAND -> wasteProto(c, s, u(s + 9), 0.15);
-                case Terrain.GALLERIES -> {
-                    if (u(s + 9) < 0.5) {
-                        c.kind = Kind.GALLERY;
-                        // v9: galleries at Taran's sizes, 26-36 long and 14-22 wide (were 36-60 by 16-26)
-                        c.rx = r(s + 3, 13, 18); c.rz = r(s + 4, 7, 11); c.sq = 2.5;
-                        c.h = r(s + 5, 13, 19); c.rise = 4; c.terr = 2;
-                    } else {
-                        c.kind = Kind.GROTTO;
-                        double dia = sizeDraw(s + 3, 16, 30);
-                        c.rx = dia / 2; c.rz = c.rx * r(s + 4, 0.65, 1.0);
-                        c.h = heightDraw(s + 5, 10, 18); c.rise = r(s + 6, 2, 4); c.terr = 1.5; c.sq = r(s + 8, 2.0, 2.8);
-                    }
-                }
                 case Terrain.BLUE -> {
                     c.kind = Kind.GROTTO;
                     double dia = sizeDraw(s + 3, 20, 32);
@@ -1112,27 +845,6 @@ final class NetPlanner {
             return c;
         }
 
-        /**
-         * A Wasteland chamber's kind and size, by the draw {@code q}: a short gallery under {@code gallery}, else a cave.
-         * Galleries stay short (22 to 30 long, 14 to 20 wide), so none is a long straight view. Caves are 15 to 30
-         * across, most of them small, 10 to 18 tall. No junction room is placed here: one only stands where it is a fork
-         * from the start, cut into a tunnel with its third way ({@link #cutJunction}); placed beforehand, most junction
-         * rooms ended with two ways, a mere bulge in a passage that runs on.
-         */
-        void wasteProto(Chamber c, long s, double q, double gallery) {
-            if (q < gallery) {
-                c.kind = Kind.GALLERY;
-                c.rx = r(s + 3, 11, 15); c.rz = r(s + 4, 7, 10); c.sq = 2.4;
-                c.h = r(s + 5, 11, 16); c.rise = 3; c.terr = 2;
-            } else {
-                c.kind = Kind.GROTTO;
-                double dia = sizeDraw(s + 3, 15, 30);
-                c.rx = dia / 2; c.rz = c.rx * r(s + 4, 0.65, 1.0);
-                c.h = heightDraw(s + 5, 10, 18); c.rise = r(s + 6, 2, 4); c.terr = 1.5; c.pend = r(s + 7, 1, 3);
-                c.sq = r(s + 8, 2.0, 2.8);
-            }
-        }
-
         Chamber strandNode(Strand st, double[] p, double[] dir, double fHi, double fLo, long salt) {
             for (int i = 0; i < 14; i++) {
                 long s = salt * 31 + i * 17L;
@@ -1142,7 +854,6 @@ final class NetPlanner {
                 Chamber c = strandProto(st, salt, x, z, fm);
                 c.x = x;
                 c.z = z;
-                if (c.kind == Kind.GALLERY) c.setRot(Math.atan2(dir[1], dir[0]));
                 // the floor steps down along the way through the chamber: about 0.3 at most
                 double R = Math.max(c.rx, c.rz);
                 c.rampDrop = Math.max(0, Math.min(fHi - fLo, 0.3 * 2 * R));
@@ -1151,10 +862,6 @@ final class NetPlanner {
                 c.rampZ = dir[1];
                 if (c.terr <= 0) c.terr = 1;
                 c.f0 = fm - c.rampDrop * 0.5 - 1;
-                // Basalt Galleries: the whole floor stays above the highest surge, as in fill (near the bedrock landing
-                // the strand's line comes down to the surge stairs, and a ramp's low end fell under the surge)
-                if (surge > 0) c.f0 = Math.max(c.f0, W + surge + 2);
-                if (li == Terrain.WASTELAND) c.f0 = Math.max(c.f0, W + WASTE_FLOOR);
                 c.strand = st.s;
                 if (fits(c)) {
                     add(c);
@@ -1737,7 +1444,6 @@ final class NetPlanner {
 
         /** Horizontal gap between two nodes: centres less a share of the radii, or the raster distance for regions. */
         double gapXZ(Chamber a, Chamber b, double k) {
-            if (capsule(a) || capsule(b)) return axisGap(a, b) - k * (capR(a) + capR(b));
             if (a.dark < 0 && b.dark < 0) return Math.hypot(a.x - b.x, a.z - b.z) - k * (a.R() + b.R());
             if (a.dark >= 0 && b.dark >= 0) {
                 long key = ((long) Math.min(a.id, b.id) << 32) | Math.max(a.id, b.id);
@@ -1817,43 +1523,6 @@ final class NetPlanner {
                         if (em.id > 0 && n.ch.size() > em.id && n.ch.get(em.id) == em) cascade = em;
                     }
                 }
-                case Terrain.WASTELAND -> {
-                    if (greatHigh == null) {
-                        Chamber g = wasteHall(340);
-                        g.setRot(r(345, 0, 3.14));
-                        double ra = r(346, 0, 6.28); g.rampX = Math.cos(ra); g.rampZ = Math.sin(ra);
-                        g.f0 = W + r(347, HALL_FLOOR, HALL_FLOOR + 34);
-                        randomPlace(g, 348);
-                    }
-                    // one or two domed caves 36 to 40 across, landmarks on a storey of their own choosing
-                    int domes = u(380) < 0.5 ? 1 : 2;
-                    for (int k = 0; k < domes; k++) {
-                        long s = 381 + 10L * k;
-                        Chamber d = chamber(Kind.GROTTO, s);
-                        d.rx = r(s + 1, 18, 20); d.rz = d.rx * r(s + 2, 0.85, 1.0); d.setRot(r(s + 3, 0, 3.14));
-                        d.h = r(s + 4, 16, 20); d.rise = 3; d.terr = 1.5; d.sq = 2.2; d.pend = 3; d.set = true;
-                        int tier = Math.min(tierY.length - 1, (int) (u(s + 5) * tierY.length));
-                        d.f0 = Math.max(W + WASTE_FLOOR, tierY[tier] + r(s + 6, -3, 3));
-                        underSeal(d);
-                        randomPlace(d, s + 7);
-                    }
-                }
-                case Terrain.GALLERIES -> {
-                    if (chimney == null && helixRoom()) {
-                        Chamber c = chamber(Kind.CHIMNEY, 360);
-                        c.rx = c.rz = r(361, 9.5, 11.5); c.warp = 0.08;
-                        c.f0 = W + surge + r(362, 4, 14); c.top = Math.min(T - 26, c.f0 + r(363, 70, 110));
-                        c.h = c.top - c.f0; c.rise = 2; c.set = true;
-                        helix(c, 364);
-                        randomPlace(c, 365);
-                    }
-                    if (greatHigh == null) {
-                        Chamber g = chamber(Kind.GREAT, 340);
-                        g.rx = r(341, 24, 28); g.rz = r(342, 19, 25); g.setRot(r(343, 0, 3.14));
-                        g.sq = 2.4; g.f0 = W + r(344, 40, 120); g.h = r(345, 40, 52); g.rise = 9; g.terr = 3; g.set = true;
-                        randomPlace(g, 346);
-                    }
-                }
                 case Terrain.BLUE -> { }
                 default -> throw new IllegalArgumentException("no set pieces for layer " + li);
             }
@@ -1895,11 +1564,7 @@ final class NetPlanner {
             return best;
         }
 
-        /**
-         * Refuges: bare, calm, off the main ways, reached by one tunnel of their own. The Wasteland's (the Ash Hollows)
-         * have two, as no room there is a dead end: they are cut into tunnels once the network stands
-         * ({@link #refugeCut}), so none is placed here.
-         */
+        /** Refuges: bare, calm, off the main ways, reached by one tunnel of their own. */
         void refuges() {
             switch (li) {
                 case Terrain.GARDENS -> {
@@ -1911,18 +1576,6 @@ final class NetPlanner {
                         double ra = r(406 + 20 * k, 0, 6.28); s.rampX = Math.cos(ra); s.rampZ = Math.sin(ra); s.rampDrop = r(407 + 20 * k, 8, 12);
                         s.refuge = true; s.pend = 3;
                         offMainPlace(s, 408 + 20 * k);
-                    }
-                }
-                // the Wasteland's refuges are cut into tunnels once the network stands (refugeCut)
-                case Terrain.WASTELAND -> { }
-                case Terrain.GALLERIES -> {
-                    for (int k = 0; k < 2; k++) {
-                        Chamber t = chamber(Kind.TUBEHUB, 450 + 20 * k);
-                        t.rx = t.rz = r(451 + 20 * k, 8, 10); t.warp = 0.06;
-                        t.f0 = W + surge + r(452 + 20 * k, 6, Math.min(90, T - W - surge - 32)); t.h = r(453 + 20 * k, 12, 14); t.rise = 1;
-                        t.refuge = true;
-                        t.pillars = new double[]{0, 0, r(454 + 20 * k, 1.8, 2.6)};
-                        offMainPlace(t, 455 + 20 * k);
                     }
                 }
                 case Terrain.BLUE -> { }
@@ -1967,36 +1620,22 @@ final class NetPlanner {
 
         boolean fits(Chamber c) {
             if (strandMode) underSeal(c);
-            if (capsule(c)) {
-                if (!capsuleInCell(c)) return false;
-            } else {
-                double m = EDGE_MARGIN + c.R() + 4;
-                if (c.x < x0 + m || c.x > x0 + cell - m || c.z < z0 + m || c.z > z0 + cell - m) return false;
-            }
-            // a set piece, and a flight court (its floor kept block by block, the bedrock landing's beside it), may stand
-            // on the block over the seal: with the Basalt Galleries' lava under the default 10 deep (config), the
-            // flights' floor at W + 2 is no higher than that
-            if (c.yLo() < B + Terrain.SEAL + (c.set || c.flight ? 1 : 4) && !c.landing()) return false;
+            double m = EDGE_MARGIN + c.R() + 4;
+            if (c.x < x0 + m || c.x > x0 + cell - m || c.z < z0 + m || c.z > z0 + cell - m) return false;
+            // a set piece may stand on the block over the seal
+            if (c.yLo() < B + Terrain.SEAL + (c.set ? 1 : 4) && !c.landing()) return false;
             if (c.yHi() > T - Terrain.SEAL - 6 && !c.landing()) return false;
             if (n.dark != null && c.dark < 0 && n.dark.hit(c.x, c.z, c.R() + sp.gapH, c.yLo() - sp.gapV, c.yHi() + sp.gapV, -1, -1)) return false;
             for (Chamber o : n.ch) {
                 if (!o.keep || o.kind == Kind.CANYON || o.dark >= 0) continue;
                 double gapH = sp.gapH;
                 if (o.landing() || c.landing()) gapH = (c.court || o.court) ? 5 : sp.gapH + 10;
-                if (capsule(c) || capsule(o)) {
-                    // a flight court's foot stands right by the bedrock landing's plate
-                    if ((c.flight && o.landing()) || (o.flight && c.landing())) gapH = 1;
-                    if (pairGap(c, o) > gapH) continue;
-                } else {
-                    double d = Math.hypot(c.x - o.x, c.z - o.z);
-                    if (d > c.R() + o.R() + gapH) continue;
-                }
+                double d = Math.hypot(c.x - o.x, c.z - o.z);
+                if (d > c.R() + o.R() + gapH) continue;
                 double gv = sp.gapV;
                 if (c.yHi() + gv < o.yLo() || o.yHi() + gv < c.yLo()) continue;
                 return false;
             }
-            if (capsule(c) ? capsuleLavaHit(c) : lavaHit(c.x, c.z, c.R(), c.yLo(), c.yHi(), sp.gapH, sp.gapV)) return false;
-            if ((c.hall() || c.flight) && blocksFlightEnd(c)) return false;
             if (c.kind != Kind.CITY && reserveHit(c.x, c.z, c.R(), c.yLo(), c.yHi())) return false;
             // keep out of the canyons' volume (Blue Reaches)
             for (Route r : n.canyons) {
@@ -2006,31 +1645,8 @@ final class NetPlanner {
             if (wayHit(c)) return false;
             if (geodeHit(c.x, c.z, c.R(), c.yLo(), c.yHi(), GEODE_GAP + 2, GEODE_GAP)) return false;
             // the gates' passages and the band seals
-            return capsule(c) ? !capsuleNearGate(c) : !nearGatePassage(c);
+            return !nearGatePassage(c);
         }
-
-        /**
-         * The Basalt Galleries: true when hall c stands in the way out of a flight's far end, or flight c's far end
-         * against a hall: within {@link #FLIGHT_EXIT} of the point 12 blocks past the end. A flight's far doors face out
-         * along the stair, and a hall the gap's 12 from the end left its tunnel nowhere to go but into the hall's own
-         * clearance.
-         */
-        boolean blocksFlightEnd(Chamber c) {
-            for (Chamber o : n.ch) {
-                if (!o.keep || o == c) continue;
-                Chamber f = c.flight ? c : o, h = c.flight ? o : c;
-                if (!f.flight || !h.hall()) continue;
-                double end = flightEnd(f), px = f.x - f.rampX * end * (f.rx + 12), pz = f.z - f.rampZ * end * (f.rx + 12);
-                if (capGap(h, px, pz) < FLIGHT_EXIT) return true;
-            }
-            return false;
-        }
-
-        /** The clear radius round the point 12 blocks past a flight's far end (blocks): a tunnel's half-width and clearance. */
-        static final double FLIGHT_EXIT = 14;
-
-        /** The farthest a flight's far end, a portal or a tube is joined to a hall from by {@link #hallLink} (blocks, gap). */
-        static final double HALL_REACH = 170;
 
         /** Rock kept between a refuge geode and the network's rooms, tunnels and shafts (blocks). */
         static final double GEODE_GAP = 6;
@@ -2050,7 +1666,6 @@ final class NetPlanner {
 
         /** True when a planned tunnel passes through the chamber's volume (with a margin). */
         boolean wayHit(Chamber c) {
-            if (capsule(c)) return capsuleWayHit(c);
             double R = c.R();
             int bx0 = Math.max(0, (int) Math.floor((c.x - R - 12 - x0 + Net.APRON) / CB)), bx1 = Math.min(cn - 1, (int) Math.floor((c.x + R + 12 - x0 + Net.APRON) / CB));
             int bz0 = Math.max(0, (int) Math.floor((c.z - R - 12 - z0 + Net.APRON) / CB)), bz1 = Math.min(cn - 1, (int) Math.floor((c.z + R + 12 - z0 + Net.APRON) / CB));
@@ -2068,7 +1683,7 @@ final class NetPlanner {
         }
 
         boolean nearGatePassage(Chamber c) {
-            for (int b = li + 1; b <= li + 2 && b <= w.shape.layerCount; b++) {
+            for (int b = li + 1; b <= li + 2; b++) {
                 Plans.Gate g = w.base.plans.gate(b, cx, cz);
                 for (double y = c.yLo(); y <= c.yHi(); y += 4) {
                     if (g.passageXZ(c.x, y, c.z) < c.R() + g.radius * 1.5 + 8) return true;
@@ -2123,37 +1738,6 @@ final class NetPlanner {
             return false;
         }
 
-        /**
-         * The Wasteland: a cave to either side of the way in from each portal vestibule, 10 to 16 blocks of rock from
-         * it, 30 to 45 degrees off the line from the cell's edge and within 3 blocks of the vestibule's floor, so the
-         * vestibule has two near neighbours on its own level and takes two short tunnels. Left to the fill, one
-         * vestibule in four (its floor anywhere between the storeys, by the edge, where the cell's rooms thin out) got
-         * one tunnel only, often a long one: a dead end but for its stub, every tunnel on the way to it a bridge. A cave
-         * that fits nowhere after eight tries is left to the fill.
-         */
-        void portalRooms() {
-            for (int id : n.portals) {
-                Chamber v = n.ch.get(id);
-                Network.Portal p = portalOf.get(id);
-                double in = Math.atan2(p.xEdge ? 0 : Math.signum(v.z - p.line), p.xEdge ? Math.signum(v.x - p.line) : 0);
-                for (int side = -1; side <= 1; side += 2) {
-                    for (int t = 0; t < 8; t++) {
-                        long s = 9_000L + id * 640L + (side + 1) * 160L + t * 16L;
-                        Chamber c = new Chamber();
-                        c.hash = Hashing.mix(h, s, 5, 0);
-                        wasteProto(c, s, u(s + 9), 0.15);
-                        c.setRot(r(s + 10, 0, Math.PI));
-                        double a = in + side * Math.toRadians(r(s + 11, 30, 45)), d = v.R() + c.R() + r(s + 12, 10, 16);
-                        c.x = v.x + Math.cos(a) * d;
-                        c.z = v.z + Math.sin(a) * d;
-                        c.f0 = Math.max(W + WASTE_FLOOR, v.f0 + r(s + 13, -3, 3));
-                        underSeal(c);
-                        if (fits(c)) { add(c); break; }
-                    }
-                }
-            }
-        }
-
         /** Ordinary chambers: dart throwing with a clearance rule, types by district. */
         void fill() {
             double[] dc = huntC;
@@ -2202,21 +1786,6 @@ final class NetPlanner {
                             c.sq = r(s + 8, 2.0, 2.8);
                         }
                     }
-                    case Terrain.WASTELAND -> wasteProto(c, s, u(s + 9), 0.15);
-                    case Terrain.GALLERIES -> {
-                        if (u(s + 9) < 0.45) {
-                            c.kind = Kind.GALLERY;
-                            // v9: galleries at Taran's sizes, 26-36 long and 14-22 wide (were 36-68 by 16-28)
-                            c.rx = r(s + 3, 13, 18); c.rz = r(s + 4, 7, 11); c.sq = 2.5;
-                            c.h = r(s + 5, 13, 19); c.rise = 4; c.terr = 2;
-                        } else {
-                            c.kind = Kind.GROTTO;
-                            double dia = sizeDraw(s + 3, 15, 30);
-                            c.rx = dia / 2; c.rz = c.rx * r(s + 4, 0.65, 1.0);
-                            c.h = heightDraw(s + 5, 10, 18); c.rise = r(s + 6, 2, 4); c.terr = 1.5; c.sq = r(s + 8, 2.0, 2.8);
-                        }
-                        c.low = surge > 0 && fy < W + surge;
-                    }
                     case Terrain.BLUE -> {
                         // Blue Reaches: junction rooms between the rift, the caverns and the landings
                         c.kind = Kind.GROTTO;
@@ -2236,12 +1805,6 @@ final class NetPlanner {
                     c.rampX = Math.cos(ra); c.rampZ = Math.sin(ra);
                     c.f0 = fy - c.rampDrop * 0.5;
                 }
-                if (surge > 0) {
-                    // every ordinary chamber floor stays above the highest surge (the storeys' tilt and jitter included)
-                    c.f0 = Math.max(c.f0, W + surge + 2);
-                    c.low = false;
-                }
-                if (li == Terrain.WASTELAND) c.f0 = Math.max(c.f0, W + WASTE_FLOOR);
                 underSeal(c);
                 if (fits(c)) { add(c); placed++; }
             }
@@ -2278,7 +1841,6 @@ final class NetPlanner {
         // ------------------------------------------------------------------------------------------- edges
         /** Candidate edges: each node to its nearest neighbours (vertical distance counts 2.5 times). */
         List<Edge> candidates() {
-            if (li == Terrain.WASTELAND) return gabriel();
             List<Edge> out = new ArrayList<>();
             int N = n.ch.size();
             int K = sp.candK;
@@ -2293,8 +1855,6 @@ final class NetPlanner {
                     double dy = Math.abs(a.f0 - b.f0);
                     best[j] = j == i ? 1e18 : Math.hypot(Math.max(0, dxz), dy * 2.5);
                     if (a.kind == Kind.CANYON && b.kind == Kind.CANYON) best[j] = 1e18;
-                    // the Wasteland: no candidate one tunnel or climb could never join
-                    if (sp.wayMax > 0 && j != i && !joinable(a, b)) best[j] = 1e18;
                 }
                 Arrays.sort(idx, Comparator.comparingDouble(j -> best[j]));
                 for (int k = 0; k < K && k < N; k++) {
@@ -2314,56 +1874,6 @@ final class NetPlanner {
             return out;
         }
 
-        /**
-         * The Wasteland's candidate edges: of the pairs one tunnel or climb could join ({@link #joinable}), those whose
-         * sphere on their segment (in x, z and 2.5 times the floor height, as candidates() measures) holds no third
-         * chamber's centre: the Gabriel graph. It holds each chamber's nearest neighbour in every direction and no pair
-         * whose tunnel would pass another chamber by, so its edges are what a planar maze of short tunnels is made of,
-         * and they seldom cross or crowd one another's doors (the nearest-neighbour lists' crossing and parallel pairs
-         * were most of the failed embeds). Each chamber also gets its cheapest pair a climb would join (floors 8 or more
-         * apart), which a storey's own chambers screen off. Cheapest first, with candidates()' jitter.
-         */
-        List<Edge> gabriel() {
-            int N = n.ch.size();
-            List<Chamber> cs = new ArrayList<>();
-            for (Chamber c : n.ch) if (c.keep && c.kind != Kind.CANYON) cs.add(c);
-            List<Edge> out = new ArrayList<>();
-            java.util.Set<Long> seen = new java.util.HashSet<>();
-            double[] bestClimb = new double[N];
-            int[] climbTo = new int[N];
-            Arrays.fill(bestClimb, 1e18);
-            Arrays.fill(climbTo, -1);
-            for (int i = 0; i < cs.size(); i++) {
-                Chamber a = cs.get(i);
-                for (int j = i + 1; j < cs.size(); j++) {
-                    Chamber b = cs.get(j);
-                    if (!joinable(a, b)) continue;
-                    double cost = gapXZ(a, b, 1.0) + 2.5 * Math.abs(a.f0 - b.f0);
-                    if (Math.abs(walkF(a) - walkF(b)) >= 8) {
-                        if (cost < bestClimb[a.id]) { bestClimb[a.id] = cost; climbTo[a.id] = b.id; }
-                        if (cost < bestClimb[b.id]) { bestClimb[b.id] = cost; climbTo[b.id] = a.id; }
-                    }
-                    double mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = 1.25 * (a.f0 + b.f0);
-                    double r2 = ((a.x - b.x) * (a.x - b.x) + (a.z - b.z) * (a.z - b.z) + 6.25 * (a.f0 - b.f0) * (a.f0 - b.f0)) / 4;
-                    boolean free = true;
-                    for (Chamber c : cs) {
-                        if (c == a || c == b) continue;
-                        double dx = c.x - mx, dz = c.z - mz, dy = 2.5 * c.f0 - my;
-                        if (dx * dx + dz * dz + dy * dy < r2) { free = false; break; }
-                    }
-                    if (free && seen.add(((long) a.id << 32) | b.id)) out.add(edge(a.id, b.id));
-                }
-            }
-            for (int i = 0; i < N; i++) {
-                if (climbTo[i] < 0) continue;
-                int lo = Math.min(i, climbTo[i]), hi = Math.max(i, climbTo[i]);
-                if (seen.add(((long) lo << 32) | hi)) out.add(edge(lo, hi));
-            }
-            for (Edge e : out) e.cost *= 0.75 + 0.5 * Hashing.unit(Hashing.mix(h, 900, e.a, e.b));
-            out.sort(Comparator.comparingDouble(e -> e.cost));
-            return out;
-        }
-
         boolean contains(List<Edge> l, int a, int b) {
             int lo = Math.min(a, b), hi = Math.max(a, b);
             for (Edge e : l) if (e.a == lo && e.b == hi) return true;
@@ -2377,8 +1887,6 @@ final class NetPlanner {
             if ((a.refuge && b.landing()) || (b.refuge && a.landing())) return false;
             if ((a.refuge && b.kind == Kind.PORTAL) || (b.refuge && a.kind == Kind.PORTAL)) return false;
             if ((a.refuge && b.court) || (b.refuge && a.court)) return false;
-            // two flights joined are one way to their landing, and a flight's far end has only two doors
-            if (a.flight && b.flight) return false;
             return true;
         }
 
@@ -2397,12 +1905,10 @@ final class NetPlanner {
         /**
          * Required nodes (landings, portals) not yet joined to the entry: try harder, with longer meanders. A node that
          * failed is not tried again at the same level, so one hopeless node does not use up the passes of the others.
-         * In the Blue Reaches the last 10 of the 40 passes may cross other deep dark caverns to reach a portal. In the
-         * Wasteland a node that failed is tried again once another part has joined (the main part it may reach has
-         * grown), over {@link #WASTE_JOIN_PASSES} passes.
+         * In the Blue Reaches the last 10 of the 40 passes may cross other deep dark caverns to reach a portal.
          */
         void connectRequired(List<Edge> cand) {
-            int passes = n.dark != null ? 40 : sp.wayMax > 0 ? WASTE_JOIN_PASSES : 4;
+            int passes = n.dark != null ? 40 : 4;
             java.util.Set<Integer> failed = new java.util.HashSet<>();
             for (int pass = 0; pass < passes; pass++) {
                 if (n.dark != null && pass == passes - 10) failed.clear();
@@ -2451,8 +1957,6 @@ final class NetPlanner {
                     }
                     relaxDark = false;
                     if (!joined) failed.add(c.id);
-                    // the Wasteland: a part that could not join may join the main part once it has grown
-                    else if (sp.wayMax > 0) failed.clear();
                     break; // components changed: recount
                 }
                 if (all || !tried) {
@@ -2461,217 +1965,6 @@ final class NetPlanner {
                 }
             }
             // the entry must be in the main component: everything else is measured from it
-        }
-
-        /**
-         * The Wasteland's passes of connectRequired, one part joined or failed in each. With 4, as elsewhere, a cell
-         * whose portal vestibules stood apart in five parts dropped the fifth unjoined, and one whose part stood 140
-         * blocks from the main part dropped it before the parts between had joined. A vestibule dropped leaves the
-         * stub a blind end on both sides of the seam ({@link #portalFallback}): a dead end.
-         */
-        static final int WASTE_JOIN_PASSES = 16;
-
-        /**
-         * How far from its wall a boxed-in portal vestibule looks for a tunnel to join ({@link #vestibuleJunctions}).
-         */
-        static final double VEST_JUNCTION_REACH = 60;
-
-        /**
-         * The Basalt Galleries: a portal vestibule no tunnel could join to the entry ({@link #connectRequired}) joins a
-         * tunnel near it through a junction room cut into that tunnel ({@link #cutJunction}), from the vestibule or
-         * from a room it did reach. A vestibule stands 30 blocks in from the cell's edge, and a tunnel run along the
-         * edge in front of it, or a long hall, boxes it in: no tunnel of its own crosses that one, and the edge's
-         * margin leaves no way round. Left out, the vestibule took its stub with it while the cell across the edge,
-         * which plans alone, kept its own vestibule and its half of the stub: a portal that ended blind at the seam.
-         * The points of the entry's tunnels within {@link #VEST_JUNCTION_REACH} of such a room's wall, far enough from
-         * it for the junction to keep its clearance and near enough to its floor for a tunnel, are tried, the nearest
-         * first (a block of height counting 2.5): 16 of them, at least 5 blocks apart along each tunnel and at most 6
-         * from each room; when none takes, 16 more, at least 12 apart from every one tried and at most 12 from each
-         * room. The nearest places can crowd one stretch of one tunnel, where every tunnel to them winds into that
-         * tunnel's halves or turns back beside the vestibule.
-         */
-        void vestibuleJunctions() {
-            for (int id : n.portals) {
-                if (n.ch.get(id).keep && find(id) != find(n.entry)) junctionsFor(find(id), false);
-            }
-        }
-
-        /**
-         * Joins the rooms of component {@code comp} (by the union-find) to the entry's through a junction room cut
-         * into a tunnel near one of them, as {@link #vestibuleJunctions} describes, with {@code plain} the plain tunnel
-         * among the joining tunnel's shapes ({@link #plainAny}); true once joined.
-         */
-        boolean junctionsFor(int comp, boolean plain) {
-            int root = find(n.entry);
-            boolean[] from = new boolean[n.ch.size()], to = new boolean[n.ch.size()];
-            for (Chamber c : n.ch) {
-                from[c.id] = c.keep && find(c.id) == comp;
-                to[c.id] = c.keep && find(c.id) == root;
-            }
-            int j = cutAcross(from, to, -1, false, plain, -1);
-            if (j < 0) return false;
-            union(j, root);
-            union(comp, root);
-            return true;
-        }
-
-        /**
-         * A junction room cut into a walking tunnel between two rooms of {@code to} (never at room {@code skip}),
-         * joined by a forced tunnel to a room of {@code from} within {@link #VEST_JUNCTION_REACH} of it, the places
-         * tried as {@link #vestibuleJunctions} describes; with {@code open}, never from a refuge or a landing (which
-         * take no more tunnels); with {@code plain}, the plain tunnel among the joining tunnel's shapes ({@link
-         * #plainAny}); with {@code flow} 0 or more ({@link #gateRescue}, the gates' ways so far), only a junction by
-         * which the gates gain a way ({@link #gained}). The junction's id once one stays, else -1.
-         */
-        int cutAcross(boolean[] from, boolean[] to, int skip, boolean open, boolean plain, int flow) {
-            // {edge index, point, arc, cost, room}
-            List<double[]> spots = new ArrayList<>();
-            for (Chamber v : n.ch) {
-                if (!v.keep || v.id >= from.length || !from[v.id] || v.id == skip) continue;
-                if (open && (v.refuge || v.landing())) continue;
-                double reach = v.R() + VEST_JUNCTION_REACH, near = 6.5 + sp.clearC;
-                for (int k = 0; k < n.edges.size(); k++) {
-                    Edge e = n.edges.get(k);
-                    if (e.kind != EK.WALK || e.w1 == null || e.a >= to.length || e.b >= to.length) continue;
-                    if (!to[e.a] || !to[e.b] || e.a == skip || e.b == skip) continue;
-                    if (!n.ch.get(e.a).keep || !n.ch.get(e.b).keep) continue;
-                    Way wy = e.w1;
-                    if (v.x < wy.minX - reach || v.x > wy.maxX + reach || v.z < wy.minZ - reach || v.z > wy.maxZ + reach) continue;
-                    double s = 0;
-                    for (int i = 1; i + 1 < wy.n; i++) {
-                        s += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
-                        if (s < JUNCTION_END + NetGraph.RUN_IN || wy.length - s < JUNCTION_END + NetGraph.RUN_IN) continue;
-                        // the gap from the room's wall (a hall's or a flight's capsule, else its reach)
-                        double c = capsule(v) ? capGap(v, wy.x[i], wy.z[i]) : Math.hypot(wy.x[i] - v.x, wy.z[i] - v.z) - v.R();
-                        double dy = Math.abs(wy.f[i] - v.f0);
-                        if (c > VEST_JUNCTION_REACH || c < near || !doorFree(v.id, Math.atan2(wy.z[i] - v.z, wy.x[i] - v.x))) continue;
-                        // as steep as embed's forced tunnels go, from the room's wall to the junction's
-                        if (dy > sp.maxSlope * (2.2 * (c - 6) - 8)) continue;
-                        // the junction's floor (a block under the tunnel's) at the dry level, as every room's but
-                        // the bedrock landing's and its flights'
-                        if (wy.f[i] - 1 < W + surge + 2) continue;
-                        spots.add(new double[]{k, i, s, c + 2.5 * dy, v.id});
-                    }
-                }
-            }
-            spots.sort(Comparator.comparingDouble(q -> q[3]));
-            List<double[]> tried = new ArrayList<>();
-            for (int round = 0; round < 2; round++) {
-                double apart = round == 0 ? 5 : 12;
-                int most = round == 0 ? 16 : 32, perRoom = round == 0 ? 6 : 12;
-                for (double[] q : spots) {
-                    if (tried.size() == most) break;
-                    int fromRoom = 0;
-                    boolean close = false;
-                    for (double[] o : tried) {
-                        close |= o[0] == q[0] && Math.abs(o[2] - q[2]) < apart;
-                        if (o[4] == q[4]) fromRoom++;
-                    }
-                    if (close || fromRoom >= perRoom) continue;
-                    tried.add(q);
-                    Chamber v = n.ch.get((int) q[4]);
-                    int[] joined = {-1};
-                    boolean ok = cutJunction(n.edges.get((int) q[0]), (int) q[1], v.x, v.z, 1.5, j -> {
-                        Edge ne = edge(v.id, j.id);
-                        plainAny = plain;
-                        boolean laid = allowed(v, j) && embed(ne, true);
-                        plainAny = false;
-                        if (!laid) return false;
-                        // gateRescue's junction stays only when the gates gain a way by it (cutJunction then mends
-                        // the tunnel it was cut into)
-                        if (flow >= 0 && !gained(flow, skip)) { unlay(ne); return false; }
-                        ne.tree = true; ne.forced = true; n.forced++;
-                        joined[0] = j.id;
-                        return true;
-                    });
-                    if (ok) return joined[0];
-                }
-            }
-            return -1;
-        }
-
-        /**
-         * The Basalt Galleries: a required room still not joined to the entry once the tree, {@link #connectRequired}
-         * and {@link #vestibuleJunctions} are done (a set piece, an Obsidian Tube, a flight or a portal vestibule),
-         * together with the rooms it did reach, gets a forced tunnel from one of them to a room of the entry's part of
-         * the network, the 40 nearest pairs tried as connectRequired tries them but with the plain tunnel among the
-         * shapes ({@link #plainAny}); when none embeds, the rooms it reached that are not required are taken out
-         * ({@link #shed}) and the pairs tried again; when still none embeds, and no vestibule is among them
-         * (vestibuleJunctions tried those), a junction room cut into a tunnel near them ({@link #junctionsFor}). A
-         * Causeway or a rift boxed in by column halls had no tunnel left whose swing past its leg did not turn it back
-         * alongside its own capsule, and was left out with the tube that hung on it: a cell without its Causeway, or
-         * its rift, and with one refuge.
-         */
-        void joinRequired() {
-            int N = n.ch.size();
-            for (int id = 0; id < N; id++) {
-                Chamber c = n.ch.get(id);
-                if (!c.keep || !c.required || find(id) == find(n.entry)) continue;
-                if (plainJoin(find(id)) || (shed(find(id)) && plainJoin(find(id)))) continue;
-                int comp = find(id);
-                boolean portal = false;
-                for (Chamber o : n.ch) portal |= o.keep && o.kind == Kind.PORTAL && find(o.id) == comp;
-                if (!portal) junctionsFor(comp, true);
-            }
-        }
-
-        /**
-         * Takes the rooms of component {@code comp} that are not required out of the plan, with their tunnels (they
-         * would go with it when it stays apart, {@link #dropOrphans}): a gallery room the tree joined to a boxed-in set
-         * piece took one of its few doors and the space its other tunnels needed. Never the exit's component, which is
-         * the far half of the network rather than a boxed-in corner. True when one was taken out.
-         */
-        boolean shed(int comp) {
-            if (find(n.exit) == comp) return false;
-            boolean any = false;
-            for (Chamber o : n.ch) {
-                if (!o.keep || o.required || find(o.id) != comp) continue;
-                for (Edge e : new ArrayList<>(n.edges)) if (e.a == o.id || e.b == o.id) unlink(e);
-                o.keep = false;
-                n.droppedChambers++;
-                any = true;
-            }
-            if (any) reunion();
-            return any;
-        }
-
-        /**
-         * A forced tunnel, the plain tunnel among its shapes, from a room of component {@code comp} to one of the
-         * entry's component: the 40 nearest pairs (a block of height counting 2.5); true once one embeds.
-         */
-        boolean plainJoin(int comp) {
-            int root = find(n.entry);
-            List<int[]> pairs = new ArrayList<>();
-            for (Chamber a : n.ch) {
-                if (!a.keep || find(a.id) != comp) continue;
-                for (Chamber b : n.ch) {
-                    if (!b.keep || b.refuge || find(b.id) != root) continue;
-                    pairs.add(new int[]{a.id, b.id});
-                }
-            }
-            pairs.sort(Comparator.comparingDouble(q -> {
-                Chamber a = n.ch.get(q[0]), b = n.ch.get(q[1]);
-                return Math.hypot(a.x - b.x, a.z - b.z) + 2.5 * Math.abs(a.f0 - b.f0);
-            }));
-            plainAny = true;
-            try {
-                for (int k = 0; k < Math.min(40, pairs.size()); k++) {
-                    Edge e = new Edge();
-                    e.a = Math.min(pairs.get(k)[0], pairs.get(k)[1]); e.b = Math.max(pairs.get(k)[0], pairs.get(k)[1]);
-                    Chamber oa = n.ch.get(e.a), ob = n.ch.get(e.b);
-                    if (!allowed(oa, ob) || alreadyEdge(e.a, e.b)) continue;
-                    e.len = Math.max(6, Math.hypot(oa.x - ob.x, oa.z - ob.z) - 0.8 * (oa.R() + ob.R()));
-                    e.dy = Math.abs(oa.f0 - ob.f0);
-                    if (embed(e, true)) {
-                        e.tree = true; e.forced = true; n.forced++;
-                        union(e.a, e.b);
-                        return true;
-                    }
-                }
-            } finally {
-                plainAny = false;
-            }
-            return false;
         }
 
         void dropOrphans() {
@@ -2702,73 +1995,17 @@ final class NetPlanner {
         }
 
         /**
-         * Takes edge e's tunnels, ledges and shafts out of the plan and gives its chambers their doors back (the caller
-         * takes e out of the edge list and rebuilds the point index).
+         * Takes edge e's tunnels, ledges and shafts out of the plan and counts its ways off its chambers (their doors stay
+         * taken; the caller takes e out of the edge list and rebuilds the point index).
          */
         void unplan(Edge e) {
             n.ch.get(e.a).deg--;
             n.ch.get(e.b).deg--;
-            if (sp.wayMax > 0) freeDoors(e);
             if (e.w1 != null) n.ways.remove(e.w1);
             if (e.w2 != null) n.ways.remove(e.w2);
             for (Way l : e.ledges) n.ways.remove(l);
             if (e.sh != null) n.shafts.remove(e.sh);
             for (Shaft sh : e.stages) n.shafts.remove(sh);
-        }
-
-        /**
-         * The Wasteland: the doors of an edge that goes are free again in the chamber that stays. The Wasteland drops
-         * many chambers as dead ends, and each dropped tunnel kept its door taken in the chamber at its other end, so a
-         * portal vestibule whose second cave went could take no tunnel that way again. (The other layers keep the
-         * older rule, so their plans stay as they were.)
-         */
-        void freeDoors(Edge e) {
-            if (e.kind == EK.WALK && e.w1 != null) {
-                freeWayDoor(e.w1.a, e.w1, true);
-                freeWayDoor(e.w1.b, e.w1, false);
-            } else if (e.kind == EK.CLIMB && e.w1 != null && e.w2 != null) {
-                // the lower tunnel starts at the lower door, the upper one ends at the upper door
-                freeWayDoor(e.w1.a, e.w1, true);
-                freeWayDoor(e.w2.b, e.w2, false);
-            }
-        }
-
-        /**
-         * Frees the door chamber c had for way wy, at the way's start or its end. A junction room's doors onto the two
-         * halves of the tunnel it was cut into point at each half's third point from the room ({@link #cutJunction}),
-         * not at its end, which lies on the cut, off the room's centre: that point is tried first. (A tunnel the room
-         * got later starts on its door's ray, so that point frees its door too, or no door, and its end then does.)
-         */
-        void freeWayDoor(int c, Way wy, boolean atStart) {
-            if (c >= 0 && n.ch.get(c).keep && n.ch.get(c).kind == Kind.JUNCTION && wy.n > 2) {
-                int k = atStart ? 2 : wy.n - 3;
-                if (freeDoor(c, wy.x[k], wy.z[k])) return;
-            }
-            int i = atStart ? 0 : wy.n - 1;
-            freeDoor(c, wy.x[i], wy.z[i]);
-        }
-
-        /**
-         * Frees chamber c's door towards a way's end at (x, z): the way's line starts on the ray from the chamber's
-         * centre through its door ({@link #walkWay}), so the door is the one at that angle (within 0.05). True when
-         * one was freed.
-         */
-        boolean freeDoor(int c, double x, double z) {
-            if (c < 0 || !n.ch.get(c).keep) return false;
-            Chamber k = n.ch.get(c);
-            double th = Math.atan2(z - k.z, x - k.x);
-            double[] o = doorAngles.get(c);
-            int best = -1;
-            double bd = 0.05;
-            for (int i = 0; i < o.length; i++) {
-                double d = Math.abs(Math.atan2(Math.sin(th - o[i]), Math.cos(th - o[i])));
-                if (d < bd) { bd = d; best = i; }
-            }
-            if (best < 0) return false;
-            double[] nn = new double[o.length - 1];
-            for (int i = 0, j = 0; i < o.length; i++) if (i != best) nn[j++] = o[i];
-            doorAngles.set(c, nn);
-            return true;
         }
 
         /**
@@ -2868,56 +2105,7 @@ final class NetPlanner {
         }
 
         /**
-         * Puts the two pieces of tunnel wy in its place (a junction room or a refuge cut into it): w1, its points 0 to
-         * k0, takes wy's place and number among the plan's ways, and w2 goes last. Only what changed is indexed again
-         * (wy's points past k0 out, w2's in), so the index is what {@link #rebuildPointIndex} would make: rebuilt whole
-         * after every junction room tried, it took a third of a Wasteland plan's time.
-         */
-        void splitWay(Way wy, Way w1, int k0, Way w2) {
-            int at = n.ways.indexOf(wy);
-            unindex(wy, k0 + 1, wy.n - 1);
-            n.ways.set(at, w1);
-            w1.id = at;
-            addWay(w2);
-        }
-
-        /** Undoes {@link #splitWay} once nothing else was added: wy back in w1's place, w2 (the last way) gone. */
-        void unsplitWay(Way wy, Way w1, int k0, Way w2) {
-            if (n.ways.get(n.ways.size() - 1) != w2) {
-                n.ways.set(n.ways.indexOf(w1), wy);
-                n.ways.remove(w2);
-                rebuildPointIndex();
-                return;
-            }
-            unindex(w2, 0, w2.n - 1);
-            n.ways.remove(n.ways.size() - 1);
-            int at = n.ways.indexOf(w1);
-            n.ways.set(at, wy);
-            wy.id = at;
-            for (int k = k0 + 1; k < wy.n; k++) {
-                int b = bucket(wy.x[k], wy.z[k]);
-                if (b >= 0) pts[b].add(new int[]{wy.id, k});
-            }
-        }
-
-        /** Takes points k0 to k1 of way wy (under its number) out of the point index. */
-        void unindex(Way wy, int k0, int k1) {
-            for (int k = k0; k <= k1; k++) {
-                int b = bucket(wy.x[k], wy.z[k]);
-                if (b < 0) continue;
-                List<int[]> l = pts[b];
-                for (int i = l.size() - 1; i >= 0; i--) {
-                    int[] q = l.get(i);
-                    if (q[0] == wy.id && q[1] == k) { l.remove(i); break; }
-                }
-            }
-        }
-
-        /**
-         * Extra edges that close long loops: the tree's way round between their ends is much longer than the edge. None
-         * from the Basalt Galleries' bedrock landing: its tunnel to a room 50 over it is a ramp 150 long under the
-         * flood line, from whose middle the walk out of the lava's rise is over 80, where the landing's flights climb
-         * out of it within 50.
+         * Extra edges that close long loops: the tree's way round between their ends is much longer than the edge.
          */
         void loops(List<Edge> cand) {
             int V = 0;
@@ -2930,40 +2118,10 @@ final class NetPlanner {
                 Chamber a = n.ch.get(e.a), b = n.ch.get(e.b);
                 if (!a.keep || !b.keep || !allowed(a, b)) continue;
                 if (a.refuge || b.refuge) continue;
-                if (li == Terrain.GALLERIES && (a.kind == Kind.BEDROCK || b.kind == Kind.BEDROCK)) continue;
                 if (Hashing.unit(Hashing.mix(h, 950, e.a, e.b)) > sp.loopP) continue;
                 double via = graphDist(e.a, e.b);
                 if (via < sp.loopDetour * (e.len + 2 * e.dy)) continue;
                 if (embed(e, false)) { e.loop = true; added++; }
-            }
-            n.loopsAdded = added;
-        }
-
-        /** A Wasteland chamber stops taking mesh tunnels at this many ways; a fork wants three. */
-        static final int MESH_CAP = 5;
-
-        /**
-         * The Wasteland's loops, in place of loops(): a fork at every chamber, so no passage goes far without a branch.
-         * The candidates (the nearest chambers one tunnel or climb can join, cheapest first) are embedded wherever one
-         * end has fewer than three ways and neither has {@link #MESH_CAP}, unless the way round between the two is
-         * already under {@code loopDetour} times the new tunnel's cost (it would only run beside what is there). Every
-         * loop this makes is short: the tight, many-looped maze the Wasteland's encounters want.
-         */
-        void mesh(List<Edge> cand) {
-            List<List<Edge>> adj = NetGraph.adjacency(n, false);
-            int added = 0;
-            for (Edge e : cand) {
-                if (e.tree || alreadyEdge(e.a, e.b)) continue;
-                Chamber a = n.ch.get(e.a), b = n.ch.get(e.b);
-                if (!a.keep || !b.keep || !allowed(a, b)) continue;
-                if (Math.min(a.deg, b.deg) >= 3 || Math.max(a.deg, b.deg) >= MESH_CAP) continue;
-                if (NetGraph.within(n, adj, e.a, e.b, sp.loopDetour * (e.len + 2 * e.dy))) continue;
-                if (embed(e, false)) {
-                    e.loop = true;
-                    added++;
-                    adj.get(e.a).add(e);
-                    adj.get(e.b).add(e);
-                }
             }
             n.loopsAdded = added;
         }
@@ -3044,119 +2202,9 @@ final class NetPlanner {
             }
         }
 
-        /**
-         * The Basalt Galleries: where {@link #gateWays} and {@link #chokeRooms} left the gates a single way (every way
-         * through one flight, court or vestibule: the flight's hall boxed in, its tunnels on taken by the vestibules
-         * and the tubes), a way round it, from the side that holds the entry to the side that holds the exit: a forced
-         * tunnel between the two, the plain tunnel among its shapes ({@link #plainAcross}), else a junction room cut
-         * into a tunnel of one side and joined to a room of the other ({@link #cutAcross}), the exit's side's rooms
-         * first, else one more flight from a landing ({@link #extraFlight}). A junction or a flight is kept only when
-         * the gates gain a way by it ({@link #gained}), else taken out again and the next place tried: a junction that
-         * joins the two sides into a tunnel only it reaches gains nothing, and stands on every way itself. A tunnel
-         * across stays: it may be the first of two steps, the next round's junction cut into it the second way. Up to 6
-         * rounds; a room nothing gets round is left.
-         */
-        void gateRescue() {
-            java.util.Set<Integer> failed = new java.util.HashSet<>();
-            for (int it = 0; it < 6; it++) {
-                boolean[] A, B;
-                int skip = -1, flow = NetGraph.maxFlow(n, n.entry, n.exit, false);
-                if (flow < 2) {
-                    A = NetGraph.minCutSide(n, n.entry, n.exit, false);
-                    B = new boolean[A.length];
-                    for (int i = 0; i < A.length; i++) B[i] = !A[i];
-                } else {
-                    skip = chokeRoom(n, failed);
-                    if (skip < 0) return;
-                    A = NetGraph.reachWithout(n, n.entry, skip);
-                    B = NetGraph.reachWithout(n, n.exit, skip);
-                }
-                if (plainAcross(A, B, skip) || cutAcross(B, A, skip, true, true, flow) >= 0
-                        || cutAcross(A, B, skip, true, true, flow) >= 0
-                        || extraFlight(n.exit, skip) || extraFlight(n.entry, skip)) {
-                    n.chokeRepairs++;
-                    continue;
-                }
-                if (skip < 0) return;
-                failed.add(skip);
-            }
-        }
-
-        /**
-         * One more flight from landing L ({@link #newFlight}, 30 to 90 degrees off one of its flights, joined to a
-         * hall), kept only when the gates then have more ways than before, or room {@code skip} no longer stands on
-         * every way: a flight whose hall reaches the rest of the network only through the landing's other flight left
-         * that one the only way, and the side of the landing away from its lava basin is often free.
-         */
-        boolean extraFlight(int L, int skip) {
-            int flow = NetGraph.maxFlow(n, n.entry, n.exit, false);
-            List<Integer> courts = L == n.entry ? n.courtsE : n.courtsX;
-            for (int fid : new ArrayList<>(courts)) {
-                Chamber f = n.ch.get(fid);
-                if (!f.keep || !f.flight) continue;
-                if (!newFlight(n.ch.get(L), f, courts, 30, false)) continue;
-                if (gained(flow, skip)) return true;
-                Chamber q = n.ch.get(courts.remove(courts.size() - 1));
-                for (Edge o : new ArrayList<>(n.edges)) if (o.a == q.id || o.b == q.id) unlink(o);
-                q.keep = false;
-            }
-            return false;
-        }
-
-        /**
-         * {@link #gateRescue}: true when the gates now have more than {@code flow} ways between them, or room {@code
-         * skip} (when one is named) no longer stands on every way.
-         */
-        boolean gained(int flow, int skip) {
-            int now = NetGraph.maxFlow(n, n.entry, n.exit, false);
-            return now > flow || (now == flow && skip >= 0 && NetGraph.reachWithout(n, n.entry, skip)[n.exit]);
-        }
-
-        /** Takes an edge just embedded out again, with its ways, a climb's ledges and shafts, and its doors. */
-        void unlay(Edge e) {
-            for (Way l : e.ledges) n.ways.remove(l);
-            if (e.sh != null) n.shafts.remove(e.sh);
-            for (Shaft sh : e.stages) n.shafts.remove(sh);
-            unlink(e);
-        }
-
-        /**
-         * A forced tunnel from side A to side B, never at room {@code skip}, the plain tunnel among its shapes ({@link
-         * #plainAny}): the 40 nearest pairs within 170 (as {@link #repairAcross} chooses them); true once one embeds.
-         */
-        boolean plainAcross(boolean[] A, boolean[] B, int skip) {
-            List<int[]> pairs = new ArrayList<>();
-            for (Chamber a : n.ch) {
-                if (a.id == skip || !a.keep || a.id >= A.length || !A[a.id]) continue;
-                if (a.refuge || a.landing() || a.kind == Kind.POCKET) continue;
-                for (Chamber b : n.ch) {
-                    if (b.id == skip || !b.keep || b.id >= B.length || !B[b.id]) continue;
-                    if (b.refuge || b.landing() || b.kind == Kind.POCKET) continue;
-                    if (gapXZ(a, b, 1.0) > 170 || alreadyEdge(a.id, b.id)) continue;
-                    pairs.add(new int[]{a.id, b.id});
-                }
-            }
-            pairs.sort(Comparator.comparingDouble(q -> {
-                Chamber a = n.ch.get(q[0]), b = n.ch.get(q[1]);
-                return gapXZ(a, b, 1.0) + 2.5 * Math.abs(a.f0 - b.f0);
-            }));
-            plainAny = true;
-            try {
-                for (int k = 0; k < Math.min(40, pairs.size()); k++) {
-                    Edge e = edge(pairs.get(k)[0], pairs.get(k)[1]);
-                    if (!allowed(n.ch.get(e.a), n.ch.get(e.b)) || !embed(e, true)) continue;
-                    e.loop = true; e.gate = true; n.cutRepairs++;
-                    return true;
-                }
-            } finally {
-                plainAny = false;
-            }
-            return false;
-        }
-
         /** True for the chambers a single way may pass through without counting as a choke: big open spaces. */
         static boolean chokeFree(Chamber c) {
-            return c.kind == Kind.CAVERN || c.kind == Kind.CANYON || c.kind == Kind.CITY || c.landing() || c.hall();
+            return c.kind == Kind.CAVERN || c.kind == Kind.CANYON || c.kind == Kind.CITY || c.landing();
         }
 
         /** The first kept room (by id, not in {@code skip}) whose loss cuts the entry from the exit, or -1. */
@@ -3202,1178 +2250,7 @@ final class NetPlanner {
             return added;
         }
 
-        // ------------------------------------------------------------------------------------------- no dead ends
-        /**
-         * The Wasteland has no dead ends (Taran: "avoid it generating with dead ends"): every kept chamber has at least
-         * two ways ({@link NetGraph#waysNeeded}), and no way is a bridge, whose loss would cut part of the network off,
-         * so every tunnel is part of a loop. Rounds of: each chamber short of ways gets tunnels to the nearest chambers
-         * that take one ({@link #addWays}), else to a junction room cut into a tunnel near it ({@link #joinViaJunction});
-         * a chamber still left with one way or none is dropped unless it is required (as dropOrphans drops what cannot
-         * be joined); then each bridge gets a tunnel across it, between two chambers ({@link #joinAcross}) or from a
-         * chamber on its far side to a junction on the near side, and a bridge that takes none goes, with everything on
-         * its far side from the entry, when nothing required is there. A drop can leave a neighbour short, so the
-         * rounds go on until nothing changes. The landings are left to their courts (gateWays and landingSpoke give
-         * them their ways). What may be left: a portal vestibule nothing else reaches keeps one tunnel and its stub to
-         * the next cell (about one in sixteen, measured over 20 cells), and the tunnels on the way to it are bridges
-         * inside the cell, though not in the world, where the stub goes on; and junction rooms left with two ways, which
-         * {@link #forkJunctions} sees to.
-         */
-        void closeDeadEnds() {
-            java.util.Set<Integer> failed = new java.util.HashSet<>();
-            java.util.Set<Edge> hopeless = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-            for (int round = 0; round < 16; round++) {
-                boolean changed = false;
-                int[] deg = NetGraph.wayCounts(n);
-                for (int id = 0; id < n.ch.size(); id++) {
-                    Chamber c = n.ch.get(id);
-                    if (!c.keep || c.landing() || deg[c.id] >= NetGraph.waysNeeded(c) || failed.contains(c.id)) continue;
-                    // a required chamber (a portal's vestibule, a court) cannot be dropped: its tunnels may run long,
-                    // and splitLong cuts junction rooms into them
-                    longOK = c.required;
-                    int added = addWays(c, NetGraph.waysNeeded(c) - deg[c.id], 8, 3);
-                    while (deg[c.id] + added < NetGraph.waysNeeded(c) && joinViaJunction(c, null, 3)) added++;
-                    longOK = false;
-                    if (added > 0) {
-                        n.deadEndWays += added;
-                        changed = true;
-                        deg = NetGraph.wayCounts(n);
-                    }
-                    if (deg[c.id] < NetGraph.waysNeeded(c)) failed.add(c.id);
-                }
-                boolean dropped = false;
-                for (Chamber c : n.ch) {
-                    if (!c.keep || c.required || c.landing() || deg[c.id] >= 2) continue;
-                    c.keep = false;
-                    n.droppedChambers++;
-                    n.deadEndDrops++;
-                    dropped = true;
-                }
-                if (dropped) {
-                    // a chamber that loses a tunnel to a drop has that door back, and is tried again
-                    for (Edge e : n.edges) {
-                        Chamber a = n.ch.get(e.a), b = n.ch.get(e.b);
-                        if (a.keep != b.keep) failed.remove(a.keep ? a.id : b.id);
-                    }
-                    pruneEdges();
-                    continue;
-                }
-                for (int it = 0; it < 100; it++) {
-                    Edge b = null;
-                    for (Edge e : NetGraph.bridges(n)) if (!hopeless.contains(e)) { b = e; break; }
-                    if (b == null) break;
-                    // the near side holds the entry; the far side is what the bridge's other end reaches without it
-                    boolean[] A = reachWithout(n.entry, b), far = reachWithout(A[b.a] ? b.b : b.a, b);
-                    boolean required = false;
-                    for (Chamber c : n.ch) if (far[c.id]) required |= c.required || c.landing();
-                    longOK = required;
-                    boolean joined = joinAcross(A, far, 16, 6) || junctionAcross(A, far, b);
-                    longOK = false;
-                    if (joined) { n.deadEndWays++; changed = true; continue; }
-                    hopeless.add(b);
-                    if (required) continue;
-                    // (a junction that did not fit is still listed, unkept, past the end of far)
-                    for (int id = 0; id < far.length; id++) {
-                        if (!far[id]) continue;
-                        n.ch.get(id).keep = false;
-                        n.droppedChambers++;
-                        n.deadEndDrops++;
-                    }
-                    pruneEdges();
-                    changed = true;
-                }
-                if (!changed) break;
-            }
-        }
-
-
-        /** Chambers whose gap is under this can be joined by one Wasteland tunnel or climb: the tunnel limit. */
-        double joinGap() { return sp.wayMax * reach; }
-
-        /**
-         * How far a Wasteland tunnel or climb may walk, as a share of the limit {@code wayMax}: 1, but
-         * {@link #BRANCH_REACH} where nothing nearer was found for a branch: a long run's ({@link #branchOut}), a long
-         * tunnel's junction room ({@link #splitLong}) or a junction room left with two ways ({@link #forkJunctions}).
-         */
-        double reach = 1;
-
-        /**
-         * The tallest climb a tunnel may be: {@code climbMax}, but while {@link #reach} is over 1, the four stages a
-         * climb may have ({@link #STAGE_MAX} each): a long run's rooms often stand a storey and more above the rooms
-         * round them.
-         */
-        double climbTop() { return reach > 1 ? 4 * STAGE_MAX : sp.climbMax; }
-
-        /** The pairs embed has tried in the plain mode at the current {@link #reach} and {@link #seek}. */
-        java.util.Set<Long> tried() { return triedPairs.computeIfAbsent(seek ? -reach : reach, k -> new java.util.HashSet<>()); }
-
-        /**
-         * True when a tunnel line this long (both run-ins into its chambers included) walks further than the Wasteland
-         * lets one tunnel walk from door to door ({@link NetGraph#walkLength}); never elsewhere. While {@link #longOK}
-         * is set the limit is {@link #LONG_MUL} times as long.
-         */
-        boolean overLimit(double line) {
-            return sp.wayMax > 0 && line - 2 * NetGraph.RUN_IN > sp.wayMax * (longOK ? LONG_MUL : reach);
-        }
-
-        /**
-         * Set while the Wasteland lays the ways that must exist whatever the limit costs (the strands, which carry the
-         * walk from the entry to the exit, the required chambers' tunnels, the gates' ways round): those may run up to
-         * {@link #LONG_MUL} times the limit, and {@link #splitLong} then cuts junction rooms into them.
-         */
-        boolean longOK;
-
-        static final double LONG_MUL = 3;
-
-        /** True when two chambers might take one tunnel or climb: near enough, and their floors within a climb. */
-        boolean joinable(Chamber a, Chamber b) {
-            if (a.id == b.id || !a.keep || !b.keep || a.landing() || b.landing()) return false;
-            if (Math.abs(walkF(a) - walkF(b)) > climbTop() + 4) return false;
-            return gapXZ(a, b, 1.0) <= joinGap();
-        }
-
-        /**
-         * Up to {@code want} new tunnels (or climbs) from chamber c to the nearest chambers that take one (by gap, a
-         * block of height counting 2.5): the first {@code tries} are tried, the first {@code forced} of them forced too.
-         * Returns how many were added.
-         */
-        int addWays(Chamber c, int want, int tries, int forced) {
-            List<Chamber> near = new ArrayList<>();
-            for (Chamber o : n.ch) if (joinable(c, o)) near.add(o);
-            near.sort(Comparator.comparingDouble(o -> gapXZ(c, o, 1.0) + 2.5 * Math.abs(o.f0 - c.f0)));
-            int added = 0;
-            for (int k = 0; k < Math.min(tries, near.size()) && added < want; k++) {
-                Chamber o = near.get(k);
-                if (!allowed(c, o) || alreadyEdge(c.id, o.id)) continue;
-                Edge e = edge(c.id, o.id);
-                if (embed(e, false) || (k < forced && embed(e, true))) {
-                    e.loop = true;
-                    added++;
-                }
-            }
-            return added;
-        }
-
-        /**
-         * One new tunnel (or climb) between side A and side B of a bridge: the cheapest of the pairs near enough to
-         * take one, the first {@code tries} tried, the first {@code forced} of them forced too.
-         */
-        boolean joinAcross(boolean[] A, boolean[] B, int tries, int forced) {
-            List<int[]> pairs = new ArrayList<>();
-            List<Double> cost = new ArrayList<>();
-            for (Chamber a : n.ch) {
-                if (!a.keep || !A[a.id]) continue;
-                for (Chamber b : n.ch) {
-                    if (!b.keep || !B[b.id] || !joinable(a, b) || !allowed(a, b) || alreadyEdge(a.id, b.id)) continue;
-                    pairs.add(new int[]{a.id, b.id, cost.size()});
-                    cost.add(gapXZ(a, b, 1.0) + 2.5 * Math.abs(a.f0 - b.f0));
-                }
-            }
-            pairs.sort(Comparator.comparingDouble(p -> cost.get(p[2])));
-            for (int k = 0; k < Math.min(tries, pairs.size()); k++) {
-                Edge e = edge(pairs.get(k)[0], pairs.get(k)[1]);
-                if (embed(e, false) || (k < forced && embed(e, true))) {
-                    e.loop = true;
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        /**
-         * The fallback of joinAcross: a junction room cut into a tunnel of one side of bridge b, joined to a chamber of
-         * the other side ({@link #joinViaJunction}); the four chambers of each side nearest the bridge's end on the
-         * other side are tried, the far side's first.
-         */
-        boolean junctionAcross(boolean[] A, boolean[] B, Edge b) {
-            for (int pass = 0; pass < 2; pass++) {
-                boolean[] mine = pass == 0 ? B : A, other = pass == 0 ? A : B;
-                Chamber toward = n.ch.get(other[b.a] ? b.a : b.b);
-                List<Chamber> cs = new ArrayList<>();
-                for (int id = 0; id < mine.length; id++) {
-                    Chamber c = n.ch.get(id);
-                    if (mine[id] && c.keep && !c.landing()) cs.add(c);
-                }
-                cs.sort(Comparator.comparingDouble(c -> Math.hypot(c.x - toward.x, c.z - toward.z)));
-                for (int k = 0; k < Math.min(4, cs.size()); k++) if (joinViaJunction(cs.get(k), other, 2)) return true;
-            }
-            return false;
-        }
-
-        /** A junction room cut into a tunnel stands at least this far along its line from both of its doors (blocks). */
-        static final double JUNCTION_END = 9;
-
-        /** A place on a tunnel for a junction room: the edge, the point of its line, and how far it is to reach. */
-        private static final class Spot {
-            final Edge e;
-            final int i;
-            final double cost;
-
-            Spot(Edge e, int i, double cost) { this.e = e; this.i = i; this.cost = cost; }
-        }
-
-        /**
-         * Joins chamber v to the tunnels near it through a junction room cut into one of them ({@link #junctionJoin}):
-         * the tunnels' nearest points to v (horizontally, a block of height counting 2.5) are tried, the nearest first,
-         * {@code tries} of them. Only tunnels whose two chambers are both in {@code side} are used (null: any); never one
-         * of v's own. True when v got its way.
-         */
-        boolean joinViaJunction(Chamber v, boolean[] side, int tries) {
-            List<Spot> spots = new ArrayList<>();
-            double span = v.R() + joinGap();
-            for (Edge e : n.edges) {
-                if (e.kind != EK.WALK || e.w1 == null || e.a == v.id || e.b == v.id) continue;
-                if (!n.ch.get(e.a).keep || !n.ch.get(e.b).keep) continue;
-                // a junction added since the side was measured is on neither side
-                if (side != null && (e.a >= side.length || e.b >= side.length || !side[e.a] || !side[e.b])) continue;
-                Way wy = e.w1;
-                if (v.x < wy.minX - span || v.x > wy.maxX + span || v.z < wy.minZ - span || v.z > wy.maxZ + span) continue;
-                double s = 0;
-                List<double[]> pts = new ArrayList<>();
-                for (int i = 1; i + 1 < wy.n; i++) {
-                    s += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
-                    if (s < JUNCTION_END + NetGraph.RUN_IN || wy.length - s < JUNCTION_END + NetGraph.RUN_IN) continue;
-                    double d = Math.hypot(wy.x[i] - v.x, wy.z[i] - v.z) - v.R(), dy = Math.abs(wy.f[i] + 1 - walkF(v));
-                    if (d > joinGap() || dy > climbTop() + 4) continue;
-                    // v needs a free door that way, or near it while a door is sought (see seek): then the points it
-                    // has a free door straight towards come first
-                    double th = Math.atan2(wy.z[i] - v.z, wy.x[i] - v.x);
-                    boolean straight = doorFree(v.id, th);
-                    if (!straight && !doorToward(v.id, th)) continue;
-                    pts.add(new double[]{i, d + 2.5 * dy + (straight ? 0 : SOUGHT_LAST)});
-                }
-                // the tunnel's nearest point
-                pts.sort(Comparator.comparingDouble(p -> p[1]));
-                if (!pts.isEmpty()) spots.add(new Spot(e, (int) pts.get(0)[0], pts.get(0)[1]));
-            }
-            spots.sort(Comparator.comparingDouble(q -> q.cost));
-            for (int t = 0; t < Math.min(tries, spots.size()); t++) {
-                if (junctionJoin(v, spots.get(t).e, spots.get(t).i)) return true;
-            }
-            return false;
-        }
-
-        /**
-         * A branch where a tunnel had none: a junction room (8 to 11 across, a little taller than the tunnel) cut into
-         * tunnel e at point i of its line, its centre 1.5 blocks off the line towards v; the tunnel's line is cut in two
-         * there, its halves the junction's first two ways (nothing is rebuilt, so they stay as they were embedded), and
-         * a new tunnel or climb joins v to the junction. When the junction does not fit, or nothing joins v to it, all
-         * is put back as it was. True when v got its way.
-         */
-        boolean junctionJoin(Chamber v, Edge e, int i) {
-            return cutJunction(e, i, v.x, v.z, 1.5, j -> {
-                if (!allowed(v, j)) return false;
-                Edge ne = edge(v.id, j.id);
-                if (embed(ne, false) || embed(ne, true)) {
-                    ne.loop = true;
-                    return true;
-                }
-                // the junction's id is given out again if it goes, so the pair it tried is forgotten
-                tried().remove(((long) Math.min(v.id, j.id) << 32) | Math.max(v.id, j.id));
-                return false;
-            });
-        }
-
-        /**
-         * Cuts a junction room into tunnel e at point i of its line (see junctionJoin), its centre {@code off} blocks
-         * off the line towards (tx, tz), and asks {@code join} for its third way. When the junction does not fit, or
-         * join finds none, all is put back as it was: the tunnel whole again, and the junction (the last chamber added,
-         * since join puts back whatever it added) gone. True when the junction stays. A tunnel that is no longer in the
-         * plan (cut in two since the caller listed it) is refused before anything is added.
-         */
-        boolean cutJunction(Edge e, int i, double towardX, double towardZ, double off, java.util.function.Predicate<Chamber> join) {
-            int at = n.edges.indexOf(e);
-            if (at < 0) return false;
-            Way wy = e.w1;
-            double tx = wy.x[i + 1] - wy.x[i - 1], tz = wy.z[i + 1] - wy.z[i - 1], tl = Math.max(1e-6, Math.hypot(tx, tz));
-            tx /= tl;
-            tz /= tl;
-            double nx = -tz, nz = tx;
-            if ((towardX - wy.x[i]) * nx + (towardZ - wy.z[i]) * nz < 0) { nx = -nx; nz = -nz; }
-            long s = Hashing.mix(h, 5300 + i, e.a, e.b);
-            Chamber j = chamber(Kind.JUNCTION, s);
-            j.rx = 4 + 1.5 * Hashing.unit(Hashing.mix(s, 1, 0, 0));
-            j.rz = j.rx * (0.85 + 0.15 * Hashing.unit(Hashing.mix(s, 2, 0, 0)));
-            j.sq = 2.0; j.warp = 0.1; j.rise = 1; j.terr = 1;
-            j.setRot(Math.atan2(tz, tx));
-            j.x = wy.x[i] + nx * off;
-            j.z = wy.z[i] + nz * off;
-            j.f0 = wy.f[i] - 1;
-            // the Basalt Galleries' tunnels are 12 to 18 tall: there the junction stands inside the tunnel's vault
-            j.h = li == Terrain.GALLERIES ? 11 : Math.max(8, wy.hgt[i] + 1.5);
-            if (!fitsOnWay(j, wy, e)) return false;
-            add(j);
-            Way w1 = part(wy, 0, i), w2 = part(wy, i, wy.n - 1);
-            w1.a = wy.a; w1.b = j.id;
-            w2.a = j.id; w2.b = wy.b;
-            Edge e1 = halfEdge(e, wy.a, j.id, w1), e2 = halfEdge(e, j.id, wy.b, w2);
-            n.edges.set(at, e1);
-            n.edges.add(e2);
-            splitWay(wy, w1, i, w2);
-            j.deg = 2;
-            int ib = Math.max(0, i - 2), ia = Math.min(wy.n - 1, i + 2);
-            useDoor(j.id, Math.atan2(wy.z[ib] - j.z, wy.x[ib] - j.x));
-            useDoor(j.id, Math.atan2(wy.z[ia] - j.z, wy.x[ia] - j.x));
-            if (join.test(j)) {
-                n.junctionsCut++;
-                return true;
-            }
-            n.edges.set(n.edges.indexOf(e1), e);
-            n.edges.remove(e2);
-            unsplitWay(wy, w1, i, w2);
-            n.ch.remove(n.ch.size() - 1);
-            doorAngles.remove(doorAngles.size() - 1);
-            return false;
-        }
-
-        /** Points i0..i1 of a way's line, as a way of their own (the same kind, widths, heights and slabs). */
-        Way part(Way wy, int i0, int i1) {
-            Way p = new Way();
-            p.kind = wy.kind;
-            p.round = wy.round;
-            p.trunk = wy.trunk;
-            p.keyhole = wy.keyhole;
-            alloc(p, i1 - i0 + 1);
-            for (int k = 0; k < p.n; k++) {
-                p.x[k] = wy.x[i0 + k]; p.z[k] = wy.z[i0 + k]; p.f[k] = wy.f[i0 + k];
-                p.w[k] = wy.w[i0 + k]; p.hgt[k] = wy.hgt[i0 + k]; p.slab[k] = wy.slab[i0 + k];
-            }
-            p.bounds();
-            return p;
-        }
-
-        /** One half of edge e cut by a junction room: a walking edge from a to b along way w, with e's standing. */
-        Edge halfEdge(Edge e, int a, int b, Way w) {
-            Edge h2 = edge(a, b);
-            h2.kind = EK.WALK;
-            h2.w1 = w;
-            h2.tree = e.tree; h2.loop = e.loop; h2.gate = e.gate; h2.forced = e.forced; h2.strand = e.strand;
-            return h2;
-        }
-
-        /**
-         * Room for a junction room cut into tunnel {@code own} (of edge e): inside the cell and over the lava table, clear
-         * of every other chamber (the tunnel's own two by their reach, the others by clearC more), as far from every
-         * other way as a tunnel keeps from a chamber (clearC, clearCV), 3 from every climb, and away from the gates'
-         * passages. The other tunnels of the tunnel's own two chambers may come as close near those chambers' doors as
-         * clear() lets ways sharing a chamber come (they meet there anyway).
-         */
-        boolean fitsOnWay(Chamber j, Way own, Edge e) {
-            double m = EDGE_MARGIN + j.R() + 2;
-            if (j.x < x0 + m || j.x > x0 + cell - m || j.z < z0 + m || j.z > z0 + cell - m) return false;
-            if (j.f0 < W + WASTE_FLOOR - 1e-9 || j.yHi() > T - Terrain.SEAL - 6) return false;
-            double rj = Math.max(j.rx, j.rz) * (1 + j.warp);
-            for (Chamber o : n.ch) {
-                if (!o.keep || o.kind == Kind.CANYON) continue;
-                if (o.id == e.a || o.id == e.b) {
-                    // the tunnel's own two: the junction stands clear of their footprint (its wall line, as lavaHit
-                    // measures), however far into their bounding reach, which is kept loose for the warp
-                    if (w.e(o, j.x, j.z) < 1 + rj / Math.min(o.rx, o.rz)) return false;
-                    continue;
-                }
-                if (Math.hypot(j.x - o.x, j.z - o.z) > j.R() + o.R() + sp.clearC) continue;
-                if (j.yHi() + sp.clearCV < o.yLo() || o.yHi() + sp.clearCV < j.yLo()) continue;
-                return false;
-            }
-            int bx = (int) Math.floor((j.x - x0 + Net.APRON) / CB), bz = (int) Math.floor((j.z - z0 + Net.APRON) / CB);
-            for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
-                int qx = bx + dx, qz = bz + dz;
-                if (qx < 0 || qz < 0 || qx >= cn || qz >= cn) continue;
-                for (int[] q : pts[qx * cn + qz]) {
-                    Way o = n.ways.get(q[0]);
-                    if (o == own) continue;
-                    int k = q[1];
-                    if (Math.hypot(j.x - o.x[k], j.z - o.z[k]) > j.R() + o.w[k] + sp.clearC) continue;
-                    if (o.f[k] + o.hgt[k] + sp.clearCV < j.yLo() || j.yHi() + sp.clearCV < o.f[k] - o.slab[k]) continue;
-                    if (sharesEnd(o, e.a, e.b) && nearOwnEnd(o.x[k], o.z[k], e.a, e.b)) continue;
-                    return false;
-                }
-            }
-            for (Shaft sh : n.shafts) {
-                if (Math.hypot(j.x - sh.x, j.z - sh.z) > j.R() + sh.r + 3) continue;
-                if (sh.y1 + 3 < j.yLo() || j.yHi() + 3 < sh.y0) continue;
-                return false;
-            }
-            if (nearGatePassage(j)) return false;
-            return true;
-        }
-
-        /** The chambers src reaches over the network's ways without crossing edge {@code skip}. */
-        boolean[] reachWithout(int src, Edge skip) {
-            List<List<Edge>> adj = new ArrayList<>();
-            for (int i = 0; i < n.ch.size(); i++) adj.add(new ArrayList<>());
-            for (Edge e : NetGraph.ways(n)) {
-                if (e == skip) continue;
-                adj.get(e.a).add(e);
-                adj.get(e.b).add(e);
-            }
-            boolean[] seen = new boolean[n.ch.size()];
-            java.util.ArrayDeque<Integer> q = new java.util.ArrayDeque<>();
-            q.add(src);
-            seen[src] = true;
-            while (!q.isEmpty()) {
-                int u = q.poll();
-                for (Edge e : adj.get(u)) {
-                    int v = e.other(u);
-                    if (!seen[v]) { seen[v] = true; q.add(v); }
-                }
-            }
-            return seen;
-        }
-
-        /**
-         * Branch often (Taran: no "passages that go on for too long without branching"): no run through chambers with
-         * two ways ({@link NetGraph#runs}) walks more than {@code runMax}, measured as a walker goes it
-         * ({@link NetGraph#runWalk}: its tunnels, and the floor of each room inside it from door to door, since such a
-         * room offers no other way on), a run that ends at a portal vestibule with no other tunnel weighed with the
-         * stub beyond it ({@link #runWeight}). The heaviest run over it gets a branch: a second tunnel out of such a
-         * vestibule, or a new way out of one of its chambers, those nearest the run's middle first, to the nearest
-         * chamber that takes one or to a junction room cut into a tunnel near it; failing that, a junction room cut into
-         * one of the run's tunnels, the longest first, joined to the nearest chamber ({@link #splitTunnel}). What finds nothing within the tunnel limit is tried again with
-         * ways that may walk {@link #BRANCH_REACH} times as far ({@link #reach}). The run ends there, and runs are
-         * measured again. A chamber or tunnel that took nothing at a reach is not tried again at it; a run with nothing
-         * left to try is left to {@link #dropRuns}, and so is everything after {@link #BRANCH_TRIES} branches tried. A
-         * refuge is passed over: it keeps its two ways.
-         */
-        void branchOut() {
-            List<List<Edge>> runs = null;
-            List<List<Integer>> lone = null;
-            double[] walks = null;
-            for (int it = 0; it < BRANCH_TRIES; it++) {
-                // a branch that was not added left the network as it was, and its runs with it
-                if (runs == null) {
-                    runs = NetGraph.runs(n);
-                    int[] deg = NetGraph.wayCounts(n);
-                    lone = new ArrayList<>(runs.size());
-                    walks = new double[runs.size()];
-                    for (int i = 0; i < walks.length; i++) {
-                        lone.add(loneVestibules(runs.get(i), deg));
-                        walks[i] = runWeight(runs.get(i), lone.get(i));
-                    }
-                }
-                List<Edge> worst = null;
-                double longest = sp.runMax;
-                for (int i = 0; i < walks.length; i++) {
-                    List<Edge> run = runs.get(i);
-                    if (walks[i] <= longest || !(workable(run, lone.get(i), spent.get(0), uncut.get(0)) || workable(run, lone.get(i), spent.get(1), uncut.get(1)))) continue;
-                    longest = walks[i];
-                    worst = run;
-                }
-                if (worst == null) return;
-                boolean ok = false;
-                for (int lv = 0; lv < 2 && !ok; lv++) {
-                    reach = lv == 0 ? 1 : BRANCH_REACH;
-                    ok = branch(worst, spent.get(lv), uncut.get(lv));
-                    reach = 1;
-                }
-                if (ok) {
-                    n.branchWays++;
-                    runs = null;
-                }
-            }
-        }
-
-        /**
-         * What branchOut has tried, at each reach (1, then {@link #BRANCH_REACH}): the chambers it tried to branch from
-         * and the tunnels it tried to cut. Kept for the plan, so branchOut called again tries only what is new.
-         */
-        final List<java.util.Set<Integer>> spent = List.of(new java.util.HashSet<>(), new java.util.HashSet<>());
-        final List<java.util.Set<Edge>> uncut = List.of(java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()),
-                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()));
-
-        /**
-         * The most branches branchOut tries in one plan. Measured over 92 plans (seeds 1 to 30, three cells each, and
-         * two more), none tried them all; with 120, two plans in three did, and a fifth more of their runs walked more
-         * than the limit (6.3% against 5.2%).
-         */
-        static final int BRANCH_TRIES = 300;
-
-        /**
-         * A branch may walk this many times the tunnel limit (and climb four stages): a long run's rooms seldom have a
-         * neighbour nearer that takes a way.
-         */
-        static final double BRANCH_REACH = 1.5;
-
-        /**
-         * True when a run still has a chamber or a tunnel that branchOut has not tried ({@code lone}: its ends that are
-         * portal vestibules with no other tunnel, {@link #loneVestibules}).
-         */
-        static boolean workable(List<Edge> run, List<Integer> lone, java.util.Set<Integer> spent, java.util.Set<Edge> uncut) {
-            for (int v : lone) if (!spent.contains(v)) return true;
-            for (Edge e : run) if (e.kind == EK.WALK && !uncut.contains(e)) return true;
-            if (run.size() < 2) return false;
-            for (int v : innerByMiddle(run, NetGraph.runLength(run))) if (!spent.contains(v)) return true;
-            return false;
-        }
-
-        /** One branch in a run (see branchOut); what was tried is marked spent or uncut. True when one was added. */
-        boolean branch(List<Edge> run, java.util.Set<Integer> spent, java.util.Set<Edge> uncut) {
-            // a portal vestibule at the run's end with no other tunnel: a second one makes it a fork, and the walk in
-            // from the stub has a way on there (see runWeight)
-            for (int v : loneVestibules(run, NetGraph.wayCounts(n))) {
-                if (!spent.add(v)) continue;
-                Chamber c = n.ch.get(v);
-                if (addWays(c, 1, 12, 4) > 0 || joinViaJunction(c, null, 8)) return true;
-            }
-            if (run.size() >= 2) {
-                for (int v : innerByMiddle(run, NetGraph.runLength(run))) {
-                    if (!spent.add(v)) continue;
-                    Chamber c = n.ch.get(v);
-                    // a refuge keeps its two ways
-                    if (c.refuge) continue;
-                    if (addWays(c, 1, 12, 4) > 0 || joinViaJunction(c, null, 8)) return true;
-                }
-            }
-            List<Edge> byLen = new ArrayList<>(run);
-            byLen.sort(Comparator.comparingDouble(e -> -NetGraph.walkLength(e)));
-            for (Edge e : byLen) {
-                if (e.kind != EK.WALK || e.w1 == null || !uncut.add(e)) continue;
-                if (splitTunnel(e)) return true;
-            }
-            return false;
-        }
-
-        /**
-         * The ends of run r that are portal vestibules with no way in the cell but the run's tunnel ({@code deg}: the
-         * chambers' way counts, {@link NetGraph#wayCounts}). From such a vestibule the stub is the only other way on, so
-         * a walker goes on through it into the next cell with no choice.
-         */
-        List<Integer> loneVestibules(List<Edge> r, int[] deg) {
-            List<Integer> out = new ArrayList<>(2);
-            int a = r.size() == 1 ? r.get(0).a : NetGraph.runStart(n, r), b = a;
-            for (Edge e : r) b = e.other(b);
-            for (int v : a == b ? new int[]{a} : new int[]{a, b}) {
-                Chamber c = n.ch.get(v);
-                if (c.keep && c.kind == Kind.PORTAL && deg[v] == 1 && portalOf.containsKey(v)) out.add(v);
-            }
-            return out;
-        }
-
-        /**
-         * Run r's walk ({@link NetGraph#runWalk}) as branchOut and dropRuns weigh it. A run that ends at a portal
-         * vestibule with no other tunnel ({@code lone}, {@link #loneVestibules}) goes on through the stub into the next
-         * cell, whose half of the walk is out of sight here: it weighs its walk and half of each such stub twice over,
-         * as though the next cell's run were as long, so that runs held to a limit in each cell hold the walk across
-         * the seam to it too. Weighed by their walk alone, 5 of the 210 such vestibules in 360 plans began a walk of
-         * more than 160 with no other way on (the longest 210: 27 in the cell, a stub of 52 and 131 in the next cell);
-         * weighed so, one of 150 does (171).
-         */
-        double runWeight(List<Edge> r, List<Integer> lone) {
-            double l = NetGraph.runWalk(n, r);
-            if (lone.isEmpty()) return l;
-            for (int v : lone) l += portalOf.get(v).stub.length / 2;
-            return 2 * l;
-        }
-
-        /** Where splitTunnel tries a junction room, as shares of the tunnel's line: the middle first. */
-        static final double[] SPLIT_AT = {0.5, 0.36, 0.64};
-
-        /** Where splitLong tries one on a tunnel that still walks more than twice the run limit: more places. */
-        static final double[] SPLIT_MORE = {0.5, 0.36, 0.64, 0.43, 0.57, 0.28, 0.72, 0.2, 0.8};
-
-        /**
-         * A junction room cut into tunnel e (at the shares of its line in {@link #SPLIT_AT}, the middle first), joined
-         * to the nearest chamber that takes a way (not one of the tunnel's own two), the three nearest tried at each.
-         * True when one was.
-         */
-        boolean splitTunnel(Edge e) { return splitTunnel(e, SPLIT_AT); }
-
-        /** The same at the shares of the tunnel's line in {@code shares}, in order. */
-        boolean splitTunnel(Edge e, double[] shares) {
-            Way wy = e.w1;
-            for (double at : shares) {
-                double want = wy.length * at, s = 0;
-                int mid = -1;
-                for (int i = 1; i + 1 < wy.n; i++) {
-                    s += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
-                    if (s >= want) { mid = i; break; }
-                }
-                if (mid < 0 || s < JUNCTION_END + NetGraph.RUN_IN || wy.length - s < JUNCTION_END + NetGraph.RUN_IN) continue;
-                double mx = wy.x[mid], mz = wy.z[mid], mf = wy.f[mid] + 1;
-                List<Chamber> near = new ArrayList<>();
-                for (Chamber c : n.ch) {
-                    if (!c.keep || c.landing() || c.refuge || c.id == e.a || c.id == e.b || c.kind == Kind.CANYON) continue;
-                    if (Math.hypot(c.x - mx, c.z - mz) - c.R() > joinGap() || Math.abs(walkF(c) - mf) > climbTop() + 4) continue;
-                    // (by distance alone, a chamber behind a sought door too: see SOUGHT_LAST)
-                    if (!doorToward(c.id, Math.atan2(mz - c.z, mx - c.x))) continue;
-                    near.add(c);
-                }
-                near.sort(Comparator.comparingDouble(c -> Math.hypot(c.x - mx, c.z - mz) - c.R() + 2.5 * Math.abs(walkF(c) - mf)));
-                for (int k = 0; k < Math.min(3, near.size()); k++) if (junctionJoin(near.get(k), e, mid)) return true;
-                // else a junction on this tunnel joined to one cut into a tunnel beside it: a branch on both
-                if (cutJunction(e, mid, mx, mz, 0, j -> joinViaJunction(j, null, 3))) return true;
-            }
-            return false;
-        }
-
-        /**
-         * The ways laid under longOK may be longer than the limit: each such tunnel gets junction rooms cut into it
-         * ({@link #splitTunnel}), each joined to a chamber near it, until its pieces are all within the limit or no
-         * junction fits. A tunnel cut in two leaves two shorter ones, so this goes on over its pieces, a few rounds.
-         * Each round goes over the tunnels as they were when it began; one that a junction room joined to an earlier
-         * one has since cut in two is no longer in the plan and is passed over (its halves come in the next round).
-         */
-        void splitLong() {
-            java.util.Set<Edge> uncut = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-            for (int round = 0; round < 4; round++) {
-                boolean any = false;
-                for (Edge e : new ArrayList<>(n.edges)) {
-                    if (e.kind != EK.WALK || e.w1 == null || uncut.contains(e) || NetGraph.walkLength(e) <= sp.wayMax) continue;
-                    if (!n.ch.get(e.a).keep || !n.ch.get(e.b).keep || !n.edges.contains(e)) continue;
-                    if (splitTunnel(e)) any = true;
-                    else uncut.add(e);
-                }
-                if (!any) break;
-            }
-            // a tunnel still walking more than twice the run limit is one long passage with no way off: it is tried at
-            // more places along it, and the junction's third way may reach as far as a branch does
-            uncut.clear();
-            reach = BRANCH_REACH;
-            for (int round = 0; round < 3; round++) {
-                boolean any = false;
-                for (Edge e : new ArrayList<>(n.edges)) {
-                    if (e.kind != EK.WALK || e.w1 == null || uncut.contains(e) || NetGraph.walkLength(e) <= 2 * sp.runMax) continue;
-                    if (!n.ch.get(e.a).keep || !n.ch.get(e.b).keep || !n.edges.contains(e)) continue;
-                    if (splitTunnel(e, SPLIT_MORE)) any = true;
-                    else uncut.add(e);
-                }
-                if (!any) break;
-            }
-            reach = 1;
-        }
-
-        /**
-         * A junction room is a fork: one left with two ways (the chamber at the end of its third way, or of one of its
-         * halves, went as a dead end) is only a bulge in one passage. It is given a third way once more, as branchOut
-         * gives one (at either reach); failing that, its two ways become one through where it stood ({@link #mergeAt})
-         * and it goes. The passage through it is as long either way (passages are measured through such a room).
-         */
-        void forkJunctions() {
-            for (int id = 0; id < n.ch.size(); id++) {
-                Chamber j = n.ch.get(id);
-                if (!j.keep || j.kind != Kind.JUNCTION || NetGraph.wayCounts(n)[id] >= NetGraph.waysNeeded(j)) continue;
-                boolean ok = false;
-                for (int lv = 0; lv < 2 && !ok; lv++) {
-                    reach = lv == 0 ? 1 : BRANCH_REACH;
-                    ok = addWays(j, 1, 12, 4) > 0 || joinViaJunction(j, null, 8);
-                    reach = 1;
-                }
-                if (ok) n.branchWays++;
-                else mergeAt(j);
-            }
-        }
-
-        /**
-         * Joins the two ways of junction room j into one and drops the room. Two tunnels become one tunnel: their lines
-         * joined end to end, through the room's floor (both ends lie inside the room, a block or two apart, so the
-         * joined line runs where the room was cut and touches nothing else). A tunnel and a climb become the climb, its
-         * tunnel at that end longer by the other. The same chambers stay joined, so the network's runs, bridges and
-         * ways between the gates are as they were. Kept as it is: a room whose two ways lead to the same chamber, and
-         * one beside a refuge whose other way is a climb or leads to a chamber a refuge may not open on.
-         */
-        boolean mergeAt(Chamber j) {
-            List<Edge> es = new ArrayList<>();
-            for (Edge e : NetGraph.ways(n)) if (e.a == j.id || e.b == j.id) es.add(e);
-            if (es.size() != 2) return false;
-            Edge p = es.get(0), q = es.get(1);
-            if (p.kind != EK.WALK) { Edge t = p; p = q; q = t; }
-            if (p.kind != EK.WALK || p.w1 == null || q.w1 == null || (q.kind == EK.CLIMB && q.w2 == null)) return false;
-            if (q.kind != EK.WALK && q.kind != EK.CLIMB) return false;
-            int y = p.other(j.id), z = q.other(j.id);
-            Chamber Y = n.ch.get(y), Z = n.ch.get(z);
-            if (y == z) return false;
-            if (Y.refuge || Z.refuge) {
-                Chamber o = Y.refuge ? Z : Y;
-                if (q.kind != EK.WALK || o.refuge || o.landing() || o.kind == Kind.PORTAL || o.court) return false;
-            }
-            // p's line, from y to the room
-            boolean pRev = startsAt(p.w1, j);
-            Way merged;
-            Edge out;
-            if (q.kind == EK.WALK) {
-                merged = joinLines(p.w1, pRev, q.w1, !startsAt(q.w1, j));
-                merged.a = y;
-                merged.b = z;
-                out = edge(y, z);
-                out.kind = EK.WALK;
-                out.w1 = merged;
-                n.ways.remove(q.w1);
-                n.edges.set(n.edges.indexOf(q), out);
-            } else if (q.w1.a == j.id) {
-                // the room is the climb's lower end: its lower tunnel starts at y now
-                merged = joinLines(p.w1, pRev, q.w1, false);
-                merged.a = y;
-                merged.b = -1;
-                n.ways.remove(q.w1);
-                q.w1 = merged;
-                out = q;
-            } else {
-                // the room is the climb's upper end: its upper tunnel ends at y now
-                merged = joinLines(q.w2, false, p.w1, !pRev);
-                merged.a = -1;
-                merged.b = y;
-                n.ways.remove(q.w2);
-                q.w2 = merged;
-                out = q;
-            }
-            if (out == q) {
-                Edge fresh = edge(y, z);
-                q.a = fresh.a;
-                q.b = fresh.b;
-                q.len = fresh.len;
-                q.dy = fresh.dy;
-                q.cost = fresh.cost;
-            }
-            out.tree = p.tree || q.tree;
-            out.loop = p.loop || q.loop;
-            out.gate = p.gate || q.gate;
-            out.forced = p.forced || q.forced;
-            out.strand = p.strand >= 0 ? p.strand : q.strand;
-            n.ways.remove(p.w1);
-            n.ways.add(merged);
-            n.edges.remove(p);
-            j.keep = false;
-            j.deg = 0;
-            rebuildPointIndex();
-            return true;
-        }
-
-        /** True when way wy's line starts nearer chamber c's centre than it ends. */
-        static boolean startsAt(Way wy, Chamber c) {
-            return Math.hypot(wy.x[0] - c.x, wy.z[0] - c.z) < Math.hypot(wy.x[wy.n - 1] - c.x, wy.z[wy.n - 1] - c.z);
-        }
-
-        /**
-         * One way from two lines laid end to end: a's points (reversed if {@code ra}), then b's (reversed if
-         * {@code rb}); b's first point is left out where it stands on a's last. Kind and look are a's.
-         */
-        Way joinLines(Way a, boolean ra, Way b, boolean rb) {
-            int ia = ra ? 0 : a.n - 1, ib = rb ? b.n - 1 : 0;
-            int skip = Math.hypot(a.x[ia] - b.x[ib], a.z[ia] - b.z[ib]) < 0.5 ? 1 : 0;
-            Way wy = new Way();
-            wy.kind = a.kind;
-            wy.round = a.round;
-            wy.trunk = a.trunk || b.trunk;
-            wy.keyhole = a.keyhole;
-            alloc(wy, a.n + b.n - skip);
-            for (int k = 0; k < wy.n; k++) {
-                Way src = k < a.n ? a : b;
-                int i = k < a.n ? (ra ? a.n - 1 - k : k) : (rb ? b.n - 1 - (k - a.n + skip) : k - a.n + skip);
-                wy.x[k] = src.x[i]; wy.z[k] = src.z[i]; wy.f[k] = src.f[i];
-                wy.w[k] = src.w[i]; wy.hgt[k] = src.hgt[i]; wy.slab[k] = src.slab[i];
-            }
-            wy.bounds();
-            return wy;
-        }
-
-        /** A run branchOut could not branch that weighs more than this many times {@code runMax} goes ({@link #dropRuns}). */
-        static final double DROP_MUL = 4;
-
-        /** How far the last branch of a run that cannot go may reach, as a share of the tunnel limit ({@link #dropRuns}). */
-        static final double FAR_REACH = 2;
-
-        /** The rooms and tunnels of runs dropRuns has tried its far branches from. */
-        final java.util.Set<Integer> spentFar = new java.util.HashSet<>();
-        final java.util.Set<Edge> uncutFar = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-
-        /**
-         * The last resort for the runs branchOut could not branch: a run that still weighs more than {@link #DROP_MUL}
-         * times the limit ({@link #runWeight}), through rooms that offer no other way on, goes, its rooms and their
-         * tunnels, when nothing but the run is lost ({@link #dropRun}), the heaviest first. A run that cannot go (one from a portal's vestibule, or
-         * one whose loss would leave a fork with two ways or make a bridge) gets one more branch, reaching
-         * {@link #FAR_REACH} times the tunnel limit. A room at either end of a dropped run that is left with two ways
-         * joins the runs on its other sides into one; branchOut then goes on over those. True when one went or branched.
-         */
-        boolean dropRuns() {
-            java.util.Set<Edge> failed = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-            boolean any = false;
-            for (int it = 0; it < 8; it++) {
-                List<Edge> worst = null;
-                double longest = DROP_MUL * sp.runMax;
-                int[] deg = NetGraph.wayCounts(n);
-                for (List<Edge> run : NetGraph.runs(n)) {
-                    if (failed.contains(run.get(0))) continue;
-                    double len = runWeight(run, loneVestibules(run, deg));
-                    if (len > longest) { longest = len; worst = run; }
-                }
-                if (worst == null) break;
-                if (dropRun(worst)) {
-                    any = true;
-                    continue;
-                }
-                reach = FAR_REACH;
-                boolean ok = branch(worst, spentFar, uncutFar);
-                reach = 1;
-                if (ok) {
-                    n.branchWays++;
-                    any = true;
-                } else failed.add(worst.get(0));
-            }
-            if (any) pruneEdges();
-            // a single tunnel walking more than twice the limit is one long passage (splitLong found no junction for it)
-            for (Edge e : new ArrayList<>(n.edges)) {
-                if ((e.kind != EK.WALK && e.kind != EK.CLIMB) || NetGraph.walkLength(e) <= 2 * sp.runMax) continue;
-                if (!n.ch.get(e.a).keep || !n.ch.get(e.b).keep) continue;
-                if (dropTunnel(e)) any = true;
-            }
-            return any;
-        }
-
-        /**
-         * Drops tunnel e on the same terms as a run ({@link #dropRun}): the chambers at its ends keep the ways they need
-         * and are no landings, it is no bridge and nothing else becomes one, the gates keep their ways, no room comes to
-         * stand between them, and the runs that come to pass through its ends stay within {@link #DROP_MUL} times the
-         * limit. A strand or a gate's way may go too: both its ends keep other ways on, which the checks hold.
-         */
-        boolean dropTunnel(Edge e) {
-            Chamber A = n.ch.get(e.a), B = n.ch.get(e.b);
-            if (A.landing() || B.landing() || e.a == e.b) return false;
-            int[] deg = NetGraph.wayCounts(n);
-            if (deg[e.a] - 1 < NetGraph.waysNeeded(A) || deg[e.b] - 1 < NetGraph.waysNeeded(B)) return false;
-            List<Edge> br = NetGraph.bridges(n);
-            if (br.contains(e)) return false;
-            int flow = NetGraph.maxFlow(n, n.entry, n.exit, false);
-            boolean walk = NetGraph.reach(n, n.entry, true)[n.exit];
-            java.util.Set<Integer> chokes = chokes();
-            int at = n.edges.indexOf(e);
-            n.edges.remove(at);
-            boolean ok = NetGraph.bridges(n).size() == br.size() && NetGraph.maxFlow(n, n.entry, n.exit, false) >= flow
-                    && (!walk || NetGraph.reach(n, n.entry, true)[n.exit]) && chokes.containsAll(chokes())
-                    && endRunsWithin(e.a, e.b);
-            if (!ok) {
-                n.edges.add(at, e);
-                return false;
-            }
-            unplan(e);
-            rebuildPointIndex();
-            return true;
-        }
-
-        /** True when every run through chamber a or b weighs no more than {@link #DROP_MUL} times the limit ({@link #runWeight}). */
-        boolean endRunsWithin(int a, int b) {
-            int[] deg = NetGraph.wayCounts(n);
-            for (List<Edge> o : NetGraph.runs(n)) {
-                boolean mine = false;
-                for (Edge e : o) mine |= e.a == a || e.b == a || e.a == b || e.b == b;
-                if (mine && runWeight(o, loneVestibules(o, deg)) > DROP_MUL * sp.runMax) return false;
-            }
-            return true;
-        }
-
-        /**
-         * Drops run r's rooms (they are left unkept; the caller prunes their tunnels) when nothing but the run is lost:
-         * its rooms are ordinary ones (no refuge, court, portal vestibule or other required room), its tunnels no part of
-         * the trunk (the strands, the gates' ways), the rooms at its ends are no landings and keep the ways they need
-         * ({@link NetGraph#waysNeeded}), none of its tunnels is a bridge and no other tunnel becomes one, the gates keep
-         * as many edge-disjoint ways between them (and a walk without climbs if they had one), no single room comes to
-         * stand between them, and the runs that come to pass through its end rooms walk no more than {@link #DROP_MUL}
-         * times the limit. A run with no room inside it, or a ring, is kept.
-         */
-        boolean dropRun(List<Edge> r) {
-            if (r.size() < 2) return false;
-            int a = NetGraph.runStart(n, r), v = a;
-            int[] deg = NetGraph.wayCounts(n);
-            if (!NetGraph.runEnd(n.ch.get(a), deg[a])) return false;
-            List<Integer> inner = new ArrayList<>();
-            for (int i = 0; i + 1 < r.size(); i++) {
-                v = r.get(i).other(v);
-                inner.add(v);
-            }
-            int b = r.get(r.size() - 1).other(v);
-            for (int id : inner) {
-                Chamber c = n.ch.get(id);
-                if (c.required || c.refuge || c.court || c.landing() || c.kind == Kind.PORTAL) return false;
-            }
-            Chamber A = n.ch.get(a), B = n.ch.get(b);
-            if (A.landing() || B.landing()) return false;
-            int needA = NetGraph.waysNeeded(A), needB = NetGraph.waysNeeded(B);
-            if (a == b ? deg[a] - 2 < needA : deg[a] - 1 < needA || deg[b] - 1 < needB) return false;
-            // the strands and the gates' ways are the trunk, the walk from gate to gate: it stays whole
-            for (Edge e : r) if (e.strand >= 0 || e.gate) return false;
-            List<Edge> br = NetGraph.bridges(n);
-            for (Edge e : r) if (br.contains(e)) return false;
-            int flow = NetGraph.maxFlow(n, n.entry, n.exit, false);
-            boolean walk = NetGraph.reach(n, n.entry, true)[n.exit];
-            java.util.Set<Integer> chokes = chokes();
-            for (int id : inner) n.ch.get(id).keep = false;
-            boolean ok = NetGraph.bridges(n).size() == br.size() && NetGraph.maxFlow(n, n.entry, n.exit, false) >= flow
-                    && (!walk || NetGraph.reach(n, n.entry, true)[n.exit]) && chokes.containsAll(chokes())
-                    && endRunsWithin(a, b);
-            if (!ok) {
-                for (int id : inner) n.ch.get(id).keep = true;
-                return false;
-            }
-            n.droppedChambers += inner.size();
-            return true;
-        }
-
-        /** The kept rooms whose loss would cut the entry from the exit (the open spaces of {@link #chokeFree} aside). */
-        java.util.Set<Integer> chokes() {
-            java.util.Set<Integer> out = new java.util.HashSet<>();
-            for (Chamber c : n.ch) {
-                if (!c.keep || chokeFree(c)) continue;
-                if (!NetGraph.reachWithout(n, n.entry, c.id)[n.exit]) out.add(c.id);
-            }
-            return out;
-        }
-
-        /** The chambers inside a run (between its edges), nearest the run's middle (by walking length) first. */
-        static List<Integer> innerByMiddle(List<Edge> run, double len) {
-            Edge e0 = run.get(0), e1 = run.get(1);
-            int shared = e0.a == e1.a || e0.a == e1.b ? e0.a : e0.b;
-            int v = e0.other(shared);
-            double s = 0;
-            List<double[]> at = new ArrayList<>();
-            for (int i = 0; i + 1 < run.size(); i++) {
-                Edge e = run.get(i);
-                s += NetGraph.walkLength(e);
-                v = e.other(v);
-                at.add(new double[]{v, Math.abs(s - len / 2)});
-            }
-            at.sort(Comparator.comparingDouble(p -> p[1]));
-            List<Integer> out = new ArrayList<>();
-            for (double[] p : at) out.add((int) p[0]);
-            return out;
-        }
-
-        // ------------------------------------------------------------------------------------------- the Ash Hollows
-        /** The Wasteland's two refuges stand at least this far apart, centre to centre (blocks). */
-        static final double REFUGE_APART = 100;
-        /** A refuge stands at least this far from both landings' centres (blocks). */
-        static final double REFUGE_FROM_LANDING = 60;
-        /** The shortest tunnel line a refuge is tried on: a refuge's reach and 9 blocks of line on either side. */
-        static final double REFUGE_LINE = 34;
-        /** Each piece of a tunnel cut for a refuge keeps at least this much line (6 blocks of walk past its run-ins). */
-        static final double REFUGE_PIECE = 12;
-        /** The most a tunnel's floor may climb across a refuge cut into it (blocks). */
-        static final double REFUGE_STEP = 3;
-        /** The most a refuge's floor steps down across it ({@code rampDrop}, blocks). */
-        static final double REFUGE_DROP = 5;
-        /** Where cutRefuge tries a refuge on a tunnel, as shares of its line: the middle first. */
-        static final double[] REFUGE_AT = {0.5, 0.42, 0.58, 0.34, 0.66};
-
-        /**
-         * The Wasteland's two refuges, the Ash Hollows: domed rooms 15 to 20 across, each cut into a tunnel
-         * ({@link #cutRefuge}), so each has two ways, the halves of the tunnel on either side, and is no dead end. A
-         * refuge placed beforehand, as the other layers place theirs, mostly ended with one way or none and went as a
-         * dead end: it takes no climb, and the doors of the chambers near it were taken. Only tunnels between two
-         * ordinary chambers are cut (never a landing's, a court's or a portal vestibule's, the busy rooms), the quiet
-         * ones off the strands and the gates' ways first, the longest first; the two refuges stand
-         * {@link #REFUGE_APART} apart and {@link #REFUGE_FROM_LANDING} from both landings.
-         */
-        void refugeCut() {
-            List<Chamber> made = new ArrayList<>();
-            for (int pass = 0; pass < 2 && made.size() < 2; pass++) {
-                List<Edge> cand = new ArrayList<>();
-                for (Edge e : n.edges) if (refugeTunnel(e, pass == 1)) cand.add(e);
-                cand.sort(Comparator.comparingDouble(e -> -e.w1.length));
-                for (Edge e : cand) {
-                    if (made.size() >= 2) break;
-                    // an edge cut for the first refuge is no longer in the plan
-                    if (!n.edges.contains(e)) continue;
-                    Chamber c = cutRefuge(e, made);
-                    if (c != null) made.add(c);
-                }
-            }
-        }
-
-        /**
-         * True when tunnel e may take a refuge: a walking tunnel long enough for one with a stretch of tunnel on
-         * either side, between two kept chambers that are no landing, court, portal vestibule or refuge; off the
-         * strands and the gates' ways unless {@code any}.
-         */
-        boolean refugeTunnel(Edge e, boolean any) {
-            if (e.kind != EK.WALK || e.w1 == null || e.w1.length < REFUGE_LINE) return false;
-            if (!any && (e.strand >= 0 || e.gate)) return false;
-            for (int id : new int[]{e.a, e.b}) {
-                Chamber c = n.ch.get(id);
-                if (!c.keep || c.landing() || c.court || c.refuge || c.kind == Kind.PORTAL) return false;
-            }
-            return true;
-        }
-
-        /**
-         * A refuge cut into tunnel e at one of the shares of its line in {@link #REFUGE_AT} ({@link #refugeRoom}), the
-         * first that fits: the tunnel comes in fairly straight from both sides ({@link #refugeTrim}), its floor stays
-         * within {@link #REFUGE_STEP} across the refuge ({@link #refugeFloor}), the refuge keeps its distances
-         * ({@link #refugeSpaced}) and stands clear of every other chamber, way and climb ({@link #fitsOnWay} and
-         * {@link #refugeClear}). The tunnel's line is cut where it passes 3 blocks inside the refuge's doors, as every
-         * tunnel's line runs on 3 blocks past its door ({@link #door}); the points between go, and the inner walks join
-         * the two ends across the refuge's floor. Nothing is rebuilt, so both pieces stay as they were embedded.
-         * Returns the refuge, or null when none fitted.
-         */
-        Chamber cutRefuge(Edge e, List<Chamber> made) {
-            Way wy = e.w1;
-            double[] arc = new double[wy.n];
-            for (int i = 1; i < wy.n; i++) arc[i] = arc[i - 1] + Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
-            long s = Hashing.mix(h, 5600, e.a, e.b);
-            for (int t = 0; t < REFUGE_AT.length; t++) {
-                double want = arc[wy.n - 1] * REFUGE_AT[t];
-                int i = 1;
-                while (i < wy.n - 2 && arc[i] < want) i++;
-                Chamber c = refugeRoom(wy, i, Hashing.mix(s, t, 0, 0));
-                if (!refugeSpaced(c, made)) continue;
-                int[] k = refugeTrim(c, wy, i, arc);
-                if (k == null || !refugeFloor(c, wy, k[0], k[1]) || !fitsOnWay(c, wy, e) || !refugeClear(c, wy)) continue;
-                add(c);
-                Way w1 = part(wy, 0, k[0]), w2 = part(wy, k[1], wy.n - 1);
-                w1.a = wy.a; w1.b = c.id;
-                w2.a = c.id; w2.b = wy.b;
-                Edge e1 = halfEdge(e, wy.a, c.id, w1), e2 = halfEdge(e, c.id, wy.b, w2);
-                n.edges.set(n.edges.indexOf(e), e1);
-                n.edges.add(e2);
-                splitWay(wy, w1, k[0], w2);
-                c.deg = 2;
-                useDoor(c.id, Math.atan2(wy.z[k[0]] - c.z, wy.x[k[0]] - c.x));
-                useDoor(c.id, Math.atan2(wy.z[k[1]] - c.z, wy.x[k[1]] - c.x));
-                return c;
-            }
-            return null;
-        }
-
-        /**
-         * A refuge standing on point i of tunnel wy: round, 15 to 20 across (a little shorter across the tunnel than
-         * along it), 11 to 14 tall under a dome ({@link Network#ceilAt}), its floor rising 1.5 to the wall in treads of
-         * a block, no hanging rock; its centre on the line, turned along it. Its floor is set by refugeFloor.
-         */
-        Chamber refugeRoom(Way wy, int i, long s) {
-            Chamber c = chamber(Kind.GROTTO, s);
-            c.refuge = true;
-            c.rx = (15 + 5 * Hashing.unit(Hashing.mix(s, 1, 0, 0))) / 2;
-            c.rz = c.rx * (0.85 + 0.15 * Hashing.unit(Hashing.mix(s, 2, 0, 0)));
-            c.h = 11 + 3 * Hashing.unit(Hashing.mix(s, 3, 0, 0));
-            c.sq = 2.0; c.warp = 0.08; c.rise = 1.5; c.terr = 1; c.pend = 0;
-            c.setRot(Math.atan2(wy.z[i + 1] - wy.z[i - 1], wy.x[i + 1] - wy.x[i - 1]));
-            c.x = wy.x[i];
-            c.z = wy.z[i];
-            return c;
-        }
-
-        /** True when refuge c stands {@link #REFUGE_APART} from every refuge made and away from both landings. */
-        boolean refugeSpaced(Chamber c, List<Chamber> made) {
-            for (Chamber o : made) if (Math.hypot(c.x - o.x, c.z - o.z) < REFUGE_APART) return false;
-            for (int id : new int[]{n.entry, n.exit}) {
-                Chamber l = n.ch.get(id);
-                if (Math.hypot(c.x - l.x, c.z - l.z) < REFUGE_FROM_LANDING) return false;
-            }
-            return true;
-        }
-
-        /**
-         * Where tunnel wy is cut for refuge c centred on its point i: {k1, k2}, the last point before i and the first
-         * after it that lie {@link NetGraph#RUN_IN} inside the refuge's doors (at 0.78 of its reach, where door() puts
-         * them). Null when either piece would keep less than {@link #REFUGE_PIECE} of line, or the tunnel does not
-         * come in fairly straight: a point short of k1 or past k2 inside the cut, or one within the refuge's wall
-         * (plus the tunnel's half-width and 2) further along than the straight way in through the wall.
-         */
-        int[] refugeTrim(Chamber c, Way wy, int i, double[] arc) {
-            double rMin = Math.min(c.rx, c.rz), rMax = Math.max(c.rx, c.rz);
-            double eIn = Math.max(0.3, 0.78 - NetGraph.RUN_IN / rMin);
-            int k1 = i, k2 = i;
-            while (k1 > 0 && w.e(c, wy.x[k1], wy.z[k1]) < eIn) k1--;
-            while (k2 < wy.n - 1 && w.e(c, wy.x[k2], wy.z[k2]) < eIn) k2++;
-            if (arc[k1] < REFUGE_PIECE || arc[wy.n - 1] - arc[k2] < REFUGE_PIECE) return null;
-            double through = (1 - eIn) * rMax * (1 + c.warp) + 4;
-            for (int k = 0; k < wy.n; k++) {
-                if (k >= k1 && k <= k2) continue;
-                double ek = w.e(c, wy.x[k], wy.z[k]);
-                if (ek < eIn) return null;
-                double from = k < k1 ? arc[k1] - arc[k] : arc[k] - arc[k2];
-                if (from > through && ek < 1 + (wy.w[k] + 2) / rMin) return null;
-            }
-            return new int[]{k1, k2};
-        }
-
-        /**
-         * Sets refuge c's floor by its tunnel's: level with the line at both cut points k1 and k2 (by the floor's
-         * shape, {@link Network#floorAt}, its noise and treads aside; the inner walks ease what is left), stepping
-         * down across the refuge from the higher to the lower ({@code rampDrop}, at most {@link #REFUGE_DROP}) where
-         * the tunnel climbs there. False when the tunnel's floor between the cuts strays more than
-         * {@link #REFUGE_STEP} from either cut's.
-         */
-        boolean refugeFloor(Chamber c, Way wy, int k1, int k2) {
-            double fa = wy.f[k1], fb = wy.f[k2];
-            for (int k = k1; k <= k2; k++) if (Math.abs(wy.f[k] - fa) > REFUGE_STEP || Math.abs(wy.f[k] - fb) > REFUGE_STEP) return false;
-            int hi = fa >= fb ? k1 : k2, lo = fa >= fb ? k2 : k1;
-            double ux = wy.x[lo] - wy.x[hi], uz = wy.z[lo] - wy.z[hi], ul = Math.max(1e-6, Math.hypot(ux, uz));
-            c.rampX = ux / ul;
-            c.rampZ = uz / ul;
-            double R = Math.max(c.rx, c.rz);
-            double th = rampT(c, wy.x[hi], wy.z[hi], R), tl = rampT(c, wy.x[lo], wy.z[lo], R);
-            double eh = w.e(c, wy.x[hi], wy.z[hi]), el = w.e(c, wy.x[lo], wy.z[lo]);
-            // the floor: f0 + rise e^2 + 1 + rampDrop (1 - t) / 2, t the place along the ramp (-1 to 1)
-            double drop = tl - th > 0.2 ? 2 * (wy.f[hi] - wy.f[lo] - c.rise * (eh * eh - el * el)) / (tl - th) : 0;
-            c.rampDrop = Math.max(0, Math.min(REFUGE_DROP, drop));
-            c.f0 = wy.f[lo] - 1 - c.rise * el * el - c.rampDrop * 0.5 * (1 - tl);
-            return true;
-        }
-
-        /** The place of (x, z) along chamber c's ramp, from -1 (its high side) to 1, as floorAt measures it. */
-        static double rampT(Chamber c, double x, double z, double R) {
-            double t = ((x - c.x) * c.rampX + (z - c.z) * c.rampZ) / R;
-            return t < -1 ? -1 : (t > 1 ? 1 : t);
-        }
-
-        /**
-         * True when no way but refuge c's own tunnel comes within its half-width and 2 of the refuge's wall, at its
-         * heights. fitsOnWay lets the other tunnels of the tunnel's two chambers come close by those chambers, where a
-         * junction room meets them anyway; a refuge keeps to its two ways.
-         */
-        boolean refugeClear(Chamber c, Way own) {
-            double rMin = Math.min(c.rx, c.rz);
-            int bx = (int) Math.floor((c.x - x0 + Net.APRON) / CB), bz = (int) Math.floor((c.z - z0 + Net.APRON) / CB);
-            for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
-                int qx = bx + dx, qz = bz + dz;
-                if (qx < 0 || qz < 0 || qx >= cn || qz >= cn) continue;
-                for (int[] q : pts[qx * cn + qz]) {
-                    Way o = n.ways.get(q[0]);
-                    if (o == own) continue;
-                    int k = q[1];
-                    if (Math.hypot(c.x - o.x[k], c.z - o.z[k]) > c.R() + o.w[k] + 2) continue;
-                    if (o.f[k] + o.hgt[k] + sp.clearCV < c.yLo() || c.yHi() + sp.clearCV < o.f[k] - o.slab[k]) continue;
-                    if (w.e(c, o.x[k], o.z[k]) < 1 + (o.w[k] + 2) / rMin) return false;
-                }
-            }
-            return true;
-        }
-
-        boolean relaxDark, surgeNiche;
-
-        /**
-         * Basalt Galleries: niches above the highest surge right by the bedrock landing, each reached by a vine shaft
-         * from the landing's bowl, so that wherever the surge can reach there is somewhere close to climb to.
-         */
-        void surgeNiches() {
-            if (surge <= 0) return;
-            Chamber L = null;
-            for (Chamber c : n.ch) if (c.keep && c.kind == Kind.BEDROCK) L = c;
-            if (L == null) return;
-            int made = 0;
-            for (int k = 0; k < 48 && made < 3; k++) {
-                double a = r(990 + k, 0, Math.PI * 2);
-                Chamber pk = new Chamber();
-                pk.kind = Kind.POCKET;
-                pk.rx = pk.rz = r(991 + k, 4.5, 6);
-                pk.h = 7; pk.rise = 0; pk.terr = 1; pk.warp = 0.15; pk.pend = 1.5; pk.parent = L.id;
-                // the climb is two stages (section 10): the floor (f0 to f0 + 2) stays within two stages of the
-                // landing's and its lowest feet are a block over the highest surge; the pocket stands far enough out
-                // for a short tunnel to the first stage, the ledge passage and the tunnel on from the second stage's top
-                pk.f0 = W + surge + 0.75;
-                double d = L.R() + pk.R() + r(992 + k, 10, 18);
-                pk.x = L.x + Math.cos(a) * d; pk.z = L.z + Math.sin(a) * d;
-                pk.hash = Hashing.mix(h, 993, k, 0);
-                L.keep = false; // the niche sits just over the landing's rim: only the other spaces count
-                boolean fl = fitsLoose(pk, L);
-                L.keep = true;
-                if (!fl || wayHit(pk)) continue;
-                add(pk);
-                Edge e = edge(L.id, pk.id);
-                surgeNiche = true; preferClimb = true;
-                boolean ok = embed(e, true);
-                surgeNiche = false; preferClimb = false;
-                if (ok) { e.stub = false; made++; } else pk.keep = false;
-            }
-            n.surgeNiches = made;
-        }
+        boolean relaxDark;
 
         /** Blind side passages: dead ends that pinch out or end in a small pocket. */
         void stubs() {
@@ -4390,9 +2267,8 @@ final class NetPlanner {
                     double ex = d[0] + d[3] * len, ez = d[1] + d[4] * len;
                     boolean pocket = Hashing.unit(Hashing.mix(h, 973, c.id, t)) < 0.5;
                     double ey = d[2] + (Hashing.unit(Hashing.mix(h, 974, c.id, t)) - 0.5) * len * 0.5;
-                    // no blind end runs under water, as no tunnel does (its door is at W + 1 or higher); Basalt
-                    // Galleries: no blind end or pocket under the highest surge
-                    ey = Math.max(ey, surge > 0 ? W + surge + 2 : W + 1);
+                    // no blind end runs under water, as no tunnel does (its door is at W + 1 or higher)
+                    ey = Math.max(ey, W + 1);
                     Chamber pk = null;
                     if (pocket) {
                         pk = new Chamber();
@@ -4437,298 +2313,6 @@ final class NetPlanner {
             n.stubsAdded = added;
         }
 
-        /**
-         * Blind round tubes round each Obsidian Tubes hub (section 5): two or three, 8 to 14 long, level and pinching
-         * out, so the hub reads as a junction of tubes. Each is a way of its hub (an inner walk joins it), not an edge,
-         * so the hub keeps its one tunnel.
-         */
-        void tubeStubs() {
-            for (Chamber c : n.ch) {
-                if (!c.keep || c.kind != Kind.TUBEHUB) continue;
-                int want = 2 + (Hashing.unit(Hashing.mix(h, 990, c.id, 0)) < 0.5 ? 1 : 0), made = 0;
-                // a Basalt Galleries hub crowded by its tunnel and the rooms round it tries 24 places more for its
-                // second, the tubes 8 long
-                for (int t = 0; t < 36 && made < (t < 12 ? want : li == Terrain.GALLERIES ? 2 : 0); t++) {
-                    double th = Hashing.unit(Hashing.mix(h, 991, c.id, t)) * Math.PI * 2;
-                    double[] d = door(c, th, c.f0);
-                    if (d == null || !doorFree(c.id, Math.atan2(d[1] - c.z, d[0] - c.x))) continue;
-                    Way wy = tubeStub(d, t < 12 ? 8 + 6 * Hashing.unit(Hashing.mix(h, 992, c.id, t)) : 8);
-                    if (!clear(wy, c.id, -1)) continue;
-                    wy.a = c.id;
-                    addWay(wy);
-                    useDoor(c.id, Math.atan2(d[1] - c.z, d[0] - c.x));
-                    made++;
-                }
-                n.tubeStubs += made;
-            }
-        }
-
-        /** A straight, level round tube from 3 inside a hub's door out to {@code len} past it, pinching out at its end. */
-        Way tubeStub(double[] d, double len) {
-            double sx = d[0] - d[3] * 3, sz = d[1] - d[4] * 3, ex = d[0] + d[3] * len, ez = d[1] + d[4] * len;
-            int m = Math.max(3, (int) Math.ceil((len + 3) / 2.0) + 1);
-            Way wy = new Way();
-            wy.kind = EK.STUB;
-            wy.round = true;
-            wy.taper = true;
-            alloc(wy, m);
-            for (int i = 0; i < m; i++) {
-                double q = i / (double) (m - 1);
-                double k = q < 0.55 ? 1 : 1 - (q - 0.55) / 0.45 * 0.75;
-                wy.x[i] = sx + (ex - sx) * q;
-                wy.z[i] = sz + (ez - sz) * q;
-                wy.f[i] = d[2];
-                wy.w[i] = sp.half * 0.9 * k;
-                wy.hgt[i] = sp.hgt * 0.85 * k;
-                wy.slab[i] = Math.max(1.5, Math.min(3.5, d[2] - (B + Terrain.SEAL + 2.5)));
-            }
-            wy.bounds();
-            return wy;
-        }
-
-        /**
-         * Basalt arches (section 5): one across every great hall and about a third of the galleries longer than 30, a
-         * span of rock across the hall's short axis at a point along its long one, its feet sunk in the walls. The
-         * crown stands 8 to 14 over the floor under it, at least 10 over every floor under its middle, and over
-         * {@code W + 38}; a gallery too low for that gets none. Of four places tried, the first whose underside clears
-         * every walk and tunnel of the hall by 7 is taken; a great hall takes the one that clears most.
-         */
-        void arches() {
-            if (!Terrain.basaltLook(li)) return;
-            for (Chamber c : n.ch) {
-                if (!c.keep) continue;
-                boolean great = c.kind == Kind.GREAT;
-                if (!great && !(c.kind == Kind.GALLERY && c.rx > 15 && Hashing.unit(Hashing.mix(h, 995, c.id, 0)) < 0.4)) continue;
-                Arch best = null;
-                int bestCuts = Integer.MAX_VALUE;
-                for (int t = 0; t < 4 && bestCuts > 0; t++) {
-                    Arch a = arch(c, t);
-                    if (a == null) continue;
-                    int cuts = archCuts(c, a);
-                    if (cuts < bestCuts) { best = a; bestCuts = cuts; }
-                }
-                if (best != null && (great || bestCuts == 0)) n.arches.add(best);
-            }
-        }
-
-        // ------------------------------------------------------------------------------------------- lava pools
-        /**
-         * Lava pools cut 1 deep into floors (the lead's list, 2026-10-29), planned last, when every way is known. Each
-         * Basalt great hall gets a perched channel along its lowest terrace where one fits ({@link #channel}); each
-         * blind tube of an Obsidian Tubes hub ends in lava over its last 3 blocks ({@link #tubeEnd}).
-         */
-        void lavaPools() {
-            if (!Terrain.basaltLook(li) || !POOLS) return;
-            for (Chamber c : n.ch) if (c.keep && c.kind == Kind.GREAT) channel(c);
-            for (Way wy : new ArrayList<>(n.ways))
-                if (wy.kind == EK.STUB && wy.round && wy.a >= 0 && n.ch.get(wy.a).kind == Kind.TUBEHUB) tubeEnd(wy);
-        }
-
-        /** A great hall's channel: 24 to 40 long where that fits, 12 at the least. */
-        static final double CHANNEL_MIN = 12;
-
-        /**
-         * A great hall's perched lava channel: 3 to 4 wide, 24 to 40 long (shorter down to 12 where the tread is
-         * smaller), lying on the flat of the hall's lowest tread with its banks (the blocks beside the lava, kept as
-         * rock level with it, open over them) too, the banks at least 0.6 w + 4 from every way's line (so it never
-         * crosses a walk and needs no bridge), 3 blocks from the hall's pillars and 4 from its climbs, and with the
-         * hall's floor 4 blocks round its ends, so the tread joins round them. Tried along the hall's long axis
-         * first, then turning 15 degrees at a time; longest first, from centres nearest the tread's middle. None
-         * when nothing fits: the lowest tread is a blob 15 to 25 across that the walk from the low door crosses, so
-         * most halls have no room (measured in the Implemented section).
-         */
-        void channel(Chamber c) {
-            double R = c.R() + 2;
-            int x0 = (int) Math.floor(c.x - R), z0 = (int) Math.floor(c.z - R), N = (int) Math.ceil(2 * R) + 1;
-            // per block: the tread it is on (-1 off a tread's flat or near the wall), and whether the hall's floor is there
-            int[] tread = new int[N * N];
-            boolean[] hall = new boolean[N * N];
-            int kMin = Integer.MAX_VALUE;
-            for (int i = 0; i < N; i++) for (int j = 0; j < N; j++) {
-                double px = x0 + i + 0.5, pz = z0 + j + 0.5, e = w.e(c, px, pz);
-                hall[i * N + j] = e < 0.92;
-                tread[i * N + j] = -1;
-                if (e >= 0.85) continue;
-                double q = (w.floorAt(c, e, px, pz) - c.f0) / 3.0;
-                long k = Math.round(q);
-                if (Math.abs(q - k) > 1e-6) continue;
-                tread[i * N + j] = (int) k;
-                kMin = Math.min(kMin, (int) k);
-            }
-            if (kMin == Integer.MAX_VALUE) return;
-            // the lowest tread's blocks clear of every way, pillar and climb
-            boolean[] ok = new boolean[N * N];
-            double sx = 0, sz = 0;
-            int cnt = 0;
-            for (int i = 0; i < N; i++) for (int j = 0; j < N; j++) {
-                if (tread[i * N + j] != kMin) continue;
-                double px = x0 + i + 0.5, pz = z0 + j + 0.5;
-                if (!clearOfWays(px, pz) || !clearOfPillars(c, px, pz)) continue;
-                ok[i * N + j] = true;
-                sx += px; sz += pz; cnt++;
-            }
-            if (cnt == 0) return;
-            double mx = sx / cnt, mz = sz / cnt;
-            List<double[]> centres = new ArrayList<>();
-            for (int i = 0; i < N; i++) for (int j = 0; j < N; j++) if (ok[i * N + j]) centres.add(new double[]{x0 + i + 0.5, z0 + j + 0.5});
-            centres.sort((a, b) -> Double.compare(Math.hypot(a[0] - mx, a[1] - mz), Math.hypot(b[0] - mx, b[1] - mz)));
-            double half = r(9610 + c.id, 1.3, 1.9), want = r(9611 + c.id, 24, 40);
-            int y = (int) Math.ceil(c.f0 + 3 * kMin - 1e-9) - 1;
-            // never under the lava table, where the tread is the lava's bed anyway
-            if (y < W + 2) return;
-            // the drawn width first, then the narrowest (3 blocks) before a shorter length
-            double[] halves = half > 1.35 ? new double[]{half, 1.3} : new double[]{half};
-            for (double L = want; L >= CHANNEL_MIN; L -= 2) {
-                for (double hw : halves) {
-                    for (double[] q : centres) {
-                        for (int a = 0; a < 12; a++) {
-                            double th = c.rot + ((a & 1) == 0 ? 1 : -1) * ((a + 1) / 2) * Math.PI / 12;
-                            double ux = Math.cos(th) * L * 0.5, uz = Math.sin(th) * L * 0.5;
-                            Net.Pool p = new Net.Pool(q[0] - ux, q[1] - uz, q[0] + ux, q[1] + uz, hw, y);
-                            p.channel = true;
-                            p.chamber = c.id;
-                            if (!channelFits(p, x0, z0, N, ok, hall)) continue;
-                            n.pools.add(p);
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-
-        /** Every block of the channel and its banks is on the clear lowest tread, the hall's floor 4 round its ends. */
-        boolean channelFits(Net.Pool p, int x0, int z0, int N, boolean[] ok, boolean[] hall) {
-            double reach = p.bank() + 4;
-            int i0 = (int) Math.floor(Math.min(p.ax, p.bx) - p.half - reach) - x0, i1 = (int) Math.ceil(Math.max(p.ax, p.bx) + p.half + reach) - x0;
-            int j0 = (int) Math.floor(Math.min(p.az, p.bz) - p.half - reach) - z0, j1 = (int) Math.ceil(Math.max(p.az, p.bz) + p.half + reach) - z0;
-            for (int i = i0; i <= i1; i++) for (int j = j0; j <= j1; j++) {
-                double d = p.dist(x0 + i + 0.5, z0 + j + 0.5);
-                if (d > reach) continue;
-                boolean in = i >= 0 && j >= 0 && i < N && j < N;
-                if (d <= p.bank() + 0.5 ? !(in && ok[i * N + j]) : !(in && hall[i * N + j])) return false;
-            }
-            return true;
-        }
-
-        /** True when (x, z) is at least 0.6 w + 4 from every way's line (w its half-width there) at any height, 2 from a climb. */
-        boolean clearOfWays(double x, double z) {
-            for (Way o : n.ways) {
-                if (x < o.minX - 12 || x > o.maxX + 12 || z < o.minZ - 12 || z > o.maxZ + 12) continue;
-                for (int j = 0; j + 1 < o.n; j++) {
-                    double d = segDistXZ(x, z, o.x[j], o.z[j], o.x[j + 1], o.z[j + 1]);
-                    // the bank's blocks are checked by their centres: half a block more
-                    if (d < 0.6 * Math.max(o.w[j], o.w[j + 1]) + 4.5) return false;
-                }
-            }
-            for (Shaft s : n.shafts) if (Math.hypot(x - s.x, z - s.z) < s.r + 4) return false;
-            return true;
-        }
-
-        boolean clearOfPillars(Chamber c, double x, double z) {
-            for (int k = 0; k + 2 < c.pillars.length; k += 3) {
-                double px = c.kind == Kind.TUBEHUB ? c.x + c.pillars[k] : c.pillars[k], pz = c.kind == Kind.TUBEHUB ? c.z + c.pillars[k + 1] : c.pillars[k + 1];
-                if (Math.hypot(x - px, z - pz) < c.pillars[k + 2] * 1.65 + 3) return false;
-            }
-            return true;
-        }
-
-        /**
-         * A blind tube's lava end: its last 3 blocks along the line, 3 blocks wide, cut into the floor's top block, the
-         * walking line ending 3 blocks before it. The tube's rock holds the pool (its floor slab, and the rock round its
-         * pinched end); when another space comes within reach of the pool or its bank at that level, the end gets a
-         * magma floor instead ({@link Network#tubeStubEnd}).
-         */
-        void tubeEnd(Way wy) {
-            int m = wy.n;
-            double ex = wy.x[m - 1], ez = wy.z[m - 1], L = 0;
-            for (int i = 1; i < m; i++) L += Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
-            double dx = ex - wy.x[m - 2], dz = ez - wy.z[m - 2], dl = Math.max(1e-6, Math.hypot(dx, dz));
-            int y = (int) Math.ceil(wy.f[m - 1] - 1e-9) - 1;
-            Net.Pool p = new Net.Pool(ex - dx / dl * 3, ez - dz / dl * 3, ex, ez, 1.0, y);
-            p.chamber = wy.a;
-            p.way = wy.id;
-            if (poolHeld(p, wy)) {
-                n.pools.add(p);
-                wy.walkTo = L - 6;
-            } else {
-                n.magmaEnds.add(new double[]{ex, y, ez});
-            }
-        }
-
-        /** No other space (way, chamber, climb) opens within 2 blocks of a pool or its bank, at the pool's level. */
-        boolean poolHeld(Net.Pool p, Way own) {
-            double reach = p.bank() + 2;
-            double lo = p.y - 1, hi = p.y + 1;
-            double cx = (p.ax + p.bx) * 0.5, cz = (p.az + p.bz) * 0.5, R = p.len * 0.5 + p.half + reach;
-            for (Way o : n.ways) {
-                if (o == own || cx < o.minX - R || cx > o.maxX + R || cz < o.minZ - R || cz > o.maxZ + R) continue;
-                for (int j = 0; j < o.n; j++) {
-                    if (o.f[j] - o.slab[j] > hi + 1 || o.f[j] + o.hgt[j] < lo - 1) continue;
-                    if (p.dist(o.x[j], o.z[j]) < o.w[j] * 1.85 + reach) return false;
-                }
-            }
-            for (Chamber c : n.ch) {
-                if (!c.keep || c.kind == Kind.CANYON || c.yHi() < lo - 1 || c.yLo() > hi + 1) continue;
-                if (Math.hypot(cx - c.x, cz - c.z) > c.R() + R) continue;
-                for (double t = 0; t <= 1; t += 0.25) {
-                    double qx = p.ax + (p.bx - p.ax) * t, qz = p.az + (p.bz - p.az) * t;
-                    if (w.e(c, qx, qz) < 1 + reach / Math.min(c.rx, c.rz)) return false;
-                }
-            }
-            for (Shaft s : n.shafts) {
-                if (s.y1 < lo - 1 || s.y0 > hi + 1) continue;
-                if (p.dist(s.x, s.z) < s.r + reach) return false;
-            }
-            return true;
-        }
-
-        Arch arch(Chamber c, int t) {
-            double at = ((t & 1) == 0 ? 1 : -1) * c.rx * (0.18 + 0.25 * Hashing.unit(Hashing.mix(h, 996, c.id, t)));
-            double ux = c.cos, uz = c.sin, vx = -c.sin, vz = c.cos;
-            double px = c.x + ux * at, pz = c.z + uz * at;
-            // the hall's width there, wall to wall across
-            double vPlus = wallAlong(c, px, pz, vx, vz), vMinus = wallAlong(c, px, pz, -vx, -vz);
-            if (vPlus < 3 || vMinus < 3) return null;
-            double mid = (vPlus - vMinus) * 0.5;
-            Arch a = new Arch();
-            a.chamber = c.id;
-            a.x = px + vx * mid; a.z = pz + vz * mid;
-            a.ux = ux; a.uz = uz; a.vx = vx; a.vz = vz;
-            a.span = (vPlus + vMinus) * 0.5 + 3;
-            a.halfAlong = 2.5 + 1.5 * Hashing.unit(Hashing.mix(h, 997, c.id, t));
-            double fC = w.floorAt(c, w.e(c, a.x, a.z), a.x, a.z), fMax = fC;
-            for (double v = -0.6 * a.span; v <= 0.6 * a.span; v += 1) {
-                double qx = a.x + vx * v, qz = a.z + vz * v, e = w.e(c, qx, qz);
-                if (e < 1) fMax = Math.max(fMax, w.floorAt(c, e, qx, qz));
-            }
-            a.deck = Math.max(Math.max(fC + 8 + 6 * Hashing.unit(Hashing.mix(h, 998, c.id, t)), fMax + 10), W + 38);
-            if (a.deck > w.ceilAt(c, w.e(c, a.x, a.z), a.x, a.z) - 3) return null;
-            return a;
-        }
-
-        /** Distance from (x, z) along (dx, dz) to the chamber's wall line. */
-        double wallAlong(Chamber c, double x, double z, double dx, double dz) {
-            double d = 0;
-            while (d < 80 && w.e(c, x + dx * d, z + dz * d) < 1) d += 0.5;
-            return d;
-        }
-
-        /** Points of the hall's ways (its tunnels near it and its inner walks) where the arch's underside comes within 7 of the floor. */
-        int archCuts(Chamber c, Arch a) {
-            int cuts = 0;
-            for (Way wy : n.ways) {
-                if (wy.a != c.id && wy.b != c.id) continue;
-                for (int i = 0; i < wy.n; i++) {
-                    double dx = wy.x[i] - a.x, dz = wy.z[i] - a.z;
-                    double q = Math.abs(dx * a.vx + dz * a.vz) / a.span, along = Math.abs(dx * a.ux + dz * a.uz);
-                    if (q >= 1 || along > a.halfAlong * (1 + 1.2 * q * q) + wy.w[i] + 1.3) continue;
-                    double under = a.deck - 4 * q * q - (3 + 9 * q * q * q);
-                    if (under < wy.f[i] + 7) cuts++;
-                }
-            }
-            return cuts;
-        }
-
         boolean fitsLoose(Chamber pk, Chamber parent) {
             double m = EDGE_MARGIN + pk.R() + 4;
             if (pk.x < x0 + m || pk.x > x0 + cell - m || pk.z < z0 + m || pk.z > z0 + cell - m) return false;
@@ -4740,7 +2324,6 @@ final class NetPlanner {
                 if (pk.yHi() + 6 < o.yLo() || o.yHi() + 6 < pk.yLo()) continue;
                 return false;
             }
-            if (lavaHit(pk.x, pk.z, pk.R(), pk.yLo(), pk.yHi(), 8, 6)) return false;
             if (reserveHit(pk.x, pk.z, pk.R(), pk.yLo(), pk.yHi())) return false;
             return !geodeHit(pk.x, pk.z, pk.R(), pk.yLo(), pk.yHi(), GEODE_GAP, GEODE_GAP);
         }
@@ -4791,14 +2374,6 @@ final class NetPlanner {
                     if (s.y1 > c.f0 - 2 && s.y1 < c.f0 + c.h) doors.add(new double[]{s.x, s.z, s.y1 - 3});
                 }
                 if (doors.size() == 0) continue;
-                if (c.hall()) {
-                    extra.addAll(hallWalks(c, doors));
-                    continue;
-                }
-                if (c.flight) {
-                    extra.addAll(flightWalks(c, doors));
-                    continue;
-                }
                 if (c.helix()) {
                     extra.add(helixWay(c));
                     continue;
@@ -4813,13 +2388,6 @@ final class NetPlanner {
                 for (int k = 0; k < doors.size(); k++) {
                     double[] d = doors.get(k);
                     double tx = hx, tz = hz, tf = hf;
-                    if (c.kind == Kind.TUBEHUB && c.pillars.length >= 3) {
-                        // walks end on a ring round the pillar, never through it (section 4.5)
-                        double px = c.x + c.pillars[0], pz = c.z + c.pillars[1], rr = c.pillars[2] + 2.5;
-                        double dx = d[0] - px, dz = d[1] - pz, dl = Math.max(1e-6, Math.hypot(dx, dz));
-                        tx = px + dx / dl * rr; tz = pz + dz / dl * rr;
-                        tf = w.floorAt(c, w.e(c, tx, tz), tx, tz);
-                    }
                     Way wy = straightWalk(d[0], d[1], d[2], tx, tz, tf, c, Hashing.mix(c.hash, 980, k, 0));
                     wy.inner = true;
                     wy.a = c.id;
@@ -4913,7 +2481,7 @@ final class NetPlanner {
             return lo;
         }
 
-        /** The spiral ledge of a well or chimney, from the top door down to the bottom. */
+        /** The spiral ledge of a well, from the top door down to the bottom. */
         Way helixWay(Chamber c) {
             double len = (c.helixTop - (c.f0 + 1)) / c.helixSlope;
             int m = Math.max(4, (int) (len / 2.5));
@@ -4934,1257 +2502,13 @@ final class NetPlanner {
             return wy;
         }
 
-        // ------------------------------------------------------------------------------------------- the Galleries' halls
-        /**
-         * The Basalt Galleries (since 0.5): a few great halls over the lava sea, joined by wide galleries. The landings
-         * first; the axes round the bedrock landing ({@link #hallAxes}) and its lava basin; the portals; the entry's
-         * courts, flights down ({@link #entryFlight}); the bedrock landing's two flights up to the dry level ({@link
-         * #flights}); the halls ({@link #hallSites}: the Causeway, the Scoria Canyons' rift, the Caldera, then column
-         * halls); each flight and portal joined to a hall ({@link #flightLinks}); the Obsidian Tubes beside the halls
-         * ({@link #tubes}), each joined to one; gallery rooms between the halls ({@link #hallFill}); then the edges as in
-         * the other layers, and last the
-         * halls' own walks, arches and vents. Every floor of the network but the bedrock landing's and its flights'
-         * feet stands at the dry level, over the highest flood; the halls' low floors (the Causeway's column path, the
-         * rift's low ledges, the Caldera's crater rim) flood, and each is a short walk below a dry one.
-         */
-        void runHalls() {
-            landings();
-            hallAxes();
-            lavaBasin();
-            portals();
-            viewsInit();
-            tiers();
-            strandMode = true;
-            courtsFor(n.entry, n.exit, true, n.courtsE);
-            flights();
-            strandMode = false;
-            hallSites();
-            flightLinks(false, 0);
-            flightRepair();
-            flightLinks(false, 1);
-            tubes();
-            flightLinks(true);
-            tubeRepair();
-            hallFill();
-            List<Edge> cand = candidates();
-            kruskal(cand);
-            connectRequired(cand);
-            vestibuleJunctions();
-            joinRequired();
-            dropOrphans();
-            portalFallback();
-            loops(cand);
-            gateWays();
-            chokeRooms();
-            gateRescue();
-            walkWays();
-            tubeStubs();
-            trunk();
-            biomes();
-            innerWalks();
-            lavaPools();
-            vents();
-            if (lava != null) {
-                // added last, so no stage gives it a door or an edge and no other id moves
-                lava.biome = w.biomeOf(li, lava);
-                add(lava);
-            }
-            NetIndex.build(w, n);
-        }
-
-        /** The direction from the bedrock landing to its lava basin, and the flights' axis across it (radians). */
-        double basinA, flightA;
-        /** While {@link #embed} chooses a door: the chamber at the edge's other end (a flight court picks its end by it). */
-        int curOther = -1;
-        /** The doors chosen so far for each hall and flight court: {x, z, floor, outward x, outward z}. */
-        final java.util.Map<Integer, List<double[]>> hallDoors = new java.util.HashMap<>();
-        /** The walkable arches of each hall (its crossings, the rift's bridges): added with the hall's walks. */
-        final java.util.Map<Integer, List<Arch>> hallArchList = new java.util.HashMap<>();
-
-        /**
-         * The axes round the bedrock landing: its lava basin straight on from the entry, along the grid direction
-         * nearest that, and the two flights across it. Along the grid, because a walk along a diagonal takes up to 1.4
-         * times the steps, and the flights are the way out of the landing when the lava rises.
-         */
-        void hallAxes() {
-            Chamber E = n.ch.get(n.entry), L = n.ch.get(n.exit);
-            double a = Math.atan2(L.z - E.z, L.x - E.x);
-            basinA = Math.round(a / (Math.PI / 2)) * (Math.PI / 2);
-            flightA = basinA + Math.PI / 2;
-        }
-
-        /** The raster of {@link #views} reaches this far past the cell's edges (blocks): the portals' far sides. */
-        static final int VIEW_APRON = 100;
-        /**
-         * How far past a neighbouring cell's portal vestibule its tunnel is taken to run straight on (blocks). Each cell
-         * sees its own tunnels, the stub and both vestibules but not the neighbour's tunnels: with each side's line
-         * counted on through the other vestibule this far, the two sides' tunnels together stay under the limit.
-         */
-        static final double VIEW_BEYOND = 36;
-
-        /**
-         * The Basalt Galleries' view raster ({@link NetViews}): the plan's rooms and ways as they are made, the lava
-         * basin behind the bedrock landing, and across each seam the portal's other vestibule with a tunnel running
-         * straight on from it ({@link #VIEW_BEYOND}).
-         */
-        void viewsInit() {
-            views = new NetViews(w, (int) x0 - VIEW_APRON, (int) z0 - VIEW_APRON, (int) cell + 2 * VIEW_APRON);
-            if (lava != null) views.addExtra(lava);
-            for (int id : n.portals) {
-                Network.Portal p = portalOf.get(id);
-                if (p == null) continue;
-                boolean mine = p.cellA(cx, cz);
-                Chamber o = new Chamber();
-                o.kind = Kind.PORTAL;
-                o.x = mine ? p.bx : p.ax;
-                o.z = mine ? p.bz : p.az;
-                o.f0 = p.floor; o.rx = o.rz = p.vestR; o.h = p.vestH; o.warp = 0.12;
-                o.hash = Hashing.mix(w.seed, 7300 + li, (long) Math.floor(o.x), (long) Math.floor(o.z));
-                views.addExtra(o);
-                Chamber c = n.ch.get(id);
-                double ux = o.x - c.x, uz = o.z - c.z, ul = Math.max(1e-9, Math.hypot(ux, uz));
-                ux /= ul; uz /= ul;
-                Way on = new Way();
-                alloc(on, 2);
-                for (int i = 0; i < 2; i++) {
-                    double s = p.vestR + VIEW_BEYOND * i;
-                    on.x[i] = o.x + ux * s; on.z[i] = o.z + uz * s; on.f[i] = p.floor;
-                    on.w[i] = 6.5; on.hgt[i] = 12; on.slab[i] = 3;
-                }
-                views.addExtra(on);
-            }
-        }
-
-        /**
-         * The bedrock landing's courts are two flights: long, narrow stairs of 1-block terraces from the landing's floor
-         * up to the dry level, on opposite sides of the landing across the basin's axis, each joined to the landing by a
-         * short level spoke. Tried as the courts are: on the axis, then 7 degrees further each way.
-         */
-        void flights() {
-            Chamber L = n.ch.get(n.exit);
-            for (int i = 0; i < 2; i++) {
-                long s = 9500 + 40L * i;
-                for (int t = 0; t < 18; t++) {
-                    double a = flightA + Math.PI * i + (t == 0 ? 0 : ((t & 1) == 0 ? 1 : -1) * Math.toRadians(7.0 * ((t + 1) / 2)));
-                    Chamber q = flightCourt(L, a, s + t);
-                    if (!fits(q)) continue;
-                    add(q);
-                    Edge e = edge(L.id, q.id);
-                    noClimb = true;
-                    widthMul = 1.2;
-                    boolean ok = embed(e, false) || embed(e, true);
-                    noClimb = false;
-                    widthMul = 1;
-                    if (ok) { e.gate = true; union(L.id, q.id); n.courtsX.add(q.id); break; }
-                    q.keep = false;
-                }
-            }
-        }
-
-        /**
-         * A flight court at angle a from the bedrock landing L: 50 to 53 long, 14 to 17 wide, its foot by the landing's
-         * plate and level for {@link Network#FLIGHT_FOOT} blocks, then its floor climbing 1-block steps about 0.9 up per
-         * block along, from the landing's level to 5 over the flood line (a {@code rampDrop} of 43), its ceiling 11 to
-         * 13 over the stair. The stair's floor is kept per block ({@link Network#hallFloor}) and has no noise, so no
-         * step is ever two blocks: the steeper the stair, the shorter the walk out of the flood.
-         */
-        Chamber flightCourt(Chamber L, double a, long s) {
-            Chamber q = chamber(Kind.GROTTO, s);
-            q.court = true; q.required = true; q.flight = true; q.low = true;
-            q.rx = r(s + 1, 25, 26.5); q.rz = r(s + 2, 7, 8.5); q.setRot(a);
-            q.sq = 2.6; q.warp = 0.06;
-            q.f0 = W + 2;
-            q.rampDrop = W + surge + 5 - q.f0;
-            q.rampX = -Math.cos(a); q.rampZ = -Math.sin(a);
-            q.h = r(s + 3, 11, 13); q.rise = 0.5; q.terr = 1; q.pend = 1.5;
-            double d = L.R() + capR(q) + capHalf(q) + 1.5;
-            q.x = L.x + Math.cos(a) * d; q.z = L.z + Math.sin(a) * d;
-            return q;
-        }
-
-        /**
-         * A flight court's door: for the spoke from the landing, at the end by the landing, facing it; otherwise at the
-         * far end, out of it, on the side the other room lies on (the side of {@code th}), or on the other side when
-         * that one is taken; null when both are. The floor is the stair's 2 (3) blocks in, where the tunnel ends.
-         */
-        double[] flightDoor(Chamber c, double th) {
-            double end = flightEnd(c), lx = c.rampX * end, lz = c.rampZ * end;
-            if (curOther >= 0 && n.ch.get(curOther).landing()) {
-                double px = c.x + lx * 0.95 * c.rx, pz = c.z + lz * 0.95 * c.rx, qx = px - lx * 2, qz = pz - lz * 2;
-                return new double[]{px, pz, Math.max(W + 1, w.floorAt(c, w.e(c, qx, qz), qx, qz)), lx, lz};
-            }
-            List<double[]> used = hallDoors.getOrDefault(c.id, List.of());
-            double side = Math.sin(th - c.rot) >= 0 ? 1 : -1, vx = -c.sin, vz = c.cos;
-            for (int k = 0; k < 2; k++, side = -side) {
-                double px = c.x - lx * 0.95 * c.rx + vx * side * 0.4 * c.rz, pz = c.z - lz * 0.95 * c.rx + vz * side * 0.4 * c.rz;
-                boolean taken = false;
-                for (double[] d : used) if (Math.hypot(d[0] - px, d[1] - pz) < 4) taken = true;
-                if (taken) continue;
-                double qx = px + lx * 3, qz = pz + lz * 3;
-                return new double[]{px, pz, w.floorAt(c, w.e(c, qx, qz), qx, qz), -lx, -lz};
-            }
-            return null;
-        }
-
-        /**
-         * Which end of a flight court its landing stands by: +1 for the stair's foot (the bedrock landing's flights up
-         * out of the flood), -1 for its top (the entry's flights down to the halls). The landing is the nearer one.
-         */
-        double flightEnd(Chamber c) {
-            Chamber E = n.ch.get(n.entry), X = n.ch.get(n.exit);
-            Chamber L = Math.hypot(E.x - c.x, E.z - c.z) <= Math.hypot(X.x - c.x, X.z - c.z) ? E : X;
-            return (L.x - c.x) * c.rampX + (L.z - c.z) * c.rampZ >= 0 ? 1 : -1;
-        }
-
-        /**
-         * An entry flight (Basalt Galleries): the entry landing's courts are flights too, down from the landing toward
-         * the halls. 44 to 52 long, 14 to 17 wide, the stair's top 4 to 8 under the landing's floor by the landing, its
-         * 1-block steps about 0.82 down a block to a level foot {@link Network#FLIGHT_FOOT} long at the far end, 33 to
-         * 39 down, where the network's tunnels leave it; the ceiling 11 to 13 over the stair, lower where the band's
-         * seal needs. Plain courts 6 to 12 under the landing left the network 40 to 70 blocks to descend in walking
-         * tunnels from three small rooms by the landing, and in a cell of 15 none could: the cell kept only the entry.
-         */
-        Chamber entryFlight(Chamber L, double a, long s) {
-            Chamber q = chamber(Kind.GROTTO, s);
-            q.court = true; q.required = true; q.flight = true;
-            q.rx = r(s + 1, 22, 26); q.rz = r(s + 2, 7, 8.5); q.setRot(a);
-            q.sq = 2.6; q.warp = 0.06;
-            double top = L.f0 - r(s + 5, 4, 8);
-            q.rampDrop = Math.floor(0.82 * (2 * q.rx - Network.FLIGHT_FOOT));
-            q.f0 = top - q.rampDrop;
-            q.rampX = Math.cos(a); q.rampZ = Math.sin(a);
-            q.rise = 0.5; q.terr = 1; q.pend = 1.5;
-            q.h = Math.max(7.5, Math.min(r(s + 3, 11, 13), T - Terrain.SEAL - 6 - q.f0 - q.rise - q.rampDrop - 2));
-            double d = L.R() + capR(q) + capHalf(q) + 1.5;
-            q.x = L.x + Math.cos(a) * d; q.z = L.z + Math.sin(a) * d;
-            return q;
-        }
-
-        /**
-         * A hall's door toward angle th: where the footprint reaches 0.93 and the floor there and 3 blocks in is at the
-         * dry level (on a ledge, a terrace or the outer ring, never over the lava), at least 22 blocks from the hall's
-         * other doors (16 in the Causeway and the rift, whose ledges are narrow), facing out along the footprint's
-         * gradient, its floor the one 3 blocks in (where the tunnel ends). Tried at th, then 0.12 radians further each
-         * way, out to 0.72; null when nothing qualifies.
-         */
-        double[] hallDoor(Chamber c, double th) {
-            List<double[]> used = hallDoors.getOrDefault(c.id, List.of());
-            double sep = c.kind == Kind.HALL || c.kind == Kind.CALDERA ? 22 : 16;
-            for (int k = 0; k < 13; k++) {
-                double a = th + (k == 0 ? 0 : ((k & 1) == 1 ? 1 : -1) * 0.12 * ((k + 1) / 2));
-                double[] p = ringPoint(c, a, 0.93);
-                double px = p[0], pz = p[1];
-                boolean near = false;
-                for (double[] d : used) if (Math.hypot(d[0] - px, d[1] - pz) < sep) { near = true; break; }
-                if (near) continue;
-                double gx = w.e(c, px + 1, pz) - w.e(c, px - 1, pz), gz = w.e(c, px, pz + 1) - w.e(c, px, pz - 1), gl = Math.hypot(gx, gz);
-                if (gl < 1e-9) continue;
-                gx /= gl; gz /= gl;
-                double qx = px - gx * 3, qz = pz - gz * 3;
-                double fl = w.floorAt(c, w.e(c, qx, qz), qx, qz);
-                if (Math.min(fl, w.floorAt(c, w.e(c, px, pz), px, pz)) < W + surge + 2) continue;
-                return new double[]{px, pz, fl, gx, gz};
-            }
-            return null;
-        }
-
-        /** The point at angle th from a chamber's centre where its footprint reaches eT (by bisection). */
-        double[] ringPoint(Chamber c, double th, double eT) {
-            double ox = Math.cos(th), oz = Math.sin(th), lo = 0, hi = c.R() * 1.3;
-            for (int i = 0; i < 24; i++) {
-                double mid = (lo + hi) * 0.5;
-                if (w.e(c, c.x + ox * mid, c.z + oz * mid) < eT) lo = mid;
-                else hi = mid;
-            }
-            return new double[]{c.x + ox * lo, c.z + oz * lo};
-        }
-
-        /** The world point of a chamber's local (u, v) (unwarped). */
-        static double[] world(Chamber c, double u, double v) {
-            return new double[]{c.x + u * c.cos - v * c.sin, c.z + u * c.sin + v * c.cos};
-        }
-
-        /** A world point's local (u, v) in a chamber (unwarped). */
-        static double[] local(Chamber c, double x, double z) {
-            double dx = x - c.x, dz = z - c.z;
-            return new double[]{dx * c.cos + dz * c.sin, -dx * c.sin + dz * c.cos};
-        }
-
-        static double hu(long hash, long salt) { return Hashing.unit(Hashing.mix(hash, salt, 0, 0)); }
-
-        /**
-         * The halls, before anything but the landings, the portals and the courts: the Causeway, the Scoria Canyons'
-         * rift and the Caldera, 120 random places tried each, then up to 14 column halls, 60 places tried each of 24. The
-         * long halls lie along the grid, to within 5 degrees: their low paths run along them, and a way out of the flood
-         * along a grid line takes the fewest steps. The three set pieces are required rooms: where no tunnel of the tree
-         * reaches one, {@link #connectRequired} forces one to it (else a Causeway between the rift and a column hall,
-         * whose tunnels there all give views of 156 to 161, is left out in about 1 cell in 50).
-         */
-        void hallSites() {
-            int slot = 0;
-            Chamber cw = makeCauseway(9600);
-            placeHall(cw, 20000 + 2000L * slot++, 120);
-            Chamber rf = makeRift(9620);
-            if (placeHall(rf, 20000 + 2000L * slot++, 120)) hallArchList.put(rf.id, riftBridges(rf));
-            Chamber cd = makeCaldera(9640);
-            placeHall(cd, 20000 + 2000L * slot++, 120);
-            cw.required = rf.required = cd.required = true;
-            int halls = 0;
-            for (int k = 0; k < 24 && halls < 14; k++) {
-                Chamber c = makeHall(9660 + 20L * k);
-                if (!placeHall(c, 20000 + 2000L * slot++, 60)) continue;
-                halls++;
-                List<Arch> arches = lakeArches(c);
-                hallArchList.put(c.id, arches);
-                hallPillars(c, arches);
-            }
-        }
-
-        /**
-         * Each flight's far end and each portal vestibule joined to a hall right after the halls are placed, or with
-         * {@code tubes} each Obsidian Tube right after the tubes are: the flights are their landings' ways in and out,
-         * the portals the ways to the next cells, the tubes the only refuges (one way in each), and once the gallery
-         * rooms and their tunnels stood round a flight's far end (a flight has only two doors there), a vestibule
-         * squeezed between two halls by the cell's edge or a tube by a hall, no tunnel could leave it ({@link
-         * #hallLink}). A flight no hall can be reached from (in a small cell, config) tries the portal vestibules. The
-         * flights are joined before the portals: each is one of its landing's two ways out, and a portal's long tunnel
-         * to a far hall passed by a flight's far end and left it none (in a cell of 480 blocks). A flight goes to
-         * another hall than its landing's other flights when one embeds: two flights into one hall are one way while
-         * that hall has a single tunnel on (the Scoria Canyons' rift boxed in by column halls, 1 cell in 180). The
-         * flights come first ({@code pass} 0), then (1) the vestibules or the tubes; {@link #flightRepair} goes between
-         * the flights and the vestibules, so a new flight finds the room a vestibule's tunnel would take.
-         */
-        void flightLinks(boolean tubes) { flightLinks(tubes, 1); }
-
-        /** {@link #flightLinks(boolean)}, the flights' pass (0) or the vestibules' or tubes' (1). */
-        void flightLinks(boolean tubes, int pass) {
-            for (Chamber f : new ArrayList<>(n.ch)) {
-                boolean join = pass == 0 ? f.flight : (tubes ? f.refuge : f.kind == Kind.PORTAL) && f.deg == 0;
-                if (!f.keep || !join) continue;
-                java.util.Set<Integer> shared = f.flight ? sharedHalls(f) : java.util.Set.of();
-                if (hallLink(f, false, shared) || (!shared.isEmpty() && hallLink(f, false))) continue;
-                if (f.flight) hallLink(f, true);
-            }
-        }
-
-        /** The halls the other flights of flight f's landing are joined to. */
-        java.util.Set<Integer> sharedHalls(Chamber f) {
-            java.util.Set<Integer> out = new java.util.HashSet<>();
-            for (List<Integer> courts : List.of(n.courtsE, n.courtsX)) {
-                if (!courts.contains(f.id)) continue;
-                for (int g : courts) {
-                    if (g == f.id) continue;
-                    for (Edge e : n.edges) {
-                        int o = e.a == g ? e.b : e.b == g ? e.a : -1;
-                        if (o >= 0 && n.ch.get(o).hall()) out.add(o);
-                    }
-                }
-            }
-            return out;
-        }
-
-        /** True when chamber c has a tunnel to a hall. */
-        boolean toHall(Chamber c) {
-            for (Edge e : n.edges) {
-                int o = e.a == c.id ? e.b : e.b == c.id ? e.a : -1;
-                if (o >= 0 && n.ch.get(o).keep && n.ch.get(o).hall()) return true;
-            }
-            return false;
-        }
-
-        /**
-         * Joins chamber f (from a flight's far end) to a hall, the 5 nearest tried by the gap and the climb, or with
-         * {@code portals} to a portal vestibule, the 3 nearest; true once joined. Never to one more than {@link
-         * #HALL_REACH} away: a portal with no hall nearer waits for the gallery rooms ({@link #hallFill}) and the
-         * edges, and its tunnel along the cell's edge to a far hall cut off the portals and flights it passed.
-         */
-        boolean hallLink(Chamber f, boolean portals) { return hallLink(f, portals, java.util.Set.of()); }
-
-        /** {@link #hallLink(Chamber, boolean)}, never to the chambers in {@code skip}. */
-        boolean hallLink(Chamber f, boolean portals, java.util.Set<Integer> skip) {
-            double end = f.flight ? flightEnd(f) : 0, px = f.x - f.rampX * end * f.rx, pz = f.z - f.rampZ * end * f.rx, fy = walkF(f);
-            List<Chamber> to = new ArrayList<>();
-            for (Chamber h : n.ch)
-                if (h.keep && !skip.contains(h.id) && (portals ? h.kind == Kind.PORTAL : h.hall()) && capGap(h, px, pz) <= HALL_REACH) to.add(h);
-            to.sort(Comparator.comparingDouble(h -> capGap(h, px, pz) + 2.5 * Math.abs(h.f0 - fy)));
-            for (int k = 0; k < Math.min(portals ? 3 : 5, to.size()); k++) {
-                Chamber h = to.get(k);
-                Edge e = edge(f.id, h.id);
-                if (!allowed(f, h) || alreadyEdge(e.a, e.b)) continue;
-                noClimb = true;
-                boolean ok = embed(e, false) || embed(e, true);
-                noClimb = false;
-                if (ok) { e.tree = true; union(f.id, h.id); return true; }
-            }
-            return false;
-        }
-
-        /**
-         * A flight whose far end no hall could be joined to (in a small cell, config) stays, a dead end (the bedrock
-         * landing's dry at its top) or a way to one portal vestibule, and its landing gets another flight beside it
-         * ({@link #newFlight}, 30 to 90 degrees off it). When none fits there (the lava basin on one side, the
-         * landing's other flight on the other), the dead end itself gives way to a flight 15 to 90 degrees off it, and
-         * is put back when none is joined. The entry landing's first, then the bedrock landing's: without it, every way
-         * from that landing ran through its other flight, or through a vestibule nothing else reached.
-         */
-        void flightRepair() {
-            for (int side = 0; side < 2; side++) {
-                boolean entry = side == 0;
-                Chamber L = n.ch.get(entry ? n.entry : n.exit);
-                List<Integer> courts = entry ? n.courtsE : n.courtsX;
-                for (int fid : new ArrayList<>(courts)) {
-                    Chamber f = n.ch.get(fid);
-                    if (!f.keep || !f.flight || toHall(f)) continue;
-                    if (newFlight(L, f, courts, 30, true)) continue;
-                    List<Edge> old = new ArrayList<>();
-                    for (Edge o : n.edges) if (o.a == fid || o.b == fid) old.add(o);
-                    for (Edge o : old) unlink(o);
-                    f.keep = false;
-                    if (newFlight(L, f, courts, 15, false)) {
-                        courts.remove(Integer.valueOf(fid));
-                        reunion();
-                    } else {
-                        f.keep = true;
-                        for (Edge o : old) relink(o);
-                    }
-                }
-            }
-        }
-
-        /**
-         * A new flight from landing L, off flight f's angle by {@code from} degrees and on in steps of 15 to 90, either
-         * way: each kept only once its far end is joined to a hall ({@link #hallLink}; with {@code portals}, else to a
-         * portal vestibule) and then its foot to the landing, its far end's tunnel taken out again when the foot's
-         * fails. True once one is joined.
-         */
-        boolean newFlight(Chamber L, Chamber f, List<Integer> courts, int from, boolean portals) {
-            boolean entry = L.id == n.entry;
-            int steps = (90 - from) / 15 + 1;
-            for (int t = 0; t < 2 * steps; t++) {
-                double a = f.rot + ((t & 1) == 0 ? 1 : -1) * Math.toRadians(from + 15 * (t / 2));
-                long s = 9700 + 40L * f.id + t + (from == 30 ? 0 : 20);
-                Chamber q = entry ? entryFlight(L, a, s) : flightCourt(L, a, s);
-                if (!fits(q)) continue;
-                add(q);
-                if (!hallLink(q, false) && !(portals && hallLink(q, true))) { q.keep = false; continue; }
-                Edge e = edge(L.id, q.id);
-                noClimb = true;
-                widthMul = 1.2;
-                boolean ok = embed(e, false) || embed(e, true);
-                noClimb = false;
-                widthMul = 1;
-                if (ok) { e.gate = true; union(L.id, q.id); courts.add(q.id); return true; }
-                for (Edge o : new ArrayList<>(n.edges)) if (o.a == q.id || o.b == q.id) unlink(o);
-                q.keep = false;
-            }
-            return false;
-        }
-
-        /**
-         * Takes an edge out of the plan again: its tunnels, the degree it gave its two ends and (the Basalt Galleries)
-         * the doors it took, so a tunnel that takes its place may use them.
-         */
-        void unlink(Edge e) {
-            n.edges.remove(e);
-            if (e.w1 != null) n.ways.remove(e.w1);
-            if (e.w2 != null) n.ways.remove(e.w2);
-            n.ch.get(e.a).deg--;
-            n.ch.get(e.b).deg--;
-            double[][] d = edgeDoors.get(e);
-            if (d != null) { freeDoor(e.a, d[0]); freeDoor(e.b, d[1]); }
-            rebuildPointIndex();
-        }
-
-        /** Puts an edge {@link #unlink} took out back, doors and all. */
-        void relink(Edge e) {
-            n.edges.add(e);
-            if (e.w1 != null) n.ways.add(e.w1);
-            if (e.w2 != null) n.ways.add(e.w2);
-            Chamber A = n.ch.get(e.a), B = n.ch.get(e.b);
-            A.deg++;
-            B.deg++;
-            double[][] d = edgeDoors.get(e);
-            if (d != null) {
-                useDoor(A.id, Math.atan2(d[0][1] - A.z, d[0][0] - A.x));
-                useDoor(B.id, Math.atan2(d[1][1] - B.z, d[1][0] - B.x));
-                if (capsule(A)) hallDoors.computeIfAbsent(A.id, k -> new ArrayList<>()).add(d[0]);
-                if (capsule(B)) hallDoors.computeIfAbsent(B.id, k -> new ArrayList<>()).add(d[1]);
-            }
-            rebuildPointIndex();
-        }
-
-        /** The union-find again from the edges alone, once edges were taken out ({@link #unlink}). */
-        void reunion() {
-            for (int i = 0; i < uf.length; i++) uf[i] = i;
-            for (Edge e : n.edges) union(e.a, e.b);
-        }
-
-        /** The Basalt Galleries: the doors each edge took ({@link #embed}), its first end's and its second's. */
-        final java.util.Map<Edge, double[][]> edgeDoors = new java.util.HashMap<>();
-
-        /** Frees door d of chamber c again: its angle, and its place on a hall or a flight. */
-        void freeDoor(int c, double[] d) {
-            Chamber k = n.ch.get(c);
-            double th = Math.atan2(d[1] - k.z, d[0] - k.x);
-            double[] o = doorAngles.get(c);
-            for (int i = 0; i < o.length; i++) {
-                if (Math.abs(Math.atan2(Math.sin(o[i] - th), Math.cos(o[i] - th))) > 1e-9) continue;
-                double[] nn = new double[o.length - 1];
-                System.arraycopy(o, 0, nn, 0, i);
-                System.arraycopy(o, i + 1, nn, i, o.length - i - 1);
-                doorAngles.set(c, nn);
-                break;
-            }
-            List<double[]> h = hallDoors.get(c);
-            if (h != null) h.remove(d);
-        }
-
-        /**
-         * An Obsidian Tube no hall could be joined to (in a small cell, config) gives way to another of its size: up to
-         * 8 places by a hall (within 80 of its capsule, 60 from the landings) that fit are tried, each kept only once
-         * its tunnel to a hall embeds ({@link #hallLink}).
-         */
-        void tubeRepair() {
-            Chamber a = n.ch.get(n.entry), b = n.ch.get(n.exit);
-            int k = 0;
-            for (Chamber old : new ArrayList<>(n.ch)) {
-                if (!old.keep || !old.refuge || old.deg > 0) continue;
-                old.keep = false;
-                int tried = 0;
-                for (int i = 0; i < 320 && tried < 8; i++) {
-                    long s = 7300 + 1000L * k + 4L * i;
-                    Chamber t = chamber(Kind.TUBEHUB, s);
-                    t.rx = t.rz = old.rx; t.warp = 0.06; t.h = old.h; t.rise = 1;
-                    t.refuge = true; t.required = true;
-                    t.pillars = old.pillars.clone();
-                    t.x = x0 + r(s + 1, 0, cell); t.z = z0 + r(s + 2, 0, cell);
-                    clampIn(t);
-                    if (Math.hypot(t.x - a.x, t.z - a.z) < 60 || Math.hypot(t.x - b.x, t.z - b.z) < 60) continue;
-                    Chamber h = null;
-                    double best = 1e9;
-                    for (Chamber o : n.ch) {
-                        if (!o.keep || !o.hall()) continue;
-                        double g = capGap(o, t.x, t.z);
-                        if (g < best) { best = g; h = o; }
-                    }
-                    if (h == null || best - t.R() > 80) continue;
-                    t.f0 = Math.max(W + surge + 6, h.f0 + r(s + 3, 2, 8));
-                    if (!fits(t)) continue;
-                    add(t);
-                    tried++;
-                    if (hallLink(t, false)) break;
-                    t.keep = false;
-                }
-                k++;
-            }
-        }
-
-        /**
-         * The Obsidian Tubes, the Galleries' two refuges: round rooms 16 to 20 across, away from the main route as in
-         * the other layers ({@link #offMain}: 75 from it, less with each try, and 90 from the landings), but each by a
-         * column hall, within 30 of its capsule, its floor 2 to 8 over that hall's and never under the dry level plus 6
-         * (a column hall's ledge runs all round it; the set pieces have few doors, and a tube by one took them). A
-         * tube at any height up to 90 over the dry level stood by a hall's sheer wall, and the way from the hall's
-         * ledge up to it wound back into the hall ({@link #leavesCapsule}) or found no room, so a tube was often left
-         * with no way in. Where no column hall has room by it (a small cell, config), any hall within 45 will do, then
-         * any within 80 and 60 from the landings. Never beside a portal vestibule no tunnel has reached yet ({@link
-         * #nearLoneVestibule}). Required, as a portal is: the tubes are the only refuges.
-         */
-        void tubes() {
-            Chamber a = n.ch.get(n.entry), b = n.ch.get(n.exit);
-            for (int k = 0; k < 2; k++) {
-                Chamber t = chamber(Kind.TUBEHUB, 450 + 20 * k);
-                t.rx = t.rz = r(451 + 20 * k, 8, 10); t.warp = 0.06;
-                t.h = r(453 + 20 * k, 12, 14); t.rise = 1;
-                t.refuge = true; t.required = true;
-                t.pillars = new double[]{0, 0, r(454 + 20 * k, 1.8, 2.6)};
-                double lift = r(452 + 20 * k, 2, 8);
-                boolean placed = false;
-                for (int pass = 0; pass < 3 && !placed; pass++) {
-                    long salt = 455 + 20 * k + 7919L * pass;
-                    double near = pass == 0 ? 30 : pass == 1 ? 45 : 80, fromLanding = pass < 2 ? 90 : 60;
-                    for (int i = 0; i < 160 && !placed; i++) {
-                        t.x = x0 + r(salt * 31 + i * 2L, 0, cell);
-                        t.z = z0 + r(salt * 31 + i * 2L + 1, 0, cell);
-                        clampIn(t);
-                        double d = Math.min(segDistXZ(t.x, t.z, a.x, a.z, b.x, b.z) + 30, strandDist(t.x, t.z));
-                        if (d < 75 - i * 0.5) continue;
-                        if (Math.hypot(t.x - a.x, t.z - a.z) < fromLanding || Math.hypot(t.x - b.x, t.z - b.z) < fromLanding) continue;
-                        if (nearLoneVestibule(t)) continue;
-                        Chamber h = null;
-                        double best = 1e9;
-                        for (Chamber o : n.ch) {
-                            if (!o.keep || (pass == 0 ? o.kind != Kind.HALL : !o.hall())) continue;
-                            double g = capGap(o, t.x, t.z);
-                            if (g < best) { best = g; h = o; }
-                        }
-                        if (h == null || best - t.R() > near) continue;
-                        t.f0 = Math.max(W + surge + 6, h.f0 + lift);
-                        if (fits(t)) { add(t); placed = true; }
-                    }
-                }
-            }
-        }
-
-        /**
-         * True when tube t would stand within {@link #VEST_ROOM} of a portal vestibule no tunnel has reached yet: its
-         * tunnel still has to find a way in from the vestibule's side, and a tube beside the vestibule, with its own
-         * tunnel to a hall, took that way (the vestibule was left out, and its portal ended blind past the seam).
-         */
-        boolean nearLoneVestibule(Chamber t) {
-            for (int id : n.portals) {
-                Chamber v = n.ch.get(id);
-                if (v.keep && v.deg == 0 && Math.hypot(t.x - v.x, t.z - v.z) < t.R() + v.R() + VEST_ROOM) return true;
-            }
-            return false;
-        }
-
-        /** The room a tube leaves round a portal vestibule no tunnel has reached yet ({@link #nearLoneVestibule}). */
-        static final double VEST_ROOM = 40;
-
-        /**
-         * Places a hall at random (up to {@code tries} places), the long ones turned along the grid; true once placed.
-         * The Causeway's wall ledge, the only dry floor its doors can stand on, faces the cell's middle: facing the
-         * cell's edge, every tunnel from it had to curl back round the hall to reach the rest of the network.
-         */
-        boolean placeHall(Chamber c, long salt, int tries) {
-            boolean grid = c.kind == Kind.CAUSEWAY || c.kind == Kind.RIFT;
-            double m = EDGE_MARGIN + 4;
-            for (int i = 0; i < tries; i++) {
-                long s = salt + 7L * i;
-                if (grid) c.setRot((u(s) < 0.5 ? 0 : Math.PI / 2) + r(s + 1, -0.08, 0.08));
-                double[] a = capAxis(c);
-                double ex = Math.abs(a[2] - a[0]) * 0.5 + capR(c), ez = Math.abs(a[3] - a[1]) * 0.5 + capR(c);
-                if (2 * (m + ex) >= cell || 2 * (m + ez) >= cell) return false;
-                c.x = x0 + r(s + 2, m + ex, cell - m - ex);
-                c.z = z0 + r(s + 3, m + ez, cell - m - ez);
-                if (c.kind == Kind.CAUSEWAY) c.side = (x0 + cell * 0.5 - c.x) * -c.sin + (z0 + cell * 0.5 - c.z) * c.cos >= 0 ? 1 : -1;
-                if (fits(c)) { add(c); return true; }
-            }
-            return false;
-        }
-
-        /**
-         * The halls' horizontal scale: 1 in a cell of 600 blocks or more, its share of 600 in a smaller one (config), so
-         * a 480-block cell still has room for its portals, tubes and galleries between the halls. The halls' lengths and
-         * the column halls' and the Caldera's widths follow it; the Causeway's and the rift's widths (their column path,
-         * river and ledges) do not.
-         */
-        double hallScale() { return Math.min(1, cell / 600.0); }
-
-        /**
-         * The bed of a hall's lava and of the bedrock landing's basin: 5 under the lava's table, or as deep as the seal
-         * over the bedrock leaves, whichever is higher. With lava less than the default 10 deep (config), W - 5 lies in
-         * that seal: no hall would fit ({@link #fits}), so no column hall, Caldera, Causeway or rift and no tube hub (the
-         * tubes stand by a hall). A hall's lava stands as high over the bed as it does at the default depth ({@link
-         * Network#HALL_LAVA}).
-         */
-        double lakeBed() { return Math.max(W - 5, B + Terrain.SEAL + 1); }
-
-        /**
-         * A column hall: 80 to 110 across, its floor a lava lake inside {@code lakeEdge} (0.66 to 0.78 of the way out)
-         * and a ledge from the lip to the walls at the dry level (W + 44 to W + 62), rising a terrace or three to the walls,
-         * its underside an overhang down to the lava ({@link Network#shelfUnder}); a flat vault 100 to 108 over the
-         * lava's table. The ledge is the hall's walking floor and its doors stand on it.
-         */
-        Chamber makeHall(long s) {
-            Chamber c = chamber(Kind.HALL, s);
-            c.rx = r(s + 1, 40, 55) * hallScale(); c.rz = c.rx * r(s + 2, 0.8, 1.0); c.setRot(r(s + 3, 0, Math.PI));
-            c.sq = r(s + 4, 2.1, 2.5); c.warp = 0.1;
-            c.base = lakeBed();
-            c.f0 = Math.floor(W + surge + r(s + 5, 4, 22));
-            c.lakeEdge = r(s + 6, 0.66, 0.78);
-            c.shelf = r(s + 7, 10, 13);
-            c.rise = r(s + 8, 1, 3);
-            c.h = Math.min(T - Terrain.SEAL - 8, W + 108) - r(s + 9, 0, 8) - c.f0 - c.rise - 2;
-            c.pend = r(s + 10, 4, 7);
-            c.set = true;
-            return c;
-        }
-
-        /**
-         * The Caldera: a round crater hall 80 to 92 across under a dome; the crater's lava lake inside, its inner wall
-         * rising sheer to the crest of the rim (W + 15 to W + 28, at 0.36 to 0.42 of the way out), then 1-block terraces
-         * climbing at most 0.8 a block to the outer ring at the dry level (W + 43 or W + 44), where its doors are.
-         */
-        Chamber makeCaldera(long s) {
-            Chamber c = chamber(Kind.CALDERA, s);
-            c.rx = r(s + 1, 40, 46) * hallScale(); c.rz = c.rx * r(s + 2, 0.92, 1.0); c.setRot(r(s + 3, 0, Math.PI));
-            c.sq = 2; c.warp = 0.06;
-            c.base = lakeBed();
-            c.f0 = Math.floor(W + surge + r(s + 4, 3, 4.99));
-            c.crestE = r(s + 5, 0.36, 0.42);
-            c.crest = Math.max(W + 15, Math.min(W + 28, Math.floor(c.f0 - 0.8 * (0.86 - c.crestE) * Math.min(c.rx, c.rz))));
-            c.rise = 2; c.shelf = 10;
-            c.h = Math.min(T - Terrain.SEAL - 8, W + 108) - r(s + 6, 0, 6) - c.f0 - c.rise - 2;
-            c.pend = 3; c.set = true;
-            return c;
-        }
-
-        /**
-         * The Causeway: a long hall (112 to 136 by 44 to 54) floored with lava under a flat vault; a ledge 8 to 9.5 wide
-         * along one wall at the dry level; at both ends a ramp of 1-block terraces across the hall from that ledge down
-         * to W + 20 by the far wall; between the ramps, by the far wall, the column path two hexagonal columns wide
-         * (3.6 to 4.4 apart), its tops dipping from W + 20 at the ramps to W + 14.5 at most in the middle
-         * ({@link Network#hexTop}).
-         */
-        Chamber makeCauseway(long s) {
-            Chamber c = chamber(Kind.CAUSEWAY, s);
-            c.rx = r(s + 1, 56, 68) * hallScale(); c.rz = r(s + 2, 22, 27);
-            c.sq = 5; c.warp = 0.03;
-            c.base = lakeBed();
-            c.f0 = Math.floor(W + surge + r(s + 3, 4, 6.99));
-            c.side = 1; // the ledge is turned to face the cell's middle where the hall is placed (placeHall)
-            c.ledgeW = r(s + 5, 8, 9.5);
-            c.endW = r(s + 6, 12, 14);
-            c.hexS = r(s + 7, 3.6, 4.4);
-            double rowH = 1.5 * c.hexS / Math.sqrt(3);
-            c.pathV = (Math.floor(-(c.rz - 7) / rowH) + 0.5) * rowH;
-            c.pathEnd = W + 20;
-            c.pathMid = W + 20 - Math.min(5.5, 0.14 * (c.rx - c.endW));
-            c.shelf = r(s + 8, 10, 12);
-            c.rise = 1;
-            c.h = Math.min(T - Terrain.SEAL - 8, W + 108) - r(s + 9, 0, 8) - c.f0 - c.rise - 2;
-            c.pend = 3; c.set = true;
-            return c;
-        }
-
-        /**
-         * The Scoria Canyons' rift: 124 to 148 long, 36 to 42 wide, sheer-walled up to its vault; a lava river 9 to 12
-         * wide down the middle, an upper ledge along each wall at the dry level (to where the walls close in on it at
-         * the ends, {@link Network#riftLedgeEnd}), and on each side a low ledge (12 under the upper one, so it floods)
-         * 16 to 24 long beside the river, reached by a ramp of 1-block terraces down from the upper ledge along the
-         * canyon, the two across the river from each other. The bridges across it are added once it is placed
-         * ({@link #riftBridges}).
-         */
-        Chamber makeRift(long s) {
-            Chamber c = chamber(Kind.RIFT, s);
-            c.rx = r(s + 1, 62, 74) * hallScale(); c.rz = r(s + 2, 18, 21);
-            c.sq = 4; c.warp = 0.03;
-            c.base = lakeBed();
-            c.f0 = Math.floor(W + surge + r(s + 3, 4, 8.99));
-            c.crest = c.f0 - 12;
-            c.riverW = r(s + 4, 4.5, 6);
-            c.lowW = r(s + 5, 6, 7.5);
-            // a canyon drawn narrow (rz near 18) with a wide river and low ledges leaves the upper ledges no length
-            // (Network.riftLedgeEnd near 0), and the walks along them none: about one rift in three hundred. Such a
-            // rift narrows its low ledges (to 6 or a little more) until the upper ones run about two thirds of the way
-            // to the canyon's ends; every other rift keeps what it drew
-            if (Network.riftLedgeEnd(c) <= 4) c.lowW = Math.max(6, 0.95 * c.rz - Network.RIFT_LEDGE_MIN - c.riverW);
-            // the low ledges and their ramps keep 2 inside the upper ledges' ends; the second side's stands across the
-            // river from the first's (within 4 along), and where it can the pair leaves room at both ends of the
-            // bridges' reach for the bridges, which keep clear of it ({@link #riftBridges}): one fits on each side
-            double ramp = (c.f0 - c.crest) / Network.RIFT_RAMP, lim = Network.riftLedgeEnd(c) - 2, reach = riftBridgeReach(c);
-            c.lowLen[0] = r(s + 6, 16, 24);
-            c.lowLen[1] = r(s + 7, 16, 24);
-            c.rampDir[0] = c.rampDir[1] = u(s + 8) < 0.5 ? 1 : -1;
-            double most = ramp + Math.max(c.lowLen[0], c.lowLen[1]);
-            for (int k = 0; k < 2; k++) {
-                double unit = ramp + c.lowLen[k], a = c.rampDir[k] > 0 ? unit - lim : -lim, b = c.rampDir[k] > 0 ? lim : lim - unit;
-                if (k == 1) {
-                    c.rampU[1] = Math.max(a, Math.min(b, c.rampU[0] + r(s + 11, -4, 4)));
-                    continue;
-                }
-                // the bridges' keep-out round both sides, 2 inside the reach at each end
-                double top = BRIDGE_RAMP + 4 + 2, low = most + BRIDGE_LOW + 4 + 2;
-                double ca = Math.max(a, c.rampDir[0] > 0 ? low - reach : top - reach);
-                double cb = Math.min(b, c.rampDir[0] > 0 ? reach - top : reach - low);
-                c.rampU[0] = ca <= cb ? r(s + 10, ca, cb) : r(s + 10, a, b);
-            }
-            c.rise = 2; c.shelf = 10;
-            c.h = Math.min(T - Terrain.SEAL - 8, W + 108) - r(s + 12, 0, 8) - c.f0 - c.rise - 2;
-            c.pend = 3; c.set = true;
-            return c;
-        }
-
-        /**
-         * A column hall's walkable arches: one across the lake (two in a hall 80 or more across, one each side of the
-         * middle) at 15 to 30 percent of the long axis from the middle, from lip to lip with its feet 5 into the ledges,
-         * its crown 1.5 over the ledge's level and falling 2 to its feet, so its top meets the ledges and a walk runs
-         * over it.
-         */
-        List<Arch> lakeArches(Chamber c) {
-            List<Arch> out = new ArrayList<>();
-            int k = c.rx >= 40 ? 2 : 1;
-            double first = hu(c.hash, 9930) < 0.5 ? 1 : -1;
-            for (int i = 0; i < k; i++) {
-                double at = (i == 0 ? first : -first) * c.rx * (0.15 + 0.15 * hu(c.hash, 9931 + i));
-                double ux = c.cos, uz = c.sin, vx = -c.sin, vz = c.cos, px = c.x + ux * at, pz = c.z + uz * at;
-                double vp = edgeAlong(c, px, pz, vx, vz, c.lakeEdge), vm = edgeAlong(c, px, pz, -vx, -vz, c.lakeEdge);
-                if (vp < 4 || vm < 4) continue;
-                double mid = (vp - vm) * 0.5;
-                Arch a = new Arch();
-                a.chamber = c.id;
-                a.x = px + vx * mid; a.z = pz + vz * mid;
-                a.ux = ux; a.uz = uz; a.vx = vx; a.vz = vz;
-                a.span = (vp + vm) * 0.5 + 5;
-                a.halfAlong = 3 + hu(c.hash, 9933 + i);
-                a.deck = c.f0 + 1.5; a.drop = 2; a.walk = true;
-                out.add(a);
-            }
-            return out;
-        }
-
-        /**
-         * How far a column hall's columns keep inside the ledge's lip (blocks, at the least, from their sides). The 4 x
-         * 8 x 4 interpolation leaves a column's foot a block or two wider than its shaft, up to 8 over the lava's bed:
-         * by the lip, a step off the ledge lands on it, 30 or 40 down, a pocket in the lava with no way out.
-         */
-        static final double PILLAR_LIP = 4;
-
-        /** Distance from (x, z) along (dx, dz) to where the chamber's footprint reaches eT (half-block steps). */
-        double edgeAlong(Chamber c, double x, double z, double dx, double dz, double eT) {
-            double d = 0;
-            while (d < 160 && w.e(c, x + dx * d, z + dz * d) < eT) d += 0.5;
-            return d;
-        }
-
-        /**
-         * A column hall's columns: 2 to 4 standing in its lake from the lava's bed to the vault (radius 4 to 7,
-         * straight, {@link Network#pillarSolid}), {@link #PILLAR_LIP} inside the lip, apart from each other and from
-         * the arches. They break the long views across the hall.
-         */
-        void hallPillars(Chamber c, List<Arch> arches) {
-            int want = 2 + (int) Math.floor(hu(c.hash, 9940) * 2.999);
-            List<Double> p = new ArrayList<>();
-            for (int t = 0; t < 40 && p.size() < want * 3; t++) {
-                double a = hu(c.hash, 9941 + 3L * t) * Math.PI * 2, d = Math.sqrt(hu(c.hash, 9942 + 3L * t)) * c.lakeEdge;
-                double pr = 4 + 3 * hu(c.hash, 9943 + 3L * t);
-                double[] q = world(c, Math.cos(a) * d * c.rx, Math.sin(a) * d * c.rz);
-                if (w.e(c, q[0], q[1]) + (pr + PILLAR_LIP) / Math.min(c.rx, c.rz) > c.lakeEdge) continue;
-                boolean ok = true;
-                for (Arch ar : arches) {
-                    double along = Math.abs((q[0] - ar.x) * ar.ux + (q[1] - ar.z) * ar.uz);
-                    if (along < ar.halfAlong * 2.2 + 1.65 * pr + 3) ok = false;
-                }
-                for (int j = 0; j + 2 < p.size() && ok; j += 3)
-                    if (Math.hypot(q[0] - p.get(j), q[1] - p.get(j + 1)) < 1.65 * (pr + p.get(j + 2)) + 6) ok = false;
-                if (!ok) continue;
-                p.add(q[0]); p.add(q[1]); p.add(pr);
-            }
-            c.pillars = new double[p.size()];
-            for (int i = 0; i < p.size(); i++) c.pillars[i] = p.get(i);
-        }
-
-        /**
-         * The Scoria Canyons: how far from the middle along the rift its bridges stand at most ({@link #riftBridges}).
-         */
-        static double riftBridgeReach(Chamber c) { return Math.min(0.7 * c.rx, Network.riftLedgeEnd(c) - 5); }
-
-        /**
-         * How far a rift's bridge keeps from a ramp's top along the rift (blocks; its deck would roof the ramp), and from
-         * the far end of a ramp and its low ledge (a step off a bridge's side over a low ledge falls 16 or 17 onto rock;
-         * over the river it falls into the lava).
-         */
-        static final double BRIDGE_RAMP = 6, BRIDGE_LOW = 7;
-
-        /**
-         * The rift's natural bridges: 2 or 3 across it at the upper ledges' level (crown 1.5 over them, falling 2 to the
-         * feet), at least 30 apart along it, within 70 percent of its half-length from the middle and 5 inside the upper
-         * ledges' ends ({@link #riftBridgeReach}), and clear of the ramps and low ledges ({@link #BRIDGE_RAMP}, {@link
-         * #BRIDGE_LOW}); where the picks find fewer than 2 places, the ends of the reach, which {@link #makeRift} keeps
-         * free of the low ledges where it can.
-         */
-        List<Arch> riftBridges(Chamber c) {
-            List<Arch> out = new ArrayList<>();
-            double ramp = (c.f0 - c.crest) / Network.RIFT_RAMP, reach = riftBridgeReach(c);
-            int want = 2 + (hu(c.hash, 9970) < 0.5 ? 1 : 0);
-            List<Double> at = new ArrayList<>();
-            for (int t = 0; t < 62 && at.size() < want; t++) {
-                if (t >= 60 && at.size() >= 2) break;
-                double bu = t < 60 ? (hu(c.hash, 9971 + t) * 2 - 1) * reach : (t == 60 ? 1 - reach : reach - 1);
-                boolean ok = true;
-                for (double o : at) if (Math.abs(o - bu) < 30) ok = false;
-                for (int k = 0; k < 2 && ok; k++) {
-                    double top = c.rampU[k], foot = c.rampU[k] - c.rampDir[k] * (ramp + c.lowLen[k]);
-                    double lo = c.rampDir[k] > 0 ? foot - BRIDGE_LOW : top - BRIDGE_RAMP, hi = c.rampDir[k] > 0 ? top + BRIDGE_RAMP : foot + BRIDGE_LOW;
-                    if (bu > lo && bu < hi) ok = false;
-                }
-                if (ok) at.add(bu);
-            }
-            for (int i = 0; i < at.size(); i++) {
-                double[] p = world(c, at.get(i), 0);
-                Arch a = new Arch();
-                a.chamber = c.id;
-                a.x = p[0]; a.z = p[1];
-                a.ux = c.cos; a.uz = c.sin; a.vx = -c.sin; a.vz = c.cos;
-                a.span = c.riverW + c.lowW + 5;
-                a.halfAlong = 3 + hu(c.hash, 9990 + i);
-                a.deck = c.f0 + 1.5; a.drop = 2; a.walk = true;
-                out.add(a);
-            }
-            return out;
-        }
-
-        /**
-         * Gallery rooms between the halls (the spec's fill, 14 per 600-block cell): long rooms 26 to 44 by 10 to 16,
-         * 13 to 22 tall, their floors anywhere from the dry level to 30 under the band, 2 of 5 stepping down 4 to 9
-         * along their length. The galleries branch and turn in them on their way between the halls.
-         */
-        void hallFill() {
-            int want = (int) Math.round(sp.fill * (cell / 600.0) * (cell / 600.0));
-            double lo = W + surge + 4, hi = Math.max(lo, Math.min(W + 100, T - Terrain.SEAL - 34));
-            for (int i = 0; i < want; i++) {
-                long s = 10400 + 20L * i;
-                Chamber c = chamber(Kind.GALLERY, s);
-                c.rx = r(s + 1, 13, 22); c.rz = r(s + 2, 5, 8); c.setRot(r(s + 3, 0, Math.PI));
-                c.h = r(s + 4, 13, 22); c.terr = 2; c.rise = 2; c.pend = 2; c.sq = 2.2; c.warp = 0.12;
-                c.f0 = lo + (hi - lo) * u(s + 5);
-                if (u(s + 6) < 0.4) { c.rampDrop = r(s + 7, 4, 9); c.rampX = c.cos; c.rampZ = c.sin; }
-                underSeal(c);
-                randomPlace(c, s + 8);
-            }
-        }
-
-        /** A hall's inner walks: along its ledges and terraces, over its arches, and from each door to them. */
-        List<Way> hallWalks(Chamber c, List<double[]> doors) {
-            List<Way> out = new ArrayList<>();
-            switch (c.kind) {
-                case HALL -> {
-                    // a ring round the ledge, 0.55 of the way from the lip to the wall; a spoke from each door
-                    double eR = c.lakeEdge + 0.55 * (1 - c.lakeEdge);
-                    out.add(hallWalk(c, ring(c, eR), Double.NaN, Double.NaN, null));
-                    for (double[] d : doors) out.add(spoke(c, d, ringPoint(c, Math.atan2(d[1] - c.z, d[0] - c.x), eR)));
-                    for (Arch a : hallArchList.getOrDefault(c.id, List.of())) {
-                        n.arches.add(a);
-                        double vp = edgeAlong(c, a.x, a.z, a.vx, a.vz, eR), vm = edgeAlong(c, a.x, a.z, -a.vx, -a.vz, eR);
-                        out.add(hallWalk(c, List.of(new double[]{a.x + a.vx * vp, a.z + a.vz * vp}, new double[]{a.x - a.vx * vm, a.z - a.vz * vm}),
-                                Double.NaN, Double.NaN, a));
-                    }
-                }
-                case CALDERA -> {
-                    // the outer ring by the doors, the crest of the rim, and two walks down the terraces between them
-                    double eO = 0.915, eC = c.crestE + 0.02;
-                    out.add(hallWalk(c, ring(c, eO), Double.NaN, Double.NaN, null));
-                    out.add(hallWalk(c, ring(c, eC), Double.NaN, Double.NaN, null));
-                    double a0 = hu(c.hash, 9900) * Math.PI * 2;
-                    for (int k = 0; k < 2; k++) {
-                        List<double[]> d = new ArrayList<>();
-                        for (int i = 0; i <= 12; i++) d.add(ringPoint(c, a0 + Math.PI * k + 0.4 * i / 12.0, eO + (eC - eO) * i / 12.0));
-                        out.add(hallWalk(c, d, Double.NaN, Double.NaN, null));
-                    }
-                    for (double[] d : doors) out.add(spoke(c, d, ringPoint(c, Math.atan2(d[1] - c.z, d[0] - c.x), eO)));
-                }
-                case CAUSEWAY -> {
-                    // along the wall ledge; down each end ramp to the column path's end (the path itself is no walk:
-                    // a walk's slab would fill the gaps between its columns)
-                    double sl = c.rz - c.ledgeW * 0.5, uE = c.rx - 0.6 * c.endW, endU = c.rx - c.endW;
-                    List<double[]> ledge = new ArrayList<>();
-                    int m = (int) Math.ceil(uE);
-                    for (int i = 0; i <= m; i++) ledge.add(world(c, -uE + 2 * uE * i / m, sl * c.side));
-                    out.add(hallWalk(c, ledge, Double.NaN, Double.NaN, null));
-                    for (int s = -1; s <= 1; s += 2)
-                        out.add(hallWalk(c, List.of(world(c, s * uE, sl * c.side), world(c, s * uE, c.pathV * c.side), world(c, s * (endU - 1), c.pathV * c.side)),
-                                Double.NaN, Double.NaN, null));
-                    for (double[] d : doors) {
-                        double u = Math.max(-uE, Math.min(uE, local(c, d[0], d[1])[0]));
-                        out.add(spoke(c, d, world(c, u, sl * c.side)));
-                    }
-                }
-                case RIFT -> {
-                    // along each upper ledge; down each side's ramp and along its low ledge, to 5 short of its end (the
-                    // walk's slab reaches 3.6 round its line: nearer the end it stands out past the low ledge's end, a
-                    // knob under the upper ledge's lip, 16 down); over the bridges
-                    double vU = (c.riverW + c.lowW + c.rz) * 0.5, uW = Math.min(0.8 * c.rx, Network.riftLedgeEnd(c) - 4), ramp = (c.f0 - c.crest) / Network.RIFT_RAMP;
-                    for (int s = 0; s < 2; s++) {
-                        double sg = s == 0 ? 1 : -1, vL = sg * (c.riverW + c.lowW * 0.5), uT = c.rampU[s], dir = c.rampDir[s];
-                        List<double[]> line = new ArrayList<>();
-                        int m = (int) Math.ceil(uW);
-                        for (int i = 0; i <= m; i++) line.add(world(c, -uW + 2 * uW * i / m, sg * vU));
-                        out.add(hallWalk(c, line, Double.NaN, Double.NaN, null));
-                        out.add(hallWalk(c, List.of(world(c, uT - dir * 2, sg * vU), world(c, uT - dir * 2, vL), world(c, uT - dir * ramp, vL),
-                                world(c, uT - dir * (ramp + c.lowLen[s] - 5), vL)), Double.NaN, Double.NaN, null));
-                    }
-                    for (double[] d : doors) {
-                        double[] uv = local(c, d[0], d[1]);
-                        out.add(spoke(c, d, world(c, Math.max(-uW, Math.min(uW, uv[0])), (uv[1] >= 0 ? 1 : -1) * vU)));
-                    }
-                    for (Arch a : hallArchList.getOrDefault(c.id, List.of())) {
-                        n.arches.add(a);
-                        double au = local(c, a.x, a.z)[0];
-                        out.add(hallWalk(c, List.of(world(c, au, vU), world(c, au, -vU)), Double.NaN, Double.NaN, a));
-                    }
-                }
-                default -> { }
-            }
-            return out;
-        }
-
-        /** A closed ring of points round a chamber where its footprint is eT, about 2 blocks apart. */
-        List<double[]> ring(Chamber c, double eT) {
-            int m = Math.max(24, (int) Math.ceil(Math.PI * Math.max(c.rx, c.rz) * eT));
-            List<double[]> out = new ArrayList<>();
-            for (int i = 0; i <= m; i++) out.add(ringPoint(c, Math.PI * 2 * (i % m) / m, eT));
-            return out;
-        }
-
-        /**
-         * A walk from a door (the inner end of its tunnel) to a point of a hall's walks. A door within a thousandth of a
-         * block of the point stands on it, and its spoke is the door's spot alone: the way queries ({@link
-         * Network#wayLinesAt}) read a stretch much shorter than that as its first point, which leaves its last off the
-         * line.
-         */
-        Way spoke(Chamber c, double[] d, double[] p) {
-            if (Math.hypot(p[0] - d[0], p[1] - d[1]) < 1e-3) p = new double[]{d[0], d[1]};
-            return hallWalk(c, List.of(new double[]{d[0], d[1]}, p), d[2], Double.NaN, null);
-        }
-
-        /**
-         * An inner walk of a hall along a polyline (world x and z), resampled 2 blocks apart or closer, on the hall's
-         * floor there (or, over the arch {@code over}, its top), eased to 0.85 a block; its first and last floors are
-         * {@code fa} and {@code fb} where these are not NaN (a door's).
-         */
-        Way hallWalk(Chamber c, List<double[]> line, double fa, double fb, Arch over) {
-            List<double[]> pts = new ArrayList<>();
-            for (int i = 0; i + 1 < line.size(); i++) {
-                double[] p = line.get(i), q = line.get(i + 1);
-                int m = Math.max(1, (int) Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / 2.0));
-                for (int j = 0; j < m; j++) pts.add(new double[]{p[0] + (q[0] - p[0]) * j / m, p[1] + (q[1] - p[1]) * j / m});
-            }
-            pts.add(line.get(line.size() - 1));
-            Way wy = new Way();
-            wy.kind = EK.WALK;
-            alloc(wy, pts.size());
-            for (int i = 0; i < wy.n; i++) {
-                double x = pts.get(i)[0], z = pts.get(i)[1], fl = w.floorAt(c, w.e(c, x, z), x, z);
-                if (over != null) {
-                    double q = Math.abs((x - over.x) * over.vx + (z - over.z) * over.vz) / over.span;
-                    if (q < 1) fl = Math.max(fl, over.deck - over.drop * q * q);
-                }
-                wy.x[i] = x; wy.z[i] = z; wy.f[i] = fl;
-                wy.w[i] = 2.2; wy.hgt[i] = 5; wy.slab[i] = 2.5;
-            }
-            if (!Double.isNaN(fa)) wy.f[0] = fa;
-            if (!Double.isNaN(fb)) wy.f[wy.n - 1] = fb;
-            easeFloor(wy, 0.85);
-            wy.inner = true; wy.a = c.id; wy.biome = c.biome;
-            wy.bounds();
-            return wy;
-        }
-
-        /**
-         * A flight court's inner walks: straight up the stair from its foot door to the top of the stair, and from there
-         * to each door at the top. The stair climbs about 0.77 a block, under the walks' 0.85.
-         */
-        List<Way> flightWalks(Chamber c, List<double[]> doors) {
-            List<Way> out = new ArrayList<>();
-            double lx = c.rampX, lz = c.rampZ;
-            double[] foot = {c.x + lx * 0.8 * c.rx, c.z + lz * 0.8 * c.rx}, top = {c.x - lx * 0.8 * c.rx, c.z - lz * 0.8 * c.rx};
-            out.add(hallWalk(c, List.of(foot, top), Double.NaN, Double.NaN, null));
-            for (double[] d : doors) {
-                double tf = ((d[0] - c.x) * lx + (d[1] - c.z) * lz) > 0 ? 1 : -1;
-                out.add(spoke(c, d, tf > 0 ? foot : top));
-            }
-            return out;
-        }
-
-        /**
-         * The Caldera's vents, where the runtime's eruptions will break out: one in the middle of the crater's lake
-         * (radius 4 to 6), 1 or 2 more in the lake (2.5 to 3.5), and 1 to 3 on the crest of the rim (2 to 3): 3 to 6.
-         */
-        void vents() {
-            for (Chamber c : n.ch) {
-                if (!c.keep || c.kind != Kind.CALDERA) continue;
-                long hh = Hashing.mix(c.hash, 9950, 0, 0);
-                double lakeR = (c.crestE - 0.1) * Math.min(c.rx, c.rz);
-                addVent(c, c.x, c.z, 4 + 2 * hu(hh, 1), W - 1, false);
-                int lake = 1 + (hu(hh, 2) < 0.5 ? 1 : 0), crest = 1 + (int) Math.floor(hu(hh, 3) * 2.999);
-                double a0 = hu(hh, 4) * Math.PI * 2;
-                for (int i = 0; i < lake; i++) {
-                    double a = a0 + Math.PI * i + (hu(hh, 10 + i) - 0.5) * 0.8, d = lakeR * 0.7;
-                    addVent(c, c.x + Math.cos(a) * d, c.z + Math.sin(a) * d, 2.5 + hu(hh, 20 + i), W - 1, false);
-                }
-                for (int i = 0; i < crest; i++) {
-                    double[] p = ringPoint(c, a0 + Math.PI / 2 + Math.PI * 2 * i / crest + (hu(hh, 30 + i) - 0.5) * 0.5, c.crestE + 0.03);
-                    double y = Math.ceil(w.floorAt(c, w.e(c, p[0], p[1]), p[0], p[1]) - 1e-9) - 1;
-                    addVent(c, p[0], p[1], 2 + hu(hh, 40 + i), y, true);
-                }
-            }
-        }
-
-        void addVent(Chamber c, double x, double z, double r, double y, boolean crest) {
-            Net.Vent v = new Net.Vent();
-            v.x = x; v.z = z; v.r = r; v.y = y; v.chamber = c.id; v.crest = crest;
-            n.vents.add(v);
-        }
-
-        // ------------------------------------------------------------------------------------------- capsules
-        /** The chambers placed and kept apart by an axis and a radius (capsules): the halls and the flight courts. */
-        static boolean capsule(Chamber c) { return c.hall() || c.flight; }
-
-        /** A capsule's half-length: the long half-axis less the short one. */
-        static double capHalf(Chamber c) { return Math.abs(c.rx - c.rz); }
-
-        /**
-         * A capsule's radius round its axis: the short half-axis, times what a superellipse of its squareness reaches
-         * past a circle (2^(1/2 - 1/sq), at 45 degrees), plus its warp and 2. Any other chamber: its bounding radius.
-         */
-        static double capR(Chamber c) {
-            if (!capsule(c)) return c.R();
-            double k = c.sq > 2 ? Math.pow(2, 0.5 - 1 / c.sq) : 1;
-            return Math.min(c.rx, c.rz) * k + c.warp * Math.max(c.rx, c.rz) + 2;
-        }
-
-        /** A capsule's axis along its long side through its centre, {x1, z1, x2, z2}; any other chamber's centre, twice. */
-        static double[] capAxis(Chamber c) {
-            double hl = capsule(c) ? capHalf(c) : 0;
-            double dx = c.rx >= c.rz ? c.cos : -c.sin, dz = c.rx >= c.rz ? c.sin : c.cos;
-            return new double[]{c.x - dx * hl, c.z - dz * hl, c.x + dx * hl, c.z + dz * hl};
-        }
-
-        static double capDist(Chamber c, double x, double z) {
-            double[] a = capAxis(c);
-            return segDistXZ(x, z, a[0], a[1], a[2], a[3]);
-        }
-
-        /** How far (x, z) lies outside a chamber's capsule (negative inside). */
-        static double capGap(Chamber c, double x, double z) { return capDist(c, x, z) - capR(c); }
-
-        /** The distance between two chambers' axes. */
-        static double axisGap(Chamber a, Chamber b) {
-            double[] p = capAxis(a), q = capAxis(b);
-            if (segCross(p, q)) return 0;
-            return Math.min(Math.min(segDistXZ(p[0], p[1], q[0], q[1], q[2], q[3]), segDistXZ(p[2], p[3], q[0], q[1], q[2], q[3])),
-                    Math.min(segDistXZ(q[0], q[1], p[0], p[1], p[2], p[3]), segDistXZ(q[2], q[3], p[0], p[1], p[2], p[3])));
-        }
-
-        static boolean segCross(double[] p, double[] q) {
-            double d1 = orient(q, p[0], p[1]), d2 = orient(q, p[2], p[3]), d3 = orient(p, q[0], q[1]), d4 = orient(p, q[2], q[3]);
-            return d1 * d2 < 0 && d3 * d4 < 0;
-        }
-
-        static double orient(double[] s, double px, double pz) {
-            return (s[2] - s[0]) * (pz - s[1]) - (s[3] - s[1]) * (px - s[0]);
-        }
-
-        /** The rock between two chambers' outlines, a capsule's taken round its axis. */
-        static double pairGap(Chamber a, Chamber b) { return axisGap(a, b) - capR(a) - capR(b); }
-
-        /** A capsule's bounding box lies inside the cell's margin. */
-        boolean capsuleInCell(Chamber c) {
-            double[] a = capAxis(c);
-            double R = capR(c), m = EDGE_MARGIN + 4;
-            return Math.min(a[0], a[2]) - R >= x0 + m && Math.max(a[0], a[2]) + R <= x0 + cell - m
-                    && Math.min(a[1], a[3]) - R >= z0 + m && Math.max(a[1], a[3]) + R <= z0 + cell - m;
-        }
-
-        /** {@link #lavaHit} along a capsule's axis, at most 8 blocks apart. */
-        boolean capsuleLavaHit(Chamber c) {
-            double[] a = capAxis(c);
-            double R = capR(c);
-            int k = Math.max(1, (int) Math.ceil(2 * capHalf(c) / 8));
-            for (int i = 0; i <= k; i++) {
-                double t = i / (double) k;
-                if (lavaHit(a[0] + (a[2] - a[0]) * t, a[1] + (a[3] - a[1]) * t, R, c.yLo(), c.yHi(), sp.gapH, sp.gapV)) return true;
-            }
-            return false;
-        }
-
-        /** {@link #nearGatePassage} for a capsule: the passages' centres measured to its axis. */
-        boolean capsuleNearGate(Chamber c) {
-            double[] a = capAxis(c);
-            double R = capR(c);
-            for (int b = li + 1; b <= li + 2 && b <= w.shape.layerCount; b++) {
-                Plans.Gate g = w.base.plans.gate(b, cx, cz);
-                for (double y = c.yLo(); y <= c.yHi(); y += 4) {
-                    double t = g.tAt(y);
-                    if (Double.isNaN(t)) continue;
-                    if (segDistXZ(g.px(t), g.pz(t), a[0], a[1], a[2], a[3]) < R + g.radius * 1.5 + 8) return true;
-                }
-            }
-            return false;
-        }
-
-        /** {@link #wayHit} for a capsule: way points measured to its axis. */
-        boolean capsuleWayHit(Chamber c) {
-            double[] a = capAxis(c);
-            double R = capR(c);
-            double xl = Math.min(a[0], a[2]) - R - 12, xh = Math.max(a[0], a[2]) + R + 12, zl = Math.min(a[1], a[3]) - R - 12, zh = Math.max(a[1], a[3]) + R + 12;
-            int bx0 = Math.max(0, (int) Math.floor((xl - x0 + Net.APRON) / CB)), bx1 = Math.min(cn - 1, (int) Math.floor((xh - x0 + Net.APRON) / CB));
-            int bz0 = Math.max(0, (int) Math.floor((zl - z0 + Net.APRON) / CB)), bz1 = Math.min(cn - 1, (int) Math.floor((zh - z0 + Net.APRON) / CB));
-            for (int bx = bx0; bx <= bx1; bx++) for (int bz = bz0; bz <= bz1; bz++) {
-                for (int[] q : pts[bx * cn + bz]) {
-                    Way o = n.ways.get(q[0]);
-                    int j = q[1];
-                    if (segDistXZ(o.x[j], o.z[j], a[0], a[1], a[2], a[3]) > R + o.w[j] + Math.max(4, sp.clearC - 1)) continue;
-                    if (o.f[j] + o.hgt[j] + sp.clearCV < c.yLo() || c.yHi() + sp.clearCV < o.f[j] - o.slab[j]) continue;
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        /**
-         * {@link #clear}'s rule for a way's own capsule: once the way has left it (its straight way out plus 6), it may
-         * not come back alongside it at its heights.
-         */
-        boolean leavesCapsule(Way wy, Chamber k) {
-            boolean fromStart = capDist(k, wy.x[0], wy.z[0]) <= capDist(k, wy.x[wy.n - 1], wy.z[wy.n - 1]);
-            int i0 = fromStart ? 0 : wy.n - 1;
-            double R = capR(k), d0 = capDist(k, wy.x[i0], wy.z[i0]), arc = 0;
-            for (int j = 1; j < wy.n; j++) {
-                int i = fromStart ? j : wy.n - 1 - j, ip = fromStart ? j - 1 : wy.n - j;
-                arc += Math.hypot(wy.x[i] - wy.x[ip], wy.z[i] - wy.z[ip]);
-                double d = capDist(k, wy.x[i], wy.z[i]), lim = R + wy.w[i];
-                if (arc > lim - d0 + 6 && d < lim - 1 && !(wy.f[i] + wy.hgt[i] + sp.clearCV < k.yLo() || k.yHi() + sp.clearCV < wy.f[i] - wy.slab[i])) return false;
-            }
-            return true;
-        }
-
         // ------------------------------------------------------------------------------------------- doors and ways
         boolean doorFree(int c, double th) {
-            // a hall's or a flight court's doors are kept apart by their distance when they are chosen (hallDoor)
-            if (capsule(n.ch.get(c))) return true;
             for (double a : doorAngles.get(c)) {
                 double d = Math.abs(Math.atan2(Math.sin(th - a), Math.cos(th - a)));
                 if (d < minDoorSep(n.ch.get(c))) return false;
             }
             return true;
-        }
-
-        /**
-         * The Wasteland, while a branch is sought for a long run or a long tunnel, or a third way for a junction room
-         * ({@link #splitLong}, {@link #branchOut}, {@link #dropRuns}, {@link #forkJunctions}): a door that embed would
-         * take straight towards the other chamber, but which is taken, gives way to the nearest free one within
-         * {@link #SEEK_MAX} of it ({@link #seekDoor}), and a tunnel that does not fit may still go as a climb. A room
-         * inside a long run has its two doors, and the rooms it could branch to mostly lie the way one of them faces:
-         * of the reasons the branches of the four longest runs left over 283 plans failed, nine in ten were a door
-         * taken.
-         */
-        boolean seek;
-
-        /** How far off the straight way a sought door may turn (see {@link #seek}). */
-        static final double SEEK_MAX = Math.toRadians(80);
-
-        /**
-         * What a place on a tunnel adds to its cost in {@link #joinViaJunction} when the chamber would need a sought
-         * door to reach it ({@link #seek}): more than any distance in a cell, so the places it has a free door straight
-         * towards are all tried first, and a door is sought only where none is, as embed does (taken at their distance
-         * alone, a nearer place behind a sought door won over one straight ahead). {@link #splitTunnel} keeps its three
-         * nearest chambers by distance alone: put after those with a straight door, the chambers behind a sought door
-         * were no longer tried, and a run of 194 through two-way rooms was left unbranched (seed 60, cell -3,-5).
-         */
-        static final double SOUGHT_LAST = 1000;
-
-        /** The free door angle of chamber c nearest th, at most {@link #SEEK_MAX} off it, or NaN when none is. */
-        double freeAngle(int c, double th) {
-            if (doorFree(c, th)) return th;
-            for (double d = Math.toRadians(4); d <= SEEK_MAX + 1e-9; d += Math.toRadians(4)) {
-                if (doorFree(c, th + d)) return th + d;
-                if (doorFree(c, th - d)) return th - d;
-            }
-            return Double.NaN;
-        }
-
-        /** The door of chamber c at the free angle nearest th ({@link #freeAngle}), or null when none is free. */
-        double[] seekDoor(Chamber c, double th, double wantY) {
-            double a = freeAngle(c.id, th);
-            return Double.isNaN(a) ? null : door(c, a, wantY);
-        }
-
-        /** True when chamber c has a door it may take towards angle th: that one free, or while seeking one near it. */
-        boolean doorToward(int c, double th) {
-            return seek && sp.wayMax > 0 ? !Double.isNaN(freeAngle(c, th)) : doorFree(c, th);
         }
 
         double minDoorSep(Chamber c) {
@@ -6201,31 +2525,10 @@ final class NetPlanner {
         }
 
         /**
-         * The Basalt Galleries: a portal vestibule's door angle turned to at most 60 degrees off the way into the cell
-         * from its edge, so its tunnel leaves the edge before it turns along it; when that door is taken (a second
-         * tunnel along the same edge), the nearest free one further in, in steps of 8 degrees. A vestibule stands 30
-         * blocks in from the seam, and a tunnel along the edge to a hall there met the cell's margin at the vestibule's
-         * door: the vestibule was dropped (2 cells in 40). Other chambers and layers keep the angle.
-         */
-        double offEdge(Chamber c, double th) {
-            if (li != Terrain.GALLERIES || c.kind != Kind.PORTAL) return th;
-            double dw = c.x - x0, de = x0 + cell - c.x, dn = c.z - z0, ds = z0 + cell - c.z;
-            double m = Math.min(Math.min(dw, de), Math.min(dn, ds));
-            double inA = m == dw ? 0 : m == de ? Math.PI : m == dn ? Math.PI / 2 : -Math.PI / 2;
-            double d = Math.atan2(Math.sin(th - inA), Math.cos(th - inA)), lim = Math.toRadians(60);
-            if (Math.abs(d) <= lim) return th;
-            double a = inA + Math.signum(d) * lim;
-            for (int k = 0; k < 11 && !doorFree(c.id, a); k++) a -= Math.signum(d) * Math.toRadians(8);
-            return a;
-        }
-
-        /**
-         * The door of chamber c facing angle th: {x, z, floor, outward x, outward z}. Wells and chimneys put the door
-         * where their spiral passes at the height wanted; landings on their rim at their floor.
+         * The door of chamber c facing angle th: {x, z, floor, outward x, outward z}. Wells put the door where their
+         * spiral passes at the height wanted; landings on their rim at their floor.
          */
         double[] door(Chamber c, double th, double wantY) {
-            if (c.flight) return flightDoor(c, th);
-            if (c.hall()) return hallDoor(c, th);
             double ox = Math.cos(th), oz = Math.sin(th);
             if (c.landing()) {
                 double rr = c.rx * 0.72;
@@ -6271,12 +2574,7 @@ final class NetPlanner {
         boolean embed(Edge e, boolean force) {
             Chamber A = n.ch.get(e.a), B = n.ch.get(e.b);
             if (!A.keep || !B.keep) return false;
-            // the Wasteland tries a pair once in the plain mode: the network only fills up, so a pair that did not
-            // embed seldom does later, and its many stages ask again and again (one that did is never asked again)
-            boolean plain = sp.wayMax > 0 && !force && !noClimb && !preferClimb && widthMul == 1 && !longOK;
-            if (plain && !tried().add(((long) e.a << 32) | e.b)) return false;
             double th = Math.atan2(B.z - A.z, B.x - A.x);
-            boolean climbTried = false;
             for (int attempt = 0; attempt < (force ? 6 : 3); attempt++) {
                 n.tries++;
                 double ja = (Hashing.unit(Hashing.mix(h, 1100 + attempt, e.a, e.b)) - 0.5) * (0.5 + attempt * 0.35);
@@ -6291,16 +2589,8 @@ final class NetPlanner {
                     db = darkDoor(B, A.x, A.z, attempt);
                     da = db == null ? null : door(A, Math.atan2(db[1] - A.z, db[0] - A.x) + ja, B.f0);
                 } else {
-                    curOther = e.b;
-                    da = door(A, offEdge(A, th + ja), B.f0);
-                    curOther = e.a;
-                    db = door(B, offEdge(B, th + Math.PI + jb), A.f0);
-                    curOther = -1;
-                    if (seek && sp.wayMax > 0) {
-                        // a door taken: the nearest free one (see seek)
-                        if (da != null && !doorFree(A.id, Math.atan2(da[1] - A.z, da[0] - A.x))) da = seekDoor(A, th + ja, B.f0);
-                        if (db != null && !doorFree(B.id, Math.atan2(db[1] - B.z, db[0] - B.x))) db = seekDoor(B, th + Math.PI + jb, A.f0);
-                    }
+                    da = door(A, th + ja, B.f0);
+                    db = door(B, th + Math.PI + jb, A.f0);
                 }
                 if (da == null || db == null) continue;
                 if ((A.dark < 0 && !doorFree(A.id, Math.atan2(da[1] - A.z, da[0] - A.x))) || (B.dark < 0 && !doorFree(B.id, Math.atan2(db[1] - B.z, db[0] - B.x)))) continue;
@@ -6309,57 +2599,30 @@ final class NetPlanner {
                 long hh = Hashing.mix(h, 1300 + attempt, e.a, e.b);
                 double half = widthMul * sp.half * (1 + sp.halfVar * (Hashing.unit(Hashing.mix(hh, 1, 0, 0)) * 2 - 1));
                 double hgt = (1 + (widthMul - 1) * 0.5) * sp.hgt * (1 + sp.hgtVar * (Hashing.unit(Hashing.mix(hh, 2, 0, 0)) * 2 - 1));
-                boolean landingEnd = (A.landing() && !(surgeNiche && A.kind == Kind.BEDROCK)) || (B.landing() && !(surgeNiche && B.kind == Kind.BEDROCK));
+                boolean landingEnd = A.landing() || B.landing();
                 boolean walkOK = dy <= sp.maxSlope * (L * (force ? 2.2 : 1.5) - 8);
-                // the Wasteland: a tunnel whose line would be over the limit even straight (it runs 3 blocks into
-                // each chamber past the doors), or steep enough to need such a line, is a climb or nothing
-                if (overLimit(L + 2 * NetGraph.RUN_IN) || overLimit(dy / sp.maxSlope + 10)) walkOK = false;
                 // v9: no climb into a refuge (its way takes the refuge's biome, and refuges hold no vines)
-                boolean climbOK = !noClimb && !landingEnd && !A.refuge && !B.refuge && dy <= (preferClimb ? Math.max(32, sp.climbMax) : climbTop()) && dy >= 5 && L <= sp.climbL * reach;
-                // the Wasteland tries one climb per call: the next attempts' doors move a little, and a climb that
-                // did not fit seldom fits a few blocks over, while each try costs as much as a dozen tunnels
-                if (climbTried && sp.wayMax > 0) climbOK = false;
+                boolean climbOK = !noClimb && !landingEnd && !A.refuge && !B.refuge && dy <= (preferClimb ? Math.max(32, sp.climbMax) : sp.climbMax) && dy >= 5 && L <= sp.climbL;
                 boolean walk = walkOK && !(preferClimb && climbOK && dy >= 8);
                 if (walk) {
-                    Way wy;
-                    if (li == Terrain.GALLERIES) {
-                        wy = galleryWay(e, A, B, da, db, hh, half, hgt, force, L);
-                        if (wy == null) { n.embedFail++; continue; }
-                    } else {
-                        wy = walkWay(da, db, hh, half, hgt, force, true);
-                        wayBend = 0; legA = 0; legB = 0;
-                        if (wy != null && overLimit(wy.length)) { n.embedFail++; wy = null; }
-                        if (wy != null) {
-                            // the Obsidian Tubes' tunnel is a round tube (section 5)
-                            wy.round = A.kind == Kind.TUBEHUB || B.kind == Kind.TUBEHUB;
-                            if (!clear(wy, e.a, e.b)) { n.embedFail++; wy = null; }
-                        }
-                    }
-                    if (wy != null) {
-                        wy.a = e.a; wy.b = e.b;
-                        addWay(wy);
-                        e.kind = EK.WALK;
-                        e.w1 = wy;
-                    } else if (seek && sp.wayMax > 0 && climbOK) {
-                        // while a way is sought (see seek), a tunnel that did not fit may still go as a climb
-                        walk = false;
-                    } else continue;
-                }
-                if (!walk) {
+                    Way wy = walkWay(da, db, hh, half, hgt, force, true);
+                    if (wy != null && !clear(wy, e.a, e.b)) { n.embedFail++; wy = null; }
+                    if (wy == null) continue;
+                    wy.a = e.a; wy.b = e.b;
+                    addWay(wy);
+                    e.kind = EK.WALK;
+                    e.w1 = wy;
+                } else {
                     if (!climbOK) continue;
-                    climbTried = true;
                     if (!climb(e, da, db, hh, half, hgt)) { n.embedFail++; continue; }
                 }
                 useDoor(A.id, Math.atan2(da[1] - A.z, da[0] - A.x));
                 useDoor(B.id, Math.atan2(db[1] - B.z, db[0] - B.x));
-                if (capsule(A)) hallDoors.computeIfAbsent(A.id, k -> new ArrayList<>()).add(da);
-                if (capsule(B)) hallDoors.computeIfAbsent(B.id, k -> new ArrayList<>()).add(db);
                 if (A.dark >= 0) { darkDoors.computeIfAbsent(A.id, k -> new ArrayList<>()).add(da); addWay(darkInnerWalk(A, da)); }
                 if (B.dark >= 0) { darkDoors.computeIfAbsent(B.id, k -> new ArrayList<>()).add(db); addWay(darkInnerWalk(B, db)); }
                 A.deg++;
                 B.deg++;
                 n.edges.add(e);
-                if (li == Terrain.GALLERIES) edgeDoors.put(e, new double[][]{da, db});
                 return true;
             }
             return false;
@@ -6376,14 +2639,8 @@ final class NetPlanner {
          * of at most {@link #STAGE_MAX} joined by ledge passages, and a level tunnel on from the last stage's top to the
          * upper door. Stage axes stand {@code 2 r + 3} to {@code 2 r + 5} apart along the climb's heading, each next one
          * turned by up to 45 degrees where that is what fits, so the holes never overlap and a fall ends on the floor of
-         * the stage it fell down. The stages are as tall as each other (in the Wasteland none but the first under
-         * {@link #STEP_MIN}, the first taking what is left), but for a last stage that would let a fall run deeper
-         * ({@link #fallSafe(Shaft)}), most often by opening in the upper room's floor under the rock by its wall: the
-         * climb is then laid again with the last stage as short as the others let it be ({@link #STEP_MIN} at least),
-         * one stage more where that is what it takes, and the chain {@link #RETRY_BACK} further back towards the lower
-         * door, so the last stage keeps further from the upper room (the first may then open beside the lower room, as
-         * {@link #stageFits} lets it). The climb is checked as a whole, against the network and against itself; on
-         * success its ways and shafts are added and the edge is filled in.
+         * the stage it fell down. The stages are as tall as each other. The climb is checked as a whole, against the
+         * network and against itself; on success its ways and shafts are added and the edge is filled in.
          */
         boolean climb(Edge e, double[] da, double[] db, long hh, double half, double hgt) {
             boolean aLow = da[2] < db[2];
@@ -6391,128 +2648,78 @@ final class NetPlanner {
             int cLo = aLow ? e.a : e.b, cHi = aLow ? e.b : e.a;
             double L = Math.hypot(hi[0] - lo[0], hi[1] - lo[1]);
             double dy = hi[2] - lo[2];
-            int ns0 = Math.max(1, (int) Math.ceil(dy / STAGE_MAX - 1e-9));
-            if (ns0 > 4) return false;
+            int ns = Math.max(1, (int) Math.ceil(dy / STAGE_MAX - 1e-9));
+            if (ns > 4) return false;
             double rad = 2.6 + 0.8 * Hashing.unit(Hashing.mix(hh, 4, 0, 0));
             double gap = 2 * rad + 3 + 2 * Hashing.unit(Hashing.mix(hh, 5, 0, 0));
             double th0 = Math.atan2(hi[1] - lo[1], hi[0] - lo[0]);
             double ux = Math.cos(th0), uz = Math.sin(th0);
             double at = L * (0.35 + 0.3 * Hashing.unit(Hashing.mix(hh, 3, 0, 0)));
-            Way w1 = null, w2 = null;
-            Shaft[] st = null;
-            Way[] ledges = null;
+            // stage k + 1 climbs from floor fl[k] to fl[k + 1]
+            double[] fl = new double[ns + 1];
+            double sh = dy / ns;
+            for (int k = 0; k <= ns; k++) fl[k] = lo[2] + k * sh;
+            Shaft[] st = new Shaft[ns];
+            Way[] ledges = new Way[ns - 1];
+            // the first stage stands on the line between the doors, the chain of stages centred where the single
+            // shaft would stand
+            double d1 = at;
+            if (ns > 1) d1 = Math.max(6, Math.min(d1 - (ns - 1) * gap * 0.5, L - (ns - 1) * gap - 6));
+            double sx = lo[0] + ux * d1, sz = lo[1] + uz * d1;
+            // a single shaft's tunnel runs on 1.5 past its axis; a staged climb's ends at the first axis, so the
+            // second stage keeps its 3 blocks of rock from the tunnel's end (the first stage's foot is the rock
+            // under its hole either way, and the tunnel's slab reaches under the vines)
+            double past = ns == 1 ? 1.5 : 0;
+            double[] footEnd = {sx + ux * past, sz + uz * past, lo[2], -ux, -uz};
+            Way w1 = climbTunnel(lo, footEnd, false, hh, half * 0.9, hgt);
+            if (w1 == null || !clear(w1, e.a, e.b)) return false;
+            List<Object> parts = new ArrayList<>();
+            parts.add(w1);
+            st[0] = stage(sx, sz, rad, fl[0], fl[1], 1, ns);
+            if (!stageFits(st[0], -1, ns == 1 ? -1 : cHi, parts, e.a, e.b)) return false;
+            parts.add(st[0]);
             double heading = th0;
-            boolean laid = false, lastFell = false;
-            for (int round = 0; round < 2 && !laid; round++) {
-                int ns = ns0;
-                // stage k + 1 climbs from floor fl[k] to fl[k + 1]
-                double[] fl = new double[ns + 1];
-                if (round == 0) {
-                    double sh = dy / ns;
-                    for (int k = 0; k <= ns; k++) fl[k] = lo[2] + k * sh;
-                    // the Wasteland: every stage but the first is at least STEP_MIN tall, and the first is what is left
-                    if (sp.wayMax > 0 && ns > 1 && sh < STEP_MIN) for (int k = 1; k <= ns; k++) fl[k] = hi[2] - (ns - k) * STEP_MIN;
-                } else {
-                    // laid again (see above) only when the last stage was turned down by fallSafe
-                    if (!lastFell || ns0 == 1) break;
-                    double hl = Math.max(STEP_MIN, dy - (ns - 1) * STAGE_MAX);
-                    if (hl > dy / ns - 1 && ns < 4) {
-                        ns++;
-                        hl = Math.max(STEP_MIN, dy - (ns - 1) * STAGE_MAX);
-                        fl = new double[ns + 1];
-                    }
-                    if (hl > dy / ns0 - 1) break;
-                    double sh = (dy - hl) / (ns - 1);
-                    for (int k = 0; k < ns; k++) fl[k] = lo[2] + k * sh;
-                    fl[ns] = hi[2];
-                }
-                lastFell = false;
-                st = new Shaft[ns];
-                ledges = new Way[ns - 1];
-                // the first stage stands on the line between the doors, the chain of stages centred where the single
-                // shaft would stand
-                double d1 = at;
-                if (ns > 1) d1 = Math.max(6, Math.min(d1 - (ns - 1) * gap * 0.5, L - (ns - 1) * gap - 6));
-                // laid again, the chain starts further back (see above)
-                if (round == 1) d1 = Math.max(1, Math.min(at - (ns - 1) * gap * 0.5, L - (ns - 1) * gap - 6) - RETRY_BACK);
-                double sx = lo[0] + ux * d1, sz = lo[1] + uz * d1;
-                // a single shaft's tunnel runs on 1.5 past its axis; a staged climb's ends at the first axis, so the
-                // second stage keeps its 3 blocks of rock from the tunnel's end (the first stage's foot is the rock
-                // under its hole either way, and the tunnel's slab reaches under the vines)
-                double past = ns == 1 ? 1.5 : 0;
-                double[] footEnd = {sx + ux * past, sz + uz * past, lo[2], -ux, -uz};
-                w1 = climbTunnel(lo, footEnd, false, hh, half * 0.9, hgt);
-                if (w1 == null || !clear(w1, e.a, e.b)) continue;
-                List<Object> parts = new ArrayList<>();
-                parts.add(w1);
-                st[0] = stage(sx, sz, rad, fl[0], fl[1], 1, ns);
-                if (!stageFits(st[0], -1, ns == 1 ? -1 : cHi, parts, e.a, e.b) || !fallSafe(st[0])) continue;
-                parts.add(st[0]);
-                heading = th0;
-                w2 = null;
-                boolean placed = true;
-                for (int k = 1; k < ns && placed; k++) {
-                    // stage k + 1 and the ledge passage to it from the top of stage k
-                    double sgn = Hashing.unit(Hashing.mix(hh, 40 + k, 0, 0)) < 0.5 ? 1 : -1;
-                    placed = false;
-                    for (double turn : new double[]{0, sgn * Math.PI / 8, -sgn * Math.PI / 8, sgn * Math.PI / 4, -sgn * Math.PI / 4}) {
-                        double hd = th0 + turn;
-                        Shaft p = st[k - 1];
-                        double qx = p.x + Math.cos(hd) * gap, qz = p.z + Math.sin(hd) * gap;
-                        Way lg = ledgeWay(p.x, p.z, qx, qz, fl[k], hd);
-                        if (!clear(lg, e.a, e.b) || !selfClear(lg, parts) || !fallSafe(lg) || !underOwnRooms(lg, e.a, e.b)) continue;
-                        parts.add(lg);
-                        Shaft s = stage(qx, qz, rad, fl[k], fl[k + 1], k + 1, ns);
-                        Way top = null;
-                        boolean ok = stageFits(s, cLo, k + 1 == ns ? -1 : cHi, parts, e.a, e.b);
-                        if (ok && !fallSafe(s)) {
-                            ok = false;
-                            if (k + 1 == ns) lastFell = true;
+            Way w2 = null;
+            for (int k = 1; k < ns; k++) {
+                // stage k + 1 and the ledge passage to it from the top of stage k
+                double sgn = Hashing.unit(Hashing.mix(hh, 40 + k, 0, 0)) < 0.5 ? 1 : -1;
+                boolean placed = false;
+                for (double turn : new double[]{0, sgn * Math.PI / 8, -sgn * Math.PI / 8, sgn * Math.PI / 4, -sgn * Math.PI / 4}) {
+                    double hd = th0 + turn;
+                    Shaft p = st[k - 1];
+                    double qx = p.x + Math.cos(hd) * gap, qz = p.z + Math.sin(hd) * gap;
+                    Way lg = ledgeWay(p.x, p.z, qx, qz, fl[k], hd);
+                    if (!clear(lg, e.a, e.b) || !selfClear(lg, parts)) continue;
+                    parts.add(lg);
+                    Shaft s = stage(qx, qz, rad, fl[k], fl[k + 1], k + 1, ns);
+                    Way top = null;
+                    boolean ok = stageFits(s, cLo, k + 1 == ns ? -1 : cHi, parts, e.a, e.b);
+                    if (ok) {
+                        parts.add(s);
+                        if (k + 1 == ns) {
+                            // the last stage: the upper tunnel has to fit too, or another turn is tried
+                            top = upperTunnel(s, hd, hi, hh, half, hgt);
+                            ok = top != null && clear(top, e.a, e.b) && selfClear(top, parts);
                         }
-                        if (ok) {
-                            parts.add(s);
-                            if (k + 1 == ns) {
-                                // the last stage: the upper tunnel has to fit too, or another turn is tried
-                                top = upperTunnel(s, hd, hi, hh, half, hgt);
-                                ok = top != null && clear(top, e.a, e.b) && selfClear(top, parts);
-                            }
-                            if (!ok) parts.remove(parts.size() - 1);
-                        }
-                        if (!ok) { parts.remove(parts.size() - 1); continue; }
-                        st[k - 1].vineA = hd;
-                        st[k] = s;
-                        ledges[k - 1] = lg;
-                        heading = hd;
-                        w2 = top;
-                        placed = true;
-                        break;
+                        if (!ok) parts.remove(parts.size() - 1);
                     }
+                    if (!ok) { parts.remove(parts.size() - 1); continue; }
+                    st[k - 1].vineA = hd;
+                    st[k] = s;
+                    ledges[k - 1] = lg;
+                    heading = hd;
+                    w2 = top;
+                    placed = true;
+                    break;
                 }
-                if (!placed) continue;
-                if (ns == 1) {
-                    w2 = upperTunnel(st[0], th0, hi, hh, half, hgt);
-                    if (w2 == null || !clear(w2, e.a, e.b) || !selfClear(w2, parts)) continue;
-                }
-                laid = true;
+                if (!placed) return false;
             }
-            if (!laid) return false;
-            if (sp.wayMax > 0) {
-                // the Wasteland: the climb's tunnels and ledges together walk no further than one tunnel may, even
-                // under longOK (no junction room is ever cut into a climb)
-                double walk = w1.length + w2.length;
-                for (Way lg : ledges) walk += lg.length;
-                if (walk - 2 * NetGraph.RUN_IN > sp.wayMax * reach) return false;
+            if (ns == 1) {
+                w2 = upperTunnel(st[0], th0, hi, hh, half, hgt);
+                if (w2 == null || !clear(w2, e.a, e.b) || !selfClear(w2, parts)) return false;
             }
             // the last stage's vines face the upper tunnel, which leaves along the last heading
             st[st.length - 1].vineA = heading;
-            // the Wasteland: turned, where they must be, so the step off their top lands in the passage on, which then
-            // keeps its vault low over the hole (lowVault)
-            if (sp.wayMax > 0) for (int k = 0; k < st.length; k++) {
-                Way out = k + 1 < st.length ? ledges[k] : w2;
-                double hd = st[k].vineA;
-                st[k].vineA = stepAngle(st[k], out);
-                if (st[k].vineA != hd) lowVault(out, st[k]);
-            }
             for (Shaft s : st) Network.fixVines(s);
             w1.a = cLo; w1.b = -1;
             w2.a = -1; w2.b = cHi;
@@ -6524,314 +2731,6 @@ final class NetPlanner {
             e.w1 = w1; e.w2 = w2; e.sh = st[0];
             e.stages = st;
             e.ledges = ledges;
-            return true;
-        }
-
-        /**
-         * The Wasteland: the angle stage s's vines face, so that the step off their top ({@link Network#fixVines})
-         * lands on passage {@code out}, which leaves the stage's top (the ledge passage to the next stage, or the upper
-         * tunnel from the last). The step is the block beside the top of the vines along x or z, whichever is nearer
-         * that angle, kept open over a floor block, and a climber walks on from it only where the passage's floor meets
-         * it. Facing the climb's heading ({@code s.vineA} as it comes in) does that unless the passage turns away at
-         * once, as an upper tunnel that bends towards a door off to one side does: the step then stood in a niche of
-         * the hole's wall, and the rooms the climb alone reached were cut off. So the heading stays when its step lies
-         * on the passage ({@link #stepOn}); else the vines face where the passage's line leaves the hole, or up to 30
-         * degrees either side of that, the first angle whose step does; failing all of them, where the line leaves.
-         * Turned, the vines hang under the passage's line, and {@link #climb} keeps its vault over the hole low
-         * ({@link #lowVault}).
-         */
-        double stepAngle(Shaft s, Way out) {
-            double lead = leaveAngle(s, out), d = Math.toRadians(10);
-            for (double a : new double[]{s.vineA, lead, lead + d, lead - d, lead + 2 * d, lead - 2 * d, lead + 3 * d, lead - 3 * d}) {
-                s.vineA = a;
-                Network.fixVines(s);
-                if (stepOn(s, out)) return a;
-            }
-            return lead;
-        }
-
-        /**
-         * True when stage s's step lies within {@link #STEP_ON_LINE} of passage out's line, where its walking core is
-         * open at the feet through the rim round the hole's mouth, and no nearer the axis than the edge of the hole's
-         * open core, so the block on from it along the line is past the hole and has the passage's floor under it.
-         */
-        boolean stepOn(Shaft s, Way out) {
-            if (Math.hypot(s.stepX - s.x, s.stepZ - s.z) < s.r - 0.6) return false;
-            for (int i = 0; i + 1 < out.n; i++)
-                if (segDistXZ(s.stepX, s.stepZ, out.x[i], out.z[i], out.x[i + 1], out.z[i + 1]) <= STEP_ON_LINE) return true;
-            return false;
-        }
-
-        /** How far from a passage's line a stage's step may lie and still be on it ({@link #stepOn}). */
-        static final double STEP_ON_LINE = 0.7;
-
-        /** The angle from stage s's axis to where passage out's line first runs a block past the hole's edge. */
-        double leaveAngle(Shaft s, Way out) {
-            double R = s.r + 1;
-            for (int i = 0; i + 1 < out.n; i++) {
-                double ax = out.x[i] - s.x, az = out.z[i] - s.z, dx = out.x[i + 1] - out.x[i], dz = out.z[i + 1] - out.z[i];
-                if (Math.hypot(ax + dx, az + dz) < R) continue;
-                // the point of this segment at R from the axis: it ends past R and starts inside (or is the first)
-                double a = dx * dx + dz * dz, b = 2 * (ax * dx + az * dz), c = ax * ax + az * az - R * R;
-                double t = c >= 0 || a < 1e-12 ? 0 : (-b + Math.sqrt(Math.max(0, b * b - 4 * a * c))) / (2 * a);
-                return Math.atan2(az + dz * t, ax + dx * t);
-            }
-            return s.vineA;
-        }
-
-        /**
-         * The Wasteland, once every way is laid: over each climb's stage taller than {@link #HOLE_TALL}, the passage
-         * that leaves its top (the ledge passage to the next stage, or the upper tunnel from the last) is widened
-         * ({@link #clearOfHole}), so that its walls stand clear of the hole and the rim round the hole's mouth is its
-         * floor. A passage no wider than the hole (2.5 to 3.1 against 2.6 to 3.4) had its rough walls meet the hole's
-         * edge, where they rise in steps of a block to 3.5 or 4.5 over its floor, and one who stepped off the top step
-         * fell the stage and those steps: 16 blocks, beside 3 of the 5946 stages of 52 cells. It is done last, when no
-         * tunnel is still to be laid, so that it moves no way and turns none away: widened while each climb was being
-         * fitted, the passages refused so many climbs that the runs over twice the limit rose by half, and widened as
-         * each climb was laid, they turned later tunnels away and the plans with a run over three times the limit rose
-         * from 17 to 28 of 292.
-         */
-        void clearHoles() {
-            for (Edge e : n.edges) {
-                if (e.kind != EK.CLIMB || e.stages.length == 0) continue;
-                Shaft[] st = e.stages;
-                ownParts = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-                for (Way wy : new Way[]{e.w1, e.w2}) if (wy != null) ownParts.add(wy);
-                ownParts.addAll(java.util.Arrays.asList(e.ledges));
-                ownParts.addAll(java.util.Arrays.asList(st));
-                for (int k = 0; k < st.length; k++) clearOfHole(k + 1 < st.length ? e.ledges[k] : e.w2, st[k], e.a, e.b);
-            }
-            ownParts = null;
-        }
-
-        /**
-         * What clear() lets by besides the way it checks (identity): the climb's own ways and stages while
-         * {@link #clearHoles} widens one of its passages, as none of them stood in the network while the climb was
-         * being laid. Null otherwise.
-         */
-        java.util.Set<Object> ownParts;
-
-        /**
-         * Passage wy, which leaves the top of stage s, widened over the stage's hole to the hole's radius and 1.5 more
-         * within 2 of its edge ({@link #clearHoles}); where the wider passage would not clear the network
-         * ({@link #clear}, ca and cb the climb's rooms), or would bring another tunnel standing high over the stage's
-         * foot beside the hole ({@link #stepsApart}), it stays as it was. Where it is widened, its vault there is no
-         * higher than {@link #HOLE_VAULT}.
-         */
-        void clearOfHole(Way wy, Shaft s, int ca, int cb) {
-            if (sp.wayMax <= 0 || wy == null || s.top - s.foot <= HOLE_TALL) return;
-            double[] w0 = wy.w.clone();
-            for (int i = 0; i < wy.n; i++)
-                if (Math.hypot(wy.x[i] - s.x, wy.z[i] - s.z) < s.r + 2) wy.w[i] = Math.max(wy.w[i], s.r + 1.5);
-            wy.bounds();
-            if (stepsApart(wy, w0, s) && clear(wy, ca, cb)) {
-                lowVault(wy, s);
-                return;
-            }
-            System.arraycopy(w0, 0, wy.w, 0, w0.length);
-            wy.bounds();
-        }
-
-        /** Passage wy's vault no higher than {@link #HOLE_VAULT} over its floor within 2 of stage s's hole. */
-        void lowVault(Way wy, Shaft s) {
-            for (int i = 0; i < wy.n; i++)
-                if (Math.hypot(wy.x[i] - s.x, wy.z[i] - s.z) < s.r + 2) wy.hgt[i] = Math.min(wy.hgt[i], HOLE_VAULT);
-            wy.bounds();
-        }
-
-        /**
-         * The Wasteland: the height of a passage's vault over a stage's hole where {@link #clearOfHole} widened it, or
-         * where the stage's vines were turned to it ({@link #stepAngle}). Up to 6 over the top floor no roughness
-         * reaches the rock round the mouth ({@link Network#mouthFade}). A widened tunnel's vault 7 high reached past
-         * that, and its roof over the hole, rough there, held a knob 7 over the floor beside the vines, which hang from
-         * the first rock over the floor and so went on up past it: a climber who left the vines for the knob could fall
-         * 20 into the hole. Vines turned to an upper tunnel that bends away from the climb's heading hang under its
-         * line, where its vault stood 8 high, and a pocket in its roof 7.5 over the floor beside them let a climber fall
-         * 17. The walking core stays open to 6.24 over the floor all the same ({@link Network#pathCore}).
-         */
-        static final double HOLE_VAULT = 6;
-
-        /**
-         * True when no tunnel but the climb's own comes within 2 of passage wy where {@link #clearOfHole} widened it
-         * ({@code w0}: its widths before) with its floor more than {@link #HOLE_TALL} over the foot of stage s, at
-         * heights where the two may open into each other, and with its open space (out to 1.25 times its half-width
-         * from its line) reaching within a block of the hole's edge. The steps of that tunnel's walls stand up to 4.5
-         * over its floor, and the wider passage took the rock between them and the hole: a tunnel of the upper room
-         * 13 over the foot, which met the climb at the room's door (clear() lets them by there), was left with a step
-         * over the hole from which one fell 16 (and a tunnel whose open space came to 0.2 of the hole's edge, a fall
-         * of 17). A step of a tunnel whose open space stops further out stands beside the wider passage's floor round
-         * the hole, not beside the hole, and a fall from it ends on that floor. Any tunnel near the passage had kept it
-         * as narrow as the hole (70 of the 261 passages over stages taller than {@link #HOLE_TALL} in three cells; 30
-         * under this rule), and the steps of its own walls at the hole's edge let a walker fall 16.
-         */
-        boolean stepsApart(Way wy, double[] w0, Shaft s) {
-            for (int i = 0; i < wy.n; i++) {
-                if (wy.w[i] == w0[i]) continue;
-                int b0 = bucket(wy.x[i], wy.z[i]);
-                if (b0 < 0) continue;
-                int bx = b0 / cn, bz = b0 % cn;
-                for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-                    int qx = bx + dx, qz = bz + dz;
-                    if (qx < 0 || qz < 0 || qx >= cn || qz >= cn) continue;
-                    for (int[] q : pts[qx * cn + qz]) {
-                        Way o = n.ways.get(q[0]);
-                        if (o == wy || ownParts != null && ownParts.contains(o)) continue;
-                        int j = q[1];
-                        if (o.f[j] <= s.foot + HOLE_TALL || o.f[j] - o.slab[j] >= wy.f[i] + wy.hgt[i]) continue;
-                        if (Math.hypot(wy.x[i] - o.x[j], wy.z[i] - o.z[j]) > wy.w[i] + o.w[j] + 2) continue;
-                        if (nearRim(o, j, s)) return false;
-                    }
-                }
-            }
-            return true;
-        }
-
-        /**
-         * The Wasteland: a stage at most this tall leaves its top passage as it is ({@link #clearOfHole}): the steps of
-         * a passage's walls stand at most 4.5 over its floor, so a fall down such a stage stays within 15.
-         */
-        static final double HOLE_TALL = 10.5;
-
-        /**
-         * The Wasteland: every stage of a climb but the first is at least this tall, a last stage laid again shorter
-         * (see {@link #climb}) too. The ledge passage that leads to a stage runs on 3 blocks past its axis, under the
-         * step off the top of its vines ({@link Network#fixVines}), and its walking core stays open up to 6.24 over its
-         * floor ({@link Network#pathCore}): under a shorter stage it took the step's floor block, so a climber had
-         * nowhere to step off the vines, and the rooms the climb alone reached were cut off (stages of 5 to 6.6 did so
-         * in 15 of the 5810 stages of 42 cells, and in 5 of 8 last stages under 7 tall measured block by block). The
-         * first stage needs none of it: the lower tunnel ends at its axis, behind its vines.
-         */
-        static final double STEP_MIN = 7.5;
-
-        /**
-         * The Wasteland: a ledge passage that runs under one of its climb's own rooms (clear() lets a climb's parts by
-         * them) keeps the room's floor whole: within the passage's width and a block of the room's wall, the room's
-         * floor stands {@link #STEP_MIN} over the ledge's, for the same walking core. Under a room the passage would
-         * open a pit in its floor, and where that pit took the floor by the last stage's vines, the climb could not be
-         * climbed.
-         */
-        boolean underOwnRooms(Way lg, int ca, int cb) {
-            if (sp.wayMax <= 0) return true;
-            for (int c : new int[]{ca, cb}) {
-                Chamber k = n.ch.get(c);
-                if (k.dark >= 0 || k.kind == Kind.CANYON || k.landing()) continue;
-                double R = Math.min(k.rx, k.rz);
-                for (int i = 0; i < lg.n; i++) {
-                    double e = w.e(k, lg.x[i], lg.z[i]);
-                    if ((e - 1) * R > lg.w[i] + 1) continue;
-                    // (a floor under the ledge's is the lower room's, which the climb rises out of)
-                    double fr = w.floorAt(k, Math.min(e, 1), lg.x[i], lg.z[i]);
-                    if (fr > lg.f[i] && fr < lg.f[i] + STEP_MIN) return false;
-                }
-            }
-            return true;
-        }
-
-        /**
-         * The Wasteland: how much further back towards the lower door a climb laid again (see {@link #climb}) starts its
-         * chain of stages; its first stage stands at least a block out from that door.
-         */
-        static final double RETRY_BACK = 8;
-
-        /**
-         * The Wasteland: the most a floor beside a climb's stage may stand over its foot, and the most a way under its
-         * foot may lie under its top, so a fall into the stage or on through it is at most 15 blocks, as one down the
-         * stage is ({@link #STAGE_MAX}).
-         */
-        static final double STAGE_FALL = 14;
-
-        /**
-         * True when nothing beside stage s makes its hole deeper than {@link #STAGE_FALL}: within its radius and 1.5
-         * more, no room whose floor there is no higher than the stage's open space is so tall that a walker in it could
-         * stand higher over the foot (a walker stands up to two under a room's vault: on its floor, or on the rock left
-         * where floor and vault close in by its wall and round the vault's pendants), and no way reaching the stage's
-         * open space has its floor higher over the foot (its feet a block lower where its open space comes to the
-         * hole's edge, {@link #nearRim}), or lower under its top. The climb's own rooms are not spared
-         * ({@link #stageFits} lets the first and the last stage stand at their doors, and a last stage's hole may open
-         * in its room's floor), and neither are the other tunnels of those rooms ({@link #clearShaft} lets them by: they
-         * meet at the doors). From such a place a walker steps off into the hole, and one who lets go at the top falls
-         * on through the foot into such a way under it: 16 and 17 blocks. Elsewhere a stage keeps clear of the network
-         * anyway, so this holds.
-         */
-        boolean fallSafe(Shaft s) {
-            if (sp.wayMax <= 0) return true;
-            double hiF = s.foot + STAGE_FALL, loF = s.top - STAGE_FALL, rr = s.r + 1.5;
-            for (Chamber c : n.ch) {
-                if (!c.keep || c.kind == Kind.CANYON || c.dark >= 0 || c.yHi() < hiF) continue;
-                if (Math.hypot(s.x - c.x, s.z - c.z) > Math.max(c.rx, c.rz) * (1 + c.warp) + rr) continue;
-                for (double dx = -rr; dx <= rr; dx += 1) for (double dz = -rr; dz <= rr; dz += 1) {
-                    if (dx * dx + dz * dz > rr * rr) continue;
-                    double x = s.x + dx, z = s.z + dz, ce = w.e(c, x, z);
-                    if (ce >= 1) continue;
-                    // under a room whose floor stands higher than the stage's open space, rock parts them
-                    if (w.floorAt(c, ce, x, z) > s.y1 + 1.5) continue;
-                    // a walker in the room may stand up to two under its vault: the rock where floor and vault close in
-                    // by its wall, and the vault's pendants, leave pockets and ledges over the floor
-                    if (w.ceilAt(c, ce, x, z) - 2 > hiF) return false;
-                }
-            }
-            int bx = (int) Math.floor((s.x - x0 + Net.APRON) / CB), bz = (int) Math.floor((s.z - z0 + Net.APRON) / CB);
-            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-                int qx = bx + dx, qz = bz + dz;
-                if (qx < 0 || qz < 0 || qx >= cn || qz >= cn) continue;
-                for (int[] q : pts[qx * cn + qz]) {
-                    Way o = n.ways.get(q[0]);
-                    int j = q[1];
-                    if (Math.hypot(s.x - o.x[j], s.z - o.z[j]) > rr + o.w[j]) continue;
-                    if (o.f[j] - o.slab[j] > s.y1 + 1.5 || o.f[j] + Math.max(o.hgt[j], 6.5) < s.y0 - 1.5) continue;
-                    if (o.f[j] > hiF || o.f[j] < loF) return false;
-                    // feet on a way whose open space comes to the hole's edge stand up to 2 higher there (nearRim)
-                    if (Math.ceil(o.f[j] - 1e-9) - Math.ceil(s.foot - 1e-9) > STAGE_FALL - 1 && nearRim(o, j, s)) return false;
-                }
-            }
-            return true;
-        }
-
-        /**
-         * True when way o's open space (out to 1.25 times its half-width from its line, on either side of its point j)
-         * comes within a block of the edge of stage s's hole. There the way's floor rises to its wall and meets the
-         * hole's, and a walker stands on that rock up to 2 higher than on the floor, so {@link #fallSafe(Shaft)} keeps
-         * the feet on such a way's floor at most {@link #STAGE_FALL} - 1 blocks over those at the stage's foot, and a
-         * fall from that rock at most 15: a room's tunnel at its door, its feet 14 over the foot's and its open space
-         * reaching 1.6 into the hole, left a step 2 over its floor from which a walker fell 16. (Measured out to its
-         * half-width alone, a tunnel whose open space stopped short of that block left such a step all the same.)
-         * Beside such a way the passage over the hole stays narrow ({@link #stepsApart}).
-         */
-        boolean nearRim(Way o, int j, Shaft s) {
-            double fromAxis = Double.MAX_VALUE;
-            for (int jj = Math.max(0, j - 1); jj < Math.min(o.n - 1, j + 1); jj++)
-                fromAxis = Math.min(fromAxis, segDistXZ(s.x, s.z, o.x[jj], o.z[jj], o.x[jj + 1], o.z[jj + 1]));
-            return fromAxis - 1.25 * o.w[j] < s.r + 1;
-        }
-
-        /**
-         * The same for a ledge passage between two stages: no way it hangs over (with no slab of rock between) lies
-         * more than {@link #STAGE_FALL} under its floor, and none over it stands that much higher. clear() lets the
-         * other tunnels of the climb's rooms come close near those rooms' doors.
-         */
-        boolean fallSafe(Way lg) {
-            if (sp.wayMax <= 0) return true;
-            for (int i = 0; i < lg.n; i++) {
-                int b0 = bucket(lg.x[i], lg.z[i]);
-                if (b0 < 0) continue;
-                int bx = b0 / cn, bz = b0 % cn;
-                for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-                    int qx = bx + dx, qz = bz + dz;
-                    if (qx < 0 || qz < 0 || qx >= cn || qz >= cn) continue;
-                    for (int[] q : pts[qx * cn + qz]) {
-                        Way o = n.ways.get(q[0]);
-                        int j = q[1];
-                        if (Math.hypot(lg.x[i] - o.x[j], lg.z[i] - o.z[j]) > lg.w[i] + o.w[j]) continue;
-                        double lo = Math.min(lg.f[i], o.f[j]), hi = Math.max(lg.f[i], o.f[j]);
-                        if (hi - lo <= STAGE_FALL) continue;
-                        Way up = lg.f[i] > o.f[j] ? lg : o, dn = up == lg ? o : lg;
-                        int iu = up == lg ? i : j, id = up == lg ? j : i;
-                        // rock between them when the lower one's open space ends under the upper one's slab
-                        if (dn.f[id] + Math.max(dn.hgt[id], 6.5) < up.f[iu] - up.slab[iu] - 1.5) continue;
-                        return false;
-                    }
-                }
-            }
             return true;
         }
 
@@ -7004,39 +2903,8 @@ final class NetPlanner {
         }
 
         /**
-         * The Basalt Galleries: how far a tunnel runs straight out of door d of capsule room c before it winds, so it
-         * has left the room's capsule when it turns ({@link #leavesCapsule}: the capsule's radius and the tunnel's
-         * flared half-width, less the door's own distance from the axis); at most 0.45 of the L between the doors, and
-         * 0 for any other room. A tunnel that turned along a rift's or a flight's side at once came back into its
-         * capsule, and a flight's far end, whose doors face out along the stair, could reach nothing behind it.
-         */
-        double capLeg(Chamber c, double[] d, double half, double L) {
-            if (!capsule(c)) return 0;
-            return Math.min(0.45 * L, capR(c) + half * 1.25 * 1.24 + 1 - capDist(c, d[0], d[1]));
-        }
-
-        /**
-         * The control points of a tunnel's way out of door d ({@link #walkWay}), outward first: straight out for
-         * {@code leg} blocks (at least 5), then, with a leg and the tunnel's far end (x, z of {@code far}) behind it,
-         * round to the side the far end lies on, 24 blocks over, so the tunnel comes back beside its room, not into it.
-         */
-        static List<double[]> legOut(double[] d, double[] far, double leg) {
-            List<double[]> o = new ArrayList<>();
-            double L = Math.max(5, leg), ox = d[0] + d[3] * L, oz = d[1] + d[4] * L;
-            o.add(new double[]{ox, oz});
-            double fx = far[0] - ox, fz = far[1] - oz;
-            if (leg > 0 && fx * d[3] + fz * d[4] < 0) {
-                double s = d[3] * fz - d[4] * fx >= 0 ? 1 : -1, nx = -d[4] * s, nz = d[3] * s;
-                o.add(new double[]{ox + d[3] * 7 + nx * 12, oz + d[4] * 7 + nz * 12});
-                o.add(new double[]{ox + nx * 24, oz + nz * 24});
-            }
-            return o;
-        }
-
-        /**
          * A winding tunnel from door a to door b ({x, z, floor, outward x, outward z}), long enough for its descent at
-         * the planning slope, terraced, with a width and height that swell and pinch. In the Basalt Galleries a door
-         * of a hall or a flight has a leg ({@link #legOut}), and the winding runs between the legs' ends.
+         * the planning slope, terraced, with a width and height that swell and pinch.
          */
         Way walkWay(double[] a, double[] b, long hh, double half, double hgt, boolean force, boolean check) {
             double dy = Math.abs(b[2] - a[2]);
@@ -7045,78 +2913,34 @@ final class NetPlanner {
             double ux = (b[0] - a[0]) / Math.max(1e-6, L), uz = (b[1] - a[1]) / Math.max(1e-6, L);
             double nx = -uz, nz = ux;
             List<double[]> best = null;
-            double bestLen = 0, ampMul = 1;
+            double bestLen = 0;
             for (int attempt = 0; attempt < (force ? 9 : 6); attempt++) {
                 List<double[]> ctrl = new ArrayList<>();
                 ctrl.add(new double[]{a[0] - a[3] * 3, a[1] - a[4] * 3});
                 ctrl.add(new double[]{a[0], a[1]});
-                // the winding's chord: door to door, or (legs) between the legs' ends
-                double ax = a[0], az = a[1], bx = b[0], bz = b[1], Lc = L, cnx = nx, cnz = nz;
-                List<double[]> outB = null;
-                if (legA > 0 || legB > 0 || turnA > 0 || turnB > 0) {
-                    List<double[]> outA = new ArrayList<>(legOut(a, b, legA));
-                    outB = new ArrayList<>(legOut(b, a, legB));
-                    // the Basalt Galleries: a swing aside just past a leg that runs straight on
-                    if (turnA > 0 && outA.size() == 1) outA.add(turnPoint(a, outA.get(0), b, turnA, half, hh, 50));
-                    if (turnB > 0 && outB.size() == 1) outB.add(turnPoint(b, outB.get(0), a, turnB, half, hh, 51));
-                    ctrl.addAll(outA);
-                    double[] pa = outA.get(outA.size() - 1), pb = outB.get(outB.size() - 1);
-                    ax = pa[0]; az = pa[1]; bx = pb[0]; bz = pb[1];
-                    Lc = Math.max(1e-6, Math.hypot(bx - ax, bz - az));
-                    cnx = -(bz - az) / Lc; cnz = (bx - ax) / Lc;
-                } else ctrl.add(new double[]{a[0] + a[3] * 5, a[1] + a[4] * 5});
+                ctrl.add(new double[]{a[0] + a[3] * 5, a[1] + a[4] * 5});
                 // the bends: k points swung out to alternate sides by amp of scale, a share of the straight way
-                int k;
-                double amp, scale;
-                if (sp.windStep > 0) {
-                    // the Wasteland: a bend about every windStep blocks, swung out by about windAmp of the step
-                    k = Math.max(1, (int) Math.round(Lc / sp.windStep) - 1);
-                    amp = sp.windAmp * (0.8 + 0.4 * Hashing.unit(Hashing.mix(hh, 20, 0, 0))) * ampMul;
-                    scale = Lc / (k + 1);
-                } else {
-                    k = 1 + (Lc > 45 ? 1 : 0) + (Lc > 90 ? 1 : 0);
-                    // a sight bend goes on the middle point alone (one or three points), so the tunnel leaves each door
-                    // nearly straight and clears its room's capsule ({@link #leavesCapsule}) before it turns
-                    if (wayBend > 0) k = Lc > 90 ? 3 : 1;
-                    amp = (0.10 + 0.08 * Hashing.unit(Hashing.mix(hh, 20, 0, 0))) * (1 + 0.55 * attempt);
-                    scale = Math.max(Lc, 30);
-                    if (li == Terrain.GALLERIES) {
-                        amp *= VIEW_LEVELS[viewLevel][2];
-                        if (wayBend == 0) k += (int) VIEW_LEVELS[viewLevel][3];
-                    }
-                }
-                double sign = (Hashing.unit(Hashing.mix(hh, 21, 0, 0)) < 0.5 ? -1 : 1) * (mirrorWind ? -1 : 1);
+                int k = 1 + (L > 45 ? 1 : 0) + (L > 90 ? 1 : 0);
+                double amp = (0.10 + 0.08 * Hashing.unit(Hashing.mix(hh, 20, 0, 0))) * (1 + 0.55 * attempt);
+                double scale = Math.max(L, 30);
+                double sign = Hashing.unit(Hashing.mix(hh, 21, 0, 0)) < 0.5 ? -1 : 1;
                 for (int i = 0; i < k; i++) {
                     double t = (i + 1.0) / (k + 1) + (Hashing.unit(Hashing.mix(hh, 22 + i, 0, 0)) - 0.5) * 0.1;
                     double off = sign * amp * scale * (0.6 + 0.4 * Hashing.unit(Hashing.mix(hh, 30 + i, 0, 0)));
-                    if (wayBend > 0 && 2 * i + 1 == k) off = Math.copySign(Math.max(Math.abs(off), wayBend), off);
                     sign = -sign;
-                    double px = ax + (bx - ax) * t + cnx * off, pz = az + (bz - az) * t + cnz * off;
+                    double px = a[0] + (b[0] - a[0]) * t + nx * off, pz = a[1] + (b[1] - a[1]) * t + nz * off;
                     double m = EDGE_MARGIN + half + 8;
                     px = Math.max(x0 + m, Math.min(x0 + cell - m, px));
                     pz = Math.max(z0 + m, Math.min(z0 + cell - m, pz));
                     ctrl.add(new double[]{px, pz});
                 }
-                if (outB != null) for (int i = outB.size() - 1; i >= 0; i--) ctrl.add(outB.get(i));
-                else ctrl.add(new double[]{b[0] + b[3] * 5, b[1] + b[4] * 5});
+                ctrl.add(new double[]{b[0] + b[3] * 5, b[1] + b[4] * 5});
                 ctrl.add(new double[]{b[0], b[1]});
                 ctrl.add(new double[]{b[0] - b[3] * 3, b[1] - b[4] * 3});
                 List<double[]> poly = catmull(ctrl, 2.5);
                 double len = polyLen(poly);
-                if (sp.windStep > 0) {
-                    // the Wasteland: the bends swing wider while the line is too short for its descent and gentler
-                    // while it is over the tunnel limit (halved, then none at all), and the first line that is
-                    // neither is the tunnel; a line both too short and over the limit has no way out
-                    best = poly;
-                    bestLen = len;
-                    boolean over = overLimit(len);
-                    if (len >= need && !over) break;
-                    if (over && (len < need || ampMul == 0)) break;
-                    ampMul = over ? (ampMul >= 0.5 ? ampMul * 0.5 : 0) : ampMul + 0.55;
-                    continue;
-                }
                 if (best == null || len > bestLen) { best = poly; bestLen = len; }
-                if (len >= need || overLimit(len)) break;
+                if (len >= need) break;
             }
             if (bestLen < need - 0.5) return null;
             List<double[]> poly = best;
@@ -7144,192 +2968,6 @@ final class NetPlanner {
             }
             wy.bounds();
             return wy;
-        }
-
-        /**
-         * The Basalt Galleries' tunnel shapes, tried in turn until one keeps the views through it short ({@link
-         * #galleryWay}): {the swing aside past a hall's or a flight's leg, past any other door (half-widths, plus 3; 0
-         * for none), the winding's swing (times), one more bend (1) or not, the legs (times)}. A tunnel leaves a hall
-         * straight for 15 to 25 blocks to clear its capsule; running on in line with its mouth, it would let a view from
-         * the hall's far side (80 to 120 blocks) or from a tunnel facing it across the hall run 50 to 70 blocks into it.
-         * The last is the plain tunnel, with no swing aside, for a portal vestibule's tunnel and for the last tries
-         * ({@link #plainAny}) alone: where every swing past a leg turns the tunnel back alongside its own room's capsule
-         * (a rift's or a Causeway's, long and narrow), the plain tunnel may still keep the views short. A vestibule no
-         * tunnel reaches is left out and its portal ends blind, while any other room has other pairs to try first.
-         */
-        static final double[][] VIEW_LEVELS = {
-                {1.4, 0, 1, 0, 1},
-                {1.8, 1.8, 1.6, 0, 1},
-                {2.2, 2.2, 2.2, 1, 0.75},
-                {0, 0, 1, 0, 1}};
-
-        /**
-         * A Basalt Galleries tunnel from door da of A to door db of B ({@link #embed}'s walking case), or null: the
-         * first of the {@link #VIEW_LEVELS} shapes that is long enough for its descent, keeps clear of the network
-         * ({@link #clear}) and of itself ({@link #crossesItself}, {@link #turnsBack}) and has no straight line through
-         * it longer than {@link NetViews#LIMIT} across what is open so far ({@link NetViews#clear}); a shape that coils
-         * over itself is tried once more with its bends swung to the other sides ({@link #mirrorWind}). Each door of a
-         * hall or a flight has a leg ({@link #capLeg}). A sight bend ({@link #sightBend}) needs a stretch between the
-         * legs to turn off the doors' line in: two bends' worth and a tunnel's width, or the bend folds into a hairpin
-         * a straight line passes across; shorter, the legs give way.
-         */
-        Way galleryWay(Edge e, Chamber A, Chamber B, double[] da, double[] db, long hh, double half, double hgt, boolean force, double L) {
-            double bend = sightBend(A, B, da, db, half);
-            // a landing's spoke is short and straight: no legs
-            boolean spoke = A.landing() || B.landing();
-            double la = spoke ? 0 : capLeg(A, da, half, L), lb = spoke ? 0 : capLeg(B, db, half, L);
-            double room = L - 2 * bend - 2 * half;
-            if (bend > 0 && la + lb > room) {
-                double f = Math.max(0, room) / (la + lb);
-                la *= f; lb *= f;
-            }
-            views.sync(n.ch, n.ways);
-            for (int level = 0; level < VIEW_LEVELS.length; level++) {
-                if (level == VIEW_LEVELS.length - 1 && A.kind != Kind.PORTAL && B.kind != Kind.PORTAL && !plainAny) break;
-                double[] v = VIEW_LEVELS[level];
-                for (int mirror = 0; mirror < 2; mirror++) {
-                    wayBend = bend;
-                    legA = la * v[4]; legB = lb * v[4];
-                    turnA = (la > 0 ? v[0] : v[1]) * half;
-                    turnB = (lb > 0 ? v[0] : v[1]) * half;
-                    if (turnA > 0) turnA += 3;
-                    if (turnB > 0) turnB += 3;
-                    viewLevel = level;
-                    mirrorWind = mirror == 1;
-                    Way wy = walkWay(da, db, hh, half, hgt, force, true);
-                    wayBend = 0; legA = 0; legB = 0; turnA = 0; turnB = 0; viewLevel = 0; mirrorWind = false;
-                    if (wy == null) break;
-                    // the Obsidian Tubes' tunnel is a round tube (section 5)
-                    wy.round = A.kind == Kind.TUBEHUB || B.kind == Kind.TUBEHUB;
-                    if (!clear(wy, e.a, e.b)) break;
-                    // a winding that coils over itself on its way down may not with its bends swung the other way
-                    if (crossesItself(wy)) continue;
-                    if ((!spoke && turnsBack(wy)) || !views.clear(wy, A, B)) break;
-                    return wy;
-                }
-            }
-            return null;
-        }
-
-        /**
-         * True when the tunnel passes over itself: two of its points less than the lower one's half-width apart across,
-         * or, where the tunnel drops more than {@link #SELF_DROP} between them, whose footprints overlap (less than
-         * their two half-widths apart), though the stretch between them does not run straight (longer than their
-         * distance by a width), more than 6 apart in height and with less than clearV of rock between the lower one's
-         * vault and the upper one's slab. {@link #clear} leaves a way's own points out, and a winding swung hard to the
-         * side can coil over itself on its way down. Under the upper stretch's walk the lower one's vault cuts the way:
-         * winding down 9 within a few blocks, a tunnel loses its upper floor to the vault under it and cannot be walked
-         * up. Beside the walk, where the upper floor curls up toward its wall, the rough vault (15 to 19 tall) leaves a
-         * hole as deep as the drop and 2 or 3 more, a fall of 16 to 19 from a coil of 13 to 18. A kink of a few blocks
-         * in a short tunnel by its doors, a step of up to 6, keeps its floor. Where the line itself crosses over an
-         * earlier stretch, a loop rather than a kink, any drop of more than {@link #SELF_STEP} at the crossing counts:
-         * the lower stretch's vault takes the upper one's floor over its whole width there, and the upper walk meets a
-         * step as high as the drop. Coiling up 4 from a flight's top to a hall's door, such a tunnel was the only way
-         * from the bedrock landing and its flights to the rest of the cell, and in the blocks no one could walk it.
-         */
-        boolean crossesItself(Way wy) {
-            double[] arc = new double[wy.n];
-            for (int i = 1; i < wy.n; i++) arc[i] = arc[i - 1] + Math.hypot(wy.x[i] - wy.x[i - 1], wy.z[i] - wy.z[i - 1]);
-            for (int i = 0; i < wy.n; i++) {
-                for (int j = i + 1; j < wy.n; j++) {
-                    int lo = wy.f[i] < wy.f[j] ? i : j, hi = lo == i ? j : i;
-                    double rise = wy.f[hi] - wy.f[lo], dx = wy.x[i] - wy.x[j], dz = wy.z[i] - wy.z[j];
-                    double reach = rise > SELF_DROP ? wy.w[i] + wy.w[j] : wy.w[lo];
-                    if (rise <= 6 || Math.abs(dx) > reach || Math.abs(dz) > reach) continue;
-                    double d = Math.sqrt(dx * dx + dz * dz);
-                    if (d >= reach || arc[j] - arc[i] < d + Math.max(wy.w[i], wy.w[j])) continue;
-                    if (rise - wy.slab[hi] - wy.hgt[lo] < sp.clearV) return true;
-                }
-            }
-            // stretches i and j (not neighbours) whose lines cross in plan
-            for (int i = 0; i + 1 < wy.n; i++) {
-                double ax = wy.x[i], az = wy.z[i], bx = wy.x[i + 1] - ax, bz = wy.z[i + 1] - az;
-                for (int j = i + 2; j + 1 < wy.n; j++) {
-                    double cx = wy.x[j] - ax, cz = wy.z[j] - az, ex = wy.x[j + 1] - wy.x[j], ez = wy.z[j + 1] - wy.z[j];
-                    double den = bx * ez - bz * ex;
-                    if (Math.abs(den) < 1e-9) continue;
-                    double s = (cx * ez - cz * ex) / den, t = (cx * bz - cz * bx) / den;
-                    if (s < 0 || s > 1 || t < 0 || t > 1) continue;
-                    double fi = wy.f[i] + (wy.f[i + 1] - wy.f[i]) * s, fj = wy.f[j] + (wy.f[j + 1] - wy.f[j]) * t;
-                    int lo = fi < fj ? i : j, hi = lo == i ? j : i;
-                    double rise = Math.abs(fj - fi);
-                    if (rise > SELF_STEP && rise - wy.slab[hi] - wy.hgt[lo] < sp.clearV) return true;
-                }
-            }
-            return false;
-        }
-
-        /**
-         * The most a tunnel may climb between two of its stretches whose lines cross in plan ({@link #crossesItself}):
-         * past it, the step at the crossing is 2 blocks or more however the floors round, more than a player steps up.
-         */
-        static final double SELF_STEP = 2;
-
-        /**
-         * The most a tunnel may drop between two of its stretches whose footprints overlap ({@link #crossesItself}):
-         * a hole beside its walk is then at most 15 deep.
-         */
-        static final double SELF_DROP = 10;
-
-        /**
-         * True when the tunnel's line turns straight back on itself (from one point to the next, to within about 26
-         * degrees of reversed: a cusp where the winding's points crowd together) between floors more than a block
-         * apart. It passes the same spot twice there and the blocks keep one floor for both, the higher, so the lower
-         * pass's walk meets a step of 2 or more. A landing's spoke is left to its flight: where it turns back into the
-         * stair, the stair's floor is its floor ({@link Network}).
-         */
-        boolean turnsBack(Way wy) {
-            for (int i = 1; i + 1 < wy.n; i++) {
-                double ux = wy.x[i] - wy.x[i - 1], uz = wy.z[i] - wy.z[i - 1], vx = wy.x[i + 1] - wy.x[i], vz = wy.z[i + 1] - wy.z[i];
-                double lu = Math.hypot(ux, uz), lv = Math.hypot(vx, vz);
-                if (lu < 0.3 || lv < 0.3) continue;
-                if ((ux * vx + uz * vz) / (lu * lv) < -0.9 && Math.abs(wy.f[i + 1] - wy.f[i - 1]) > 1) return true;
-            }
-            return false;
-        }
-
-        /**
-         * The Basalt Galleries: the point 6 blocks on from p (the end of door d's leg) and {@code off} to the side, on
-         * the side the tunnel's far end lies (straight ahead, a side by the tunnel's hash), so the tunnel swings aside
-         * just past its leg and a straight line through its mouth runs only a few blocks into it.
-         */
-        double[] turnPoint(double[] d, double[] p, double[] far, double off, double half, long hh, long salt) {
-            double nx = d[3], nz = d[4], fx = far[0] - p[0], fz = far[1] - p[1], fl = Math.max(1e-9, Math.hypot(fx, fz));
-            double cr = (nx * fz - nz * fx) / fl;
-            double side = Math.abs(cr) > 0.17 ? Math.signum(cr) : (Hashing.unit(Hashing.mix(hh, salt, 0, 0)) < 0.5 ? -1 : 1);
-            double m = EDGE_MARGIN + half + 8;
-            double px = p[0] + nx * 6 - nz * side * off, pz = p[1] + nz * 6 + nx * side * off;
-            return new double[]{Math.max(x0 + m, Math.min(x0 + cell - m, px)), Math.max(z0 + m, Math.min(z0 + cell - m, pz))};
-        }
-
-        /** The Basalt Galleries: the longest a straight line may run through a tunnel from room to room (blocks). */
-        static final double SIGHT_RUN = 150;
-
-        /**
-         * The Basalt Galleries: the least sideways bend a tunnel from door da of A to door db of B needs: none when the
-         * straight line between the doors, run on through both rooms to their walls, is under {@link #SIGHT_RUN}; else
-         * 2.6 half-widths and 2, so no straight line passes both doors inside the tunnel (the line keeps within a
-         * flared half-width of the doors' chord; the bend takes the tunnel's middle further off it than that and its
-         * own half-width). Between two halls 80 to 100 across, a straight tunnel let sight lines run 190 blocks.
-         */
-        double sightBend(Chamber A, Chamber B, double[] da, double[] db, double half) {
-            double L = Math.hypot(db[0] - da[0], db[1] - da[1]);
-            if (L < 1e-6) return 0;
-            double ux = (db[0] - da[0]) / L, uz = (db[1] - da[1]) / L;
-            double run = L + runIn(A, da[0], da[1], -ux, -uz) + runIn(B, db[0], db[1], ux, uz);
-            return run > SIGHT_RUN ? 2.6 * half + 2 : 0;
-        }
-
-        /** How far a straight line from (x, z) runs on into room c along (dx, dz) before its footprint ends (blocks). */
-        double runIn(Chamber c, double x, double z, double dx, double dz) {
-            double s = 0, lim = 2.4 * c.R();
-            boolean in = false;
-            for (; s < lim; s += 2) {
-                boolean inside = w.e(c, x + dx * s, z + dz * s) < 1;
-                if (inside) in = true;
-                else if (in) break;
-            }
-            return s;
         }
 
         /** Terraced descent from fa at s0 to fb at s1: steps of about 2.5 blocks, ramps never steeper than 0.85. */
@@ -7400,13 +3038,6 @@ final class NetPlanner {
             return bx * cn + bz;
         }
 
-        /**
-         * The Basalt Galleries: two ways from one chamber share its mouth, free of the clearances between them, only
-         * where their floors are at most this far apart (blocks). Further apart, one is the other's roof: a tall tunnel
-         * passing 20 over another by their hall's mouth breaks through the other's vault, a fall of 21 from its floor.
-         */
-        static final double MOUTH_STEP = 10;
-
         /** True when the way keeps clear of every chamber but its own two, every other way and every shaft. */
         boolean clear(Way wy, int ca, int cb) {
             // v10: once a way has left one of its own chambers it may not come back alongside it (clear() used to
@@ -7415,10 +3046,6 @@ final class NetPlanner {
                 if (c < 0) continue;
                 Chamber k = n.ch.get(c);
                 if (k.dark >= 0 || k.kind == Kind.CANYON || k.landing()) continue;
-                if (capsule(k)) {
-                    if (!leavesCapsule(wy, k)) return false;
-                    continue;
-                }
                 boolean fromStart = Math.hypot(wy.x[0] - k.x, wy.z[0] - k.z) <= Math.hypot(wy.x[wy.n - 1] - k.x, wy.z[wy.n - 1] - k.z);
                 int i0 = fromStart ? 0 : wy.n - 1;
                 double d0 = Math.hypot(wy.x[i0] - k.x, wy.z[i0] - k.z), arc = 0;
@@ -7443,14 +3070,13 @@ final class NetPlanner {
             for (Chamber c : n.ch) {
                 if (!c.keep || c.kind == Kind.CANYON || c.dark >= 0 || c.id == ca || c.id == cb) continue;
                 double m = c.R() + wMax + sp.clearC + 1;
-                if (!capsule(c) && (c.x < lx - m || c.x > hx + m || c.z < lz - m || c.z > hz + m)) continue;
+                if (c.x < lx - m || c.x > hx + m || c.z < lz - m || c.z > hz + m) continue;
                 nearC.add(c);
             }
             List<Shaft> nearS = new ArrayList<>();
             for (Shaft s : n.shafts) {
                 double m = s.r + wMax + 4;
                 if (s.x < lx - m || s.x > hx + m || s.z < lz - m || s.z > hz + m) continue;
-                if (ownParts != null && ownParts.contains(s)) continue;
                 nearS.add(s);
             }
             for (int i = 0; i < wy.n; i++) {
@@ -7460,16 +3086,11 @@ final class NetPlanner {
                 if (pf - wy.slab[i] < B + Terrain.SEAL + 2 || pf + ph > T - Terrain.SEAL - 3) return false;
                 if (n.dark != null && !relaxDark && (i & 1) == 0 && n.dark.hit(px, pz, pw + 2, pf - wy.slab[i] - 2, pf + ph + 2, darkOf(ca), darkOf(cb))) return false;
                 for (Chamber c : nearC) {
-                    if (capsule(c)) {
-                        if (capGap(c, px, pz) > pw + sp.clearC) continue;
-                    } else {
-                        double dx = px - c.x, dz = pz - c.z, lim = c.R() + pw + sp.clearC;
-                        if (far(dx, dz, lim) || Math.hypot(dx, dz) > lim) continue;
-                    }
+                    double dx = px - c.x, dz = pz - c.z, lim = c.R() + pw + sp.clearC;
+                    if (far(dx, dz, lim) || Math.hypot(dx, dz) > lim) continue;
                     if (pf + ph + sp.clearCV < c.yLo() || c.yHi() + sp.clearCV < pf - wy.slab[i]) continue;
                     return false;
                 }
-                if (lavaHit(px, pz, pw + sp.clearC, pf - wy.slab[i], pf + ph, 0, sp.clearCV)) return false;
                 if (!cityDoor && reserveHit(px, pz, pw, pf - wy.slab[i], pf + ph)) return false;
                 if (geodeHit(px, pz, pw, pf - wy.slab[i], pf + ph, GEODE_GAP, 4)) return false;
                 // ends near their own chambers are allowed to touch them
@@ -7480,13 +3101,12 @@ final class NetPlanner {
                     if (qx < 0 || qz < 0 || qx >= cn || qz >= cn) continue;
                     for (int[] q : pts[qx * cn + qz]) {
                         Way o = n.ways.get(q[0]);
-                        if (o == wy || ownParts != null && ownParts.contains(o)) continue;
+                        if (o == wy) continue;
                         int j = q[1];
                         double ex = px - o.x[j], ez = pz - o.z[j], lim = pw + o.w[j] + sp.clearH;
                         if (far(ex, ez, lim) || Math.hypot(ex, ez) > lim) continue;
-                        // two ways leaving the same chamber may share its mouth (the Basalt Galleries: at about one
-                        // floor)
-                        if (sharesEnd(o, ca, cb) && nearOwnEnd(px, pz, ca, cb) && (li != Terrain.GALLERIES || Math.abs(pf - o.f[j]) <= MOUTH_STEP)) continue;
+                        // two ways leaving the same chamber may share its mouth
+                        if (sharesEnd(o, ca, cb) && nearOwnEnd(px, pz, ca, cb)) continue;
                         double gap = pf > o.f[j] ? pf - wy.slab[i] - (o.f[j] + o.hgt[j]) : o.f[j] - o.slab[j] - (pf + ph);
                         if (gap >= sp.clearV) continue;
                         return false;
@@ -7500,7 +3120,7 @@ final class NetPlanner {
                 }
             }
             // the gates' passages
-            for (int b = li + 1; b <= li + 2 && b <= w.shape.layerCount; b++) {
+            for (int b = li + 1; b <= li + 2; b++) {
                 Plans.Gate g = w.base.plans.gate(b, cx, cz);
                 for (int i = 0; i < wy.n; i += 2) {
                     if (nearOwnEnd(wy.x[i], wy.z[i], ca, cb) && (n.ch.get(ca).landing() || (cb >= 0 && n.ch.get(cb).landing()))) continue;
@@ -7540,7 +3160,7 @@ final class NetPlanner {
                 if (c < 0) continue;
                 Chamber k = n.ch.get(c);
                 if (k.dark >= 0) { if (n.dark.near(region(k), px, pz, 9)) return true; continue; }
-                if (capsule(k) ? capGap(k, px, pz) < 9 : Math.hypot(px - k.x, pz - k.z) < k.R() + 9) return true;
+                if (Math.hypot(px - k.x, pz - k.z) < k.R() + 9) return true;
             }
             return false;
         }
@@ -7553,7 +3173,6 @@ final class NetPlanner {
                 if (s.y1 + 3 < c.yLo() || c.yHi() + 3 < s.y0) continue;
                 return false;
             }
-            if (lavaHit(s.x, s.z, s.r + 5, s.y0, s.y1, 0, 3)) return false;
             if (!(city != null && (ca == city.id || cb == city.id)) && reserveHit(s.x, s.z, s.r + 2, s.y0, s.y1)) return false;
             if (geodeHit(s.x, s.z, s.r, s.y0, s.y1, GEODE_GAP, 4)) return false;
             // the way points from the index, two buckets (24 blocks) round the shaft's: a shaft's reach (its radius, the

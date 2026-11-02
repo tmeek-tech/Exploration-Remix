@@ -622,8 +622,8 @@ final class VoxelHarness {
     }
 
     /**
-     * The share of the chamber's planned interior that is open: the columns well inside its footprint (e under 0.95)
-     * and off its pillars, from a block over its floor to a block under its ceiling. Returns {open, planned}.
+     * The share of the chamber's planned interior that is open: the columns well inside its footprint (e under 0.95),
+     * from a block over its floor to a block under its ceiling. Returns {open, planned}.
      */
     long[] openShare(Network w, Chamber ch) {
         long plan = 0, open = 0;
@@ -633,7 +633,6 @@ final class VoxelHarness {
             Network.LCol lc = w.layer(w.column(x, z), li);
             for (int k = 0; k < lc.nc; k++) {
                 if (lc.c[k] != ch || lc.e[k] >= 0.95) continue;
-                if (lc.pr[k] > 0 && lc.pd[k] < lc.pr[k] + 1) continue;
                 int ya = (int) Math.ceil(lc.F[k] + 1), yb = (int) Math.floor(lc.C[k] - 1);
                 for (int y = ya; y <= yb; y++) {
                     if (!in(x, y, z)) continue;
