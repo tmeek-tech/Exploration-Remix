@@ -134,7 +134,12 @@ public final class LavaFlood {
     public static void changedDimension(PlayerEvent.PlayerChangedDimensionEvent event) { tell(event.getEntity()); }
 
     @SubscribeEvent
-    public static void serverStopped(ServerStoppedEvent event) { reset(); }
+    public static void serverStopped(ServerStoppedEvent event) {
+        reset();
+        TerrainReset.reset();
+        com.explorationremix.world.quake.Quakes.reset();
+        com.explorationremix.world.eruption.Eruptions.reset();
+    }
 
     private static void reset() {
         setUp = false;
@@ -210,6 +215,10 @@ public final class LavaFlood {
         }
         STATS.tick();
         flood(level, target, now);
+        // 0.5.1: the terrain reset follows the flood (it reads the heights the flood left), then the quakes and eruptions
+        TerrainReset.tick(level, band, s, now);
+        com.explorationremix.world.quake.Quakes.tick(level, band, s, now);
+        com.explorationremix.world.eruption.Eruptions.tick(level, band, s, now);
     }
 
     /**

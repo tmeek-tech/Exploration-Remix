@@ -46,6 +46,7 @@ public final class ExplorationRemix {
         ERBiomeModifiers.SERIALIZERS.register(modBus);
         ERSounds.SOUNDS.register(modBus);
         ERParticles.PARTICLES.register(modBus);
+        com.explorationremix.registry.EREntities.ENTITIES.register(modBus);
         MinecraftForge.EVENT_BUS.register(DeepWorldInstaller.class);
         MinecraftForge.EVENT_BUS.register(RemixCommands.class);
         MinecraftForge.EVENT_BUS.register(ERRemaps.class);
