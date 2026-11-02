@@ -546,28 +546,6 @@ def _line(x0, y0, x1, y1):
             y0 += sy
 
 
-def silver_fern():
-    """Silvery-mint fronds arching out of one root, leaflets in a herringbone (the Silver Fern Rift picture)."""
-    return grid([
-        "................",
-        "...h.......h....",
-        "..lc.......cl...",
-        "...lc..h..cl....",
-        "..h.lc.c.cl.h...",
-        ".lc..lclcl..cl..",
-        "..lc..scs..cl...",
-        "h..lc.lcl.cl..h.",
-        "lc..lscscsl..cl.",
-        ".lc..sscss..cl..",
-        "..lcs.scs.scl...",
-        "....sssgsss.....",
-        "......sgs.......",
-        "......ggg.......",
-        ".......g........",
-        ".......g........",
-    ], {"h": "#EEF6F0", "l": "#C6DACD", "c": "#9DB9A8", "s": "#78978A", "g": "#5F7C50"})
-
-
 # ------------------------------------------------------------------------------------------------ Ember Gardens
 
 def orange_shelf_fungus():
@@ -685,7 +663,6 @@ PAINTERS = {
     "block/blue_glow_vines": blue_glow_vines,
     "block/blue_glow_vines_plant": blue_glow_vines_plant,
     "block/blue_glow_vines_plant_2": blue_glow_vines_plant_2,
-    "block/silver_fern": silver_fern,
     "block/orange_shelf_fungus": orange_shelf_fungus,
     "block/orange_shelf_fungus_under": orange_shelf_fungus_under,
     "block/lavender_coral": lavender_coral,

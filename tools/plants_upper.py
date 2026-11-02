@@ -10,7 +10,7 @@ leaflets instead run on into the tile below, drawn wrapped, and are the same in 
 """
 import math, random
 from PIL import Image
-from plants import (hexc, grid, blank, _line, register, put, stamp, sway, bezier, fern_fan, prisms, speckle_sheet,
+from plants import (hexc, grid, blank, _line, register, put, stamp, sway, bezier, prisms, speckle_sheet,
                     put_wrap)
 
 PAINTERS = {}
@@ -270,34 +270,7 @@ for _k in (1, 2):
     register(PAINTERS, variants("silver_frond_plant", 2)[_k - 1], (lambda k=_k: _silver_frond(k, False)))
     register(PAINTERS, variants("silver_frond", 2)[_k - 1], (lambda k=_k: _silver_frond(k, True)))
 
-# Tall silver fern: six or seven fronds from one base, drawn on one 16 by 32 canvas and cut in two.
-TALL_FERN = [
-    [((6.5, 31.5), (3, 22), (1, 12)), ((7.5, 31.5), (5, 16), (4, 2)), ((7.5, 31.5), (8, 14), (9, 0)),
-     ((8.5, 31.5), (11, 16), (13, 4)), ((8.5, 31.5), (13, 22), (15, 13)), ((6.5, 31.5), (4, 28), (0, 23)),
-     ((8.5, 31.5), (12, 28), (15, 24))],
-    [((6.5, 31.5), (4, 16), (0, 8)), ((7.5, 31.5), (6, 14), (6, 1)), ((8.5, 31.5), (10, 14), (12, 1)),
-     ((8.5, 31.5), (12, 18), (15, 9)), ((6.5, 31.5), (5, 24), (2, 18)), ((8.5, 31.5), (11, 25), (14, 19))],
-]
-for _k in (1, 2):
-    register(PAINTERS, variants("tall_silver_fern_top", 2)[_k - 1],
-             (lambda k=_k: fern_fan(TALL_FERN[k - 1], height=32).crop((0, 0, 16, 16))))
-    register(PAINTERS, variants("tall_silver_fern_bottom", 2)[_k - 1],
-             (lambda k=_k: fern_fan(TALL_FERN[k - 1], height=32).crop((0, 16, 16, 32))))
-
-# More looks for the existing silver fern: five fronds, and three long ones.
-register(PAINTERS, "silver_fern_2", lambda: fern_fan([
-    ((7.5, 15.5), (5, 10), (1, 4)), ((7.5, 15.5), (7.5, 8), (7, 0)), ((8.5, 15.5), (11, 10), (14, 4)),
-    ((6.5, 15.5), (4, 13), (0, 11)), ((8.5, 15.5), (12, 13), (15, 12))]))
-register(PAINTERS, "silver_fern_3", lambda: fern_fan([
-    ((6.5, 15.5), (4, 8), (2, 1)), ((7.5, 15.5), (8, 7), (8, 0)), ((8.5, 15.5), (12, 8), (14, 2))], max_len=3))
-
-# Silver wall fern: fronds fanning out of a crack. The model is vanilla's coral_wall_fan, which puts the bottom rows
-# against the wall and the top rows at the free tips.
-register(PAINTERS, "silver_wall_fern", lambda: fern_fan([
-    ((7.5, 15.5), (5, 9), (3, 1)), ((8.5, 15.5), (11, 9), (12, 1)), ((8.5, 15.5), (13, 12), (15, 8))]))
-register(PAINTERS, "silver_wall_fern_2", lambda: fern_fan([
-    ((6.5, 15.5), (3, 11), (0, 5)), ((7.5, 15.5), (7, 8), (6, 0)), ((8.5, 15.5), (10, 8), (12, 1)),
-    ((8.5, 15.5), (13, 13), (15, 9))]))
+# The silver ferns (small, tall and hanging) are in plants_fern.py.
 
 
 # ------------------------------------------------------------------------------------------------ Ivory Root Cavern

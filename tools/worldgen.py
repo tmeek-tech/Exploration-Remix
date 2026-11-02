@@ -449,9 +449,10 @@ def build_features():
     feature("ivory_root_cavern/grotto_ivy", "underground_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:grotto_ivy"), "walls_ceiling", 32, f"#{MOD}:cave_rock", radius=5, height=5),
             [count(9), SQUARE, layer(up), BIOME])
+    # Hanging ferns down the walls, where their fronds fall free (the picture's fronds draping the ledges).
     feature("silver_fern_rift/wall_ferns", "underground_decoration", ["silver_fern_rift"],
-            attach(simple(f"{MOD}:silver_wall_fern"), "walls", 32, f"#{MOD}:cave_rock", radius=6, height=6),
-            [count(6), SQUARE, layer(up), BIOME])
+            attach(simple(f"{MOD}:silver_wall_fern"), "walls_hanging", 32, f"#{MOD}:cave_rock", radius=6, height=6),
+            [count(10), SQUARE, layer(up), BIOME])
     feature("ivory_root_cavern/brackets", "underground_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:ivory_bracket"), "walls", 64, f"#{MOD}:cave_rock", radius=7, height=8),
             [count(3), SQUARE, layer(up), BIOME])
