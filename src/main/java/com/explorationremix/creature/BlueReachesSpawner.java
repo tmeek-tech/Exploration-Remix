@@ -123,6 +123,8 @@ public final class BlueReachesSpawner {
             int y = y0 + ((k & 1) == 0 ? k / 2 : -(k + 1) / 2);
             SkeinEntity.Placement spot = SkeinEntity.placement(level, EREntities.SKEIN.get(), new BlockPos(x, y, z));
             if (spot == null) continue;
+            // its body is laid straight back from its head: not where most of it would lie in a step or over a drop
+            if (SkeinEntity.openLength(level, EREntities.SKEIN.get(), spot) < SkeinEntity.BODY_ROOM) return null;
             BlockPos at = BlockPos.containing(spot.pos());
             int there = countNear(level, SkeinEntity.class, spot.pos(), BlueSpawnRules.SKEIN_RADIUS);
             if (BlueSpawnRules.skeinSpot(placeAt(level, at), spot.pos().y, top, bottom, nearestPlayer(level, spot.pos()), spot.pos().distanceTo(p.position()), there)) return spot;
