@@ -2,6 +2,7 @@ package com.explorationremix.client;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.client.model.Geometry;
+import com.explorationremix.client.render.FireflySwarmRenderer;
 import com.explorationremix.client.render.MossbackRenderer;
 import com.explorationremix.registry.EREntities;
 import com.explorationremix.registry.ERParticles;
@@ -31,5 +32,7 @@ public final class ClientSetup {
     @SubscribeEvent
     public static void renderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(EREntities.MOSSBACK.get(), MossbackRenderer::new);
+        // the blue fireflies: points of light drawn round the swarm's centre (no model)
+        event.registerEntityRenderer(EREntities.FIREFLY_SWARM.get(), FireflySwarmRenderer::new);
     }
 }
