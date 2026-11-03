@@ -211,9 +211,11 @@ class NoiseLayersTest {
      * the seal), and at the band's top and bottom rows the combined density has the sign of the lone field there, so no
      * lid or step forms where the band begins. Where beta is from {@link Join#LAVA_BETA} to under {@link Join#HOLE_BETA}
      * no block of the Wasteland's rows under a row over its lava table is open, whatever the interpolation gives, but in
-     * the craters round the holes the Galleries open with a ramp, which go under the table on purpose ({@link Join#seal}
-     * keeps out of them): there every open block under the table is air (20 000 columns, 20 areas of 512 x 512 anywhere
-     * in 6000 x 6000, {@link Spread}; the craters' fluid rule over more points is WastelandFieldTest.fluidRule).
+     * the craters round the holes the Galleries open with a ramp out to {@link WastelandField#crDry} from the hole's edge,
+     * which go under the table on purpose ({@link Join#seal} keeps out of them): there every open block under the table is
+     * air. A crater's outer ring, where its floor lies over the table and the fluid under it is lava, is sealed like the
+     * rest (20 000 columns, 20 areas of 512 x 512 anywhere in 6000 x 6000, {@link Spread}; the craters' fluid rule over
+     * more points is WastelandFieldTest.fluidRule).
      */
     @Test
     void joinIsOneDensity() {
@@ -237,7 +239,8 @@ class NoiseLayersTest {
             if ((t.rawDensity(x, j.hi, z) > 0) != (t.wasteland.density(x, j.hi, z) > 0)) topFlips++;
             double beta = t.breakthrough.beta(x, z);
             if (beta >= Join.LAVA_BETA && beta < Join.HOLE_BETA) {
-                boolean crater = t.wasteland.column(x, z).crater > 0;
+                WastelandField.Col c = t.wasteland.column(x, z);
+                boolean crater = c.crater > 0 && c.ring < t.wasteland.crDry;
                 int yy = j.wBot + r.nextInt(j.W - j.wBot + 1);
                 boolean isOpen = t.fine(x, yy, z, r.nextDouble() * 2 - 1) <= 0;
                 if (!crater) {

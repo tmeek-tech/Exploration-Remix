@@ -34,7 +34,8 @@ class WastelandFieldTest {
         long seed;
         int innerPlaces, mainInner;
         int tips, outOfReach, wayOn, blind;
-        int openings;
+        /** Openings (throats, see {@link #throatColumn}) and the areas of hole columns that hold them. */
+        int openings, holeAreas;
         double innerKm2;
         int[] rimWalks;
         int rimMainPlaces, rimUnreached;
@@ -81,9 +82,9 @@ class WastelandFieldTest {
             int[] w = rimWalks.clone();
             Arrays.sort(w);
             return String.format(java.util.Locale.ROOT, "seed %d: places %d, SCC %.2f %%; tips %d (%.2f per 1000), out of reach %d, way on %d, blind %d (%.3f per 1000)%s;"
-                            + " openings %d (%.0f per km2)%s; rim walk median %d p90 %d of %d main places (%d never); lava blocks %d, could flow %d, near an opening %d;"
+                            + " openings %d (%.0f per km2) in %d hole areas%s; rim walk median %d p90 %d of %d main places (%d never); lava blocks %d, could flow %d, near an opening %d;"
                             + " views p50 %.0f p90 %.0f p99 %.0f max %.0f of %d; NaN %d",
-                    seed, innerPlaces, 100 * scc(), tips, tipsPer1000(), outOfReach, wayOn, blind, blindPer1000(), blindAt, openings, openingsPerKm2(), openingAt,
+                    seed, innerPlaces, 100 * scc(), tips, tipsPer1000(), outOfReach, wayOn, blind, blindPer1000(), blindAt, openings, openingsPerKm2(), holeAreas, openingAt,
                     w.length == 0 ? -1 : w[w.length / 2], w.length == 0 ? -1 : w[(int) (w.length * 0.9)], rimMainPlaces, rimUnreached, lavaBlocks, lavaFlow,
                     lavaNearOpening, NoiseVox.quantile(v, 0.5), NoiseVox.quantile(v, 0.9), NoiseVox.quantile(v, 0.99), v.length == 0 ? 0 : v[v.length - 1], v.length, nans);
         }
@@ -144,6 +145,43 @@ class WastelandFieldTest {
     static boolean holeColumn(NoiseVox v, int bot, int x, int z) {
         for (int y = bot - 2; y <= bot + 8; y++) if (v.mat(x, y, z) != NoiseVox.AIR) return false;
         return true;
+    }
+
+    /**
+     * A hole's throat: air all the way from 6 rows under the Wasteland's bottom (T - 5, the first open row of a crater's
+     * floor and of a ramp's head, over the Galleries' rock at T - 6) to 8 over it. The crater round a hole the Galleries
+     * open with a ramp lowers the Wasteland's floor under its bottom for about 10 blocks past the hole's edge, so the hole
+     * columns of two holes some 20-30 blocks apart can meet in one area; each hole keeps a throat of its own.
+     */
+    static boolean throatColumn(NoiseVox v, int bot, int x, int z) {
+        for (int y = bot - 6; y <= bot + 8; y++) if (v.mat(x, y, z) != NoiseVox.AIR) return false;
+        return true;
+    }
+
+    /**
+     * The 4-connected groups of the marked columns of a SIZE x SIZE square: each column's group is labelled by the group's
+     * first column (in index order), whose entries of cnt, sx and sz get the group's size and sums of i and k.
+     */
+    static void group(boolean[] m, int[] lab, int[] cnt, long[] sx, long[] sz) {
+        Arrays.fill(lab, -1);
+        ArrayDeque<Integer> q = new ArrayDeque<>();
+        for (int p0 = 0; p0 < SIZE * SIZE; p0++) {
+            if (!m[p0] || lab[p0] >= 0) continue;
+            q.add(p0);
+            lab[p0] = p0;
+            while (!q.isEmpty()) {
+                int p = q.poll(), pi = p / SIZE, pk = p % SIZE;
+                sx[p0] += pi;
+                sz[p0] += pk;
+                cnt[p0]++;
+                for (int d = 0; d < 4; d++) {
+                    int a = pi + NoiseVox.DX[d], b = pk + NoiseVox.DZ[d];
+                    if (a < 0 || b < 0 || a >= SIZE || b >= SIZE) continue;
+                    int pp = a * SIZE + b;
+                    if (m[pp] && lab[pp] < 0) { lab[pp] = p0; q.add(pp); }
+                }
+            }
+        }
     }
 
     static Stats measure(long seed, int cx, int cz) {
@@ -266,35 +304,28 @@ class WastelandFieldTest {
             s.missedAt = missed.toString();
         }
 
-        // openings into the Galleries: 4 columns or more of hole columns, centre in the inner square
-        boolean[] hole = new boolean[SIZE * SIZE];
-        for (int i = 0; i < SIZE; i++) for (int k = 0; k < SIZE; k++) hole[i * SIZE + k] = holeColumn(v, bot, x0 + i, z0 + k);
-        int[] lab = new int[SIZE * SIZE];
-        Arrays.fill(lab, -1);
+        // openings into the Galleries: areas of 4 columns or more of hole columns, middle in the inner square, each
+        // counted once per throat of 4 columns or more in it (at least once)
+        boolean[] hole = new boolean[SIZE * SIZE], throat = new boolean[SIZE * SIZE];
+        for (int i = 0; i < SIZE; i++) for (int k = 0; k < SIZE; k++) {
+            hole[i * SIZE + k] = holeColumn(v, bot, x0 + i, z0 + k);
+            throat[i * SIZE + k] = hole[i * SIZE + k] && throatColumn(v, bot, x0 + i, z0 + k);
+        }
+        int[] lab = new int[SIZE * SIZE], tlab = new int[SIZE * SIZE], throats = new int[SIZE * SIZE];
+        int[] areaCnt = new int[SIZE * SIZE];
+        long[] areaSx = new long[SIZE * SIZE], areaSz = new long[SIZE * SIZE];
+        group(hole, lab, areaCnt, areaSx, areaSz);
+        int[] thrCnt = new int[SIZE * SIZE];
+        group(throat, tlab, thrCnt, new long[SIZE * SIZE], new long[SIZE * SIZE]);
+        for (int p = 0; p < SIZE * SIZE; p++) if (tlab[p] == p && thrCnt[p] >= 4) throats[lab[p]]++;
         StringBuilder openingAt = new StringBuilder();
         for (int p0 = 0; p0 < SIZE * SIZE; p0++) {
-            if (!hole[p0] || lab[p0] >= 0) continue;
-            ArrayDeque<Integer> q = new ArrayDeque<>();
-            q.add(p0);
-            lab[p0] = p0;
-            long sx = 0, sz = 0;
-            int cnt = 0;
-            while (!q.isEmpty()) {
-                int p = q.poll(), pi = p / SIZE, pk = p % SIZE;
-                sx += pi;
-                sz += pk;
-                cnt++;
-                for (int d = 0; d < 4; d++) {
-                    int a = pi + NoiseVox.DX[d], b = pk + NoiseVox.DZ[d];
-                    if (a < 0 || b < 0 || a >= SIZE || b >= SIZE) continue;
-                    int pp = a * SIZE + b;
-                    if (hole[pp] && lab[pp] < 0) { lab[pp] = p0; q.add(pp); }
-                }
-            }
-            int mx = x0 + (int) (sx / cnt), mz = z0 + (int) (sz / cnt);
+            if (lab[p0] != p0) continue;
+            int cnt = areaCnt[p0], mx = x0 + (int) (areaSx[p0] / cnt), mz = z0 + (int) (areaSz[p0] / cnt);
             if (cnt >= 4 && mx >= ix0 && mx < ix1 && mz >= iz0 && mz < iz1) {
-                s.openings++;
-                if (s.openings <= 3) openingAt.append(String.format(" (%d,%d)", mx, mz));
+                s.holeAreas++;
+                s.openings += Math.max(1, throats[p0]);
+                if (s.holeAreas <= 3) openingAt.append(String.format(" (%d,%d)", mx, mz));
             }
         }
         s.openingAt = openingAt.toString();
@@ -567,12 +598,16 @@ class WastelandFieldTest {
     }
 
     /**
-     * Openings into the Galleries (4 columns or more open from 2 under the Wasteland's bottom to 8 over it) are common and
-     * near: at least 60 per km^2 over the boxes, and the median walk from a main-component place to an opening's rim at
-     * most 220 moves. The Wasteland's spec measured 195-254 per km^2 and 143-168 moves over a stand-in for the Galleries
-     * and asked 120; an opening only falls where the Galleries are open under it, and the interim Galleries' domes reach
-     * the join on about a third of the columns where beta asks for an opening, so with them the boxes measure 94 per
-     * km^2 (29, 137, 117) and 180-226 moves. The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
+     * Openings into the Galleries (areas of 4 columns or more open from 2 under the Wasteland's bottom to 8 over it,
+     * counted once per throat in them, {@link #throatColumn}) are common and near: at least 60 per km^2 over the boxes,
+     * and the median walk from a main-component place to an opening's rim at most 220 moves. The Wasteland's spec
+     * measured 195-254 per km^2 and 143-168 moves over a stand-in for the Galleries and asked 120; an opening only falls
+     * where the Galleries are open under it, and the interim Galleries' domes reached the join on about a third of the
+     * columns where beta asks for an opening (94 per km^2: 29, 137, 117; 180-226 moves). The Galleries' v2 field keeps 7
+     * in 10 of the Wasteland's openings by hash, only over its caverns, and opens each with a ramp and a crater, or as a
+     * skylight away from the ramped ones: 19 holes in the three inner squares (62 per km^2: 7, 8 and 4; medians 196-224
+     * moves), the 19 the field lists there, in 17 areas of hole columns (in box 8004 three holes 22-25 blocks apart share
+     * one crater's floor). The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
      */
     @Test
     void openingsAreCommonAndReachable() {
@@ -1054,9 +1089,9 @@ class WastelandFieldTest {
      * The fluid rule (spec 6.5, spec-galleries-field-v2 7.4), over 10^6 points (200 areas of 512 x 512 anywhere in
      * 20 000 x 20 000, {@link Spread}): under the lava table a block is air wherever beta is {@link Join#AIR_BETA} or more
      * or a hole the Galleries open with a ramp is within {@link WastelandField#crDry} (its crater may go under the table;
-     * lava under that), and where beta is from {@link Join#LAVA_BETA} to under {@link Join#HOLE_BETA}, outside the
-     * craters (the seal keeps out of them, {@link Join#seal}), no block from the Wasteland's bottom to a row over its
-     * table is open, whatever the corners interpolate to.
+     * lava under that), and where beta is from {@link Join#LAVA_BETA} to under {@link Join#HOLE_BETA}, but in the craters
+     * within crDry of their holes (the seal keeps out of them, {@link Join#seal}; a crater's outer ring is sealed), no
+     * block from the Wasteland's bottom to a row over its table is open, whatever the corners interpolate to.
      */
     @Test
     void fluidRule() {
@@ -1079,7 +1114,7 @@ class WastelandFieldTest {
                 air++;
                 if (f != Terrain.AIR) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta + " ring " + col.ring; }
             } else if (f != Terrain.LAVA) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta + " ring " + col.ring; }
-            if (beta >= Join.LAVA_BETA && beta < Join.HOLE_BETA && !crater) {
+            if (beta >= Join.LAVA_BETA && beta < Join.HOLE_BETA && !(crater && dry)) {
                 sealed++;
                 int yy = bot + r.nextInt(W + 2 - bot);
                 if (t.fine(x, yy, z, r.nextDouble() * 2 - 1) <= 0) { open++; if (first == null) first = "open at " + x + " " + yy + " " + z + " beta " + beta; }

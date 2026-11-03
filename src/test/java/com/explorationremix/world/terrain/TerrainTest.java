@@ -192,8 +192,9 @@ class TerrainTest {
     /**
      * Each layer's fluid lies flat at its table. Above it only perched water: the Lantern Lake's perched lakes, each flat
      * at its own level, and the pools of the Basalt Galleries' Obsidian Tubes. Under it the table's fluid but in a gate's
-     * passage, and in the Wasteland, where the Galleries open into it, air ({@link Join#AIR_BETA}): its lava pools only
-     * where beta is under that.
+     * passage, and in the Wasteland, where the Galleries open into it, air ({@link Join#AIR_BETA}), and within {@link
+     * WastelandField#crDry} of a hole the Galleries open with a ramp (its crater may go under the table): its lava pools
+     * only where beta is under that, further from such a hole.
      */
     @Test
     void waterTablesAreFlat() {
@@ -208,7 +209,7 @@ class TerrainTest {
             if (y >= t.shape.waterY(li)) {
                 if (f != Terrain.AIR) assertTrue(f == Terrain.WATER && (li == Terrain.GALLERIES || inPerchedLake(t, li, x, y, z)), "fluid above the table at " + x + " " + y + " " + z);
             } else if (li == Terrain.WASTELAND) {
-                boolean air = t.breakthrough != null && t.breakthrough.beta(x, z) >= Join.AIR_BETA;
+                boolean air = t.breakthrough != null && (t.breakthrough.beta(x, z) >= Join.AIR_BETA || t.wasteland.column(x, z).ring < t.wasteland.crDry);
                 if (air) wasteAir++; else wasteLava++;
                 assertEquals(air ? Terrain.AIR : Terrain.LAVA, f, "the Wasteland under its table at " + x + " " + y + " " + z);
             } else if (f == Terrain.AIR) {

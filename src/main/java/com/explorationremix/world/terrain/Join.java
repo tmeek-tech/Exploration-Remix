@@ -97,13 +97,16 @@ public final class Join {
      * Rock the join keeps whatever either field says (positive inside, or -SOLID): the Wasteland's rows up to a row over
      * its lava table where beta is under {@link #HOLE_BETA} (but for its lava pools' dips), 4 rows over its bottom under
      * lava-holding ground, and the Galleries' top 4 rows where beta is under {@link #CLOSED_BETA}. None of it in the
-     * craters round the holes the Galleries open with a ramp ({@link WastelandField}): there the Wasteland's lowest sheet
-     * goes down to the hole's lip whatever beta is, its open space under the lava table is air, no lava pool comes near,
-     * and the Galleries' own rock (their cap at T - 6 or lower outside their discs) keeps the layers apart.
+     * craters round the holes the Galleries open with a ramp ({@link WastelandField}) out to {@link WastelandField#crDry}
+     * from the hole's edge: there the Wasteland's lowest sheet goes down to the hole's lip whatever beta is, its open
+     * space under the lava table is air, no lava pool comes near, and the Galleries' own rock (their cap at T - 6 or lower
+     * outside their discs) keeps the layers apart. Further out a crater's floor lies over the table (crDry is where it
+     * rises past W + 2, plus a gap), the fluid under the table is lava again, and the seal holds as anywhere else, so no
+     * interpolation opens a block of lava there.
      */
     double seal(int x, int y, int z) {
         WastelandField.Col c = upper.column(x, z);
-        if (c.crater > 0) return -Terrain.SOLID;
+        if (c.crater > 0 && c.ring < upper.crDry) return -Terrain.SOLID;
         double b = c.beta, s = -Terrain.SOLID;
         if (y >= wBot && y <= W + 1 && b < HOLE_BETA && c.lavaDip <= 0) s = Math.max(s, 1 + (W + 1 - y));
         if (y >= wBot && y <= wBot + 3 && b < LAVA_BETA) s = Math.max(s, 1 + (wBot + 3 - y));
