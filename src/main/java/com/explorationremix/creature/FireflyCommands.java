@@ -53,7 +53,9 @@ public final class FireflyCommands {
         ServerLevel level = c.getSource().getLevel();
         Vec3 eye = c.getSource().getPosition();
         Vec3 look = Vec3.directionFromRotation(c.getSource().getRotation());
-        if (c.getSource().getEntity() != null) eye = c.getSource().getEntity().getEyePosition();
+        // from your eyes, unless the command was moved elsewhere ("execute positioned ...")
+        if (c.getSource().getEntity() != null && c.getSource().getEntity().position().distanceToSqr(eye) < 1.0E-6)
+            eye = c.getSource().getEntity().getEyePosition();
         // a few blocks short of the rock you look at (out of shy range), or six blocks ahead into open air
         BlockHitResult hit = level.clip(new ClipContext(eye, eye.add(look.scale(24)), ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, null));
         Vec3 at = hit.getType() == HitResult.Type.MISS ? eye.add(look.scale(6)) : hit.getLocation().subtract(look.scale(Math.min(2.0, hit.getLocation().distanceTo(eye) * 0.5)));
