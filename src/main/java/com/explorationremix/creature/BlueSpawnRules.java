@@ -8,8 +8,8 @@ package com.explorationremix.creature;
  * <p>Round a player in the Blue Reaches (in Survival or Adventure) it keeps one or two Skeins within {@link
  * #SKEIN_RADIUS} blocks, never more than {@link #SKEIN_MAX} there, and three to five swarms within {@link
  * #SWARM_RADIUS} (one or two in the Deep Dark, where the fireflies are few). Each comes out {@link #NEAR} blocks or
- * further from every player, and within the radius it is counted in, so it counts as soon as it is out. The Asurine
- * Geodes are a refuge: fireflies live there, Skeins never.
+ * further from every player, and within the radius it is counted in (a sphere: height counts too), so it counts as
+ * soon as it is out. The Asurine Geodes are a refuge: fireflies live there, Skeins never.
  */
 public final class BlueSpawnRules {
     private BlueSpawnRules() {}
@@ -66,7 +66,8 @@ public final class BlueSpawnRules {
 
     /**
      * Whether to bring out a Skein for a player with {@code nearby} within {@link #SKEIN_RADIUS}: always below one,
-     * now and then ({@code roll} under {@link #SKEIN_TOP_UP}) below two; never in Peaceful or without mob spawning.
+     * now and then ({@code roll} under {@link #SKEIN_TOP_UP}) below two; never in Peaceful or without mob spawning
+     * ({@code mobSpawning}: the doMobSpawning rule, and the server spawning monsters at all).
      */
     public static boolean wantSkein(int nearby, boolean peaceful, boolean mobSpawning, double roll) {
         if (peaceful || !mobSpawning || nearby >= SKEIN_MAX) return false;
@@ -83,7 +84,10 @@ public final class BlueSpawnRules {
         return p == Place.DEEP_DARK ? 2 : p == Place.OTHER ? 0 : 5;
     }
 
-    /** Whether to bring out a swarm for a player in {@code p} with {@code nearby} within {@link #SWARM_RADIUS}. */
+    /**
+     * Whether to bring out a swarm for a player in {@code p} with {@code nearby} within {@link #SWARM_RADIUS}; never
+     * without mob spawning ({@code mobSpawning}: the doMobSpawning rule, and the server spawning animals at all).
+     */
     public static boolean wantSwarm(Place p, int nearby, boolean mobSpawning, double roll) {
         if (!mobSpawning || nearby >= swarmsMax(p)) return false;
         if (nearby < swarmsKept(p)) return true;
@@ -92,15 +96,21 @@ public final class BlueSpawnRules {
 
     /**
      * Whether a Skein may come out at a spot: a place it lives in, in the Blue Reaches, at least {@link #NEAR} from every
-     * player, and with fewer than {@link #SKEIN_MAX} Skeins already within {@link #SKEIN_RADIUS} of it.
+     * player, within {@link #SKEIN_RADIUS} of the player it is for ({@code fromPlayer}, straight through the rock, up and
+     * down too: the sphere it is counted in), and with fewer than {@link #SKEIN_MAX} Skeins already within
+     * {@link #SKEIN_RADIUS} of it.
      */
-    public static boolean skeinSpot(Place p, double y, int top, int bottom, double nearestPlayer, int skeinsThere) {
-        return skeinsLive(p) && inBand(y, top, bottom) && nearestPlayer >= NEAR && skeinsThere < SKEIN_MAX;
+    public static boolean skeinSpot(Place p, double y, int top, int bottom, double nearestPlayer, double fromPlayer, int skeinsThere) {
+        return skeinsLive(p) && inBand(y, top, bottom) && nearestPlayer >= NEAR && fromPlayer <= SKEIN_RADIUS && skeinsThere < SKEIN_MAX;
     }
 
-    /** Whether a swarm may come out at a spot ({@code roll} thins them out in the Deep Dark). */
-    public static boolean swarmSpot(Place p, double y, int top, int bottom, double nearestPlayer, double roll) {
-        if (!swarmsLive(p) || !inBand(y, top, bottom) || nearestPlayer < NEAR) return false;
+    /**
+     * Whether a swarm may come out at a spot: a place swarms live in, in the Blue Reaches, at least {@link #NEAR} from
+     * every player, and within {@link #SWARM_RADIUS} of the player it is for ({@code fromPlayer}, up and down too, as for
+     * a Skein); {@code roll} thins them out in the Deep Dark.
+     */
+    public static boolean swarmSpot(Place p, double y, int top, int bottom, double nearestPlayer, double fromPlayer, double roll) {
+        if (!swarmsLive(p) || !inBand(y, top, bottom) || nearestPlayer < NEAR || fromPlayer > SWARM_RADIUS) return false;
         return p != Place.DEEP_DARK || roll < DEEP_DARK_SWARMS;
     }
 

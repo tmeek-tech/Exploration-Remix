@@ -6,6 +6,7 @@ import com.explorationremix.registry.EREntities;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -82,10 +83,13 @@ public final class BlueReachesSpawner {
         if (!BlueSpawnRules.playerCounts(p.isSpectator(), p.isCreative(), place, p.getY(), top, bottom)) return;
         boolean mobSpawning = level.getGameRules().getBoolean(GameRules.RULE_DOMOBSPAWNING);
         boolean peaceful = level.getDifficulty() == Difficulty.PEACEFUL;
+        // the server's spawn-monsters and spawn-animals, as vanilla's spawns keep them: a Skein is a monster, and a
+        // swarm is ambient life, which vanilla brings out only with the animals
+        MinecraftServer server = level.getServer();
         int skeins = countNear(level, SkeinEntity.class, p.position(), BlueSpawnRules.SKEIN_RADIUS);
-        if (BlueSpawnRules.wantSkein(skeins, peaceful, mobSpawning, level.random.nextDouble())) spawnSkein(level, p, top, bottom);
+        if (BlueSpawnRules.wantSkein(skeins, peaceful, mobSpawning && server.isSpawningMonsters(), level.random.nextDouble())) spawnSkein(level, p, top, bottom);
         int swarms = countNear(level, FireflySwarm.class, p.position(), BlueSpawnRules.SWARM_RADIUS);
-        if (BlueSpawnRules.wantSwarm(place, swarms, mobSpawning, level.random.nextDouble())) spawnSwarm(level, p, top, bottom);
+        if (BlueSpawnRules.wantSwarm(place, swarms, mobSpawning && server.isSpawningAnimals(), level.random.nextDouble())) spawnSwarm(level, p, top, bottom);
     }
 
     private static int countNear(ServerLevel level, Class<? extends net.minecraft.world.entity.Entity> kind, Vec3 at, double r) {
@@ -121,7 +125,7 @@ public final class BlueReachesSpawner {
             if (spot == null) continue;
             BlockPos at = BlockPos.containing(spot.pos());
             int there = countNear(level, SkeinEntity.class, spot.pos(), BlueSpawnRules.SKEIN_RADIUS);
-            if (BlueSpawnRules.skeinSpot(placeAt(level, at), spot.pos().y, top, bottom, nearestPlayer(level, spot.pos()), there)) return spot;
+            if (BlueSpawnRules.skeinSpot(placeAt(level, at), spot.pos().y, top, bottom, nearestPlayer(level, spot.pos()), spot.pos().distanceTo(p.position()), there)) return spot;
             return null;
         }
         return null;
@@ -156,7 +160,9 @@ public final class BlueReachesSpawner {
         if (!level.hasChunksAt(at.getX() - 2, at.getZ() - 2, at.getX() + 2, at.getZ() + 2)) return null;
         if (!clear(level, at) || !rockBelow(level, at)) return null;
         Vec3 mid = Vec3.atCenterOf(at);
-        return BlueSpawnRules.swarmSpot(placeAt(level, at), mid.y, top, bottom, nearestPlayer(level, mid), level.random.nextDouble()) ? mid : null;
+        // it is counted where its box stands, half a box under its centre
+        double fromPlayer = mid.subtract(0.0, FireflySwarm.HALF, 0.0).distanceTo(p.position());
+        return BlueSpawnRules.swarmSpot(placeAt(level, at), mid.y, top, bottom, nearestPlayer(level, mid), fromPlayer, level.random.nextDouble()) ? mid : null;
     }
 
     /** Nothing solid and no water or lava in the blocks round {@code at}. */

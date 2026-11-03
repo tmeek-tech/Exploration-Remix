@@ -61,19 +61,19 @@ class BlueSpawnRulesTest {
         assertTrue(skeinsLive(Place.RIFT));
         assertTrue(skeinsLive(Place.DEEP_DARK));
         assertTrue(swarmsLive(Place.GEODES));
-        assertFalse(skeinSpot(Place.GEODES, -150, TOP, BOTTOM, 30, 0));
-        assertTrue(swarmSpot(Place.GEODES, -150, TOP, BOTTOM, 30, 0.9));
+        assertFalse(skeinSpot(Place.GEODES, -150, TOP, BOTTOM, 30, 30, 0));
+        assertTrue(swarmSpot(Place.GEODES, -150, TOP, BOTTOM, 30, 30, 0.9));
     }
 
     @Test
     void spotsAreFarFromEveryPlayerAndNotCrowded() {
-        assertTrue(skeinSpot(Place.RIFT, -150, TOP, BOTTOM, 25, 2));
-        assertFalse(skeinSpot(Place.RIFT, -150, TOP, BOTTOM, 19.9, 0), "too near a player");
-        assertFalse(skeinSpot(Place.RIFT, -150, TOP, BOTTOM, 25, 3), "three there already");
-        assertFalse(skeinSpot(Place.RIFT, -300, TOP, BOTTOM, 25, 0), "below the Blue Reaches");
-        assertFalse(swarmSpot(Place.RIFT, -150, TOP, BOTTOM, 10, 0.0));
-        assertTrue(swarmSpot(Place.DEEP_DARK, -150, TOP, BOTTOM, 25, 0.1));
-        assertFalse(swarmSpot(Place.DEEP_DARK, -150, TOP, BOTTOM, 25, 0.9), "few in the Deep Dark");
+        assertTrue(skeinSpot(Place.RIFT, -150, TOP, BOTTOM, 25, 25, 2));
+        assertFalse(skeinSpot(Place.RIFT, -150, TOP, BOTTOM, 19.9, 19.9, 0), "too near a player");
+        assertFalse(skeinSpot(Place.RIFT, -150, TOP, BOTTOM, 25, 25, 3), "three there already");
+        assertFalse(skeinSpot(Place.RIFT, -300, TOP, BOTTOM, 25, 25, 0), "below the Blue Reaches");
+        assertFalse(swarmSpot(Place.RIFT, -150, TOP, BOTTOM, 10, 10, 0.0));
+        assertTrue(swarmSpot(Place.DEEP_DARK, -150, TOP, BOTTOM, 25, 25, 0.1));
+        assertFalse(swarmSpot(Place.DEEP_DARK, -150, TOP, BOTTOM, 25, 25, 0.9), "few in the Deep Dark");
     }
 
     @Test
@@ -85,6 +85,16 @@ class BlueSpawnRulesTest {
         }
         assertEquals(NEAR, ringDistance(-1, SKEIN_FAR));
         assertEquals(SKEIN_FAR, ringDistance(2, SKEIN_FAR));
+        // the ring is flat, but a spot is tried up to HEIGHT_SPREAD above or below the player and a Skein's rock is
+        // looked for SKEIN_SCAN further up or down (its node two blocks across): the furthest corner is outside the
+        // sphere it is counted in, so the spot's own distance is what keeps it in
+        double skeinWorst = Math.hypot(SKEIN_FAR + 2.0, BlueReachesSpawner.HEIGHT_SPREAD + BlueReachesSpawner.SKEIN_SCAN + 1.0);
+        double swarmWorst = Math.hypot(SWARM_FAR + 1.0, BlueReachesSpawner.HEIGHT_SPREAD + 1.0);
+        assertTrue(skeinWorst > SKEIN_RADIUS && swarmWorst > SWARM_RADIUS);
+        for (double d = NEAR; d <= skeinWorst; d += 0.25)
+            assertEquals(d <= SKEIN_RADIUS, skeinSpot(Place.RIFT, -150, TOP, BOTTOM, NEAR, d, 0), "a Skein " + d + " away");
+        for (double d = NEAR; d <= swarmWorst; d += 0.25)
+            assertEquals(d <= SWARM_RADIUS, swarmSpot(Place.RIFT, -150, TOP, BOTTOM, NEAR, d, 0.0), "a swarm " + d + " away");
     }
 
     @Test

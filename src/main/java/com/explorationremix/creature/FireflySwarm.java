@@ -17,7 +17,6 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
@@ -59,8 +58,10 @@ import java.util.Set;
  * fireflies) and each scatter with where it came from.
  *
  * <p>It is no mob: it has no health, never blocks anyone, is not pushed by water, pistons or other entities, sets off
- * no pressure plates, and an arrow flies through it. A swing at it only scatters it. It makes no sound. It is ambient
- * (never counted against the monsters) and goes away, as ambient mobs do, once no player has been near it a while.
+ * no pressure plates, and an arrow flies through it. A swing at it only scatters it. It makes no sound. Being no mob,
+ * its type is of the MISC category, not AMBIENT: it counts against no mob cap (an ambient one would crowd the bats out
+ * of its own caves) and wants no attributes. All the same it goes away as ambient mobs do, once no player has been near
+ * it a while ({@link #checkDespawn}, with distances of its own).
  */
 public class FireflySwarm extends Entity {
     // ------------------------------------------------------------------------------------------------ tuning
@@ -89,6 +90,16 @@ public class FireflySwarm extends Entity {
     static final double HALF = 0.3;
     /** Drawn while within this many blocks (times the view-distance scale): a light in the dark carries far. */
     static final double SEEN_FROM = 96.0;
+    /** Random points it tries for its next one, at each pick. */
+    static final int PICK_TRIES = 12;
+    /** After a pick that found nowhere to go, it hovers this long (ticks) before it tries again, not every tick. */
+    static final int REPICK = 20;
+    /**
+     * An ambient mob's despawn distances, kept here rather than read from its type's category (MISC, which vanilla
+     * despawns nothing by): gone at once with no player within {@link #DESPAWN_FAR} blocks, and in time with none
+     * within {@link #DESPAWN_NEAR}.
+     */
+    static final double DESPAWN_FAR = 128.0, DESPAWN_NEAR = 32.0;
 
     // ------------------------------------------------------------------------------------------------ synced
     private static final EntityDataAccessor<Boolean> DATA_LANDED = SynchedEntityData.defineId(FireflySwarm.class, EntityDataSerializers.BOOLEAN);
@@ -207,7 +218,7 @@ public class FireflySwarm extends Entity {
         else {
             abandonLanding();
             target = pickTarget(from);
-            retarget = 80;
+            retarget = target == null ? REPICK : 80;
         }
         fleeTicks = FLEE_TICKS;
         restTicks = Math.max(restTicks, SCARE_REST + random.nextInt(SCARE_REST + 1));
@@ -255,16 +266,18 @@ public class FireflySwarm extends Entity {
         return false;
     }
 
-    /** As ambient mobs: gone at once far from every player, and in time once none has come near for a while. */
+    /**
+     * As ambient mobs: gone at once far from every player, and in time once none has come near for a while. Its own
+     * distances ({@link #DESPAWN_FAR}, {@link #DESPAWN_NEAR}), not its category's: the server calls this for every
+     * entity it ticks, whatever its category.
+     */
     @Override
     public void checkDespawn() {
         Player p = level().getNearestPlayer(this, -1.0);
         if (p == null) return;
         double d = p.distanceToSqr(this);
-        MobCategory cat = getType().getCategory();
-        int far = cat.getDespawnDistance(), near = cat.getNoDespawnDistance();
-        if (d > (double) far * far) { discard(); return; }
-        if (d > (double) near * near) {
+        if (d > DESPAWN_FAR * DESPAWN_FAR) { discard(); return; }
+        if (d > DESPAWN_NEAR * DESPAWN_NEAR) {
             if (++farTicks > 600 && random.nextInt(800) == 0) discard();
         } else {
             farTicks = 0;
@@ -312,9 +325,10 @@ public class FireflySwarm extends Entity {
         if (landAt == null && restTicks == 0 && flightTicks > FLY_MIN && random.nextInt(LAND_CHANCE) == 0) planLanding();
         if (landAt != null && ++approachTicks > APPROACH_TICKS) abandonLanding();   // it cannot get there: another time
         if (landAt != null) target = landAt;
-        else if (target == null || retarget <= 0 || c.distanceToSqr(target) < 0.6 * 0.6) {
+        else if (target == null ? retarget <= 0 : (retarget <= 0 || c.distanceToSqr(target) < 0.6 * 0.6)) {
+            // with no target it waits out retarget too: a pick that found nothing is tried again REPICK ticks on
             target = pickTarget(null);
-            retarget = target == null ? 20 : 100 + random.nextInt(140);
+            retarget = target == null ? REPICK : 100 + random.nextInt(140);
         }
 
         Vec3 want = Vec3.ZERO;
@@ -335,6 +349,7 @@ public class FireflySwarm extends Entity {
             drift = drift.scale(-0.4);
             abandonLanding();
             target = null;
+            retarget = 0;                                    // a new one at once
             return;
         }
         if (!open(level(), here)) next = c.add(0.0, 0.08, 0.0).add(drift);   // shut in (a block set on it): it works its way out
@@ -382,7 +397,7 @@ public class FireflySwarm extends Entity {
             restTicks = Math.max(restTicks, SCARE_REST);
         }
         target = pickTarget(from);
-        retarget = 100;
+        retarget = target == null ? REPICK : 100;
     }
 
     private void abandonLanding() {
@@ -482,13 +497,16 @@ public class FireflySwarm extends Entity {
 
     /**
      * A point to drift to: a few blocks off in open air (room round it, no water), in sight, within its leash and its
-     * own biome; away from {@code away} when that is given. Null when it finds none this time.
+     * own biome; away from {@code away} when that is given. Far out from home it wants one near home; when none of
+     * those is in sight (home is round a bend of its cave) it finds its way back a hop at a time ({@link #wayBack}).
+     * Null when it finds none this time.
      */
     @Nullable
     private Vec3 pickTarget(@Nullable Vec3 away) {
         Vec3 c = centre();
         Vec3 h = home != null ? home : c;
-        for (int i = 0; i < 12; i++) {
+        boolean far = away == null && (!withinLeash(c) || c.distanceToSqr(h) > LEASH * LEASH * 0.4);
+        for (int i = 0; i < PICK_TRIES; i++) {
             Vec3 dir = new Vec3(random.nextGaussian(), random.nextGaussian() * 0.5, random.nextGaussian());
             if (dir.lengthSqr() < 1.0E-6) continue;
             dir = dir.normalize();
@@ -498,17 +516,44 @@ public class FireflySwarm extends Entity {
                 Vec3 off = c.subtract(away).multiply(1.0, 0.5, 1.0);
                 if (off.lengthSqr() > 1.0E-4) dir = off.normalize().add(dir.scale(0.6)).normalize();
                 r += 2.0;
-            } else if (!withinLeash(c) || c.distanceToSqr(h) > LEASH * LEASH * 0.4) {
+            } else if (far) {
                 from = h;                                  // far out: back towards home
                 r = random.nextDouble() * 4.0;
             }
             Vec3 t = from.add(dir.scale(r));
-            if (!withinLeash(t)) continue;
-            BlockPos tp = BlockPos.containing(t);
-            if (!level().isLoaded(tp) || !roomy(level(), tp) || !inHomeBiome(tp) || !clear(c, t)) continue;
-            return t;
+            if (withinLeash(t) && canDriftTo(c, t)) return t;
         }
-        return null;
+        return far ? wayBack(c, h) : null;
+    }
+
+    /**
+     * Far out, with no point near home in sight (home is round a bend): an ordinary hop from where it is that brings
+     * it nearer home, so it works its way back round the bend; failing that any hop within its leash, so it does not
+     * hang in one place until home happens to come into sight. Out of its leash altogether (carried off), any hop
+     * nearer home will do. Null when it finds neither this time.
+     */
+    @Nullable
+    private Vec3 wayBack(Vec3 c, Vec3 h) {
+        double now = c.distanceToSqr(h);
+        boolean out = !withinLeash(c);
+        Vec3 any = null;
+        for (int i = 0; i < PICK_TRIES; i++) {
+            Vec3 dir = new Vec3(random.nextGaussian(), random.nextGaussian() * 0.5, random.nextGaussian());
+            if (dir.lengthSqr() < 1.0E-6) continue;
+            Vec3 t = c.add(dir.normalize().scale(3.0 + random.nextDouble() * 5.0));
+            boolean nearer = t.distanceToSqr(h) < now;
+            if (nearer ? !(out || withinLeash(t)) : (any != null || !withinLeash(t))) continue;
+            if (!canDriftTo(c, t)) continue;
+            if (nearer) return t;
+            any = t;
+        }
+        return any;
+    }
+
+    /** Whether t is open, roomy air in its home biome (and loaded) that it can see from c. */
+    private boolean canDriftTo(Vec3 c, Vec3 t) {
+        BlockPos tp = BlockPos.containing(t);
+        return level().isLoaded(tp) && roomy(level(), tp) && inHomeBiome(tp) && clear(c, t);
     }
 
     private boolean withinLeash(Vec3 p) {
