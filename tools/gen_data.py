@@ -561,6 +561,8 @@ def creature_data():
 
 def lang(extra):
     out = dict(extra)
+    # the blue fireflies (creature.FireflySwarm; tools/fireflies.py paints their glow): one entity is a whole swarm
+    out[f"entity.{MOD}.firefly_swarm"] = "Blue Fireflies"
     write(os.path.join(ASSETS, "lang", "en_us.json"), dict(sorted(out.items())))
 
 

@@ -1,6 +1,7 @@
 package com.explorationremix.registry;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.creature.FireflySwarm;
 import com.explorationremix.creature.MossbackDen;
 import com.explorationremix.creature.MossbackEntity;
 import net.minecraft.core.registries.Registries;
@@ -34,6 +35,11 @@ public final class EREntities {
     @SuppressWarnings("DataFlowIssue")
     public static final RegistryObject<BlockEntityType<MossbackDen.Tile>> DEN_TILE = BLOCK_ENTITIES.register("mossback_den",
             () -> BlockEntityType.Builder.of(MossbackDen.Tile::new, ERBlocks.MOSSBACK_DEN.get()).build(null));
+
+    // ---- the blue fireflies (creature.FireflySwarm): one entity is a whole swarm; ambient, never a monster. Its box
+    // is only what a swing can hit (it blocks nothing); clients track it from eight chunks off, as its lights show far.
+    public static final RegistryObject<EntityType<FireflySwarm>> FIREFLY_SWARM = ENTITIES.register("firefly_swarm",
+            () -> EntityType.Builder.<FireflySwarm>of(FireflySwarm::new, MobCategory.AMBIENT).sized(0.6F, 0.6F).clientTrackingRange(8).build("firefly_swarm"));
 
     public static void onAttributes(EntityAttributeCreationEvent e) {
         e.put(MOSSBACK.get(), MossbackEntity.attributes().build());

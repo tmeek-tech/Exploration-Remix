@@ -77,6 +77,7 @@ import java.util.Locale;
  *     <li>{@code /remix census [radius]}: how overgrown and lit the caves around you are, per biome (PlantCensus)</li>
  *     <li>{@code /remix lava ...}: the Basalt Galleries' lava cycle: where it is, and setting, holding or lengthening it
  *     (LavaCommands)</li>
+ *     <li>{@code /remix fireflies ...}: spawning, listing, landing and scattering blue firefly swarms (FireflyCommands)</li>
  *     <li>{@code /remix mossback ...}: spawning, listing and steering Mossbacks, and finding their dens (MossbackCommands)</li>
  *     <li>{@code /remix entrances [cells]}: the entrance sites in the cells round you, why the other cells have none, and
  *     the nearest of each kind</li>
@@ -95,6 +96,7 @@ public final class RemixCommands {
                 .then(Commands.literal("info").executes(RemixCommands::info))
                 .then(PlantCensus.command())
                 .then(LavaCommands.command())
+                .then(com.explorationremix.creature.FireflyCommands.command())          // the blue fireflies
                 .then(com.explorationremix.creature.MossbackCommands.command())
                 .then(Commands.literal("entrances").executes(c -> entrances(c, 8))
                         .then(Commands.argument("cells", IntegerArgumentType.integer(1, 24)).executes(c -> entrances(c, IntegerArgumentType.getInteger(c, "cells")))))
