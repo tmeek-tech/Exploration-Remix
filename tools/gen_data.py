@@ -545,7 +545,7 @@ def biome_modifiers():
 
 
 def creature_data():
-    """The Mossback's drops and what it hunts."""
+    """The creatures' drops: the Mossback's (and what it hunts) and the Skein's."""
     write(os.path.join(DATA, "loot_tables", "entities", "mossback.json"), {
         "type": "minecraft:entity",
         "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:mossback_hide", "functions": [
@@ -557,10 +557,20 @@ def creature_data():
                                                "minecraft:goat", "minecraft:sheep", "minecraft:pig", "minecraft:silverfish"])
     write(os.path.join(ASSETS, "models", "item", "mossback_hide.json"),
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/mossback_hide"}})
+    # the Skein: a plate or two of its shell, kept for crafting later
+    write(os.path.join(DATA, "loot_tables", "entities", "skein.json"), {
+        "type": "minecraft:entity",
+        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:skein_plate", "functions": [
+            {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}},
+            {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]}]})
+    write(os.path.join(ASSETS, "models", "item", "skein_plate.json"),
+          {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/skein_plate"}})
 
 
 def lang(extra):
     out = dict(extra)
+    # the blue fireflies (creature.FireflySwarm; tools/fireflies.py paints their glow): one entity is a whole swarm
+    out[f"entity.{MOD}.firefly_swarm"] = "Blue Fireflies"
     write(os.path.join(ASSETS, "lang", "en_us.json"), dict(sorted(out.items())))
 
 

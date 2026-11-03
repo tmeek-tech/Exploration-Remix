@@ -2,7 +2,9 @@ package com.explorationremix.client;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.client.model.Geometry;
+import com.explorationremix.client.render.FireflySwarmRenderer;
 import com.explorationremix.client.render.MossbackRenderer;
+import com.explorationremix.client.render.SkeinRenderer;
 import com.explorationremix.registry.EREntities;
 import com.explorationremix.registry.ERParticles;
 import net.minecraftforge.api.distmarker.Dist;
@@ -26,10 +28,16 @@ public final class ClientSetup {
     @SubscribeEvent
     public static void layers(EntityRenderersEvent.RegisterLayerDefinitions event) {
         event.registerLayerDefinition(MossbackRenderer.LAYER, () -> Geometry.load("mossback"));
+        // the Skein: its loose pieces (head, plates, tail), drawn along its trail
+        event.registerLayerDefinition(SkeinRenderer.LAYER, () -> Geometry.load("skein"));
     }
 
     @SubscribeEvent
     public static void renderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(EREntities.MOSSBACK.get(), MossbackRenderer::new);
+        // the blue fireflies: points of light drawn round the swarm's centre (no model)
+        event.registerEntityRenderer(EREntities.FIREFLY_SWARM.get(), FireflySwarmRenderer::new);
+        // the Skein
+        event.registerEntityRenderer(EREntities.SKEIN.get(), SkeinRenderer::new);
     }
 }
