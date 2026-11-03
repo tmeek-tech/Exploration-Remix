@@ -466,16 +466,20 @@ class WastelandFieldTest {
                 }
                 // the floors: the flat part of a vault, away from the dips, the landings and other sheets' vaults
                 if (c.lavaDip > 0 || c.holeDip > 0 || c.entryD < 40 || c.h[k] < 3 || c.fl[k] <= bot + 4 || q >= 0.5) continue;
+                // (a crater's slope is no tunnel's floor: it is checked for holes, but kept out of the lane's statistics)
+                boolean lane = !(k == 0 && c.crater > 0);
                 boolean clash = false;
                 for (int o = 0; o < S && !clash; o++)
                     clash = o != k && c.near[o] && c.e[o] < c.w[o] * 1.25 && c.fl[o] - 6 < c.fl[k] + 4 && c.f[o] + c.h[o] + 2 > c.fl[k] - 5;
                 if (clash) continue;
                 s.floorColumns++;
                 int base = (int) Math.ceil(c.fl[k] - 1e-9), feet = standNear(v, x, base, z), zone = zoneOf(e), idx = (i * n + j) * S + k;
-                if (zone >= 0) s.floorAt[vaultClass(w)][zone][feet == NONE ? 7 : Math.max(-3, Math.min(3, feet - base)) + 3]++;
-                ee[idx] = (float) e;
-                ww[idx] = (float) w;
-                dl[idx] = feet == NONE ? NONE : feet - base;
+                if (lane) {
+                    if (zone >= 0) s.floorAt[vaultClass(w)][zone][feet == NONE ? 7 : Math.max(-3, Math.min(3, feet - base)) + 3]++;
+                    ee[idx] = (float) e;
+                    ww[idx] = (float) w;
+                    dl[idx] = feet == NONE ? NONE : feet - base;
+                }
                 // a hole: no standing place within 4 rows of the walking floor (terrace and all), open 5 rows or more under it
                 int wb = (int) Math.ceil(WastelandField.walkFloor(c, k) - 1e-9);
                 if (standNear(v, x, wb, z) == NONE && v.mat(x, wb, z) != NoiseVox.ROCK && v.mat(x, wb + 1, z) != NoiseVox.ROCK) {
@@ -603,11 +607,11 @@ class WastelandFieldTest {
      * and the median walk from a main-component place to an opening's rim at most 220 moves. The Wasteland's spec
      * measured 195-254 per km^2 and 143-168 moves over a stand-in for the Galleries and asked 120; an opening only falls
      * where the Galleries are open under it, and the interim Galleries' domes reached the join on about a third of the
-     * columns where beta asks for an opening (94 per km^2: 29, 137, 117; 180-226 moves). The Galleries' v2 field keeps 7
-     * in 10 of the Wasteland's openings by hash, only over its caverns, and opens each with a ramp and a crater, or as a
-     * skylight away from the ramped ones: 19 holes in the three inner squares (62 per km^2: 7, 8 and 4; medians 196-224
-     * moves), the 19 the field lists there, in 17 areas of hole columns (in box 8004 three holes 22-25 blocks apart share
-     * one crater's floor). The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
+     * columns where beta asks for an opening (94 per km^2: 29, 137, 117; 180-226 moves). The Galleries' v2 field opens
+     * every one of the Wasteland's openings over its caverns (off the massifs and the tube countries) that it can give a
+     * ramp, each with a crater, and no other (step 2: no skylights): 19 holes in the three inner squares (62 per km^2: 7,
+     * 8 and 4; medians 190-209 moves), the 19 the field lists there, in 17 areas of hole columns (in box 8004 holes some
+     * 20 blocks apart share one crater's floor). The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
      */
     @Test
     void openingsAreCommonAndReachable() {
@@ -803,7 +807,12 @@ class WastelandFieldTest {
         assertTrue(blind * 1000.0 / places <= 0.25, "blind ends with the decorations: " + blind + " in " + places);
     }
 
-    /** The decorations' lava keeps 3 columns from the openings into the Galleries (0; unguarded 27-318 blocks a box). */
+    /**
+     * The decorations' lava keeps 3 columns from the openings into the Galleries (0; unguarded 27-318 blocks a box). At
+     * least 200 blocks of it must be placed over the boxes for the check to mean anything: 283 are (15 pools and 14
+     * falls), fewer than before step 2 (over 300) because the Galleries now open every hole they can give a ramp, and
+     * the craters round them keep the pools away ({@link WastelandField#crDry}).
+     */
     @Test
     void decorationLavaKeepsFromTheOpenings() {
         int lava = 0;
@@ -812,7 +821,7 @@ class WastelandFieldTest {
             assertEquals(0, s.decorLavaNearOpening, "decoration lava within 3 columns of an opening, seed " + s.seed + ": " + s.decor);
             lava += s.decorLava;
         }
-        assertTrue(lava > 300, "too little decoration lava to check: " + lava);
+        assertTrue(lava >= 200, "too little decoration lava to check: " + lava);
     }
 
     /**
@@ -1462,9 +1471,12 @@ class WastelandFieldTest {
     }
 
     /**
-     * Lava stays at the openings' rims: every column an opening's dip reaches keeps its lava out (spec 8). Every third
-     * column each way of 4000 x 4000, taken in tiles of about 500 x 500 (a raster over the whole width would keep pushing
-     * the lattice cells of the Galleries' openings, which the columns' craters ask, out of their per-thread caches).
+     * Lava stays out of the openings (spec 8): every column of a crater's dry part (within {@link WastelandField#crDry} of
+     * the edge of a hole the Galleries open, where the crater's open space may go under the lava table) and every column
+     * an opening's dip reaches (none since the craters carry every opening: JoinTest.openingSiteIsThePreGuardDip) keeps
+     * its lava out. Every third column each way of 4000 x 4000, taken in tiles of about 500 x 500 (a raster over the
+     * whole width would keep pushing the lattice cells of the Galleries' openings, which the columns' craters ask, out of
+     * their per-thread caches).
      */
     @Test
     void lavaKeptAtOpenings() {
@@ -1473,7 +1485,8 @@ class WastelandFieldTest {
         int rims = 0, bad = 0, n = 1334, tile = 166;
         for (int a = 0; a < n; a += tile) for (int b = 0; b < n; b += tile) for (int i = a; i < Math.min(n, a + tile); i++) for (int k = b; k < Math.min(n, b + tile); k++) {
             int x = -2000 + 3 * i, z = -2000 + 3 * k;
-            if (f.openingRim(x, z) <= 0) continue;
+            WastelandField.Col c = f.column(x, z);
+            if (!(c.holeDip > 0 || (c.crater > 0 && c.ring < f.crDry))) continue;
             rims++;
             if (!f.lavaKept(x, f.W - 1, z)) bad++;
         }

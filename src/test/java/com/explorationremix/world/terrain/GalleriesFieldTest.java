@@ -49,8 +49,8 @@ class GalleriesFieldTest {
         int places, inMain, toMain, low, never, within384;
         /** Moves of the walk graph from the inner square's places: all (falls included), drops of 2..15 rows, falls (off an edge, over 15 or into lava). */
         long moves, drops, falls;
-        /** The opened openings with middles in the inner square: all, kept with a ramp, with a way down from the ramp's head, with a view down; skylights beside a ramped opening. */
-        int opened, ramped, waysDown, viewsDown, skyBesideRamp;
+        /** The opened openings with middles in the inner square: all, kept with a ramp, with a way down from the ramp's head, with a view down; opened without a ramp. */
+        int opened, ramped, waysDown, viewsDown, withoutRamp;
         /** Kept ramps walked along their centre lines block by block: ramps, columns, columns with no standing place near the deck, steps over a row. */
         int rampsWalked, centreColumns, centreMissing, centreSteps;
         String noWayAt = "", missingAt = "";
@@ -74,12 +74,12 @@ class GalleriesFieldTest {
 
         @Override public String toString() {
             return String.format(java.util.Locale.ROOT, "seed %d (built in %.1f s): places %d, SCC %.1f %%, walk into it %.1f %%; low %d, escape <= 384 %.1f %%, never %.2f %%;"
-                            + " moves %d: drops %.2f %%, falls %.2f %%; openings %d, with a ramp %d, way down %d%s, view down %d, skylights beside a ramp %d;"
+                            + " moves %d: drops %.2f %%, falls %.2f %%; openings %d, with a ramp %d, way down %d%s, view down %d, without a ramp %d;"
                             + " ramps walked %d (%d columns): no place near the deck %d%s, steps over a row %d;"
                             + " views from %d: 80+ %.1f %%, 160+ %.2f %%, 192+ %.3f %%; largest flat patch under the top %d columns%s; Wasteland lava %d, beside air %d%s, near an opening %d (%d opening columns);"
                             + " water %d, unsealed %d%s, in open cavern %d, under W+40 %d, by lava %d%s; NaN %d",
                     seed, buildSeconds, places, 100 * scc(), 100 * walkIntoMain(), low, 100 * within384(), 100 * neverShare(), moves, 100 * dropShare(), 100 * fallShare(),
-                    opened, ramped, waysDown, noWayAt, viewsDown, skyBesideRamp, rampsWalked, centreColumns, centreMissing, missingAt, centreSteps, views.length, 100 * over(80),
+                    opened, ramped, waysDown, noWayAt, viewsDown, withoutRamp, rampsWalked, centreColumns, centreMissing, missingAt, centreSteps, views.length, 100 * over(80),
                     100 * over(160), 100 * over(192), flatPatch, flatAt, wastelandLava, lavaBesideAir, lavaAt, lavaNearOpening, openingColumns, water, waterUnsealed, unsealedAt,
                     waterInOpenCavern, waterLow, waterByLava, byLavaAt, nans);
         }
@@ -200,7 +200,7 @@ class GalleriesFieldTest {
      * The opened openings with middles in the inner square (spec 7.2-7.3, 7.6): how many keep a ramp; a way down from each
      * ramp's head (a standing place within 3 blocks of the deck 2 blocks past the lip, feet from T - 9 up, that walks into
      * the main cavern); a view down (a ray straight down from the middle at T - 1.5 that runs 48 blocks through open
-     * space); the skylight rule (no ramped opening within SKY_D of an opening without one); and each kept ramp wholly in
+     * space); that it keeps a ramp (an opening without one stays shut); and each kept ramp wholly in
      * the box walked block by block along its centre line from its head to its foot: a standing place within -4..+3 rows of
      * the deck's row at every column, and no step of more than a row between neighbouring columns.
      */
@@ -220,7 +220,7 @@ class GalleriesFieldTest {
             if (run >= 48) s.viewsDown++;
             GalleriesField.Ramp rp = o.ramp;
             if (rp == null) {
-                for (GalleriesField.Opening q : all) if (q.ramp != null && Math.hypot(q.x - o.x, q.z - o.z) < GalleriesField.SKY_D) { s.skyBesideRamp++; break; }
+                s.withoutRamp++;
                 continue;
             }
             s.ramped++;
@@ -240,7 +240,7 @@ class GalleriesFieldTest {
                     || !v.inColumns((int) Math.floor(o.x + rp.ux * t0) + 8, (int) Math.floor(o.z + rp.uz * t0) + 8)) continue;
             s.rampsWalked++;
             int lastX = Integer.MIN_VALUE, lastZ = 0, lastFeet = 0;
-            double top = T - GalleriesField.HEAD_DROP;
+            double top = g.headTop;
             for (double tt = t0 + 1; tt <= rp.tEnd - 3; tt += 0.25) {
                 double b = g.bend(rp, t0, tt);
                 int x = (int) Math.floor(o.x + rp.ux * tt + rp.uz * b), z = (int) Math.floor(o.z + rp.uz * tt - rp.ux * b);
@@ -362,20 +362,20 @@ class GalleriesFieldTest {
     }
 
     /**
-     * Ways down (spec 7.3, 7.6; Taran: "many ways to climb down"): per box, at least 75 % of the opened openings keep a
-     * ramp, at least 90 % of those have a way down from the ramp's head into the main cavern, at least 75 % of the
-     * openings have a view down, and no opening without a ramp lies within SKY_D of one with a ramp. The ways back up
-     * into the Wasteland are {@link JoinTest#layersJoinBothWays}.
+     * Ways down (spec 7.3, 7.6; Taran: "many ways to climb down"): per box, every opened opening keeps a ramp (one left
+     * without stays shut), at least 90 % of them have a way down from the ramp's head into the main cavern, and at least
+     * 75 % of the openings have a view down. The ways down from the Wasteland and back up into it are
+     * {@link JoinTest#waysDownAndUp}.
      */
     @Test
     void waysDown() {
         for (int i = 0; i < BOXES.length; i++) {
             Stats s = stats(i);
             assertTrue(s.opened >= 20, "too few openings to measure: " + s);
-            assertTrue(s.ramped >= 0.75 * s.opened, "too few openings keep a ramp: " + s);
+            assertEquals(s.opened, s.ramped, "openings without a ramp: " + s);
             assertTrue(s.waysDown >= 0.9 * s.ramped, "ramps with no way down into the cavern: " + s);
             assertTrue(s.viewsDown >= 0.75 * s.opened, "openings with no view down: " + s);
-            assertEquals(0, s.skyBesideRamp, "skylights beside a ramped opening: " + s);
+            assertEquals(0, s.withoutRamp, "openings opened without a ramp: " + s);
         }
     }
 
@@ -681,18 +681,29 @@ class GalleriesFieldTest {
         assertTrue(GalleriesField.SPIRE_R1 < 1.15 * GalleriesField.SPIRE_GRID, "SPIRE_GRID: the spires' 3 x 3 search");
         assertTrue(GalleriesField.OP_MAX_R + GalleriesField.CR_IN + GalleriesField.CR_REACH < GalleriesField.RAMP_REACH, "CR_REACH: a crater lies within its opening's reach");
         assertEquals(GalleriesField.HEAD_DROP + 1, GalleriesField.CR_DROP, "CR_DROP: the crater's floor is the row under a ramp's head");
-        assertTrue(GalleriesField.RAMP_S1 <= 1, "RAMP_S1: a deck read block by block steps a row at a time");
+        assertTrue(GalleriesField.RAMP_S1 + GalleriesField.DK_TA * (GalleriesField.NOISE_D / GalleriesField.DK_TP + 0.75 * 1.5 / GalleriesField.DK_TIN) < 1,
+                "DK_TA: a deck read block by block, its terraces with it, steps a row at a time");
+        // the noise's steepest change a block, which DK_TA's bound counts on: Perlin.noise2 repeats every 256, so a fine
+        // sweep over one period finds it
+        Perlin n = new Perlin(5);
+        double steep = 0;
+        for (double u = 0; u < 256; u += 0.125) for (double w = 0; w < 256; w += 0.5) {
+            steep = Math.max(steep, Math.abs(n.noise2(u + 0.01, w) - n.noise2(u, w)) / 0.01);
+            steep = Math.max(steep, Math.abs(n.noise2(w, u + 0.01) - n.noise2(w, u)) / 0.01);
+        }
+        assertTrue(steep < GalleriesField.NOISE_D, "NOISE_D: Perlin.noise2 changes by up to " + steep + " a unit");
     }
 
     /**
      * The digest (spec 10.2): {@link #probe} at 30 000 blocks of the Galleries' rows and the join's round the origin, and
-     * every opened opening of 6 x 6 lattice cells with its kept ramp, bit for bit, for two seeds; pinned at the port (the
-     * real join and TubeField). A change to the Galleries' shapes shows here: pin again only on purpose.
+     * every opened opening of 6 x 6 lattice cells with its kept ramp, bit for bit, for two seeds; pinned again at step 2
+     * of the port (ramps with terraces, a way up from every hole, no hole without a ramp; it was a25a9bf4bf313878 and
+     * 0da260ed6d0a26e3 at the port). A change to the Galleries' shapes shows here: pin again only on purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("a25a9bf4bf313878", digest(8675309), "seed 8675309");
-        assertEquals("0da260ed6d0a26e3", digest(12345), "seed 12345");
+        assertEquals("2c2d20539cf4424d", digest(8675309), "seed 8675309");
+        assertEquals("1a2532428f34f770", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {
@@ -884,10 +895,10 @@ class GalleriesFieldTest {
             double sink = 0;
             for (int x = x0; x < x0 + 64; x++) for (int z = z0; z < z0 + 64; z++) for (int y = lo; y <= hi; y++) sink += g.fineBlocks(x, y, z);
             long t1 = System.nanoTime();
-            for (int x = x0; x < x0 + 64; x++) for (int z = z0; z < z0 + 64; z++) for (int y = lo; y <= hi; y++) sink += GalleriesField.blocks(g.column(x, z), x, y, z);
+            for (int x = x0; x < x0 + 64; x++) for (int z = z0; z < z0 + 64; z++) for (int y = lo; y <= hi; y++) sink += g.blocks(g.column(x, z), x, y, z);
             long t2 = System.nanoTime();
             for (int x = x0; x < x0 + 64; x++) for (int z = z0; z < z0 + 64; z++) for (int y = lo; y <= hi; y++) {
-                double d = GalleriesField.blocks(g.column(x, z), x, y, z);
+                double d = g.blocks(g.column(x, z), x, y, z);
                 if (g.tubesAt(x + 0.5, z + 0.5) && y >= g.tubes.spanLo(x, z) && y <= g.tubes.spanHi(x, z)) d = Math.min(d, g.tubes.tube(x, y, z));
                 sink += d;
             }
@@ -920,8 +931,9 @@ class GalleriesFieldTest {
 
     /**
      * The slow set: the spec's other four boxes, held to the main two's bars but for never (1.5 %, see below). It fails on
-     * seed 77's box, and is left so as the record of it: 18.0 % of the low places there never walk up out of the flood
-     * (escape within 384 moves 82.0 %), as on v3a (17.6 %, 82.4 %). Nearly all are one Causeway basin round (40850, -11130),
+     * seed 77's box, and is left so as the record of it: 17.6 % of the low places there never walk up out of the flood
+     * (escape within 384 moves 82.4 %), as on v3a (17.6 %, 82.4 %) and the port before the ramps' terraces (18.0 %,
+     * 82.0 %). Nearly all (27 750 places) are one Causeway basin round (40850, -11130),
      * closed by a tube apron's cliff on the west and elsewhere by slopes whose column steps rise 2-3 rows
      * (spec-galleries-field-v2 15.3). The other three boxes pass.
      */

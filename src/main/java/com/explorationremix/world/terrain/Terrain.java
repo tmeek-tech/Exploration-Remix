@@ -81,6 +81,14 @@ public final class Terrain {
     private final ThreadLocal<Column[]> cache;
 
     public Terrain(TerrainSettings settings, int packFloor, long seed) {
+        this(settings, packFloor, seed, 0, 0);
+    }
+
+    /**
+     * As above, with the Galleries' ramp decks and disc caps moved {@code deckShift} and {@code capShift} rows against the
+     * Wasteland's craters (JoinTest's one-row check only; the game keeps both at 0).
+     */
+    Terrain(TerrainSettings settings, int packFloor, long seed, int deckShift, int capShift) {
         this.settings = settings;
         this.cache = ThreadLocal.withInitial(() -> {
             Column[] a = new Column[1024];
@@ -98,7 +106,7 @@ public final class Terrain {
         this.sheets = shape.layerCount > WASTELAND ? new WastelandSheets(seed, shape, settings, plans) : null;
         this.breakthrough = Join.on(shape) ? new Breakthrough(seed, shape, sheets) : null;
         this.tubes = shape.layerCount > GALLERIES ? new TubeField(seed, shape.waterY(GALLERIES)) : null;
-        this.galleries = tubes != null ? new GalleriesField(seed, shape.bottom(GALLERIES), shape.top(GALLERIES), shape.waterY(GALLERIES), tubes, breakthrough) : null;
+        this.galleries = tubes != null ? new GalleriesField(seed, shape.bottom(GALLERIES), shape.top(GALLERIES), shape.waterY(GALLERIES), tubes, breakthrough, deckShift, capShift) : null;
         Join.Lower lower = galleries != null ? Join.Lower.of(galleries) : null;
         this.wasteland = shape.layerCount > WASTELAND ? new WastelandField(this, breakthrough, lower) : null;
         this.join = wasteland != null && lower != null ? new Join(shape, wasteland, lower, breakthrough) : null;

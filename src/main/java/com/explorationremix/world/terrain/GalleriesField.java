@@ -44,7 +44,7 @@ public final class GalleriesField {
 
     // ============================================================================================ noise
     final Perlin warpA, warpB, elevN, detailN, riverN, riverW, ceilN2, bandN, bandMask, bandH, pierN, canN, canW, causN,
-            massN, fordN, densN, roofN, hillN, stepN, bendN, sagN, clumpN, rubN;
+            massN, fordN, densN, roofN, hillN, stepN, bendN, sagN, clumpN, rubN, deckN;
 
     /**
      * The join with the Wasteland above, as the Galleries need it; null: no join (the seal stays). Every method reads the
@@ -59,15 +59,29 @@ public final class GalleriesField {
          * openings' middles from it and choose which of them they open.
          */
         double openingSite(double x, double z);
-        /** The highest open row of the Galleries' space under an opening (the layer's top + 6). */
+        /** A bound on the highest open row of the Galleries' space under an opening (the layer's top + 6); they stay under T - 3. */
         int bandTop();
     }
 
     final Join join;
+    /**
+     * A ramp's head's first open row (T - HEAD_DROP: the crater's floor's first open row) and the first rock row over an
+     * opened disc (T - CR_DROP + 2: the disc is open up to the crater's floor's first open row).
+     */
+    final double headTop, discTop;
     /** The Obsidian Tubes' field (its own region noise), or null (no tubes). */
     final TubeField tubes;
 
     public GalleriesField(long seed, int bottom, int top, int lavaTable, TubeField tubes, Join join) {
+        this(seed, bottom, top, lavaTable, tubes, join, 0, 0);
+    }
+
+    /**
+     * As above, with every ramp's deck moved {@code deckShift} rows and every opened disc's cap {@code capShift} rows up
+     * (down where negative) against the Wasteland's craters, whose floors stay put: only JoinTest's one-row check
+     * (W-ENG-2) moves them; the game keeps both at 0.
+     */
+    GalleriesField(long seed, int bottom, int top, int lavaTable, TubeField tubes, Join join, int deckShift, int capShift) {
         this.seed = seed;
         this.tubes = tubes;
         this.B = bottom;
@@ -76,6 +90,8 @@ public final class GalleriesField {
         this.openLo = B + SEAL;
         this.openHi = T - SEAL;
         this.join = join;
+        this.headTop = T - HEAD_DROP + deckShift;
+        this.discTop = T - CR_DROP + 2 + capShift;
         long s = seed ^ 0x5851F42D4C957F2DL;
         warpA = new Perlin(Hashing.mix(s, 1, 0, 0));
         warpB = new Perlin(Hashing.mix(s, 2, 0, 0));
@@ -101,6 +117,7 @@ public final class GalleriesField {
         sagN = new Perlin(Hashing.mix(s, 56, 0, 0));
         clumpN = new Perlin(Hashing.mix(s, 57, 0, 0));
         rubN = new Perlin(Hashing.mix(s, 58, 0, 0));
+        deckN = new Perlin(Hashing.mix(s, 59, 0, 0));
     }
 
     // ============================================================================================ helpers
@@ -609,14 +626,15 @@ public final class GalleriesField {
 
     /**
      * The profile at block (x, y, z) of cell c: {@link #blocks(Cell, int)}, but on a ramp's deck the deck's row is read at
-     * the block itself (the deck falls s rows a block along the ramp's axis, rounded), so walking along a ramp it steps a
-     * row at a time, never the 2 to 4 rows a whole cell's step would be. The deck keeps 2 open rows under the cell's
-     * ceiling, stays on or over the ground, and an arch's band keeps a row open under it or becomes a fill.
+     * the block itself (the ramp's plane, falling s rows a block along its axis, with its terraces, {@link #deckTerrace},
+     * rounded), so walking along a ramp it steps a row at a time, never the 2 to 4 rows a whole cell's step would be, and
+     * the steps' edges wander. The deck keeps 2 open rows under the cell's ceiling, stays on or over the ground, and an
+     * arch's band keeps a row open under it or becomes a fill.
      */
-    static double blocks(Cell c, int x, int y, int z) {
+    double blocks(Cell c, int x, int y, int z) {
         if (c.deckMode == 0) return blocks(c, y);
         double t = (x + 0.5 - c.dkX) * c.dkUx + (z + 0.5 - c.dkZ) * c.dkUz;
-        int row = (int) Math.floor(c.dkTop - c.dkS * Math.max(0, t - c.dkT0) + 0.5) - c.dkDrop;
+        int row = (int) Math.floor(c.dkTop - c.dkS * Math.max(0, t - c.dkT0) + deckTerrace(x + 0.5, z + 0.5, t - c.dkT0) + 0.5) - c.dkDrop;
         row = Math.min(row, c.c - 2);
         if (row == c.dkRow) return blocks(c, y);
         if (c.deckMode == 1) return blocks(c, Math.max(row, c.dkGround), c.c, 0, 0, y);
@@ -778,9 +796,8 @@ public final class GalleriesField {
             C = Math.max(C, rh.deck + RAMP_HEAD);
             out.minC = Math.max(out.minC, dk + RAMP_HEAD - 2);
         }
-        // the disc of an opening with a ramp opens to its crater's floor, so no column end hangs into the hole there (a
-        // skylight's disc opens into the band, far over its column ends)
-        if (rh.jt >= 0.5 && rh.jtTop <= T) out.minC = Math.max(out.minC, cap);
+        // an opening's disc opens to its crater's floor, so no column end hangs into the hole there
+        if (rh.jt >= 0.5) out.minC = Math.max(out.minC, cap);
         C = Math.min(C, cap);
         out.cap = cap;
         double head = C - F;
@@ -1032,12 +1049,11 @@ public final class GalleriesField {
      * The Wasteland's openings as the Galleries take them. The Wasteland offers openingSite(x, z). The Galleries find
      * each opening's middle (the centroid of the samples where that weight passes a half, on a grid of OP_S blocks,
      * searched per lattice cell of OP_G blocks with a margin of OP_M; an opening belongs to the lattice cell holding its
-     * middle) and choose by the opening's hash which they open (OP_KEEP of them, off massifs and tube countries). An
-     * opened opening opens the cap over a disc round its middle (radius r + 1, fading to r + LIP): an opening with a ramp
-     * up to the floor of the crater the Wasteland's lowest sheet makes round it ({@link #craterFloor}), a skylight (no
-     * ramp) into the band, where the Wasteland's guard lets its floor fall through. The guard closes every other opening.
+     * middle) and take every one off the massifs and the tube countries as a candidate. A candidate that keeps a ramp
+     * opens: the cap over a disc round its middle (radius r + 1, fading to r + LIP) opens up to the floor of the crater
+     * the Wasteland's lowest sheet makes round it ({@link #craterFloor}). The guard closes every other opening.
      *
-     * Ramps. Every opened opening offers up to RAMP_DIRS ramp candidates (one per direction from a hashed start): a deck
+     * Ramps. Every candidate offers up to RAMP_DIRS ramp candidates (one per direction from a hashed start): a deck
      * from the disc's lip (r + LIP along its axis), whose first open row there is HEAD_DROP rows under the layer's top
      * (the crater's floor), falling s = RAMP_S0..RAMP_S1 rows a block along its axis, RAMP_HW0..RAMP_HW1
      * blocks to either side of a centre line that bends sideways (bendA x a slow noise along the axis, fading in over
@@ -1050,7 +1066,7 @@ public final class GalleriesField {
      * within RAMP_GAP blocks:
      * pass 0 takes each opening's first candidate; pass k its first candidate clear of the pass k-1 choices of all
      * higher-priority openings; the last pass keeps the pass-RAMP_PASSES choice only if it is clear of the same pass's
-     * choices of all higher-priority openings, else the opening has no ramp (a skylight). Two kept ramps never conflict:
+     * choices of all higher-priority openings, else the opening has no ramp and stays shut. Two kept ramps never conflict:
      * the lower of the two was checked against the higher's last choice, which is the higher's ramp if it has one.
      */
     /** A ramp's head keeps the half disc of r + 3.5 on its side of DK_T x the radius past the middle clear of other ramps. */
@@ -1066,17 +1082,16 @@ public final class GalleriesField {
      * r + CR_IN, rising CR_S rows a block beyond, out to CR_REACH blocks further. The disc opens up to that floor only.
      */
     static final double CR_DROP = 6, CR_IN = 4, CR_S = 0.65, CR_REACH = 42;
-    static final double OP_G = 64, OP_KEEP = 0.7;
-    /** An opening without a ramp opens only when no opening with a ramp lies within this many blocks of it. */
-    static final double SKY_D = 48;
+    static final double OP_G = 64;
     static final int OP_S = 3, OP_M = 18, RAMP_DIRS = 16;
     /**
-     * Ramps: head room RAMP_HEAD; run at most RAMP_MAX along the axis, sampled every RAMP_DT; slope (at most a row a
-     * block, so the deck read block by block steps a row at a time), half width and base thickness ranges; bends of
+     * Ramps: head room RAMP_HEAD; run at most RAMP_MAX along the axis, sampled every RAMP_DT; slope (so gentle that with
+     * the deck's terraces, {@link #DK_TA}, the deck read block by block steps a row at a time), half width and base
+     * thickness ranges; bends of
      * BEND_A0..+BEND_A1 blocks (a noise of period BEND_P along the axis, in over BEND_IN); RAMP_GAP blocks kept between
      * any two ramps.
      */
-    static final double RAMP_HEAD = 7, RAMP_MAX = 150, RAMP_DT = 4, RAMP_S0 = 0.6, RAMP_S1 = 1.0,
+    static final double RAMP_HEAD = 7, RAMP_MAX = 175, RAMP_DT = 4, RAMP_S0 = 0.55, RAMP_S1 = 0.78,
             RAMP_HW0 = 3.5, RAMP_HW1 = 5, RAMP_TH0 = 6, RAMP_TH1 = 4, BEND_A0 = 8, BEND_A1 = 14, BEND_P = 60, BEND_IN = 24, RAMP_GAP = 6;
     /**
      * A ramp's body: filled to the floor from where the free height under its base thickness first comes within DK_FILL
@@ -1084,15 +1099,26 @@ public final class GalleriesField {
      * a = 4 s' (1 - s') (a parabola), s' = (s + DK_ROOT) / (1 + DK_ROOT), s the place along the free span (0 the head, 1
      * tg), so the underside springs from a hanging root under the head (0.29 of the gap), is thinnest at about a third of
      * the span, and curves down to the floor at tg; plus DK_J rows of column ends per cell. The deck's outer half drops 0..EDGE_LOW rows per cell
-     * (ragged column tops). Beside the solid part a talus: the floor rises to the deck, falling TALUS_S rows a block
+     * (ragged column tops), fading in over the head's first EDGE_IN blocks (so the head's whole width meets the crater's
+     * floor beside it). Beside the solid part a talus: the floor rises to the deck, falling TALUS_S rows a block
      * outwards, or steeper where the deck stands higher over the ground under its centre line (so that it meets the
      * ground TALUS_MAX blocks out). The solid part starts at ts, where the arch's opening over the ground (less the column
      * ends) first stays under TS_OPEN rows to tg, so no stretch of the body stands as a wall without a walkable flank.
      */
-    static final double DK_FILL = 7, DK_ROOT = 0.3, DK_J = 4, EDGE_LOW = 2, TALUS_S = 0.35, TALUS_MAX = 32, TS_OPEN = 3;
+    static final double DK_FILL = 7, DK_ROOT = 0.3, DK_J = 4, EDGE_LOW = 2, EDGE_IN = 3, TALUS_S = 0.35, TALUS_MAX = 32, TS_OPEN = 3;
+    /**
+     * The deck's terraces: its height is the ramp's plane plus DK_TA rows x a noise of period DK_TP blocks (read at the
+     * block, unwarped), faded in over DK_TIN blocks past the head, so its steps are a row high but their edges wander and
+     * their treads vary (along the axis a median of 1.25 to 1.5 blocks, a tenth of them 2 or more, measured on three
+     * seeds): stepped basalt, not a staircase. The plane falls at most RAMP_S1 a
+     * block and the noise changes by at most DK_TA (NOISE_D / DK_TP + 0.75 x 1.5 / DK_TIN) a block (NOISE_D: the largest
+     * derivative of Perlin.noise2, 2.12 measured over its whole period), so neighbouring blocks of a deck's walked half
+     * differ by at most a row: walked up as well as down.
+     */
+    static final double DK_TA = 0.8, DK_TP = 10, DK_TIN = 24, NOISE_D = 2.2;
     /** Everything an opening touches lies within RAMP_REACH of its middle; ramps are resolved against openings within OP_CONF lattice cells; columns look OP_NEAR cells round. */
-    static final double RAMP_REACH = 190;
-    static final int OP_CONF = 6, OP_NEAR = 3;
+    static final double RAMP_REACH = 220;
+    static final int OP_CONF = 6, OP_NEAR = 4;
     /** The passes of the ramps' resolution (see {@link #choice}); the openings' cache (64 x 64 lattice cells) must hold (RAMP_PASSES + 1) OP_CONF + OP_NEAR cells to every side. */
     static final int RAMP_PASSES = 3;
     /** The largest opening radius (the crater's reach is checked against it; a blob of a larger radius stays shut). */
@@ -1107,6 +1133,7 @@ public final class GalleriesField {
         if (Math.max(RB_R1, RB_L1) >= 1.15 * RB_G) throw new IllegalStateException("RB_G");
         if (SPIRE_R1 >= 1.15 * SPIRE_GRID) throw new IllegalStateException("SPIRE_GRID");
         if (OP_MAX_R + CR_IN + CR_REACH >= RAMP_REACH || CR_DROP != HEAD_DROP + 1) throw new IllegalStateException("CR_REACH");
+        if (RAMP_S1 + DK_TA * (NOISE_D / DK_TP + 0.75 * 1.5 / DK_TIN) >= 1) throw new IllegalStateException("DK_TA");
     }
 
 
@@ -1129,7 +1156,7 @@ public final class GalleriesField {
         /** The choice of each pass among cands (-1 none, -2 not yet decided), and the openings before it within reach. */
         final int[] ch = {-2, -2, -2, -2, -2, -2};
         List<Opening> rivals;
-        /** Pass 2: the ramp it keeps (null: a skylight). */
+        /** The last pass: the ramp it keeps (null: none, and the opening stays shut). */
         Ramp ramp;
         /** Whether its ramp is resolved; diagnostics: whether it keeps a ramp, and that ramp's axis, slope, end and half width. */
         boolean kept, walk;
@@ -1145,7 +1172,7 @@ public final class GalleriesField {
         boolean fill;
         /** The lowest row rock may hang to over a ramp (NaN: none) and the talus floor beside a ramp's solid part (-1e9: none). */
         double rb, talus;
-        /** The cap the strongest disc opens to (a crater's floor, or the band's top for a skylight). */
+        /** The cap the strongest disc opens to (its crater's floor). */
         double jtTop;
         /** The lowest deck's ramp: its opening's middle, axis, the deck's start along it, first open row there and slope. */
         double rx, rz, rux, ruz, rt0, rtop, rs;
@@ -1175,16 +1202,17 @@ public final class GalleriesField {
     }
 
     /**
-     * The opened openings whose middles lie in lattice cell (i, j), each with the ramp it keeps (o.ramp, o.walk). An
-     * opening left without a ramp (a skylight) is opened only when no opening with a ramp lies within SKY_D of it: in a
-     * close group of openings the ones a player can climb down from open, the others stay shut (the Wasteland's guard
-     * closes them), so no hole without a way down sits beside one with a way.
+     * The opened openings whose middles lie in lattice cell (i, j), each with the ramp it keeps (o.ramp, o.walk). Only an
+     * opening that keeps a ramp opens: one left without (no candidate clear of the ramps before it) stays shut, and the
+     * Wasteland's guard closes it, so every hole has a way down and back up. (Holes without a ramp were measured as views
+     * before they were dropped: a shaft through the vault's relief, its best rim seeing the Galleries through 0-4.5 % of
+     * its downward rays, against 14-35 % from the rims of the holes with ramps, and a lethal fall.)
      */
     Opening[] openings(int i, int j) {
         OpCell c = rawCell(i, j);
         if (c.open == null) {
             List<Opening> l = new ArrayList<>();
-            for (Opening o : c.ops) if (kept(o).ramp != null || !rampNear(o)) l.add(o);
+            for (Opening o : c.ops) if (kept(o).ramp != null) l.add(o);
             c.open = l.isEmpty() ? NO_OPENINGS : l.toArray(new Opening[0]);
         }
         return c.open;
@@ -1194,15 +1222,6 @@ public final class GalleriesField {
     Opening kept(Opening o) {
         if (!o.kept) { keep(o); o.kept = true; }
         return o;
-    }
-
-    /** Whether an opening with a ramp lies within SKY_D of o (middle to middle). */
-    boolean rampNear(Opening o) {
-        int ci = (int) Math.floor(o.x / OP_G), cj = (int) Math.floor(o.z / OP_G), n = (int) Math.ceil(SKY_D / OP_G);
-        for (int di = -n; di <= n; di++) for (int dj = -n; dj <= n; dj++)
-            for (Opening p : rawCell(ci + di, cj + dj).ops)
-                if (p != o && len(p.x - o.x, p.z - o.z) < SKY_D && kept(p).ramp != null) return true;
-        return false;
     }
 
     /** Diagnostics: the number of the Wasteland's openings whose middles lie in lattice cell (i, j), opened or not. */
@@ -1359,6 +1378,15 @@ public final class GalleriesField {
         return c.ops;
     }
 
+    /**
+     * The deck's terraces at (x, z), {@code u} blocks past the ramp's head along its axis (rows, added to the ramp's
+     * plane): DK_TA x a noise of period DK_TP, faded in over DK_TIN (0 at the head itself, which meets the crater's floor).
+     */
+    double deckTerrace(double x, double z, double u) {
+        if (u <= 0) return 0;
+        return DK_TA * deckN.noise2(x / DK_TP, z / DK_TP) * smooth(u / DK_TIN);
+    }
+
     /** The sideways offset of ramp rp's centre line at t along its axis (0 up to its head t0). */
     double bend(Ramp rp, double t0, double t) {
         if (t <= t0) return 0;
@@ -1382,7 +1410,7 @@ public final class GalleriesField {
         rh.talus = -1e9;
         if (join == null) return;
         int ci = (int) Math.floor(x / OP_G), cj = (int) Math.floor(z / OP_G);
-        double top = T - HEAD_DROP;
+        double top = headTop;
         for (Opening o : nearOps(ci, cj)) {
             double dx = x - o.x, dz = z - o.z;
             if (Math.abs(dx) > o.reach || Math.abs(dz) > o.reach) continue;
@@ -1391,28 +1419,33 @@ public final class GalleriesField {
             double d = Math.sqrt(d2);
             Ramp rp = o.ramp;
             double jt = smooth((o.r + LIP - d) / 1.5);
+            if (rp == null) continue;                // (opened openings all keep a ramp)
             if (jt > rh.jt) {
                 rh.jt = jt;
-                // an opening with a ramp opens up to its crater's floor (the Wasteland's tunnels come down to it), a
-                // skylight into the band (the Wasteland's floor falls through to it)
-                rh.jtTop = rp != null ? T - CR_DROP + 2 : join.bandTop() + 1;
+                // an opening opens up to its crater's floor (the Wasteland's tunnels come down to it)
+                rh.jtTop = discTop;
             }
             rh.clr = Math.max(rh.clr, smooth((o.r + 6 - d) / 3));
-            if (rp == null) continue;
             double t0 = o.r + LIP, t = dx * rp.ux + dz * rp.uz;
             if (t < t0 - 1 || t > rp.tEnd) continue;
             double l = dx * rp.uz - dz * rp.ux;
             double dl = Math.abs(l - bend(rp, t0, t));
             if (dl >= rp.hw + TALUS_MAX) continue;
-            double dk = top - rp.s * Math.max(0, t - t0);
+            double dk = top - rp.s * Math.max(0, t - t0) + deckTerrace(x, z, t - t0);
             if (dl < rp.hw + 1) {
-                // over the ramp and a block beside it rock hangs no lower than its head room
+                // over the ramp and a block beside it rock hangs no lower than its head room; beside it no higher than
+                // the crater's floor's rock (T - CR_DROP), so round the head the crater's floor stays whole up to the
+                // deck and walks onto it (cells beside the deck opened up to the head room cut the head off the
+                // crater's floor at 3 of 81 holes measured, leaving those ramps no way back up)
                 double rb = dk + RAMP_HEAD + 1;
+                if (dl >= rp.hw) rb = Math.min(rb, T - CR_DROP);
                 if (!(rh.rb >= rb)) rh.rb = rb;
             }
             if (dl < rp.hw) {
                 double sig = clamp01((t - t0) / Math.max(1, rp.tg - t0));
-                double edge = t > t0 ? clamp01((dl - 0.5 * rp.hw) / (0.5 * rp.hw)) : 0;
+                // the ragged edge fades in over the head's first EDGE_IN blocks: the head's full width stays at the
+                // crater's floor's level beside it, a row up or down whatever the deck's row (W-ENG-2's one-row check)
+                double edge = t > t0 ? clamp01((dl - 0.5 * rp.hw) / (0.5 * rp.hw)) * clamp01((t - t0) / EDGE_IN) : 0;
                 if (!(rh.deck <= dk)) {
                     rh.deck = dk;
                     rh.th0 = rp.th0;
@@ -1514,7 +1547,7 @@ public final class GalleriesField {
             // and the Wasteland's guard closes it)
             if (o.r > OP_MAX_R) continue;
             o.h = Hashing.mix(seed, 52001, (long) Math.floor(cx * 4), (long) Math.floor(cz * 4));
-            if (Hashing.unit(o.h) >= OP_KEEP || !openable(o)) continue;
+            if (!openable(o)) continue;
             o.prio = Hashing.unit(Hashing.mix(o.h, 91, 0, 0));
             o.cands = rampCandidates(o);
             o.ext = o.r + 3.5;
@@ -1542,7 +1575,7 @@ public final class GalleriesField {
         double hw = RAMP_HW0 + (RAMP_HW1 - RAMP_HW0) * Hashing.unit(Hashing.mix(o.h, 4, 0, 0));
         double th0 = RAMP_TH0 + RAMP_TH1 * Hashing.unit(Hashing.mix(o.h, 9, 0, 0));
         int k0 = dirOf(Hashing.unit(Hashing.mix(o.h, 3, 0, 0)));
-        double top = T - HEAD_DROP, t0 = o.r + LIP;
+        double top = headTop, t0 = o.r + LIP;
         double[] w2 = new double[6];
         Climate cl = new Climate();
         int nMax = (int) (RAMP_MAX / RAMP_DT) + 2;
@@ -2044,12 +2077,12 @@ public final class GalleriesField {
             RampHit rh = new RampHit();
             rampsAt(c.x, c.z, rh);
             double ring = craterRing(x, z);
-            out.add(String.format(java.util.Locale.ROOT, "  join: beta %.2f, opening site %.2f (a skylight's disc may rise to y %d); disc %.2f%s%s", join.beta(x + 0.5, z + 0.5),
+            out.add(String.format(java.util.Locale.ROOT, "  join: beta %.2f, opening site %.2f (the band's top y %d); disc %.2f%s%s", join.beta(x + 0.5, z + 0.5),
                     join.openingSite(x + 0.5, z + 0.5), join.bandTop(), rh.jt, rh.jt > 0 ? String.format(java.util.Locale.ROOT, " (open to y %.0f)", rh.jtTop - 1) : "",
                     rh.deck == rh.deck ? String.format(java.util.Locale.ROOT, ", a ramp's deck at y %.0f%s", rh.deck, rh.fill ? " (filled)" : "") : ""));
             if (ring < Double.POSITIVE_INFINITY)
                 out.add(String.format(java.util.Locale.ROOT, "  crater: %.1f from a ramped hole's edge; the Wasteland's lowest floor may go down to y %.1f (a ramp's head is at y %.0f)",
-                        ring, craterFloor(T, ring), T - HEAD_DROP));
+                        ring, craterFloor(T, ring), headTop));
         }
         return out;
     }

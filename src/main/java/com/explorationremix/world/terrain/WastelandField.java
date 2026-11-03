@@ -312,7 +312,8 @@ public final class WastelandField {
         // and none within reach of a crater's open space under the table (crDry), so its air never meets lava
         if (c.ring < crDry + 3) lava *= clamp01((c.ring - crDry) / 3);
         double hole = WastelandSheets.hole(c.beta);
-        // an opening only falls where the Galleries are open right under it, so it never ends in a pit on their rock
+        // an opening only falls where the Galleries are open right under it, so it never ends in a pit on their rock (their
+        // cap is rock at gTop - 3 at every column, so this guard stays shut and the holes are the craters': craterRing)
         c.under = hole > 0 ? Join.under(lower, gTop, x, z) : 1;
         double wh = whN.noise2(x / WH_SCALE, z / WH_SCALE) / 0.4, wh2 = whN.noise2(x / WH_SCALE + 40.5, z / WH_SCALE - 12.5) / 0.4;
         wh = wh < -1 ? -1 : (wh > 1 ? 1 : wh);
@@ -703,7 +704,10 @@ public final class WastelandField {
      */
     public boolean lavaKept(int x, int y, int z) { return column(x, z).lavaW <= 0; }
 
-    /** How much of an opening's dip a column has (0..1): the rims of the holes into the Galleries. */
+    /**
+     * How much of an opening's dip a column has (0..1): openingSite times the guard ({@link Join#under}), 0 at every column
+     * while the Galleries' cap shuts the guard; the holes into the Galleries are the craters' ({@link #openingNear}).
+     */
     public double openingRim(int x, int z) { return column(x, z).holeDip; }
 
     /**

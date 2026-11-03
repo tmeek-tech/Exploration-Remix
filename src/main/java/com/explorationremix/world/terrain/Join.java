@@ -6,12 +6,17 @@ package com.explorationremix.world.terrain;
  * over the rows {@link #lo}..{@link #hi} round that line both fields are evaluated and combined into one density with a
  * smooth minimum ({@link #density}), at the corners and in the per-block pass alike, so no lid, step or seam can form.
  *
- * <p>The {@link Breakthrough} noise, beta (0..1), decides where the two meet: where it is high the Wasteland's lowest
- * sheet dips through its floor ({@link WastelandField}) and the Galleries raise their ceiling, and the two open into each
- * other, as holes with ledges round them. Where it is low a seal of rock keeps them apart ({@link #seal}). The seal also
- * keeps the Wasteland's lava away from the openings: lava pools only exist where beta is under {@link #LAVA_BETA},
- * open space under the lava table is air from {@link #AIR_BETA} up, and between the two the seal leaves no open space
- * under the table at all, so lava and an opening's air are never side by side.
+ * <p>The two open into each other at the holes the Galleries open, each with a ramp down to their floor: the Galleries
+ * find the holes' middles from the shared site function ({@link Breakthrough#openingSite}) and open a disc up to the
+ * crater's floor (T - 5), and round each hole the Wasteland's lowest sheet goes down to that floor
+ * ({@link Lower#craterRing}, {@link GalleriesField#craterFloor}), so a player walks from its tunnels down to the hole's
+ * lip, onto the ramp, and back up. Everywhere else the Galleries' space stops under their cap (rock from T - 3 up), so
+ * the Wasteland's own dip ({@link #under}) never falls and no other hole forms. The {@link Breakthrough} noise, beta
+ * (0..1), still shapes the meeting: where it is high the Galleries' ceiling rises toward their cap and only a few rows of
+ * rock part the layers; where it is low a seal of rock keeps them apart ({@link #seal}). The seal also keeps the
+ * Wasteland's lava away from the openings: lava pools only exist where beta is under {@link #LAVA_BETA} and out of the
+ * craters' reach, open space under the lava table is air from {@link #AIR_BETA} up, and between the two the seal leaves
+ * no open space under the table at all, so lava and an opening's air are never side by side.
  *
  * <p>Immutable; built last of the fields (breakthrough, tubes, Galleries, Wasteland, join), so nothing calls back into
  * a field that is not built yet.
@@ -99,8 +104,8 @@ public final class Join {
      * lava-holding ground, and the Galleries' top 4 rows where beta is under {@link #CLOSED_BETA}. None of it in the
      * craters round the holes the Galleries open with a ramp ({@link WastelandField}) out to {@link WastelandField#crDry}
      * from the hole's edge: there the Wasteland's lowest sheet goes down to the hole's lip whatever beta is, its open
-     * space under the lava table is air, no lava pool comes near, and the Galleries' own rock (their cap at T - 6 or lower
-     * outside their discs) keeps the layers apart. Further out a crater's floor lies over the table (crDry is where it
+     * space under the lava table is air, no lava pool comes near, and the Galleries' own rock (their first rock row at
+     * T - 6 or lower outside their discs and their ramps' head room) keeps the layers apart. Further out a crater's floor lies over the table (crDry is where it
      * rises past W + 2, plus a gap), the fluid under the table is lava again, and the seal holds as anywhere else, so no
      * interpolation opens a block of lava there.
      */
@@ -117,7 +122,9 @@ public final class Join {
     /**
      * How open the Galleries are right under the Wasteland's bottom at a column, 0..1: 1 where their density is at most -2
      * at both gTop-3 (the floor of an opening's dip) and gTop-6, 0 where either row is rock. The Wasteland's lowest sheet
-     * only dips through its floor in proportion, so an opening never ends in a pit on a pillar, pinch or massif.
+     * only dips through its floor in proportion, so an opening never ends in a pit on a pillar, pinch or massif. The
+     * Galleries' cap is rock at gTop - 3 at every column (their space stops at gTop - 4, a disc's at gTop - 5), so this is
+     * 0 everywhere and the dip never falls: every opening is a crater's (W-ENG-2's obligation (ii), with a row of margin).
      */
     double under(int x, int z) { return on ? under(lower, gTop, x, z) : 0; }
 

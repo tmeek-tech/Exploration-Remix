@@ -3,9 +3,10 @@ package com.explorationremix.world.terrain;
 /**
  * Where the Wasteland and the Basalt Galleries open into each other (0.5.1, Taran: "No band, opens into them"): a 2D
  * noise, {@link #beta} (0 to 1 over a column), that both layers read, and the weight of the Wasteland's opening dip
- * before its guard ({@link #openingSite}). Where beta is high the Wasteland's lowest tunnels dip through their floor
- * ({@link WastelandField}) and the Galleries open the ceiling of their cavern under the openings they choose; where it is
- * low the {@link Join}'s seal keeps the two apart.
+ * before its guard ({@link #openingSite}). The Galleries find the openings' middles from that site function and open the
+ * ones they keep a ramp for, a disc each, round which the Wasteland's lowest sheet goes down to the crater's floor; the
+ * Wasteland's own dip is the same site times its guard, which the Galleries' cap keeps shut (so the dip never falls and
+ * every opening is a crater's). Where beta is low the {@link Join}'s seal keeps the two apart.
  *
  * <p>An immutable function of the seed, built before both fields from the shared {@link WastelandSheets}, so that neither
  * field has to ask the other where they meet: Terrain builds the sheets, this, the tubes, the Galleries (which see this as
@@ -41,7 +42,10 @@ public final class Breakthrough implements GalleriesField.Join {
     @Override
     public double openingSite(double x, double z) { return sheets.openingSite(beta(x, z), x, z); }
 
-    /** The highest open row of the Galleries' space under an opening: their top + 6 (-683 by default). */
+    /**
+     * A bound on the highest open row of the Galleries' space under an opening, their top + 6 (-683 by default), inside
+     * the join's rows. Their space stops at T - 4 (a disc's at T - 5); a crater's open space over it is the Wasteland's.
+     */
     @Override
     public int bandTop() { return bandTop; }
 }
