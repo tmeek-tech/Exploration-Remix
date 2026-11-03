@@ -51,15 +51,20 @@ class NoiseLayersTest {
      * one (seed 2, cell 0,-1); the deep dark and what is planned after it moved with them. With the den gates past the
      * first switched off every plan and row is the last pin's; with the pillar drop and the void rules switched off
      * every plan is 0.6.1's less the breaker's shapes and every row is 0.6.1's built without the breaker. Of the five
-     * chunks the third and fourth of seeds 1 and 8004 and the third of seed 2 change.
+     * chunks the third and fourth of seeds 1 and 8004 and the third of seed 2 changed. Pinned again for the merge's
+     * fixes (0.6.2): the plans also drop the pillars a way's walking core cuts into and those the rift, with a cavern it
+     * opens into, lays bare (219 over these twelve cells, 111 before), and three natural bridges no wall holds go (seed
+     * 1 cell 0,0; seed 8004 cells 0,-1 and 0,0); every way is as it was. Of the five chunks the third of seed 1 (a
+     * shelf between the rift's vault and a cavern opened, 302 blocks) and the fourth of seed 8004 (a pillar a way cut,
+     * 1,159 blocks) change, both only to air; the caverns' roofs kept under the ways change none of them.
      */
     static final String[] BLUE = {
-            "seed 1 plans: 803e76da08d65ade 6794f2e3dde05973 99461ba1a9c7eb75 fcb5fca783fcaa25"
-                    + " blocks: d7a8389b4d6c059e 6c97765a11a75ff3 bdb1f069c5628852 2d39b7613d416fc2 eecfad9773024289",
-            "seed 2 plans: 3993b7d806b083c4 513a9d6bd401c10 b519e05299342f33 5dc4a613a9874f3f"
+            "seed 1 plans: 623d934e4b5682fe da21b3f20dc3b453 b385c8b8f4d28295 b557d6ba42fe47bf"
+                    + " blocks: d7a8389b4d6c059e 6c97765a11a75ff3 e9bc5e6b3c60cbc2 2d39b7613d416fc2 eecfad9773024289",
+            "seed 2 plans: b08518cb2b38f204 265b0d0339c96250 8ca4de95cb42487b e6abde3fd779de77"
                     + " blocks: 871413a11c96a0b2 86c1690fea0001f1 55f8f1bba395da45 37afd4d970cda9fe a6930c0bdb192b36",
-            "seed 8004 plans: bcac46d080376555 92b6205d28f973da 732d40c811f36981 9a675235bc0c590"
-                    + " blocks: ccfcc9e7ae39fcb5 96f095f23ac431a7 4e803ea46608272d dab073b8c09f3f09 8533a8c9f6e3d85b"};
+            "seed 8004 plans: 6711279c6dfd8e75 36524a85c08d7cfa 9798f8eb4514d27a d7d5eb365d1345b4"
+                    + " blocks: ccfcc9e7ae39fcb5 96f095f23ac431a7 4e803ea46608272d 5af8fcf25ca80c07 8533a8c9f6e3d85b"};
     static final long[] UNCHANGED_SEEDS = {1, 2, 8004};
 
     /** As {@link #UNCHANGED} and {@link #BLUE} say, and building them (band 3 too) plans no other layer. */

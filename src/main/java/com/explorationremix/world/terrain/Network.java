@@ -884,6 +884,8 @@ public final class Network {
         // deep dark tiers (Blue)
         boolean darkOn;
         double aF, aC, bF, bC, aPd, aPr, bPd, bPr;
+        /** The tiers' ceilings as the plan keeps them, before a way close over one brings it down ({@link #DARK_ROOF}). */
+        double aC0, bC0;
         // landings; whether the gates' passages can reach the column (outside, their term is rock)
         Plans.Gate en, ex;
         boolean enNear, exNear;
@@ -1031,7 +1033,11 @@ public final class Network {
         lc.rrC = -SOLID;
         if (!n.canyons.isEmpty()) canyonCol(lc, n.canyons.get(0), x, z);
         lc.darkOn = false;
-        if (n.dark != null) darkCol(lc, n.dark, x, z);
+        if (n.dark != null) {
+            darkCol(lc, n.dark, x, z);
+            // not within 16 of a seam, where both cells carve the raw field alike (section 6.3)
+            if (lc.darkOn && NetDark.seamDist(x + 0.5, z + 0.5, cell) > 16) roofUnderWays(lc);
+        }
         // landings: a planned layer has the gate above it and the gate below it
         lc.en = base.plans.gate(li + 1, cx, cz);
         lc.ex = base.plans.gate(li + 2, cx, cz);
@@ -1109,7 +1115,7 @@ public final class Network {
      */
     private void darkCol(LCol lc, NetDark.Plan p, double x, double z) {
         lc.aF = lc.bF = SOLID;
-        lc.aC = lc.bC = -SOLID;
+        lc.aC = lc.bC = lc.aC0 = lc.bC0 = -SOLID;
         lc.aPr = lc.bPr = 0;
         lc.aPd = lc.bPd = 1e9;
         double[] t = lc.tmp;
@@ -1122,9 +1128,37 @@ public final class Network {
             if (!dark.tierAt(p, k, x, z, o, band, fade, t)) continue;
             double F = t[0], C = t[1];
             dark.pillar(k, x, z, p, t);
-            if (k == 0) { lc.aF = F; lc.aC = C; lc.aPd = t[0]; lc.aPr = t[1]; }
-            else { lc.bF = F; lc.bC = C; lc.bPd = t[0]; lc.bPr = t[1]; }
+            if (k == 0) { lc.aF = F; lc.aC = lc.aC0 = C; lc.aPd = t[0]; lc.aPr = t[1]; }
+            else { lc.bF = F; lc.bC = lc.bC0 = C; lc.bPd = t[0]; lc.bPr = t[1]; }
             lc.darkOn = true;
+        }
+    }
+
+    /**
+     * The rock a deep dark cavern's roof keeps under a walking way's floor slab (blocks): its ceiling comes down to
+     * that far under the slab beneath the way and {@link #ROOF_SIDE} beyond its sides, sloping back up further out
+     * (but within 16 blocks of a seam, where both cells carve the raw tiers alike).
+     * The planner lays ways over the caverns' roofs, their own included, and the roughness of the roof (up to 5.4
+     * blocks) and of the tunnel holed a thinner one: walking tunnels whose slabs lay 3 or 4 blocks over a cavern's roof
+     * dropped 27 to 36 blocks into it (0.6.2, seeds 8004 cell 0,0 and 575400745 cell 1,-2). Keeping the ways off such
+     * roofs in the planner instead laid all 99 plans of the sweep's cells out anew (9,169 ways to 8,618) and left
+     * caverns and exits unjoined (seed 2 cell -1,0 lost its exit and all 25 of its caverns); this leaves every plan as
+     * it was, and only lowers a roof a few blocks along the ways that run close over it.
+     */
+    static final double DARK_ROOF = 8;
+    /** How far beyond a way's half width a cavern's roof keeps {@link #DARK_ROOF} under it (blocks); then 1.5 a block less. */
+    static final double ROOF_SIDE = 2;
+
+    /** Lowers the tiers' ceilings of a column to {@link #DARK_ROOF} under the slab of a way close over them. */
+    private static void roofUnderWays(LCol lc) {
+        for (int k = 0; k < lc.nw; k++) {
+            if (lc.w[k].inner) continue;
+            double side = lc.wd[k] - lc.ww[k] - ROOF_SIDE;
+            double bottom = lc.wf[k] - lc.wsl[k], cap = bottom - DARK_ROOF + Math.max(0, side) * 1.5;
+            if (cap >= bottom) continue;
+            // only a roof under the slab (a way that bridges a cavern's air, or passes in its wall, leaves it as it is)
+            if (lc.aC > lc.aF && bottom >= lc.aC - 1 && cap < lc.aC) lc.aC = Math.max(lc.aF, cap);
+            if (lc.bC > lc.bF && bottom >= lc.bC - 1 && cap < lc.bC) lc.bC = Math.max(lc.bF, cap);
         }
     }
 
@@ -1146,13 +1180,14 @@ public final class Network {
      * (until 0.5.1 the view breaker's spires tied the worst of them to the rift's floor and ceiling; Taran had the
      * spires go, 2026-11-02, for the long views and the natural walls). The rift's own shape stays as it is: carving
      * the pillars with it would leave slivers and half columns at its edge instead. A pillar goes when the rift's open
-     * span (as canyonCol carves it) or the hall's lays one of its ends bare ({@link #pillarBared}): holds the block
-     * under its foot or over its top, within {@link #PILLAR_END_MARGIN}, at a column of that end within the pillar's
-     * radius of its centre, or at {@link #PILLAR_BARED_SHARE} of the end's columns (those its foot's or top's disc
-     * covers, within 2.5 radii, where its tier opens, whichever pillar is nearest there). So every pillar left stands
-     * on, and hangs from, rock over most of both ends. A pillar the rift only passes beside, or grazes, stands as
-     * before, and so does every pillar away from the rift and the hall. No pillar is needed to hold up a way's floor:
-     * the ways keep off the rift's void and the caverns' air (NetPlanner's clear and darkDoor).
+     * span (as canyonCol carves it, with a cavern it opens into, {@link #PLATE}) or the hall's lays one of its ends
+     * bare ({@link #pillarBared}): holds the block under its foot or over its top, within {@link #PILLAR_END_MARGIN},
+     * at a column of that end within the pillar's radius of its centre, or at {@link #PILLAR_BARED_SHARE} of the end's
+     * columns (those its foot's or top's disc covers, within 2.5 radii, where its tier opens, whichever pillar is
+     * nearest there). So every pillar left stands on, and hangs from, rock over most of both ends. A pillar the rift
+     * only passes beside, or grazes, stands as before, and so does every pillar away from the rift and the hall. No
+     * pillar is needed to hold up a way's floor: the ways keep off the rift's void and the caverns' air (NetPlanner's
+     * clear and darkDoor). A pillar a way's walking core cuts into goes too ({@link #wayCuts}, 0.6.2).
      *
      * <p>A cell only drops pillars whose centre lies at least 2.5 of the tier's largest radii inside it: no column of
      * another cell can see such a pillar (neither its rock nor its being nearer than one whose rock would reach the
@@ -1160,8 +1195,9 @@ public final class Network {
      * pillars nearer an edge reach at most 30 blocks in (tier B 32.5). The hall keeps 88 blocks inside its cell. The
      * rift's centre line keeps 72, and the rift opens at most its half width (42 at most with the default layers) and
      * 2 more from it, so it may come as near as 28 blocks to the edge in theory; measured over 240 cells it came no
-     * nearer than 36, and none of the 7,477 pillars those cells kept by their edges had an end it laid bare. Runs as
-     * the plan's last step, when the rift, the hall and the regions kept are final.
+     * nearer than 36, and none of the 7,477 pillars those cells kept by their edges had an end it laid bare. The ways
+     * keep {@code EDGE_MARGIN} inside their cell, so a pillar they cut is in it. Runs as the plan's last step, when the
+     * rift, the hall, the ways and the regions kept are final.
      */
     void dropExposedPillars(Net n) {
         NetDark.Plan p = n.dark;
@@ -1169,7 +1205,20 @@ public final class Network {
         Route rift = n.canyons.isEmpty() ? null : n.canyons.get(0);
         List<Chamber> halls = new ArrayList<>();
         for (Chamber c : n.ch) if (c.keep && c.kind == Kind.CITY) halls.add(c);
-        if (rift == null && halls.isEmpty()) return;
+        List<Way> ways = new ArrayList<>();
+        for (Way wy : n.ways) if (!wy.inner && wy.n > 0) ways.add(wy);
+        if (rift == null && halls.isEmpty() && ways.isEmpty()) return;
+        // each way's box {x lo, x hi, z lo, z hi}, for wayCuts to pass over the ways far from a pillar
+        double[][] box = new double[ways.size()][];
+        for (int i = 0; i < box.length; i++) {
+            Way wy = ways.get(i);
+            double[] b = {1e18, -1e18, 1e18, -1e18};
+            for (int j = 0; j < wy.n; j++) {
+                b[0] = Math.min(b[0], wy.x[j]); b[1] = Math.max(b[1], wy.x[j]);
+                b[2] = Math.min(b[2], wy.z[j]); b[3] = Math.max(b[3], wy.z[j]);
+            }
+            box[i] = b;
+        }
         double riftHalf = 0;
         if (rift != null) for (double h : rift.riftHalf) riftHalf = Math.max(riftHalf, h);
         double x0 = n.cx * cell, z0 = n.cz * cell;
@@ -1182,7 +1231,7 @@ public final class Network {
                 for (int gz = (int) Math.floor((z0 + inset) / grid) - 1; gz * grid <= z0 + cell - inset; gz++) {
                     if (!dark.gridPillar(t, gx, gz, pc)) continue;
                     if (pc[0] < x0 + inset || pc[0] > x0 + cell - inset || pc[1] < z0 + inset || pc[1] > z0 + cell - inset) continue;
-                    if (!pillarBared(p, t, pc, rift, riftHalf, halls, tc, span, tmp)) continue;
+                    if (!pillarBared(p, t, pc, rift, riftHalf, halls, tc, span, tmp) && !wayCuts(p, t, pc, ways, box, tc)) continue;
                     if (no == out.length) out = Arrays.copyOf(out, no * 2);
                     out[no++] = NetDark.pillarKey(t, gx, gz);
                 }
@@ -1206,6 +1255,7 @@ public final class Network {
         for (Chamber c : halls) if (Math.hypot(cx - c.x, cz - c.z) < c.R() + reach + 4) nearHall = true;
         if (!nearRift && !nearHall) return false;
         // per end, foot then top: the columns it covers, how many of them are bared, and whether one within pr is
+        double[] ts = new double[4], tc2 = new double[2];
         int footN = 0, footBared = 0, topN = 0, topBared = 0;
         boolean footCore = false, topCore = false;
         for (int x = (int) Math.floor(cx - reach); x <= (int) Math.ceil(cx + reach); x++) {
@@ -1224,8 +1274,11 @@ public final class Network {
                 if (nearRift && rift.nearest(x, z, tmp)) {
                     double s = tmp[1];
                     if (riftCut(rift, x, z, s, tmp[2], rift.at(rift.riftTop, s), rift.at(rift.riftHalf, s), span)) {
-                        footBare = endBared(span[0], span[1], F, C, foot, false);
-                        topBare = endBared(span[0], span[1], F, C, false, top);
+                        // the rift with the cavern it opens into where a tier's floor lies within PLATE over its vault
+                        tierSpans(p, x, z, ts, tc2);
+                        double hi = joinedTop(span[1], ts);
+                        footBare = endBared(span[0], hi, F, C, foot, false);
+                        topBare = endBared(span[0], hi, F, C, false, top);
                     }
                 }
                 for (Chamber c : halls) {
@@ -1240,6 +1293,164 @@ public final class Network {
             }
         }
         return endLaidBare(footN, footBared, footCore) || endLaidBare(topN, topBared, topCore);
+    }
+
+    /**
+     * Whether a way's walking core cuts into pillar pc = {x, z, radius} of tier t ({@link #dropExposedPillars}): passes
+     * within the pillar's waist (0.75 radii, the column every height of it keeps) and {@link #WAY_CORE}, its tunnel
+     * reaching into the pillar's height (its floor - 3 to its ceiling + 3). The pillar's rock is laid over the ways'
+     * tunnels and only the core opened through it again ({@link #mustOpen}), so such a pillar stood with a squeeze hole
+     * through its foot, and where the corners' interpolation thinned its waist away a piece of it hung from nothing
+     * (0.6.2: a 134-block foot a way on the cavern's floor cut loose, a 12-block sliver over a way that ran just under
+     * its cavern's floor; over 36 cells 5.6% of the pillars standing in the open had a way through them so). The ways
+     * meet pillars in their own caverns, which dark.hit leaves them, and in those a last walking tunnel may cross.
+     */
+    private boolean wayCuts(NetDark.Plan p, int t, double[] pc, List<Way> ways, double[][] box, double[] tc) {
+        double cx = pc[0], cz = pc[1], pr = pc[2], reach = 0.75 * pr + WAY_CORE;
+        double F = Double.NaN, C = Double.NaN;
+        for (int i = 0; i < box.length; i++) {
+            double[] b = box[i];
+            if (cx < b[0] - reach || cx > b[1] + reach || cz < b[2] - reach || cz > b[3] + reach) continue;
+            Way wy = ways.get(i);
+            for (int j = 0; j < wy.n; j++) {
+                int a = Math.max(0, j - 1);
+                // the way's line nearest the pillar's axis, on segment a..j
+                double ax = wy.x[a], az = wy.z[a], dx = wy.x[j] - ax, dz = wy.z[j] - az, len2 = dx * dx + dz * dz;
+                double u = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((cx - ax) * dx + (cz - az) * dz) / len2));
+                if (Math.hypot(cx - (ax + dx * u), cz - (az + dz * u)) >= reach) continue;
+                if (Double.isNaN(F)) {
+                    // the pillar's height span at its axis (its rock is clipped to each column's tier floor - 3 and
+                    // ceiling + 3; dropExposedPillars only asks of pillars whose tier opens round them)
+                    double o = dark.open(t, cx, cz);
+                    if (o <= 0 || !dark.tierAt(p, t, cx, cz, o, NetDark.band(NetDark.seamDist(cx + 0.5, cz + 0.5, cell)), NetDark.fade(p.geodes, cx, cz), tc)) return false;
+                    F = tc[0];
+                    C = tc[1];
+                }
+                double f = wy.f[a] + (wy.f[j] - wy.f[a]) * u, h = wy.hgt[a] + (wy.hgt[j] - wy.hgt[a]) * u;
+                if (f < C + 3 && f + h > F - 3) return true;
+            }
+        }
+        return false;
+    }
+
+    /** How far a way's walking core reaches from its line (blocks): its half width, 2.4 ({@link #pathCore}). */
+    static final double WAY_CORE = 2.4;
+
+    /**
+     * How thick (blocks) the shelf between the rift's vault and a deep dark tier's floor over it must be to stay: a
+     * thinner one goes, and the rift and the cavern open into one ({@link #layerDensity}). Roughness ate such shelves
+     * into plates nothing held (0.6.2: four pieces of 80 to 273 blocks over 100 cells, where the shelf was 10 blocks
+     * thick or less), and taking them adds no rock: the view from the cavern down the rift opens.
+     */
+    static final double PLATE = 10;
+
+    /**
+     * The top of the rift's open span at a column, whose ceiling is ce, once a tier whose floor lies within
+     * {@link #PLATE} over it joins it ({@link #tierSpans}' {aF, aC, bF, bC}).
+     */
+    static double joinedTop(double ce, double[] ts) {
+        return Math.max(joinedTop(ce, ts[0], ts[1]), joinedTop(ce, ts[2], ts[3]));
+    }
+
+    static double joinedTop(double ce, double F, double C) {
+        return C > F && C > ce && F - ce < PLATE ? C : ce;
+    }
+
+    /** The deep dark tiers' open spans at a column as plan p keeps them: out = {aF, aC, bF, bC}, SOLID / -SOLID where shut. */
+    void tierSpans(NetDark.Plan p, int x, int z, double[] out, double[] tc) {
+        out[0] = out[2] = SOLID;
+        out[1] = out[3] = -SOLID;
+        if (p == null) return;
+        double band = NetDark.band(NetDark.seamDist(x + 0.5, z + 0.5, cell)), fade = -1;
+        for (int k = 0; k < 2; k++) {
+            double o = dark.open(k, x, z);
+            if (o <= 0) continue;
+            if (fade < 0) fade = NetDark.fade(p.geodes, x, z);
+            if (!dark.tierAt(p, k, x, z, o, band, fade, tc)) continue;
+            out[2 * k] = tc[0];
+            out[2 * k + 1] = tc[1];
+        }
+    }
+
+    /** The share of a natural bridge's deck columns that must reach rock for it to stand ({@link #dropLooseBridges}). */
+    static final double BRIDGE_HELD_SHARE = 0.05;
+
+    /**
+     * How thick (blocks) the run of rock round a block of a bridge's deck must be for the block to hold the bridge
+     * ({@link #bridgeHeld}): from the nearest span the rift or a tier opens under it to the nearest over it. Roughness
+     * (up to 5.4 blocks off either span) and the 8-block steps of the interpolation thin a thinner run to nothing: a
+     * run of 12 between the rift's floor and a cavern's roof under it held a bridge that hung as 507 blocks (0.6.2).
+     */
+    static final double BRIDGE_HOLD = 20;
+
+    /**
+     * Blue Reaches: the rift's natural bridges that nothing would hold (0.6.2). A natural bridge is drawn at a height
+     * between the water + 18 and the rift's top - 16, and its deck reaches 4 blocks past the rift's half width so that
+     * its ends sit in the walls. But where a deep dark tier opens the walls at that height, or where the bridge lies at
+     * a bend of the centre line (its deck is the columns whose nearest point on the line is the bridge's, and at a bend
+     * those can stop short of a wall), it was rock nothing held: over 100 cells nine of 105 natural bridges, each with
+     * under 3% of its deck's columns reaching rock. A natural bridge with under {@link #BRIDGE_HELD_SHARE} of its
+     * deck's columns reaching rock that neither the rift (with the caverns it opens into, {@link #PLATE}) nor a tier
+     * opens, in a run of {@link #BRIDGE_HOLD}, goes: over 95 cells 20 of 103, of which 9 had hung as 87 to 2,404 blocks
+     * and most of the rest lay in a cavern's air. It is not drawn again at another height: there it crossed what
+     * these spans leave out (a way, a room, a ledge path) and hung cut off from the end that held it (1,191 blocks). The
+     * bridges the ledge path crosses on are its slab's and stay. The rift keeps 72 blocks inside its cell, so a
+     * bridge's columns are its own cell's. Runs at the plan's end, when the rift and the regions kept are final.
+     */
+    void dropLooseBridges(Net n) {
+        if (n.canyons.isEmpty()) return;
+        Route r = n.canyons.get(0);
+        NetDark.Plan p = n.dark;
+        double[] tmp = new double[6], span = new double[2], ts = new double[4], tc = new double[2];
+        List<Route.Bridge> stand = new ArrayList<>();
+        for (Route.Bridge b : r.bridges) {
+            if (r.crossings.contains(b.s())) { stand.add(b); continue; }
+            // the deck's columns, as canyonCol and mustStay make them: {q, rift floor, joined top, aF, aC, bF, bC}
+            double[] c = r.pointAt(b.s());
+            int reach = (int) Math.ceil(b.span() + 2 * b.halfAlong() + 2);
+            List<double[]> cols = new ArrayList<>();
+            for (int x = (int) Math.floor(c[0]) - reach; x <= (int) Math.ceil(c[0]) + reach; x++)
+                for (int z = (int) Math.floor(c[1]) - reach; z <= (int) Math.ceil(c[1]) + reach; z++) {
+                    if (!r.nearest(x, z, tmp)) continue;
+                    double s = tmp[1], v = tmp[2], along = Math.abs(s - b.s()), across = Math.abs(v);
+                    if (along >= b.halfAlong() + 6 || across >= b.span()) continue;
+                    double q = across / b.span();
+                    if (b.halfAlong() * (1 + 0.7 * q * q) - along <= 0) continue;
+                    double rf = SOLID * 9, rc = -SOLID * 9;
+                    tierSpans(p, x, z, ts, tc);
+                    if (riftCut(r, x, z, s, v, r.at(r.riftTop, s), r.at(r.riftHalf, s), span)) { rf = span[0]; rc = joinedTop(span[1], ts); }
+                    cols.add(new double[]{q, rf, rc, ts[0], ts[1], ts[2], ts[3]});
+                }
+            if (bridgeHeld(cols, b.y())) stand.add(b);
+        }
+        r.bridges.clear();
+        r.bridges.addAll(stand);
+    }
+
+    /**
+     * Whether a bridge's deck at height y, over its columns ({@link #dropLooseBridges}), reaches rock at its held share:
+     * a block of the deck that neither the rift nor a tier opens, in a run of rock at least {@link #BRIDGE_HOLD} thick.
+     * A thinner run is a shelf between two open spans (a terrace of the rift's floor over a cavern's roof), which
+     * roughness holes as it holed the plates.
+     */
+    static boolean bridgeHeld(List<double[]> cols, double y) {
+        int held = 0;
+        for (double[] c : cols) {
+            double q = c[0], deck = y + 1.5 * q * q, thick = 3.0 + 9.0 * q * q * q;
+            for (double yy = Math.ceil(deck - thick + 1); yy <= deck - 1; yy++) {
+                double below = -1e9, above = 1e9;
+                boolean open = false;
+                for (int k = 1; k < 7; k += 2) {
+                    double lo = c[k], hi = c[k + 1];
+                    if (hi <= lo) continue;
+                    if (yy > lo && yy < hi) open = true;
+                    else if (hi <= yy) below = Math.max(below, hi);
+                    else above = Math.min(above, lo);
+                }
+                if (!open && above - below >= BRIDGE_HOLD) { held++; break; }
+            }
+        }
+        return held >= BRIDGE_HELD_SHARE * cols.size();
     }
 
     /** True when an end's bared columns (of cols it covers) reach within the pillar's radius or make up its bared share. */
@@ -1409,6 +1620,12 @@ public final class Network {
         if (lc.darkOn) {
             if (lc.aC > lc.aF) d = Math.min(d, Math.max(lc.aF - y, y - lc.aC));
             if (lc.bC > lc.bF) d = Math.min(d, Math.max(lc.bF - y, y - lc.bC));
+            // a tier whose floor lies within PLATE over the rift's vault opens into the rift: one span from the rift's
+            // floor to the cavern's ceiling, deep enough that no roughness stands in it where the shelf was
+            if (lc.r != null && lc.rOn && lc.rrC > lc.rrF) {
+                double jt = Math.max(joinedTop(lc.rrC, lc.aF, lc.aC), joinedTop(lc.rrC, lc.bF, lc.bC));
+                if (jt > lc.rrC) d = Math.min(d, Math.max(lc.rrF - y, y - jt));
+            }
         }
         if (d > -12 && d < 12) {
             // the deep dark's floors stay walkable: a third of the roughness within a few blocks of a tier's floor

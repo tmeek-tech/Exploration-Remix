@@ -559,6 +559,10 @@ def creature_data():
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/mossback_hide"}})
 
 
+# Entities that are not creatures (creatures.py names those): 0.5.1's lava bomb, thrown by the Caldera's eruptions.
+ENTITY_NAMES = {"lava_bomb": "Lava Bomb"}
+
+
 def lang(extra):
     out = dict(extra)
     write(os.path.join(ASSETS, "lang", "en_us.json"), dict(sorted(out.items())))
@@ -588,6 +592,7 @@ def main():
     biome_modifiers()
     names.update(sounds.write_all(ASSETS, write))
     names.update(creatures.write_all(ASSETS, write))
+    names.update({f"entity.{MOD}.{e}": n for e, n in ENTITY_NAMES.items()})
     creature_data()
     particles()
     lang(names)

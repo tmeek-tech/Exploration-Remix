@@ -1183,6 +1183,34 @@ class NetworkTest {
         assertTrue(fails.isEmpty(), fails.size() + " pieces of rock nothing holds:\n" + String.join("\n", fails));
     }
 
+    /**
+     * Nothing the merge of main's den gates (0.6.2) left in mid-air stays there: in each cell no piece of rock nothing
+     * holds larger than {@link #LOOSE_ROCK_MAX} blocks, nor one with more than {@link #PILLAR_CRUMB} blocks of a
+     * pillar's rock. The den gates moved the rift and the ways of most cells, and with them came pieces of three kinds
+     * the reshape had too, more rarely: a natural bridge whose deck reached no wall, at a cavern or a bend of the rift
+     * (seed 8004 cell 0,0, 2,404 blocks; seed -8658168 cell 4,-4, 474 blocks, and 507 when a 12-block shelf between the
+     * rift's floor and a cavern's roof counted as its wall; {@link Network#dropLooseBridges}, {@link Network#BRIDGE_HOLD}),
+     * plates of the shelf between the rift's vault and a
+     * cavern's floor over it (seed 8675309 cell 1,-1, 273 and 157 blocks; {@link Network#PLATE}), and pillars a way's
+     * tunnel cut (seed -1763342040 cell -1,-2, a foot of 134 blocks; seed 464211742 cell -2,1, a sliver of 12;
+     * {@link Network#dropExposedPillars}).
+     */
+    @Test
+    @Tag("voxel")
+    void nothingHangsWhereTheMergeLeftIt() {
+        List<String> fails = new ArrayList<>();
+        long[][] cells = {{8004L, 0, 0}, {-8658168L, 4, -4}, {8675309L, 1, -1}, {-1763342040L, -1, -2}, {464211742L, -2, 1}};
+        for (long[] c : cells) {
+            long seed = c[0];
+            int cx = (int) c[1], cz = (int) c[2];
+            Network w = terrain(seed).network;
+            int cell = (int) w.cell;
+            VoxelHarness v = built(seed, Terrain.BLUE, cx, cz, 1, 1, false);
+            System.out.println(looseRock(w, v, tag(seed, Terrain.BLUE, cx, cz), cx * cell, cz * cell, (cx + 1) * cell, (cz + 1) * cell, fails));
+        }
+        assertTrue(fails.isEmpty(), fails.size() + " pieces of rock nothing holds:\n" + String.join("\n", fails));
+    }
+
     /** The Blue Reaches 256 tall (the config allows 64 to 512) with rifts up to 60 deeper: a deeper, wider rift. */
     static TerrainSettings tallBlue() {
         TerrainSettings d = TerrainSettings.defaults();
@@ -1284,7 +1312,13 @@ class NetworkTest {
      * than 15 lower; a staged climb ends a fall on the floor of the stage it fell down. Falls into water or onto vines
      * are safe. Falls in the rift, the deep dark, the helices and the ancient city are reported, not failed: 0.2.0's
      * cliffs and the high ledges are meant to be dangerous. Over the voxel tests' cells of the Deep Gardens and 2 x 2
-     * cells of the Blue Reaches (the layers under them are noise fields, tested with their fields).
+     * cells of the Blue Reaches (the layers under them are noise fields, tested with their fields), and two Blue cells
+     * of the merge of main's den gates (0.6.2): seed 8004 cell 0,0 had falls of 32 to 36 blocks from a walking tunnel
+     * whose slab lay 3 blocks over its own cavern's roof, seed 575400745 cell 1,-2 falls of 27 and 28 from one 4 blocks
+     * over a cavern's roof ({@link Network#DARK_ROOF}). In those two a fall from a gate's passage is reported, not
+     * failed: a landing's spoke can pass a few blocks under its own gate's passage, as it did in main (0.6.1; seed 8004
+     * cell 0,0 drops 18 from the first gate's), and keeping the spokes 12 blocks under the passages doubled the courts'
+     * tries (1,473 to 2,862 over 99 cells) and moved the layout of every cell but one.
      */
     @Test
     @Tag("voxel")
@@ -1293,11 +1327,14 @@ class NetworkTest {
         List<Object[]> runs = new ArrayList<>();
         for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], Terrain.GARDENS, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
+        runs.add(new Object[]{8004L, Terrain.BLUE, 0, 0, 1});
+        runs.add(new Object[]{575400745L, Terrain.BLUE, 1, -2, 1});
         for (Object[] run : runs) {
             long seed = (Long) run[0];
             int li = (Integer) run[1], cx = (Integer) run[2], cz = (Integer) run[3], wc = (Integer) run[4];
             Terrain t = terrain(seed);
-            VoxelHarness v = built(seed, li, cx, cz, wc, wc, true);
+            // the single Blue cells are this test's alone: built and let go
+            VoxelHarness v = built(seed, li, cx, cz, wc, wc, li != Terrain.BLUE || wc > 1);
             String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "");
             java.util.Map<String, Integer> told = new java.util.TreeMap<>();
             int lethal = 0, deepest = 0;
@@ -1306,6 +1343,7 @@ class NetworkTest {
                 if (f[6] == 1 || f[6] == 2 || f[6] == 4) continue;
                 String why = fallPlace(t, li, f[0], f[1], f[2]);
                 if (why == null) why = fallPlace(t, li, f[3], f[1], f[4]);
+                if (why == null && li == Terrain.BLUE && wc == 1 && inGatePassage(t, cx, cz, f[0], f[1], f[2])) why = "a gate's passage";
                 if (f[6] == 3) why = "into lava" + (why == null ? "" : ", " + why);
                 if (why != null) { told.merge(why, 1, Integer::sum); continue; }
                 lethal++;
@@ -1317,7 +1355,22 @@ class NetworkTest {
         assertTrue(fails.isEmpty(), fails.size() + " lethal falls:\n" + String.join("\n", fails));
     }
 
-    /** Why a fall at a place is allowed (the rift, the deep dark, a helix, a city, a gate's mouth), or null. */
+    /** Whether a place lies in a gate's passage into Blue cell (cx, cz), the first's or a den gate's, or at its rim. */
+    static boolean inGatePassage(Terrain t, int cx, int cz, int x, int y, int z) {
+        List<Plans.Gate> gs = new ArrayList<>(t.plans.denGates(cx, cz));
+        gs.add(t.plans.gate(Terrain.BLUE + 1, cx, cz));
+        for (Plans.Gate g : gs) {
+            double tt = g.tAt(y);
+            if (!Double.isNaN(tt) && g.passageXZ(x, y, z) < g.radiusAt(tt) + 3) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Why a fall at a place is allowed (the rift, the deep dark, a helix, a city, a gate's mouth), or null. The deep dark
+     * is a tier's span as the plan keeps it, within 6 blocks: a roof brought down under a way ({@link Network#DARK_ROOF})
+     * leaves it as it was.
+     */
     static String fallPlace(Terrain t, int li, int x, int y, int z) {
         Network w = t.network;
         Network.LCol lc = w.layer(w.column(x, z), li);
@@ -1327,7 +1380,7 @@ class NetworkTest {
             if (lc.c[k].kind == Kind.CITY) return "city";
         }
         if (lc.rOn && Math.abs(lc.rV) < lc.rHalfTop + 8) return "rift";
-        if (lc.darkOn && ((lc.aC > lc.aF && y > lc.aF - 6 && y < lc.aC + 6) || (lc.bC > lc.bF && y > lc.bF - 6 && y < lc.bC + 6))) return "deep dark";
+        if (lc.darkOn && ((lc.aC0 > lc.aF && y > lc.aF - 6 && y < lc.aC0 + 6) || (lc.bC0 > lc.bF && y > lc.bF - 6 && y < lc.bC0 + 6))) return "deep dark";
         if (gateMouth(t, lc.net, x, z)) return "gate mouth";
         return null;
     }
