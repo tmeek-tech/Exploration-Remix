@@ -440,7 +440,7 @@ class GalleriesFieldTest {
                 int i = c[0] + dx, k = c[1] + dz;
                 if (i < 0 || k < 0 || i >= gn || k >= gn) continue;
                 int o = owner[i * gn + k];
-                assertTrue(o == 0 || o == c[2], "seed " + ar[0] + ": decks of the openings at " + where(kept.get(c[2] - 1)) + " and " + where(kept.get(o - 1))
+                assertTrue(o == 0 || o == c[2], () -> "seed " + ar[0] + ": decks of the openings at " + where(kept.get(c[2] - 1)) + " and " + where(kept.get(o - 1))
                         + " closer than RAMP_GAP at column " + (c[0] + gx0) + " " + (c[1] + gz0));
             }
         }

@@ -114,7 +114,9 @@ class JoinTest {
         for (int i = 0; i < SIZE; i++) for (int k = 0; k < SIZE; k++) {
             int x = x0 + i, z = z0 + k;
             WastelandField.Col c = t.wasteland.column(x, z);
-            if (c.holeDip > 0) { b.dipColumns++; if (c.under < 1) b.partialDips++; }
+            // a dip the guard cuts short where the floor falls through (its weight before the guard 0.1 or more: the
+            // fringe under that lowers the floor by less than a row)
+            if (c.holeDip > 0) { b.dipColumns++; if (c.under < 1 && t.breakthrough.openingSite(x, z) >= 0.1) b.partialDips++; }
             // the seal's three parts, block by block; none in the craters round the holes with ramps (Join#seal)
             if (c.crater > 0) {
                 b.craterColumns++;
@@ -209,8 +211,8 @@ class JoinTest {
      * bottom to 8 over it) runs on down into the Galleries' space, to 6 rows under their top at least, so no lid closes
      * it; no flat lid lies at the join line itself: where the Galleries' top row is open under the Wasteland's bottom row
      * of rock, it is in patches of a few columns (the edges of openings, a crater's vault), never a plane; and the guard
-     * cuts few dips short: at most 1 % of the columns where the Wasteland's floor falls through have the Galleries only
-     * partly open under them (W-ENG-2).
+     * cuts few dips short: at most 1 % of the columns where the Wasteland's floor falls through (the dip's weight before
+     * the guard 0.1 or more) have the Galleries only partly open under them (W-ENG-2).
      */
     @Test
     void sealedOrOpenNeverLidded() {
@@ -249,7 +251,7 @@ class JoinTest {
             List<int[]> cols = new ArrayList<>();
             for (int i = -6; i < 6; i++) for (int k = -6; k < 6; k++)
                 for (GalleriesField.Opening o : t.galleries.rawCell(i, k).ops)
-                    for (int dx = -24; dx <= 24; dx += 2) for (int dz = -24; dz <= 24; dz += 2) cols.add(new int[]{(int) Math.floor(o.x) + dx, (int) Math.floor(o.z) + dz});
+                    for (int dx = -24; dx <= 24; dx++) for (int dz = -24; dz <= 24; dz++) cols.add(new int[]{(int) Math.floor(o.x) + dx, (int) Math.floor(o.z) + dz});
             Spread spread = new Spread(new Random(seed), 8000, 512, 1000);
             for (int q = 0; q < 20_000; q++) cols.add(spread.next());
             int wrong = 0;
@@ -362,7 +364,8 @@ class JoinTest {
         int ramped, skylights, measured, down, down3, up, both;
         double km2;
         int landingWalk = -1;
-        int upPlaces, upWithin400, upNever;
+        int upPlaces, upWithin400, upNever, upMedian, up90;
+        int downPlaces, downNever, downMedian, down90;
         String failed = "";
 
         double perKm2(int n) { return n / km2; }
@@ -370,9 +373,11 @@ class JoinTest {
         @Override public String toString() {
             return String.format(java.util.Locale.ROOT, "seed %d: main component holds %.1f %% of %d Wasteland places and %.1f %% of %d Galleries dry places;"
                             + " %d ramped holes (%.0f per km2), %d skylights; measured %d: way down %d (every drop <= 3: %d), way up %d, both %d (%.0f per km2);"
-                            + " Galleries dry places reaching the Wasteland within 400 moves %.1f %% (none %d); walk from gate 3's landing to the nearest rim %d%s",
+                            + " Galleries dry places reaching the Wasteland within 400 moves %.1f %% (none %d; median %d, 90 %% %d moves);"
+                            + " the Wasteland's low places to the Galleries' floor median %d, 90 %% %d moves (none %d of %d); walk from gate 3's landing to the nearest rim %d%s",
                     seed, 100.0 * wMain / wPlaces, wPlaces, 100.0 * gMain / gPlaces, gPlaces, ramped, perKm2(ramped), skylights, measured, down, down3, up, both,
-                    perKm2(ramped) * both / Math.max(1, measured), 100.0 * upWithin400 / upPlaces, upNever, landingWalk, failed);
+                    perKm2(ramped) * both / Math.max(1, measured), 100.0 * upWithin400 / upPlaces, upNever, upMedian, up90, downMedian, down90, downNever, downPlaces,
+                    landingWalk, failed);
         }
     }
 
@@ -439,13 +444,33 @@ class JoinTest {
         boolean[] wGoal = new boolean[v.places];
         for (int p = 0; p < v.places; p++) wGoal[p] = v.py(p) >= wBot + 4;
         int[] toW = v.walkTo(wGoal);
+        List<Integer> ups = new ArrayList<>();
         for (int p = 0; p < v.places; p++) {
             int y = v.py(p);
             if (!v.inMain(p) || y > T - 12 || y <= Wg + 2) continue;
             w.upPlaces++;
-            if (toW[p] < 0) w.upNever++;
-            else if (toW[p] <= 400) w.upWithin400++;
+            if (toW[p] < 0) { w.upNever++; continue; }
+            ups.add(toW[p]);
+            if (toW[p] <= 400) w.upWithin400++;
         }
+        Collections.sort(ups);
+        w.upMedian = quantile(ups, 0.5);
+        w.up90 = quantile(ups, 0.9);
+        // and the Wasteland's low places (its lowest sheets) down to the Galleries' floor
+        boolean[] gGoal = new boolean[v.places];
+        for (int p = 0; p < v.places; p++) gGoal[p] = v.py(p) <= T - 12;
+        int[] toG = v.walkTo(gGoal);
+        List<Integer> downs = new ArrayList<>();
+        for (int p = 0; p < v.places; p++) {
+            int y = v.py(p);
+            if (!v.inMain(p) || y < wBot + 2 || y > T + 40) continue;
+            w.downPlaces++;
+            if (toG[p] < 0) w.downNever++;
+            else downs.add(toG[p]);
+        }
+        Collections.sort(downs);
+        w.downMedian = quantile(downs, 0.5);
+        w.down90 = quantile(downs, 0.9);
         // gate 3's landing to the nearest crater rim
         int[] toRim = v.walkTo(rim);
         int best = Integer.MAX_VALUE;
@@ -455,6 +480,11 @@ class JoinTest {
         }
         w.landingWalk = best == Integer.MAX_VALUE ? -1 : best;
         return w;
+    }
+
+    /** The value a share f of the way up a sorted list (-1 for an empty list). */
+    static int quantile(List<Integer> sorted, double f) {
+        return sorted.isEmpty() ? -1 : sorted.get(Math.min(sorted.size() - 1, (int) (f * sorted.size())));
     }
 
     /** Whether some place of {@code from} walks to some place of {@code to} inside {@code region}, every move dropping at most maxDrop. */
@@ -486,11 +516,13 @@ class JoinTest {
     @Test
     void layersJoinBothWays() {
         List<Integer> landings = new ArrayList<>();
-        StringBuilder all = new StringBuilder();
+        List<Ways> boxes = new ArrayList<>();
         for (long seed : new long[]{1, 2, 8004}) {
             Ways w = ways(seed);
             System.out.println("JoinTest ways " + w);
-            all.append(w).append('\n');
+            boxes.add(w);
+        }
+        for (Ways w : boxes) {
             assertTrue(w.wPlaces > 100_000 && w.gPlaces > 100_000, "too few places to measure: " + w);
             assertTrue(w.wMain >= 0.85 * w.wPlaces && w.gMain >= 0.85 * w.gPlaces, "the layers are not one walk both ways: " + w);
             assertTrue(w.measured >= 3, "too few ramped holes to measure: " + w);

@@ -1053,10 +1053,10 @@ class WastelandFieldTest {
     /**
      * The fluid rule (spec 6.5, spec-galleries-field-v2 7.4), over 10^6 points (200 areas of 512 x 512 anywhere in
      * 20 000 x 20 000, {@link Spread}): under the lava table a block is air wherever beta is {@link Join#AIR_BETA} or more
-     * or a crater round a hole with a ramp lowers the lowest sheet's floor (lava under that), and where beta is from
-     * {@link Join#LAVA_BETA} to under {@link Join#HOLE_BETA}, outside the craters (the seal keeps out of them,
-     * {@link Join#seal}), no block from the Wasteland's bottom to a row over its table is open, whatever the corners
-     * interpolate to.
+     * or a hole the Galleries open with a ramp is within {@link WastelandField#crDry} (its crater may go under the table;
+     * lava under that), and where beta is from {@link Join#LAVA_BETA} to under {@link Join#HOLE_BETA}, outside the
+     * craters (the seal keeps out of them, {@link Join#seal}), no block from the Wasteland's bottom to a row over its
+     * table is open, whatever the corners interpolate to.
      */
     @Test
     void fluidRule() {
@@ -1070,14 +1070,15 @@ class WastelandFieldTest {
             int[] at = spread.next();
             int x = at[0], z = at[1];
             double beta = t.breakthrough.beta(x, z);
-            boolean crater = t.wasteland.column(x, z).crater > 0;
+            WastelandField.Col col = t.wasteland.column(x, z);
+            boolean crater = col.crater > 0, dry = col.ring < t.wasteland.crDry;
             if (crater) craters++;
             int y = bot + r.nextInt(W - bot);
             int f = t.fluidAt(x, y, z);
-            if (beta >= Join.AIR_BETA || crater) {
+            if (beta >= Join.AIR_BETA || dry) {
                 air++;
-                if (f != Terrain.AIR) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta + " crater " + crater; }
-            } else if (f != Terrain.LAVA) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta; }
+                if (f != Terrain.AIR) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta + " ring " + col.ring; }
+            } else if (f != Terrain.LAVA) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta + " ring " + col.ring; }
             if (beta >= Join.LAVA_BETA && beta < Join.HOLE_BETA && !crater) {
                 sealed++;
                 int yy = bot + r.nextInt(W + 2 - bot);

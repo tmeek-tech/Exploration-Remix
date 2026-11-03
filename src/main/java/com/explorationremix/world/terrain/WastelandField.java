@@ -125,6 +125,8 @@ public final class WastelandField {
     static final double CR_FLAT = GalleriesField.LIP + 1, CR_FLAT_G = 2;
     /** The crater's depth fades out over the last CR_FADE blocks of its reach (it is 0 there in the default layout anyway). */
     static final double CR_FADE = 6;
+    /** The share of a crater's fall its vault's crown keeps (the crown comes down by the rest). */
+    static final double CR_CEIL = 0.5;
     /** Lava pools keep CR_DRY_GAP blocks of rock from where a crater may go under the lava table, fading in over 3 more. */
     static final double CR_DRY_GAP = 4;
     /** The decorations' walk guard ({@link #walkNear}): rows from this far under a tunnel's floor to this far over it. */
@@ -383,6 +385,9 @@ public final class WastelandField {
                     c.crater = f - fn;
                     f = fn;
                     e = Math.min(e, CR_FLAT_G * Math.max(0, c.ring - CR_FLAT));
+                    // the vault's crown comes down by only part of the floor's fall: the crater is a funnel under the
+                    // tunnel's own roof, and its roof stays over the join line (a low crown there would be a flat lid)
+                    h += CR_CEIL * c.crater;
                 }
             }
             c.e[k] = e;
@@ -650,13 +655,15 @@ public final class WastelandField {
     // ================================================================================================ fluids and biomes
     /**
      * What fills an open block of the Wasteland: lava under the table, but air where the breakthrough noise is high
-     * enough that an opening could be near ({@link Join#AIR_BETA}); air above it. The join's seal keeps every open
-     * block under the table either far from the openings (lava) or inside them (air), never both side by side.
+     * enough that an opening could be near ({@link Join#AIR_BETA}) and within {@link #crDry} of a hole the Galleries open
+     * with a ramp (its crater may go under the table there, and no lava pool comes that near); air above it. The join's
+     * seal keeps every open block under the table either far from the openings (lava) or inside them (air), never both
+     * side by side.
      */
     public int fluid(int x, int y, int z) {
         if (y >= W) return Terrain.AIR;
         Col c = column(x, z);
-        return c.beta >= Join.AIR_BETA || c.crater > 0 ? Terrain.AIR : Terrain.LAVA;
+        return c.beta >= Join.AIR_BETA || c.ring < crDry ? Terrain.AIR : Terrain.LAVA;
     }
 
     /**

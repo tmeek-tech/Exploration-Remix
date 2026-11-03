@@ -793,6 +793,9 @@ public final class GalleriesField {
             C = Math.max(C, rh.deck + RAMP_HEAD);
             out.minC = Math.max(out.minC, dk + RAMP_HEAD - 2);
         }
+        // the disc of an opening with a ramp opens to its crater's floor, so no column end hangs into the hole there (a
+        // skylight's disc opens into the band, far over its column ends)
+        if (rh.jt >= 0.5 && rh.jtTop <= T) out.minC = Math.max(out.minC, cap);
         C = Math.min(C, cap);
         out.cap = cap;
         double head = C - F;
