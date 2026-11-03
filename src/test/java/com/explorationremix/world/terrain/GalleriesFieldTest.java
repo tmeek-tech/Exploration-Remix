@@ -851,7 +851,7 @@ class GalleriesFieldTest {
      * 64 x 64 columns with the most blocks in the tubes' spans round the first three tube countries from the origin out
      * (windows every 32 blocks within 128 of a country's middle), every row of the layer, the per-block density with the
      * hook (fineBlocks: the cell's profile, and the tubes in the column's span) against the profile alone, and against the
-     * same hook reading the span on every block (the form T6 warned of), best of three rounds each, taken in turns.
+     * same hook reading the span on every block (the form T6 warned of), best of seven rounds each, taken in turns.
      * Printed as a ratio. A quarter of these blocks lie in a span and pay the tubes' own density there, so the ratio is the
      * worst a chunk of the layer sees: 3.1-4.4 at the port on a loaded machine (the per-block read 4.5-6.7). Held under 6,
      * and under the per-block read's cost.
@@ -879,7 +879,7 @@ class GalleriesFieldTest {
         long inSpan = inSpan(g, x0, z0, 1, lo, hi);
         assertTrue(inSpan > 20_000, "too few blocks in the tubes' spans to time: " + inSpan);
         double with = Double.MAX_VALUE, without = Double.MAX_VALUE, perBlock = Double.MAX_VALUE;
-        for (int round = 0; round < 4; round++) {
+        for (int round = 0; round < 8; round++) {
             long t0 = System.nanoTime();
             double sink = 0;
             for (int x = x0; x < x0 + 64; x++) for (int z = z0; z < z0 + 64; z++) for (int y = lo; y <= hi; y++) sink += g.fineBlocks(x, y, z);
