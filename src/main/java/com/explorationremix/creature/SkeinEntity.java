@@ -95,8 +95,11 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
      * struck), a new encounter starts where it next strikes.
      */
     static final int ENCOUNTER_TICKS = 600;
-    /** A split second rearing (shorter when it strikes back), the lunge, and a moment before it strikes again. */
-    static final int REAR_TICKS = 7, SNAP_REAR_TICKS = 3, SWARM_REAR_TICKS = 5, LUNGE_TICKS = 8, STRIKE_COOLDOWN = 30;
+    /**
+     * A split second rearing (shorter when it strikes back), the lunge, and four seconds before it strikes again: one
+     * standing in reach is bitten every few seconds, not worried to death in a breath.
+     */
+    static final int REAR_TICKS = 7, SNAP_REAR_TICKS = 3, SWARM_REAR_TICKS = 5, LUNGE_TICKS = 8, STRIKE_COOLDOWN = 80;
     static final double LUNGE_SPEED = 0.62;
     /** After a strike it skitters off this far before it freezes; hurt from afar, it bolts this far. */
     static final double AFTER_STRIKE_MIN = 3.0, AFTER_STRIKE_MAX = 6.0, BOLT_MIN = 10.0, BOLT_MAX = 20.0;

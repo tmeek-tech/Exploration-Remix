@@ -32,9 +32,9 @@ import org.joml.Quaternionf;
 public class FireflySwarmRenderer extends EntityRenderer<FireflySwarm> {
     public static final ResourceLocation TEXTURE = new ResourceLocation(ExplorationRemix.MOD_ID, "textures/entity/firefly_swarm/firefly.png");
     /** Half the width of a firefly's core and of its halo (blocks), and how bright the halo is next to the core. */
-    static final float CORE = 0.075F, HALO = 0.28F, HALO_LEVEL = 0.5F;
-    /** A dim firefly's halo shrinks to this share of its full size. */
-    static final float HALO_DIM = 0.6F;
+    static final float CORE = 0.09F, HALO = 0.36F, HALO_LEVEL = 0.8F;
+    /** A dim firefly's halo shrinks to this share of its full size, so a settled one's breath swells as well as brightens. */
+    static final float HALO_DIM = 0.5F;
     /**
      * Seen from further than {@link #HALO_NEAR} blocks a halo grows with the distance, to {@link #HALO_GROWTH} times its
      * size at {@link #HALO_FAR} and no more: it keeps more of its apparent size, where the core and the halo's middle

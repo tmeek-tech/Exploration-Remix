@@ -17,8 +17,11 @@ package com.explorationremix.creature.firefly;
 public final class Pulse {
     /** The shortest and longest breath, in ticks. */
     public static final double MIN_PERIOD = 40.0, MAX_PERIOD = 80.0;
-    /** The steady glow in flight, and the dim rest between breaths (fractions of full brightness). */
-    public static final double GLOW = 1.0, LOW = 0.12;
+    /**
+     * The steady glow in flight, and the dim rest between breaths (fractions of full brightness): low enough that each
+     * breath shows as a swell of light, high enough that a resting firefly still shows as a small blue ember.
+     */
+    public static final double GLOW = 1.0, LOW = 0.3;
     /** The share of a cycle a firefly's light swells and fades for; the rest is its dim pause. */
     public static final double MIN_SWELL = 0.5, MAX_SWELL = 0.66;
     /** How far a firefly's point in the cycle may stray from its even share (a fraction of the cycle). */
