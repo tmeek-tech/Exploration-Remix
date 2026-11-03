@@ -26,8 +26,8 @@ import java.util.Locale;
  *     to 24 without one)</li>
  *     <li>{@code /remix fireflies list [radius]}: the swarms round you, nearest first: where each is, flying or landed
  *     (and on what), how many fireflies it has of how many it grows back to</li>
- *     <li>{@code /remix fireflies land}: the nearest swarm settles at once on the best patch of rock within a few
- *     blocks, for its longest stay (40 s, or until you come within three blocks)</li>
+ *     <li>{@code /remix fireflies land [seconds]}: the nearest swarm settles at once on the best patch of rock within a
+ *     few blocks, for its longest stay (40 s, or the seconds given, or until you come within three blocks)</li>
  *     <li>{@code /remix fireflies scatter}: the nearest swarm scatters away from you, as if struck</li>
  * </ul>
  */
@@ -41,7 +41,9 @@ public final class FireflyCommands {
                                 .executes(c -> spawn(c, IntegerArgumentType.getInteger(c, "count")))))
                 .then(Commands.literal("list").executes(c -> list(c, 48))
                         .then(Commands.argument("radius", IntegerArgumentType.integer(4, 256)).executes(c -> list(c, IntegerArgumentType.getInteger(c, "radius")))))
-                .then(Commands.literal("land").executes(FireflyCommands::land))
+                .then(Commands.literal("land").executes(c -> land(c, 0))
+                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 600))
+                                .executes(c -> land(c, IntegerArgumentType.getInteger(c, "seconds") * 20))))
                 .then(Commands.literal("scatter").executes(FireflyCommands::scatter));
     }
 
@@ -89,10 +91,10 @@ public final class FireflyCommands {
         return all.size();
     }
 
-    private static int land(CommandContext<CommandSourceStack> c) {
+    private static int land(CommandContext<CommandSourceStack> c, int ticks) {
         FireflySwarm s = nearest(c);
         if (s == null) return 0;
-        if (!s.landNow()) { c.getSource().sendFailure(Component.literal("No rock to land on near the swarm at " + BlockPos.containing(s.centre()).toShortString())); return 0; }
+        if (!(ticks > 0 ? s.landNow(ticks) : s.landNow())) { c.getSource().sendFailure(Component.literal("No rock to land on near the swarm at " + BlockPos.containing(s.centre()).toShortString())); return 0; }
         say(c, "Landed: " + s.describe());
         return 1;
     }

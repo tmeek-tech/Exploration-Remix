@@ -422,6 +422,11 @@ public class FireflySwarm extends Entity {
      * the longest stay. Returns false when there is no patch to land on.
      */
     public boolean landNow() {
+        return landNow(LAND_MAX);
+    }
+
+    /** As {@link #landNow()}, staying {@code ticks} (for pictures, which take longer to settle than a stay lasts). */
+    public boolean landNow(int ticks) {
         if (landed()) takeOff(null);
         Perch p = findPerch(0, PERCH_REACH + 2);
         if (p == null) return false;
@@ -429,7 +434,7 @@ public class FireflySwarm extends Entity {
         perchRock = p.rock;
         landAt = landingPoint(p.pos, p.rock);
         land();
-        landTicks = LAND_MAX;
+        landTicks = Math.max(1, ticks);
         return true;
     }
 
