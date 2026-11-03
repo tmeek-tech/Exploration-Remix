@@ -24,8 +24,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The volcanic smoke of the Galleries and the Wasteland (0.6.0): registered with sprites of its own; each puff rises
  * 40 to 100 blocks, slowing, swells and fades, and spreads under the rock it meets instead of stopping dead; a vent's
- * puffs stand as an unbroken column; the plumes rise over the lava under open air, and the openings' plumes out through
- * the hole; and the client's count of puffs.
+ * puffs stand as an unbroken column; the plumes rise over the lava under open air from the first of a cell's spots
+ * that finds it, and the openings' plumes out through the hole, still thick over it; and the client's count of puffs,
+ * which turns plumes away whole, the far ones first.
  */
 class VolcanicSmokeTest {
     private static final SmokePuff.Rock NONE = (x, y, z) -> false;
@@ -229,7 +230,7 @@ class VolcanicSmokeTest {
     private static List<Puff> run(SmokeColumns.Blocks w, long from, long to, int px, int py, int pz, boolean galleries, int top) {
         List<Puff> out = new ArrayList<>();
         for (long t = from; t < to; t++)
-            SmokeColumns.puff(w, t, px, py, pz, galleries, top, 0, (x, y, z, reach, above) -> out.add(new Puff(x, y, z, reach, above)));
+            SmokeColumns.puff(w, t, px, py, pz, galleries, top, 0, (x, y, z, reach, above, plume, far) -> out.add(new Puff(x, y, z, reach, above)));
         return out;
     }
 
@@ -336,16 +337,138 @@ class VolcanicSmokeTest {
             }
         }
         assertTrue(tall && plain, "both kinds from the Galleries");
-        // and a tall plume's puffs rise out through the hole, still to be seen there
-        Random r = new Random(5);
-        SmokePuff p = new SmokePuff(10.5, 1.1, 10.5, 1.0, top + SmokeColumns.OUT - 1, r::nextDouble);
-        SmokePuff.Rock rock = (x, y, z) -> roof.at((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
-        boolean out = false;
-        while (p.age < p.life) {
-            p.tick(rock, r::nextDouble);
-            if (p.y > top + 1 && p.alpha() >= 0.1) out = true;
+        // and a tall plume's puffs rise out through the hole still thick: at least half their peak 6 blocks over the top
+        // row, here and with the game's 134 rows from the lava to the top
+        for (int t : new int[]{top, 134}) {
+            SmokePuff.Rock rock = (x, y, z) -> Math.floor(y) >= 60 && Math.floor(y) <= t && !(x >= 0 && x < 30 && z >= 0 && z < 30);
+            for (int seed = 0; seed < 12; seed++) {
+                Random r = new Random(seed);
+                SmokePuff p = new SmokePuff(15.5, 1.1, 15.5, 1.0, t + SmokeColumns.OUT - 1, r::nextDouble);
+                boolean over = false;
+                while (p.age < p.life && !over) {
+                    p.tick(rock, r::nextDouble);
+                    if (p.y > t + 6) {
+                        over = true;
+                        assertTrue(p.alpha() >= 0.5 * p.peak, "6 over the top row at " + p.alpha() / p.peak + " of its peak, seed " + seed);
+                    }
+                }
+                assertTrue(over, "the plume's puffs come out over the top, seed " + seed);
+            }
         }
-        assertTrue(out, "the plume's puffs come out over the top");
+    }
+
+    @Test
+    void aCellFindsTheLavaThroughAnyOfItsSpots() {
+        // rivers three blocks wide every 12 along x (z 4 to 6 of each cell), the rest a rock floor over the lava
+        SmokePuff.Rock banks = (x, y, z) -> y >= 1 && y <= 4 && Math.floorMod((int) Math.floor(z), 12) != 4
+                && Math.floorMod((int) Math.floor(z), 12) != 5 && Math.floorMod((int) Math.floor(z), 12) != 6;
+        Cave rivers = new Cave(0, banks);
+        int px = 7, pz = -5;
+        List<Puff> puffs = run(rivers, 2000, 2000 + SmokeColumns.FAR_BEAT, px, 30, pz, true, SmokeColumns.UNKNOWN);
+        Map<Long, List<Puff>> byCell = new HashMap<>();
+        for (Puff p : puffs) {
+            int z = Math.floorMod((int) Math.floor(p.z), 12);
+            assertTrue(z >= 4 && z <= 6, "a plume over the river: " + p);
+            byCell.computeIfAbsent(SmokeColumns.plume(Math.floorDiv((int) Math.floor(p.x), 12), Math.floorDiv((int) Math.floor(p.z), 12)), k -> new ArrayList<>()).add(p);
+        }
+        int cx = Math.floorDiv(px, SmokeColumns.CELL), cz = Math.floorDiv(pz, SmokeColumns.CELL), vents = 0, smoking = 0, first = 0;
+        for (int[] o : SmokeColumns.RINGS) {
+            int gx = cx + o[0], gz = cz + o[1];
+            long h = SmokeColumns.hash(gx, gz);
+            if (SmokeColumns.ventBeat(h, o[0] * o[0] + o[1] * o[1]) == 0) continue;
+            vents++;
+            int found = -1;
+            for (int c = 0; c < SmokeColumns.SPOTS && found < 0; c++) {
+                int z = Math.floorMod(SmokeColumns.spotZ(gz, SmokeColumns.spot(h, c)), 12);
+                if (z >= 4 && z <= 6) found = c;
+            }
+            List<Puff> got = byCell.getOrDefault(SmokeColumns.plume(gx, gz), List.of());
+            assertEquals(found >= 0, !got.isEmpty(), "cell " + gx + "," + gz + " smokes when one of its spots is over the river");
+            if (found < 0) continue;
+            smoking++;
+            if (found == 0) first++;
+            long s = SmokeColumns.spot(h, found);
+            // from its first spot over the river, give or take half a block of wander
+            for (Puff p : got) {
+                assertEquals(SmokeColumns.spotX(gx, s) + 0.5, p.x, 0.5 + 1e-9);
+                assertEquals(SmokeColumns.spotZ(gz, s) + 0.5, p.z, 0.5 + 1e-9);
+            }
+        }
+        // one spot finds a river a quarter of its width about a quarter of the time, four about two thirds of the time
+        assertTrue(smoking > 0.55 * vents, smoking + " of " + vents + " vents smoke");
+        assertTrue(smoking > 2 * first, smoking + " vents smoke, only " + first + " from their first spot");
+    }
+
+    @Test
+    void aPlumeTheCountTurnsAwayRestsWhole() {
+        SmokeBudget.clear();
+        try {
+            int budget = 10;
+            for (int i = 0; i < 9; i++) SmokeBudget.add(300);
+            long far1 = SmokeColumns.plume(8, 0), near1 = SmokeColumns.plume(1, 0), near2 = SmokeColumns.plume(0, 1), far2 = SmokeColumns.plume(0, 8);
+            // the far plumes stop at nine tenths of the count, the near ones at all of it
+            assertFalse(SmokeBudget.admit(far1, true, 0, budget));
+            assertTrue(SmokeBudget.admit(near1, false, 0, budget));
+            SmokeBudget.add(300);
+            assertFalse(SmokeBudget.admit(near2, false, 0, budget));
+            // the count is empty at 300, but the plumes turned away rest until 600
+            assertEquals(0, SmokeBudget.alive(300));
+            assertFalse(SmokeBudget.admit(far1, true, 300, budget));
+            assertFalse(SmokeBudget.admit(near2, false, 599, budget));
+            assertTrue(SmokeBudget.admit(far2, true, 300, budget));
+            assertTrue(SmokeBudget.admit(near1, false, 300, budget));
+            assertTrue(SmokeBudget.admit(far1, true, SmokeBudget.REST, budget));
+            assertTrue(SmokeBudget.admit(near2, false, SmokeBudget.REST, budget));
+            // a new level has nothing resting
+            assertFalse(SmokeBudget.admit(far2, true, 700, 0));
+            SmokeBudget.clear();
+            assertTrue(SmokeBudget.admit(far2, true, 701, budget));
+        } finally {
+            SmokeBudget.clear();
+        }
+    }
+
+    @Test
+    void aFullCountPausesWholePlumesTheFarOnesFirst() {
+        // the open sea, every vent smoking, with room for about a seventh of their puffs (about 2800 without a count)
+        Cave sea = new Cave(0, NONE);
+        int budget = 400;
+        Map<Long, List<long[]>> asks = new HashMap<>();
+        int[] admitted = new int[2], asked = new int[2];
+        SmokeBudget.clear();
+        try {
+            for (long t = 0; t < 4000; t++) {
+                final long now = t;
+                SmokeColumns.puff(sea, t, 0, 30, 0, true, SmokeColumns.UNKNOWN, 0, (x, y, z, reach, above, plume, far) -> {
+                    boolean ok = SmokeBudget.admit(plume, far, now, budget);
+                    asks.computeIfAbsent(plume, k -> new ArrayList<>()).add(new long[]{now, ok ? 1 : 0});
+                    asked[far ? 1 : 0]++;
+                    if (!ok) return;
+                    admitted[far ? 1 : 0]++;
+                    SmokeBudget.add(now + SmokePuff.lifeFor(reach) + 30);
+                });
+                assertTrue(SmokeBudget.alive(now) <= budget, "over the count at " + now);
+            }
+        } finally {
+            SmokeBudget.clear();
+        }
+        // a plume turned away pauses whole: between two of its puffs either its beat or a whole rest, never a short gap
+        int pauses = 0;
+        for (List<long[]> l : asks.values()) {
+            long beat = Long.MAX_VALUE, last = -1;
+            for (int i = 1; i < l.size(); i++) beat = Math.min(beat, l.get(i)[0] - l.get(i - 1)[0]);
+            for (long[] a : l) {
+                if (a[1] == 0) continue;
+                if (last >= 0 && a[0] - last > beat) {
+                    assertTrue(a[0] - last >= SmokeBudget.REST, "a gap of " + (a[0] - last) + " ticks in a plume on a beat of " + beat);
+                    pauses++;
+                }
+                last = a[0];
+            }
+        }
+        assertTrue(pauses > 0, "the count was full");
+        double near = admitted[0] / (double) asked[0], far = admitted[1] / (double) asked[1];
+        assertTrue(near > far, "the near plumes keep more of their puffs: " + near + " against " + far);
     }
 
     @Test

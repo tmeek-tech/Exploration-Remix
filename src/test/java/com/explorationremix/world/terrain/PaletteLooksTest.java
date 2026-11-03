@@ -26,10 +26,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The looks of the two bottom layers (Palette.shell): natural stone only, and no made block anywhere in them (palette,
- * features); no stripe at the high-water mark, and a tide that only darkens a column, once; the Wasteland's and the
- * Galleries' looks blended over ragged rows at the join; in the Galleries magma only where the lava touches the rock;
- * crying obsidian sparingly; columns that read one by one; no magma shore where the Wasteland keeps its lava off an
- * opening; and the rock of layers 0 and 1 and of the upper caves exactly as 0.5.0 made it.
+ * features); no stripe at the high-water mark, and a tide that only darkens a column, once; every face of a column its
+ * column's stone, top to underside; the Wasteland's and the Galleries' looks blended over ragged rows at the join; in the
+ * Galleries magma only on rock the lava touches, checked on the blocks the real fields build; crying obsidian sparingly;
+ * columns that read one by one; no magma shore where the Wasteland keeps its lava off an opening; and the rock of layers
+ * 0 and 1 and of the upper caves exactly as 0.5.0 made it.
  */
 class PaletteLooksTest {
     private static final long SEED = 8675309L;
@@ -229,33 +230,132 @@ class PaletteLooksTest {
         }
     }
 
+    /**
+     * The surface pass over one column of a box of blocks, as Minecraft's SurfaceSystem walks it top down: how deep each
+     * block lies under the top of its run of rock (reset by air only, not by a fluid), how far over the run's bottom,
+     * and whether a fluid rests on the run. Rows ylo..yhi; {@code out[y - ylo]} is {above, below, wet}, or null off rock.
+     */
+    private static int[][] surfacePass(NoiseVox v, int x, int z, int ylo, int yhi) {
+        int[][] out = new int[yhi - ylo + 1][];
+        int above = 0, runBottom = Integer.MAX_VALUE;
+        boolean wet = false;
+        for (int y = yhi; y >= ylo; y--) {
+            int m = v.mat(x, y, z);
+            if (m == NoiseVox.AIR) {
+                above = 0;
+                wet = false;
+                continue;
+            }
+            if (m != NoiseVox.ROCK) {
+                wet = true;
+                continue;
+            }
+            if (runBottom >= y) {
+                runBottom = ylo;
+                for (int yy = y - 1; yy >= ylo; yy--) if (v.mat(x, yy, z) != NoiseVox.ROCK) { runBottom = yy + 1; break; }
+            }
+            above++;
+            out[y - ylo] = new int[]{above, y - runBottom + 1, wet ? 1 : 0};
+        }
+        return out;
+    }
+
     @Test
-    void magmaOnlyWhereTheLavaTouches() {
-        // Crisp dark banks (picture 1): in the Galleries magma only on rock the table's lava touches (under W, or at W
-        // right over the lava), on about one such block in eight, and none on the shore over it; the Caldera's craters
-        // (its eruptions' vents) aside.
+    void magmaOnlyOnRockTheLavaTouches() {
+        // Crisp dark banks (picture 1), on the blocks as the game builds them from the real fields: in the Galleries
+        // every magma block that shows to the air has lava on one of its faces (the bank's edge, not the dry column tops
+        // level with the lava a few blocks back from it, which a player walks across), the Caldera's craters aside; magma
+        // on about one in eight of the blocks the lava touches; none over W.
         Terrain t = terrain();
-        Shape s = t.shape;
-        int W = s.waterY(Terrain.GALLERIES);
-        Stand looks = new Stand();
-        looks.cone = 9.0;
-        DeepBiome[] lowland = {DeepBiome.BASALT_GALLERIES, DeepBiome.CALDERA, DeepBiome.CAUSEWAY, DeepBiome.SCORIA_CANYONS};
-        Random r = new Random(9);
-        for (Palette p : new Palette[]{new Palette(t, SEED, LookQueries.NONE), new Palette(t, SEED, looks)}) {
-            int touch = 0, magma = 0;
-            for (int k = 0; k < 200000; k++) {
-                DeepBiome b = lowland[r.nextInt(lowland.length)];
-                int y = W - 8 + r.nextInt(s.top(Terrain.GALLERIES) - W + 8), above = 1 + r.nextInt(12), below = 1 + r.nextInt(12);
-                boolean touches = y < W || y == W && below <= 1;
-                Rock q = p.shell(b, Terrain.GALLERIES, r.nextInt(4000) - 2000, y, r.nextInt(4000) - 2000, above, below,
-                        above <= 3 && y < W - 1 && r.nextBoolean());
-                assertTrue(touches || q != Rock.MAGMA, "magma in " + b + " at W+" + (y - W) + ", above " + above + ", below " + below);
-                if (touches) {
-                    touch++;
-                    if (q == Rock.MAGMA) magma++;
+        int W = t.shape.waterY(Terrain.GALLERIES), ylo = W - 14, yhi = W + 14, n = 160;
+        int[][] boxes = {{-2240, -2752}, {-1728, 1088}};   // seed 8675309: the Causeway's banks and a hall's river
+        int[][] faces = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+        int allTouched = 0, allMagma = 0;
+        for (int[] box : boxes) {
+            NoiseVox v = NoiseVox.build(t, box[0], box[1], n, n, ylo, yhi);
+            int shown = 0, touched = 0, touchedMagma = 0, dryTops = 0;
+            List<String> bad = new ArrayList<>();
+            for (int x = box[0] + 1; x < box[0] + n - 1; x++) for (int z = box[1] + 1; z < box[1] + n - 1; z++) {
+                int[][] col = surfacePass(v, x, z, ylo, yhi);
+                for (int y = W - 6; y <= W + 6; y++) {
+                    int[] c = col[y - ylo];
+                    if (c == null) continue;
+                    Rock q = t.palette.shell(x, y, z, c[0], c[1], c[2] != 0);
+                    boolean air = false, lava = false;
+                    for (int[] d : faces) {
+                        int m = v.mat(x + d[0], y + d[1], z + d[2]);
+                        air |= m == NoiseVox.AIR;
+                        lava |= m == NoiseVox.LAVA;
+                    }
+                    if (y == W - 1 && c[0] == 1 && !lava) dryTops++;
+                    if (q == Rock.MAGMA && t.looks.cone(x, z) >= Palette.CRATER) {
+                        if (y > W || air && !lava) bad.add(x + " " + y + " " + z + (air ? " (shows)" : ""));
+                        if (air) shown++;
+                    }
+                    if (lava) {
+                        touched++;
+                        if (q == Rock.MAGMA) touchedMagma++;
+                    }
                 }
             }
-            assertTrue(magma >= 0.10 * touch && magma <= 0.15 * touch, "magma on " + magma + " of " + touch + " blocks the lava touches");
+            String where = "box " + box[0] + " " + box[1];
+            assertTrue(bad.isEmpty(), where + ": " + bad.size() + " magma blocks off the lava, e.g. " + bad.subList(0, Math.min(5, bad.size())));
+            assertTrue(dryTops > 500, where + ": dry column tops level with the lava, to test: " + dryTops);
+            assertTrue(shown >= 15, where + ": magma showing at the lava's edge: " + shown);
+            // the heat's clumps make one box's share wander a little round the whole's
+            assertTrue(touchedMagma >= 0.07 * touched && touchedMagma <= 0.17 * touched,
+                    where + ": magma on " + touchedMagma + " of " + touched + " blocks the lava touches");
+            allTouched += touched;
+            allMagma += touchedMagma;
+        }
+        assertTrue(allMagma >= 0.10 * allTouched && allMagma <= 0.15 * allTouched, "magma on " + allMagma + " of " + allTouched + " blocks the lava touches");
+    }
+
+    @Test
+    void aColumnIsOneStoneFromEndToEnd() {
+        // Decision 3 and picture 1: every face of a basalt column, its top and the two blocks under it, its sides and its
+        // underside, in a hanging cluster or not, is the column's stone, so it reads as one stone from end to end. Under
+        // the tide's mark it may turn blackstone, once, going down, and never back: a top is never darker than the side
+        // 4 to 6 blocks under it, an underside never lighter than the side over it. Over the tide's reach, no change.
+        Terrain t = terrain();
+        Stand looks = new Stand();
+        looks.cone = 9.0;
+        Palette p = new Palette(t, SEED, looks);
+        int W = t.shape.waterY(Terrain.GALLERIES), high = W + Terrain.surge(Terrain.GALLERIES);
+        Random r = new Random(11);
+        for (DeepBiome b : new DeepBiome[]{DeepBiome.BASALT_GALLERIES, DeepBiome.CALDERA, DeepBiome.CAUSEWAY}) {
+            for (double hang : new double[]{0, 0.6}) {
+                looks.hang = hang;
+                int runs = 0, lighter = 0, twice = 0, dryChanged = 0, darkTop = 0, tide = 0;
+                for (int k = 0; k < 6000; k++) {
+                    int x = r.nextInt(8000) - 4000, z = r.nextInt(8000) - 4000;
+                    // runs over the table: under it the lava hides the rock (and covers every face of it)
+                    int top = W + 20 + r.nextInt(80), bottom = top - 7 - r.nextInt(12);
+                    int last = -1, changes = 0, topShade = -1, side = -1;
+                    for (int y = top; y >= bottom; y--) {
+                        int q = shade(p.shell(b, Terrain.GALLERIES, x, y, z, top - y + 1, y - bottom + 1, false));
+                        if (q < 0) continue;
+                        if (y == top) topShade = q;
+                        if (y <= top - 4 && y >= top - 6 && side < 0) side = q;
+                        if (last >= 0 && q != last) {
+                            changes++;
+                            if (q < last) lighter++;
+                        }
+                        last = q;
+                    }
+                    runs++;
+                    if (changes > 1) twice++;
+                    if (changes > 0 && bottom >= high) dryChanged++;
+                    if (changes > 0) tide++;
+                    if (topShade == 1 && side == 0) darkTop++;
+                }
+                String what = b + (hang > 0 ? " in a hanging cluster" : "");
+                assertEquals(0, lighter, what + ": runs that turn lighter going down, of " + runs);
+                assertEquals(0, twice, what + ": runs that change stone more than once, of " + runs);
+                assertEquals(0, darkTop, what + ": dark tops over grey sides, of " + runs);
+                assertEquals(0, dryChanged, what + ": runs over the tide's reach that change stone, of " + runs);
+                if (b != DeepBiome.CALDERA) assertTrue(tide > runs / 20, what + ": the tide darkens some runs: " + tide + " of " + runs);
+            }
         }
     }
 

@@ -19,7 +19,7 @@ public final class CaveParticles {
 
     /**
      * A puff of volcanic smoke off the lava of the Galleries and the Wasteland, built like {@link Steam} but long-lived:
-     * it rises 40 to 100 blocks over 30 to 60 seconds (the plumes through the openings about 150), slowing as it cools,
+     * it rises 40 to 100 blocks over 30 to 60 seconds (the plumes through the openings about 170), slowing as it cools,
      * swells from two blocks or so across to seven to nine, thickens and thins away, and spreads under the rock it meets
      * rather than stopping dead ({@link SmokePuff} has the motion). It takes the lava's light from below
      * ({@link SmokePuff#lightFromBelow}), so it is never a black blot in mid-air.

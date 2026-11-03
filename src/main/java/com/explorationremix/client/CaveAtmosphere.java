@@ -260,8 +260,8 @@ public final class CaveAtmosphere {
             LavaNet.Sync s = LavaWarnings.lastSync();
             BLOCKS.level = level;
             SmokeColumns.puff(BLOCKS, time, px, py, pz, inGalleries, s != null ? s.top() : SmokeColumns.UNKNOWN, s != null ? s.tableY() : 0,
-                    (x, y, z, reach, over) -> {
-                        if (SmokeBudget.alive(time) < budget)
+                    (x, y, z, reach, over, plume, far) -> {
+                        if (SmokeBudget.admit(plume, far, time, budget))
                             level.addAlwaysVisibleParticle(ERParticles.VOLCANIC_SMOKE.get(), true, x, y, z, reach, over, 0);
                     });
             BLOCKS.level = null;

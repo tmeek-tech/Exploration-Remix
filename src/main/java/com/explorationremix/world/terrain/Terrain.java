@@ -249,6 +249,24 @@ public final class Terrain {
         return network.fine(li, x, y, z, coarse);
     }
 
+    /**
+     * Whether the game builds rock at a block below the pack's old floor, as its noise pass does: {@link #density} at
+     * Minecraft's 4 x 8 x 4 corners, interpolated in NoiseChunk's order (along y, then x, then z), then {@link #fine}.
+     * Pure and thread safe like the fields. It costs eight corner densities and one fine(), so the rock dressing asks it
+     * only of the few blocks whose look turns on a neighbour (Palette: lava beside a bank's top).
+     */
+    public boolean rockAt(int x, int y, int z) {
+        int x0 = Math.floorDiv(x, 4) * 4, y0 = Math.floorDiv(y, 8) * 8, z0 = Math.floorDiv(z, 4) * 4;
+        double fx = (x - x0) / 4.0, fy = (y - y0) / 8.0, fz = (z - z0) / 4.0;
+        double x00 = lerp(fy, density(x0, y0, z0), density(x0, y0 + 8, z0));
+        double x10 = lerp(fy, density(x0 + 4, y0, z0), density(x0 + 4, y0 + 8, z0));
+        double x01 = lerp(fy, density(x0, y0, z0 + 4), density(x0, y0 + 8, z0 + 4));
+        double x11 = lerp(fy, density(x0 + 4, y0, z0 + 4), density(x0 + 4, y0 + 8, z0 + 4));
+        return fine(x, y, z, lerp(fz, lerp(fx, x00, x10), lerp(fx, x01, x11))) > 0;
+    }
+
+    private static double lerp(double t, double a, double b) { return a + t * (b - a); }
+
     private double landing(double dxz, double rad, double cy, double half, double floor, int x, int y, int z) {
         double ex = dxz / rad, ey = (y - cy) / half;
         double ell = (Math.sqrt(ex * ex + ey * ey) - 1) * half + 1.8 * detail.noise3(x / 9.0, y / 7.0, z / 9.0);
