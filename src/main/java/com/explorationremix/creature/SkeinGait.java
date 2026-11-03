@@ -52,6 +52,7 @@ public final class SkeinGait {
     private int burstTicks;
     private double speed = 1.0, turn;
     private int failed;
+    private boolean gaveUp;
 
     public Phase phase() { return phase; }
     public Mood mood() { return mood; }
@@ -67,6 +68,11 @@ public final class SkeinGait {
     /** Motionless: resting or frozen. */
     public boolean still() { return phase == Phase.REST || phase == Phase.FREEZE; }
     public boolean outing() { return phase != Phase.REST; }
+    /**
+     * Whether it is resting because its last outing's bursts got nowhere ({@link #GIVE_UP} in a row) with way still to
+     * go, not because it went its way or was told to rest: there was no way where it was going.
+     */
+    public boolean gaveUp() { return gaveUp; }
 
     /** Rests for a random while (long, after roaming; short after a bolt or a stalk). */
     public void rest(DoubleSupplier r) {
@@ -78,6 +84,7 @@ public final class SkeinGait {
         left = Math.max(1, ticks);
         budget = 0;
         failed = 0;
+        gaveUp = false;
     }
 
     /** Sets out on an outing of the usual length (8 to 30 blocks). */
@@ -90,6 +97,7 @@ public final class SkeinGait {
         mood = m;
         budget = blocks;
         failed = 0;
+        gaveUp = false;
         pivot(r);
     }
 
@@ -108,8 +116,11 @@ public final class SkeinGait {
             case PIVOT -> burst();
             case BURST -> freeze(r);
             case FREEZE -> {
-                if (budget <= 0 || failed >= GIVE_UP) rest(r);
-                else pivot(r);
+                if (budget <= 0 || failed >= GIVE_UP) {
+                    boolean nowhere = budget > 0;
+                    rest(r);
+                    gaveUp = nowhere;
+                } else pivot(r);
             }
         }
         return true;
