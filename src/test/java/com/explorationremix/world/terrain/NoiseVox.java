@@ -137,6 +137,16 @@ final class NoiseVox {
         return (int) (w >>> ((j & 31) << 1)) & 3;
     }
 
+    /**
+     * Sets a block (a decoration laid on the blocks, {@link DecorBox}); nothing outside the box. The walk graph is stale
+     * until {@link #graph} runs again.
+     */
+    void set(int x, int y, int z, int m) {
+        if (!in(x, y, z)) return;
+        int j = y - y0, w = ((x - x0) * nz + (z - z0)) * mw + (j >> 5), sh = (j & 31) << 1;
+        mat[w] = (mat[w] & ~(3L << sh)) | ((long) (m & 3) << sh);
+    }
+
     /** Open for a player: air or water (lava is not). */
     boolean open(int x, int y, int z) {
         int m = mat(x, y, z);

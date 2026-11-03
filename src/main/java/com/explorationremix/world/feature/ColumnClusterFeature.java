@@ -16,17 +16,19 @@ import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvi
 /**
  * A cluster of basalt columns around the origin: stepped stacks rising from the floor, some reaching the ceiling, and
  * some hanging from it (a quarter by default; hang_chance 1 hangs every column from the ceiling), like the column
- * walls of the Basalt Galleries.
+ * walls of the Basalt Galleries. With a {@code clearance}, a hanging column stops that many open blocks over whatever is
+ * under it ({@link ColumnFit#hangingLength}), so in a low tunnel it is a short stub and never closes the way.
  */
 public final class ColumnClusterFeature extends Feature<ColumnClusterFeature.Config> {
-    public record Config(BlockStateProvider block, int radius, int count, IntProvider height, float hangChance)
+    public record Config(BlockStateProvider block, int radius, int count, IntProvider height, float hangChance, int clearance)
             implements FeatureConfiguration {
         public static final Codec<Config> CODEC = RecordCodecBuilder.create(i -> i.group(
                 BlockStateProvider.CODEC.fieldOf("block").forGetter(Config::block),
                 Codec.intRange(1, 14).fieldOf("radius").forGetter(Config::radius),
                 Codec.intRange(1, 200).fieldOf("count").forGetter(Config::count),
                 IntProvider.codec(1, 64).fieldOf("height").forGetter(Config::height),
-                Codec.floatRange(0, 1).optionalFieldOf("hang_chance", 0.25F).forGetter(Config::hangChance)
+                Codec.floatRange(0, 1).optionalFieldOf("hang_chance", 0.25F).forGetter(Config::hangChance),
+                Codec.intRange(0, 8).optionalFieldOf("clearance", 0).forGetter(Config::clearance)
         ).apply(i, Config::new));
     }
 
@@ -55,6 +57,14 @@ public final class ColumnClusterFeature extends Feature<ColumnClusterFeature.Con
             if (tries >= 12 || GlowBlock.open(level.getBlockState(pos))) continue;
             BlockState anchor = level.getBlockState(pos);
             if (!anchor.isSolid()) continue;
+            if (hang && c.clearance() > 0) {
+                // the open blocks straight under the ceiling block, as far as the column and its clearance could reach
+                int open = 0;
+                BlockPos.MutableBlockPos q = pos.mutable();
+                while (open < h + c.clearance() && GlowBlock.open(level.getBlockState(q.move(0, -1, 0)))) open++;
+                h = ColumnFit.hangingLength(h, open, c.clearance());
+                if (h < 1) continue;
+            }
             if (Walkway.near(pos.getX(), pos.getZ(), pos.getY(), pos.getY() - step * h, 1)) continue;
             for (int k = 0; k < h; k++) {
                 pos.move(0, -step, 0);

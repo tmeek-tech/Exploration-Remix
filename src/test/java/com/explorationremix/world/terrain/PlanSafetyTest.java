@@ -86,10 +86,16 @@ class PlanSafetyTest {
             for (String line : t.describe(cell / 2, t.shape.waterY(li) + 10, cell / 2)) assertNotNull(line);
         }
         for (DeepBiome b : DeepBiome.values()) t.places(b, cell / 2.0, cell / 2.0);
-        // the noise layers have no plan: asking for one is a mistake
-        for (int li = 0; li < layers; li++) {
-            int l = li;
-            if (!Terrain.planned(li)) assertThrows(IllegalArgumentException.class, () -> t.network(l, 0, 0));
+        // the noise layers have no plan: asking for one is a mistake (it throws under the tests, strict)
+        boolean was = Network.strict;
+        Network.strict = true;
+        try {
+            for (int li = 0; li < layers; li++) {
+                int l = li;
+                if (!Terrain.planned(li)) assertThrows(IllegalArgumentException.class, () -> t.network(l, 0, 0));
+            }
+        } finally {
+            Network.strict = was;
         }
         System.out.printf("aCellWhosePlansAllThrowIsRock: %d samples, %d open in the failed cell (at its landings)%n", samples, open);
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
