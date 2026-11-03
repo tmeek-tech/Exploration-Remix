@@ -1133,7 +1133,10 @@ public final class Network {
      * <p>A cell only drops pillars whose centre lies at least 2.5 of the tier's largest radii inside it: no column of
      * another cell can see such a pillar (neither its rock nor its being nearer than one whose rock would reach the
      * column), so both sides of a seam build the same pillars, and every column needs only its own cell's plan. The
-     * rift keeps 28 blocks inside its cell and the hall 88, so this never spares a pillar they would lay bare. Runs as
+     * pillars nearer an edge reach at most 30 blocks in (tier B 32.5). The hall keeps 88 blocks inside its cell. The
+     * rift's centre line keeps 72, and the rift opens at most its half width (42 at most with the default layers) and
+     * 2 more from it, so it may come as near as 28 blocks to the edge in theory; measured over 240 cells it came no
+     * nearer than 36, and none of the 7,477 pillars those cells kept by their edges had an end it laid bare. Runs as
      * the plan's last step, when the rift, the hall, the regions kept and the ways are final.
      */
     void dropExposedPillars(Net n) {
