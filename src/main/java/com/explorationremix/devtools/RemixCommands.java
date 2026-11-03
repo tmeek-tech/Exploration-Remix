@@ -255,6 +255,10 @@ public final class RemixCommands {
             return 0;
         }
         Net n = t.network(last, t.plans.cellOf((int) Math.floor(pl.getX())), t.plans.cellOf((int) Math.floor(pl.getZ())));
+        if (n == null) {
+            c.getSource().sendFailure(Component.literal(t.shape.id(last) + " has no plan here. Try /remix tp biome."));
+            return 0;
+        }
         Net.Chamber b = n.ch.get(n.exit);
         int x = (int) Math.floor(b.x), z = (int) Math.floor(b.z);
         BlockPos stand = findStand((ServerLevel) pl.level(), x, (int) Math.floor(b.f0) + 1, z);

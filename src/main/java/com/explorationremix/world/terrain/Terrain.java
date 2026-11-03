@@ -413,10 +413,10 @@ public final class Terrain {
 
     /**
      * The plan of layer li in cell (cx, cz). Only the {@link #planned} layers have one: asking for another's is a mistake
-     * (it would plan caves nobody sees), so it throws.
+     * (it would plan caves nobody sees), so it is null in the game, which the dev tools refuse, and throws under the
+     * tests ({@link Network#hasPlan}).
      */
     public Net network(int li, int cx, int cz) {
-        if (!planned(li)) throw new IllegalArgumentException("layer " + li + " is a noise field: it has no plan");
         return network.network(li, cx, cz);
     }
 
