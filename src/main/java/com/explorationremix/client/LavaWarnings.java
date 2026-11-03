@@ -76,6 +76,10 @@ public final class LavaWarnings {
         syncedAt = level != null ? level.getGameTime() : Long.MIN_VALUE;
     }
 
+    /** The server's last word on the cycle (its rows: the lava table, the Galleries' top), or null when it does not run here. */
+    @Nullable
+    public static LavaNet.Sync lastSync() { return sync; }
+
     /** Where the cycle is now, as far as this client knows, or null when it does not run here. */
     @Nullable
     private static LavaCycle.State now(ClientLevel level) {

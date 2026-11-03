@@ -149,7 +149,20 @@ def main():
             if b.startswith(MOD + ":") and b not in removed:
                 errors.append(f"immersive_weathering icy tag: {b} keeps Immersive Weathering's own icicle clusters")
     errors += bottom_layers(configured, placed)
+    errors += particle_sprites()
     return sorted(set(errors))
+
+
+def particle_sprites():
+    """Every sprite a particle of the mod's lists must be a texture: a missing one is a missing-texture square in game."""
+    errors = []
+    folder = os.path.join(RES, "assets", MOD, "particles")
+    for name, path in files(folder).items():
+        for sprite in load(path).get("textures", []):
+            ns, _, tex = sprite.partition(":") if ":" in sprite else ("minecraft", "", sprite)
+            if ns == MOD and not os.path.exists(os.path.join(RES, "assets", MOD, "textures", "particle", tex + ".png")):
+                errors.append(f"particles/{name}: no texture particle/{tex}.png")
+    return errors
 
 
 # 0.5.1: the two bottom layers. Natural stone only (Taran, 2026-11-02: "Polished blackstone doesn't fit. It looks too

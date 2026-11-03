@@ -531,11 +531,14 @@ def lang(extra):
     write(os.path.join(ASSETS, "lang", "en_us.json"), dict(sorted(out.items())))
 
 
-# The mod's particle types (ERParticles) reuse vanilla sprites; CaveParticles tints and animates them.
+# The mod's particle types (ERParticles): the first three reuse vanilla sprites, the volcanic smoke has its own
+# (textures/particle); CaveParticles tints and animates them.
 PARTICLES = {
     "steam": [f"minecraft:big_smoke_{i}" for i in range(12)],
     "ember": ["minecraft:generic_0", "minecraft:generic_1"],
     "pollen": ["minecraft:generic_0"],
+    # 0.6.0: painted by tools/particles.py
+    "volcanic_smoke": [f"{MOD}:volcanic_smoke_{i}" for i in range(4)],
 }
 
 
