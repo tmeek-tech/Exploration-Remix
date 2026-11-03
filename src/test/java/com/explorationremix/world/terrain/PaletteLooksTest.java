@@ -15,7 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The 0.5.1 looks of the two bottom layers (Palette.shell): natural stone only, no stripe at the high-water mark, the
  * Wasteland's and the Galleries' looks blended over ragged rows at the join, magma only by the lava, crying obsidian
  * sparingly, columns that read one by one, no magma shore where the Wasteland keeps its lava off an opening; and the
- * rock of layers 0 and 1 and of the upper caves exactly as 0.5.0 made it (but where the Blue Reaches' ways moved).
+ * rock of layers 0 and 1 and of the upper caves exactly as 0.5.0 made it (but where the Blue Reaches' ways moved, and
+ * where main's den gates brought their landings and moved the rift for them).
  */
 class PaletteLooksTest {
     private static final long SEED = 8675309L;
@@ -47,7 +48,14 @@ class PaletteLooksTest {
         // 0.5.0's answers (IdentityHash over a2c3d73's classes, seed 8675309; the same for seed 12345 against its own),
         // but for the public path's: there the shell follows the plan's biomes, and in 0.5.1 the Blue Reaches' ways and
         // deep dark doors kept off the rift's void and the caverns' air, which changes the rock at 22 of layer 0's 60,000
-        // samples (layer 1's and the bands' are 0.5.0's)
+        // samples (layer 1's and the bands' are 0.5.0's). Pinned again with main's den gates (0.6.2): each cell plans the
+        // lower landings of its den gates past the first, with their courts and ways, and the rift keeps clear of them;
+        // the geodes move with the rift, which changes the rock by biome at 1,475 of layer 0's 400,000 samples, all in
+        // the Asurine Geodes (the answer is 0.6.1's), and through the public path at 608 of layer 0's 60,000 samples.
+        // Against 0.6.1 the public path differs at 44 samples, all where the ways keep off the void. The interior,
+        // layer 1, the bands and the upper caves answer as before. With the den gates past the first switched off all
+        // four answers are the last pin's; with the void rules switched off they are 0.6.1's (the pillar drop changes
+        // none of them)
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
@@ -87,9 +95,9 @@ class PaletteLooksTest {
             hUpper = hUpper * 31 + nz(p.oasis(x, y, z, above, below, wet, shell, r.nextBoolean()));
             hUpper = hUpper * 31 + nz(p.frostGrotto(x, y, z, above, below, wet));
         }
-        assertEquals("b9eaef6541e0fcd6", String.format("%016x", hBiome), "layers 0 and 1, by biome");
+        assertEquals("d4480c4b98b9e541", String.format("%016x", hBiome), "layers 0 and 1, by biome");
         assertEquals("2604e01a1b4b2ee3", String.format("%016x", hInterior), "layers 0 and 1, interior");
-        assertEquals("4913fabc7a673e9d", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
+        assertEquals("625c6dfe796ad0fa", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
         assertEquals("f1e881cc466dc49d", String.format("%016x", hUpper), "the upper caves");
     }
 
