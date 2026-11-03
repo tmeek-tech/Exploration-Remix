@@ -157,13 +157,13 @@ def main():
 # kind").
 BOTTOM = ["wasteland", "ash_hollows", "basalt_galleries", "obsidian_tubes", "caldera", "causeway", "scoria_canyons"]
 GALLERIES = ["basalt_galleries", "obsidian_tubes", "caldera", "causeway", "scoria_canyons"]
-WORKED = re.compile(r"polished|bricks?\b|chiseled|_tiles\b|cut_|_slab|_stairs|_wall\b|smooth_stone")
+# 0.6.0: "layered" too (Create's layered scoria and scorchia are stonecut blocks), and a chain is made, not grown
+WORKED = re.compile(r"polished|bricks?\b|chiseled|_tiles\b|cut_|_cut\b|layered|_slab|_stairs|_wall\b|smooth_stone|chain")
 # every block a feature may place in the Galleries: rock, fluids, and the mod's light and stand-ins
 GALLERIES_BLOCKS = {"minecraft:" + b for b in (
     "basalt", "smooth_basalt", "blackstone", "gilded_blackstone", "magma_block", "obsidian", "crying_obsidian", "tuff", "calcite",
-    "lava", "water", "air", "cave_air", "deepslate_gold_ore", "brown_terracotta", "terracotta")} | {
-    "create:scoria", "create:scorchia", "create:layered_scoria", "create:layered_scorchia", f"{MOD}:ember_crust", f"{MOD}:glow",
-    f"{MOD}:cinder_chain"}
+    "lava", "water", "air", "cave_air", "deepslate_gold_ore", "brown_terracotta")} | {
+    "create:scoria", "create:scorchia", f"{MOD}:ember_crust", f"{MOD}:glow"}
 
 
 def blocks_in(obj, out):

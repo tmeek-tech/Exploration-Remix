@@ -238,10 +238,11 @@ public final class ERBlocks {
                     .requiresCorrectToolForDrops().lightLevel(s -> 11).emissiveRendering((s, l, p) -> true)
                     .isValidSpawn((s, l, p, e) -> false)));
     /**
-     * Beads of cinder fused into a hanging chain: the climbs of the Galleries and of the Wasteland's bare refuges, where no
-     * vine may grow ({@code ClimbVinesFeature}). It climbs like a vine (minecraft:climbable) and hangs from a sturdy
-     * ceiling or from the chain above it (explorationremix:hanging_supports). No light: a few embers caught between its
-     * beads only glint (a glow overlay left out of the shader's glowing blocks).
+     * Beads of cinder fused into a hanging chain. 0.5's climbs of the Galleries and of the Wasteland's bare refuges hung
+     * it; since 0.6.0 world generation places none (the two bottom layers are natural rock only), and it stays registered
+     * for worlds that have it. It climbs like a vine (minecraft:climbable) and hangs from a sturdy ceiling or from the
+     * chain above it (explorationremix:hanging_supports). No light: a few embers caught between its beads only glint (a
+     * glow overlay left out of the shader's glowing blocks).
      */
     public static final RegistryObject<Block> CINDER_CHAIN = block("cinder_chain", () -> new HangingPlantBlock(
             BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).noCollission().strength(0.5F).sound(SoundType.BASALT)

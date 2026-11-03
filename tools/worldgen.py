@@ -1101,9 +1101,7 @@ NO_RAVINES = ["#minecraft:has_structure/" + s for s in (
     {"id": "#forge:is_swamp", "required": False}, "#minecraft:is_river", "#minecraft:is_ocean", "#minecraft:is_beach"]
 
 # ----------------------------------------------------------------------------------------------- block tags
-CREATE_STONES = ["create:limestone", "create:veridium", "create:asurine", "create:crimsite", "create:ochrum", "create:scoria", "create:scorchia",
-                 # 0.5: the Scoria Canyons' layered bands
-                 "create:layered_scoria", "create:layered_scorchia"]
+CREATE_STONES = ["create:limestone", "create:veridium", "create:asurine", "create:crimsite", "create:ochrum", "create:scoria", "create:scorchia"]
 STAND_INS = ["minecraft:yellow_terracotta", "minecraft:deepslate_tiles", "minecraft:warped_wart_block", "minecraft:brown_terracotta",
              "minecraft:red_terracotta", "minecraft:terracotta"]
 
@@ -1140,12 +1138,12 @@ BLOCK_TAGS = {
     "surface_frost_rock": ["#minecraft:base_stone_overworld", "#minecraft:dirt", "minecraft:packed_ice", "minecraft:ice",
                            "minecraft:blue_ice", "minecraft:gravel", "minecraft:calcite", "minecraft:cobblestone", "minecraft:mossy_cobblestone"],
     # The Wasteland's and the Galleries' rock: lava falls pour out of it, lichen and shards grow on it. Since 0.5 with the
-    # Galleries' ember crust and the Scoria Canyons' layered stones (terracotta stands in for layered scoria); since 0.5.1
-    # natural stone only (no polished basalt or blackstone).
+    # Galleries' ember crust (brown terracotta stands in for scoria without Create); since 0.5.1 natural stone only (no
+    # polished basalt or blackstone), since 0.6.0 without Create's layered scoria and scorchia.
     "basalt_rock": ["minecraft:basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:gilded_blackstone",
                     "minecraft:magma_block", "minecraft:deepslate_gold_ore", "minecraft:brown_terracotta",
-                    f"{MOD}:ember_crust", "minecraft:terracotta"]
-                   + optional(["create:scoria", "create:scorchia", "create:layered_scoria", "create:layered_scorchia"]),
+                    f"{MOD}:ember_crust"]
+                   + optional(["create:scoria", "create:scorchia"]),
     # 0.5.1's terrain reset (TerrainReset.RESET_AS_ROCK): blocks a reset puts back as plain rock, whatever the palette
     # chose there (ores and gilded blackstone are not given back to a player who mined them).
     "reset_as_rock": [{"id": "#forge:ores", "required": False}, "minecraft:gilded_blackstone"],
