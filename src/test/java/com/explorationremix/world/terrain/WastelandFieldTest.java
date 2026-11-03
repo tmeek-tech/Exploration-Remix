@@ -581,8 +581,8 @@ class WastelandFieldTest {
 
     /**
      * Tight: the longest view from a place (every 4th column, the planned Wasteland's metric), p90 at most 44 blocks
-     * (41-42; 0.5.0 measures 33-34 on the same metric and the target is 40, a question for Taran), none of 160 or more
-     * (83-121). Printed with the share of places that see 40 blocks or more and the caves' footprints (0.5.0: p90 356,
+     * (40-41; 0.5.0 measures 33-34 on the same metric and the target is 40, a question for Taran), none of 160 or more
+     * (86-121). Printed with the share of places that see 40 blocks or more and the caves' footprints (0.5.0: p90 356,
      * max 624 m^2), which belong to the same question ("medium-sized caves").
      */
     @Test
@@ -611,8 +611,9 @@ class WastelandFieldTest {
      * near: at least 60 per km^2 over the boxes, and the median walk from a main-component place to an opening's rim at
      * most 220 moves. The Wasteland's spec measured 195-254 per km^2 and 143-168 moves over a stand-in for the Galleries
      * and asked 120; an opening only falls where the Galleries are open under it, and the interim Galleries' domes reach
-     * the join on about a third of the columns where beta asks for an opening, so with them the boxes measure 94 per
-     * km^2 (29, 137, 117) and 180-226 moves. The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
+     * the join on about a third of the columns where beta asks for an opening, so with them the boxes measure 88 per
+     * km^2 (29, 127, 107; 94 in fix round 1, at the same sites: one opening's two parts joined, another's second part
+     * fell under 4 columns) and 182-239 moves. The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
      */
     @Test
     void openingsAreCommonAndReachable() {
@@ -821,8 +822,9 @@ class WastelandFieldTest {
     }
 
     /**
-     * The guards keep the decorations narrow: over the boxes at least 10 lava pools are placed (22; 372 unguarded), 150
-     * hanging columns (328), 12 great ones (29) and 12 lava falls (25). A guard as wide as the whole tunnel would take
+     * The guards keep the decorations narrow: over the boxes at least 10 lava pools are placed (13, fewer on the rougher
+     * cave floors of fix round 2: 22 before it, 372 unguarded), 150 hanging columns (320), 12 great ones (31) and 12 lava
+     * falls (31). A guard as wide as the whole tunnel would take
      * most of them.
      */
     @Test
