@@ -430,15 +430,8 @@ def build_features():
                 "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:smooth_basalt"), 1)),
                 "radius": 6, "count": 34, "height": uniform(8, 18), "hang_chance": 1.0, "clearance": 3}},
             [count(4), SQUARE, layer("wasteland", above_water=True)] + ceiling() + [tall, BIOME])
-    # Short columns of basalt and pale tuff hanging only from the basalt patches of the tubes' vaults (the second
-    # reference picture). 0.5.1: the palette gives the vault about twice the basalt, so fewer tries.
-    under_basalt = {"type": "minecraft:block_predicate_filter",
-                    "predicate": {"type": "minecraft:matching_blocks", "offset": [0, 1, 0], "blocks": "minecraft:basalt"}}
-    feature("obsidian_tubes/vault_columns", "local_modifications", ["obsidian_tubes"],
-            {"type": f"{MOD}:column_cluster", "config": {
-                "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:tuff"), 1)),
-                "radius": 3, "count": 18, "height": uniform(1, 5), "hang_chance": 1.0}},
-            [count(64), SQUARE, layer("basalt_galleries", above_water=True)] + ceiling() + [under_basalt, BIOME])
+    # The Obsidian Tubes have no column feature: the tube field itself hangs whole column cells from the bays' vaults
+    # (TubeField.hang), and loose columns under them would double that look.
 
     # ---- underground decoration: moss, wall growth, crystals, machines
     feature("rootvaults/moss_floor", "underground_decoration", rv, "minecraft:moss_patch",
@@ -1038,13 +1031,15 @@ def build_features():
     # band, one try in every 4-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
     # rock near black. 0.5.1, "brightly lit" but not flat: lit from the lava and the floor up. Level 15 just over the
     # flood band, fading to 13 seventy blocks higher; a spot with no floor in reach under it but only a vault over it one
-    # less; one up or down in slow patches; 9 in the Obsidian Tubes, the refuge. A face gets about 3 to 4 levels under
-    # the spot that lights it: on the look prototype's stand-in cavern the floors measured 11.1, 10.1 and 9.0 on average
-    # 0-30, 30-60 and 60+ blocks over the band and the undersides 10.8, 9.9 and 9.2 (0.5.0's 15-to-14: 11.2 to 9.9 and
-    # 11.2 to 10.4, nearly flat). The first fade to 11 left the vaults at 8 on average, a third of the faces under 8.
+    # less; one up or down in slow patches. A face gets about 3 to 4 levels under the spot that lights it: on the look
+    # prototype's stand-in cavern the floors measured 11.1, 10.1 and 9.0 on average 0-30, 30-60 and 60+ blocks over the
+    # band and the undersides 10.8, 9.9 and 9.2 (0.5.0's 15-to-14: 11.2 to 9.9 and 11.2 to 10.4, nearly flat). The first
+    # fade to 11 left the vaults at 8 on average, a third of the faces under 8. The Obsidian Tubes take 13, as bright as
+    # the high halls (Taran's second picture: tubes lit to their far ends): on the real tube field their faces measure
+    # 9.3 on average from the glow alone, one in eight under 8 (HallGlowFeatureTest); at 9, about 6, four in five under 8.
     feature("basalt_galleries/glow", "top_layer_modification", GALLERIES,
             {"type": f"{MOD}:hall_glow", "config": {"spacing": 4, "reach": 4, "low": 15, "high": 13, "fade": 70, "patch": 1,
-                                                    "vault": 1, "tubes": 9}}, [])
+                                                    "vault": 1, "tubes": 13}}, [])
 
 
 # The vanilla deep dark, moved down into the Blue Reaches: its sculk, which vanilla only places relative to the old

@@ -510,8 +510,8 @@ public final class Palette {
 
     /**
      * The Obsidian Tubes (the second reference picture): arches of glossy obsidian, the tube's ribs; between them walls
-     * of column grain, basalt with pale tuff and brown scoria columns; a vault of obsidian and basalt (short columns hang
-     * under the basalt, ColumnClusterFeature); stepped floors of obsidian and pale grey tuff and smooth basalt; still
+     * of column grain, basalt with pale tuff and brown scoria columns; a vault of obsidian and basalt (the tube field
+     * hangs whole column cells from it, TubeField.hang); stepped floors of obsidian and pale grey tuff and smooth basalt; still
      * pools on dark obsidian. Crying obsidian sparingly, about one obsidian block in 40.
      */
     private Rock tubes(int x, int y, int z, boolean top, boolean floor, boolean ceil, boolean wet, double n) {
