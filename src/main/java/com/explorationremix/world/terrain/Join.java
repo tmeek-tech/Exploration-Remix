@@ -29,9 +29,6 @@ public final class Join {
     static final double HOLE_BETA = 0.45, HOLE_RAMP = 0.25;
     /** The Galleries keep 4 rows of rock under their top where beta is under this. */
     static final double CLOSED_BETA = 0.3;
-    /** The Galleries' ceiling reaches {@link #OPEN_CEIL} rows into the Wasteland from here up. */
-    static final double OPEN_BETA = 0.55;
-    static final int OPEN_CEIL = 3;
 
     /** What the join needs from the layer under the Wasteland (the Galleries' field). */
     public interface Lower {
@@ -48,6 +45,12 @@ public final class Join {
         int fluid(int x, int y, int z);
 
         /**
+         * Blocks from a column to the edge of the nearest hole it opens with a ramp down from the Wasteland (negative inside
+         * the hole), or +inf where none is near: the Wasteland's lowest sheet goes down round it ({@link WastelandField}).
+         */
+        double craterRing(int x, int z);
+
+        /**
          * The Galleries' field as the join's lower layer. Its per-block pass is the exact profile, so it ignores
          * {@code c8} and is its own open core (its tubes stop far under the band).
          */
@@ -57,6 +60,7 @@ public final class Join {
                 @Override public double fineBlocks(int x, int y, int z, double c8) { return g.fineBlocks(x, y, z); }
                 @Override public double openCore(int x, int y, int z) { return g.fineBlocks(x, y, z); }
                 @Override public int fluid(int x, int y, int z) { return g.fluid(x, y, z); }
+                @Override public double craterRing(int x, int z) { return g.craterRing(x, z); }
             };
         }
     }
@@ -92,10 +96,14 @@ public final class Join {
     /**
      * Rock the join keeps whatever either field says (positive inside, or -SOLID): the Wasteland's rows up to a row over
      * its lava table where beta is under {@link #HOLE_BETA} (but for its lava pools' dips), 4 rows over its bottom under
-     * lava-holding ground, and the Galleries' top 4 rows where beta is under {@link #CLOSED_BETA}.
+     * lava-holding ground, and the Galleries' top 4 rows where beta is under {@link #CLOSED_BETA}. None of it in the
+     * craters round the holes the Galleries open with a ramp ({@link WastelandField}): there the Wasteland's lowest sheet
+     * goes down to the hole's lip whatever beta is, its open space under the lava table is air, no lava pool comes near,
+     * and the Galleries' own rock (their cap at T - 6 or lower outside their discs) keeps the layers apart.
      */
     double seal(int x, int y, int z) {
         WastelandField.Col c = upper.column(x, z);
+        if (c.crater > 0) return -Terrain.SOLID;
         double b = c.beta, s = -Terrain.SOLID;
         if (y >= wBot && y <= W + 1 && b < HOLE_BETA && c.lavaDip <= 0) s = Math.max(s, 1 + (W + 1 - y));
         if (y >= wBot && y <= wBot + 3 && b < LAVA_BETA) s = Math.max(s, 1 + (wBot + 3 - y));

@@ -61,6 +61,8 @@ public final class Terrain {
      * #planned}). Nothing asks it about the Wasteland or the Galleries.
      */
     public final Network network;
+    /** The Wasteland's tunnel sheets (warp, lattices, floors, opening sites), shared by both fields; null without a Wasteland. */
+    final WastelandSheets sheets;
     /** Where the Wasteland opens into the Galleries; null when the layout keeps a band between them ({@link Join#on}). */
     public final Breakthrough breakthrough;
     /** The Galleries' Obsidian Tubes; null when the layout has no Galleries. */
@@ -90,10 +92,11 @@ public final class Terrain {
         long s = seed ^ 0x6A09E667F3BCC909L;
         detail = new Perlin(Hashing.mix(s, 18, 0, 0));
         this.plans = new Plans(this, seed);
-        // The noise layers, each built from what it reads (no cycles): the breakthrough both read, the tubes, the
-        // Galleries (which see the breakthrough as their join), the Wasteland (which reads the Galleries' density under
-        // its openings) and the join of the two.
-        this.breakthrough = Join.on(shape) ? new Breakthrough(seed, shape) : null;
+        // The noise layers, each built from what it reads (no cycles): the Wasteland's sheets and the breakthrough both
+        // read, the tubes, the Galleries (which see the breakthrough as their join), the Wasteland (which reads the
+        // Galleries' density under its openings) and the join of the two.
+        this.sheets = shape.layerCount > WASTELAND ? new WastelandSheets(seed, shape, settings, plans) : null;
+        this.breakthrough = Join.on(shape) ? new Breakthrough(seed, shape, sheets) : null;
         this.tubes = shape.layerCount > GALLERIES ? new TubeField(seed, shape.waterY(GALLERIES)) : null;
         this.galleries = tubes != null ? new GalleriesField(seed, shape.bottom(GALLERIES), shape.top(GALLERIES), shape.waterY(GALLERIES), tubes, breakthrough) : null;
         Join.Lower lower = galleries != null ? Join.Lower.of(galleries) : null;

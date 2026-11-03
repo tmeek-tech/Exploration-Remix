@@ -117,6 +117,16 @@ public final class WastelandField {
     static final double SHIFT_R0 = 20, SHIFT_R1 = 90, UND_R0 = 6, UND_FADE = 20, LAND_R = 30, LAND_FADE = 10, LAND_CAVE = 0.5;
     /** Terraces, hanging ends and pillars keep this far (blocks) from the landing's centre, and out of the passage. */
     static final double LAND_CLEAR = 40;
+    /**
+     * The crater round a hole the Galleries open with a ramp ({@link Join.Lower#craterRing}): out to CR_FLAT blocks past the
+     * hole's edge (the ramp's head and a block beyond) the lowest sheet's vault is as on its tunnel's middle line, so its
+     * floor is level and whole round the lip; the distance it reads from the line grows CR_FLAT_G blocks a block beyond.
+     */
+    static final double CR_FLAT = GalleriesField.LIP + 1, CR_FLAT_G = 2;
+    /** The crater's depth fades out over the last CR_FADE blocks of its reach (it is 0 there in the default layout anyway). */
+    static final double CR_FADE = 6;
+    /** Lava pools keep CR_DRY_GAP blocks of rock from where a crater may go under the lava table, fading in over 3 more. */
+    static final double CR_DRY_GAP = 4;
     /** The decorations' walk guard ({@link #walkNear}): rows from this far under a tunnel's floor to this far over it. */
     static final int WALK_BELOW = 3, WALK_ABOVE = 6;
 
@@ -126,7 +136,9 @@ public final class WastelandField {
     final int li = Terrain.WASTELAND;
     /** The layer's top and bottom rows, and its lava table (the first row above the lava). */
     final int top, bot, W;
-    private final Perlin warpA, warpB, warpC, warpD, floorN, rampN, caveN, whN, lavaN, ashN, rough1, rough2, rough3, terN, clusterN, lavaWN, lavaEN;
+    private final Perlin caveN, whN, lavaN, ashN, rough1, rough2, rough3, terN, clusterN, lavaWN, lavaEN;
+    /** The sheets' warp, lattices, floors and the lowest sheet's opening weight, shared with the Galleries' join. */
+    final WastelandSheets sh;
     /**
      * The sheets this layer has: the top one's level sits 4 to 30 blocks under gate 3's lower landing floor, which its
      * floor rises to near the landing ({@link #PULL_R}).
@@ -134,8 +146,6 @@ public final class WastelandField {
     final int sheets;
     /** The rise from one sheet to the next: {@link #STEP}, or more where the sheets run out under a high landing. */
     final double step;
-    private final long[] sheetSeed = new long[MAX_SHEETS];
-    private final double[] cos = new double[MAX_SHEETS], sin = new double[MAX_SHEETS], offA = new double[MAX_SHEETS], offB = new double[MAX_SHEETS];
     private final ThreadLocal<Caches> cache;
     /** The breakthrough noise both layers read (where they open into each other). */
     final Breakthrough breakthrough;
@@ -145,6 +155,11 @@ public final class WastelandField {
     final boolean joinOn;
     /** The Galleries' top row (the row under {@link #bot}) when the join is on. */
     final int gTop;
+    /**
+     * Blocks from a ramped hole's edge out to which a crater may go under the lava table's guard row (W + 2), plus
+     * {@link #CR_DRY_GAP}: no lava pool comes nearer, so the craters' open space under the table (air) never meets lava.
+     */
+    final double crDry;
 
     /**
      * The Wasteland of {@code base}'s seed and layout. {@code breakthrough} and {@code lower} (the Galleries' field under
@@ -162,19 +177,12 @@ public final class WastelandField {
         this.lower = lower;
         this.joinOn = breakthrough != null && lower != null && Join.on(shape);
         this.gTop = bot - 1;
-        // gate 3's lower landing floor (Plans.buildGate): 3 + 1.55 landing half-heights under the layer's top
-        double lFloor = top - 3 - 1.55 * base.settings.landingRadius() / 1.6;
-        sheets = Math.max(1, Math.min(MAX_SHEETS, (int) Math.floor((lFloor - 4 - (W + SHEET0)) / STEP) + 1));
-        // a layer too high for the sheets (a thick band 3 gives it its rows) spaces them out, so the top one still sits
-        // within 30 blocks under the landing and the pull to it stays walkable
-        step = sheets == MAX_SHEETS && lFloor - (W + SHEET0 + STEP * (sheets - 1)) > 30 ? (lFloor - 17 - (W + SHEET0)) / (sheets - 1) : STEP;
+        this.crDry = GalleriesField.CR_IN + (W + 2 - (gTop - GalleriesField.CR_DROP)) / GalleriesField.CR_S + CR_DRY_GAP;
+        // the sheets (how many, their rise, lattices and floors) are the shared helper's, built before both fields
+        this.sh = base.sheets;
+        sheets = sh.sheets;
+        step = sh.step;
         long s = seed ^ 0x510E527FADE682D1L;
-        warpA = new Perlin(Hashing.mix(s, 1, 0, 0));
-        warpB = new Perlin(Hashing.mix(s, 2, 0, 0));
-        warpC = new Perlin(Hashing.mix(s, 3, 0, 0));
-        warpD = new Perlin(Hashing.mix(s, 4, 0, 0));
-        floorN = new Perlin(Hashing.mix(s, 5, 0, 0));
-        rampN = new Perlin(Hashing.mix(s, 6, 0, 0));
         caveN = new Perlin(Hashing.mix(s, 7, 0, 0));
         whN = new Perlin(Hashing.mix(s, 8, 0, 0));
         lavaN = new Perlin(Hashing.mix(s, 9, 0, 0));
@@ -186,21 +194,12 @@ public final class WastelandField {
         clusterN = new Perlin(Hashing.mix(s, 15, 0, 0));
         lavaWN = new Perlin(Hashing.mix(s, 16, 0, 0));
         lavaEN = new Perlin(Hashing.mix(s, 17, 0, 0));
-        for (int k = 0; k < MAX_SHEETS; k++) {
-            long h = Hashing.mix(s, 100 + k, 0, 0);
-            sheetSeed[k] = h;
-            double ang = 0.71 * k + 0.3 * Hashing.unit(Hashing.mix(h, 1, 0, 0));
-            cos[k] = Math.cos(ang);
-            sin[k] = Math.sin(ang);
-            offA[k] = 1000 * Hashing.unit(Hashing.mix(h, 2, 0, 0));
-            offB[k] = 1000 * Hashing.unit(Hashing.mix(h, 3, 0, 0));
-        }
         cache = ThreadLocal.withInitial(Caches::new);
     }
 
     // ================================================================================================ columns
     /** What a column needs that does not depend on y, per sheet and for the column. */
-    static final class Col {
+    static final class Col extends WastelandSheets.Cells {
         int x, z;
         boolean valid;
         /** Per sheet: distance to the nearest edge (blocks), floor at the edge's middle line, floor here (with the dip),
@@ -212,6 +211,11 @@ public final class WastelandField {
         double lavaW;
         /** How open the Galleries are right under the join at this column (0..1; 1 where the join is off). */
         double under;
+        /**
+         * Blocks to the edge of the nearest hole the Galleries open with a ramp (+inf: none near), and how far the crater
+         * round it lowers the lowest sheet's floor here (blocks; 0: not at all).
+         */
+        double ring, crater;
         /** The roughness here: less in small tunnels, which it would close, and in the refuge. */
         double roughK;
         /** The half-width of the widest vault the column is in (faded out from 0.85 to 1.25 of it): the roughness grows with it. */
@@ -225,11 +229,6 @@ public final class WastelandField {
         Plans.Gate en;
         double entryD;
         boolean enNear;
-        /** Scratch for the cellular search, and its result: {e, F3 - F1}, the nearest site and the one across the nearest boundary. */
-        final double[] px = new double[16], pz = new double[16], pd = new double[16];
-        final double[] out = new double[2];
-        int near1, across;
-        int a0, b0;
     }
 
     /**
@@ -239,9 +238,11 @@ public final class WastelandField {
     static final class Caches {
         final Col[] cols = new Col[1024];
         final Col scratch = new Col();
-        final double[] site = new double[2], side = new double[1];
+        final double[] site = new double[2], side = new double[1], shift = new double[3];
         Plans.Gate shiftGate;
         double shiftU, shiftV, edge;
+        /** Nested column fills in progress (counted only under assertions). */
+        int depth;
 
         Caches() {
             for (int i = 0; i < cols.length; i++) cols[i] = new Col();
@@ -252,10 +253,17 @@ public final class WastelandField {
         Caches k = cache.get();
         Col c = k.cols[((x & 31) << 5) | (z & 31)];
         if (c.valid && c.x == x && c.z == z) return c;
+        // a column is computed from the fields built before this one only: nothing it reads may call back into this
+        // cache (the slot is marked unfilled first, and under the tests' assertions a nested fill fails)
         c.valid = false;
         c.x = x;
         c.z = z;
-        compute(c, k);
+        assert k.depth++ == 0 : "WastelandField.column re-entered at " + x + ", " + z;
+        try {
+            compute(c, k);
+        } finally {
+            assert k.depth-- == 1;
+        }
         c.valid = true;
         return c;
     }
@@ -264,47 +272,8 @@ public final class WastelandField {
 
     private static double clamp01(double v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
 
-    /**
-     * Sheet k's cellular pattern at the warped point (u, v): {distance to the nearest cell boundary, F3 - F1}, both in
-     * blocks. The boundaries are the tunnels' middle lines; F3 - F1 is 0 where three cells meet (a junction).
-     */
-    void cells(Col c, int k, double u, double v) {
-        double S = SPACING[k];
-        double a = (cos[k] * u - sin[k] * v) / S + offA[k], b = (sin[k] * u + cos[k] * v) / S + offB[k];
-        int ia = floor(a), ib = floor(b);
-        int a0 = a - ia < 0.5 ? ia - 2 : ia - 1, b0 = b - ib < 0.5 ? ib - 2 : ib - 1;
-        double d1 = 1e9, d2 = 1e9, d3 = 1e9;
-        int i1 = 0;
-        int n = 0;
-        for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++, n++) {
-            long hh = Hashing.mix(sheetSeed[k], a0 + i, b0 + j, 7);
-            double sx = a0 + i + 0.5 + JITTER * ((hh & 0xFFFFFFFFL) * 0x1.0p-32 - 0.5);
-            double sz = b0 + j + 0.5 + JITTER * ((hh >>> 32) * 0x1.0p-32 - 0.5);
-            double dx = sx - a, dz = sz - b, d = dx * dx + dz * dz;
-            c.px[n] = sx;
-            c.pz[n] = sz;
-            c.pd[n] = d;
-            if (d < d1) { d3 = d2; d2 = d1; d1 = d; i1 = n; }
-            else if (d < d2) { d3 = d2; d2 = d; }
-            else if (d < d3) d3 = d;
-        }
-        // distance to the boundary of the nearest site's cell: the nearest of its bisectors with the other sites
-        double e = 1e9, x1 = c.px[i1], z1 = c.pz[i1];
-        int across = i1;
-        for (int m = 0; m < 16; m++) {
-            if (m == i1) continue;
-            double dd = c.pd[m] - d1;
-            double qx = c.px[m] - x1, qz = c.pz[m] - z1;
-            double t = dd / (2 * Math.sqrt(qx * qx + qz * qz));
-            if (t < e) { e = t; across = m; }
-        }
-        c.out[0] = e * S;
-        c.out[1] = (Math.sqrt(d3) - Math.sqrt(d1)) * S;
-        c.near1 = i1;
-        c.across = across;
-        c.a0 = a0;
-        c.b0 = b0;
-    }
+    /** Sheet k's cellular pattern at the warped point (u, v), into {@code c} ({@link WastelandSheets#cells}). */
+    void cells(Col c, int k, double u, double v) { sh.cells(c, k, u, v); }
 
     /**
      * The run a column's tunnel on sheet k follows, after {@link #cells}: +1 or -1 for the side of its middle line the
@@ -314,8 +283,8 @@ public final class WastelandField {
     double runValue(Col c, int k, double[] side) {
         int ia = c.a0 + c.near1 / 4, ib = c.b0 + c.near1 % 4, ja = c.a0 + c.across / 4, jb = c.b0 + c.across % 4;
         boolean first = ia < ja || (ia == ja && ib < jb);
-        long h = first ? Hashing.mix(sheetSeed[k] ^ 0x3C6EF372FE94F82BL, ia, ib, ((long) ja << 32) ^ (jb & 0xFFFFFFFFL))
-                : Hashing.mix(sheetSeed[k] ^ 0x3C6EF372FE94F82BL, ja, jb, ((long) ia << 32) ^ (ib & 0xFFFFFFFFL));
+        long h = first ? Hashing.mix(sh.sheetSeed(k) ^ 0x3C6EF372FE94F82BL, ia, ib, ((long) ja << 32) ^ (jb & 0xFFFFFFFFL))
+                : Hashing.mix(sh.sheetSeed(k) ^ 0x3C6EF372FE94F82BL, ja, jb, ((long) ia << 32) ^ (ib & 0xFFFFFFFFL));
         side[0] = first ? 1 : -1;
         return Hashing.unit(h) * 2 - 1;
     }
@@ -324,33 +293,23 @@ public final class WastelandField {
     double sheetFloor(int k, double x, double z) { return sheetFloor(k, x, z, 1); }
 
     /** {@link #sheetFloor}, with the rise to the next sheet scaled by {@code up} (the lowest sheet stays down where it opens). */
-    double sheetFloor(int k, double x, double z, double up) { return sheetFloor(k, x, z, up, undulation(k, x, z)); }
+    double sheetFloor(int k, double x, double z, double up) { return sh.sheetFloor(k, x, z, up, sh.undulation(k, x, z)); }
 
     /** The undulation of sheet k's floor (blocks): its relief, two octaves. */
-    double undulation(int k, double x, double z) {
-        return FLOOR_AMP * floorN.noise2(x / FLOOR_SCALE + 31.7 * k, z / FLOOR_SCALE - 17.3 * k) / 0.75
-                + FLOOR2_AMP * floorN.noise2(x / FLOOR2_SCALE - 7.1 * k, z / FLOOR2_SCALE + 3.3 * k) / 0.75;
-    }
-
-    private double sheetFloor(int k, double x, double z, double up, double und) {
-        double f = W + SHEET0 + step * k + und;
-        double m = rampN.noise2(x / RAMP_SCALE + 51.3 * k, z / RAMP_SCALE - 23.9 * k);
-        if (k < sheets - 1) f += step * up * clamp01((m - RAMP_LO) / (RAMP_HI - RAMP_LO));
-        if (k > 0) f -= step * clamp01((-m - RAMP_LO) / (RAMP_HI - RAMP_LO));
-        return f;
-    }
+    double undulation(int k, double x, double z) { return sh.undulation(k, x, z); }
 
     private void compute(Col c, Caches k0) {
         int x = c.x, z = c.z;
-        double wx = WARP1 * warpA.noise2(x / WARP1_SCALE, z / WARP1_SCALE) + WARP2 * warpC.noise2(x / WARP2_SCALE, z / WARP2_SCALE);
-        double wz = WARP1 * warpB.noise2(x / WARP1_SCALE, z / WARP1_SCALE) + WARP2 * warpD.noise2(x / WARP2_SCALE, z / WARP2_SCALE);
-        double u = x + wx, v = z + wz;
+        double u = x + sh.warpX(x, z), v = z + sh.warpZ(x, z);
         c.beta = joinOn ? breakthrough.beta(x, z) : 0;
-        c.ash = clamp01((ashN.noise2(x / ASH_SCALE, z / ASH_SCALE) - ASH_LO) / (ASH_HI - ASH_LO));
+        c.ring = joinOn ? lower.craterRing(x, z) : Double.POSITIVE_INFINITY;
+        c.ash = ash(x, z);
         double lava = clamp01((lavaN.noise2(x / LAVA_SCALE, z / LAVA_SCALE) - LAVA_LO) / (LAVA_HI - LAVA_LO));
         // lava only far from any opening, and none in the refuge
         lava *= (1 - clamp01(c.beta / Join.LAVA_BETA)) * (1 - c.ash);
-        double hole = Terrain.smooth((c.beta - Join.HOLE_BETA) / Join.HOLE_RAMP);
+        // and none within reach of a crater's open space under the table (crDry), so its air never meets lava
+        if (c.ring < crDry + 3) lava *= clamp01((c.ring - crDry) / 3);
+        double hole = WastelandSheets.hole(c.beta);
         // an opening only falls where the Galleries are open right under it, so it never ends in a pit on their rock
         c.under = hole > 0 ? Join.under(lower, gTop, x, z) : 1;
         double wh = whN.noise2(x / WH_SCALE, z / WH_SCALE) / 0.4, wh2 = whN.noise2(x / WH_SCALE + 40.5, z / WH_SCALE - 12.5) / 0.4;
@@ -362,34 +321,38 @@ public final class WastelandField {
         // gate 3's lower landing in this cell (its centre keeps 92 blocks inside the cell, past PULL_MAX)
         Plans.Gate en = base.plans.gate(li + 1, base.plans.cellOf(x), base.plans.cellOf(z));
         c.en = en;
-        c.entryD = Math.hypot(x - en.lx, z - en.lz);
+        c.entryD = StrictMath.hypot(x - en.lx, z - en.lz);
         c.enNear = en.overlaps(x, z, x, z, 8);
         c.fLo = 1e9;
         c.fHi = -1e9;
         c.lavaDip = 0;
         c.holeDip = 0;
         c.lavaW = 0;
+        c.crater = 0;
+        // the crater's floor here (the cone round the nearest hole with a ramp), and its weight (it fades out at its reach)
+        double crFloor = GalleriesField.craterFloor(gTop, c.ring);
+        double crW = crFloor < Double.POSITIVE_INFINITY ? Terrain.smooth((GalleriesField.CR_IN + GalleriesField.CR_REACH - c.ring) / CR_FADE) : 0;
         for (int k = 0; k < sheets; k++) {
             boolean topSheet = k == sheets - 1;
             if (topSheet && c.entryD < SHIFT_R1) {
                 // the top sheet's pattern slides so one of its tunnels' lines runs through the landing's centre
                 gateShift(en, k0);
-                double sft = Terrain.smooth((SHIFT_R1 - c.entryD) / (SHIFT_R1 - SHIFT_R0));
+                double sft = WastelandSheets.shiftShare(c.entryD);
                 cells(c, k, u + k0.shiftU * sft, v + k0.shiftV * sft);
             } else cells(c, k, u, v);
             double e = c.out[0], j = c.out[1];
-            c.e[k] = e;
             double cave = clamp01((caveN.noise2(x / CAVE_SCALE + 13.1 * k, z / CAVE_SCALE - 29.7 * k) + (k == 0 ? 0.05 : 0) - CAVE_LO) / (CAVE_HI - CAVE_LO));
             cave *= CAVE_RUN + (1 - CAVE_RUN) * Terrain.smooth(1 - j / CAVE_J);
-            double und = undulation(k, x, z);
-            double f = sheetFloor(k, x, z, k == 0 ? 1 - hole : 1, und);
+            double und = sh.undulation(k, x, z);
+            double f = sh.sheetFloor(k, x, z, k == 0 ? 1 - hole : 1, und);
             // the lowest sheet's dips: only where it lies at its own level (not up a ramp)
-            double low = k == 0 ? clamp01((W + 10 - f) / 4) : 0;
+            double low = k == 0 ? sh.low(f) : 0;
             // lava stays out of the junctions, so every pool has dry ground round its ends and the banks on either
             // side of it join there (lava along every edge round a cell would otherwise leave each bank an island)
             double lw = lava * low * Terrain.smooth((j - LAVA_J) / LAVA_JF), hw = hole * low;
             // lava pools lie along caves; openings at the middle of rooms round junctions
-            double hr = hw * Terrain.smooth(1 - j / HOLE_ROOM), hd = hw * clamp01((HOLE_R - j) / HOLE_FADE) * c.under;
+            // the dip's weight is the shared opening site (the Galleries open under it) times the guard
+            double hr = hw * Terrain.smooth(1 - j / HOLE_ROOM), hd = WastelandSheets.dipWeight(hole, low, j) * c.under;
             c.lavaW = Math.max(c.lavaW, lw);
             cave = Math.max(cave, Math.max(lw * 0.9, hr));
             cave = Math.max(cave, c.ash * ASH_CAVE);
@@ -408,6 +371,21 @@ public final class WastelandField {
                 double p = clamp01((r1 - c.entryD) / (r1 - PULL_FULL));
                 f = level + gap * p + und * clamp01((c.entryD - UND_R0) / UND_FADE);
             }
+            if (k == 0 && crW > 0) {
+                // the crater (after the dip's weight, which is the Galleries' opening site): the lowest sheet's level goes
+                // down to the cone round the hole, its ramps going down with it, and they fade out toward the hole (all of
+                // them at the lip, none at the crater's reach), so the floor round the lip is the cone's and nothing steps;
+                // round the lip the vault is level and whole, so the ramp's head always lies in it
+                double fn = f - Math.max(0, sh.sheetFloor(0, x, z, 0, und) - crFloor) * crW;
+                fn -= Terrain.smooth((GalleriesField.CR_IN + GalleriesField.CR_REACH - c.ring) / (GalleriesField.CR_IN + GalleriesField.CR_REACH - CR_FLAT))
+                        * Math.max(0, fn - crFloor);
+                if (fn < f) {
+                    c.crater = f - fn;
+                    f = fn;
+                    e = Math.min(e, CR_FLAT_G * Math.max(0, c.ring - CR_FLAT));
+                }
+            }
+            c.e[k] = e;
             // the vault stays under the layer's seal
             h = Math.min(h, top - Terrain.SEAL - 1 - f);
             double fl = f;
@@ -451,7 +429,7 @@ public final class WastelandField {
         c.feat = false;
         for (int k = 0; k < sheets; k++) {
             double cw = Terrain.smooth((c.w[k] - 6) / 4) * (1 - c.ash);
-            boolean dip = k == 0 && (c.lavaDip > 0 || c.holeDip > 0);
+            boolean dip = k == 0 && (c.lavaDip > 0 || c.holeDip > 0 || c.crater > 0);
             double t = dip || clear ? 0 : Math.round(terrace * cw);
             // the lowest sheet's terraces never step down under the lava table's guard row (no new lava, no pits)
             if (k == 0 && t < 0) t = Math.min(0, Math.max(t, Math.ceil(W + 2 - c.fl[k])));
@@ -480,18 +458,10 @@ public final class WastelandField {
      */
     void gateShift(Plans.Gate en, Caches k) {
         if (k.shiftGate == en) return;
-        Col c = k.scratch;
-        int x = (int) Math.floor(en.lx), z = (int) Math.floor(en.lz);
-        double wx = WARP1 * warpA.noise2(x / WARP1_SCALE, z / WARP1_SCALE) + WARP2 * warpC.noise2(x / WARP2_SCALE, z / WARP2_SCALE);
-        double wz = WARP1 * warpB.noise2(x / WARP1_SCALE, z / WARP1_SCALE) + WARP2 * warpD.noise2(x / WARP2_SCALE, z / WARP2_SCALE);
-        int t = sheets - 1;
-        cells(c, t, x + wx, z + wz);
-        double S = SPACING[t];
-        double qx = c.px[c.across] - c.px[c.near1], qz = c.pz[c.across] - c.pz[c.near1], ql = Math.sqrt(qx * qx + qz * qz);
-        double el = c.out[0] / S, da = el * qx / ql, db = el * qz / ql;
-        k.shiftU = S * (cos[t] * da + sin[t] * db);
-        k.shiftV = S * (-sin[t] * da + cos[t] * db);
-        k.edge = c.out[0];
+        sh.landingShift(en.lx, en.lz, k.scratch, k.shift);
+        k.shiftU = k.shift[0];
+        k.shiftV = k.shift[1];
+        k.edge = k.shift[2];
         k.shiftGate = en;
     }
 
@@ -505,15 +475,15 @@ public final class WastelandField {
     double landingEdge(Plans.Gate en) { return landingEdge(en, cache.get()); }
 
     // the tests' and tools' view of the pattern
-    Perlin warpA() { return warpA; }
-    Perlin warpB() { return warpB; }
-    Perlin warpC() { return warpC; }
-    Perlin warpD() { return warpD; }
-    long sheetSeed(int k) { return sheetSeed[k]; }
-    double offA(int k) { return offA[k]; }
-    double offB(int k) { return offB[k]; }
-    double cos(int k) { return cos[k]; }
-    double sin(int k) { return sin[k]; }
+    Perlin warpA() { return sh.warpA(); }
+    Perlin warpB() { return sh.warpB(); }
+    Perlin warpC() { return sh.warpC(); }
+    Perlin warpD() { return sh.warpD(); }
+    long sheetSeed(int k) { return sh.sheetSeed(k); }
+    double offA(int k) { return sh.offA(k); }
+    double offB(int k) { return sh.offB(k); }
+    double cos(int k) { return sh.cos(k); }
+    double sin(int k) { return sh.sin(k); }
 
     /** A value in [-1, 1] constant over each small Voronoi cell (the basalt columns' offsets; Network.voronoiValue). */
     double voronoiValue(double x, double z) {
@@ -556,6 +526,9 @@ public final class WastelandField {
 
     /** The core's inset in a vault of height h: deeper in tall caves, so their relief survives the per-block pass. */
     static double coreIn(double h) { return CORE_IN + CORE_DEEP * Math.max(0, h - CORE_H); }
+
+    /** Sheet k's core inset at a column: CORE_IN on the lowest sheet's opening dips and craters (their floors are walked), else {@link #coreIn}. */
+    static double coreOf(Col c, int k) { return k == 0 && (c.holeDip > 0 || c.crater > 0) ? CORE_IN : coreIn(c.h[k]); }
 
     /** Sheet k's analytic floor at a column (the vault's floor at its e, before terraces). */
     static double floorOf(Col c, int k) {
@@ -628,13 +601,13 @@ public final class WastelandField {
             if (!c.near[k]) continue;
             double e = c.e[k], f = c.f[k], w = c.w[k], h = c.h[k], fb = walkFloor(c, k);
             if (y < fb - 5 || y > f + h + 2 || e >= w * 1.1) continue;
-            if (fb > bot + 4) {
-                // the floor guard: rock from 1 to 4 blocks under the floor, so roughness never holes it
+            if (fb > bot + 4 || (k == 0 && c.crater > 0)) {
+                // the floor guard: rock from 1 to 4 blocks under the floor, so roughness never holes it (a crater's too)
                 keep = Math.max(keep, Math.min(fb - 1 - y, y - (fb - 4)));
                 // round gate 3's landing the top sheet's floor is whole up to its level, so the landing never cuts off
                 if (k == sheets - 1 && c.entryD < PULL_FULL) keep = Math.max(keep, Math.min(fb - y, y - (fb - 3)));
             }
-            open = Math.min(open, vault(e, y, fb, f, w, h) + (k == 0 && c.holeDip > 0 ? CORE_IN : coreIn(h)));
+            open = Math.min(open, vault(e, y, fb, f, w, h) + coreOf(c, k));
         }
         if (pass) open = Math.min(open, base.network.passage(en, x, y, z));
         if (keep <= 0) keep = -Terrain.SOLID;
@@ -669,7 +642,7 @@ public final class WastelandField {
             if (!c.near[k]) continue;
             double fb = walkFloor(c, k);
             if (y < fb - 5 || y > c.f[k] + c.h[k] + 2 || c.e[k] >= c.w[k] * 1.1) continue;
-            open = Math.min(open, vault(c.e[k], y, fb, c.f[k], c.w[k], c.h[k]) + (k == 0 && c.holeDip > 0 ? CORE_IN : coreIn(c.h[k])));
+            open = Math.min(open, vault(c.e[k], y, fb, c.f[k], c.w[k], c.h[k]) + coreOf(c, k));
         }
         return open > 0 ? Terrain.SOLID : open;
     }
@@ -683,12 +656,15 @@ public final class WastelandField {
     public int fluid(int x, int y, int z) {
         if (y >= W) return Terrain.AIR;
         Col c = column(x, z);
-        return c.beta >= Join.AIR_BETA ? Terrain.AIR : Terrain.LAVA;
+        return c.beta >= Join.AIR_BETA || c.crater > 0 ? Terrain.AIR : Terrain.LAVA;
     }
 
-    /** The Ash Hollows where their climate passes halfway, else the Wasteland. */
+    /**
+     * The Ash Hollows where their climate passes halfway, else the Wasteland. Read straight from the climate, the
+     * column's own {@link Col#ash}: a biome query never needs the rest of the column (its craters ask the Galleries).
+     */
     public DeepBiome biome(int x, int y, int z) {
-        return column(x, z).ash >= 0.5 ? DeepBiome.ASH_HOLLOWS : DeepBiome.WASTELAND;
+        return ash(x, z) >= 0.5 ? DeepBiome.ASH_HOLLOWS : DeepBiome.WASTELAND;
     }
 
     // ================================================================================================ look queries
@@ -730,7 +706,10 @@ public final class WastelandField {
      */
     public boolean openingNear(int x, int z, int r) {
         if (!joinOn) return false;
+        // a crater's floor slopes down to its hole, so lava anywhere it lowers the floor would run into the Galleries
+        boolean crater = lower.craterRing(x, z) <= GalleriesField.CR_IN + GalleriesField.CR_REACH + 1.5 * r;
         for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) {
+            if (crater && column(x + dx, z + dz).crater > 0) return true;
             // a dip needs beta over HOLE_BETA, and beta is cheap to ask
             if (breakthrough.beta(x + dx, z + dz) <= Join.HOLE_BETA) continue;
             if (column(x + dx, z + dz).holeDip > 0) return true;
@@ -747,15 +726,20 @@ public final class WastelandField {
     public boolean walkNear(int x, int z, int lo, int hi, double margin) {
         Col c = column(x, z);
         for (int k = 0; k < sheets; k++) {
-            if (!c.near[k] || c.e[k] >= 1.0 + margin || c.fl[k] <= bot + 4) continue;
+            if (!c.near[k] || c.e[k] >= 1.0 + margin || (c.fl[k] <= bot + 4 && !(k == 0 && c.crater > 0))) continue;
             int fb = (int) Math.floor(walkFloor(c, k));
             if (hi >= fb - WALK_BELOW && lo <= fb + WALK_ABOVE) return true;
         }
         return false;
     }
 
-    /** The Ash Hollows' climate at a column (0..1): pale rock blends in from 0, the biome is theirs from 0.5. */
-    public double ash(int x, int z) { return column(x, z).ash; }
+    /**
+     * The Ash Hollows' climate at a column (0..1): pale rock blends in from 0, the biome is theirs from 0.5. Its own
+     * noise, so it needs nothing else of the column ({@link Col#ash} is this).
+     */
+    public double ash(int x, int z) {
+        return clamp01((ashN.noise2(x / ASH_SCALE, z / ASH_SCALE) - ASH_LO) / (ASH_HI - ASH_LO));
+    }
 
     /** The sheet whose tunnel or cave holds a block (its vault is nearest), or -1 in the rock. */
     public int sheetAt(int x, int y, int z) {
@@ -819,6 +803,8 @@ public final class WastelandField {
         List<String> out = new ArrayList<>();
         out.add(String.format(java.util.Locale.ROOT, "wasteland: beta %.2f, ash %.2f, lava pool %.2f, opening %.2f (Galleries open under it %.2f), column shift %.1f, rows %.0f..%.0f",
                 c.beta, c.ash, c.lavaDip, c.holeDip, c.under, c.shift, c.fLo, c.fHi));
+        if (c.ring < Double.POSITIVE_INFINITY)
+            out.add(String.format(java.util.Locale.ROOT, "  crater: %.1f from a ramped hole's edge, floor lowered %.1f", c.ring, c.crater));
         for (int k = 0; k < sheets; k++)
             out.add(String.format(java.util.Locale.ROOT, "  sheet %d: %.1f from its line, floor %.1f (%.1f here, terrace %+.0f), half-width %.1f, vault %.1f%s%s%s", k, c.e[k], c.f[k], c.fl[k],
                     c.toff[k], c.w[k], c.h[k], c.hang[k] > 0 ? String.format(java.util.Locale.ROOT, ", hanging end %.0f", c.hang[k]) : "", c.pillar[k] ? ", pillar" : "",

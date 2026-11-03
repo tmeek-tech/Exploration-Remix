@@ -1051,9 +1051,11 @@ class WastelandFieldTest {
     }
 
     /**
-     * The fluid rule (spec 6.5), over 10^6 points: under the lava table a block is air wherever beta is
-     * {@link Join#AIR_BETA} or more (lava under that), and where beta is from {@link Join#LAVA_BETA} to under
-     * {@link Join#HOLE_BETA} no block from the Wasteland's bottom to a row over its table is open, whatever the corners
+     * The fluid rule (spec 6.5, spec-galleries-field-v2 7.4), over 10^6 points (200 areas of 512 x 512 anywhere in
+     * 20 000 x 20 000, {@link Spread}): under the lava table a block is air wherever beta is {@link Join#AIR_BETA} or more
+     * or a crater round a hole with a ramp lowers the lowest sheet's floor (lava under that), and where beta is from
+     * {@link Join#LAVA_BETA} to under {@link Join#HOLE_BETA}, outside the craters (the seal keeps out of them,
+     * {@link Join#seal}), no block from the Wasteland's bottom to a row over its table is open, whatever the corners
      * interpolate to.
      */
     @Test
@@ -1061,31 +1063,37 @@ class WastelandFieldTest {
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, 2);
         int li = Terrain.WASTELAND, bot = t.shape.bottom(li), W = t.shape.waterY(li);
         Random r = new Random(17);
-        int air = 0, sealed = 0, wrong = 0, open = 0;
+        Spread spread = new Spread(r, 20000, 512, 5000);
+        int air = 0, sealed = 0, wrong = 0, open = 0, craters = 0;
         String first = null;
         for (int n = 0; n < 1_000_000; n++) {
-            int x = r.nextInt(20000) - 10000, z = r.nextInt(20000) - 10000;
+            int[] at = spread.next();
+            int x = at[0], z = at[1];
             double beta = t.breakthrough.beta(x, z);
+            boolean crater = t.wasteland.column(x, z).crater > 0;
+            if (crater) craters++;
             int y = bot + r.nextInt(W - bot);
             int f = t.fluidAt(x, y, z);
-            if (beta >= Join.AIR_BETA) {
+            if (beta >= Join.AIR_BETA || crater) {
                 air++;
-                if (f != Terrain.AIR) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta; }
+                if (f != Terrain.AIR) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta + " crater " + crater; }
             } else if (f != Terrain.LAVA) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta; }
-            if (beta >= Join.LAVA_BETA && beta < Join.HOLE_BETA) {
+            if (beta >= Join.LAVA_BETA && beta < Join.HOLE_BETA && !crater) {
                 sealed++;
                 int yy = bot + r.nextInt(W + 2 - bot);
                 if (t.fine(x, yy, z, r.nextDouble() * 2 - 1) <= 0) { open++; if (first == null) first = "open at " + x + " " + yy + " " + z + " beta " + beta; }
             }
         }
-        assertTrue(air > 50_000 && sealed > 100_000, "too few points to check: " + air + " air, " + sealed + " sealed");
+        System.out.printf(java.util.Locale.ROOT, "WastelandFieldTest fluid rule: %d air, %d sealed, %d in craters%n", air, sealed, craters);
+        assertTrue(air > 50_000 && sealed > 100_000 && craters > 500, "too few points to check: " + air + " air, " + sealed + " sealed, " + craters + " in craters");
         assertEquals(0, wrong, "fluids against the rule; first: " + first);
         assertEquals(0, open, "open blocks under the lava table where the seal holds; first: " + first);
     }
 
     /**
      * No band stone where the Wasteland meets the Galleries: every row from the Galleries' bottom to the Wasteland's top
-     * belongs to a layer, and the palette never gives band stone over the join's rows.
+     * belongs to a layer, and the palette never gives band stone over the join's rows (10^5 blocks, 50 areas of 512 x 512
+     * anywhere in 8000 x 8000, {@link Spread}).
      */
     @Test
     void noBandStoneAtTheJoin() {
@@ -1095,9 +1103,11 @@ class WastelandFieldTest {
         assertEquals(-545, s.top(Terrain.WASTELAND));
         for (int y = s.bottom(Terrain.GALLERIES); y <= s.top(Terrain.WASTELAND); y++) assertTrue(s.layerAt(y) >= 0, "row " + y + " is in no layer");
         Random r = new Random(23);
+        Spread spread = new Spread(r, 8000, 512, 2000);
         int bands = 0;
         for (int n = 0; n < 100_000; n++) {
-            int x = r.nextInt(8000) - 4000, z = r.nextInt(8000) - 4000, y = t.join.lo + r.nextInt(t.join.hi - t.join.lo + 1);
+            int[] at = spread.next();
+            int x = at[0], z = at[1], y = t.join.lo + r.nextInt(t.join.hi - t.join.lo + 1);
             if (t.palette.shell(x, y, z, 1 + r.nextInt(8), 1 + r.nextInt(8), r.nextInt(4) == 0) == Rock.BAND_STONE) bands++;
         }
         assertEquals(0, bands, "band stone in the join's rows");
@@ -1324,8 +1334,11 @@ class WastelandFieldTest {
 
     /**
      * The field is a pure function of the seed: density, the per-block pass, fluid and biome at 10^5 points of its rows
-     * (and the join's under them) answer bit for bit the same on one thread and on four in shuffled order, in a fresh
-     * instance, with neighbouring queries 32 blocks apart (the column cache's slots alias there).
+     * (and the join's under them) in 2400 x 2400 columns round the origin answer bit for bit the same on one thread and on
+     * four in shuffled order, in a fresh instance, with neighbouring queries 32 blocks apart (the column cache's slots
+     * alias there). (A wider area would only be slower: its columns ask the Galleries for their craters, and queries
+     * spread at random over more than about 3000 blocks keep pushing each other's lattice cells out of the Galleries'
+     * per-thread caches, {@link Spread}.)
      */
     @Test
     void pureAndThreadSafe() throws Exception {
@@ -1335,7 +1348,7 @@ class WastelandFieldTest {
         Random r = new Random(29);
         int[][] pts = new int[n][];
         for (int k = 0; k < n; k++) {
-            int x = r.nextInt(6000) - 3000, z = r.nextInt(6000) - 3000;
+            int x = r.nextInt(2400) - 1200, z = r.nextInt(2400) - 1200;
             if ((k & 1) == 1) { x = pts[k - 1][0] + 32; z = pts[k - 1][2] - 32; }
             pts[k] = new int[]{x, one.bot - 16 + r.nextInt(one.top - one.bot + 17), z, r.nextInt(2001)};
         }
@@ -1412,13 +1425,18 @@ class WastelandFieldTest {
         return System.nanoTime() - t0;
     }
 
-    /** Lava stays at the openings' rims: every column an opening's dip reaches keeps its lava out (spec 8). */
+    /**
+     * Lava stays at the openings' rims: every column an opening's dip reaches keeps its lava out (spec 8). Every third
+     * column each way of 4000 x 4000, taken in tiles of about 500 x 500 (a raster over the whole width would keep pushing
+     * the lattice cells of the Galleries' openings, which the columns' craters ask, out of their per-thread caches).
+     */
     @Test
     void lavaKeptAtOpenings() {
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, 1);
         WastelandField f = t.wasteland;
-        int rims = 0, bad = 0;
-        for (int x = -2000; x < 2000; x += 3) for (int z = -2000; z < 2000; z += 3) {
+        int rims = 0, bad = 0, n = 1334, tile = 166;
+        for (int a = 0; a < n; a += tile) for (int b = 0; b < n; b += tile) for (int i = a; i < Math.min(n, a + tile); i++) for (int k = b; k < Math.min(n, b + tile); k++) {
+            int x = -2000 + 3 * i, z = -2000 + 3 * k;
             if (f.openingRim(x, z) <= 0) continue;
             rims++;
             if (!f.lavaKept(x, f.W - 1, z)) bad++;
@@ -1431,15 +1449,17 @@ class WastelandFieldTest {
      * The lava pools are no canals (fix round 1, lava-canals): each lies off its tunnel's line by its own share and
      * swells and narrows, so of the lowest sheet's columns a pool fills (its dip at least half), at least 5 % lie more
      * than 0.62 of the half-width from the line, where 0.5.0's pools, centred and as wide as the tunnel's middle, all
-     * ended (7.3 %); the far bank always stays.
+     * ended (7.3 %); the far bank always stays. (3 x 10^5 columns, 100 areas of 512 x 512 anywhere in 8000 x 8000,
+     * {@link Spread}.)
      */
     @Test
     void lavaPoolsLieOffTheLine() {
         WastelandField f = new Terrain(TerrainSettings.defaults(), -64, 2).wasteland;
-        Random r = new Random(41);
+        Spread spread = new Spread(new Random(41), 8000, 512, 3000);
         int pool = 0, off = 0, wall = 0;
         for (int n = 0; n < 300_000; n++) {
-            WastelandField.Col c = f.column(r.nextInt(8000) - 4000, r.nextInt(8000) - 4000);
+            int[] at = spread.next();
+            WastelandField.Col c = f.column(at[0], at[1]);
             if (!c.near[0] || c.lavaDip < 0.5) continue;
             pool++;
             double q = c.e[0] / c.w[0];
