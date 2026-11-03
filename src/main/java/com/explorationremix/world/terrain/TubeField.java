@@ -27,7 +27,9 @@ package com.explorationremix.world.terrain;
  * apart, so two neighbours can only meet where they meander close and one of them runs as twins. Where a twin noise
  * passes a threshold a line splits into two tubes {@code o} either side of it, a pier of rock between them, and they join
  * again further on. The ribs' along-coordinate is v at the nearest point of the (twin) axis, so the ribs stand square across
- * the tube.
+ * the tube. A column reads the line it lies nearest and the two beside it ({@link #REACH}): a twin's outer tube or a wide
+ * bay can reach past the middle between two lines, and the column takes the union of what each near line opens there, its
+ * lining the nearest of their sections, so no tube is cut flat where the nearest line changes.
  *
  * <p><b>The section.</b> A round vault (an ellipse {@code R} across, {@link #VSTRETCH} R high) cut by a floor
  * {@link #FLOOR_CUT} of the vault's height under the axis, rising to the walls in a bowl. The floor is taken at the site
@@ -39,7 +41,8 @@ package com.explorationremix.world.terrain;
  *
  * <p><b>Use.</b> The Galleries' field takes {@code min(cave, tube(x, y, z))} block by block in its per-block pass over
  * {@link #spanLo}..{@link #spanHi} of the column (the tube is not in Minecraft's 4 x 8 x 4 corners: its steps, ribs and
- * hanging ends are thinner than the corner grid). {@link #shellDepth}, {@link #ribShare} and {@link #floorCell} dress the
+ * hanging ends are thinner than the corner grid), keeping a roof of its own where its open space stands high over the
+ * tube's walking level ({@link #walk}). {@link #shellDepth}, {@link #ribShare} and {@link #floorCell} dress the
  * lining, {@link #inLining} is the biome, {@link #pool} the still water. Every value is finite: a fading end closes the
  * section to nothing and the lining's distance reads {@link #SOLID} there.
  */
@@ -63,6 +66,11 @@ public final class TubeField {
     static final double RHO_TUBE = -0.13;
     /** Over the last END_FADE of rho a tube's radius closes to nothing (its end in the cavern, or a blind end). */
     static final double END_FADE = 0.05;
+    /**
+     * The field reaches TIP_REACH of rho past RHO_TUBE, where every section is closed: the rock round a tube's last open
+     * blocks is still near it, so it is lined and surface rock like any other face of the tube.
+     */
+    static final double TIP_REACH = 0.05;
     /** Pools only this far inside the massif (rho): well away from the mouths and the cavern's open air. */
     static final double RHO_POOL = 0.10;
 
@@ -362,7 +370,10 @@ public final class TubeField {
     }
 
     // ================================================================================================ the tube at a point
-    /** What the tube field is at a point (x, z) of the plane: the nearest line, its twin split, the section's size. */
+    /**
+     * What the tube field is at a point (x, z) of the plane for one line: its twin split, the section's size. {@link #at}
+     * fills it for the nearest line; {@link #line} for any line of the point's country, from the frame {@link #frame} set.
+     */
     static final class Pt {
         boolean on;          // a tube line is near
         double rho;
@@ -380,17 +391,30 @@ public final class TubeField {
         double rib;          // the rib's share here, 0..1 (rib())
         double fade;         // end fade 0..1
         Country c;
+        // the frame (frame()): the point, its coordinates across and along the flow, the warped coordinate's gradient
+        // there, and f = U / S - phase (the nearest line is floor(f))
+        double x, z, u, v, dUdu, dUdv, g, f;
     }
 
-    /** Fills p with the tube field at (x, z) (block-centre coordinates). */
+    /** Fills p with the tube field at (x, z) (block-centre coordinates) for the nearest line. */
     void at(double x, double z, Pt p) {
+        if (frame(x, z, p)) line(p, (int) Math.floor(p.f), Double.MAX_VALUE);
+    }
+
+    /**
+     * Sets p's frame at (x, z): the country, rho and the warped coordinate U's value and gradient; true where tubes may
+     * run (p.on stays false until a line is filled in).
+     */
+    boolean frame(double x, double z, Pt p) {
         p.on = false;
         Country c = countryAt(x, z);
         p.c = c;
-        if (!c.on) { p.rho = -9; return; }
+        p.x = x;
+        p.z = z;
+        if (!c.on) { p.rho = -9; return false; }
         double rho = rho(c, x, z);
         p.rho = rho;
-        if (rho <= RHO_TUBE) return;
+        if (rho <= RHO_TUBE - TIP_REACH) return false;
         double u = c.u(x, z), v = c.v(x, z);
         double A = WARP_A * c.S;
         double nu = c.nu, nv = c.nv;
@@ -398,27 +422,60 @@ public final class TubeField {
         double e = 0.5;
         double dUdu = 1 + A * (warpN.noise2((u + e) / WARP_LU + nu, v / WARP_LV + nv) - warpN.noise2((u - e) / WARP_LU + nu, v / WARP_LV + nv)) / (2 * e);
         double dUdv = A * (warpN.noise2(u / WARP_LU + nu, (v + e) / WARP_LV + nv) - warpN.noise2(u / WARP_LU + nu, (v - e) / WARP_LV + nv)) / (2 * e);
-        double g = Math.sqrt(dUdu * dUdu + dUdv * dUdv);
-        double f = U / c.S - c.phase;
-        int k = (int) Math.floor(f);
-        double s = (f - k - 0.5) * c.S / g;
+        p.u = u;
+        p.v = v;
+        p.dUdu = dUdu;
+        p.dUdv = dUdv;
+        p.g = Math.sqrt(dUdu * dUdu + dUdv * dUdv);
+        p.f = U / c.S - c.phase;
+        return true;
+    }
+
+    /** Copies q's frame into p, so p can take another line at the same point. */
+    static void frameOf(Pt q, Pt p) {
+        p.on = false;
+        p.c = q.c;
+        p.rho = q.rho;
+        p.x = q.x;
+        p.z = q.z;
+        p.u = q.u;
+        p.v = q.v;
+        p.dUdu = q.dUdu;
+        p.dUdv = q.dUdv;
+        p.g = q.g;
+        p.f = q.f;
+    }
+
+    /**
+     * Fills p (its frame set) with line k's tube at p's point: k need not be the nearest line, as a line's tube is the same
+     * shape on either side of the middle between two lines (its distance {@code s} is one smooth function there). False,
+     * p left half filled, where the tube's bulged bays stay more than {@code nearMax} blocks off (a cheap early out).
+     */
+    boolean line(Pt p, int k, double nearMax) {
+        Country c = p.c;
+        double v = p.v, g = p.g, dUdu = p.dUdu, dUdv = p.dUdv, nu = c.nu, nv = c.nv;
+        double s = (p.f - k - 0.5) * c.S / g, as = Math.abs(s);
         // the line's own values
         long lk = Hashing.mix(seed, c.ci * 31L + c.cj, k, 991);
-        double R = R_MIN + (R_MAX - R_MIN) * Math.pow(Hashing.unit(lk), 0.9);
-        R *= 1 + R_WANDER * radN.noise2(v / R_WANDER_L + nv, k * 5.31 + nu);
-        double ribK = smooth((ribN.noise2(v / RIB_L + nv, k * 3.73 + nu) - RIB_OFF) / RIB_RAMP);
-        double tw = twinN.noise2(v / TWIN_L + nv, k * 7.77 + 3.1 + nu);
+        double R0 = R_MIN + (R_MAX - R_MIN) * Math.pow(Hashing.unit(lk), 0.9);
         double pier = PIER_MIN + (PIER_MAX - PIER_MIN) * Hashing.unit(Hashing.mix(lk, 1, 0, 0));
+        // cheap outs, before the noise: past the widest this line's twins can stand, or past one tube where it is single
+        double bay = R0 * (1 + R_WANDER) + BULGE;
+        if (as - (2 * bay + pier) > nearMax) return false;
+        double split = smooth((twinN.noise2(v / TWIN_L + nv, k * 7.77 + 3.1 + nu) - T_ON) / T_RAMP);
+        if (split <= 0 && as - bay > nearMax) return false;
+        double R = R0 * (1 + R_WANDER * radN.noise2(v / R_WANDER_L + nv, k * 5.31 + nu));
+        double ribK = smooth((ribN.noise2(v / RIB_L + nv, k * 3.73 + nu) - RIB_OFF) / RIB_RAMP);
         // the twins stand apart by their bays' bulged half-width and the pier, so the pier keeps its width at the bays
-        double o = (R + BULGE * ribK + pier) * smooth((tw - T_ON) / T_RAMP);
-        double as = Math.abs(s);
+        double o = (R + BULGE * ribK + pier) * split;
         double d = Math.abs(as - o);
+        if (d - (R + BULGE * ribK) > nearMax) return false;
         // the nearest point of the twin's axis, and the along-coordinate there (ribs stand square across the tube)
-        double nU = dUdu / g, nV = dUdv / g;           // the line's normal in the (u, v) frame
+        double nV = dUdv / g;                          // the v part of the line's normal in the (u, v) frame
         double off = s - Math.signum(s) * o;           // signed distance from the nearer twin's axis
         double phi = v - off * nV;
-        double fade = smooth((rho - RHO_TUBE) / END_FADE);
-        double yc = W + c.h0 + H_AMP * heightN.noise2(x / H_SCALE + nu, z / H_SCALE + nv) + c.slope * v;
+        double fade = smooth((p.rho - RHO_TUBE) / END_FADE);
+        double yc = W + c.h0 + H_AMP * heightN.noise2(p.x / H_SCALE + nu, p.z / H_SCALE + nv) + c.slope * v;
         double Rv0 = R * VSTRETCH;
         yc = Math.max(yc, W + FLOOR_MIN + FLOOR_CUT * Rv0);
         yc = Math.min(yc, W + VAULT_MAX - Rv0);
@@ -442,7 +499,16 @@ public final class TubeField {
         p.R = Rb * fade;
         p.Rv = Rb * VSTRETCH * fade;
         p.Rv0 = Rv0 * fade;
+        return true;
     }
+
+    /** Blocks within which a column is near a line's tube: the lining's reach and a margin (SHELL_BIOME + 3). */
+    static final double NEAR = SHELL_BIOME + 3;
+    /**
+     * The furthest from a line's axis (blocks of its distance s) that its tube comes within NEAR: the outer twin's offset
+     * and bulged bay at the largest radius (R_MAX wandering R_WANDER up, the widest pier), and a margin of 2.
+     */
+    static final double REACH = 2 * (R_MAX * (1 + R_WANDER) + BULGE) + PIER_MAX + NEAR + 2;
 
     /**
      * The smooth floor of the section at a point (absolute y): flat in the middle at the unbulged section's level (bays and
@@ -524,7 +590,13 @@ public final class TubeField {
     }
 
     // ================================================================================================ columns
-    /** A column's tube: the open rows F..C-1 (none when C <= F), the pool rows, the smooth section for the lining. */
+    /**
+     * A column's tube: the open rows F..C-1 (none when C <= F), the pool rows, and the smooth sections of the lines whose
+     * tubes come near it, for the lining. A line's tube is whole wherever it reaches, not cut where the next line becomes
+     * the nearer (a twin's outer tube often reaches past that middle): the column takes the nearest line and a neighbour
+     * line on either side whose axis lies within {@link #REACH}, keeps those within {@link #NEAR} and opens the union of
+     * their rows, so two tubes that meet merge round.
+     */
     static final class Col {
         int x, z;
         boolean valid;
@@ -532,11 +604,19 @@ public final class TubeField {
         int F, C;            // open rows [F, C)
         int waterLo, waterHi; // water rows [waterLo, waterHi) (empty when equal)
         int spanLo, spanHi;  // rows the per-block pass must look at (widened by besides() to the rows its neighbours open)
-        boolean runs;        // the smooth section's own rows (8 either way) are not empty: a tube runs here
-        // smooth section at the block centre (bulged, without the rib's cut), for shellDepth
-        double yc, d, R, Rv, yfs, rho, rib;
+        boolean runs;        // the smooth sections' own rows (8 either way) are not empty: a tube runs here
+        double rho, rib;
         int cq, cr;          // the column cell
+        /**
+         * The near lines (pb, nb[0], nb[1]) in sec[0..n), and their smooth sections at the block centre (bulged, without
+         * the rib's cut) for shellDepth: the first in yc..yfs, the others in xs[i - 1] = {yc, d, R, Rv, yfs}.
+         */
+        int n;
+        final Pt[] sec = new Pt[3];
+        double yc, d, R, Rv, yfs;
+        final double[][] xs = new double[2][5];
         final Pt pb = new Pt(), pc = new Pt();
+        final Pt[] nb = {new Pt(), new Pt()};
         final int[] cell = new int[2], rows = new int[2];
         boolean besideDone;  // beside holds the open rows {F, C} of the 4 columns beside (+x, -x, +z, -z), the span widened
         final int[] beside = new int[8];
@@ -556,6 +636,15 @@ public final class TubeField {
     }
 
     private void compute(Col c) {
+        computeRows(c);
+        if (c.C > c.F) pool(c, c.x, c.z);
+    }
+
+    /**
+     * Column c's near lines, smooth sections, span and open rows without pools: the union of the rows each near line opens
+     * (two that overlap give their hull; where two lie apart, which is rare, the line the column lies deepest in).
+     */
+    private void computeRows(Col c) {
         int x = c.x, z = c.z;
         c.near = false;
         c.runs = false;
@@ -566,33 +655,78 @@ public final class TubeField {
         c.waterLo = c.waterHi = 0;
         c.spanLo = 1;
         c.spanHi = 0;
+        c.n = 0;
         Pt pb = c.pb;
-        at(x + 0.5, z + 0.5, pb);
+        boolean on = frame(x + 0.5, z + 0.5, pb);
         c.rho = pb.rho;
-        if (!pb.on) return;
-        double rib = pb.rib;
-        c.rib = rib;
-        c.yc = pb.yc;
-        c.d = pb.d;
-        c.R = pb.R;
-        c.Rv = pb.Rv;
-        c.yfs = floorY(pb, x + 0.5, z + 0.5);
-        if (pb.d - pb.R > SHELL_BIOME + 3) return;   // too far out for the lining
+        if (!on) return;
+        // the nearest line, then the neighbour lines, the one toward which the column lies first: their tubes may reach
+        // past the middle (a line far off is left after a cheap look at its hashed size)
+        int k0 = (int) Math.floor(pb.f), up = pb.f - k0 >= 0.5 ? 1 : -1;
+        for (int side = 0; side < 2; side++) frameOf(pb, c.nb[side]);
+        int n = 0;
+        if (line(pb, k0, NEAR) && pb.d - pb.R <= NEAR) c.sec[n++] = pb;
+        for (int side = 0; side < 2; side++) {
+            int k = k0 + (side == 0 ? up : -up);
+            if (Math.abs((pb.f - k - 0.5) * pb.c.S / pb.g) > REACH) continue;
+            Pt q = c.nb[side];
+            if (line(q, k, NEAR) && q.d - q.R <= NEAR) c.sec[n++] = q;
+        }
+        c.n = n;
+        if (n == 0) return;   // too far out for the lining
         c.near = true;
-        c.spanLo = (int) Math.floor(c.yfs) - 8;
-        c.spanHi = (int) Math.ceil(pb.yc + pb.Rv) + 8;
-        c.runs = c.spanLo <= c.spanHi;
-        if (!rowsOf(x, z, pb, rib, c.pc, c.cell, c.rows)) return;
+        int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE, F = 0, C = 0;
+        boolean open = false;
+        double deepAll = 1e9, deepOpen = 1e9;
+        for (int i = 0; i < n; i++) {
+            Pt p = c.sec[i];
+            double yfs = floorY(p, x + 0.5, z + 0.5);
+            if (i == 0) {
+                c.yc = p.yc;
+                c.d = p.d;
+                c.R = p.R;
+                c.Rv = p.Rv;
+                c.yfs = yfs;
+            } else {
+                double[] e = c.xs[i - 1];
+                e[0] = p.yc;
+                e[1] = p.d;
+                e[2] = p.R;
+                e[3] = p.Rv;
+                e[4] = yfs;
+            }
+            if (p.R <= 1e-6) continue;   // a closed section past a tube's end: only its neighbours' faces (besides())
+            lo = Math.min(lo, (int) Math.floor(yfs) - 8);
+            hi = Math.max(hi, (int) Math.ceil(p.yc + p.Rv) + 8);
+            double deep = p.d - p.R;
+            if (!open && deep < deepAll) { deepAll = deep; c.rib = p.rib; }
+            if (!rowsOf(x, z, p, p.rib, c.pc, c.cell, c.rows)) continue;
+            int f = c.rows[0], cc = c.rows[1];
+            if (open && f <= C && F <= cc) {
+                F = Math.min(F, f);
+                C = Math.max(C, cc);
+            } else if (open && deep >= deepOpen) continue;
+            else {
+                F = f;
+                C = cc;
+            }
+            if (!open || deep < deepOpen) { deepOpen = deep; c.rib = p.rib; }
+            open = true;
+        }
+        c.spanLo = lo;
+        c.spanHi = hi;
+        c.runs = lo <= hi;
+        if (!open) return;
         c.cq = c.cell[0];
         c.cr = c.cell[1];
-        c.F = c.rows[0];
-        c.C = c.rows[1];
-        pool(c, x, z);
+        c.F = F;
+        c.C = C;
     }
 
     /**
      * The open rows {F, C} of block column (x, z) without pools, from its column cell's floor and hanging end and the rib
-     * cut at the block: false where the tube does not open the column. pb is the field at the block, rib its rib share.
+     * cut at the block, for the line pb holds: false where that line's tube does not open the column. pb is the line's
+     * field at the block, rib its rib share; the column cell's floor is taken for the same line.
      */
     boolean rowsOf(int x, int z, Pt pb, double rib, Pt pc, int[] cell, int[] out) {
         // the vault, per block: the round section; a rib is a ring, its intrados the section shrunk by the rib's depth at
@@ -605,9 +739,9 @@ public final class TubeField {
             if (yr == Double.NEGATIVE_INFINITY) return false;   // the jamb
             yv = Math.min(yv, yr);
         }
-        // the floor, per column cell: steps with column-shaped risers
+        // the floor, per column cell (the cell's site on the same line): steps with column-shaped risers
         cellOf(x, z, cell);
-        Site st = site(cell[0], cell[1], pc);
+        Site st = site(cell[0], cell[1], pb.line, pc);
         if (!st.on) return false;
         int F = st.F;
         // column ends hanging from the vault in the bays, a whole column cell at a time (outside the rings' soft edges)
@@ -619,28 +753,36 @@ public final class TubeField {
         return true;
     }
 
-    /** A column cell's draw at its site: whether a tube is there, the cell's floor row, how far its column hangs. */
+    /**
+     * A column cell's draw at its site for one line: whether a tube is there, the cell's floor row, how far its column
+     * hangs.
+     */
     static final class Site {
-        int q, r, F, hang;
+        int q, r, k, F, hang;
         boolean valid, on;
     }
 
     private final ThreadLocal<Site[]> sites = ThreadLocal.withInitial(() -> {
-        Site[] a = new Site[256];
+        Site[] a = new Site[512];
         for (int i = 0; i < a.length; i++) a[i] = new Site();
         return a;
     });
 
-    /** Column cell (q, r)'s draw (a per-thread cache; pc is scratch for the field at the site). */
-    Site site(int q, int r, Pt pc) {
-        Site st = sites.get()[((q & 15) << 4) | (r & 15)];
-        if (st.valid && st.q == q && st.r == r) return st;
+    /**
+     * Column cell (q, r)'s draw for line k, the line of the column asking (a per-thread cache, neighbouring lines in
+     * slots of their own; pc is scratch for the field at the site). The site may lie nearer another line: the cell still
+     * takes line k's floor, so a tube is the same shape on both sides of the middle between two lines.
+     */
+    Site site(int q, int r, int k, Pt pc) {
+        Site st = sites.get()[((q & 15) << 5) | ((r & 15) << 1) | (k & 1)];
+        if (st.valid && st.q == q && st.r == r && st.k == k) return st;
         st.q = q;
         st.r = r;
+        st.k = k;
         st.valid = true;
         double sx = siteX(q, r), sz = siteZ(q, r);
-        at(sx, sz, pc);
-        st.on = pc.on;
+        // a site past the tubes' end (where the field still reaches, TIP_REACH) opens nothing, as before the union
+        st.on = frame(sx, sz, pc) && pc.rho > RHO_TUBE && line(pc, k, Double.MAX_VALUE);
         st.F = st.on ? (int) Math.round(floorY(pc, sx, sz)) : 0;
         st.hang = st.on ? hang(q, r, sx, sz, pc) : 0;
         return st;
@@ -701,14 +843,14 @@ public final class TubeField {
         if (!p.on || p.rho < RHO_POOL || p.fade < 1 || p.d > DIP_MID * p.R) return v;
         // the disc and its ring well inside the massif's rock, clear of the rim and of every collapse gap
         if (massifAt(cx, cz) < rd + POOL_KEEP) return v;
-        int[] cell = new int[2];
+        Col t = new Col();
         int F0 = Integer.MAX_VALUE, open = 0;
         int ext = (int) Math.ceil(rd + 1.5);
         int bx = (int) Math.floor(cx), bz = (int) Math.floor(cz);
         for (int dx = -ext; dx <= ext; dx++) for (int dz = -ext; dz <= ext; dz++) {
             double ddx = bx + dx + 0.5 - cx, ddz = bz + dz + 0.5 - cz, dd = Math.sqrt(ddx * ddx + ddz * ddz);
             if (dd > rd + 1.5) continue;
-            int[] fc = openFloor(bx + dx, bz + dz, cell);
+            int[] fc = openFloor(bx + dx, bz + dz, t);
             if (fc == null) continue;                  // rock (the wall or a rib's jamb): it seals the pool
             F0 = Math.min(F0, fc[0]);
             if (dd <= rd) open++;
@@ -722,13 +864,15 @@ public final class TubeField {
         return v;
     }
 
-    /** The floor and vault {F, C} of block column (bx, bz) without pools, or null where the tube does not open it. */
-    private int[] openFloor(int bx, int bz, int[] cell) {
-        Pt pb = new Pt(), pc = new Pt();
-        at(bx + 0.5, bz + 0.5, pb);
-        if (!pb.on) return null;
-        int[] out = new int[2];
-        return rowsOf(bx, bz, pb, pb.rib, pc, cell, out) ? out : null;
+    /**
+     * The floor and vault {F, C} of block column (bx, bz) without pools (every near line's), or null where no tube opens
+     * it; t is scratch, outside the column cache, which may be filling the column that asks.
+     */
+    private int[] openFloor(int bx, int bz, Col t) {
+        t.x = bx;
+        t.z = bz;
+        computeRows(t);
+        return t.C > t.F ? new int[]{t.F, t.C} : null;
     }
 
     private void pool(Col c, int x, int z) {
@@ -813,16 +957,30 @@ public final class TubeField {
     }
 
     /**
-     * Distance (about blocks) from the smooth section's envelope, negative inside it: the section without the ribs' cut
-     * (a rib's rock reads inside it and is lined), over the smooth floor. A fading end closes both radii to nothing: there
-     * it is SOLID, never 0 x infinity (NaN, which the game would read as open).
+     * Distance (about blocks) from the smooth sections' envelope, negative inside it: the nearest of the column's near
+     * lines' sections (where two tubes meet, the union of the two). SOLID where no line is near.
      */
     static double envelope(Col c, int y) {
-        double R = c.R, Rv = c.Rv;
+        if (c.n == 0) return SOLID;
+        double e = envelope(c.yc, c.d, c.R, c.Rv, c.yfs, y);
+        for (int i = 1; i < c.n; i++) {
+            double[] x = c.xs[i - 1];
+            e = Math.min(e, envelope(x[0], x[1], x[2], x[3], x[4], y));
+        }
+        return e;
+    }
+
+    /**
+     * Distance (about blocks) from one line's smooth section (axis height yc, distance d from the axis, half-width R,
+     * vault height Rv), negative inside it: the section without the ribs' cut (a rib's rock reads inside it and is
+     * lined), over the smooth floor yfs. A fading end closes both radii to nothing: there it is SOLID, never 0 x infinity
+     * (NaN, which the game would read as open).
+     */
+    static double envelope(double yc, double d, double R, double Rv, double yfs, int y) {
         if (R <= 1e-6 || Rv <= 1e-6) return SOLID;
-        double dy = (y + 0.5 - c.yc) / Rv, dx = c.d / R;
+        double dy = (y + 0.5 - yc) / Rv, dx = d / R;
         double sec = (Math.sqrt(dx * dx + dy * dy) - 1) * Math.min(R, Rv);
-        return Math.max(sec, c.yfs - (y + 0.5));
+        return Math.max(sec, yfs - (y + 0.5));
     }
 
     /**
@@ -857,6 +1015,17 @@ public final class TubeField {
             if (dd < best) best = dd;
         }
         return best;
+    }
+
+    /**
+     * The tube's walking level in column (x, z): the first open row over its floor or over its pool's water;
+     * Integer.MAX_VALUE where no tube opens the column. The Galleries keep a roof over the tube where their own open space
+     * floats too high over it (GalleriesField.roofed).
+     */
+    public int walk(int x, int z) {
+        Col c = column(x, z);
+        if (!c.near || c.C <= c.F) return Integer.MAX_VALUE;
+        return c.waterHi > c.waterLo ? c.waterHi : c.F;
     }
 
     /** True for a block of still water in a pool's dip. */
@@ -942,4 +1111,18 @@ public final class TubeField {
 
     /** The open rows of the column: {F, C} (none when C <= F). For tools. */
     int[] rows(int x, int z) { Col c = column(x, z); return c.near ? new int[]{c.F, c.C, c.waterLo, c.waterHi} : null; }
+
+    /** How many lines' tubes come near column (x, z) (0 to 3; 2 or more where a tube reaches past the middle). For tools. */
+    int nearLines(int x, int z) { return column(x, z).n; }
+
+    /**
+     * For tools: true where exactly one line's tube comes near column (x, z), with out filled for that line at the block
+     * centre (not always the nearest line: a neighbour's twin may be the only tube near).
+     */
+    boolean soleLine(int x, int z, Pt out) {
+        Col c = column(x, z);
+        if (c.n != 1) return false;
+        int k = c.sec[0].line;
+        return frame(x + 0.5, z + 0.5, out) && line(out, k, Double.MAX_VALUE);
+    }
 }

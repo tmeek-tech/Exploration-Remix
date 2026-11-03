@@ -355,9 +355,9 @@ public final class GalleriesField {
     }
 
     // ============================================================================================ the profile
-    /** Scratch for one cell's shape. */
+    /** Scratch for one cell's shape (mouth: the tubes' mouth weight there, the apron's weight where a tube runs). */
     static final class Shape0 {
-        double F, C, open, gap, hang, rise, jt;
+        double F, C, open, gap, hang, rise, jt, mouth;
         boolean pillar;
         final double[] ch = new double[2], w = new double[6];
         final DomeScratch sc = new DomeScratch();
@@ -455,7 +455,7 @@ public final class GalleriesField {
         c.f = f;
         c.c = ce;
         c.bl = c.bh = 0;
-        if (f < ce) band(c, x, z, cl);
+        if (f < ce) band(c, x, z, cl, s.mouth);
         return c;
     }
 
@@ -647,7 +647,7 @@ public final class GalleriesField {
                 if (vv > up) up = vv;
             }
         }
-        // clusters and spires stay out of the tubes' mouths and the join's openings
+        // clusters and spires stay out of the tubes' mouths and the join's openings (and bands out of the mouths: cell())
         double clear = (1 - mouth) * (1 - jt);
         hang *= clear;
         up *= 1 - mouth;
@@ -658,6 +658,7 @@ public final class GalleriesField {
         out.hang = hang;
         out.rise = up;
         out.pillar = pillar;
+        out.mouth = mouth;
     }
 
     // ------------------------------------------------------------------------------------------- talus cones (the join)
@@ -796,14 +797,19 @@ public final class GalleriesField {
     }
 
     // ------------------------------------------------------------------------------------------- bands
-    /** Rock bands: long ridges at mid height from a ridged noise, as bridges over low ground, ribs or ridges. */
+    /**
+     * Rock bands: long ridges at mid height from a ridged noise, as bridges over low ground, ribs or ridges. Like the
+     * clusters and spires they stay out of the tubes' mouths: a band narrows by the cell's mouth weight and is gone where
+     * that is whole, so no deck or ridge stands in a mouth's head room (a tube cutting through one left its top standing
+     * high over the tube's floor, a fall of 16 to 24 rows).
+     */
     static final double BAND_P = 300, BAND_MASK = 0.12;
 
-    void band(Cell c, double x, double z, Climate cl) {
+    void band(Cell c, double x, double z, Climate cl, double mouth) {
         double mk = bandMask.noise2(x / 240.0, z / 240.0);
         if (mk < BAND_MASK) return;
         double db = lineDist(bandN, x + 30 * warpB.noise2(x / 90.0, z / 90.0), z, BAND_P);
-        double hw = 4 + 4 * smooth(0.5 + bandH.noise2(x / 80.0 + 7, z / 80.0)) * smooth((mk - BAND_MASK) / 0.1);
+        double hw = (4 + 4 * smooth(0.5 + bandH.noise2(x / 80.0 + 7, z / 80.0)) * smooth((mk - BAND_MASK) / 0.1)) * (1 - mouth);
         if (db >= hw) return;
         double q = db / hw;
         double deck = W + 68 + 16 * bandH.noise2(x / 190.0, z / 190.0);
@@ -881,9 +887,34 @@ public final class GalleriesField {
 
     /** The per-block density in blocks: the cell's profile, and the tubes carved in it (min(cave, tube)). */
     public double fineBlocks(int x, int y, int z) {
-        double d = density(x, y, z);
-        if (tubes != null && y >= tubes.spanLo(x, z) && y <= tubes.spanHi(x, z) && tubesAt(x + 0.5, z + 0.5)) d = Math.min(d, tubes.tube(x, y, z));
+        Cell c = column(x, z);
+        double d = blocks(c, y);
+        if (tubes != null && y >= tubes.spanLo(x, z) && y <= tubes.spanHi(x, z) && tubesAt(x + 0.5, z + 0.5)) d = Math.min(d, roofed(c, x, y, z));
         return d;
+    }
+
+    /** Rows of rock a tube keeps under the cavern's open space where that space floats over it (see {@link #roofed}). */
+    static final int TUBE_ROOF = 2;
+    /** The most rows the cavern's open space may stand over a tube's walking level and still open into the tube. */
+    static final int TUBE_DROP = 15;
+
+    /**
+     * The tube field's value at a block (TubeField.tube; the country stands), keeping the cavern's roofs: where the tube
+     * would open one of the TUBE_ROOF rows just under the cavern's own open space, and that space starts more than
+     * TUBE_DROP rows over the tube's walking level there (the cavern's floor or a band standing high over a tube where
+     * the apron has not brought it down to the tube's level), the block stays rock (0.5, inside the tube's lining), so
+     * the tube runs under it and no hole in it drops a walker into the tube. Lower, the cavern opens into the tube.
+     */
+    double roofed(int x, int y, int z) {
+        return roofed(column(x, z), x, y, z);
+    }
+
+    /** {@link #roofed(int, int, int)} with the column's cell c in hand (the per-block pass has it from the density). */
+    double roofed(Cell c, int x, int y, int z) {
+        double tv = tubes.tube(x, y, z);
+        if (tv >= 0) return tv;
+        for (int k = 1; k <= TUBE_ROOF; k++) if (c.open(y + k)) return y + k - tubes.walk(x, z) > TUBE_DROP ? 0.5 : tv;
+        return tv;
     }
 
     /** What fills an open block: still water in a tube's pools, lava under the table, else air. */
@@ -1079,9 +1110,12 @@ public final class GalleriesField {
         return tubes != null && tubesAt(x + 0.5, z + 0.5) ? tubes.shellDepth(x, y, z) : 1e9;
     }
 
-    /** The tube field's value where the country stands (negative in tube air), else Terrain.SOLID: LookQueries.tube. */
+    /**
+     * The tube field's value where the country stands, with the cavern's roofs kept ({@link #roofed}; negative in tube
+     * air), else Terrain.SOLID: LookQueries.tube.
+     */
     public double tube(int x, int y, int z) {
-        return tubes != null && tubesAt(x + 0.5, z + 0.5) ? tubes.tube(x, y, z) : Terrain.SOLID;
+        return tubes != null && tubesAt(x + 0.5, z + 0.5) ? roofed(x, y, z) : Terrain.SOLID;
     }
 
     /**

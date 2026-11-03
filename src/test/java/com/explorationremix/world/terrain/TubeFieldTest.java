@@ -46,8 +46,14 @@ class TubeFieldTest {
         int poolFaces, poolFacesBad;
         String poolBadAt = "", poolFaceBadAt = "", blindAt = "", stepAt = "";
         /** Block by block over the countries' columns. */
-        long spanCols, values, nonFinite, openBlocks, unlined, tubeCols, hangCols, spikes, deepSpikes, cellsHung, cellsMixed;
+        long spanCols, values, nonFinite, openBlocks, unlined, tubeCols, unionCols, hangCols, spikes, deepSpikes, cellsHung, cellsMixed;
         String nonFiniteAt = "", unlinedAt = "", mixedAt = "";
+        /** Rock faces of the blocks the tubes open (air or water) over the whole countries, and those not lined. */
+        long faces, facesBad;
+        String facesBadAt = "";
+        /** Falls over 15 onto rock from a standing place of the cavern into a tube's column, and those the tube made. */
+        int caveFalls, caveFallsMade;
+        String caveFallAt = "";
         /** The seed being measured, and a few mouths of each seed (seed, x, the tube's walking level, z) for the biome check. */
         long seed;
         final List<long[]> mouths = new ArrayList<>();
@@ -69,7 +75,10 @@ class TubeFieldTest {
                     + String.format(java.util.Locale.ROOT, "; columns with a span %d, values %d, non-finite %d%s; open blocks %d, unlined %d%s; tube columns %d, hung %d,"
                                     + " isolated spikes %d (%.2f %%), 2+ deep %d; hung cells %d, mixed %d%s",
                             spanCols, values, nonFinite, nonFiniteAt, openBlocks, unlined, unlinedAt, tubeCols, hangCols, spikes, 100.0 * spikes / Math.max(1, tubeCols),
-                            deepSpikes, cellsHung, cellsMixed, mixedAt);
+                            deepSpikes, cellsHung, cellsMixed, mixedAt)
+                    + "; tube columns two lines reach " + unionCols
+                    + "; faces of the tubes' open blocks " + faces + ", unlined " + facesBad + facesBadAt
+                    + "; falls over 15 from the cavern into a tube " + caveFalls + ", the tube's making " + caveFallsMade + caveFallAt;
         }
     }
 
@@ -404,12 +413,26 @@ class TubeFieldTest {
                     s.unlined++;
                     if (s.unlinedAt.length() < 120) s.unlinedAt += String.format(java.util.Locale.ROOT, " (%d %d %d: %.2f)", x, y, z, sd);
                 }
+                if (g.fineBlocks(x, y, z) > 0) continue;   // a roof the cavern keeps over the tube
+                // every rock face of the block the tube opens is the lining: lined, surface rock, in the biome
+                for (int[] d : SIX) {
+                    int a = x + d[0], b = y + d[1], e = z + d[2];
+                    double fb = g.fineBlocks(a, b, e);
+                    if (fb <= 0) continue;
+                    s.faces++;
+                    double sda = g.tubeShellDepth(a, b, e);
+                    if (sda < 1.8 && fb <= 6 && t.biomeAt(a, b, e) == DeepBiome.OBSIDIAN_TUBES) continue;
+                    s.facesBad++;
+                    if (s.facesBadAt.length() < 160) s.facesBadAt += String.format(java.util.Locale.ROOT, " (%d %d %d: depth %.2f, density %.2f, %s)", a, b, e, sda, fb, t.biomeAt(a, b, e));
+                }
             }
+            caveFalls(t, x, z, r, s);
             // hanging ends: enclosed bay columns of the tube (no pool, the cavern's rock at the vault)
             if (r[3] > r[2] || g.density(x, r[1] - 1, z) <= 0) continue;
             s.tubeCols++;
-            tf.at(x + 0.5, z + 0.5, pb);
-            if (pb.rib == 0) {
+            // where two lines' tubes reach a column it opens the union of their rows: the ends are read where one is near
+            if (tf.nearLines(x, z) > 1) s.unionCols++;
+            if (tf.soleLine(x, z, pb) && pb.rib == 0) {
                 double yv = TubeField.vaultY(pb.yc, pb.d, pb.R, pb.Rv);
                 int h = (int) Math.round(yv) - r[1];
                 if (h > 0) s.hangCols++;
@@ -433,6 +456,41 @@ class TubeFieldTest {
         }
         for (java.util.Map.Entry<Long, Integer> e : hang.entrySet()) if (e.getValue() > 0) s.cellsHung++;
         s.cellsMixed += mixed.size();
+    }
+
+    static final int[][] SIX = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+
+    /**
+     * Falls from the cavern into tube column (x, z) with open rows r: a standing place of the cavern beside it (a cell's
+     * floor or a band's top, rock under it and two open rows over it as the blocks stand) at a row over the tube's floor
+     * the column is open at (that row, the one under and the one over), dropping more than 15 rows onto rock (not into a
+     * pool). The tube made it where the cavern alone is rock there or drops 15 or less.
+     */
+    static void caveFalls(Terrain t, int x, int z, int[] r, Stats s) {
+        GalleriesField g = t.galleries;
+        for (int[] d : SIX) {
+            if (d[1] != 0) continue;
+            int a = x + d[0], e = z + d[2];
+            GalleriesField.Cell n = g.column(a, e);
+            if (n.closed()) continue;
+            for (int k = 0; k < 2; k++) {
+                if (k == 1 && n.bl >= n.bh) break;
+                int y = k == 0 ? n.f : n.bh;
+                if (y <= r[0] || g.fineBlocks(x, y, z) > 0 || g.fineBlocks(x, y - 1, z) > 0 || g.fineBlocks(x, y + 1, z) > 0) continue;
+                if (g.fineBlocks(a, y - 1, e) <= 0 || g.fineBlocks(a, y, e) > 0 || g.fineBlocks(a, y + 1, e) > 0) continue;
+                int yl = y - 1;
+                while (yl > g.B && g.fineBlocks(x, yl, z) <= 0 && t.fluidAt(x, yl, z) == Terrain.AIR) yl--;
+                int drop = y - (yl + 1);
+                if (drop <= 15 || g.fineBlocks(x, yl, z) <= 0) continue;   // a step, or the fall ends in water or lava
+                s.caveFalls++;
+                boolean cave = g.density(x, y - 1, z) <= 0 && g.density(x, y, z) <= 0 && g.density(x, y + 1, z) <= 0;
+                int yc = y - 1;
+                if (cave) while (yc > g.B && g.density(x, yc, z) <= 0) yc--;
+                if (cave && y - (yc + 1) > 15) continue;
+                s.caveFallsMade++;
+                if (s.caveFallAt.length() < 200) s.caveFallAt += String.format(java.util.Locale.ROOT, " (seed %d: %d from %d %d %d into %d %d)", s.seed, drop, a, y, e, x, z);
+            }
+        }
     }
 
     static void finite(Stats s, int x, int z, int y, double v, String what) {
@@ -597,8 +655,40 @@ class TubeFieldTest {
     }
 
     /**
+     * Every rock face of the tubes over whole countries is their lining (round 2: a tube reaching past the middle between
+     * two lines was cut flat there and the rock beyond read as no tube's, 2,792 deep, undressed faces over these seeds at
+     * 69 places): every rock block beside a block a tube opens in the cavern's rock (its air or a pool's water), over every
+     * column of the standing countries, lies within 1.8 of the tube's surface (the palette lines it), is surface rock (at
+     * most 6 blocks deep in the game's density) and is in the Obsidian Tubes (measured 5.07 M faces, counted per open
+     * block, all lined).
+     */
+    @Test
+    void everyFaceIsLined() {
+        Stats s = stats();
+        assertTrue(s.faces > 1_000_000, "too few faces checked: " + s.faces);
+        assertEquals(0, s.facesBad, "faces of the tubes not lined:" + s.facesBadAt);
+    }
+
+    /**
+     * The cavern does not drop a walker into a tube (round 2: the tubes cut through rock bands crossing their mouths and
+     * left falls of 16 to 24 rows from the cavern into tube air, 194 over seeds 1, 2024 and -987654321): from the cavern's
+     * standing places beside the tubes' columns, at most 12 falls of more than 15 rows onto rock that the tube made (where
+     * the cavern alone is rock or drops 15 or less). Measured 4, all at one place of seed 12345 where a 15-row step of the
+     * cavern meets a tube floor one row under the cavern's; bands stay out of the mouths and the cavern keeps its roofs.
+     * Falls the cavern makes alone into a tube's column (a cliff of the cavern over the apron's floor where a tube's rows lie
+     * in the cavern's air: 171 edges) are the cavern's.
+     */
+    @Test
+    void noFallsIntoTubes() {
+        Stats s = stats();
+        assertTrue(s.caveFalls > 0, "no falls looked at");
+        assertTrue(s.caveFallsMade <= 12, "falls the tubes made from the cavern (" + s.caveFallsMade + "):" + s.caveFallAt);
+    }
+
+    /**
      * The hanging column ends are whole column cells (critique tubes-fringe): in the bays every column of a column cell
-     * hangs the same number of blocks from the vault (0 cells mixed; measured 4 to 9 % of the bays' columns hang), and
+     * hangs the same number of blocks from the vault (0 cells mixed; measured 4 to 9 % of the bays' columns hang; read
+     * where one line's tube is near, since a column two lines' tubes reach opens the union of their rows), and
      * under 1 % of the tube's enclosed columns are isolated spikes, an open column whose vault is lower than all 4 of its
      * open neighbours' (0.26 %; the per-block fringe gave 3.1 %), under 0.1 % two blocks deep or more (0.01 %; 0.87 %).
      */
@@ -845,11 +935,12 @@ class TubeFieldTest {
     /**
      * T7: one gate, the cavern field's tubesAt, stands in front of every tube query. Over the columns the tube field
      * reaches, a country that does not stand gives the Galleries' no-tube answers (the cavern's own density, rock for the
-     * tube, no lining, rib, floor cell, pool or tube biome), and a standing one passes the tube field's own.
+     * tube, no lining, rib, floor cell, pool or tube biome), and a standing one passes the tube field's own, but for the
+     * roofs the cavern keeps over a tube (a tube block one or two rows under the cavern's open space reads rock).
      */
     @Test
     void everyTubeQueryIsGated() {
-        long gated = 0, passed = 0;
+        long gated = 0, passed = 0, roofs = 0;
         for (long seed : new long[]{SEEDS[0], SEEDS[1]}) {
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
             TubeField tf = t.tubes;
@@ -865,9 +956,15 @@ class TubeFieldTest {
                     else assertEquals(0, g.tubeFloorCell(x, z), "floor cell" + w);
                     for (int y = lo; y <= hi; y += 3) {
                         if (at) {
-                            assertEquals(tf.tube(x, y, z), g.tube(x, y, z), "tube" + w);
+                            // the tube field's own value, but for the roofs the cavern keeps over a tube (GalleriesField.roofed)
+                            double tv = tf.tube(x, y, z), gv = g.tube(x, y, z);
+                            GalleriesField.Cell cc = g.column(x, z);
+                            if (gv != tv) {
+                                assertTrue(tv < 0 && gv == 0.5 && (cc.open(y + 1) || cc.open(y + 2)), "tube" + w + ": " + tv + " " + gv);
+                                if (!cc.open(y)) roofs++;   // in the cavern's own air the roof's value changes no block
+                            }
                             assertEquals(tf.shellDepth(x, y, z), g.tubeShellDepth(x, y, z), "lining" + w);
-                            assertEquals(Math.min(g.density(x, y, z), tf.tube(x, y, z)), g.fineBlocks(x, y, z), "density" + w);
+                            assertEquals(Math.min(g.density(x, y, z), gv), g.fineBlocks(x, y, z), "density" + w);
                             passed++;
                         } else {
                             assertEquals(Terrain.SOLID, g.tube(x, y, z), "tube" + w);
@@ -882,16 +979,16 @@ class TubeFieldTest {
                 }
             }
         }
-        System.out.println("TubeFieldTest gate: " + gated + " samples gated, " + passed + " passed");
+        System.out.println("TubeFieldTest gate: " + gated + " samples gated, " + passed + " passed (" + roofs + " tube blocks closed by a roof the cavern keeps)");
         assertTrue(gated > 2000 && passed > 2000, "too few samples: " + gated + " gated, " + passed + " passed");
     }
 
     /**
-     * The tubes cost little: the tube part of the per-block pass (the span, the veto, the tube's value) takes at most 60 %
-     * of the Galleries' own per-block pass in chunks with a tube (8 x 8 chunks round a standing country's spot), and at
-     * most 12 % over 96 chunks drawn at random from 16 tube cells (0.6.0's wider tubes: about 0.27-0.35 against
-     * 0.6-0.8 ms a chunk in tube chunks, 43-52 %, and 0.04-0.05 at random, 5 %; 0.5.1's narrow tubes 0.19 against
-     * 0.45, 42 %). One thread, best of three rounds after a warm-up.
+     * The tubes cost little: the tube part of the per-block pass (the span, the veto, the tube's value with the roofs the
+     * cavern keeps over it) takes at most 60 % of the Galleries' own per-block pass in chunks with a tube (8 x 8 chunks
+     * round a standing country's spot), and at most 12 % over 96 chunks drawn at random from 16 tube cells (0.6.0's wider
+     * tubes: about 0.27-0.35 against 0.6-0.8 ms a chunk in tube chunks, 43-52 %, and 0.04-0.05 at random, 5 %; 0.5.1's
+     * narrow tubes 0.19 against 0.45, 42 %). One thread, best of three rounds after a warm-up.
      */
     @Test
     void cost() {
@@ -939,7 +1036,8 @@ class TubeFieldTest {
                 int sl = tf.spanLo(x, z), sh = tf.spanHi(x, z);
                 if (sl > sh || !g.tubesAt(x + 0.5, z + 0.5)) continue;
                 any = true;
-                for (int y = Math.max(lo, sl); y <= Math.min(hi, sh); y++) sink += tf.tube(x, y, z);
+                GalleriesField.Cell cell = g.column(x, z);   // the per-block pass has it from the density
+                for (int y = Math.max(lo, sl); y <= Math.min(hi, sh); y++) sink += g.roofed(cell, x, y, z);
             }
             long t2 = System.nanoTime();
             if (tubeOnly && !any) continue;
