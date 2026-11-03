@@ -1059,15 +1059,20 @@ public final class Network {
         lc.ww[k] = (float) (wy.w[i] + (wy.w[i + 1] - wy.w[i]) * t);
         lc.wh[k] = (float) (wy.hgt[i] + (wy.hgt[i + 1] - wy.hgt[i]) * t);
         lc.wsl[k] = (float) (wy.slab[i] + (wy.slab[i + 1] - wy.slab[i]) * t);
-        boolean helix = wy.inner && wy.slab[0] >= 3.4;
         lc.wcore[k] = wy.inner ? 1.9f : 2.4f;
-        lc.wslabHalf[k] = helix ? 3.4f : (wy.inner ? 3.6f : (float) Math.min(5.0, lc.ww[k] * 0.9 + 1.2));
+        lc.wslabHalf[k] = (float) slabHalf(wy, lc.ww[k]);
         if (d < lc.wslabHalf[k] + 1 || d < lc.wcore[k] + 1.5 || (!wy.inner && d < lc.ww[k] * 1.25)) {
             // the walking core stays open up to 6.24 over the floor line, whatever the way's height (the sum is a
             // double's: the floats' own sum would round differently)
             lc.fLo = Math.min(lc.fLo, lc.wf[k] - lc.wsl[k] - 2);
             lc.fHi = Math.max(lc.fHi, lc.wf[k] + (double) Math.max(lc.wh[k] + 1, 7));
         }
+    }
+
+    /** Half the width of a way's floor slab where the way is w wide (a helix's spiral ledge, an inner walk, a tunnel). */
+    static double slabHalf(Way wy, double w) {
+        boolean helix = wy.inner && wy.slab[0] >= 3.4;
+        return helix ? 3.4 : (wy.inner ? 3.6 : Math.min(5.0, w * 0.9 + 1.2));
     }
 
     /**
@@ -1087,16 +1092,268 @@ public final class Network {
             double o = dark.open(k, x, z);
             if (o <= 0) continue;
             if (fade < 0) fade = NetDark.fade(p.geodes, x, z);
-            o *= fade * Math.max(band, p.keepAt(k, x, z));
-            if (o <= 0) continue;
-            dark.tier(o, dark.floor0(k, x, z), dark.ceil0(k, x, z), t);
-            if (t[1] <= t[0]) continue;
+            if (!dark.tierAt(p, k, x, z, o, band, fade, t)) continue;
             double F = t[0], C = t[1];
-            dark.pillar(k, x, z, t);
+            dark.pillar(k, x, z, p, t);
             if (k == 0) { lc.aF = F; lc.aC = C; lc.aPd = t[0]; lc.aPr = t[1]; }
             else { lc.bF = F; lc.bC = C; lc.bPd = t[0]; lc.bPr = t[1]; }
             lc.darkOn = true;
         }
+    }
+
+    /** How near (blocks) an open span may come to a pillar's foot or top and still lay it bare: roughness and interpolation. */
+    static final double PILLAR_END_MARGIN = 2;
+
+    /**
+     * How many of an end's columns (blocks) must stay in rock for a pillar to be held there, by its foot in the floor
+     * or its top in the roof: more than the few columns of a thin neck, which the interpolation can cut.
+     */
+    static final int PILLAR_HELD = 25;
+
+    /**
+     * How deep (blocks) open space must reach under a way's floor for the floor to hang there: the density's 8-block
+     * vertical step fills a shallower gap with rock.
+     */
+    static final double HANG_DEPTH = 8;
+
+    /**
+     * The deep dark pillars a Blue Reaches cell does not stand ({@link NetDark.Plan#drops}): those the rift, or the
+     * city's hall, would leave in mid-air. A pillar's rock is clipped to its tier's floor - 3 and ceiling + 3 (0.2.0),
+     * and the rift opens far below and above both, so a pillar inside it floats, or hangs or stands with a sawn-off end
+     * (until 0.5.1 the view breaker's spires tied the worst of them to the rift's floor and ceiling; Taran had the
+     * spires go, 2026-11-02, for the long views and the natural walls). The rift's own shape stays as it is: carving
+     * the pillars with it would leave slivers and half columns at its edge instead. A pillar goes when, at any column
+     * it could cover (within 2.5 radii, where its tier opens, whichever pillar is nearest there), the rift's open span
+     * (as canyonCol carves it) or the hall's holds the block under its foot or over its top, within
+     * {@link #PILLAR_END_MARGIN}. A pillar the rift only passes beside, or whose ends stay in rock, stands as before,
+     * and so does every pillar away from the rift and the hall. One more stands, bare end and all: a pillar held by its
+     * other end ({@link #PILLAR_HELD}) that holds up a way's floor over the void ({@link #holdsWayFloor}), which
+     * would hang in mid-air without it.
+     *
+     * <p>A cell only drops pillars whose centre lies at least 2.5 of the tier's largest radii inside it: no column of
+     * another cell can see such a pillar (neither its rock nor its being nearer than one whose rock would reach the
+     * column), so both sides of a seam build the same pillars, and every column needs only its own cell's plan. The
+     * rift keeps 28 blocks inside its cell and the hall 88, so this never spares a pillar they would lay bare. Runs as
+     * the plan's last step, when the rift, the hall, the regions kept and the ways are final.
+     */
+    void dropExposedPillars(Net n) {
+        NetDark.Plan p = n.dark;
+        if (p == null) return;
+        Route rift = n.canyons.isEmpty() ? null : n.canyons.get(0);
+        List<Chamber> halls = new ArrayList<>();
+        for (Chamber c : n.ch) if (c.keep && c.kind == Kind.CITY) halls.add(c);
+        if (rift == null && halls.isEmpty()) return;
+        double riftHalf = 0;
+        if (rift != null) for (double h : rift.riftHalf) riftHalf = Math.max(riftHalf, h);
+        double x0 = n.cx * cell, z0 = n.cz * cell;
+        double[] pc = new double[3], tc = new double[2], span = new double[2], tmp = new double[6];
+        int[] ends = new int[4];
+        long[] out = new long[16];
+        int no = 0;
+        for (int t = 0; t < 2; t++) {
+            double grid = NetDark.PILLAR_GRID[t], inset = NetDark.PILLAR_REACH * NetDark.PILLAR_R_MAX[t];
+            for (int gx = (int) Math.floor((x0 + inset) / grid) - 1; gx * grid <= x0 + cell - inset; gx++)
+                for (int gz = (int) Math.floor((z0 + inset) / grid) - 1; gz * grid <= z0 + cell - inset; gz++) {
+                    if (!dark.gridPillar(t, gx, gz, pc)) continue;
+                    if (pc[0] < x0 + inset || pc[0] > x0 + cell - inset || pc[1] < z0 + inset || pc[1] > z0 + cell - inset) continue;
+                    if (!pillarEnds(p, t, pc, rift, riftHalf, halls, tc, span, tmp, ends)) continue;
+                    boolean held = ends[0] - ends[1] >= PILLAR_HELD || ends[2] - ends[3] >= PILLAR_HELD;
+                    if (held && holdsWayFloor(n, p, t, pc, rift, halls, tc, span, tmp)) continue;
+                    if (no == out.length) out = Arrays.copyOf(out, no * 2);
+                    out[no++] = NetDark.pillarKey(t, gx, gz);
+                }
+        }
+        long[] d = Arrays.copyOf(out, no);
+        Arrays.sort(d);
+        p.drops = d;
+    }
+
+    /**
+     * Whether the rift or a hall would lay bare the foot or the top of pillar pc = {x, z, radius} of tier t; ends =
+     * {columns its foot covers, how many of them are bared, the same for its top} (all 0 away from the rift and the
+     * halls).
+     */
+    private boolean pillarEnds(NetDark.Plan p, int t, double[] pc, Route rift, double riftHalf, List<Chamber> halls,
+                               double[] tc, double[] span, double[] tmp, int[] ends) {
+        Arrays.fill(ends, 0);
+        double cx = pc[0], cz = pc[1], pr = pc[2], reach = NetDark.PILLAR_REACH * pr;
+        // the rift opens only within its half width + 2 of the centre line (ledge noise), the hall inside its R()
+        boolean nearRift = rift != null && rift.nearest(cx, cz, tmp) && tmp[0] - reach < riftHalf + 4;
+        boolean nearHall = false;
+        for (Chamber c : halls) if (Math.hypot(cx - c.x, cz - c.z) < c.R() + reach + 4) nearHall = true;
+        if (!nearRift && !nearHall) return false;
+        for (int x = (int) Math.floor(cx - reach); x <= (int) Math.ceil(cx + reach); x++) {
+            for (int z = (int) Math.floor(cz - reach); z <= (int) Math.ceil(cz + reach); z++) {
+                double pd = Math.hypot(x - cx, z - cz);
+                if (pd >= reach) continue;
+                double o = dark.open(t, x, z);
+                if (o <= 0) continue;
+                double band = NetDark.band(NetDark.seamDist(x + 0.5, z + 0.5, cell));
+                if (!dark.tierAt(p, t, x, z, o, band, NetDark.fade(p.geodes, x, z), tc)) continue;
+                double F = tc[0], C = tc[1];
+                // the pillar is widest at its ends: a column its ends miss holds none of it
+                boolean foot = pillarR(pr, F - 3, F, C) > pd, top = pillarR(pr, C + 3, F, C) > pd;
+                if (!foot && !top) continue;
+                boolean footBare = false, topBare = false;
+                if (nearRift && rift.nearest(x, z, tmp)) {
+                    double s = tmp[1];
+                    if (riftCut(rift, x, z, s, tmp[2], rift.at(rift.riftTop, s), rift.at(rift.riftHalf, s), span)) {
+                        footBare = endBared(span[0], span[1], F, C, foot, false);
+                        topBare = endBared(span[0], span[1], F, C, false, top);
+                    }
+                }
+                for (Chamber c : halls) {
+                    double e = e(c, x, z);
+                    if (e >= 1) continue;
+                    double lo = floorAt(c, e, x, z), hi = ceilAt(c, e, x, z);
+                    footBare |= endBared(lo, hi, F, C, foot, false);
+                    topBare |= endBared(lo, hi, F, C, false, top);
+                }
+                if (foot) { ends[0]++; if (footBare) ends[1]++; }
+                if (top) { ends[2]++; if (topBare) ends[3]++; }
+            }
+        }
+        return ends[1] + ends[3] > 0;
+    }
+
+    /** True when an open span lo..hi reaches the block under a pillar's foot (F - 3) or over its top (C + 3). */
+    static boolean endBared(double lo, double hi, double F, double C, boolean foot, boolean top) {
+        double m = PILLAR_END_MARGIN;
+        return (foot && lo < F - 3 + m && hi > F - 3 - m) || (top && hi > C + 3 - m && lo < C + 3 + m);
+    }
+
+    /**
+     * True when pillar pc = {x, z, radius} of tier t holds up a way's floor: somewhere in its disc its rock meets, or
+     * comes within a block of, a way's floor slab with the rift's open span or a hall's under it ({@link #openUnder}),
+     * and that floor rests on nothing else ({@link #floorHangs}). A deep dark door is
+     * picked on its tier's floor as the raster has it, which knows nothing of the rift, and the way checks let a way
+     * pass the rift near its own rooms, so a door, its inner walk and the first stage of the climb from it to the
+     * rift's path can stand in the rift's void with a pillar the only rock they touch.
+     */
+    private boolean holdsWayFloor(Net n, NetDark.Plan p, int t, double[] pc, Route rift, List<Chamber> halls,
+                                  double[] tc, double[] span, double[] tmp) {
+        double cx = pc[0], cz = pc[1], pr = pc[2], reach = NetDark.PILLAR_REACH * pr;
+        List<Way> near = new ArrayList<>();
+        for (Way wy : n.ways) {
+            if (wy.n < 2 || wy.maxX + 1 <= cx - reach || wy.minX - 1 >= cx + reach) continue;
+            if (wy.maxZ + 1 > cz - reach && wy.minZ - 1 < cz + reach) near.add(wy);
+        }
+        if (near.isEmpty()) return false;
+        List<Way> resting = new ArrayList<>();
+        double[] at = new double[4];
+        for (int x = (int) Math.floor(cx - reach); x <= (int) Math.ceil(cx + reach); x++) {
+            for (int z = (int) Math.floor(cz - reach); z <= (int) Math.ceil(cz + reach); z++) {
+                double pd = Math.hypot(x - cx, z - cz);
+                if (pd >= reach) continue;
+                double o = dark.open(t, x, z);
+                if (o <= 0) continue;
+                double band = NetDark.band(NetDark.seamDist(x + 0.5, z + 0.5, cell));
+                if (!dark.tierAt(p, t, x, z, o, band, NetDark.fade(p.geodes, x, z), tc)) continue;
+                double F = tc[0], C = tc[1];
+                // the pillar's rock in this column (pillarR > pd): up from F - 3 to footHi and down from C + 3 to topLo,
+                // which meet where the pillar's waist is thicker than pd
+                double q2 = (pd / pr - 0.75) / 0.9, mid = (F + C) * 0.5, half = Math.max(4, (C - F) * 0.5);
+                double q = Math.sqrt(Math.max(0, q2));
+                double footHi = Math.min(C + 3, mid - half * q), topLo = Math.max(F - 3, mid + half * q);
+                boolean foot = footHi >= F - 3, top = topLo <= C + 3;
+                if (!foot && !top) continue;
+                for (Way wy : near) {
+                    if (resting.contains(wy) || !nearestOnWay(wy, x, z, at) || at[0] >= slabHalf(wy, at[3]) + 1) continue;
+                    // the slab's rock, floor - slab .. floor, and a block round it
+                    double lo = at[1] - at[2] - 1, hi = at[1] + 1;
+                    if (!(foot && lo < footHi && hi > F - 3) && !(top && hi > topLo && lo < C + 3)) continue;
+                    if (!openUnder(rift, halls, x, z, at[1] - at[2] - 1, span, tmp)) continue;
+                    if (floorHangs(n, p, wy, rift, halls, tc, span, tmp)) return true;
+                    resting.add(wy);
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True when way wy's floor, with the floors of the ways that meet it at its level, rests on nothing: under every
+     * point of them lies open space (the rift's, a hall's or a deep dark tier's: {@link #openUnder},
+     * {@link #tierOpenUnder}), and none ends at a rift node, whose floor is the rift's own path.
+     */
+    private boolean floorHangs(Net n, NetDark.Plan p, Way start, Route rift, List<Chamber> halls, double[] tc,
+                               double[] span, double[] tmp) {
+        List<Way> run = new ArrayList<>();
+        run.add(start);
+        double[] at = new double[4];
+        for (int k = 0; k < run.size(); k++) {
+            Way wy = run.get(k);
+            for (int e : new int[]{wy.a, wy.b}) if (e >= 0 && n.ch.get(e).kind == Kind.CANYON) return false;
+            for (int i = 0; i < wy.n; i++) {
+                double x = wy.x[i], z = wy.z[i], y = wy.f[i] - wy.slab[i] - 1;
+                if (!openUnder(rift, halls, x, z, y, span, tmp) && !tierOpenUnder(p, x, z, y, tc)) return false;
+            }
+            for (Way o : n.ways) {
+                if (o.n < 2 || run.contains(o) || o.maxX < wy.minX - 6 || o.minX > wy.maxX + 6) continue;
+                if (o.maxZ < wy.minZ - 6 || o.minZ > wy.maxZ + 6) continue;
+                if (meets(wy, o, at) || meets(o, wy, at)) run.add(o);
+            }
+        }
+        return true;
+    }
+
+    /** True when an end of way a lies on way b's floor slab, within a block and a half of its level. */
+    static boolean meets(Way a, Way b, double[] at) {
+        for (int i : new int[]{0, a.n - 1}) {
+            if (nearestOnWay(b, a.x[i], a.z[i], at) && at[0] < slabHalf(b, at[3]) + slabHalf(a, a.w[i])
+                    && Math.abs(at[1] - a.f[i]) < 1.5) return true;
+        }
+        return false;
+    }
+
+    /** As {@link #openUnder}, for the deep dark tiers' open spans. */
+    private boolean tierOpenUnder(NetDark.Plan p, double x, double z, double y, double[] tc) {
+        double band = NetDark.band(NetDark.seamDist(x + 0.5, z + 0.5, cell)), fade = -1;
+        for (int t = 0; t < 2; t++) {
+            double o = dark.open(t, x, z);
+            if (o <= 0) continue;
+            if (fade < 0) fade = NetDark.fade(p.geodes, x, z);
+            if (dark.tierAt(p, t, x, z, o, band, fade, tc) && tc[0] < y - HANG_DEPTH && tc[1] > y - PILLAR_END_MARGIN) return true;
+        }
+        return false;
+    }
+
+    /** The point of way wy's line nearest (x, z): out = {distance, floor, slab, width} there; false for a way of one point. */
+    static boolean nearestOnWay(Way wy, double x, double z, double[] out) {
+        if (wy.n < 2) return false;
+        double best = 1e18;
+        for (int i = 0; i + 1 < wy.n; i++) {
+            double ax = wy.x[i], az = wy.z[i], dx = wy.x[i + 1] - ax, dz = wy.z[i + 1] - az;
+            double l2 = dx * dx + dz * dz;
+            double s = l2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+            double ex = ax + dx * s - x, ez = az + dz * s - z, d2 = ex * ex + ez * ez;
+            if (d2 < best) {
+                best = d2;
+                out[1] = wy.f[i] + (wy.f[i + 1] - wy.f[i]) * s;
+                out[2] = wy.slab[i] + (wy.slab[i + 1] - wy.slab[i]) * s;
+                out[3] = wy.w[i] + (wy.w[i + 1] - wy.w[i]) * s;
+            }
+        }
+        out[0] = Math.sqrt(best);
+        return true;
+    }
+
+    /**
+     * True when the rift's open span (as canyonCol carves it) or a hall's holds column (x, z) from height y, or from no
+     * more than {@link #PILLAR_END_MARGIN} under it, down at least {@link #HANG_DEPTH} under y.
+     */
+    private boolean openUnder(Route rift, List<Chamber> halls, double x, double z, double y, double[] span, double[] tmp) {
+        double m = PILLAR_END_MARGIN;
+        if (rift != null && rift.nearest(x, z, tmp)) {
+            double s = tmp[1];
+            if (riftCut(rift, x, z, s, tmp[2], rift.at(rift.riftTop, s), rift.at(rift.riftHalf, s), span)
+                    && span[0] < y - HANG_DEPTH && span[1] > y - m) return true;
+        }
+        for (Chamber c : halls) {
+            double e = e(c, x, z);
+            if (e < 1 && floorAt(c, e, x, z) < y - HANG_DEPTH && ceilAt(c, e, x, z) > y - m) return true;
+        }
+        return false;
     }
 
     private void canyonCol(LCol lc, Route r, double x, double z) {
@@ -1109,13 +1366,7 @@ public final class Network {
             lc.rV = tmp[2];
             lc.rTop = r.at(r.riftTop, lc.rS);
             lc.rHalfTop = r.at(r.riftHalf, lc.rS);
-            double v = Math.abs(lc.rV) + 2.0 * ledgeN.noise2(x / 16.0, z / 16.0);
-            double step = 11 + 3 * ledgeN.noise2(lc.rS / 90.0, 4.4);
-            double fl = Terrain.riftFloor(Math.max(0, v), r.W - 2, lc.rTop, lc.rHalfTop, r.streamHalf, step);
-            double ce = lc.rTop + 7 * Math.max(0, 1 - (v / lc.rHalfTop) * (v / lc.rHalfTop));
-            double endFade = Terrain.smooth((Math.min(lc.rS, r.length - lc.rS) - 10) / 60.0);
-            ce = fl + (ce - fl) * endFade;
-            if (ce > fl) { lc.rrF = fl; lc.rrC = ce; }
+            if (riftCut(r, x, z, lc.rS, lc.rV, lc.rTop, lc.rHalfTop, tmp)) { lc.rrF = tmp[0]; lc.rrC = tmp[1]; }
             for (Route.Bridge bb : r.bridges) if (Math.abs(lc.rS - bb.s()) < bb.halfAlong() + 6) { lc.bridge = bb; break; }
         }
         lc.wOn = r.nearestWalk(x, z, tmp);
@@ -1153,6 +1404,24 @@ public final class Network {
             lc.geo[lc.geoN] = g;
             lc.geoD2[lc.geoN++] = (float) d2;
         }
+    }
+
+    /**
+     * The rift's open span at a column as canyonCol carves it, from the column's nearest point on the centre line (arc
+     * length s, signed distance sv, from {@link Route#nearest}) and the rift's top and half width there: out = {floor,
+     * ceiling}; false where the rift is shut.
+     */
+    boolean riftCut(Route r, double x, double z, double s, double sv, double top, double halfTop, double[] out) {
+        double v = Math.abs(sv) + 2.0 * ledgeN.noise2(x / 16.0, z / 16.0);
+        double step = 11 + 3 * ledgeN.noise2(s / 90.0, 4.4);
+        double fl = Terrain.riftFloor(Math.max(0, v), r.W - 2, top, halfTop, r.streamHalf, step);
+        double ce = top + 7 * Math.max(0, 1 - (v / halfTop) * (v / halfTop));
+        double endFade = Terrain.smooth((Math.min(s, r.length - s) - 10) / 60.0);
+        ce = fl + (ce - fl) * endFade;
+        if (ce <= fl) return false;
+        out[0] = fl;
+        out[1] = ce;
+        return true;
     }
 
     /**
@@ -1253,8 +1522,8 @@ public final class Network {
         }
         if (lc.geoN > 0) d = Math.min(d, geodeDist(lc, x, y, z));
         if (lc.darkOn) {
-            if (lc.aC > lc.aF && lc.aPd < lc.aPr * 2.5) d = Math.max(d, pillarSolid(lc.aPd, lc.aPr, y, lc.aF, lc.aC));
-            if (lc.bC > lc.bF && lc.bPd < lc.bPr * 2.5) d = Math.max(d, pillarSolid(lc.bPd, lc.bPr, y, lc.bF, lc.bC));
+            if (lc.aC > lc.aF && lc.aPd < lc.aPr * NetDark.PILLAR_REACH) d = Math.max(d, pillarSolid(lc.aPd, lc.aPr, y, lc.aF, lc.aC));
+            if (lc.bC > lc.bF && lc.bPd < lc.bPr * NetDark.PILLAR_REACH) d = Math.max(d, pillarSolid(lc.bPd, lc.bPr, y, lc.bF, lc.bC));
         }
         d = Math.max(d, mustStay(lc, x, y, z));
         if (top - y < Terrain.SEAL) d = Math.max(d, Terrain.SEAL - (top - y));
@@ -1296,10 +1565,15 @@ public final class Network {
     /** One of 0.2.0's hourglass pillars of a deep dark tier: 0.75 pr across at its waist, flaring to its foot and top. */
     static double pillarSolid(double pd, double pr, double y, double f, double c) {
         if (pr <= 0 || c <= f) return -SOLID;
+        double r = pillarR(pr, y, f, c);
+        return Math.min(r - pd, Math.min(y - (f - 3), (c + 3) - y));
+    }
+
+    /** The radius of a pillar (radius pr at its centre) at height y, where its tier spans f to c: an hourglass. */
+    static double pillarR(double pr, double y, double f, double c) {
         double mid = (f + c) * 0.5, half = Math.max(4, (c - f) * 0.5);
         double q = (y - mid) / half;
-        double r = pr * (0.75 + 0.9 * q * q);
-        return Math.min(r - pd, Math.min(y - (f - 3), (c + 3) - y));
+        return pr * (0.75 + 0.9 * q * q);
     }
 
     double passage(Plans.Gate g, int x, int y, int z) {

@@ -271,6 +271,9 @@ final class NetPlanner {
             biomes();
             innerWalks();
             for (Strand st : strands) { n.strands.add(st.nodes); n.strandLines.add(st.line); }
+            // Blue Reaches: the pillars the rift or the city's hall would leave in mid-air (the rift, the hall, the
+            // regions kept and the ways are final now)
+            if (n.dark != null) w.dropExposedPillars(n);
             NetIndex.build(w, n);
         }
 

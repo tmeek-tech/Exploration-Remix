@@ -14,8 +14,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * The Wasteland and the Basalt Galleries as noise fields (0.5.1), wired into Terrain: the layers above them are what
- * they were (the Blue Reaches less their view breaker), nothing plans the noise layers, the join's rows are one
- * density, and the fields answer the same on any thread. (The fields' own statistics are their own tests'.)
+ * they were (the Blue Reaches less their view breaker and the pillars it held), nothing plans the noise layers, the
+ * join's rows are one density, and the fields answer the same on any thread. (The fields' own statistics are their
+ * own tests'.)
  */
 class NoiseLayersTest {
     /**
@@ -37,14 +38,17 @@ class NoiseLayersTest {
      * the view breaker went (Taran, 2026-11-02: long views are welcome, they make the caves look epic, and the breaker's
      * columns, fins and spires made the walls look unnatural): no shape stands in the deep dark or the rift only to cut
      * a view, and the rift's ledge path runs open again. The rest of each plan is a2c3d73's (its hash without the
-     * breaker's shapes is the same).
+     * breaker's shapes is the same). Pinned once more when the cells dropped the pillars the rift and the city's hall
+     * lay bare, which the breaker's spires had held and the rift then left in mid-air: each plan is the same but for
+     * the pillars it drops (162 over these twelve cells; without them the hashes are the last pin's), and of the five
+     * chunks only seed 1's third, in cell -1,0, changes.
      */
     static final String[] BLUE = {
-            "seed 1 plans: 9ccbd3efbffd4858 2b04561b90a77625 53cd7b151cbd1796 33ea1fdad052c141"
-                    + " blocks: d7a8389b4d6c059e 6c97765a11a75ff3 e985111e1ec7d967 b2d0858f44798212 eecfad9773024289",
-            "seed 2 plans: bb5652fc6f97b070 4bb67f41a6e3a32a 71c98fc34025e323 2a03945ca81363f0"
+            "seed 1 plans: daf0eb36a79976d8 e99fab7d2db95f9d d8f937dae243a606 cb8f62b49c93c729"
+                    + " blocks: d7a8389b4d6c059e 6c97765a11a75ff3 303b9c18f6418229 b2d0858f44798212 eecfad9773024289",
+            "seed 2 plans: db50a0277268bc70 5abf478bf9f5bb7a e9f7c9bd3b684b03 2f581a2918bf6870"
                     + " blocks: 871413a11c96a0b2 86c1690fea0001f1 d1cb6de834d723de 37afd4d970cda9fe a6930c0bdb192b36",
-            "seed 8004 plans: fea4dda6811c9604 f5c7c74c2cdacf1e bb5e10ae5b6af1cd 15fadf23a6d0c07"
+            "seed 8004 plans: fe3756910b9a73e4 31636363f59751be 60113deff3de215 dabd5cbb064961af"
                     + " blocks: ccfcc9e7ae39fcb5 96f095f23ac431a7 90d045b652f4d05b d90a6e2c93b653c2 8533a8c9f6e3d85b"};
     static final long[] UNCHANGED_SEEDS = {1, 2, 8004};
 
