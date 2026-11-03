@@ -39,16 +39,17 @@ class NoiseLayersTest {
      * columns, fins and spires made the walls look unnatural): no shape stands in the deep dark or the rift only to cut
      * a view, and the rift's ledge path runs open again. The rest of each plan is a2c3d73's (its hash without the
      * breaker's shapes is the same). Pinned once more when the cells dropped the pillars the rift and the city's hall
-     * lay bare, which the breaker's spires had held and the rift then left in mid-air: each plan is the same but for
-     * the pillars it drops (162 over these twelve cells; without them the hashes are the last pin's), and of the five
-     * chunks only seed 1's third, in cell -1,0, changes.
+     * lay bare, which the breaker's spires had held and the rift then left in mid-air, and the ways, the deep dark
+     * doors and the climbs kept off the rift's void and the caverns' air, where floors the spires had held hung: each
+     * plan differs from the last pin's in the pillars it drops (140 over these twelve cells) and in some of its ways,
+     * and of the five chunks only the third of seeds 1 and 2, in cell -1,0, changes.
      */
     static final String[] BLUE = {
-            "seed 1 plans: daf0eb36a79976d8 e99fab7d2db95f9d d8f937dae243a606 cb8f62b49c93c729"
-                    + " blocks: d7a8389b4d6c059e 6c97765a11a75ff3 303b9c18f6418229 b2d0858f44798212 eecfad9773024289",
-            "seed 2 plans: db50a0277268bc70 5abf478bf9f5bb7a e9f7c9bd3b684b03 2f581a2918bf6870"
-                    + " blocks: 871413a11c96a0b2 86c1690fea0001f1 d1cb6de834d723de 37afd4d970cda9fe a6930c0bdb192b36",
-            "seed 8004 plans: fe3756910b9a73e4 31636363f59751be 60113deff3de215 dabd5cbb064961af"
+            "seed 1 plans: 118f4e74172c0149 478abfe19e6cb3fc f2a721987933cde1 9ee5d0886c477ecd"
+                    + " blocks: d7a8389b4d6c059e 6c97765a11a75ff3 811975dc65e0ce46 b2d0858f44798212 eecfad9773024289",
+            "seed 2 plans: 42a0001d577a3335 4c58995f446d4f1f afc438a29cd8cbc6 e947762e77d16261"
+                    + " blocks: 871413a11c96a0b2 86c1690fea0001f1 98e806a659ed4169 37afd4d970cda9fe a6930c0bdb192b36",
+            "seed 8004 plans: 612bbb725b72460e fe28f41e3bd28727 b99f646529dc155 dc5566ca39359b24"
                     + " blocks: ccfcc9e7ae39fcb5 96f095f23ac431a7 90d045b652f4d05b d90a6e2c93b653c2 8533a8c9f6e3d85b"};
     static final long[] UNCHANGED_SEEDS = {1, 2, 8004};
 

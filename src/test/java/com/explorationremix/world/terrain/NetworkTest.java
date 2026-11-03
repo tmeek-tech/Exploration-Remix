@@ -1007,25 +1007,87 @@ class NetworkTest {
     }
 
     /**
-     * No deep dark pillar hangs in mid-air: in the Blue Reaches' 2 x 2 voxel cells, every block that is rock because of
-     * a tier's pillar (the column's pillar's pillarSolid at least 1, a block inside its surface) is joined through rock
-     * to the faces of the box. Once the view breaker's spires were gone (0.5.1), the rift left hourglass pillars
-     * floating (nine pieces in these cells, the largest 1,196 blocks) until the cells dropped the pillars it lays bare
-     * ({@link Network#dropExposedPillars}). The rest of the rock nothing holds (walk floors over the rift's void,
-     * crumbs of interpolation) is reported, not failed.
+     * No deep dark pillar hangs in mid-air, nor a way's floor: in the Blue Reaches' 2 x 2 voxel cells, no piece of rock
+     * nothing holds has more than {@link #PILLAR_CRUMB} blocks that are rock because of a tier's pillar (the column's
+     * pillar's pillarSolid at least 1, a block inside its surface), and none is larger than {@link #LOOSE_ROCK_MAX}
+     * blocks. Once the view breaker's spires were gone (0.5.1), the rift left hourglass pillars floating (nine pieces
+     * in these cells, the largest 1,196 blocks) until the cells dropped the pillars it lays bare
+     * ({@link Network#dropExposedPillars}). The crumbs of interpolation are reported, not failed: here among them
+     * single blocks of a pillar's flank in cell 1,-3, where a way's tunnel passes it.
      */
     @Test
     @Tag("voxel")
     void pillarsNeverFloat() {
         long seed = SEEDS[0];
         int cx = 0, cz = -3;
-        Terrain t = terrain(seed);
-        Network w = t.network;
+        Network w = terrain(seed).network;
         int cell = (int) w.cell;
         VoxelHarness v = built(seed, Terrain.BLUE, cx, cz, 2, 2);
         List<String> fails = new ArrayList<>();
+        String tg = tag(seed, Terrain.BLUE, cx, cz) + " (2 x 2)";
+        System.out.println(looseRock(w, v, tg, cx * cell, cz * cell, (cx + 2) * cell, (cz + 2) * cell, fails));
+        assertTrue(fails.isEmpty(), fails.size() + " pieces of rock nothing holds:\n" + String.join("\n", fails));
+    }
+
+    /**
+     * No way, door or climb of the Blue Reaches hangs over the rift's void, in the cells where they did once the view
+     * breaker's spires were gone (0.5.1): no piece of rock nothing holds larger than {@link #LOOSE_ROCK_MAX} blocks,
+     * and none with more than {@link #PILLAR_CRUMB} blocks of a pillar's rock, in the cell. The ways now keep off the
+     * rift's open span and the caverns' air, and the deep dark doors off the rift (NetPlanner's clear and darkDoor).
+     * Seed -756657478 cell 0,-1 had a way from door to door across the rift (3,651 blocks in mid-air), seed 4242 cell
+     * -3,2 another (3,125), and seed 12345 cell -2,-1, with the Blue Reaches 256 tall, a way's floor only a pillar the
+     * cell then dropped had held (2,801).
+     */
+    @Test
+    @Tag("voxel")
+    void noWayHangsInTheRift() {
+        List<String> fails = new ArrayList<>();
+        // {seed, cell x, cell z, the Blue Reaches 256 tall}
+        long[][] cells = {{-756657478L, 0, -1, 0}, {4242L, -3, 2, 0}, {12345L, -2, -1, 1}};
+        for (long[] c : cells) {
+            long seed = c[0];
+            int cx = (int) c[1], cz = (int) c[2];
+            Terrain t = new Terrain(c[3] == 1 ? tallBlue() : TerrainSettings.defaults(), -64, seed);
+            Network w = t.network;
+            int cell = (int) w.cell, ap = NetDark.APRON;
+            VoxelHarness v = VoxelHarness.build(t, Terrain.BLUE, cx * cell - ap, cz * cell - ap, cell + 2 * ap, cell + 2 * ap);
+            String tg = tag(seed, Terrain.BLUE, cx, cz) + (c[3] == 1 ? " (256 tall)" : "");
+            System.out.println(looseRock(w, v, tg, cx * cell, cz * cell, (cx + 1) * cell, (cz + 1) * cell, fails));
+        }
+        assertTrue(fails.isEmpty(), fails.size() + " pieces of rock nothing holds:\n" + String.join("\n", fails));
+    }
+
+    /** The Blue Reaches 256 tall (the config allows 64 to 512) with rifts up to 60 deeper: a deeper, wider rift. */
+    static TerrainSettings tallBlue() {
+        TerrainSettings d = TerrainSettings.defaults();
+        List<LayerSettings> l = new ArrayList<>(d.layers());
+        LayerSettings b = l.get(Terrain.BLUE);
+        l.set(Terrain.BLUE, new LayerSettings(b.id(), 256, b.fluidDepth(), b.lava(), b.heightMin(), b.heightMax() + 60, b.widthMin(), b.widthMax()));
+        return new TerrainSettings(d.bandThickness(), d.gateSpacing(), d.passageRadius(), d.landingRadius(), List.copyOf(l));
+    }
+
+    /**
+     * The most blocks a piece of rock nothing holds may have in a Blue Reaches cell: the crumbs the interpolation leaves
+     * at the rift's and the caverns' edges stay under it; a way's floor in mid-air is hundreds.
+     */
+    static final int LOOSE_ROCK_MAX = 64;
+
+    /**
+     * The most blocks of a pillar's rock a piece of rock nothing holds may have: where a way's tunnel passes a pillar,
+     * the interpolation can leave a block or two of its flank on their own, which is no pillar in mid-air (one the
+     * rift lays bare floats whole, a hundred blocks and more).
+     */
+    static final int PILLAR_CRUMB = 4;
+
+    /**
+     * The pieces of rock nothing holds in voxel box v ({@link VoxelHarness#floatingRock}) that reach the blocks from
+     * (x0, z0) to (x1, z1), exclusive: a fail for each with more than {@link #PILLAR_CRUMB} blocks of a pillar's rock
+     * in it or more than {@link #LOOSE_ROCK_MAX} blocks. Returns a line on all of them.
+     */
+    static String looseRock(Network w, VoxelHarness v, String tg, int x0, int z0, int x1, int z1, List<String> fails) {
         List<int[]> sizes = new ArrayList<>();
         long blocks = 0;
+        int bad = 0;
         for (List<int[]> piece : v.floatingRock()) {
             int size = 0, pillar = 0;
             // the piece's box: x, y and z, each lowest then highest
@@ -1040,17 +1102,19 @@ class NetworkTest {
             }
             blocks += size;
             sizes.add(new int[]{size, b[0], b[2], b[4]});
-            boolean inCells = b[1] >= cx * cell && b[0] < (cx + 2) * cell && b[5] >= cz * cell && b[4] < (cz + 2) * cell;
-            if (pillar > 0 && inCells) fails.add("a floating piece of " + size + " blocks, " + pillar + " of them a pillar's, at x "
-                    + b[0] + ".." + b[1] + " y " + b[2] + ".." + b[3] + " z " + b[4] + ".." + b[5]);
+            boolean inCells = b[1] >= x0 && b[0] < x1 && b[5] >= z0 && b[4] < z1;
+            if (inCells && (pillar > PILLAR_CRUMB || size > LOOSE_ROCK_MAX)) {
+                bad++;
+                fails.add(tg + ": a floating piece of " + size + " blocks, " + pillar + " of them a pillar's, at x "
+                        + b[0] + ".." + b[1] + " y " + b[2] + ".." + b[3] + " z " + b[4] + ".." + b[5]);
+            }
         }
         sizes.sort((p, q) -> q[0] - p[0]);
         StringBuilder top = new StringBuilder();
         for (int[] z : sizes.subList(0, Math.min(5, sizes.size())))
             top.append(String.format(java.util.Locale.ROOT, " %d at %d %d %d;", z[0], z[1], z[2], z[3]));
-        System.out.printf("%s (2 x 2): rock nothing holds: %d pieces, %d blocks; the largest:%s %d with pillar rock%n",
-                tag(seed, Terrain.BLUE, cx, cz), sizes.size(), blocks, top, fails.size());
-        assertTrue(fails.isEmpty(), fails.size() + " floating pillars:\n" + String.join("\n", fails));
+        return String.format(java.util.Locale.ROOT, "%s: rock nothing holds: %d pieces, %d blocks; the largest:%s %d failed",
+                tg, sizes.size(), blocks, top, bad);
     }
 
     /** True for a block at height y of a column well inside a deep dark pillar's surface (pillarSolid at least 1). */

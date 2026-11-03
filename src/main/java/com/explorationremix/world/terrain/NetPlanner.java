@@ -271,8 +271,8 @@ final class NetPlanner {
             biomes();
             innerWalks();
             for (Strand st : strands) { n.strands.add(st.nodes); n.strandLines.add(st.line); }
-            // Blue Reaches: the pillars the rift or the city's hall would leave in mid-air (the rift, the hall, the
-            // regions kept and the ways are final now)
+            // Blue Reaches: the pillars the rift or the city's hall would leave in mid-air (the rift, the hall and the
+            // regions kept are final now)
             if (n.dark != null) w.dropExposedPillars(n);
             NetIndex.build(w, n);
         }
@@ -1082,36 +1082,69 @@ final class NetPlanner {
             return n.dark.distTo(region(r), o.x, o.z) - k * o.R();
         }
 
-        /** A door on region node R's core edge, facing the point (tx, tz): {x, z, floor, out x, out z}, or null. */
+        /**
+         * A door on region node R's core edge, facing the point (tx, tz): {x, z, floor, out x, out z}, or null. The door
+         * sites lie on the tier's floor as the raster has it, which knows nothing of the rift, so a site whose inner walk
+         * ({@link #darkInnerWalk}) would come near the rift's open space ({@link #nearRift}) is passed over: where the
+         * rift cuts through a cavern its floor is gone, and a door there, its walk and the floor of the tunnel or climb
+         * to it hung in the rift's void (the view breaker's spires had held some of them until 0.5.1).
+         */
         double[] darkDoor(Chamber R, double tx, double tz, int attempt) {
             NetDark.Region g = region(R);
-            List<double[]> cand = n.dark.nearestDoors(g, tx, tz, 6);
+            List<double[]> cand = n.dark.nearestDoors(g, tx, tz, 12);
             List<double[]> used = darkDoors.getOrDefault(R.id, List.of());
             int skip = attempt;
             for (double[] p : cand) {
                 boolean near = false;
                 for (double[] u : used) if (Math.hypot(u[0] - p[0], u[1] - p[1]) < 16) near = true;
                 if (near) continue;
-                if (skip-- > 0) continue;
                 double dx = tx - p[0], dz = tz - p[1], dl = Math.max(1e-6, Math.hypot(dx, dz));
-                double fl = n.dark.floorAt(g.tier, p[0], p[1]);
-                return new double[]{p[0], p[1], Math.max(fl, W + 1), dx / dl, dz / dl};
+                double[] d = {p[0], p[1], Math.max(n.dark.floorAt(g.tier, p[0], p[1]), W + 1), dx / dl, dz / dl};
+                if (innerWalkNearRift(d)) continue;
+                if (skip-- > 0) continue;
+                return d;
             }
             return null;
         }
 
+        /** A region door's inner walk: its points, their spacing, and its half width, height and slab. */
+        static final int INNER_N = 9;
+        static final double INNER_STEP = 1.6, INNER_HALF = 2.2, INNER_HGT = 5, INNER_SLAB = 2.5;
+
+        /** True when the inner walk from region door d ({@link #darkInnerWalk}) comes near the rift's open space. */
+        boolean innerWalkNearRift(double[] d) {
+            for (int i = 0; i < INNER_N; i++) {
+                double s = i * INNER_STEP;
+                if (nearRift(d[0] - d[3] * s, d[1] - d[4] * s, INNER_HALF, d[2] - INNER_SLAB, d[2] + INNER_HGT)) return true;
+            }
+            return false;
+        }
+
+        /**
+         * The canyon test of {@link #clear} (Blue Reaches): true when what spans lo..hi at (x, z), half w across (a way
+         * from its floor less its slab to its floor plus its height, or a climb's stage), comes within w + 5 across and
+         * 3 up or down of the rift's open space.
+         */
+        boolean nearRift(double x, double z, double w, double lo, double hi) {
+            for (Route r : n.canyons) {
+                double[] o = this.w.riftOpen(r, x, z, w + 5);
+                if (o != null && lo - 3 < o[1] && hi + 3 > o[0]) return true;
+            }
+            return false;
+        }
+
         /** A short level walk from a region door into the cavern, so the tunnel's floor runs out onto the cavern's. */
         Way darkInnerWalk(Chamber R, double[] d) {
-            int m = 9;
+            int m = INNER_N;
             Way wy = new Way();
             wy.kind = EK.WALK;
             alloc(wy, m);
             for (int i = 0; i < m; i++) {
-                double s = i * 1.6;
+                double s = i * INNER_STEP;
                 wy.x[i] = d[0] - d[3] * s;
                 wy.z[i] = d[1] - d[4] * s;
                 wy.f[i] = d[2];
-                wy.w[i] = 2.2; wy.hgt[i] = 5; wy.slab[i] = 2.5;
+                wy.w[i] = INNER_HALF; wy.hgt[i] = INNER_HGT; wy.slab[i] = INNER_SLAB;
             }
             wy.inner = true; wy.a = R.id; wy.biome = DeepBiome.DEEP_DARK;
             wy.bounds();
@@ -2750,12 +2783,19 @@ final class NetPlanner {
                     }
                 }
             }
-            // the canyons (Blue): a way may only meet a canyon at its own canyon node
-            for (Route r : n.canyons) {
+            // the canyons (Blue): a way may only meet a canyon at its own canyon node, or by its own room (rooms keep 12
+            // from the rift); not by its own deep dark region, which the rift may cut through (its doors keep off the
+            // rift too, darkDoor). Nor does its floor ever hang over the rift's void or in a cavern's air (dark.hit
+            // above leaves the way's own regions out), but in its mouth on the ledge path: until 0.5.1 the view
+            // breaker's spires held some of the floors laid there, and the rest hung. (A way that may bridge caverns,
+            // relaxDark, spans them from rock to rock.)
+            if (!n.canyons.isEmpty() || n.dark != null) {
                 for (int i = 0; i < wy.n; i++) {
-                    if (nearOwnEnd(wy.x[i], wy.z[i], ca, cb)) continue;
-                    double[] o = w.riftOpen(r, wy.x[i], wy.z[i], wy.w[i] + 5);
-                    if (o != null && wy.f[i] - wy.slab[i] - 3 < o[1] && wy.f[i] + wy.hgt[i] + 3 > o[0]) return false;
+                    double px = wy.x[i], pz = wy.z[i], under = wy.f[i] - wy.slab[i] - 2;
+                    if (canyonMouth(px, pz, ca, cb)) continue;
+                    if (overRift(px, pz, 2, under) || (!relaxDark && overDark(px, pz, 2, under))) return false;
+                    if (n.canyons.isEmpty() || nearOwnEnd(px, pz, ca, cb, false)) continue;
+                    if (nearRift(px, pz, wy.w[i], wy.f[i] - wy.slab[i], wy.f[i] + wy.hgt[i])) return false;
                 }
             }
             return true;
@@ -2777,17 +2817,80 @@ final class NetPlanner {
         }
 
         boolean nearOwnEnd(double px, double pz, int ca, int cb) {
+            return nearOwnEnd(px, pz, ca, cb, true);
+        }
+
+        /** True when (px, pz) lies by chamber ca or cb (a deep dark region's only when {@code dark}). */
+        boolean nearOwnEnd(double px, double pz, int ca, int cb, boolean dark) {
             for (int c : new int[]{ca, cb}) {
                 if (c < 0) continue;
                 Chamber k = n.ch.get(c);
-                if (k.dark >= 0) { if (n.dark.near(region(k), px, pz, 9)) return true; continue; }
+                if (k.dark >= 0) { if (dark && n.dark.near(region(k), px, pz, 9)) return true; continue; }
                 if (Math.hypot(px - k.x, pz - k.z) < k.R() + 9) return true;
+            }
+            return false;
+        }
+
+        /**
+         * True when (px, pz) lies in the mouth of a way at canyon node ca or cb: within {@link #CANYON_MOUTH} of the
+         * node, on the ledge path and the first blocks into the rift's wall, level with the path.
+         */
+        boolean canyonMouth(double px, double pz, int ca, int cb) {
+            for (int c : new int[]{ca, cb}) {
+                if (c < 0) continue;
+                Chamber k = n.ch.get(c);
+                if (k.kind == Kind.CANYON && Math.hypot(px - k.x, pz - k.z) < CANYON_MOUTH) return true;
+            }
+            return false;
+        }
+
+        /** How far from its canyon node a way's mouth reaches (blocks): the 3 behind the door and the 5 out from it. */
+        static final double CANYON_MOUTH = 8;
+
+        /**
+         * True when the rift's open space lies under height y at (x, z), with the column taken {@code shrink} blocks
+         * nearer its centre line: rock standing there, a way's floor or the rim of a climb's stage, hangs in the void.
+         */
+        boolean overRift(double x, double z, double shrink, double y) {
+            for (Route r : n.canyons) {
+                double[] o = this.w.riftOpen(r, x, z, shrink);
+                if (o != null && o[0] < y && o[1] > y) return true;
+            }
+            return false;
+        }
+
+        /**
+         * As {@link #overRift}, for the deep dark tiers as the plan keeps them (Blue Reaches): true when a tier's open
+         * space within rad of (x, z) holds height y with its floor more than 2 blocks under it. A cavern's own ways
+         * and climbs may come into it (dark.hit leaves them out), but nothing of theirs may hang in its air: the
+         * ledges and rims of a climb whose stages stood in a cavern did.
+         */
+        boolean overDark(double x, double z, double rad, double y) {
+            NetDark.Plan p = n.dark;
+            if (p == null) return false;
+            int i0 = Math.max(0, p.ix(x - rad)), i1 = Math.min(p.N - 1, p.ix(x + rad));
+            int k0 = Math.max(0, p.iz(z - rad)), k1 = Math.min(p.N - 1, p.iz(z + rad));
+            for (int t = 0; t < 2; t++) {
+                for (int i = i0; i <= i1; i++) for (int k = k0; k <= k1; k++) {
+                    int c = i * p.N + k;
+                    if (p.keep[t][c] == 0 || p.open[t][c] <= 0 || p.F[t][c] >= y - 2 || p.C[t][c] <= y) continue;
+                    if (Math.hypot(p.px(i) - x, p.pz(k) - z) > rad + NetDark.G * 0.71) continue;
+                    return true;
+                }
             }
             return false;
         }
 
         boolean clearShaft(Shaft s, int ca, int cb) {
             if (n.dark != null && n.dark.hit(s.x, s.z, s.r + 3, s.y0 - 2, s.y1 + 2, darkOf(ca), darkOf(cb))) return false;
+            // the rift and the caverns (Blue), as for a way (clear): no stage stands over the rift's void or in a
+            // cavern's air, where its rim and the floors at its foot and its top hung, and none comes near the rift
+            // but by its own canyon node or room
+            if (!n.canyons.isEmpty() || n.dark != null) {
+                double rim = s.r + 1.5;
+                if (overRift(s.x, s.z, rim, s.foot - 3) || overRift(s.x, s.z, rim, s.top - 3) || overDark(s.x, s.z, rim, s.top - 3)) return false;
+                if (!n.canyons.isEmpty() && !nearOwnEnd(s.x, s.z, ca, cb, false) && nearRift(s.x, s.z, s.r, s.foot - 3, s.y1)) return false;
+            }
             for (Chamber c : n.ch) {
                 if (!c.keep || c.id == ca || c.id == cb || c.kind == Kind.CANYON || c.dark >= 0) continue;
                 if (Math.hypot(s.x - c.x, s.z - c.z) > c.R() + s.r + 5) continue;

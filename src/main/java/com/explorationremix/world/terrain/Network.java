@@ -1105,16 +1105,12 @@ public final class Network {
     static final double PILLAR_END_MARGIN = 2;
 
     /**
-     * How many of an end's columns (blocks) must stay in rock for a pillar to be held there, by its foot in the floor
-     * or its top in the roof: more than the few columns of a thin neck, which the interpolation can cut.
+     * What share of an end's columns an open span must lay bare for the pillar to go, unless one of them lies within
+     * the pillar's radius of its centre. Fewer, all out on the flare of its foot or top, leave a lip over the void on an
+     * end the rock still holds: a pillar the rift only grazes stands. (For a straight edge of the void the share and
+     * the radius agree: a fifth of the end's disc reaches about one radius in from its rim.)
      */
-    static final int PILLAR_HELD = 25;
-
-    /**
-     * How deep (blocks) open space must reach under a way's floor for the floor to hang there: the density's 8-block
-     * vertical step fills a shallower gap with rock.
-     */
-    static final double HANG_DEPTH = 8;
+    static final double PILLAR_BARED_SHARE = 0.2;
 
     /**
      * The deep dark pillars a Blue Reaches cell does not stand ({@link NetDark.Plan#drops}): those the rift, or the
@@ -1122,13 +1118,14 @@ public final class Network {
      * and the rift opens far below and above both, so a pillar inside it floats, or hangs or stands with a sawn-off end
      * (until 0.5.1 the view breaker's spires tied the worst of them to the rift's floor and ceiling; Taran had the
      * spires go, 2026-11-02, for the long views and the natural walls). The rift's own shape stays as it is: carving
-     * the pillars with it would leave slivers and half columns at its edge instead. A pillar goes when, at any column
-     * it could cover (within 2.5 radii, where its tier opens, whichever pillar is nearest there), the rift's open span
-     * (as canyonCol carves it) or the hall's holds the block under its foot or over its top, within
-     * {@link #PILLAR_END_MARGIN}. A pillar the rift only passes beside, or whose ends stay in rock, stands as before,
-     * and so does every pillar away from the rift and the hall. One more stands, bare end and all: a pillar held by its
-     * other end ({@link #PILLAR_HELD}) that holds up a way's floor over the void ({@link #holdsWayFloor}), which
-     * would hang in mid-air without it.
+     * the pillars with it would leave slivers and half columns at its edge instead. A pillar goes when the rift's open
+     * span (as canyonCol carves it) or the hall's lays one of its ends bare ({@link #pillarBared}): holds the block
+     * under its foot or over its top, within {@link #PILLAR_END_MARGIN}, at a column of that end within the pillar's
+     * radius of its centre, or at {@link #PILLAR_BARED_SHARE} of the end's columns (those its foot's or top's disc
+     * covers, within 2.5 radii, where its tier opens, whichever pillar is nearest there). So every pillar left stands
+     * on, and hangs from, rock over most of both ends. A pillar the rift only passes beside, or grazes, stands as
+     * before, and so does every pillar away from the rift and the hall. No pillar is needed to hold up a way's floor:
+     * the ways keep off the rift's void and the caverns' air (NetPlanner's clear and darkDoor).
      *
      * <p>A cell only drops pillars whose centre lies at least 2.5 of the tier's largest radii inside it: no column of
      * another cell can see such a pillar (neither its rock nor its being nearer than one whose rock would reach the
@@ -1137,7 +1134,7 @@ public final class Network {
      * rift's centre line keeps 72, and the rift opens at most its half width (42 at most with the default layers) and
      * 2 more from it, so it may come as near as 28 blocks to the edge in theory; measured over 240 cells it came no
      * nearer than 36, and none of the 7,477 pillars those cells kept by their edges had an end it laid bare. Runs as
-     * the plan's last step, when the rift, the hall, the regions kept and the ways are final.
+     * the plan's last step, when the rift, the hall and the regions kept are final.
      */
     void dropExposedPillars(Net n) {
         NetDark.Plan p = n.dark;
@@ -1150,7 +1147,6 @@ public final class Network {
         if (rift != null) for (double h : rift.riftHalf) riftHalf = Math.max(riftHalf, h);
         double x0 = n.cx * cell, z0 = n.cz * cell;
         double[] pc = new double[3], tc = new double[2], span = new double[2], tmp = new double[6];
-        int[] ends = new int[4];
         long[] out = new long[16];
         int no = 0;
         for (int t = 0; t < 2; t++) {
@@ -1159,9 +1155,7 @@ public final class Network {
                 for (int gz = (int) Math.floor((z0 + inset) / grid) - 1; gz * grid <= z0 + cell - inset; gz++) {
                     if (!dark.gridPillar(t, gx, gz, pc)) continue;
                     if (pc[0] < x0 + inset || pc[0] > x0 + cell - inset || pc[1] < z0 + inset || pc[1] > z0 + cell - inset) continue;
-                    if (!pillarEnds(p, t, pc, rift, riftHalf, halls, tc, span, tmp, ends)) continue;
-                    boolean held = ends[0] - ends[1] >= PILLAR_HELD || ends[2] - ends[3] >= PILLAR_HELD;
-                    if (held && holdsWayFloor(n, p, t, pc, rift, halls, tc, span, tmp)) continue;
+                    if (!pillarBared(p, t, pc, rift, riftHalf, halls, tc, span, tmp)) continue;
                     if (no == out.length) out = Arrays.copyOf(out, no * 2);
                     out[no++] = NetDark.pillarKey(t, gx, gz);
                 }
@@ -1172,19 +1166,21 @@ public final class Network {
     }
 
     /**
-     * Whether the rift or a hall would lay bare the foot or the top of pillar pc = {x, z, radius} of tier t; ends =
-     * {columns its foot covers, how many of them are bared, the same for its top} (all 0 away from the rift and the
-     * halls).
+     * Whether the rift or a hall lays the foot or the top of pillar pc = {x, z, radius} of tier t bare enough for it to
+     * go ({@link #dropExposedPillars}): at a column of that end within the pillar's radius of its centre, or at
+     * {@link #PILLAR_BARED_SHARE} of the end's columns.
      */
-    private boolean pillarEnds(NetDark.Plan p, int t, double[] pc, Route rift, double riftHalf, List<Chamber> halls,
-                               double[] tc, double[] span, double[] tmp, int[] ends) {
-        Arrays.fill(ends, 0);
+    private boolean pillarBared(NetDark.Plan p, int t, double[] pc, Route rift, double riftHalf, List<Chamber> halls,
+                                double[] tc, double[] span, double[] tmp) {
         double cx = pc[0], cz = pc[1], pr = pc[2], reach = NetDark.PILLAR_REACH * pr;
         // the rift opens only within its half width + 2 of the centre line (ledge noise), the hall inside its R()
         boolean nearRift = rift != null && rift.nearest(cx, cz, tmp) && tmp[0] - reach < riftHalf + 4;
         boolean nearHall = false;
         for (Chamber c : halls) if (Math.hypot(cx - c.x, cz - c.z) < c.R() + reach + 4) nearHall = true;
         if (!nearRift && !nearHall) return false;
+        // per end, foot then top: the columns it covers, how many of them are bared, and whether one within pr is
+        int footN = 0, footBared = 0, topN = 0, topBared = 0;
+        boolean footCore = false, topCore = false;
         for (int x = (int) Math.floor(cx - reach); x <= (int) Math.ceil(cx + reach); x++) {
             for (int z = (int) Math.floor(cz - reach); z <= (int) Math.ceil(cz + reach); z++) {
                 double pd = Math.hypot(x - cx, z - cz);
@@ -1212,151 +1208,22 @@ public final class Network {
                     footBare |= endBared(lo, hi, F, C, foot, false);
                     topBare |= endBared(lo, hi, F, C, false, top);
                 }
-                if (foot) { ends[0]++; if (footBare) ends[1]++; }
-                if (top) { ends[2]++; if (topBare) ends[3]++; }
+                if (foot) { footN++; if (footBare) { footBared++; footCore |= pd < pr; } }
+                if (top) { topN++; if (topBare) { topBared++; topCore |= pd < pr; } }
             }
         }
-        return ends[1] + ends[3] > 0;
+        return endLaidBare(footN, footBared, footCore) || endLaidBare(topN, topBared, topCore);
+    }
+
+    /** True when an end's bared columns (of cols it covers) reach within the pillar's radius or make up its bared share. */
+    static boolean endLaidBare(int cols, int bared, boolean core) {
+        return bared > 0 && (core || bared >= PILLAR_BARED_SHARE * cols);
     }
 
     /** True when an open span lo..hi reaches the block under a pillar's foot (F - 3) or over its top (C + 3). */
     static boolean endBared(double lo, double hi, double F, double C, boolean foot, boolean top) {
         double m = PILLAR_END_MARGIN;
         return (foot && lo < F - 3 + m && hi > F - 3 - m) || (top && hi > C + 3 - m && lo < C + 3 + m);
-    }
-
-    /**
-     * True when pillar pc = {x, z, radius} of tier t holds up a way's floor: somewhere in its disc its rock meets, or
-     * comes within a block of, a way's floor slab with the rift's open span or a hall's under it ({@link #openUnder}),
-     * and that floor rests on nothing else ({@link #floorHangs}). A deep dark door is
-     * picked on its tier's floor as the raster has it, which knows nothing of the rift, and the way checks let a way
-     * pass the rift near its own rooms, so a door, its inner walk and the first stage of the climb from it to the
-     * rift's path can stand in the rift's void with a pillar the only rock they touch.
-     */
-    private boolean holdsWayFloor(Net n, NetDark.Plan p, int t, double[] pc, Route rift, List<Chamber> halls,
-                                  double[] tc, double[] span, double[] tmp) {
-        double cx = pc[0], cz = pc[1], pr = pc[2], reach = NetDark.PILLAR_REACH * pr;
-        List<Way> near = new ArrayList<>();
-        for (Way wy : n.ways) {
-            if (wy.n < 2 || wy.maxX + 1 <= cx - reach || wy.minX - 1 >= cx + reach) continue;
-            if (wy.maxZ + 1 > cz - reach && wy.minZ - 1 < cz + reach) near.add(wy);
-        }
-        if (near.isEmpty()) return false;
-        List<Way> resting = new ArrayList<>();
-        double[] at = new double[4];
-        for (int x = (int) Math.floor(cx - reach); x <= (int) Math.ceil(cx + reach); x++) {
-            for (int z = (int) Math.floor(cz - reach); z <= (int) Math.ceil(cz + reach); z++) {
-                double pd = Math.hypot(x - cx, z - cz);
-                if (pd >= reach) continue;
-                double o = dark.open(t, x, z);
-                if (o <= 0) continue;
-                double band = NetDark.band(NetDark.seamDist(x + 0.5, z + 0.5, cell));
-                if (!dark.tierAt(p, t, x, z, o, band, NetDark.fade(p.geodes, x, z), tc)) continue;
-                double F = tc[0], C = tc[1];
-                // the pillar's rock in this column (pillarR > pd): up from F - 3 to footHi and down from C + 3 to topLo,
-                // which meet where the pillar's waist is thicker than pd
-                double q2 = (pd / pr - 0.75) / 0.9, mid = (F + C) * 0.5, half = Math.max(4, (C - F) * 0.5);
-                double q = Math.sqrt(Math.max(0, q2));
-                double footHi = Math.min(C + 3, mid - half * q), topLo = Math.max(F - 3, mid + half * q);
-                boolean foot = footHi >= F - 3, top = topLo <= C + 3;
-                if (!foot && !top) continue;
-                for (Way wy : near) {
-                    if (resting.contains(wy) || !nearestOnWay(wy, x, z, at) || at[0] >= slabHalf(wy, at[3]) + 1) continue;
-                    // the slab's rock, floor - slab .. floor, and a block round it
-                    double lo = at[1] - at[2] - 1, hi = at[1] + 1;
-                    if (!(foot && lo < footHi && hi > F - 3) && !(top && hi > topLo && lo < C + 3)) continue;
-                    if (!openUnder(rift, halls, x, z, at[1] - at[2] - 1, span, tmp)) continue;
-                    if (floorHangs(n, p, wy, rift, halls, tc, span, tmp)) return true;
-                    resting.add(wy);
-                }
-            }
-        }
-        return false;
-    }
-
-    /**
-     * True when way wy's floor, with the floors of the ways that meet it at its level, rests on nothing: under every
-     * point of them lies open space (the rift's, a hall's or a deep dark tier's: {@link #openUnder},
-     * {@link #tierOpenUnder}), and none ends at a rift node, whose floor is the rift's own path.
-     */
-    private boolean floorHangs(Net n, NetDark.Plan p, Way start, Route rift, List<Chamber> halls, double[] tc,
-                               double[] span, double[] tmp) {
-        List<Way> run = new ArrayList<>();
-        run.add(start);
-        double[] at = new double[4];
-        for (int k = 0; k < run.size(); k++) {
-            Way wy = run.get(k);
-            for (int e : new int[]{wy.a, wy.b}) if (e >= 0 && n.ch.get(e).kind == Kind.CANYON) return false;
-            for (int i = 0; i < wy.n; i++) {
-                double x = wy.x[i], z = wy.z[i], y = wy.f[i] - wy.slab[i] - 1;
-                if (!openUnder(rift, halls, x, z, y, span, tmp) && !tierOpenUnder(p, x, z, y, tc)) return false;
-            }
-            for (Way o : n.ways) {
-                if (o.n < 2 || run.contains(o) || o.maxX < wy.minX - 6 || o.minX > wy.maxX + 6) continue;
-                if (o.maxZ < wy.minZ - 6 || o.minZ > wy.maxZ + 6) continue;
-                if (meets(wy, o, at) || meets(o, wy, at)) run.add(o);
-            }
-        }
-        return true;
-    }
-
-    /** True when an end of way a lies on way b's floor slab, within a block and a half of its level. */
-    static boolean meets(Way a, Way b, double[] at) {
-        for (int i : new int[]{0, a.n - 1}) {
-            if (nearestOnWay(b, a.x[i], a.z[i], at) && at[0] < slabHalf(b, at[3]) + slabHalf(a, a.w[i])
-                    && Math.abs(at[1] - a.f[i]) < 1.5) return true;
-        }
-        return false;
-    }
-
-    /** As {@link #openUnder}, for the deep dark tiers' open spans. */
-    private boolean tierOpenUnder(NetDark.Plan p, double x, double z, double y, double[] tc) {
-        double band = NetDark.band(NetDark.seamDist(x + 0.5, z + 0.5, cell)), fade = -1;
-        for (int t = 0; t < 2; t++) {
-            double o = dark.open(t, x, z);
-            if (o <= 0) continue;
-            if (fade < 0) fade = NetDark.fade(p.geodes, x, z);
-            if (dark.tierAt(p, t, x, z, o, band, fade, tc) && tc[0] < y - HANG_DEPTH && tc[1] > y - PILLAR_END_MARGIN) return true;
-        }
-        return false;
-    }
-
-    /** The point of way wy's line nearest (x, z): out = {distance, floor, slab, width} there; false for a way of one point. */
-    static boolean nearestOnWay(Way wy, double x, double z, double[] out) {
-        if (wy.n < 2) return false;
-        double best = 1e18;
-        for (int i = 0; i + 1 < wy.n; i++) {
-            double ax = wy.x[i], az = wy.z[i], dx = wy.x[i + 1] - ax, dz = wy.z[i + 1] - az;
-            double l2 = dx * dx + dz * dz;
-            double s = l2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
-            double ex = ax + dx * s - x, ez = az + dz * s - z, d2 = ex * ex + ez * ez;
-            if (d2 < best) {
-                best = d2;
-                out[1] = wy.f[i] + (wy.f[i + 1] - wy.f[i]) * s;
-                out[2] = wy.slab[i] + (wy.slab[i + 1] - wy.slab[i]) * s;
-                out[3] = wy.w[i] + (wy.w[i + 1] - wy.w[i]) * s;
-            }
-        }
-        out[0] = Math.sqrt(best);
-        return true;
-    }
-
-    /**
-     * True when the rift's open span (as canyonCol carves it) or a hall's holds column (x, z) from height y, or from no
-     * more than {@link #PILLAR_END_MARGIN} under it, down at least {@link #HANG_DEPTH} under y.
-     */
-    private boolean openUnder(Route rift, List<Chamber> halls, double x, double z, double y, double[] span, double[] tmp) {
-        double m = PILLAR_END_MARGIN;
-        if (rift != null && rift.nearest(x, z, tmp)) {
-            double s = tmp[1];
-            if (riftCut(rift, x, z, s, tmp[2], rift.at(rift.riftTop, s), rift.at(rift.riftHalf, s), span)
-                    && span[0] < y - HANG_DEPTH && span[1] > y - m) return true;
-        }
-        for (Chamber c : halls) {
-            double e = e(c, x, z);
-            if (e < 1 && floorAt(c, e, x, z) < y - HANG_DEPTH && ceilAt(c, e, x, z) > y - m) return true;
-        }
-        return false;
     }
 
     private void canyonCol(LCol lc, Route r, double x, double z) {

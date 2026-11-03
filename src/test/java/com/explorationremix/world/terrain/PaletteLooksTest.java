@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The 0.5.1 looks of the two bottom layers (Palette.shell): natural stone only, no stripe at the high-water mark, the
  * Wasteland's and the Galleries' looks blended over ragged rows at the join, magma only by the lava, crying obsidian
  * sparingly, columns that read one by one, no magma shore where the Wasteland keeps its lava off an opening; and the
- * rock of layers 0 and 1 and of the upper caves exactly as 0.5.0 made it.
+ * rock of layers 0 and 1 and of the upper caves exactly as 0.5.0 made it (but where the Blue Reaches' ways moved).
  */
 class PaletteLooksTest {
     private static final long SEED = 8675309L;
@@ -44,7 +44,10 @@ class PaletteLooksTest {
 
     @Test
     void layersZeroAndOneAndTheUpperCavesKeepTheirRock() {
-        // 0.5.0's answers (IdentityHash over a2c3d73's classes, seed 8675309; the same for seed 12345 against its own)
+        // 0.5.0's answers (IdentityHash over a2c3d73's classes, seed 8675309; the same for seed 12345 against its own),
+        // but for the public path's: there the shell follows the plan's biomes, and in 0.5.1 the Blue Reaches' ways and
+        // deep dark doors kept off the rift's void and the caverns' air, which changes the rock at 22 of layer 0's 60,000
+        // samples (layer 1's and the bands' are 0.5.0's)
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
@@ -86,7 +89,7 @@ class PaletteLooksTest {
         }
         assertEquals("b9eaef6541e0fcd6", String.format("%016x", hBiome), "layers 0 and 1, by biome");
         assertEquals("2604e01a1b4b2ee3", String.format("%016x", hInterior), "layers 0 and 1, interior");
-        assertEquals("49776a1ae4fb6b8f", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
+        assertEquals("4913fabc7a673e9d", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
         assertEquals("f1e881cc466dc49d", String.format("%016x", hUpper), "the upper caves");
     }
 
