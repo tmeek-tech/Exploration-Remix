@@ -24,7 +24,7 @@ class PlanSafetyTest {
     void unhook() { NetPlanner.failHook = null; }
 
     /**
-     * Every attempt of every planned layer's plan in cell 0,0 throws: each plan is the two landings and nothing else, the
+     * Every attempt of every planned layer's plan in cell 0,0 throws: each plan is its landings and nothing else, the
      * fault is recorded, the neighbours plan as ever, and every query of the terrain over the cell and its eight
      * neighbours answers, in every layer (density, fine density, fluid, biome, the materials' and features' queries, the
      * walking lines, climbs, vents, and the dev tools' places and descriptions). In the cell, every block of a planned
@@ -44,8 +44,11 @@ class PlanSafetyTest {
             String tg = "layer " + li + " cell 0,0";
             if (!n.failed || n.attempts != NetPlanner.ATTEMPTS) fails.add(tg + ": failed " + n.failed + " after " + n.attempts + " attempts");
             if (!NetPlanner.FAULTS.contains(ROCK_SEED + "/" + li + "/0/0")) fails.add(tg + ": the fault is not recorded");
-            if (n.ch.size() != 2 || n.entry < 0 || n.exit < 0 || !n.ch.get(n.entry).landing() || !n.ch.get(n.exit).landing())
-                fails.add(tg + ": " + n.ch.size() + " chambers, not the two landings");
+            // the two landings, and in the Blue Reaches perhaps the other den gates' lower landings too
+            int most = li == Terrain.BLUE ? t.plans.denGates(0, 0).size() + 1 : 2;
+            if (n.ch.size() < 2 || n.ch.size() > most || n.entry < 0 || n.exit < 0 || !n.ch.get(n.entry).landing() || !n.ch.get(n.exit).landing()
+                    || !n.ch.stream().allMatch(Chamber::landing))
+                fails.add(tg + ": " + n.ch.size() + " chambers, not just its landings");
             if (!n.edges.isEmpty() || !n.ways.isEmpty() || !n.shafts.isEmpty()
                     || !n.canyons.isEmpty() || n.dark != null || !n.portals.isEmpty())
                 fails.add(tg + ": the plan is not empty");
@@ -95,14 +98,16 @@ class PlanSafetyTest {
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
     }
 
-    /** Near one of the failed cell's landings or the gates' passages, which are carved whatever the plan. */
+    /**
+     * Near one of the failed cell's landings or the gates' passages, which are carved whatever the plan: band 1's are
+     * every den gate's ({@link Plans#denGates}).
+     */
     static boolean nearLanding(Terrain t, Net n, int li, int x, int z) {
-        for (int id : new int[]{n.entry, n.exit}) {
-            Chamber c = n.ch.get(id);
-            if (Math.hypot(x - c.x, z - c.z) < c.rx + 12) return true;
-        }
+        for (Chamber c : n.ch)
+            if (c.landing() && Math.hypot(x - c.x, z - c.z) < c.rx + 12) return true;
         for (int band = li + 1; band <= Math.min(li + 2, t.shape.layerCount); band++)
-            if (t.plans.gate(band, 0, 0).overlaps(x, z, x, z, 8)) return true;
+            for (Plans.Gate g : band == 1 ? t.plans.denGates(0, 0) : List.of(t.plans.gate(band, 0, 0)))
+                if (g.overlaps(x, z, x, z, 8)) return true;
         return false;
     }
 

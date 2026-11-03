@@ -1034,6 +1034,10 @@ def build_features():
     feature("climb_vines", "top_layer_modification", DEEP, {"type": f"{MOD}:climb_vines", "config": {}}, [])
     feature("shelf_vines", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:shelf_vines", "config": {}}, [])
     feature("open_way", "top_layer_modification", DEEP, {"type": f"{MOD}:open_way", "config": {}}, [])
+    # The Mossback lairs on the den gates' upper landings (DenLairFeature): each den, and the bones and scraps within 30
+    # blocks of it, once the ways are open. Band 1 is the Deep Blue Rift under every column, so this reaches every
+    # chunk, and the feature works out from the plan which chunks hold a lair.
+    feature("den_lair", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:den_lair", "config": {}}, [])
     # The Galleries' lava glow (HallGlowFeature, after everything else): invisible light along the rock above the flood
     # band, one try in every 4-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
     # rock near black. 0.5.1, "brightly lit" but not flat: lit from the lava and the floor up. Level 15 just over the

@@ -8,7 +8,7 @@ import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.world.level.levelgen.DensityFunction;
 
 /**
- * Carves out of the pack's own terrain above its old floor: the first gate's upper landing and its ramp, the Silver
+ * Carves out of the pack's own terrain above its old floor: every den gate's upper landing and its ramp, the Silver
  * Fern Rift or Ivory Root Cavern of each cell, and the entrances' chambers and tunnels near the surface. Combined with
  * the pack's density through {@code min}, so it only ever removes stone. Interpolated like the pack's density;
  * {@link UpperFine} puts the thin parts back block by block.

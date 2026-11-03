@@ -61,12 +61,85 @@ class TerrainTest {
                 for (int i = 0; i <= 200; i++) {
                     double tt = i / 200.0;
                     int x = (int) Math.floor(g.px(tt)), y = (int) Math.floor(g.py(tt)), z = (int) Math.floor(g.pz(tt));
-                    double d = y >= t.shape.packFloor ? Math.min(t.rawDensity(x, y, z), t.gateOneCarve(x, y, z)) : t.rawDensity(x, y, z);
+                    double d = y >= t.shape.packFloor ? Math.min(t.rawDensity(x, y, z), t.denGateCarve(x, y, z)) : t.rawDensity(x, y, z);
                     assertTrue(d < 0, "gate " + b + " blocked at t=" + tt + " (" + x + " " + y + " " + z + ") seed " + seed + " d=" + d);
                     if (y < t.shape.packFloor) assertEquals(Terrain.AIR, t.fluidAt(x, y, z), "gate " + b + " flooded at " + x + " " + y + " " + z);
                 }
             }
         }
+    }
+
+    /**
+     * Every den gate is a way down from the Upper Caves ({@link Plans#denGates}): its upper landing's floor and its
+     * ramp up into the pack's caves are carved out of the pack's terrain and dry, and its passage is open and dry from
+     * the landing through band 1. (The end in the Blue Reaches, under the band, is the network's to carve.)
+     */
+    @Test
+    void denGatesAreOpenFromTheirLandingThroughBandOne() {
+        int gates = 0;
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            Shape s = t.shape;
+            for (int[] c : CELLS) for (Plans.Gate g : t.plans.denGates(c[0], c[1])) {
+                gates++;
+                String tg = "den gate " + g.den + " of cell " + c[0] + "," + c[1] + " seed " + seed;
+                for (int i = 0; i <= 200; i++) {
+                    double tt = i / 200.0;
+                    int x = (int) Math.floor(g.px(tt)), y = (int) Math.floor(g.py(tt)), z = (int) Math.floor(g.pz(tt));
+                    if (y < s.bandBottom(1)) break;
+                    double d = y >= s.packFloor ? Math.min(t.rawDensity(x, y, z), t.upperCarve(x, y, z)) : t.rawDensity(x, y, z);
+                    assertTrue(d < 0, tg + ": the passage is blocked at t=" + tt + " (" + x + " " + y + " " + z + ") d=" + d);
+                    if (y < s.packFloor) assertEquals(Terrain.AIR, t.fluidAt(x, y, z), tg + ": the passage is flooded at " + x + " " + y + " " + z);
+                }
+                // feet and head over the landing's floor, at the mouth of the passage and on the ring round it
+                for (int k = 0; k < 8; k++) for (double r : new double[]{0, 4, 8}) {
+                    int x = (int) Math.floor(g.ux + Math.cos(k * Math.PI / 4) * r), z = (int) Math.floor(g.uz + Math.sin(k * Math.PI / 4) * r);
+                    for (int y = (int) g.uFloor + 2; y <= g.uFloor + 3; y++) {
+                        assertTrue(t.upperCarve(x, y, z) < 0, tg + ": the landing is rock at " + x + " " + y + " " + z);
+                        assertEquals(Terrain.AIR, t.upperFluid(x, y, z), tg + ": the landing is not dry at " + x + " " + y + " " + z);
+                    }
+                }
+                Route.Link ramp = t.plans.ramp(g);
+                for (int i = 0; i <= 100; i++) {
+                    double q = i / 100.0;
+                    int x = (int) Math.floor(ramp.x1() + (ramp.x2() - ramp.x1()) * q), y = (int) Math.floor(ramp.y1() + (ramp.y2() - ramp.y1()) * q),
+                            z = (int) Math.floor(ramp.z1() + (ramp.z2() - ramp.z1()) * q);
+                    assertTrue(t.upperCarve(x, y, z) < 0, tg + ": the ramp is blocked at " + x + " " + y + " " + z);
+                    assertEquals(Terrain.AIR, t.upperFluid(x, y, z), tg + ": the ramp is not dry at " + x + " " + y + " " + z);
+                }
+            }
+        }
+        assertTrue(gates >= SEEDS.length * CELLS.length * 3, "only " + gates + " den gates checked");
+    }
+
+    /**
+     * Band 1 and the den gates' carve look only at the den gates whose bounding boxes reach a column, found once per
+     * column ({@link Terrain.Column}): every answer is the one trying every den gate of the cell everywhere gives, with
+     * the columns visited in any order.
+     */
+    @Test
+    void denGateShortcutsChangeNothing() {
+        Terrain fast = terrain(SEEDS[1]), slow = terrain(SEEDS[1]);
+        slow.everyDenGate = true;
+        Shape s = fast.shape;
+        java.util.List<Plans.Gate> gates = new java.util.ArrayList<>();
+        for (int cx = -1; cx <= 1; cx++) for (int cz = -1; cz <= 1; cz++) gates.addAll(fast.plans.denGates(cx, cz));
+        java.util.Random r = new java.util.Random(5);
+        int open = 0, carved = 0;
+        for (int k = 0; k < 40000; k++) {
+            // round a landing and its passage, or out as far as the ramps reach
+            Plans.Gate g = gates.get(r.nextInt(gates.size()));
+            int reach = r.nextBoolean() ? 20 : 80;
+            int x = (int) Math.floor(g.ux) + r.nextInt(2 * reach + 1) - reach, z = (int) Math.floor(g.uz) + r.nextInt(2 * reach + 1) - reach;
+            int y = s.bandBottom(1) + r.nextInt(s.packFloor + 57 - s.bandBottom(1));
+            double d = fast.rawDensity(x, y, z), cv = fast.denGateCarve(x, y, z);
+            assertEquals(slow.rawDensity(x, y, z), d, "density at " + x + " " + y + " " + z);
+            assertEquals(slow.denGateCarve(x, y, z), cv, "the den gates' carve at " + x + " " + y + " " + z);
+            assertEquals(slow.upperFluid(x, y, z), fast.upperFluid(x, y, z), "the fluid at " + x + " " + y + " " + z);
+            if (d < 0) open++;
+            if (cv < 0) carved++;
+        }
+        assertTrue(open > 100 && carved > 500, "too few samples in the gates: " + open + " open in the bands, " + carved + " carved above");
     }
 
     @Test
@@ -79,8 +152,12 @@ class TerrainTest {
             if (t.shape.bandThickness(b) == 0) continue;   // no band: the Wasteland opens into the Galleries
             int x = r.nextInt(1800) - 900, z = r.nextInt(1800) - 900;
             int y = t.shape.bandBottom(b) + r.nextInt(t.shape.bandThickness(b));
-            Plans.Gate g = t.plans.gate(b, t.plans.cellOf(x), t.plans.cellOf(z));
-            if (g.passageXZ(x, y, z) < g.radius * 2 + 6) continue;
+            int cx = t.plans.cellOf(x), cz = t.plans.cellOf(z);
+            // band 1 has every den gate of the cell, the deeper bands one gate each
+            boolean near = false;
+            for (Plans.Gate g : b == 1 ? t.plans.denGates(cx, cz) : java.util.List.of(t.plans.gate(b, cx, cz)))
+                if (g.passageXZ(x, y, z) < g.radius * 2 + 6) near = true;
+            if (near) continue;
             if (t.rawDensity(x, y, z) <= 0) open++;
         }
         assertEquals(0, open, "open blocks inside bands away from the passages");
@@ -93,7 +170,8 @@ class TerrainTest {
             Terrain t = terrain(seed);
             for (int[] c : CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
                 Net n = t.network.net(li, c[0], c[1]);
-                Plans.Gate en = t.plans.gate(li + 1, c[0], c[1]);
+                // the ways in: every den gate's passage comes down into the Blue Reaches
+                java.util.List<Plans.Gate> en = li == Terrain.BLUE ? t.plans.denGates(c[0], c[1]) : java.util.List.of(t.plans.gate(li + 1, c[0], c[1]));
                 Plans.Gate ex = li + 2 <= t.shape.layerCount ? t.plans.gate(li + 2, c[0], c[1]) : null;
                 int[] counts = new int[2];
                 double cell = t.network.cell, x0 = c[0] * cell, z0 = c[1] * cell;
@@ -154,11 +232,13 @@ class TerrainTest {
      * One point of a walking line: the feet (at the first block over the floor line, or one higher on a step up) and the
      * head are open and dry; counts the point, and whether there is rock under the feet or one block lower.
      */
-    private static void wayPoint(Terrain t, int li, Plans.Gate en, Plans.Gate ex, double px, double floor, double pz, String what, long seed, int[] counts) {
+    private static void wayPoint(Terrain t, int li, java.util.List<Plans.Gate> en, Plans.Gate ex, double px, double floor, double pz, String what, long seed,
+                                 int[] counts) {
         // the block whose column is nearest the line
         int x = (int) Math.round(px), z = (int) Math.round(pz);
         int feet = (int) Math.ceil(floor - 1e-9);
-        if (en.passageXZ(x, feet, z) < en.radius * 1.45 + 3 || (ex != null && ex.passageXZ(x, feet, z) < ex.radius * 1.45 + 3)) return;
+        for (Plans.Gate g : en) if (g.passageXZ(x, feet, z) < g.radius * 1.45 + 3) return;
+        if (ex != null && ex.passageXZ(x, feet, z) < ex.radius * 1.45 + 3) return;
         if (t.rawDensity(x, feet, z) >= 0) feet++;
         for (int y = feet; y <= feet + 1; y++) {
             assertTrue(t.rawDensity(x, y, z) < 0, what + " in layer " + li + " blocked at " + x + " " + y + " " + z + " seed " + seed);
@@ -289,8 +369,10 @@ class TerrainTest {
 
     /**
      * Spaces are sized to each biome's picture, not grown with depth (Taran, 2026-10-28): the Deep Blue Rift keeps its
-     * full depth inside the shorter Blue Reaches, and the Basalt Galleries keep their tall caverns. The noise layers'
-     * open blocks take their own biomes: the Wasteland's one of its two, the Galleries' one of their five.
+     * full depth inside the shorter Blue Reaches, and the Basalt Galleries keep their tall caverns. The rift is looked for
+     * in three cells: where 0.2.0's rift would cut a den gate's landing (0.6.1) it is laid on another line, and there it
+     * can stand a little less deep (136 in cell 0,0 of the first seed). The noise layers' open blocks take their own
+     * biomes: the Wasteland's one of its two, the Galleries' one of their five.
      */
     @Test
     void spacesFollowTheirBiomes() {
@@ -303,16 +385,18 @@ class TerrainTest {
         java.util.List<String> strays = new java.util.ArrayList<>();
         for (int li = 0; li < t.shape.layerCount; li++) {
             java.util.Set<DeepBiome> mine = own.get(li);
-            for (int x = 0; x < 600; x += 6) for (int z = 0; z < 600; z += 6) {
-                int run = 0;
-                for (int y = t.shape.bottom(li); y <= t.shape.top(li); y++) {
-                    if (t.rawDensity(x, y, z) < 0) {
-                        run++;
-                        tallest[li] = Math.max(tallest[li], run);
-                        if (mine != null && !mine.contains(t.biomeAt(x, y, z)) && strays.size() < 10) strays.add(x + " " + y + " " + z + ": " + t.biomeAt(x, y, z));
-                    } else run = 0;
+            int[][] cells = li == Terrain.BLUE ? new int[][]{{0, 0}, {-1, 0}, {0, -1}} : new int[][]{{0, 0}};
+            for (int[] c : cells)
+                for (int x = c[0] * 600; x < c[0] * 600 + 600; x += 6) for (int z = c[1] * 600; z < c[1] * 600 + 600; z += 6) {
+                    int run = 0;
+                    for (int y = t.shape.bottom(li); y <= t.shape.top(li); y++) {
+                        if (t.rawDensity(x, y, z) < 0) {
+                            run++;
+                            tallest[li] = Math.max(tallest[li], run);
+                            if (mine != null && !mine.contains(t.biomeAt(x, y, z)) && strays.size() < 10) strays.add(x + " " + y + " " + z + ": " + t.biomeAt(x, y, z));
+                        } else run = 0;
+                    }
                 }
-            }
         }
         assertTrue(strays.isEmpty(), "open blocks of the noise layers in another biome: " + strays);
         assertTrue(tallest[Terrain.BLUE] > 140, "the Deep Blue Rift is only " + tallest[Terrain.BLUE] + " blocks deep");

@@ -23,10 +23,10 @@ import java.util.List;
 /**
  * Guarantees the ways are open, after every other feature has run. The terrain's density is interpolated in 4x8x4
  * cells, which can pinch a passage that twists through a 16-block band, and other mods' features can drop blocks
- * into it. This pass re-opens, block by block inside each chunk: every gate passage's core, the first gate's ramp up
- * into the pack's caves, a walking corridor along every way of the network (section 12.3), and the open core of every
- * climb. Only blocks you would bump into are removed, so plants, vines and lichen on the path stay; climbable blocks
- * (the climbs' vines) and the rims round the climbs' mouths are never touched.
+ * into it. This pass re-opens, block by block inside each chunk: every gate passage's core (in band 1 every den
+ * gate's), every den gate's ramp up into the pack's caves, a walking corridor along every way of the network (section
+ * 12.3), and the open core of every climb. Only blocks you would bump into are removed, so plants, vines and lichen on
+ * the path stay; climbable blocks (the climbs' vines) and the rims round the climbs' mouths are never touched.
  */
 public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
     public OpenWayFeature(Codec<NoneFeatureConfiguration> codec) { super(codec); }
@@ -43,7 +43,16 @@ public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
         int cellX = plans.cellOf(minX + 8), cellZ = plans.cellOf(minZ + 8);
         Shape s = t.shape;
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        for (int band = 1; band <= s.layerCount; band++) {
+        // Band 1: every den gate's passage, and its ramp up into the pack's caves. A ramp runs far past the box round
+        // its gate's passage and landings, so it is tested on its own.
+        for (int dcx = -1; dcx <= 1; dcx++) for (int dcz = -1; dcz <= 1; dcz++) {
+            for (Plans.Gate g : plans.denGates(cellX + dcx, cellZ + dcz)) {
+                if (g.overlaps(minX, minZ, maxX, maxZ, 24)) any |= carvePassage(level, g, minX, minZ, maxX, maxZ, pos);
+                Route.Link ramp = plans.ramp(g);
+                if (reaches(ramp, 4, minX, minZ, maxX, maxZ)) any |= carveLink(level, ramp, 1.4, minX, minZ, maxX, maxZ, pos);
+            }
+        }
+        for (int band = 2; band <= s.layerCount; band++) {
             // a band with no rows has no gate (since 0.5.1 the Wasteland opens into the Galleries): Plans would still
             // make one, and its passage would be carved down through both layers
             if (s.bandThickness(band) == 0) continue;
@@ -51,7 +60,6 @@ public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
                 Plans.Gate g = plans.gate(band, cellX + dcx, cellZ + dcz);
                 if (!g.overlaps(minX, minZ, maxX, maxZ, 24)) continue;
                 any |= carvePassage(level, g, minX, minZ, maxX, maxZ, pos);
-                if (band == 1) any |= carveLink(level, plans.ramp(g), 1.4, minX, minZ, maxX, maxZ, pos);
             }
         }
         for (int li = 0; li < s.layerCount; li++) {
@@ -110,6 +118,12 @@ public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
             any |= carveBall(level, cx, cy, cz, r, minX, minZ, maxX, maxZ, pos);
         }
         return any;
+    }
+
+    /** Whether the box round a link's two ends, padded, reaches the box minX..maxX, minZ..maxZ. */
+    private static boolean reaches(Route.Link l, double pad, int minX, int minZ, int maxX, int maxZ) {
+        return Math.max(l.x1(), l.x2()) + pad >= minX && Math.min(l.x1(), l.x2()) - pad <= maxX
+                && Math.max(l.z1(), l.z2()) + pad >= minZ && Math.min(l.z1(), l.z2()) - pad <= maxZ;
     }
 
     private static boolean carveLink(WorldGenLevel level, Route.Link l, double shrink, int minX, int minZ, int maxX, int maxZ, BlockPos.MutableBlockPos pos) {
