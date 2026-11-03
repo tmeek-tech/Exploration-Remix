@@ -120,6 +120,9 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     /** How far and how long it may touch nothing (rounding an edge) before it falls (as the Mossback). */
     static final double AIR_REACH = 1.5;
     static final int AIR_GRACE = 40;
+    /** Landed: how far past its run through the air it looks back along its trail for the way its body lay; how much
+     * keeping near that way counts against open rock (in half blocks of it) when it lays its body afresh. */
+    static final double LANDING_LOOK_BACK = 2.0, LANDING_KEEP_WAY = 3.0;
     /** Half blocks of open rock a spawn spot needs behind the head ({@link #openLength}): room for most of its body. */
     public static final int BODY_ROOM = 6;
     /** A patter of feet every this many blocks it runs. */
@@ -355,12 +358,14 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     /**
      * Whether it feels {@code e} against its body: {@code e}'s box against the head's box or a section's, with a clear
-     * line from that part to it (it feels nobody through a door, a pane, bars or rock).
+     * line from that part to it (it feels nobody through a door, a pane, bars or rock). Not by the jaws' box: that
+     * reaches past its head, through a trapdoor it presses on, and a player at its jaws is near by the eyes' clip.
      */
     private boolean touches(Entity e) {
         AABB b = e.getBoundingBox();
         if (getBoundingBox().inflate(0.4).intersects(b) && clearTo(getBoundingBox().getCenter(), e)) return true;
-        for (Section s : sections) if (s.getBoundingBox().inflate(0.4).intersects(b) && clearTo(s.getBoundingBox().getCenter(), e)) return true;
+        for (Section s : sections)
+            if (s.index != JAWS && s.getBoundingBox().inflate(0.4).intersects(b) && clearTo(s.getBoundingBox().getCenter(), e)) return true;
         return false;
     }
 
@@ -698,10 +703,13 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     /**
      * The walkable node (floor, wall or ceiling, not water) whose box would sit nearest {@code p}, within {@code r}
-     * blocks; never reading an unloaded chunk, never in the refuge.
+     * blocks; never reading an unloaded chunk, never in the refuge unless it is in there itself (set down by an egg or a
+     * command: the nearest open spot outside may lie behind the geodes' rock, and roaming the refuge it finds the way
+     * out through its tunnel, never to come back).
      */
     @Nullable
     private BlockPos nodeNear(Vec3 p, int r) {
+        boolean inRefuge = isRefuge(blockPosition());
         int bx = Mth.floor(p.x - 1.0), by = Mth.floor(p.y - 0.35), bz = Mth.floor(p.z - 1.0);
         BlockPos best = null;
         double bestD = Double.MAX_VALUE;
@@ -716,7 +724,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
                     byte k = ClimbNodeEvaluator.classify(level(), x, y, z, 2, 1, 2);
                     if (k < ClimbNodeEvaluator.FLOOR || k == ClimbNodeEvaluator.WATER) continue;
                     BlockPos n = new BlockPos(x, y, z);
-                    if (isRefuge(n.offset(1, 0, 1))) continue;
+                    if (!inRefuge && isRefuge(n.offset(1, 0, 1))) continue;
                     bestD = d;
                     best = n;
                 }
@@ -725,8 +733,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     }
 
     /**
-     * Whether a path runs into the refuge. For one that finds itself in there any path will do: its goals all lie
-     * outside (nodeNear), so one that ends short of its goal, still inside, is on its way out.
+     * Whether a path runs into the refuge. For one that finds itself in there any path will do: it heads for the way
+     * out first and roams the refuge when that is shut, until it is out.
      */
     private boolean crossesRefuge(Path p) {
         if (isRefuge(blockPosition())) return false;
@@ -1100,6 +1108,11 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     /** Its body laid straight behind its head along its rock. */
     private void layTrail(Vec3 up) {
+        layTrail(up, null);
+    }
+
+    /** Its body laid straight from its head along {@code back} on its rock (straight behind its head when null). */
+    private void layTrail(Vec3 up, @Nullable Vec3 back) {
         Vec3 f = feet(up);
         Vec3 fwd = forward;
         if (level().isClientSide) {
@@ -1108,8 +1121,42 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
             fwd = new Vec3(sf.x, sf.y, sf.z);
             if (fwd.lengthSqr() > 1.0E-4) clientForward = fwd.normalize();
         }
-        trail.lay(f.x, f.y, f.z, -fwd.x, -fwd.y, -fwd.z, up.x, up.y, up.z);
+        Vec3 b = back != null ? back : fwd.scale(-1.0);
+        trail.lay(f.x, f.y, f.z, b.x, b.y, b.z, up.x, up.y, up.z);
         placeSections();
+    }
+
+    /**
+     * Landed after a fall or a lunge: the way to lay its body on the rock it landed on. The way its body lay before it
+     * left the rock, flattened onto this rock (its head may have turned in the air, to bolt, so straight behind the head
+     * could put the body on the far side of it, or back into the wall it lunged off); of eight ways along the rock, the
+     * one nearest that with the most open rock behind.
+     */
+    private Vec3 landingBack(Vec3 up) {
+        Vec3 f = feet(up);
+        double[] s = new double[6];
+        trail.sample(airRun + LANDING_LOOK_BACK, s);
+        Vec3 prefer = flatten(new Vec3(s[0] - f.x, s[1] - f.y, s[2] - f.z), up);
+        if (prefer == null) prefer = flatten(forward.scale(-1.0), up);
+        Vec3 a = Math.abs(up.y) > 0.9 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
+        Vec3 b = up.cross(a);
+        if (prefer == null) prefer = a;
+        Vec3 best = prefer;
+        double bestScore = -Double.MAX_VALUE;
+        for (int i = 0; i < 8; i++) {
+            double ang = i * Math.PI / 4.0;
+            Vec3 back = a.scale(Math.cos(ang)).add(b.scale(Math.sin(ang)));
+            double score = openBehind(level(), f, back.scale(-1.0), up) + LANDING_KEEP_WAY * back.dot(prefer);
+            if (score > bestScore) { bestScore = score; best = back; }
+        }
+        return best;
+    }
+
+    /** {@code v} with its part along {@code up} taken out, at unit length; null when little is left. */
+    @Nullable
+    private static Vec3 flatten(Vec3 v, Vec3 up) {
+        Vec3 f = v.subtract(up.scale(v.dot(up)));
+        return f.lengthSqr() > 0.09 ? f.normalize() : null;
     }
 
     /** Where a Skein set down on a climbing node sits: its position (its box's bottom middle) and its rock's side. */
@@ -1348,8 +1395,9 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
             return;
         }
         if (rock != null && airRun > AIR_REACH && (!client || touching(getBoundingBox(), rock))) {
+            Vec3 back = landingBack(up);
             airRun = 0.0;
-            layTrail(up);
+            layTrail(up, back);
             return;
         }
         Vec3 f = feet(up);
