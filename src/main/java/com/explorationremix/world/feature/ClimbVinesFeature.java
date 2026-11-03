@@ -22,10 +22,10 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
  * vines on the wall facing the way out at its top ({@link Network#vineColumn}): it hangs from the first rock over the
  * floor the stage climbs to (at most 16 blocks over it) down through the air to the stage's foot, so a climber steps
  * off its top onto that floor. The vine follows the climb's biome: wisteria by the Lantern Lake, ember vines in the
- * Ember Gardens and the Wasteland (which have no climbing plant of their own), blue glow vines in the Blue Reaches and
- * dusk vines in the deep dark. Nothing grows in the Basalt Galleries or in the Wasteland's bare refuges (the Ash
- * Hollows), so their climbs hang cinder chains, which climb the same way. The voxel harness's {@code markShafts} models
- * exactly this column.
+ * Ember Gardens (which have no climbing plant of their own), blue glow vines in the Blue Reaches and dusk vines in the
+ * deep dark. The two bottom layers have no planned climbs (Terrain.planned) and hang nothing: nothing grows in the
+ * Basalt Galleries or in the Ash Hollows, and since 0.6.0 no made thing (the cinder chain) hangs there either, natural
+ * rock only. The voxel harness's {@code markShafts} models exactly this column.
  */
 public final class ClimbVinesFeature extends Feature<NoneFeatureConfiguration> {
     /** How far over the floor at a stage's top its vines may hang from. */
@@ -52,13 +52,13 @@ public final class ClimbVinesFeature extends Feature<NoneFeatureConfiguration> {
                 if (hold > top + HOLD || !level.getBlockState(p.set(s.vineX, hold, s.vineZ)).isFaceSturdy(level, p, Direction.DOWN)) continue;
                 // a climb the plan gave no biome takes its layer's route biome, so none in the Galleries is ever alive
                 Block[] vine = vine(s.biome != null ? s.biome : Terrain.routeBiome(li), Hashing.mix(t.seed, 8812, s.vineX, s.vineZ));
-                any |= hang(level, s.vineX, hold - 1, foot, s.vineZ, vine[0], vine[1]);
+                if (vine != null) any |= hang(level, s.vineX, hold - 1, foot, s.vineZ, vine[0], vine[1]);
             }
         }
         return any;
     }
 
-    /** The climbing plant of a biome, or the lifeless chain that stands in for one: {head, body}. */
+    /** The climbing plant of a biome, {head, body}, or null in the two bottom layers' biomes, where nothing hangs. */
     static Block[] vine(DeepBiome b, long h) {
         if (b == null) b = DeepBiome.WASTELAND;
         return switch (b) {
@@ -66,8 +66,7 @@ public final class ClimbVinesFeature extends Feature<NoneFeatureConfiguration> {
                     : new Block[]{ERBlocks.PALE_WISTERIA.get(), ERBlocks.PALE_WISTERIA_PLANT.get()};
             case DEEP_BLUE_RIFT, ASURINE_GEODES -> new Block[]{ERBlocks.BLUE_GLOW_VINES.get(), ERBlocks.BLUE_GLOW_VINES_PLANT.get()};
             case DEEP_DARK -> new Block[]{ERBlocks.DUSK_VINES.get(), ERBlocks.DUSK_VINES_PLANT.get()};
-            case BASALT_GALLERIES, OBSIDIAN_TUBES, CALDERA, CAUSEWAY, SCORIA_CANYONS, ASH_HOLLOWS ->
-                    new Block[]{ERBlocks.CINDER_CHAIN.get(), ERBlocks.CINDER_CHAIN.get()};
+            case BASALT_GALLERIES, OBSIDIAN_TUBES, CALDERA, CAUSEWAY, SCORIA_CANYONS, ASH_HOLLOWS -> null;
             default -> new Block[]{ERBlocks.EMBER_VINES.get(), ERBlocks.EMBER_VINES_PLANT.get()};
         };
     }

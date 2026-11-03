@@ -17,5 +17,6 @@ public final class ClientSetup {
         event.registerSpriteSet(ERParticles.STEAM.get(), CaveParticles.Steam.Provider::new);
         event.registerSpriteSet(ERParticles.EMBER.get(), CaveParticles.Ember.Provider::new);
         event.registerSpriteSet(ERParticles.POLLEN.get(), CaveParticles.Pollen.Provider::new);
+        event.registerSpriteSet(ERParticles.VOLCANIC_SMOKE.get(), CaveParticles.VolcanicSmoke.Provider::new);
     }
 }

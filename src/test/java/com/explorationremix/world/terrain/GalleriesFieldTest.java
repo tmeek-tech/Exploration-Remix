@@ -371,6 +371,7 @@ class GalleriesFieldTest {
         h = h * 31 + Double.doubleToLongBits(q.tubeShellDepth(x, y, z));
         h = h * 31 + (q.tubeRib(x, y, z) ? 1 : 0);
         h = h * 31 + Double.doubleToLongBits(q.cone(x, z));
+        h = h * 31 + Double.doubleToLongBits(q.coneTop(x, z));
         h = h * 31 + (g.tubesAt(x + 0.5, z + 0.5) ? 1 : 0);
         return h;
     }

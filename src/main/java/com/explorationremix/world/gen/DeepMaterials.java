@@ -91,9 +91,6 @@ public final class DeepMaterials {
                 case ORANGE_TERRACOTTA -> Blocks.ORANGE_TERRACOTTA.defaultBlockState();
                 case ANDESITE -> Blocks.ANDESITE.defaultBlockState();
                 case FROST_MOSS -> ERBlocks.FROST_MOSS.get().defaultBlockState();
-                // Create's layered stones stand upright by default, so their layers lie flat like the canyons' bands.
-                case LAYERED_SCORIA -> create("layered_scoria", Blocks.TERRACOTTA, missing);
-                case LAYERED_SCORCHIA -> create("layered_scorchia", Blocks.BLACKSTONE, missing);
                 case EMBER_CRUST -> ERBlocks.EMBER_CRUST.get().defaultBlockState();
             };
             STATES.put(r, s);
