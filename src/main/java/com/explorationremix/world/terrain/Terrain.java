@@ -5,13 +5,14 @@ package com.explorationremix.world.terrain;
  * negative is open space; values are in blocks (a signed distance, roughly) until {@link #density} scales them for
  * Minecraft's interpolation.
  *
- * <p>The bands between the layers are solid but for the gate passages ({@link Plans.Gate}). Every block inside the Blue
- * Reaches and the Deep Gardens is the layer's cave network's ({@link Network}): chambers joined by tunnels and climbs,
- * planned per cell, with the Deep Blue Rift and the deep dark in the Blue Reaches. Since 0.5.1 the Wasteland and the
- * Basalt Galleries are noise fields with nothing planned ({@link WastelandField}, {@link GalleriesField} with the
- * {@link TubeField}), and the Wasteland opens into the Galleries with no band between them ({@link Join}, where the
- * {@link Breakthrough} noise says). Above the pack's old floor, this carves only the first gate's landing and ramp and
- * the cell's upper set piece (the Silver Fern Rift or the Ivory Root Cavern).
+ * <p>The bands between the layers are solid but for the gate passages ({@link Plans.Gate}): band 1 has every den gate
+ * of a cell ({@link Plans#denGates}), the deeper bands one gate each. Every block inside the Blue Reaches and the Deep
+ * Gardens is the layer's cave network's ({@link Network}): chambers joined by tunnels and climbs, planned per cell, with
+ * the Deep Blue Rift and the deep dark in the Blue Reaches. Since 0.5.1 the Wasteland and the Basalt Galleries are noise
+ * fields with nothing planned ({@link WastelandField}, {@link GalleriesField} with the {@link TubeField}), and the
+ * Wasteland opens into the Galleries with no band between them ({@link Join}, where the {@link Breakthrough} noise says).
+ * Above the pack's old floor, this carves only the den gates' upper landings and ramps and the cell's upper set piece
+ * (the Silver Fern Rift or the Ivory Root Cavern).
  */
 public final class Terrain {
     /**
@@ -77,6 +78,11 @@ public final class Terrain {
     /** The wobble of the gate passages and landings (0.2.0's noise field 18, kept so the gates do not move). */
     private final Perlin detail;
     private final ThreadLocal<Column[]> cache;
+    /**
+     * Tests only: band 1 and the den gates' carve try every den gate of the cell in every column, not only those whose
+     * bounding box reaches it ({@link #densOf}). The answers must not change.
+     */
+    boolean everyDenGate;
 
     public Terrain(TerrainSettings settings, int packFloor, long seed) {
         this.settings = settings;
@@ -114,6 +120,13 @@ public final class Terrain {
         Upper.Piece up;
         double upD, upS;                    // distance from the rift's centre line or the cavern's axis; arc length
         final double[] upT = new double[3];
+        // The den gates of the column's cell whose landing or passage can reach it, and the ramps that can: computed on
+        // first use, so a block looks at the one or two near it and not at every den gate of the cell.
+        boolean densDone, rampsDone;
+        Plans.Gate[] dens = new Plans.Gate[0];
+        int denN;
+        Route.Link[] ramps = new Route.Link[0];
+        int rampN;
     }
 
     public Column column(int x, int z) {
@@ -126,6 +139,8 @@ public final class Terrain {
         c.cellZ = plans.cellOf(z);
         c.valid = true;
         c.upDone = false;
+        c.densDone = false;
+        c.rampsDone = false;
         return c;
     }
 
@@ -148,6 +163,45 @@ public final class Terrain {
             c.upDone = true;
         }
         return c.up;
+    }
+
+    /**
+     * How far past a den gate's bounding box ({@link Plans.Gate#overlaps}, which adds the landing's radius) its upper
+     * landing or passage can carve anything: the landing reaches 6 past its radius, a passage 8 past its widest.
+     */
+    private static final double DEN_REACH = 8;
+    /** How far past the box round a ramp's ends it is carved (its radius and wobble) and kept dry, as it always was. */
+    private static final double RAMP_REACH = 12;
+
+    /** The den gates of the column's cell whose upper landing or passage can reach it: {@code c.dens[0..denN)}. */
+    private void densOf(Column c) {
+        if (c.densDone) return;
+        java.util.List<Plans.Gate> l = plans.denGates(c.cellX, c.cellZ);
+        if (c.dens.length < l.size()) c.dens = new Plans.Gate[l.size()];
+        int n = 0;
+        for (Plans.Gate g : l) if (everyDenGate || g.overlaps(c.x, c.z, c.x, c.z, DEN_REACH)) c.dens[n++] = g;
+        c.denN = n;
+        c.densDone = true;
+    }
+
+    /** The ramps of the column's cell's den gates that can reach it: {@code c.ramps[0..rampN)}. */
+    private void rampsOf(Column c) {
+        if (c.rampsDone) return;
+        java.util.List<Plans.Gate> l = plans.denGates(c.cellX, c.cellZ);
+        if (c.ramps.length < l.size()) c.ramps = new Route.Link[l.size()];
+        int n = 0;
+        for (Plans.Gate g : l) {
+            Route.Link r = plans.ramp(g);
+            if (rampNear(r, c.x, c.z, RAMP_REACH)) c.ramps[n++] = r;
+        }
+        c.rampN = n;
+        c.rampsDone = true;
+    }
+
+    /** Whether (x, z) is within {@code pad} of the box round a ramp's two ends (strictly, as the first gate's was). */
+    public static boolean rampNear(Route.Link r, double x, double z, double pad) {
+        return Math.abs(x - (r.x1() + r.x2()) * 0.5) < Math.abs(r.x2() - r.x1()) * 0.5 + pad
+                && Math.abs(z - (r.z1() + r.z2()) * 0.5) < Math.abs(r.z2() - r.z1()) * 0.5 + pad;
     }
 
     // ================================================================================================ helpers
@@ -193,12 +247,8 @@ public final class Terrain {
     public double rawDensity(int x, int y, int z) {
         if (y < shape.floorY + 1) return SOLID;
         if (y >= shape.packFloor) {
-            // Only the first gate's passage continues upward; the pack's own terrain is used above its old floor.
-            if (y < shape.packFloor + 16) {
-                Column c = column(x, z);
-                Plans.Gate g = plans.gate(1, c.cellX, c.cellZ);
-                return passage(g, x, y, z);
-            }
+            // Only the den gates' passages continue upward; the pack's own terrain is used above its old floor.
+            if (y < shape.packFloor + 16) return denPassages(column(x, z), x, y, z);
             return SOLID;
         }
         int li = shape.layerAt(y);
@@ -206,12 +256,22 @@ public final class Terrain {
             int band = shape.bandAt(y);
             if (band == 0) return SOLID;
             Column c = column(x, z);
+            // Band 1 has every den gate of the cell; each deeper band has one gate.
+            if (band == 1) return denPassages(c, x, y, z);
             return passage(plans.gate(band, c.cellX, c.cellZ), x, y, z);
         }
         if (join != null && join.inBand(y)) return join.density(x, y, z);
         if (li == WASTELAND) return wasteland.density(x, y, z);
         if (li == GALLERIES) return galleries.density(x, y, z);
         return network.layerDensity(li, x, y, z);
+    }
+
+    /** The den gates' passages through band 1 at a block: the nearest of those that can reach the column. */
+    private double denPassages(Column c, int x, int y, int z) {
+        densOf(c);
+        double d = SOLID;
+        for (int i = 0; i < c.denN; i++) d = Math.min(d, passage(c.dens[i], x, y, z));
+        return d;
     }
 
     private double passage(Plans.Gate g, int x, int y, int z) {
@@ -275,11 +335,11 @@ public final class Terrain {
     }
 
     /**
-     * Everything carved out of the pack's own terrain above its old floor: the first gate's landing and ramp, and the
-     * Silver Fern Rift or Ivory Root Cavern of this cell. Negative inside.
+     * Everything carved out of the pack's own terrain above its old floor: the den gates' upper landings and ramps, and
+     * the Silver Fern Rift or Ivory Root Cavern of this cell. Negative inside.
      */
     public double upperCarve(int x, int y, int z) {
-        return Math.min(gateOneCarve(x, y, z), pieceDist(x, y, z));
+        return Math.min(denGateCarve(x, y, z), pieceDist(x, y, z));
     }
 
     /** Signed distance to the open space of this column's upper set piece (negative inside), or SOLID when none is near. */
@@ -292,7 +352,7 @@ public final class Terrain {
     }
 
     /**
-     * What fills an open block above the pack's old floor near the upper set piece or the first gate's landing:
+     * What fills an open block above the pack's old floor near the upper set piece or a den gate's landing or ramp:
      * {@link #AIR} or {@link #WATER}, or -1 to leave it to the pack. Never lava, which the pack puts in its lowest caves.
      */
     public int upperFluid(int x, int y, int z) {
@@ -304,7 +364,7 @@ public final class Terrain {
             if (p instanceof Upper.Cavern cv && c.upD > cv.rxz + 1) return AIR;
             return WATER;
         }
-        if (y < shape.packFloor + 48 && gateOneCarve(x, y, z) < 14.0) return AIR;
+        if (y < shape.packFloor + 48 && denGateCarve(x, y, z) < 14.0) return AIR;
         return -1;
     }
 
@@ -327,21 +387,26 @@ public final class Terrain {
     public Upper.Piece upperPiece(int x, int z) { return upperOf(column(x, z)); }
 
     /**
-     * The first gate's upper landing, the top of its passage and the ramp up into the pack's caves: carved out of
-     * the pack's own terrain just above its old floor. Negative inside.
+     * Every den gate's upper landing, the top of its passage and its ramp up into the pack's caves ({@link
+     * Plans#denGates}): carved out of the pack's own terrain just above its old floor. Negative inside. Each is carved
+     * as the first gate always was, so where no other den gate is near, the first gate's carve is what it was.
      */
-    public double gateOneCarve(int x, int y, int z) {
+    public double denGateCarve(int x, int y, int z) {
         if (y < shape.packFloor - 8 || y > shape.packFloor + 56) return SOLID;
         Column c = column(x, z);
-        Plans.Gate g = plans.gate(1, c.cellX, c.cellZ);
+        densOf(c);
+        rampsOf(c);
         double d = SOLID;
-        double dxz = Math.hypot(x - g.ux, z - g.uz);
-        if (dxz < g.landR + 6) d = Math.min(d, landing(dxz, g.landR, g.uCy, g.landHalf, g.uFloor, x, y, z));
-        d = Math.min(d, passage(g, x, y, z));
-        Route.Link ramp = plans.ramp(g);
-        if (Math.abs(x - (ramp.x1() + ramp.x2()) * 0.5) < Math.abs(ramp.x2() - ramp.x1()) * 0.5 + 12
-                && Math.abs(z - (ramp.z1() + ramp.z2()) * 0.5) < Math.abs(ramp.z2() - ramp.z1()) * 0.5 + 12) {
-            d = Math.min(d, ramp.dist(x, y, z) + 1.5 * detail.noise3(x / 8.0, y / 6.0, z / 8.0));
+        for (int i = 0; i < c.denN; i++) {
+            Plans.Gate g = c.dens[i];
+            double dxz = Math.hypot(x - g.ux, z - g.uz);
+            if (dxz < g.landR + 6) d = Math.min(d, landing(dxz, g.landR, g.uCy, g.landHalf, g.uFloor, x, y, z));
+            d = Math.min(d, passage(g, x, y, z));
+        }
+        if (c.rampN > 0) {
+            // one wobble for every ramp here, the one the first gate's ramp always had
+            double n = 1.5 * detail.noise3(x / 8.0, y / 6.0, z / 8.0);
+            for (int i = 0; i < c.rampN; i++) d = Math.min(d, c.ramps[i].dist(x, y, z) + n);
         }
         return d;
     }

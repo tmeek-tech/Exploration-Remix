@@ -1,0 +1,17 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:bat",
+    "minecraft:axolotl",
+    "minecraft:glow_squid",
+    "minecraft:creeper",
+    "minecraft:frog",
+    "minecraft:rabbit",
+    "minecraft:chicken",
+    "minecraft:fox",
+    "minecraft:goat",
+    "minecraft:sheep",
+    "minecraft:pig",
+    "minecraft:silverfish"
+  ]
+}

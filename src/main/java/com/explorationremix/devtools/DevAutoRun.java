@@ -26,9 +26,10 @@ import java.util.TreeMap;
 
 /**
  * Headless world generation check, enabled with the environment variable ER_DEVRUN=1. Once the server is up it
- * generates the spawn cell's gates, checks that every passage is open, describes each layer where it is entered (the
- * network's plan, or the noise field's values in the Wasteland and the Galleries), writes pictures of the real blocks
- * into {@code remix_devrun/}, then stops the server (unless ER_DEVRUN=keep).
+ * generates the spawn cell's gates (in band 1 the den gate nearest spawn), checks that every passage is open,
+ * describes each layer where it is entered (the network's plan, or the noise field's values in the Wasteland and the
+ * Galleries), writes pictures of the real blocks into {@code remix_devrun/}, then stops the server (unless
+ * ER_DEVRUN=keep).
  */
 public final class DevAutoRun {
     private static int ticks = -1;
@@ -83,12 +84,19 @@ public final class DevAutoRun {
             BlockPos spawn = level.getSharedSpawnPos();
             int cx = t.plans.cellOf(spawn.getX()), cz = t.plans.cellOf(spawn.getZ());
             String cellEnv = System.getenv("ER_DEVRUN_CELL");
-            if (cellEnv != null && cellEnv.contains(",")) {
+            boolean cellAsked = cellEnv != null && cellEnv.contains(",");
+            if (cellAsked) {
                 cx = Integer.parseInt(cellEnv.split(",")[0].trim());
                 cz = Integer.parseInt(cellEnv.split(",")[1].trim());
             }
             out.println("cell " + cx + " " + cz + " (spawn " + spawn.toShortString() + ")");
             out.flush();
+            int mx = cx * t.settings.gateSpacing() + t.settings.gateSpacing() / 2, mz = cz * t.settings.gateSpacing() + t.settings.gateSpacing() / 2;
+            // The way down from the Upper Caves: the den gate nearest spawn, or the middle of the cell asked for. The
+            // deeper gates are the cell's.
+            Plans.Gate den = cellAsked ? t.plans.nearestDenGate(mx, mz) : t.plans.nearestDenGate(spawn.getX(), spawn.getZ());
+            out.printf(Locale.ROOT, "gate 1 is den gate %d of cell %d %d (%d den gates there)%n", den.den, den.cellX, den.cellZ,
+                    t.plans.denGates(den.cellX, den.cellZ).size());
 
             // Gates: walk each passage's centre line; every block on it must be open and dry. Plants and other
             // blocks a player walks through are listed but don't block the way.
@@ -97,7 +105,7 @@ public final class DevAutoRun {
                     out.printf(Locale.ROOT, "gate %d: none (no band: %s opens into %s)%n", b, s.id(b - 2), s.id(b - 1));
                     continue;
                 }
-                Plans.Gate g = t.plans.gate(b, cx, cz);
+                Plans.Gate g = b == 1 ? den : t.plans.gate(b, cx, cz);
                 long t0 = System.nanoTime();
                 int samples = 0, solid = 0, wet = 0;
                 Map<String, Integer> passable = new TreeMap<>(), blocking = new TreeMap<>();
@@ -124,15 +132,14 @@ public final class DevAutoRun {
                 BlockImages.write(along(level, g.ux, g.uz, g.lx, g.lz, 40, (int) y0, (int) y1), new File(dir, "gate_" + b + ".png"), 3);
             }
 
-            // Each layer as /remix info tells it where it is entered: at its landing, or for a layer the one above opens
-            // into, at the cell's middle half way up it. (0.2.0 walked its route here; the route is gone, and the voxel
-            // tests walk the network instead.)
-            int mx = cx * t.settings.gateSpacing() + t.settings.gateSpacing() / 2, mz = cz * t.settings.gateSpacing() + t.settings.gateSpacing() / 2;
+            // Each layer as /remix info tells it where it is entered: at its landing (the Blue Reaches' at the den gate
+            // checked above), or for a layer the one above opens into, at the cell's middle half way up it. (0.2.0 walked
+            // its route here; the route is gone, and the voxel tests walk the network instead.)
             for (int li = 0; li < s.layerCount; li++) {
                 out.println("layer " + (li + 1) + " " + s.id(li) + ":");
                 int x, y, z;
                 if (s.bandThickness(li + 1) > 0) {
-                    Plans.Gate en = t.plans.gate(li + 1, cx, cz);
+                    Plans.Gate en = li == 0 ? den : t.plans.gate(li + 1, cx, cz);
                     x = (int) Math.floor(en.lx);
                     y = (int) Math.floor(en.lFloor) + 1;
                     z = (int) Math.floor(en.lz);

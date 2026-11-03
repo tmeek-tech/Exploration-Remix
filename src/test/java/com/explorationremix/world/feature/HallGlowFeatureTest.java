@@ -90,7 +90,7 @@ class HallGlowFeatureTest {
         // 11, left the vaults at 8 on average with a third of the faces under 8: no spot may go below 11.
         HallGlowFeature.Config shipped = shipped();
         assertEquals(HallGlow.BAND_LEVEL, shipped.low(), "the band's glow and the glow just over it meet without a step");
-        // 0.6.0: the Obsidian Tubes as bright as the high halls (Taran's second picture, the tubes lit to their far ends);
+        // 0.6.2: the Obsidian Tubes as bright as the high halls (Taran's second picture, the tubes lit to their far ends);
         // at 9 their faces measured a mean of 6 (theTubesFacesAreLit)
         assertEquals(13, shipped.tubes(), "the tubes' glow");
         assertTrue(shipped.tubes() >= shipped.high(), "the tubes no darker than the high halls");

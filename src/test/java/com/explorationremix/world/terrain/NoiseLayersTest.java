@@ -24,7 +24,10 @@ class NoiseLayersTest {
      * cells (-1..0)^2 ({@link NetworkTest#planHash}) and a hash of every block of rows -544..-65 but the Blue Reaches'
      * own (rock after the per-block pass, fluid, biome) of five chunks, as the game builds them (corners every 4 x 8 x 4,
      * interpolated). Until the Blue Reaches lost their view breaker one line pinned both layers; these are a2c3d73's
-     * hashes of the same plans and rows, split from it.
+     * hashes of the same plans and rows, split from it. They held through main's den gates (0.6.2): the gates past each
+     * cell's first carve their shafts through band 1, but in none of these five chunks, and nothing of the gates reaches
+     * the Deep Gardens (the same line on 0.6.1, on the reshape before the merge and on the merge). They held again when
+     * the merge landed on the reshape's fixes (0.6.2): the same line on a49a88c, on 1dd7375 and on their merge.
      */
     static final String[] UNCHANGED = {
             "seed 1 plans: f1ccde63e4c18e32 acd1f91d5f20af65 e8c65f191f619aa0 cbefaff340029a5c"
@@ -42,15 +45,30 @@ class NoiseLayersTest {
      * lay bare, which the breaker's spires had held and the rift then left in mid-air, and the ways, the deep dark
      * doors and the climbs kept off the rift's void and the caverns' air, where floors the spires had held hung: each
      * plan differs from the last pin's in the pillars it drops (140 over these twelve cells) and in some of its ways,
-     * and of the five chunks only the third of seeds 1 and 2, in cell -1,0, changes.
+     * and of the five chunks only the third of seeds 1 and 2, in cell -1,0, changes. Pinned again with main's den gates
+     * (0.6.2, the merge of 0.6.1): each cell plans the lower landings of its den gates past the first (46 over these
+     * twelve cells), their courts and the ways that join them to the network and walk them to the way out, all kept off
+     * the void as above, and the rift keeps 16 blocks clear of them, so it moved in ten of the cells and was left out in
+     * one (seed 2, cell 0,-1); the deep dark and what is planned after it moved with them. With the den gates past the
+     * first switched off every plan and row is the last pin's; with the pillar drop and the void rules switched off
+     * every plan is 0.6.1's less the breaker's shapes and every row is 0.6.1's built without the breaker. Of the five
+     * chunks the third and fourth of seeds 1 and 8004 and the third of seed 2 changed. Pinned again for the merge's
+     * fixes (0.6.2): the plans also drop the pillars a way's walking core cuts into and those the rift, with a cavern it
+     * opens into, lays bare (219 over these twelve cells, 111 before), and three natural bridges no wall holds go (seed
+     * 1 cell 0,0; seed 8004 cells 0,-1 and 0,0); every way is as it was. Of the five chunks the third of seed 1 (a
+     * shelf between the rift's vault and a cavern opened, 302 blocks) and the fourth of seed 8004 (a pillar a way cut,
+     * 1,159 blocks) change, both only to air; the caverns' roofs kept under the ways change none of them. Held when the
+     * merge landed on the reshape's fixes (0.6.2): a49a88c gives 94a4dea's line, and 1dd7375 and their merge give this
+     * one. Over six seeds the merge plans layer 0 in cells (-2..1)^2 as 1dd7375 does (96 plans, every one of them
+     * different on a49a88c) and builds its rows as 1dd7375 does in 852 chunks (669 of them different on a49a88c).
      */
     static final String[] BLUE = {
-            "seed 1 plans: 118f4e74172c0149 478abfe19e6cb3fc f2a721987933cde1 9ee5d0886c477ecd"
-                    + " blocks: d7a8389b4d6c059e 6c97765a11a75ff3 811975dc65e0ce46 b2d0858f44798212 eecfad9773024289",
-            "seed 2 plans: 42a0001d577a3335 4c58995f446d4f1f afc438a29cd8cbc6 e947762e77d16261"
-                    + " blocks: 871413a11c96a0b2 86c1690fea0001f1 98e806a659ed4169 37afd4d970cda9fe a6930c0bdb192b36",
-            "seed 8004 plans: 612bbb725b72460e fe28f41e3bd28727 b99f646529dc155 dc5566ca39359b24"
-                    + " blocks: ccfcc9e7ae39fcb5 96f095f23ac431a7 90d045b652f4d05b d90a6e2c93b653c2 8533a8c9f6e3d85b"};
+            "seed 1 plans: 623d934e4b5682fe da21b3f20dc3b453 b385c8b8f4d28295 b557d6ba42fe47bf"
+                    + " blocks: d7a8389b4d6c059e 6c97765a11a75ff3 e9bc5e6b3c60cbc2 2d39b7613d416fc2 eecfad9773024289",
+            "seed 2 plans: b08518cb2b38f204 265b0d0339c96250 8ca4de95cb42487b e6abde3fd779de77"
+                    + " blocks: 871413a11c96a0b2 86c1690fea0001f1 55f8f1bba395da45 37afd4d970cda9fe a6930c0bdb192b36",
+            "seed 8004 plans: 6711279c6dfd8e75 36524a85c08d7cfa 9798f8eb4514d27a d7d5eb365d1345b4"
+                    + " blocks: ccfcc9e7ae39fcb5 96f095f23ac431a7 4e803ea46608272d 5af8fcf25ca80c07 8533a8c9f6e3d85b"};
     static final long[] UNCHANGED_SEEDS = {1, 2, 8004};
 
     /** As {@link #UNCHANGED} and {@link #BLUE} say, and building them (band 3 too) plans no other layer. */

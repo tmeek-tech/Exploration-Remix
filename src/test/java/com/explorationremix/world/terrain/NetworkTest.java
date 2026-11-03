@@ -271,7 +271,7 @@ class NetworkTest {
                     Network.WayLines l = pass == 0 ? w.wayLinesAt(n.li, wy.x[i], wy.z[i], 0.5) : w.carvedLinesAt(n.li, wy.x[i], wy.z[i], 0.5);
                     boolean ok = false;
                     for (int k = 0; k < l.n && !ok; k++)
-                        ok = l.d[k] < 1e-6 && Math.abs(l.floor[k] - wy.f[i]) < 1e-6 && Math.abs(l.half[k] - wy.w[i]) < 0.25;
+                        ok = l.d[k] < 1e-6 && Math.abs(l.floor[k] - wy.f[i]) < 1e-6 && widthHere(wy, i, l.half[k]);
                     if (!ok) {
                         missed++;
                         if (first == null) first = String.format(java.util.Locale.ROOT, "way %d (%s) point %d of %d at %.1f, %.1f floor %.2f (pass %d)",
@@ -288,6 +288,22 @@ class NetworkTest {
             if (s.stepX != Integer.MIN_VALUE && !w.shaftsIn(n.li, s.stepX, s.stepZ, s.stepX, s.stepZ).contains(s))
                 fails.add(tag + ": climb stage " + s.id + " not found at its step");
         }
+    }
+
+    /**
+     * True when {@code half} is way wy's half-width (within 0.25) at its point i, or wherever else the way passes over
+     * that point: a short level tunnel out of a climb's top that turns back to a door behind the stage runs over its
+     * own start, and a column then reads the first pass's width, as the carve does.
+     */
+    static boolean widthHere(Way wy, int i, double half) {
+        if (Math.abs(half - wy.w[i]) < 0.25) return true;
+        for (int j = 0; j + 1 < wy.n; j++) {
+            double dx = wy.x[j + 1] - wy.x[j], dz = wy.z[j + 1] - wy.z[j], len2 = dx * dx + dz * dz;
+            double t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((wy.x[i] - wy.x[j]) * dx + (wy.z[i] - wy.z[j]) * dz) / len2));
+            if (Math.hypot(wy.x[i] - wy.x[j] - dx * t, wy.z[i] - wy.z[j] - dz * t) > 1e-6) continue;
+            if (Math.abs(half - (wy.w[j] + (wy.w[j + 1] - wy.w[j]) * t)) < 0.25) return true;
+        }
+        return false;
     }
 
     /**
@@ -480,6 +496,113 @@ class NetworkTest {
         }
         System.out.printf("citySitesAreClear: %d sites, %d eligible, %d cities in %d cells%n", sites, eligible, cities, SEEDS.length * 16);
         if (cities == 0) fails.add("no city placed in " + SEEDS.length * 16 + " cells");
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
+    }
+
+    /**
+     * The den gates ({@link Plans#denGates} past the first) over the fast tests' Blue Reaches cells and the voxel
+     * tests' ones: each one's lower landing is an ENTRY chamber of the plan, at the gate's landing, kept, joined to the
+     * entry and walked to the exit with no climb; and each one's passage (the first gate's too) opens into its landing.
+     * From the top of the Blue Reaches, through the seal under the band (the band itself is Terrain's, which
+     * TerrainTest checks), down the passage's centre line to its end over the landing's floor, the exact density is
+     * open, and so is the per-block pass's over interpolated rock; under the end the landing is open down to a block
+     * over its floor and rock from a block under it (the floor's noise moves it by up to a block), whatever the
+     * interpolation left there.
+     */
+    @Test
+    void denGatesLandInTheNetwork() {
+        List<String> fails = new ArrayList<>();
+        List<long[]> cells = new ArrayList<>();
+        for (long seed : SEEDS) for (int[] c : CELLS) cells.add(new long[]{seed, c[0], c[1]});
+        for (int s = 0; s < VOX_SEEDS.length; s++) cells.add(new long[]{VOX_SEEDS[s], VOX_CELLS[s][0], VOX_CELLS[s][1]});
+        int gates = 0, joinedLate = 0, walkWays = 0;
+        double planMs = 0;
+        for (long[] c : cells) {
+            Terrain t = terrain(c[0]);
+            int cx = (int) c[1], cz = (int) c[2], top = t.shape.top(Terrain.BLUE);
+            Net n = t.network.net(Terrain.BLUE, cx, cz);
+            String tg = tag(c[0], Terrain.BLUE, cx, cz);
+            planMs += n.planMs;
+            joinedLate += n.denJoins;
+            walkWays += n.denWalks;
+            List<Plans.Gate> dens = t.plans.denGates(cx, cz);
+            if (n.dens.size() != dens.size() - 1) fails.add(tg + ": " + n.dens.size() + " den landings for " + (dens.size() - 1) + " den gates past the first");
+            boolean[] toEntry = joined(n), onFoot = NetGraph.reach(n, n.exit, true);
+            for (int i = 0; i < dens.size(); i++) {
+                Plans.Gate g = dens.get(i);
+                String gt = tg + " den gate " + i + " (landing " + (int) g.lx + " " + (int) g.lFloor + " " + (int) g.lz + ")";
+                if (i > 0 && i - 1 < n.dens.size()) {
+                    gates++;
+                    Chamber L = n.ch.get(n.dens.get(i - 1));
+                    if (L.kind != Kind.ENTRY || L.x != g.lx || L.z != g.lz || L.f0 != g.lFloor) fails.add(gt + ": the plan's den landing #" + L.id + " is not at the gate's landing");
+                    else if (!L.keep) fails.add(gt + ": its landing #" + L.id + " is dropped");
+                    else if (!toEntry[L.id]) fails.add(gt + ": its landing #" + L.id + " is not joined to the entry");
+                    else if (!onFoot[L.id]) fails.add(gt + ": no way from its landing #" + L.id + " to the exit without climbing");
+                }
+                double t0 = g.tAt(top);
+                for (int k = 0; k <= 80; k++) {
+                    double tt = t0 + (1 - t0) * k / 80.0;
+                    int x = (int) Math.floor(g.px(tt)), y = (int) Math.floor(g.py(tt)), z = (int) Math.floor(g.pz(tt));
+                    if (y > top) continue;
+                    double d = t.rawDensity(x, y, z), f = t.fine(x, y, z, 1.0);
+                    if (d < 0 && f < 0) continue;
+                    fails.add(gt + ": the passage is shut at " + x + " " + y + " " + z + " (density " + fmt(d) + ", per block " + fmt(f) + ")");
+                    break;
+                }
+                int x = (int) Math.floor(g.lx), z = (int) Math.floor(g.lz), floor = (int) Math.floor(g.lFloor);
+                for (int y = (int) Math.floor(g.y1); y > g.lFloor + 1; y--) {
+                    if (t.rawDensity(x, y, z) < 0 && t.fine(x, y, z, 1.0) < 0) continue;
+                    fails.add(gt + ": the landing is shut over its floor at " + x + " " + y + " " + z);
+                    break;
+                }
+                for (int y = floor - 1; y >= floor - 5; y--) {
+                    if (t.rawDensity(x, y, z) > 0 && t.fine(x, y, z, -1.0) > 0) continue;
+                    fails.add(gt + ": the landing is open under its floor at " + x + " " + y + " " + z);
+                    break;
+                }
+            }
+        }
+        System.out.printf(java.util.Locale.ROOT, "denGatesLandInTheNetwork: %d den gates past the first in %d Blue Reaches cells; %d landings joined after connectRequired, %d tunnels added to walk them to the exit; plans took %.0f ms a cell%n",
+                gates, cells.size(), joinedLate, walkWays, planMs / cells.size());
+        if (gates < 2 * cells.size()) fails.add("only " + gates + " den gates past the first in " + cells.size() + " cells");
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
+    }
+
+    /**
+     * The rift and the den gates' landings (0.6.1): a landing's passage is carved whatever the plan, so the rift may not
+     * cut into one; it keeps the 16 blocks clear of a landing it keeps of a court. Over 3 seeds x 4 x 4 Blue cells the
+     * rift is left out of few cells for them (2 to 4 of 48 when this was written), and where it is kept its edge stays well
+     * clear of every den landing (sampled every 2 blocks along it, against every 6 in the planner, so a little under 16).
+     */
+    @Test
+    void riftsKeepClearOfDenLandings() {
+        List<String> fails = new ArrayList<>();
+        int cells = 0, dropped = 0, kept = 0, near = 0;
+        double minClear = Double.MAX_VALUE;
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            for (int cx = -2; cx <= 1; cx++) for (int cz = -2; cz <= 1; cz++) {
+                Net n = t.network.net(Terrain.BLUE, cx, cz);
+                cells++;
+                dropped += n.riftsDropped;
+                kept += n.canyons.size();
+                for (Route r : n.canyons) for (int d : n.dens) {
+                    Chamber c = n.ch.get(d);
+                    double clear = Double.MAX_VALUE;
+                    for (double s = 0; s < r.length; s += 2) {
+                        double[] p = r.pointAt(s);
+                        clear = Math.min(clear, Math.hypot(p[0] - c.x, p[1] - c.z) - r.at(r.riftHalf, s) - c.R());
+                    }
+                    for (Route.Geode g : r.geodes) clear = Math.min(clear, Math.hypot(g.x() - c.x, g.z() - c.z) - g.r() - c.R());
+                    minClear = Math.min(minClear, clear);
+                    if (clear < 30) near++;
+                    if (clear < 8) fails.add(tag(seed, Terrain.BLUE, cx, cz) + ": the rift passes " + fmt(clear) + " from den landing #" + c.id + "'s reach");
+                }
+            }
+        }
+        System.out.printf(java.util.Locale.ROOT, "riftsKeepClearOfDenLandings: %d cells, %d rifts kept, %d left out for den landings; %d landings within 30 of a rift, nearest %.1f%n",
+                cells, kept, dropped, near, minClear);
+        if (dropped * 8 > cells) fails.add("the rift is left out of " + dropped + " of " + cells + " cells for den landings");
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
     }
 
@@ -888,6 +1011,9 @@ class NetworkTest {
     static boolean gateMouth(Terrain t, Net n, double x, double z) {
         Plans.Gate en = t.plans.gate(n.li + 1, n.cx, n.cz);
         if (Math.hypot(x - en.lx, z - en.lz) < en.landR + 6) return true;
+        // the Blue Reaches: the other den gates' landings too
+        if (n.li == Terrain.BLUE)
+            for (Plans.Gate g : t.plans.denGates(n.cx, n.cz)) if (Math.hypot(x - g.lx, z - g.lz) < g.landR + 6) return true;
         if (n.li + 2 <= t.shape.layerCount) {
             Plans.Gate ex = t.plans.gate(n.li + 2, n.cx, n.cz);
             return Math.hypot(x - ex.ux, z - ex.uz) < ex.landR + 6;
@@ -1057,6 +1183,34 @@ class NetworkTest {
         assertTrue(fails.isEmpty(), fails.size() + " pieces of rock nothing holds:\n" + String.join("\n", fails));
     }
 
+    /**
+     * Nothing the merge of main's den gates (0.6.2) left in mid-air stays there: in each cell no piece of rock nothing
+     * holds larger than {@link #LOOSE_ROCK_MAX} blocks, nor one with more than {@link #PILLAR_CRUMB} blocks of a
+     * pillar's rock. The den gates moved the rift and the ways of most cells, and with them came pieces of three kinds
+     * the reshape had too, more rarely: a natural bridge whose deck reached no wall, at a cavern or a bend of the rift
+     * (seed 8004 cell 0,0, 2,404 blocks; seed -8658168 cell 4,-4, 474 blocks, and 507 when a 12-block shelf between the
+     * rift's floor and a cavern's roof counted as its wall; {@link Network#dropLooseBridges}, {@link Network#BRIDGE_HOLD}),
+     * plates of the shelf between the rift's vault and a
+     * cavern's floor over it (seed 8675309 cell 1,-1, 273 and 157 blocks; {@link Network#PLATE}), and pillars a way's
+     * tunnel cut (seed -1763342040 cell -1,-2, a foot of 134 blocks; seed 464211742 cell -2,1, a sliver of 12;
+     * {@link Network#dropExposedPillars}).
+     */
+    @Test
+    @Tag("voxel")
+    void nothingHangsWhereTheMergeLeftIt() {
+        List<String> fails = new ArrayList<>();
+        long[][] cells = {{8004L, 0, 0}, {-8658168L, 4, -4}, {8675309L, 1, -1}, {-1763342040L, -1, -2}, {464211742L, -2, 1}};
+        for (long[] c : cells) {
+            long seed = c[0];
+            int cx = (int) c[1], cz = (int) c[2];
+            Network w = terrain(seed).network;
+            int cell = (int) w.cell;
+            VoxelHarness v = built(seed, Terrain.BLUE, cx, cz, 1, 1, false);
+            System.out.println(looseRock(w, v, tag(seed, Terrain.BLUE, cx, cz), cx * cell, cz * cell, (cx + 1) * cell, (cz + 1) * cell, fails));
+        }
+        assertTrue(fails.isEmpty(), fails.size() + " pieces of rock nothing holds:\n" + String.join("\n", fails));
+    }
+
     /** The Blue Reaches 256 tall (the config allows 64 to 512) with rifts up to 60 deeper: a deeper, wider rift. */
     static TerrainSettings tallBlue() {
         TerrainSettings d = TerrainSettings.defaults();
@@ -1158,7 +1312,13 @@ class NetworkTest {
      * than 15 lower; a staged climb ends a fall on the floor of the stage it fell down. Falls into water or onto vines
      * are safe. Falls in the rift, the deep dark, the helices and the ancient city are reported, not failed: 0.2.0's
      * cliffs and the high ledges are meant to be dangerous. Over the voxel tests' cells of the Deep Gardens and 2 x 2
-     * cells of the Blue Reaches (the layers under them are noise fields, tested with their fields).
+     * cells of the Blue Reaches (the layers under them are noise fields, tested with their fields), and two Blue cells
+     * of the merge of main's den gates (0.6.2): seed 8004 cell 0,0 had falls of 32 to 36 blocks from a walking tunnel
+     * whose slab lay 3 blocks over its own cavern's roof, seed 575400745 cell 1,-2 falls of 27 and 28 from one 4 blocks
+     * over a cavern's roof ({@link Network#DARK_ROOF}). In those two a fall from a gate's passage is reported, not
+     * failed: a landing's spoke can pass a few blocks under its own gate's passage, as it did in main (0.6.1; seed 8004
+     * cell 0,0 drops 18 from the first gate's), and keeping the spokes 12 blocks under the passages doubled the courts'
+     * tries (1,473 to 2,862 over 99 cells) and moved the layout of every cell but one.
      */
     @Test
     @Tag("voxel")
@@ -1167,11 +1327,14 @@ class NetworkTest {
         List<Object[]> runs = new ArrayList<>();
         for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], Terrain.GARDENS, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
+        runs.add(new Object[]{8004L, Terrain.BLUE, 0, 0, 1});
+        runs.add(new Object[]{575400745L, Terrain.BLUE, 1, -2, 1});
         for (Object[] run : runs) {
             long seed = (Long) run[0];
             int li = (Integer) run[1], cx = (Integer) run[2], cz = (Integer) run[3], wc = (Integer) run[4];
             Terrain t = terrain(seed);
-            VoxelHarness v = built(seed, li, cx, cz, wc, wc, true);
+            // the single Blue cells are this test's alone: built and let go
+            VoxelHarness v = built(seed, li, cx, cz, wc, wc, li != Terrain.BLUE || wc > 1);
             String tg = tag(seed, li, cx, cz) + (wc > 1 ? " (2 x 2)" : "");
             java.util.Map<String, Integer> told = new java.util.TreeMap<>();
             int lethal = 0, deepest = 0;
@@ -1180,6 +1343,7 @@ class NetworkTest {
                 if (f[6] == 1 || f[6] == 2 || f[6] == 4) continue;
                 String why = fallPlace(t, li, f[0], f[1], f[2]);
                 if (why == null) why = fallPlace(t, li, f[3], f[1], f[4]);
+                if (why == null && li == Terrain.BLUE && wc == 1 && inGatePassage(t, cx, cz, f[0], f[1], f[2])) why = "a gate's passage";
                 if (f[6] == 3) why = "into lava" + (why == null ? "" : ", " + why);
                 if (why != null) { told.merge(why, 1, Integer::sum); continue; }
                 lethal++;
@@ -1191,7 +1355,22 @@ class NetworkTest {
         assertTrue(fails.isEmpty(), fails.size() + " lethal falls:\n" + String.join("\n", fails));
     }
 
-    /** Why a fall at a place is allowed (the rift, the deep dark, a helix, a city, a gate's mouth), or null. */
+    /** Whether a place lies in a gate's passage into Blue cell (cx, cz), the first's or a den gate's, or at its rim. */
+    static boolean inGatePassage(Terrain t, int cx, int cz, int x, int y, int z) {
+        List<Plans.Gate> gs = new ArrayList<>(t.plans.denGates(cx, cz));
+        gs.add(t.plans.gate(Terrain.BLUE + 1, cx, cz));
+        for (Plans.Gate g : gs) {
+            double tt = g.tAt(y);
+            if (!Double.isNaN(tt) && g.passageXZ(x, y, z) < g.radiusAt(tt) + 3) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Why a fall at a place is allowed (the rift, the deep dark, a helix, a city, a gate's mouth), or null. The deep dark
+     * is a tier's span as the plan keeps it, within 6 blocks: a roof brought down under a way ({@link Network#DARK_ROOF})
+     * leaves it as it was.
+     */
     static String fallPlace(Terrain t, int li, int x, int y, int z) {
         Network w = t.network;
         Network.LCol lc = w.layer(w.column(x, z), li);
@@ -1201,7 +1380,7 @@ class NetworkTest {
             if (lc.c[k].kind == Kind.CITY) return "city";
         }
         if (lc.rOn && Math.abs(lc.rV) < lc.rHalfTop + 8) return "rift";
-        if (lc.darkOn && ((lc.aC > lc.aF && y > lc.aF - 6 && y < lc.aC + 6) || (lc.bC > lc.bF && y > lc.bF - 6 && y < lc.bC + 6))) return "deep dark";
+        if (lc.darkOn && ((lc.aC0 > lc.aF && y > lc.aF - 6 && y < lc.aC0 + 6) || (lc.bC0 > lc.bF && y > lc.bF - 6 && y < lc.bC0 + 6))) return "deep dark";
         if (gateMouth(t, lc.net, x, z)) return "gate mouth";
         return null;
     }

@@ -68,11 +68,51 @@ LAVA_EVENTS = {
 LAVA_SUBTITLES = {"lava.rumble": "The deep rock rumbles", "lava.surge": "Lava surges up"}
 
 
+# 0.5.1's quakes and eruptions (ERSounds registers their events; nothing plays them until the quakes and the eruptions
+# are built): the mod's own rumbles, lower, and vanilla sounds, until those builds give them their own.
+QUAKE_EVENTS = {
+    "quake.rumble": [own(f"lava_rumble{i}", 1.0, pitch=0.7) for i in range(1, 4)],
+    "quake.debris": [vanilla(f"ambient/nether/basalt_deltas/debris{i}", 1.0) for i in range(1, 4)],
+    "eruption.boom": [vanilla(f"random/explode{i}", 1.0, 0.7) for i in range(1, 5)],
+    "eruption.roar": [own("lava_surge", 1.0, pitch=0.8)],
+}
+QUAKE_SUBTITLES = {
+    "quake.rumble": "The ground shakes", "quake.debris": "Rock falls",
+    "eruption.boom": "An eruption bursts", "eruption.roar": "Lava roars",
+}
+
+
+# The Mossback (tools/synth_creature_sounds.py makes the files): its call carries far, so you hear it coming.
+def creature(name, count, volume=1.0, attenuation=None):
+    out = []
+    for i in range(1, count + 1):
+        e = {"name": f"{MOD}:creature/mossback/{name}{i}", "volume": volume}
+        if attenuation: e["attenuation_distance"] = attenuation
+        out.append(e)
+    return out
+
+
+CREATURE_EVENTS = {
+    "mossback.call": creature("call", 3, 1.0, 28),
+    "mossback.step": creature("step", 4, 0.9),
+    "mossback.hiss": creature("hiss", 2, 1.0, 24),
+    "mossback.bite": creature("bite", 2, 1.0),
+    "mossback.shake": creature("shake", 3, 1.0),
+    "mossback.hurt": creature("hurt", 3, 1.0),
+    "mossback.death": creature("death", 1, 1.0, 24),
+}
+CREATURE_SUBTITLES = {
+    "mossback.call": "Mossback clicks", "mossback.step": "Heavy footsteps", "mossback.hiss": "Mossback hisses",
+    "mossback.bite": "Jaws snap", "mossback.shake": "Mossback growls", "mossback.hurt": "Mossback hurts",
+    "mossback.death": "Mossback dies",
+}
+
+
 def write_all(assets_dir, write):
     out = {}
     lang = {}
-    subtitles = {**SUBTITLES, **LAVA_SUBTITLES}
-    for ev, sounds in {**EVENTS, **LAVA_EVENTS}.items():
+    subtitles = {**SUBTITLES, **LAVA_SUBTITLES, **QUAKE_SUBTITLES, **CREATURE_SUBTITLES}
+    for ev, sounds in {**EVENTS, **LAVA_EVENTS, **QUAKE_EVENTS, **CREATURE_EVENTS}.items():
         sub = f"subtitles.{MOD}.{ev}"
         out[ev] = {"sounds": sounds, "subtitle": sub}
         lang[sub] = subtitles[ev]

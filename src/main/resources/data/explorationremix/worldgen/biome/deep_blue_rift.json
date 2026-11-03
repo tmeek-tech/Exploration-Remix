@@ -128,7 +128,8 @@
     [
       "explorationremix:climb_vines",
       "explorationremix:shelf_vines",
-      "explorationremix:open_way"
+      "explorationremix:open_way",
+      "explorationremix:den_lair"
     ]
   ]
 }

@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The volcanic smoke of the Galleries and the Wasteland (0.6.0): registered with sprites of its own; each puff rises
+ * The volcanic smoke of the Galleries and the Wasteland (0.6.2): registered with sprites of its own; each puff rises
  * 40 to 100 blocks, slowing, swells and fades, and spreads under the rock it meets instead of stopping dead; a vent's
  * puffs stand as an unbroken column; the plumes rise over the lava under open air from the first of a cell's spots
  * that finds it, and the openings' plumes out through the hole, still thick over it; and the client's count of puffs,

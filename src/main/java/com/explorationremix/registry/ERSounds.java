@@ -39,6 +39,16 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> HOLLOWS_LOOP = register("ambient.hollows.loop");
     public static final RegistryObject<SoundEvent> HOLLOWS_ADDITIONS = register("ambient.hollows.additions");
 
+    // The Mossback (creature.MossbackEntity): its call, heavy steps, the hiss when it sees you, the snap of its jaws,
+    // the growl while it shakes its catch, hurt and death. The mod's own recordings (tools/synth_creature_sounds.py).
+    public static final RegistryObject<SoundEvent> MOSSBACK_CALL = register("mossback.call");
+    public static final RegistryObject<SoundEvent> MOSSBACK_STEP = register("mossback.step");
+    public static final RegistryObject<SoundEvent> MOSSBACK_HISS = register("mossback.hiss");
+    public static final RegistryObject<SoundEvent> MOSSBACK_BITE = register("mossback.bite");
+    public static final RegistryObject<SoundEvent> MOSSBACK_SHAKE = register("mossback.shake");
+    public static final RegistryObject<SoundEvent> MOSSBACK_HURT = register("mossback.hurt");
+    public static final RegistryObject<SoundEvent> MOSSBACK_DEATH = register("mossback.death");
+
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ExplorationRemix.MOD_ID, name)));
     }

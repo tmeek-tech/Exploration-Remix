@@ -201,6 +201,9 @@ public final class Upper {
     /** Asked before a piece is placed: true where the surface above is an ocean, river or beach. */
     public interface SurfaceProbe {
         boolean wet(int x, int z);
+
+        /** The pack's own density at a block (negative is open cave); without a pack to ask, everything is rock. */
+        default double packDensity(int x, int y, int z) { return 1.0; }
     }
 
     /**
