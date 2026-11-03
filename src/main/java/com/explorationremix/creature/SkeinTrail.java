@@ -16,6 +16,9 @@ package com.explorationremix.creature;
  * back from the head. The trail keeps at least its {@code keep} length (more for a moment after a long step), so
  * every plate always has a place to lie.
  *
+ * <p>It can be written out as samples at given distances back from the head and read back ({@link #write}, {@link
+ * #read}): the Skein saves its body so, and sends it to each client that starts tracking it.
+ *
  * <p>Plain numbers, no game classes, so it can be tested on its own.
  */
 public final class SkeinTrail {
@@ -67,6 +70,52 @@ public final class SkeinTrail {
         set(head, 0, x, y, z, ux, uy, uz);
         laid = true;
         lastStep = 0.0;
+    }
+
+    /**
+     * The trail as samples at {@code arcs} (blocks back from the head, rising, the first 0: the head itself), to save or
+     * send: for each, six floats, its position less (ox, oy, oz) and its rock's normal. Positions are taken relative to
+     * a point near the head so that floats keep them to a hair however far out in the world it is. Nothing (an empty
+     * array) for a trail not laid yet.
+     */
+    public float[] write(double[] arcs, double ox, double oy, double oz) {
+        if (!laid) return new float[0];
+        double[] s = new double[STRIDE * arcs.length];
+        sampleAll(arcs, s);
+        float[] out = new float[s.length];
+        for (int o = 0; o < s.length; o += STRIDE) {
+            out[o] = (float) (s[o] - ox);
+            out[o + 1] = (float) (s[o + 1] - oy);
+            out[o + 2] = (float) (s[o + 2] - oz);
+            out[o + 3] = (float) s[o + 3];
+            out[o + 4] = (float) s[o + 4];
+            out[o + 5] = (float) s[o + 5];
+        }
+        return out;
+    }
+
+    /**
+     * Lays the trail through samples {@link #write} gave (relative to (ox, oy, oz)): the first is the head, the rest the
+     * line back from it, so the body lies again as it did when they were taken. False, and the trail left as it was,
+     * when they are no trail: fewer than two, not whole samples, not numbers, or a normal of no length.
+     */
+    public boolean read(float[] data, double ox, double oy, double oz) {
+        int n = data.length / STRIDE;
+        if (n < 2 || n > CAP || data.length != n * STRIDE) return false;
+        for (int o = 0; o < data.length; o += STRIDE) {
+            for (int i = 0; i < STRIDE; i++) if (!Float.isFinite(data[o + i])) return false;
+            if (sq(data[o + 3]) + sq(data[o + 4]) + sq(data[o + 5]) < 0.25) return false;
+        }
+        size = 0;
+        for (int o = (n - 1) * STRIDE; o > 0; o -= STRIDE) {
+            double l = Math.sqrt(sq(data[o + 3]) + sq(data[o + 4]) + sq(data[o + 5]));
+            add(data[o] + ox, data[o + 1] + oy, data[o + 2] + oz, data[o + 3] / l, data[o + 4] / l, data[o + 5] / l);
+        }
+        double l = Math.sqrt(sq(data[3]) + sq(data[4]) + sq(data[5]));
+        set(head, 0, data[0] + ox, data[1] + oy, data[2] + oz, data[3] / l, data[4] / l, data[5] / l);
+        laid = true;
+        lastStep = 0.0;
+        return true;
     }
 
     /**
@@ -124,6 +173,37 @@ public final class SkeinTrail {
         double cx = x1 + tx * a, cy = y1 + ty * a, cz = z1 + tz * a;
         if (Math.sqrt(sq(cx - x2) + sq(cy - y2) + sq(cz - z2)) > gap + 1.0) return null;
         return new double[]{cx, cy, cz};
+    }
+
+    /**
+     * The box round the stretch of body between two samples (positions and normals at at[a..a+5] and at[b..b+5], as
+     * {@link #sampleAll} gives them), as {minX, minY, minZ, maxX, maxY, maxZ} in out: a slab {@code thick} thick and
+     * {@code wide} wide lying along the stretch, each end lifted half its thickness off its own rock, squared to the
+     * world's axes. So it is thin across the rock and wide across the body whichever way the stretch runs, along a
+     * floor or straight up a wall (where a box kept upright would cover only its own height of the body).
+     */
+    public static void stretchBox(double[] at, int a, int b, double wide, double thick, double[] out) {
+        double h = thick / 2.0, w = wide / 2.0;
+        double ax = at[a] + at[a + 3] * h, ay = at[a + 1] + at[a + 4] * h, az = at[a + 2] + at[a + 5] * h;
+        double bx = at[b] + at[b + 3] * h, by = at[b + 1] + at[b + 4] * h, bz = at[b + 2] + at[b + 5] * h;
+        // the rock's normal along the stretch (half way between its ends', over an edge)
+        double nx = at[a + 3] + at[b + 3], ny = at[a + 4] + at[b + 4], nz = at[a + 5] + at[b + 5];
+        double nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (nl < 1.0E-6) { nx = at[b + 3]; ny = at[b + 4]; nz = at[b + 5]; nl = Math.max(1.0E-6, Math.sqrt(nx * nx + ny * ny + nz * nz)); }
+        nx /= nl; ny /= nl; nz /= nl;
+        // the way across the body: square to the stretch and the normal, or every way along the rock for no stretch
+        double dx = bx - ax, dy = by - ay, dz = bz - az;
+        double sx = ny * dz - nz * dy, sy = nz * dx - nx * dz, sz = nx * dy - ny * dx;
+        double sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
+        if (sl > 1.0E-6) { sx = Math.abs(sx) / sl; sy = Math.abs(sy) / sl; sz = Math.abs(sz) / sl; }
+        else { sx = 1.0 - Math.abs(nx); sy = 1.0 - Math.abs(ny); sz = 1.0 - Math.abs(nz); }
+        double ex = Math.abs(nx) * h + sx * w, ey = Math.abs(ny) * h + sy * w, ez = Math.abs(nz) * h + sz * w;
+        out[0] = Math.min(ax, bx) - ex;
+        out[1] = Math.min(ay, by) - ey;
+        out[2] = Math.min(az, bz) - ez;
+        out[3] = Math.max(ax, bx) + ex;
+        out[4] = Math.max(ay, by) + ey;
+        out[5] = Math.max(az, bz) + ez;
     }
 
     /** Drops the oldest points while the rest still reach {@code keep} behind the head. */

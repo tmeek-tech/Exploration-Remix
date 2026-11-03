@@ -9,6 +9,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -42,8 +47,10 @@ import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.entity.IEntityAdditionalSpawnData;
 import net.minecraftforge.entity.PartEntity;
 import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
+import net.minecraftforge.network.NetworkHooks;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -69,10 +76,12 @@ import java.util.function.DoubleSupplier;
  * near it ({@link FireflySwarm}), creeping up in short bursts and long freezes, strikes into it and eats a few; then it
  * is fed for a minute or three. It never goes into the Asurine Geodes, the Blue Reaches' refuge.
  *
- * <p>The head carries the main box; the body is {@link #SECTION_AT}.length sections along the trail ({@link Section},
- * Forge's multipart parts, as the ender dragon has), so any of it can be hit, and a hit on a section hurts the Skein.
+ * <p>The head carries the main box; the body is {@link #SECTION_AT}.length sections along the trail, and one more for
+ * its jaws ({@link Section}, Forge's multipart parts, as the ender dragon has), so any of it can be hit, and a hit on a
+ * section hurts the Skein. The trail is saved with it and sent to each client that starts tracking it, so its body
+ * comes back lying where it lay.
  */
-public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
+public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IEntityAdditionalSpawnData {
     // ------------------------------------------------------------------------------------------------ tuning
     /** Movement speed is blocks a tick at a speed of 1 (ClimbMoveControl): its bursts run at about a player's sprint. */
     public static final double HEALTH = 60.0, ARMOR = 6.0, SPEED = 0.29, KNOCKBACK_RESISTANCE = 0.8;
@@ -98,6 +107,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
     /** How far and how long it may touch nothing (rounding an edge) before it falls (as the Mossback). */
     static final double AIR_REACH = 1.5;
     static final int AIR_GRACE = 40;
+    /** Half blocks of open rock a spawn spot needs behind the head ({@link #openLength}): room for most of its body. */
+    public static final int BODY_ROOM = 6;
     /** A patter of feet every this many blocks it runs. */
     static final double PATTER_EVERY = 1.7;
     /** How much of the way to its new heading the drawn head turns each tick. */
@@ -114,8 +125,43 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
     /** The hit sections along the body: how far back along the trail each lies, and its box (the head has the main box). */
     static final double[] SECTION_AT = {1.3, 2.15, 2.95, 3.7};
     static final float[] SECTION_W = {1.25F, 1.05F, 0.85F, 0.65F}, SECTION_H = {0.55F, 0.5F, 0.45F, 0.4F};
+    /**
+     * The stretch of trail the sections' boxes cover between them: from just inside the head's box (heading up or down
+     * a wall, that box covers only its height of the body) to the tips of its spurs. Each box runs from half way to the
+     * section before to half way to the one after.
+     */
+    static final double SECTIONS_FROM = 0.3, SECTIONS_TO = 4.1;
+    /** Where each section's box starts and ends along the trail, after the head (0): see {@link #SECTIONS_FROM}. */
+    private static final double[] SECTION_ENDS = sectionEnds();
+    /**
+     * The jaws' part: from the tips of its mandibles, this far ahead of the point under its head, back to this far
+     * ahead, inside the head's box (heading up or down a wall, the head's box does not reach its jaws). The last part.
+     */
+    static final double JAWS_TIP = 1.0, JAWS_BACK = 0.25;
+    static final float JAWS_W = 0.65F, JAWS_H = 0.4F;
+    static final int JAWS = SECTION_AT.length;
+    /**
+     * Where along its trail its body is saved, and sent to a client that starts tracking it: its head, each of its
+     * plates, and the end of what it keeps. A body laid back through these lies as it did, each plate where it was.
+     */
+    static final double[] KEPT_AT = keptAt();
 
     public static double plateAt(int k) { return PLATE_START + PLATE_STEP * k; }
+
+    private static double[] sectionEnds() {
+        double[] e = new double[SECTION_AT.length + 2];
+        e[1] = SECTIONS_FROM;
+        for (int i = 1; i < SECTION_AT.length; i++) e[i + 1] = (SECTION_AT[i - 1] + SECTION_AT[i]) / 2.0;
+        e[SECTION_AT.length + 1] = SECTIONS_TO;
+        return e;
+    }
+
+    private static double[] keptAt() {
+        double[] a = new double[PLATES + 2];
+        for (int k = 0; k < PLATES; k++) a[k + 1] = plateAt(k);
+        a[PLATES + 1] = TRAIL_KEEP;
+        return a;
+    }
 
     public static final ResourceKey<Biome> REFUGE = ResourceKey.create(Registries.BIOME, new ResourceLocation(ExplorationRemix.MOD_ID, "asurine_geodes"));
     /**
@@ -136,6 +182,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
 
     private final Section[] sections;
     private final SkeinTrail trail = new SkeinTrail(TRAIL_KEEP);
+    private double airRun;                   // how far it has gone touching nothing (each side reckons its own)
     private final SkeinGait gait = new SkeinGait();
     private final DoubleSupplier rnd = () -> random.nextDouble();
     private int stateTicks, stateLength;
@@ -168,8 +215,9 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
 
     public SkeinEntity(EntityType<? extends Monster> type, Level level) {
         super(type, level);
-        this.sections = new Section[SECTION_AT.length];
-        for (int i = 0; i < sections.length; i++) sections[i] = new Section(this, i, SECTION_W[i], SECTION_H[i]);
+        this.sections = new Section[SECTION_AT.length + 1];
+        for (int i = 0; i < SECTION_AT.length; i++) sections[i] = new Section(this, i, SECTION_W[i], SECTION_H[i]);
+        sections[JAWS] = new Section(this, JAWS, JAWS_W, JAWS_H);
         if (IDS != null) setId(IDS.getAndAdd(sections.length + 1) + 1);
         this.moveControl = new ClimbMoveControl(this);
         this.xpReward = 25;
@@ -253,20 +301,39 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         return hurt(source, amount);
     }
 
-    /** Sets each section on the trail where it lies, its box against the rock under it. */
+    /**
+     * Sets each section's box over its stretch of the trail ({@link #SECTIONS_FROM}), its underside on the rock there,
+     * thin across the rock and as wide as its part of the body whichever way the trail runs: a box kept upright would
+     * cover only its own height of a body running straight up a wall, and a blow at the rest would go through to the
+     * rock. The jaws' part goes ahead of the head, the way the server has it heading.
+     */
     private void placeSections() {
-        double[] out = new double[6 * sections.length];
-        trail.sampleAll(SECTION_AT, out);
-        for (int i = 0; i < sections.length; i++) {
-            Section s = sections[i];
-            double ux = out[6 * i + 3], uy = out[6 * i + 4], uz = out[6 * i + 5];
-            double w = s.getBbWidth() / 2.0, h = s.getBbHeight() / 2.0;
-            double ext = Math.abs(ux) * w + Math.abs(uy) * h + Math.abs(uz) * w;
-            double cx = out[6 * i] + ux * ext, cy = out[6 * i + 1] + uy * ext, cz = out[6 * i + 2] + uz * ext;
-            s.xo = s.getX(); s.yo = s.getY(); s.zo = s.getZ();
-            s.xOld = s.xo; s.yOld = s.yo; s.zOld = s.zo;
-            s.setPos(cx, cy - h, cz);
+        double[] at = new double[6 * SECTION_ENDS.length], box = new double[6];
+        trail.sampleAll(SECTION_ENDS, at);
+        for (int i = 0; i < SECTION_AT.length; i++) {
+            SkeinTrail.stretchBox(at, 6 * (i + 1), 6 * (i + 2), sections[i].getBbWidth(), sections[i].getBbHeight(), box);
+            fit(sections[i], box);
         }
+        // along its rock at the head, or else the way the trail runs into the head
+        Vector3f sf = entityData.get(DATA_FORWARD);
+        double nx = at[3], ny = at[4], nz = at[5], along = sf.x * nx + sf.y * ny + sf.z * nz;
+        double fx = sf.x - nx * along, fy = sf.y - ny * along, fz = sf.z - nz * along;
+        if (fx * fx + fy * fy + fz * fz < 1.0E-4) { fx = at[0] - at[6]; fy = at[1] - at[7]; fz = at[2] - at[8]; }
+        double fl = Math.max(1.0E-6, Math.sqrt(fx * fx + fy * fy + fz * fz));
+        fx /= fl; fy /= fl; fz /= fl;
+        double[] jaws = {at[0] + fx * JAWS_TIP, at[1] + fy * JAWS_TIP, at[2] + fz * JAWS_TIP, nx, ny, nz,
+                at[0] + fx * JAWS_BACK, at[1] + fy * JAWS_BACK, at[2] + fz * JAWS_BACK, nx, ny, nz};
+        SkeinTrail.stretchBox(jaws, 0, 6, JAWS_W, JAWS_H, box);
+        fit(sections[JAWS], box);
+    }
+
+    /** Moves {@code s} to the box {minX, minY, minZ, maxX, maxY, maxZ}, its feet at the box's bottom middle. */
+    private static void fit(Section s, double[] b) {
+        s.xo = s.getX(); s.yo = s.getY(); s.zo = s.getZ();
+        s.xOld = s.xo; s.yOld = s.yo; s.zOld = s.zo;
+        s.setPos((b[0] + b[3]) / 2.0, b[1], (b[2] + b[5]) / 2.0);
+        // after setPos, which sets the upright box its size gives (sections never tick, so it stays till the next)
+        s.setBoundingBox(new AABB(b[0], b[1], b[2], b[3], b[4], b[5]));
     }
 
     /** Whether {@code e}'s box is against its body (the head's box or a section's). */
@@ -961,10 +1028,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         Vec3 up = normal(p.rock());
         Vec3 a = Math.abs(up.y) > 0.9 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
         Vec3 b = up.cross(a);
-        // the point on its rock under the middle of its box, as feet() has it
-        double w = type.getWidth() / 2.0, h = type.getHeight() / 2.0;
-        double ext = Math.abs(up.x) * w + Math.abs(up.y) * h + Math.abs(up.z) * w;
-        Vec3 feet = p.pos().add(0, h, 0).subtract(up.scale(ext));
+        Vec3 feet = placedFeet(type, p);
         Vec3 best = a;
         double bestScore = -1;
         for (int i = 0; i < 8; i++) {
@@ -974,6 +1038,24 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
             if (score > bestScore) { bestScore = score; best = fwd; }
         }
         return best;
+    }
+
+    /**
+     * How many half blocks of open rock there are behind a Skein set down at {@code p} with the best heading {@link
+     * #openHeading} finds. Its body is laid straight back from its head, and stays so until it has walked its length:
+     * the spawner wants {@link #BODY_ROOM} of it, not a body laid into a step or out over a drop.
+     */
+    public static int openLength(Level level, EntityType<?> type, Placement p) {
+        Vec3 feet = placedFeet(type, p);
+        return openBehind(level, feet, openHeading(level, type, p, () -> 0.0), normal(p.rock()));
+    }
+
+    /** The point on its rock under the middle of the box of a Skein set down at {@code p}, as feet() has it. */
+    private static Vec3 placedFeet(EntityType<?> type, Placement p) {
+        Vec3 up = normal(p.rock());
+        double w = type.getWidth() / 2.0, h = type.getHeight() / 2.0;
+        double ext = Math.abs(up.x) * w + Math.abs(up.y) * h + Math.abs(up.z) * w;
+        return p.pos().add(0, h, 0).subtract(up.scale(ext));
     }
 
     /** How many half blocks back from {@code feet} (against {@code fwd}) there is open air over rock, up to its length. */
@@ -997,6 +1079,9 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
+        // its body as it lies, so that it does not come back laid straight through the rock
+        float[] kept = trail.write(KEPT_AT, getX(), getY(), getZ());
+        if (kept.length > 0) tag.put("Trail", newFloatList(kept));
         tag.putInt("Hunger", hunger);
         tag.putFloat("ForwardX", (float) forward.x);
         tag.putFloat("ForwardY", (float) forward.y);
@@ -1006,12 +1091,53 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
+        // (its position is read by now; without a trail, or a bad one, it lays one straight on its first tick)
+        ListTag kept = tag.getList("Trail", Tag.TAG_FLOAT);
+        float[] t = new float[kept.size()];
+        for (int i = 0; i < t.length; i++) t[i] = kept.getFloat(i);
+        trail.read(t, getX(), getY(), getZ());
         hunger = tag.getInt("Hunger");
         Vec3 f = new Vec3(tag.getFloat("ForwardX"), tag.getFloat("ForwardY"), tag.getFloat("ForwardZ"));
         if (f.lengthSqr() > 1.0E-4) {
             forward = f.normalize();
             entityData.set(DATA_FORWARD, new Vector3f((float) forward.x, (float) forward.y, (float) forward.z));
         }
+    }
+
+    /** Forge's spawn packet, so that it carries its body as it lies to each client that starts tracking it. */
+    @Override
+    public Packet<ClientGamePacketListener> getAddEntityPacket() {
+        return NetworkHooks.getEntitySpawningPacket(this);
+    }
+
+    /** The way its head points, and its trail at {@link #KEPT_AT} (none when it has none yet): see readSpawnData. */
+    @Override
+    public void writeSpawnData(FriendlyByteBuf buf) {
+        buf.writeFloat((float) forward.x);
+        buf.writeFloat((float) forward.y);
+        buf.writeFloat((float) forward.z);
+        float[] kept = trail.write(KEPT_AT, getX(), getY(), getZ());
+        buf.writeVarInt(kept.length);
+        for (float v : kept) buf.writeFloat(v);
+    }
+
+    /**
+     * On the client, as it first sees it (its position set, its synced data not yet come): its body lies as the
+     * server's does, never laid straight back from its head through whatever rock is there, and its head is in its
+     * pose already. Without a trail it lays one straight on its first tick, as the server did.
+     */
+    @Override
+    public void readSpawnData(FriendlyByteBuf buf) {
+        Vec3 fwd = new Vec3(buf.readFloat(), buf.readFloat(), buf.readFloat());
+        int n = buf.readVarInt();
+        if (n < 0 || n > 6 * KEPT_AT.length) return;
+        float[] kept = new float[n];
+        for (int i = 0; i < n; i++) kept[i] = buf.readFloat();
+        if (!trail.read(kept, getX(), getY(), getZ())) return;
+        placeSections();
+        double[] head = new double[6];
+        trail.sample(0.0, head);
+        poseHead(fwd, new Vec3(head[3], head[4], head[5]));
     }
 
     // ------------------------------------------------------------------------------------------------ dev commands
@@ -1077,12 +1203,32 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         if (level().isClientSide) clientTick();
     }
 
-    /** The head's new place goes on the trail, and the body's sections move along it. */
+    /**
+     * The head's new place goes on the trail, and the body's sections move along it. Back on rock after it has gone
+     * further than {@link #AIR_REACH} touching nothing (it fell, or lunged off a wall or the ceiling: rounding an edge,
+     * where the body pours round after the head, takes less), its body is laid afresh behind it on that rock rather than
+     * left hanging along the way it fell; on the client once its own box, a little behind the server's, is down on it.
+     */
     private void followHead() {
-        Vec3 up = level().isClientSide ? normal(clientRock) : up();
-        if (!trail.laid()) { layTrail(up); return; }
+        boolean client = level().isClientSide;
+        Direction rock = client ? clientRock : surface();
+        Vec3 up = normal(rock);
+        if (!trail.laid()) {
+            layTrail(up);
+            // first seen: its head starts in the pose it lies in, not rolling into it from upright
+            if (client) poseHead(clientForward, up);
+            return;
+        }
+        if (rock != null && airRun > AIR_REACH && (!client || touching(getBoundingBox(), rock))) {
+            airRun = 0.0;
+            layTrail(up);
+            return;
+        }
         Vec3 f = feet(up);
         trail.record(f.x, f.y, f.z, up.x, up.y, up.z);
+        // (how far it moved, not the trail's step: that jumps from one side of its box to another as it leaves a wall)
+        if (rock == null && !isInWater()) airRun += Math.sqrt(Mth.square(getX() - xo) + Mth.square(getY() - yo) + Mth.square(getZ() - zo));
+        else if (rock == null || airRun <= AIR_REACH) airRun = 0.0;     // swimming, or round an edge onto rock
         placeSections();
     }
 
@@ -1091,12 +1237,17 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
     /**
      * The rock it clings to as the client sees it: the synced side while its box (where the client has it) touches that
      * rock, else the rock it was on while it still touches it, else whatever it touches. The client's box lags the
-     * server's a little, so the plain synced side would now and then put the trail a hair off the rock.
+     * server's a little, so the plain synced side would now and then put the trail a hair off the rock. With none
+     * synced (it falls or swims), the rock it was on only while its box still touches it (rounding an edge), else
+     * none, as on the server: a Skein falling off the ceiling is drawn falling, not still clinging belly up.
      */
     private void updateClientRock() {
         AABB box = getBoundingBox();
         Direction synced = surface();
-        if (synced == null) { clientRock = isInWater() ? null : clientRock; return; }
+        if (synced == null) {
+            clientRock = !isInWater() && clientRock != null && touching(box, clientRock) ? clientRock : null;
+            return;
+        }
         if (touching(box, synced)) { clientRock = synced; return; }
         if (clientRock != null && touching(box, clientRock)) return;
         if (touching(box, Direction.DOWN)) { clientRock = Direction.DOWN; return; }
@@ -1179,6 +1330,20 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         if (tickCount < 2) headOrientO.set(headOrient);
     }
 
+    /**
+     * Puts its head straight into its pose, belly to {@code up}, pointing along {@code fwd} as it lies along that rock:
+     * as the client first sees it, so that one on a wall or the ceiling does not roll into its pose from upright.
+     */
+    private void poseHead(Vec3 fwd, Vec3 up) {
+        Vec3 u = up.normalize();
+        Vec3 f = fwd.subtract(u.scale(fwd.dot(u)));
+        if (u.lengthSqr() < 0.5 || f.lengthSqr() < 1.0E-4) return;
+        clientUp = u;
+        clientForward = f.normalize();
+        headOrient.set(basis(clientForward, clientUp));
+        headOrientO.set(headOrient);
+    }
+
     /** The rotation that turns a model's back up along {@code up} and its head along {@code fwd}. */
     public static Quaternionf basis(Vec3 fwd, Vec3 up) {
         // JOML takes the columns: the model's x (right), y (back) and z (tail) in the world
@@ -1206,8 +1371,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
 
     /**
      * One section of the Skein's long body: a box on its trail that can be hit (and is hit by arrows and blades like
-     * any entity), handing the damage to the Skein. Never saved, never sent: the Skein makes and places its own on
-     * each side.
+     * any entity), handing the damage to the Skein. Never saved, never sent: the Skein makes its own on each side and
+     * places them by its trail (which is saved and sent).
      */
     public static final class Section extends PartEntity<SkeinEntity> {
         public final int index;
