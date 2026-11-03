@@ -242,13 +242,19 @@ class GalleriesFieldTest {
 
     /**
      * The corners and the per-block pass agree with the field's exact per-block density: in two boxes of 64 x 64 columns
-     * (one in a tube country) every block of the Galleries' rows under the join, made as the game makes it, is rock exactly
-     * where {@link GalleriesField#fineBlocks} is positive (the corners never decide anything there), and no density over
-     * the whole layer and the join is NaN.
+     * (one round the tube spot of the first standing tube country near the origin) every block of the Galleries' rows
+     * under the join, made as the game makes it, is rock exactly where {@link GalleriesField#fineBlocks} is positive (the
+     * corners never decide anything there), and no density over the whole layer and the join is NaN.
      */
     @Test
     void cornersNeverDecide() {
-        long[][] boxes = {{8675309, 154, -306}, {12345, -1000, 2200}};
+        long[][] boxes = {{8675309, 0, 0}, {12345, -1000, 2200}};
+        Terrain spots = new Terrain(TerrainSettings.defaults(), -64, boxes[0][0]);
+        int[] spot = null;
+        for (int ci = -2; ci < 2 && spot == null; ci++) for (int cj = -2; cj < 2 && spot == null; cj++) spot = spots.galleries.tubeSpot(ci, cj);
+        assertNotNull(spot, "no standing tube country near the origin");
+        boxes[0][1] = spot[0] - 32;
+        boxes[0][2] = spot[2] - 32;
         int tubeBlocks = 0;
         for (long[] b : boxes) {
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, b[0]);
