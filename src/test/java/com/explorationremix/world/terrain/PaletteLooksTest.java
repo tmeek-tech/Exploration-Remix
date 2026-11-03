@@ -28,7 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The looks of the two bottom layers (Palette.shell): natural stone only, and no made block anywhere in them (palette,
  * features); no stripe at the high-water mark, and a tide that only darkens a column, once; every face of a column its
  * column's stone, top to underside; the Wasteland's and the Galleries' looks blended over ragged rows at the join; in the
- * Galleries magma only on rock the lava touches, checked on the blocks the real fields build; crying obsidian sparingly;
+ * Galleries magma only on rock the lava touches, checked on the blocks the real fields build; the Caldera's cinders on its
+ * cones, not on the walls and vault over them; crying obsidian sparingly;
  * columns that read one by one; no magma shore where the Wasteland keeps its lava off an opening; and the rock of layers
  * 0 and 1 and of the upper caves exactly as 0.5.0 made it.
  */
@@ -42,8 +43,9 @@ class PaletteLooksTest {
     }
 
     /**
-     * Stand-in look queries: 3x3 columns, clusters, tube walls, cones and kept lava in fixed patterns; {@code hang} and
-     * {@code cone}, when set, put every place in (or out of) a cluster or on (or off) a cone.
+     * Stand-in look queries: 3x3 columns, clusters, tube walls, cones (their ground over every place) and kept lava in
+     * fixed patterns; {@code hang} and {@code cone}, when set, put every place in (or out of) a cluster or on (or off) a
+     * cone.
      */
     static final class Stand implements LookQueries {
         boolean kept;
@@ -55,6 +57,7 @@ class PaletteLooksTest {
         @Override public double tubeShellDepth(int x, int y, int z) { return Math.max(0, tube(x, y, z)); }
         @Override public boolean tubeRib(int x, int y, int z) { return (x & 7) == 0; }
         @Override public double cone(int x, int z) { return cone != null ? cone : Math.floorMod(x, 40) / 20.0; }
+        @Override public double coneTop(int x, int z) { return 1e9; }
         @Override public boolean lavaKept(int x, int y, int z) { return kept; }
     }
 
@@ -309,6 +312,43 @@ class PaletteLooksTest {
             allMagma += touchedMagma;
         }
         assertTrue(allMagma >= 0.10 * allTouched && allMagma <= 0.15 * allTouched, "magma on " + allMagma + " of " + allTouched + " blocks the lava touches");
+    }
+
+    @Test
+    void theConesStoneStaysOnTheCones() {
+        // The Caldera's cones (the field's cone floors, seed 8675309): cinders and the craters' throats on the cone's own
+        // ground, but the walls, hanging masses, ledges and vault over a cone's foot are the hall's, never scoria,
+        // scorchia or magma (round 1's palette dressed the whole height over a cone's foot as the cone)
+        Terrain t = terrain();
+        Palette p = t.palette;
+        LookQueries q = t.looks;
+        int W = t.shape.waterY(Terrain.GALLERIES);
+        Random r = new Random(11);
+        int cones = 0, flank = 0, cinders = 0, over = 0;
+        for (int k = 0; k < 400000 && cones < 300; k++) {
+            int x = r.nextInt(6000) - 3000, z = r.nextInt(6000) - 3000;
+            double d = q.cone(x, z), h = q.coneTop(x, z);
+            if (d >= 1 || h < W) continue;   // a cone's foot over a cone standing out of the lava
+            cones++;
+            int g = (int) Math.floor(h);
+            if (d >= Palette.CRATER && d <= 0.8) {
+                // the top block of a flank: cinders, but for its cooling cracks
+                Rock a = p.shell(DeepBiome.CALDERA, Terrain.GALLERIES, x, g, z, 1, 12, false);
+                flank++;
+                if (a == Rock.SCORIA || a == Rock.SCORCHIA) cinders++;
+            }
+            for (int y = Math.max(W + 1, g + Palette.CONE_OVER + 1); y <= W + 130; y += 3) {
+                for (int[] ab : new int[][]{{12, 12}, {12, 1}, {1, 12}}) {   // a wall, an underside, a ledge's top
+                    Rock b = p.shell(DeepBiome.CALDERA, Terrain.GALLERIES, x, y, z, ab[0], ab[1], false);
+                    over++;
+                    assertTrue(b != Rock.SCORIA && b != Rock.SCORCHIA && b != Rock.MAGMA,
+                            b + " over a cone's ground at " + x + " " + y + " " + z + " (ground W" + (g - W >= 0 ? "+" : "") + (g - W) + ", d " + d + ")");
+                }
+            }
+        }
+        assertTrue(cones >= 300, "cone feet found: " + cones);
+        assertTrue(over > 20000, "places over the cones tested: " + over);
+        assertTrue(cinders > 0.7 * flank, "cinders on " + cinders + " of " + flank + " flank tops");
     }
 
     @Test

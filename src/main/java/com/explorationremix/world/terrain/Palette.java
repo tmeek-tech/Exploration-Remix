@@ -287,6 +287,20 @@ public final class Palette {
 
     /** How far from a Caldera cone's axis, in foot radii, its crater (the eruptions' vent) reaches. */
     static final double CRATER = 0.22;
+    /**
+     * How far over its cone ground ({@link LookQueries#coneTop}) a block still counts as the cone: the game's blocks follow
+     * the field's floor to within a block or two (its density is interpolated between corners four blocks apart).
+     */
+    static final int CONE_OVER = 3;
+
+    /**
+     * Where (x, y, z) lies on a Caldera cone, in foot radii from its axis ({@link LookQueries#cone}), 9 when off any: only
+     * the cone's own ground counts, not the walls, hanging masses and vault over its foot, which are the hall's.
+     */
+    private double coneAt(int x, int y, int z) {
+        double d = looks.cone(x, z);
+        return d < 1 && y > looks.coneTop(x, z) + CONE_OVER ? 9 : d;
+    }
 
     /**
      * Whether a block of rock round the Galleries' open space touches the table's lava, which fills the open space under
@@ -360,7 +374,7 @@ public final class Palette {
         boolean ceil = !floor && below <= 2;
         int W = s.waterY(look);
         if (look == Terrain.GALLERIES && b != DeepBiome.OBSIDIAN_TUBES) {
-            double cone = b == DeepBiome.CALDERA ? looks.cone(x, z) : 9;
+            double cone = b == DeepBiome.CALDERA ? coneAt(x, y, z) : 9;
             // Magma only where the table's lava touches the rock, in clumps on about one such block in eight, so the
             // banks stay dark and crisp, lit by the lava itself (picture 1); none on the shore over it, nor on the dry
             // column tops level with the lava a few blocks back from it. The Caldera's craters keep their throats of
@@ -524,11 +538,12 @@ public final class Palette {
 
     /**
      * The Caldera, the brightest place in the Galleries: a crust of blackstone-led columns, each one stone to its top,
-     * with plates of ember crust on the low ground, cones of cinders ({@link #cone}), and walls and a vault seamed and
-     * cracked with ember crust; magma where its lava touches the rock (basaltShell) and in the cones' craters.
+     * with plates of ember crust on the low ground, cones of cinders ({@link #cone}, on the cones' own ground only:
+     * {@link #coneAt}), and walls and a vault seamed and cracked with ember crust; magma where its lava touches the rock
+     * (basaltShell) and in the cones' craters.
      */
     private Rock caldera(int x, int y, int z, boolean top, boolean floor, boolean ceil, boolean wet, double n, int W) {
-        double d = looks.cone(x, z);
+        double d = coneAt(x, y, z);
         if (d < 1) return cone(x, y, z, d, n, W);
         long cell = looks.columnCell(x, z);
         if (floor) {

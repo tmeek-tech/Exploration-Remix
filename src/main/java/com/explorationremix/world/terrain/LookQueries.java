@@ -48,6 +48,13 @@ public interface LookQueries {
     double cone(int x, int z);
 
     /**
+     * The top of the Caldera's cone ground under column (x, z): the floor the cones give the column (very low where they
+     * give none). Over it a place in a cone's foot ({@link #cone} under 1) is the hall's wall, hanging mass or vault, not
+     * the cone.
+     */
+    double coneTop(int x, int z);
+
+    /**
      * Whether the layer's field keeps its lava off open space round (x, y, z) that lies at or under its table: the
      * Wasteland's rule that no lava sits next to an opening into the Galleries. The palette lays no magma shore there.
      */
@@ -62,6 +69,7 @@ public interface LookQueries {
         @Override public double tubeShellDepth(int x, int y, int z) { return 1e9; }
         @Override public boolean tubeRib(int x, int y, int z) { return false; }
         @Override public double cone(int x, int z) { return 1e9; }
+        @Override public double coneTop(int x, int z) { return -1e9; }
         @Override public boolean lavaKept(int x, int y, int z) { return false; }
     };
 
@@ -79,6 +87,7 @@ public interface LookQueries {
             @Override public double tubeShellDepth(int x, int y, int z) { return g != null ? g.tubeShellDepth(x, y, z) : 1e9; }
             @Override public boolean tubeRib(int x, int y, int z) { return g != null && g.tubeRib(x, y, z); }
             @Override public double cone(int x, int z) { return g != null ? g.cone(x, z) : 1e9; }
+            @Override public double coneTop(int x, int z) { return g != null ? g.coneTop(x, z) : -1e9; }
             @Override public boolean lavaKept(int x, int y, int z) { return w != null && w.lavaKept(x, y, z); }
         };
     }

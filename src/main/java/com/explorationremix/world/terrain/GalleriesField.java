@@ -311,6 +311,8 @@ public final class GalleriesField {
         final double[] colE = new double[COL_CACHE];
         /** The column's cone distance ({@link #cone(int, int)}), NaN until first asked. */
         final double[] colCone = new double[COL_CACHE];
+        /** The top of the column's cone ground ({@link #coneTop(int, int)}), NaN until first asked. */
+        final double[] colConeTop = new double[COL_CACHE];
         final int[] ij = new int[2];
         final double[] tmp = new double[2], sx = new double[9], sz = new double[9];
         final Climate cl = new Climate();
@@ -345,6 +347,7 @@ public final class GalleriesField {
         k.col[slot] = c;
         k.colE[slot] = e;
         k.colCone[slot] = Double.NaN;
+        k.colConeTop[slot] = Double.NaN;
         return c;
     }
 
@@ -369,6 +372,8 @@ public final class GalleriesField {
     static final double SPIRE_GRID = 24, SPIRE_P = 0.6, SPIRE_R0 = 3.5, SPIRE_R1 = 8;
     /** Caldera cones. */
     static final double CONE_GRID = 30, CONE_P = 0.8;
+    /** How far the cones sink where the Caldera fades out (its weight under 0.7). */
+    static final double CONE_SINK = 80;
 
     // ---- the landscape
     /** Domain warp of the large shapes: amplitude and period (blocks). */
@@ -568,7 +573,7 @@ public final class GalleriesField {
         // ---- sub-biomes
         if (cl.wCal > 0) {
             // cones stand in the lake, their craters the vents
-            F = Math.max(F, coneFloor(x, z) - 80 * (1 - smooth((cl.wCal - 0.2) / 0.5)));
+            F = Math.max(F, coneFloor(x, z) - CONE_SINK * (1 - smooth((cl.wCal - 0.2) / 0.5)));
         }
         if (cl.wCaus > 0.2) {
             // prisms stepping out of the lava: the coarse cells' tops scatter round the table
@@ -1135,6 +1140,21 @@ public final class GalleriesField {
         int slot = (x & 31) << 5 | (z & 31);
         double v = k.colCone[slot];
         if (v != v) k.colCone[slot] = v = coneDist(x, z);
+        return v;
+    }
+
+    /**
+     * The top of the cone ground under column (x, z): the floor the Caldera's cones give the column's cell, as
+     * {@link #shape} lays it (the highest cone floor at the cell's site, sunk where the Caldera fades), or about -1e9
+     * where the cell has none. Over it, the walls, hanging masses and vault over a cone's foot are not the cone. From the
+     * per-column cache, like {@link #cone(int, int)}.
+     */
+    public double coneTop(int x, int z) {
+        Cell c = column(x, z);
+        Caches k = caches.get();
+        int slot = (x & 31) << 5 | (z & 31);
+        double v = k.colConeTop[slot];
+        if (v != v) k.colConeTop[slot] = v = c.wCal > 0 ? coneFloor(c.x, c.z) - CONE_SINK * (1 - smooth((c.wCal - 0.2) / 0.5)) : -1e9;
         return v;
     }
 
