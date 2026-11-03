@@ -81,7 +81,10 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
     static final double STRIKE_RANGE = 4.0, TOUCH = 1.6;
     /** It never lunges at anyone further than this from where it first struck (and never chases at all). */
     static final double STRIKE_LEASH = 8.0;
-    /** After this long without striking, a new encounter starts where it next strikes. */
+    /**
+     * After this long without striking at a player (or once it has gone its own way beyond its leash from where it
+     * struck), a new encounter starts where it next strikes.
+     */
     static final int ENCOUNTER_TICKS = 600;
     /** A split second rearing (shorter when it strikes back), the lunge, and a moment before it strikes again. */
     static final int REAR_TICKS = 7, SNAP_REAR_TICKS = 3, SWARM_REAR_TICKS = 5, LUNGE_TICKS = 8, STRIKE_COOLDOWN = 30;
@@ -90,9 +93,19 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
     static final double AFTER_STRIKE_MIN = 3.0, AFTER_STRIKE_MAX = 6.0, BOLT_MIN = 10.0, BOLT_MAX = 20.0;
     /** A landed swarm this near draws it when hungry; it strikes into the swarm from this near. */
     static final double SWARM_SENSE = 12.0, SWARM_STRIKE = 2.6, SWARM_BITE = 1.4;
-    /** A stalk gives up after this long; its outings are this long (it starts another while the swarm stays). */
-    static final int STALK_GIVE_UP = 1200;
+    /**
+     * A stalk gives up after this long from its start (less than a swarm's longest stay, FireflySwarm.LAND_MAX, or it
+     * never would), or once its bursts get nowhere; its outings are this long (it starts another while the swarm stays).
+     */
+    static final int STALK_GIVE_UP = 700;
     static final double STALK_BUDGET = 40.0;
+    /** Ways it tries for a burst before it gives that pivot up (stalking only one: every way leads to the swarm). */
+    static final int PATH_TRIES = 6;
+    /**
+     * In the refuge it looks for the nearest open spot outside it on shells round it this far apart, out to this far,
+     * with at most this many points to a shell (so they lie further apart far out; it looks again at every snap).
+     */
+    static final int WAY_OUT_STEP = 4, WAY_OUT_REACH = 48, WAY_OUT_POINTS = 200;
     /** A meal of fireflies keeps it fed for one to three minutes; it chews this long. */
     static final int MEAL_MIN = 1200, MEAL_MAX = 3600, EAT_TICKS = 50;
     /** How far and how long it may touch nothing (rounding an edge) before it falls (as the Mossback). */
@@ -145,6 +158,10 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
     private double burstMoved;               // BURST: how far it has gone in this one
     @Nullable private Vec3 threat;           // BOLT: what it gets away from
     @Nullable private FireflySwarm prey;     // STALK, and a strike into a swarm
+    private long stalkSince;                 // STALK: when it set out after this swarm (its outings after it do not reset it)
+    @Nullable private FireflySwarm shunned;  // a swarm it gave up on, left be while it sits where it was then
+    @Nullable private BlockPos shunnedAt;
+    private boolean refugeTried;             // in the refuge: it has set out for the way out (again only once a rest ends)
     private boolean atSwarm;                 // REAR and LUNGE: the strike is at the swarm, not a player
     @Nullable private Vec3 anchor;           // where it first struck in this encounter
     private long lastStrike = -ENCOUNTER_TICKS;
@@ -269,11 +286,14 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         }
     }
 
-    /** Whether {@code e}'s box is against its body (the head's box or a section's). */
+    /**
+     * Whether it feels {@code e} against its body: {@code e}'s box against the head's box or a section's, with a clear
+     * line from that part to it (it feels nobody through a door, a pane, bars or rock).
+     */
     private boolean touches(Entity e) {
         AABB b = e.getBoundingBox();
-        if (getBoundingBox().inflate(0.4).intersects(b)) return true;
-        for (Section s : sections) if (s.getBoundingBox().inflate(0.4).intersects(b)) return true;
+        if (getBoundingBox().inflate(0.4).intersects(b) && clearTo(getBoundingBox().getCenter(), e)) return true;
+        for (Section s : sections) if (s.getBoundingBox().inflate(0.4).intersects(b) && clearTo(s.getBoundingBox().getCenter(), e)) return true;
         return false;
     }
 
@@ -429,7 +449,11 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         stateTicks++;
         if (hunger > 0) hunger--;
         if (strikeCooldown > 0) strikeCooldown--;
-        if (anchor != null && level().getGameTime() - lastStrike > ENCOUNTER_TICKS) anchor = null;
+        // the encounter is over a while after its last strike, or once it has gone its own way (it never chases) beyond
+        // its leash from where it struck: a player it then meets starts a new one
+        byte s = state();
+        if (anchor != null && (level().getGameTime() - lastStrike > ENCOUNTER_TICKS
+                || s != REAR && s != LUNGE && s != BOLT && position().distanceTo(anchor) > STRIKE_LEASH)) anchor = null;
         switch (state()) {
             case STILL -> still();
             case SKITTER, BOLT -> outing();
@@ -474,9 +498,15 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         toState(STILL, 0);
     }
 
-    /** It finds itself in the refuge (set down there, say): it goes out at once, never to come back. */
+    /**
+     * It finds itself in the refuge (set down there, say): it goes out at once, never to come back (its roaming there
+     * heads for the nearest way out, see beginPivot). Should that outing end with it still inside, it tries again only
+     * when its rest is over, not every second.
+     */
     private boolean leaveRefuge() {
-        if (!isRefuge(blockPosition())) return false;
+        if (!isRefuge(blockPosition())) { refugeTried = false; return false; }
+        if (refugeTried) return false;
+        refugeTried = true;
         startOuting(SKITTER, SkeinGait.Mood.ROAM, SkeinGait.OUTING_MAX);
         return true;
     }
@@ -497,13 +527,19 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         }
     }
 
-    /** A snap: it stops dead and picks the way of its coming burst; it turns its head that way over the pivot's ticks. */
+    /**
+     * A snap: it stops dead and picks the way of its coming burst; it turns its head that way over the pivot's ticks.
+     * Roaming in the refuge, it first tries for the nearest way out. Stalking, it asks the way only once: the swarm is
+     * where every snap leads, so a second try would only search the same way again.
+     */
     private void beginPivot() {
         stopDead();
         pendingPath = null;
-        for (int i = 0; i < 6 && pendingPath == null; i++) {
+        Vec3 out = gait.mood() == SkeinGait.Mood.ROAM && isRefuge(blockPosition()) ? wayOutOfRefuge() : null;
+        int tries = gait.mood() == SkeinGait.Mood.STALK ? 1 : PATH_TRIES;
+        for (int i = 0; i < tries && pendingPath == null; i++) {
             if (i > 0) gait.reroll(rnd);
-            pendingPath = burstPath();
+            pendingPath = burstPath(i == 0 ? out : null);
         }
         pivotWant = pendingPath != null ? firstLeg(pendingPath) : null;
     }
@@ -547,16 +583,19 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
 
     /**
      * The way the coming burst runs: roaming, a spot about the burst's length along its heading snapped by the gait's
-     * turn; bolting, the same away from what it flees; stalking, towards the swarm. Null when there is no way there
-     * (rock, unloaded chunks, or a way through the refuge).
+     * turn; bolting, the same away from what it flees; stalking, towards the swarm; with {@code toward} (the way out
+     * of the refuge), towards that whatever the snap. Null when there is no way there (rock, unloaded chunks, or a way
+     * through the refuge).
      */
     @Nullable
-    private Path burstPath() {
+    private Path burstPath(@Nullable Vec3 toward) {
         Vec3 up = up();
         BlockPos goal;
         if (gait.mood() == SkeinGait.Mood.STALK) {
             if (prey == null) return null;
             goal = nodeNear(prey.centre(), 3);
+        } else if (toward != null) {
+            goal = nodeNear(toward, 3);
         } else {
             Vec3 base = gait.mood() == SkeinGait.Mood.BOLT ? awayFrom(threat, up) : forward;
             Vec3 heading = rotate(base, up, gait.turn());
@@ -618,10 +657,13 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         return best;
     }
 
-    /** Whether a path runs into the refuge (out of it is fine, for one that finds itself there). */
+    /**
+     * Whether a path runs into the refuge. For one that finds itself in there any path will do: its goals all lie
+     * outside (nodeNear), so one that ends short of its goal, still inside, is on its way out.
+     */
     private boolean crossesRefuge(Path p) {
-        boolean inside = isRefuge(blockPosition());
-        for (int i = inside ? p.getNodeCount() - 1 : 0; i < p.getNodeCount(); i++) {
+        if (isRefuge(blockPosition())) return false;
+        for (int i = 0; i < p.getNodeCount(); i++) {
             Node n = p.getNode(i);
             if (isRefuge(new BlockPos(n.x + 1, n.y, n.z + 1))) return true;
         }
@@ -631,6 +673,33 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
     /** The Asurine Geodes are the Blue Reaches' refuge: no hunter goes there. */
     public boolean isRefuge(BlockPos p) {
         return level().isLoaded(p) && level().getBiome(p).is(REFUGE);
+    }
+
+    /**
+     * The nearest open spot outside the refuge (the middle of a block with nothing solid in it), looked for on shells
+     * round it {@link #WAY_OUT_STEP} blocks apart out to {@link #WAY_OUT_REACH}, points spread evenly over each (a
+     * Fibonacci sphere), the one nearest its own level on the nearest shell that has any; never reading an unloaded
+     * chunk. Null when there is none so near.
+     */
+    @Nullable
+    private Vec3 wayOutOfRefuge() {
+        Vec3 c = bodyCentre();
+        double golden = Math.PI * (3.0 - Math.sqrt(5.0));
+        for (int r = WAY_OUT_STEP; r <= WAY_OUT_REACH; r += WAY_OUT_STEP) {
+            int n = Math.min(WAY_OUT_POINTS, (int) Math.ceil(4.0 * Math.PI * Mth.square(r / (double) WAY_OUT_STEP)));
+            Vec3 best = null;
+            double bestRise = Double.MAX_VALUE;
+            for (int i = 0; i < n; i++) {
+                double y = 1.0 - 2.0 * (i + 0.5) / n, flat = Math.sqrt(1.0 - y * y), a = i * golden;
+                if (Math.abs(y) >= bestRise) continue;
+                BlockPos p = BlockPos.containing(c.x + Math.cos(a) * flat * r, c.y + y * r, c.z + Math.sin(a) * flat * r);
+                if (!level().isLoaded(p) || isRefuge(p) || !level().getBlockState(p).getCollisionShape(level(), p).isEmpty()) continue;
+                bestRise = Math.abs(y);
+                best = Vec3.atCenterOf(p);
+            }
+            if (best != null) return best;
+        }
+        return null;
     }
 
     /** {@code v} turned by {@code a} radians about the unit axis {@code k} (Rodrigues). */
@@ -653,7 +722,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
             // it never goes for anyone beyond its leash from where it first struck
             if (anchor != null && p.position().distanceTo(anchor) > STRIKE_LEASH) continue;
             double d = Math.sqrt(p.getBoundingBox().distanceToSqr(m));
-            boolean near = touches(p) || d < TOUCH || (d < STRIKE_RANGE && canSee(p));
+            // felt or seen, never through a door, a pane, bars or rock
+            boolean near = touches(p) || (d < TOUCH && clearTo(eyes(), p)) || (d < STRIKE_RANGE && canSee(p));
             if (near && d < bestD) { bestD = d; best = p; }
         }
         return best;
@@ -668,13 +738,18 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
 
     /** It sees what is in the open round its head (its feelers take in every side), not through rock. */
     public boolean canSee(LivingEntity t) {
-        if (t.isInvisible()) return false;
-        Vec3 eye = eyes();
-        for (Vec3 at : new Vec3[]{t.getEyePosition(), t.getBoundingBox().getCenter()}) {
-            HitResult hit = level().clip(new ClipContext(eye, at, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this));
-            if (hit.getType() == HitResult.Type.MISS) return true;
-        }
-        return false;
+        return !t.isInvisible() && clearTo(eyes(), t);
+    }
+
+    /** Whether there is a clear line from {@code from} to {@code t}'s eyes or its middle. */
+    private boolean clearTo(Vec3 from, Entity t) {
+        return clear(from, t.getEyePosition()) || clear(from, t.getBoundingBox().getCenter());
+    }
+
+    /** Whether a straight line from {@code from} to {@code to} meets nothing solid (rock, a door, a pane, bars). */
+    private boolean clear(Vec3 from, Vec3 to) {
+        HitResult hit = level().clip(new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this));
+        return hit.getType() == HitResult.Type.MISS;
     }
 
     private boolean huntable(LivingEntity t) {
@@ -729,13 +804,14 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         double sp = stateTicks <= 3 ? LUNGE_SPEED : LUNGE_SPEED * 0.45;
         Vec3 v = lungeDir.scale(sp);
         setDeltaMovement(v.x, onFloor() ? Math.max(getDeltaMovement().y, v.y + 0.02) : v.y, v.z);
-        // never past its leash
-        if (anchor != null && position().distanceTo(anchor) > STRIKE_LEASH) { afterStrike(aim); return; }
+        // never past its leash from where it struck at a player (a swarm it strikes at wherever it is)
+        if (!atSwarm && anchor != null && position().distanceTo(anchor) > STRIKE_LEASH) { afterStrike(aim); return; }
+        // it bites only what it reaches in the open: not through a door, a pane, bars or rock
         if (atSwarm) {
-            if (prey != null && mouth().distanceTo(prey.centre()) < SWARM_BITE) { eatFrom(prey); return; }
+            if (prey != null && mouth().distanceTo(prey.centre()) < SWARM_BITE && clear(eyes(), prey.centre())) { eatFrom(prey); return; }
         } else {
             LivingEntity t = getTarget();
-            if (t != null && new AABB(mouth(), mouth()).inflate(0.7).intersects(t.getBoundingBox())) { bite(t); return; }
+            if (t != null && new AABB(mouth(), mouth()).inflate(0.7).intersects(t.getBoundingBox()) && clearTo(eyes(), t)) { bite(t); return; }
         }
         if (stateTicks >= stateLength) afterStrike(aim);
     }
@@ -746,11 +822,15 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         afterStrike(t.position());
     }
 
-    /** The strike is over, bitten or missed: it skitters a few blocks off and freezes again. */
+    /**
+     * The strike is over, bitten or missed: it skitters a few blocks off and freezes again. A swarm it struck at and
+     * missed takes off all the same; only a strike at a player keeps the encounter (and its leash) going.
+     */
     private void afterStrike(@Nullable Vec3 from) {
         Vec3 dm = getDeltaMovement();
         setDeltaMovement(dm.x * 0.2, dm.y, dm.z * 0.2);
-        lastStrike = level().getGameTime();
+        if (!atSwarm) lastStrike = level().getGameTime();
+        else if (prey != null && prey.isAlive()) prey.scatter(mouth());
         strikeCooldown = STRIKE_COOLDOWN;
         setTarget(null);
         boltFrom(from != null ? from : position().add(forward), AFTER_STRIKE_MIN + random.nextDouble() * (AFTER_STRIKE_MAX - AFTER_STRIKE_MIN));
@@ -774,18 +854,40 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         if (hunger > 0) return false;
         FireflySwarm s = nearestSwarm();
         if (s == null) return false;
-        prey = s;
-        startOuting(STALK, SkeinGait.Mood.STALK, STALK_BUDGET);
+        startStalk(s);
         return true;
     }
 
+    /** It sets out after swarm {@code s}, for {@link #STALK_GIVE_UP} at most however many outings it takes. */
+    private void startStalk(FireflySwarm s) {
+        prey = s;
+        stalkSince = level().getGameTime();
+        startOuting(STALK, SkeinGait.Mood.STALK, STALK_BUDGET);
+    }
+
+    /** It gives up on the swarm it stalks, and leaves it be while it sits where it is now. */
+    private void shun(FireflySwarm s) {
+        shunned = s;
+        shunnedAt = s.anchor();
+    }
+
+    /** Whether it gave up on {@code s} where it sits (it forgets that once the swarm flies off, or lands elsewhere). */
+    private boolean shuns(FireflySwarm s) {
+        if (shunned != null && !(shunned.isAlive() && shunned.landed() && shunned.anchor().equals(shunnedAt))) {
+            shunned = null;
+            shunnedAt = null;
+        }
+        return s == shunned;
+    }
+
+    /** The nearest landed swarm within {@link #SWARM_SENSE} blocks, but not one it gave up on. */
     @Nullable
     private FireflySwarm nearestSwarm() {
         FireflySwarm best = null;
         double bestD = SWARM_SENSE * SWARM_SENSE;
         Vec3 c = bodyCentre();
         for (FireflySwarm s : level().getEntitiesOfClass(FireflySwarm.class, getBoundingBox().inflate(SWARM_SENSE))) {
-            if (!stalkable(s)) continue;
+            if (!stalkable(s) || shuns(s)) continue;
             double d = s.centre().distanceToSqr(c);
             if (d < bestD) { bestD = d; best = s; }
         }
@@ -794,15 +896,23 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
 
     private void stalk() {
         if (tickCount % 2 == 0 && strikeAtPlayer()) return;
-        if (!stalkable(prey) || stateTicks > STALK_GIVE_UP) {
-            // it took off, or was eaten up, or it has crept after it long enough
+        boolean gone = !stalkable(prey);
+        if (gone || level().getGameTime() - stalkSince > STALK_GIVE_UP) {
+            // it took off, or was eaten up; or it has crept after it long enough, and leaves it be
+            if (!gone) shun(prey);
             gait.rest(SkeinGait.SHORT_REST_MIN + random.nextInt(SkeinGait.SHORT_REST_MAX - SkeinGait.SHORT_REST_MIN));
             settle();
             return;
         }
-        if (mouth().distanceTo(prey.centre()) < SWARM_STRIKE) { startSwarmStrike(prey); return; }
+        // it strikes only at a swarm it has a clear line to, never through rock
+        if (mouth().distanceTo(prey.centre()) < SWARM_STRIKE && clear(eyes(), prey.centre())) { startSwarmStrike(prey); return; }
         stepGait();
-        if (!gait.outing()) startOuting(STALK, SkeinGait.Mood.STALK, STALK_BUDGET);    // the swarm is still there
+        if (gait.outing()) return;
+        if (gait.gaveUp()) {
+            // its bursts got nowhere: there is no way to it from here; it rests a little (the gait does) and leaves it be
+            shun(prey);
+            settle();
+        } else startOuting(STALK, SkeinGait.Mood.STALK, STALK_BUDGET);    // the swarm is still there
     }
 
     private void eatFrom(FireflySwarm s) {
@@ -838,17 +948,35 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
         return hurt;
     }
 
-    /** Hurt by {@code by}: struck back at once if it is close (and not in the refuge), otherwise it bolts. */
+    /**
+     * Hurt by {@code by}: struck back at once if it is close (and not in the refuge), otherwise it bolts. Close is by
+     * its jaws or within striking range of any of its body: a blade at its tail is as near as one at its head.
+     */
     private void answer(LivingEntity by) {
         byte s = state();
         if (s == REAR || s == LUNGE) return;
         double d = Math.sqrt(by.getBoundingBox().distanceToSqr(mouth()));
-        if ((d < STRIKE_RANGE + 0.5 || touches(by)) && !isRefuge(by.blockPosition())) {
+        if ((d < STRIKE_RANGE + 0.5 || nearBody(by.getBoundingBox(), STRIKE_RANGE)) && !isRefuge(by.blockPosition())) {
             anchor = position();
             startStrike(by, SNAP_REAR_TICKS);
         } else {
             boltFrom(by.position(), BOLT_MIN + random.nextDouble() * (BOLT_MAX - BOLT_MIN));
         }
+    }
+
+    /** Whether box {@code b} comes within {@code r} of its body: the head's box or a section's. */
+    private boolean nearBody(AABB b, double r) {
+        if (gap(getBoundingBox(), b) < r) return true;
+        for (Section s : sections) if (gap(s.getBoundingBox(), b) < r) return true;
+        return false;
+    }
+
+    /** The distance between two boxes (0 where they meet or overlap). */
+    static double gap(AABB a, AABB b) {
+        double dx = Math.max(0.0, Math.max(a.minX - b.maxX, b.minX - a.maxX));
+        double dy = Math.max(0.0, Math.max(a.minY - b.maxY, b.minY - a.maxY));
+        double dz = Math.max(0.0, Math.max(a.minZ - b.maxZ, b.minZ - a.maxZ));
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     // ------------------------------------------------------------------------------------------------ sounds
@@ -1043,10 +1171,10 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber {
             case SKITTER -> startOuting(SKITTER, SkeinGait.Mood.ROAM, SkeinGait.OUTING_MAX);
             case BOLT -> boltFrom(who != null ? who.position() : position().add(forward), BOLT_MAX);
             case STALK -> {
+                shunned = null;     // told to, it tries again what it gave up on
                 FireflySwarm sw = nearestSwarm();
                 if (sw == null) return false;
-                prey = sw;
-                startOuting(STALK, SkeinGait.Mood.STALK, STALK_BUDGET);
+                startStalk(sw);
             }
             case REAR, LUNGE -> {
                 if (who == null || !huntable(who)) return false;

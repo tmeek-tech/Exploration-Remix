@@ -182,6 +182,50 @@ class SkeinGaitTest {
         }
         while (g.phase() == SkeinGait.Phase.FREEZE) g.tick(0, r);
         assertEquals(SkeinGait.Phase.REST, g.phase());
+        assertTrue(g.gaveUp(), "it rests because it got nowhere");
+    }
+
+    @Test
+    void aStalkThatGetsNowhereGivesUpForAShortRest() {
+        SkeinGait g = new SkeinGait();
+        DoubleSupplier r = rng(12);
+        for (int k = 0; k < 200; k++) {
+            g.startOuting(SkeinGait.Mood.STALK, 40.0, r);
+            assertFalse(g.gaveUp());
+            int guard = 0;
+            while (g.outing() && guard++ < 10_000) {
+                // no way to the swarm: every burst ends where it began
+                if (g.phase() == SkeinGait.Phase.BURST) g.endBurst(true, r);
+                else g.tick(0, r);
+            }
+            assertFalse(g.outing());
+            assertTrue(g.gaveUp(), "a stalk with nowhere to go gives up");
+            assertTrue(g.left() >= 100 && g.left() <= 400, "rest after a stalk " + g.left());
+        }
+    }
+
+    @Test
+    void anOutingThatGoesItsWayOrIsToldToRestHasNotGivenUp() {
+        SkeinGait g = new SkeinGait();
+        DoubleSupplier r = rng(13);
+        for (int k = 0; k < 200; k++) {
+            g.startOuting(k % 2 == 0 ? SkeinGait.Mood.STALK : SkeinGait.Mood.ROAM, 5.0, r);
+            int guard = 0;
+            while (g.outing() && guard++ < 10_000) g.tick(g.phase() == SkeinGait.Phase.BURST ? g.speed() * PER_TICK : 0, r);
+            assertFalse(g.outing());
+            assertFalse(g.gaveUp(), "it went its way");
+        }
+        // it gives up, then is told to rest (or sets out again): that is no giving up
+        g.startOuting(SkeinGait.Mood.STALK, 40.0, r);
+        while (g.outing()) { if (g.phase() == SkeinGait.Phase.BURST) g.endBurst(true, r); else g.tick(0, r); }
+        assertTrue(g.gaveUp());
+        g.rest(50);
+        assertFalse(g.gaveUp());
+        g.startOuting(SkeinGait.Mood.STALK, 40.0, r);
+        while (g.outing()) { if (g.phase() == SkeinGait.Phase.BURST) g.endBurst(true, r); else g.tick(0, r); }
+        assertTrue(g.gaveUp());
+        g.startOuting(SkeinGait.Mood.STALK, 40.0, r);
+        assertFalse(g.gaveUp());
     }
 
     @Test
