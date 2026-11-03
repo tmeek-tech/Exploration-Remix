@@ -1,0 +1,64 @@
+{
+  "variants": {
+    "facing=north,look=0": {
+      "model": "explorationremix:block/bone_scraps"
+    },
+    "facing=east,look=0": {
+      "model": "explorationremix:block/bone_scraps",
+      "y": 90
+    },
+    "facing=south,look=0": {
+      "model": "explorationremix:block/bone_scraps",
+      "y": 180
+    },
+    "facing=west,look=0": {
+      "model": "explorationremix:block/bone_scraps",
+      "y": 270
+    },
+    "facing=north,look=1": {
+      "model": "explorationremix:block/bone_scraps_2"
+    },
+    "facing=east,look=1": {
+      "model": "explorationremix:block/bone_scraps_2",
+      "y": 90
+    },
+    "facing=south,look=1": {
+      "model": "explorationremix:block/bone_scraps_2",
+      "y": 180
+    },
+    "facing=west,look=1": {
+      "model": "explorationremix:block/bone_scraps_2",
+      "y": 270
+    },
+    "facing=north,look=2": {
+      "model": "explorationremix:block/bone_scraps_3"
+    },
+    "facing=east,look=2": {
+      "model": "explorationremix:block/bone_scraps_3",
+      "y": 90
+    },
+    "facing=south,look=2": {
+      "model": "explorationremix:block/bone_scraps_3",
+      "y": 180
+    },
+    "facing=west,look=2": {
+      "model": "explorationremix:block/bone_scraps_3",
+      "y": 270
+    },
+    "facing=north,look=3": {
+      "model": "explorationremix:block/bone_scraps_4"
+    },
+    "facing=east,look=3": {
+      "model": "explorationremix:block/bone_scraps_4",
+      "y": 90
+    },
+    "facing=south,look=3": {
+      "model": "explorationremix:block/bone_scraps_4",
+      "y": 180
+    },
+    "facing=west,look=3": {
+      "model": "explorationremix:block/bone_scraps_4",
+      "y": 270
+    }
+  }
+}

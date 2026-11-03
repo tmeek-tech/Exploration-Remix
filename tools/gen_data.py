@@ -50,6 +50,9 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #   tall        a two-block plant: textures <id>_bottom and <id>_top; drops from its lower half only
 #   lichen      a sheet on any of the six faces, like glow lichen (a GlowLichenBlock); drops one per face
 #   carpet      a flat sheet lying on the floor, turned at random
+#   litter      a flat sheet lying on the floor whose look and turn are the block's state (properties look, one per
+#               variant, and facing), so a feature or the game can choose them; drops the item named by option drop
+#               (any namespace) with option chance
 #   moss_carpet a carpet one pixel thick drawn with a block's texture, like vanilla's moss carpet (option texture)
 #   wall_plant  a plant growing sideways out of a wall, drawn with vanilla's coral wall fan model
 #   fern        a bushy fern: crossed planes (textures <id>) and four planes leaning out (<id>_fan), wider than a block
@@ -60,10 +63,10 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #               it, <id>_side square to it), turned to face away from the wall; it has no item, and drops the item
 #               named by option drop
 # Options: variants (how many textures: <id>, <id>_2, <id>_3; the game picks one per block from its position, so it
-# never changes), weights (one per variant), drop (hanging_fern: the item it drops), glow_under (shelf: the whole
-# underside glows), shader_glow (default True; False keeps the glow overlay but leaves the block out of
-# glowing_blocks.json, so under Complementary only the overlay shines and the rest is lit like rock). A texture with an
-# entry in textures.GLOW gets an emissive overlay.
+# never changes), weights (one per variant), drop (hanging_fern, litter: the item it drops), chance (litter: how often
+# it drops it), glow_under (shelf: the whole underside glows), shader_glow (default True; False keeps the glow overlay
+# but leaves the block out of glowing_blocks.json, so under Complementary only the overlay shines and the rest is lit
+# like rock). A texture with an entry in textures.GLOW gets an emissive overlay.
 BLOCKS = {
     "band_stone": ("Band Stone", "cube"),
     "white_glow_flower": ("White Glow Flower", "cross"),
@@ -148,14 +151,17 @@ BLOCKS = {
     # The Galleries' lava glow: invisible light in the air along the halls' rock (HallGlowFeature). Nothing is drawn and
     # there is no item.
     "glow": ("Lava Glow", "invisible"),
-    # A Mossback's den (creature.MossbackDen): trampled moss and gnawed bone on a plant cave's floor. It drops nothing,
-    # so nobody can carry one off to farm lizards.
+    # A Mossback's den (creature.MossbackDen): trampled moss and gnawed bone on a den gate's upper landing. It drops
+    # nothing, so nobody can carry one off to farm lizards.
     "mossback_den": ("Mossback Den", "moss_carpet", {"texture": "mossback_den"}),
+    # The bones and scraps round a den (DenLairFeature): ribs and vertebrae, a skull fragment, feathers and fur, and the
+    # lizards' own shed scales and hide. A bone now and then.
+    "bone_scraps": ("Bone Scraps", "litter", {"variants": 4, "drop": "minecraft:bone", "chance": 0.4}),
 }
 NO_DROP = {"band_stone", "glow", "mossback_den"}
-# Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, and the
-# lifeless blocks of the Galleries.
-NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain"}
+# Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
+# lifeless blocks of the Galleries, and the litter round the dens.
+NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"}
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
@@ -358,8 +364,8 @@ def plane_model(tex, plain_parent, template, key):
     return {"parent": plain_parent, "render_type": "minecraft:cutout", "textures": t}
 
 
-def loot(bid, drop, kind):
-    entry = {"type": "minecraft:item", "name": f"{MOD}:{drop}"}
+def loot(bid, drop, kind, chance=None):
+    entry = {"type": "minecraft:item", "name": drop if ":" in drop else f"{MOD}:{drop}"}
     if kind in ("tall", "tall_fern"):
         # both halves break together; only the lower half's table drops the plant
         entry["conditions"] = [{"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"half": "lower"}}]
@@ -368,6 +374,9 @@ def loot(bid, drop, kind):
         entry["functions"] = [{"function": "minecraft:set_count", "add": True, "count": 1,
                                "conditions": [{"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {f: "true"}}]}
                               for f in FACES] + [{"function": "minecraft:set_count", "add": True, "count": -1}]
+    if chance is not None:
+        # only now and then
+        entry.setdefault("conditions", []).append({"condition": "minecraft:random_chance", "chance": chance})
     return {"type": "minecraft:block",
             "pools": [{"rolls": 1, "bonus_rolls": 0, "entries": [entry], "conditions": [{"condition": "minecraft:survives_explosion"}]}]}
 
@@ -418,6 +427,11 @@ def block_assets():
             for t in texs:
                 models[t] = plane_model(t, f"{MOD}:block/template/carpet", "carpet", "texture")
             states = {"variants": {"": pick([{"model": ref(t), "y": r} for t in texs for r in (0, 90, 180, 270)])}}
+        elif kind == "litter":
+            for t in texs:
+                models[t] = plane_model(t, f"{MOD}:block/template/carpet", "carpet", "texture")
+            states = {"variants": {f"facing={f},look={k}": dict({"model": ref(t)}, **turn) for k, t in enumerate(texs) for f, turn in FACE4.items()}}
+            drop = opts["drop"]
         elif kind == "lichen":
             for t in texs:
                 models[t] = plane_model(t, f"{MOD}:block/template/lichen", "lichen", "texture")
@@ -493,7 +507,7 @@ def block_assets():
         if item is not None:
             write(os.path.join(ASSETS, "models", "item", bid + ".json"), item)
         if bid not in NO_DROP:
-            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind))
+            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind, opts.get("chance")))
     unused = set(textures.GLOW) - used_glow
     assert not unused, f"glow overlays no model draws: {sorted(unused)}"
     write(os.path.join(ASSETS, "glowing_blocks.json"), {"blocks": sorted(glowing)})

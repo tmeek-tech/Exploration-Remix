@@ -1,5 +1,7 @@
 package com.explorationremix.world.terrain;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -49,6 +51,8 @@ public final class Plans {
      */
     public static final class Gate {
         public final int band, cellX, cellZ;
+        /** Which of its cell's den gates this is ({@link #denGates}); 0 for the cell's first gate and every deeper gate. */
+        public final int den;
         public final double ux, uz, uFloor, uCy;     // upper landing: centre x/z, floor y, centre y
         public final double lx, lz, lFloor, lCy;     // lower landing
         public final double landR, landHalf;          // landing radius (xz) and half height
@@ -59,7 +63,12 @@ public final class Plans {
 
         Gate(int band, int cellX, int cellZ, double ux, double uz, double uFloor, double lx, double lz, double lFloor,
              double c1x, double c1z, double c2x, double c2z, double radius, double landR, double landHalf, double phase, double wob) {
-            this.band = band; this.cellX = cellX; this.cellZ = cellZ;
+            this(band, cellX, cellZ, 0, ux, uz, uFloor, lx, lz, lFloor, c1x, c1z, c2x, c2z, radius, landR, landHalf, phase, wob);
+        }
+
+        Gate(int band, int cellX, int cellZ, int den, double ux, double uz, double uFloor, double lx, double lz, double lFloor,
+             double c1x, double c1z, double c2x, double c2z, double radius, double landR, double landHalf, double phase, double wob) {
+            this.band = band; this.cellX = cellX; this.cellZ = cellZ; this.den = den;
             this.ux = ux; this.uz = uz; this.uFloor = uFloor;
             this.lx = lx; this.lz = lz; this.lFloor = lFloor;
             this.c1x = c1x; this.c1z = c1z; this.c2x = c2x; this.c2z = c2z;
@@ -217,6 +226,15 @@ public final class Plans {
 
     /** The first gate's upper landing sits on the pack's old floor; this ramp climbs from it into the pack's caves. */
     public Route.Link ramp(Gate g) {
+        if (g.band == 1 && g.den > 0) {
+            // not computeIfAbsent: building one asks for the cell's den gates and set piece, which use this map's sibling
+            long k = key(g.den, g.cellX, g.cellZ);
+            Route.Link l = denRamps.get(k);
+            if (l != null) return l;
+            l = denRamp(g);
+            Route.Link prev = denRamps.putIfAbsent(k, l);
+            return prev != null ? prev : l;
+        }
         return ramps.computeIfAbsent(key(0, g.cellX, g.cellZ), k -> {
             long h = Hashing.mix(seed, 777, g.cellX, g.cellZ);
             double angle = Hashing.range(Hashing.mix(h, 1, 0, 0), 0, Math.PI * 2);
@@ -224,5 +242,155 @@ public final class Plans {
             double ex = clampCell(g.ux + Math.cos(angle) * run, g.cellX, MARGIN), ez = clampCell(g.uz + Math.sin(angle) * run, g.cellZ, MARGIN);
             return new Route.Link(g.ux, g.uFloor + 3, g.uz, ex, g.uFloor + rise, ez, 4.0);
         });
+    }
+
+    // ------------------------------------------------------------------------------------------------ den gates
+
+    /** Den gates in one cell keep at least this far apart (blocks): with the cell margins, about one every 250 blocks. */
+    public static final double DEN_SPACING = 170;
+    /** Upper landings keep at least this far from a cell edge, as the first gate's do. */
+    static final double DEN_EDGE = MARGIN + 20;
+    /** Their lower landings in the Blue Reaches keep at least this far apart (blocks). */
+    static final double DEN_LOWER_SPACING = 90;
+    /** A den gate's passage runs at least this far across from its upper landing to its lower one (blocks). */
+    static final double DEN_MIN_RUN = 46;
+    private static final int DEN_TRIES = 48, DEN_MAX = 9;
+    private final Map<Long, List<Gate>> denGateLists = new ConcurrentHashMap<>();
+    private final Map<Long, Route.Link> denRamps = new ConcurrentHashMap<>();
+
+    /**
+     * Every way down from the Upper Caves to the Blue Reaches in a cell, each with a Mossback den on its upper landing:
+     * the cell's first gate ({@code gate(1, cx, cz)}, index 0, left where it always was so the deeper gates keep their
+     * places) and the extra den gates after it (index = {@link Gate#den}). A pure function of the seed and the cell,
+     * cached; the extras keep {@link #DEN_SPACING} from each other and the first gate, {@link #DEN_EDGE} from the cell's
+     * edges, and clear of the first gate's ramp and the cell's upper set piece.
+     */
+    public List<Gate> denGates(int cx, int cz) {
+        long k = key(1, cx, cz);
+        List<Gate> l = denGateLists.get(k);
+        if (l != null) return l;
+        l = List.copyOf(buildDenGates(cx, cz));
+        List<Gate> prev = denGateLists.putIfAbsent(k, l);
+        return prev != null ? prev : l;
+    }
+
+    /** The den gate whose upper landing is nearest (x, z), looking in the 3 x 3 cells round it. */
+    public Gate nearestDenGate(double x, double z) {
+        int cx = cellOf(x), cz = cellOf(z);
+        Gate best = null;
+        double bestD = Double.MAX_VALUE;
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dz = -1; dz <= 1; dz++)
+                for (Gate g : denGates(cx + dx, cz + dz)) {
+                    double d = (g.ux - x) * (g.ux - x) + (g.uz - z) * (g.uz - z);
+                    if (d < bestD) { bestD = d; best = g; }
+                }
+        return best;
+    }
+
+    private List<Gate> buildDenGates(int cx, int cz) {
+        Gate first = gate(1, cx, cz);
+        List<Gate> out = new ArrayList<>();
+        out.add(first);
+        Route.Link r = ramp(first);
+        Upper.Piece piece = upper(cx, cz);
+        long h = Hashing.mix(seed, 4101, cx, cz);
+        double span = cellSize - 2 * DEN_EDGE;
+        for (int i = 0; i < DEN_TRIES && out.size() < DEN_MAX; i++) {
+            double x = cx * (double) cellSize + DEN_EDGE + Hashing.unit(Hashing.mix(h, i, 1, 0)) * span;
+            double z = cz * (double) cellSize + DEN_EDGE + Hashing.unit(Hashing.mix(h, i, 2, 0)) * span;
+            boolean ok = true;
+            for (Gate g : out) if (Math.hypot(x - g.ux, z - g.uz) < DEN_SPACING) { ok = false; break; }
+            if (!ok) continue;
+            // clear of the first gate's ramp (its middle and top), and of the set piece by as much as the first gate is
+            if (Math.hypot(x - r.x2(), z - r.z2()) < landingRadius + 50) continue;
+            if (Math.hypot(x - (r.x1() + r.x2()) * 0.5, z - (r.z1() + r.z2()) * 0.5) < landingRadius + 40) continue;
+            if (piece != null && piece.distXZ(x, z) < landingRadius + 40) continue;
+            Gate g = buildDenGate(Hashing.mix(h, 100 + i, 0, 0), out.size(), cx, cz, x, z);
+            // near a cell edge the clamp can pull the lower landing back under the upper one, and the passage would
+            // be a straight shaft: keep only those that run as far across as the first gates do
+            if (Math.hypot(g.lx - g.ux, g.lz - g.uz) < DEN_MIN_RUN) continue;
+            // the lower landings, each with its courts in the top of the Blue Reaches, keep room between them too
+            for (Gate o : out) if (Math.hypot(g.lx - o.lx, g.lz - o.lz) < DEN_LOWER_SPACING) { ok = false; break; }
+            if (ok) out.add(g);
+        }
+        return out;
+    }
+
+    /** A den gate from its upper landing: the same passage and landings as {@link #buildGate} makes for band 1. */
+    private Gate buildDenGate(long h, int index, int cx, int cz, double ux, double uz) {
+        double half = landingRadius / 1.6;
+        double uFloor = shape.packFloor;
+        double lCy = shape.top(0) - 3 - half;
+        double lFloor = lCy - half * 0.55;
+        double angle = Hashing.range(Hashing.mix(h, 3, 0, 0), 0, Math.PI * 2);
+        double dist = Hashing.range(Hashing.mix(h, 4, 0, 0), 46, 64);
+        double lx = clampCell(ux + Math.cos(angle) * dist, cx, DEN_EDGE), lz = clampCell(uz + Math.sin(angle) * dist, cz, DEN_EDGE);
+        double dx = lx - ux, dz = lz - uz, len = Math.max(1, Math.hypot(dx, dz));
+        double perp = Hashing.range(Hashing.mix(h, 5, 0, 0), 14, 22) * (Hashing.unit(Hashing.mix(h, 6, 0, 0)) < 0.5 ? -1 : 1);
+        double nx = -dz / len, nz = dx / len;
+        double c1x = clampCell(ux + dx * 0.33 + nx * perp, cx, MARGIN), c1z = clampCell(uz + dz * 0.33 + nz * perp, cz, MARGIN);
+        double c2x = clampCell(ux + dx * 0.66 - nx * perp, cx, MARGIN), c2z = clampCell(uz + dz * 0.66 - nz * perp, cz, MARGIN);
+        double phase = Hashing.range(Hashing.mix(h, 7, 0, 0), 0, Math.PI * 2);
+        double wob = Hashing.range(Hashing.mix(h, 8, 0, 0), 2.0, 4.0);
+        return new Gate(1, cx, cz, index, ux, uz, uFloor, lx, lz, lFloor, c1x, c1z, c2x, c2z, passageRadius, landingRadius, half, phase, wob);
+    }
+
+    /**
+     * A den gate's ramp up into the pack's caves (the first gate keeps {@link #ramp}'s seeded one). Tried in eight
+     * directions, three lengths and three rises; it ends where the pack's own density finds open cave round about, as
+     * the entrances' descents do, keeping clear of the other den gates' landings and the set piece. With no open cave
+     * in reach it falls back to the first gate's kind of ramp.
+     */
+    private Route.Link denRamp(Gate g) {
+        long h = Hashing.mix(seed, 4177, g.cellX * 8 + g.den, g.cellZ);
+        Upper.SurfaceProbe probe = terrain.surfaceProbe;
+        List<Gate> others = denGates(g.cellX, g.cellZ);
+        Upper.Piece piece = upper(g.cellX, g.cellZ);
+        double rot = Hashing.range(Hashing.mix(h, 1, 0, 0), 0, Math.PI / 4);
+        double best = -1e18, bx = 0, by = 0, bz = 0;
+        if (probe != null) {
+            for (int k = 0; k < 8; k++) {
+                double phi = rot + k * Math.PI / 4;
+                for (double run : new double[]{44, 57, 70}) {
+                    double ex = clampCell(g.ux + Math.cos(phi) * run, g.cellX, MARGIN), ez = clampCell(g.uz + Math.sin(phi) * run, g.cellZ, MARGIN);
+                    if (!rampClear(g, others, piece, ex, ez)) continue;
+                    for (double rise : new double[]{24, 31, 38}) {
+                        int x = (int) Math.round(ex), y = (int) Math.round(g.uFloor + rise), z = (int) Math.round(ez);
+                        double dens = probe.packDensity(x, y, z);
+                        if (dens >= -0.08) continue;
+                        int open = 0;
+                        if (probe.packDensity(x + 4, y, z) < 0) open++;
+                        if (probe.packDensity(x - 4, y, z) < 0) open++;
+                        if (probe.packDensity(x, y, z + 4) < 0) open++;
+                        if (probe.packDensity(x, y, z - 4) < 0) open++;
+                        if (open < 2) continue;
+                        double score = Math.min(0.6, -dens) * 3 + open * 0.2 - Math.abs(rise / run - 0.5) - run / 140
+                                + 0.2 * Hashing.unit(Hashing.mix(h, k, (long) run, (long) rise));
+                        if (score > best) { best = score; bx = ex; by = g.uFloor + rise; bz = ez; }
+                    }
+                }
+            }
+        }
+        if (best <= -1e17) {
+            double angle = Hashing.range(Hashing.mix(h, 2, 0, 0), 0, Math.PI * 2);
+            for (int k = 0; k < 8; k++) {
+                double phi = angle + k * Math.PI / 4;
+                bx = clampCell(g.ux + Math.cos(phi) * 70, g.cellX, MARGIN);
+                bz = clampCell(g.uz + Math.sin(phi) * 70, g.cellZ, MARGIN);
+                if (rampClear(g, others, piece, bx, bz)) break;
+            }
+            by = g.uFloor + 38;
+        }
+        return new Route.Link(g.ux, g.uFloor + 3, g.uz, bx, by, bz, 4.0);
+    }
+
+    private boolean rampClear(Gate g, List<Gate> others, Upper.Piece piece, double ex, double ez) {
+        double mx = (g.ux + ex) * 0.5, mz = (g.uz + ez) * 0.5;
+        for (Gate o : others) {
+            if (o == g) continue;
+            if (Math.hypot(ex - o.ux, ez - o.uz) < o.landR + 30 || Math.hypot(mx - o.ux, mz - o.uz) < o.landR + 30) return false;
+        }
+        return piece == null || (piece.distXZ(ex, ez) > 30 && piece.distXZ(mx, mz) > 30);
     }
 }

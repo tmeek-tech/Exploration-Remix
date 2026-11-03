@@ -7,6 +7,7 @@ import com.explorationremix.world.feature.CeilingRootsFeature;
 import com.explorationremix.world.feature.ClimbVinesFeature;
 import com.explorationremix.world.feature.ColumnClusterFeature;
 import com.explorationremix.world.feature.DaylightShaftFeature;
+import com.explorationremix.world.feature.DenLairFeature;
 import com.explorationremix.world.feature.FallbackStateProvider;
 import com.explorationremix.world.feature.FluidFallFeature;
 import com.explorationremix.world.feature.GiantFungusFeature;
@@ -64,7 +65,9 @@ public final class ERWorldgen {
     // cave ends joined to other caves
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> VERIDIUM_SPREAD = FEATURES.register("veridium_spread", () -> new VeridiumSpreadFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> JOIN_DEAD_ENDS = FEATURES.register("join_dead_ends", () -> new JoinDeadEndsFeature(NoneFeatureConfiguration.CODEC));
-    public static final RegistryObject<Feature<NoneFeatureConfiguration>> MOSSBACK_DEN = FEATURES.register("mossback_den", () -> new com.explorationremix.world.feature.MossbackDenFeature(NoneFeatureConfiguration.CODEC));
+    // the den gates' Mossback lairs: the den on each gate's upper landing, and the bones and scraps round it (0.6.0's dens
+    // in the plant caves are gone)
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> DEN_LAIR = FEATURES.register("den_lair", () -> new DenLairFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
 
     public static final RegistryObject<BlockStateProviderType<FallbackStateProvider>> FALLBACK_PROVIDER = STATE_PROVIDERS.register("fallback", () -> new BlockStateProviderType<>(FallbackStateProvider.CODEC));

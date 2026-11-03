@@ -254,6 +254,11 @@ final class NetPlanner {
         /** How far the layer's lava rises over its table at the height of its cycle (the Galleries only, else 0). */
         final int surge;
         final Spec sp;
+        /**
+         * The Blue Reaches: the cell's den gates past the first ({@link Plans#denGates}), whose lower landings stand in
+         * this layer as the entry's does; none elsewhere. A pure function of the seed (it never asks for a plan).
+         */
+        final List<Plans.Gate> denGates;
         final List<double[]> doorAngles = new ArrayList<>(); // per chamber: used door angles (radians)
         /**
          * The Wasteland: the chamber pairs embed has tried in the plain mode (low id in the high half), a set for each
@@ -285,6 +290,8 @@ final class NetPlanner {
             x0 = cx * cell;
             z0 = cz * cell;
             sp = spec(li, s, cell);
+            List<Plans.Gate> dg = li == Terrain.BLUE ? w.base.plans.denGates(cx, cz) : List.of();
+            denGates = dg.size() > 1 ? dg.subList(1, dg.size()) : List.of();
             cn = (int) Math.ceil((cell + 2 * Net.APRON) / CB);
             pts = new List[cn * cn];
             for (int i = 0; i < pts.length; i++) pts[i] = new ArrayList<>();
@@ -315,6 +322,7 @@ final class NetPlanner {
                 return;
             }
             landings();
+            denLandings();
             portals();
             tiers();
             if (li == Terrain.BLUE) city();
@@ -339,6 +347,7 @@ final class NetPlanner {
             kruskal(cand);
             longOK = true;
             connectRequired(cand);
+            joinDens();
             longOK = false;
             dropOrphans();
             portalFallback();
@@ -349,6 +358,7 @@ final class NetPlanner {
             gateWays();
             chokeRooms();
             walkWays();
+            denWays();
             longOK = false;
             if (li == Terrain.WASTELAND) {
                 // no blind passages, niches or tubes: every way goes on (Taran: no dead ends), and none runs long
@@ -457,6 +467,25 @@ final class NetPlanner {
             n.exit = x.id;
         }
 
+        /**
+         * The Blue Reaches: the lower landings of the cell's other den gates, each an ENTRY chamber made as the entry
+         * is, so every rule for a landing holds for it (the gaps round it, its spokes' exemption from the passages, its
+         * no-climb end, the trunk, the column index leaving it to the network's own landing terms). They come after the
+         * two landings, which keep their ids and hashes. Their places are the gates', which the seed lays out, so a plan
+         * made again after a fault keeps them; the rock-only plan of {@link NetPlanner#plan} has the two landings only,
+         * and the network carves every den gate's landing and passage from the gates, whatever the plan.
+         */
+        void denLandings() {
+            for (Plans.Gate g : denGates) {
+                Chamber e = new Chamber();
+                e.kind = Kind.ENTRY;
+                e.x = g.lx; e.z = g.lz; e.f0 = g.lFloor; e.h = g.landHalf * 1.6;
+                e.rx = e.rz = g.landR; e.warp = 0; e.required = true;
+                add(e);
+                n.dens.add(e.id);
+            }
+        }
+
         final java.util.Map<Integer, Network.Portal> portalOf = new java.util.HashMap<>();
 
         /** The portal vestibules of this cell: one per portal on each of the four edges. */
@@ -552,20 +581,43 @@ final class NetPlanner {
             strandMode = true;
             courtsFor(n.entry, n.exit, true, n.courtsE);
             courtsFor(n.exit, n.entry, false, n.courtsX);
+            // the den gates' landings get theirs after the two landings', which stay as they were, fanned towards the
+            // exit too; into a list of their own, as the strands and the ways between the gates count the entry's
+            for (int i = 0; i < n.dens.size(); i++) {
+                long s = DEN_COURT_SALT + i * 100L;
+                courtsFor(n.dens.get(i), n.exit, true, n.courtsD, s, s + 10);
+            }
             strandMode = false;
         }
 
-        void courtsFor(int L, int other, boolean entry, List<Integer> out) {
+        /**
+         * Salts of the den landings' courts: 100 for each den landing from here, far past every other salt of the
+         * plan's hash (the entry's and the exit's courts draw from 990 and 1000 on, by the landing's id).
+         */
+        static final long DEN_COURT_SALT = 5_000_000L;
+        /** What a rift try that cuts through a den gate's landing scores, against 3 for a court and 1 for a city. */
+        static final int DEN_HIT = 1000;
+        /**
+         * Rounds of six rift tries (see canyonStrand): past 0.2.0's first, only while every try cuts a den gate's landing.
+         * A den landing keeps the same 16 blocks clear of the rift as a court: tries that passed closer (2 to 10) kept
+         * the rift in a few more cells but left drops of up to 44 beside the ways round those landings.
+         */
+        static final int RIFT_ROUNDS = 4;
+
+        void courtsFor(int L, int other, boolean entry, List<Integer> out) { courtsFor(L, other, entry, out, 990 + L, 1000 + L * 50L); }
+
+        /** Courts round landing L: their count and fan drawn from salts {@code sk} and {@code sk + 2}, each court's from {@code s0 + 10 i} on. */
+        void courtsFor(int L, int other, boolean entry, List<Integer> out, long sk, long s0) {
             Chamber c = n.ch.get(L), o = n.ch.get(other);
-            int k = u(990 + L) < 0.62 ? 3 : 2;
+            int k = u(sk) < 0.62 ? 3 : 2;
             // with the lava basin behind the bedrock landing, two courts in front leave the sides to the surge niches
             // (three courts, the niches and the basin do not fit round one landing)
             if (lava != null && !entry) k = Math.min(k, LAVA_COURTS);
             double axis = Math.atan2(o.z - c.z, o.x - c.x);
-            double fan = Math.toRadians(r(992 + L, 64, 84));
+            double fan = Math.toRadians(r(sk + 2, 64, 84));
             double[] base = k == 3 ? new double[]{-fan, 0, fan} : new double[]{-fan * 0.62, fan * 0.62};
             for (int i = 0; i < k; i++) {
-                long s = 1000 + L * 50L + i * 10L;
+                long s = s0 + i * 10L;
                 // the Deep Gardens exit's middle court is the Lantern Lake hall, with the exit landing on its shore: 12
                 // tries at its full size, 12 more at 36 to 44 across, then a plain court
                 boolean special = !entry && i == k / 2 && li == Terrain.GARDENS;
@@ -962,7 +1014,12 @@ final class NetPlanner {
 
         /** Lays one strand: its line through its anchors, chambers along it, and the tunnels joining them in order. */
         void buildStrand(Strand st) {
-            if (st.canyon) { canyonStrand(st); return; }
+            if (st.canyon) {
+                // a rift that would cut through a den gate's landing is left out; the strand is then laid as an
+                // ordinary walked one with the others
+                if (!canyonStrand(st)) st.canyon = false;
+                return;
+            }
             Chamber a = n.ch.get(st.a), b = n.ch.get(st.b);
             // keys: the entry court, the anchors in order, the exit court; each with the floor the way enters and leaves at
             List<Object[]> keys = new ArrayList<>();
@@ -1210,8 +1267,12 @@ final class NetPlanner {
             return link(st, from, to);
         }
 
-        /** Blue Reaches: one strand is the rift, 0.2.0's canyon with its ledge path, bridges and geodes. */
-        void canyonStrand(Strand st) {
+        /**
+         * Blue Reaches: one strand is the rift, 0.2.0's canyon with its ledge path, bridges and geodes. False, with
+         * nothing laid, when every try would cut through a den gate's landing (their passages are carved whatever the
+         * plan, so a rift there would leave the landing a disc hanging over the canyon).
+         */
+        boolean canyonStrand(Strand st) {
             Chamber a = n.ch.get(st.a), b = n.ch.get(st.b);
             double t0 = r(600, 0.16, 0.24), t1 = r(601, 0.78, 0.86);
             // 0.2.0's rift starts at the entry landing's floor: its ledge path comes down from near the top of the layer
@@ -1220,21 +1281,28 @@ final class NetPlanner {
             double sFloor = Math.max(walkF(a) - r(606, 8, 16), n.ch.get(n.entry).f0), eFloor = W + 3;
             Route best = null;
             int bestHits = Integer.MAX_VALUE;
-            double push = 0;
-            double sgn = st.off >= 0 ? 1 : -1;
-            for (int attempt = 0; attempt < 6; attempt++) {
-                double[] hp = slotPoint(st, t0 + 0.02 * attempt), fp = slotPoint(st, t1 - 0.02 * attempt);
+            double side = st.off >= 0 ? 1 : -1;
+            for (int attempt = 0; attempt < 6 * RIFT_ROUNDS; attempt++) {
+                // six tries pushed one way, as 0.2.0 made them; then, only while every try so far cuts through a den
+                // gate's landing, six pushed the other way, and six more each way further out
+                int round = attempt / 6, k = attempt % 6;
+                if (round > 0 && k == 0 && bestHits < DEN_HIT) break;
+                double push = 25 * k + 25 * (round % 2) + 150 * (round / 2);
+                double sgn = round % 2 == 0 ? side : -side;
+                double[] hp = slotPoint(st, t0 + 0.02 * k), fp = slotPoint(st, t1 - 0.02 * k);
                 hp[0] += axNx * push * sgn; hp[1] += axNz * push * sgn;
                 fp[0] += axNx * push * sgn; fp[1] += axNz * push * sgn;
                 hp = clampP(hp, 100);
                 fp = clampP(fp, 100);
                 Route rt = w.canyon(li, cx, cz, Hashing.mix(h, 610 + attempt, 0, 0), hp[0], hp[1], fp[0], fp[1], sFloor, eFloor);
                 int hits = 0;
-                for (Chamber c : n.ch) if (c.keep && c.kind != Kind.CANYON && canyonHits(rt, c)) hits += c.kind == Kind.CITY ? 1 : 3;
+                for (Chamber c : n.ch)
+                    if (c.keep && c.kind != Kind.CANYON && canyonHits(rt, c))
+                        hits += c.kind == Kind.CITY ? 1 : (c.kind == Kind.ENTRY && c.id != n.entry ? DEN_HIT : 3);
                 if (hits < bestHits) { bestHits = hits; best = rt; }
                 if (hits == 0) break;
-                push += 25;
             }
+            if (bestHits >= DEN_HIT) { n.riftsDropped++; return false; }
             Route rt = best;
             if (bestHits > 0) for (Chamber c : n.ch) if (c.keep && c.kind == Kind.CITY && canyonHits(rt, c)) { c.keep = false; n.droppedChambers++; }
             n.canyons.add(rt);
@@ -1295,6 +1363,7 @@ final class NetPlanner {
             ok = false;
             for (int i = cn.size() - 1; i >= Math.max(0, cn.size() - 5) && !ok; i--) ok = linkVia(st, cn.get(i), st.b);
             st.nodes.add(st.b);
+            return true;
         }
 
         double[] clampP(double[] p, double m) {
@@ -2074,6 +2143,14 @@ final class NetPlanner {
                     if (g.passageXZ(c.x, y, c.z) < c.R() + g.radius * 1.5 + 8) return true;
                 }
             }
+            for (Plans.Gate g : denGates) {
+                // the passage's centre line keeps inside the gate's box, so a chamber off it is clear of the passage
+                double m = c.R() + g.radius * 1.5 + 8;
+                if (!g.overlaps(c.x, c.z, c.x, c.z, m)) continue;
+                for (double y = c.yLo(); y <= c.yHi(); y += 4) {
+                    if (g.passageXZ(c.x, y, c.z) < m) return true;
+                }
+            }
             return false;
         }
 
@@ -2274,6 +2351,7 @@ final class NetPlanner {
             for (Route.Geode g : r.geodes) if (Math.hypot(g.x() - c.x, g.z() - c.z) < g.r() + (isCity ? Network.CITY_RESERVE : c.R() + 10)) return true;
             return false;
         }
+
 
         // ------------------------------------------------------------------------------------------- edges
         /** Candidate edges: each node to its nearest neighbours (vertical distance counts 2.5 times). */
@@ -2857,6 +2935,133 @@ final class NetPlanner {
             }
             noClimb = false;
             return added;
+        }
+
+        /**
+         * The Blue Reaches: a den gate's landing whose part of the network (it and its courts, which are required too)
+         * the tree and {@link #connectRequired} left apart from the entry's is joined to it here, before {@link
+         * #dropOrphans} would take the part out and leave the gate's passage to end in a closed room. First a forced
+         * tunnel from a room of its part to one of the entry's part, the 60 nearest pairs (a block of height counting
+         * 2.5); then a spoke from the landing itself ({@link #denSpoke}); then both again crossing deep dark caverns, as
+         * connectRequired's last passes may. A landing none of these joins makes the plan throw, so that it is made
+         * again with its layout salted ({@link NetPlanner#plan}): a den gate's landing and passage are carved whatever
+         * the plan, so every one must be on the network's way.
+         */
+        void joinDens() {
+            for (int id : n.dens) {
+                if (find(id) == find(n.entry)) continue;
+                boolean joined = false;
+                for (int pass = 0; pass < (n.dark != null ? 2 : 1) && !joined; pass++) {
+                    relaxDark = pass == 1;
+                    joined = joinPart(id);
+                    if (!joined) {
+                        boolean[] root = new boolean[n.ch.size()];
+                        for (Chamber c : n.ch) root[c.id] = c.keep && find(c.id) == find(n.entry);
+                        Edge e = denSpoke(id, root);
+                        if (e != null) { e.tree = true; e.forced = true; n.forced++; union(e.a, e.b); joined = true; }
+                    }
+                    relaxDark = false;
+                }
+                if (!joined) {
+                    Chamber L = n.ch.get(id);
+                    throw new IllegalStateException(String.format(java.util.Locale.ROOT, "the landing of den gate %d at %.0f %.0f %.0f could not be joined to the network",
+                            n.dens.indexOf(id) + 1, L.x, L.f0, L.z));
+                }
+                n.denJoins++;
+            }
+        }
+
+        /** {@link #joinDens}: a forced tunnel from the part of den landing L to the entry's part; true once one embeds. */
+        boolean joinPart(int L) {
+            int comp = find(L), root = find(n.entry);
+            List<int[]> pairs = new ArrayList<>();
+            for (Chamber a : n.ch) {
+                if (!a.keep || find(a.id) != comp) continue;
+                for (Chamber b : n.ch) {
+                    if (!b.keep || b.refuge || find(b.id) != root) continue;
+                    pairs.add(new int[]{a.id, b.id});
+                }
+            }
+            pairs.sort(Comparator.comparingDouble(p -> {
+                Chamber a = n.ch.get(p[0]), b = n.ch.get(p[1]);
+                return Math.hypot(a.x - b.x, a.z - b.z) + 2.5 * Math.abs(a.f0 - b.f0);
+            }));
+            for (int k = 0; k < Math.min(60, pairs.size()); k++) {
+                Edge e = new Edge();
+                e.a = Math.min(pairs.get(k)[0], pairs.get(k)[1]); e.b = Math.max(pairs.get(k)[0], pairs.get(k)[1]);
+                Chamber oa = n.ch.get(e.a), ob = n.ch.get(e.b);
+                if (!allowed(oa, ob) || alreadyEdge(e.a, e.b)) continue;
+                e.len = Math.max(6, Math.hypot(oa.x - ob.x, oa.z - ob.z) - 0.8 * (oa.R() + ob.R()));
+                e.dy = Math.abs(oa.f0 - ob.f0);
+                if (embed(e, true)) {
+                    e.tree = true; e.forced = true; n.forced++;
+                    union(e.a, e.b);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * A spoke from den landing L, a wide walking tunnel like its courts' own (as {@link #landingSpoke} gives the
+         * entry and the exit), to the nearest room of {@code to} within 120 (the 40 nearest tried, a block of height
+         * counting 2.5): the edge once one embeds, else null.
+         */
+        Edge denSpoke(int L, boolean[] to) {
+            Chamber l = n.ch.get(L);
+            List<Integer> ends = new ArrayList<>();
+            for (Chamber b : n.ch) {
+                if (!b.keep || b.id >= to.length || !to[b.id] || b.refuge || b.landing() || b.kind == Kind.POCKET || b.kind == Kind.CANYON || b.kind == Kind.PORTAL) continue;
+                if (gapXZ(l, b, 1.0) > 120 || alreadyEdge(L, b.id)) continue;
+                ends.add(b.id);
+            }
+            ends.sort(Comparator.comparingDouble(id -> gapXZ(l, n.ch.get(id), 1.0) + 2.5 * Math.abs(l.f0 - n.ch.get(id).f0)));
+            Edge out = null;
+            noClimb = true;
+            widthMul = sp.trunkMul;
+            for (int k = 0; k < Math.min(40, ends.size()) && out == null; k++) {
+                Edge e = edge(L, ends.get(k));
+                if (!allowed(n.ch.get(e.a), n.ch.get(e.b))) continue;
+                if (embed(e, false) || embed(e, true)) { e.gate = true; out = e; }
+            }
+            noClimb = false;
+            widthMul = 1;
+            return out;
+        }
+
+        /**
+         * The Blue Reaches: each den gate's landing walks to the exit, as the entry does ({@link #walkWays}, from the den
+         * landing): while it cannot, a walking tunnel from what it reaches on foot to what the exit does, then the same
+         * crossing deep dark caverns, then a spoke from the landing itself ({@link #denSpoke}: its courts may all have
+         * found no room), then a tunnel from what it reaches to any other space, so a later round can go on from there.
+         * Up to 6 rounds a landing. One left without (it is joined to the network: {@link #joinDens}) climbs to it.
+         */
+        void denWays() {
+            for (int id : n.dens) {
+                for (int it = 0; it < 6; it++) {
+                    boolean[] S = NetGraph.reach(n, id, true);
+                    if (S[n.exit]) break;
+                    boolean[] X = NetGraph.reach(n, n.exit, true);
+                    boolean added = walkAcross(S, X, true);
+                    if (!added && n.dark != null) {
+                        relaxDark = true;
+                        added = walkAcross(S, X, true);
+                        relaxDark = false;
+                    }
+                    if (!added) {
+                        Edge e = denSpoke(id, X);
+                        if (e == null && n.dark != null) {
+                            relaxDark = true;
+                            e = denSpoke(id, X);
+                            relaxDark = false;
+                        }
+                        if (e != null) { e.loop = true; n.walkRepairs++; added = true; }
+                    }
+                    if (!added) added = walkAcross(S, X, false);
+                    if (!added) break;
+                    n.denWalks++;
+                }
+            }
         }
 
         void rebuildPointIndex() {
@@ -6092,6 +6297,15 @@ final class NetPlanner {
                     if (segDistXZ(g.px(t), g.pz(t), a[0], a[1], a[2], a[3]) < R + g.radius * 1.5 + 8) return true;
                 }
             }
+            for (Plans.Gate g : denGates) {
+                double m = R + g.radius * 1.5 + 8;
+                if (!g.overlaps(Math.min(a[0], a[2]), Math.min(a[1], a[3]), Math.max(a[0], a[2]), Math.max(a[1], a[3]), m)) continue;
+                for (double y = c.yLo(); y <= c.yHi(); y += 4) {
+                    double t = g.tAt(y);
+                    if (Double.isNaN(t)) continue;
+                    if (segDistXZ(g.px(t), g.pz(t), a[0], a[1], a[2], a[3]) < m) return true;
+                }
+            }
             return false;
         }
 
@@ -7504,6 +7718,18 @@ final class NetPlanner {
                 Plans.Gate g = w.base.plans.gate(b, cx, cz);
                 for (int i = 0; i < wy.n; i += 2) {
                     if (nearOwnEnd(wy.x[i], wy.z[i], ca, cb) && (n.ch.get(ca).landing() || (cb >= 0 && n.ch.get(cb).landing()))) continue;
+                    for (double y = wy.f[i] - wy.slab[i]; y <= wy.f[i] + wy.hgt[i]; y += 3) {
+                        if (g.passageXZ(wy.x[i], y, wy.z[i]) < wy.w[i] + g.radius * 1.5 + 4) return false;
+                    }
+                }
+            }
+            // and the den gates' (the Blue Reaches), only those whose box the way's comes near: the test above can only
+            // fail within its reach of the passage's centre line, which keeps inside the box
+            for (Plans.Gate g : denGates) {
+                if (!g.overlaps(lx, lz, hx, hz, wMax + g.radius * 1.5 + 4)) continue;
+                boolean spoke = (ca >= 0 && n.ch.get(ca).landing()) || (cb >= 0 && n.ch.get(cb).landing());
+                for (int i = 0; i < wy.n; i += 2) {
+                    if (spoke && nearOwnEnd(wy.x[i], wy.z[i], ca, cb)) continue;
                     for (double y = wy.f[i] - wy.slab[i]; y <= wy.f[i] + wy.hgt[i]; y += 3) {
                         if (g.passageXZ(wy.x[i], y, wy.z[i]) < wy.w[i] + g.radius * 1.5 + 4) return false;
                     }

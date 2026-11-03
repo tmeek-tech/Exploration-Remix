@@ -633,9 +633,9 @@ if __name__ == "__main__":
 
 
 # =============================================================================================== block and item textures
-# The den and the hide, painted like the mod's other 16 x 16 textures (tools/plants.py's helpers): short ramps of
-# shades, hard pixels. textures.py merges this table.
-from plants import blank, put  # noqa: E402
+# The den, the bone scraps round it and the hide, painted like the mod's other 16 x 16 textures (tools/plants.py's
+# helpers): short ramps of shades, hard pixels. textures.py merges this table.
+from plants import blank, grid, put  # noqa: E402
 
 DEN_MOSS = ["#2F3E1E", "#3B4D24", "#4A5E2B", "#586E33", "#667D3B"]
 DEN_BONE = ["#B9AE8C", "#D8CDA8", "#ECE3C4"]
@@ -693,7 +693,114 @@ def _hide():
     return img
 
 
+# The bone scraps (gen_data.py's bone_scraps, one texture per look): litter lying on a den gate's landing and the floors
+# round it, mostly see-through so the rock shows between the pieces. The bones are the den's own ramp, pale against
+# the dark deepslate so they read in a dim cave, with a darker shade for their shadowed sides, cracks and gnawed ends.
+SCRAP_BONE = {"k": "#4A4334", "d": "#857A5E", "a": DEN_BONE[0], "b": DEN_BONE[1], "c": DEN_BONE[2]}
+# a pale flight feather (w lit vane, v and g its shaded side, e its edge, q the quill), wads of brown (n m f j) and grey
+# (s r l) fur from what was caught
+SCRAP_FUR = {"w": "#EEEAE0", "v": "#D3CCBE", "g": "#ADA595", "e": "#7A7366", "q": "#BFB49B",
+             "n": "#B58F60", "m": "#8C6A45", "f": "#6B4E33", "j": "#4A3524",
+             "s": "#B4B0A6", "r": "#8A867D", "l": "#5E5B55"}
+# the Mossbacks' own: the hide's ramp and spots, with its pale underside (o p) where a torn edge curls over
+SCRAP_HIDE = {"e": HIDE_EDGE, "3": HIDE[2], "4": HIDE[3], "5": HIDE[4], "s": HIDE_SPOT, "n": "#80A83A",
+              "o": "#857556", "p": "#A39270"}
+
+
+def _scraps_ribs():
+    """Rib bones fallen flat, still curved as they lay round the body, and a few vertebrae: a short run and a loose one."""
+    return grid([
+        "................",
+        "..cbbba.........",
+        "......dbba......",
+        "..........ba....",
+        ".cbba......ad...",
+        ".....dbba...a...",
+        ".........ba.ad..",
+        "..........a..d..",
+        "..........ad....",
+        "...........d....",
+        "................",
+        ".a..a........a..",
+        ".cbdcbda....cbd.",
+        ".dd.dd.cbda..d..",
+        ".......dd.cbd...",
+        "..........dd....",
+    ], SCRAP_BONE)
+
+
+def _scraps_skull():
+    """A small skull on its side, the back of it broken away (dark inside), cracked across, with chips of bone round it."""
+    return grid([
+        "................",
+        ".............b..",
+        "............d...",
+        "................",
+        "....dccccb......",
+        "...kcbbbbbba....",
+        "..kdbbdbbkkbaa..",
+        "..kbbbbdbkkbbba.",
+        "..kdbbbbdbbbbad.",
+        "...kabbbbbadada.",
+        "....kaaddd.c.c..",
+        "................",
+        "................",
+        ".bd.......c.....",
+        "......ad....bd..",
+        "................",
+    ], SCRAP_BONE)
+
+
+def _scraps_fur():
+    """A flight feather with a split in its vane, a tuft of down, and wads of brown and grey fur."""
+    return grid([
+        "................",
+        "..........w.....",
+        ".w.w.....wwv....",
+        "..wv....wwqve...",
+        ".vqw...wwqvge...",
+        "..q...wwqvgve...",
+        "......w.qvve....",
+        ".....wwqvge.....",
+        "....wwqvve......",
+        "....wqvve..nn...",
+        "....qve..nnmmn..",
+        "...q....nmmmfmnn",
+        "..q......fmffmj.",
+        "......ss..jj.j..",
+        ".....srrss......",
+        "......lrl.l.....",
+    ], SCRAP_FUR)
+
+
+def _scraps_hide():
+    """Shed by the Mossbacks themselves: a torn piece of mossy hide, scaled and spotted, curling over to its pale
+    underside along the tear, and loose scales round it."""
+    return grid([
+        "................",
+        "..eeeee.........",
+        ".e45454ee.......",
+        ".e5s45454e......",
+        ".e45454s45e..n5.",
+        "..e54545454e.53e",
+        "..eop45s454e..e.",
+        "...eoppe4545e...",
+        "....eee.e.ee....",
+        "..........n5....",
+        ".n5.......53e...",
+        ".53e.......e..n5",
+        "..e...........53",
+        "......e454e....e",
+        ".......eee.n5...",
+        "...........53e..",
+    ], SCRAP_HIDE)
+
+
 PAINTERS = {
     "block/mossback_den": _den,
+    "block/bone_scraps": _scraps_ribs,
+    "block/bone_scraps_2": _scraps_skull,
+    "block/bone_scraps_3": _scraps_fur,
+    "block/bone_scraps_4": _scraps_hide,
     "item/mossback_hide": _hide,
 }

@@ -21,7 +21,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * Paths for a creature that walks on floors, walls and ceilings. A node is the low corner of the cells the creature's
  * box fills (for a box 1.4 wide and 0.9 tall: 2 x 1 x 2 cells; vanilla puts a mob of that width at node + 1). A node
  * can be walked when those cells are open and the box touches rock on some side: below (floor), beside (wall) or
- * above (ceiling). Water can be swum. Floors cost least, then walls, then ceilings, so it walks normally where it can
+ * above (ceiling). Water can be swum at its top, never under it. Floors cost least, then walls, then ceilings, so it walks normally where it can
  * and climbs where it must. Moves go to the 18 face and edge neighbours; an edge move needs one of its two straight
  * halves open, so it rounds a ledge but never cuts through a corner of rock.
  */
@@ -55,17 +55,31 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
         kinds.clear();
     }
 
-    /** The node whose box is centred nearest the mob, or a walkable one next to it. */
+    /**
+     * The node whose box is centred nearest the mob, or else the walkable one round it whose box is nearest where the
+     * mob really is (a box straddling two nodes starts from the one it stands or clings in, not one it would have to
+     * squeeze down or round an edge to reach).
+     */
     @Override
     public Node getStart() {
         int x = Mth.floor(mob.getX() - entityWidth * 0.5 + 0.5);
         int y = Mth.floor(mob.getY() + 0.05);
         int z = Mth.floor(mob.getZ() - entityDepth * 0.5 + 0.5);
         if (walkable(kind(x, y, z))) return start(x, y, z);
-        for (int[] s : STEPS) {
-            if (walkable(kind(x + s[0], y + s[1], z + s[2]))) return start(x + s[0], y + s[1], z + s[2]);
-        }
-        return start(x, y, z);
+        int bx = x, by = y, bz = z;
+        double best = Double.MAX_VALUE;
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dz = -1; dz <= 1; dz++) {
+                    int nx = x + dx, ny = y + dy, nz = z + dz;
+                    byte k = kind(nx, ny, nz);
+                    if ((dx | dy | dz) == 0 || !walkable(k)) continue;
+                    // a floor wins a tie: it is where it walks most easily
+                    double d = Mth.square(nx + entityWidth * 0.5 - mob.getX()) + Mth.square(ny - mob.getY())
+                            + Mth.square(nz + entityDepth * 0.5 - mob.getZ()) + (k == FLOOR ? 0.0 : 0.05);
+                    if (d < best) { best = d; bx = nx; by = ny; bz = nz; }
+                }
+        return start(bx, by, bz);
     }
 
     private Node start(int x, int y, int z) {
@@ -170,28 +184,52 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
                 }
             return FLOOR;
         }
-        if (water) return WATER;
+        if (water) {
+            // it swims at the top of the water, where it can breathe, floating with its back out of it: only where
+            // the water's top lies in the box's own cells, with open air over every one of them (deeper, it would
+            // float up out of the node, or into rock over it)
+            for (int dx = 0; dx < w; dx++)
+                for (int dz = 0; dz < d; dz++) {
+                    BlockState over = level.getBlockState(p.set(x + dx, y + h, z + dz));
+                    if (!over.getCollisionShape(level, p).isEmpty() || !over.getFluidState().isEmpty()) return BLOCKED;
+                }
+            return WATER;
+        }
         // floor: rock under any of the cells
         for (int dx = 0; dx < w; dx++)
             for (int dz = 0; dz < d; dz++)
                 if (solid(level, p.set(x + dx, y - 1, z + dz))) return FLOOR;
-        // walls: rock beside the box at its own height
+        // walls: rock beside the box at its own height, reaching the side it would cling to (a pane, bars or a
+        // fence post stand in the middle of their cell, out of its reach)
         for (int dy = 0; dy < h; dy++) {
             for (int dz = 0; dz < d; dz++) {
-                if (solid(level, p.set(x - 1, y + dy, z + dz))) return WALL;
-                if (solid(level, p.set(x + w, y + dy, z + dz))) return WALL;
+                if (face(level, p.set(x - 1, y + dy, z + dz), net.minecraft.core.Direction.Axis.X, true)) return WALL;
+                if (face(level, p.set(x + w, y + dy, z + dz), net.minecraft.core.Direction.Axis.X, false)) return WALL;
             }
             for (int dx = 0; dx < w; dx++) {
-                if (solid(level, p.set(x + dx, y + dy, z - 1))) return WALL;
-                if (solid(level, p.set(x + dx, y + dy, z + d))) return WALL;
+                if (face(level, p.set(x + dx, y + dy, z - 1), net.minecraft.core.Direction.Axis.Z, true)) return WALL;
+                if (face(level, p.set(x + dx, y + dy, z + d), net.minecraft.core.Direction.Axis.Z, false)) return WALL;
             }
         }
-        // ceiling: rock over any of the cells
+        // ceiling: rock over any of the cells, coming down to the top of the box (not a top slab's half way up)
         for (int dx = 0; dx < w; dx++)
             for (int dz = 0; dz < d; dz++)
-                if (solid(level, p.set(x + dx, y + h, z + dz))) return CEILING;
+                if (face(level, p.set(x + dx, y + h, z + dz), net.minecraft.core.Direction.Axis.Y, false)) return CEILING;
         return OPEN;
     }
+
+    /**
+     * Rock in {@code p} that reaches the face it shares with the box: its high side along {@code axis} when it lies
+     * on the box's low side ({@code high}), else its low side.
+     */
+    private static boolean face(BlockGetter level, BlockPos p, net.minecraft.core.Direction.Axis axis, boolean high) {
+        if (!solid(level, p)) return false;
+        VoxelShape shape = level.getBlockState(p).getCollisionShape(level, p);
+        return high ? shape.max(axis) >= 1.0 - REACH : shape.min(axis) <= REACH;
+    }
+
+    /** How far short of a cell's side rock may stop and still be clung to (the box reaches 0.08 past its own sides). */
+    private static final double REACH = 0.06;
 
     /** Rock to cling to: something with a real collision shape (not a carpet), neither harmful nor wet. */
     private static boolean solid(BlockGetter level, BlockPos p) {
