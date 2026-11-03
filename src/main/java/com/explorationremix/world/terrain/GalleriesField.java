@@ -729,33 +729,18 @@ public final class GalleriesField {
             double st = CAUS_B + 2.4 * causN.noise2(x / 38.0, z / 38.0) + 1.2 * causN.noise2(x / 11.0 + 50, z / 11.0);
             F = lerp(F, F + st, smooth((cl.wCaus - 0.2) / 0.5) * smooth((W + 6 - F) / 6.0));
         }
-        if (cl.wCan > 0) {
-            // canyons: lava slots along the zero lines of a noise, sheer walls up to the dry ground, then stepped cliffs up
-            // to the ridges; the terrain fades out with the patch's weight, the slots pinch out before it fades
-            double dc = lineDistW(canN, w, CAN_P);
-            double cw0 = smooth((cl.wCan - 0.15) / 0.35);
-            double fw = (2.5 + 3.5 * smooth(0.5 + canW.noise2(x / 70.0, z / 70.0))) * smooth((cw0 - 0.8) / 0.15)
-                    * smooth((F - (W + CAN_LOW)) / 8.0);
-            double ws = 1.0 + 1.8 * smooth(0.5 + canW.noise2(x / 110.0 + 20, z / 110.0));
-            double u = dc - fw;
-            double Fk = fw > 0 && u <= 0 ? W - 4 : W + CAN_DRY + terrace(ws * Math.max(0, u), CAN_STEP, 0.45) + 300 * (1 - cw0);
-            F = Math.min(F, Fk);
-        }
+        if (cl.wCan > 0) F = canyonFloor(x, z, w, cl, F);
         // ---- a tube country's apron (TubeField): the floor goes to the tubes' level; where a tube runs out of the massif
         // (its mouth) the space is kept open with head room
         double mouth = 0;
         double ad = tubesAt(x, z) ? -tubes.massifAt(x, z) - (TubeField.APRON_OUT - TubeField.APRON_FADE) : 1e9;
-        if (ad < AP_D + AP_FD) {
-            double af = tubes.apronFloorAt(x, z);
-            double lim = AP_S * Math.max(0, ad) + 1000 * smooth((ad - AP_D) / AP_FD);
-            F = terrace(af + Math.max(-lim, Math.min(lim, F - af)), 1, 0.5);
-        }
+        if (ad < AP_D + AP_FD) F = terrace(apronFit(x, z, ad, F), 1, 0.5);
         if (ap > 0) {
             int ix = (int) Math.floor(x), iz = (int) Math.floor(z);
             if (tubes.runs(ix, iz)) mouth = ap;
         }
         out.mouth = mouth;
-        // ---- a filled ramp's talus: the floor beside it rises to its deck, TALUS_S rows a block lower outwards
+        // ---- a ramp's talus beside its solid part: the floor rises to its deck, TALUS_S rows a block lower outwards
         if (rh.talus > F) { F = Math.floor(rh.talus); out.ragged = false; }
         // ---- the vault: the cap less its relief; over an opened opening's disc it rises into the band; flaring down onto
         // the massifs, lifted back toward the cap under the breakthrough patches
@@ -854,22 +839,73 @@ public final class GalleriesField {
      * relief, the lava rivers with their fords and banks, and the high plains' rubble. {@code w} is the warp at (x, z).
      */
     double floorBase(double x, double z, double[] w, double Fs, Climate cl, double dm, double clr) {
+        double F = riverFloor(x, z, w, Fs, RV_PATCH * smooth((cl.wCal + cl.wCaus - 0.1) / 0.5), dm < RV_DM ? RV_DMH * (1 - smooth(dm / RV_DM)) : 0);
+        double rw = smooth((F - W - RB_LO) / RB_FADE) * (1 - clr) * cl.wMain();
+        if (rw > 0) F += rw * rubble(x, z);
+        return F;
+    }
+
+    /**
+     * The landscape Fs with the fine relief and the lava rivers' valleys (rows, unrounded): the bed sheer up to the table,
+     * then gentle banks, RIVER_BANK rows a block (so a river's valley reaches far out into the low landscape); fords where
+     * a noise is high (the bed rises out of the lava, its banks all gentle). The bed rises by {@code patch} over the
+     * Caldera's and the Causeway's shores and by {@code foot} at the massifs' feet. {@code w} is the warp at (x, z).
+     */
+    double riverFloor(double x, double z, double[] w, double Fs, double patch, double foot) {
         double F = Fs + DT_A * detailN.noise2(x / DT_P, z / DT_P);
         if (Fs < W + RIVER_LOW + 16) {
-            // lava rivers: the bed sheer up to the table, then gentle banks; fords where a noise is high (the bed rises
-            // out of the lava, its banks all gentle)
             double dr = lineDistW(riverN, w, RIVER_P);
             double wc = 3.5 + 4 * smooth(0.5 + riverW.noise2(x / 90.0, z / 90.0));
             double q = Math.max(0, dr - wc);
             double ford = FORD_H * smooth((fordN.noise2(w[0] / FORD_P, w[1] / FORD_P) - FORD_T) / 0.15);
-            double bed = W - 4 + RIVER_RISE * Math.max(0, Fs - (W + RIVER_LOW)) + ford
-                    + RV_PATCH * smooth((cl.wCal + cl.wCaus - 0.1) / 0.5)
-                    + (dm < RV_DM ? RV_DMH * (1 - smooth(dm / RV_DM)) : 0);
+            double bed = W - 4 + RIVER_RISE * Math.max(0, Fs - (W + RIVER_LOW)) + ford + patch + foot;
             double sheer = Math.max(0, Math.min(5, W + 1 - bed));
             F = Math.min(F, bed + Math.min(q, sheer) + RIVER_BANK * Math.max(0, q - sheer));
         }
-        double rw = smooth((F - W - RB_LO) / RB_FADE) * (1 - clr) * cl.wMain();
-        if (rw > 0) F += rw * rubble(x, z);
+        return F;
+    }
+
+    /**
+     * The Scoria Canyons over the floor F at (x, z) (where cl.wCan > 0): lava slots along the zero lines of a noise, sheer
+     * walls up to the dry ground, then stepped cliffs up to the ridges; the terrain fades out with the patch's weight, the
+     * slots pinch out before it fades. Never over F. {@code w} is the warp at (x, z).
+     */
+    double canyonFloor(double x, double z, double[] w, Climate cl, double F) {
+        double dc = lineDistW(canN, w, CAN_P);
+        double cw0 = smooth((cl.wCan - 0.15) / 0.35);
+        double fw = (2.5 + 3.5 * smooth(0.5 + canW.noise2(x / 70.0, z / 70.0))) * smooth((cw0 - 0.8) / 0.15)
+                * smooth((F - (W + CAN_LOW)) / 8.0);
+        double ws = 1.0 + 1.8 * smooth(0.5 + canW.noise2(x / 110.0 + 20, z / 110.0));
+        double u = dc - fw;
+        double Fk = fw > 0 && u <= 0 ? W - 4 : W + CAN_DRY + terrace(ws * Math.max(0, u), CAN_STEP, 0.45) + 300 * (1 - cw0);
+        return Math.min(F, Fk);
+    }
+
+    /**
+     * A tube country's apron: the floor F at a column {@code ad} blocks out past the apron's fade (ad under AP_D + AP_FD)
+     * drawn toward the tubes' level, to within AP_S x ad rows of it (unrounded).
+     */
+    double apronFit(double x, double z, double ad, double F) {
+        double af = tubes.apronFloorAt(x, z);
+        double lim = AP_S * Math.max(0, ad) + 1000 * smooth((ad - AP_D) / AP_FD);
+        return af + Math.max(-lim, Math.min(lim, F - af));
+    }
+
+    /**
+     * The ground a ramp is laid against at (x, z) (rows, unrounded): the floor a player meets there before any ramp, less
+     * the parts that only raise it by a few rows (the massifs' feet, the rubble, the terraces' and prisms' steps): the
+     * landscape with the lava rivers' valleys cut in (their beds rising over the patches' shores), the Caldera's stacks,
+     * the Canyons' slots and cliffs, and a tube country's apron drawn to the tubes' level. {@code w} is the warp at (x, z),
+     * {@code cl} its climate.
+     */
+    double rampGround(double x, double z, double[] w, Climate cl) {
+        double F = riverFloor(x, z, w, landscape(x, z, w), RV_PATCH * smooth((cl.wCal + cl.wCaus - 0.1) / 0.5), 0);
+        if (cl.wCal > 0) F = Math.max(F, coneFloor(x, z));
+        if (cl.wCan > 0) F = canyonFloor(x, z, w, cl, F);
+        if (tubesAt(x, z)) {
+            double ad = -tubes.massifAt(x, z) - (TubeField.APRON_OUT - TubeField.APRON_FADE);
+            if (ad < AP_D + AP_FD) F = apronFit(x, z, ad, F);
+        }
         return F;
     }
 
@@ -1005,7 +1041,9 @@ public final class GalleriesField {
      * from the disc's lip (r + LIP along its axis), whose first open row there is HEAD_DROP rows under the layer's top
      * (the crater's floor), falling s = RAMP_S0..RAMP_S1 rows a block along its axis, RAMP_HW0..RAMP_HW1
      * blocks to either side of a centre line that bends sideways (bendA x a slow noise along the axis, fading in over
-     * BEND_IN blocks), down to the landscape; a candidate must stay off massifs and tube countries, land on dry ground off
+     * BEND_IN blocks), down to the ground under it ({@link #rampGround}: the deck, its fill and its talus are laid against
+     * the ground a player meets, so no filled body or talus stands as a wall across a river's valley or a canyon, and no
+     * deck runs on buried under a stack or a tube country's apron); a candidate must stay off massifs and tube countries, land on dry ground off
      * the canyons, the Caldera and the rivers (W + 6 at least; W + 40 or more preferred by 60 blocks), and keep all it
      * touches within RAMP_REACH of the middle. Which candidate an opening builds is decided by a hashed priority in
      * RAMP_PASSES + 1 passes (see {@link #choice}), so that no two ramps (their heads' half discs of r + 3.5 included) come
@@ -1046,11 +1084,12 @@ public final class GalleriesField {
      * a = 4 s' (1 - s') (a parabola), s' = (s + DK_ROOT) / (1 + DK_ROOT), s the place along the free span (0 the head, 1
      * tg), so the underside springs from a hanging root under the head (0.29 of the gap), is thinnest at about a third of
      * the span, and curves down to the floor at tg; plus DK_J rows of column ends per cell. The deck's outer half drops 0..EDGE_LOW rows per cell
-     * (ragged column tops). Beside the filled part a talus: the floor rises to the deck, falling TALUS_S rows a block
-     * outwards, or steeper where the deck stands higher over the landscape under its centre line (so that it meets the
-     * landscape TALUS_MAX blocks out).
+     * (ragged column tops). Beside the solid part a talus: the floor rises to the deck, falling TALUS_S rows a block
+     * outwards, or steeper where the deck stands higher over the ground under its centre line (so that it meets the
+     * ground TALUS_MAX blocks out). The solid part starts at ts, where the arch's opening over the ground (less the column
+     * ends) first stays under TS_OPEN rows to tg, so no stretch of the body stands as a wall without a walkable flank.
      */
-    static final double DK_FILL = 7, DK_ROOT = 0.3, DK_J = 4, EDGE_LOW = 2, TALUS_S = 0.35, TALUS_MAX = 32;
+    static final double DK_FILL = 7, DK_ROOT = 0.3, DK_J = 4, EDGE_LOW = 2, TALUS_S = 0.35, TALUS_MAX = 32, TS_OPEN = 3;
     /** Everything an opening touches lies within RAMP_REACH of its middle; ramps are resolved against openings within OP_CONF lattice cells; columns look OP_NEAR cells round. */
     static final double RAMP_REACH = 190;
     static final int OP_CONF = 6, OP_NEAR = 3;
@@ -1074,8 +1113,8 @@ public final class GalleriesField {
     /** A ramp candidate of an opening. Immutable once built. */
     static final class Ramp {
         int dir;
-        double ux, uz, s, hw, th0, tEnd, tg, bendA, bk0, bk1, b0, reach, score;
-        /** Centre-line samples every RAMP_DT along the axis from t = r, and the landscape under them. */
+        double ux, uz, s, hw, th0, tEnd, tg, ts, bendA, bk0, bk1, b0, reach, score;
+        /** Centre-line samples every RAMP_DT along the axis from t = r, and the ground under them ({@link #rampGround}). */
         double[] px, pz, fl;
         int n;
         /** Bounding box of the strip and the ledge. */
@@ -1104,7 +1143,7 @@ public final class GalleriesField {
         /** The lowest deck over the column: its first open row (NaN: none), base thickness, place along the free span, edge weight; whether it is filled. */
         double deck, th0, sig, edge;
         boolean fill;
-        /** The lowest row rock may hang to over a ramp (NaN: none) and the talus floor beside a filled ramp (-1e9: none). */
+        /** The lowest row rock may hang to over a ramp (NaN: none) and the talus floor beside a ramp's solid part (-1e9: none). */
         double rb, talus;
         /** The cap the strongest disc opens to (a crater's floor, or the band's top for a skylight). */
         double jtTop;
@@ -1328,7 +1367,7 @@ public final class GalleriesField {
 
     /**
      * The openings' effects at column (x, z): the discs' and clearing weights (and the cap the strongest disc opens to),
-     * the lowest ramp deck over the column, the head room rows over ramps, and the talus floor beside filled ramps.
+     * the lowest ramp deck over the column, the head room rows over ramps, and the talus floor beside the ramps' solid parts.
      */
     void rampsAt(double x, double z, RampHit rh) {
         rh.jt = 0;
@@ -1382,9 +1421,9 @@ public final class GalleriesField {
                     rh.edge = edge;
                     rh.rx = o.x; rh.rz = o.z; rh.rux = rp.ux; rh.ruz = rp.uz; rh.rt0 = t0; rh.rtop = top; rh.rs = rp.s;
                 }
-            } else if (t >= rp.tg) {
-                // the talus: down from the deck at TALUS_S rows a block, or steeper where the deck stands higher, so that it
-                // meets the landscape under the centre line TALUS_MAX blocks out
+            } else if (t >= rp.ts) {
+                // the talus beside the solid part: down from the deck at TALUS_S rows a block, or steeper where the deck
+                // stands higher, so that it meets the ground under the centre line TALUS_MAX blocks out
                 int q = Math.min(rp.n - 1, Math.max(0, (int) Math.round((t - t0) / RAMP_DT)));
                 double sl = Math.max(TALUS_S, (dk - rp.fl[q]) / TALUS_MAX);
                 rh.talus = Math.max(rh.talus, dk - (dl - rp.hw) * sl);
@@ -1534,7 +1573,8 @@ public final class GalleriesField {
                 warp(px, pz, w2);
                 if (massN.fbm2(w2[0] / M_P, w2[1] / M_P, 2) > M_T - 0.08) { ok = false; break; }
                 if (tubesAt(px, pz) && tubes.apronAt(px, pz) > 0.02) { ok = false; break; }
-                double Fl = landscape(px, pz, w2);
+                climate(px, pz, cl);
+                double Fl = rampGround(px, pz, w2, cl);
                 bx[n] = px;
                 bz[n] = pz;
                 bf[n] = Fl;
@@ -1554,8 +1594,19 @@ public final class GalleriesField {
                 double t = t0 + q * RAMP_DT;
                 if (top - s * (t - t0) - th0 - bf[q] <= DK_FILL) { tg = t; break; }
             }
+            // the talus starts where the arch's opening under the deck closes: going back from tg, the last sample whose
+            // opening over the ground, less the column ends' DK_J rows, is under TS_OPEN rows
+            double ts = tg;
+            for (int q = n - 1; q >= 0; q--) {
+                double t = t0 + q * RAMP_DT;
+                if (t >= tg) continue;
+                double sp = (clamp01((t - t0) / Math.max(1, tg - t0)) + DK_ROOT) / (1 + DK_ROOT);
+                if ((top - s * (t - t0) - th0 - bf[q]) * 4 * sp * (1 - sp) - DK_J >= TS_OPEN) break;
+                ts = t;
+            }
             rp.tEnd = tEnd + 2;
             rp.tg = tg;
+            rp.ts = ts;
             rp.n = n;
             rp.px = Arrays.copyOf(bx, n);
             rp.pz = Arrays.copyOf(bz, n);

@@ -846,6 +846,52 @@ class GalleriesFieldTest {
         assertTrue(ratio <= 3.0, "the Galleries' rows cost " + ratio + " times the Gardens'");
     }
 
+    /**
+     * The tubes' hook in the per-block pass (critique T6: the span read once per column, kept with the column): over 4 x 4
+     * chunks round the middle of the tube country nearest the origin, every row of the layer, the per-block density with
+     * the hook (fineBlocks: the cell's profile, and the tubes in the column's span) against the profile alone, best of
+     * three rounds each, taken in turns. Printed as a ratio; held under 2 (a hook that read the span on every block, or
+     * the tubes' field over whole columns, would cost several times the profile).
+     */
+    @Test
+    void tubeHookCost() {
+        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 8675310);
+        GalleriesField g = t.galleries;
+        TubeField.Country c = null;
+        for (int r = 0; r < 8 && c == null; r++)
+            for (int i = -r; i <= r && c == null; i++) for (int j = -r; j <= r && c == null; j++) {
+                if (Math.max(Math.abs(i), Math.abs(j)) != r) continue;
+                double cx = (i + 0.5) * TubeField.CELL, cz = (j + 0.5) * TubeField.CELL;
+                if (g.tubesAt(cx, cz)) c = g.tubes.countryAt(cx, cz);
+            }
+        assertNotNull(c, "no tube country near the origin");
+        int x0 = (int) Math.floor(c.ox) - 32, z0 = (int) Math.floor(c.oz) - 32, lo = g.B, hi = g.T;
+        long inSpan = 0;
+        for (int x = x0; x < x0 + 64; x++) for (int z = z0; z < z0 + 64; z++) {
+            if (!g.tubesAt(x + 0.5, z + 0.5)) continue;
+            int a = g.tubes.spanLo(x, z), b = g.tubes.spanHi(x, z);
+            inSpan += Math.max(0, Math.min(hi, b) - Math.max(lo, a) + 1);
+        }
+        assertTrue(inSpan > 20_000, "too few blocks in the tubes' spans to time: " + inSpan);
+        double with = Double.MAX_VALUE, without = Double.MAX_VALUE;
+        for (int round = 0; round < 4; round++) {
+            long t0 = System.nanoTime();
+            double sink = 0;
+            for (int x = x0; x < x0 + 64; x++) for (int z = z0; z < z0 + 64; z++) for (int y = lo; y <= hi; y++) sink += g.fineBlocks(x, y, z);
+            long t1 = System.nanoTime();
+            for (int x = x0; x < x0 + 64; x++) for (int z = z0; z < z0 + 64; z++) for (int y = lo; y <= hi; y++) sink += GalleriesField.blocks(g.column(x, z), x, y, z);
+            long t2 = System.nanoTime();
+            assertTrue(Double.isFinite(sink));
+            if (round == 0) continue;   // the first round builds the cells and the openings
+            with = Math.min(with, t1 - t0);
+            without = Math.min(without, t2 - t1);
+        }
+        double blocks = 64.0 * 64 * (hi - lo + 1);
+        System.out.printf(java.util.Locale.ROOT, "GalleriesFieldTest tube hook: country at (%.0f, %.0f), %d blocks in spans of %.0f; per block %.1f ns with the hook, %.1f ns without, ratio %.2f%n",
+                c.ox, c.oz, inSpan, blocks, with / blocks, without / blocks, with / without);
+        assertTrue(with / without <= 2.0, "the tubes' hook costs " + with / without + " times the profile alone");
+    }
+
     // ================================================================================================ slow
 
     /** The slow set: the spec's other four boxes, held to the same bars as the main two. */
