@@ -69,10 +69,10 @@ LAVA_SUBTITLES = {"lava.rumble": "The deep rock rumbles", "lava.surge": "Lava su
 
 
 # The Mossback (tools/synth_creature_sounds.py makes the files): its call carries far, so you hear it coming.
-def creature(name, count, volume=1.0, attenuation=None):
+def creature(name, count, volume=1.0, attenuation=None, who="mossback"):
     out = []
     for i in range(1, count + 1):
-        e = {"name": f"{MOD}:creature/mossback/{name}{i}", "volume": volume}
+        e = {"name": f"{MOD}:creature/{who}/{name}{i}", "volume": volume}
         if attenuation: e["attenuation_distance"] = attenuation
         out.append(e)
     return out
@@ -92,6 +92,22 @@ CREATURE_SUBTITLES = {
     "mossback.bite": "Jaws snap", "mossback.shake": "Mossback growls", "mossback.hurt": "Mossback hurts",
     "mossback.death": "Mossback dies",
 }
+
+# The Skein: its rattle as it rears carries, so a near miss is heard before it is seen; its patter is quiet.
+SKEIN_EVENTS = {
+    "skein.patter": creature("patter", 4, 0.8, 16, who="skein"),
+    "skein.chitter": creature("chitter", 3, 0.9, 18, who="skein"),
+    "skein.rattle": creature("rattle", 2, 1.0, 24, who="skein"),
+    "skein.bite": creature("bite", 2, 1.0, who="skein"),
+    "skein.hurt": creature("hurt", 2, 1.0, who="skein"),
+    "skein.death": creature("death", 1, 1.0, 24, who="skein"),
+}
+SKEIN_SUBTITLES = {
+    "skein.patter": "Many feet patter", "skein.chitter": "Something chitters", "skein.rattle": "Skein rattles",
+    "skein.bite": "Mandibles snap", "skein.hurt": "Skein hurts", "skein.death": "Skein dies",
+}
+CREATURE_EVENTS.update(SKEIN_EVENTS)
+CREATURE_SUBTITLES.update(SKEIN_SUBTITLES)
 
 
 def write_all(assets_dir, write):

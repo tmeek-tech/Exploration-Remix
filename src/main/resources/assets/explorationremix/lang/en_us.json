@@ -94,8 +94,11 @@
   "block.explorationremix.wisteria_plant": "Wisteria",
   "entity.explorationremix.firefly_swarm": "Blue Fireflies",
   "entity.explorationremix.mossback": "Mossback",
+  "entity.explorationremix.skein": "Skein",
   "item.explorationremix.mossback_hide": "Mossback Hide",
   "item.explorationremix.mossback_spawn_egg": "Mossback Spawn Egg",
+  "item.explorationremix.skein_plate": "Skein Plate",
+  "item.explorationremix.skein_spawn_egg": "Skein Spawn Egg",
   "itemGroup.explorationremix": "Exploration Remix",
   "subtitles.explorationremix.ambient.basalt.additions": "Lava pops",
   "subtitles.explorationremix.ambient.basalt.loop": "The rock rumbles",
@@ -116,5 +119,11 @@
   "subtitles.explorationremix.mossback.hiss": "Mossback hisses",
   "subtitles.explorationremix.mossback.hurt": "Mossback hurts",
   "subtitles.explorationremix.mossback.shake": "Mossback growls",
-  "subtitles.explorationremix.mossback.step": "Heavy footsteps"
+  "subtitles.explorationremix.mossback.step": "Heavy footsteps",
+  "subtitles.explorationremix.skein.bite": "Mandibles snap",
+  "subtitles.explorationremix.skein.chitter": "Something chitters",
+  "subtitles.explorationremix.skein.death": "Skein dies",
+  "subtitles.explorationremix.skein.hurt": "Skein hurts",
+  "subtitles.explorationremix.skein.patter": "Many feet patter",
+  "subtitles.explorationremix.skein.rattle": "Skein rattles"
 }

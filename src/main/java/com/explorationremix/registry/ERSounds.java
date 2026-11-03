@@ -43,6 +43,16 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> MOSSBACK_HURT = register("mossback.hurt");
     public static final RegistryObject<SoundEvent> MOSSBACK_DEATH = register("mossback.death");
 
+    // The Skein (creature.SkeinEntity): the dry patter of its many feet, the clicking chitter it makes lying still,
+    // the rattling hiss of its plates as it rears, the crack of its mandibles, hurt and death. The mod's own recordings
+    // (tools/synth_creature_sounds.py).
+    public static final RegistryObject<SoundEvent> SKEIN_PATTER = register("skein.patter");
+    public static final RegistryObject<SoundEvent> SKEIN_CHITTER = register("skein.chitter");
+    public static final RegistryObject<SoundEvent> SKEIN_RATTLE = register("skein.rattle");
+    public static final RegistryObject<SoundEvent> SKEIN_BITE = register("skein.bite");
+    public static final RegistryObject<SoundEvent> SKEIN_HURT = register("skein.hurt");
+    public static final RegistryObject<SoundEvent> SKEIN_DEATH = register("skein.death");
+
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ExplorationRemix.MOD_ID, name)));
     }
