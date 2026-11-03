@@ -27,6 +27,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class WastelandFieldTest {
     /** The measured boxes: seed and centre (spec 9). */
     static final long[][] BOXES = {{1, 300, 300}, {2, -900, 1400}, {8004, 2000, -1500}};
+    /**
+     * More boxes, measured plain (no views, no decorations) for the walk graph's and the caves' statistics: the two where
+     * fix round 1's verifier found connectivity at its bars (seed 3's main component, seed 77's blind ends).
+     */
+    static final long[][] MORE_BOXES = {{3, 0, 0}, {77, 1500, -700}};
     static final int SIZE = 512, MARGIN = 96;
 
     /** What one box measured (the blocks themselves are dropped once counted). */
@@ -90,10 +95,39 @@ class WastelandFieldTest {
     }
 
     private static final Map<Integer, Stats[]> STATS = new HashMap<>();
+    private static final Map<Integer, Stats> MORE = new HashMap<>();
 
     @AfterAll
     static void forget() {
         synchronized (STATS) { STATS.clear(); }
+        synchronized (MORE) { MORE.clear(); }
+    }
+
+    /** Box i of {@link #MORE_BOXES}: its plain statistics and shapes, measured on first use. */
+    static Stats more(int i) {
+        synchronized (MORE) {
+            Stats s = MORE.get(i);
+            if (s == null) {
+                long seed = MORE_BOXES[i][0];
+                int cx = (int) MORE_BOXES[i][1], cz = (int) MORE_BOXES[i][2];
+                Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+                int top = t.shape.top(Terrain.WASTELAND), bot = t.shape.bottom(Terrain.WASTELAND), x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
+                NoiseVox v = NoiseVox.build(t, x0, z0, SIZE, SIZE, bot - 24, top + 1).graph();
+                s = measure(t, v, seed, x0, z0, false);
+                shapes(t, v, s, x0, z0);
+                System.out.println("WastelandFieldTest more box " + s);
+                MORE.put(i, s);
+            }
+            return s;
+        }
+    }
+
+    /** Every box's plain statistics: {@link #BOXES}, then {@link #MORE_BOXES}. */
+    static List<Stats> allStats() {
+        List<Stats> all = new ArrayList<>();
+        for (int i = 0; i < BOXES.length; i++) all.add(stats(i));
+        for (int i = 0; i < MORE_BOXES.length; i++) all.add(more(i));
+        return all;
     }
 
     /** Box i's statistics, measured on first use. */
@@ -510,11 +544,13 @@ class WastelandFieldTest {
 
     // ================================================================================================ the caves
 
-    /** The Wasteland is one cave: the largest strongly connected component holds 95.5 % of the places or more (97.0-98.0). */
+    /**
+     * The Wasteland is one cave: the largest strongly connected component holds 95.5 % of the places or more, on every
+     * box ({@link #allStats}: 98.3 / 97.4 / 97.9, seeds 3 and 77 96.5 and 98.3; fix round 1 left seed 3 at 95.6).
+     */
     @Test
     void oneCave() {
-        for (int i = 0; i < BOXES.length; i++) {
-            Stats s = stats(i);
+        for (Stats s : allStats()) {
             assertEquals(0, s.nans, "NaN densities, seed " + s.seed);
             assertTrue(s.innerPlaces > 50_000, "too few standing places to measure: " + s);
             assertTrue(s.scc() >= 0.955, "the largest walkable component holds too little: " + s);
@@ -522,21 +558,25 @@ class WastelandFieldTest {
     }
 
     /**
-     * Few blind ends: the dead-end finder's tips (on 2-block cells) at most 2 per 1000 standing places (1.65-1.73; 1.05-1.11
-     * before fix round 1, whose rougher caves make more small pockets), and of them, those where a walker finds no second
-     * way out within 12 blocks at most 0.25 per 1000 (0.14-0.18).
+     * Few blind ends, on every box ({@link #allStats}): the dead-end finder's tips (on 2-block cells) at most 2 per 1000
+     * standing places (1.68-1.88), and of them, those where a walker finds no second way out within 12 blocks at most
+     * 0.25 per 1000 (0.13-0.23; fix round 1 left seed 77 at 0.28). Before fix round 1 the tips were 0.92-1.27: a lane open
+     * along every tunnel's middle line joined the small pockets beside it, and the walking-strip finding removed it (its
+     * verifier's ablation: only the lane brings them back). The floor guard's free row, which lets the floor take the
+     * roughness's pits, cut off pockets of its own in the narrow tunnels until it was kept to the wider vaults (fix round
+     * 2: the main component 0.2-0.9 points larger on every box, seed 77's blind ends 36 to 30).
      */
     @Test
     void fewBlindEnds() {
         int tips = 0, blind = 0, places = 0;
-        for (int i = 0; i < BOXES.length; i++) {
-            Stats s = stats(i);
+        for (Stats s : allStats()) {
             assertTrue(s.tipsPer1000() <= 2.0, "too many dead-end tips: " + s);
+            assertTrue(s.blindPer1000() <= 0.25, "blind ends for a walker: " + s);
             tips += s.tips;
             blind += s.blind;
             places += s.innerPlaces;
         }
-        assertTrue(blind * 1000.0 / places <= 0.25, "blind ends for a walker: " + blind + " in " + places + " places (" + tips + " tips)");
+        System.out.printf(java.util.Locale.ROOT, "WastelandFieldTest blind ends: %d tips, %d blind in %d places (%.3f per 1000)%n", tips, blind, places, blind * 1000.0 / places);
     }
 
     /**
@@ -613,18 +653,19 @@ class WastelandFieldTest {
     // ================================================================================================ the caves' shapes
 
     /**
-     * Natural caves, not arenas (fix round 1, arena-caves): in the dry caves 9 or more wide, rock stands on at least 3 %
-     * of the blocks more than 1.5 inside the analytic vault (7.4-8.8; 0 before), no single offset of the built floor or
-     * ceiling from the analytic one holds more than 30 % of the columns (20-24; 55-63 before, when the dome was the core
-     * itself), and the median cave has at most 70 % of its floor within a row of its commonest level (59-66 per box;
-     * 68-85 before; the finding's "at most half" is not reached: a question for the pictures).
+     * Natural caves, not arenas (fix round 1, arena-caves): in the dry caves 9 or more wide, on every box
+     * ({@link #allStats}), rock stands on at least 3 % of the blocks more than 1.5 inside the analytic vault (8.9; 0
+     * before), no single offset of the built floor or ceiling from the analytic one holds more than 30 % of the columns
+     * (18-24; 55-63 before, when the dome was the core itself), and the median cave has at most 55 % of its floor within a
+     * row of its commonest level (51 % over 68 caves, 45-61 per box; 60 in fix round 1, 68-85 before it). The finding's
+     * "at most half" is not met everywhere (56 % over six more boxes, where fix round 1 has 63): a question for the
+     * pictures.
      */
     @Test
     void cavesAreNotArenas() {
         long rock = 0, blocks = 0;
         List<Double> flat = new ArrayList<>();
-        for (int i = 0; i < BOXES.length; i++) {
-            Stats s = stats(i);
+        for (Stats s : allStats()) {
             rock += s.coreRock;
             blocks += s.coreBlocks;
             flat.addAll(s.caveFlat);
@@ -642,7 +683,7 @@ class WastelandFieldTest {
                 100.0 * rock / blocks, flat.size(), 100 * median);
         assertTrue(rock >= 0.03 * blocks, "the caves' insides are the analytic vault: rock on " + rock + " of " + blocks);
         assertTrue(flat.size() >= 12, "too few dry caves to measure: " + flat.size());
-        assertTrue(median <= 0.70, "the median cave's floor is flat: " + median);
+        assertTrue(median <= 0.55, "the median cave's floor is flat: " + median);
     }
 
     /**
@@ -715,8 +756,7 @@ class WastelandFieldTest {
      */
     @Test
     void noHolesThroughVaultFloors() {
-        for (int i = 0; i < BOXES.length; i++) {
-            Stats s = stats(i);
+        for (Stats s : allStats()) {
             assertTrue(s.floorColumns > 100_000, "too few floor columns: " + s.floorColumns);
             assertEquals(0, s.floorHoles, "holes through the floor, seed " + s.seed + ":" + s.holeAt);
         }
@@ -1106,15 +1146,17 @@ class WastelandFieldTest {
     /**
      * Gate 3's lower landing lands in the caves: for seeds 1 to 4 and cells -1..1, the standing places on the landing
      * belong to a walkable component (both ways) holding places 70 blocks or more away, and the walk there takes at most
-     * 100 moves (36 of 36; at most 76). And it lands on one of the field's own tunnels, not on a plaza (fix round 1,
-     * landing-plaza): the largest flat open disc within 40 blocks of each landing has a radius of at most 8 at the median
-     * (6.7) and 12 at most (11.7, 19 blocks from the centre, where the top sheet's level is pulled flat; 0.5.0's dome:
-     * median 12.2, max 19.3).
+     * 100 moves (36 of 36; at most 79). And it lands on one of the field's own tunnels, no flatter than the field
+     * (fix round 1, landing-plaza, and its verifier): the largest flat open disc within 40 blocks of each landing is no
+     * larger than the p99 of the same measure at 400 of the field's own channel points far from any landing
+     * ({@link #naturalDiscs}), and at the median no larger than their p90 (median 5.0, max 7.2; the field's median 4.1,
+     * p90 5.4, p99 7.3, max 8.1; the passage's foot keeps the median a little over the field's. 0.5.0's dome: median 12.2,
+     * max 19.3; fix round 1 at first: median 6.7, max 11.7, where the top sheet's floor was pulled flat 40 blocks round).
      */
     @Test
     void gateThreeLandsInTheCaves() {
         List<String> bad = new ArrayList<>();
-        List<Double> discs = new ArrayList<>();
+        List<Double> discs = new ArrayList<>(), natural = new ArrayList<>();
         int worst = 0;
         for (long seed = 1; seed <= 4; seed++) {
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
@@ -1125,15 +1167,47 @@ class WastelandFieldTest {
                 worst = Math.max(worst, w);
                 discs.add(l[1]);
             }
+            natural.addAll(naturalDiscs(t, seed, 100));
         }
         Collections.sort(discs);
-        System.out.printf(java.util.Locale.ROOT, "WastelandFieldTest gate 3: longest walk from a landing %d moves; flat discs median %.1f, max %.1f%n", worst,
-                discs.get(discs.size() / 2), discs.get(discs.size() - 1));
+        Collections.sort(natural);
+        double n50 = natural.get(natural.size() / 2), n90 = natural.get((int) (natural.size() * 0.9)), n99 = natural.get((int) (natural.size() * 0.99));
+        double median = discs.get(discs.size() / 2), max = discs.get(discs.size() - 1);
+        System.out.printf(java.util.Locale.ROOT, "WastelandFieldTest gate 3: longest walk from a landing %d moves; flat discs median %.1f, max %.1f; the field's own"
+                + " (%d channel points far from the landings): median %.1f, p90 %.1f, p99 %.1f, max %.1f%n", worst, median, max, natural.size(), n50, n90, n99, natural.get(natural.size() - 1));
         assertTrue(bad.isEmpty(), "landings cut off or far from the caves: " + bad);
-        assertTrue(discs.get(discs.size() / 2) <= 8 && discs.get(discs.size() - 1) <= 12, "plazas at the landings: " + discs);
+        assertTrue(max <= n99 && median <= n90, "plazas at the landings: " + discs + " against the field's p90 " + n90 + ", p99 " + n99);
     }
 
     static int landingWalk(Terrain t, int cx, int cz, int reach) { return (int) landing(t, cx, cz, reach)[0]; }
+
+    /**
+     * The landing statistic at the field's own places: {@code n} channel points at random over 2400 x 2400 blocks round
+     * the origin, each on a random sheet's tunnel line (e under 1; not on a dip or the lowest rows) and 150 blocks or more
+     * from every gate 3 landing, and the largest flat open disc within 40 blocks of each ({@link #flatDisc}, round its
+     * walking floor).
+     */
+    static List<Double> naturalDiscs(Terrain t, long seed, int n) {
+        WastelandField f = t.wasteland;
+        Random r = new Random(seed * 7919L + 13);
+        List<Double> out = new ArrayList<>();
+        for (int tries = 0; out.size() < n && tries < 200_000; tries++) {
+            int x = r.nextInt(2400) - 1200, z = r.nextInt(2400) - 1200, k = r.nextInt(f.sheets);
+            boolean far = true;
+            for (int a = -1; a <= 1 && far; a++) for (int b = -1; b <= 1 && far; b++) {
+                Plans.Gate g = t.plans.gate(Terrain.WASTELAND + 1, t.plans.cellOf(x) + a, t.plans.cellOf(z) + b);
+                far = Math.hypot(x - g.lx, z - g.lz) >= 150;
+            }
+            if (!far) continue;
+            WastelandField.Col c = f.column(x, z);
+            if (!c.near[k] || c.e[k] >= 1 || c.fl[k] <= f.bot + 4 || c.lavaDip > 0 || c.holeDip > 0) continue;
+            double level = WastelandField.walkFloor(c, k);
+            int lf = (int) Math.floor(level);
+            NoiseVox v = NoiseVox.build(t, x - 56, z - 56, 112, 112, lf - 8, lf + 11);
+            out.add(flatDisc(v, x + 0.5, z + 0.5, level, 56));
+        }
+        return out;
+    }
 
     /**
      * The walk (moves) from gate 3's lower landing in cell (cx, cz) to a place {@code reach} blocks away in the landing's
@@ -1170,11 +1244,16 @@ class WastelandFieldTest {
      * the columns with a standing place within a row of the level and 4 blocks of air are flat, and the distance from a
      * flat column to the nearest one that is not (the box's edge counts) is the radius of the disc round it.
      */
-    static double flatDisc(NoiseVox v, Plans.Gate g) {
-        int lf = (int) Math.floor(g.lFloor), nx = v.nx, nz = v.nz;
+    static double flatDisc(NoiseVox v, Plans.Gate g) { return flatDisc(v, g.lx, g.lz, g.lFloor, Math.max(v.nx, v.nz)); }
+
+    /** {@link #flatDisc} round any point and floor level, over the box's columns within {@code half} of the point each way. */
+    static double flatDisc(NoiseVox v, double cx, double cz, double level, int half) {
+        int lf = (int) Math.floor(level), px = (int) Math.floor(cx), pz = (int) Math.floor(cz);
+        int ia = Math.max(0, px - half - v.x0), ib = Math.min(v.nx, px + half - v.x0), ka = Math.max(0, pz - half - v.z0), kb = Math.min(v.nz, pz + half - v.z0);
+        int nx = ib - ia, nz = kb - ka;
         boolean[][] open = new boolean[15][nx * nz];
         for (int j = 0; j < 15; j++) for (int i = 0; i < nx; i++) for (int k = 0; k < nz; k++) {
-            int x = v.x0 + i, y = lf - 7 + j, z = v.z0 + k;
+            int x = v.x0 + ia + i, y = lf - 7 + j, z = v.z0 + ka + k;
             open[j][i * nz + k] = v.stand(x, y, z) && v.mat(x, y + 2, z) == NoiseVox.AIR && v.mat(x, y + 3, z) == NoiseVox.AIR;
         }
         double best = 0;
@@ -1183,7 +1262,7 @@ class WastelandFieldTest {
             for (int p = 0; p < nx * nz; p++) flat[p] = open[j - 1][p] || open[j][p] || open[j + 1][p];
             double[] d2 = edt(flat, nx, nz);
             for (int i = 0; i < nx; i++) for (int k = 0; k < nz; k++)
-                if (Math.hypot(v.x0 + i + 0.5 - g.lx, v.z0 + k + 0.5 - g.lz) <= 40) best = Math.max(best, Math.sqrt(d2[i * nz + k]));
+                if (Math.hypot(v.x0 + ia + i + 0.5 - cx, v.z0 + ka + k + 0.5 - cz) <= 40) best = Math.max(best, Math.sqrt(d2[i * nz + k]));
         }
         return best;
     }

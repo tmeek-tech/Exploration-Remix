@@ -32,8 +32,8 @@ import java.util.List;
  * {@link Join.Lower}) only to keep its openings off their rock, and the Galleries never read this field.
  *
  * <p>The only plumbing is gate 3's lower landing (P2): near it the top sheet's pattern is shifted so one of its own
- * tunnels runs under the band 3 passage's foot, its floor level is pulled to the landing's floor (its relief kept), and
- * its cave noise is raised a little, so the passage opens into an ordinary tunnel crossing or medium cave. The end of the
+ * tunnels runs under the band 3 passage's foot and its floor level is pulled to the landing's floor (its relief kept but
+ * at the landing itself), so the passage opens into one of the field's own tunnels, as wide as it is there. The end of the
  * band 3 passage is {@link Network}'s, unchanged since 0.5.0; the landing's dome is not carved here.
  */
 public final class WastelandField {
@@ -94,11 +94,23 @@ public final class WastelandField {
      */
     static final double CORE_IN = 1.0, CORE_DEEP = 0.35, CORE_H = 10;
     /**
+     * The floor guard (rock under every floor, so roughness never holes it) starts at the floor's own row in the narrow
+     * tunnels (half-width GUARD_W0 or less) and a row under it in the wider vaults (GUARD_W1 or more), between them by
+     * the share: a free row lets the floor take the roughness's pits, and in a tunnel that free row against a raised
+     * neighbour is a step of two, which a walker climbs one way only.
+     */
+    static final double GUARD_W0 = 4, GUARD_W1 = 6;
+    /**
      * Terraces: in caves (half-width from 6, fully at 10) the floor of each basalt column is set up or down by a whole
      * number of blocks, TERRACE times a noise read at the column's site (scale TERRACE_SCALE), so neighbouring columns
      * step together; at most TERRACE_MAX either way.
      */
-    static final double TERRACE = 7, TERRACE_SCALE = 22, TERRACE_MAX = 4;
+    static final double TERRACE = 8, TERRACE_SCALE = 16, TERRACE_MAX = 4;
+    /**
+     * A cave's floor rises and falls across it, under the terraces: up to BUMP blocks either way, a noise of about a
+     * cave's own size (scale BUMP_SCALE), in caves as the terraces are, fading out into the dips and at gate 3's landing.
+     */
+    static final double BUMP = 4, BUMP_SCALE = 10;
     /**
      * Hanging column ends and pillars in tall caves (vault HANG_H or more): a column cell hangs from the ceiling by up to
      * HANG_MAX (and h - 8) blocks where a cluster noise (scale HANG_SCALE) says so; a cell whose hash passes PILLAR stands
@@ -109,14 +121,17 @@ public final class WastelandField {
      * Gate 3's landing. The top sheet's floor level (its base and ramps, not its relief) is pulled to the landing's floor
      * within PULL_FULL, fading out at PULL_R, or further where the gap is deep (the fade is at least the gap over
      * PULL_SLOPE long, up to PULL_MAX, inside the 92 blocks the landing keeps from its cell's edges); the relief fades
-     * out from UND_R0 + UND_FADE to UND_R0. The sheet's pattern shifts so a tunnel's line runs through the landing's
-     * centre (fully within SHIFT_R0, none from SHIFT_R1), and its cave noise is at least LAND_CAVE within LAND_R
-     * (fading over LAND_FADE).
+     * out from UND_R0 + UND_FADE to UND_R0, so only the landing itself is level. The sheet's pattern shifts so a tunnel's
+     * line runs through the landing's centre (fully within SHIFT_R0, none from SHIFT_R1); its width and height are the
+     * field's own there (no cave is made for the landing).
      */
     static final double PULL_R = 80, PULL_FULL = 40, PULL_MAX = 92, PULL_SLOPE = 0.65;
-    static final double SHIFT_R0 = 20, SHIFT_R1 = 90, UND_R0 = 6, UND_FADE = 20, LAND_R = 30, LAND_FADE = 10, LAND_CAVE = 0.5;
-    /** Terraces, hanging ends and pillars keep this far (blocks) from the landing's centre, and out of the passage. */
-    static final double LAND_CLEAR = 40;
+    static final double SHIFT_R0 = 20, SHIFT_R1 = 90, UND_R0 = 6, UND_FADE = 8;
+    /**
+     * Terraces, hanging ends and pillars keep this far (blocks) from the landing's centre, and out of the passage; within
+     * it the top sheet's floor guard is exact (whole up to the floor's own row), so the landing never cuts off.
+     */
+    static final double LAND_CLEAR = 10;
     /** The decorations' walk guard ({@link #walkNear}): rows from this far under a tunnel's floor to this far over it. */
     static final int WALK_BELOW = 3, WALK_ABOVE = 6;
 
@@ -126,7 +141,7 @@ public final class WastelandField {
     final int li = Terrain.WASTELAND;
     /** The layer's top and bottom rows, and its lava table (the first row above the lava). */
     final int top, bot, W;
-    private final Perlin warpA, warpB, warpC, warpD, floorN, rampN, caveN, whN, lavaN, ashN, rough1, rough2, rough3, terN, clusterN, lavaWN, lavaEN;
+    private final Perlin warpA, warpB, warpC, warpD, floorN, rampN, caveN, whN, lavaN, ashN, rough1, rough2, rough3, terN, clusterN, lavaWN, lavaEN, bumpN;
     /**
      * The sheets this layer has: the top one's level sits 4 to 30 blocks under gate 3's lower landing floor, which its
      * floor rises to near the landing ({@link #PULL_R}).
@@ -186,6 +201,7 @@ public final class WastelandField {
         clusterN = new Perlin(Hashing.mix(s, 15, 0, 0));
         lavaWN = new Perlin(Hashing.mix(s, 16, 0, 0));
         lavaEN = new Perlin(Hashing.mix(s, 17, 0, 0));
+        bumpN = new Perlin(Hashing.mix(s, 18, 0, 0));
         for (int k = 0; k < MAX_SHEETS; k++) {
             long h = Hashing.mix(s, 100 + k, 0, 0);
             sheetSeed[k] = h;
@@ -393,8 +409,6 @@ public final class WastelandField {
             c.lavaW = Math.max(c.lavaW, lw);
             cave = Math.max(cave, Math.max(lw * 0.9, hr));
             cave = Math.max(cave, c.ash * ASH_CAVE);
-            // the passage from band 3 comes down into a medium cave at most, of the field's own profile
-            if (topSheet && c.entryD < LAND_R) cave = Math.max(cave, LAND_CAVE * clamp01((LAND_R - c.entryD) / LAND_FADE));
             double cs = Terrain.smooth(cave);
             double jr = Math.max(0, 1 - j / JUNC_R);
             jr *= jr;
@@ -410,11 +424,12 @@ public final class WastelandField {
             }
             // the vault stays under the layer's seal
             h = Math.min(h, top - Terrain.SEAL - 1 - f);
-            double fl = f;
+            double fl = f, dip = 0;
             if (hd > 0) {
                 // an opening: the room's floor falls through into the Galleries, with a ledge round it
                 fl = f + (Math.min(f, bot - 4) - f) * hd;
                 c.holeDip = Math.max(c.holeDip, hd);
+                dip = hd;
             } else if (lw > 0) {
                 // a lava pool along a wide place: off the tunnel's line by the same share all along its run, swelling
                 // and narrowing, its outline ragged; it may reach one wall, never both (the far bank stays)
@@ -427,6 +442,16 @@ public final class WastelandField {
                 double dw = lw * clamp01((half - Math.abs(es - off)) / (0.25 * w));
                 fl = f + (Math.min(f, W - 3) - f) * dw;
                 c.lavaDip = Math.max(c.lavaDip, dw);
+                dip = dw;
+            }
+            // a cave's floor rises and falls (not on the dips, nor at the landing); the lowest sheet's never sinks under
+            // the lava table's guard row
+            double bw = Terrain.smooth((w - 6) / 4) * (1 - c.ash) * (1 - dip);
+            if (topSheet && c.entryD < PULL_MAX) bw *= clamp01((c.entryD - UND_R0) / UND_FADE);
+            if (bw > 0) {
+                double b = BUMP * bw * bumpN.noise2(x / BUMP_SCALE + 7.7 * k, z / BUMP_SCALE - 5.3 * k) / 0.75;
+                if (k == 0) b = Math.max(b, Math.min(0, W + 2 - fl));
+                fl += b;
             }
             c.f[k] = f;
             c.fl[k] = fl;
@@ -629,10 +654,11 @@ public final class WastelandField {
             double e = c.e[k], f = c.f[k], w = c.w[k], h = c.h[k], fb = walkFloor(c, k);
             if (y < fb - 5 || y > f + h + 2 || e >= w * 1.1) continue;
             if (fb > bot + 4) {
-                // the floor guard: rock from 1 to 4 blocks under the floor, so roughness never holes it
-                keep = Math.max(keep, Math.min(fb - 1 - y, y - (fb - 4)));
-                // round gate 3's landing the top sheet's floor is whole up to its level, so the landing never cuts off
-                if (k == sheets - 1 && c.entryD < PULL_FULL) keep = Math.max(keep, Math.min(fb - y, y - (fb - 3)));
+                // the floor guard: rock from the floor (a tunnel's) or a block under it (a cave's) to 4 under it
+                double free = clamp01((w - GUARD_W0) / (GUARD_W1 - GUARD_W0));
+                keep = Math.max(keep, Math.min(fb - free - y, y - (fb - 4)));
+                // at gate 3's landing the top sheet's floor is whole up to its level, so the landing never cuts off
+                if (k == sheets - 1 && c.entryD < LAND_CLEAR) keep = Math.max(keep, Math.min(fb - y, y - (fb - 3)));
             }
             open = Math.min(open, vault(e, y, fb, f, w, h) + (k == 0 && c.holeDip > 0 ? CORE_IN : coreIn(h)));
         }
