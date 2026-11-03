@@ -24,7 +24,8 @@ import java.util.concurrent.atomic.LongAdder;
  * Minecraft's interpolation corners ({@link #layerDensity}), the per-block correction after interpolation ({@link
  * #fine}), the fluids and the biomes. The bands, the gates and their landings, the upper caves and the noise layers
  * (the Wasteland and the Basalt Galleries) stay with {@link Terrain}, which owns one of these and hands it every block
- * inside a planned layer; asked about a noise layer, it throws ({@link #requirePlanned}).
+ * inside a planned layer. Asked about a noise layer, its queries answer empty in the game and throw under the tests
+ * ({@link #hasPlan}).
  *
  * <p>Plans are made on first use and cached (single-flight: concurrent requests for one cell-layer wait for one
  * planner run). Everything else is a pure function of the seed and position, so any number of worldgen threads can
@@ -91,9 +92,24 @@ public final class Network {
     private static int unpack(long v) { return (int) (v << 36 >> 36); }
 
     /**
-     * Throws for a layer that is not {@link Terrain#planned}: the Wasteland and the Basalt Galleries are noise fields
-     * with no plan, so nothing here answers for them, and a caller that still asks fails at once.
+     * Whether a question about a layer that is not {@link Terrain#planned} throws (true under the tests, which set the
+     * system property {@code explorationremix.strictPlans}) or gets an empty answer (false, the game). The Wasteland and
+     * the Basalt Galleries are noise fields with no plan, so nothing here answers for them: a caller that still asks is a
+     * mistake, which the tests catch at once and world generation survives.
      */
+    static volatile boolean strict = Boolean.getBoolean("explorationremix.strictPlans");
+
+    /**
+     * True for a planned layer. For another it throws when {@link #strict}, and is false otherwise: the query answers
+     * empty (no way lines, no climbs, no portals, no plan, no geode).
+     */
+    static boolean hasPlan(int li) {
+        if (Terrain.planned(li)) return true;
+        if (strict) throw new IllegalArgumentException("layer " + li + " is a noise field: it has no plan");
+        return false;
+    }
+
+    /** Throws for a layer that is not planned, strict or not: for the plans' own workings, which only planned layers reach. */
     static void requirePlanned(int li) {
         if (!Terrain.planned(li)) throw new IllegalArgumentException("layer " + li + " is a noise field: it has no plan");
     }
@@ -151,9 +167,9 @@ public final class Network {
      * column more than once (a helix's turns, a hairpin) is listed once per pass. No cap (section 12.1).
      */
     public WayLines wayLinesAt(int li, double x, double z, double reach) {
-        requirePlanned(li);
         WayLines out = LINES.get();
         out.n = 0;
+        if (!hasPlan(li)) return out;
         int cx = cellOf(x), cz = cellOf(z);
         for (int i = -1; i <= 1; i++) for (int k = -1; k <= 1; k++) {
             double ex = Math.max(0, Math.max((cx + i) * cell - x, x - (cx + i + 1) * cell));
@@ -172,6 +188,7 @@ public final class Network {
     public WayLines carvedLinesAt(int li, double x, double z, double reach) {
         WayLines out = LINES.get();
         out.n = 0;
+        if (!hasPlan(li)) return out;
         linesOf(net(li, cellOf(x), cellOf(z)), x, z, reach, out);
         return out;
     }
@@ -225,8 +242,8 @@ public final class Network {
      * (inclusive): from the plans of every cell the box touches, each shaft carved in its own cell.
      */
     public List<Shaft> shaftsIn(int li, int minX, int minZ, int maxX, int maxZ) {
-        requirePlanned(li);
         List<Shaft> out = new ArrayList<>();
+        if (!hasPlan(li)) return out;
         // a climb's radius is at most 3.4 (NetPlanner.climb), 5.4 with its rim and step: 8 covers every cell
         for (int cx = cellOf(minX - 8); cx <= cellOf(maxX + 8); cx++) for (int cz = cellOf(minZ - 8); cz <= cellOf(maxZ + 8); cz++) {
             for (Shaft s : net(li, cx, cz).shafts) {
@@ -239,8 +256,8 @@ public final class Network {
         return out;
     }
 
-    /** The plan of layer li in cell (cx, cz), for the dev tools. */
-    public Net network(int li, int cx, int cz) { return net(li, cx, cz); }
+    /** The plan of layer li in cell (cx, cz), for the dev tools; null for a layer with no plan ({@link #hasPlan}). */
+    public Net network(int li, int cx, int cz) { return hasPlan(li) ? net(li, cx, cz) : null; }
 
     // ================================================================================================ dev tools (12.5)
     /** A place showing a deep biome, for the dev tools: a chamber, the rift or a refuge geode, with spots to stand on. */
@@ -335,6 +352,7 @@ public final class Network {
     /** For /remix info: the plan's node, way, climb and rift at a block of layer li, in words. */
     public List<String> describe(int li, int x, int y, int z) {
         List<String> out = new ArrayList<>();
+        if (!hasPlan(li)) return out;
         int cx = cellOf(x), cz = cellOf(z);
         Net n = net(li, cx, cz);
         int kept = 0;
@@ -407,7 +425,7 @@ public final class Network {
      * function of the seed, the layer and the edge, so the cells on both sides plan the same ones.
      */
     List<Portal> portalsOfEdge(int li, boolean xEdge, int ex, int ez) {
-        requirePlanned(li);
+        if (!hasPlan(li)) return List.of();
         long k = Hashing.mix(seed, 7400 + li * 2L + (xEdge ? 1 : 0), ex, ez);
         try {
             return portalCache.get(k, () -> makePortals(li, xEdge, ex, ez, k));
@@ -1602,8 +1620,7 @@ public final class Network {
     // ================================================================================================ queries for materials
     /** Depth into the rock round the nearest refuge geode (0 at its inner surface), or 1e9 when none is near. */
     double geodeShellDepth(int li, int x, int y, int z) {
-        requirePlanned(li);
-        if (li != Terrain.BLUE) return 1e9;
+        if (!hasPlan(li) || li != Terrain.BLUE) return 1e9;
         LCol lc = layer(column(x, z), li);
         return lc.geoN == 0 ? 1e9 : geodeDist(lc, x, y, z);
     }

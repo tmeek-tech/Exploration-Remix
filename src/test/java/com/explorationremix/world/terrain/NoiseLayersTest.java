@@ -150,19 +150,57 @@ class NoiseLayersTest {
             sink += t.places(b, 100, -300).size();
         assertTrue(Double.isFinite(sink), "a query came back NaN");
         Network w = t.network;
-        for (int li = Terrain.WASTELAND; li < s.layerCount; li++) {
-            final int L = li, y = s.waterY(li) + 20;
-            final DeepBiome b = Terrain.routeBiome(li);
-            assertThrows(IllegalArgumentException.class, () -> t.network(L, 0, 0), "a plan of noise layer " + li);
-            List<org.junit.jupiter.api.function.Executable> asks = List.of(() -> w.net(L, 0, 0), () -> w.wayLinesAt(L, 0, 0, 8),
-                    () -> w.carvedLinesAt(L, 0, 0, 8), () -> w.shaftsIn(L, -8, -8, 8, 8), () -> w.portalsOfEdge(L, true, 0, 0),
-                    () -> w.layerDensity(L, 0, y, 0), () -> w.fine(L, 0, y, 0, 0.5), () -> w.fluidAt(L, 0, y, 0),
-                    () -> w.biomeAt(L, 0, y, 0), () -> w.describe(L, 0, y, 0), () -> w.geodeShellDepth(L, 0, y, 0),
-                    () -> w.rough(L, 0, y, 0), () -> w.places(b, 0, 0));
-            for (int i = 0; i < asks.size(); i++)
-                assertThrows(IllegalArgumentException.class, asks.get(i), "network query " + i + " answered for noise layer " + li);
+        boolean was = Network.strict;
+        Network.strict = true;
+        try {
+            for (int li = Terrain.WASTELAND; li < s.layerCount; li++) {
+                final int L = li, y = s.waterY(li) + 20;
+                final DeepBiome b = Terrain.routeBiome(li);
+                assertThrows(IllegalArgumentException.class, () -> t.network(L, 0, 0), "a plan of noise layer " + li);
+                List<org.junit.jupiter.api.function.Executable> asks = List.of(() -> w.net(L, 0, 0), () -> w.wayLinesAt(L, 0, 0, 8),
+                        () -> w.carvedLinesAt(L, 0, 0, 8), () -> w.shaftsIn(L, -8, -8, 8, 8), () -> w.portalsOfEdge(L, true, 0, 0),
+                        () -> w.layerDensity(L, 0, y, 0), () -> w.fine(L, 0, y, 0, 0.5), () -> w.fluidAt(L, 0, y, 0),
+                        () -> w.biomeAt(L, 0, y, 0), () -> w.describe(L, 0, y, 0), () -> w.geodeShellDepth(L, 0, y, 0),
+                        () -> w.rough(L, 0, y, 0), () -> w.places(b, 0, 0));
+                for (int i = 0; i < asks.size(); i++)
+                    assertThrows(IllegalArgumentException.class, asks.get(i), "network query " + i + " answered for noise layer " + li);
+            }
+        } finally {
+            Network.strict = was;
         }
         assertEquals(0, t.network.plansMade.sum(), "plans made for the noise layers");
+    }
+
+    /**
+     * In the game (not strict) a question to the plans about a noise layer gets an empty answer instead of an exception,
+     * so a feature or command that still asks cannot stop world generation: no way lines, no climbs, no portals, no words,
+     * no geode, and no plan, which the bedrock command refuses. Nothing is planned for it either way.
+     */
+    @Test
+    void noiseLayersAnswerEmptyInTheGame() {
+        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 4243);
+        Shape s = t.shape;
+        Network w = t.network;
+        boolean was = Network.strict;
+        Network.strict = false;
+        try {
+            for (int li = Terrain.WASTELAND; li < s.layerCount; li++) {
+                int y = s.waterY(li) + 20;
+                assertNull(t.network(li, 0, 0), "a plan of noise layer " + li);
+                assertNull(w.network(li, 3, -2), "a plan of noise layer " + li);
+                assertEquals(0, w.wayLinesAt(li, 0, 0, 8).n, "way lines in noise layer " + li);
+                assertEquals(0, w.carvedLinesAt(li, 0, 0, 8).n, "carved lines in noise layer " + li);
+                assertTrue(w.shaftsIn(li, -8, -8, 8, 8).isEmpty(), "climbs in noise layer " + li);
+                assertTrue(w.portalsOfEdge(li, true, 0, 0).isEmpty(), "portals in noise layer " + li);
+                assertTrue(w.describe(li, 0, y, 0).isEmpty(), "plan words for noise layer " + li);
+                assertEquals(1e9, w.geodeShellDepth(li, 0, y, 0), "a geode in noise layer " + li);
+                assertEquals(0, t.wayLinesAt(li, 0, 0, 8).n);
+                assertTrue(t.shaftsIn(-8, -8, 8, 8, li).isEmpty());
+            }
+        } finally {
+            Network.strict = was;
+        }
+        assertEquals(0, w.plansMade.sum(), "plans made for the noise layers");
     }
 
     /**

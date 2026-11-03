@@ -69,6 +69,27 @@ class TerrainTest {
         }
     }
 
+    /**
+     * Gate 3 comes down onto the Wasteland's walking floor (fix round 1, landing-plaza): with no landing dome, the
+     * passage's lower end is a tunnel of the field at the landing's floor, so within 2 blocks of the landing's centre a
+     * player stands with his feet within a row of it.
+     */
+    @Test
+    void gateThreeEndsOnTheWalkingFloor() {
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            for (int[] c : CELLS) {
+                Plans.Gate g = t.plans.gate(Terrain.WASTELAND + 1, c[0], c[1]);
+                int lx = (int) Math.floor(g.lx), lz = (int) Math.floor(g.lz), lf = (int) Math.ceil(g.lFloor);
+                NoiseVox v = NoiseVox.build(t, lx - 2, lz - 2, 5, 5, lf - 12, lf + 12);
+                boolean stands = false;
+                for (int x = lx - 2; x <= lx + 2 && !stands; x++) for (int z = lz - 2; z <= lz + 2 && !stands; z++)
+                    for (int y = lf - 1; y <= lf + 1 && !stands; y++) stands = v.stand(x, y, z);
+                assertTrue(stands, "no walking floor at gate 3's lower end, seed " + seed + " cell " + c[0] + "," + c[1] + " (" + lx + " " + lf + " " + lz + ")");
+            }
+        }
+    }
+
     @Test
     void bandsAreSolidAwayFromTheirPassage() {
         Terrain t = terrain(SEEDS[0]);

@@ -128,4 +128,6 @@ test {
         if (!project.hasProperty('slowTests')) excludeTags 'slow'
     }
     maxHeapSize = '2g'
+    // A question to the cave plans about a noise layer (no plan) throws under the tests; the game gets an empty answer.
+    systemProperty 'explorationremix.strictPlans', 'true'
 }

@@ -138,8 +138,10 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         int drop = 0;
         while (drop < 300 && GlowBlock.open(level.getBlockState(p.move(Direction.DOWN)))) drop++;
         if (drop < c.minDrop()) return false;
-        // A fall never pours onto the way down.
+        // A fall never pours onto the way down (in the Wasteland, onto a tunnel's walking channel), and a lava fall keeps
+        // 3 columns or more from the openings into the Galleries.
         if (Walkway.near(front.getX(), front.getZ(), front.getY() - drop, front.getY(), 2)) return false;
+        if (fluid.isSame(Fluids.LAVA) && Walkway.nearOpening(front.getX(), front.getZ(), front.getY(), 3)) return false;
         BlockState below = level.getBlockState(p);
         boolean intoPool = below.getFluidState().getType().isSame(fluid);
         if (!intoPool && !below.getFluidState().isEmpty()) return false; // never lava into water or the other way round
@@ -156,6 +158,10 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
                 FluidState fs = level.getFluidState(n);
                 if (!sealed(level, c, n) && !(fs.isSource() && fs.getType().isSame(fluid))) return false;
             }
+            // In the Wasteland, whose ways no plan keeps, the sump takes the standing place at the fall's foot only where
+            // the places round it stay joined without it: a fall never closes the mouth of a passage.
+            if (Walkway.channelled(front.getY())
+                    && !Detour.around((x, y, z) -> walker(level, x, y, z), front.getX(), sump.getY() + 1, front.getZ())) return false;
         }
         BlockState falling = fluid.getFlowing(8, true).createLegacyBlock();
         level.setBlock(src, fluid.getSource(false).createLegacyBlock(), 2);
@@ -169,6 +175,13 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         level.scheduleTick(front, f, 0);
         level.scheduleTick(q.immutable(), f, 0);
         return true;
+    }
+
+    /** A block as a walker meets it ({@link Detour}). */
+    private static int walker(WorldGenLevel level, int x, int y, int z) {
+        BlockState s = level.getBlockState(new BlockPos(x, y, z));
+        if (GlowBlock.open(s)) return Detour.OPEN;
+        return s.getFluidState().isEmpty() && s.isSolid() ? Detour.SOLID : Detour.OTHER;
     }
 
     private static boolean sealed(WorldGenLevel level, Config c, BlockPos pos) {

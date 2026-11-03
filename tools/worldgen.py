@@ -407,28 +407,28 @@ def build_features():
     # starts at a random height in it (114 blocks to pick from above its lava, where the old layer had 274) lands within
     # a scan's reach of a floor or a vault about 2.4 times as often. So the rock features are about halved, which leaves
     # the caves a little fuller than the old galleries; the plants (below) keep their counts and so grow about 2.4 times
-    # as thick, the overgrowth of a hunting ground. The columns keep off the ways (Walkway), and open_way clears them.
-    # Small lava pools flush with the floor, in about every second or third cave (basalt_galleries.jpg).
+    # as thick, the overgrowth of a hunting ground. 0.5.1: the Wasteland is a noise field with no planned ways, so the
+    # features keep off its tunnels' walking channels instead (Walkway.nearChannel: the middle line of every tunnel and
+    # cave). There are no standing columns: one 2 or more blocks tall walls off a narrow tunnel, and the field's own
+    # column cells, terraces and hanging column ends already give the column look. Every hanging column stops 3 blocks
+    # or more over the floor under it (clearance), so none closes a passage.
+    # Small lava pools flush with the floor, beside the walking channels (whose cells a pool treats as no floor), kept
+    # 3 columns or more from the openings into the Galleries.
     feature("wasteland/lava_pools", "local_modifications", ["wasteland"],
             pools(mix((simple("minecraft:blackstone"), 2), (simple("minecraft:basalt", axis="y"), 3)), simple("minecraft:magma_block"), 4, lava=True),
             [count(16), SQUARE, layer("wasteland", above_water=True)] + floor() + [BIOME])
-    feature("wasteland/columns", "local_modifications", ["wasteland"],
-            {"type": f"{MOD}:column_cluster", "config": {
-                "block": mix((simple("minecraft:basalt", axis="y"), 4), (simple("minecraft:smooth_basalt"), 1)),
-                "radius": 6, "count": 26, "height": uniform(3, 16)}},
-            [count(4), SQUARE, layer("wasteland", above_water=True)] + floor() + [BIOME])
     # Columns hanging from the vaults, longest in the middle of a cluster; the longest under the tallest caves' vaults,
     # where the floor is more than 16 below.
     feature("wasteland/hanging_columns", "local_modifications", ["wasteland"],
             {"type": f"{MOD}:column_cluster", "config": {
                 "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:smooth_basalt"), 1)),
-                "radius": 4, "count": 20, "height": uniform(3, 10), "hang_chance": 1.0}},
+                "radius": 4, "count": 20, "height": uniform(3, 10), "hang_chance": 1.0, "clearance": 3}},
             [count(6), SQUARE, layer("wasteland", above_water=True)] + ceiling() + [BIOME])
     tall = {"type": "minecraft:block_predicate_filter", "predicate": dict(AIR, offset=[0, -16, 0])}
     feature("wasteland/great_hanging_columns", "local_modifications", ["wasteland"],
             {"type": f"{MOD}:column_cluster", "config": {
                 "block": mix((simple("minecraft:basalt", axis="y"), 3), (simple("minecraft:smooth_basalt"), 1)),
-                "radius": 6, "count": 34, "height": uniform(8, 18), "hang_chance": 1.0}},
+                "radius": 6, "count": 34, "height": uniform(8, 18), "hang_chance": 1.0, "clearance": 3}},
             [count(4), SQUARE, layer("wasteland", above_water=True)] + ceiling() + [tall, BIOME])
     # Short columns of basalt and pale tuff hanging only from the basalt patches of the tubes' vaults (the second
     # reference picture). 0.5.1: the palette gives the vault about twice the basalt, so fewer tries.
