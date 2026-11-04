@@ -6,10 +6,10 @@ import java.util.Random;
  * Columns sampled in clusters, for the tests that ask the Basalt Galleries or the Wasteland about places spread over a
  * wide area. The Galleries resolve their openings and ramps over the lattice cells round a query (spec-galleries-field-v2
  * 7.2), and the Wasteland's lowest sheet reads the craters of the holes with ramps from them: the first query in an area
- * costs about 0.2 s, the next ones there microseconds, while queries spread at random over more than about 3000 blocks
- * keep pushing each other's cells out of the per-thread caches (every query then pays the first one's cost). So a test
- * takes a new area every {@code per} columns, anywhere in its span, and its columns at random in a window round that
- * area's middle: as many conditions across the world, at a cost a test can pay.
+ * costs about 0.1-0.3 s (the openings' lattice cells round it are found and resolved once, into caches every thread
+ * shares), the next ones there microseconds, so queries spread at random over a wide area would each pay the first
+ * one's cost. So a test takes a new area every {@code per} columns, anywhere in its span, and its columns at random in
+ * a window round that area's middle: as many conditions across the world, at a cost a test can pay.
  */
 final class Spread {
     private final Random r;

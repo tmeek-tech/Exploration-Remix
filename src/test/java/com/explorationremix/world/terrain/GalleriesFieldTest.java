@@ -780,12 +780,13 @@ class GalleriesFieldTest {
      * The digest (spec 10.2): {@link #probe} at 30 000 blocks of the Galleries' rows and the join's round the origin, and
      * every opened opening of 6 x 6 lattice cells with its kept ramp, bit for bit, for two seeds; pinned again at step 2
      * of the port (ramps with terraces, a way up from every hole, no hole without a ramp; it was a25a9bf4bf313878 and
-     * 0da260ed6d0a26e3 at the port). A change to the Galleries' shapes shows here: pin again only on purpose.
+     * 0da260ed6d0a26e3 at the port) and in fix round 2b (the openings resolved by lattice cell priority, their candidates
+     * in the order of an estimate). A change to the Galleries' shapes shows here: pin again only on purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("2c2d20539cf4424d", digest(8675309), "seed 8675309");
-        assertEquals("1a2532428f34f770", digest(12345), "seed 12345");
+        assertEquals("9a44061bac098872", digest(8675309), "seed 8675309");
+        assertEquals("f7af35eb63184c62", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {
@@ -817,16 +818,17 @@ class GalleriesFieldTest {
     static String bits(double d) { return Long.toHexString(Double.doubleToLongBits(d)); }
 
     /**
-     * The openings are pure (spec 7.2, 10.2): the opened openings of 6 x 6 lattice cells and their kept ramps are the same,
-     * bit for bit, when one instance answers them on two threads in opposite orders (one of them after filling its caches
-     * with the lattice cells 64 cells away, which share the cache's slots) and when a fresh instance answers them in
-     * shuffled order.
+     * The openings are pure (spec 7.2, 10.2): the opened openings of 8 x 8 lattice cells and their kept ramps are the same,
+     * bit for bit, when one instance answers them on two threads in opposite orders (one of them after asking for the
+     * lattice cells 64 cells away first), when a fresh instance answers them in shuffled order, and when a third answers
+     * them while another thread keeps emptying its caches (the shared caches drop cells, and a dropped cell, even one a
+     * resolution under way still reads, is found again bit for bit).
      */
     @Test
     void openingsArePure() throws Exception {
         long seed = 8675309;
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed), fresh = new Terrain(TerrainSettings.defaults(), -64, seed);
-        int n = 6, i0 = -3, j0 = -3;
+        int n = 8, i0 = -4, j0 = -4;
         String[] fwd = new String[n * n], back = new String[n * n], shuffled = new String[n * n];
         ExecutorService ex = Executors.newFixedThreadPool(2);
         try {
@@ -844,11 +846,34 @@ class GalleriesFieldTest {
         for (int q = 0; q < n * n; q++) order.add(q);
         Collections.shuffle(order, new Random(67));
         for (int q : order) shuffled[q] = openingsOf(fresh.galleries, i0 + q / n, j0 + q % n);
+        // a third instance whose caches another thread keeps emptying while it resolves (every cell dropped, mid-way
+        // through a resolution too, must be found again bit for bit)
+        Terrain dropped = new Terrain(TerrainSettings.defaults(), -64, seed);
+        String[] again = new String[n * n];
+        java.util.concurrent.atomic.AtomicBoolean done = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.concurrent.atomic.AtomicInteger drops = new java.util.concurrent.atomic.AtomicInteger();
+        Thread dropper = new Thread(() -> {
+            while (!done.get()) {
+                dropped.galleries.rawCells.invalidateAll();
+                dropped.galleries.openCells.invalidateAll();
+                drops.incrementAndGet();
+                try { Thread.sleep(20); } catch (InterruptedException e) { return; }
+            }
+        });
+        dropper.start();
+        try {
+            for (int q : order) again[q] = openingsOf(dropped.galleries, i0 + q / n, j0 + q % n);
+        } finally {
+            done.set(true);
+            dropper.join();
+        }
+        assertTrue(drops.get() >= 5, "the caches were emptied only " + drops.get() + " times");
         int ops = 0, ramps = 0;
         for (int q = 0; q < n * n; q++) {
             String cell = "lattice cell " + (i0 + q / n) + " " + (j0 + q % n);
             assertEquals(fwd[q], back[q], cell + " differs between the two threads");
             assertEquals(fwd[q], shuffled[q], cell + " differs in a fresh instance");
+            assertEquals(fwd[q], again[q], cell + " differs in an instance whose caches were emptied as it resolved");
             ops += fwd[q].split(";", -1).length - 1;
             ramps += fwd[q].split(" ramp ", -1).length - 1;
         }
@@ -919,24 +944,74 @@ class GalleriesFieldTest {
 
     /**
      * The cost of the Galleries' rows (corners every 4 x 8 x 4, interpolation and the per-block pass, one thread) per row,
-     * at most three times the Deep Gardens' in the same JVM with their plans made first (spec 9.3: about 0.8-1.4 times
-     * 0.5.0's planned Galleries). Best of three rounds each, taken in turns; the bar is generous for a shared machine.
+     * at most three times the Deep Gardens' (spec 9.3: about 0.8-1.4 times 0.5.0's planned Galleries), in three cases:
+     * <ul>
+     * <li>warm: 16 fixed chunks with their plans and openings made first, best of three rounds each, taken in turns;</li>
+     * <li>a cold first chunk: at each of three places, the first chunk of a fresh field (the Galleries' openings and the
+     * Gardens' plans all unmade), against the Gardens' rows of another fresh field's first chunk there (fix round 2b: the
+     * openings' per-thread caches made that 801 ms against 39 for the merge base);</li>
+     * <li>two regions 5,000 blocks apart in turns (two players on one worldgen thread): 30 chunks in each, on one fresh
+     * field each (fix round 2b: 84 ms a chunk, 17 times the Gardens' per row, when the two regions' lattice cells shared
+     * the per-thread caches' slots).</li>
+     * </ul>
+     * The cold cases count the thread's CPU time (a busy machine does not skew them) after the code is warmed on fields of
+     * their own far off. The bar is generous for a shared machine.
      */
     @Test
     void costWithinBudget() {
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, 8675310);
         Shape s = t.shape;
         int gLo = s.bottom(Terrain.GALLERIES), gHi = s.top(Terrain.GALLERIES), dLo = s.bottom(Terrain.GARDENS), dHi = s.top(Terrain.GARDENS);
+        double rowsG = gHi - gLo + 1, rowsD = dHi - dLo + 1;
         WastelandFieldTest.timeRows(t, dLo, dHi);
         WastelandFieldTest.timeRows(t, gLo, gHi);
         double bestG = Double.MAX_VALUE, bestD = Double.MAX_VALUE;
         for (int round = 0; round < 3; round++) {
-            bestG = Math.min(bestG, WastelandFieldTest.timeRows(t, gLo, gHi) / (gHi - gLo + 1));
-            bestD = Math.min(bestD, WastelandFieldTest.timeRows(t, dLo, dHi) / (dHi - dLo + 1));
+            bestG = Math.min(bestG, WastelandFieldTest.timeRows(t, gLo, gHi) / rowsG);
+            bestD = Math.min(bestD, WastelandFieldTest.timeRows(t, dLo, dHi) / rowsD);
         }
         double ratio = bestG / bestD;
-        System.out.printf(java.util.Locale.ROOT, "GalleriesFieldTest cost per row: Galleries %.1f us, Gardens %.1f us, ratio %.2f%n", bestG / 1e3, bestD / 1e3, ratio);
+        // the cold cases: the code warmed far off first
+        for (int k = 0; k < 3; k++) {
+            chunkCpu(t, 9000 + k, 9000, gLo, gHi);
+            chunkCpu(t, 9000 + k, 9000, dLo, dHi);
+        }
+        long coldG = 0, coldD = 0;
+        for (int p = 0; p < 3; p++) {
+            int cx = 13 + 700 * p, cz = -19 - 450 * p;
+            coldG += chunkCpu(new Terrain(TerrainSettings.defaults(), -64, 8675310), cx, cz, gLo, gHi);
+            coldD += chunkCpu(new Terrain(TerrainSettings.defaults(), -64, 8675310), cx, cz, dLo, dHi);
+        }
+        double cold = (coldG / rowsG) / (coldD / rowsD);
+        Terrain tg = new Terrain(TerrainSettings.defaults(), -64, 8675310), td = new Terrain(TerrainSettings.defaults(), -64, 8675310);
+        long altG = 0, altD = 0;
+        for (int k = 0; k < 30; k++) for (int r = 0; r < 2; r++) {
+            int cx = -300 + r * 5000 / 16 + k % 6, cz = 120 + k / 6;
+            altG += chunkCpu(tg, cx, cz, gLo, gHi);
+            altD += chunkCpu(td, cx, cz, dLo, dHi);
+        }
+        double alt = (altG / rowsG) / (altD / rowsD);
+        System.out.printf(java.util.Locale.ROOT, "GalleriesFieldTest cost per row: Galleries %.1f us, Gardens %.1f us, ratio %.2f; cold first chunks %.0f ms against %.0f, ratio %.2f;"
+                        + " regions 5000 apart in turns %.1f ms a chunk against %.1f, ratio %.2f%n",
+                bestG / 1e3, bestD / 1e3, ratio, coldG / 3e6, coldD / 3e6, cold, altG / 60e6, altD / 60e6, alt);
         assertTrue(ratio <= 3.0, "the Galleries' rows cost " + ratio + " times the Gardens'");
+        assertTrue(cold <= 3.0, "a cold first chunk of the Galleries' rows costs " + cold + " times the Gardens' per row");
+        assertTrue(alt <= 3.0, "the Galleries' rows of two regions in turns cost " + alt + " times the Gardens' per row");
+    }
+
+    /** The thread's CPU time (ns) for one chunk (cx, cz) of rows lo..hi as the game makes it (corners every 4 x 8 x 4, interpolation, the per-block pass). */
+    static long chunkCpu(Terrain t, int cx, int cz, int lo, int hi) {
+        java.lang.management.ThreadMXBean mx = java.lang.management.ManagementFactory.getThreadMXBean();
+        long t0 = mx.getCurrentThreadCpuTime();
+        int bx = cx * 16, bz = cz * 16;
+        int cy0 = Math.floorDiv(lo, 8), cy1 = Math.floorDiv(hi, 8) + 1, ny = cy1 - cy0 + 1;
+        double[] cor = new double[25 * ny];
+        for (int i = 0; i < 5; i++) for (int k = 0; k < 5; k++) for (int j = 0; j < ny; j++) cor[(i * 5 + k) * ny + j] = t.density(bx + i * 4, (cy0 + j) * 8, bz + k * 4);
+        double sink = 0;
+        for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) for (int y = lo; y <= hi; y++)
+            sink += NoiseLayersTest.interpolatedFine(t, cor, ny, cy0, bx, bz, x, y, z);
+        assertTrue(Double.isFinite(sink));
+        return mx.getCurrentThreadCpuTime() - t0;
     }
 
     /**

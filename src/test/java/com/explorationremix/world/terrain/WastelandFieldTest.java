@@ -1383,11 +1383,10 @@ class WastelandFieldTest {
 
     /**
      * The field is a pure function of the seed: density, the per-block pass, fluid and biome at 10^5 points of its rows
-     * (and the join's under them) in 2400 x 2400 columns round the origin answer bit for bit the same on one thread and on
+     * (and the join's under them) in 6000 x 6000 columns round the origin answer bit for bit the same on one thread and on
      * four in shuffled order, in a fresh instance, with neighbouring queries 32 blocks apart (the column cache's slots
-     * alias there). (A wider area would only be slower: its columns ask the Galleries for their craters, and queries
-     * spread at random over more than about 3000 blocks keep pushing each other's lattice cells out of the Galleries'
-     * per-thread caches, {@link Spread}.)
+     * alias there). Its columns ask the Galleries for their craters, so this also reads the openings of the whole area
+     * at random (fix round 2b restored the area from 2400: the openings' caches are shared and keyed by the whole cell).
      */
     @Test
     void pureAndThreadSafe() throws Exception {
@@ -1397,7 +1396,7 @@ class WastelandFieldTest {
         Random r = new Random(29);
         int[][] pts = new int[n][];
         for (int k = 0; k < n; k++) {
-            int x = r.nextInt(2400) - 1200, z = r.nextInt(2400) - 1200;
+            int x = r.nextInt(6000) - 3000, z = r.nextInt(6000) - 3000;
             if ((k & 1) == 1) { x = pts[k - 1][0] + 32; z = pts[k - 1][2] - 32; }
             pts[k] = new int[]{x, one.bot - 16 + r.nextInt(one.top - one.bot + 17), z, r.nextInt(2001)};
         }

@@ -123,6 +123,48 @@ public final class WastelandSheets {
         c.b0 = b0;
     }
 
+    /** The lattice points {@link #junction} read last on this thread (the sites' grid asks for neighbouring points in turn). */
+    private static final class Lattice {
+        int k = -1, a0, b0;
+        final double[] sx = new double[16], sz = new double[16];
+    }
+
+    private final ThreadLocal<Lattice> lattice = ThreadLocal.withInitial(Lattice::new);
+
+    /**
+     * Sheet k's F3 - F1 at the warped point (u, v) (blocks): {@link #cells}'s second output, bit for bit, without the
+     * cell's boundary (the openings' sites ask only this). The 4 x 4 lattice points are kept from the last call on the
+     * thread when they are the same.
+     */
+    double junction(int k, double u, double v) {
+        double S = WastelandField.SPACING[k];
+        double a = (cos[k] * u - sin[k] * v) / S + offA[k], b = (sin[k] * u + cos[k] * v) / S + offB[k];
+        int ia = floor(a), ib = floor(b);
+        int a0 = a - ia < 0.5 ? ia - 2 : ia - 1, b0 = b - ib < 0.5 ? ib - 2 : ib - 1;
+        Lattice l = lattice.get();
+        if (l.k != k || l.a0 != a0 || l.b0 != b0) {
+            for (int i = 0, n = 0; i < 4; i++) for (int j = 0; j < 4; j++, n++) {
+                long hh = Hashing.mix(sheetSeed[k], a0 + i, b0 + j, 7);
+                l.sx[n] = a0 + i + 0.5 + WastelandField.JITTER * ((hh & 0xFFFFFFFFL) * 0x1.0p-32 - 0.5);
+                l.sz[n] = b0 + j + 0.5 + WastelandField.JITTER * ((hh >>> 32) * 0x1.0p-32 - 0.5);
+            }
+            l.k = k;
+            l.a0 = a0;
+            l.b0 = b0;
+        }
+        // the three nearest squared distances, kept in order without branches (the same values as cells' ordered inserts)
+        double d1 = 1e9, d2 = 1e9, d3 = 1e9;
+        for (int n = 0; n < 16; n++) {
+            double dx = l.sx[n] - a, dz = l.sz[n] - b, d = dx * dx + dz * dz;
+            double lo1 = Math.min(d1, d), hi1 = Math.max(d1, d);
+            double lo2 = Math.min(d2, hi1), hi2 = Math.max(d2, hi1);
+            d3 = Math.min(d3, hi2);
+            d2 = lo2;
+            d1 = lo1;
+        }
+        return (Math.sqrt(d3) - Math.sqrt(d1)) * S;
+    }
+
     /** The undulation of sheet k's floor (blocks): its relief, two octaves. */
     double undulation(int k, double x, double z) {
         return WastelandField.FLOOR_AMP * floorN.noise2(x / WastelandField.FLOOR_SCALE + 31.7 * k, z / WastelandField.FLOOR_SCALE - 17.3 * k) / 0.75
@@ -188,22 +230,23 @@ public final class WastelandSheets {
         if (beta <= Join.HOLE_BETA) return 0;
         double hole = hole(beta);
         double u = x + warpX(x, z), v = z + warpZ(x, z);
-        Cells c = new Cells();
         if (plans != null) {
             // a layer of one sheet: its top sheet is the lowest, and it slides toward gate 3's landing
             Plans.Gate en = plans.gate(Terrain.WASTELAND + 1, plans.cellOf(x), plans.cellOf(z));
             double entryD = StrictMath.hypot(x - en.lx, z - en.lz);
             if (entryD < WastelandField.SHIFT_R1) {
                 double[] sh = new double[3];
-                landingShift(en.lx, en.lz, c, sh);
+                landingShift(en.lx, en.lz, new Cells(), sh);
                 double sft = shiftShare(entryD);
                 u += sh[0] * sft;
                 v += sh[1] * sft;
             }
         }
-        cells(c, 0, u, v);
+        double j = junction(0, u, v);
+        // outside a junction room the weight is 0 whatever the floor (dipWeight's last factor), so the floor is not read
+        if (j >= WastelandField.HOLE_R) return 0;
         double f = sheetFloor(0, x, z, 1 - hole, undulation(0, x, z));
-        return dipWeight(hole, low(f), c.out[1]);
+        return dipWeight(hole, low(f), j);
     }
 
     // the tests' and tools' view of the pattern
