@@ -371,9 +371,11 @@ public final class GalleriesField {
         k.nearQ = -1;
         for (int q = 0; q < n; q++) {
             double ex = sx[q] - x1, ez = sz[q] - z1, l = Math.sqrt(ex * ex + ez * ez);
+            k.eq[q] = 1e9;
             if (l < 1e-9) continue;
             double d2 = (x - sx[q]) * (x - sx[q]) + (z - sz[q]) * (z - sz[q]);
             double eq = (d2 - best) / (2 * l);
+            k.eq[q] = eq;
             if (eq < e) { e = eq; k.nearQ = q; }
         }
         return e;
@@ -398,6 +400,8 @@ public final class GalleriesField {
         final double[] tmp = new double[2], sx = new double[9], sz = new double[9];
         /** The lattice cells of the 9 sites {@link #cellOf} looked at, and which of them holds the nearest joint. */
         final int[] si = new int[9], sj = new int[9];
+        /** The distance from the column to its cell's joint with each of the 9 sites (1e9 for its own). */
+        final double[] eq = new double[9];
         int nearQ;
         final Climate cl = new Climate();
         final Shape0 sh = new Shape0();
@@ -428,10 +432,23 @@ public final class GalleriesField {
         boolean coarse = coarseAt(x + 0.5, z + 0.5, k);
         boolean seam = Math.abs(k.cl.wCaus - 0.5) < SEAM_W;
         double e = cellOf(coarse, x + 0.5, z + 0.5, k.ij, k);
-        int nq = k.nearQ, ni = nq >= 0 ? k.si[nq] : 0, nj = nq >= 0 ? k.sj[nq] : 0;
+        int nq = k.nearQ;
         Cell c = cell(coarse, k.ij[0], k.ij[1]);
         if (c.near == null) nearOf(c);
-        int tf = e < TREAD_REACH && nq >= 0 ? tread(c, e, ni, nj) : NO_TREAD;
+        int tf = NO_TREAD;
+        if (e < TREAD_REACH && nq >= 0) {
+            // the joints within reach, nearest first: the first whose two cells make stairs (the nearest alone left a
+            // riser without stairs wherever a cell's nearest joint was with lava or a deck)
+            double last = -1;
+            for (int pass = 0; pass < 8 && tf == NO_TREAD; pass++) {
+                int bq = -1;
+                double be = TREAD_REACH;
+                for (int q = 0; q < 9; q++) if (k.eq[q] > last && k.eq[q] < be) { be = k.eq[q]; bq = q; }
+                if (bq < 0) break;
+                last = be;
+                tf = tread(c, be, k.si[bq], k.sj[bq]);
+            }
+        }
         if (tf == NO_TREAD && seam) tf = seamTread(c, coarse, x, z, k);
         k.colX[slot] = x;
         k.colZ[slot] = z;
@@ -450,7 +467,7 @@ public final class GalleriesField {
      * the lower one's floor under W + TREAD_TOP (the flood's reach and a little over), the columns within TREAD_REACH of
      * their joint step a row a block from one floor to the other.
      */
-    static final int TREAD_K = 4, TREAD_TOP = 44;
+    static final int TREAD_K = 6, TREAD_TOP = 44;
     static final double TREAD_REACH = 3;
 
     /**
@@ -461,9 +478,10 @@ public final class GalleriesField {
      * there. So on such a joint the columns step a row a block across it: the signed distance s from the joint (into the
      * higher cell) puts the column at lo + clamp(m + floor(s), 0, d), d the rows between the floors and m = ceil(d / 2)
      * (the step is shared out between the two cells: the lower one's columns at the joint rise, the higher one's sink).
-     * Each column takes the stairs of its nearest joint only, so the cells' tops stay level away from their joints. Both
-     * cells must be plain open ground (no deck, band or pillar), the raised floor must keep three rows open over it, and
-     * lava cells (floor under W) take none. Pure (cells and sites are).
+     * Each column takes the stairs of the nearest of its cell's joints within TREAD_REACH that has any (fix round 2b: of
+     * the nearest joint only, a riser whose cells met lava or a deck nearer kept no stairs), so the cells' tops stay level
+     * away from their joints. Both cells must be plain open ground (no deck, band or pillar), the raised floor must keep
+     * three rows open over it, and lava cells (floor under W) take none. Pure (cells and sites are).
      */
     int tread(Cell c, double e, int ni, int nj) {
         if (!treadGround(c)) return NO_TREAD;
@@ -643,7 +661,9 @@ public final class GalleriesField {
     /**
      * The apron's ramps: the floor keeps within AP_S a block of the apron's floor, and from AP_D0 on within AP_S + AP_R a
      * block (a slope the low ground's stairs, {@link #tread}, can climb), released from AP_D over AP_FD blocks. (Released
-     * from AP_S alone, an apron standing over a river's valley ended in a cliff of 30 to 40 rows: seed 77's basin.)
+     * from AP_S alone, an apron standing over a river's valley ended in a cliff of 30 to 40 rows: seed 77's basin.) Over
+     * lava the shelf is not released: it runs on down into the lava at its own slope (released, it ended in a ledge over
+     * the lake 5 to 10 rows under the shelf, a pit).
      */
     static final double AP_S = 0.2, AP_D0 = 12, AP_R = 0.75, AP_D = 54, AP_FD = 10;
     // ---- the sub-biomes' terrain
@@ -654,9 +674,11 @@ public final class GalleriesField {
     /**
      * Scoria Canyons: lava slots (W - 4) along the zero lines of a noise of period CAN_P, sheer walls up to W + CAN_DRY,
      * then stepped cliffs of CAN_STEP rows up to the high ground; the terrain fades out with the patch's weight, and the
-     * slots pinch out before it does (a slot's floor is lava or none, never in the flood's reach).
+     * slots pinch out before it does (a slot's floor is lava or none, never in the flood's reach); they pinch out too
+     * over CAN_AP blocks before a tube country's apron, which draws the floor toward the tubes' level (fix round 2b: it
+     * lifted a slot's lava floor into a trench 20 rows deep, closed at the massif: a pit in seed -42's box).
      */
-    static final double CAN_P = 160, CAN_STEP = 5, CAN_DRY = 40;
+    static final double CAN_P = 160, CAN_STEP = 5, CAN_DRY = 40, CAN_AP = 8;
     /** Slope of the basins' shores: column stairs, 1 row in 3 to 4 blocks. */
     static final double SHORE_S = 0.22;
     /** A quarter of the cells (hashed) stand this many rows higher where the ground's slope is under FO_S: ragged column tops. */
@@ -716,17 +738,22 @@ public final class GalleriesField {
         c.c = ce;
         c.bl = c.bh = 0;
         if (f < ce) {
-            if (s.deck == s.deck) deck(c, s);
-            else band(c, x, z, cl, s.mouth);
+            // a cell whose site lies on the other side of the seam between the Causeway's coarse prisms and the fine
+            // cells keeps only the few columns of its side (the others are nearer a site of the other lattice), so a deck
+            // or a band in it could stand alone in mid-air: there a deck or a band is filled down to the ground (a deck
+            // slab of one column floated in seed -42's box at (-3520, 6060), a band's in a coarse cell at (-4515, 7408))
+            boolean stray = coarse != cl.wCaus > 0.5;
+            if (s.deck == s.deck) deck(c, s, stray);
+            else band(c, x, z, cl, s.mouth, stray);
         }
         return c;
     }
 
     /**
      * A ramp's deck in the cell: rock rows [deck - thickness, deck), open over it; solid down to the floor where it is
-     * filled or less than 4 rows would stay open under it.
+     * filled (a stray cell's, see {@link #build}) or less than 4 rows would stay open under it.
      */
-    void deck(Cell c, Shape0 s) {
+    void deck(Cell c, Shape0 s, boolean filled) {
         int d0 = (int) Math.floor(s.deck + 0.5);
         if (d0 <= c.f) return;                       // the ground already stands at the deck
         if (d0 > c.c - 2) { c.f = c.c = W + 200; return; }
@@ -736,7 +763,7 @@ public final class GalleriesField {
         c.dkRow = d0;
         c.dkDrop = s.deckDrop;
         c.dkGround = c.f;
-        if (bl <= c.f + 3) { c.f = d0; c.deckMode = 1; return; }     // filled: a ridge of columns on the ground
+        if (filled || bl <= c.f + 3) { c.f = d0; c.deckMode = 1; return; }     // filled: a ridge of columns on the ground
         c.bl = bl;
         c.bh = d0;
         c.deckMode = 2;
@@ -882,8 +909,10 @@ public final class GalleriesField {
         out.mouth = mouth;
         // ---- a ramp's talus beside its solid part: the floor rises to its deck, TALUS_S rows a block lower outwards, or
         // steeper where the column's own floor lies lower, so the talus meets it at its outer edge (measured against the
-        // ground under the centre line it stood as a wall of up to 26 rows over a valley beside the ramp: seed -42's pit)
-        if (rh.talus > F) {
+        // ground under the centre line it stood as a wall of up to 26 rows over a valley beside the ramp: seed -42's pit);
+        // none over lava (fix round 2b: in a Scoria Canyons slot the talus filled the lava up to a dry shelf between the
+        // slot's sheer walls, a pit in seed 8675309's box)
+        if (rh.talus > F && F >= W) {
             double tal = rh.talDk - rh.talU * Math.max(TALUS_S * TALUS_MAX, rh.talDk - F);
             if (tal > F) { F = Math.floor(tal); out.ragged = false; }
         }
@@ -939,9 +968,10 @@ public final class GalleriesField {
             hang = hc[0];
             pillar = hc[1] > 0;
         }
-        // ---- spires standing on the floor (few: their tops are perches)
+        // ---- spires standing on the floor (few: their tops are perches), on dry ground only (fix round 2b: a spire's foot
+        // in a Caldera lake left ledges over the lava under its flanks, a pit in seed -42's box)
         double up = 0;
-        if (head > 8) {
+        if (head > 8 && F >= W) {
             int gi = (int) Math.floor(x / SPIRE_GRID), gj = (int) Math.floor(z / SPIRE_GRID);
             for (int di = -1; di <= 1; di++) for (int dj = -1; dj <= 1; dj++) {
                 long h = Hashing.mix(seed, 35001, gi + di, gj + dj);
@@ -1010,15 +1040,26 @@ public final class GalleriesField {
     }
 
     /**
+     * How free column (x, z) is of a tube country's apron for the canyons' slots: 1 where no apron reaches it, falling to 0
+     * over CAN_AP blocks before the apron's released stretch ({@link #AP_D} + {@link #AP_FD} from the massif's edge).
+     */
+    double apronFree(double x, double z) {
+        if (!tubesAt(x, z)) return 1;
+        double ad = -tubes.massifAt(x, z) - (TubeField.APRON_OUT - TubeField.APRON_FADE);
+        return smooth((ad - AP_D - AP_FD) / CAN_AP);
+    }
+
+    /**
      * The Scoria Canyons over the floor F at (x, z) (where cl.wCan > 0): lava slots along the zero lines of a noise, sheer
      * walls up to the dry ground, then stepped cliffs up to the ridges; the terrain fades out with the patch's weight, the
-     * slots pinch out before it fades. Never over F. {@code w} is the warp at (x, z).
+     * slots pinch out before it fades and before a tube country's apron ({@link #apronFree}). Never over F. {@code w} is
+     * the warp at (x, z).
      */
     double canyonFloor(double x, double z, double[] w, Climate cl, double F) {
         double dc = lineDistW(canN, w, CAN_P);
         double cw0 = smooth((cl.wCan - 0.15) / 0.35);
         double fw = (2.5 + 3.5 * smooth(0.5 + canW.noise2(x / 70.0, z / 70.0))) * smooth((cw0 - 0.8) / 0.15)
-                * smooth((F - (W + CAN_LOW)) / 8.0);
+                * smooth((F - (W + CAN_LOW)) / 8.0) * apronFree(x, z);
         double ws = 1.0 + 1.8 * smooth(0.5 + canW.noise2(x / 110.0 + 20, z / 110.0));
         double u = dc - fw;
         double Fk = fw > 0 && u <= 0 ? W - 4 : W + CAN_DRY + terrace(ws * Math.max(0, u), CAN_STEP, 0.45) + 300 * (1 - cw0);
@@ -1031,8 +1072,11 @@ public final class GalleriesField {
      */
     double apronFit(double x, double z, double ad, double F) {
         double af = tubes.apronFloorAt(x, z);
-        double lim = AP_S * Math.max(0, ad) + AP_R * Math.max(0, ad - AP_D0) + 1000 * smooth((ad - AP_D) / AP_FD);
-        return af + Math.max(-lim, Math.min(lim, F - af));
+        double lim = AP_S * Math.max(0, ad) + AP_R * Math.max(0, ad - AP_D0), rel = 1000 * smooth((ad - AP_D) / AP_FD);
+        // over lava the shelf is not released: it runs on down into the lava at its own slope (released there, it ended
+        // in a ledge 5 to 10 rows under the shelf, over the lake: closed pits in seed 8675309's Caldera)
+        double down = F < W ? lim : lim + rel;
+        return af + Math.max(-down, Math.min(lim + rel, F - af));
     }
 
     /**
@@ -1224,10 +1268,11 @@ public final class GalleriesField {
      * the deck's terraces, {@link #DK_TA}, the deck read block by block steps a row at a time), half width and base
      * thickness ranges; bends of
      * BEND_A0..+BEND_A1 blocks (a noise of period BEND_P along the axis, in over BEND_IN); RAMP_GAP blocks kept between
-     * any two ramps.
+     * any two ramps (6 before fix round 2b: with the openings resolved by lattice cell priority fewer candidates fitted,
+     * 17 ramped holes in the Wasteland test's three squares against 19, under its bar of 60 per km^2; at 5, 19 again).
      */
     static final double RAMP_HEAD = 7, RAMP_MAX = 175, RAMP_DT = 4, RAMP_S0 = 0.55, RAMP_S1 = 0.78,
-            RAMP_HW0 = 3.5, RAMP_HW1 = 5, RAMP_TH0 = 6, RAMP_TH1 = 4, BEND_A0 = 8, BEND_A1 = 14, BEND_P = 60, BEND_IN = 24, RAMP_GAP = 6;
+            RAMP_HW0 = 3.5, RAMP_HW1 = 5, RAMP_TH0 = 6, RAMP_TH1 = 4, BEND_A0 = 8, BEND_A1 = 14, BEND_P = 60, BEND_IN = 24, RAMP_GAP = 5;
     /**
      * A ramp's body: filled to the floor from where the free height under its base thickness first comes within DK_FILL
      * rows (tg, along the centre line, and wherever it does at a cell); before that an arch: thickness th0 + gap x (1 - a),
@@ -2096,11 +2141,11 @@ public final class GalleriesField {
      * noise passes BAND_MASK. Over the mask's last BAND_FADE the band's underside comes down to the floor (its fade
      * share f: under = floor + f (under - floor)), so a band ends on a footing, never in mid-air (it ended where the
      * mask did, and a stretch with no pier to the ground floated: 18 539 and 8221 blocks in seed 555's box at (944,
-     * -856)); none in a tube's mouth.
+     * -856)); none in a tube's mouth. In a stray cell ({@code footing}, see {@link #build}) the band stands on the ground.
      */
     static final double BAND_P = 300, BAND_MASK = 0.12, BAND_FADE = 0.1;
 
-    void band(Cell c, double x, double z, Climate cl, double mouth) {
+    void band(Cell c, double x, double z, Climate cl, double mouth, boolean footing) {
         double mk = bandMask.noise2(x / 240.0, z / 240.0);
         if (mk < BAND_MASK || mouth >= 1) return;
         double fade = smooth((mk - BAND_MASK) / BAND_FADE);
@@ -2116,7 +2161,7 @@ public final class GalleriesField {
         under -= (1 - fade) * Math.max(0, under - c.f);
         int bl = (int) Math.floor(under + 0.5), bh = (int) Math.floor(top + 0.5) + 1;
         if (bh <= c.f || bl >= c.c) return;
-        if (bl <= c.f + 1) { c.f = Math.max(c.f, bh); if (c.c - c.f < 2) c.f = c.c = W + 200; return; }   // a ridge on the ground
+        if (footing || bl <= c.f + 1) { c.f = Math.max(c.f, bh); if (c.c - c.f < 2) c.f = c.c = W + 200; return; }   // a ridge on the ground
         if (bh >= c.c - 1) { c.c = Math.min(c.c, bl); if (c.c - c.f < 2) c.f = c.c = W + 200; return; }   // a rib under the ceiling
         c.bl = bl;
         c.bh = bh;

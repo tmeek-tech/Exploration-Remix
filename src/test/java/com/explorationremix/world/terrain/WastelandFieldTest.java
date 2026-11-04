@@ -609,9 +609,10 @@ class WastelandFieldTest {
      * where the Galleries are open under it, and the interim Galleries' domes reached the join on about a third of the
      * columns where beta asks for an opening (94 per km^2: 29, 137, 117; 180-226 moves). The Galleries' v2 field opens
      * every one of the Wasteland's openings over its caverns (off the massifs and the tube countries) that it can give a
-     * ramp, each with a crater, and no other (step 2: no skylights): 19 holes in the three inner squares (62 per km^2: 7,
-     * 8 and 4; medians 190-209 moves), the 19 the field lists there, in 17 areas of hole columns (in box 8004 holes some
-     * 20 blocks apart share one crater's floor). The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
+     * ramp, each with a crater, and no other (step 2: no skylights): 19 holes in the three inner squares (62 per km^2: 8,
+     * 9 and 2 since fix round 2b's ramp gap of 5; medians 185-226 moves), the 19 the field lists there, each in an area
+     * of hole columns of its own (17 areas before that round, when holes some 20 blocks apart in box 8004 shared a
+     * crater's floor). The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
      */
     @Test
     void openingsAreCommonAndReachable() {

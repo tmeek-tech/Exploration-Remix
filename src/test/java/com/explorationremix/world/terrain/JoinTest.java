@@ -866,9 +866,10 @@ class JoinTest {
      * are the opened holes: 90 % or more of those measured have a way down from the Wasteland's tunnels round them to the
      * Galleries' floor with drops of 15 at most (75 % with every drop 3 at most) and a way back up, and there are 40 or
      * more ways down and up per km^2 in every box (W-ENG-3 estimated 60 and 30 before the Galleries were built; the boxes
-     * measure 53-72 opened, all with ways). 90 % or more of the Galleries' dry places reach the nearest way up within 400
-     * moves (W-ENG-3's bar: measured 99.2-100 %). The walks on up into the Wasteland and from the Wasteland's low places
-     * to the nearest way down are printed.
+     * measure 46-65 opened, all with ways, since fix round 2b resolved the openings by lattice cell priority: 53-72
+     * before). 90 % or more of the Galleries' dry places reach the nearest way up within 400 moves (W-ENG-3's bar:
+     * measured 95.0-100 %, 99.2-100 % before). The walks on up into the Wasteland and from the Wasteland's low places to
+     * the nearest way down are printed.
      */
     @Test
     void waysDownAndUp() {
@@ -890,9 +891,10 @@ class JoinTest {
      * edges, where a way round may leave the box), and 60 % or more of the Galleries' dry places walk up into the
      * Wasteland within 400 moves, the climb included (W-ENG-3 asked 90 % of a walk to a way up, which {@link #waysDownAndUp}
      * bars; the whole climb up 130-145 rows on a ramp of 0.55-0.78 rows a block takes 150-250 moves of its own; measured
-     * 95.2, 61.7 and 96.0 %: seed 2's box has a tube country in its middle, where no hole opens). The walk from gate 3's
-     * landing to the nearest crater rim must exist and is printed (far-from-entry asked a median of about 200 moves;
-     * measured 390, 460 and 474: not met, the landings are placed by the Wasteland's gates, not by the openings). End to
+     * 99.2, 70.8 and 93.8 % for seeds 1, 2 and 8004 since fix round 2b, 95.2, 61.7 and 96.0 % before: seed 2's box has a
+     * tube country in its middle, where no hole opens). The walk from gate 3's landing to the nearest crater rim must
+     * exist and is printed (far-from-entry asked a median of about 200 moves; measured 391, 474 and 451: not met, the
+     * landings are placed by the Wasteland's gates, not by the openings). End to
      * end (W-ENG-3's check from gate 3's landing): the landing lies in the main component, so it walks down to the
      * Galleries' floor and back up; both walks are printed ({@link #gateThreeLandingsReachTheGalleriesAndBack} runs the
      * check over 36 landings).

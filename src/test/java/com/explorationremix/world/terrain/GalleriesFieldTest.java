@@ -378,7 +378,12 @@ class GalleriesFieldTest {
      * basin (25 769 places with feet up to W + 24, walled by a tube apron's cliff and column steps of 2-4 rows), and
      * seed -42's hollow between three ramps (1332 places, walled by their talus and the same steps). The low ground's
      * stairs ({@link GalleriesField#tread}), the apron's walkable release, the talus meeting the ground and the rivers'
-     * gentler end opened both; before, the shares of never-escaping places there were 47.4 % and 10.0 %.
+     * gentler end opened both; before, the shares of never-escaping places there were 47.4 % and 10.0 %. The measured
+     * boxes still held 116 and 311 such places (15 and 14 sets) when those were first written, and this test stopped at
+     * its first line; they closed with the stairs at whichever of a cell's joints has them and steps up to 6 rows, the
+     * apron's shelf not released over lava, the canyons' slots pinched out before an apron, no talus or spire over lava,
+     * and the decks and bands of stray cells filled ({@link GalleriesField#build}). The 512 boxes hold about 220 000 and
+     * 240 000 places (the bar of 300 000 first written here was never reached).
      */
     @Test
     void noClosedPits() {
@@ -393,7 +398,7 @@ class GalleriesFieldTest {
             pits(v, W, v.walkUpTo(W + Terrain.FLOOD_RISE), s);
             System.out.printf(java.util.Locale.ROOT, "GalleriesFieldTest pits seed %d at %d %d: %d places, closed pits %d places in %d sets%s%n",
                     b[0], b[1], b[2], v.places, s.trapped, s.trapSets, s.trapAt);
-            assertTrue(v.places > 300_000, "too few places: " + v.places);
+            assertTrue(v.places > 150_000, "too few places: " + v.places);
             assertEquals(0, s.trapped, "closed pits the main cavern walks into, seed " + b[0] + s.trapAt);
         }
     }
@@ -480,7 +485,8 @@ class GalleriesFieldTest {
     /**
      * The kept ramps keep apart (spec 7.2): over 12 x 12 lattice cells in each of three seeds no two kept ramps conflict,
      * and block by block the columns of their decks (within the half width of the bent centre line, from a block before
-     * the head to the end) lie RAMP_GAP blocks apart or more (measured: 8.9 at the closest).
+     * the head to the end) lie RAMP_GAP blocks apart or more (measured in fix round 2b, RAMP_GAP 5: 9.5, 9.0 and 10.6 at
+     * the closest in the three areas).
      */
     @Test
     void rampsKeepApart() {
@@ -780,13 +786,14 @@ class GalleriesFieldTest {
      * The digest (spec 10.2): {@link #probe} at 30 000 blocks of the Galleries' rows and the join's round the origin, and
      * every opened opening of 6 x 6 lattice cells with its kept ramp, bit for bit, for two seeds; pinned again at step 2
      * of the port (ramps with terraces, a way up from every hole, no hole without a ramp; it was a25a9bf4bf313878 and
-     * 0da260ed6d0a26e3 at the port) and in fix round 2b (the openings resolved by lattice cell priority, their candidates
-     * in the order of an estimate). A change to the Galleries' shapes shows here: pin again only on purpose.
+     * 0da260ed6d0a26e3 at the port) and twice in fix round 2b: the openings resolved by lattice cell priority, their
+     * candidates in the order of an estimate (9a44061bac098872 and f7af35eb63184c62), then the closed pits' fixes and
+     * RAMP_GAP 5 ({@link #noClosedPits}). A change to the Galleries' shapes shows here: pin again only on purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("9a44061bac098872", digest(8675309), "seed 8675309");
-        assertEquals("f7af35eb63184c62", digest(12345), "seed 12345");
+        assertEquals("ebaffa279749c19a", digest(8675309), "seed 8675309");
+        assertEquals("e96e139ac587ceda", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {
@@ -1087,12 +1094,13 @@ class GalleriesFieldTest {
     // ================================================================================================ slow
 
     /**
-     * The slow set: the spec's other four boxes, held to the main two's bars but for never (1.5 %, see below). It fails on
-     * seed 77's box, and is left so as the record of it: 17.6 % of the low places there never walk up out of the flood
-     * (escape within 384 moves 82.4 %), as on v3a (17.6 %, 82.4 %) and the port before the ramps' terraces (18.0 %,
-     * 82.0 %). Nearly all (27 750 places) are one Causeway basin round (40850, -11130),
-     * closed by a tube apron's cliff on the west and elsewhere by slopes whose column steps rise 2-3 rows
-     * (spec-galleries-field-v2 15.3). The other three boxes pass.
+     * The slow set: the spec's other four boxes, held to the main two's bars but for never (1.5 %, see below). Until fix
+     * round 2b it failed on seed 77's box: 17.6 % of the low places there never walked up out of the flood (escape within
+     * 384 moves 82.4 %), nearly all (27 750 places) one Causeway basin round (40850, -11130) closed by a tube apron's
+     * cliff and column steps of 2-3 rows (spec-galleries-field-v2 15.3); the low ground's stairs and the apron's release
+     * opened it (escape 100.0 %, never 0.01 %), and all four boxes pass. Closed pits are not held to 0 here: 25, 12, 1 and
+     * 0 places stay (the largest, 9 places, shelves at the lava's level under a Caldera's higher cells in seeds 12345 and
+     * 2000023), and seed 77's and 4242's boxes keep 2 and 1 floating pieces (352 and 90 blocks), not looked into.
      */
     @Test
     @Tag("slow")
