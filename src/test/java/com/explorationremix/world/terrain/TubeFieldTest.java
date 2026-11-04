@@ -956,12 +956,12 @@ class TubeFieldTest {
                     else assertEquals(0, g.tubeFloorCell(x, z), "floor cell" + w);
                     for (int y = lo; y <= hi; y += 3) {
                         if (at) {
-                            // the tube field's own value, but for the roofs the cavern keeps over a tube (GalleriesField.roofed)
+                            // the tube field's own value, but for the roofs the cavern keeps over a tube (GalleriesField.roofed):
+                            // the cavern's open space is its exact per-block profile (density), stairs and decks and all
                             double tv = tf.tube(x, y, z), gv = g.tube(x, y, z);
-                            GalleriesField.Cell cc = g.column(x, z);
                             if (gv != tv) {
-                                assertTrue(tv < 0 && gv == 0.5 && (cc.open(y + 1) || cc.open(y + 2)), "tube" + w + ": " + tv + " " + gv);
-                                if (!cc.open(y)) roofs++;   // in the cavern's own air the roof's value changes no block
+                                assertTrue(tv < 0 && gv == 0.5 && (g.density(x, y + 1, z) < 0 || g.density(x, y + 2, z) < 0), "tube" + w + ": " + tv + " " + gv);
+                                if (g.density(x, y, z) >= 0) roofs++;   // in the cavern's own air the roof's value changes no block
                             }
                             assertEquals(tf.shellDepth(x, y, z), g.tubeShellDepth(x, y, z), "lining" + w);
                             assertEquals(Math.min(g.density(x, y, z), gv), g.fineBlocks(x, y, z), "density" + w);

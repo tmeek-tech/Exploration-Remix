@@ -48,7 +48,8 @@ class WastelandFieldTest {
         long seed;
         int innerPlaces, mainInner;
         int tips, outOfReach, wayOn, blind;
-        int openings;
+        /** Openings (throats, see {@link #throatColumn}) and the areas of hole columns that hold them. */
+        int openings, holeAreas;
         double innerKm2;
         int[] rimWalks;
         int rimMainPlaces, rimUnreached;
@@ -95,9 +96,9 @@ class WastelandFieldTest {
             int[] w = rimWalks.clone();
             Arrays.sort(w);
             return String.format(java.util.Locale.ROOT, "seed %d: places %d, SCC %.2f %%; tips %d (%.2f per 1000), out of reach %d, way on %d, blind %d (%.3f per 1000)%s;"
-                            + " openings %d (%.0f per km2)%s; rim walk median %d p90 %d of %d main places (%d never); lava blocks %d, could flow %d, near an opening %d;"
+                            + " openings %d (%.0f per km2) in %d hole areas%s; rim walk median %d p90 %d of %d main places (%d never); lava blocks %d, could flow %d, near an opening %d;"
                             + " views p50 %.0f p90 %.0f p99 %.0f max %.0f of %d; NaN %d",
-                    seed, innerPlaces, 100 * scc(), tips, tipsPer1000(), outOfReach, wayOn, blind, blindPer1000(), blindAt, openings, openingsPerKm2(), openingAt,
+                    seed, innerPlaces, 100 * scc(), tips, tipsPer1000(), outOfReach, wayOn, blind, blindPer1000(), blindAt, openings, openingsPerKm2(), holeAreas, openingAt,
                     w.length == 0 ? -1 : w[w.length / 2], w.length == 0 ? -1 : w[(int) (w.length * 0.9)], rimMainPlaces, rimUnreached, lavaBlocks, lavaFlow,
                     lavaNearOpening, NoiseVox.quantile(v, 0.5), NoiseVox.quantile(v, 0.9), NoiseVox.quantile(v, 0.99), v.length == 0 ? 0 : v[v.length - 1], v.length, nans);
         }
@@ -197,6 +198,43 @@ class WastelandFieldTest {
     static boolean holeColumn(NoiseVox v, int bot, int x, int z) {
         for (int y = bot - 2; y <= bot + 8; y++) if (v.mat(x, y, z) != NoiseVox.AIR) return false;
         return true;
+    }
+
+    /**
+     * A hole's throat: air all the way from 6 rows under the Wasteland's bottom (T - 5, the first open row of a crater's
+     * floor and of a ramp's head, over the Galleries' rock at T - 6) to 8 over it. The crater round a hole the Galleries
+     * open with a ramp lowers the Wasteland's floor under its bottom for about 10 blocks past the hole's edge, so the hole
+     * columns of two holes some 20-30 blocks apart can meet in one area; each hole keeps a throat of its own.
+     */
+    static boolean throatColumn(NoiseVox v, int bot, int x, int z) {
+        for (int y = bot - 6; y <= bot + 8; y++) if (v.mat(x, y, z) != NoiseVox.AIR) return false;
+        return true;
+    }
+
+    /**
+     * The 4-connected groups of the marked columns of a SIZE x SIZE square: each column's group is labelled by the group's
+     * first column (in index order), whose entries of cnt, sx and sz get the group's size and sums of i and k.
+     */
+    static void group(boolean[] m, int[] lab, int[] cnt, long[] sx, long[] sz) {
+        Arrays.fill(lab, -1);
+        ArrayDeque<Integer> q = new ArrayDeque<>();
+        for (int p0 = 0; p0 < SIZE * SIZE; p0++) {
+            if (!m[p0] || lab[p0] >= 0) continue;
+            q.add(p0);
+            lab[p0] = p0;
+            while (!q.isEmpty()) {
+                int p = q.poll(), pi = p / SIZE, pk = p % SIZE;
+                sx[p0] += pi;
+                sz[p0] += pk;
+                cnt[p0]++;
+                for (int d = 0; d < 4; d++) {
+                    int a = pi + NoiseVox.DX[d], b = pk + NoiseVox.DZ[d];
+                    if (a < 0 || b < 0 || a >= SIZE || b >= SIZE) continue;
+                    int pp = a * SIZE + b;
+                    if (m[pp] && lab[pp] < 0) { lab[pp] = p0; q.add(pp); }
+                }
+            }
+        }
     }
 
     static Stats measure(long seed, int cx, int cz) {
@@ -319,35 +357,28 @@ class WastelandFieldTest {
             s.missedAt = missed.toString();
         }
 
-        // openings into the Galleries: 4 columns or more of hole columns, centre in the inner square
-        boolean[] hole = new boolean[SIZE * SIZE];
-        for (int i = 0; i < SIZE; i++) for (int k = 0; k < SIZE; k++) hole[i * SIZE + k] = holeColumn(v, bot, x0 + i, z0 + k);
-        int[] lab = new int[SIZE * SIZE];
-        Arrays.fill(lab, -1);
+        // openings into the Galleries: areas of 4 columns or more of hole columns, middle in the inner square, each
+        // counted once per throat of 4 columns or more in it (at least once)
+        boolean[] hole = new boolean[SIZE * SIZE], throat = new boolean[SIZE * SIZE];
+        for (int i = 0; i < SIZE; i++) for (int k = 0; k < SIZE; k++) {
+            hole[i * SIZE + k] = holeColumn(v, bot, x0 + i, z0 + k);
+            throat[i * SIZE + k] = hole[i * SIZE + k] && throatColumn(v, bot, x0 + i, z0 + k);
+        }
+        int[] lab = new int[SIZE * SIZE], tlab = new int[SIZE * SIZE], throats = new int[SIZE * SIZE];
+        int[] areaCnt = new int[SIZE * SIZE];
+        long[] areaSx = new long[SIZE * SIZE], areaSz = new long[SIZE * SIZE];
+        group(hole, lab, areaCnt, areaSx, areaSz);
+        int[] thrCnt = new int[SIZE * SIZE];
+        group(throat, tlab, thrCnt, new long[SIZE * SIZE], new long[SIZE * SIZE]);
+        for (int p = 0; p < SIZE * SIZE; p++) if (tlab[p] == p && thrCnt[p] >= 4) throats[lab[p]]++;
         StringBuilder openingAt = new StringBuilder();
         for (int p0 = 0; p0 < SIZE * SIZE; p0++) {
-            if (!hole[p0] || lab[p0] >= 0) continue;
-            ArrayDeque<Integer> q = new ArrayDeque<>();
-            q.add(p0);
-            lab[p0] = p0;
-            long sx = 0, sz = 0;
-            int cnt = 0;
-            while (!q.isEmpty()) {
-                int p = q.poll(), pi = p / SIZE, pk = p % SIZE;
-                sx += pi;
-                sz += pk;
-                cnt++;
-                for (int d = 0; d < 4; d++) {
-                    int a = pi + NoiseVox.DX[d], b = pk + NoiseVox.DZ[d];
-                    if (a < 0 || b < 0 || a >= SIZE || b >= SIZE) continue;
-                    int pp = a * SIZE + b;
-                    if (hole[pp] && lab[pp] < 0) { lab[pp] = p0; q.add(pp); }
-                }
-            }
-            int mx = x0 + (int) (sx / cnt), mz = z0 + (int) (sz / cnt);
+            if (lab[p0] != p0) continue;
+            int cnt = areaCnt[p0], mx = x0 + (int) (areaSx[p0] / cnt), mz = z0 + (int) (areaSz[p0] / cnt);
             if (cnt >= 4 && mx >= ix0 && mx < ix1 && mz >= iz0 && mz < iz1) {
-                s.openings++;
-                if (s.openings <= 3) openingAt.append(String.format(" (%d,%d)", mx, mz));
+                s.holeAreas++;
+                s.openings += Math.max(1, throats[p0]);
+                if (s.holeAreas <= 3) openingAt.append(String.format(" (%d,%d)", mx, mz));
             }
         }
         s.openingAt = openingAt.toString();
@@ -488,16 +519,20 @@ class WastelandFieldTest {
                 }
                 // the floors: the flat part of a vault, away from the dips, the landings and other sheets' vaults
                 if (c.lavaDip > 0 || c.holeDip > 0 || c.entryD < 40 || c.h[k] < 3 || c.fl[k] <= bot + 4 || q >= 0.5) continue;
+                // (a crater's slope is no tunnel's floor: it is checked for holes, but kept out of the lane's statistics)
+                boolean lane = !(k == 0 && c.crater > 0);
                 boolean clash = false;
                 for (int o = 0; o < S && !clash; o++)
                     clash = o != k && c.near[o] && c.e[o] < c.w[o] * 1.25 && c.fl[o] - 6 < c.fl[k] + 4 && c.f[o] + c.h[o] + 2 > c.fl[k] - 5;
                 if (clash) continue;
                 s.floorColumns++;
                 int base = (int) Math.ceil(c.fl[k] - 1e-9), feet = standNear(v, x, base, z), zone = zoneOf(e), idx = (i * n + j) * S + k;
-                if (zone >= 0) s.floorAt[vaultClass(w)][zone][feet == NONE ? 7 : Math.max(-3, Math.min(3, feet - base)) + 3]++;
-                ee[idx] = (float) e;
-                ww[idx] = (float) w;
-                dl[idx] = feet == NONE ? NONE : feet - base;
+                if (lane) {
+                    if (zone >= 0) s.floorAt[vaultClass(w)][zone][feet == NONE ? 7 : Math.max(-3, Math.min(3, feet - base)) + 3]++;
+                    ee[idx] = (float) e;
+                    ww[idx] = (float) w;
+                    dl[idx] = feet == NONE ? NONE : feet - base;
+                }
                 // a hole: no standing place within 4 rows of the walking floor (terrace and all), open 5 rows or more under it
                 int wb = (int) Math.ceil(WastelandField.walkFloor(c, k) - 1e-9);
                 if (standNear(v, x, wb, z) == NONE && v.mat(x, wb, z) != NoiseVox.ROCK && v.mat(x, wb + 1, z) != NoiseVox.ROCK) {
@@ -626,13 +661,17 @@ class WastelandFieldTest {
     }
 
     /**
-     * Openings into the Galleries (4 columns or more open from 2 under the Wasteland's bottom to 8 over it) are common and
-     * near: at least 60 per km^2 over the boxes, and the median walk from a main-component place to an opening's rim at
-     * most 220 moves. The Wasteland's spec measured 195-254 per km^2 and 143-168 moves over a stand-in for the Galleries
-     * and asked 120; an opening only falls where the Galleries are open under it, and the interim Galleries' domes reach
-     * the join on about a third of the columns where beta asks for an opening, so with them the boxes measure 88 per
-     * km^2 (29, 127, 107; 94 in fix round 1, at the same sites: one opening's two parts joined, another's second part
-     * fell under 4 columns) and 182-239 moves. The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
+     * Openings into the Galleries (areas of 4 columns or more open from 2 under the Wasteland's bottom to 8 over it,
+     * counted once per throat in them, {@link #throatColumn}) are common and near: at least 60 per km^2 over the boxes,
+     * and the median walk from a main-component place to an opening's rim at most 220 moves. The Wasteland's spec
+     * measured 195-254 per km^2 and 143-168 moves over a stand-in for the Galleries and asked 120; an opening only falls
+     * where the Galleries are open under it, and the interim Galleries' domes reached the join on about a third of the
+     * columns where beta asks for an opening (94 per km^2: 29, 137, 117; 180-226 moves). The Galleries' v2 field opens
+     * every one of the Wasteland's openings over its caverns (off the massifs and the tube countries) that it can give a
+     * ramp, each with a crater, and no other (step 2: no skylights): 19 holes in the three inner squares (62 per km^2: 8,
+     * 9 and 2 since fix round 2b's ramp gap of 5; medians 185-226 moves), the 19 the field lists there, each in an area
+     * of hole columns of its own (17 areas before that round, when holes some 20 blocks apart in box 8004 shared a
+     * crater's floor). The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
      */
     @Test
     void openingsAreCommonAndReachable() {
@@ -710,10 +749,14 @@ class WastelandFieldTest {
      * No lane along the tunnels (fix round 1, walking-strip): the floor is the same thing on and off a tunnel's middle
      * line. Over the boxes, by vault class, the shares of the floor's offset from ceil(fl) agree within 5 points between
      * the zones of e every vault of the class holds in its flat part (e under 1 and 1 to 2.2; wide vaults also 2.2 to
-     * 3.4), and so do the rates of steps between neighbouring columns within them; and across the old strip's edges (e =
-     * 1 and 2.2) steps are no likelier than across the lines 0.6 to either side, within 5 points. The finding's control
-     * line at 3.4 is not the bar: steps grow likelier towards the walls (the bowl and the wider vaults' rougher floors),
-     * which is no edge. Before the fix the lane had no steps at all and 81 % of the pairs across e = 1 stepped.
+     * 3.4), and so do the rates of steps between neighbouring columns within neighbouring zones; and across the old
+     * strip's edges (e = 1 and 2.2) steps are no likelier than across the lines 0.6 to either side, within 5 points. The
+     * finding's control line at 3.4 is not the bar: steps grow likelier towards the walls (the bowl and the wider vaults'
+     * rougher floors), which is no edge. Before the fix the lane had no steps at all and 81 % of the pairs across e = 1
+     * stepped. (Step 2 of the Galleries' port: with a crater's slope left out, the wide vaults' zones step 42.9, 44.2 and
+     * 48.0 % of their pairs, a steady rise towards the walls with no edge across e = 1 or 2.2 (45.4 against 45.4 round
+     * it, 49.5 against 49.2); zones 0 and 2, two zones apart, differ by 5.04 points, which is that rise, so the step rates
+     * are compared between neighbouring zones, 1.3 and 3.8 points apart.)
      */
     @Test
     void noLaneAlongTheTunnels() {
@@ -755,7 +798,7 @@ class WastelandFieldTest {
                     if (d > 5) bad.add(cls[c] + " offset " + (o == 7 ? "none" : String.valueOf(o - 3)) + " zones " + a + "/" + b + ": " + d);
                 }
                 double d = 100.0 * Math.abs((double) zs[c][a] / zp[c][a] - (double) zs[c][b] / zp[c][b]);
-                if (d > 5) bad.add(cls[c] + " steps zones " + a + "/" + b + ": " + d);
+                if (b == a + 1 && d > 5) bad.add(cls[c] + " steps zones " + a + "/" + b + ": " + d);
             }
             for (int l = 1; l + 1 < LINES.length; l++) {
                 if (LINES[l] != 1.0 && LINES[l] != 2.2) continue;
@@ -859,7 +902,12 @@ class WastelandFieldTest {
         assertTrue(placed[DecorBox.POOLS] >= 20 && placed[DecorBox.FALLS] >= 50, "too few pools or falls to check: " + Arrays.toString(placed));
     }
 
-    /** The decorations' lava keeps 3 columns from the openings into the Galleries (0; unguarded 27-318 blocks a box). */
+    /**
+     * The decorations' lava keeps 3 columns from the openings into the Galleries (0; unguarded 27-318 blocks a box). At
+     * least 200 blocks of it must be placed over the boxes for the check to mean anything: 283 are (15 pools and 14
+     * falls), fewer than before step 2 (over 300) because the Galleries now open every hole they can give a ramp, and
+     * the craters round them keep the pools away ({@link WastelandField#crDry}).
+     */
     @Test
     void decorationLavaKeepsFromTheOpenings() {
         int lava = 0;
@@ -868,7 +916,7 @@ class WastelandFieldTest {
             assertEquals(0, s.decorLavaNearOpening, "decoration lava within 3 columns of an opening, seed " + s.seed + ": " + s.decor);
             lava += s.decorLava;
         }
-        assertTrue(lava > 300, "too little decoration lava to check: " + lava);
+        assertTrue(lava >= 200, "too little decoration lava to check: " + lava);
     }
 
     /**
@@ -1143,41 +1191,50 @@ class WastelandFieldTest {
     }
 
     /**
-     * The fluid rule (spec 6.5), over 10^6 points: under the lava table a block is air wherever beta is
-     * {@link Join#AIR_BETA} or more (lava under that), and where beta is from {@link Join#LAVA_BETA} to under
-     * {@link Join#HOLE_BETA} no block from the Wasteland's bottom to a row over its table is open, whatever the corners
-     * interpolate to.
+     * The fluid rule (spec 6.5, spec-galleries-field-v2 7.4), over 10^6 points (200 areas of 512 x 512 anywhere in
+     * 20 000 x 20 000, {@link Spread}): under the lava table a block is air wherever beta is {@link Join#AIR_BETA} or more
+     * or a hole the Galleries open with a ramp is within {@link WastelandField#crDry} (its crater may go under the table;
+     * lava under that), and where beta is from {@link Join#LAVA_BETA} to under {@link Join#HOLE_BETA}, but in the craters
+     * within crDry of their holes (the seal keeps out of them, {@link Join#seal}; a crater's outer ring is sealed), no
+     * block from the Wasteland's bottom to a row over its table is open, whatever the corners interpolate to.
      */
     @Test
     void fluidRule() {
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, 2);
         int li = Terrain.WASTELAND, bot = t.shape.bottom(li), W = t.shape.waterY(li);
         Random r = new Random(17);
-        int air = 0, sealed = 0, wrong = 0, open = 0;
+        Spread spread = new Spread(r, 20000, 512, 5000);
+        int air = 0, sealed = 0, wrong = 0, open = 0, craters = 0;
         String first = null;
         for (int n = 0; n < 1_000_000; n++) {
-            int x = r.nextInt(20000) - 10000, z = r.nextInt(20000) - 10000;
+            int[] at = spread.next();
+            int x = at[0], z = at[1];
             double beta = t.breakthrough.beta(x, z);
+            WastelandField.Col col = t.wasteland.column(x, z);
+            boolean crater = col.crater > 0, dry = col.ring < t.wasteland.crDry;
+            if (crater) craters++;
             int y = bot + r.nextInt(W - bot);
             int f = t.fluidAt(x, y, z);
-            if (beta >= Join.AIR_BETA) {
+            if (beta >= Join.AIR_BETA || dry) {
                 air++;
-                if (f != Terrain.AIR) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta; }
-            } else if (f != Terrain.LAVA) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta; }
-            if (beta >= Join.LAVA_BETA && beta < Join.HOLE_BETA) {
+                if (f != Terrain.AIR) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta + " ring " + col.ring; }
+            } else if (f != Terrain.LAVA) { wrong++; if (first == null) first = "fluid " + f + " at " + x + " " + y + " " + z + " beta " + beta + " ring " + col.ring; }
+            if (beta >= Join.LAVA_BETA && beta < Join.HOLE_BETA && !(crater && dry)) {
                 sealed++;
                 int yy = bot + r.nextInt(W + 2 - bot);
                 if (t.fine(x, yy, z, r.nextDouble() * 2 - 1) <= 0) { open++; if (first == null) first = "open at " + x + " " + yy + " " + z + " beta " + beta; }
             }
         }
-        assertTrue(air > 50_000 && sealed > 100_000, "too few points to check: " + air + " air, " + sealed + " sealed");
+        System.out.printf(java.util.Locale.ROOT, "WastelandFieldTest fluid rule: %d air, %d sealed, %d in craters%n", air, sealed, craters);
+        assertTrue(air > 50_000 && sealed > 100_000 && craters > 500, "too few points to check: " + air + " air, " + sealed + " sealed, " + craters + " in craters");
         assertEquals(0, wrong, "fluids against the rule; first: " + first);
         assertEquals(0, open, "open blocks under the lava table where the seal holds; first: " + first);
     }
 
     /**
      * No band stone where the Wasteland meets the Galleries: every row from the Galleries' bottom to the Wasteland's top
-     * belongs to a layer, and the palette never gives band stone over the join's rows.
+     * belongs to a layer, and the palette never gives band stone over the join's rows (10^5 blocks, 50 areas of 512 x 512
+     * anywhere in 8000 x 8000, {@link Spread}).
      */
     @Test
     void noBandStoneAtTheJoin() {
@@ -1187,9 +1244,11 @@ class WastelandFieldTest {
         assertEquals(-545, s.top(Terrain.WASTELAND));
         for (int y = s.bottom(Terrain.GALLERIES); y <= s.top(Terrain.WASTELAND); y++) assertTrue(s.layerAt(y) >= 0, "row " + y + " is in no layer");
         Random r = new Random(23);
+        Spread spread = new Spread(r, 8000, 512, 2000);
         int bands = 0;
         for (int n = 0; n < 100_000; n++) {
-            int x = r.nextInt(8000) - 4000, z = r.nextInt(8000) - 4000, y = t.join.lo + r.nextInt(t.join.hi - t.join.lo + 1);
+            int[] at = spread.next();
+            int x = at[0], z = at[1], y = t.join.lo + r.nextInt(t.join.hi - t.join.lo + 1);
             if (t.palette.shell(x, y, z, 1 + r.nextInt(8), 1 + r.nextInt(8), r.nextInt(4) == 0) == Rock.BAND_STONE) bands++;
         }
         assertEquals(0, bands, "band stone in the join's rows");
@@ -1455,8 +1514,10 @@ class WastelandFieldTest {
 
     /**
      * The field is a pure function of the seed: density, the per-block pass, fluid and biome at 10^5 points of its rows
-     * (and the join's under them) answer bit for bit the same on one thread and on four in shuffled order, in a fresh
-     * instance, with neighbouring queries 32 blocks apart (the column cache's slots alias there).
+     * (and the join's under them) in 6000 x 6000 columns round the origin answer bit for bit the same on one thread and on
+     * four in shuffled order, in a fresh instance, with neighbouring queries 32 blocks apart (the column cache's slots
+     * alias there). Its columns ask the Galleries for their craters, so this also reads the openings of the whole area
+     * at random (fix round 2b restored the area from 2400: the openings' caches are shared and keyed by the whole cell).
      */
     @Test
     void pureAndThreadSafe() throws Exception {
@@ -1543,14 +1604,23 @@ class WastelandFieldTest {
         return System.nanoTime() - t0;
     }
 
-    /** Lava stays at the openings' rims: every column an opening's dip reaches keeps its lava out (spec 8). */
+    /**
+     * Lava stays out of the openings (spec 8): every column of a crater's dry part (within {@link WastelandField#crDry} of
+     * the edge of a hole the Galleries open, where the crater's open space may go under the lava table) and every column
+     * an opening's dip reaches (none since the craters carry every opening: JoinTest.openingSiteIsThePreGuardDip) keeps
+     * its lava out. Every third column each way of 4000 x 4000, taken in tiles of about 500 x 500 (a raster over the
+     * whole width would keep pushing the lattice cells of the Galleries' openings, which the columns' craters ask, out of
+     * their per-thread caches).
+     */
     @Test
     void lavaKeptAtOpenings() {
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, 1);
         WastelandField f = t.wasteland;
-        int rims = 0, bad = 0;
-        for (int x = -2000; x < 2000; x += 3) for (int z = -2000; z < 2000; z += 3) {
-            if (f.openingRim(x, z) <= 0) continue;
+        int rims = 0, bad = 0, n = 1334, tile = 166;
+        for (int a = 0; a < n; a += tile) for (int b = 0; b < n; b += tile) for (int i = a; i < Math.min(n, a + tile); i++) for (int k = b; k < Math.min(n, b + tile); k++) {
+            int x = -2000 + 3 * i, z = -2000 + 3 * k;
+            WastelandField.Col c = f.column(x, z);
+            if (!(c.holeDip > 0 || (c.crater > 0 && c.ring < f.crDry))) continue;
             rims++;
             if (!f.lavaKept(x, f.W - 1, z)) bad++;
         }
@@ -1562,15 +1632,17 @@ class WastelandFieldTest {
      * The lava pools are no canals (fix round 1, lava-canals): each lies off its tunnel's line by its own share and
      * swells and narrows, so of the lowest sheet's columns a pool fills (its dip at least half), at least 5 % lie more
      * than 0.62 of the half-width from the line, where 0.5.0's pools, centred and as wide as the tunnel's middle, all
-     * ended (7.3 %); the far bank always stays.
+     * ended (7.3 %); the far bank always stays. (3 x 10^5 columns, 100 areas of 512 x 512 anywhere in 8000 x 8000,
+     * {@link Spread}.)
      */
     @Test
     void lavaPoolsLieOffTheLine() {
         WastelandField f = new Terrain(TerrainSettings.defaults(), -64, 2).wasteland;
-        Random r = new Random(41);
+        Spread spread = new Spread(new Random(41), 8000, 512, 3000);
         int pool = 0, off = 0, wall = 0;
         for (int n = 0; n < 300_000; n++) {
-            WastelandField.Col c = f.column(r.nextInt(8000) - 4000, r.nextInt(8000) - 4000);
+            int[] at = spread.next();
+            WastelandField.Col c = f.column(at[0], at[1]);
             if (!c.near[0] || c.lavaDip < 0.5) continue;
             pool++;
             double q = c.e[0] / c.w[0];

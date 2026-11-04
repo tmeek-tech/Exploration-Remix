@@ -136,7 +136,8 @@ class NoiseLayersTest {
      * Nothing plans the Wasteland or the Galleries (Terrain.planned is the one switch): every query the game, the
      * features and the dev commands make of their rows is answered with no plan made at all, the plan queries come back
      * empty, and asking for a noise layer's plan throws. So does every query of the network itself for a noise layer,
-     * so a caller that goes round Terrain fails as loudly.
+     * so a caller that goes round Terrain fails as loudly. (400 columns, 16 areas of 256 x 256 anywhere in 4000 x 4000,
+     * {@link Spread}.)
      */
     @Test
     void noiseLayersPlanNothing() {
@@ -144,9 +145,11 @@ class NoiseLayersTest {
         Shape s = t.shape;
         int lo = s.floorY + 1, hi = s.top(Terrain.WASTELAND);
         Random r = new Random(5);
+        Spread spread = new Spread(r, 4000, 256, 25);
         double sink = 0;
         for (int k = 0; k < 400; k++) {
-            int x = r.nextInt(4000) - 2000, z = r.nextInt(4000) - 2000;
+            int[] at = spread.next();
+            int x = at[0], z = at[1];
             for (int y = lo; y <= hi; y += 3) {
                 sink += t.density(x, y, z) + t.rawDensity(x, y, z) + t.fine(x, y, z, r.nextDouble() * 2 - 1);
                 sink += t.fluidAt(x, y, z) + t.biomeAt(x, y, z).ordinal();
@@ -230,7 +233,12 @@ class NoiseLayersTest {
      * The join's rows are one density: Terrain routes them to {@link Join#density} (the two fields' smooth minimum and
      * the seal), and at the band's top and bottom rows the combined density has the sign of the lone field there, so no
      * lid or step forms where the band begins. Where beta is from {@link Join#LAVA_BETA} to under {@link Join#HOLE_BETA}
-     * no block of the Wasteland's rows under a row over its lava table is open, whatever the interpolation gives.
+     * no block of the Wasteland's rows under a row over its lava table is open, whatever the interpolation gives, but in
+     * the craters round the holes the Galleries open with a ramp out to {@link WastelandField#crDry} from the hole's edge,
+     * which go under the table on purpose ({@link Join#seal} keeps out of them): there every open block under the table is
+     * air. A crater's outer ring, where its floor lies over the table and the fluid under it is lava, is sealed like the
+     * rest (20 000 columns, 20 areas of 512 x 512 anywhere in 6000 x 6000, {@link Spread}; the craters' fluid rule over
+     * more points is WastelandFieldTest.fluidRule).
      */
     @Test
     void joinIsOneDensity() {
@@ -241,9 +249,12 @@ class NoiseLayersTest {
         assertEquals(-704, j.lo);
         assertEquals(-673, j.hi);
         Random r = new Random(9);
-        int bottomFlips = 0, topFlips = 0, sealed = 0, open = 0;
+        Spread spread = new Spread(r, 6000, 512, 1000);
+        int bottomFlips = 0, topFlips = 0, sealed = 0, open = 0, craterOpen = 0, craterNotAir = 0;
+        String first = null;
         for (int k = 0; k < 20000; k++) {
-            int x = r.nextInt(6000) - 3000, z = r.nextInt(6000) - 3000;
+            int[] at = spread.next();
+            int x = at[0], z = at[1];
             int y = j.lo + r.nextInt(j.hi - j.lo + 1);
             double want = Math.max(Network.smin(t.wasteland.density(x, y, z), t.galleries.density(x, y, z), Join.K), j.seal(x, y, z));
             assertEquals(want, t.rawDensity(x, y, z), "the join's density at " + x + " " + y + " " + z);
@@ -251,15 +262,24 @@ class NoiseLayersTest {
             if ((t.rawDensity(x, j.hi, z) > 0) != (t.wasteland.density(x, j.hi, z) > 0)) topFlips++;
             double beta = t.breakthrough.beta(x, z);
             if (beta >= Join.LAVA_BETA && beta < Join.HOLE_BETA) {
-                sealed++;
+                WastelandField.Col c = t.wasteland.column(x, z);
+                boolean crater = c.crater > 0 && c.ring < t.wasteland.crDry;
                 int yy = j.wBot + r.nextInt(j.W - j.wBot + 1);
-                if (t.fine(x, yy, z, r.nextDouble() * 2 - 1) <= 0) open++;
+                boolean isOpen = t.fine(x, yy, z, r.nextDouble() * 2 - 1) <= 0;
+                if (!crater) {
+                    sealed++;
+                    if (isOpen) { open++; if (first == null) first = x + " " + yy + " " + z + " beta " + beta; }
+                } else if (isOpen) {
+                    craterOpen++;
+                    if (t.fluidAt(x, yy, z) != Terrain.AIR) craterNotAir++;
+                }
             }
         }
         assertEquals(0, bottomFlips, "columns whose band's bottom row differs from the Galleries' alone");
         assertEquals(0, topFlips, "columns whose band's top row differs from the Wasteland's alone");
         assertTrue(sealed > 1000, "too few sealed columns to check: " + sealed);
-        assertEquals(0, open, "open blocks under the Wasteland's lava table where the seal holds");
+        assertEquals(0, open, "open blocks under the Wasteland's lava table where the seal holds, first at " + first);
+        assertEquals(0, craterNotAir, "open blocks under the table in a crater that are not air, of " + craterOpen);
     }
 
     /**

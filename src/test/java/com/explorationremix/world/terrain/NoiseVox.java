@@ -316,6 +316,92 @@ final class NoiseVox {
         return dist;
     }
 
+    /** The places a walk (forward) from any place of {@code from} reaches, those included. */
+    boolean[] reachFrom(boolean[] from) {
+        boolean[] seen = Arrays.copyOf(from, places);
+        int[] q = new int[places];
+        int h = 0, tl = 0;
+        for (int p = 0; p < places; p++) if (seen[p]) q[tl++] = p;
+        while (h < tl) {
+            int u = q[h++];
+            for (int d = 0; d < 4; d++) {
+                int w = next[u * 4 + d];
+                if (w >= 0 && !seen[w]) { seen[w] = true; q[tl++] = w; }
+            }
+        }
+        return seen;
+    }
+
+    /**
+     * Rock not held by anything: the components of rock blocks (6-connected, found as runs per column joined by
+     * union-find) that touch no face of the box. Returns each such component of {@code minBlocks} or more as {blocks,
+     * x, y, z of one of its blocks}, largest first.
+     */
+    java.util.List<int[]> floating(int minBlocks) {
+        int[] colRun = new int[nx * nz + 1];
+        int[] ry0 = new int[1 << 16], ry1 = new int[1 << 16];
+        int nr = 0;
+        for (int i = 0; i < nx; i++) for (int k = 0; k < nz; k++) {
+            colRun[i * nz + k] = nr;
+            int x = x0 + i, z = z0 + k, y = y0, top = y0 + ny - 1;
+            while (y <= top) {
+                if (mat(x, y, z) != ROCK) { y++; continue; }
+                int a = y;
+                while (y <= top && mat(x, y, z) == ROCK) y++;
+                if (nr == ry0.length) { ry0 = Arrays.copyOf(ry0, nr * 2); ry1 = Arrays.copyOf(ry1, nr * 2); }
+                ry0[nr] = a;
+                ry1[nr] = y - 1;
+                nr++;
+            }
+        }
+        colRun[nx * nz] = nr;
+        int[] parent = new int[nr + 1];
+        for (int r = 0; r <= nr; r++) parent[r] = r;
+        int anchor = nr, top = y0 + ny - 1;
+        for (int i = 0; i < nx; i++) for (int k = 0; k < nz; k++) {
+            int q = i * nz + k;
+            boolean edge = i == 0 || k == 0 || i == nx - 1 || k == nz - 1;
+            for (int r = colRun[q]; r < colRun[q + 1]; r++) if (edge || ry0[r] == y0 || ry1[r] == top) union(parent, r, anchor);
+            for (int d = 0; d < 2; d++) {
+                int i2 = i + (d == 0 ? 1 : 0), k2 = k + (d == 1 ? 1 : 0);
+                if (i2 >= nx || k2 >= nz) continue;
+                int q2 = i2 * nz + k2;
+                int a = colRun[q], ae = colRun[q + 1], b = colRun[q2], be = colRun[q2 + 1];
+                while (a < ae && b < be) {
+                    if (ry1[a] >= ry0[b] && ry1[b] >= ry0[a]) union(parent, a, b);
+                    if (ry1[a] < ry1[b]) a++; else b++;
+                }
+            }
+        }
+        int root = find(parent, anchor);
+        java.util.Map<Integer, int[]> comps = new java.util.HashMap<>();
+        for (int i = 0; i < nx; i++) for (int k = 0; k < nz; k++) {
+            int q = i * nz + k;
+            for (int r = colRun[q]; r < colRun[q + 1]; r++) {
+                int c = find(parent, r);
+                if (c == root) continue;
+                int[] e = comps.computeIfAbsent(c, z -> new int[4]);
+                if (e[0] == 0) { e[1] = x0 + i; e[2] = ry0[r]; e[3] = z0 + k; }
+                e[0] += ry1[r] - ry0[r] + 1;
+            }
+        }
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        for (int[] e : comps.values()) if (e[0] >= minBlocks) out.add(e);
+        out.sort((p, q) -> q[0] - p[0]);
+        return out;
+    }
+
+    private static int find(int[] parent, int a) {
+        while (parent[a] != a) { parent[a] = parent[parent[a]]; a = parent[a]; }
+        return a;
+    }
+
+    private static void union(int[] parent, int a, int b) {
+        a = find(parent, a);
+        b = find(parent, b);
+        if (a != b) parent[Math.max(a, b)] = Math.min(a, b);
+    }
+
     /** {@link #walkTo} the main component. */
     int[] walkToMain() {
         boolean[] g = new boolean[places];

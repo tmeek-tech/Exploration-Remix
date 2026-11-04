@@ -224,7 +224,7 @@ public final class TubeField {
         Country(int ci, int cj, boolean on, double ox, double oz, double ang, double a, double b, double S, double phase,
                 double h0, double slope, double nu, double nv, double gapSp, double gapPh) {
             this.ci = ci; this.cj = cj; this.on = on; this.ox = ox; this.oz = oz;
-            this.cos = Math.cos(ang); this.sin = Math.sin(ang);
+            this.cos = StrictMath.cos(ang); this.sin = StrictMath.sin(ang);
             this.a = a; this.b = b; this.S = S; this.phase = phase; this.h0 = h0; this.slope = slope;
             this.nu = nu; this.nv = nv;
             this.rimWarp = RIM_WARP * b;
@@ -457,7 +457,7 @@ public final class TubeField {
         double s = (p.f - k - 0.5) * c.S / g, as = Math.abs(s);
         // the line's own values
         long lk = Hashing.mix(seed, c.ci * 31L + c.cj, k, 991);
-        double R0 = R_MIN + (R_MAX - R_MIN) * Math.pow(Hashing.unit(lk), 0.9);
+        double R0 = R_MIN + (R_MAX - R_MIN) * StrictMath.pow(Hashing.unit(lk), 0.9);
         double pier = PIER_MIN + (PIER_MAX - PIER_MIN) * Hashing.unit(Hashing.mix(lk, 1, 0, 0));
         // cheap outs, before the noise: past the widest this line's twins can stand, or past one tube where it is single
         double bay = R0 * (1 + R_WANDER) + BULGE;
@@ -836,7 +836,7 @@ public final class TubeField {
         for (int di = -1; di <= 1; di++) for (int dj = -1; dj <= 1; dj++) {
             if (di == 0 && dj == 0) continue;
             double[] o = dipDraw(gi + di, gj + dj);
-            if (o != null && o[0] > dr[0] && Math.hypot(o[1] - cx, o[2] - cz) < rd + o[3] + 2) return v;
+            if (o != null && o[0] > dr[0] && StrictMath.hypot(o[1] - cx, o[2] - cz) < rd + o[3] + 2) return v;
         }
         Pt p = new Pt();
         at(cx, cz, p);
@@ -881,7 +881,7 @@ public final class TubeField {
             int[] v = dip(gi, gj);
             if (v[0] == 0) continue;
             double cx = v[2] / 16.0, cz = v[3] / 16.0, rd = v[4] / 16.0;
-            double dd = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
+            double dd = StrictMath.hypot(x + 0.5 - cx, z + 0.5 - cz);
             if (dd > rd) continue;
             int F0 = v[1];
             int depth = rd > DIP_TWO && dd < rd * DIP_DEEP ? 2 : 1;

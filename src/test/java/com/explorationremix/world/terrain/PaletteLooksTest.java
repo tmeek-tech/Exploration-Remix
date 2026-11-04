@@ -140,11 +140,15 @@ class PaletteLooksTest {
         Random r = new Random(5);
         // no look queries, stand-ins that put columns, tubes and cones everywhere, and the noise fields' own (t.palette)
         for (Palette p : new Palette[]{new Palette(t, SEED, LookQueries.NONE), new Palette(t, SEED, new Stand()), t.palette}) {
+            // columns in 40 clusters anywhere in the square (Spread): the noise fields resolve the Galleries' openings
+            // round an area once, where columns at random over it would make every query pay for that again
+            Spread spread = new Spread(r, 4000, 512, 5000);
             for (int k = 0; k < 200000; k++) {
                 boolean gal = r.nextBoolean();
                 int li = gal ? Terrain.GALLERIES : Terrain.WASTELAND;
                 DeepBiome b = gal ? GALLERIES[r.nextInt(GALLERIES.length)] : r.nextBoolean() ? DeepBiome.WASTELAND : DeepBiome.ASH_HOLLOWS;
-                int x = r.nextInt(4000) - 2000, z = r.nextInt(4000) - 2000, y = s.bottom(li) + r.nextInt(s.height(li));
+                int[] at = spread.next();
+                int x = at[0], z = at[1], y = s.bottom(li) + r.nextInt(s.height(li));
                 Rock q = p.shell(b, li, x, y, z, 1 + r.nextInt(8), 1 + r.nextInt(8), r.nextInt(4) == 0);
                 assertTrue(allowed.contains(q), q + " in " + b + " at " + x + " " + y + " " + z);
             }
