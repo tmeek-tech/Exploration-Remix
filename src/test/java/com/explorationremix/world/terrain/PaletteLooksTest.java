@@ -291,7 +291,11 @@ class PaletteLooksTest {
         // on about one in eight of the blocks the lava touches; none over W.
         Terrain t = terrain();
         int W = t.shape.waterY(Terrain.GALLERIES), ylo = W - 14, yhi = W + 14, n = 160;
-        int[][] boxes = {{-2240, -2752}, {-1728, 1088}};   // seed 8675309: the Causeway's banks and a hall's river
+        // seed 8675309: a lake's shore with dry ground round it, and a hall's river. The first box was the interim
+        // Galleries' Causeway banks at -2240,-2752, where the v2 field (0.8.0) leaves 22 lava blocks in these rows and no
+        // shore; this one is among the ten boxes with the most shore a scan of v2's lava found (569 dry tops, 37 magma
+        // blocks showing; no magma off the lava in any of the 18 boxes measured)
+        int[][] boxes = {{320, -960}, {-1728, 1088}};
         int[][] faces = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
         int allTouched = 0, allMagma = 0;
         for (int[] box : boxes) {

@@ -789,12 +789,17 @@ class GalleriesFieldTest {
      * of the port (ramps with terraces, a way up from every hole, no hole without a ramp; it was a25a9bf4bf313878 and
      * 0da260ed6d0a26e3 at the port) and twice in fix round 2b: the openings resolved by lattice cell priority, their
      * candidates in the order of an estimate (9a44061bac098872 and f7af35eb63184c62), then the closed pits' fixes and
-     * RAMP_GAP 5 ({@link #noClosedPits}). A change to the Galleries' shapes shows here: pin again only on purpose.
+     * RAMP_GAP 5 ({@link #noClosedPits}; ebaffa279749c19a and e96e139ac587ceda). Pinned again when the v2 field landed on
+     * the reshape (0.8.0), for four of the reshape's changes, each of which moves it: the probe reads LookQueries.coneTop
+     * (6f7d038c1ce4dc54 and 502cbec08f10beae with that alone), the tubes are whole where two lines meet (TubeField), the
+     * tubes keep the cavern's roofs ({@link GalleriesField#roofed}), and the Wasteland's fix round 2 moves the join's rows
+     * (Terrain.rawDensity). The rest of the reshape's files leave it as it was. A change to the Galleries' shapes shows
+     * here: pin again only on purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("ebaffa279749c19a", digest(8675309), "seed 8675309");
-        assertEquals("e96e139ac587ceda", digest(12345), "seed 12345");
+        assertEquals("1adc7d3d2e79e341", digest(8675309), "seed 8675309");
+        assertEquals("2b0c55b4cb09aa8e", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {

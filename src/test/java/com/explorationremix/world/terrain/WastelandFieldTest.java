@@ -881,7 +881,10 @@ class WastelandFieldTest {
      * largest pits thirty fresh boxes had (46 and 31 places; 94 in the thirty, 0 now): no cut, no window one way, and no
      * place of the featureless box's main component that is still a place is walked into from the main component without
      * a walk back (on the whole box's graph, not only round each placement); lava keeps from the openings and the
-     * channels keep their places as on the measured boxes.
+     * channels keep their places as on the measured boxes. At least 15 pools and 50 falls must be placed for the check to
+     * mean anything: 17 and 57 are, with 2 pools and 1 fall kept off the walks (29 and 77 before the v2 Galleries landed,
+     * 0.8.0: the craters round every hole they give a ramp keep 427 of the 3170 pools' tries from the openings, 94
+     * before, and the falls 85 against 16).
      */
     @Test
     void decorationsLeaveNoPits() {
@@ -899,7 +902,7 @@ class WastelandFieldTest {
         }
         System.out.println("WastelandFieldTest decorated alone: placed " + Arrays.toString(placed) + ", kept off the walks " + Arrays.toString(walks)
                 + " " + Arrays.toString(DecorBox.NAMES));
-        assertTrue(placed[DecorBox.POOLS] >= 20 && placed[DecorBox.FALLS] >= 50, "too few pools or falls to check: " + Arrays.toString(placed));
+        assertTrue(placed[DecorBox.POOLS] >= 15 && placed[DecorBox.FALLS] >= 50, "too few pools or falls to check: " + Arrays.toString(placed));
     }
 
     /**
@@ -920,17 +923,19 @@ class WastelandFieldTest {
     }
 
     /**
-     * The guards keep the decorations narrow: over the boxes at least 10 lava pools are placed (13, fewer on the rougher
-     * cave floors of fix round 2: 22 before it, 372 unguarded), 150 hanging columns (320), 12 great ones (31) and 12 lava
-     * falls (31). A guard as wide as the whole tunnel would take
-     * most of them.
+     * The guards keep the decorations narrow: over the boxes at least 4 lava pools are placed, 150 hanging columns (317),
+     * 12 great ones (30) and 12 lava falls (17). A guard as wide as the whole tunnel would take most of them. The pools
+     * are few because of the field, not the guards: the walk guard turns away 2 of their 1378 tries and the walk window
+     * none, the craters round the holes 180, and most of the rest find no 10 floor cells at one level. 5 are placed since
+     * the v2 Galleries landed on fix round 2 (0.8.0): fix round 2's rougher cave floors left 13 of the 22 before it, the
+     * craters round every hole the Galleries give a ramp 11, and the two together leave 5 (372 unguarded before both).
      */
     @Test
     void decorationsStayPlaced() {
         int[] placed = new int[DecorBox.FEATURES];
         for (int i = 0; i < BOXES.length; i++) for (int f = 0; f < DecorBox.FEATURES; f++) placed[f] += decorated(i).decorPlaced[f];
         System.out.println("WastelandFieldTest decorations placed: " + Arrays.toString(placed) + " " + Arrays.toString(DecorBox.NAMES));
-        assertTrue(placed[DecorBox.POOLS] >= 10, "lava pools: " + placed[DecorBox.POOLS]);
+        assertTrue(placed[DecorBox.POOLS] >= 4, "lava pools: " + placed[DecorBox.POOLS]);
         assertTrue(placed[DecorBox.HANGING] >= 150, "hanging columns: " + placed[DecorBox.HANGING]);
         assertTrue(placed[DecorBox.GREAT] >= 12, "great hanging columns: " + placed[DecorBox.GREAT]);
         assertTrue(placed[DecorBox.FALLS] >= 12, "lava falls: " + placed[DecorBox.FALLS]);
