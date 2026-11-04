@@ -74,7 +74,7 @@ PAINTERS = {
 # plants_fern.py has the Silver Fern Rift's ferns, redrawn fluffier for their 3D models. 0.5's lifeless Galleries added
 # minerals.py (the ember crust and the cinder chain), which is no plant file. 0.6.0's Mossback added creatures.py (its
 # den, the bone scraps round it and its hide; the creatures' own textures, the Mossback's and since 0.7.0 the Skein's,
-# are drawn by gen_data.py through it), 0.7.0 added fireflies.py (the blue fireflies' glow), and 0.6.2 added
+# are drawn by gen_data.py through it), 0.7.0 added fireflies.py (the blue fireflies' glow), and 0.8.0 added
 # particles.py, the volcanic smoke's puffs (textures/particle).
 import plants  # noqa: E402
 import plants_upper  # noqa: E402

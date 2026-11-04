@@ -16,7 +16,7 @@ public final class Palette {
     // 0.5.1, the two bottom layers: the flood's tide mark, the ragged join of the Wasteland's and the Galleries' looks,
     // the dip of the Scoria Canyons' bands, and the patches of the terraces' cooling cracks
     private final Perlin tideN, joinN, tiltN, crackN;
-    // 0.6.2: the clumps of magma where the Galleries' lava touches the rock
+    // 0.8.0: the clumps of magma where the Galleries' lava touches the rock
     private final Perlin heatN;
     /** What the noise fields of the two bottom layers tell the dressing ({@link LookQueries}). */
     private final LookQueries looks;

@@ -986,7 +986,7 @@ class TubeFieldTest {
     /**
      * The tubes cost little: the tube part of the per-block pass (the span, the veto, the tube's value with the roofs the
      * cavern keeps over it) takes at most 60 % of the Galleries' own per-block pass in chunks with a tube (8 x 8 chunks
-     * round a standing country's spot), and at most 12 % over 96 chunks drawn at random from 16 tube cells (0.6.2's wider
+     * round a standing country's spot), and at most 12 % over 96 chunks drawn at random from 16 tube cells (0.8.0's wider
      * tubes: about 0.27-0.35 against 0.6-0.8 ms a chunk in tube chunks, 43-52 %, and 0.04-0.05 at random, 5 %; 0.5.1's
      * narrow tubes 0.19 against 0.45, 42 %). One thread, best of three rounds after a warm-up.
      */

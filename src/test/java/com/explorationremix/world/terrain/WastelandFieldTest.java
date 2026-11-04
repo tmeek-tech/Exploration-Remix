@@ -33,7 +33,7 @@ class WastelandFieldTest {
      */
     static final long[][] MORE_BOXES = {{3, 0, 0}, {77, 1500, -700}};
     /**
-     * Boxes decorated alone ({@link #decorationsLeaveNoPits}): where the landing of main's den gates (0.6.2) found lava
+     * Boxes decorated alone ({@link #decorationsLeaveNoPits}): where the landing of main's den gates (0.8.0) found lava
      * pools and a lava fall that left a walk one way or a pit (seed 8675309 at 0,0 and -1831217569 at -1846,6353 one way;
      * -1249636696 at -1925,171, 392286899 at -4264,-1654 and -1314707143 at 5560,2806 pits of 2, 1 and 1 places), and the
      * two of thirty fresh boxes where a pool left the largest pits (-1563395035 at 2310,5212 and -667355435 at -6827,5355:
@@ -830,7 +830,7 @@ class WastelandFieldTest {
     }
 
     /**
-     * The lava pools and falls leave no walk one way and no pit (the landing of main's den gates, 0.6.2): a pool whose
+     * The lava pools and falls leave no walk one way and no pit (the landing of main's den gates, 0.8.0): a pool whose
      * lava closed a gap between the cave's own lava left a passage one way (its way back 32 moves before, 78 after; 38 and
      * 192 at the second), and pools and a fall that took the only way out of a nook left pits of 1 or 2 places that a
      * player drops into and cannot leave. Each pool and fall now forms only where the walks round it stay as they were

@@ -1158,7 +1158,7 @@ public final class Network {
      * (but within 16 blocks of a seam, where both cells carve the raw tiers alike).
      * The planner lays ways over the caverns' roofs, their own included, and the roughness of the roof (up to 5.4
      * blocks) and of the tunnel holed a thinner one: walking tunnels whose slabs lay 3 or 4 blocks over a cavern's roof
-     * dropped 27 to 36 blocks into it (0.6.2, seeds 8004 cell 0,0 and 575400745 cell 1,-2). Keeping the ways off such
+     * dropped 27 to 36 blocks into it (0.8.0, seeds 8004 cell 0,0 and 575400745 cell 1,-2). Keeping the ways off such
      * roofs in the planner instead laid all 99 plans of the sweep's cells out anew (9,169 ways to 8,618) and left
      * caverns and exits unjoined (seed 2 cell -1,0 lost its exit and all 25 of its caverns); this leaves every plan as
      * it was, and only lowers a roof a few blocks along the ways that run close over it.
@@ -1205,7 +1205,7 @@ public final class Network {
      * nearest there). So every pillar left stands on, and hangs from, rock over most of both ends. A pillar the rift
      * only passes beside, or grazes, stands as before, and so does every pillar away from the rift and the hall. No
      * pillar is needed to hold up a way's floor: the ways keep off the rift's void and the caverns' air (NetPlanner's
-     * clear and darkDoor). A pillar a way's walking core cuts into goes too ({@link #wayCuts}, 0.6.2).
+     * clear and darkDoor). A pillar a way's walking core cuts into goes too ({@link #wayCuts}, 0.8.0).
      *
      * <p>A cell only drops pillars whose centre lies at least 2.5 of the tier's largest radii inside it: no column of
      * another cell can see such a pillar (neither its rock nor its being nearer than one whose rock would reach the
@@ -1319,7 +1319,7 @@ public final class Network {
      * reaching into the pillar's height (its floor - 3 to its ceiling + 3). The pillar's rock is laid over the ways'
      * tunnels and only the core opened through it again ({@link #mustOpen}), so such a pillar stood with a squeeze hole
      * through its foot, and where the corners' interpolation thinned its waist away a piece of it hung from nothing
-     * (0.6.2: a 134-block foot a way on the cavern's floor cut loose, a 12-block sliver over a way that ran just under
+     * (0.8.0: a 134-block foot a way on the cavern's floor cut loose, a 12-block sliver over a way that ran just under
      * its cavern's floor; over 36 cells 5.6% of the pillars standing in the open had a way through them so). The ways
      * meet pillars in their own caverns, which dark.hit leaves them, and in those a last walking tunnel may cross.
      */
@@ -1357,7 +1357,7 @@ public final class Network {
     /**
      * How thick (blocks) the shelf between the rift's vault and a deep dark tier's floor over it must be to stay: a
      * thinner one goes, and the rift and the cavern open into one ({@link #layerDensity}). Roughness ate such shelves
-     * into plates nothing held (0.6.2: four pieces of 80 to 273 blocks over 100 cells, where the shelf was 10 blocks
+     * into plates nothing held (0.8.0: four pieces of 80 to 273 blocks over 100 cells, where the shelf was 10 blocks
      * thick or less), and taking them adds no rock: the view from the cavern down the rift opens.
      */
     static final double PLATE = 10;
@@ -1397,12 +1397,12 @@ public final class Network {
      * How thick (blocks) the run of rock round a block of a bridge's deck must be for the block to hold the bridge
      * ({@link #bridgeHeld}): from the nearest span the rift or a tier opens under it to the nearest over it. Roughness
      * (up to 5.4 blocks off either span) and the 8-block steps of the interpolation thin a thinner run to nothing: a
-     * run of 12 between the rift's floor and a cavern's roof under it held a bridge that hung as 507 blocks (0.6.2).
+     * run of 12 between the rift's floor and a cavern's roof under it held a bridge that hung as 507 blocks (0.8.0).
      */
     static final double BRIDGE_HOLD = 20;
 
     /**
-     * Blue Reaches: the rift's natural bridges that nothing would hold (0.6.2). A natural bridge is drawn at a height
+     * Blue Reaches: the rift's natural bridges that nothing would hold (0.8.0). A natural bridge is drawn at a height
      * between the water + 18 and the rift's top - 16, and its deck reaches 4 blocks past the rift's half width so that
      * its ends sit in the walls. But where a deep dark tier opens the walls at that height, or where the bridge lies at
      * a bend of the centre line (its deck is the columns whose nearest point on the line is the bridge's, and at a bend

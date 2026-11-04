@@ -1138,7 +1138,7 @@ BLOCK_TAGS = {
                            "minecraft:blue_ice", "minecraft:gravel", "minecraft:calcite", "minecraft:cobblestone", "minecraft:mossy_cobblestone"],
     # The Wasteland's and the Galleries' rock: lava falls pour out of it, lichen and shards grow on it. Since 0.5 with the
     # Galleries' ember crust (brown terracotta stands in for scoria without Create); since 0.5.1 natural stone only (no
-    # polished basalt or blackstone), since 0.6.2 without Create's layered scoria and scorchia.
+    # polished basalt or blackstone), since 0.8.0 without Create's layered scoria and scorchia.
     "basalt_rock": ["minecraft:basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:gilded_blackstone",
                     "minecraft:magma_block", "minecraft:deepslate_gold_ore", "minecraft:brown_terracotta",
                     f"{MOD}:ember_crust"]

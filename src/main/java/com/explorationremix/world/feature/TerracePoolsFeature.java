@@ -104,7 +104,7 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
         if (interior < 4) return false;
         // In the Wasteland a lava pool takes no floor a walk needs. Its lava is no floor and no way, so where its cells
         // close a gap (between the cave's own lava, or walls) a passage round it would be cut or left one way, and a nook
-        // beside it whose way out crossed them a pit (0.6.2). The walks round it must stay as they were (WalkWindow).
+        // beside it whose way out crossed them a pit (0.8.0). The walks round it must stay as they were (WalkWindow).
         if (c.lava() && Walkway.channelled(fy)) {
             WalkWindow.Change change = new WalkWindow.Change();
             for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {

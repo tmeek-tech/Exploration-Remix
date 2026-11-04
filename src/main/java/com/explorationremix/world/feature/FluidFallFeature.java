@@ -164,7 +164,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         }
         // Nor does a lava fall there leave a walk round it cut, one way or a pit: the place at its foot goes, and so do the
         // steps and drops into its column, so a place beside the column that walked out only through it would be left
-        // with no way out (0.6.2). The walks round the fall must stay as they were (WalkWindow).
+        // with no way out (0.8.0). The walks round the fall must stay as they were (WalkWindow).
         if (fluid.isSame(Fluids.LAVA) && Walkway.channelled(front.getY())) {
             WalkWindow.Change change = new WalkWindow.Change().add(src.getX(), src.getY(), src.getZ(), Detour.OTHER);
             for (int k = 0; k <= drop; k++) change.add(front.getX(), front.getY() - k, front.getZ(), Detour.OTHER);

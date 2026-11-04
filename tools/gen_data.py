@@ -584,7 +584,7 @@ PARTICLES = {
     "steam": [f"minecraft:big_smoke_{i}" for i in range(12)],
     "ember": ["minecraft:generic_0", "minecraft:generic_1"],
     "pollen": ["minecraft:generic_0"],
-    # 0.6.2: painted by tools/particles.py
+    # 0.8.0: painted by tools/particles.py
     "volcanic_smoke": [f"{MOD}:volcanic_smoke_{i}" for i in range(4)],
 }
 

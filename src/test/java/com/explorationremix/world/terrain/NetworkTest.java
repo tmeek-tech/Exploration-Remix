@@ -1184,7 +1184,7 @@ class NetworkTest {
     }
 
     /**
-     * Nothing the merge of main's den gates (0.6.2) left in mid-air stays there: in each cell no piece of rock nothing
+     * Nothing the merge of main's den gates (0.8.0) left in mid-air stays there: in each cell no piece of rock nothing
      * holds larger than {@link #LOOSE_ROCK_MAX} blocks, nor one with more than {@link #PILLAR_CRUMB} blocks of a
      * pillar's rock. The den gates moved the rift and the ways of most cells, and with them came pieces of three kinds
      * the reshape had too, more rarely: a natural bridge whose deck reached no wall, at a cavern or a bend of the rift
@@ -1313,7 +1313,7 @@ class NetworkTest {
      * are safe. Falls in the rift, the deep dark, the helices and the ancient city are reported, not failed: 0.2.0's
      * cliffs and the high ledges are meant to be dangerous. Over the voxel tests' cells of the Deep Gardens and 2 x 2
      * cells of the Blue Reaches (the layers under them are noise fields, tested with their fields), and two Blue cells
-     * of the merge of main's den gates (0.6.2): seed 8004 cell 0,0 had falls of 32 to 36 blocks from a walking tunnel
+     * of the merge of main's den gates (0.8.0): seed 8004 cell 0,0 had falls of 32 to 36 blocks from a walking tunnel
      * whose slab lay 3 blocks over its own cavern's roof, seed 575400745 cell 1,-2 falls of 27 and 28 from one 4 blocks
      * over a cavern's roof ({@link Network#DARK_ROOF}). In those two a fall from a gate's passage is reported, not
      * failed: a landing's spoke can pass a few blocks under its own gate's passage, as it did in main (0.6.1; seed 8004

@@ -8,7 +8,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
 /**
- * The cave particles: steam off hot pools, embers off lava, pollen in daylight shafts, and (0.6.2) the volcanic smoke of
+ * The cave particles: steam off hot pools, embers off lava, pollen in daylight shafts, and (0.8.0) the volcanic smoke of
  * the Galleries and the Wasteland. Spawned by each client.
  */
 public final class ERParticles {

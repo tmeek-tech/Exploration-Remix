@@ -62,7 +62,7 @@ public enum Rock {
     ANDESITE(0x888889),
     FROST_MOSS(0x5d8a96),
     // ---- 0.5: the ember crust, a mod block: the glowing seams that light the lifeless Galleries where lava cannot
-    // reach. (0.5.1: polished basalt and polished blackstone are gone, 0.6.2: Create's layered scoria and scorchia too;
+    // reach. (0.5.1: polished basalt and polished blackstone are gone, 0.8.0: Create's layered scoria and scorchia too;
     // the two bottom layers are natural stone.)
     EMBER_CRUST(0xe0782e);
 

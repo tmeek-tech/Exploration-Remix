@@ -24,7 +24,7 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
  * off its top onto that floor. The vine follows the climb's biome: wisteria by the Lantern Lake, ember vines in the
  * Ember Gardens (which have no climbing plant of their own), blue glow vines in the Blue Reaches and dusk vines in the
  * deep dark. The two bottom layers have no planned climbs (Terrain.planned) and hang nothing: nothing grows in the
- * Basalt Galleries or in the Ash Hollows, and since 0.6.2 no made thing (the cinder chain) hangs there either, natural
+ * Basalt Galleries or in the Ash Hollows, and since 0.8.0 no made thing (the cinder chain) hangs there either, natural
  * rock only. The voxel harness's {@code markShafts} models exactly this column.
  */
 public final class ClimbVinesFeature extends Feature<NoneFeatureConfiguration> {

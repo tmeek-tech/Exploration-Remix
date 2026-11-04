@@ -1,4 +1,4 @@
-"""Particle textures the mod paints itself (0.6.2): the volcanic smoke of the Basalt Galleries and the Wasteland.
+"""Particle textures the mod paints itself (0.8.0): the volcanic smoke of the Basalt Galleries and the Wasteland.
 
 16 by 16 like the block textures, vanilla style: a short ramp of pale warm greys and alpha in a few hard steps, from a
 thick core to a thin rim, no blur. The particle tints the puff (client/CaveParticles.VolcanicSmoke: a warm grey that

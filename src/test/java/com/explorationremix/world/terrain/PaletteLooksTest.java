@@ -70,14 +70,14 @@ class PaletteLooksTest {
         // 0.5.0's answers (IdentityHash over a2c3d73's classes, seed 8675309; the same for seed 12345 against its own),
         // but for the public path's: there the shell follows the plan's biomes, and in 0.5.1 the Blue Reaches' ways and
         // deep dark doors kept off the rift's void and the caverns' air, which changes the rock at 22 of layer 0's 60,000
-        // samples (layer 1's and the bands' are 0.5.0's). Pinned again with main's den gates (0.6.2): each cell plans the
+        // samples (layer 1's and the bands' are 0.5.0's). Pinned again with main's den gates (0.8.0): each cell plans the
         // lower landings of its den gates past the first, with their courts and ways, and the rift keeps clear of them;
         // the geodes move with the rift, which changes the rock by biome at 1,475 of layer 0's 400,000 samples, all in
         // the Asurine Geodes (the answer is 0.6.1's), and through the public path at 608 of layer 0's 60,000 samples.
         // Against 0.6.1 the public path differs at 44 samples, all where the ways keep off the void. The interior,
         // layer 1, the bands and the upper caves answer as before. With the den gates past the first switched off all
         // four answers are the last pin's; with the void rules switched off they are 0.6.1's (the pillar drop changes
-        // none of them). They held when this merge landed on the reshape's fixes (0.6.2): a49a88c answers 94a4dea's
+        // none of them). They held when this merge landed on the reshape's fixes (0.8.0): a49a88c answers 94a4dea's
         // four (the last pin's), 1dd7375 and the merge these. Split over the same draws into one running hash per layer
         // (by biome, interior, public path), per band and for the upper caves, every part of the merge's answers is
         // 1dd7375's; they differ from a49a88c's only in layer 0's by-biome and public parts, and every other part, band

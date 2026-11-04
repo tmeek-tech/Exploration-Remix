@@ -240,7 +240,7 @@ public final class ERBlocks {
                     .isValidSpawn((s, l, p, e) -> false)));
     /**
      * Beads of cinder fused into a hanging chain. 0.5's climbs of the Galleries and of the Wasteland's bare refuges hung
-     * it; since 0.6.2 world generation places none (the two bottom layers are natural rock only), and it stays registered
+     * it; since 0.8.0 world generation places none (the two bottom layers are natural rock only), and it stays registered
      * for worlds that have it. It climbs like a vine (minecraft:climbable) and hangs from a sturdy ceiling or from the
      * chain above it (explorationremix:hanging_supports). No light: a few embers caught between its beads only glint (a
      * glow overlay left out of the shader's glowing blocks).
