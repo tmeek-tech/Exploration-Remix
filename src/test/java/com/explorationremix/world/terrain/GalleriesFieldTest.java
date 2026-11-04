@@ -59,6 +59,9 @@ class GalleriesFieldTest {
         int flatPatch;
         String flatAt = "";
         int wastelandLava, lavaBesideAir, lavaNearOpening, openingColumns;
+        /** Places a walk from the main cavern reaches that never walk up out of the flood (nor to the box's edge), in how many components; floating rock (components of 8 blocks or more held by nothing). */
+        int trapped, trapSets, floating;
+        String trapAt = "", floatAt = "";
         int water, waterUnsealed, waterInOpenCavern, waterLow, waterByLava;
         String unsealedAt = "", byLavaAt = "", lavaAt = "";
         double buildSeconds;
@@ -77,11 +80,11 @@ class GalleriesFieldTest {
                             + " moves %d: drops %.2f %%, falls %.2f %%; openings %d, with a ramp %d, way down %d%s, view down %d, without a ramp %d;"
                             + " ramps walked %d (%d columns): no place near the deck %d%s, steps over a row %d;"
                             + " views from %d: 80+ %.1f %%, 160+ %.2f %%, 192+ %.3f %%; largest flat patch under the top %d columns%s; Wasteland lava %d, beside air %d%s, near an opening %d (%d opening columns);"
-                            + " water %d, unsealed %d%s, in open cavern %d, under W+40 %d, by lava %d%s; NaN %d",
+                            + " water %d, unsealed %d%s, in open cavern %d, under W+40 %d, by lava %d%s; closed pits %d places in %d sets%s; floating rock %d%s; NaN %d",
                     seed, buildSeconds, places, 100 * scc(), 100 * walkIntoMain(), low, 100 * within384(), 100 * neverShare(), moves, 100 * dropShare(), 100 * fallShare(),
                     opened, ramped, waysDown, noWayAt, viewsDown, withoutRamp, rampsWalked, centreColumns, centreMissing, missingAt, centreSteps, views.length, 100 * over(80),
                     100 * over(160), 100 * over(192), flatPatch, flatAt, wastelandLava, lavaBesideAir, lavaAt, lavaNearOpening, openingColumns, water, waterUnsealed, unsealedAt,
-                    waterInOpenCavern, waterLow, waterByLava, byLavaAt, nans);
+                    waterInOpenCavern, waterLow, waterByLava, byLavaAt, trapped, trapSets, trapAt, floating, floatAt, nans);
         }
     }
 
@@ -134,6 +137,8 @@ class GalleriesFieldTest {
             if (up[p] < 0) s.never++;
             else if (up[p] <= 384) s.within384++;
         }
+        pits(v, W, up, s);
+        rockHeld(v, s);
         s.views = v.longestViews(4, xa, za, xb, zb, W, T, YLO, YHI, true, 260);
         // the moves: drops of 2..15 rows, and falls (a step off an edge with nothing to stand on 15 rows under, or lava)
         for (int p = 0; p < n; p++) {
@@ -194,6 +199,41 @@ class GalleriesFieldTest {
         s.byLavaAt = byLavaAt.toString();
         s.lavaAt = lavaAt.toString();
         return s;
+    }
+
+    /**
+     * Closed pits (fix round 2b): the places a walk from the main cavern reaches (main itself included) that never walk
+     * up out of the flood ({@code up}: moves to a place with feet at W + FLOOD_RISE or over, -1 for none) and never reach
+     * the box's edge (where a way out could lie outside the box). A player who drops into one cannot walk out before the
+     * lava. Counted with the number of their components and where the largest is.
+     */
+    static void pits(NoiseVox v, int W, int[] up, Stats s) {
+        boolean[] main = new boolean[v.places], edge = new boolean[v.places];
+        for (int p = 0; p < v.places; p++) {
+            main[p] = v.inMain(p);
+            int x = v.px(p), z = v.pz(p);
+            edge[p] = x == v.x0 || z == v.z0 || x == v.x0 + v.nx - 1 || z == v.z0 + v.nz - 1;
+        }
+        boolean[] reached = v.reachFrom(main);
+        int[] toEdge = v.walkTo(edge);
+        Map<Integer, int[]> sets = new HashMap<>();
+        for (int p = 0; p < v.places; p++) {
+            if (!reached[p] || up[p] >= 0 || toEdge[p] >= 0) continue;
+            s.trapped++;
+            int[] e = sets.computeIfAbsent(v.comp[p], c -> new int[4]);
+            if (e[0]++ == 0) { e[1] = v.px(p); e[2] = v.py(p); e[3] = v.pz(p); }
+        }
+        s.trapSets = sets.size();
+        int[] big = null;
+        for (int[] e : sets.values()) if (big == null || e[0] > big[0]) big = e;
+        if (big != null) s.trapAt = String.format(java.util.Locale.ROOT, " (largest %d places at %d,%d,%d)", big[0], big[1], big[2], big[3]);
+    }
+
+    /** Floating rock (fix round 2b): components of 8 rock blocks or more that touch no face of the box. */
+    static void rockHeld(NoiseVox v, Stats s) {
+        List<int[]> fl = v.floating(8);
+        s.floating = fl.size();
+        if (!fl.isEmpty()) s.floatAt = String.format(java.util.Locale.ROOT, " (largest %d blocks at %d,%d,%d)", fl.get(0)[0], fl.get(0)[1], fl.get(0)[2], fl.get(0)[3]);
     }
 
     /**
@@ -328,7 +368,49 @@ class GalleriesFieldTest {
             assertTrue(s.low > 100_000, "too few low places to measure: " + s);
             assertTrue(s.within384() >= 0.97, "too few low places walk out of the flood within 384 moves: " + s);
             assertTrue(s.neverShare() <= 0.01, "too many low places have no way out of the flood: " + s);
+            assertEquals(0, s.trapped, "closed pits the main cavern walks into: " + s);
         }
+    }
+
+    /**
+     * No closed pits (fix round 2b): per component, no place a walk from the main cavern reaches lacks a walk up out of
+     * the flood, on the two measured boxes and on two 512 x 512 boxes where the verifier found them: seed 77's Causeway
+     * basin (25 769 places with feet up to W + 24, walled by a tube apron's cliff and column steps of 2-4 rows), and
+     * seed -42's hollow between three ramps (1332 places, walled by their talus and the same steps). The low ground's
+     * stairs ({@link GalleriesField#tread}), the apron's walkable release, the talus meeting the ground and the rivers'
+     * gentler end opened both; before, the shares of never-escaping places there were 47.4 % and 10.0 %.
+     */
+    @Test
+    void noClosedPits() {
+        for (int i = 0; i < BOXES.length; i++) assertEquals(0, stats(i).trapped, "closed pits: " + stats(i));
+        long[][] pits = {{77, 40594, -11386}, {-42, -4806, 6944}};
+        for (long[] b : pits) {
+            Terrain t = new Terrain(TerrainSettings.defaults(), -64, b[0]);
+            int W = t.shape.waterY(Terrain.GALLERIES);
+            NoiseVox v = NoiseVox.build(t, (int) b[1], (int) b[2], 512, 512, YLO, YHI).graph();
+            Stats s = new Stats();
+            s.seed = b[0];
+            pits(v, W, v.walkUpTo(W + Terrain.FLOOD_RISE), s);
+            System.out.printf(java.util.Locale.ROOT, "GalleriesFieldTest pits seed %d at %d %d: %d places, closed pits %d places in %d sets%s%n",
+                    b[0], b[1], b[2], v.places, s.trapped, s.trapSets, s.trapAt);
+            assertTrue(v.places > 300_000, "too few places: " + v.places);
+            assertEquals(0, s.trapped, "closed pits the main cavern walks into, seed " + b[0] + s.trapAt);
+        }
+    }
+
+    /**
+     * No floating rock (fix round 2b): every component of 8 rock blocks or more is held by the box's faces, the box's rows
+     * from the Galleries' floor to the Wasteland's lava table (a band whose mask ended in mid-air left 18 539 and 8221
+     * blocks floating in seed 555's box at (944, -856); the bands now stand on footings where their mask fades).
+     */
+    @Test
+    void noFloatingRock() {
+        for (int i = 0; i < BOXES.length; i++) assertEquals(0, stats(i).floating, "floating rock: " + stats(i));
+        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 555);
+        NoiseVox v = NoiseVox.build(t, 944, -856, 512, 512, YLO, YHI);
+        List<int[]> fl = v.floating(8);
+        System.out.println("GalleriesFieldTest floating rock seed 555 at 944 -856: " + fl.size() + (fl.isEmpty() ? "" : ", largest " + Arrays.toString(fl.get(0))));
+        assertTrue(fl.isEmpty(), "floating rock, seed 555: " + (fl.isEmpty() ? "" : Arrays.toString(fl.get(0))));
     }
 
     /**
