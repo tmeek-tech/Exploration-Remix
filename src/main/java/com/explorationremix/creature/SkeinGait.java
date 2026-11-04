@@ -14,14 +14,16 @@ import java.util.function.DoubleSupplier;
  *
  * <p>Its moods change the numbers: {@link Mood#ROAM} as above; {@link Mood#STALK}, creeping up on fireflies, in short
  * slow bursts with long freezes, its heading only jittered (the creature aims it); {@link Mood#BOLT}, getting away, in
- * fast long bursts with only the briefest freezes, over a short way.
+ * fast long bursts with only the briefest freezes, over a short way; {@link Mood#JOURNEY}, heading somewhere far off,
+ * in long runs broken by brief freezes and now and then a longer pause, its heading only jittered (the creature aims
+ * it at where it is going), and a long rest once it gets there.
  *
  * <p>The creature says how far it moved each tick and when a burst got nowhere; the gait says what to do next. Plain
  * numbers and a source of uniform randoms in [0, 1), so it can be tested on its own.
  */
 public final class SkeinGait {
     public enum Phase { REST, PIVOT, BURST, FREEZE }
-    public enum Mood { ROAM, STALK, BOLT }
+    public enum Mood { ROAM, STALK, BOLT, JOURNEY }
 
     // ROAM: bursts of 3 to 30 ticks (a twitch, a dash, now and then a long run), at 0.95 to 1.2 times its speed
     static final int TWITCH_MAX = 6, DASH_MAX = 18, RUN_MAX = 30, BURST_MIN = 3;
@@ -40,6 +42,11 @@ public final class SkeinGait {
     static final double STALK_JITTER = 35;
     static final int BOLT_BURST_MIN = 10, BOLT_BURST_MAX = 30, BOLT_FREEZE_MIN = 3, BOLT_FREEZE_MAX = 10;
     static final double BOLT_JITTER = 50;
+    // JOURNEY: runs of 24 to 50 ticks at 0.95 to 1.1 times its speed; freezes of 2 to 8 ticks, a fifth of them pauses of
+    // 20 to 45; its heading jittered up to 12 degrees either way
+    static final int JOURNEY_BURST_MIN = 24, JOURNEY_BURST_MAX = 50, JOURNEY_FREEZE_MIN = 2, JOURNEY_FREEZE_MAX = 8,
+            JOURNEY_PAUSE_MIN = 20, JOURNEY_PAUSE_MAX = 45;
+    static final double JOURNEY_PAUSES = 0.2, JOURNEY_JITTER = 12;
     /** After a bolt or a stalk it rests only 5 to 20 seconds. */
     static final int SHORT_REST_MIN = 100, SHORT_REST_MAX = 400;
     /** Bursts in a row that got nowhere before it gives up the outing. */
@@ -74,9 +81,9 @@ public final class SkeinGait {
      */
     public boolean gaveUp() { return gaveUp; }
 
-    /** Rests for a random while (long, after roaming; short after a bolt or a stalk). */
+    /** Rests for a random while (long, after roaming or a journey; short after a bolt or a stalk). */
     public void rest(DoubleSupplier r) {
-        rest(mood == Mood.ROAM ? REST_MIN + (int) (sq(r.getAsDouble()) * REST_SPREAD) : range(r, SHORT_REST_MIN, SHORT_REST_MAX));
+        rest(mood == Mood.ROAM || mood == Mood.JOURNEY ? REST_MIN + (int) (sq(r.getAsDouble()) * REST_SPREAD) : range(r, SHORT_REST_MIN, SHORT_REST_MAX));
     }
 
     public void rest(int ticks) {
@@ -163,6 +170,7 @@ public final class SkeinGait {
                     : TURN_MIN + r.getAsDouble() * (TURN_MAX - TURN_MIN);
             case STALK -> r.getAsDouble() * STALK_JITTER;
             case BOLT -> r.getAsDouble() * BOLT_JITTER;
+            case JOURNEY -> r.getAsDouble() * JOURNEY_JITTER;
         };
         return side * Math.toRadians(deg);
     }
@@ -177,6 +185,7 @@ public final class SkeinGait {
             }
             case STALK -> range(r, BURST_MIN, STALK_BURST_MAX);
             case BOLT -> range(r, BOLT_BURST_MIN, BOLT_BURST_MAX);
+            case JOURNEY -> range(r, JOURNEY_BURST_MIN, JOURNEY_BURST_MAX);
         };
     }
 
@@ -186,6 +195,7 @@ public final class SkeinGait {
             case ROAM -> 0.95 + 0.25 * k;
             case STALK -> 0.55 + 0.2 * k;
             case BOLT -> 1.2 + 0.15 * k;
+            case JOURNEY -> 0.95 + 0.15 * k;
         };
     }
 
@@ -199,6 +209,8 @@ public final class SkeinGait {
             }
             case STALK -> range(r, STALK_FREEZE_MIN, STALK_FREEZE_MAX);
             case BOLT -> range(r, BOLT_FREEZE_MIN, BOLT_FREEZE_MAX);
+            case JOURNEY -> r.getAsDouble() < JOURNEY_PAUSES ? range(r, JOURNEY_PAUSE_MIN, JOURNEY_PAUSE_MAX)
+                    : range(r, JOURNEY_FREEZE_MIN, JOURNEY_FREEZE_MAX);
         };
     }
 

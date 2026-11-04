@@ -288,6 +288,19 @@ public final class Network {
         return null;
     }
 
+    /**
+     * The Deep Blue Rifts that may pass within {@code reach} of (x, z) (sideways): those of the Blue Reaches cells
+     * that reach that near, for the creatures that travel them. Their plans are made if they have not been.
+     */
+    public List<Route> riftsNear(double x, double z, double reach) {
+        List<Route> out = new ArrayList<>();
+        if (Terrain.BLUE >= shape.layerCount) return out;
+        for (int cx = cellOf(x - reach); cx <= cellOf(x + reach); cx++)
+            for (int cz = cellOf(z - reach); cz <= cellOf(z + reach); cz++)
+                for (Route r : net(Terrain.BLUE, cx, cz).canyons) if (r.rift) out.add(r);
+        return out;
+    }
+
     /** The plan of layer li in cell (cx, cz), for the dev tools. */
     public Net network(int li, int cx, int cz) { return net(li, cx, cz); }
 

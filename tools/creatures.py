@@ -717,12 +717,12 @@ def write_skein(assets, write):
 
 # The Skein's body as the renderer lays it (SkeinEntity.PLATES, PLATE_START, PLATE_STEP): which piece each plate is,
 # and how wide it is drawn.
-SKEIN_PLATES = 13
-SKEIN_PLATE_START, SKEIN_PLATE_STEP = 0.12, 0.30
+SKEIN_PLATES = 23
+SKEIN_PLATE_START, SKEIN_PLATE_STEP = 0.15, 0.30
 
 
 def skein_piece(k):
-    return "tail" if k == SKEIN_PLATES - 1 else ("plate_large", "plate_mid", "plate_small")[min(2, k // 4)]
+    return "tail" if k == SKEIN_PLATES - 1 else ("plate_large", "plate_mid", "plate_small")[min(2, k * 3 // (SKEIN_PLATES - 1))]
 
 
 def skein_width(k):
@@ -931,7 +931,7 @@ def skein_layout(bend=0.0, phase=None, rear=0.0):
         th = bend * s
         return (1 - math.cos(th)) / bend * 16, math.sin(th) / bend * 16, math.degrees(th)
 
-    cx, cz, _ = at(1.9)
+    cx, cz, _ = at(3.4)
     parts, pose = [], {}
     pieces = [("head", 0, 0.0)] + [(skein_piece(k), k, SKEIN_PLATE_START + SKEIN_PLATE_STEP * k) for k in range(SKEIN_PLATES)]
     for idx, (piece, k, s) in enumerate(pieces):

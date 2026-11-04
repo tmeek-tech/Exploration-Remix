@@ -5,6 +5,9 @@ import com.explorationremix.creature.climb.ClimbMoveControl;
 import com.explorationremix.creature.climb.ClimbNavigation;
 import com.explorationremix.creature.climb.ClimbNodeEvaluator;
 import com.explorationremix.registry.ERSounds;
+import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.terrain.Route;
+import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
@@ -47,6 +50,7 @@ import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.entity.IEntityAdditionalSpawnData;
 import net.minecraftforge.entity.PartEntity;
 import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
@@ -62,12 +66,13 @@ import java.util.function.DoubleSupplier;
 
 /**
  * The Skein: the Blue Reaches' cave crawler. A long, low, many-legged thing of overlapping cobalt-blue shell plates,
- * about five blocks from the wedge of its head to the spurs of its tail, a seam of cyan light down its back. Most of
+ * about eight blocks from the wedge of its head to the spurs of its tail, a seam of cyan light down its back. Most of
  * the time it lies motionless on a floor, a wall or the ceiling, only its feelers twitching; now and then it goes out
  * round the cave in erratic bursts, a cockroach's way: a dash, a dead stop, a snap to a new heading, another dash
  * ({@link SkeinGait}). It runs up walls and across ceilings as readily as over floors (the climbing pathfinder and
- * move control the Mossback uses, in creature.climb), and its body follows its head's exact path like a train ({@link
- * SkeinTrail}), pouring over edges and round corners.
+ * move control the Mossback uses, in creature.climb), and its body follows its head's path ({@link SkeinTrail}),
+ * pouring over edges and round corners: along a smooth curve through it ({@link SkeinSpine}), so however sharply the
+ * head snaps round, the body comes after it in a curve and never folds.
  *
  * <p>It minds a player only when they come close: within about {@link #STRIKE_RANGE} blocks, if it can see or feel
  * them, it rears its front plates for a split second, lunges and bites, then skitters a few blocks off and freezes
@@ -114,6 +119,22 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     /** Ways it tries for a burst before it gives that pivot up (stalking only one: every way leads to the swarm). */
     static final int PATH_TRIES = 6;
     /**
+     * Near the Deep Blue Rift's ledge path (this near it across, and this near its floor up or down) it now and then
+     * sets out along the path as its rest ends (this share of them, and once a journey has started, none for a minute
+     * or two after): to a spot this far along it, either way, keeping this far from its ends (and at least this far to
+     * go, or it does not set out). It goes in runs of at most this many blocks, is there once within this far of it,
+     * and gives the journey up after this long.
+     */
+    static final double JOURNEY_REACH = 16.0, JOURNEY_RISE = 12.0, JOURNEY_NEAR = 40.0, JOURNEY_FAR = 90.0, JOURNEY_END_GAP = 6.0,
+            JOURNEY_LEAST = 24.0, JOURNEY_LEG = 14.0, JOURNEY_ARRIVE = 5.0, JOURNEY_CHANCE = 0.3;
+    static final int JOURNEY_EVERY_MIN = 1200, JOURNEY_EVERY_MAX = 2400, JOURNEY_GIVE_UP = 2400;
+    /**
+     * The ways a journey's run tries in turn: how much of the run along the path it aims for, and how far that aim is
+     * turned aside (degrees, the side drawn each snap). It goes straight on first, then shorter, then swerves round what
+     * is in the way.
+     */
+    static final double[][] JOURNEY_TRIES = {{1, 0}, {0.5, 0}, {1, 35}, {1, -35}, {0.5, 70}, {0.5, -70}};
+    /**
      * In the refuge it looks for the nearest open spot outside it on shells round it this far apart, out to this far,
      * with at most this many points to a shell (so they lie further apart far out; it looks again at every snap).
      */
@@ -127,29 +148,32 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
      * keeping near that way counts against open rock (in half blocks of it) when it lays its body afresh. */
     static final double LANDING_LOOK_BACK = 2.0, LANDING_KEEP_WAY = 3.0;
     /** Half blocks of open rock a spawn spot needs behind the head ({@link #openLength}): room for most of its body. */
-    public static final int BODY_ROOM = 6;
+    public static final int BODY_ROOM = 10;
     /** A patter of feet every this many blocks it runs. */
     static final double PATTER_EVERY = 1.7;
     /** How much of the way to its new heading the drawn head turns each tick. */
     static final double HEAD_SNAP = 0.75;
 
     // ------------------------------------------------------------------------------------------------ the body
-    /** Its plates (the last one the tail's), each this far back along the trail from the point under its head. */
-    public static final int PLATES = 13;
-    public static final double PLATE_START = 0.12, PLATE_STEP = 0.30;
+    /** Its plates (the last one the tail's), each this far back along its body from the point under its head. */
+    public static final int PLATES = 23;
+    public static final double PLATE_START = 0.15, PLATE_STEP = 0.30;
     /** Its jaws are this far ahead of the point under its head. */
     public static final double HEAD_REACH = 0.8;
-    /** The trail it keeps: the whole body and a little more. */
-    public static final double TRAIL_KEEP = PLATE_START + PLATE_STEP * (PLATES - 1) + 1.6;
-    /** The hit sections along the body: how far back along the trail each lies, and its box (the head has the main box). */
-    static final double[] SECTION_AT = {1.3, 2.15, 2.95, 3.7};
-    static final float[] SECTION_W = {1.25F, 1.05F, 0.85F, 0.65F}, SECTION_H = {0.55F, 0.5F, 0.45F, 0.4F};
+    /** Its length, head to spur tips (blocks). */
+    public static final double BODY_LENGTH = PLATE_START + PLATE_STEP * (PLATES - 1) + 0.6;
+    /** The trail it keeps: the whole body and the stretch behind it that the curve its body lies along looks to. */
+    public static final double TRAIL_KEEP = BODY_LENGTH + 2.4;
+    /** The hit sections along the body: how far back along it each lies, and its box (the head has the main box). */
+    static final double[] SECTION_AT = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 6.9};
+    static final float[] SECTION_W = {1.25F, 1.15F, 1.05F, 0.95F, 0.85F, 0.75F, 0.6F},
+            SECTION_H = {0.55F, 0.52F, 0.5F, 0.47F, 0.45F, 0.42F, 0.38F};
     /**
      * The stretch of trail the sections' boxes cover between them: from just inside the head's box (heading up or down
      * a wall, that box covers only its height of the body) to the tips of its spurs. Each box runs from half way to the
      * section before to half way to the one after.
      */
-    static final double SECTIONS_FROM = 0.3, SECTIONS_TO = 4.1;
+    static final double SECTIONS_FROM = 0.3, SECTIONS_TO = 7.3;
     /** Where each section's box starts and ends along the trail, after the head (0): see {@link #SECTIONS_FROM}. */
     private static final double[] SECTION_ENDS = sectionEnds();
     /**
@@ -164,6 +188,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
      * plates, and the end of what it keeps. A body laid back through these lies as it did, each plate where it was.
      */
     static final double[] KEPT_AT = keptAt();
+    /** The joints of the curve its body lies along ({@link SkeinSpine}): far enough back for its tail and its last section. */
+    public static final int SPINE_JOINTS = (int) Math.ceil(Math.max(PLATE_START + PLATE_STEP * (PLATES - 1) + 0.3, SECTIONS_TO) / SkeinSpine.LINK) + 1;
 
     public static double plateAt(int k) { return PLATE_START + PLATE_STEP * k; }
 
@@ -190,9 +216,9 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     @Nullable private static final AtomicInteger IDS = idCounter();
 
     // ------------------------------------------------------------------------------------------------ state
-    public static final byte STILL = 0, SKITTER = 1, STALK = 2, REAR = 3, LUNGE = 4, BOLT = 5, EAT = 6;
+    public static final byte STILL = 0, SKITTER = 1, STALK = 2, REAR = 3, LUNGE = 4, BOLT = 5, EAT = 6, JOURNEY = 7;
     /** The state names, by id, for /remix skein. */
-    public static final String[] STATE_NAMES = {"still", "skitter", "stalk", "rear", "lunge", "bolt", "eat"};
+    public static final String[] STATE_NAMES = {"still", "skitter", "stalk", "rear", "lunge", "bolt", "eat", "journey"};
     private static final EntityDataAccessor<Byte> DATA_STATE = SynchedEntityData.defineId(SkeinEntity.class, EntityDataSerializers.BYTE);
     /** The side its rock is on (a Direction's 3D value), or -1 while it falls or swims. */
     private static final EntityDataAccessor<Byte> DATA_SURFACE = SynchedEntityData.defineId(SkeinEntity.class, EntityDataSerializers.BYTE);
@@ -201,6 +227,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     private final Section[] sections;
     private final SkeinTrail trail = new SkeinTrail(TRAIL_KEEP);
+    private final SkeinSpine spine = new SkeinSpine(SPINE_JOINTS);
     private double airRun;                   // how far it has gone touching nothing (each side reckons its own)
     private final SkeinGait gait = new SkeinGait();
     private final DoubleSupplier rnd = () -> random.nextDouble();
@@ -215,6 +242,12 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     @Nullable private FireflySwarm shunned;  // a swarm it gave up on, left be while it sits where it was then
     @Nullable private BlockPos shunnedAt;
     private boolean refugeTried;             // in the refuge: it has set out for the way out (again only once a rest ends)
+    @Nullable private Vec3 journeyTo;        // JOURNEY: where it is going
+    @Nullable private Route journeyRift;     // JOURNEY: the rift whose ledge path it follows there
+    private double journeyAt, journeyEnd;    // JOURNEY: how far along the path it has got, and where it is going
+    private int journeyWay;                  // JOURNEY: which way along the path (1 or -1)
+    private long journeyFrom;                // JOURNEY: when it set out
+    private long nextJourney;                // the game time before which it sets out on no journey
     private boolean atSwarm;                 // REAR and LUNGE: the strike is at the swarm, not a player
     @Nullable private Vec3 anchor;           // where it first struck in this encounter
     private long lastStrike = -ENCOUNTER_TICKS;
@@ -304,7 +337,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     @Override public boolean onClimbable() { return false; }
     /** Nothing shoves it off its rock (it shoves, though). */
     @Override public boolean isPushable() { return false; }
-    /** Its body trails five blocks behind its box: keep drawing it while any of it is on screen. */
+    /** Its body trails eight blocks behind its box: keep drawing it while any of it is on screen. */
     @Override public AABB getBoundingBoxForCulling() { return getBoundingBox().inflate(TRAIL_KEEP); }
 
     // ------------------------------------------------------------------------------------------------ the body's parts
@@ -325,20 +358,21 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     }
 
     /**
-     * Sets each section's box over its stretch of the trail ({@link #SECTIONS_FROM}), its underside on the rock there,
-     * thin across the rock and as wide as its part of the body whichever way the trail runs: a box kept upright would
-     * cover only its own height of a body running straight up a wall, and a blow at the rest would go through to the
-     * rock. The jaws' part goes ahead of the head, the way the server has it heading.
+     * Sets each section's box over its stretch of the body ({@link #SECTIONS_FROM}), along the curve it is drawn along,
+     * its underside on the rock there, thin across the rock and as wide as its part of the body whichever way the body
+     * runs: a box kept upright would cover only its own height of a body running straight up a wall, and a blow at the
+     * rest would go through to the rock. The jaws' part goes ahead of the head, the way the server has it heading.
      */
     private void placeSections() {
         double[] at = new double[6 * SECTION_ENDS.length], box = new double[6];
-        trail.sampleAll(SECTION_ENDS, at);
+        Vector3f sf = entityData.get(DATA_FORWARD);
+        spine.build(trail, 0.0, sf.x, sf.y, sf.z, rockIn(level()));
+        spine.sampleAll(SECTION_ENDS, at);
         for (int i = 0; i < SECTION_AT.length; i++) {
             SkeinTrail.stretchBox(at, 6 * (i + 1), 6 * (i + 2), sections[i].getBbWidth(), sections[i].getBbHeight(), box);
             fit(sections[i], box);
         }
-        // along its rock at the head, or else the way the trail runs into the head
-        Vector3f sf = entityData.get(DATA_FORWARD);
+        // along its rock at the head, or else the way the body runs into the head
         double nx = at[3], ny = at[4], nz = at[5], along = sf.x * nx + sf.y * ny + sf.z * nz;
         double fx = sf.x - nx * along, fy = sf.y - ny * along, fz = sf.z - nz * along;
         if (fx * fx + fy * fy + fz * fz < 1.0E-4) { fx = at[0] - at[6]; fy = at[1] - at[7]; fz = at[2] - at[8]; }
@@ -348,6 +382,24 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
                 at[0] + fx * JAWS_BACK, at[1] + fy * JAWS_BACK, at[2] + fz * JAWS_BACK, nx, ny, nz};
         SkeinTrail.stretchBox(jaws, 0, 6, JAWS_W, JAWS_H, box);
         fit(sections[JAWS], box);
+    }
+
+    /**
+     * Whether a point is inside the solid part of a block of {@code level} (a slab's empty half is not), for the curve
+     * of its body to keep out of the rock; never reading an unloaded chunk.
+     */
+    public static SkeinSpine.Solid rockIn(Level level) {
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        return (x, y, z) -> {
+            p.set(Mth.floor(x), Mth.floor(y), Mth.floor(z));
+            if (!level.isLoaded(p)) return false;
+            VoxelShape shape = level.getBlockState(p).getCollisionShape(level, p);
+            if (shape.isEmpty()) return false;
+            double lx = x - p.getX(), ly = y - p.getY(), lz = z - p.getZ();
+            for (AABB b : shape.toAabbs())
+                if (lx >= b.minX && lx <= b.maxX && ly >= b.minY && ly <= b.maxY && lz >= b.minZ && lz <= b.maxZ) return true;
+            return false;
+        };
     }
 
     /** Moves {@code s} to the box {minX, minY, minZ, maxX, maxY, maxZ}, its feet at the box's bottom middle. */
@@ -470,7 +522,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
             Vec3 to = aim.subtract(feet(up));
             Vec3 flat = to.subtract(up.scale(to.dot(up)));
             if (flat.lengthSqr() > 1.0E-4) { want = flat.normalize(); rate = 0.6; }
-        } else if (gait.phase() == SkeinGait.Phase.PIVOT && pivotWant != null && (s == SKITTER || s == BOLT || s == STALK)) {
+        } else if (gait.phase() == SkeinGait.Phase.PIVOT && pivotWant != null && (s == SKITTER || s == BOLT || s == STALK || s == JOURNEY)) {
             Vec3 flat = pivotWant.subtract(up.scale(pivotWant.dot(up)));
             if (flat.lengthSqr() > 1.0E-4) { want = flat.normalize(); rate = 0.65; }    // a snap: done in two or three ticks
         } else if (along.lengthSqr() > 1.0E-4) want = along.normalize();
@@ -514,6 +566,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         stateTicks = 0;
         stateLength = length;
         if (s != REAR && s != LUNGE) atSwarm = false;
+        if (s != JOURNEY) { journeyTo = null; journeyRift = null; }
     }
 
     @Override
@@ -532,6 +585,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         switch (state()) {
             case STILL -> still();
             case SKITTER, BOLT -> outing();
+            case JOURNEY -> journey();
             case STALK -> stalk();
             case REAR -> rear();
             case LUNGE -> lunge();
@@ -547,10 +601,84 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         if (tickCount % 2 == 0 && strikeAtPlayer()) return;
         if (tickCount % 20 == 0 && (lookForSwarm() || leaveRefuge())) return;
         if (!gait.outing() && gait.tick(0.0, rnd) && gait.outing()) {
-            // its rest is over: out it goes, snapping to its first heading
+            // its rest is over: out it goes, snapping to its first heading; by the rift, now and then far along it
+            if (level().getGameTime() >= nextJourney && random.nextDouble() < JOURNEY_CHANCE && startJourney()) return;
             toState(SKITTER, 0);
             beginPivot();
         }
+    }
+
+    /**
+     * Sets out along the Deep Blue Rift's ledge path, when it is by one: {@link #JOURNEY_NEAR} to {@link #JOURNEY_FAR}
+     * blocks along it, the way there is room for (either way when both have), short of its ends and of unloaded
+     * chunks. False when it is by no rift, or there is too little way to go.
+     */
+    private boolean startJourney() {
+        Terrain t = DeepWorld.installed() ? DeepWorld.terrain() : null;
+        if (t == null) return false;
+        Vec3 c = position();
+        Route rift = null;
+        double at = 0, bestD = Double.MAX_VALUE;
+        for (Route r : t.network.riftsNear(c.x, c.z, JOURNEY_REACH)) {
+            double s = r.walkArcNear(c.x, c.y, c.z, JOURNEY_REACH, JOURNEY_RISE);
+            if (Double.isNaN(s)) continue;
+            double[] q = r.pathAt(s);
+            double d = Mth.square(q[0] - c.x) + Mth.square(q[1] - c.z);
+            if (d < bestD) { bestD = d; rift = r; at = s; }
+        }
+        if (rift == null) return false;
+        double want = JOURNEY_NEAR + random.nextDouble() * (JOURNEY_FAR - JOURNEY_NEAR);
+        double ahead = rift.walkLength - JOURNEY_END_GAP - at, back = at - JOURNEY_END_GAP;
+        int way = ahead >= want && back >= want ? (random.nextBoolean() ? 1 : -1) : ahead >= back ? 1 : -1;
+        double go = Math.min(want, way > 0 ? ahead : back);
+        // never on into chunks that are not loaded
+        while (go >= JOURNEY_LEAST && !loadedAt(rift.pathAt(at + way * go))) go -= 8.0;
+        if (go < JOURNEY_LEAST) return false;
+        journeyRift = rift;
+        journeyAt = at;
+        journeyWay = way;
+        journeyEnd = at + way * go;
+        journeyTo = pathPoint(rift, journeyEnd);
+        journeyFrom = level().getGameTime();
+        nextJourney = journeyFrom + JOURNEY_EVERY_MIN + random.nextInt(JOURNEY_EVERY_MAX - JOURNEY_EVERY_MIN + 1);
+        // its way there is never straight: room for the swerves, after which it gives up
+        gait.startOuting(SkeinGait.Mood.JOURNEY, go * 1.8 + 20.0, rnd);
+        toState(JOURNEY, 0);
+        beginPivot();
+        return true;
+    }
+
+    /** Where it stands on the rift's ledge path {@code s} blocks along it: {x, feet y, z} (see {@link Route#feetAt}). */
+    private static Vec3 pathPoint(Route r, double s) {
+        double[] q = r.pathAt(s);
+        return new Vec3(q[0], Route.feetAt(q[2]), q[1]);
+    }
+
+    private boolean loadedAt(double[] q) {
+        int x = Mth.floor(q[0]), z = Mth.floor(q[1]);
+        return level().hasChunksAt(x - 2, z - 2, x + 2, z + 2);
+    }
+
+    /**
+     * On a journey: it runs on along the rift's ledge path towards where it is going, striking at whoever comes near
+     * as it does roaming, but paying swarms no mind, until it gets there, its way runs out, or it has been at it too
+     * long.
+     */
+    private void journey() {
+        if (tickCount % 2 == 0 && strikeAtPlayer()) return;
+        if (journeyTo == null || journeyRift == null || level().getGameTime() - journeyFrom > JOURNEY_GIVE_UP) {
+            settle();
+            return;
+        }
+        Vec3 c = position();
+        double s = journeyRift.walkArcNear(c.x, c.y, c.z, JOURNEY_REACH * 1.5, JOURNEY_RISE * 1.5);
+        if (!Double.isNaN(s)) journeyAt = s;
+        if (Math.abs(journeyEnd - journeyAt) < JOURNEY_ARRIVE || c.distanceToSqr(journeyTo) < JOURNEY_ARRIVE * JOURNEY_ARRIVE) {
+            settle();
+            return;
+        }
+        stepGait();
+        if (!gait.outing()) settle();
     }
 
     /** Out roaming (SKITTER) or getting away (BOLT): burst, freeze and snap until the outing's way is covered. */
@@ -605,16 +733,20 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     /**
      * A snap: it stops dead and picks the way of its coming burst; it turns its head that way over the pivot's ticks.
      * Roaming in the refuge, it first tries for the nearest way out. Stalking, it asks the way only once: the swarm is
-     * where every snap leads, so a second try would only search the same way again.
+     * where every snap leads, so a second try would only search the same way again. On a journey it tries straight on
+     * along the rift's path first, then shorter, then swerving ({@link #JOURNEY_TRIES}).
      */
     private void beginPivot() {
         stopDead();
         pendingPath = null;
         Vec3 out = gait.mood() == SkeinGait.Mood.ROAM && isRefuge(blockPosition()) ? wayOutOfRefuge() : null;
         int tries = gait.mood() == SkeinGait.Mood.STALK ? 1 : PATH_TRIES;
+        boolean journey = gait.mood() == SkeinGait.Mood.JOURNEY;
+        double side = random.nextBoolean() ? 1.0 : -1.0;
         for (int i = 0; i < tries && pendingPath == null; i++) {
-            if (i > 0) gait.reroll(rnd);
-            pendingPath = burstPath(i == 0 ? out : null);
+            if (i > 0 && !journey) gait.reroll(rnd);
+            double[] j = JOURNEY_TRIES[Math.min(i, JOURNEY_TRIES.length - 1)];
+            pendingPath = burstPath(i == 0 ? out : null, journey ? j[0] : 1.0, journey ? side * Math.toRadians(j[1]) : 0.0);
         }
         pivotWant = pendingPath != null ? firstLeg(pendingPath) : null;
     }
@@ -659,11 +791,12 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     /**
      * The way the coming burst runs: roaming, a spot about the burst's length along its heading snapped by the gait's
      * turn; bolting, the same away from what it flees; stalking, towards the swarm; with {@code toward} (the way out
-     * of the refuge), towards that whatever the snap. Null when there is no way there (rock, unloaded chunks, or a way
-     * through the refuge).
+     * of the refuge), towards that whatever the snap; on a journey, to the spot on the rift's ledge path a run on (of
+     * up to {@link #JOURNEY_LEG} blocks, times {@code part}), turned {@code off} aside round it. Null when there is no
+     * way there (rock, unloaded chunks, or a way through the refuge).
      */
     @Nullable
-    private Path burstPath(@Nullable Vec3 toward) {
+    private Path burstPath(@Nullable Vec3 toward, double part, double off) {
         Vec3 up = up();
         BlockPos goal;
         if (gait.mood() == SkeinGait.Mood.STALK) {
@@ -671,6 +804,13 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
             goal = nodeNear(prey.centre(), 3);
         } else if (toward != null) {
             goal = nodeNear(toward, 3);
+        } else if (gait.mood() == SkeinGait.Mood.JOURNEY) {
+            if (journeyRift == null) return null;
+            double left = Math.abs(journeyEnd - journeyAt);
+            double run = Math.max(2.5, part * Math.min(Math.min(left, JOURNEY_LEG), gait.speed() * SPEED * gait.burstTicks() + 1.5));
+            Vec3 aim = pathPoint(journeyRift, journeyAt + journeyWay * run).add(0, 0.35, 0), from = bodyCentre();
+            if (off != 0.0) aim = from.add(rotate(aim.subtract(from), up, off));
+            goal = nodeNear(aim, 3);
         } else {
             Vec3 base = gait.mood() == SkeinGait.Mood.BOLT ? awayFrom(threat, up) : forward;
             Vec3 heading = rotate(base, up, gait.turn());
@@ -1239,7 +1379,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     /** How many half blocks back from {@code feet} (against {@code fwd}) there is open air over rock, up to its length. */
     private static int openBehind(Level level, Vec3 feet, Vec3 fwd, Vec3 up) {
         int open = 0;
-        for (double d = 0.5; d <= TRAIL_KEEP; d += 0.5) {
+        for (double d = 0.5; d <= BODY_LENGTH; d += 0.5) {
             Vec3 q = feet.subtract(fwd.scale(d));
             BlockPos air = BlockPos.containing(q.add(up.scale(0.3))), rock = BlockPos.containing(q.subtract(up.scale(0.3)));
             if (!level.isLoaded(air) || !level.isLoaded(rock)) break;
@@ -1330,7 +1470,10 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
                 .append(", health ").append(Math.round(getHealth()))
                 .append(", hunger ").append(hunger / 20).append('s');
         if (prey != null) b.append(", after a swarm of ").append(prey.count());
+        if (journeyTo != null) b.append(String.format(Locale.ROOT, ", going along the rift to %.0f %.0f %.0f (%.0f blocks along it to go, %ds on the way)",
+                journeyTo.x, journeyTo.y, journeyTo.z, Math.abs(journeyEnd - journeyAt), (level().getGameTime() - journeyFrom) / 20));
         if (anchor != null) b.append(String.format(Locale.ROOT, ", struck from %.0f %.0f %.0f", anchor.x, anchor.y, anchor.z));
+        level().getBiome(blockPosition()).unwrapKey().ifPresent(k -> b.append(", in ").append(k.location().getPath()));
         if (isInWater()) b.append(", in water");
         if (airborne()) b.append(", falling");
         if (getMoveControl() instanceof ClimbMoveControl mc && mc.wedged() > 0) b.append(", wedged ").append(mc.wedged());
@@ -1338,8 +1481,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     }
 
     /**
-     * For /remix skein state: puts it in state {@code s} for about {@code ticks} (STILL, SKITTER and BOLT go by the
-     * gait); a strike or a bolt is at or from {@code who}. Returns false when that state cannot be started now.
+     * For /remix skein state: puts it in state {@code s} for about {@code ticks} (STILL, SKITTER, BOLT and JOURNEY go
+     * by the gait); a strike or a bolt is at or from {@code who}. Returns false when that state cannot be started now.
      */
     public boolean forceState(byte s, int ticks, @Nullable LivingEntity who) {
         switch (s) {
@@ -1357,6 +1500,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
                 startStrike(who, REAR_TICKS);
             }
             case EAT -> toState(EAT, Math.max(1, ticks));
+            case JOURNEY -> { if (!startJourney()) return false; }
             default -> { return false; }
         }
         return true;

@@ -39,6 +39,8 @@ public final class SkeinTrail {
     private int size;
     private final double[] head = new double[STRIDE];
     private boolean laid;
+    /** Counts the changes to it: the same count, the same trail. */
+    private int version;
     private double lastStep;
 
     /** A trail that keeps at least {@code keep} blocks behind the head. */
@@ -49,6 +51,9 @@ public final class SkeinTrail {
     public boolean laid() { return laid; }
     /** How far the head went at the last record (the renderer draws the body that far back between ticks). */
     public double lastStep() { return lastStep; }
+
+    /** A number that changes whenever the trail does (a body laid along it the same count ago lies the same). */
+    public int version() { return version; }
     /** Points on the line (the head not counted). */
     public int size() { return size; }
     public double keep() { return keep; }
@@ -70,6 +75,7 @@ public final class SkeinTrail {
         set(head, 0, x, y, z, ux, uy, uz);
         laid = true;
         lastStep = 0.0;
+        version++;
     }
 
     /**
@@ -115,6 +121,7 @@ public final class SkeinTrail {
         set(head, 0, data[0] + ox, data[1] + oy, data[2] + oz, data[3] / l, data[4] / l, data[5] / l);
         laid = true;
         lastStep = 0.0;
+        version++;
         return true;
     }
 
@@ -132,6 +139,8 @@ public final class SkeinTrail {
             return;
         }
         lastStep = step;
+        if (step == 0.0 && head[3] == ux && head[4] == uy && head[5] == uz) return;   // where it was: nothing changes
+        version++;
         int last = (size - 1) * STRIDE;
         double dot = pts[last + 3] * ux + pts[last + 4] * uy + pts[last + 5] * uz;
         if (dot < TURNED) {

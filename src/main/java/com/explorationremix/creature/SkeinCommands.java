@@ -32,7 +32,8 @@ import java.util.Locale;
  *     laid out behind it the way there is most room</li>
  *     <li>{@code /remix skein list [radius]}: the Skeins round you, where each is and what it is doing</li>
  *     <li>{@code /remix skein state <name> [ticks]}: sets the nearest one's state (still, skitter, stalk, rear,
- *     lunge, bolt, eat): a strike is at you, a bolt away from you, a stalk after the nearest landed swarm</li>
+ *     lunge, bolt, eat, journey): a strike is at you, a bolt away from you, a stalk after the nearest landed swarm, a
+ *     journey 40 to 90 blocks along the Deep Blue Rift's ledge path (it must be by it)</li>
  *     <li>{@code /remix skein hungry}: makes the nearest one hungry now, so it goes for a landed swarm near it</li>
  * </ul>
  */
@@ -136,7 +137,7 @@ public final class SkeinCommands {
         LivingEntity me = c.getSource().getEntity() instanceof LivingEntity le ? le : null;
         if (!s.forceState((byte) st, ticks, me)) {
             c.getSource().sendFailure(Component.literal("It cannot " + name + " now (a stalk needs a landed swarm near it; a strike, "
-                    + "a player in survival)."));
+                    + "a player in survival; a journey, the Deep Blue Rift's ledge path near it, with way to go along it)."));
             return 0;
         }
         say(c, "Now: " + s.describe());

@@ -2,6 +2,7 @@ package com.explorationremix.client.render;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.creature.SkeinEntity;
+import com.explorationremix.creature.SkeinSpine;
 import com.explorationremix.creature.SkeinTrail;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -26,8 +27,9 @@ import org.joml.Vector3f;
 
 /**
  * Draws the Skein along the trail its head has run (SkeinEntity.trail()): the head where the head is, then each of its
- * {@link SkeinEntity#PLATES} plates at its own distance back along the trail, lying on the rock it crosses there and
- * turned along the way the trail runs, so the long body pours over edges and round corners after the head. The pieces
+ * {@link SkeinEntity#PLATES} plates at its own distance back along a smooth curve through that trail ({@link SkeinSpine}),
+ * lying on the rock it crosses there and turned along the way the curve runs, so the long body pours over edges and
+ * swings round in an easy curve where the head snapped round. The pieces
  * are the few loose parts of geometry/skein.json (tools/creatures.py): the head, three sizes of plate and the tail,
  * each plate drawn a little narrower than the one before.
  *
@@ -47,7 +49,7 @@ public class SkeinRenderer extends EntityRenderer<SkeinEntity> {
     private static final float WIDE = 16.0F, NARROW = 7.0F;
     /** The legs of the last plate are this much smaller than the first's. */
     private static final float LEG_SHRINK = 0.3F;
-    /** How far either side of a plate's place the trail is read for the way it runs (blocks; under half a plate step). */
+    /** How far either side of a plate's place the curve is read for the way it runs (blocks; under half a plate step). */
     private static final double TANGENT = 0.1;
     /** The leg wave: radians of the phase between one plate's legs and the next's, and how far a leg swings and lifts. */
     private static final float WAVE_LAG = 0.65F, SWING = 0.5F, LIFT = 0.5F;
@@ -65,6 +67,7 @@ public class SkeinRenderer extends EntityRenderer<SkeinEntity> {
     // per frame (the render thread only): where each piece goes and its light
     private final double[] arcs = new double[1 + 3 * PLATES];
     private final double[] at = new double[6 * (1 + 3 * PLATES)];
+    private final SkeinSpine spine = new SkeinSpine(SkeinEntity.SPINE_JOINTS);
     private final Matrix4f[] poses = new Matrix4f[PIECES];
     private final Matrix3f[] normals = new Matrix3f[PIECES];
     private final int[] lights = new int[PIECES];
@@ -104,7 +107,7 @@ public class SkeinRenderer extends EntityRenderer<SkeinEntity> {
 
     /** The plate size the k-th plate is drawn with: large behind the head, then mid, then small, then the tail. */
     private Plate kind(int k) {
-        return k == PLATES - 1 ? kinds[3] : kinds[Math.min(2, k / 4)];
+        return k == PLATES - 1 ? kinds[3] : kinds[Math.min(2, k * 3 / (PLATES - 1))];
     }
 
     private static float width(int k) {
@@ -128,22 +131,24 @@ public class SkeinRenderer extends EntityRenderer<SkeinEntity> {
 
     /**
      * Works out where every piece goes this frame, from the trail: the head as far back along it as the head is behind
-     * its newest place (it moved there over the last tick), each plate that far plus its own distance.
+     * its newest place (it moved there over the last tick), each plate its own distance behind the head along the
+     * smooth curve laid from there.
      */
     private void place(SkeinEntity e, float pt, PoseStack pose) {
         SkeinTrail trail = e.trail();
         double behind = (1.0 - pt) * trail.lastStep();
-        arcs[0] = behind;
+        Quaternionf headTurn = new Quaternionf(e.headOrientO).slerp(e.headOrient, pt);
+        Vector3f headUp = headTurn.transform(new Vector3f(0, 1, 0)), hf = headTurn.transform(new Vector3f(0, 0, -1));
+        spine.build(trail, behind, hf.x, hf.y, hf.z, SkeinEntity.rockIn(e.level()));
+        arcs[0] = 0.0;
         for (int k = 0; k < PLATES; k++) {
-            double s = behind + SkeinEntity.plateAt(k);
+            double s = SkeinEntity.plateAt(k);
             arcs[1 + 3 * k] = s - TANGENT;
             arcs[2 + 3 * k] = s;
             arcs[3 + 3 * k] = s + TANGENT;
         }
-        trail.sampleAll(arcs, at);
+        spine.sampleAll(arcs, at);
         double ox = Mth.lerp(pt, e.xOld, e.getX()), oy = Mth.lerp(pt, e.yOld, e.getY()), oz = Mth.lerp(pt, e.zOld, e.getZ());
-        Quaternionf headTurn = new Quaternionf(e.headOrientO).slerp(e.headOrient, pt);
-        Vector3f headUp = headTurn.transform(new Vector3f(0, 1, 0));
         for (int i = 0; i < PIECES; i++) {
             int m = i == 0 ? 0 : 6 * (2 + 3 * (i - 1));               // the piece's own sample (the middle of its three)
             Vec3 p = new Vec3(at[m], at[m + 1], at[m + 2]);
