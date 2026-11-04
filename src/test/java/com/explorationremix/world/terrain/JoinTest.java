@@ -487,6 +487,12 @@ class JoinTest {
         /** The Wasteland's places in the main component (its lowest sheets): to the nearest way down, and down to the Galleries' floor. */
         int wLow, toWayDownMedian, toWayDown90, toWayDownNever, downToFloorMedian, downToFloor90, downToFloorNever;
         int landingWalk = -1;
+        /**
+         * Gate 3's landing: whether a place of it lies in the main component, its walk down to the Galleries' floor, and
+         * the walk back up to it from the nearest floor place and (median) from the Galleries' dry places.
+         */
+        boolean landingInMain;
+        int landingToFloor = -1, floorToLanding = -1, floorToLandingMedian = -1;
         /** Keyholes: openings examined, with a reachable rim, whose best rim sees 10 % or more of its downward rays reach the Galleries. */
         int keyholes, withRim, best10;
         double aimedMedian, bestMedian;
@@ -502,12 +508,13 @@ class JoinTest {
                             + " %d holes opened (%.0f per km2), %d measured: way down %d (every drop <= 3: %d), way up %d, both %d;"
                             + " Galleries dry places to the nearest way up within 400 moves %.1f %% (none %d; median %d, 90 %% %d), up into the Wasteland within 400 %.1f %% (none %d; median %d, 90 %% %d);"
                             + " the Wasteland's places to the nearest way down median %d, 90 %% %d (none %d), down to the Galleries' floor median %d, 90 %% %d (none %d of %d);"
-                            + " gate 3's landing to the nearest rim %d moves;"
+                            + " gate 3's landing to the nearest rim %d moves (in the main component %b; down to the Galleries' floor %d moves, back up from the nearest floor place %d, from the dry places median %d);"
                             + " keyholes %d: with a reachable rim %d, best rim 10 %% or more %d (median best %.1f %%), edge-aimed median %.1f %%, floor columns seen min %d median %d;"
                             + " views of 192 or more from %.2f %% of the Wasteland's places, %.2f %% of rim places%s%s",
                     seed, 100.0 * wMain / wPlaces, wPlaces, 100.0 * gMain / gPlaces, gPlaces, opened, perKm2(opened), measured, down, down3, up, both,
                     100.0 * toWayUp400 / gDry, toWayUpNever, toWayUpMedian, toWayUp90, 100.0 * intoWasteland400 / gDry, intoWastelandNever, intoWastelandMedian, intoWasteland90,
                     toWayDownMedian, toWayDown90, toWayDownNever, downToFloorMedian, downToFloor90, downToFloorNever, wLow, landingWalk,
+                    landingInMain, landingToFloor, floorToLanding, floorToLandingMedian,
                     keyholes, withRim, best10, 100 * bestMedian, 100 * aimedMedian, floorColsMin, floorColsMedian, 100 * wViews192, 100 * rimViews192, failed, holes);
         }
     }
@@ -662,6 +669,7 @@ class JoinTest {
             if (d < land.landR - 2 && v.py(p) >= land.lFloor - 3 && v.py(p) <= land.lFloor + 4 && toRim[p] >= 0) best = Math.min(best, toRim[p]);
         }
         w.landingWalk = best == Integer.MAX_VALUE ? -1 : best;
+        landingWalks(v, land, T, Wg, w);
         keyholes(v, w, ops, T);
         // views of 192 or more from the Wasteland's places (every 4th column of the box less 64 at each side)
         double[] wv = v.longestViews(4, x0 + 64, z0 + 64, x0 + size - 64, z0 + size - 64, wBot + 2, t.shape.top(Terrain.WASTELAND), t.shape.bottom(Terrain.GALLERIES),
@@ -670,6 +678,36 @@ class JoinTest {
         for (double d : wv) if (d >= 192) long192++;
         w.wViews192 = wv.length == 0 ? 0 : long192 / (double) wv.length;
         return w;
+    }
+
+    /**
+     * Gate 3's landing against the Galleries' floor (W-ENG-3's end-to-end check), into {@code w}: whether a place of the
+     * landing (within its radius less 2, feet from its floor - 3 to + 4) lies in the main component; the walk from the
+     * landing down to the Galleries' dry floor (feet from Wg + 3 to T - 12); and the walks back up to the landing, from
+     * the nearest floor place and (the median) from the Galleries' dry places in the main component.
+     */
+    static void landingWalks(NoiseVox v, Plans.Gate land, int T, int Wg, Ways w) {
+        boolean[] landing = new boolean[v.places], floor = new boolean[v.places];
+        for (int p = 0; p < v.places; p++) {
+            int y = v.py(p);
+            if (Math.hypot(v.px(p) + 0.5 - land.lx, v.pz(p) + 0.5 - land.lz) < land.landR - 2 && y >= land.lFloor - 3 && y <= land.lFloor + 4) {
+                landing[p] = true;
+                w.landingInMain |= v.inMain(p);
+            }
+            floor[p] = y <= T - 12 && y > Wg + 2;
+        }
+        int[] down = v.walkTo(floor), up = v.walkTo(landing);
+        int best = Integer.MAX_VALUE, back = Integer.MAX_VALUE;
+        List<Integer> backs = new ArrayList<>();
+        for (int p = 0; p < v.places; p++) {
+            if (landing[p] && down[p] >= 0) best = Math.min(best, down[p]);
+            if (floor[p] && up[p] >= 0) back = Math.min(back, up[p]);
+            if (floor[p] && v.inMain(p) && up[p] >= 0) backs.add(up[p]);
+        }
+        Collections.sort(backs);
+        w.landingToFloor = best == Integer.MAX_VALUE ? -1 : best;
+        w.floorToLanding = back == Integer.MAX_VALUE ? -1 : back;
+        w.floorToLandingMedian = quantile(backs, 0.5);
     }
 
     /** The keyhole views of the holes with middles 40 blocks or more inside the box (see {@link #ways}). */
@@ -854,11 +892,15 @@ class JoinTest {
      * bars; the whole climb up 130-145 rows on a ramp of 0.55-0.78 rows a block takes 150-250 moves of its own; measured
      * 95.2, 61.7 and 96.0 %: seed 2's box has a tube country in its middle, where no hole opens). The walk from gate 3's
      * landing to the nearest crater rim must exist and is printed (far-from-entry asked a median of about 200 moves;
-     * measured 390, 460 and 474: not met, the landings are placed by the Wasteland's gates, not by the openings).
+     * measured 390, 460 and 474: not met, the landings are placed by the Wasteland's gates, not by the openings). End to
+     * end (W-ENG-3's check from gate 3's landing): the landing lies in the main component, so it walks down to the
+     * Galleries' floor and back up; both walks are printed ({@link #gateThreeLandingsReachTheGalleriesAndBack} runs the
+     * check over 36 landings).
      */
     @Test
     void layersJoinBothWays() {
         List<Integer> landings = new ArrayList<>();
+        List<String> ends = new ArrayList<>();
         for (long seed : WAY_SEEDS) {
             Ways w = waysOf(seed);
             assertTrue(w.wPlaces > 100_000 && w.gPlaces > 100_000, "too few places to measure: " + w);
@@ -866,10 +908,50 @@ class JoinTest {
             assertTrue(w.intoWasteland400 >= 0.6 * w.gDry && w.intoWastelandNever == 0, "the Galleries' ground is far from the Wasteland: " + w);
             assertEquals(0, w.downToFloorNever, "Wasteland places with no walk down to the Galleries' floor: " + w);
             assertTrue(w.landingWalk >= 0, "no walk from gate 3's landing to a crater's rim: " + w);
+            assertTrue(w.landingInMain && w.landingToFloor >= 0 && w.floorToLanding >= 0, "gate 3's landing is cut off from the Galleries' floor: " + w);
             landings.add(w.landingWalk);
+            ends.add(String.format(java.util.Locale.ROOT, "seed %d: down %d, back up %d (from the dry places median %d)", seed, w.landingToFloor, w.floorToLanding, w.floorToLandingMedian));
         }
         Collections.sort(landings);
-        System.out.println("JoinTest walks from gate 3's landings to the nearest rim: " + landings);
+        System.out.println("JoinTest walks from gate 3's landings to the nearest rim: " + landings + "; to the Galleries' floor and back: " + ends);
+    }
+
+    /**
+     * W-ENG-3's end-to-end check (slow): from gate 3's lower landing of each of the cells -1..1 x -1..1 of seeds 1-4 (36
+     * landings), in a 512 x 512 box of both layers round it (rows -832..-545, blocks made as the game makes them), the
+     * landing lies in the box's main component and that component holds the Galleries' dry floor, so a walk (climbs of
+     * a row, drops of 15 at most) goes from the landing down to the floor and one comes back. The walks down and back
+     * up are printed.
+     */
+    @Test
+    @org.junit.jupiter.api.Tag("slow")
+    void gateThreeLandingsReachTheGalleriesAndBack() {
+        List<String> bad = new ArrayList<>();
+        List<Integer> downs = new ArrayList<>(), ups = new ArrayList<>(), medians = new ArrayList<>();
+        for (long seed = 1; seed <= 4; seed++) {
+            Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+            int T = t.join.gTop, Wg = t.shape.waterY(Terrain.GALLERIES);
+            for (int cx = -1; cx <= 1; cx++) for (int cz = -1; cz <= 1; cz++) {
+                Plans.Gate land = t.plans.gate(Terrain.WASTELAND + 1, cx, cz);
+                int size = 512, x0 = (int) Math.floor(land.lx) - size / 2, z0 = (int) Math.floor(land.lz) - size / 2;
+                NoiseVox v = NoiseVox.build(t, x0, z0, size, size, t.shape.bottom(Terrain.GALLERIES), t.shape.top(Terrain.WASTELAND) + 1).graph();
+                Ways w = new Ways();
+                w.seed = seed;
+                landingWalks(v, land, T, Wg, w);
+                int gMain = 0;
+                for (int p = 0; p < v.places; p++) if (v.inMain(p) && v.py(p) <= T - 12 && v.py(p) > Wg + 2) gMain++;
+                String at = String.format(java.util.Locale.ROOT, "seed %d cell %d,%d (landing %.0f,%.0f): in the main component %b, its Galleries dry places %d, down %d, back up %d (median %d)",
+                        seed, cx, cz, land.lx, land.lz, w.landingInMain, gMain, w.landingToFloor, w.floorToLanding, w.floorToLandingMedian);
+                System.out.println("JoinTest landing " + at);
+                if (!w.landingInMain || gMain < 50_000 || w.landingToFloor < 0 || w.floorToLanding < 0) bad.add(at);
+                else { downs.add(w.landingToFloor); ups.add(w.floorToLanding); medians.add(w.floorToLandingMedian); }
+            }
+        }
+        Collections.sort(downs);
+        Collections.sort(ups);
+        Collections.sort(medians);
+        System.out.println("JoinTest landings to the Galleries' floor: down " + downs + "; back up from the nearest floor place " + ups + "; from the dry places (medians) " + medians);
+        assertTrue(bad.isEmpty(), "landings cut off from the Galleries' floor: " + bad);
     }
 
     /**
