@@ -409,5 +409,101 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.mossback.death"
+  },
+  "skein.patter": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/patter1",
+        "volume": 0.8,
+        "attenuation_distance": 16
+      },
+      {
+        "name": "explorationremix:creature/skein/patter2",
+        "volume": 0.8,
+        "attenuation_distance": 16
+      },
+      {
+        "name": "explorationremix:creature/skein/patter3",
+        "volume": 0.8,
+        "attenuation_distance": 16
+      },
+      {
+        "name": "explorationremix:creature/skein/patter4",
+        "volume": 0.8,
+        "attenuation_distance": 16
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.skein.patter"
+  },
+  "skein.chitter": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/chitter1",
+        "volume": 0.9,
+        "attenuation_distance": 18
+      },
+      {
+        "name": "explorationremix:creature/skein/chitter2",
+        "volume": 0.9,
+        "attenuation_distance": 18
+      },
+      {
+        "name": "explorationremix:creature/skein/chitter3",
+        "volume": 0.9,
+        "attenuation_distance": 18
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.skein.chitter"
+  },
+  "skein.rattle": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/rattle1",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:creature/skein/rattle2",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.skein.rattle"
+  },
+  "skein.bite": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/bite1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:creature/skein/bite2",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.skein.bite"
+  },
+  "skein.hurt": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/hurt1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:creature/skein/hurt2",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.skein.hurt"
+  },
+  "skein.death": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/death1",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.skein.death"
   }
 }

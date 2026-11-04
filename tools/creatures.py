@@ -422,6 +422,313 @@ def paint(parts, variant, seed):
     return cv
 
 
+# =============================================================================================== the Skein
+# The Blue Reaches' crawler: a long, low thing of overlapping cobalt shell plates, widest just behind its wedge of a
+# head and tapering to two trailing spurs, each plate with a thin pale glassy rim, a seam of cyan light down the
+# middle of its back, two thin dark legs splayed from under every plate, small hooked mandibles and two long feelers.
+# The mod's own creature; nothing here is taken from any other game.
+#
+# Its model is a few loose pieces that the renderer (client.render.SkeinRenderer) draws again and again along the
+# trail its head has run: the head, three sizes of shell plate (large behind the head, then mid, then small) and the
+# tail. Every piece stands on the rock at its own pivot (0, 24, 0), facing -z, so the renderer can lay each on the trail
+# where it lies. A plate tips up a little at the back, so each one's rim rides over the front of the next.
+
+SKEIN_FEMUR, SKEIN_SHIN = 6, 7                      # leg lengths, px: thigh out and up to a high knee, shin down
+SKEIN_PLATE_D = 7                                   # a plate's length, px (they lie 4.8 px apart, so they overlap)
+SKEIN_WIDTHS = {"plate_large": 16, "plate_mid": 13, "plate_small": 10, "tail": 8}
+
+
+def _skein_legs(piece, half):
+    """A plate's pair of legs, from under its edge, splayed wide and low: each thigh out and a little up to its knee,
+    each shin down and out to the rock, the foot well outside the shell."""
+    x = half - 2
+    return [
+        P(f"{piece}_leg_left", piece, (x, -3, 0), (0, 0, -20), [B("leg", (0, -0.5, -0.5), (SKEIN_FEMUR, 1, 1))]),
+        P(f"{piece}_shin_left", f"{piece}_leg_left", (SKEIN_FEMUR - 0.5, 0, 0), (0, 0, -25),
+          [B("shin", (-0.5, 0, -0.5), (1, SKEIN_SHIN, 1))]),
+        P(f"{piece}_leg_right", piece, (-x, -3, 0), (0, 0, 20), [B("leg", (-SKEIN_FEMUR, -0.5, -0.5), (SKEIN_FEMUR, 1, 1))]),
+        P(f"{piece}_shin_right", f"{piece}_leg_right", (-(SKEIN_FEMUR - 0.5), 0, 0), (0, 0, 25),
+          [B("shin", (-0.5, 0, -0.5), (1, SKEIN_SHIN, 1))]),
+    ]
+
+
+def _skein_plate(piece):
+    """One shell plate: the domed shell with the seam's ridge along its top and the pale belly under it, and its legs.
+    The shell is its own part so the renderer can taper it plate by plate without stretching the legs."""
+    w, d = SKEIN_WIDTHS[piece], SKEIN_PLATE_D
+    half = w / 2
+    return [
+        P(piece, "root", (0, 24, 0), (0, 0, 0), []),
+        P(f"{piece}_shell", piece, (0, 0, 0), (6, 0, 0), [
+            B("shell", (-half, -7, -d / 2), (w, 3, d)),
+            B("ridge", (-1.5, -8, -d / 2 + 0.5), (3, 1, d - 1)),
+            B("belly", (-(half - 2), -4, -d / 2 + 0.5), (w - 4, 2, d - 1)),
+        ]),
+    ] + _skein_legs(piece, half)
+
+
+SKEIN_PARTS = [
+    # the head: a wedge of a head plate over the head itself, stepping down to a blunt snout; eyes on its sides
+    P("head", "root", (0, 24, 0), (0, 0, 0), [
+        B("shield", (-7, -8, -4), (14, 2, 6)),
+        B("shield", (-5, -7.5, -8), (10, 2, 4)),
+        B("shield", (-3, -7, -11), (6, 2, 3)),
+        B("skull", (-5, -6, -10), (10, 4, 10)),
+        B("eye", (5, -6, -8.5), (1, 1, 2)),
+        B("eye", (-6, -6, -8.5), (1, 1, 2)),
+    ]),
+    # small hooked mandibles under the snout, their tips turned in
+    P("mandible_left", "head", (3, -3, -10), (0, 18, 0), [B("mandible", (-1, -0.5, -5), (2, 1, 5)),
+                                                          B("fang", (-2, -0.5, -6), (2, 1, 1))]),
+    P("mandible_right", "head", (-3, -3, -10), (0, -18, 0), [B("mandible", (-1, -0.5, -5), (2, 1, 5)),
+                                                             B("fang", (0, -0.5, -6), (2, 1, 1))]),
+    # two long feelers: up and out from the brow, the outer half bending further out and back
+    P("feeler_left", "head", (2.5, -7.5, -10.5), (-22, -50, 0), [B("feeler", (-0.5, -0.5, -10), (1, 1, 10))]),
+    P("feeler_left_tip", "feeler_left", (0, 0, -10), (14, -40, 0), [B("feeler_tip", (-0.5, -0.5, -9), (1, 1, 9))]),
+    P("feeler_right", "head", (-2.5, -7.5, -10.5), (-22, 50, 0), [B("feeler", (-0.5, -0.5, -10), (1, 1, 10))]),
+    P("feeler_right_tip", "feeler_right", (0, 0, -10), (14, 40, 0), [B("feeler_tip", (-0.5, -0.5, -9), (1, 1, 9))]),
+]
+for _piece in ("plate_large", "plate_mid", "plate_small", "tail"):
+    SKEIN_PARTS += _skein_plate(_piece)
+# the two short spurs the tail ends in, trailing back, up a little and out
+SKEIN_PARTS += [
+    P("tail_spur_left", "tail", (2, -5, 3), (10, 22, 0), [B("spur", (-0.5, -0.5, 0), (1, 1, 7))]),
+    P("tail_spur_right", "tail", (-2, -5, 3), (10, -22, 0), [B("spur", (-0.5, -0.5, 0), (1, 1, 7))]),
+]
+
+SKEIN_PALETTE = {
+    "shell": ["#0b1533", "#101d47", "#16285e", "#1d3478", "#244293", "#2e52ad", "#3d66c4"],
+    "rim": ["#5aa3c8", "#86cfe6", "#bdeef8"],
+    "rim_glow": ["#1e5f82", "#2c7fa6"],
+    "seam": ["#3fc8f2", "#8fe8ff", "#d4fbff"],
+    "dark": ["#070c1d", "#0c1430", "#121d42"],
+    "belly": ["#25304c", "#323f60", "#435274", "#56668a"],
+    "leg": ["#0c1328", "#141e3b", "#1e2b50", "#2c3d68"],
+    "claw": ["#7f95b8", "#b6c6dd"],
+    "mandible": ["#070b18", "#141c33", "#2a3654"],
+    "fang": ["#b9c8de", "#e2ebf5"],
+    "eye": ["#5fd6ff", "#c4f6ff", "#f2feff"],
+    "pupil": "#04101a",
+    "mouth": ["#1a0f2a", "#2a1840", "#3c2456"],
+}
+
+
+def _along(face, i, j, size):
+    """How far along a box's length (z) a texel lies, 0 at the back (+z) to d-1 at the front."""
+    w, h, d = size
+    if face in ("top", "bottom"): return j
+    if face == "west": return i
+    if face == "east": return d - 1 - i
+    return d - 1 if face == "north" else 0
+
+
+def _texels(cv, box, fn):
+    """Calls fn(face, i, j, face_w, face_h) for every texel of every face and puts what it gives: a colour, or a
+    (colour, glow mask, dim colour) triple, or None for a see-through texel."""
+    for face, (x0, y0, fw, fh) in faces(box).items():
+        for j in range(fh):
+            for i in range(fw):
+                c = fn(face, i, j, fw, fh)
+                if c is None:
+                    cv.clear(x0 + i, y0 + j)
+                elif isinstance(c, tuple) and len(c) == 3 and isinstance(c[1], (str, type(None))):
+                    cv.put(x0 + i, y0 + j, c[0], c[1], c[2])
+                else:
+                    cv.put(x0 + i, y0 + j, c)
+
+
+def _skein_shell(cv, box, pal, rng, front_rim=False):
+    """A shell plate (or the head's plate): glossy cobalt, lit along its crown and dark towards its sides, finely
+    pitted, with a thin pale glassy rim round its edge that holds a little light. The back edge's rim rides over the
+    next plate; the front edge lies under the one before (the head's has a rim all round)."""
+    w, h, d = box["size"]
+    n = noise2(rng, w + d * 2, d + h, 2.5)
+
+    def fn(face, i, j, fw, fh):
+        r = rng.random()
+        if face == "top":
+            crown = 1.0 - abs((i + 0.5) / w - 0.5) * 2.0                   # 1 along the middle, 0 at the edges
+            if j == 0 or (front_rim and j == d - 1):
+                # the rim holds only a little light of its own (the glow texture adds to the colour under it)
+                return (C(pal["rim_glow"][1 if r < 0.7 else 0]), "flare", C(pal["rim"][1 if r < 0.7 else 2]))
+            t = 0.25 + 0.55 * crown + 0.25 * (n[j][i] - 0.5) - (0.12 if r < 0.08 else 0.0)
+            if j == 1 and r < 0.5: t += 0.12                               # a glint just inside the back rim
+            return ramp(pal["shell"], t)
+        if face in ("west", "east") or (front_rim and face == "north"):
+            if j == 0:
+                return (C(pal["rim_glow"][0]), "flare", C(pal["rim"][0]))
+            return ramp(pal["shell"], 0.18 + 0.15 * n[min(j, len(n) - 1)][min(i, len(n[0]) - 1)] - 0.08 * j)
+        if face == "south":
+            return ramp(pal["shell"], 0.3 - 0.08 * j + 0.1 * r)
+        if face == "north":
+            return ramp(pal["dark"], 0.5 + 0.4 * r)
+        return ramp(pal["dark"], 0.3 + 0.5 * r)                            # its underside, under the belly
+
+    _texels(cv, box, fn)
+
+
+def _skein_ridge(cv, box, pal, rng):
+    """The low ridge down the middle of each plate: the seam of cyan light along its crown, dark flanks."""
+    w, h, d = box["size"]
+
+    def fn(face, i, j, fw, fh):
+        k = _along(face, i, j, box["size"])
+        if face == "top":
+            if i == w // 2:
+                bright = 2 if k in (0, d - 1) else 1                       # brightest where it meets the next plate
+                return (C(pal["seam"][bright]), "flare", C(pal["shell"][3]))
+            return (C(pal["seam"][0]), "flare", ramp(pal["shell"], 0.55)) if rng.random() < 0.2 else ramp(pal["shell"], 0.6)
+        if face in ("south", "north"):
+            return (C(pal["seam"][1]), "flare", C(pal["shell"][3])) if i == w // 2 else ramp(pal["shell"], 0.4)
+        return ramp(pal["shell"], 0.35 + 0.2 * rng.random())
+
+    _texels(cv, box, fn)
+
+
+def _skein_belly(cv, box, pal, rng):
+    """The pale underside: soft grey-blue in bands across, barely seen but for the glimpse between its legs."""
+
+    def fn(face, i, j, fw, fh):
+        k = _along(face, i, j, box["size"])
+        band = k % 3 == 0
+        return ramp(pal["belly"], 0.35 + 0.45 * rng.random() - (0.3 if band else 0.0))
+
+    _texels(cv, box, fn)
+
+
+def _skein_leg(cv, box, pal, rng, shin):
+    """A thin dark navy leg, banded at its joints; a shin ends in a pale claw."""
+    w, h, d = box["size"]
+    length = h if shin else w
+
+    def fn(face, i, j, fw, fh):
+        if shin:
+            at = j if face not in ("top", "bottom") else (0 if face == "top" else length - 1)
+        else:
+            at = i if face in ("top", "bottom", "north") else (w - 1 - i if face == "south" else 0)
+        if shin and at == length - 1:
+            return C(pal["claw"][1 if face != "bottom" else 0])
+        joint = at == 0 or at == length - 1
+        return ramp(pal["leg"], (0.75 if joint else 0.3) + 0.2 * rng.random() + (0.1 if face == "top" else 0.0))
+
+    _texels(cv, box, fn)
+
+
+def _skein_skull(cv, box, pal, rng):
+    """The head under its plate: dark, its mouth parts below, a few tiny lit eyelets along each side."""
+    w, h, d = box["size"]
+
+    def fn(face, i, j, fw, fh):
+        k = _along(face, i, j, box["size"])
+        if face == "bottom":
+            return ramp(pal["mouth"], 0.2 + 0.7 * rng.random()) if k > d // 2 else ramp(pal["belly"], 0.2 + 0.3 * rng.random())
+        if face in ("west", "east") and j == 0 and k in (d - 4, d - 6):
+            return (C(pal["eye"][1]), "eyes", C(pal["eye"][0]))
+        if face == "north":
+            return ramp(pal["mouth"], 0.3 + 0.6 * rng.random()) if j >= h - 2 else ramp(pal["shell"], 0.25 + 0.2 * rng.random())
+        return ramp(pal["shell"], 0.15 + 0.25 * rng.random() + 0.04 * k)
+
+    _texels(cv, box, fn)
+
+
+def _skein_eye(cv, box, pal, rng):
+    """A glassy eye: pale cyan light round a dark pupil on its outer face."""
+
+    def fn(face, i, j, fw, fh):
+        if face in ("west", "east") and i == (1 if face == "east" else 0):
+            return C(pal["pupil"])
+        return (C(pal["eye"][2 if face == "top" else 1]), "eyes", C(pal["eye"][0]))
+
+    _texels(cv, box, fn)
+
+
+def _skein_feeler(cv, box, pal, rng, tip):
+    """A feeler: thin dark rings, lighter between; its tip holds a faint light."""
+    w, h, d = box["size"]
+
+    def fn(face, i, j, fw, fh):
+        k = _along(face, i, j, box["size"])
+        if tip and k >= d - 2:
+            return (C(pal["seam"][1 if k == d - 1 else 0]), "eyes", C(pal["rim"][0]))
+        return ramp(pal["leg"], 0.25 + (0.45 if k % 2 == 0 else 0.0) + 0.15 * rng.random())
+
+    _texels(cv, box, fn)
+
+
+def _skein_spur(cv, box, pal, rng):
+    """A tail spur: dark shell with a glassy rim along its top, its point lit."""
+    w, h, d = box["size"]
+
+    def fn(face, i, j, fw, fh):
+        k = _along(face, i, j, box["size"])
+        if k == 0 or face == "south":
+            return (C(pal["seam"][1]), "flare", C(pal["rim"][0]))
+        if face == "top":
+            return (C(pal["rim"][0]), "flare", C(pal["shell"][3])) if k % 2 == 0 else ramp(pal["shell"], 0.6)
+        return ramp(pal["shell"], 0.25 + 0.3 * rng.random())
+
+    _texels(cv, box, fn)
+
+
+def paint_skein_box(cv, box, pal, rng):
+    mat = box["mat"]
+    if mat == "shell": _skein_shell(cv, box, pal, rng)
+    elif mat == "shield": _skein_shell(cv, box, pal, rng, front_rim=True)
+    elif mat == "ridge": _skein_ridge(cv, box, pal, rng)
+    elif mat == "belly": _skein_belly(cv, box, pal, rng)
+    elif mat in ("leg", "shin"): _skein_leg(cv, box, pal, rng, mat == "shin")
+    elif mat == "skull": _skein_skull(cv, box, pal, rng)
+    elif mat == "eye": _skein_eye(cv, box, pal, rng)
+    elif mat in ("feeler", "feeler_tip"): _skein_feeler(cv, box, pal, rng, mat == "feeler_tip")
+    elif mat == "spur": _skein_spur(cv, box, pal, rng)
+    elif mat == "mandible":
+        _texels(cv, box, lambda f, i, j, fw, fh: ramp(pal["mandible"], 0.2 + 0.5 * rng.random() + (0.3 if f == "top" else 0.0)))
+    elif mat == "fang":
+        _texels(cv, box, lambda f, i, j, fw, fh: C(pal["fang"][1 if f in ("top", "north") else 0]))
+    else:
+        raise ValueError(mat)
+
+
+def paint_skein(seed=4501):
+    cv = Canvas()
+    rng = random.Random(seed)
+    for p in SKEIN_PARTS:
+        for b in p["boxes"]:
+            paint_skein_box(cv, b, SKEIN_PALETTE, rng)
+    return cv
+
+
+def write_skein(assets, write):
+    """The Skein's geometry, its texture and its one glow texture (eyes, rims, seam and feeler tips: the renderer lights
+    them all together, brighter while it moves); returns its lang entries."""
+    pack(SKEIN_PARTS)
+    write(os.path.join(assets, "geometry", "skein.json"), geometry_json(SKEIN_PARTS))
+    tex_dir = os.path.join(assets, "textures", "entity", "skein")
+    os.makedirs(tex_dir, exist_ok=True)
+    cv = paint_skein()
+    cv.img.save(os.path.join(tex_dir, "skein.png"))
+    glow = Image.alpha_composite(cv.flare, cv.eyes)
+    assert cv.eyes.getbbox() and cv.flare.getbbox(), "skein: no glowing pixels"
+    glow.save(os.path.join(tex_dir, "skein_glow.png"))
+    write(os.path.join(assets, "models", "item", "skein_spawn_egg.json"), {"parent": "minecraft:item/template_spawn_egg"})
+    return {f"entity.{MOD}.skein": NAMES["skein"], f"item.{MOD}.skein_spawn_egg": NAMES["skein"] + " Spawn Egg",
+            f"item.{MOD}.skein_plate": "Skein Plate"}
+
+
+# The Skein's body as the renderer lays it (SkeinEntity.PLATES, PLATE_START, PLATE_STEP): which piece each plate is,
+# and how wide it is drawn.
+SKEIN_PLATES = 13
+SKEIN_PLATE_START, SKEIN_PLATE_STEP = 0.12, 0.30
+
+
+def skein_piece(k):
+    return "tail" if k == SKEIN_PLATES - 1 else ("plate_large", "plate_mid", "plate_small")[min(2, k // 4)]
+
+
+def skein_width(k):
+    return 16.0 - 9.0 * k / (SKEIN_PLATES - 1)
+
+
 # =============================================================================================== output
 def geometry_json(parts):
     return {"texture_width": TEX_W, "texture_height": TEX_H, "parts": [
@@ -430,8 +737,8 @@ def geometry_json(parts):
         for p in parts]}
 
 
-SPAWN_EGGS = {"mossback": (0x2e3e20, 0xc4ec50)}
-NAMES = {"mossback": "Mossback"}
+SPAWN_EGGS = {"mossback": (0x2e3e20, 0xc4ec50), "skein": (0x1d3d96, 0x8fe8ff)}
+NAMES = {"mossback": "Mossback", "skein": "Skein"}
 VARIANTS = {"mossback": ("moss", "frost")}
 
 
@@ -454,6 +761,8 @@ def write_all(assets, write):
         names[f"entity.{MOD}.{name}"] = NAMES[name]
         names[f"item.{MOD}.{name}_spawn_egg"] = NAMES[name] + " Spawn Egg"
     names[f"item.{MOD}.mossback_hide"] = "Mossback Hide"
+    # the Skein: one look, one glow texture, its pieces drawn along its trail (write_skein)
+    names.update(write_skein(assets, write))
     return names
 
 
@@ -603,8 +912,77 @@ POSES = {
 }
 
 
+SKEIN_REAR = ((0.4, 40), (0.28, 35), (0.18, 25), (0.09, 12), (0.03, 4))   # (lift in blocks, pitch) head, plates 0..3
+
+
+def skein_layout(bend=0.0, phase=None, rear=0.0):
+    """The Skein laid out as the renderer lays it, as one tree of parts for render(): its pieces along a trail that
+    curves by bend (radians a block), its legs in their wave at phase (None: at rest), its front reared by rear (0..1)."""
+    byname = {p["name"]: p for p in SKEIN_PARTS}
+
+    def subtree(root):
+        out = [byname[root]]
+        for p in SKEIN_PARTS:
+            if any(p["parent"] == q["name"] for q in out) and p not in out: out.append(p)
+        return out
+
+    def at(s):
+        if abs(bend) < 1e-6: return 0.0, s * 16, 0.0
+        th = bend * s
+        return (1 - math.cos(th)) / bend * 16, math.sin(th) / bend * 16, math.degrees(th)
+
+    cx, cz, _ = at(1.9)
+    parts, pose = [], {}
+    pieces = [("head", 0, 0.0)] + [(skein_piece(k), k, SKEIN_PLATE_START + SKEIN_PLATE_STEP * k) for k in range(SKEIN_PLATES)]
+    for idx, (piece, k, s) in enumerate(pieces):
+        x, z, yaw = at(s)
+        tag = f"#{idx}"
+        lift, pitch = SKEIN_REAR[idx] if idx < len(SKEIN_REAR) else (0.0, 0.0)
+        for p in subtree(piece):
+            q = dict(p, name=p["name"] + tag, parent=p["parent"] + tag if p["parent"] != "root" else "root")
+            if p["name"] == piece:
+                q["pivot"] = [x - cx, 24 - lift * rear * 16, z - cz]
+                q["rot"] = [-pitch * rear, yaw, 0]
+            parts.append(q)
+        if piece == "head":
+            continue
+        w = skein_width(k)
+        ls = 1.0 - 0.3 * k / (SKEIN_PLATES - 1)
+        pose[f"{piece}_shell{tag}"] = {"scale": (w / SKEIN_WIDTHS[piece], 0.75 + 0.25 * w / 16, 1)}
+        rest = 0.55 + (-0.6 - 0.55) * k / (SKEIN_PLATES - 1)
+        for side, sgn in (("left", 1), ("right", -1)):
+            leg = next(q for q in parts if q["name"] == f"{piece}_leg_{side}{tag}")
+            leg["pivot"] = [sgn * (w / 2 - 2), -3 * ls, 0]
+            ph = (phase - 0.65 * k + (math.pi if sgn < 0 else 0)) if phase is not None else None
+            swing = 0.5 * math.sin(ph) if ph is not None else 0.0
+            lift_ = 0.5 * max(0.0, math.cos(ph)) if ph is not None else 0.0
+            pose[leg["name"]] = {"rot": (0, math.degrees(sgn * (rest + swing)), math.degrees(-sgn * lift_)), "scale": (ls, ls, ls)}
+    return parts, pose
+
+
+def preview_skein(out_dir):
+    pack(SKEIN_PARTS)
+    cv = paint_skein()
+    cv.img.resize((TEX_W * 4, TEX_H * 4), Image.NEAREST).save(os.path.join(out_dir, "skein_texture.png"))
+    glow = Image.alpha_composite(cv.flare, cv.eyes)
+    tiles = []
+    # lying still in the dark (dim glow); running round a bend, lit; from the side, running; rearing to strike
+    for (bend, phase, rear), yaw, pitch, lvl, ll, bg in (((0.0, None, 0.0), 35, 30, 0.35, 0.55, (24, 27, 30)),
+                                                        ((0.45, 1.3, 0.0), 20, 45, 1.0, 0.55, (24, 27, 30)),
+                                                        ((0.0, 2.1, 0.0), 90, 8, 1.0, 1.0, (52, 56, 60)),
+                                                        ((0.0, None, 1.0), -50, 15, 1.0, 1.0, (52, 56, 60))):
+        parts, pose = skein_layout(bend, phase, rear)
+        tiles.append(render(parts, cv.img, pose, yaw, pitch, 420, dist=9.0, glow=glow, glow_level=lvl, bg=bg, light_level=ll))
+    sheet = Image.new("RGB", (420 * 2, 420 * 2))
+    for k, t in enumerate(tiles):
+        sheet.paste(t, ((k % 2) * 420, (k // 2) * 420))
+    sheet.save(os.path.join(out_dir, "skein.png"))
+    print("preview skein")
+
+
 def preview(out_dir):
     os.makedirs(out_dir, exist_ok=True)
+    preview_skein(out_dir)
     for name, parts in CREATURES.items():
         pack(parts)
         for i, variant in enumerate(VARIANTS[name]):
@@ -796,6 +1174,40 @@ def _scraps_hide():
     ], SCRAP_HIDE)
 
 
+SKEIN_SHELL = ["#0E1940", "#16285E", "#1D3478", "#244293", "#2E52AD", "#3D66C4"]
+SKEIN_RIM = ["#6FB9D9", "#9FDCEE", "#D2F4FB"]
+SKEIN_SEAM = "#8FE8FF"
+SKEIN_EDGE = "#070C1D"
+
+
+def _skein_plate():
+    """A Skein's shell plate: a broad curved scute, glossy cobalt lit along its crown, a pale glassy rim along its
+    edge, the dead seam's line down its middle, its underside's dark lip showing below."""
+    rng = random.Random(5170)
+    img = blank()
+    px = img.load()
+    for y in range(3, 13):
+        # an arched band, its ends drooping: the plate seen from above and a little behind
+        for x in range(1, 15):
+            dx = (x - 7.5) / 7.0
+            top = 4 + int(round(3.2 * dx * dx))
+            bottom = top + 7 - int(round(2.0 * dx * dx))
+            if not (top <= y <= bottom): continue
+            if y == top or x in (1, 14):
+                put(px, x, y, SKEIN_RIM[1 if rng.random() < 0.7 else 2])
+            elif y == bottom:
+                put(px, x, y, SKEIN_EDGE)
+            else:
+                crown = 1.0 - abs(dx)
+                shade = int(1 + 3.5 * crown - 0.6 * (y - top) / 4 + rng.choice([0, 0, -1, 1]))
+                put(px, x, y, SKEIN_SHELL[max(0, min(5, shade))])
+    for y in range(5, 10):                                                  # the seam, dull now it is dead
+        put(px, 7, y, SKEIN_SEAM if y % 2 else SKEIN_RIM[0])
+    put(px, 5, 6, SKEIN_RIM[2])                                             # a glint on the gloss
+    put(px, 6, 5, SKEIN_RIM[1])
+    return img
+
+
 PAINTERS = {
     "block/mossback_den": _den,
     "block/bone_scraps": _scraps_ribs,
@@ -803,4 +1215,6 @@ PAINTERS = {
     "block/bone_scraps_3": _scraps_fur,
     "block/bone_scraps_4": _scraps_hide,
     "item/mossback_hide": _hide,
+    # the Skein's
+    "item/skein_plate": _skein_plate,
 }
