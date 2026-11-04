@@ -3,7 +3,6 @@ package com.explorationremix.client.render;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.creature.SkeinEntity;
 import com.explorationremix.creature.SkeinSpine;
-import com.explorationremix.creature.SkeinTrail;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
@@ -26,10 +25,11 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
- * Draws the Skein along the trail its head has run (SkeinEntity.trail()): the head where the head is, then each of its
- * {@link SkeinEntity#PLATES} plates at its own distance back along a smooth curve through that trail ({@link SkeinSpine}),
- * lying on the rock it crosses there and turned along the way the curve runs, so the long body pours over edges and
- * swings round in an easy curve where the head snapped round. The pieces
+ * Draws the Skein along the chain its body lies in ({@link SkeinSpine}, SkeinEntity.spine()), which the head drags
+ * after it along the way it has come: the head where the head is, then each of its {@link SkeinEntity#PLATES} plates
+ * at its own distance back along the chain, lying on the rock it crosses there and turned along the way the chain runs,
+ * so the long body pours over edges and swings round in an easy curve where the head snapped round. The chain moves
+ * once a tick, and is drawn part way between where it lay and where it lies, so it moves smoothly. The pieces
  * are the few loose parts of geometry/skein.json (tools/creatures.py): the head, three sizes of plate and the tail,
  * each plate drawn a little narrower than the one before.
  *
@@ -67,7 +67,6 @@ public class SkeinRenderer extends EntityRenderer<SkeinEntity> {
     // per frame (the render thread only): where each piece goes and its light
     private final double[] arcs = new double[1 + 3 * PLATES];
     private final double[] at = new double[6 * (1 + 3 * PLATES)];
-    private final SkeinSpine spine = new SkeinSpine(SkeinEntity.SPINE_JOINTS);
     private final Matrix4f[] poses = new Matrix4f[PIECES];
     private final Matrix3f[] normals = new Matrix3f[PIECES];
     private final int[] lights = new int[PIECES];
@@ -130,16 +129,14 @@ public class SkeinRenderer extends EntityRenderer<SkeinEntity> {
     // ------------------------------------------------------------------------------------------------ placing
 
     /**
-     * Works out where every piece goes this frame, from the trail: the head as far back along it as the head is behind
-     * its newest place (it moved there over the last tick), each plate its own distance behind the head along the
-     * smooth curve laid from there.
+     * Works out where every piece goes this frame, along the chain its body lies in (SkeinEntity.spine()), drawn part
+     * way from where it lay last tick to where it lies now, as the game draws the head: the head at its first joint,
+     * each plate its own distance behind along it.
      */
     private void place(SkeinEntity e, float pt, PoseStack pose) {
-        SkeinTrail trail = e.trail();
-        double behind = (1.0 - pt) * trail.lastStep();
+        SkeinSpine spine = e.spine();
         Quaternionf headTurn = new Quaternionf(e.headOrientO).slerp(e.headOrient, pt);
-        Vector3f headUp = headTurn.transform(new Vector3f(0, 1, 0)), hf = headTurn.transform(new Vector3f(0, 0, -1));
-        spine.build(trail, behind, hf.x, hf.y, hf.z, SkeinEntity.rockIn(e.level()));
+        Vector3f headUp = headTurn.transform(new Vector3f(0, 1, 0));
         arcs[0] = 0.0;
         for (int k = 0; k < PLATES; k++) {
             double s = SkeinEntity.plateAt(k);
@@ -147,7 +144,7 @@ public class SkeinRenderer extends EntityRenderer<SkeinEntity> {
             arcs[2 + 3 * k] = s;
             arcs[3 + 3 * k] = s + TANGENT;
         }
-        spine.sampleAll(arcs, at);
+        spine.sampleAll(arcs, pt, at);
         double ox = Mth.lerp(pt, e.xOld, e.getX()), oy = Mth.lerp(pt, e.yOld, e.getY()), oz = Mth.lerp(pt, e.zOld, e.getZ());
         for (int i = 0; i < PIECES; i++) {
             int m = i == 0 ? 0 : 6 * (2 + 3 * (i - 1));               // the piece's own sample (the middle of its three)

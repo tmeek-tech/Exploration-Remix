@@ -35,6 +35,7 @@ import java.util.Locale;
  *     lunge, bolt, eat, journey): a strike is at you, a bolt away from you, a stalk after the nearest landed swarm, a
  *     journey 40 to 90 blocks along the Deep Blue Rift's ledge path (it must be by it)</li>
  *     <li>{@code /remix skein hungry}: makes the nearest one hungry now, so it goes for a landed swarm near it</li>
+ *     <li>{@code /remix skein trace [ticks]}: logs how the nearest one's body moves each tick, to the server log</li>
  * </ul>
  */
 public final class SkeinCommands {
@@ -54,7 +55,18 @@ public final class SkeinCommands {
                         .executes(c -> state(c, StringArgumentType.getString(c, "name"), 400))
                         .then(Commands.argument("ticks", IntegerArgumentType.integer(1, 12000))
                                 .executes(c -> state(c, StringArgumentType.getString(c, "name"), IntegerArgumentType.getInteger(c, "ticks"))))))
-                .then(Commands.literal("hungry").executes(SkeinCommands::hungry));
+                .then(Commands.literal("hungry").executes(SkeinCommands::hungry))
+                .then(Commands.literal("trace").executes(c -> trace(c, 600))
+                        .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 12000)).executes(c -> trace(c, IntegerArgumentType.getInteger(c, "ticks")))));
+    }
+
+    /** Logs how the nearest one's body moves, each tick for {@code ticks} (to the server log). */
+    private static int trace(CommandContext<CommandSourceStack> c, int ticks) {
+        List<SkeinEntity> all = near(c, 48);
+        if (all.isEmpty()) { c.getSource().sendFailure(Component.literal("No Skein within 48 blocks.")); return 0; }
+        all.get(0).trace(ticks);
+        say(c, "Tracing its body for " + ticks + " ticks, in the server log");
+        return 1;
     }
 
     private static void say(CommandContext<CommandSourceStack> c, String msg) {

@@ -32,15 +32,26 @@ public final class SkeinTrail {
     static final double TURNED = 0.7;
     /** The most points kept (a corner adds one, so the line never runs out of room even at the smallest steps). */
     static final int CAP = 512;
+    /**
+     * How much it counts against a place on the line, looking for the one nearest a point, to lie away from the place
+     * preferred (per block along the line, squared, against the squared distance): enough to choose between two
+     * stretches about as near, where the head ran back over its own way.
+     */
+    static final double PREFER = 0.02;
     private static final int STRIDE = 6;
 
     private final double keep;
     private final double[] pts = new double[CAP * STRIDE];
+    /**
+     * How far along the line each point is (blocks, from the oldest point it was laid with): rising towards the head,
+     * and never changed while the point is kept, so a place on the line stays put as the head walks on.
+     */
+    private final double[] along = new double[CAP];
     private int size;
     private final double[] head = new double[STRIDE];
     private boolean laid;
-    /** Counts the changes to it: the same count, the same trail. */
-    private int version;
+    /** Counts the times it was laid afresh: laid straight, read back, or after a teleport. */
+    private int lays;
     private double lastStep;
 
     /** A trail that keeps at least {@code keep} blocks behind the head. */
@@ -52,8 +63,8 @@ public final class SkeinTrail {
     /** How far the head went at the last record (the renderer draws the body that far back between ticks). */
     public double lastStep() { return lastStep; }
 
-    /** A number that changes whenever the trail does (a body laid along it the same count ago lies the same). */
-    public int version() { return version; }
+    /** A number that changes whenever the trail is laid afresh (a body following it must be laid afresh too). */
+    public int lays() { return lays; }
     /** Points on the line (the head not counted). */
     public int size() { return size; }
     public double keep() { return keep; }
@@ -75,7 +86,7 @@ public final class SkeinTrail {
         set(head, 0, x, y, z, ux, uy, uz);
         laid = true;
         lastStep = 0.0;
-        version++;
+        lays++;
     }
 
     /**
@@ -121,7 +132,7 @@ public final class SkeinTrail {
         set(head, 0, data[0] + ox, data[1] + oy, data[2] + oz, data[3] / l, data[4] / l, data[5] / l);
         laid = true;
         lastStep = 0.0;
-        version++;
+        lays++;
         return true;
     }
 
@@ -140,7 +151,6 @@ public final class SkeinTrail {
         }
         lastStep = step;
         if (step == 0.0 && head[3] == ux && head[4] == uy && head[5] == uz) return;   // where it was: nothing changes
-        version++;
         int last = (size - 1) * STRIDE;
         double dot = pts[last + 3] * ux + pts[last + 4] * uy + pts[last + 5] * uz;
         if (dot < TURNED) {
@@ -222,6 +232,7 @@ public final class SkeinTrail {
             double first = dist(0, 1);
             if (total - first < keep && size < CAP) break;
             System.arraycopy(pts, STRIDE, pts, 0, (size - 1) * STRIDE);
+            System.arraycopy(along, 1, along, 0, size - 1);
             size--;
             total -= first;
         }
@@ -287,6 +298,73 @@ public final class SkeinTrail {
         }
     }
 
+    // ------------------------------------------------------------------------------------------------ places on the line
+
+    /**
+     * How far along the line the head is: places on the line are reckoned so ({@link #at}), from a
+     * point that stays put while the trail is kept (they rise towards the head, and a place stays where it is on the
+     * line as the head walks on), until it is laid afresh ({@link #lays}).
+     */
+    public double headAlong() {
+        int o = (size - 1) * STRIDE;
+        return along[size - 1] + Math.sqrt(sq(head[0] - pts[o]) + sq(head[1] - pts[o + 1]) + sq(head[2] - pts[o + 2]));
+    }
+
+    /**
+     * The point {@code u} along the line (as {@link #headAlong}): its position at out[off..off+2] and its rock's normal
+     * (unit length) at out[off+3..off+5]. Beyond the head, the head; past the oldest point, on straight the way the
+     * oldest stretch ran.
+     */
+    public void at(double u, double[] out, int off) {
+        double h = headAlong();
+        int last = size - 1;
+        if (u >= h) {
+            System.arraycopy(head, 0, out, off, STRIDE);
+            return;
+        }
+        if (u >= along[last]) {
+            double len = h - along[last];
+            double t = len < 1.0E-9 ? 1.0 : (u - along[last]) / len;
+            lerp(pts, last * STRIDE, head, 0, t, out, off);
+            return;
+        }
+        if (u <= along[0]) {
+            double[] to = size > 1 ? pts : head;
+            int ti = size > 1 ? STRIDE : 0;
+            double ox = pts[0] - to[ti], oy = pts[1] - to[ti + 1], oz = pts[2] - to[ti + 2];
+            double l = Math.sqrt(ox * ox + oy * oy + oz * oz);
+            if (l < 1.0E-9) { ox = 0; oy = 0; oz = 1; l = 1; }
+            double past = along[0] - u;
+            out[off] = pts[0] + ox / l * past;
+            out[off + 1] = pts[1] + oy / l * past;
+            out[off + 2] = pts[2] + oz / l * past;
+            normal(pts, 3, pts, 3, 0.0, out, off + 3);
+            return;
+        }
+        int i = below(u);
+        double len = along[i + 1] - along[i];
+        lerp(pts, i * STRIDE, pts, (i + 1) * STRIDE, len < 1.0E-9 ? 0.0 : (u - along[i]) / len, out, off);
+    }
+
+    /** The point before {@code u} (as {@link #headAlong}): the last i with along[i] at most u (u within the points). */
+    private int below(double u) {
+        int lo = 0, hi = size - 1;
+        while (hi - lo > 1) {
+            int mid = (lo + hi) >>> 1;
+            if (along[mid] <= u) lo = mid;
+            else hi = mid;
+        }
+        return lo;
+    }
+
+    /** Position and normal t of the way from the sample at (p, i) to the one at (q, j), into out at o. */
+    private static void lerp(double[] p, int i, double[] q, int j, double t, double[] out, int o) {
+        out[o] = p[i] + (q[j] - p[i]) * t;
+        out[o + 1] = p[i + 1] + (q[j + 1] - p[i + 1]) * t;
+        out[o + 2] = p[i + 2] + (q[j + 2] - p[i + 2]) * t;
+        normal(p, i + 3, q, j + 3, t, out, o + 3);
+    }
+
     /** The normal t of the way from the normal at (p, i) to the one at (q, j), made unit length. */
     private static void normal(double[] p, int i, double[] q, int j, double t, double[] out, int o) {
         double x = p[i] + (q[j] - p[i]) * t, y = p[i + 1] + (q[j + 1] - p[i + 1]) * t, z = p[i + 2] + (q[j + 2] - p[i + 2]) * t;
@@ -300,9 +378,12 @@ public final class SkeinTrail {
     private void add(double x, double y, double z, double ux, double uy, double uz) {
         if (size == CAP) {
             System.arraycopy(pts, STRIDE, pts, 0, (size - 1) * STRIDE);
+            System.arraycopy(along, 1, along, 0, size - 1);
             size--;
         }
-        set(pts, size * STRIDE, x, y, z, ux, uy, uz);
+        int o = size * STRIDE;
+        along[size] = size == 0 ? 0.0 : along[size - 1] + Math.sqrt(sq(x - pts[o - STRIDE]) + sq(y - pts[o - STRIDE + 1]) + sq(z - pts[o - STRIDE + 2]));
+        set(pts, o, x, y, z, ux, uy, uz);
         size++;
     }
 

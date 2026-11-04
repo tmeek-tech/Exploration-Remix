@@ -249,4 +249,40 @@ class SkeinTrailTest {
             assertEquals(1.0, Math.sqrt(p[3] * p[3] + p[4] * p[4] + p[5] * p[5]), EPS);
         }
     }
+
+    @Test
+    void aPlaceOnTheLineStaysPutAsTheHeadWalksOn() {
+        SkeinTrail t = new SkeinTrail(9.0);
+        t.lay(0, 0, 0, 0, 0, -1, 0, 1, 0);
+        for (int k = 1; k <= 40; k++) t.record(0, 0, 0.05 * k, 0, 1, 0);           // two blocks along +z
+        double u = t.headAlong() - 1.0;
+        double[] a = new double[6], b = new double[6];
+        t.at(u, a, 0);
+        assertAt(a, 0, 0, 1, EPS);
+        for (int k = 1; k <= 30; k++) t.record(0.05 * k, 0, 2, 0, 1, 0);           // then on round a corner
+        t.at(u, b, 0);
+        assertArrayEquals(a, b, EPS, "the place is where it was on the line");
+        t.at(t.headAlong(), b, 0);
+        assertAt(b, 1.5, 0, 2, EPS);
+        t.at(t.headAlong() + 3.0, b, 0);
+        assertAt(b, 1.5, 0, 2, EPS);                                                // beyond the head, the head
+        t.at(t.headAlong() - 3.5, b, 0);
+        assertAt(b, 0, 0, 0, 0.05);                         // back round the corner (its points cut it by a hair)
+        assertEquals(1.0, b[4], EPS);
+    }
+
+    @Test
+    void itCountsTheTimesItIsLaidAfresh() {
+        SkeinTrail t = new SkeinTrail(6.0);
+        t.lay(0, 0, 0, 0, 0, -1, 0, 1, 0);
+        int first = t.lays();
+        t.record(0, 0, 0.3, 0, 1, 0);
+        assertEquals(first, t.lays(), "walking on is not laying it afresh");
+        t.record(0, 0, 30, 0, 1, 0);
+        assertEquals(first + 1, t.lays(), "a teleport is");
+        assertTrue(t.read(t.write(new double[]{0, 1, 2}, 0, 0, 0), 0, 0, 0));
+        assertEquals(first + 2, t.lays(), "and so is reading it back");
+        assertFalse(t.read(new float[]{1, 2, 3}, 0, 0, 0));
+        assertEquals(first + 2, t.lays(), "but not reading what is no trail");
+    }
 }
