@@ -558,7 +558,8 @@ class TubeFieldTest {
 
     /**
      * Sections are picture 2's size (critique tubes-scale; spec-tubes 10, a6ac8ea's narrow tubes in brackets): the width
-     * at the axis height 5-95 % within 15..36 (measured 16..33, median 21; before 8..17), the floor's width at the eye row
+     * at the axis height 5-95 % within 15..36 (measured 16..31, median 21, since the v2 Galleries landed, 0.8.0; 16..32-33
+     * on the interim ones; before 8..17), the floor's width at the eye row
      * (F + 1) at least 11 at the 5th percentile (13; before 7), headroom in the bays at least 16 at the 5th percentile
      * (19, median 24; before 8) and under the ribs at least 12 (15, median 19; before 5), with two open rows everywhere;
      * floors at least W + 46 and vaults at most W + 94 plus the bays' bulge over the Galleries' lava table.
@@ -579,8 +580,9 @@ class TubeFieldTest {
 
     /**
      * The rib rings stand in on their legs, not only at the crown (critique tubes-ribs: the bays bulge out round them):
-     * against the next bay's middle a ring stands in a median of at least 1 block a side at the eye row (measured 1.5,
-     * before 0) and at least 0.5 at the floor row (1; before 0), its crown at least 4 rows under the bay's vault (6;
+     * against the next bay's middle a ring stands in a median of at least 1 block a side at the eye row (measured 1, the
+     * bar, since the v2 Galleries landed, 0.8.0, as on r2; 1.5 on the interim Galleries; before 0) and at least 0.5 at the
+     * floor row (1; before 0), its crown at least 4 rows under the bay's vault (6;
      * before 3), and the opening under it at the eye row stays at least 9 wide at the 5th percentile (12): no doorways.
      */
     @Test
@@ -596,7 +598,8 @@ class TubeFieldTest {
     /**
      * Tubes have exits along them (critique tubes-runs: collapse gaps cut each country across the flow): the enclosed
      * stretch between walkable exits that an axis block lies in, length-weighted, has its median at most 90 blocks and its
-     * 90th percentile at most 120 (measured 71 and 92; before 264 and 317).
+     * 90th percentile at most 120 (measured 71 and 92 on the interim Galleries, a median of 69 since the v2 Galleries
+     * landed, 0.8.0; before 264 and 317).
      */
     @Test
     void tubesHaveExits() {
@@ -659,8 +662,8 @@ class TubeFieldTest {
      * two lines was cut flat there and the rock beyond read as no tube's, 2,792 deep, undressed faces over these seeds at
      * 69 places): every rock block beside a block a tube opens in the cavern's rock (its air or a pool's water), over every
      * column of the standing countries, lies within 1.8 of the tube's surface (the palette lines it), is surface rock (at
-     * most 6 blocks deep in the game's density) and is in the Obsidian Tubes (measured 5.07 M faces, counted per open
-     * block, all lined).
+     * most 6 blocks deep in the game's density) and is in the Obsidian Tubes (measured 4.95 M faces since the v2 Galleries
+     * landed, 0.8.0, 5.07 M on the interim ones, counted per open block, all lined).
      */
     @Test
     void everyFaceIsLined() {
@@ -674,9 +677,10 @@ class TubeFieldTest {
      * left falls of 16 to 24 rows from the cavern into tube air, 194 over seeds 1, 2024 and -987654321): from the cavern's
      * standing places beside the tubes' columns, at most 12 falls of more than 15 rows onto rock that the tube made (where
      * the cavern alone is rock or drops 15 or less). Measured 4, all at one place of seed 12345 where a 15-row step of the
-     * cavern meets a tube floor one row under the cavern's; bands stay out of the mouths and the cavern keeps its roofs.
-     * Falls the cavern makes alone into a tube's column (a cliff of the cavern over the apron's floor where a tube's rows lie
-     * in the cavern's air: 171 edges) are the cavern's.
+     * cavern meets a tube floor one row under the cavern's (the same 4 on the interim Galleries and, since 0.8.0, on the v2
+     * ones); bands stay out of the mouths and the cavern keeps its roofs ({@link GalleriesField#roofed}). Falls the cavern
+     * makes alone into a tube's column (a cliff of the cavern over the apron's floor where a tube's rows lie in the
+     * cavern's air: 74 of the 78 falls on the v2 Galleries, 167 of 171 on the interim ones) are the cavern's.
      */
     @Test
     void noFallsIntoTubes() {
@@ -690,7 +694,8 @@ class TubeFieldTest {
      * hangs the same number of blocks from the vault (0 cells mixed; measured 4 to 9 % of the bays' columns hang; read
      * where one line's tube is near, since a column two lines' tubes reach opens the union of their rows), and
      * under 1 % of the tube's enclosed columns are isolated spikes, an open column whose vault is lower than all 4 of its
-     * open neighbours' (0.26 %; the per-block fringe gave 3.1 %), under 0.1 % two blocks deep or more (0.01 %; 0.87 %).
+     * open neighbours' (0.27 % since the v2 Galleries landed, 0.8.0, 0.26 % on the interim ones; the per-block fringe gave
+     * 3.1 %), under 0.1 % two blocks deep or more (0.01 %; 0.87 %).
      */
     @Test
     void hangingEndsAreWholeCells() {
@@ -704,7 +709,8 @@ class TubeFieldTest {
 
     /**
      * Pools are sealed and common: every block of a pool's water lies over water or rock, beside water or rock, in the
-     * cavern's rock, over the flood's reach (0 violations); 4 to 12 pools per km of tube (7.6). Their beds and sides are
+     * cavern's rock, over the flood's reach (0 violations); 4 to 12 pools per km of tube (7.5 since the v2 Galleries
+     * landed, 0.8.0; 7.6 on the interim ones). Their beds and sides are
      * the tube's lining (critique T3: 70 % of the prototype's beds read deeper than the skin): every rock block beside the
      * water is lined, in the Obsidian Tubes and surface rock.
      */
@@ -719,9 +725,10 @@ class TubeFieldTest {
     }
 
     /**
-     * Mouths open into the real Galleries: runs open at both ends 95 % or more (98.3), walkable out at both ends 85 % or
-     * more (92.8), blind ends at most 3 % (0.8), falls over 15 at a mouth at most 1 % (0). Fewer, wider tubes: about 180
-     * runs over the sample (a6ac8ea's narrow ones, about 320).
+     * Mouths open into the real Galleries: runs open at both ends 95 % or more (100 since the v2 Galleries landed, 0.8.0;
+     * 98.3 earlier), walkable out at both ends 85 % or more (100; 92.8 earlier), blind ends at most 3 % (0; 0.8 earlier),
+     * falls over 15 at a mouth at most 1 % (0). Fewer, wider tubes: about 180 runs over the sample (183; a6ac8ea's narrow
+     * ones, about 320).
      */
     @Test
     void mouthsOpen() {
@@ -737,7 +744,8 @@ class TubeFieldTest {
      * Tube countries are met: from 2000 random points over 3 seeds, the straight-line distance to the nearest country's
      * massif has its median at most 250 blocks and its 90th percentile at most 400 (spec 10: 160-168 and 332-336). In the
      * game the Galleries keep only the countries that stand in their landscape (spec-galleries 6.1, about two thirds), so
-     * a player walks further: there the median is at most 300 and the 90th percentile at most 650 (232 and 500).
+     * a player walks further: there the median is at most 300 and the 90th percentile at most 650 (220 and 484 since the
+     * v2 Galleries landed, 0.8.0; 232 and 500 earlier).
      */
     @Test
     void countriesAreMet() {
@@ -987,8 +995,10 @@ class TubeFieldTest {
      * The tubes cost little: the tube part of the per-block pass (the span, the veto, the tube's value with the roofs the
      * cavern keeps over it) takes at most 60 % of the Galleries' own per-block pass in chunks with a tube (8 x 8 chunks
      * round a standing country's spot), and at most 12 % over 96 chunks drawn at random from 16 tube cells (0.8.0's wider
-     * tubes: about 0.27-0.35 against 0.6-0.8 ms a chunk in tube chunks, 43-52 %, and 0.04-0.05 at random, 5 %; 0.5.1's
-     * narrow tubes 0.19 against 0.45, 42 %). One thread, best of three rounds after a warm-up.
+     * tubes on the v2 Galleries, the roofs read from v2's per-block profile: 0.36 against 0.77 ms a chunk in tube chunks,
+     * 47 %, and 0.065 against 1.30 at random, 5.0 %, where an earlier run of the same code gave 41 and 5.6 %; on the
+     * interim Galleries about 0.27-0.35 against 0.6-0.8, 43-52 %, and 0.04-0.05 at random, 5 %; 0.5.1's narrow tubes 0.19
+     * against 0.45, 42 %). One thread, best of three rounds after a warm-up.
      */
     @Test
     void cost() {

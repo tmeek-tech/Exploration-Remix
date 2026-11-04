@@ -613,8 +613,9 @@ class WastelandFieldTest {
 
     /**
      * Few blind ends, on every box ({@link #allStats}): the dead-end finder's tips (on 2-block cells) at most 2 per 1000
-     * standing places (1.68-1.88), and of them, those where a walker finds no second way out within 12 blocks at most
-     * 0.25 per 1000 (0.13-0.23; fix round 1 left seed 77 at 0.28). Before fix round 1 the tips were 0.92-1.27: a lane open
+     * standing places (1.66-1.84 since the v2 Galleries landed, 0.8.0; 1.67-1.88 before), and of them, those where a
+     * walker finds no second way out within 12 blocks at most 0.25 per 1000 (0.12-0.20; 0.13-0.23 before; fix round 1
+     * left seed 77 at 0.28). Before fix round 1 the tips were 0.92-1.27: a lane open
      * along every tunnel's middle line joined the small pockets beside it, and the walking-strip finding removed it (its
      * verifier's ablation: only the lane brings them back). The floor guard's free row, which lets the floor take the
      * roughness's pits, cut off pockets of its own in the narrow tunnels until it was kept to the wider vaults (fix round
@@ -669,7 +670,8 @@ class WastelandFieldTest {
      * columns where beta asks for an opening (94 per km^2: 29, 137, 117; 180-226 moves). The Galleries' v2 field opens
      * every one of the Wasteland's openings over its caverns (off the massifs and the tube countries) that it can give a
      * ramp, each with a crater, and no other (step 2: no skylights): 19 holes in the three inner squares (62 per km^2: 8,
-     * 9 and 2 since fix round 2b's ramp gap of 5; medians 185-226 moves), the 19 the field lists there, each in an area
+     * 9 and 2 since fix round 2b's ramp gap of 5; medians 187-227 moves on the reshape, 0.8.0, 185-226 on r2), the 19 the
+     * field lists there, each in an area
      * of hole columns of its own (17 areas before that round, when holes some 20 blocks apart in box 8004 shared a
      * crater's floor). The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
      */
@@ -713,12 +715,14 @@ class WastelandFieldTest {
 
     /**
      * Natural caves, not arenas (fix round 1, arena-caves): in the dry caves 9 or more wide, on every box
-     * ({@link #allStats}), rock stands on at least 3 % of the blocks more than 1.5 inside the analytic vault (8.9; 0
-     * before), no single offset of the built floor or ceiling from the analytic one holds more than 30 % of the columns
-     * (18-24; 55-63 before, when the dome was the core itself), and the median cave has at most 55 % of its floor within a
-     * row of its commonest level (51 % over 68 caves, 45-61 per box; 60 in fix round 1, 68-85 before it). The finding's
-     * "at most half" is not met everywhere (56 % over six more boxes, where fix round 1 has 63): a question for the
-     * pictures.
+     * ({@link #allStats}), rock stands on at least 3 % of the blocks more than 1.5 inside the analytic vault (7.5 since
+     * the v2 Galleries landed, 0.8.0; 8.9 on fix round 2 with the interim Galleries, 7.0 on r2's three boxes; 0 before),
+     * no single offset of the built floor or ceiling from the analytic one holds more than 30 % of the columns (20.5-27.6
+     * since the landing, 20.5-27.7 on r2's boxes; 18-24 on fix round 2; 55-63 before, when the dome was the core
+     * itself), and the median cave has at most 55 % of its floor within a row of its commonest level (52 % over 62 caves
+     * since the landing; 51 % over 67-68 caves, 45-61 per box, on fix round 2; 60 in fix round 1, 68-85 before it).
+     * The finding's "at most half" is not met everywhere (56 % over six more boxes, where fix round 1 has 63): a question
+     * for the pictures.
      */
     @Test
     void cavesAreNotArenas() {
@@ -756,7 +760,9 @@ class WastelandFieldTest {
      * stepped. (Step 2 of the Galleries' port: with a crater's slope left out, the wide vaults' zones step 42.9, 44.2 and
      * 48.0 % of their pairs, a steady rise towards the walls with no edge across e = 1 or 2.2 (45.4 against 45.4 round
      * it, 49.5 against 49.2); zones 0 and 2, two zones apart, differ by 5.04 points, which is that rise, so the step rates
-     * are compared between neighbouring zones, 1.3 and 3.8 points apart.)
+     * are compared between neighbouring zones, 1.3 and 3.8 points apart. On the reshape, 0.8.0, with fix round 2's rougher
+     * floors: 47.8, 49.5 and 51.4 %, 49.8 against 50.3 round e = 1 and 53.8 against 53.6 round 2.2, neighbouring zones
+     * 1.7 and 1.9 points apart.)
      */
     @Test
     void noLaneAlongTheTunnels() {
@@ -907,9 +913,12 @@ class WastelandFieldTest {
 
     /**
      * The decorations' lava keeps 3 columns from the openings into the Galleries (0; unguarded 27-318 blocks a box). At
-     * least 200 blocks of it must be placed over the boxes for the check to mean anything: 283 are (15 pools and 14
-     * falls), fewer than before step 2 (over 300) because the Galleries now open every hole they can give a ramp, and
-     * the craters round them keep the pools away ({@link WastelandField#crDry}).
+     * least 200 blocks of it must be placed over the boxes for the check to mean anything: 277 are (5 pools and 17 falls,
+     * 251 of the blocks the falls', since the v2 Galleries landed on fix round 2, 0.8.0; r2 also placed 277, with 11
+     * pools and 15 falls, and fix round 2 on the interim Galleries 498), fewer than before step 2 (over 300) because the
+     * Galleries now open every hole they can give a ramp, and the craters round them keep the pools away
+     * ({@link WastelandField#crDry}); fix round 2's rougher floors keep more pools from 10 cells at one level
+     * ({@link #decorationsStayPlaced}).
      */
     @Test
     void decorationLavaKeepsFromTheOpenings() {
@@ -1266,7 +1275,8 @@ class WastelandFieldTest {
      * (fix round 1, landing-plaza, and its verifier): the largest flat open disc within 40 blocks of each landing is no
      * larger than the p99 of the same measure at 400 of the field's own channel points far from any landing
      * ({@link #naturalDiscs}), and at the median no larger than their p90 (median 5.0, max 7.2; the field's median 4.1,
-     * p90 5.4, p99 7.3, max 8.1; the passage's foot keeps the median a little over the field's. 0.5.0's dome: median 12.2,
+     * p90 5.4, p99 7.3, max 8.5, 8.1 before the v2 Galleries landed; the passage's foot keeps the median a little over the
+     * field's. 0.5.0's dome: median 12.2,
      * max 19.3; fix round 1 at first: median 6.7, max 11.7, where the top sheet's floor was pulled flat 40 blocks round).
      */
     @Test
@@ -1637,7 +1647,8 @@ class WastelandFieldTest {
      * The lava pools are no canals (fix round 1, lava-canals): each lies off its tunnel's line by its own share and
      * swells and narrows, so of the lowest sheet's columns a pool fills (its dip at least half), at least 5 % lie more
      * than 0.62 of the half-width from the line, where 0.5.0's pools, centred and as wide as the tunnel's middle, all
-     * ended (7.3 %); the far bank always stays. (3 x 10^5 columns, 100 areas of 512 x 512 anywhere in 8000 x 8000,
+     * ended (7.4 % of 6725 columns since the v2 Galleries landed, 0.8.0, as on r2; 7.3 % of 8669 with the interim
+     * Galleries); the far bank always stays. (3 x 10^5 columns, 100 areas of 512 x 512 anywhere in 8000 x 8000,
      * {@link Spread}.)
      */
     @Test

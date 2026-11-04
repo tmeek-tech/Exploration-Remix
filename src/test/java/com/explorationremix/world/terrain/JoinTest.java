@@ -891,10 +891,11 @@ class JoinTest {
      * edges, where a way round may leave the box), and 60 % or more of the Galleries' dry places walk up into the
      * Wasteland within 400 moves, the climb included (W-ENG-3 asked 90 % of a walk to a way up, which {@link #waysDownAndUp}
      * bars; the whole climb up 130-145 rows on a ramp of 0.55-0.78 rows a block takes 150-250 moves of its own; measured
-     * 99.2, 70.8 and 93.8 % for seeds 1, 2 and 8004 since fix round 2b, 95.2, 61.7 and 96.0 % before: seed 2's box has a
-     * tube country in its middle, where no hole opens). The walk from gate 3's landing to the nearest crater rim must
-     * exist and is printed (far-from-entry asked a median of about 200 moves; measured 391, 474 and 451: not met, the
-     * landings are placed by the Wasteland's gates, not by the openings). End to
+     * 99.2, 70.8 and 94.0 % for seeds 1, 2 and 8004 since the v2 Galleries landed on the reshape (0.8.0), 99.2, 70.8 and
+     * 93.8 % at fix round 2b, 95.2, 61.7 and 96.0 % before: seed 2's box has a tube country in its middle, where no hole
+     * opens). The walk from gate 3's landing to the nearest crater rim must exist and is printed (far-from-entry asked a
+     * median of about 200 moves; measured 369, 592 and 451 on the reshape, with fix round 2's Wasteland, 391, 474 and 451
+     * at fix round 2b: not met, the landings are placed by the Wasteland's gates, not by the openings). End to
      * end (W-ENG-3's check from gate 3's landing): the landing lies in the main component, so it walks down to the
      * Galleries' floor and back up; both walks are printed ({@link #gateThreeLandingsReachTheGalleriesAndBack} runs the
      * check over 36 landings).
