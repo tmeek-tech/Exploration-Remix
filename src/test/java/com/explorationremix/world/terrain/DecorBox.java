@@ -3,6 +3,7 @@ package com.explorationremix.world.terrain;
 import com.explorationremix.world.feature.ColumnFit;
 import com.explorationremix.world.feature.Detour;
 import com.explorationremix.world.feature.TerracePoolsFeature;
+import com.explorationremix.world.feature.WalkWindow;
 import com.explorationremix.world.feature.Walkway;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -37,7 +38,9 @@ import java.util.Set;
  *
  * <p>Around each placement a window's walk graph (NoiseVox's moves) is compared before and after it. Its ways out are
  * the window's rim places that belonged to the featureless box's main component; a cut is two of them that were joined
- * both ways in the window before and are joined in neither direction after (one way: in one direction only).
+ * both ways in the window before and are joined in neither direction after (one way: in one direction only). After the
+ * run the whole box's graph is compared with the featureless one ({@link #finish}): the places of its main component that
+ * are still places but left it, and the pits among them (walked into from the main component, no walk back).
  *
  * <p>Each chunk draws from its own random, not from the game's decoration seeds, and the blocks' own random picks (the
  * mixed block providers) are not drawn: the placements are the game's in kind and number, not block for block.
@@ -141,12 +144,20 @@ final class DecorBox {
     final int[] guarded = new int[FEATURES], nearOpening = new int[FEATURES], shortened = new int[FEATURES];
     /** Pool floor cells a channel kept from a pool; lava falls refused for closing a passage's mouth (Detour). */
     int poolCellsOnChannels, detoured;
+    /** Refused for a walk round them they would cut, leave one way or turn into a pit ({@link WalkWindow}). */
+    final int[] walks = new int[FEATURES];
     /** The area decorated (m^2), the placements compared and where the first cuts are. */
     long area;
     int compared;
     final List<String> cutAt = new ArrayList<>();
     // measured after the run (finish())
     int lavaBlocks, lavaNearOpening, channelPlaces, channelLost;
+    /**
+     * The featureless main component's places that are still places but are no longer in the box's main component, and
+     * of them the pits: walked into from the main component with no walk back (the first few listed).
+     */
+    int leftMain, pits;
+    final List<String> pitAt = new ArrayList<>();
 
     // the blocks the current placement set: position and material before and after
     private int jn;
@@ -319,6 +330,14 @@ final class DecorBox {
             if (!edge) { lava[idx] = true; interior++; }
         }
         if (interior < 4) return false;
+        if (guards && Walkway.channelled(t, fy)) {
+            WalkWindow.Change change = new WalkWindow.Change();
+            for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
+                if (!lava[(dz + r) * size + dx + r]) continue;
+                change.add(ox + dx, fy, oz + dz, Detour.OTHER).add(ox + dx, fy - 1, oz + dz, Detour.SOLID);
+            }
+            if (!WalkWindow.keeps(this::walker, change)) { walks[f]++; return false; }
+        }
         for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
             int idx = (dz + r) * size + dx + r;
             if (cell[idx] != 1) continue;
@@ -428,6 +447,12 @@ final class DecorBox {
             if (!rock(fx, py - 1, fz)) return null;
             for (int d = 0; d < 4; d++) if (!rock(fx + HX[d], py, fz + HZ[d]) && !lavaSource(fx + HX[d], py, fz + HZ[d])) return null;
             if (guards && Walkway.channelled(t, sy) && !Detour.around(this::walker, fx, py + 1, fz)) { detoured++; return null; }
+        }
+        if (guards && Walkway.channelled(t, sy)) {
+            WalkWindow.Change change = new WalkWindow.Change().add(sx, sy, sz, Detour.OTHER);
+            for (int q = 0; q <= drop; q++) change.add(fx, sy - q, fz, Detour.OTHER);
+            if (sump) change.add(fx, py, fz, Detour.OTHER);
+            if (!WalkWindow.keeps(this::walker, change)) { walks[FALLS]++; return null; }
         }
         put(sx, sy, sz, NoiseVox.LAVA, K_SOURCE);
         for (int q = 0; q <= drop; q++) put(fx, sy - q, fz, NoiseVox.LAVA, K_FALL);
@@ -618,6 +643,23 @@ final class DecorBox {
         }
         channelLost = lost;
         v.graph();
+        // the whole box: places of the featureless main component that are still places, but no longer in the main one
+        boolean[] inMain = new boolean[v.places], entered = new boolean[v.places];
+        ArrayDeque<Integer> q = new ArrayDeque<>();
+        for (int p = 0; p < v.places; p++) if (v.inMain(p)) { inMain[p] = entered[p] = true; q.add(p); }
+        while (!q.isEmpty()) {
+            int u = q.poll();
+            for (int d = 0; d < 4; d++) { int w = v.next[u * 4 + d]; if (w >= 0 && !entered[w]) { entered[w] = true; q.add(w); } }
+        }
+        int[] back = v.walkTo(inMain);
+        for (int p = 0; p < v.places; p++) {
+            int x = v.px(p), y = v.py(p), z = v.pz(p);
+            if (inMain[p] || !main.get(bit(x, y, z))) continue;
+            leftMain++;
+            if (!entered[p] || back[p] >= 0) continue;
+            pits++;
+            if (pitAt.size() < 6) pitAt.add(String.format("(%d,%d,%d)", x, y, z));
+        }
         return this;
     }
 
@@ -630,10 +672,11 @@ final class DecorBox {
     @Override public String toString() {
         StringBuilder b = new StringBuilder(String.format(java.util.Locale.ROOT, "decorated %.3f km2:", area / 1e6));
         for (int f = 0; f < FEATURES; f++)
-            b.append(String.format(java.util.Locale.ROOT, " %s %d of %d tries (%d blocks; guard %d, openings %d, shortened %d; cuts %d, one way %d);",
-                    NAMES[f], placed[f], tries[f], blocks[f], guarded[f], nearOpening[f], shortened[f], cuts[f], oneWay[f]));
+            b.append(String.format(java.util.Locale.ROOT, " %s %d of %d tries (%d blocks; guard %d, openings %d, walks %d, shortened %d; cuts %d, one way %d);",
+                    NAMES[f], placed[f], tries[f], blocks[f], guarded[f], nearOpening[f], walks[f], shortened[f], cuts[f], oneWay[f]));
         b.append(String.format(java.util.Locale.ROOT, " pool cells kept off channels %d; falls kept from passages' mouths %d; lava blocks %d, within 3 columns of"
-                + " an opening %d; channel places %d, taken %d; first cuts %s", poolCellsOnChannels, detoured, lavaBlocks, lavaNearOpening, channelPlaces, channelLost, cutAt));
+                + " an opening %d; channel places %d, taken %d; first cuts %s; main places that left it %d, pits %d %s", poolCellsOnChannels, detoured, lavaBlocks,
+                lavaNearOpening, channelPlaces, channelLost, cutAt, leftMain, pits, pitAt));
         return b.toString();
     }
 

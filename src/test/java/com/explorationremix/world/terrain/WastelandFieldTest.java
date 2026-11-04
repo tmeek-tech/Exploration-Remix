@@ -32,6 +32,15 @@ class WastelandFieldTest {
      * fix round 1's verifier found connectivity at its bars (seed 3's main component, seed 77's blind ends).
      */
     static final long[][] MORE_BOXES = {{3, 0, 0}, {77, 1500, -700}};
+    /**
+     * Boxes decorated alone ({@link #decorationsLeaveNoPits}): where the landing of main's den gates (0.6.2) found lava
+     * pools and a lava fall that left a walk one way or a pit (seed 8675309 at 0,0 and -1831217569 at -1846,6353 one way;
+     * -1249636696 at -1925,171, 392286899 at -4264,-1654 and -1314707143 at 5560,2806 pits of 2, 1 and 1 places), and the
+     * two of thirty fresh boxes where a pool left the largest pits (-1563395035 at 2310,5212 and -667355435 at -6827,5355:
+     * 46 and 31 places).
+     */
+    static final long[][] DECOR_BOXES = {{8675309, 0, 0}, {-1831217569, -1846, 6353}, {-1249636696, -1925, 171}, {392286899, -4264, -1654},
+            {-1314707143, 5560, 2806}, {-1563395035, 2310, 5212}, {-667355435, -6827, 5355}};
     static final int SIZE = 512, MARGIN = 96;
 
     /** What one box measured (the blocks themselves are dropped once counted). */
@@ -50,7 +59,7 @@ class WastelandFieldTest {
         /** On a decorated box ({@link DecorBox}): what the decorations did. */
         String decor;
         int[] decorPlaced;
-        int decorCuts, decorOneWay, decorLava, decorLavaNearOpening, channelPlaces, channelTaken;
+        int decorCuts, decorOneWay, decorLava, decorLavaNearOpening, channelPlaces, channelTaken, decorPits;
         /**
          * The dry caves' relief ({@link #shapes}, vaults 9 or more wide): blocks more than 1.5 inside the analytic vault
          * and the rock among them, the built floor's and ceiling's offsets from the analytic ones (-20 to 20, inward
@@ -171,7 +180,17 @@ class WastelandFieldTest {
         dec.decorLavaNearOpening = d.lavaNearOpening;
         dec.channelPlaces = d.channelPlaces;
         dec.channelTaken = d.channelLost;
+        dec.decorPits = d.pits;
         return new Stats[]{plain, dec};
+    }
+
+    /** A box with the decorations laid on it as {@link #measureBoth} lays them, and nothing else measured. */
+    static DecorBox decorate(long seed, int cx, int cz) {
+        Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+        int li = Terrain.WASTELAND, top = t.shape.top(li), bot = t.shape.bottom(li);
+        int x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
+        NoiseVox v = NoiseVox.build(t, x0, z0, SIZE, SIZE, bot - 24, top + 1).graph();
+        return new DecorBox(t, v).run(seed, x0 + MARGIN - 32, z0 + MARGIN - 32, x0 + SIZE - MARGIN + 32, z0 + SIZE - MARGIN + 32).finish();
     }
 
     /** An opening column: air all the way from 2 rows under the Wasteland's bottom to 8 over it (spec 9). */
@@ -788,8 +807,8 @@ class WastelandFieldTest {
      * The decorations cut no passage (fix round 1, W-ENG-1 and L7): with the two biomes' features laid on each box
      * ({@link DecorBox}), no placement leaves two ways out of its window that were joined both ways unjoined, or joined
      * one way only (0 and 0; unguarded, 16-24 placements a box did), none takes a lane place of a tunnel (0; 684-849
-     * unguarded), and the largest walkable component and the blind ends stay as they were (within 0.1 points; one blind
-     * end more at most).
+     * unguarded), no place of the main component is left a pit (0, {@link #decorationsLeaveNoPits}), and the largest
+     * walkable component and the blind ends stay as they were (within 0.1 points; one blind end more at most).
      */
     @Test
     void decorationsCutNoPassage() {
@@ -799,6 +818,7 @@ class WastelandFieldTest {
             String what = "seed " + s.seed + ": " + s.decor;
             assertEquals(0, s.decorCuts, "passages cut, " + what);
             assertEquals(0, s.decorOneWay, "passages left one way, " + what);
+            assertEquals(0, s.decorPits, "pits, " + what);
             assertEquals(0, s.channelTaken, "lane places taken, " + what);
             assertTrue(s.channelPlaces > 50_000, "too few lane places to check, " + what);
             assertTrue(s.scc() >= 0.955 && s.scc() >= plain.scc() - 0.001, "the largest walkable component shrank: " + s.scc() + " from " + plain.scc());
@@ -807,6 +827,36 @@ class WastelandFieldTest {
             places += s.innerPlaces;
         }
         assertTrue(blind * 1000.0 / places <= 0.25, "blind ends with the decorations: " + blind + " in " + places);
+    }
+
+    /**
+     * The lava pools and falls leave no walk one way and no pit (the landing of main's den gates, 0.6.2): a pool whose
+     * lava closed a gap between the cave's own lava left a passage one way (its way back 32 moves before, 78 after; 38 and
+     * 192 at the second), and pools and a fall that took the only way out of a nook left pits of 1 or 2 places that a
+     * player drops into and cannot leave. Each pool and fall now forms only where the walks round it stay as they were
+     * ({@link com.explorationremix.world.feature.WalkWindow}). On {@link #DECOR_BOXES}, the boxes of those and of the two
+     * largest pits thirty fresh boxes had (46 and 31 places; 94 in the thirty, 0 now): no cut, no window one way, and no
+     * place of the featureless box's main component that is still a place is walked into from the main component without
+     * a walk back (on the whole box's graph, not only round each placement); lava keeps from the openings and the
+     * channels keep their places as on the measured boxes.
+     */
+    @Test
+    void decorationsLeaveNoPits() {
+        int[] placed = new int[DecorBox.FEATURES], walks = new int[DecorBox.FEATURES];
+        for (long[] b : DECOR_BOXES) {
+            DecorBox d = decorate(b[0], (int) b[1], (int) b[2]);
+            String what = "seed " + b[0] + " at " + b[1] + "," + b[2] + ": " + d;
+            System.out.println("WastelandFieldTest decorated alone " + what);
+            assertEquals(0, d.cutsAll(), "passages cut, " + what);
+            assertEquals(0, d.oneWayAll(), "passages left one way, " + what);
+            assertEquals(0, d.pits, "pits, " + what);
+            assertEquals(0, d.lavaNearOpening, "lava within 3 columns of an opening, " + what);
+            assertEquals(0, d.channelLost, "lane places taken, " + what);
+            for (int f = 0; f < DecorBox.FEATURES; f++) { placed[f] += d.placed[f]; walks[f] += d.walks[f]; }
+        }
+        System.out.println("WastelandFieldTest decorated alone: placed " + Arrays.toString(placed) + ", kept off the walks " + Arrays.toString(walks)
+                + " " + Arrays.toString(DecorBox.NAMES));
+        assertTrue(placed[DecorBox.POOLS] >= 20 && placed[DecorBox.FALLS] >= 50, "too few pools or falls to check: " + Arrays.toString(placed));
     }
 
     /** The decorations' lava keeps 3 columns from the openings into the Galleries (0; unguarded 27-318 blocks a box). */

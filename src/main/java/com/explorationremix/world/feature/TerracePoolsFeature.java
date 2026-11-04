@@ -28,7 +28,8 @@ import java.util.Optional;
  *
  * <p>In the Wasteland, whose tunnels are a noise field with no planned ways, a pool takes no floor cell on a tunnel's
  * walking channel ({@link Walkway#nearChannel}): it forms beside the channel, its rim flush along it. A lava pool keeps
- * 3 columns or more from the openings into the Galleries ({@link Walkway#nearOpening}).
+ * 3 columns or more from the openings into the Galleries ({@link Walkway#nearOpening}), and forms only where the walks
+ * round it stay as they were ({@link WalkWindow}).
  */
 public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Config> {
     public record Config(BlockStateProvider rim, BlockStateProvider bed, int radius, Optional<BlockStateProvider> edge,
@@ -101,6 +102,17 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
             if (!edge) { water[idx] = true; interior++; }
         }
         if (interior < 4) return false;
+        // In the Wasteland a lava pool takes no floor a walk needs. Its lava is no floor and no way, so where its cells
+        // close a gap (between the cave's own lava, or walls) a passage round it would be cut or left one way, and a nook
+        // beside it whose way out crossed them a pit (0.6.2). The walks round it must stay as they were (WalkWindow).
+        if (c.lava() && Walkway.channelled(fy)) {
+            WalkWindow.Change change = new WalkWindow.Change();
+            for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
+                if (!water[(dz + r) * size + dx + r]) continue;
+                change.add(o.getX() + dx, fy, o.getZ() + dz, Detour.OTHER).add(o.getX() + dx, fy - 1, o.getZ() + dz, Detour.SOLID);
+            }
+            if (!WalkWindow.keeps(WalkWindow.of(level), change)) return false;
+        }
         for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
             int idx = (dz + r) * size + dx + r;
             if (cell[idx] != 1) continue;
