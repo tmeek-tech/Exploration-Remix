@@ -39,13 +39,13 @@ EVENTS = {
     "ambient.blue.additions": [own(f"echo_drip{i}", 0.45, pitch=0.7) for i in range(1, 5)],
     # Basalt Galleries: rumbling and lava pops.
     "ambient.basalt.loop": [own("basalt_rumble", 0.8, stream=True)],
-    "ambient.basalt.additions": [vanilla("block/lava/pop", 0.7, 0.9, 3)]
+    "ambient.basalt.additions": [vanilla("liquid/lavapop", 0.7, 0.9, 3)]
                                 + [vanilla(f"ambient/nether/basalt_deltas/debris{i}", 0.5) for i in range(1, 4)]
                                 + [own(f"rumble{i}", 0.8) for i in range(1, 3)],
     # Ash Hollows (0.5), the Wasteland's refuge: the same rock heard from far off, lower and much quieter, and now and
     # then a distant rumble or a lava pop; no debris rattling down.
     "ambient.hollows.loop": [own("basalt_rumble", 0.35, stream=True, pitch=0.8)],
-    "ambient.hollows.additions": [own(f"rumble{i}", 0.35, pitch=0.75) for i in range(1, 3)] + [vanilla("block/lava/pop", 0.25, 0.8)],
+    "ambient.hollows.additions": [own(f"rumble{i}", 0.35, pitch=0.75) for i in range(1, 3)] + [vanilla("liquid/lavapop", 0.25, 0.8)],
 }
 
 SUBTITLES = {

@@ -139,7 +139,7 @@
   "ambient.basalt.additions": {
     "sounds": [
       {
-        "name": "minecraft:block/lava/pop",
+        "name": "minecraft:liquid/lavapop",
         "volume": 0.7,
         "pitch": 0.9,
         "weight": 3
@@ -191,7 +191,7 @@
         "pitch": 0.75
       },
       {
-        "name": "minecraft:block/lava/pop",
+        "name": "minecraft:liquid/lavapop",
         "volume": 0.25,
         "pitch": 0.8
       }
