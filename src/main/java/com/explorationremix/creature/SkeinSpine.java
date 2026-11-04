@@ -21,10 +21,14 @@ import java.util.Locale;
  * little (and the lead catches up) rather than pushing the body back.
  *
  * <p>Over an edge, from a floor onto a wall, the lead and the neck keep to the rock the trail crosses, so the body pours
- * over edges as the head went; only its turns across the rock are smoothed. Its back faces the rock under it, kept
- * square to the way the body runs: where the body runs up a step, its plates turn with it, the way the joint before
- * faced carried round with the body's turn. Between ticks it is drawn part way from where it was to where it is
- * ({@link #sample}), as the game draws the head.
+ * over edges as the head went; only its turns across the rock are smoothed. Where the head went down a step or up one
+ * (its rock still the floor), the body goes over the edge and down (or up) the step's face, as if it crossed that rock.
+ * When the head pops up a step at once, or hops, the lead comes on after it at its own pace, the neck stretched a
+ * moment, rather than the body being thrown forward; and laid afresh near where it lay (landing from a fall or a
+ * lunge), the body settles onto the rock over a few ticks ({@link #SETTLE}) rather than snapping there. Its back
+ * faces the rock under it, kept square to the way the body runs: where the body runs up a step, its plates turn with
+ * it, the way the joint before faced carried round with the body's turn. Between ticks it is drawn part way from where
+ * it was to where it is ({@link #sample}), as the game draws the head.
  *
  * <p>Plain numbers, no game classes, so it can be tested on its own.
  */
@@ -44,16 +48,35 @@ public final class SkeinSpine {
     static final double STEER = 4.0;
     /** How much faster than the head the lead may go to make up ground it lost (blocks a tick). */
     static final double CATCH = 0.12;
+    /**
+     * How much the lead's pace may rise in a tick (blocks a tick): it comes on no faster than the head went (and
+     * {@link #CATCH}), nor than its pace a tick ago and this. The point under the head jumping up a step (or the head
+     * hopping) throws the trail's head on at once, and the lead comes on after it at its own pace, the neck stretched,
+     * rather than the body thrown forward with it.
+     */
+    static final double PACE_RISE = 0.15;
     /** With the way on further round behind it than this (radians), the lead turns the way it last turned. */
     static final double FOLDED = Math.toRadians(150);
     /** The furthest the lead strays from the trail (blocks): room for its widest loop. */
     static final double DRIFT = 1.8;
     /** The lead moves in steps no longer than this (blocks). */
     static final double SUB = 0.05;
+    /**
+     * The most the lead is drawn, each step, onto the rock where the flat puts it (blocks): where the rock under the
+     * trail turns, or the trail doubles back over other rock, the flat may put it somewhere else at once, but the lead
+     * only ever goes on by its step, and settles onto that rock over the next few.
+     */
+    static final double SNAP = 0.02;
     /** How many pieces the neck's curve is measured in. */
     static final int NECK_PIECES = 16;
     /** How many links the neck has: the joint at its end is at the lead. */
     static final int NECK_JOINTS = (int) Math.round(NECK_LAG / LINK);
+    /**
+     * Laid afresh near where it lay (landing from a fall or a lunge, its head no further off than a trail's jump), the
+     * body goes over from where it lay to where it is laid over this many ticks, the head end at once, rather than
+     * snapping there.
+     */
+    static final int SETTLE = 8;
     /** How many ticks the way the head or the lead last turned is remembered. */
     static final int TURN_MEMORY = 60;
     /**
@@ -67,6 +90,10 @@ public final class SkeinSpine {
     private final int joints;
     /** The body (each joint's position and normal): now, and a tick ago. */
     private final double[] cur, prev;
+    /** The body as it lay when it was last laid afresh near where it lay, and how many ticks of going over from it are left. */
+    private final double[] was;
+    private int settle;
+    private boolean laid;
     /** The lead: its position and normal, the way it heads (towards the head), and how far along the trail it has got. */
     private final double[] lead = new double[6], heading = new double[3];
     private double leadAlong;
@@ -78,6 +105,8 @@ public final class SkeinSpine {
     /** The neck's curve before it is kept to the rock, and how much longer than its length it had to be last tick. */
     private final double[] raw = new double[3 * (NECK_PIECES + 1)];
     private double excess;
+    /** How fast the lead may come on (before CATCH): the head's step, rising from the last no faster than PACE_RISE. */
+    private double pace;
     /** The way the head last turned (about its rock's normal: -1, 0 for not lately, 1), how long ago, and the way it faced. */
     private int headTurn, headTurnAge;
     private final double[] facing = new double[3];
@@ -87,7 +116,7 @@ public final class SkeinSpine {
     /** The trail it lies along, and how many times that had been laid when this was laid on it. */
     @Nullable private SkeinTrail on;
     private int lays;
-    private final double[] at = new double[6], tmp = new double[6], v = new double[3], pos = new double[3];
+    private final double[] at = new double[6], tmp = new double[6], v = new double[3], pos = new double[3], move = new double[3];
     /** The rock round the lead, or the neck, laid out flat. */
     private final Flat flat = new Flat();
     private final double[] pathArcs, pathOut;
@@ -99,7 +128,8 @@ public final class SkeinSpine {
         this.joints = Math.max(2, joints);
         this.cur = new double[STRIDE * this.joints];
         this.prev = new double[STRIDE * this.joints];
-        this.path = new SkeinTrail(length() + 1.5);
+        this.was = new double[STRIDE * this.joints];
+        this.path = new SkeinTrail(length() + 1.5, false);
         // the joints behind the neck: each a link further back along the lead's path
         int behind = Math.max(1, this.joints - NECK_JOINTS - 1);
         this.pathArcs = new double[behind];
@@ -120,12 +150,17 @@ public final class SkeinSpine {
     /** Whether it lies along {@code trail} as that was last laid (else the next {@link #follow} lays it afresh). */
     public boolean on(SkeinTrail trail) { return trail == on && trail.lays() == lays; }
 
-    /** Lays the body along the trail back from the head, at once: as it lies when first set down or seen. */
+    /**
+     * Lays the body along the trail back from the head: at once when first set down or seen, or the trail was laid
+     * afresh far off (a teleport); near where it lay already, going over there in the next few ticks (see SETTLE).
+     */
     public void lay(SkeinTrail trail) {
         lay(trail, 0.0, 0.0, 0.0);
     }
 
     private void lay(SkeinTrail trail, double fx, double fy, double fz) {
+        boolean over = laid && near(trail);
+        if (over) System.arraycopy(cur, 0, was, 0, cur.length);
         on = trail;
         lays = trail.lays();
         headTurn = 0; headTurnAge = 0; leadTurn = 0; leadTurnAge = 0;
@@ -159,8 +194,39 @@ public final class SkeinSpine {
         path.read(data, lead[0], lead[1], lead[2]);
         offTrail = 0.0;
         excess = 0.0;
+        pace = 3.0 * PACE_RISE;     // laid afresh: as if it had been going at a run
         place(trail, fx, fy, fz);
-        System.arraycopy(cur, 0, prev, 0, cur.length);
+        settle = over ? SETTLE : 0;
+        settle();
+        // drawn from where it lay, going over; or (laid where it never lay) there at once, not swept there
+        System.arraycopy(over ? was : cur, 0, prev, 0, cur.length);
+        laid = true;
+    }
+
+    /** Whether the body lies (all of it somewhere) near the head of {@code trail}: no further off than a trail's jump. */
+    private boolean near(SkeinTrail trail) {
+        for (double c : cur) if (!Double.isFinite(c)) return false;
+        trail.at(trail.headAlong(), tmp, 0);
+        return sq(cur[0] - tmp[0]) + sq(cur[1] - tmp[1]) + sq(cur[2] - tmp[2]) <= sq(SkeinTrail.JUMP);
+    }
+
+    /**
+     * Going over from where it lay when last laid afresh (see {@link #SETTLE}): each joint drawn part way back to where
+     * it was, the less the fewer ticks are left, the head none and the neck less towards it.
+     */
+    private void settle() {
+        if (settle <= 0) return;
+        double k = (double) settle / (SETTLE + 1);
+        for (int j = 1; j < joints; j++) {
+            double kj = k * Math.min(1.0, (double) j / NECK_JOINTS);
+            int o = STRIDE * j;
+            for (int c = 0; c < 3; c++) cur[o + c] += (was[o + c] - cur[o + c]) * kj;
+            double x = cur[o + 3] + (was[o + 3] - cur[o + 3]) * kj, y = cur[o + 4] + (was[o + 4] - cur[o + 4]) * kj,
+                    z = cur[o + 5] + (was[o + 5] - cur[o + 5]) * kj;
+            double l = Math.sqrt(x * x + y * y + z * z);
+            if (l > 1.0E-6) { cur[o + 3] = x / l; cur[o + 4] = y / l; cur[o + 5] = z / l; }
+        }
+        settle--;
     }
 
     /**
@@ -181,6 +247,7 @@ public final class SkeinSpine {
             // never left lying nowhere (a trail of no length, say): laid afresh along the trail
             if (!Double.isFinite(c)) { lay(trail, 0.0, 0.0, 0.0); return; }
         }
+        settle();
     }
 
     /** Notes which way the head turned (about its rock's normal) since the last tick, if it turned. */
@@ -205,13 +272,15 @@ public final class SkeinSpine {
 
     /**
      * The lead comes on after the head: as far as keeps it {@link #NECK_LAG} behind it along the trail (and the neck
-     * no longer than that), at most {@link #CATCH} more than the head went; in short steps, each turned towards the
+     * no longer than that), at most {@link #CATCH} more than the head went (or than its pace, if the head went on by a
+     * jump: see {@link #PACE_RISE}); in short steps, each turned towards the
      * trail {@link #LEAD_LOOK} on. It steers on the rock round it laid out flat, so over an edge it goes on onto the
      * rock beyond as the trail does.
      */
     private void moveLead(SkeinTrail trail) {
-        double uh = trail.headAlong(), step = trail.lastStep();
-        double go = Math.max(0.0, Math.min(step + CATCH, Math.max(uh - leadAlong - NECK_LAG, excess)));
+        double uh = trail.headAlong();
+        pace = Math.min(trail.lastStep(), pace + PACE_RISE);
+        double go = Math.max(0.0, Math.min(pace + CATCH, Math.max(uh - leadAlong - NECK_LAG, excess)));
         int n = (int) Math.ceil(go / SUB - 1.0E-9);
         if (n <= 0) return;
         double ds = go / n;
@@ -225,6 +294,10 @@ public final class SkeinSpine {
         for (int i = 0; i < n; i++) {
             steer(uh, ds, fnx, fny, fnz);
             pos[0] += v[0] * ds; pos[1] += v[1] * ds; pos[2] += v[2] * ds;
+            // the step on the rock it is on (as the flat last took it there)
+            move[0] = v[0] * ds; move[1] = v[1] * ds; move[2] = v[2] * ds;
+            flat.vecToWorld(move);
+            double wx = lead[0] + move[0], wy = lead[1] + move[1], wz = lead[2] + move[2];
             double hi = Math.min(uh, leadAlong + LEAD_LOOK + 0.5);
             double u = flat.toWorld(pos, leadAlong, hi, leadAlong + ds, lead);
             // never far from the trail
@@ -235,6 +308,12 @@ public final class SkeinSpine {
                 pos[0] = flat.base[0] + ox * k; pos[1] = flat.base[1] + oy * k; pos[2] = flat.base[2] + oz * k;
                 u = flat.toWorld(pos, leadAlong, hi, u, lead);
                 ol = DRIFT;
+            }
+            // where the step took it, drawn onto the rock where the flat puts it
+            double cx = lead[0] - wx, cy = lead[1] - wy, cz = lead[2] - wz, cl = Math.sqrt(cx * cx + cy * cy + cz * cz);
+            if (cl > SNAP) {
+                double k = SNAP / cl;
+                lead[0] = wx + cx * k; lead[1] = wy + cy * k; lead[2] = wz + cz * k;
             }
             offTrail = ol;
             leadAlong = Math.max(leadAlong, u);
@@ -310,8 +389,13 @@ public final class SkeinSpine {
     private void place(SkeinTrail trail, double fx, double fy, double fz) {
         double uh = trail.headAlong();
         trail.at(uh, at, 0);
-        double px = at[0], py = at[1], pz = at[2], nx = at[3], ny = at[4], nz = at[5];
-        // the way the head points, flat on its rock; none, the way the trail comes in
+        double px = at[0], py = at[1], pz = at[2], hx = at[3], hy = at[4], hz = at[5];
+        // the stretch of rock from the lead to the head laid out flat on the plane of the rock under the head (square
+        // to the way the trail comes in), the lead with it
+        double from = Math.min(leadAlong - 0.5, uh - 0.3);
+        flat.build(trail, from, uh, uh);
+        double nx = flat.nx, ny = flat.ny, nz = flat.nz;
+        // the way the head points, flat on that; none, the way the trail comes in
         double d = fx * nx + fy * ny + fz * nz;
         fx -= nx * d; fy -= ny * d; fz -= nz * d;
         double fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
@@ -324,9 +408,6 @@ public final class SkeinSpine {
             if (fl < 1.0E-4) { fx = heading[0]; fy = heading[1]; fz = heading[2]; fl = 1.0; }
         }
         fx /= fl; fy /= fl; fz /= fl;
-        // the stretch of rock from the lead to the head laid out flat on the head's plane, the lead with it
-        double from = Math.min(leadAlong - 0.5, uh - 0.3);
-        flat.build(trail, from, uh, uh);
         flat.toFlat(lead[0], lead[1], lead[2], leadAlong, pos);
         double lx = pos[0], ly = pos[1], lz = pos[2];
         double d0 = (lx - px) * nx + (ly - py) * ny + (lz - pz) * nz;
@@ -366,7 +447,7 @@ public final class SkeinSpine {
         double u = uh, du = (uh - leadAlong) / NECK_PIECES;
         for (int i = 0; i <= NECK_PIECES; i++) {
             int o = STRIDE * i, r = 3 * i;
-            if (i == 0) { set(neck, o, px, py, pz, nx, ny, nz); neckArc[0] = 0.0; continue; }
+            if (i == 0) { set(neck, o, px, py, pz, hx, hy, hz); neckArc[0] = 0.0; continue; }
             neckArc[i] = neckArc[i - 1] + Math.sqrt(sq(raw[r] - raw[r - 3]) + sq(raw[r + 1] - raw[r - 2]) + sq(raw[r + 2] - raw[r - 1]));
             if (i == NECK_PIECES) set(neck, o, lead[0], lead[1], lead[2], lead[3], lead[4], lead[5]);
             else {
@@ -595,27 +676,41 @@ public final class SkeinSpine {
 
     /**
      * A stretch of the trail and the rock it crosses laid out flat on the plane of one place on it, as a strip of paper
-     * stuck along the rock would lie peeled off and laid flat: each sample's rock turned onto the plane, edge after
-     * edge, and the trail laid along it. A point near the stretch is taken from the flat to the rock (and back) by the
-     * turn of the rock under the trail nearest it, so a curve drawn on the flat lies on the rock, round edges as the
-     * trail goes.
+     * stuck along the rock would lie peeled off and laid flat: each stretch's rock turned onto the plane, edge after
+     * edge, and the trail laid along it at its own length. A point near the stretch is taken from the flat to the rock
+     * (and back) by the turn of the rock under the trail nearest it, so a curve drawn on the flat lies on the rock, round
+     * edges as the trail goes.
      */
     private static final class Flat {
         static final double STEP = 0.08;
         static final int MAX = 64;
         int size, ref;
         double from, du;
-        /** Each sample: how far along the trail, its place and its rock's normal, its place on the flat, and the turn from its rock onto the flat. */
-        final double[] u = new double[MAX], p = new double[3 * MAX], n = new double[3 * MAX], q = new double[3 * MAX], r = new double[9 * MAX];
+        /** Each sample: how far along the trail, its place and its rock's normal as the trail holds them, its place on the flat. */
+        final double[] u = new double[MAX], p = new double[3 * MAX], n = new double[3 * MAX], q = new double[3 * MAX];
+        /**
+         * Each stretch (sample i to i + 1): the way it runs, its rock's normal square to that way, the turn from its
+         * rock onto the flat (a matrix, by rows), its length, and how far the rock the trail holds there lies across
+         * the way it runs (1 square across it, 0 along it).
+         */
+        final double[] way = new double[3 * MAX], rock = new double[3 * MAX], r = new double[9 * MAX];
+        private final double[] len = new double[MAX], across = new double[MAX];
         /** The flat's plane: its normal. */
         double nx, ny, nz;
         /** The place on the flat's line nearest the last point taken to the rock, and the stretch it lies on. */
         final double[] base = new double[3];
         private int seg;
         private double segT;
-        private final double[] s = new double[6], m = new double[9];
+        private final double[] s = new double[6], m = new double[9], c = new double[3];
 
-        /** Lays out the trail from {@code from} to {@code to} along it, flat on its plane at {@code ref}. */
+        /**
+         * Lays out the trail from {@code from} to {@code to} along it, flat on the plane of its rock at {@code ref}.
+         * Each stretch's rock is the rock the trail holds there, turned square to the way the stretch runs; where the
+         * trail runs (nearly) along that (the point under the head sinking down a step, or climbing one, or falling,
+         * its rock still the floor) it has gone over an edge and down (or up) the face beyond, as the rock it came off
+         * turned as the trail bent: so a drop down a step lies on the flat as the face it went down, at its length,
+         * between the floors above and below, never folded up to nothing.
+         */
         void build(SkeinTrail trail, double from, double to, double ref) {
             int count = Math.max(2, Math.min(MAX, (int) Math.ceil((to - from) / STEP) + 1));
             this.from = from;
@@ -629,34 +724,117 @@ public final class SkeinSpine {
             }
             int ri = Math.max(0, Math.min(count - 1, (int) Math.round((ref - from) / du)));
             this.ref = ri;
-            for (int i = 0; i < 9; i++) r[9 * ri + i] = i % 4 == 0 ? 1.0 : 0.0;
+            int last = count - 2;
+            // each stretch's way (one of no length runs on the way of the one before it, else after it)
+            int any = -1;
+            for (int i = 0; i <= last; i++) {
+                double dx = p[3 * i + 3] - p[3 * i], dy = p[3 * i + 4] - p[3 * i + 1], dz = p[3 * i + 5] - p[3 * i + 2];
+                double l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                len[i] = l;
+                if (l > 1.0E-9) {
+                    way[3 * i] = dx / l; way[3 * i + 1] = dy / l; way[3 * i + 2] = dz / l;
+                    if (any < 0) any = i;
+                } else if (i > 0 && any >= 0) {
+                    way[3 * i] = way[3 * i - 3]; way[3 * i + 1] = way[3 * i - 2]; way[3 * i + 2] = way[3 * i - 1];
+                }
+            }
+            if (any < 0) { way[0] = 0.0; way[1] = 0.0; way[2] = 1.0; any = 0; }
+            for (int i = 0; i < any; i++) { way[3 * i] = way[3 * any]; way[3 * i + 1] = way[3 * any + 1]; way[3 * i + 2] = way[3 * any + 2]; }
+            if (any == 0 && len[0] <= 1.0E-9)
+                for (int i = 1; i <= last; i++) if (len[i] <= 1.0E-9) { way[3 * i] = way[0]; way[3 * i + 1] = way[1]; way[3 * i + 2] = way[2]; }
+            // each stretch's rock as the trail holds it (the mean of its ends'), square to the way it runs
+            for (int i = 0; i <= last; i++) {
+                double x = n[3 * i] + n[3 * i + 3], y = n[3 * i + 1] + n[3 * i + 4], z = n[3 * i + 2] + n[3 * i + 5];
+                double held = Math.sqrt(x * x + y * y + z * z);
+                double d = x * way[3 * i] + y * way[3 * i + 1] + z * way[3 * i + 2];
+                x -= way[3 * i] * d; y -= way[3 * i + 1] * d; z -= way[3 * i + 2] * d;
+                double l = Math.sqrt(x * x + y * y + z * z);
+                across[i] = held < 1.0E-9 ? 0.0 : l / held;
+                if (l > 1.0E-9) { rock[3 * i] = x / l; rock[3 * i + 1] = y / l; rock[3 * i + 2] = z / l; }
+                else { rock[3 * i] = 0.0; rock[3 * i + 1] = 0.0; rock[3 * i + 2] = 0.0; }
+            }
+            // where it runs (nearly) along it: the rock of the stretch before, carried round as the trail bends from
+            // there (and before the first stretch that runs across its rock, the rock of the one after)
+            int first = -1;
+            for (int i = 0; i <= last && first < 0; i++) if (across[i] >= SQUARE_TO) first = i;
+            if (first < 0) {
+                first = 0;
+                for (int i = 1; i <= last; i++) if (across[i] > across[first]) first = i;
+                if (across[first] < 1.0E-6) anyRock(first);
+            }
+            for (int i = first + 1; i <= last; i++) carryRock(i, i - 1);
+            for (int i = first - 1; i >= 0; i--) carryRock(i, i + 1);
+            // each stretch's rock turned onto the flat (the rock of the stretch at the reference), edge after edge
+            int rs = Math.min(ri, last);
+            nx = rock[3 * rs]; ny = rock[3 * rs + 1]; nz = rock[3 * rs + 2];
+            for (int i = 0; i < 9; i++) r[9 * rs + i] = i % 4 == 0 ? 1.0 : 0.0;
+            for (int i = rs + 1; i <= last; i++) turn(i, i - 1);
+            for (int i = rs - 1; i >= 0; i--) turn(i, i + 1);
+            // and the trail laid along them, each stretch at its length, end to end out from the reference
             q[3 * ri] = p[3 * ri]; q[3 * ri + 1] = p[3 * ri + 1]; q[3 * ri + 2] = p[3 * ri + 2];
-            nx = n[3 * ri]; ny = n[3 * ri + 1]; nz = n[3 * ri + 2];
-            for (int k = ri + 1; k < count; k++) lay(k, k - 1, 1.0);
-            for (int k = ri - 1; k >= 0; k--) lay(k, k + 1, -1.0);
+            for (int i = ri; i <= last; i++) lay(i, 1);
+            for (int i = ri - 1; i >= 0; i--) lay(i, -1);
         }
 
-        /** Sample k laid out from its neighbour j (laid out already), the stretch between running the way {@code way}. */
-        private void lay(int k, int j, double way) {
-            rotation(n[3 * k], n[3 * k + 1], n[3 * k + 2], n[3 * j], n[3 * j + 1], n[3 * j + 2], m);
-            int a = 9 * j, b = 9 * k;
+        /**
+         * Stretch i's rock where the trail's rock there lies (nearly) along it: stretch j's (beside it) carried round
+         * as the trail bends from j to i, blended into its own the more its own lies across it.
+         */
+        private void carryRock(int i, int j) {
+            double k = across[i] <= SQUARE_FROM ? 0.0 : across[i] >= SQUARE_TO ? 1.0 : (across[i] - SQUARE_FROM) / (SQUARE_TO - SQUARE_FROM);
+            if (k >= 1.0) return;
+            k = k * k * (3.0 - 2.0 * k);
+            int a = 3 * i, b = 3 * j;
+            c[0] = rock[b]; c[1] = rock[b + 1]; c[2] = rock[b + 2];
+            carry(c, way[b], way[b + 1], way[b + 2], way[a], way[a + 1], way[a + 2]);
+            double d = c[0] * way[a] + c[1] * way[a + 1] + c[2] * way[a + 2];
+            c[0] -= way[a] * d; c[1] -= way[a + 1] * d; c[2] -= way[a + 2] * d;
+            double cl = Math.sqrt(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]);
+            if (cl < 1.0E-6) {
+                // folded right back on itself: nothing to carry round, so its own (or any)
+                if (across[i] < 1.0E-6) anyRock(i);
+                return;
+            }
+            double x = rock[a] * k + c[0] / cl * (1.0 - k), y = rock[a + 1] * k + c[1] / cl * (1.0 - k), z = rock[a + 2] * k + c[2] / cl * (1.0 - k);
+            double l = Math.sqrt(x * x + y * y + z * z);
+            if (l < 1.0E-6) { x = c[0] / cl; y = c[1] / cl; z = c[2] / cl; l = 1.0; }
+            rock[a] = x / l; rock[a + 1] = y / l; rock[a + 2] = z / l;
+        }
+
+        /** Stretch i's rock, with none to go by at all (the trail runs along its rock all the way): any square to it. */
+        private void anyRock(int i) {
+            int a = 3 * i;
+            double ax = Math.abs(way[a + 1]) < 0.9 ? 0.0 : 1.0, ay = Math.abs(way[a + 1]) < 0.9 ? 1.0 : 0.0;
+            double d = ax * way[a] + ay * way[a + 1];
+            double x = ax - way[a] * d, y = ay - way[a + 1] * d, z = -way[a + 2] * d, l = Math.sqrt(x * x + y * y + z * z);
+            rock[a] = x / l; rock[a + 1] = y / l; rock[a + 2] = z / l;
+        }
+
+        /** Stretch i's turn onto the flat: its neighbour j's (turned already), and the turn from i's rock onto j's. */
+        private void turn(int i, int j) {
+            rotation(rock[3 * i], rock[3 * i + 1], rock[3 * i + 2], rock[3 * j], rock[3 * j + 1], rock[3 * j + 2], m);
+            int a = 9 * j, b = 9 * i;
             for (int row = 0; row < 3; row++)
                 for (int col = 0; col < 3; col++)
                     r[b + 3 * row + col] = r[a + 3 * row] * m[col] + r[a + 3 * row + 1] * m[3 + col] + r[a + 3 * row + 2] * m[6 + col];
-            double dx = (p[3 * k] - p[3 * j]) * way, dy = (p[3 * k + 1] - p[3 * j + 1]) * way, dz = (p[3 * k + 2] - p[3 * j + 2]) * way;
-            double ex = r[b] * dx + r[b + 1] * dy + r[b + 2] * dz;
-            double ey = r[b + 3] * dx + r[b + 4] * dy + r[b + 5] * dz;
-            double ez = r[b + 6] * dx + r[b + 7] * dy + r[b + 8] * dz;
-            // laid on the plane, its length kept (where the rock's normal does not quite square with the trail, as
-            // round an edge the head eased over, the stretch is turned flat rather than shortened)
-            double len = Math.sqrt(dx * dx + dy * dy + dz * dz), en = ex * nx + ey * ny + ez * nz;
-            ex -= nx * en; ey -= ny * en; ez -= nz * en;
-            double el = Math.sqrt(ex * ex + ey * ey + ez * ez);
-            if (el > 1.0E-9) { ex *= len / el; ey *= len / el; ez *= len / el; }
-            q[3 * k] = q[3 * j] + ex * way; q[3 * k + 1] = q[3 * j + 1] + ey * way; q[3 * k + 2] = q[3 * j + 2] + ez * way;
         }
 
-        /** The sample at or before {@code uu} (and the part of the way on to the next, in segT). */
+        /** Stretch i laid on the flat: its way turned onto the flat, at its length, on from sample i (dir 1) or back from sample i + 1 (dir -1). */
+        private void lay(int i, int dir) {
+            int b = 9 * i, a = 3 * i;
+            double x = r[b] * way[a] + r[b + 1] * way[a + 1] + r[b + 2] * way[a + 2];
+            double y = r[b + 3] * way[a] + r[b + 4] * way[a + 1] + r[b + 5] * way[a + 2];
+            double z = r[b + 6] * way[a] + r[b + 7] * way[a + 1] + r[b + 8] * way[a + 2];
+            // (square to the flat's normal already, but for rounding)
+            double d = x * nx + y * ny + z * nz;
+            x -= nx * d; y -= ny * d; z -= nz * d;
+            double l = Math.sqrt(x * x + y * y + z * z);
+            double k = l < 1.0E-9 ? 0.0 : len[i] / l;
+            if (dir > 0) for (int t = 0; t < 3; t++) q[a + 3 + t] = q[a + t] + (t == 0 ? x : t == 1 ? y : z) * k;
+            else for (int t = 0; t < 3; t++) q[a + t] = q[a + 3 + t] - (t == 0 ? x : t == 1 ? y : z) * k;
+        }
+
+        /** The stretch {@code uu} lies on (and how far along it, in segT). */
         private int at(double uu) {
             double f = (uu - from) / du;
             int k = Math.max(0, Math.min(size - 2, (int) Math.floor(f)));
@@ -671,11 +849,15 @@ public final class SkeinSpine {
             for (int i = 0; i < 3; i++) o[i] = q[3 * k + i] + (q[3 * k + 3 + i] - q[3 * k + i]) * t;
         }
 
-        /** The point (x, y, z) on the rock, beside the trail's place {@code uu}, laid out on the flat into o. */
+        /**
+         * The point (x, y, z) on the rock, beside the trail's place {@code uu}, laid out on the flat into o (and that
+         * place's rock is the one {@link #vecToWorld} turns ways back onto, till a point is next taken to the rock).
+         */
         void toFlat(double x, double y, double z, double uu, double[] o) {
             int k = at(uu);
             double t = segT;
-            int b = 9 * (t < 0.5 ? k : k + 1);
+            seg = k;
+            int b = 9 * k;
             double dx = x - (p[3 * k] + (p[3 * k + 3] - p[3 * k]) * t);
             double dy = y - (p[3 * k + 1] + (p[3 * k + 4] - p[3 * k + 1]) * t);
             double dz = z - (p[3 * k + 2] + (p[3 * k + 5] - p[3 * k + 2]) * t);
@@ -686,8 +868,7 @@ public final class SkeinSpine {
 
         /** v, a way along the rock at the trail's place {@code uu}, turned onto the flat. */
         void vecToFlat(double uu, double[] v) {
-            int k = at(uu);
-            int b = 9 * (segT < 0.5 ? k : k + 1);
+            int b = 9 * at(uu);
             double x = v[0], y = v[1], z = v[2];
             v[0] = r[b] * x + r[b + 1] * y + r[b + 2] * z;
             v[1] = r[b + 3] * x + r[b + 4] * y + r[b + 5] * z;
@@ -722,7 +903,7 @@ public final class SkeinSpine {
             int k = bk;
             for (int i = 0; i < 3; i++) base[i] = q[3 * k + i] + (q[3 * k + 3 + i] - q[3 * k + i]) * bt;
             double dx = f[0] - base[0], dy = f[1] - base[1], dz = f[2] - base[2];
-            int b = 9 * (bt < 0.5 ? k : k + 1);
+            int b = 9 * k;
             // back from the flat onto that rock: the turn undone (its transpose)
             double wx = r[b] * dx + r[b + 3] * dy + r[b + 6] * dz;
             double wy = r[b + 1] * dx + r[b + 4] * dy + r[b + 7] * dz;
@@ -730,17 +911,20 @@ public final class SkeinSpine {
             o[0] = p[3 * k] + (p[3 * k + 3] - p[3 * k]) * bt + wx;
             o[1] = p[3 * k + 1] + (p[3 * k + 4] - p[3 * k + 1]) * bt + wy;
             o[2] = p[3 * k + 2] + (p[3 * k + 5] - p[3 * k + 2]) * bt + wz;
-            double mx = n[3 * k] + (n[3 * k + 3] - n[3 * k]) * bt, my = n[3 * k + 1] + (n[3 * k + 4] - n[3 * k + 1]) * bt,
-                    mz = n[3 * k + 2] + (n[3 * k + 5] - n[3 * k + 2]) * bt;
+            // the rock's normal there: the stretch's, eased into the next stretch's either side of the sample between
+            int j = bt < 0.5 ? Math.max(0, k - 1) : Math.min(size - 2, k + 1);
+            double e = j == k ? 0.0 : bt < 0.5 ? 0.5 - bt : bt - 0.5;
+            double mx = rock[3 * k] * (1.0 - e) + rock[3 * j] * e, my = rock[3 * k + 1] * (1.0 - e) + rock[3 * j + 1] * e,
+                    mz = rock[3 * k + 2] * (1.0 - e) + rock[3 * j + 2] * e;
             double ml = Math.sqrt(mx * mx + my * my + mz * mz);
-            if (ml < 1.0E-6) { mx = n[3 * k + 3]; my = n[3 * k + 4]; mz = n[3 * k + 5]; ml = 1.0; }
+            if (ml < 1.0E-6) { mx = rock[3 * k]; my = rock[3 * k + 1]; mz = rock[3 * k + 2]; ml = 1.0; }
             o[3] = mx / ml; o[4] = my / ml; o[5] = mz / ml;
             return u[k] + du * bt;
         }
 
         /** v, a way on the flat, turned onto the rock of the point last taken to the rock. */
         void vecToWorld(double[] v) {
-            int b = 9 * (segT < 0.5 ? seg : seg + 1);
+            int b = 9 * seg;
             double x = v[0], y = v[1], z = v[2];
             v[0] = r[b] * x + r[b + 3] * y + r[b + 6] * z;
             v[1] = r[b + 1] * x + r[b + 4] * y + r[b + 7] * z;

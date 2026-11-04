@@ -308,6 +308,69 @@ class SkeinSpineTest {
     }
 
     @Test
+    void downAStepAndRightBackItNeverSkips() {
+        // along the floor (y 0, +x) to a step down at x 3; the point under the head sinks down it over some ticks as the
+        // head stands at its foot (its rock still the floor), then the head turns back along the floor below
+        Walk w = new Walk(0, 0, 0, 1, 0);
+        w.walk(2.75, 0.25);
+        w.x = 3.0; w.y = -0.4; w.tick();
+        w.x = 3.27; w.y = -0.64; w.tick();
+        for (int k = 1; k <= 9; k++) { w.y = -1.0 + 0.36 * Math.pow(0.6, k); w.tick(); }
+        w.y = -1.0;
+        w.turn(100, 2);
+        w.walk(2.5, 0.2);
+        w.turn(-60, 1);
+        w.walk(2.0, 0.25);
+        assertEquals(0.0, w.back, 1.0E-9, "behind the neck it never slides back");
+        assertTrue(w.beyond <= SkeinSpine.CATCH + 0.03, "nor skips on: " + w.beyond);
+        assertEquals(0, w.reversals, "nor goes to and fro");
+    }
+
+    @Test
+    void whenItsHeadPopsUpAStepItsNeckStretchesAndItsBodyComesOnAtItsPace() {
+        // along the floor at a quarter a tick, the point under the head up a whole step in one tick, and on
+        Walk w = new Walk(0, 0, 0, 1, 0);
+        w.walk(4, 0.25);
+        double[] was = w.spine.data().clone();
+        w.x += 0.25; w.y = 1.0; w.tick();
+        double most = 0;
+        for (int j = NECK + 1; j < JOINTS; j++) most = Math.max(most, dist(w.spine.data(), j, was, j));
+        assertTrue(most <= 0.25 + SkeinSpine.PACE_RISE + SkeinSpine.CATCH + 0.02, "the body is not thrown on: it went " + most);
+        assertTrue(w.spine.neckLength() > SkeinSpine.NECK_LAG + 0.3, "the neck takes it: " + w.spine.neckLength());
+        w.walk(3, 0.25);
+        assertEquals(SkeinSpine.NECK_LAG, w.spine.neckLength(), 0.05, "and has drawn the body up after it");
+        assertEquals(0.0, w.back, 1.0E-9);
+    }
+
+    @Test
+    void landingNearWhereItLayItsBodySettlesOntoTheRockRatherThanSnapping() {
+        // a curve on the floor; then laid afresh where the head is (landing, its head turned to +z in the air),
+        // straight back along -z
+        Walk w = new Walk(0, 0, 0, 0, 1);
+        w.walk(3, 0.25);
+        w.turn(90, 1);
+        w.walk(3, 0.25);
+        w.fx = 0; w.fz = 1;
+        double[] lay = new double[6 * JOINTS], was = w.spine.data().clone();
+        SkeinTrail t = new SkeinTrail(KEEP);
+        t.lay(w.x, w.y, w.z, 0, 0, -1, 0, 1, 0);
+        SkeinSpine laid = new SkeinSpine(JOINTS);
+        laid.lay(t);
+        System.arraycopy(laid.data(), 0, lay, 0, lay.length);
+        w.trail.lay(w.x, w.y, w.z, 0, 0, -1, 0, 1, 0);
+        w.tick();
+        double[] d = w.spine.data();
+        assertEquals(0.0, dist(d, 0, lay, 0), 1.0E-6, "its head is where it landed");
+        for (int j = NECK; j < JOINTS; j++) {
+            double gone = dist(d, j, was, j), all = dist(lay, j, was, j);
+            assertTrue(gone <= 0.25 * all + 0.01, "joint " + j + " went " + gone + " of " + all + " at once");
+        }
+        assertArrayEquals(was, w.spine.before(), "drawn going over from where it lay");
+        w.still(SkeinSpine.SETTLE);
+        for (int j = 0; j < JOINTS; j++) assertTrue(w.offTrail(j) < 0.01, "joint " + j + " is " + w.offTrail(j) + " off the trail");
+    }
+
+    @Test
     void walkingAboutItsBodyNeverJerks() {
         // the Skein's gait: its head snaps round, it darts off, it stops dead
         Random r = new Random(7);

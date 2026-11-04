@@ -41,6 +41,8 @@ public final class SkeinTrail {
     private static final int STRIDE = 6;
 
     private final double keep;
+    /** Whether a point on other rock has the corner between put in before it (see {@link #record}). */
+    private final boolean corners;
     private final double[] pts = new double[CAP * STRIDE];
     /**
      * How far along the line each point is (blocks, from the oldest point it was laid with): rising towards the head,
@@ -56,7 +58,16 @@ public final class SkeinTrail {
 
     /** A trail that keeps at least {@code keep} blocks behind the head. */
     public SkeinTrail(double keep) {
+        this(keep, true);
+    }
+
+    /**
+     * A trail that keeps at least {@code keep} blocks behind the head; without {@code corners}, a point on other rock
+     * goes straight on the line (for a line recorded in steps so short that the corner between is no way off it).
+     */
+    public SkeinTrail(double keep, boolean corners) {
         this.keep = keep;
+        this.corners = corners;
     }
 
     public boolean laid() { return laid; }
@@ -138,7 +149,8 @@ public final class SkeinTrail {
 
     /**
      * The head is now at (x, y, z), on rock facing (ux, uy, uz) (unit length). A point goes on the line once the head
-     * is {@link #SPACING} from the last one, or at once when it has gone onto other rock, after the corner between.
+     * is {@link #SPACING} from the last one, or at once when it has gone onto other rock, after the corner between
+     * (if this trail puts corners in).
      */
     public void record(double x, double y, double z, double ux, double uy, double uz) {
         if (!laid) { lay(x, y, z, 0, 0, 1, ux, uy, uz); return; }
@@ -154,7 +166,7 @@ public final class SkeinTrail {
         int last = (size - 1) * STRIDE;
         double dot = pts[last + 3] * ux + pts[last + 4] * uy + pts[last + 5] * uz;
         if (dot < TURNED) {
-            double[] c = corner(pts[last], pts[last + 1], pts[last + 2], pts[last + 3], pts[last + 4], pts[last + 5], x, y, z, ux, uy, uz);
+            double[] c = !corners ? null : corner(pts[last], pts[last + 1], pts[last + 2], pts[last + 3], pts[last + 4], pts[last + 5], x, y, z, ux, uy, uz);
             if (c != null) {
                 double nx = pts[last + 3] + ux, ny = pts[last + 4] + uy, nz = pts[last + 5] + uz;
                 double nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
