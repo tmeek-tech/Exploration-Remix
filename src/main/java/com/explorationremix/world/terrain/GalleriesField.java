@@ -817,12 +817,28 @@ public final class GalleriesField {
     static final double CAUS_FLAT = 0.6;
     /**
      * Scoria Canyons: lava slots (W - 4) along the zero lines of a noise of period CAN_P, sheer walls up to W + CAN_DRY,
-     * then stepped cliffs of CAN_STEP rows up to the high ground; the terrain fades out with the patch's weight, and the
+     * then stepped cliffs up to the high ground ({@link #CAN_WV}); the terrain fades out with the patch's weight, and the
      * slots pinch out before it does (a slot's floor is lava or none, never in the flood's reach); they pinch out too
      * over CAN_AP blocks before a tube's mouth's blend, which draws the floor toward the run's (fix round 2b: the old
-     * apron lifted a slot's lava floor into a trench 20 rows deep, closed at the massif: a pit in seed -42's box).
+     * apron lifted a slot's lava floor into a trench 20 rows deep, closed at the massif: a pit in seed -42's box). The
+     * walls' tops, CAN_DRY less CAN_WV less CAN_J at the lowest, stand over W + STAIR_TOP, so no bank is a floor the
+     * low ground's stairs wear from ({@link #stairs}): with the walls at W + 40 the banks' steps under W + 56 were worn
+     * into slopes of a row a block, the slot ringed by fine regular stairs (RFIX round: in the canyon cells of the two
+     * look boxes 9.4 % and 10.6 % of the dry columns stood on 6 or more one-row steps in a row, 26 % of those under
+     * W + 56 worn down; 8.5 % and 11.6 % with the banks broken cell by cell but the walls still at W + 40; at W + 54,
+     * 0.0 % and 0.2 %, worn 0.2 % and 2.2 %). The banks stand out of the flood's reach.
      */
-    static final double CAN_P = 160, CAN_STEP = 5, CAN_DRY = 40, CAN_AP = 8;
+    static final double CAN_P = 160, CAN_DRY = 54, CAN_AP = 8;
+    /**
+     * The Canyons' banks as broken column tops, not contour benches (RFIX round: the banks rose in even steps of 5 rows
+     * parallel to each slot, from terrace(ws x u) over the distance to the slot line, so a curving slot was ringed by a
+     * bowl of regular benches under one level rim). The walls' height over the slot varies by CAN_WV rows either way, a
+     * noise of scale CAN_WP along the slots; the step is CAN_S0..CAN_S1 rows and its flat share CAN_F0..CAN_F1 (the tread),
+     * each by a slow noise of scale CAN_SP; and each cell's top stands CAN_J rows up or down by its hash ({@link #shape}),
+     * so the steps neither keep one height nor line up along the slot. Where the ground is lower than the banks would
+     * be, the slot is cut in the ground as it stands ({@link #canyonFloor} never raises a floor).
+     */
+    static final double CAN_WV = 6, CAN_WP = 80, CAN_S0 = 3, CAN_S1 = 8, CAN_F0 = 0.25, CAN_F1 = 0.7, CAN_SP = 60, CAN_J = 3;
     /** Slope of the basins' shores: column stairs, 1 row in 3 to 4 blocks. */
     static final double SHORE_S = 0.22;
     /** A quarter of the cells (hashed) stand this many rows higher where the ground's slope is under FO_S: ragged column tops. */
@@ -1045,7 +1061,12 @@ public final class GalleriesField {
             double st = CAUS_B + 2.4 * causN.noise2(x / 38.0, z / 38.0) + 1.2 * causN.noise2(x / 11.0 + 50, z / 11.0);
             F = lerp(F, F + st, smooth((cl.wCaus - 0.2) / 0.5) * smooth((W + 6 - F) / 6.0));
         }
-        if (cl.wCan > 0) F = canyonFloor(x, z, w, cl, F);
+        if (cl.wCan > 0) {
+            // the banks' column tops stand CAN_J rows up or down, cell by cell, never over the ground they are cut in
+            double Fc = canyonFloor(x, z, w, cl, F);
+            if (Fc < F && Fc > W) Fc = Math.min(F, Fc + Math.rint(CAN_J * (2 * Hashing.unit(Hashing.mix(cellHash, 16, 0, 0)) - 1)));
+            F = Fc;
+        }
         // ---- a tube's mouth (TubeField.mouth): near where a run's air meets the cavern the floor keeps to the run's
         // floor (column steps of a row over it, a talus under it, mouthFit), and the mouth's weight keeps head room over
         // it and the hanging rock, the spires and the bands out of it
@@ -1119,7 +1140,7 @@ public final class GalleriesField {
         double reach = rh.crFloor + 1, ringTop = Math.max(discTop, reach);
         if (!through && out.lattice && cap < reach && ringTop <= (fringe ? cap0 : T)
                 && ringedOpen(out.latCoarse, out.latI, out.latJ, out, fringe)) {
-            cap = Math.max(cap, ringTop);
+            cap = Math.max(cap, ringTop + RING_UP);
             through = ringed = true;
         }
         double C = Fs + (cap - Fs) * (1 - FL_D * fl);
@@ -1155,9 +1176,15 @@ public final class GalleriesField {
             // vault, under BR_F of its relief (so it keeps the relief's lie and never lies flat at the cap), not a cut
             // stair tunnel
             double top = Math.min(cap0, rh.deck + RAMP_HEAD);
-            if (C < rh.deck + RAMP_HEAD + BR_M)
-                top = Math.max(top, Math.min(cap0 - BR_F * relief, rh.deck + RAMP_HEAD + HR_G * rh.deckU * breach(rh.deckU)
+            if (C < rh.deck + RAMP_HEAD + BR_M) {
+                // where the vault lies under the deck (its first stretch runs in the rock under the crater's floor) the
+                // breach rises to WG_SHELF rows under that floor or to the funnel's top, less 1 to 3 rows cell by cell
+                // ({@link #WG_K}, {@link #WG_CJ})
+                double lim = cap0 - BR_F * relief;
+                if (C < rh.deck) lim = Math.max(lim, Math.min(T - FUN_TOP, rh.gf - WG_SHELF) - 1 - Math.floor(WG_CJ * Hashing.unit(Hashing.mix(cellHash, 15, 0, 0))));
+                top = Math.max(top, Math.min(lim, rh.deck + RAMP_HEAD + HR_G * rh.deckU * breach(rh.deckU)
                         + HR_J * Hashing.unit(Hashing.mix(cellHash, 14, 0, 0))));
+            }
             // where the crater's floor lies a little over the deck's head room (the gully, {@link #CR_T}) the head room
             // reaches it, so the ramp runs down in a slot open to the crater, never under a lid of the floor's rock 1 to 3
             // rows thick (2 rows of it lidded the ramp at the gully's end and cut its shelf off as a shut opening: JoinTest's
@@ -1171,6 +1198,20 @@ public final class GalleriesField {
             cut = cut == cut ? Math.max(cut, top) : top;
             out.minC = Math.max(out.minC, dk + RAMP_HEAD - 2);
             if (gully) out.minC = Math.max(out.minC, rh.gf + 1);
+        } else if (rh.wedge > -1e8) {
+            // beside a deck's first stretch the vault rises to the wedge's top, 0..HR_J rows more cell by cell, under the
+            // funnel's top and WG_SHELF rows under the crater's floor, less 1 to 3 rows cell by cell and a row more every
+            // WG_KL blocks out from the deck's edge ({@link #WG_K}, {@link #WG_CJ}); the column ends hang at most FUN_J
+            // rows under it, as under the funnel
+            double wt = Math.min(rh.wedge + HR_J * Hashing.unit(Hashing.mix(cellHash, 14, 0, 0)),
+                    Math.min(T - FUN_TOP, rh.crFloor - WG_SHELF) - 1 - Math.floor(WG_CJ * Hashing.unit(Hashing.mix(cellHash, 17, 0, 0)))
+                            - rh.wedgeE / WG_KL);
+            if (wt > C) {
+                C = wt;
+                cap = Math.max(cap, wt);
+                cut = cut == cut ? Math.max(cut, wt) : wt;
+                out.minC = Math.max(out.minC, wt - FUN_J);
+            }
         }
         // an opening's disc opens to its crater's floor, so no column end hangs into the hole there, nor at its edge, nor
         // where a ringed cell opens through it, nor under the row a head room reaches
@@ -1300,8 +1341,12 @@ public final class GalleriesField {
                 * smooth((F - (W + CAN_LOW)) / 8.0) * mouthFree(x, z);
         double ws = 1.0 + 1.8 * smooth(0.5 + canW.noise2(x / 110.0 + 20, z / 110.0));
         double u = dc - fw;
-        double Fk = fw > 0 && u <= 0 ? W - 4 : W + CAN_DRY + terrace(ws * Math.max(0, u), CAN_STEP, 0.45) + 300 * (1 - cw0);
-        return Math.min(F, Fk);
+        if (fw > 0 && u <= 0) return Math.min(F, W - 4);
+        // the walls' height over the slot and the banks' steps vary along the slots ({@link #CAN_WV})
+        double wall = CAN_DRY + CAN_WV * canW.noise2(x / CAN_WP + 40, z / CAN_WP - 40);
+        double step = CAN_S0 + (CAN_S1 - CAN_S0) * smooth(0.5 + canW.noise2(x / CAN_SP - 30, z / CAN_SP + 70));
+        double flat = CAN_F0 + (CAN_F1 - CAN_F0) * smooth(0.5 + canW.noise2(x / CAN_SP + 90, z / CAN_SP - 10));
+        return Math.min(F, W + wall + terrace(ws * Math.max(0, u), step, flat) + 300 * (1 - cw0));
     }
 
     /**
@@ -1537,6 +1582,13 @@ public final class GalleriesField {
     static final double CR_T = 14, CR_TU = 16, CR_TE = 3, CR_TW = 3, CR_TB = 4, CR_TK = 1.5, CR_LA = 0.85, CR_LF = 0.3,
             CR_B = 10, CR_BK = 1.1, CR_BM = 0.75, CR_BG = 1.4, CR_BQ = 3, CR_BX = 6;
     /**
+     * A cell that opens with its ringed neighbours ({@link #ringedOpen}) opens RING_UP rows past its crater's floor, into
+     * the Wasteland's space over it: opened to the floor's own row, it kept that row of rock wherever the floor's height
+     * rounded down, a lid of one row with its neighbours open through round it (9 blocks touching no rock in seed 8004's
+     * box at (2371, -6975), between a disc's cells).
+     */
+    static final double RING_UP = 1;
+    /**
      * The hole's outline ({@link #rimR}): off the ramp's side (the same bearings as the broken rim) its radius is r plus
      * RIM_A x a noise of the bearing of scale RIM_K, so the rock juts into the hole in spurs and falls back in bays a few
      * blocks across; on the ramp's side it is r, so the head meets the lip as before. The disc, the crater's ring and the
@@ -1563,6 +1615,38 @@ public final class GalleriesField {
      * in patches of up to 93 columns in seed -42's box, against the flat-lid test's 64).
      */
     static final double HR_G = 0.7, HR_J = 6, BR_M = 4, BR_U = 64, BR_UF = 16, BR_F = 0.5;
+    /**
+     * The head's wedge (RFIX round: the first 30 blocks of most ways down ran in a slot between walls at eye height, 67 %
+     * and 58 % of the deck's samples in the look verifier's boxes A and B, and under a flat lid at 12 rows or less, 23 %
+     * and 15 %). Beside a deck's first stretch, a column WG_K x (head room - RAMP_HEAD) blocks or less past the deck's
+     * edge (at most WG_MAX) has its vault raised to the head room's top less a row every WG_K blocks out, 0..HR_J rows
+     * more cell by cell, so the flanks fall back as the deck goes down and the deck stands as a ridge over the funnel and
+     * the cavern; where the vault lies under the deck the breach may rise to WG_SHELF rows under the crater's floor (it
+     * stopped at the vault's relief, which lay under the deck there: a head room of 7). Both stop under the funnel's top
+     * as well, 1 to 3 rows under the lower of the two cell by cell, the wedge a row lower every WG_KL blocks out ({@link
+     * #WG_CJ}), so the crater's floor keeps WG_SHELF rows of rock or more over them and walks on as before. With it, 38 %
+     * and 37 % of those samples stand in a slot, none of them under such a lid (14 % and 8 % before), and no ramp's head
+     * is a slot for half its first 30 blocks (19 and 24 ramps before); the slots left lie in the first 15 blocks, where
+     * the deck runs down through the crater's floor (the gully) and its funnel: from 15 to 30 blocks 1 sample of 1069
+     * (48 % and 34 % before).
+     */
+    static final double WG_K = 1.5, WG_MAX = 24, WG_SHELF = 3;
+    /**
+     * Where the wedge or the breach stops at the funnel's top or under the crater's floor ({@link #WG_K}), each cell's top
+     * stands 1, 2 or 3 rows (1 + WG_CJ) under that limit by its hash, and the wedge's a row lower every WG_KL blocks out
+     * from the deck's edge, as the wedge itself falls, so the layer's top rows over them stay rock and their underside is
+     * no flat lid. Held at the limit, the tops beside a high deck made a flat lid of 228 columns at T - 7 in seed
+     * 8675309's box at (608, -296) ({@code noFlatLidUnderTheTop}'s bar is 64); held there on a third of the cells (0, 1
+     * or 2 rows under it), one of 129 columns in the same box at (-68, 675) and one of 97 in seed -42's at (-4022, 6588);
+     * 1 to 3 rows under it but level out to the wedge's end, 49 and 40 in those boxes and 65 in seed 12345's at (3867,
+     * -1464), the wedge's cells there at T - 7 out to 8 blocks from the deck (the same 65 with 1 to 4 or 1 to 5 rows;
+     * level for 4 blocks out and falling past them, 41). Falling with the wedge, the six boxes' largest are the
+     * landing's own, 24, 23, 28, 20, 28 and 34 columns at the same rows and places. Lowered by up to HR_J rows instead,
+     * the flanks came under the eye beside the deck: 37 % and 35 % of the heads' samples stood in a slot (31 % and 30 %
+     * held at the limit, 33 % and 32 % 0 to 2 rows under it, 36 % and 35 % 1 to 3 rows under it and level, 36 % and 35 %
+     * level for 4 blocks out, 38 % and 37 % falling a row every WG_KL 3 blocks, 40 % and 39 % a row every 1.5).
+     */
+    static final double WG_CJ = 3, WG_KL = 3;
     static final double OP_G = 64;
     static final int OP_S = 3, OP_M = 18, OP_SEED = 6, RAMP_DIRS = 16;
     /**
@@ -1643,8 +1727,13 @@ public final class GalleriesField {
     /** Everything an opening touches lies within RAMP_REACH of its middle; ramps are resolved against openings within OP_CONF lattice cells; columns look OP_NEAR cells round. */
     static final double RAMP_REACH = 220;
     static final int OP_CONF = 6, OP_NEAR = 4;
-    /** The passes of the ramps' resolution (see {@link #choice}). */
-    static final int RAMP_PASSES = 3;
+    /**
+     * The passes of the ramps' resolution (see {@link #choice}). With 3, a choice settled only three openings down a
+     * chain of rivals, and an opening whose rivals' choices had not settled was dropped for a ramp its rival did not keep
+     * in the end: 45.7 % of the raw openings were kept over 48 random boxes of 512 (55.3 a km^2), 47.0 % with 4 (56.9), at
+     * a cold chunk's cost of 1.8 to 2.1 times the Gardens' against 1.5 to 1.6 (the cost test's bar is 3).
+     */
+    static final int RAMP_PASSES = 4;
     /** The largest opening radius (the crater's reach is checked against it; a blob of a larger radius stays shut). */
     static final double OP_MAX_R = 40;
 
@@ -1718,6 +1807,10 @@ public final class GalleriesField {
         double fun;
         /** The lowest deck: blocks past its head. */
         double deckU;
+        /** The highest wedge's top over the column beside a deck's first stretch ({@link #WG_K}; -1e9: none). */
+        double wedge;
+        /** Blocks out from the deck's edge to that wedge ({@link #wedge}; its limit falls with them, {@link #WG_CJ}). */
+        double wedgeE;
         /** The cap the strongest disc opens to (its crater's floor). */
         double jtTop;
         /**
@@ -2215,6 +2308,8 @@ public final class GalleriesField {
         rh.crFloor = Double.POSITIVE_INFINITY;
         rh.fun = -1e9;
         rh.deckU = 0;
+        rh.wedge = -1e9;
+        rh.wedgeE = 0;
         rh.ramp = null;
         rh.dkFill = DK_FILL;
         rh.tn = 0;
@@ -2266,6 +2361,16 @@ public final class GalleriesField {
             if (dl < hw + NEAR_IN + NEAR_F) rh.near = Math.max(rh.near, 1 - smooth((dl - hw - NEAR_IN) / NEAR_F));
             double u = Math.max(0, t - t0), plane = top - deckDrop(rp, u);
             double dk = plane + deckTerrace(x, z, u);
+            if (dl >= hw) {
+                // the head's wedge beside the deck: the head room's top less a row every WG_K blocks out from the deck's
+                // edge, out to WG_K x its growth there ({@link #WG_K})
+                double grow = HR_G * u * breach(u), e = dl - hw;
+                double w = dk + RAMP_HEAD + grow - e / WG_K;
+                if (e < WG_K * grow && e < WG_MAX && w > rh.wedge) {
+                    rh.wedge = w;
+                    rh.wedgeE = e;
+                }
+            }
             if (dl < hw + 1) {
                 // over the ramp and a block beside it rock hangs no lower than its head room; beside it no higher than
                 // the crater's floor's rock (T - CR_DROP), so round the head the crater's floor stays whole up to the
@@ -2940,15 +3045,18 @@ public final class GalleriesField {
         double fade = smooth((mk - BAND_MASK) / BAND_FADE);
         double db = lineDist(bandN, x + 30 * warpB.noise2(x / 90.0, z / 90.0), z, BAND_P);
         double hw = 4 + 4 * smooth(0.5 + bandH.noise2(x / 80.0 + 7, z / 80.0)) * fade;
-        if (db >= hw) return;
-        double q = db / hw;
+        // beside a ramp's strip the footing spreads out to the strip's side (BAND_CUT cells), so no slot of ground is
+        // left between the two
+        double cutR = BAND_CUT * (c.coarse ? CS_COARSE : CS);
+        if (db >= hw + Math.max(0, cutR - side)) return;
+        double q = Math.min(1, db / hw);
         double deck = W + 68 + 16 * bandH.noise2(x / 190.0, z / 190.0);
         double top = deck + 1.5 * (1 - q * q);
         double thick = 4 + 5 * Math.sqrt(1 - q * q);
         double pier = Math.max(0, pierN.noise2(x / 34.0, z / 34.0) + 0.05) * 45;
         double under = deck - thick - pier - 3 * Hashing.unit(Hashing.mix(c.h, 7, 0, 0));
         under -= (1 - fade) * Math.max(0, under - c.f);
-        double cut = smooth((side - BAND_CUT * (c.coarse ? CS_COARSE : CS)) / BAND_CUT_F);
+        double cut = smooth((side - cutR) / BAND_CUT_F);
         under -= (1 - cut) * Math.max(0, under - c.f);
         int bl = (int) Math.floor(under + 0.5), bh = (int) Math.floor(top + 0.5) + 1;
         if (bh <= c.f || bl >= c.c) return;

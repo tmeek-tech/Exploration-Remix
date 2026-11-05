@@ -53,7 +53,9 @@ class GalleriesFieldTest {
         int opened, ramped, waysDown, viewsDown, withoutRamp;
         /** Kept ramps walked along their centre lines block by block: ramps, columns, columns with no standing place near the deck, steps over a row. */
         int rampsWalked, centreColumns, centreMissing, centreSteps;
-        String noWayAt = "", missingAt = "";
+        /** The walked ramps' first 30 blocks read block by block ({@link #headsAreNoTunnelsUnderLids}): samples, in a slot, under a flat lid, both. */
+        int headSamples, headSlots, headLids, headSlotLids;
+        String noWayAt = "", missingAt = "", slotLidAt = "";
         double[] views;
         /** The largest 4-connected patch of inner columns whose topmost open run under T + 10 ends at one rock row in T - 7..T + 9 (columns open over T left out), and where. */
         int flatPatch;
@@ -78,11 +80,13 @@ class GalleriesFieldTest {
         @Override public String toString() {
             return String.format(java.util.Locale.ROOT, "seed %d (built in %.1f s): places %d, SCC %.1f %%, walk into it %.1f %%; low %d, escape <= 384 %.1f %%, never %.2f %%;"
                             + " moves %d: drops %.2f %%, falls %.2f %%; openings %d, with a ramp %d, way down %d%s, view down %d, without a ramp %d;"
-                            + " ramps walked %d (%d columns): no place near the deck %d%s, steps over a row %d;"
+                            + " ramps walked %d (%d columns): no place near the deck %d%s, steps over a row %d; their first 30 blocks %d samples: slot %.1f %%, flat lid %.1f %%, slot under a flat lid %.1f %%%s;"
                             + " views from %d: 80+ %.1f %%, 160+ %.2f %%, 192+ %.3f %%; largest flat patch under the top %d columns%s; Wasteland lava %d, beside air %d%s, near an opening %d (%d opening columns);"
                             + " water %d, unsealed %d%s, in open cavern %d, under W+40 %d, by lava %d%s; closed pits %d places in %d sets%s; floating rock %d%s; NaN %d",
                     seed, buildSeconds, places, 100 * scc(), 100 * walkIntoMain(), low, 100 * within384(), 100 * neverShare(), moves, 100 * dropShare(), 100 * fallShare(),
-                    opened, ramped, waysDown, noWayAt, viewsDown, withoutRamp, rampsWalked, centreColumns, centreMissing, missingAt, centreSteps, views.length, 100 * over(80),
+                    opened, ramped, waysDown, noWayAt, viewsDown, withoutRamp, rampsWalked, centreColumns, centreMissing, missingAt, centreSteps,
+                    headSamples, 100.0 * headSlots / Math.max(1, headSamples), 100.0 * headLids / Math.max(1, headSamples), 100.0 * headSlotLids / Math.max(1, headSamples), slotLidAt,
+                    views.length, 100 * over(80),
                     100 * over(160), 100 * over(192), flatPatch, flatAt, wastelandLava, lavaBesideAir, lavaAt, lavaNearOpening, openingColumns, water, waterUnsealed, unsealedAt,
                     waterInOpenCavern, waterLow, waterByLava, byLavaAt, trapped, trapSets, trapAt, floating, floatAt, nans);
         }
@@ -120,7 +124,10 @@ class GalleriesFieldTest {
      * in 9 sets in 5 of them and 8 pieces of rock afloat in 6, these 9; the two boxes it named held 11 places in 2 sets
      * and 21 in 4; two of 32 boxes held out on 8 more seeds a dry spot walled in at the foot of a talus over the lava
      * (23 places) and a cell of band afloat beside a tube's path (96 blocks), after the rest were fixed; and one of 32 more
-     * on 8 more seeds a band's pier standing on a Caldera lake's lava (720 blocks).
+     * on 8 more seeds a band's pier standing on a Caldera lake's lava (720 blocks). The landing's verifier found three
+     * trenches of low ground walled in between a ramp's filled deck and a band's footing beside its strip (23 places at
+     * seed 31337's (4107, -798), 9 at 8675310's (-2490, 1851), 24 at -2468's (-6090, -8442)), and a sliver of 9 blocks
+     * afloat in the join's rows between two holes (8004's (2371, -6975)): the boxes round them close the list.
      */
     static final long[][] NAMED = {
             {4711, -3162, 227}, {4711, -5828, 6716}, {4711, 562, -3510},
@@ -128,7 +135,8 @@ class GalleriesFieldTest {
             {99991, -1649, -6198}, {99991, 6039, -8251},
             {-606060, -1700, 900}, {13579, -2600, 1900},
             {161803, 788, -6851}, {161803, -941, 8806},
-            {-2468, 8133, -1516}};
+            {-2468, 8133, -1516},
+            {31337, 4107, -798}, {8675310, -2490, 1851}, {-2468, -6090, -8442}, {8004, 2371, -6975}};
 
     /** Random box i ({@link #sweepBoxes}), measured by {@link #boxAt}. */
     static Stats sweepBox(int i) {
@@ -343,7 +351,7 @@ class GalleriesFieldTest {
         List<GalleriesField.Opening> all = new ArrayList<>();
         for (int i = Math.floorDiv(v.x0, 64) - 1; i <= Math.floorDiv(v.x0 + v.nx, 64) + 1; i++)
             for (int k = Math.floorDiv(v.z0, 64) - 1; k <= Math.floorDiv(v.z0 + v.nz, 64) + 1; k++) all.addAll(Arrays.asList(g.openings(i, k)));
-        StringBuilder noWay = new StringBuilder(), missing = new StringBuilder();
+        StringBuilder noWay = new StringBuilder(), missing = new StringBuilder(), slotLid = new StringBuilder();
         for (GalleriesField.Opening o : all) {
             if (o.x < xa || o.x >= xb || o.z < za || o.z >= zb) continue;
             s.opened++;
@@ -392,9 +400,63 @@ class GalleriesFieldTest {
                 lastZ = z;
                 lastFeet = feet;
             }
+            heads(g, v, o, s, slotLid);
         }
         s.noWayAt = noWay.toString();
         s.missingAt = missing.toString();
+        s.slotLidAt = slotLid.toString();
+    }
+
+    /**
+     * A walked ramp's first 30 blocks (RFIX round, spec-galleries-field-v2 21.5), read every block along its bent centre
+     * line from the head: the deck's row D at the centre (the top of the floor near the deck's plane), its edges (the
+     * columns across it whose floors stay within 2 rows of D), a slot (rock at eye height, D + 2, within 3 blocks past both
+     * edges) and a flat lid (the first rock over every column of the deck 12 rows or less over D, those rows within 2 of
+     * each other).
+     */
+    static void heads(GalleriesField g, NoiseVox v, GalleriesField.Opening o, Stats s, StringBuilder at) {
+        GalleriesField.Ramp rp = o.ramp;
+        double t0 = o.r + GalleriesField.LIP, px = rp.uz, pz = -rp.ux;
+        int[] f = new int[61];
+        for (double tt = t0; tt <= rp.tEnd && tt - t0 <= 30; tt += 1) {
+            double b = g.bend(rp, t0, tt), cx = o.x + rp.ux * tt + rp.uz * b, cz = o.z + rp.uz * tt - rp.ux * b;
+            int d = floorNear(v, g.W, (int) Math.floor(cx), (int) Math.floor(cz), (int) Math.round(g.deckPlane(rp, t0, tt)), 3, 6);
+            if (d == Integer.MIN_VALUE) continue;
+            for (int k = -30; k <= 30; k++) f[k + 30] = floorNear(v, g.W, (int) Math.floor(cx + px * k), (int) Math.floor(cz + pz * k), d, 4, 90);
+            int le = 0, re = 0;
+            while (le > -29 && f[le + 29] != Integer.MIN_VALUE && Math.abs(f[le + 29] - d) <= 2) le--;
+            while (re < 29 && f[re + 31] != Integer.MIN_VALUE && Math.abs(f[re + 31] - d) <= 2) re++;
+            int ls = 0, rs = 0;
+            while (ls < 4 && v.mat((int) Math.floor(cx + px * (le - 1 - ls)), d + 2, (int) Math.floor(cz + pz * (le - 1 - ls))) != NoiseVox.ROCK) ls++;
+            while (rs < 4 && v.mat((int) Math.floor(cx + px * (re + 1 + rs)), d + 2, (int) Math.floor(cz + pz * (re + 1 + rs))) != NoiseVox.ROCK) rs++;
+            boolean slot = ls <= 3 && rs <= 3;
+            int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+            for (int k = le; k <= re; k++) {
+                int x = (int) Math.floor(cx + px * k), z = (int) Math.floor(cz + pz * k), c = f[k + 30] + 1;
+                while (c < f[k + 30] + 40 && v.mat(x, c, z) != NoiseVox.ROCK) c++;
+                lo = Math.min(lo, c - d);
+                hi = Math.max(hi, c - d);
+            }
+            boolean lid = hi <= 12 && hi - lo <= 2;
+            s.headSamples++;
+            if (slot) s.headSlots++;
+            if (lid) s.headLids++;
+            if (slot && lid) {
+                s.headSlotLids++;
+                if (at.length() < 120) at.append(String.format(java.util.Locale.ROOT, " (%.0f,%d,%.0f)", cx, d, cz));
+            }
+        }
+    }
+
+    /** The top of the floor under (x, z) near row y0, searched from y0 + up down to y0 - down: rock with two open rows over it (lava open to the air: W - 2, a deep drop); MIN_VALUE for none. */
+    static int floorNear(NoiseVox v, int W, int x, int z, int y0, int up, int down) {
+        if (!v.inColumns(x, z)) return Integer.MIN_VALUE;
+        for (int y = y0 + up; y >= y0 - down && y > W - 3; y--) {
+            int m = v.mat(x, y, z), a = v.mat(x, y + 1, z), b = v.mat(x, y + 2, z);
+            if (m == NoiseVox.ROCK && a != NoiseVox.ROCK && b != NoiseVox.ROCK) return y;
+            if (m == NoiseVox.LAVA && a == NoiseVox.AIR) return W - 2;
+        }
+        return Integer.MIN_VALUE;
     }
 
     /**
@@ -498,7 +560,8 @@ class GalleriesFieldTest {
      * two (a lake's islet walled in by a spire's face, and two holes the stairs cut over a spire's top), and a box held
      * out a dry spot at the foot of a ramp's talus over the lava's edge (23 places): the talus now covers all ground
      * that stands dry, the column tops lifted level with the lava out of the shallows among it. Every box where a pit
-     * was found is kept ({@link #NAMED}).
+     * was found is kept ({@link #NAMED}). The landing's three trenches between a filled deck and a band's footing
+     * (23, 9 and 24 places) closed with the footing spread out to the ramp's strip ({@link GalleriesField#band}).
      */
     @Test
     void noClosedPits() {
@@ -616,6 +679,25 @@ class GalleriesFieldTest {
             assertTrue(s.rampsWalked >= 5 && s.centreColumns > 500, "too few ramps walked: " + s);
             assertTrue(s.centreMissing <= 0.01 * s.centreColumns, "ramp columns with no standing place near the deck: " + s);
             assertTrue(s.centreSteps <= 0.005 * s.centreColumns, "ramp centre lines that step more than a row: " + s);
+        }
+    }
+
+    /**
+     * No way down starts as a cut tunnel under a flat lid (RFIX round, spec-galleries-field-v2 21.5): of the samples
+     * along the first 30 blocks of the ramps walked ({@link #heads}), 3 % or fewer stand in a slot (rock at eye height
+     * within 3 blocks past both of the deck's edges) under a flat lid (rock over the whole deck at 12 rows or less, its
+     * rows within 2 of each other), the landing's look verifier's bar. On the landing 11.7 % and 8.4 % of these boxes'
+     * samples did (12.9 % and 7.9 % in that verifier's two boxes), and 47 and 33 ramps ran in a slot for half their first
+     * 30 blocks; with the head's wedge ({@link GalleriesField#WG_K}) 5 samples of 2212 and none of 1941 do, and 4 and 2
+     * ramps. The slots by themselves (39 % and 38 % here, 64 % and 58 % on the landing; the verifier's bar 20 %) are
+     * printed, not held: nearly all lie in the first 15 blocks, where the deck runs down through the crater's floor.
+     */
+    @Test
+    void headsAreNoTunnelsUnderLids() {
+        for (int i = 0; i < BOXES.length; i++) {
+            Stats s = stats(i);
+            assertTrue(s.headSamples >= 1000, "too few samples of the ramps' first 30 blocks: " + s);
+            assertTrue(s.headSlotLids <= 0.03 * s.headSamples, "ways down that start as a slot under a flat lid: " + s);
         }
     }
 
@@ -901,7 +983,10 @@ class GalleriesFieldTest {
         assertTrue(2 * (GalleriesField.RAMP_REACH - GalleriesField.TALUS_MAX - 4) + GalleriesField.RAMP_GAP + GalleriesField.RAMP_DT < GalleriesField.OP_CONF * GalleriesField.OP_G,
                 "OP_CONF: an opening's rivals are looked for OP_CONF lattice cells round");
         assertTrue(GalleriesField.HC_REACH < 2.15 * GalleriesField.HC_G, "HC_REACH: the hanging clusters' 5 x 5 search");
-        assertTrue(2 * ((GalleriesField.RAMP_PASSES + 1) * GalleriesField.OP_CONF + GalleriesField.OP_NEAR) + 1 <= 64 && GalleriesField.RAMP_PASSES <= 5,
+        // the window of lattice cells a resolution can ask, (RAMP_PASSES + 1) OP_CONF + OP_NEAR cells to every side, fits
+        // the raw cells' cache (64 x 64 cells at the port, RAW_CACHE since the openings were resolved once for every thread)
+        int window = 2 * ((GalleriesField.RAMP_PASSES + 1) * GalleriesField.OP_CONF + GalleriesField.OP_NEAR) + 1;
+        assertTrue(window * window <= GalleriesField.RAW_CACHE && GalleriesField.RAMP_PASSES < GalleriesField.KEPT,
                 "RAMP_PASSES: the openings' cache holds every cell the resolution asks");
         assertTrue(Math.max(GalleriesField.RB_R1, GalleriesField.RB_L1) < 1.15 * GalleriesField.RB_G, "RB_G: the rock bands' search");
         assertTrue(GalleriesField.SPIRE_R1 < 1.15 * GalleriesField.SPIRE_GRID, "SPIRE_GRID: the spires' 3 x 3 search");
@@ -955,12 +1040,19 @@ class GalleriesFieldTest {
      * within CR_BX of another hole, a cell opening through where its six neighbours open or, for a cell on a fringe,
      * lie on one too ({@link GalleriesField#ringedOpen}; a cell on no fringe up to its own crater's floor, over the cap
      * too), and a deck or a band standing on the ground where the Causeway's seam runs through its cell
-     * ({@link GalleriesField#seamCut}). A change to the Galleries' shapes shows here: pin again only on purpose.
+     * ({@link GalleriesField#seamCut}). Pinned again in the fix round after the landing (it was df77dd13282e04e2 and
+     * 358c4a8a51a17912), for that round's changes to the shapes: four passes of the ramps' resolution, so more raw
+     * openings keep a ramp (GalleriesField.RAMP_PASSES), a band's footing spread out to a ramp's strip (BAND_CUT), a
+     * ringed cell opened a row past its crater's floor (RING_UP), the head's wedge and the breach under the crater's
+     * floor (WG_K, WG_CJ, the wedge's limit falling a row every WG_KL blocks out from the deck), the Scoria Canyons'
+     * banks over the stairs' reach and broken cell by cell (CAN_DRY, CAN_J), and the Wasteland's floor guards, column
+     * ends and terraces in the join's rows (WastelandField.GUARD_GAP). A change to the Galleries' shapes shows here: pin
+     * again only on purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("df77dd13282e04e2", digest(8675309), "seed 8675309");
-        assertEquals("358c4a8a51a17912", digest(12345), "seed 12345");
+        assertEquals("657f03d778b8355c", digest(8675309), "seed 8675309");
+        assertEquals("b2257d4eece3e4b8", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {
@@ -1273,18 +1365,20 @@ class GalleriesFieldTest {
      * opened opening keeps a ramp and 90 % or more have a way down ({@link #waysDown}), at most 1 % of the ramps'
      * walked centre columns have no standing place near the deck and at most 0.5 % step more than a row ({@link
      * #rampsAreWalkable}), no closed pit the main cavern walks into ({@link #noClosedPits}) and no rock afloat ({@link
-     * #noFloatingRock}). Until fix round 2b it failed on seed 77's box: 17.6 % of the low places there never walked up
-     * out of the flood (escape within 384 moves 82.4 %), nearly all (27 750 places) one Causeway basin round (40850,
-     * -11130) closed by a tube apron's cliff and column steps of 2-3 rows (spec-galleries-field-v2 15.3); the low
-     * ground's stairs and the apron's release opened it (escape 100.0 %, never 0.01 %). Closed pits and floating rock
-     * were not held here before the landing: on wip/r2-ways 25, 17, 0 and 0 pit places stayed, seed 2000023's box kept
-     * a band's stretch of 3087 blocks afloat between two ramps' strips and seed 77's and 4242's boxes 2 and 3 pieces
-     * (352 and 114 blocks); at the landing's merge 0, 8, 0 and 0 pit places (a hollow 14 rows deep between a pillar and
-     * a filled ridge's sheer flank in seed 2000023's box) and no rock afloat, and centre columns with no place near the
-     * deck 575, 255, 189 and 337 (the stairs wore the ridges' decks down from the side). Now (seeds 12345, 2000023, 77
-     * and 4242): ways down 70 of 70, 53 of 53, 70 of 70 and 69 of 69; no place near the deck 0 of 12 003, 7735, 8897
-     * and 10 689 centre columns; steps over a row 11, 9, 19 and 12; never 0.00, 0.10, 0.01 and 0.02 %; no closed pit,
-     * no floating rock.
+     * #noFloatingRock}); since the fix round after the landing, at most 3 % of the samples of the ramps' first 30 blocks
+     * in a slot under a flat lid ({@link #headsAreNoTunnelsUnderLids}). Until fix round 2b it failed on seed 77's box:
+     * 17.6 % of the low places there never walked up out of the flood (escape within 384 moves 82.4 %), nearly all
+     * (27 750 places) one Causeway basin round (40850, -11130) closed by a tube apron's cliff and column steps of 2-3
+     * rows (spec-galleries-field-v2 15.3); the low ground's stairs and the apron's release opened it (escape 100.0 %,
+     * never 0.01 %). Closed pits and floating rock were not held here before the landing: on wip/r2-ways 25, 17, 0 and
+     * 0 pit places stayed, seed 2000023's box kept a band's stretch of 3087 blocks afloat between two ramps' strips and
+     * seed 77's and 4242's boxes 2 and 3 pieces (352 and 114 blocks); at the landing's merge 0, 8, 0 and 0 pit places (a
+     * hollow 14 rows deep between a pillar and a filled ridge's sheer flank in seed 2000023's box) and no rock afloat,
+     * and centre columns with no place near the deck 575, 255, 189 and 337 (the stairs wore the ridges' decks down from
+     * the side). Now (seeds 12345, 2000023, 77 and 4242): ways down 72 of 72, 55 of 55, 72 of 72 and 71 of 71; no place
+     * near the deck 0 of 12 240, 7972, 9239 and 11 003 centre columns; steps over a row 12, 11, 23 and 14; never 0.00,
+     * 0.10, 0.01 and 0.02 %; in a slot under a flat lid 0, 0, 2 and 0 of 2213, 1694, 2201 and 2184 samples of the
+     * ramps' first 30 blocks; no closed pit, no floating rock.
      */
     @Test
     @Tag("slow")
@@ -1307,6 +1401,7 @@ class GalleriesFieldTest {
             assertTrue(s.waysDown >= 0.9 * s.ramped, "ramps with no way down into the cavern: " + s);
             assertTrue(s.centreMissing <= 0.01 * s.centreColumns, "ramp columns with no standing place near the deck: " + s);
             assertTrue(s.centreSteps <= 0.005 * s.centreColumns, "ramp centre lines that step more than a row: " + s);
+            assertTrue(s.headSlotLids <= 0.03 * s.headSamples, "ways down that start as a slot under a flat lid: " + s);
             assertEquals(0, s.trapped, "closed pits the main cavern walks into: " + s);
             assertEquals(0, s.floating, "rock afloat: " + s);
         }

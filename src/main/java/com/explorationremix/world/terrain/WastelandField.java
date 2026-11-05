@@ -101,9 +101,24 @@ public final class WastelandField {
      */
     static final double GUARD_W0 = 4, GUARD_W1 = 6;
     /**
+     * A sheet's floor guard over the open vault of another sheet (a tunnel crossing a cave of the sheet under it, its
+     * floor inside the cave's space) is a plate with that vault's air under it; where the other sheet's floor lies no
+     * more than GUARD_GAP rows under the guard, the rock under the guard comes down to that floor ({@link #guardOver}), so
+     * the plate stands on it as a step of the cave's floor (the plates floated a row to three over the floor: 55 blocks
+     * in seed 0's box at (29999184, -29999486), 59 in seed -1672529434's at (-4911, 31486), 28 in seed 13's at
+     * (-1604, 2273); 54 pieces of 8 blocks or more, 848 blocks, over 60 random boxes of 384, most of them such plates;
+     * with this, the column ends' rule ({@link #columns}) and the terraces' ({@link #TERRACE}), 11 pieces of 133 blocks,
+     * plates over a gap a walker passes under). Deeper gaps stay open: filled down 4 rows, the rock walled the lower
+     * sheet's caves across (8 pieces of 93 blocks left, but the blind ends of the five test boxes rose from 111 to 146,
+     * two boxes over {@code fewBlindEnds}' bar; filled down 2, 103).
+     */
+    static final double GUARD_GAP = 2;
+    /**
      * Terraces: in caves (half-width from 6, fully at 10) the floor of each basalt column is set up or down by a whole
      * number of blocks, TERRACE times a noise read at the column's site (scale TERRACE_SCALE), so neighbouring columns
-     * step together; at most TERRACE_MAX either way.
+     * step together; at most TERRACE_MAX either way. A terrace set up lifts the rows up to a row over its own walking
+     * floor, no higher: over it, the lift would raise the rock the core leaves above the floor into a knob standing on air
+     * (9 blocks in seed 1's box at (411, -566, 397), where the interpolated density grows towards the vault's top).
      */
     static final double TERRACE = 8, TERRACE_SCALE = 16, TERRACE_MAX = 4;
     /**
@@ -626,7 +641,8 @@ public final class WastelandField {
             for (int k = 0; k < sheets; k++) {
                 if (!c.near[k] || c.e[k] >= c.w[k]) continue;
                 if (Math.abs(y - walkFloor(c, k)) < 2.5) floorNear = true;
-                if (terr < 0 && c.toff[k] != 0 && Math.abs(y - floorOf(c, k)) < TERRACE_MAX + 0.5 && y < (floorOf(c, k) + ceilOf(c, k)) / 2) terr = k;
+                if (terr < 0 && c.toff[k] != 0 && Math.abs(y - floorOf(c, k)) < TERRACE_MAX + 0.5 && y < (floorOf(c, k) + ceilOf(c, k)) / 2
+                        && (c.toff[k] < 0 || y < walkFloor(c, k) + 1)) terr = k;
             }
         }
         if (c8 > -3 && c8 < 3) c8 += c.shift * (floorNear ? FLOOR_FADE : 1);
@@ -635,12 +651,19 @@ public final class WastelandField {
         Plans.Gate en = c.en;
         boolean pass = c.enNear && y > en.y1 - 3;
         if (!span && !pass) return c8;
-        double keep = -Terrain.SOLID, open = Terrain.SOLID;
+        double keep = -Terrain.SOLID, open = Terrain.SOLID, fill = -Terrain.SOLID;
         for (int k = 0; k < sheets; k++) {
             if (!c.near[k]) continue;
             double e = c.e[k], f = c.f[k], w = c.w[k], h = c.h[k], fb = walkFloor(c, k);
-            if (y < fb - 5 || y > f + h + 2 || e >= w * 1.1) continue;
-            if (fb > bot + 4 || (k == 0 && c.crater > 0)) {
+            if (e >= w * 1.1) continue;
+            boolean guarded = fb > bot + 4 || (k == 0 && c.crater > 0);
+            // under a guard over another sheet's open vault, rock down to that sheet's floor (GUARD_GAP)
+            if (guarded && y <= fb - 4 && y >= fb - 5 - GUARD_GAP) {
+                double fj = guardOver(c, k, fb);
+                if (fj > -1e9) fill = Math.max(fill, Math.min(fb - 3.5 - y, y - fj + 0.5));
+            }
+            if (y < fb - 5 || y > f + h + 2) continue;
+            if (guarded) {
                 // the floor guard: rock from the floor (a tunnel's) or a block under it (a cave's) to 4 under it, so
                 // roughness never holes it (a crater's too)
                 double free = clamp01((w - GUARD_W0) / (GUARD_W1 - GUARD_W0));
@@ -654,18 +677,54 @@ public final class WastelandField {
         if (keep <= 0) keep = -Terrain.SOLID;
         if (open > 0) open = Terrain.SOLID;
         double res = Math.min(Math.max(c8, keep), open);
+        if (fill > 0) res = Math.max(res, fill);
         return c.feat && span && res <= 0 ? columns(c, y, res) : res;
     }
 
-    /** A cave's hanging column ends and pillars: whole basalt columns, under the vault's analytic ceiling. */
+    /**
+     * The walking floor of the highest other sheet whose vault lies open right under sheet k's floor guard (at its row
+     * fb - 4.5, the analytic vault), its floor at most GUARD_GAP rows under the guard and itself on rock (the row under
+     * it in no third sheet's vault, or the rock put there would stand in that sheet's air); -1e10 where there is none.
+     * The lowest sheet's dips, craters and lava pools are left as they are.
+     */
+    private double guardOver(Col c, int k, double fb) {
+        double best = -1e10, yq = fb - 4.5;
+        for (int j = 0; j < sheets; j++) {
+            if (j == k || !c.near[j] || c.e[j] >= c.w[j]) continue;
+            if (j == 0 && (c.holeDip > 0 || c.crater > 0 || c.lavaDip > 0)) continue;
+            double fj = walkFloor(c, j);
+            if (fj >= fb - 4 || fb - 4 - fj > GUARD_GAP || fj <= best) continue;
+            if (vault(c.e[j], yq, fj, c.f[j], c.w[j], c.h[j]) < 0 && !inOther(c, j, fj - 1)) best = fj;
+        }
+        return best;
+    }
+
+    /**
+     * A cave's hanging column ends and pillars: whole basalt columns, under the vault's analytic ceiling; none in the
+     * vault of another sheet, where it would stand in that sheet's air ({@link #inOther}: a pillar's top, 32 blocks
+     * afloat in a cave of the sheet over it in seed 600613's box at (4257, 4756)), and a hanging end only from where
+     * it meets no such vault on its way up to the ceiling (under one, it would hang from nothing).
+     */
     private double columns(Col c, int y, double res) {
         for (int k = 0; k < sheets; k++) {
             if (!c.near[k] || (c.hang[k] <= 0 && !c.pillar[k]) || c.e[k] >= c.w[k]) continue;
             double ceil = ceilOf(c, k), floor = floorOf(c, k) + c.toff[k];
             if (y < floor - 2 || y > ceil + 3) continue;
-            if (c.pillar[k] || y >= ceil - c.hang[k] - 0.5) return 1;
+            if (!c.pillar[k] && y < ceil - c.hang[k] - 0.5) continue;
+            boolean held = !inOther(c, k, y);
+            if (!c.pillar[k]) for (int yy = y + 1; held && yy <= ceil + 0.5; yy++) held = !inOther(c, k, yy);
+            if (held) return 1;
         }
         return res;
+    }
+
+    /** Whether row y of a column lies in the analytic vault of a sheet other than k (from its walking floor). */
+    private boolean inOther(Col c, int k, double y) {
+        for (int j = 0; j < sheets; j++) {
+            if (j == k || !c.near[j] || c.e[j] >= c.w[j]) continue;
+            if (vault(c.e[j], y, walkFloor(c, j), c.f[j], c.w[j], c.h[j]) < 0) return true;
+        }
+        return false;
     }
 
     /** {@link #fineBlocks} on Minecraft's scale, for the layer's rows above the join's band. */

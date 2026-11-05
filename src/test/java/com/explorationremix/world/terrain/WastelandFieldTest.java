@@ -42,6 +42,13 @@ class WastelandFieldTest {
     static final long[][] DECOR_BOXES = {{8675309, 0, 0}, {-1831217569, -1846, 6353}, {-1249636696, -1925, 171}, {392286899, -4264, -1654},
             {-1314707143, 5560, 2806}, {-1563395035, 2310, 5212}, {-667355435, -6827, 5355}};
     static final int SIZE = 512, MARGIN = 96;
+    /**
+     * The openings' count ({@link #openingsAreCommonAndReachable}) is taken over BOXES and OPENING_BOXES more boxes drawn
+     * at random from OPENING_DRAW ({@link #moreOpenings}): three inner squares hold some 36 of the Wasteland's openings,
+     * too few for a mean (a tube country standing in seed 1's square took five of its fourteen).
+     */
+    static final int OPENING_BOXES = 32;
+    static final long OPENING_DRAW = 4242;
 
     /** What one box measured (the blocks themselves are dropped once counted). */
     static final class Stats {
@@ -56,7 +63,9 @@ class WastelandFieldTest {
         int lavaFlow, lavaNearOpening, lavaBlocks;
         double[] views;
         long nans;
-        String blindAt = "", openingAt = "";
+        /** Floating rock: components of 8 blocks or more held by nothing ({@link NoiseVox#floating}), and where. */
+        int floating;
+        String blindAt = "", openingAt = "", floatAt = "";
         /** On a decorated box ({@link DecorBox}): what the decorations did. */
         String decor;
         int[] decorPlaced;
@@ -97,10 +106,11 @@ class WastelandFieldTest {
             Arrays.sort(w);
             return String.format(java.util.Locale.ROOT, "seed %d: places %d, SCC %.2f %%; tips %d (%.2f per 1000), out of reach %d, way on %d, blind %d (%.3f per 1000)%s;"
                             + " openings %d (%.0f per km2) in %d hole areas%s; rim walk median %d p90 %d of %d main places (%d never); lava blocks %d, could flow %d, near an opening %d;"
-                            + " views p50 %.0f p90 %.0f p99 %.0f max %.0f of %d; NaN %d",
+                            + " views p50 %.0f p90 %.0f p99 %.0f max %.0f of %d; floating rock %d%s; NaN %d",
                     seed, innerPlaces, 100 * scc(), tips, tipsPer1000(), outOfReach, wayOn, blind, blindPer1000(), blindAt, openings, openingsPerKm2(), holeAreas, openingAt,
                     w.length == 0 ? -1 : w[w.length / 2], w.length == 0 ? -1 : w[(int) (w.length * 0.9)], rimMainPlaces, rimUnreached, lavaBlocks, lavaFlow,
-                    lavaNearOpening, NoiseVox.quantile(v, 0.5), NoiseVox.quantile(v, 0.9), NoiseVox.quantile(v, 0.99), v.length == 0 ? 0 : v[v.length - 1], v.length, nans);
+                    lavaNearOpening, NoiseVox.quantile(v, 0.5), NoiseVox.quantile(v, 0.9), NoiseVox.quantile(v, 0.99), v.length == 0 ? 0 : v[v.length - 1], v.length,
+                    floating, floatAt, nans);
         }
     }
 
@@ -212,6 +222,62 @@ class WastelandFieldTest {
     }
 
     /**
+     * The openings into the Galleries of the inner square of the box from (x0, z0): the areas of 4 columns or more of hole
+     * columns ({@link #holeColumn}) whose middle lies in it, each counted once per throat of 4 columns or more in it
+     * ({@link #throatColumn}), at least once. Returns the openings and the areas; marks the box's hole columns in hole and
+     * writes the first three areas' middles to at.
+     */
+    static int[] countOpenings(NoiseVox v, int bot, int x0, int z0, boolean[] hole, StringBuilder at) {
+        int ix0 = x0 + MARGIN, ix1 = x0 + SIZE - MARGIN, iz0 = z0 + MARGIN, iz1 = z0 + SIZE - MARGIN;
+        boolean[] throat = new boolean[SIZE * SIZE];
+        for (int i = 0; i < SIZE; i++) for (int k = 0; k < SIZE; k++) {
+            hole[i * SIZE + k] = holeColumn(v, bot, x0 + i, z0 + k);
+            throat[i * SIZE + k] = hole[i * SIZE + k] && throatColumn(v, bot, x0 + i, z0 + k);
+        }
+        int[] lab = new int[SIZE * SIZE], tlab = new int[SIZE * SIZE], throats = new int[SIZE * SIZE];
+        int[] areaCnt = new int[SIZE * SIZE];
+        long[] areaSx = new long[SIZE * SIZE], areaSz = new long[SIZE * SIZE];
+        group(hole, lab, areaCnt, areaSx, areaSz);
+        int[] thrCnt = new int[SIZE * SIZE];
+        group(throat, tlab, thrCnt, new long[SIZE * SIZE], new long[SIZE * SIZE]);
+        for (int p = 0; p < SIZE * SIZE; p++) if (tlab[p] == p && thrCnt[p] >= 4) throats[lab[p]]++;
+        int openings = 0, areas = 0;
+        for (int p0 = 0; p0 < SIZE * SIZE; p0++) {
+            if (lab[p0] != p0) continue;
+            int cnt = areaCnt[p0], mx = x0 + (int) (areaSx[p0] / cnt), mz = z0 + (int) (areaSz[p0] / cnt);
+            if (cnt >= 4 && mx >= ix0 && mx < ix1 && mz >= iz0 && mz < iz1) {
+                areas++;
+                openings += Math.max(1, throats[p0]);
+                if (areas <= 3) at.append(String.format(" (%d,%d)", mx, mz));
+            }
+        }
+        return new int[]{openings, areas};
+    }
+
+    /**
+     * The openings of {@link #OPENING_BOXES} more boxes of SIZE ({@link #countOpenings}, inner squares as for
+     * {@link #BOXES}), at seeds and centres drawn from OPENING_DRAW: {openings, areas, the inner squares' m^2}. Only the
+     * join's rows are built (the Wasteland's bottom 16 rows each way), which make the holes and throats of the whole box:
+     * 5, 9 and 2 openings at BOXES' three either way.
+     */
+    static long[] moreOpenings() {
+        Random rnd = new Random(OPENING_DRAW);
+        long[] out = new long[3];
+        for (int b = 0; b < OPENING_BOXES; b++) {
+            long seed = rnd.nextLong() % 100000000L;
+            int cx = (rnd.nextInt(200) - 100) * 512 + 256, cz = (rnd.nextInt(200) - 100) * 512 + 256;
+            Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+            int bot = t.shape.bottom(Terrain.WASTELAND), x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
+            NoiseVox v = NoiseVox.build(t, x0, z0, SIZE, SIZE, bot - 16, bot + 16);
+            int[] op = countOpenings(v, bot, x0, z0, new boolean[SIZE * SIZE], new StringBuilder());
+            out[0] += op[0];
+            out[1] += op[1];
+            out[2] += (long) (SIZE - 2 * MARGIN) * (SIZE - 2 * MARGIN);
+        }
+        return out;
+    }
+
+    /**
      * The 4-connected groups of the marked columns of a SIZE x SIZE square: each column's group is labelled by the group's
      * first column (in index order), whose entries of cnt, sx and sz get the group's size and sums of i and k.
      */
@@ -250,6 +316,9 @@ class WastelandFieldTest {
         Stats s = new Stats();
         s.seed = seed;
         s.nans = v.nans;
+        List<int[]> fl = v.floating(8);
+        s.floating = fl.size();
+        for (int[] f : fl) s.floatAt += String.format(java.util.Locale.ROOT, " [%d blocks at (%d, %d, %d)]", f[0], f[1], f[2], f[3]);
         int ix0 = x0 + MARGIN, ix1 = x0 + SIZE - MARGIN, iz0 = z0 + MARGIN, iz1 = z0 + SIZE - MARGIN;
         s.innerKm2 = (double) (ix1 - ix0) * (iz1 - iz0) / 1e6;
         // the main component: the one holding most of the inner square's places in the layer's rows
@@ -357,30 +426,12 @@ class WastelandFieldTest {
             s.missedAt = missed.toString();
         }
 
-        // openings into the Galleries: areas of 4 columns or more of hole columns, middle in the inner square, each
-        // counted once per throat of 4 columns or more in it (at least once)
-        boolean[] hole = new boolean[SIZE * SIZE], throat = new boolean[SIZE * SIZE];
-        for (int i = 0; i < SIZE; i++) for (int k = 0; k < SIZE; k++) {
-            hole[i * SIZE + k] = holeColumn(v, bot, x0 + i, z0 + k);
-            throat[i * SIZE + k] = hole[i * SIZE + k] && throatColumn(v, bot, x0 + i, z0 + k);
-        }
-        int[] lab = new int[SIZE * SIZE], tlab = new int[SIZE * SIZE], throats = new int[SIZE * SIZE];
-        int[] areaCnt = new int[SIZE * SIZE];
-        long[] areaSx = new long[SIZE * SIZE], areaSz = new long[SIZE * SIZE];
-        group(hole, lab, areaCnt, areaSx, areaSz);
-        int[] thrCnt = new int[SIZE * SIZE];
-        group(throat, tlab, thrCnt, new long[SIZE * SIZE], new long[SIZE * SIZE]);
-        for (int p = 0; p < SIZE * SIZE; p++) if (tlab[p] == p && thrCnt[p] >= 4) throats[lab[p]]++;
+        // openings into the Galleries ({@link #countOpenings})
+        boolean[] hole = new boolean[SIZE * SIZE];
         StringBuilder openingAt = new StringBuilder();
-        for (int p0 = 0; p0 < SIZE * SIZE; p0++) {
-            if (lab[p0] != p0) continue;
-            int cnt = areaCnt[p0], mx = x0 + (int) (areaSx[p0] / cnt), mz = z0 + (int) (areaSz[p0] / cnt);
-            if (cnt >= 4 && mx >= ix0 && mx < ix1 && mz >= iz0 && mz < iz1) {
-                s.holeAreas++;
-                s.openings += Math.max(1, throats[p0]);
-                if (s.holeAreas <= 3) openingAt.append(String.format(" (%d,%d)", mx, mz));
-            }
-        }
+        int[] op = countOpenings(v, bot, x0, z0, hole, openingAt);
+        s.openings = op[0];
+        s.holeAreas = op[1];
         s.openingAt = openingAt.toString();
 
         // the walk to an opening's rim: places near the join's rows within 2 columns of a hole column
@@ -669,11 +720,16 @@ class WastelandFieldTest {
      * where the Galleries are open under it, and the interim Galleries' domes reached the join on about a third of the
      * columns where beta asks for an opening (94 per km^2: 29, 137, 117; 180-226 moves). The Galleries' v2 field opens
      * every one of the Wasteland's openings over its caverns (off the massifs and the tube countries) that it can give a
-     * ramp, each with a crater, and no other (step 2: no skylights): 19 holes in the three inner squares (62 per km^2: 8,
-     * 9 and 2 since fix round 2b's ramp gap of 5; medians 187-227 moves on the reshape, 0.8.0, 185-226 on r2), the 19 the
-     * field lists there, each in an area
-     * of hole columns of its own (17 areas before that round, when holes some 20 blocks apart in box 8004 shared a
-     * crater's floor). The bar is the Galleries spec's own for the join's openings (joinOpens: 60).
+     * ramp, each with a crater, and no other (step 2: no skylights): 19 holes in the three inner squares on wip/r2 (62 per
+     * km^2: 8, 9 and 2), 16 since the tube country stands without its ring (5, 9 and 2: the country standing in seed 1's
+     * square took five of its fourteen raw openings), each in an area of hole columns of its own. Three squares hold too
+     * few openings for a mean (36 raw openings; of the resolutions of their ramps tried in the fix round after the
+     * landing, with 16 to 64 directions, 3 or 4 passes and other orders, only those whose cold chunks or regions in turns
+     * cost about 3 times the Gardens' or more, the cost test's bar, kept the 19 the bar asks for there), so the count is
+     * taken over OPENING_BOXES more boxes as well ({@link #moreOpenings}, 3.28 km^2 of inner squares): 69.8 per km^2 in
+     * all on the landing (234 openings in the more boxes), 71.1 with four passes of the ramps' resolution (239; over 48
+     * such boxes 74.7 and 75.9). The bar is the Galleries spec's own for the join's openings (joinOpens: 60); the rim
+     * walks are the three boxes'.
      */
     @Test
     void openingsAreCommonAndReachable() {
@@ -681,16 +737,22 @@ class WastelandFieldTest {
         double km2 = 0;
         List<Integer> walks = new ArrayList<>();
         int main = 0, never = 0;
+        StringBuilder per = new StringBuilder();
         for (int i = 0; i < BOXES.length; i++) {
             Stats s = stats(i);
             openings += s.openings;
             km2 += s.innerKm2;
+            per.append(' ').append(s.openings);
             for (int w : s.rimWalks) walks.add(w);
             main += s.rimMainPlaces;
             never += s.rimUnreached;
         }
+        long[] more = moreOpenings();
+        double moreKm2 = more[2] / 1e6, perKm2 = (openings + more[0]) / (km2 + moreKm2);
+        System.out.printf(java.util.Locale.ROOT, "WastelandFieldTest openings: %d in the three boxes (%s; %.1f per km2), %d in %d more boxes' %.2f km2 (%.1f per km2); %.1f per km2 in all%n",
+                openings, per.toString().trim(), openings / km2, more[0], OPENING_BOXES, moreKm2, more[0] / moreKm2, perKm2);
+        assertTrue(perKm2 >= 60, "openings per km2: " + perKm2);
         Collections.sort(walks);
-        assertTrue(openings / km2 >= 60, "openings per km2: " + openings / km2);
         assertTrue(walks.size() > main / 2, "most places walk to no opening: " + never + " of " + main);
         assertTrue(walks.get(walks.size() / 2) <= 220, "median walk to an opening's rim: " + walks.get(walks.size() / 2));
     }
@@ -816,6 +878,38 @@ class WastelandFieldTest {
         }
         assertTrue(compared >= 8, "too little measured: " + compared + " comparisons");
         assertTrue(bad.isEmpty(), "a lane shows: " + bad);
+    }
+
+    /**
+     * Where the LR2 fix round's verifier found rock floating in the Wasteland: plates of a floor guard a row to three over
+     * the floor of the cave under it (seed 0 at (29999184, -29999486), 55 blocks; -1672529434 at (-4911, 31486), 59;
+     * 13 at (-1604, 2273), 28) and a pillar's top in the cave of the sheet over it (600613 at (4257, 4756), 32). Boxes of
+     * FLOAT_SIZE about each: {seed, x, z}.
+     */
+    static final long[][] FLOAT_BOXES = {{0, 29999184, -29999486}, {-1672529434, -4911, 31486}, {13, -1604, 2273}, {600613, 4257, 4756}};
+    static final int FLOAT_SIZE = 256;
+
+    /**
+     * No floating rock (LR2 fix round): every component of 8 rock blocks or more is held by its box's faces or its top
+     * or bottom row ({@link NoiseVox#floating}), the Wasteland's rows from 24 under its bottom to its top, in every
+     * measured box and in {@link #FLOAT_BOXES}. A floor guard over another sheet's open vault comes down to that sheet's
+     * floor, column ends stand in no other sheet's vault, and a terrace lifts no rock over its walking floor's next row
+     * ({@link WastelandField#GUARD_GAP}); over 60 random boxes of 384, 11 pieces of 133 blocks are left (54 of 848 before),
+     * guard plates over a gap a walker passes under.
+     */
+    @Test
+    void noFloatingRock() {
+        for (Stats s : allStats()) assertEquals(0, s.floating, "floating rock, seed " + s.seed + ":" + s.floatAt);
+        for (long[] b : FLOAT_BOXES) {
+            Terrain t = new Terrain(TerrainSettings.defaults(), -64, b[0]);
+            int top = t.shape.top(Terrain.WASTELAND), bot = t.shape.bottom(Terrain.WASTELAND);
+            NoiseVox v = NoiseVox.build(t, (int) b[1] - FLOAT_SIZE / 2, (int) b[2] - FLOAT_SIZE / 2, FLOAT_SIZE, FLOAT_SIZE, bot - 24, top + 1);
+            List<int[]> fl = v.floating(8);
+            StringBuilder at = new StringBuilder();
+            for (int[] f : fl) at.append(String.format(java.util.Locale.ROOT, " [%d blocks at (%d, %d, %d)]", f[0], f[1], f[2], f[3]));
+            System.out.println("WastelandFieldTest floating rock seed " + b[0] + " at " + b[1] + " " + b[2] + ": " + fl.size() + at);
+            assertTrue(fl.isEmpty(), "floating rock, seed " + b[0] + " at " + b[1] + " " + b[2] + ":" + at);
+        }
     }
 
     /**
