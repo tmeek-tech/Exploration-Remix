@@ -89,10 +89,103 @@ class GalleriesFieldTest {
     }
 
     private static final Map<Integer, Stats> STATS = new HashMap<>();
+    /** The random and named boxes' measures ({@link #boxAt}), once each. */
+    private static final Map<String, Stats> SWEEP_STATS = new HashMap<>();
 
     @AfterAll
     static void forget() {
         synchronized (STATS) { STATS.clear(); }
+        synchronized (SWEEP_STATS) { SWEEP_STATS.clear(); }
+    }
+
+    /**
+     * The random boxes (LR2 fix round): SWEEP boxes of 768 x 768 columns whose seeds and middles (within 20 000 blocks of
+     * the origin) a Random seeded with SWEEP_SEED picks, picked before the round's fixes were tried on them (one of them,
+     * box 5, then showed two gaps in the rules, see {@link #noClosedPits}). Each is measured on its inner 512 x 512
+     * ({@link #sweepBox}): closed pits, the flood's way out, floating rock.
+     */
+    static final int SWEEP = 10;
+    static final long SWEEP_SEED = 20261105L;
+
+    static long[][] sweepBoxes() {
+        Random r = new Random(SWEEP_SEED);
+        long[][] b = new long[SWEEP][];
+        for (int i = 0; i < SWEEP; i++) b[i] = new long[]{r.nextInt(), r.nextInt(40_000) - 20_000, r.nextInt(40_000) - 20_000};
+        return b;
+    }
+
+    /**
+     * The boxes where closed pits or floating rock were found (LR2 fix round), measured as the random boxes are: {seed,
+     * middle x, middle z}. The verifier's 18 random boxes (6 on each of seeds 4711, -3030 and 99991) held 31 pit places
+     * in 9 sets in 5 of them and 8 pieces of rock afloat in 6, these 9; the two boxes it named held 11 places in 2 sets
+     * and 21 in 4; two of 32 boxes held out on 8 more seeds a dry spot walled in at the foot of a talus over the lava
+     * (23 places) and a cell of band afloat beside a tube's path (96 blocks), after the rest were fixed; and one of 32 more
+     * on 8 more seeds a band's pier standing on a Caldera lake's lava (720 blocks).
+     */
+    static final long[][] NAMED = {
+            {4711, -3162, 227}, {4711, -5828, 6716}, {4711, 562, -3510},
+            {-3030, 581, -6459}, {-3030, 4071, -2184}, {-3030, 5787, 1484}, {-3030, 1803, 6259},
+            {99991, -1649, -6198}, {99991, 6039, -8251},
+            {-606060, -1700, 900}, {13579, -2600, 1900},
+            {161803, 788, -6851}, {161803, -941, 8806},
+            {-2468, 8133, -1516}};
+
+    /** Random box i ({@link #sweepBoxes}), measured by {@link #boxAt}. */
+    static Stats sweepBox(int i) {
+        long[] b = sweepBoxes()[i];
+        return boxAt("random box " + i, b[0], (int) b[1], (int) b[2]);
+    }
+
+    /** Named box i ({@link #NAMED}), measured by {@link #boxAt}. */
+    static Stats namedBox(int i) {
+        long[] b = NAMED[i];
+        return boxAt("named box " + i, b[0], (int) b[1], (int) b[2]);
+    }
+
+    /**
+     * The 768 x 768 box round (cx, cz) on seed: the main cavern is the largest walk component of the inner 512 x 512's
+     * places; closed pits are counted over the whole box ({@link #pits}: its edge is a way out), the way out of the flood
+     * from the inner square's low places, floating rock over the whole box ({@link #rockHeld}).
+     */
+    static Stats boxAt(String name, long seed, int cx, int cz) {
+        synchronized (SWEEP_STATS) {
+            Stats s = SWEEP_STATS.get(name);
+            if (s != null) return s;
+            long[] b = {seed, cx, cz};
+            long t0 = System.nanoTime();
+            Terrain t = new Terrain(TerrainSettings.defaults(), -64, b[0]);
+            int W = t.shape.waterY(Terrain.GALLERIES), T = t.shape.top(Terrain.GALLERIES);
+            int size = 768, margin = 128, x0 = (int) b[1] - size / 2, z0 = (int) b[2] - size / 2;
+            NoiseVox v = NoiseVox.build(t, x0, z0, size, size, YLO, YHI).graph();
+            int xa = x0 + margin, za = z0 + margin, xb = x0 + size - margin, zb = z0 + size - margin;
+            s = new Stats();
+            s.seed = b[0];
+            s.nans = v.nans;
+            int[] count = new int[v.compSize.length];
+            boolean[] area = new boolean[v.places];
+            for (int p = 0; p < v.places; p++) if (v.inArea(p, xa, za, xb, zb, W, T)) { area[p] = true; s.places++; count[v.comp[p]]++; }
+            int main = 0;
+            for (int c = 0; c < count.length; c++) if (count[c] > count[main]) main = c;
+            v.main = main;
+            s.inMain = count[main];
+            int[] up = v.walkUpTo(W + Terrain.FLOOD_RISE);
+            for (int p = 0; p < v.places; p++) {
+                if (!area[p] || v.py(p) >= W + Terrain.FLOOD_RISE) continue;
+                s.low++;
+                if (up[p] < 0) s.never++;
+                else if (up[p] <= 384) s.within384++;
+            }
+            pits(v, W, up, s);
+            rockHeld(v, s);
+            s.views = new double[0];
+            s.buildSeconds = (System.nanoTime() - t0) / 1e9;
+            System.out.printf(java.util.Locale.ROOT, "GalleriesFieldTest %s: seed %d centre %d %d (%.1f s): places %d, main %.1f %%; low %d, escape <= 384 %.2f %%, never %.3f %%;"
+                            + " closed pits %d places in %d sets%s; floating rock %d%s; NaN %d%n",
+                    name, b[0], b[1], b[2], s.buildSeconds, s.places, 100 * s.scc(), s.low, 100 * s.within384(), 100 * s.neverShare(), s.trapped, s.trapSets, s.trapAt,
+                    s.floating, s.floatAt, s.nans);
+            SWEEP_STATS.put(name, s);
+            return s;
+        }
     }
 
     static Stats stats(int i) {
@@ -370,6 +463,17 @@ class GalleriesFieldTest {
             assertTrue(s.neverShare() <= 0.01, "too many low places have no way out of the flood: " + s);
             assertEquals(0, s.trapped, "closed pits the main cavern walks into: " + s);
         }
+        // the random boxes (LR2 fix round; some hold only a thousand low places, so the shares are read where there
+        // are 1000 or more)
+        for (int i = 0; i < SWEEP; i++) {
+            Stats s = sweepBox(i);
+            assertEquals(0, s.nans, "NaN densities, random box " + i + ": seed " + s.seed);
+            if (s.low >= 1000) {
+                assertTrue(s.within384() >= 0.97, "too few low places walk out of the flood within 384 moves, random box " + i + ": seed " + s.seed + ", " + s.within384());
+                assertTrue(s.neverShare() <= 0.01, "too many low places have no way out of the flood, random box " + i + ": seed " + s.seed + ", " + s.neverShare());
+            }
+            assertEquals(0, s.trapped, "closed pits the main cavern walks into, random box " + i + ": seed " + s.seed + s.trapAt);
+        }
     }
 
     /**
@@ -377,17 +481,37 @@ class GalleriesFieldTest {
      * the flood, on the two measured boxes and on two 512 x 512 boxes where the verifier found them: seed 77's Causeway
      * basin (25 769 places with feet up to W + 24, walled by a tube apron's cliff and column steps of 2-4 rows), and
      * seed -42's hollow between three ramps (1332 places, walled by their talus and the same steps). The low ground's
-     * stairs ({@link GalleriesField#tread}), the apron's walkable release, the talus meeting the ground and the rivers'
+     * stairs (at first a cell's own treads at its joints), the apron's walkable release, the talus meeting the ground and the rivers'
      * gentler end opened both; before, the shares of never-escaping places there were 47.4 % and 10.0 %. The measured
      * boxes still held 116 and 311 such places (15 and 14 sets) when those were first written, and this test stopped at
      * its first line; they closed with the stairs at whichever of a cell's joints has them and steps up to 6 rows, the
      * apron's shelf not released over lava, the canyons' slots pinched out before an apron, no talus or spire over lava,
      * and the decks and bands of stray cells filled ({@link GalleriesField#build}). The 512 boxes hold about 220 000 and
      * 240 000 places (the bar of 300 000 first written here was never reached).
+     *
+     * <p>And on the SWEEP random boxes ({@link #sweepBox}; LR2 fix round). Four fixed boxes did not show the rule held:
+     * the verifier's 18 random boxes held 31 places in 9 sets, and two boxes it named 11 and 21 (a cell sunk among
+     * neighbours 5 to 11 rows higher whose joints' treads did not meet, the ground under a ramp's arch without any, a
+     * Caldera ledge at W + 0 between lava and steps of 5 to 8). They closed with the stairs worn column by column
+     * ({@link GalleriesField#stairs}: risers of up to 10 rows worn into slopes over up to 12 blocks, across cells,
+     * lattices, decks and arches alike, walked only over columns they wear), the apron's shelf never released downward,
+     * and spires sinking into the ground near the lava. One random box still held 10 places in 3 sets before the last
+     * two (a lake's islet walled in by a spire's face, and two holes the stairs cut over a spire's top), and a box held
+     * out a dry spot at the foot of a ramp's talus over the lava's edge (23 places): the talus now covers all ground
+     * that stands dry, the column tops lifted level with the lava out of the shallows among it. Every box where a pit
+     * was found is kept ({@link #NAMED}).
      */
     @Test
     void noClosedPits() {
         for (int i = 0; i < BOXES.length; i++) assertEquals(0, stats(i).trapped, "closed pits: " + stats(i));
+        for (int i = 0; i < SWEEP; i++) {
+            Stats s = sweepBox(i);
+            assertEquals(0, s.trapped, "closed pits, random box " + i + ": seed " + s.seed + s.trapAt);
+        }
+        for (int i = 0; i < NAMED.length; i++) {
+            Stats s = namedBox(i);
+            assertEquals(0, s.trapped, "closed pits, named box " + i + ": seed " + s.seed + s.trapAt);
+        }
         long[][] pits = {{77, 40594, -11386}, {-42, -4806, 6944}};
         for (long[] b : pits) {
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, b[0]);
@@ -406,11 +530,25 @@ class GalleriesFieldTest {
     /**
      * No floating rock (fix round 2b): every component of 8 rock blocks or more is held by the box's faces, the box's rows
      * from the Galleries' floor to the Wasteland's lava table (a band whose mask ended in mid-air left 18 539 and 8221
-     * blocks floating in seed 555's box at (944, -856); the bands now stand on footings where their mask fades).
+     * blocks floating in seed 555's box at (944, -856); the bands now stand on footings where their mask fades). And on
+     * the SWEEP random boxes and the {@link #NAMED} ones (LR2 fix round: the verifier's 18 random boxes held 8 pieces in
+     * 6 of them, up to 651 blocks): bands come down to the ground beside a ramp's strip, which cuts them, and beside a
+     * tube's path through its apron, which runs none, and a pier whose foot reaches the lava stands on the lake's bed
+     * ({@link GalleriesField#band}); a coarse cell whose site lies outside the Causeway holds no column; and whether a
+     * cell opens through an opening's crater floor goes by its site's place alone, a cell whose six neighbours all open
+     * opening with them ({@link GalleriesField#ringedOpen}).
      */
     @Test
     void noFloatingRock() {
         for (int i = 0; i < BOXES.length; i++) assertEquals(0, stats(i).floating, "floating rock: " + stats(i));
+        for (int i = 0; i < SWEEP; i++) {
+            Stats s = sweepBox(i);
+            assertEquals(0, s.floating, "floating rock, random box " + i + ": seed " + s.seed + s.floatAt);
+        }
+        for (int i = 0; i < NAMED.length; i++) {
+            Stats s = namedBox(i);
+            assertEquals(0, s.floating, "floating rock, named box " + i + ": seed " + s.seed + s.floatAt);
+        }
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, 555);
         NoiseVox v = NoiseVox.build(t, 944, -856, 512, 512, YLO, YHI);
         List<int[]> fl = v.floating(8);
@@ -793,13 +931,20 @@ class GalleriesFieldTest {
      * the reshape (0.8.0), for four of the reshape's changes, each of which moves it: the probe reads LookQueries.coneTop
      * (6f7d038c1ce4dc54 and 502cbec08f10beae with that alone), the tubes are whole where two lines meet (TubeField), the
      * tubes keep the cavern's roofs ({@link GalleriesField#roofed}), and the Wasteland's fix round 2 moves the join's rows
-     * (Terrain.rawDensity). The rest of the reshape's files leave it as it was. A change to the Galleries' shapes shows
-     * here: pin again only on purpose.
+     * (Terrain.rawDensity). The rest of the reshape's files leave it as it was (1adc7d3d2e79e341 and 2b0c55b4cb09aa8e).
+     * Pinned again in the landing's fix round for the closed pits and the floating rock it fixed ({@link #noClosedPits},
+     * {@link #noFloatingRock}), every one of which moves it: the low ground's stairs worn column by column, a coarse
+     * stray holding no column, the bands brought to the ground beside ramps' strips and tubes' paths and their piers onto
+     * a lava lake's bed, the apron's shelf never released downward, spires sinking near the lava, the crater's floor
+     * opened by a cell's site's place alone (a ramp's head room where it rises a row past the crater's floor there, its
+     * space reaching that row; a cell ringed by opened cells opened with them), and the talus over all ground that
+     * stands dry, the column tops lifted out of the shallows among it. A change to the Galleries' shapes shows here: pin
+     * again only on purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("1adc7d3d2e79e341", digest(8675309), "seed 8675309");
-        assertEquals("2b0c55b4cb09aa8e", digest(12345), "seed 12345");
+        assertEquals("93c7012faa9e939e", digest(8675309), "seed 8675309");
+        assertEquals("fa813a23102fb0aa", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {
@@ -959,7 +1104,10 @@ class GalleriesFieldTest {
      * The cost of the Galleries' rows (corners every 4 x 8 x 4, interpolation and the per-block pass, one thread) per row,
      * at most three times the Deep Gardens' (spec 9.3: about 0.8-1.4 times 0.5.0's planned Galleries), in three cases:
      * <ul>
-     * <li>warm: 16 fixed chunks with their plans and openings made first, best of three rounds each, taken in turns;</li>
+     * <li>warm: 16 fixed chunks with their plans and openings made first, best of three rounds each, taken in turns (LR2
+     * fix round: 5.5 times the Gardens' while the low ground's stairs searched each column's square of 25 x 25 columns
+     * again whenever the per-column cache let it go, through a cache of the columns' floors that held 16 columns across;
+     * GalleriesField keeps both for 128 x 128 columns);</li>
      * <li>a cold first chunk: at each of three places, the first chunk of a fresh field (the Galleries' openings and the
      * Gardens' plans all unmade), against the Gardens' rows of another fresh field's first chunk there (fix round 2b: the
      * openings' per-thread caches made that 801 ms against 39 for the merge base);</li>
