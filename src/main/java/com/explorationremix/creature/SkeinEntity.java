@@ -245,6 +245,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     @Nullable private Vec3 foot;
     private Vec3 footUp = new Vec3(0, 1, 0), footLag = Vec3.ZERO;
     private int trace;                       // ticks left to log its body's moves (/remix skein trace)
+    private int laidAt = -1;                 // for the trace: the tick its trail was last laid afresh, and the way back from its head
+    private Vec3 laidBack = Vec3.ZERO;
     private final SkeinGait gait = new SkeinGait();
     private final DoubleSupplier rnd = () -> random.nextDouble();
     private int stateTicks, stateLength;
@@ -1362,6 +1364,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         }
         Vec3 b = back != null ? back : fwd.scale(-1.0);
         trail.lay(f.x, f.y, f.z, b.x, b.y, b.z, up.x, up.y, up.z);
+        laidAt = tickCount;
+        laidBack = b;
         placeSections();
     }
 
@@ -1673,9 +1677,13 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         placeSections();
         if (trace > 0 && !level().isClientSide) {
             trace--;
-            ExplorationRemix.LOGGER.info(String.format(Locale.ROOT, "[skein trace] %d %s on %s, foot %.2f %.2f %.2f, step %.3f, %s",
+            // and what went into the trail and the body this tick, so that a replay of the log lays them as here
+            Vec3 f = foot == null ? Vec3.ZERO : foot;
+            ExplorationRemix.LOGGER.info(String.format(Locale.ROOT, "[skein trace] %d %s on %s, foot %.2f %.2f %.2f, step %.3f, %s | rec %.4f %.4f %.4f up %.4f %.4f %.4f fwd %.4f %.4f %.4f%s",
                     tickCount, gait.describe(), surface() == null ? "nothing" : surface().getName(), foot == null ? 0.0 : foot.x,
-                    foot == null ? 0.0 : foot.y, foot == null ? 0.0 : foot.z, trail.lastStep(), spine.moves()));
+                    foot == null ? 0.0 : foot.y, foot == null ? 0.0 : foot.z, trail.lastStep(), spine.moves(),
+                    f.x, f.y, f.z, footUp.x, footUp.y, footUp.z, fwd.x, fwd.y, fwd.z,
+                    laidAt == tickCount ? String.format(Locale.ROOT, " laid back %.4f %.4f %.4f", laidBack.x, laidBack.y, laidBack.z) : ""));
         } else if (CLIENT_TRACE && level().isClientSide) {
             ExplorationRemix.LOGGER.info(String.format(Locale.ROOT, "[skein client trace] %d id %d on %s, foot %.2f %.2f %.2f, step %.3f, %s",
                     tickCount, getId(), clientRock == null ? "nothing" : clientRock.getName(), foot == null ? 0.0 : foot.x,

@@ -9,7 +9,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * The Skein's body, tick by tick as its head walks about: straight on its trail where the head ran straight; round
  * the head's sharp turns in curves no tighter than the lead turns, cutting each corner on its inside; looping round
- * one way where the head turned back; over edges on the rock; and never jerking: behind the neck it only ever slides
+ * one way where the head turned back; its neck bending round evenly after the head, looping out rather than folding
+ * where the head went back past it; over edges on the rock; and never jerking: behind the neck it only ever slides
  * forwards along where the lead went, and it lies dead still while the head does.
  */
 class SkeinSpineTest {
@@ -28,6 +29,8 @@ class SkeinSpineTest {
         double back, beyond;
         /** How many times a joint behind the neck moved back the way it had moved the tick before. */
         int reversals;
+        /** The sharpest the neck bent at any of its joints, in any tick (radians). */
+        double neckBend;
         private double[] lastMove;
 
         /** On the floor at (x, y, z), pointing along (fx, 0, fz), its body laid straight out behind. */
@@ -45,6 +48,7 @@ class SkeinSpineTest {
             spine.follow(trail, fx, fy, fz);
             double[] d = spine.data();
             double step = trail.lastStep();
+            for (int j = 1; j <= NECK; j++) neckBend = Math.max(neckBend, SkeinSpine.bendAt(d, j));
             double[] move = new double[3 * JOINTS];
             for (int j = 0; j < JOINTS; j++) {
                 double mx = d[6 * j] - was[6 * j], my = d[6 * j + 1] - was[6 * j + 1], mz = d[6 * j + 2] - was[6 * j + 2];
@@ -158,6 +162,37 @@ class SkeinSpineTest {
                 }
                 assertTrue(w.offTrail(JOINTS - 1) < 0.02, deg + " degrees: the tail is " + w.offTrail(JOINTS - 1) + " off the trail");
             }
+        }
+    }
+
+    @Test
+    void aSharpTurnOfTheHeadBendsItsNeckRoundEvenly() {
+        // the head snaps round and goes on the new way: it takes some of the turn itself, and its neck bends round the
+        // rest along its length, rather than folding at one joint
+        for (double deg : new double[]{60, 90, -90, 135}) {
+            for (int over : new int[]{1, 3}) {
+                Walk w = new Walk(0, 0, 0, 0, 1);
+                w.walk(5, 0.25);
+                w.neckBend = 0;
+                w.turn(deg, over);
+                w.walk(4, 0.25);
+                double most = Math.toRadians(Math.abs(deg) > 100 ? 70 : 40);
+                assertTrue(w.neckBend <= most, deg + " degrees over " + over + ": the neck bends " + Math.toDegrees(w.neckBend) + " degrees at a joint");
+            }
+        }
+    }
+
+    @Test
+    void whereTheHeadGoesBackTheWayItCameItsNeckLoopsRatherThanFolding() {
+        // the head turns right round and goes back past its own neck before the lead is round the turn: the neck
+        // loops out to the side to reach round, never doubled over on itself
+        for (double deg : new double[]{180, -180, 170, 160, -200}) {
+            Walk w = new Walk(0, 0, 0, 0, 1);
+            w.walk(5, 0.25);
+            w.neckBend = 0;
+            w.turn(deg, 2);
+            w.walk(6, 0.25);
+            assertTrue(w.neckBend < Math.toRadians(120), deg + " degrees: the neck folds " + Math.toDegrees(w.neckBend) + " degrees at a joint");
         }
     }
 

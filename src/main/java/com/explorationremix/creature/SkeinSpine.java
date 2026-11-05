@@ -18,7 +18,9 @@ import java.util.Locale;
  * to the lead (coming in the way the lead heads), its joints spread along it; where the head faces back over its neck,
  * the neck swings out the other way from the head's turn (the way the back of the head went round as it turned where it
  * stood) and curls back to the lead, and if it must be longer than {@link #NECK_LAG} to reach round, it stretches a
- * little (and the lead catches up) rather than pushing the body back.
+ * little (and the lead catches up) rather than pushing the body back. The head turned aside takes some of the turn
+ * itself ({@link #HEAD_SHARE}), the neck is never pulled out so far that it folds back on itself ({@link #CAP}), and
+ * where the head has gone back the way it came, the neck loops out to the side ({@link #FOLD}) rather than folding.
  *
  * <p>Over an edge, from a floor onto a wall, the lead and the neck keep to the rock the trail crosses, so the body pours
  * over edges as the head went; only its turns across the rock are smoothed. Where the head went down a step or up one
@@ -67,6 +69,22 @@ public final class SkeinSpine {
      * only ever goes on by its step, and settles onto that rock over the next few.
      */
     static final double SNAP = 0.02;
+    /**
+     * How much further than an arc between its ends' ways the neck's curve may be pulled out to make its length: pulled
+     * further, where the head looks aside and the lead lies near it, it bulges out past them and folds back, and the
+     * neck is left a little short instead.
+     */
+    static final double CAP = 1.25;
+    /**
+     * How much of a turn of the head aside from the way its neck runs it takes itself (the neck leaving it turned that
+     * much from straight back), and the most it takes (radians): the neck bends round the rest.
+     */
+    static final double HEAD_SHARE = 0.4, HEAD_TURN = Math.toRadians(40);
+    /**
+     * The sharpest the neck's curve may turn over about a link (radians): sharper, where it folds back on itself (the
+     * head gone back the way it came, the lead not round the turn yet), it is bulged out into a loop.
+     */
+    static final double FOLD = Math.toRadians(75);
     /** How many pieces the neck's curve is measured in. */
     static final int NECK_PIECES = 16;
     /** How many links the neck has: the joint at its end is at the lead. */
@@ -116,7 +134,7 @@ public final class SkeinSpine {
     /** The trail it lies along, and how many times that had been laid when this was laid on it. */
     @Nullable private SkeinTrail on;
     private int lays;
-    private final double[] at = new double[6], tmp = new double[6], v = new double[3], pos = new double[3], move = new double[3];
+    private final double[] at = new double[6], tmp = new double[6], v = new double[3], pos = new double[3], move = new double[3], miss = new double[3];
     /** The rock round the lead, or the neck, laid out flat. */
     private final Flat flat = new Flat();
     private final double[] pathArcs, pathOut;
@@ -416,6 +434,24 @@ public final class SkeinSpine {
         flat.vecToFlat(leadAlong, v);
         flatten(v, nx, ny, nz);
         double cx = lx - px, cy = ly - py, cz = lz - pz, chord = Math.sqrt(cx * cx + cy * cy + cz * cz);
+        // the head turned aside on its neck takes some of the turn itself (HEAD_SHARE, no more than HEAD_TURN): the neck
+        // leaves it turned that much from straight back, towards the lead (or, facing right back over it, the way the
+        // back of the head went round)
+        if (chord > 1.0E-6) {
+            double bxx = -fx, byy = -fy, bzz = -fz;
+            double sn = ((byy * cz - bzz * cy) * nx + (bzz * cx - bxx * cz) * ny + (bxx * cy - byy * cx) * nz) / chord;
+            double cs = (bxx * cx + byy * cy + bzz * cz) / chord;
+            double beta = Math.atan2(sn, cs);
+            int side = headTurn != 0 ? headTurn : leadTurn != 0 ? -leadTurn : 1;
+            double sign = Math.abs(beta) < Math.toRadians(150) ? Math.signum(beta) : -side;
+            double g = sign * Math.min(HEAD_SHARE * Math.abs(beta), HEAD_TURN);
+            // f turned by g about the flat's normal
+            double c1 = Math.cos(g), s1 = Math.sin(g);
+            double kx = ny * fz - nz * fy, ky = nz * fx - nx * fz, kz = nx * fy - ny * fx;
+            fx = fx * c1 + kx * s1; fy = fy * c1 + ky * s1; fz = fz * c1 + kz * s1;
+            double l2 = Math.sqrt(fx * fx + fy * fy + fz * fz);
+            fx /= l2; fy /= l2; fz /= l2;
+        }
         // the head facing back over its neck: the neck swings out the way the back of the head went round, and curls back
         double curl = 0.0, sx = 0.0, sy = 0.0, sz = 0.0;
         if (chord > 1.0E-6) {
@@ -425,12 +461,19 @@ public final class SkeinSpine {
             int side = headTurn != 0 ? headTurn : leadTurn != 0 ? -leadTurn : 1;
             sx = (ny * fz - nz * fy) * side; sy = (nz * fx - nx * fz) * side; sz = (nx * fy - ny * fx) * side;
         }
-        // pulled out as far as makes it its length (or as little as keeps its ends' ways, if it is longer even so)
+        // pulled out as far as makes it its length (or as little as keeps its ends' ways, if it is longer even so), but
+        // never further than an arc between its ends' ways would be (CAP): pulled further, it bulges out past them and
+        // folds back, where the head looks aside and the lead lies near it
         double least = 0.25 * Math.max(chord, 0.2), pull = least;
+        double t0x = -fx + sx * curl, t0y = -fy + sy * curl, t0z = -fz + sz * curl, t0l = Math.sqrt(t0x * t0x + t0y * t0y + t0z * t0z);
+        double cphi = t0l < 1.0E-9 ? 1.0 : -(t0x * v[0] + t0y * v[1] + t0z * v[2]) / t0l;
+        double phi = Math.acos(Math.max(-1.0, Math.min(1.0, cphi)));
+        double arc = phi < 1.0E-3 ? 1.0 / 3.0 : 4.0 / 3.0 * Math.tan(phi / 4.0) / (2.0 * Math.sin(phi / 2.0));
+        double most = Math.max(least, CAP * arc * Math.max(chord, 0.2));
         double len = curve(px, py, pz, -fx, -fy, -fz, sx * curl, sy * curl, sz * curl, lx, ly, lz, least);
         excess = Math.max(0.0, len - NECK_LAG);
         if (len < NECK_LAG) {
-            double lo = least, hi = 2.0 * NECK_LAG;
+            double lo = least, hi = Math.min(2.0 * NECK_LAG, most);
             if (curve(px, py, pz, -fx, -fy, -fz, sx * curl, sy * curl, sz * curl, lx, ly, lz, hi) <= NECK_LAG) pull = hi;
             else {
                 for (int it = 0; it < 14; it++) {
@@ -438,10 +481,25 @@ public final class SkeinSpine {
                     if (curve(px, py, pz, -fx, -fy, -fz, sx * curl, sy * curl, sz * curl, lx, ly, lz, mid) < NECK_LAG) lo = mid;
                     else hi = mid;
                 }
-                pull = 0.5 * (lo + hi);
+                pull = lo;      // (never a hair longer than its length)
             }
         }
         curve(px, py, pz, -fx, -fy, -fz, sx * curl, sy * curl, sz * curl, lx, ly, lz, pull);
+        // folded on itself (the head gone back the way it came, the lead not yet round the turn): bulged out to the side
+        // the lead will swing round to, as far as makes it loop round no tighter than a fold should be
+        if (sharpest() > FOLD) {
+            int side = leadTurn != 0 ? leadTurn : headTurn != 0 ? -headTurn : 1;
+            double qx = (ny * v[2] - nz * v[1]) * side, qy = (nz * v[0] - nx * v[2]) * side, qz = (nx * v[1] - ny * v[0]) * side;
+            double best = Double.MAX_VALUE, bw = 0.0;
+            for (int k = 1; k <= 6; k++) {
+                double w = 0.1 * k;
+                curve(px, py, pz, -fx, -fy, -fz, sx * curl, sy * curl, sz * curl, lx, ly, lz, pull, qx * w, qy * w, qz * w);
+                double sh = sharpest();
+                if (sh < best) { best = sh; bw = w; }
+                if (sh <= FOLD) break;
+            }
+            excess = Math.max(0.0, curve(px, py, pz, -fx, -fy, -fz, sx * curl, sy * curl, sz * curl, lx, ly, lz, pull, qx * bw, qy * bw, qz * bw) - NECK_LAG);
+        }
         // each point folded back onto the rock, from the head back to the lead; reckoned along the flat (so the neck
         // keeps its length, and the body behind its place, however the rock under the head turns)
         double u = uh, du = (uh - leadAlong) / NECK_PIECES;
@@ -449,8 +507,13 @@ public final class SkeinSpine {
             int o = STRIDE * i, r = 3 * i;
             if (i == 0) { set(neck, o, px, py, pz, hx, hy, hz); neckArc[0] = 0.0; continue; }
             neckArc[i] = neckArc[i - 1] + Math.sqrt(sq(raw[r] - raw[r - 3]) + sq(raw[r + 1] - raw[r - 2]) + sq(raw[r + 2] - raw[r - 1]));
-            if (i == NECK_PIECES) set(neck, o, lead[0], lead[1], lead[2], lead[3], lead[4], lead[5]);
-            else {
+            if (i == NECK_PIECES) {
+                // where the flat takes the neck's end, against the lead it should meet: made up along the neck below
+                pos[0] = raw[r]; pos[1] = raw[r + 1]; pos[2] = raw[r + 2];
+                flat.toWorld(pos, from, u, u - du, tmp);
+                miss[0] = lead[0] - tmp[0]; miss[1] = lead[1] - tmp[1]; miss[2] = lead[2] - tmp[2];
+                set(neck, o, lead[0], lead[1], lead[2], lead[3], lead[4], lead[5]);
+            } else {
                 double t = (double) i / NECK_PIECES;
                 pos[0] = raw[r]; pos[1] = raw[r + 1]; pos[2] = raw[r + 2];
                 u = flat.toWorld(pos, from, u, u - du, tmp);
@@ -460,6 +523,13 @@ public final class SkeinSpine {
                 if (ml < 1.0E-6) { mx = tmp[3]; my = tmp[4]; mz = tmp[5]; ml = 1.0; }
                 set(neck, o, tmp[0], tmp[1], tmp[2], mx / ml, my / ml, mz / ml);
             }
+        }
+        // (the rock round the neck may lie otherwise beside its end than beside the lead's own place on the trail: the
+        // neck is drawn in to meet the lead, the more the nearer the lead)
+        for (int i = 1; i < NECK_PIECES; i++) {
+            double t = (double) i / NECK_PIECES, w = t * t * (3.0 - 2.0 * t);
+            int o = STRIDE * i;
+            neck[o] += miss[0] * w; neck[o + 1] += miss[1] * w; neck[o + 2] += miss[2] * w;
         }
         neckLength = neckArc[NECK_PIECES];
         // each joint: spread along the neck (however long it has to be just now, so the body behind never slides back
@@ -474,13 +544,20 @@ public final class SkeinSpine {
     }
 
     /**
-     * The neck's curve from (px, py, pz), leaving it along (dx, dy, dz) turned (sx, sy, sz) aside, to the lead, coming
-     * in the way it heads, each end pulled out {@code pull}: its points into {@link #raw}, and its length.
+     * The neck's curve from (px, py, pz), leaving it along (dx, dy, dz) turned (sx, sy, sz) aside, to the lead at
+     * (lx, ly, lz), coming in the way it heads (v, on the flat), each end pulled out {@code pull}: its points into
+     * {@link #raw}, and its length.
      */
     private double curve(double px, double py, double pz, double dx, double dy, double dz, double sx, double sy, double sz,
                          double lx, double ly, double lz, double pull) {
-        double ax = px + (dx + sx) * pull, ay = py + (dy + sy) * pull, az = pz + (dz + sz) * pull;
-        double bx = lx + heading[0] * pull, by = ly + heading[1] * pull, bz = lz + heading[2] * pull;
+        return curve(px, py, pz, dx, dy, dz, sx, sy, sz, lx, ly, lz, pull, 0.0, 0.0, 0.0);
+    }
+
+    /** As curve, with both its middle points pushed aside by (qx, qy, qz): a fold in it bulged out into a loop. */
+    private double curve(double px, double py, double pz, double dx, double dy, double dz, double sx, double sy, double sz,
+                         double lx, double ly, double lz, double pull, double qx, double qy, double qz) {
+        double ax = px + (dx + sx) * pull + qx, ay = py + (dy + sy) * pull + qy, az = pz + (dz + sz) * pull + qz;
+        double bx = lx + v[0] * pull + qx, by = ly + v[1] * pull + qy, bz = lz + v[2] * pull + qz;
         double len = 0.0;
         for (int i = 0; i <= NECK_PIECES; i++) {
             double t = (double) i / NECK_PIECES, s = 1.0 - t;
@@ -492,6 +569,20 @@ public final class SkeinSpine {
             if (i > 0) len += Math.sqrt(sq(raw[r] - raw[r - 3]) + sq(raw[r + 1] - raw[r - 2]) + sq(raw[r + 2] - raw[r - 1]));
         }
         return len;
+    }
+
+    /** The sharpest turn along the neck's curve as last laid in raw, over about a link (radians). */
+    private double sharpest() {
+        double most = 0.0;
+        for (int i = 2; i <= NECK_PIECES - 2; i++) {
+            int a = 3 * (i - 2), b = 3 * i, c = 3 * (i + 2);
+            double ux = raw[b] - raw[a], uy = raw[b + 1] - raw[a + 1], uz = raw[b + 2] - raw[a + 2];
+            double wx = raw[c] - raw[b], wy = raw[c + 1] - raw[b + 1], wz = raw[c + 2] - raw[b + 2];
+            double ul = Math.sqrt(ux * ux + uy * uy + uz * uz), wl = Math.sqrt(wx * wx + wy * wy + wz * wz);
+            if (ul < 1.0E-6 || wl < 1.0E-6) continue;
+            most = Math.max(most, Math.acos(Math.max(-1.0, Math.min(1.0, (ux * wx + uy * wy + uz * wz) / (ul * wl)))));
+        }
+        return most;
     }
 
     /** The point {@code s} along the neck's curve (position and normal) into o at off. */
