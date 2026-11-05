@@ -373,13 +373,12 @@ class GalleriesFieldTest {
                     || !v.inColumns((int) Math.floor(o.x + rp.ux * t0) + 8, (int) Math.floor(o.z + rp.uz * t0) + 8)) continue;
             s.rampsWalked++;
             int lastX = Integer.MIN_VALUE, lastZ = 0, lastFeet = 0;
-            double top = g.headTop;
             for (double tt = t0 + 1; tt <= rp.tEnd - 3; tt += 0.25) {
                 double b = g.bend(rp, t0, tt);
                 int x = (int) Math.floor(o.x + rp.ux * tt + rp.uz * b), z = (int) Math.floor(o.z + rp.uz * tt - rp.ux * b);
                 if (x == lastX && z == lastZ) continue;
                 double tc = (x + 0.5 - o.x) * rp.ux + (z + 0.5 - o.z) * rp.uz;
-                int deck = (int) Math.floor(top - rp.s * Math.max(0, tc - t0) + 0.5);
+                int deck = (int) Math.floor(g.deckPlane(rp, t0, tc) + 0.5);
                 int feet = Integer.MIN_VALUE;
                 for (int y = deck + 3; y >= deck - 4 && feet == Integer.MIN_VALUE; y--) if (v.stand(x, y, z)) feet = y;
                 s.centreColumns++;
@@ -652,7 +651,7 @@ class GalleriesFieldTest {
                 for (int x = (int) Math.floor(rp.minX) - 2; x <= (int) Math.ceil(rp.maxX) + 2; x++)
                     for (int z = (int) Math.floor(rp.minZ) - 2; z <= (int) Math.ceil(rp.maxZ) + 2; z++) {
                         double dx = x + 0.5 - o.x, dz = z + 0.5 - o.z, tt = dx * rp.ux + dz * rp.uz;
-                        if (tt < t0 - 1 || tt > rp.tEnd || Math.abs(dx * rp.uz - dz * rp.ux - g.bend(rp, t0, tt)) >= rp.hw) continue;
+                        if (tt < t0 - 1 || tt > rp.tEnd || Math.abs(dx * rp.uz - dz * rp.ux - g.bend(rp, t0, tt)) >= g.halfWidth(rp, t0, tt)) continue;
                         int i = x - gx0, k = z - gz0;
                         assertTrue(i >= 0 && k >= 0 && i < gn && k < gn, "a deck outside the grid at " + x + " " + z);
                         assertTrue(owner[i * gn + k] == 0 || owner[i * gn + k] == id + 1, "seed " + ar[0] + ": two decks on column " + x + " " + z);
@@ -943,7 +942,12 @@ class GalleriesFieldTest {
      * only where rock encloses them, the mouths' blend in place of the apron's ring and shelf (its blocks measured from
      * the runs' axis samples where their air meets the cavern), no veto, none of the cavern's massifs inside a standing
      * country's rim, the shallow dish, the pools on level floors and the narrower keep-out the openings and ramps stay out
-     * of, every one of which moves it. A change to the Galleries' shapes shows here: pin again only on purpose.
+     * of, every one of which moves it (fb1ca815ba4ddea8 and 3b00eae887e3dc90). On wip/r2 the ways down were reshaped as
+     * natural rock (the head's gully and breach, bent ramps of varying width with landings, arches or filled ridges, the
+     * broken rim, the breakdown funnel, RAMP_GAP 4: 8ee39f04e3e71a5d and a52ba6472e293d49 there), and seed 12345's
+     * again when the decks on the Causeway's coarse prisms kept HW_CO blocks to either side of their centre lines
+     * (05dc8c46f4d79178 there). A change to the
+     * Galleries' shapes shows here: pin again only on purpose.
      */
     @Test
     void digestPinned() {
@@ -1256,9 +1260,12 @@ class GalleriesFieldTest {
      * round 2b it failed on seed 77's box: 17.6 % of the low places there never walked up out of the flood (escape within
      * 384 moves 82.4 %), nearly all (27 750 places) one Causeway basin round (40850, -11130) closed by a tube apron's
      * cliff and column steps of 2-3 rows (spec-galleries-field-v2 15.3); the low ground's stairs and the apron's release
-     * opened it (escape 100.0 %, never 0.01 %), and all four boxes pass. Closed pits are not held to 0 here: 25, 12, 1 and
+     * opened it (escape 100.0 %, never 0.01 %), and all four boxes pass. Closed pits are not held to 0 here: 25, 17, 0 and
      * 0 places stay (the largest, 9 places, shelves at the lava's level under a Caldera's higher cells in seeds 12345 and
-     * 2000023), and seed 77's and 4242's boxes keep 2 and 1 floating pieces (352 and 90 blocks), not looked into.
+     * 2000023; 25, 12, 1 and 0 before the ways down were reshaped as natural rock), and floating rock is not held either:
+     * seed 2000023's box keeps a band's stretch of 3087 blocks at (21197..21218, 21276..21289), cut off between two
+     * ramps' strips with no pier (the band rule that brings a band down to the ground beside a ramp's strip belongs to
+     * the landing of r2), and seed 77's and 4242's boxes 2 and 3 pieces (352 and 114 blocks; 2 and 1, 352 and 90, before).
      */
     @Test
     @Tag("slow")

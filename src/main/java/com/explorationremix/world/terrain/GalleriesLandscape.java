@@ -46,8 +46,11 @@ final class GalleriesLandscape {
      */
     Patch patch(int i, int j) { return patch(patches.get(), i, j); }
 
+    /** The thread's patch cache, for {@link #patch(Patch[], int, int)} (a loop over many patches looks it up once). */
+    Patch[] patchCache() { return patches.get(); }
+
     /** {@link #patch(int, int)} from the thread's cache pc (one look-up of it for the many patches a column reads). */
-    private Patch patch(Patch[] pc, int i, int j) {
+    Patch patch(Patch[] pc, int i, int j) {
         int slot = (i & 7) << 3 | (j & 7);
         Patch p = pc[slot];
         if (p != null && p.i == i && p.j == j) return p;

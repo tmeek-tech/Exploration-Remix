@@ -254,8 +254,8 @@ class JoinTest {
                 int y = v.py(p);
                 if (y >= j.wBot + 2 && d >= o.r + 12 && d <= o.r + 30) from[p] = true;
                 double tt = dx * rp.ux + dz * rp.uz, l = dx * rp.uz - dz * rp.ux;
-                if (y <= T - 12 && tt >= t0 && tt <= rp.tEnd && Math.abs(l - g.bend(rp, t0, tt)) < rp.hw) {
-                    int deck = (int) Math.floor(g.headTop - rp.s * Math.max(0, tt - t0) + g.deckTerrace(v.px(p) + 0.5, v.pz(p) + 0.5, tt - t0) + 0.5);
+                if (y <= T - 12 && tt >= t0 && tt <= rp.tEnd && Math.abs(l - g.bend(rp, t0, tt)) < g.halfWidth(rp, t0, tt)) {
+                    int deck = (int) Math.floor(g.deckPlane(rp, t0, tt) + g.deckTerrace(v.px(p) + 0.5, v.pz(p) + 0.5, tt - t0) + 0.5);
                     if (y >= deck - GalleriesField.EDGE_LOW - 1 && y <= deck + 1) to[p] = true;
                 }
             }
@@ -576,7 +576,6 @@ class JoinTest {
             for (int k = Math.floorDiv(z0, 64) - 4; k <= Math.floorDiv(z0 + size, 64) + 4; k++) ops.addAll(Arrays.asList(g.openings(i, k)));
         boolean[] rim = new boolean[v.places], wayUp = new boolean[v.places];
         StringBuilder failed = new StringBuilder();
-        int top = (int) g.headTop;
         for (GalleriesField.Opening o : ops) {
             GalleriesField.Ramp rp = o.ramp;
             assertNotNull(rp, "an opened hole without a ramp at " + o.x + " " + o.z);
@@ -592,10 +591,10 @@ class JoinTest {
             for (int x = (int) Math.floor(rp.minX) - 8; x <= (int) Math.ceil(rp.maxX) + 8; x++) for (int z = (int) Math.floor(rp.minZ) - 8; z <= (int) Math.ceil(rp.maxZ) + 8; z++) {
                 if (!v.inColumns(x, z)) continue;
                 double dx = x + 0.5 - o.x, dz = z + 0.5 - o.z, tt = dx * rp.ux + dz * rp.uz, l = dx * rp.uz - dz * rp.ux;
-                boolean onDeck = tt >= t0 && tt <= rp.tEnd && Math.abs(l - g.bend(rp, t0, tt)) < rp.hw;
+                boolean onDeck = tt >= t0 && tt <= rp.tEnd && Math.abs(l - g.bend(rp, t0, tt)) < g.halfWidth(rp, t0, tt);
                 boolean atFoot = Math.hypot(x + 0.5 - ex, z + 0.5 - ez) <= 6;
                 if (!onDeck && !atFoot) continue;
-                int deck = (int) Math.floor(top - rp.s * Math.max(0, tt - t0) + g.deckTerrace(x + 0.5, z + 0.5, tt - t0) + 0.5);
+                int deck = (int) Math.floor(g.deckPlane(rp, t0, tt) + g.deckTerrace(x + 0.5, z + 0.5, tt - t0) + 0.5);
                 int qc = (x - x0) * size + (z - z0);
                 for (int p = v.colStart[qc]; p < v.colStart[qc + 1]; p++) {
                     int y = v.py(p);
@@ -866,10 +865,10 @@ class JoinTest {
      * are the opened holes: 90 % or more of those measured have a way down from the Wasteland's tunnels round them to the
      * Galleries' floor with drops of 15 at most (75 % with every drop 3 at most) and a way back up, and there are 40 or
      * more ways down and up per km^2 in every box (W-ENG-3 estimated 60 and 30 before the Galleries were built; the boxes
-     * measure 46-65 opened, all with ways, since fix round 2b resolved the openings by lattice cell priority: 53-72
-     * before). 90 % or more of the Galleries' dry places reach the nearest way up within 400 moves (W-ENG-3's bar:
-     * measured 95.0-100 %, 99.2-100 % before). The walks on up into the Wasteland and from the Wasteland's low places to
-     * the nearest way down are printed.
+     * measure 42-65 opened, all with ways, since the ways down were reshaped, 46-65 since fix round 2b resolved the
+     * openings by lattice cell priority, 53-72 before). 90 % or more of the Galleries' dry places reach the nearest way
+     * up within 400 moves (W-ENG-3's bar: measured 99.8-100 %; 95.0-100 % and 99.2-100 % in earlier rounds). The walks
+     * on up into the Wasteland and from the Wasteland's low places to the nearest way down are printed.
      */
     @Test
     void waysDownAndUp() {
@@ -891,14 +890,17 @@ class JoinTest {
      * edges, where a way round may leave the box), and 60 % or more of the Galleries' dry places walk up into the
      * Wasteland within 400 moves, the climb included (W-ENG-3 asked 90 % of a walk to a way up, which {@link #waysDownAndUp}
      * bars; the whole climb up 130-145 rows on a ramp of 0.55-0.78 rows a block takes 150-250 moves of its own; measured
-     * 99.2, 70.8 and 94.0 % for seeds 1, 2 and 8004 since the v2 Galleries landed on the reshape (0.8.0), 99.2, 70.8 and
-     * 93.8 % at fix round 2b, 95.2, 61.7 and 96.0 % before: seed 2's box has a tube country in its middle, where no hole
-     * opens). The walk from gate 3's landing to the nearest crater rim must exist and is printed (far-from-entry asked a
-     * median of about 200 moves; measured 369, 592 and 451 on the reshape, with fix round 2's Wasteland, 391, 474 and 451
-     * at fix round 2b: not met, the landings are placed by the Wasteland's gates, not by the openings). End to
-     * end (W-ENG-3's check from gate 3's landing): the landing lies in the main component, so it walks down to the
-     * Galleries' floor and back up; both walks are printed ({@link #gateThreeLandingsReachTheGalleriesAndBack} runs the
-     * check over 36 landings).
+     * 92.3, 64.6 and 91.3 % for seeds 1, 2 and 8004 on wip/r2 once the ways down were reshaped: the bent runs,
+     * their landings and the crater's bowl make the walk from a ramp's foot into the Wasteland a median 177, 240 and 188
+     * moves against 156, 175 and 165, and seed 2's box keeps 11 holes against 12; 99.2, 70.8 and 94.0 % since the v2
+     * Galleries landed on the reshape (0.8.0), 99.2, 70.8 and 93.8 % at fix round 2b, 95.2, 61.7 and 96.0 % before: seed
+     * 2's box has a tube country in its middle, where no hole opens). The walk from gate 3's landing to the nearest
+     * crater rim must exist and is printed (far-from-entry asked a median of about 200 moves; measured 369, 592 and 451
+     * on the reshape, with fix round 2's Wasteland, 390, 579 and 452 on wip/r2 with the ways reshaped, 391, 474 and 451 at
+     * fix round 2b: not met, the landings are placed by the Wasteland's gates, not by the openings). End to end (W-ENG-3's
+     * check from gate 3's landing): the landing lies in the main component, so it walks down to the Galleries' floor and
+     * back up; both walks are printed ({@link #gateThreeLandingsReachTheGalleriesAndBack} runs the check over 36
+     * landings).
      */
     @Test
     void layersJoinBothWays() {
