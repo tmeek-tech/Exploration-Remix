@@ -921,38 +921,46 @@ class GalleriesFieldTest {
     }
 
     /**
-     * The digest (spec 10.2): {@link #probe} at 30 000 blocks of the Galleries' rows and the join's round the origin, and
-     * every opened opening of 6 x 6 lattice cells with its kept ramp, bit for bit, for two seeds; pinned again at step 2
-     * of the port (ramps with terraces, a way up from every hole, no hole without a ramp; it was a25a9bf4bf313878 and
-     * 0da260ed6d0a26e3 at the port) and twice in fix round 2b: the openings resolved by lattice cell priority, their
-     * candidates in the order of an estimate (9a44061bac098872 and f7af35eb63184c62), then the closed pits' fixes and
-     * RAMP_GAP 5 ({@link #noClosedPits}; ebaffa279749c19a and e96e139ac587ceda). Pinned again when the v2 field landed on
-     * the reshape (0.8.0), for four of the reshape's changes, each of which moves it: the probe reads LookQueries.coneTop
-     * (6f7d038c1ce4dc54 and 502cbec08f10beae with that alone), the tubes are whole where two lines meet (TubeField), the
-     * tubes keep the cavern's roofs ({@link GalleriesField#roofed}), and the Wasteland's fix round 2 moves the join's rows
-     * (Terrain.rawDensity). The rest of the reshape's files leave it as it was (1adc7d3d2e79e341 and 2b0c55b4cb09aa8e).
-     * Pinned again in the landing's fix round for the closed pits and the floating rock it fixed ({@link #noClosedPits},
-     * {@link #noFloatingRock}), every one of which moves it: the low ground's stairs worn column by column, a coarse
-     * stray holding no column, the bands brought to the ground beside ramps' strips and tubes' paths and their piers onto
-     * a lava lake's bed, the apron's shelf never released downward, spires sinking near the lava, the crater's floor
-     * opened by a cell's site's place alone (a ramp's head room where it rises a row past the crater's floor there, its
-     * space reaching that row; a cell ringed by opened cells opened with them), and the talus over all ground that
-     * stands dry, the column tops lifted out of the shallows among it. Pinned again for the tube country without the ring
-     * (spec-tubes 0.2; it was 93c7012faa9e939e and fa813a23102fb0aa): the runs' floors from the Galleries' landscape and
-     * only where rock encloses them, the mouths' blend in place of the apron's ring and shelf (its blocks measured from
-     * the runs' axis samples where their air meets the cavern), no veto, none of the cavern's massifs inside a standing
-     * country's rim, the shallow dish, the pools on level floors and the narrower keep-out the openings and ramps stay out
-     * of, every one of which moves it (fb1ca815ba4ddea8 and 3b00eae887e3dc90). On wip/r2 the ways down were reshaped as
-     * natural rock (the head's gully and breach, bent ramps of varying width with landings, arches or filled ridges, the
-     * broken rim, the breakdown funnel, RAMP_GAP 4: 8ee39f04e3e71a5d and a52ba6472e293d49 there), and seed 12345's
-     * again when the decks on the Causeway's coarse prisms kept HW_CO blocks to either side of their centre lines
-     * (05dc8c46f4d79178 there). A change to the
-     * Galleries' shapes shows here: pin again only on purpose.
+     * The digest (spec 10.2): {@link #probe} at 30 000 blocks of the Galleries' rows and the join's round the origin,
+     * and every opened opening of 6 x 6 lattice cells with its kept ramp, bit for bit, for two seeds; pinned again at
+     * step 2 of the port (ramps with terraces, a way up from every hole, no hole without a ramp; it was
+     * a25a9bf4bf313878 and 0da260ed6d0a26e3 at the port) and twice in fix round 2b: the openings resolved by lattice
+     * cell priority, their candidates in the order of an estimate (9a44061bac098872 and f7af35eb63184c62), then the
+     * closed pits' fixes and RAMP_GAP 5 ({@link #noClosedPits}; ebaffa279749c19a and e96e139ac587ceda). Pinned again
+     * when the v2 field landed on the reshape (0.8.0), for four of the reshape's changes, each of which moves it: the
+     * probe reads LookQueries.coneTop (6f7d038c1ce4dc54 and 502cbec08f10beae with that alone), the tubes are whole
+     * where two lines meet (TubeField), the tubes keep the cavern's roofs ({@link GalleriesField#roofed}), and the
+     * Wasteland's fix round 2 moves the join's rows (Terrain.rawDensity). The rest of the reshape's files leave it as
+     * it was (1adc7d3d2e79e341 and 2b0c55b4cb09aa8e). Pinned again in the landing's fix round for the closed pits and
+     * the floating rock it fixed ({@link #noClosedPits}, {@link #noFloatingRock}), every one of which moves it: the low
+     * ground's stairs worn column by column, a coarse stray holding no column, the bands brought to the ground beside
+     * ramps' strips and tubes' paths and their piers onto a lava lake's bed, the apron's shelf never released downward,
+     * spires sinking near the lava, the crater's floor opened by a cell's site's place alone (a ramp's head room where
+     * it rises a row past the crater's floor there, its space reaching that row; a cell ringed by opened cells opened
+     * with them), and the talus over all ground that stands dry, the column tops lifted out of the shallows among it.
+     * Pinned again for the tube country without the ring (spec-tubes 0.2; it was 93c7012faa9e939e and
+     * fa813a23102fb0aa): the runs' floors from the Galleries' landscape and only where rock encloses them, the mouths'
+     * blend in place of the apron's ring and shelf (its blocks measured from the runs' axis samples where their air
+     * meets the cavern), no veto, none of the cavern's massifs inside a standing country's rim, the shallow dish, the
+     * pools on level floors and the narrower keep-out the openings and ramps stay out of, every one of which moves it
+     * (fb1ca815ba4ddea8 and 3b00eae887e3dc90). On wip/r2 the ways down were reshaped as natural rock (the head's gully
+     * and breach, bent ramps of varying width with landings, arches or filled ridges, the broken rim, the breakdown
+     * funnel, RAMP_GAP 4: 8ee39f04e3e71a5d and a52ba6472e293d49 there), and seed 12345's again when the decks on the
+     * Causeway's coarse prisms kept HW_CO blocks to either side of their centre lines (05dc8c46f4d79178 there). Pinned
+     * once more when the ways down and the tube country landed together (wip/land-r2): the merge alone moves it, each
+     * branch's shapes now read on the other's (1f6bf26ebe5a615c and e3b4475eb655ef25 at the merge), and so does each of
+     * the landing's rules for the closed pits and the floating rock of its sweeps and slow boxes: the ramps' decks out
+     * of the stairs' wear ({@link GalleriesField#stairFloor}), no pillar within NEAR_IN of a deck, the deck's ragged
+     * edge a row at most (EDGE_LOW), the gully deepening over its first CR_TB blocks, the broken rim coming down
+     * within CR_BX of another hole, a cell opening through where its six neighbours open or, for a cell on a fringe,
+     * lie on one too ({@link GalleriesField#ringedOpen}; a cell on no fringe up to its own crater's floor, over the cap
+     * too), and a deck or a band standing on the ground where the Causeway's seam runs through its cell
+     * ({@link GalleriesField#seamCut}). A change to the Galleries' shapes shows here: pin again only on purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("fb1ca815ba4ddea8", digest(8675309), "seed 8675309");
-        assertEquals("3b00eae887e3dc90", digest(12345), "seed 12345");
+        assertEquals("df77dd13282e04e2", digest(8675309), "seed 8675309");
+        assertEquals("358c4a8a51a17912", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {
@@ -1256,16 +1264,23 @@ class GalleriesFieldTest {
     // ================================================================================================ slow
 
     /**
-     * The slow set: the spec's other four boxes, held to the main two's bars but for never (1.5 %, see below). Until fix
-     * round 2b it failed on seed 77's box: 17.6 % of the low places there never walked up out of the flood (escape within
-     * 384 moves 82.4 %), nearly all (27 750 places) one Causeway basin round (40850, -11130) closed by a tube apron's
-     * cliff and column steps of 2-3 rows (spec-galleries-field-v2 15.3); the low ground's stairs and the apron's release
-     * opened it (escape 100.0 %, never 0.01 %), and all four boxes pass. Closed pits are not held to 0 here: 25, 17, 0 and
-     * 0 places stay (the largest, 9 places, shelves at the lava's level under a Caldera's higher cells in seeds 12345 and
-     * 2000023; 25, 12, 1 and 0 before the ways down were reshaped as natural rock), and floating rock is not held either:
-     * seed 2000023's box keeps a band's stretch of 3087 blocks at (21197..21218, 21276..21289), cut off between two
-     * ramps' strips with no pier (the band rule that brings a band down to the ground beside a ramp's strip belongs to
-     * the landing of r2), and seed 77's and 4242's boxes 2 and 3 pieces (352 and 114 blocks; 2 and 1, 352 and 90, before).
+     * The slow set: the spec's other four boxes, held to the main two's bars but for never (1.5 %, see below), and,
+     * since the ways down and the tube country landed together (wip/land-r2), to the field's own rules as well: every
+     * opened opening keeps a ramp and 90 % or more have a way down ({@link #waysDown}), at most 1 % of the ramps'
+     * walked centre columns have no standing place near the deck and at most 0.5 % step more than a row ({@link
+     * #rampsAreWalkable}), no closed pit the main cavern walks into ({@link #noClosedPits}) and no rock afloat ({@link
+     * #noFloatingRock}). Until fix round 2b it failed on seed 77's box: 17.6 % of the low places there never walked up
+     * out of the flood (escape within 384 moves 82.4 %), nearly all (27 750 places) one Causeway basin round (40850,
+     * -11130) closed by a tube apron's cliff and column steps of 2-3 rows (spec-galleries-field-v2 15.3); the low
+     * ground's stairs and the apron's release opened it (escape 100.0 %, never 0.01 %). Closed pits and floating rock
+     * were not held here before the landing: on wip/r2-ways 25, 17, 0 and 0 pit places stayed, seed 2000023's box kept
+     * a band's stretch of 3087 blocks afloat between two ramps' strips and seed 77's and 4242's boxes 2 and 3 pieces
+     * (352 and 114 blocks); at the landing's merge 0, 8, 0 and 0 pit places (a hollow 14 rows deep between a pillar and
+     * a filled ridge's sheer flank in seed 2000023's box) and no rock afloat, and centre columns with no place near the
+     * deck 575, 255, 189 and 337 (the stairs wore the ridges' decks down from the side). Now (seeds 12345, 2000023, 77
+     * and 4242): ways down 70 of 70, 53 of 53, 70 of 70 and 69 of 69; no place near the deck 0 of 12 003, 7735, 8897
+     * and 10 689 centre columns; steps over a row 11, 9, 19 and 12; never 0.00, 0.10, 0.01 and 0.02 %; no closed pit,
+     * no floating rock.
      */
     @Test
     @Tag("slow")
@@ -1284,6 +1299,12 @@ class GalleriesFieldTest {
             assertTrue(s.over(80) >= 0.90 && s.over(160) >= 0.80, "views: " + s);
             assertTrue(s.fallShare() <= 0.008 && s.dropShare() <= 0.05, "falls and drops: " + s);
             assertEquals(0, s.lavaBesideAir + s.lavaNearOpening + s.waterUnsealed + s.waterInOpenCavern + s.waterLow + s.waterByLava, "fluid rules: " + s);
+            assertEquals(s.opened, s.ramped, "openings without a ramp: " + s);
+            assertTrue(s.waysDown >= 0.9 * s.ramped, "ramps with no way down into the cavern: " + s);
+            assertTrue(s.centreMissing <= 0.01 * s.centreColumns, "ramp columns with no standing place near the deck: " + s);
+            assertTrue(s.centreSteps <= 0.005 * s.centreColumns, "ramp centre lines that step more than a row: " + s);
+            assertEquals(0, s.trapped, "closed pits the main cavern walks into: " + s);
+            assertEquals(0, s.floating, "rock afloat: " + s);
         }
     }
 }

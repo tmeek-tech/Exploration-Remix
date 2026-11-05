@@ -865,10 +865,13 @@ class JoinTest {
      * are the opened holes: 90 % or more of those measured have a way down from the Wasteland's tunnels round them to the
      * Galleries' floor with drops of 15 at most (75 % with every drop 3 at most) and a way back up, and there are 40 or
      * more ways down and up per km^2 in every box (W-ENG-3 estimated 60 and 30 before the Galleries were built; the boxes
-     * measure 42-65 opened, all with ways, since the ways down were reshaped, 46-65 since fix round 2b resolved the
-     * openings by lattice cell priority, 53-72 before). 90 % or more of the Galleries' dry places reach the nearest way
-     * up within 400 moves (W-ENG-3's bar: measured 99.8-100 %; 95.0-100 % and 99.2-100 % in earlier rounds). The walks
-     * on up into the Wasteland and from the Wasteland's low places to the nearest way down are printed.
+     * measure 42-69 opened, all with ways, since the ways down and the tube country landed together (wip/land-r2: 50, 42
+     * and 69 per km^2 against 46, 46 and 65 on wip/r2-tubes, where the tube countries standing without the veto took
+     * holes' ground), 42-65 since the ways down were reshaped, 46-65 since fix round 2b resolved the openings by lattice
+     * cell priority, 53-72 before). 90 % or more of the Galleries' dry places reach the nearest way up within 400 moves
+     * (W-ENG-3's bar: measured 98.4-100 % at the landing, 99.8-100 % on wip/r2 with the ways reshaped; 95.0-100 % and
+     * 99.2-100 % in earlier rounds). The walks on up into the Wasteland and from the Wasteland's low places to the
+     * nearest way down are printed.
      */
     @Test
     void waysDownAndUp() {
@@ -890,13 +893,17 @@ class JoinTest {
      * edges, where a way round may leave the box), and 60 % or more of the Galleries' dry places walk up into the
      * Wasteland within 400 moves, the climb included (W-ENG-3 asked 90 % of a walk to a way up, which {@link #waysDownAndUp}
      * bars; the whole climb up 130-145 rows on a ramp of 0.55-0.78 rows a block takes 150-250 moves of its own; measured
-     * 92.3, 64.6 and 91.3 % for seeds 1, 2 and 8004 on wip/r2 once the ways down were reshaped: the bent runs,
+     * 82.3, 77.4 and 83.4 % for seeds 1, 2 and 8004 since the ways down and the tube country landed together
+     * (wip/land-r2), the walk into the Wasteland a median 267, 329 and 297 moves, against 97.4, 74.3 and 99.6 % (242, 291
+     * and 234) on wip/r2-tubes, whose ramps were straight strips, with 13, 11 and 18 holes in the boxes against 12, 12
+     * and 17 there; 92.3, 64.6 and 91.3 % on wip/r2 once the ways down were reshaped: the bent runs,
      * their landings and the crater's bowl make the walk from a ramp's foot into the Wasteland a median 177, 240 and 188
      * moves against 156, 175 and 165, and seed 2's box keeps 11 holes against 12; 99.2, 70.8 and 94.0 % since the v2
      * Galleries landed on the reshape (0.8.0), 99.2, 70.8 and 93.8 % at fix round 2b, 95.2, 61.7 and 96.0 % before: seed
      * 2's box has a tube country in its middle, where no hole opens). The walk from gate 3's landing to the nearest
      * crater rim must exist and is printed (far-from-entry asked a median of about 200 moves; measured 369, 592 and 451
-     * on the reshape, with fix round 2's Wasteland, 390, 579 and 452 on wip/r2 with the ways reshaped, 391, 474 and 451 at
+     * on the reshape, with fix round 2's Wasteland, 390, 579 and 452 on wip/r2 with the ways reshaped, 361, 550 and 402
+     * at the landing of the ways down and the tube country (369, 592 and 342 on wip/r2-tubes), 391, 474 and 451 at
      * fix round 2b: not met, the landings are placed by the Wasteland's gates, not by the openings). End to end (W-ENG-3's
      * check from gate 3's landing): the landing lies in the main component, so it walks down to the Galleries' floor and
      * back up; both walks are printed ({@link #gateThreeLandingsReachTheGalleriesAndBack} runs the check over 36

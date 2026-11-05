@@ -456,8 +456,9 @@ public final class GalleriesField {
      * lowest of (a floor under W + STAIR_TOP within STAIR_R blocks, plus the blocks between them), the blocks counted
      * along a walk over columns whose own floors differ by at most STAIR_K rows a block. Every riser of 2..STAIR_K rows
      * becomes a slope rising a row a block into its higher side, and where risers follow each other the slopes join
-     * into one, whatever cells, lattices (the Causeway's coarse prisms beside the fine cells), ramps' decks or arches
-     * the columns belong to. Higher cliffs, spires and ridges keep their faces (the walk does not cross them), lava
+     * into one, whatever cells, lattices (the Causeway's coarse prisms beside the fine cells) or arches the columns
+     * belong to. A ramp's deck is a way of its own and is neither worn nor walked over ({@link #stairFloor}). Higher
+     * cliffs, spires and ridges keep their faces (the walk does not cross them), lava
      * and closed cells are not crossed, and a floor only ever sinks: no open row closes, no lava is covered, and no
      * column ends lower than a row over the floor it was worn from (so never into the lava). The grey-level erosion of
      * the floor by a cone, cut off at STAIR_R: pure (the cells and the ramps' rows are), kept per column ({@link #stairsOf}).
@@ -468,7 +469,7 @@ public final class GalleriesField {
      * longer made, and a chunk's walks take 12 444 steps, not 53 098.
      */
     private int stairs(Caches k, Cell c, int x, int z) {
-        int f0 = floorOf(c, x, z);
+        int f0 = stairFloor(c, x, z);
         if (f0 == NO_GROUND || f0 < W + 2 || f0 >= W + STAIR_TOP + STAIR_R) return NO_STAIRS;
         if (lowBound(k, x, z) >= f0) return NO_STAIRS;
         final int low = k.stLow;
@@ -579,13 +580,13 @@ public final class GalleriesField {
         return f;
     }
 
-    /** The own floor of column (x, z) ({@link #floorOf} of its cell), from the thread's cache. */
+    /** The own floor of column (x, z) as the stairs read it ({@link #stairFloor} of its cell), from the thread's cache. */
     private int ground(Caches k, int x, int z) {
         int slot = groundSlot(x, z);
         long key = (long) x << 32 | (z & 0xffffffffL);
         if (k.grKey[slot] == key) return k.grRow[slot];
         latticeOf(k, x + 0.5, z + 0.5);
-        int f = floorOf(cell(k.coarse, k.ij[0], k.ij[1]), x, z);
+        int f = stairFloor(cell(k.coarse, k.ij[0], k.ij[1]), x, z);
         k.grKey[slot] = key;
         k.grRow[slot] = f;
         return f;
@@ -606,6 +607,24 @@ public final class GalleriesField {
             }
         }
         return f < W ? NO_GROUND : f;
+    }
+
+    /**
+     * {@link #floorOf} as the stairs read it ({@link #stairs}): NO_GROUND where the floor is a ramp's deck, a filled
+     * ridge's row or an arch's band where it comes down onto the ground (the ground under an arch is worn as any other).
+     * A deck is a way of its own, falling under a row a block and stepping a row at a time, so the stairs neither wear it
+     * nor walk over it: the ways' ridges stand up to DK_FILL_R rows over the low ground, their talus steeper than a row
+     * a block where they stand high, and worn from the side a ridge's deck sank 4 to 7 rows under its plane and ended in
+     * risers of up to 7 rows where the wear stopped (575 of 12 003 columns of seed 12345's slow box's walked centre lines,
+     * 112 with the talus over all dry ground); walked over, it brought the slope of one side's ground to the other's.
+     */
+    int stairFloor(Cell c, int x, int z) {
+        if (c.deckMode != 0 && c.f < c.c) {
+            int row = deckRow(c, x, z);
+            boolean deck = c.deckMode == 1 || (row != c.dkRow && c.bl + (row - c.dkRow) <= c.dkGround + 1);
+            if (deck && row > c.dkGround) return NO_GROUND;
+        }
+        return floorOf(c, x, z);
     }
 
     /** The floor of column (x, z) as it stands: on the stairs ({@link #stairs}), on a ramp's deck its row; or NO_GROUND. */
@@ -850,7 +869,8 @@ public final class GalleriesField {
         } else {
             // column ends: the floor's top stands a row higher on a quarter of the cells of flat ground, in the shallows too,
             // where it stands level with the lava (the dark column tops along a lake's shore or a river); a ramp's talus
-            // covers such a top in its strip as all dry ground ({@link #shape})
+            // covers such a top in its strip only on ground at W + STAIR_TOP or over ({@link #shape}), never one by the
+            // lava
             double of = (c.h & 3) == 0 && s.ragged ? FLOOR_OFF : 0;
             f = (int) Math.floor(s.F + of + 0.5);
             ce = (int) Math.floor(s.C + 0.5);
@@ -873,7 +893,8 @@ public final class GalleriesField {
             // cells keeps only the few columns of its side (the others are nearer a site of the other lattice), so a deck
             // or a band in it could stand alone in mid-air: there a deck or a band is filled down to the ground (a deck
             // slab of one column floated in seed -42's box at (-3520, 6060), a band's in a coarse cell at (-4515, 7408));
-            // a coarse stray now holds no column at all (latticeOf), so this is the fine strays'
+            // a coarse stray now holds no column at all (latticeOf), so this is the fine strays'; and a cell the seam runs
+            // through keeps an arch's band or a rock band on the ground the same way ({@link #seamCut})
             if (s.deck == s.deck) deck(c, s, c.stray);
             else band(c, x, z, cl, s.mouth, s.rh.side, c.stray);
         }
@@ -895,7 +916,7 @@ public final class GalleriesField {
         c.dkRow = d0;
         c.dkDrop = s.deckDrop;
         c.dkGround = c.f;
-        if (filled || bl <= c.f + 3) { c.f = d0; c.deckMode = 1; return; }     // filled: a ridge of columns on the ground
+        if (filled || bl <= c.f + 3 || seamCut(c)) { c.f = d0; c.deckMode = 1; return; }     // filled: a ridge of columns on the ground
         c.bl = bl;
         c.bh = d0;
         c.deckMode = 2;
@@ -1037,15 +1058,16 @@ public final class GalleriesField {
         // ---- a ramp's talus beside its solid part: the floor rises to its deck, TALUS_S rows a block lower outwards, or
         // steeper where the column's own floor lies lower, so the talus meets it at its outer edge (measured against the
         // ground under the centre line it stood as a wall of up to 26 rows over a valley beside the ramp: seed -42's pit);
-        // none over lava (fix round 2b: in a Scoria Canyons slot the talus filled the lava up to a dry shelf between the
-        // slot's sheer walls, a pit in seed 8675309's box), and only on ground out of the flood's reach, W + STAIR_TOP or
-        // over: the talus lies cell by cell, a step of up to 10 rows a cell where a tall ridge's talus is steep, and in the
-        // low ground those steps walled in hollows between the talus and the ground and a shelf over the lava (seeds
-        // 8675309 and -42, with the ridges' fill); there the ridge stands on the ground, and the low ground's stairs
-        // ({@link #stairs}) wear its foot where it stands up to STAIR_K rows over it. (So no talus reaches the lava's edge:
-        // the landing's first rule, a talus over all dry ground, was for a dry spot walled in at the foot of a talus's face
-        // over the lava's edge, seed 161803's box at (1156, -7085).) Each ramp's talus is read at the column's own floor and
-        // the highest kept ({@link RampHit#tn}).
+        // only on ground out of the flood's reach, W + STAIR_TOP or over: the talus lies cell by cell, a step of up to 10
+        // rows a cell where a tall ridge's talus is steep, and it starts at its full height where the ramp's solid part
+        // starts, so on the low ground it walled in hollows: between its steps and the ground, in front of that face
+        // (with the talus over all dry ground, 8 and 118 pit places in seeds -3030 and -42 of the landing's sweep; with
+        // it also wrapped round the solid part's start, 181 in seed -3030 and 239 in seed 12345's slow box), dimples where
+        // two joints' stairs met and a shelf over the lava (seeds 8675309 and -42, with the ridges' fill). There the ridge
+        // stands sheer on the ground: its deck is out of the stairs' wear ({@link #stairFloor}), its ragged edge drops a
+        // row at most ({@link #EDGE_LOW}) and no pillar stands within NEAR_IN of it (the hanging rock, below). None over
+        // lava either (fix round 2b: in a Scoria Canyons slot the talus filled the lava up to a dry shelf).
+        // Each ramp's talus is read at the column's own floor and the highest kept ({@link RampHit#tn}).
         if (rh.talus > F && F >= W + STAIR_TOP) {
             double best = F;
             for (int i = 0; i < rh.tn; i++) {
@@ -1073,10 +1095,17 @@ public final class GalleriesField {
         // (forced up to the cap instead, the head rooms under the layer's top made flat lids of 90 and 82 columns at T - 3
         // in the test's two boxes). So whether a cell opens through goes by its site's place alone ({@link #opensThrough}),
         // and a cell left with rock over it keeps a neighbour with rock over it too, out to the crater's whole floor, but
-        // where discs and head rooms close round it: such a cell, all six of its neighbours open, opens with them (a row of
-        // rock among two discs' rims and three ramps' head rooms floated in seed -3030's box at (2122, 6396); a cap that
-        // opened where its relief, eased by the disc, came within half a row of the floor did so at no fixed place, and
-        // isolated lids of 2 rows there and of 4 rows between two discs in seed 77's box at (-6798, 9568))
+        // where discs and head rooms close round it: such a cell, each of its six neighbours open or on a disc's or a head
+        // room's fringe as it is, opens with them (a row of rock among two discs' rims and three ramps' head rooms floated
+        // in seed -3030's box at (2122, 6396); a cap that opened where its relief, eased by the disc, came within half a
+        // row of the floor did so at no fixed place, and isolated lids of 2 rows there and of 4 rows between two discs in
+        // seed 77's box at (-6798, 9568); two fringe cells side by side between a disc and a ramp's gully, each counting
+        // the other as rock, kept a lid of 16 blocks touching no rock in seed -42's box at (-2028, 3208)); and a cell on no
+        // fringe opens where all six of its neighbours open through (between two holes whose rims come down to a saddle,
+        // CR_BX, a cell on neither disc kept a lid of 31 blocks touching no rock: seed 3 at (4237, -5199)), up to its own
+        // crater's floor even where that lies over the cap, under the layer's top (its rock touches none whatever the
+        // floor's height: on such a saddle the floor at a cell's site 0.17 rows over the cap kept a lid of 44 blocks in
+        // seed 900913's box at (7004, 4575)); a fringe cell opens only under the cap
         if (rh.jt >= J_OPEN) cap = Math.max(cap, rh.jtTop);
         else if (rh.jt > 0) cap = Math.min(lerp(cap, rh.jtTop, rh.jt), T - CR_DROP);
         if (rh.rb == rh.rb) cap = Math.max(cap, Math.min(cap0, rh.rb));   // the relief stays over a ramp's head room
@@ -1085,10 +1114,10 @@ public final class GalleriesField {
         double cut = rh.fun > -1e8 ? rh.fun : Double.NaN;
         if (cut > cap) cap = cut;
         if (mouth > 0) cap = Math.max(cap, Math.min(cap0, F + TubeField.APRON_HEAD * mouth + 2));   // and over a tube's mouth
-        boolean through = opensThrough(rh), ringed = false;
+        boolean through = opensThrough(rh), ringed = false, fringe = rh.jt > 0 || rh.rb == rh.rb;
         double reach = rh.crFloor + 1, ringTop = Math.max(discTop, reach);
-        if (!through && (rh.jt > 0 || rh.rb == rh.rb) && out.lattice && cap < reach && ringTop <= cap0
-                && ringedOpen(out.latCoarse, out.latI, out.latJ, out)) {
+        if (!through && out.lattice && cap < reach && ringTop <= (fringe ? cap0 : T)
+                && ringedOpen(out.latCoarse, out.latI, out.latJ, out, fringe)) {
             cap = Math.max(cap, ringTop);
             through = ringed = true;
         }
@@ -1185,6 +1214,11 @@ public final class GalleriesField {
         up *= clear * (1 - rh.near);
         if (clear < 0.7) pillar = false;
         if (dm < SK_R) pillar = false;
+        if (pillar && rh.near >= 1) {
+            // no pillar within NEAR_IN of a ramp's deck (as no spire): its cluster ends PIL_GAP rows over the floor
+            pillar = false;
+            hang = Math.min(hang, Math.max(0, head - PIL_GAP));
+        }
         if (rh.rb == rh.rb) {
             // over a ramp: a pillar stands under its deck, spires none, clusters end over its head room
             if (pillar) cuBot = -1e9;
@@ -1469,8 +1503,10 @@ public final class GalleriesField {
      * top CR_DROP rows under the layer's top (one row under the ramp's head, on the Galleries' guaranteed rock) out to
      * r + CR_IN, rising CR_S rows a block beyond, out to CR_REACH blocks further. The disc opens up to that floor only.
      * A cell whose site lies within the disc's weight J_OPEN (r + 1.75 from the middle) opens through that floor, as does
-     * one under a ramp's head room where that rises a row past the floor there, and one whose six neighbours all open;
-     * any other keeps at least its top row of rock ({@link #shape}, {@link #opensThrough}).
+     * one under a ramp's head room where that rises a row past the floor there, one on the disc's or a head room's
+     * fringe whose six neighbours all open or lie on such a fringe, and one whose six neighbours all open (up to its own
+     * floor, over the cap too) ({@link #ringedOpen}); any other keeps at least its top row of rock ({@link #shape},
+     * {@link #opensThrough}).
      */
     static final double CR_DROP = 6, CR_IN = 4, CR_S = 0.65, CR_REACH = 42, J_OPEN = 0.5;
     /**
@@ -1482,14 +1518,23 @@ public final class GalleriesField {
      * 1 + 1 / CR_TE a block, the floor 0.87 rows), so both are walked up to the bowl and on into the Wasteland (as steep walls, 3 blocks
      * wide, the flanks left the head no way up to the crater's bowl at 15 of 45 holes of JoinTest's seeds 1 and 2; an end
      * fading over 6 blocks rose 2 to 3 rows a block, and the crater's floor round 7 of 23 ramps' heads in JoinTest's three
-     * boxes walked into the Wasteland only round by another hole, 240 to 714 moves). Off the ramp's side of the
+     * boxes walked into the Wasteland only round by another hole, 240 to 714 moves). The gully starts CR_TW short of the
+     * lip and deepens over its first CR_TB blocks, so the rim comes down into it with no step (cut off at its start, the
+     * rim stood up to 14 rings over the gully's floor from one block to the next, and between the hole's edge and the
+     * gully's start a fin of its rock 2 blocks wide hung over the Galleries' open cell: 10 blocks touching no rock in the
+     * landing's sweep, seed 99991 at (-2577, 7106); climbing back to the rim over CR_TB blocks behind its start instead,
+     * the gully took the broken rim's place beside the hole, the ring at r + 3 at exactly T - 5 on 0.47 of the bearings
+     * against wip/r2-ways' 0.38). Off the ramp's side of the
      * rim (from about 32 degrees off its axis: the bearing's cosine under CR_LA, fully from 57 degrees, CR_LF less), and
      * out of the gully, the ring reads up to CR_B blocks further, by smooth(CR_BM + CR_BG x a noise of the bearing of
      * scale CR_BK), rising from the hole's edge over CR_BQ blocks, so the rim there rises up to CR_B x CR_S rows and
-     * breaks, and a lip of a block or two stays low to look down from: the level tread is the ramp's side only.
+     * breaks, and a lip of a block or two stays low to look down from: the level tread is the ramp's side only. Within
+     * CR_BX blocks of another hole's outline the rim comes down by smooth(that distance / CR_BX) ({@link #otherHoleQ}), so
+     * two holes a few blocks apart share a low saddle (the two rims rising over the rock between them, 1.7 blocks wide,
+     * left a knob of 12 blocks over the Galleries' open cell, touching no rock: seed 77 at (-6360, -5293)).
      */
-    static final double CR_T = 14, CR_TU = 16, CR_TE = 3, CR_TW = 3, CR_TK = 1.5, CR_LA = 0.85, CR_LF = 0.3, CR_B = 10,
-            CR_BK = 1.1, CR_BM = 0.75, CR_BG = 1.4, CR_BQ = 3;
+    static final double CR_T = 14, CR_TU = 16, CR_TE = 3, CR_TW = 3, CR_TB = 4, CR_TK = 1.5, CR_LA = 0.85, CR_LF = 0.3,
+            CR_B = 10, CR_BK = 1.1, CR_BM = 0.75, CR_BG = 1.4, CR_BQ = 3, CR_BX = 6;
     /**
      * The hole's outline ({@link #rimR}): off the ramp's side (the same bearings as the broken rim) its radius is r plus
      * RIM_A x a noise of the bearing of scale RIM_K, so the rock juts into the hole in spurs and falls back in bays a few
@@ -1532,25 +1577,33 @@ public final class GalleriesField {
             RAMP_HW0 = 3.5, RAMP_HW1 = 5, RAMP_TH0 = 6, RAMP_TH1 = 4, BEND_A0 = 20, BEND_A1 = 30, BEND_P = 45, BEND_IN = 24, RAMP_GAP = 4;
     /**
      * A ramp's body: filled to the floor from where the free height under its base thickness first comes within DK_FILL
-     * rows (tg, along the centre line, and wherever it does at a cell); before that an arch: thickness th0 + gap x (1 - a),
-     * a = 4 s' (1 - s') (a parabola), s' = (s + DK_ROOT) / (1 + DK_ROOT), s the place along the free span (0 the head, 1
-     * tg), so the underside springs from a hanging root under the head (0.29 of the gap), is thinnest at about a third of
-     * the span, and curves down to the floor at tg; plus DK_J rows of column ends per cell. The deck's outer half drops 0..EDGE_LOW rows per cell
-     * (ragged column tops), fading in over the head's first EDGE_IN blocks (so the head's whole width meets the crater's
-     * floor beside it). Beside the solid part a talus: the floor rises to the deck, falling TALUS_S rows a block
-     * outwards, or steeper where the deck stands higher over the ground under its centre line (so that it meets the
-     * ground TALUS_MAX blocks out). The solid part starts at ts, where the arch's opening over the ground (less the column
-     * ends) first stays under TS_OPEN rows to tg, so no stretch of the body stands as a wall without a walkable flank.
+     * rows (tg, along the centre line, and wherever it does at a cell); before that an arch: thickness th0 + gap x (1 -
+     * a), a = 4 s' (1 - s') (a parabola), s' = (s + DK_ROOT) / (1 + DK_ROOT), s the place along the free span (0 the
+     * head, 1 tg), so the underside springs from a hanging root under the head (0.29 of the gap), is thinnest at about
+     * a third of the span, and curves down to the floor at tg; plus DK_J rows of column ends per cell. The deck's outer
+     * half drops 0..EDGE_LOW rows per cell (ragged column tops), fading in over the head's first EDGE_IN blocks (so the
+     * head's whole width meets the crater's floor beside it). A row at most, so a dropped cell always steps back up
+     * onto the deck: with 2 rows, where the ridge's side stood sheer over the low ground (no talus there), a cell
+     * dropped 2 rows on a landing or beside cells that kept their row was a closed pit, 16 or more rows over the ground
+     * beside it (GalleriesFieldTest's random box 5 at (-5219, 14382) and named box 1 at (-5910, 6778), 8 and 7 places;
+     * seed 2 at (5628, 6772) in the landing's sweep, 8). Beside the solid part a talus: the floor rises to the deck,
+     * falling TALUS_S rows a block outwards, or steeper where the deck stands higher over the ground under its centre
+     * line (so that it meets the ground TALUS_MAX blocks out). The solid part starts at ts, where the arch's opening
+     * over the ground (less the column ends) first stays under TS_OPEN rows to tg, so no stretch of the body stands as
+     * a wall without a walkable flank.
      */
-    static final double DK_FILL = 7, DK_ROOT = 0.3, DK_J = 4, EDGE_LOW = 2, EDGE_IN = 3, TALUS_S = 0.35, TALUS_MAX = 32, TS_OPEN = 3;
+    static final double DK_FILL = 7, DK_ROOT = 0.3, DK_J = 4, EDGE_LOW = 1, EDGE_IN = 3, TALUS_S = 0.35, TALUS_MAX = 32, TS_OPEN = 3;
     /**
      * The ragged edge drops only where the deck stands EDGE_G rows or more over its cell's ground (where the ground came
      * up to the deck, a dropped edge cell lay between the deck and higher ground, a pit in seed -42's box). Each column
      * keeps the TAL_N highest ramps' taluses ({@link RampHit#tn}). Spires and the rubble keep off the ramps: fully to
      * NEAR_IN blocks past a deck's edge, coming back over NEAR_F more (a spire's foot beside a ramp's end walled its
-     * ragged edge in, and the talus raised the ground round a spire into a closed pit: seeds -42 and 8675309).
+     * ragged edge in, and the talus raised the ground round a spire into a closed pit: seeds -42 and 8675309). No pillar
+     * stands within NEAR_IN of a deck either: its cluster there ends PIL_GAP rows over the floor (a pillar 3 blocks off a
+     * filled ridge's sheer flank on the low ground left a hollow 14 rows deep between them, a closed pit in seed 2000023's
+     * slow box at (21259, 21277)).
      */
-    static final double EDGE_G = 6, NEAR_IN = 16, NEAR_F = 16;
+    static final double EDGE_G = 6, NEAR_IN = 16, NEAR_F = 16, PIL_GAP = 6;
     static final int TAL_N = 4;
     /**
      * The ways down vary per hole and along each run (every hole had the same straight, even slab). The half width across
@@ -2033,11 +2086,16 @@ public final class GalleriesField {
 
     /**
      * Whether all six cells round lattice cell (coarse, i, j) open through the crater's floor by their own openings
-     * ({@link #opensThrough} at their sites), with the columns round the cell all of its own lattice (each neighbour's
-     * site on its side of the Causeway's seam): then the cell's row of rock under that floor would touch no rock at all.
-     * The lattice is a hexagonal one jittered by JIT 0.4 of a cell, so these six are the cells its columns border.
+     * ({@link #opensThrough} at their sites) or lie on a disc's or a head room's fringe themselves (jt over 0, or under a
+     * head room's bound, with the crater's floor at the site under the cap: such a neighbour opens by this same rule when
+     * its own six do, so two or three fringe cells shut in together open together; for a cell on no fringe itself,
+     * {@code fringe} false, the six must all open through), with the columns round the cell all of its own lattice
+     * (each neighbour's site on its side of the Causeway's seam): then the cell's row of rock under that floor would
+     * touch no rock at all. A fringe cell beside a cell that neither opens nor lies on a fringe keeps its row, and that
+     * row touches the other's rock; a cell on no fringe opens only beside cells with no rock over them. The lattice is a
+     * hexagonal one jittered by JIT 0.4 of a cell, so these six are the cells its columns border.
      */
-    boolean ringedOpen(boolean coarse, int i, int j, Shape0 out) {
+    boolean ringedOpen(boolean coarse, int i, int j, Shape0 out, boolean fringe) {
         int[] di = NB_DI[j & 1];
         double[] p = out.tmpN;
         for (int q = 0; q < 6; q++) {
@@ -2049,7 +2107,9 @@ public final class GalleriesField {
             // each neighbour's openings as its own shape reads them (on the Causeway's prisms a deck at least HW_CO wide)
             site(coarse, i + di[q], j + NB_DJ[q], p);
             rampsAt(p[0], p[1], out.rhN, coarse ? HW_CO : 0);
-            if (!opensThrough(out.rhN)) return false;
+            // (a fringe neighbour counts where it may open by this rule itself: its crater's floor under the cap)
+            if (!opensThrough(out.rhN) && !(fringe && (out.rhN.jt > 0 || out.rhN.rb == out.rhN.rb) && out.rhN.crFloor <= openHi))
+                return false;
         }
         return true;
     }
@@ -2266,10 +2326,11 @@ public final class GalleriesField {
         double gw = 0;
         if (t > t0 - CR_TW && t < t0 + CR_TU + CR_T * CR_TE) {
             // the gully: over the deck of the ramp's first stretch, its flanks climbing a ring every CR_TK blocks beside it
-            // and its end a ring every CR_TE blocks along the axis
+            // and its end a ring every CR_TE blocks along the axis; from its start, CR_TW short of the lip, it deepens over
+            // CR_TB blocks
             double tt = Math.max(t0, t), bt = bend(rp, t0, tt);
             double e = Math.max(0, Math.abs(dx * rp.uz - dz * rp.ux - bt) - halfWidth(rp, t0, tt, bt));
-            double s = e / CR_TK + Math.max(0, t - t0 - CR_TU) / CR_TE;
+            double s = e / CR_TK + Math.max(0, t - t0 - CR_TU) / CR_TE + Math.max(0, t0 - CR_TW + CR_TB - t) * (CR_T / CR_TB);
             if (s < CR_T) {
                 sh = s - CR_T;
                 gw = 1 - s / CR_T;
@@ -2280,9 +2341,28 @@ public final class GalleriesField {
             // the rim off the ramp's side: a noise of the bearing (the unit vector, no angle taken), per hole, rising from
             // the hole's edge
             double ox = 64 * Hashing.unit(Hashing.mix(o.h, 31, 0, 0)), oz = 64 * Hashing.unit(Hashing.mix(o.h, 32, 0, 0));
-            sh += CR_B * off * smooth(q / CR_BQ) * smooth(CR_BM + CR_BG * rimN.noise2(dx / d * CR_BK + ox, dz / d * CR_BK + oz));
+            double qo = otherHoleQ(o, px, pz);
+            sh += CR_B * off * smooth(q / CR_BQ) * smooth(qo / CR_BX)
+                    * smooth(CR_BM + CR_BG * rimN.noise2(dx / d * CR_BK + ox, dz / d * CR_BK + oz));
         }
         return Math.max(0, q + sh);
+    }
+
+    /**
+     * Blocks from (px, pz) out of the nearest hole's outline ({@link #rimR}) of the opened openings near it other than o
+     * (negative inside one), or +inf where none lies within CR_BX: the broken rim keeps low between two holes.
+     */
+    double otherHoleQ(Opening o, double px, double pz) {
+        double best = Double.POSITIVE_INFINITY;
+        for (Opening p : nearOps((int) Math.floor(px / OP_G), (int) Math.floor(pz / OP_G))) {
+            if (p == o || p.ramp == null) continue;
+            double dx = px - p.x, dz = pz - p.z, lim = p.r + RIM_A + CR_BX;
+            if (Math.abs(dx) >= lim || Math.abs(dz) >= lim) continue;
+            double d = len(dx, dz);
+            if (d >= lim) continue;
+            best = Math.min(best, d - rimR(p, dx, dz, d, dx * p.ramp.ux + dz * p.ramp.uz));
+        }
+        return best;
     }
 
     /**
@@ -2732,7 +2812,8 @@ public final class GalleriesField {
      * noise passes BAND_MASK. Over the mask's last BAND_FADE the band's underside comes down to the floor (its fade
      * share f: under = floor + f (under - floor)), so a band ends on a footing, never in mid-air (it ended where the
      * mask did, and a stretch with no pier to the ground floated: 18 539 and 8221 blocks in seed 555's box at (944,
-     * -856)). In a stray cell ({@code footing}, see {@link #build}) the band stands on the ground.
+     * -856)). In a stray cell ({@code footing}, see {@link #build}) the band stands on the ground, as in a cell the
+     * Causeway's seam runs through, unless it hangs from the ceiling ({@link #seamCut}).
      * A ramp's strip cuts a band (its deck's cells run none), so beside it the band comes down to the ground the same
      * way: on it within BAND_CUT cells of the strip ({@code side}, {@link RampHit#side}), its underside rising back over
      * the next BAND_CUT_F blocks (cut off between a ramp and the band's end, or between two ramps, with no pier, a
@@ -2765,6 +2846,7 @@ public final class GalleriesField {
         if (bh <= c.f || bl >= c.c) return;
         if (footing || bl <= Math.max(c.f, W) + 1 || besideMouth(c)) { c.f = Math.max(c.f, bh); if (c.c - c.f < 2) c.f = c.c = W + 200; return; }   // a ridge on the ground
         if (bh >= c.c - 1) { c.c = Math.min(c.c, bl); if (c.c - c.f < 2) c.f = c.c = W + 200; return; }   // a rib under the ceiling
+        if (seamCut(c)) { c.f = Math.max(c.f, bh); if (c.c - c.f < 2) c.f = c.c = W + 200; return; }   // on the ground where the seam cuts the cell
         c.bl = bl;
         c.bh = bh;
     }
@@ -2782,6 +2864,29 @@ public final class GalleriesField {
         }
         return false;
     }
+
+    /**
+     * Whether the seam between the Causeway's coarse prisms and the fine cells runs through cell c: at one of six points
+     * SEAM_R of its lattice's spacing round its site the Causeway's weight lies on the other side of a half
+     * ({@link #coarseAt}). The columns past the seam take the other lattice's cells, so what the cell keeps can end in a
+     * sliver of columns that touch the rest only at their corners, and an arch's band or a rock band held up there
+     * touches no rock: in such a cell a deck is filled to the ground and a band stands on it, as in a stray
+     * ({@link #deck}, {@link #band}; an arch's band in a coarse cell kept one column of 28 rows over the open cells
+     * beside it in seed 31337's box at (4935, -307), on wip/r2-ways too).
+     */
+    boolean seamCut(Cell c) {
+        double r = SEAM_R * (c.coarse ? CS_COARSE : CS);
+        Climate cl = new Climate();
+        for (int q = 0; q < 6; q++) {
+            climate(c.x + r * HEX_X[q], c.z + r * HEX_Z[q], cl);
+            if (cl.wCaus > 0.5 != c.coarse) return true;
+        }
+        return false;
+    }
+
+    static final double SEAM_R = 0.75;
+    private static final double[] HEX_X = {1, 0.5, -0.5, -1, -0.5, 0.5},
+            HEX_Z = {0, 0.8660254037844386, 0.8660254037844386, 0, -0.8660254037844386, -0.8660254037844386};
 
     // ------------------------------------------------------------------------------------------- neighbours
     /** The rows open in the cells round c (the 6 hexagonal neighbours and the two more a jittered lattice can need). */
