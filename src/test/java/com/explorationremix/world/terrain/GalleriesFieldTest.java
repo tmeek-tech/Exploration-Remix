@@ -1148,10 +1148,14 @@ class GalleriesFieldTest {
             bestD = Math.min(bestD, WastelandFieldTest.timeRows(t, dLo, dHi) / rowsD);
         }
         double ratio = bestG / bestD;
-        // the cold cases: the code warmed far off first
+        // the cold cases: the code warmed far off first, and on the first chunks of fresh fields of other seeds (the
+        // openings' resolution runs only on cold cells: alone in a fresh JVM its code was still being compiled when the
+        // cold case ran, RFIX round)
         for (int k = 0; k < 3; k++) {
             chunkCpu(t, 9000 + k, 9000, gLo, gHi);
             chunkCpu(t, 9000 + k, 9000, dLo, dHi);
+            chunkCpu(new Terrain(TerrainSettings.defaults(), -64, 8675311 + k), 40 * k, -30 * k, gLo, gHi);
+            chunkCpu(new Terrain(TerrainSettings.defaults(), -64, 8675311 + k), 40 * k, -30 * k, dLo, dHi);
         }
         long coldG = 0, coldD = 0;
         for (int p = 0; p < 3; p++) {
