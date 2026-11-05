@@ -2,47 +2,64 @@ package com.explorationremix.world.terrain;
 
 /**
  * The Basalt Galleries' Obsidian Tubes as noise (0.5.1; Taran 2026-11-02: "Don't design the shape. It should be
- * procedurally generated."): round lava tubes about 20 blocks across and 18 to 27 high (picture 2's size), running nearly
- * level through the rock with floors at W+46..W+76 and vaults up to about W+98 (W the lava table), with arch rings one
- * behind the other (the bays between them bulge out, so each ring stands in on its legs as well as at its crown), twin
- * tubes round a pier, floors stepped by column cells, column ends hanging from the vaults by whole column cells, and still
- * water in sealed dips of the floor. Collapse gaps cut each tube country across the flow every 80 to 120 blocks, so a
- * tube is a chain of short segments with lit, level mouths at both ends. Nothing is planned or placed: every value is a
- * pure function of the seed and the position (caches only hold those values), so any number of worldgen threads may call
- * in, and nothing seams.
+ * procedurally generated."): round lava tubes about 20 blocks across and 18 to 27 high (picture 2's size), running
+ * through the rock nearly level with floors at W+46..W+86 and vaults up to about W+113 (W the lava table), with arch
+ * rings one behind the other (the bays between them bulge out, so each ring stands in on its legs as well as at its
+ * crown), twin tubes round a pier, flat floors stepped by column cells, column ends hanging from the vaults by whole
+ * column cells, and still water in sealed dips of the floor. Collapse gaps cut each tube country across the flow every 80
+ * to 120 blocks, so a tube is a chain of short runs with mouths at both ends. Nothing is planned or placed: every value is
+ * a pure function of the seed and the position (caches only hold those values), so any number of worldgen threads may
+ * call in, and nothing seams.
  *
  * <p><b>Where tubes run.</b> Cellular noise: the world is cut into {@link #CELL}-block cells and a cell holds a tube
  * country with chance {@link #SITE_P}: a noise-warped ellipse, its long axis along a hashed flow direction. Inside its rim
- * ({@link #massif} over 0) the Galleries keep rock from floor to vault, except in the collapse gaps ({@link #gap}): bands
- * across the flow along the level lines of a warped along-coordinate, {@link #GAP_HW_MIN} to {@link #GAP_HW_MAX} blocks
- * either side of their middle, where the massif reads under 0 and the Galleries' cavern comes through at the tubes'
- * level. Round the massif, and in the gaps, lies the apron ({@link #apronAt}), where the Galleries open their space and
- * pull their floor to the tubes' level, so the tubes, which run on past the rim and through the gaps, open into the
- * cavern at its floor. A country, its tubes and its apron never reach the cell's border, so only a column's own cell is
- * ever read.
+ * ({@link #massif} over 0) the Galleries keep rock from floor to vault in place of their own massifs, except in the
+ * collapse gaps ({@link #gap}): bands across the flow along the level lines of a warped along-coordinate,
+ * {@link #GAP_HW_MIN} to {@link #GAP_HW_MAX} blocks either side of their middle, where the massif reads under 0 and the
+ * cavern comes through. Outside the rim nothing of the country shapes the cavern's ground: no ring is pulled to one
+ * height, no plateau raised and no ring sunk.
+ *
+ * <p><b>Runs.</b> A tube is cut only where rock encloses it, the country's massif or, past the rim, the Galleries' own
+ * standing rock ({@link GalleriesLandscape#massif}, out to {@link #RUN_REACH} blocks past the rim), and only into the
+ * cavern's rock. Each line's axis is sampled every {@link #RUN_STEP} blocks ({@link #runs}, once per country and thread):
+ * a run is a stretch enclosed by rock between two samples where the cavern is open across the whole section, its mouths.
+ * Its floor comes from the Galleries' landscape read without the tubes ({@link GalleriesLandscape}, built before both
+ * fields, so neither reads the other to make it): the landscape's floor at each mouth, clamped to {@link #FLOOR_LOW} ..
+ * {@link #FLOOR_TOP}, straight between the two and no steeper than {@link #RUN_SLOPE}; a run whose mouth would not meet
+ * the landscape there (within {@link #MOUTH_TOL}, or a ledge at most {@link #LEDGE_MAX} over low ground, the lava
+ * lowlands), or whose blend would end in a cliff round the mouth, is not cut. A country stands, and the Galleries keep
+ * it, where it cuts at least {@link #STAND_RUNS} runs. Past a mouth the section stays whole {@link #FADE_OUT} blocks and
+ * closes over {@link #FADE_LEN}, inside the cavern's open air, where it opens nothing.
+ *
+ * <p><b>Mouths.</b> {@link #mouth} tells the Galleries, at a point of the cavern, how far the nearest place lies where a
+ * run's air meets the cavern and the run's floor there: within {@link #BLEND_MAX} blocks the cavern's floor stands at most
+ * {@link #MOUTH_CUT} a block over the run's floor and lies at most as much under it (one row a block once under W +
+ * {@link #MOUTH_TAL}, a talus), so the floor at a mouth is the run's and a walker goes in and out at it; the mouth's
+ * weight keeps head room and clears hanging rock and bands within {@link #MOUTH_W} blocks. Nothing else of the ground is
+ * shaped.
  *
  * <p><b>The tubes.</b> In a country's frame (u across the flow, v along it) the tube axes are the level lines of a warped
- * coordinate {@code U = u + A N(u, v)} at {@code U = (k + 1/2 + phase) S}: parallel, meandering, crossing the country
- * from rim to rim, never ending inside it and never branching; at least S over the warp's steepest slope (about S / 2)
- * apart, so two neighbours can only meet where they meander close and one of them runs as twins. Where a twin noise
- * passes a threshold a line splits into two tubes {@code o} either side of it, a pier of rock between them, and they join
- * again further on. The ribs' along-coordinate is v at the nearest point of the (twin) axis, so the ribs stand square across
- * the tube. A column reads the line it lies nearest and the two beside it ({@link #REACH}): a twin's outer tube or a wide
- * bay can reach past the middle between two lines, and the column takes the union of what each near line opens there, its
- * lining the nearest of their sections, so no tube is cut flat where the nearest line changes.
+ * coordinate {@code U = u + A N(u, v)} at {@code U = (k + 1/2 + phase) S}: parallel, meandering and never branching; at
+ * least S over the warp's steepest slope (about S / 2) apart, so two neighbours can only meet where they meander close
+ * and one of them runs as twins. Where a twin noise passes a threshold a line splits into two tubes {@code o} either side
+ * of it, a pier of rock between them, and they join again further on. The ribs' along-coordinate is v at the nearest
+ * point of the (twin) axis, so the ribs stand square across the tube. A column reads the line it lies nearest and the two
+ * beside it ({@link #REACH}): a twin's outer tube or a wide bay can reach past the middle between two lines, and the
+ * column takes the union of what each near line opens there, its lining the nearest of their sections, so no tube is cut
+ * flat where the nearest line changes.
  *
  * <p><b>The section.</b> A round vault (an ellipse {@code R} across, {@link #VSTRETCH} R high) cut by a floor
- * {@link #FLOOR_CUT} of the vault's height under the axis, rising to the walls in a bowl. The floor is taken at the site
- * of the column's column cell (a jittered hex lattice {@link #HEX} across), so it steps in column tops. A rib is a ring:
- * the section shrunk by the rib's depth at the crown and {@link #RIB_WALL} of it at the walls, down to the floor; between
- * the ribs the section is {@link #BULGE} wider and higher (the floor's level stays), so the ring's legs stand off the
- * bays' walls. In the bays the vault's column cells hang 0 to {@link #HANG_MAX} blocks lower, in clusters from a smooth
- * noise.
+ * {@link #FLOOR_CUT} of the vault's height under the axis, flat with a shallow dish toward the walls. The floor is taken
+ * at the site of the column's column cell (a jittered hex lattice {@link #HEX} across), so it steps in column tops, a
+ * row at a time. A rib is a ring: the section shrunk by the rib's depth at the crown and {@link #RIB_WALL} of it at the
+ * walls, down to the floor; between the ribs the section is {@link #BULGE} wider and higher (the floor's level stays), so
+ * the ring's legs stand off the bays' walls. In the bays the vault's column cells hang 0 to {@link #HANG_MAX} blocks
+ * lower, in clusters from a smooth noise.
  *
  * <p><b>Use.</b> The Galleries' field takes {@code min(cave, tube(x, y, z))} block by block in its per-block pass over
- * {@link #spanLo}..{@link #spanHi} of the column (the tube is not in Minecraft's 4 x 8 x 4 corners: its steps, ribs and
- * hanging ends are thinner than the corner grid), keeping a roof of its own where its open space stands high over the
- * tube's walking level ({@link #walk}). {@link #shellDepth}, {@link #ribShare} and {@link #floorCell} dress the
+ * {@link #spanLo}..{@link #spanHi} of the column where its column cell is rock (the tube is not in Minecraft's 4 x 8 x 4
+ * corners: its steps, ribs and hanging ends are thinner than the corner grid); in the cavern's open columns the tube
+ * opens nothing and its rock reads as lining. {@link #shellDepth}, {@link #ribShare} and {@link #floorCell} dress the
  * lining, {@link #inLining} is the biome, {@link #pool} the still water. Every value is finite: a fading end closes the
  * section to nothing and the lining's distance reads {@link #SOLID} there.
  */
@@ -54,25 +71,70 @@ public final class TubeField {
     public static final int CELL = 640;
     /** Share of cells with a tube country. */
     static final double SITE_P = 0.8;
-    /** A country's centre lies within this share of CELL of its cell's centre, either way. */
-    static final double JIT = 0.10;
+    /**
+     * A country's centre lies within this share of CELL of its cell's centre, either way: its rim stays at least 92 blocks
+     * inside the cell (170 + 19 of rim warp + 38), room for its runs' mouths and their blend ({@link #GUARD}).
+     */
+    static final double JIT = 0.06;
     /** The country's half-length along the flow (blocks), and its half-width as a share of that. */
     static final double A_MIN = 120, A_MAX = 170, ASPECT_MIN = 0.48, ASPECT_MAX = 0.7;
     /** The rim's noise warp: amplitude as a share of the half-width, and scale (blocks). */
     static final double RIM_WARP = 0.16, RIM_SCALE = 60;
-    /** Beyond this unwarped radius rho skips the rim warp (the apron ends well inside it). */
+    /** Beyond this unwarped radius rho skips the rim warp (every run and its blend end well inside it). */
     static final double R_FAR = 2.6;
-    /** Tubes are carved where rho > RHO_TUBE (past the massif's rim, rho 0, into the cavern). */
-    static final double RHO_TUBE = -0.13;
-    /** Over the last END_FADE of rho a tube's radius closes to nothing (its end in the cavern, or a blind end). */
-    static final double END_FADE = 0.05;
     /**
-     * The field reaches TIP_REACH of rho past RHO_TUBE, where every section is closed: the rock round a tube's last open
-     * blocks is still near it, so it is lined and surface rock like any other face of the tube.
+     * The most the rim warp moves the ellipse's radius r (1 on the rim): it shifts u and v by at most RIM_WARP b times
+     * Perlin's bound of 1.5 each, and r is the norm of (u / b, v / a), so r moves by at most 0.24 sqrt(1 + (b / a)^2), under
+     * 0.293 (b / a at most ASPECT_MAX). Where the unwarped radius lies further than this from 1 the side of the rim a point
+     * lies on, and a bound on its blocks from the rim, take no noise (the runs' enclosure test and the keep-out).
      */
-    static final double TIP_REACH = 0.05;
+    static final double RIM_DR = 0.3;
+    /** The Obsidian Tubes' climate weight ({@link #region}) comes in from this rho (past the massif's rim, rho 0) to 0.1. */
+    static final double RHO_TUBE = -0.13;
     /** Pools only this far inside the massif (rho): well away from the mouths and the cavern's open air. */
     static final double RHO_POOL = 0.10;
+
+    // ------------------------------------------------------------------------------------------- runs and mouths
+    /**
+     * Runs: a line's tube runs where rock encloses it, the massif's (its collapse gaps are open) or, up to RUN_REACH
+     * blocks past the rim, the Galleries' own standing rock ({@link GalleriesLandscape#massif}), and opens at each end at a
+     * mouth, where the cavern is open across its whole section. The axis is sampled every RUN_STEP blocks; the enclosure
+     * test reads five points across the section, out to SIDE_PAD blocks past its widest (both twins and their bays).
+     */
+    static final double RUN_STEP = 2, RUN_REACH = 30, SIDE_PAD = 3;
+    /** The shortest run carved (blocks of enclosed axis), and the longest oblique mouth (last enclosed sample to first open one). */
+    static final double RUN_MIN = 16, MOUTH_MAX = 36;
+    /** A run's floor rises or falls at most RUN_SLOPE a block from mouth to mouth. */
+    static final double RUN_SLOPE = 0.15;
+    /** The highest floor line over W (the lowest is {@link #FLOOR_LOW}). */
+    static final double FLOOR_TOP = 86;
+    /**
+     * A mouth's floor lies within MOUTH_TOL rows of the landscape there, or, where the landscape lies under the lowest
+     * floor, is a ledge at most LEDGE_MAX rows over it (the Galleries lay a talus under it); else the run is not carved.
+     */
+    static final double MOUTH_TOL = 8, LEDGE_MAX = 30;
+    /** The section stays whole FADE_OUT blocks past a mouth, then closes over FADE_LEN. */
+    static final double FADE_OUT = 4, FADE_LEN = 6;
+    /**
+     * The mouth query ({@link #mouth}): the Galleries blend their floor to a run's floor out to BLEND_MAX blocks from where
+     * its air meets the cavern; the mouth's weight (head room, no hanging rock or bands) falls to 0 over MOUTH_W blocks.
+     */
+    static final double BLEND_MAX = 36, MOUTH_W = 12;
+    /**
+     * No run's axis comes within GUARD blocks of its cell's border: its tube's reach ({@link #REACH}) past the fading end,
+     * and its blend, stay inside the cell, so a column only ever reads its own cell's country.
+     */
+    static final double GUARD = 90;
+    /** A country stands (the Galleries keep it) where it carves at least this many runs. */
+    static final int STAND_RUNS = 2;
+    /**
+     * The mouths' blend ({@link #above}, {@link #below}): within BLEND_MAX of where a run's air meets the cavern the
+     * cavern's floor keeps within MOUTH_CUT rows a block over the run's floor, and under it within MOUTH_CUT rows a block
+     * down to W + MOUTH_TAL and a row a block below that (a talus: the Galleries' low ground's stairs wear its column
+     * steps into a row a block). Round each mouth the landscape must lie where that blend meets it, out to BLEND_MAX
+     * (EDGE_TOL rows over, TALUS_STEP under: a riser the stairs wear), or the run is not carved.
+     */
+    public static final double MOUTH_CUT = 1 / 3.0, MOUTH_TAL = 50, EDGE_TOL = 2, TALUS_STEP = 10;
 
     // ------------------------------------------------------------------------------------------- collapse gaps
     /**
@@ -103,8 +165,14 @@ public final class TubeField {
     static final double VSTRETCH = 1.5;
     /** The floor lies this share of the (unbulged) vault's height under the axis. */
     static final double FLOOR_CUT = 0.3;
-    /** The floor is flat out to BOWL_FLAT of the half-width, then rises up to BOWL_H of the vault's height at the wall. */
-    static final double BOWL_FLAT = 0.5, BOWL_H = 0.5;
+    /**
+     * The floor is flat out to BOWL_FLAT of the half-width, then dishes up to BOWL_H of the vault's height at the wall
+     * (about 2 rows): a lava tube's floor is its last flow's flat crust. A deeper bowl (0.5 of the vault's height from half
+     * way out, until the tube country lost its ring) rose 2 to 4 rows a column cell near the walls, and 15 to 18 % of the
+     * tubes' standing places were shelves one could drop from but never climb to; at most a row a cell, every place of
+     * the floor walks both ways.
+     */
+    static final double BOWL_FLAT = 0.4, BOWL_H = 0.12;
     /** Slow wobble of the floor (blocks). */
     static final double FLOOR_WOBBLE = 1.3;
     /**
@@ -121,12 +189,14 @@ public final class TubeField {
     static final double PIER_MIN = 3.0, PIER_MAX = 5.0;
 
     // ------------------------------------------------------------------------------------------- height
-    /** The axis height over the lava table W: a country's mean, the noise round it and its scale (blocks). */
-    static final double H_MIN = 56, H_MAX = 70, H_AMP = 9, H_SCALE = 140;
-    /** Fall of the axis along the flow (blocks per block), either way. */
-    static final double SLOPE_MAX = 0.025;
-    /** The lowest floor and the highest vault of the unbulged section (over W); bays rise up to VSTRETCH BULGE more. */
-    static final double FLOOR_MIN = 46, VAULT_MAX = 94;
+    /**
+     * The lowest floor and the highest vault of the unbulged section (over W); bays rise up to VSTRETCH BULGE more. A run's
+     * floor comes from the landscape at its mouths ({@link #FLOOR_TOP} at most), so the vault stays under FLOOR_TOP plus
+     * the tallest section.
+     */
+    static final double FLOOR_MIN = 46, VAULT_MAX = 113;
+    /** The lowest a run's floor line lies (over W): its wobbled floor ({@link #FLOOR_WOBBLE}) stays at FLOOR_MIN or over. */
+    static final double FLOOR_LOW = FLOOR_MIN + FLOOR_WOBBLE;
 
     // ------------------------------------------------------------------------------------------- ribs
     /** Rib spacing along the tube (blocks), rib thickness, its soft edge, and how far a rib stands in from the vault. */
@@ -152,27 +222,23 @@ public final class TubeField {
 
     // ------------------------------------------------------------------------------------------- pools
     /** Pool candidates: a jittered grid of this spacing (blocks), the share that are dips, their radius. */
-    static final double DIP_SP = 14, DIP_P = 0.3, DIP_R_MIN = 2.5, DIP_R_MAX = 4.5;
+    static final double DIP_SP = 14, DIP_P = 0.42, DIP_R_MIN = 2.5, DIP_R_MAX = 4.5;
     /** A dip wider than this is two deep in its middle (DIP_DEEP of the radius). */
     static final double DIP_TWO = 3.4, DIP_DEEP = 0.55;
     /** A pool's dip lies on the flat middle of the floor (share of the half-width from the axis). */
     static final double DIP_MID = 0.45;
 
     /**
-     * The apron: full out to APRON_OUT - APRON_FADE blocks past the rim (and in the gaps), gone at APRON_OUT; the headroom
-     * it keeps where a tube runs into it (over the tallest bay).
+     * The keep-out of a tube country ({@link #apronAt}): full out to APRON_OUT - APRON_FADE blocks past the rim (and in
+     * the gaps) and in the mouths' blends, gone at APRON_OUT; the openings and the ramps (over 0.02: about 11 blocks out)
+     * stay out of it as they stay off the cavern's own massifs (their 0.06 and 0.08 under the massifs' threshold lie a
+     * median of 9.6 and 12.9 blocks from the edge, 5.3 and 7.0 at the tenth percentile: scratch VMargin, seeds 8675309 and
+     * 1). Nothing of the cavern's ground is shaped by it. (With the ring it reached 56 blocks out all round, over the
+     * ring's reshaped floor; kept so, it left two of the eight holes in the Wasteland's square over the country that seed
+     * 1 now keeps at 335, 340, which carves five runs; 24 blocks out left three, 12 four.) APRON_HEAD: the head room the
+     * Galleries keep over a run's floor at its mouths (over the tallest bay).
      */
-    public static final double APRON_OUT = 56, APRON_FADE = 34, APRON_HEAD = 28;
-    /**
-     * How much the apron raises the Galleries' massif threshold (their massif noise's units): it opens the ring. Not read
-     * by the Galleries' field as it stands: its massif closes a column cell outright and the apron moves the cell's floor
-     * and vault instead ({@code GalleriesField.shape}).
-     */
-    public static final double APRON_OPEN = 0.35;
-    /** The apron's floor under the tubes' floor tendency (0: mouths open level, both ways walkable; 1.5 measured worse). */
-    static final double APRON_DROP = 0;
-    /** A tube's mean half-width (for the apron's floor). */
-    static final double R_MEAN = 10.6;
+    public static final double APRON_OUT = 12, APRON_FADE = 10, APRON_HEAD = 28;
 
     /** The lining's reach into the rock, for the biome (blocks). */
     public static final double SHELL_BIOME = 4;
@@ -180,18 +246,25 @@ public final class TubeField {
     final long seed;
     /** The lava table (first block over the lava): heights are over it. */
     final int W;
-    private final Perlin rimA, rimB, warpN, twinN, radN, heightN, floorN, ribN, ribJ, gapN, gapW, hangN;
+    /** The Galleries' landscape before any tube is cut: the runs' floors and the standing rock they go on through. */
+    final GalleriesLandscape land;
+    private final Perlin rimA, rimB, warpN, twinN, radN, floorN, ribN, ribJ, gapN, gapW, hangN;
 
     public TubeField(long seed, int lavaTable) {
+        this(seed, lavaTable, new GalleriesLandscape(seed, lavaTable));
+    }
+
+    /** The tube field over the Galleries' landscape {@code land} (of the same seed and lava table). */
+    TubeField(long seed, int lavaTable, GalleriesLandscape land) {
         this.seed = seed;
         this.W = lavaTable;
+        this.land = land;
         long s = seed ^ 0x5DEECE66DA3B1F27L;
         rimA = new Perlin(Hashing.mix(s, 1, 0, 0));
         rimB = new Perlin(Hashing.mix(s, 2, 0, 0));
         warpN = new Perlin(Hashing.mix(s, 3, 0, 0));
         twinN = new Perlin(Hashing.mix(s, 4, 0, 0));
         radN = new Perlin(Hashing.mix(s, 5, 0, 0));
-        heightN = new Perlin(Hashing.mix(s, 6, 0, 0));
         floorN = new Perlin(Hashing.mix(s, 7, 0, 0));
         ribN = new Perlin(Hashing.mix(s, 8, 0, 0));
         ribJ = new Perlin(Hashing.mix(s, 9, 0, 0));
@@ -212,20 +285,21 @@ public final class TubeField {
     // ================================================================================================ countries
     /**
      * A tube country: one per cell at most ({@code on} false where the cell has none). Immutable. Public for the
-     * Galleries' veto ({@code GalleriesField.countryStands}), which reads its frame and size.
+     * Galleries' description of a column ({@code GalleriesField.describe}) and the tests, which read its frame and size;
+     * whether it stands is {@link #stands}.
      */
     public static final class Country {
         public final int ci, cj;
         public final boolean on;
-        public final double ox, oz, cos, sin, a, b, S, phase, h0, slope, nu, nv, rimWarp;
+        public final double ox, oz, cos, sin, a, b, S, phase, nu, nv, rimWarp;
         /** The collapse gaps' spacing along the flow (blocks) and phase (share of it). */
         final double gapSp, gapPh;
 
         Country(int ci, int cj, boolean on, double ox, double oz, double ang, double a, double b, double S, double phase,
-                double h0, double slope, double nu, double nv, double gapSp, double gapPh) {
+                double nu, double nv, double gapSp, double gapPh) {
             this.ci = ci; this.cj = cj; this.on = on; this.ox = ox; this.oz = oz;
             this.cos = StrictMath.cos(ang); this.sin = StrictMath.sin(ang);
-            this.a = a; this.b = b; this.S = S; this.phase = phase; this.h0 = h0; this.slope = slope;
+            this.a = a; this.b = b; this.S = S; this.phase = phase;
             this.nu = nu; this.nv = nv;
             this.rimWarp = RIM_WARP * b;
             this.gapSp = gapSp;
@@ -241,7 +315,7 @@ public final class TubeField {
     /** The tube country of cell (ci, cj) (pure: hashed from the seed and the cell). */
     Country country(int ci, int cj) {
         long k = Hashing.mix(seed ^ 0x7F4A7C159E3779B9L, ci, cj, 77);
-        if (Hashing.unit(k) >= SITE_P) return new Country(ci, cj, false, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0);
+        if (Hashing.unit(k) >= SITE_P) return new Country(ci, cj, false, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0);
         double ox = (ci + 0.5 + JIT * 2 * (Hashing.unit(Hashing.mix(k, 1, 0, 0)) - 0.5)) * CELL;
         double oz = (cj + 0.5 + JIT * 2 * (Hashing.unit(Hashing.mix(k, 2, 0, 0)) - 0.5)) * CELL;
         double ang = Math.PI * 2 * Hashing.unit(Hashing.mix(k, 3, 0, 0));
@@ -249,12 +323,10 @@ public final class TubeField {
         double b = a * (ASPECT_MIN + (ASPECT_MAX - ASPECT_MIN) * Hashing.unit(Hashing.mix(k, 5, 0, 0)));
         double S = S_MIN + (S_MAX - S_MIN) * Hashing.unit(Hashing.mix(k, 6, 0, 0));
         double phase = Hashing.unit(Hashing.mix(k, 7, 0, 0));
-        double h0 = H_MIN + (H_MAX - H_MIN) * Hashing.unit(Hashing.mix(k, 8, 0, 0));
-        double slope = SLOPE_MAX * (2 * Hashing.unit(Hashing.mix(k, 9, 0, 0)) - 1);
         double nu = 1000 * Hashing.unit(Hashing.mix(k, 10, 0, 0)), nv = 1000 * Hashing.unit(Hashing.mix(k, 11, 0, 0));
         double gapSp = GAP_SP_MIN + (GAP_SP_MAX - GAP_SP_MIN) * Hashing.unit(Hashing.mix(k, 12, 0, 0));
         double gapPh = Hashing.unit(Hashing.mix(k, 13, 0, 0));
-        return new Country(ci, cj, true, ox, oz, ang, a, b, S, phase, h0, slope, nu, nv, gapSp, gapPh);
+        return new Country(ci, cj, true, ox, oz, ang, a, b, S, phase, nu, nv, gapSp, gapPh);
     }
 
     private final ThreadLocal<Country[]> lastCountry = ThreadLocal.withInitial(() -> new Country[1]);
@@ -272,13 +344,13 @@ public final class TubeField {
 
     /**
      * How deep (x, z) lies in its cell's tube country: 1 - r, r the noise-warped ellipse radius (1 on the rim). Over 0 is
-     * the massif, over {@link #RHO_TUBE} the tubes. -9 where no country is near.
+     * the massif (but for its collapse gaps). -9 where no country is near.
      */
     double rho(Country c, double x, double z) {
         if (!c.on) return -9;
         double u = c.u(x, z), v = c.v(x, z);
         double r0 = Math.sqrt((v / c.a) * (v / c.a) + (u / c.b) * (u / c.b));
-        if (r0 > R_FAR) return 1 - r0;   // beyond the apron's reach: the warp no longer matters
+        if (r0 > R_FAR) return 1 - r0;   // beyond every run and its blend: the warp no longer matters
         double wu = u + c.rimWarp * rimA.noise2(x / RIM_SCALE + c.nu, z / RIM_SCALE), wv = v + c.rimWarp * rimB.noise2(x / RIM_SCALE, z / RIM_SCALE + c.nv);
         return 1 - Math.sqrt((wv / c.a) * (wv / c.a) + (wu / c.b) * (wu / c.b));
     }
@@ -339,27 +411,50 @@ public final class TubeField {
     }
 
     /**
-     * The apron round a tube country and in its collapse gaps, 0..1: 1 from the massif's rim out past the tubes' ends (and
-     * across every gap), 0 from {@link #APRON_OUT} blocks out. The Galleries pull their floor toward {@link #apronFloorAt}
-     * by this weight and keep {@link #APRON_HEAD} of headroom over it where a tube runs in, so the tubes' mouths open at
-     * the cavern's floor (a climate-style blend).
+     * The keep-out of a tube country, 0..1, where the Galleries' openings and ramps do not go (over 0.02): 1 in its
+     * massif and its collapse gaps and out to APRON_OUT - APRON_FADE blocks past them, 0 from {@link #APRON_OUT} blocks
+     * out, and 1 within a mouth's blend ({@link #mouth}, BLEND_MAX blocks of where a run's air meets the cavern), whose
+     * floor and head room are the tube's. Nothing of the cavern's ground or rock is shaped by it.
      */
     public double apronAt(double x, double z) {
         Country c = countryAt(x, z);
         if (!c.on) return 0;
-        double m = withGaps(c, x, z, blocks(c, x, z, rho(c, x, z)));
-        return smooth((m + APRON_OUT) / APRON_FADE);
+        double k = 0;
+        // the rim's ring only where the rim may lie within APRON_OUT blocks (and one more, for rounding): the warp moves r
+        // by RIM_DR at most
+        double r0 = radius0(c, x, z);
+        if (r0 <= 1 + RIM_DR || (1 - r0 + RIM_DR) * rhoBlocks(c, x, z) > -APRON_OUT - 1) {
+            double m = withGaps(c, x, z, blocks(c, x, z, rho(c, x, z)));
+            k = smooth((m + APRON_OUT) / APRON_FADE);
+            if (k >= 1) return 1;
+        }
+        return nearestMeet(runs(c), x, z) != null ? 1 : k;
     }
 
-    /** The floor height (absolute y) the apron pulls the cavern's floor to: the tubes' own floor tendency there. */
-    public double apronFloorAt(double x, double z) {
+    /** The unwarped ellipse radius of (x, z) in country c (1 on the unwarped rim; {@link #rho} warps it). */
+    static double radius0(Country c, double x, double z) {
+        double u = c.u(x, z), v = c.v(x, z);
+        return Math.sqrt((v / c.a) * (v / c.a) + (u / c.b) * (u / c.b));
+    }
+
+    /** Blocks per unit of rho at (x, z) ({@link #blocks} divides rho by the inverse): a bound's scale, not bit for bit. */
+    static double rhoBlocks(Country c, double x, double z) {
+        double u = c.u(x, z), v = c.v(x, z);
+        double r0 = Math.sqrt((v / c.a) * (v / c.a) + (u / c.b) * (u / c.b));
+        if (r0 < 1e-3) return c.b;
+        double gv = v / (c.a * c.a), gu = u / (c.b * c.b);
+        return 1 / Math.max(Math.sqrt(gv * gv + gu * gu) / r0, 1 / c.a);
+    }
+
+    /**
+     * About the blocks from (x, z) to its country's rim, over 0 inside it whether in a collapse gap or not ({@link #massif}
+     * without the gaps); -SOLID with no country. Inside the rim the country's massif and gaps stand for the cavern's own
+     * massifs (the Galleries keep none of theirs there).
+     */
+    public double rimAt(double x, double z) {
         Country c = countryAt(x, z);
-        if (!c.on) return W + H_MIN;
-        double yc = W + c.h0 + H_AMP * heightN.noise2(x / H_SCALE + c.nu, z / H_SCALE + c.nv) + c.slope * c.v(x, z);
-        double Rv = R_MEAN * VSTRETCH;
-        yc = Math.max(yc, W + FLOOR_MIN + FLOOR_CUT * Rv);
-        yc = Math.min(yc, W + VAULT_MAX - Rv);
-        return yc - FLOOR_CUT * Rv - APRON_DROP;
+        if (!c.on) return -SOLID;
+        return blocks(c, x, z, rho(c, x, z));
     }
 
     /** 0 outside any tube country, 1 well inside: the Obsidian Tubes' climate weight. */
@@ -367,6 +462,457 @@ public final class TubeField {
         Country c = countryAt(x + 0.5, z + 0.5);
         if (!c.on) return 0;
         return smooth((rho(c, x + 0.5, z + 0.5) - RHO_TUBE) / (0.1 - RHO_TUBE));
+    }
+
+    // ================================================================================================ runs
+    /**
+     * One run of a line: the stretch of tube between its two mouths, oa < ob (the along-coordinate phi of the first axis
+     * samples past its enclosed stretch where the cavern is open across the whole section); ea and eb the first and last
+     * enclosed samples (between a mouth and them the section opens obliquely); its floor ya at oa and yb at ob (absolute
+     * y, straight between them); and its side windows, phi intervals in pairs where the section is open on a side between
+     * enclosed samples.
+     */
+    static final class Run {
+        final double oa, ob, ea, eb, ya, yb;
+        final double[] win;
+
+        Run(double oa, double ob, double ea, double eb, double ya, double yb, double[] win) {
+            this.oa = oa; this.ob = ob; this.ea = ea; this.eb = eb; this.ya = ya; this.yb = yb; this.win = win;
+        }
+
+        /** The floor at phi (absolute y, unrounded). */
+        double floor(double phi) { return ya + (yb - ya) * clamp01((phi - oa) / (ob - oa)); }
+
+        /** 1 between the mouths and FADE_OUT past them, closing to 0 over the next FADE_LEN. */
+        double fade(double phi) {
+            return smooth((phi - (oa - FADE_OUT - FADE_LEN)) / FADE_LEN) * smooth((ob + FADE_OUT + FADE_LEN - phi) / FADE_LEN);
+        }
+    }
+
+    /**
+     * Where a run's air meets the cavern: a mouth's open stretch out to FADE_OUT past it (from the open sample's end to the
+     * first enclosed sample) or a side window, as the axis samples along it (x, z, along-coordinate v) and the section's
+     * outer half-width at each (both twins and their bulged bays, {@link #spread}), with a circle round it out to
+     * BLEND_MAX past the section ({@link #mouth} looks no further).
+     */
+    static final class Meet {
+        final Run run;
+        final double[] x, z, v, r;
+        final double cx, cz, rad;
+
+        Meet(Run run, double[] x, double[] z, double[] v, double[] r) {
+            this.run = run; this.x = x; this.z = z; this.v = v; this.r = r;
+            int q = x.length;
+            cx = 0.5 * (x[0] + x[q - 1]);
+            cz = 0.5 * (z[0] + z[q - 1]);
+            double m = 0;
+            for (int i = 0; i < q; i++) m = Math.max(m, Math.hypot(x[i] - cx, z[i] - cz) + r[i]);
+            rad = m + BLEND_MAX + 1;
+        }
+
+        /**
+         * Blocks from (x, z) to the section's footprint along the stretch, from the nearest point of its axis: past an end of
+         * the stretch, the hypotenuse of how far out along the tube and how far beside its walls; elsewhere how far past
+         * its walls. With {@code phi} true, the along-coordinate there instead (past an end, that far beyond it).
+         */
+        double dist(double px, double pz, boolean phi) {
+            int q = x.length, bi = 0;
+            double bt = 0, bd = Double.MAX_VALUE;
+            for (int i = 0; i + 1 < q; i++) {
+                double ex = x[i + 1] - x[i], ez = z[i + 1] - z[i], l2 = ex * ex + ez * ez;
+                double t = l2 > 1e-12 ? ((px - x[i]) * ex + (pz - z[i]) * ez) / l2 : 0;
+                t = t < 0 ? 0 : (t > 1 ? 1 : t);
+                double ox = px - x[i] - t * ex, oz = pz - z[i] - t * ez, d = ox * ox + oz * oz;
+                if (d < bd) { bd = d; bi = i; bt = t; }
+            }
+            // past the first sample, or past the last: along the tube from the end, and across it
+            int e0 = bt == 0 && bi == 0 ? 0 : (bt == 1 && bi == q - 2 ? q - 1 : -1);
+            if (e0 >= 0) {
+                int e1 = e0 == 0 ? 1 : q - 2;
+                double ex = x[e0] - x[e1], ez = z[e0] - z[e1], l = Math.sqrt(ex * ex + ez * ez);
+                double along = l > 1e-6 ? ((px - x[e0]) * ex + (pz - z[e0]) * ez) / l : 0;
+                if (along > 0) {
+                    if (phi) return v[e0] + (e0 == 0 ? -along : along);
+                    double across = Math.abs((px - x[e0]) * ez - (pz - z[e0]) * ex) / l;
+                    return Math.hypot(along, Math.max(0, across - r[e0]));
+                }
+            }
+            if (phi) return v[bi] + bt * (v[bi + 1] - v[bi]);
+            return Math.max(0, Math.sqrt(bd) - (r[bi] + bt * (r[bi + 1] - r[bi])));
+        }
+    }
+
+    /** A country's runs: per line k0 .. k0 + lines.length - 1, and what was looked at (for tools and tests). */
+    static final class Runs {
+        int ci, cj, k0;
+        Run[][] lines = new Run[0][];
+        /** Runs carved; stretches of the country's lines enclosed by rock (carved or not); their enclosed blocks. */
+        int carved, candidates;
+        double carvedLen, candidateLen;
+        /**
+         * Why candidates were left: no open sample at an end, an oblique end too long, too short, a mouth's floor off the
+         * landscape, the landscape round a mouth off the blend.
+         */
+        int noExit, oblique, tooShort, offLand, offBlend;
+        /** The field's reach past the rim (blocks): the furthest a run's fading end lies, plus {@link #REACH}. */
+        double cut = -1e9;
+        boolean stands;
+        /** Where the carved runs' air meets the cavern: their mouths' open stretches and their side windows. */
+        Meet[] meets = new Meet[0];
+
+        /** The run of line k whose extent holds phi (the one least faded), or null. */
+        Run at(int k, double phi) {
+            int i = k - k0;
+            if (i < 0 || i >= lines.length) return null;
+            Run best = null;
+            double bf = 0;
+            for (Run r : lines[i]) {
+                if (phi <= r.oa - FADE_OUT - FADE_LEN || phi >= r.ob + FADE_OUT + FADE_LEN) continue;
+                double f = r.fade(phi);
+                if (best == null || f > bf) { best = r; bf = f; }
+            }
+            return best;
+        }
+
+        Run[] line(int k) {
+            int i = k - k0;
+            return i < 0 || i >= lines.length ? null : lines[i];
+        }
+    }
+
+    /**
+     * The countries' runs a thread keeps, most recently used first: every country a chunk's columns can read (its cell's
+     * and up to three beside it) for several places far apart at once, and the countries round them that the Galleries'
+     * openings look at (their search for the Wasteland's openings and their ramps reaches some 1,300 blocks, over 15
+     * countries round each place). Kept by slots of the cell's coordinates, two regions 5,000 blocks apart on one thread
+     * (two players) shared a slot and made each other's runs again chunk by chunk (GalleriesFieldTest.costWithinBudget:
+     * 3.4 times the Gardens' rows, bar 3); 12 kept made 43 runs for 33 countries in that test's two regions.
+     */
+    static final int RUN_CACHE = 32;
+    private final ThreadLocal<Runs[]> runCache = ThreadLocal.withInitial(() -> new Runs[RUN_CACHE]);
+    /** Whether a country stands, per thread, by a hash of its cell (key times 2, plus 1 where it stands). */
+    private final ThreadLocal<long[]> standCache = ThreadLocal.withInitial(() -> {
+        long[] a = new long[256];
+        java.util.Arrays.fill(a, Long.MIN_VALUE);
+        return a;
+    });
+
+    /** Country c's runs (computed once per thread and kept; pure: a function of the seed and the cell). */
+    Runs runs(Country c) {
+        Runs[] a = runCache.get();
+        for (int i = 0; i < a.length && a[i] != null; i++) {
+            Runs r = a[i];
+            if (r.ci != c.ci || r.cj != c.cj) continue;
+            if (i > 0) {
+                System.arraycopy(a, 0, a, 1, i);
+                a[0] = r;
+            }
+            return r;
+        }
+        Runs r = computeRuns(c);
+        System.arraycopy(a, 0, a, 1, a.length - 1);
+        a[0] = r;
+        return r;
+    }
+
+    /**
+     * Whether the country of tube cell (ci, cj) stands: it carves at least {@link #STAND_RUNS} runs (kept per thread by the
+     * cell, so a country whose runs have left {@link #runCache} is not made again to answer this).
+     */
+    public boolean stands(int ci, int cj) {
+        long key = ((long) ci << 32) ^ (cj & 0xFFFFFFFFL);
+        long[] sc = standCache.get();
+        int slot = (int) ((key * 0x9E3779B97F4A7C15L) >>> 56);
+        if (sc[slot] == (key << 1 | 1)) return true;
+        if (sc[slot] == key << 1) return false;
+        Country c = country(ci, cj);
+        boolean on = c.on && runs(c).stands;
+        sc[slot] = key << 1 | (on ? 1 : 0);
+        return on;
+    }
+
+    /**
+     * Rock that encloses a tube at (x, z): inside the country's rim its massif (open in the collapse gaps), outside it
+     * the Galleries' own standing rock. The rim's warp is read only where the unwarped radius lies within RIM_DR of 1.
+     */
+    private boolean rockAt(Country c, double x, double z) {
+        double r0 = radius0(c, x, z);
+        return rockAt(c, x, z, r0 < 1 - RIM_DR || (r0 <= 1 + RIM_DR && rho(c, x, z) > 0));
+    }
+
+    /** {@link #rockAt} where it is known whether (x, z) lies inside the rim. */
+    private boolean rockAt(Country c, double x, double z, boolean inside) {
+        return inside ? gap(c, c.u(x, z), c.v(x, z)) > 0 : land.massifStands(x, z);
+    }
+
+    /** The across-coordinate u of line k's axis at along-coordinate v (Newton on U from u). */
+    private double axisU(Country c, int k, double v, double u) {
+        double target = (k + 0.5 + c.phase) * c.S, A = WARP_A * c.S, e = 0.5;
+        for (int it = 0; it < 30; it++) {
+            double U = u + A * warpN.noise2(u / WARP_LU + c.nu, v / WARP_LV + c.nv);
+            double dU = 1 + A * (warpN.noise2((u + e) / WARP_LU + c.nu, v / WARP_LV + c.nv) - warpN.noise2((u - e) / WARP_LU + c.nu, v / WARP_LV + c.nv)) / (2 * e);
+            double du = (U - target) / dU;
+            u -= du;
+            if (Math.abs(du) < 1e-4) break;
+        }
+        return u;
+    }
+
+    /** Line k's half-width at along-coordinate v: its widest bay, and the pier and the other twin's where it splits. */
+    double spread(Country c, int k, double v) {
+        long lk = Hashing.mix(seed, c.ci * 31L + c.cj, k, 991);
+        return spread(c, k, v, R0(lk), pier(lk));
+    }
+
+    /** Line k's base half-width R0 and half its pier's width, from its hash lk ({@link #geom}). */
+    static double R0(long lk) { return R_MIN + (R_MAX - R_MIN) * StrictMath.pow(Hashing.unit(lk), 0.9); }
+    static double pier(long lk) { return PIER_MIN + (PIER_MAX - PIER_MIN) * Hashing.unit(Hashing.mix(lk, 1, 0, 0)); }
+
+    /** {@link #spread(Country, int, double)} with the line's R0 and pier known. */
+    private double spread(Country c, int k, double v, double R0, double pier) {
+        double split = smooth((twinN.noise2(v / TWIN_L + c.nv, k * 7.77 + 3.1 + c.nu) - T_ON) / T_RAMP);
+        double R = R0 * (1 + R_WANDER * radN.noise2(v / R_WANDER_L + c.nv, k * 5.31 + c.nu));
+        double ribK = smooth((ribN.noise2(v / RIB_L + c.nv, k * 3.73 + c.nu) - RIB_OFF) / RIB_RAMP);
+        double bay = R + BULGE * ribK;
+        return (bay + pier) * split + bay;
+    }
+
+    /** Blocks from (x, z) to the nearest border of tube cell (ci, cj) (negative outside it). */
+    static double borderDist(int ci, int cj, double x, double z) {
+        double fx = x - (double) ci * CELL, fz = z - (double) cj * CELL;
+        return Math.min(Math.min(fx, CELL - fx), Math.min(fz, CELL - fz));
+    }
+
+    /** The landscape's floor at (x, z) clamped to the tubes' floors (absolute y). */
+    private double clampFloor(double l) { return Math.max(W + FLOOR_LOW, Math.min(W + FLOOR_TOP, l)); }
+
+    /** Whether a run's floor y at a mouth meets the landscape l there ({@link #MOUTH_TOL}, {@link #LEDGE_MAX}). */
+    private boolean meets(double y, double l) {
+        if (l >= W + FLOOR_LOW) return Math.abs(y - l) <= MOUTH_TOL;
+        return y - l <= LEDGE_MAX && y - (W + FLOOR_LOW) <= MOUTH_TOL;
+    }
+
+    /** Rows the mouths' blend lets the cavern's floor stand over a run's floor, d blocks from where its air meets the cavern. */
+    static double above(double d) { return MOUTH_CUT * d; }
+
+    /** Rows the mouths' blend lets the cavern's floor lie under a run's floor y (absolute), d blocks out (see {@link #MOUTH_CUT}). */
+    double below(double y, double d) {
+        double d1 = Math.max(0, (y - (W + MOUTH_TAL)) / MOUTH_CUT);
+        return d <= d1 ? MOUTH_CUT * d : MOUTH_CUT * d1 + (d - d1);
+    }
+
+    /** The ring a mouth's landscape is read on: distances out, and the directions' cosines and sines off the outward one. */
+    private static final double[] RING_D = {BLEND_MAX / 2, BLEND_MAX};
+    private static final double[] RING_C = {0.5, 0.8660254037844386, 1, 0.8660254037844386, 0.5}, RING_S = {-0.8660254037844386, -0.5, 0, 0.5, 0.8660254037844386};
+
+    /**
+     * Whether the landscape round a mouth at (x, z), outward along the unit (tx, tz), lies where the blend from the run's
+     * floor y meets it: at BLEND_MAX / 2 and BLEND_MAX blocks out, in five directions within 60 degrees of the outward one,
+     * wherever the cavern is open there, no more than EDGE_TOL rows over what the blend lets stand, and no more than
+     * TALUS_STEP rows under the talus (or lava). Else the blend would end in a cliff round the mouth.
+     */
+    private boolean blendMeets(Country c, double x, double z, double tx, double tz, double y) {
+        for (double d : RING_D) for (int a = 0; a < RING_C.length; a++) {
+            double qx = x + d * (RING_C[a] * tx - RING_S[a] * tz), qz = z + d * (RING_S[a] * tx + RING_C[a] * tz);
+            if (rockAt(c, qx, qz)) continue;
+            double l = land.floor(qx, qz);
+            if (l > y + above(d) + EDGE_TOL) return false;
+            if (l >= W && l < y - below(y, d) - TALUS_STEP) return false;
+        }
+        return true;
+    }
+
+    /** The unit vector from sample j toward sample i of the axis (the outward way at a mouth). */
+    private static double[] outward(double[] ax, double[] az, int j, int i) {
+        double dx = ax[i] - ax[j], dz = az[i] - az[j], l = Math.sqrt(dx * dx + dz * dz);
+        return l < 1e-9 ? new double[]{1, 0} : new double[]{dx / l, dz / l};
+    }
+
+    /**
+     * Country c's runs, line by line: the axis sampled every RUN_STEP blocks out to its tips and RUN_REACH past them;
+     * each sample enclosed (rock at all five points across the section and SIDE_PAD past it), open (rock at none), or
+     * partly open; out past RUN_REACH outside the rim or within GUARD of the cell's border. A run is a stretch of samples
+     * that are not open, holding an enclosed one inside the rim, with an open sample at each end (its mouths), oblique
+     * ends of at most MOUTH_MAX, RUN_MIN enclosed blocks, and floors at its mouths that meet the landscape there: the
+     * landscape's floor at each mouth, clamped to FLOOR_LOW..FLOOR_TOP, straight between them and no steeper than
+     * RUN_SLOPE (the two ends moved toward each other where they lie further apart). Where its air meets the cavern (its
+     * mouths' open stretches and its side windows) is kept for the mouth query ({@link Meet}). The rim's warp is read only
+     * where the unwarped radius says it can matter ({@link #RIM_DR}): the same runs, bit for bit, as reading it everywhere.
+     */
+    private Runs computeRuns(Country c) {
+        Runs rs = new Runs();
+        rs.ci = c.ci;
+        rs.cj = c.cj;
+        if (!c.on) return rs;
+        double A = WARP_A * c.S;
+        double uMax = c.b + c.rimWarp + RUN_REACH + 2 * (R_MAX * (1 + R_WANDER) + BULGE) + PIER_MAX + SIDE_PAD;
+        int kLo = (int) Math.floor((-uMax - A) / c.S - c.phase - 0.5), kHi = (int) Math.ceil((uMax + A) / c.S - c.phase - 0.5);
+        double V = c.a + c.rimWarp + RUN_REACH + MOUTH_MAX + RUN_STEP;
+        int n = (int) Math.ceil(2 * V / RUN_STEP) + 1;
+        rs.k0 = kLo;
+        rs.lines = new Run[kHi - kLo + 1][];
+        byte[] st = new byte[n];
+        boolean[] inRim = new boolean[n];
+        double[] ax = new double[n], az = new double[n], mm = new double[n], sp = new double[n];
+        java.util.ArrayList<Run> out = new java.util.ArrayList<>();
+        java.util.ArrayList<Double> win = new java.util.ArrayList<>();
+        java.util.ArrayList<Meet> meets = new java.util.ArrayList<>();
+        double reach = -1e9;
+        for (int k = kLo; k <= kHi; k++) {
+            long lk = Hashing.mix(seed, c.ci * 31L + c.cj, k, 991);
+            double R0 = R0(lk), pier = pier(lk);
+            double u = (k + 0.5 + c.phase) * c.S;
+            for (int i = 0; i < n; i++) {
+                double v = -V + i * RUN_STEP;
+                u = axisU(c, k, v, u);
+                double x = c.ox + v * c.cos - u * c.sin, z = c.oz + v * c.sin + u * c.cos;
+                ax[i] = x;
+                az[i] = z;
+                sp[i] = Double.NaN;
+                // inside the rim or not, and out past RUN_REACH or not: the blocks from the rim (mm, NaN until read) only
+                // where the unwarped radius leaves it open
+                double r0 = radius0(c, x, z), m = Double.NaN;
+                boolean in;
+                if (r0 < 1 - RIM_DR) in = true;
+                else if (r0 > 1 + RIM_DR) in = false;
+                else { m = blocks(c, x, z, rho(c, x, z)); in = m > 0; }
+                boolean far = false;
+                if (!in) {
+                    double sc = rhoBlocks(c, x, z);
+                    if ((1 - r0 + RIM_DR) * sc < -RUN_REACH - 1) far = true;
+                    else if ((1 - r0 - RIM_DR) * sc <= -RUN_REACH + 1) {
+                        if (m != m) m = blocks(c, x, z, rho(c, x, z));
+                        far = m < -RUN_REACH;
+                    }
+                }
+                mm[i] = m;
+                inRim[i] = in;
+                if (far || borderDist(c.ci, c.cj, x, z) < GUARD) { st[i] = -1; continue; }
+                // the line's normal at the axis point, and five points across its section (the axis point first: one
+                // rock and one open point make the sample partly open)
+                double e = 0.5;
+                double dUdu = 1 + A * (warpN.noise2((u + e) / WARP_LU + c.nu, v / WARP_LV + c.nv) - warpN.noise2((u - e) / WARP_LU + c.nu, v / WARP_LV + c.nv)) / (2 * e);
+                double dUdv = A * (warpN.noise2(u / WARP_LU + c.nu, (v + e) / WARP_LV + c.nv) - warpN.noise2(u / WARP_LU + c.nu, (v - e) / WARP_LV + c.nv)) / (2 * e);
+                double g = Math.sqrt(dUdu * dUdu + dUdv * dUdv);
+                double gx = (-dUdu * c.sin + dUdv * c.cos) / g, gz = (dUdu * c.cos + dUdv * c.sin) / g;
+                sp[i] = spread(c, k, v, R0, pier);
+                double hw = sp[i] + SIDE_PAD;
+                boolean r = rockAt(c, x, z, in), mixed = false;
+                for (int j = -2; j <= 2 && !mixed; j++) {
+                    if (j == 0) continue;
+                    mixed = rockAt(c, x + j * 0.5 * hw * gx, z + j * 0.5 * hw * gz) != r;
+                }
+                st[i] = (byte) (mixed ? 1 : (r ? 2 : 0));
+            }
+            out.clear();
+            for (int i = 0; i < n; ) {
+                if (st[i] <= 0) { i++; continue; }
+                int i0 = i, fe = -1, le = -1, encl = 0;
+                boolean rim = false;
+                while (i < n && st[i] > 0) {
+                    if (st[i] == 2) { if (fe < 0) fe = i; le = i; encl++; rim |= inRim[i]; }
+                    i++;
+                }
+                int i1 = i - 1;
+                if (encl == 0 || !rim) continue;   // not this country's: the Galleries' own rock, or never enclosed
+                rs.candidates++;
+                rs.candidateLen += encl * RUN_STEP;
+                if (i0 == 0 || i1 == n - 1 || st[i0 - 1] != 0 || st[i1 + 1] != 0) { rs.noExit++; continue; }
+                double oa = -V + (i0 - 1) * RUN_STEP, ob = -V + (i1 + 1) * RUN_STEP, ea = -V + fe * RUN_STEP, eb = -V + le * RUN_STEP;
+                if (ea - oa > MOUTH_MAX || ob - eb > MOUTH_MAX) { rs.oblique++; continue; }
+                if (encl * RUN_STEP < RUN_MIN) { rs.tooShort++; continue; }
+                double la = land.floor(ax[i0 - 1], az[i0 - 1]), lb = land.floor(ax[i1 + 1], az[i1 + 1]);
+                double ya = clampFloor(la), yb = clampFloor(lb), lim = RUN_SLOPE * (ob - oa);
+                if (Math.abs(yb - ya) > lim) {
+                    double mid = 0.5 * (ya + yb), sg = Math.signum(yb - ya);
+                    ya = mid - sg * 0.5 * lim;
+                    yb = mid + sg * 0.5 * lim;
+                }
+                if (!meets(ya, la) || !meets(yb, lb)) { rs.offLand++; continue; }
+                double[] ta = outward(ax, az, fe, i0 - 1), tb = outward(ax, az, le, i1 + 1);
+                if (!blendMeets(c, ax[i0 - 1], az[i0 - 1], ta[0], ta[1], ya) || !blendMeets(c, ax[i1 + 1], az[i1 + 1], tb[0], tb[1], yb)) { rs.offBlend++; continue; }
+                win.clear();
+                for (int j = fe; j <= le; ) {
+                    if (st[j] != 1) { j++; continue; }
+                    int w0 = j;
+                    while (j <= le && st[j] == 1) j++;
+                    win.add(-V + (w0 - 1) * RUN_STEP);
+                    win.add(-V + j * RUN_STEP);
+                }
+                double[] wa = new double[win.size()];
+                for (int j = 0; j < wa.length; j++) wa[j] = win.get(j);
+                Run run = new Run(oa, ob, ea, eb, ya, yb, wa);
+                out.add(run);
+                rs.carved++;
+                rs.carvedLen += encl * RUN_STEP;
+                // where its air meets the cavern: each mouth's open stretch out to FADE_OUT past it, and each window
+                int fo = (int) Math.round(FADE_OUT / RUN_STEP);
+                meets.add(meet(c, k, run, Math.max(0, i0 - 1 - fo), fe, V, ax, az, sp, R0, pier));
+                meets.add(meet(c, k, run, le, Math.min(n - 1, i1 + 1 + fo), V, ax, az, sp, R0, pier));
+                for (int j = 0; j < wa.length; j += 2)
+                    meets.add(meet(c, k, run, (int) Math.round((wa[j] + V) / RUN_STEP), (int) Math.round((wa[j + 1] + V) / RUN_STEP), V, ax, az, sp, R0, pier));
+                // the furthest past the rim its section reaches as it closes
+                int ext = (int) Math.ceil((FADE_OUT + FADE_LEN) / RUN_STEP);
+                for (int j = Math.max(0, i0 - 1 - ext); j <= Math.min(n - 1, i1 + 1 + ext); j++) {
+                    if (mm[j] != mm[j]) mm[j] = blocks(c, ax[j], az[j], rho(c, ax[j], az[j]));
+                    reach = Math.max(reach, -mm[j]);
+                }
+            }
+            rs.lines[k - kLo] = out.toArray(new Run[0]);
+        }
+        rs.cut = reach + REACH;
+        rs.stands = rs.carved >= STAND_RUNS;
+        rs.meets = meets.toArray(new Meet[0]);
+        return rs;
+    }
+
+    /** The meeting stretch of line k's run over axis samples i0..i1 (the section's half-width read where it was not). */
+    private Meet meet(Country c, int k, Run run, int i0, int i1, double V, double[] ax, double[] az, double[] sp, double R0, double pier) {
+        int q = i1 - i0 + 1;
+        double[] x = new double[q], z = new double[q], v = new double[q], r = new double[q];
+        for (int i = 0; i < q; i++) {
+            int j = i0 + i;
+            x[i] = ax[j];
+            z[i] = az[j];
+            v[i] = -V + j * RUN_STEP;
+            if (sp[j] != sp[j]) sp[j] = spread(c, k, v[i], R0, pier);
+            r[i] = sp[j];
+        }
+        return new Meet(run, x, z, v, r);
+    }
+
+    /**
+     * The mouth query, at a point of the cavern: the nearest place where a carved run's air meets the cavern (a mouth's
+     * open stretch out to FADE_OUT past it, or a side window: {@link Meet}), out = {weight, floor, blocks}: the blocks from
+     * there (0 inside its section; along the tube past a stretch's end and across it past the walls), the run's floor
+     * there (absolute y, unrounded), and the mouth's weight, 1 there and 0 from MOUTH_W blocks out. False where none lies
+     * within BLEND_MAX blocks. The Galleries blend their floor to the run's within BLEND_MAX and keep the mouth's head room
+     * by its weight. No noise is read: the stretches are the runs' axis samples.
+     */
+    public boolean mouth(double x, double z, double[] out) {
+        Country c = countryAt(x, z);
+        if (!c.on) return false;
+        Runs rs = runs(c);
+        Meet near = nearestMeet(rs, x, z);
+        if (near == null) return false;
+        double d = near.dist(x, z, false);
+        out[0] = 1 - smooth(d / MOUTH_W);
+        out[1] = near.run.floor(near.dist(x, z, true));
+        out[2] = d;
+        return true;
+    }
+
+    /** The meeting stretch of rs nearest (x, z), where it lies within BLEND_MAX blocks ({@link Meet#dist}); else null. */
+    private static Meet nearestMeet(Runs rs, double x, double z) {
+        double best = BLEND_MAX;
+        Meet near = null;
+        for (Meet mt : rs.meets) {
+            double dx = x - mt.cx, dz = z - mt.cz;
+            if (dx * dx + dz * dz > mt.rad * mt.rad) continue;
+            double d = mt.dist(x, z, false);
+            if (d < best || (d == best && near == null)) { best = d; near = mt; }
+        }
+        return near;
     }
 
     // ================================================================================================ the tube at a point
@@ -382,6 +928,7 @@ public final class TubeField {
         double gx, gz;       // the line's unit normal in the world, toward +s (for tools: the twins lie o either way along it)
         double o;            // the twins' offset either side of the line (0: one tube)
         double d;            // distance from the nearer twin's axis (blocks)
+        double Rw;           // the section's half-width before the bulge, the rib and the end fade (wandering along the line)
         double R, Rv;        // half-width and vault height of the section (end fade and the bays' bulge in; not the rib's cut)
         double Rv0;          // the unbulged section's vault height (end fade in): the floor's level
         double yc;           // axis height (absolute y)
@@ -389,7 +936,7 @@ public final class TubeField {
         double ribP, ribD, ribK; // rib spacing, depth, strength 0..1
         double ribQ;         // blocks from the nearest rib's middle
         double rib;          // the rib's share here, 0..1 (rib())
-        double fade;         // end fade 0..1
+        double fade;         // end fade 0..1: the line's run past its mouths ({@link Run#fade}), 0 where it has none
         Country c;
         // the frame (frame()): the point, its coordinates across and along the flow, the warped coordinate's gradient
         // there, and f = U / S - phase (the nearest line is floor(f))
@@ -403,7 +950,8 @@ public final class TubeField {
 
     /**
      * Sets p's frame at (x, z): the country, rho and the warped coordinate U's value and gradient; true where tubes may
-     * run (p.on stays false until a line is filled in).
+     * run (p.on stays false until a line is filled in): within the reach of the country's runs ({@link Runs#cut} blocks
+     * past its rim).
      */
     boolean frame(double x, double z, Pt p) {
         p.on = false;
@@ -414,7 +962,8 @@ public final class TubeField {
         if (!c.on) { p.rho = -9; return false; }
         double rho = rho(c, x, z);
         p.rho = rho;
-        if (rho <= RHO_TUBE - TIP_REACH) return false;
+        Runs rs = runs(c);
+        if (rs.carved == 0 || blocks(c, x, z, rho) < -rs.cut) return false;
         double u = c.u(x, z), v = c.v(x, z);
         double A = WARP_A * c.S;
         double nu = c.nu, nv = c.nv;
@@ -448,10 +997,37 @@ public final class TubeField {
 
     /**
      * Fills p (its frame set) with line k's tube at p's point: k need not be the nearest line, as a line's tube is the same
-     * shape on either side of the middle between two lines (its distance {@code s} is one smooth function there). False,
-     * p left half filled, where the tube's bulged bays stay more than {@code nearMax} blocks off (a cheap early out).
+     * shape on either side of the middle between two lines (its distance {@code s} is one smooth function there). Its
+     * floor and its end fade come from the line's run at phi ({@link Runs#at}): no run, no tube (fade 0). False, p left
+     * half filled, where the tube's bulged bays stay more than {@code nearMax} blocks off (a cheap early out).
      */
     boolean line(Pt p, int k, double nearMax) {
+        if (!geom(p, k, nearMax)) return false;
+        Run run = runs(p.c).at(k, p.phi);
+        double fade = run == null ? 0 : run.fade(p.phi);
+        double Rv0 = p.Rw * VSTRETCH;
+        double yc = (run == null ? W + FLOOR_LOW : run.floor(p.phi)) + FLOOR_CUT * Rv0;
+        yc = Math.max(yc, W + FLOOR_LOW + FLOOR_CUT * Rv0);
+        yc = Math.min(yc, W + VAULT_MAX - Rv0);
+        p.on = true;
+        p.yc = yc;
+        p.fade = fade;
+        // the bays bulge out between the ribs: at a rib's middle the section is R, in a bay R + BULGE (full ribs)
+        double sh = rib(p);
+        double Rb = p.Rw + BULGE * (p.ribK - sh);
+        p.rib = sh;
+        p.R = Rb * fade;
+        p.Rv = Rb * VSTRETCH * fade;
+        p.Rv0 = Rv0 * fade;
+        return true;
+    }
+
+    /**
+     * Line k's shape at p's point (its frame set), without its run: the distance from the line and from the nearer twin's
+     * axis, the twins' offset, phi, the unfaded half-width Rw and the ribs' spacing, depth and strength. False where the
+     * tube's bulged bays stay more than {@code nearMax} blocks off.
+     */
+    private boolean geom(Pt p, int k, double nearMax) {
         Country c = p.c;
         double v = p.v, g = p.g, dUdu = p.dUdu, dUdv = p.dUdv, nu = c.nu, nv = c.nv;
         double s = (p.f - k - 0.5) * c.S / g, as = Math.abs(s);
@@ -473,32 +1049,17 @@ public final class TubeField {
         // the nearest point of the twin's axis, and the along-coordinate there (ribs stand square across the tube)
         double nV = dUdv / g;                          // the v part of the line's normal in the (u, v) frame
         double off = s - Math.signum(s) * o;           // signed distance from the nearer twin's axis
-        double phi = v - off * nV;
-        double fade = smooth((p.rho - RHO_TUBE) / END_FADE);
-        double yc = W + c.h0 + H_AMP * heightN.noise2(p.x / H_SCALE + nu, p.z / H_SCALE + nv) + c.slope * v;
-        double Rv0 = R * VSTRETCH;
-        yc = Math.max(yc, W + FLOOR_MIN + FLOOR_CUT * Rv0);
-        yc = Math.min(yc, W + VAULT_MAX - Rv0);
-        p.on = true;
         p.line = k;
         p.s = s;
         p.gx = (-dUdu * c.sin + dUdv * c.cos) / g;
         p.gz = (dUdu * c.cos + dUdv * c.sin) / g;
         p.o = o;
         p.d = d;
-        p.yc = yc;
-        p.phi = phi;
-        p.fade = fade;
+        p.phi = v - off * nV;
+        p.Rw = R;
         p.ribP = RIB_P_MIN + (RIB_P_MAX - RIB_P_MIN) * Hashing.unit(Hashing.mix(lk, 2, 0, 0));
         p.ribD = RIB_D_MIN + (RIB_D_MAX - RIB_D_MIN) * Hashing.unit(Hashing.mix(lk, 3, 0, 0));
         p.ribK = ribK;
-        // the bays bulge out between the ribs: at a rib's middle the section is R, in a bay R + BULGE (full ribs)
-        double sh = rib(p);
-        double Rb = R + BULGE * (ribK - sh);
-        p.rib = sh;
-        p.R = Rb * fade;
-        p.Rv = Rb * VSTRETCH * fade;
-        p.Rv0 = Rv0 * fade;
         return true;
     }
 
@@ -781,8 +1342,8 @@ public final class TubeField {
         st.k = k;
         st.valid = true;
         double sx = siteX(q, r), sz = siteZ(q, r);
-        // a site past the tubes' end (where the field still reaches, TIP_REACH) opens nothing, as before the union
-        st.on = frame(sx, sz, pc) && pc.rho > RHO_TUBE && line(pc, k, Double.MAX_VALUE);
+        // a site where the line has no run, or past its closing end, opens nothing
+        st.on = frame(sx, sz, pc) && line(pc, k, Double.MAX_VALUE) && pc.fade > 0;
         st.F = st.on ? (int) Math.round(floorY(pc, sx, sz)) : 0;
         st.hang = st.on ? hang(q, r, sx, sz, pc) : 0;
         return st;
@@ -819,8 +1380,9 @@ public final class TubeField {
      * The pool of grid cell (gi, gj): {valid 0/1, water top F0 (the first row over the water), cx*16, cz*16, radius*16};
      * cached per thread. A dip is valid well inside the massif on the flat middle of a tube's floor, where no
      * overlapping candidate of a neighbouring grid cell draws higher (so pools never touch), with at least three open
-     * columns in its disc. Its water's top row is one under the lowest floor in its disc and the ring of a block round it,
-     * so every block beside the water at its rows is rock.
+     * columns in its disc, where the floor is level (the floors in its disc and the ring of a block round it at most a row
+     * apart, so the walking level over the water is never 2 under a floor beside it). Its water's top row is one under the
+     * lowest floor in the disc and the ring, so every block beside the water at its rows is rock.
      */
     int[] dip(int gi, int gj) {
         java.util.HashMap<Long, int[]> m = dipCache.get();
@@ -844,7 +1406,7 @@ public final class TubeField {
         // the disc and its ring well inside the massif's rock, clear of the rim and of every collapse gap
         if (massifAt(cx, cz) < rd + POOL_KEEP) return v;
         Col t = new Col();
-        int F0 = Integer.MAX_VALUE, open = 0;
+        int F0 = Integer.MAX_VALUE, Fmax = Integer.MIN_VALUE, open = 0;
         int ext = (int) Math.ceil(rd + 1.5);
         int bx = (int) Math.floor(cx), bz = (int) Math.floor(cz);
         for (int dx = -ext; dx <= ext; dx++) for (int dz = -ext; dz <= ext; dz++) {
@@ -853,9 +1415,11 @@ public final class TubeField {
             int[] fc = openFloor(bx + dx, bz + dz, t);
             if (fc == null) continue;                  // rock (the wall or a rib's jamb): it seals the pool
             F0 = Math.min(F0, fc[0]);
+            Fmax = Math.max(Fmax, fc[0]);
             if (dd <= rd) open++;
         }
-        if (open < 3 || F0 - 3 < W + Terrain.FLOOD_RISE + 1) return v;
+        // still water lies where the floor is level: every floor round it at most a row over the lowest, so one steps out
+        if (open < 3 || F0 - 3 < W + Terrain.FLOOD_RISE + 1 || Fmax - F0 > 1) return v;
         v[0] = 1;
         v[1] = F0;
         v[2] = (int) Math.round(cx * 16);

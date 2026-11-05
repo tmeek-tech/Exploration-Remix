@@ -33,9 +33,12 @@ class TubeFieldTest {
         int sideOpen;
         /** level, step down 2..15, fall > 15, step up > 1, blind, over lava, too short, in the open. */
         final int[] ends = new int[8];
-        /** Widths across the tube (on the line's normal, in the cavern's rock) at the axis height and at the eye row (F + 1). */
-        final List<Integer> widthsAxis = new ArrayList<>(), widths = new ArrayList<>(), headRib = new ArrayList<>(), headBay = new ArrayList<>(),
-                floors = new ArrayList<>(), vaults = new ArrayList<>();
+        /**
+         * Widths across the tube (on the line's normal, in the cavern's rock) at the axis height (a tube: single, or a twin
+         * split apart; where the twins of a line still overlap, a junction, in widthsJoin) and at the eye row (F + 1).
+         */
+        final List<Integer> widthsAxis = new ArrayList<>(), widthsJoin = new ArrayList<>(), widths = new ArrayList<>(), headRib = new ArrayList<>(),
+                headBay = new ArrayList<>(), floors = new ArrayList<>(), vaults = new ArrayList<>();
         /** Rib rings against the next bay's middle: how much wider the bay is at the eye row and at the floor row (both sides), the crown's depth, the opening under the ring at the eye row. */
         final List<Integer> ringEye = new ArrayList<>(), ringFloor = new ArrayList<>(), ringCrown = new ArrayList<>(), ribOpen = new ArrayList<>();
         /** For every axis block of an enclosed stretch: its stretch's length between walkable exits (length-weighted). */
@@ -51,8 +54,11 @@ class TubeFieldTest {
         /** Rock faces of the blocks the tubes open (air or water) over the whole countries, and those not lined. */
         long faces, facesBad;
         String facesBadAt = "";
-        /** Falls over 15 onto rock from a standing place of the cavern into a tube's column, and those the tube made. */
-        int caveFalls, caveFallsMade;
+        /**
+         * Edges looked at (a standing place of the cavern beside a tube's column open at its feet), falls over 15 onto rock
+         * from them into the tube's column, and those the tube made.
+         */
+        int caveEdges, caveFalls, caveFallsMade;
         String caveFallAt = "";
         /** The seed being measured, and a few mouths of each seed (seed, x, the tube's walking level, z) for the biome check. */
         long seed;
@@ -78,7 +84,8 @@ class TubeFieldTest {
                             deepSpikes, cellsHung, cellsMixed, mixedAt)
                     + "; tube columns two lines reach " + unionCols
                     + "; faces of the tubes' open blocks " + faces + ", unlined " + facesBad + facesBadAt
-                    + "; falls over 15 from the cavern into a tube " + caveFalls + ", the tube's making " + caveFallsMade + caveFallAt;
+                    + "; junctions (twins overlapping) width at the axis height " + dist(widthsJoin)
+                    + "; edges from the cavern into a tube's column " + caveEdges + ", falls over 15 " + caveFalls + ", the tube's making " + caveFallsMade + caveFallAt;
         }
     }
 
@@ -122,10 +129,15 @@ class TubeFieldTest {
         return v[Math.min(v.length - 1, (int) Math.floor(q * v.length))];
     }
 
-    /** Along every line of the country, its runs (a line's stretch of tube): length, width, headroom, steps and ends. */
+    /**
+     * Along every line of the country, its runs (a line's stretch of tube): length, width, headroom, steps and ends. A run
+     * is where the tube is unfaded on the axis the walker follows ({@link #axisCol}): between split twins the line's own
+     * axis lies in the pier, where the along-coordinate reads either twin's and on a bend fell past a mouth (seed 12345:
+     * a run cut in two 4 blocks inside its mouth, its inner piece counted as a blind end).
+     */
     static void lines(Terrain t, TubeField.Country c, Stats s) {
         TubeField tf = t.tubes;
-        TubeField.Pt p = new TubeField.Pt();
+        TubeField.Pt p = new TubeField.Pt(), pt = new TubeField.Pt();
         int n = (int) (2 * TubeField.A_MAX * 1.45);
         double v0 = -n / 2.0;
         for (int k = -10; k <= 10; k++) {
@@ -135,7 +147,13 @@ class TubeFieldTest {
             for (int i = 0; i < n; i++) {
                 q[i] = tf.axisPoint(c, k, v0 + i);
                 tf.at(q[i][0], q[i][1], p);
-                on[i] = p.on && p.line == k && p.fade > 0.5;
+                boolean in = p.on && p.line == k;
+                if (in && p.o > 0.5) {
+                    int[] col = axisCol(tf, q[i], p);
+                    tf.at(col[0] + 0.5, col[1] + 0.5, pt);
+                    in = pt.on && pt.line == k && pt.fade > 0.5;
+                } else in &= p.fade > 0.5;
+                on[i] = in;
                 any |= on[i];
             }
             if (!any) continue;
@@ -179,7 +197,7 @@ class TubeFieldTest {
             int wE = widthAt(t, bx + 0.5, bz + 0.5, F + 1, pb.gx, pb.gz), wA = widthAt(t, bx + 0.5, bz + 0.5, (int) Math.floor(pb.yc), pb.gx, pb.gz);
             if (wE < 0 || wA < 0) { s.sideOpen++; continue; }   // the section crosses the cavern's open air: no width
             s.widths.add(wE);
-            s.widthsAxis.add(wA);
+            (p.o > 0.05 && p.o < p.R ? s.widthsJoin : s.widthsAxis).add(wA);
         }
         rings(t, q, a, b, s);
         exits(t, q, a, b, s);
@@ -370,9 +388,9 @@ class TubeFieldTest {
     }
 
     /**
-     * Block by block over the columns of a country (the ellipse and its apron's inner part): every value the tube field
-     * gives is finite (tube() over each span and 4 rows past it, shellDepth() over the span and 12 rows past it, the
-     * massif, apron and apron floor at a column cell site's kind of point, the region); every open block the tube makes
+     * Block by block over the columns of a country (the ellipse grown by 30 %): every value the tube field gives is finite
+     * (tube() over each span and 4 rows past it, shellDepth() over the span and 12 rows past it, the massif, the
+     * keep-out, the rim and the mouth query at a column cell site's kind of point, the region); every open block the tube makes
      * in the cavern's rock (air or a pool's water) is lined (shellDepth finite and under SHELL_BIOME, inLining); and the
      * hanging column ends are whole column cells (in the bays, where the vault hangs, every column of a cell hangs the
      * same), with few isolated spikes (an open column lower than all 4 open neighbours).
@@ -386,13 +404,15 @@ class TubeFieldTest {
         java.util.Set<Long> mixed = new java.util.HashSet<>();
         TubeField.Pt pb = new TubeField.Pt();
         int[] cell = new int[2];
+        double[] mq = new double[3];
         int yb = t.shape.bottom(Terrain.GALLERIES), yt = t.shape.top(Terrain.GALLERIES);
         for (int x = x0; x <= x1; x++) for (int z = z0; z <= z1; z++) {
             double u = c.u(x + 0.5, z + 0.5) / c.b, v = c.v(x + 0.5, z + 0.5) / c.a;
             if (u * u + v * v > 1.69) continue;
             finite(s, x, z, 0, tf.massifAt(x + 0.37, z + 0.81), "massif");
-            finite(s, x, z, 0, tf.apronAt(x + 0.37, z + 0.81), "apron");
-            finite(s, x, z, 0, tf.apronFloorAt(x + 0.37, z + 0.81), "apron floor");
+            finite(s, x, z, 0, tf.apronAt(x + 0.37, z + 0.81), "keep-out");
+            finite(s, x, z, 0, tf.rimAt(x + 0.37, z + 0.81), "rim");
+            if (tf.mouth(x + 0.37, z + 0.81, mq)) for (int i = 0; i < 3; i++) finite(s, x, z, i, mq[i], "mouth");
             finite(s, x, z, 0, tf.region(x, z), "region");
             int lo = tf.spanLo(x, z), hi = tf.spanHi(x, z);
             if (lo > hi) continue;
@@ -478,6 +498,7 @@ class TubeFieldTest {
                 int y = k == 0 ? n.f : n.bh;
                 if (y <= r[0] || g.fineBlocks(x, y, z) > 0 || g.fineBlocks(x, y - 1, z) > 0 || g.fineBlocks(x, y + 1, z) > 0) continue;
                 if (g.fineBlocks(a, y - 1, e) <= 0 || g.fineBlocks(a, y, e) > 0 || g.fineBlocks(a, y + 1, e) > 0) continue;
+                s.caveEdges++;
                 int yl = y - 1;
                 while (yl > g.B && g.fineBlocks(x, yl, z) <= 0 && t.fluidAt(x, yl, z) == Terrain.AIR) yl--;
                 int drop = y - (yl + 1);
@@ -557,12 +578,16 @@ class TubeFieldTest {
     // ================================================================================================ tests
 
     /**
-     * Sections are picture 2's size (critique tubes-scale; spec-tubes 10, a6ac8ea's narrow tubes in brackets): the width
-     * at the axis height 5-95 % within 15..36 (measured 16..31, median 21, since the v2 Galleries landed, 0.8.0; 16..32-33
-     * on the interim ones; before 8..17), the floor's width at the eye row
-     * (F + 1) at least 11 at the 5th percentile (13; before 7), headroom in the bays at least 16 at the 5th percentile
-     * (19, median 24; before 8) and under the ribs at least 12 (15, median 19; before 5), with two open rows everywhere;
-     * floors at least W + 46 and vaults at most W + 94 plus the bays' bulge over the Galleries' lava table.
+     * Sections are picture 2's size (critique tubes-scale; spec-tubes 10, a6ac8ea's narrow tubes in brackets): a tube's
+     * width at the axis height (one tube, or a twin split round its pier) 5-95 % within 15..36 (measured 17..29, median 24,
+     * since the tube country lost its ring and the floor its deep bowl; 16..31, median 21, with the bowl; before 8..17),
+     * and a junction's, where a line's twins still overlap, at most 56 at the 95th percentile, two bays and the gap between
+     * their axes (measured 20..50, median 32: the bowl's rise between the twins kept these under 36 at the axis height, and
+     * made the shelves no one could climb to, TubeField.BOWL_H); the floor's width at the eye row (F + 1) at least 11 at
+     * the 5th percentile (16; 13 with the bowl; before 7), headroom in the bays at least 16 at the 5th percentile (20,
+     * median 24; before 8) and under the ribs at least 12 (16, median 19; before 5), with two open rows everywhere; floors
+     * at least W + 46 and vaults at most W + 113 plus the bays' bulge over the Galleries' lava table (a run's floor follows
+     * the landscape at its mouths, up to W + 86).
      */
     @Test
     void sectionsAreRoundAndSized() {
@@ -570,6 +595,7 @@ class TubeFieldTest {
         assertTrue(s.standing >= 40, "too few standing countries to measure: " + s);
         assertTrue(s.widths.size() > 3000, "too few sections measured: " + s);
         assertTrue(pct(s.widthsAxis, 0.05) >= 15 && pct(s.widthsAxis, 0.95) <= 36, "widths at the axis height: " + dist(s.widthsAxis));
+        assertTrue(s.widthsJoin.size() > 200 && pct(s.widthsJoin, 0.95) <= 56, "junctions' widths at the axis height: " + dist(s.widthsJoin));
         assertTrue(pct(s.widths, 0.05) >= 11, "floor widths at the eye row: " + dist(s.widths));
         assertTrue(pct(s.headBay, 0.05) >= 16, "headroom in the bays: " + dist(s.headBay));
         assertTrue(pct(s.headRib, 0.05) >= 12, "headroom under the ribs: " + dist(s.headRib));
@@ -580,10 +606,11 @@ class TubeFieldTest {
 
     /**
      * The rib rings stand in on their legs, not only at the crown (critique tubes-ribs: the bays bulge out round them):
-     * against the next bay's middle a ring stands in a median of at least 1 block a side at the eye row (measured 1, the
-     * bar, since the v2 Galleries landed, 0.8.0, as on r2; 1.5 on the interim Galleries; before 0) and at least 0.5 at the
-     * floor row (1; before 0), its crown at least 4 rows under the bay's vault (6;
-     * before 3), and the opening under it at the eye row stays at least 9 wide at the 5th percentile (12): no doorways.
+     * against the next bay's middle a ring stands in a median of at least 1 block a side at the eye row (measured 2 since
+     * the floor lost its deep bowl; 1, the bar, on the v2 Galleries with it; 1.5 on the interim Galleries; before 0) and at
+     * least 0.5 at the floor row (0.5, the bar; 1 with the bowl; before 0), its crown at least 4 rows under the bay's vault
+     * (6; before 3), and the opening under it at the eye row stays at least 9 wide at the 5th percentile (15; 12 with the
+     * bowl): no doorways.
      */
     @Test
     void ribRingsStandIn() {
@@ -598,8 +625,8 @@ class TubeFieldTest {
     /**
      * Tubes have exits along them (critique tubes-runs: collapse gaps cut each country across the flow): the enclosed
      * stretch between walkable exits that an axis block lies in, length-weighted, has its median at most 90 blocks and its
-     * 90th percentile at most 120 (measured 71 and 92 on the interim Galleries, a median of 69 since the v2 Galleries
-     * landed, 0.8.0; before 264 and 317).
+     * 90th percentile at most 120 (measured a median of 75 and a 95th percentile of 100 since the runs go only where rock
+     * encloses them; 71 and 92 on the interim Galleries, a median of 69 on the v2 ones with the ring; before 264 and 317).
      */
     @Test
     void tubesHaveExits() {
@@ -609,8 +636,8 @@ class TubeFieldTest {
     }
 
     /**
-     * Floors are walkable: under 0.1 % of 1-block moves along the axes step 2 or more (0.03 %), at most 0.01 % step 4 or
-     * more (0).
+     * Floors are walkable: under 0.1 % of 1-block moves along the axes step 2 or more (0.006 %; 0.03 % with the ring, when
+     * pools also lay on sloping floors, 2 rows under a floor beside them), at most 0.01 % step 4 or more (0).
      */
     @Test
     void floorsAreWalkable() {
@@ -624,8 +651,8 @@ class TubeFieldTest {
      * Every value of the field is finite (critique T1, T4): a NaN density reads as open in the game (the aquifer's
      * {@code density > 0}), and the old envelope gave NaN on every ribbed tube end. Over the columns of the standing
      * countries: tube() over each span and 4 rows past it, shellDepth() over the span and 12 rows past it and on every
-     * 9th row of the whole layer (the palette and the biome read it at any row), the massif, the apron, the apron's floor
-     * and the region; and the Galleries' per-block density over boxes round the old NaN columns.
+     * 9th row of the whole layer (the palette and the biome read it at any row), the massif, the keep-out, the rim, the
+     * mouth query and the region; and the Galleries' per-block density over boxes round the old NaN columns.
      */
     @Test
     void finite() {
@@ -662,8 +689,9 @@ class TubeFieldTest {
      * two lines was cut flat there and the rock beyond read as no tube's, 2,792 deep, undressed faces over these seeds at
      * 69 places): every rock block beside a block a tube opens in the cavern's rock (its air or a pool's water), over every
      * column of the standing countries, lies within 1.8 of the tube's surface (the palette lines it), is surface rock (at
-     * most 6 blocks deep in the game's density) and is in the Obsidian Tubes (measured 4.95 M faces since the v2 Galleries
-     * landed, 0.8.0, 5.07 M on the interim ones, counted per open block, all lined).
+     * most 6 blocks deep in the game's density) and is in the Obsidian Tubes (measured 3.22 M faces since the runs go only
+     * where rock encloses them, 4.95 M with the ring on the v2 Galleries, 5.07 M on the interim ones, counted per open
+     * block, all lined).
      */
     @Test
     void everyFaceIsLined() {
@@ -676,16 +704,17 @@ class TubeFieldTest {
      * The cavern does not drop a walker into a tube (round 2: the tubes cut through rock bands crossing their mouths and
      * left falls of 16 to 24 rows from the cavern into tube air, 194 over seeds 1, 2024 and -987654321): from the cavern's
      * standing places beside the tubes' columns, at most 12 falls of more than 15 rows onto rock that the tube made (where
-     * the cavern alone is rock or drops 15 or less). Measured 4, all at one place of seed 12345 where a 15-row step of the
-     * cavern meets a tube floor one row under the cavern's (the same 4 on the interim Galleries and, since 0.8.0, on the v2
-     * ones); bands stay out of the mouths and the cavern keeps its roofs ({@link GalleriesField#roofed}). Falls the cavern
-     * makes alone into a tube's column (a cliff of the cavern over the apron's floor where a tube's rows lie in the
-     * cavern's air: 74 of the 78 falls on the v2 Galleries, 167 of 171 on the interim ones) are the cavern's.
+     * the cavern alone is rock or drops 15 or less). Measured 0 of 9 falls over 7,165 edges looked at since the tubes are
+     * cut only into the cavern's rock and the mouths' blend meets their floors ({@link GalleriesField#roofed}); 4 of 78 with
+     * the ring, at one place of seed 12345 where a 15-row step of the cavern met a tube floor one row under it, the other 74
+     * the cavern's own cliffs over the apron's floor where a tube's rows lay in the cavern's air. Bands stay out of the
+     * mouths. The edges are counted so the check is seen to look (the ring's cliffs gave it falls to count; now there are
+     * next to none).
      */
     @Test
     void noFallsIntoTubes() {
         Stats s = stats();
-        assertTrue(s.caveFalls > 0, "no falls looked at");
+        assertTrue(s.caveEdges > 1000, "too few edges from the cavern into a tube's column looked at: " + s.caveEdges);
         assertTrue(s.caveFallsMade <= 12, "falls the tubes made from the cavern (" + s.caveFallsMade + "):" + s.caveFallAt);
     }
 
@@ -709,8 +738,9 @@ class TubeFieldTest {
 
     /**
      * Pools are sealed and common: every block of a pool's water lies over water or rock, beside water or rock, in the
-     * cavern's rock, over the flood's reach (0 violations); 4 to 12 pools per km of tube (7.5 since the v2 Galleries
-     * landed, 0.8.0; 7.6 on the interim ones). Their beds and sides are
+     * cavern's rock, over the flood's reach (0 violations); 4 to 12 pools per km of tube (7.7 since they lie only where
+     * the floor is level, from more candidates; 7.5 on the v2 Galleries with the ring; 7.6 on the interim ones). Their beds
+     * and sides are
      * the tube's lining (critique T3: 70 % of the prototype's beds read deeper than the skin): every rock block beside the
      * water is lined, in the Obsidian Tubes and surface rock.
      */
@@ -725,10 +755,11 @@ class TubeFieldTest {
     }
 
     /**
-     * Mouths open into the real Galleries: runs open at both ends 95 % or more (100 since the v2 Galleries landed, 0.8.0;
-     * 98.3 earlier), walkable out at both ends 85 % or more (100; 92.8 earlier), blind ends at most 3 % (0; 0.8 earlier),
-     * falls over 15 at a mouth at most 1 % (0). Fewer, wider tubes: about 180 runs over the sample (183; a6ac8ea's narrow
-     * ones, about 320).
+     * Mouths open into the real Galleries: runs open at both ends 95 % or more (100 since the runs go only where rock
+     * encloses them, each with a mouth at either end meeting the landscape; 100 with the ring; 98.3 earlier), walkable out
+     * at both ends 85 % or more (100; 100 with the ring; 92.8 earlier), blind ends at most 3 % (0; 0; 0.8 earlier), falls
+     * over 15 at a mouth at most 1 % (0). Fewer, wider tubes: 130 runs over the sample (183 with the ring, which ran the
+     * tubes on into its open apron; a6ac8ea's narrow ones, about 320).
      */
     @Test
     void mouthsOpen() {
@@ -743,9 +774,11 @@ class TubeFieldTest {
     /**
      * Tube countries are met: from 2000 random points over 3 seeds, the straight-line distance to the nearest country's
      * massif has its median at most 250 blocks and its 90th percentile at most 400 (spec 10: 160-168 and 332-336). In the
-     * game the Galleries keep only the countries that stand in their landscape (spec-galleries 6.1, about two thirds), so
-     * a player walks further: there the median is at most 300 and the 90th percentile at most 650 (220 and 484 since the
-     * v2 Galleries landed, 0.8.0; 232 and 500 earlier).
+     * game the Galleries keep only the countries that carve two runs or more (spec-tubes 0.2: 67 of 112, about three
+     * fifths; with the Galleries' veto, spec-galleries 6.1, 72), so
+     * a player walks further: there the median is at most 300 and the 90th percentile at most 650 (236 and 496 since a
+     * country stands where it carves two runs; 220 and 484 with the Galleries' veto on the v2 Galleries, 0.8.0; 232 and 500
+     * earlier).
      */
     @Test
     void countriesAreMet() {
@@ -878,7 +911,7 @@ class TubeFieldTest {
     /**
      * The field is pure and seamless: two instances, one asked column strips in order and one in shuffled order on a
      * parallel stream, give the same values; and nothing of a country reaches within 2 blocks of its cell's border (no
-     * apron, no massif within the apron's reach, no tube rows), so neighbouring cells never meet.
+     * keep-out, no massif within its reach, no tube rows, no mouth's blend), so neighbouring cells never meet.
      */
     @Test
     void pureAndSeamless() {
@@ -900,12 +933,14 @@ class TubeFieldTest {
         assertEquals(0, nonFinite.get(), "non-finite values in the strips (a NaN hashes alike in every instance)");
 
         int touched = 0, samples = 0;
+        double[] mq = new double[3];
         for (int line = -20; line <= 20; line++) for (int along = -6400; along < 6400; along += 3) for (int off = -2; off <= 1; off++) {
             int u = line * TubeField.CELL + off;
             for (int xz = 0; xz < 2; xz++) {
                 int x = xz == 0 ? u : along, z = xz == 0 ? along : u;
                 samples++;
-                if (a.apronAt(x + 0.5, z + 0.5) > 0 || a.massif(x, z) > -TubeField.APRON_OUT || a.spanLo(x, z) <= a.spanHi(x, z)) touched++;
+                if (a.apronAt(x + 0.5, z + 0.5) > 0 || a.massif(x, z) > -TubeField.APRON_OUT || a.spanLo(x, z) <= a.spanHi(x, z)
+                        || a.mouth(x + 0.5, z + 0.5, mq)) touched++;
             }
         }
         assertTrue(samples > 300_000);
@@ -922,11 +957,14 @@ class TubeFieldTest {
 
     static long strip(TubeField f, int[] s, int W) {
         long h = 1;
+        double[] mq = new double[3];
         for (int i = 0; i < 64; i++) {
             int x = s[0] + (s[2] == 1 ? i : 0), z = s[1] + (s[2] == 1 ? 0 : i);
             h = fold(h, f.massif(x, z));
             h = fold(h, f.apronAt(x + 0.5, z + 0.5));
-            h = fold(h, f.apronFloorAt(x + 0.5, z + 0.5));
+            h = fold(h, f.rimAt(x + 0.5, z + 0.5));
+            if (f.mouth(x + 0.5, z + 0.5, mq)) for (double q : mq) h = fold(h, q);
+            else h = h * 31 + 7;
             h = fold(h, f.region(x, z));
             h = h * 31 + f.spanLo(x, z) * 7L + f.spanHi(x, z);
             h = h * 31 + f.floorCell(x, z);
@@ -943,8 +981,9 @@ class TubeFieldTest {
     /**
      * T7: one gate, the cavern field's tubesAt, stands in front of every tube query. Over the columns the tube field
      * reaches, a country that does not stand gives the Galleries' no-tube answers (the cavern's own density, rock for the
-     * tube, no lining, rib, floor cell, pool or tube biome), and a standing one passes the tube field's own, but for the
-     * roofs the cavern keeps over a tube (a tube block one or two rows under the cavern's open space reads rock).
+     * tube, no lining, rib, floor cell, pool or tube biome), and a standing one passes the tube field's own where the
+     * cavern's column is rock; in an open column of the cavern the tube opens nothing (its rock reads as lining, at most
+     * 0.5: GalleriesField.roofed), so no trench crosses the open floor.
      */
     @Test
     void everyTubeQueryIsGated() {
@@ -964,12 +1003,12 @@ class TubeFieldTest {
                     else assertEquals(0, g.tubeFloorCell(x, z), "floor cell" + w);
                     for (int y = lo; y <= hi; y += 3) {
                         if (at) {
-                            // the tube field's own value, but for the roofs the cavern keeps over a tube (GalleriesField.roofed):
-                            // the cavern's open space is its exact per-block profile (density), stairs and decks and all
+                            // the tube field's own value where the cavern's column is rock; in an open column only its rock,
+                            // as lining (GalleriesField.roofed)
                             double tv = tf.tube(x, y, z), gv = g.tube(x, y, z);
                             if (gv != tv) {
-                                assertTrue(tv < 0 && gv == 0.5 && (g.density(x, y + 1, z) < 0 || g.density(x, y + 2, z) < 0), "tube" + w + ": " + tv + " " + gv);
-                                if (g.density(x, y, z) >= 0) roofs++;   // in the cavern's own air the roof's value changes no block
+                                assertTrue(!g.column(x, z).closed() && gv == Math.max(0.5, tv), "tube" + w + ": " + tv + " " + gv);
+                                if (tv < 0 && g.density(x, y, z) >= 0) roofs++;   // a tube block the open column's rock keeps
                             }
                             assertEquals(tf.shellDepth(x, y, z), g.tubeShellDepth(x, y, z), "lining" + w);
                             assertEquals(Math.min(g.density(x, y, z), gv), g.fineBlocks(x, y, z), "density" + w);
@@ -987,7 +1026,7 @@ class TubeFieldTest {
                 }
             }
         }
-        System.out.println("TubeFieldTest gate: " + gated + " samples gated, " + passed + " passed (" + roofs + " tube blocks closed by a roof the cavern keeps)");
+        System.out.println("TubeFieldTest gate: " + gated + " samples gated, " + passed + " passed (" + roofs + " tube blocks kept as rock in the cavern's open columns)");
         assertTrue(gated > 2000 && passed > 2000, "too few samples: " + gated + " gated, " + passed + " passed");
     }
 

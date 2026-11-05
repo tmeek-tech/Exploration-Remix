@@ -76,6 +76,11 @@ public final class GalleriesField {
     final double headTop, discTop;
     /** The Obsidian Tubes' field (its own region noise), or null (no tubes). */
     final TubeField tubes;
+    /**
+     * The landscape before any tube (the tubes' own, built before them; a field of its own where there are no tubes): the
+     * warp, elevation, climate patches, basins, mounds and massif noise this field reads ({@link GalleriesLandscape}).
+     */
+    final GalleriesLandscape land;
 
     public GalleriesField(long seed, int bottom, int top, int lavaTable, TubeField tubes, Join join) {
         this(seed, bottom, top, lavaTable, tubes, join, 0, 0);
@@ -97,10 +102,11 @@ public final class GalleriesField {
         this.join = join;
         this.headTop = T - HEAD_DROP + deckShift;
         this.discTop = T - CR_DROP + 2 + capShift;
+        this.land = tubes != null && tubes.land.seed == seed && tubes.land.W == lavaTable ? tubes.land : new GalleriesLandscape(seed, lavaTable);
         long s = seed ^ 0x5851F42D4C957F2DL;
-        warpA = new Perlin(Hashing.mix(s, 1, 0, 0));
-        warpB = new Perlin(Hashing.mix(s, 2, 0, 0));
-        elevN = new Perlin(Hashing.mix(s, 4, 0, 0));
+        warpA = land.warpA;
+        warpB = land.warpB;
+        elevN = land.elevN;
         detailN = new Perlin(Hashing.mix(s, 8, 0, 0));
         riverN = new Perlin(Hashing.mix(s, 9, 0, 0));
         riverW = new Perlin(Hashing.mix(s, 10, 0, 0));
@@ -112,11 +118,11 @@ public final class GalleriesField {
         canN = new Perlin(Hashing.mix(s, 17, 0, 0));
         canW = new Perlin(Hashing.mix(s, 18, 0, 0));
         causN = new Perlin(Hashing.mix(s, 20, 0, 0));
-        massN = new Perlin(Hashing.mix(s, 40, 0, 0));
+        massN = land.massN;
         fordN = new Perlin(Hashing.mix(s, 48, 0, 0));
         densN = new Perlin(Hashing.mix(s, 49, 0, 0));
         roofN = new Perlin(Hashing.mix(s, 51, 0, 0));
-        hillN = new Perlin(Hashing.mix(s, 52, 0, 0));
+        hillN = land.hillN;
         stepN = new Perlin(Hashing.mix(s, 54, 0, 0));
         bendN = new Perlin(Hashing.mix(s, 55, 0, 0));
         sagN = new Perlin(Hashing.mix(s, 56, 0, 0));
@@ -239,65 +245,11 @@ public final class GalleriesField {
         long h;
     }
 
-    /**
-     * The patch of lattice cell (i, j), from a small per-thread cache. Its kind follows the landscape at its middle, so
-     * the basins sit in low ground and the canyons are cut into high ground: a lowland patch is a Caldera or a Causeway
-     * (hashed), a highland one Scoria Canyons (CAN_SHARE of them), and the ground between has none.
-     */
-    Patch patch(int i, int j) {
-        Patch[] pc = patches.get();
-        int slot = (i & 7) << 3 | (j & 7);
-        Patch p = pc[slot];
-        if (p != null && p.i == i && p.j == j) return p;
-        p = new Patch();
-        p.i = i;
-        p.j = j;
-        long h = Hashing.mix(seed, 31001, i, j);
-        p.h = h;
-        p.cx = (i + 0.5 + 0.3 * (Hashing.unit(Hashing.mix(h, 1, 0, 0)) - 0.5)) * SP;
-        p.cz = (j + 0.5 + 0.3 * (Hashing.unit(Hashing.mix(h, 2, 0, 0)) - 0.5)) * SP;
-        p.r = SP * Hashing.range(Hashing.mix(h, 3, 0, 0), PATCH_R_MIN, PATCH_R_MAX);
-        if (Hashing.unit(h) > PATCH_P) p.kind = G;
-        else {
-            double e = elevN.fbm2(p.cx / ELEV_P, p.cz / ELEV_P, 2);
-            double u2 = Hashing.unit(Hashing.mix(h, 7, 0, 0));
-            p.kind = e < E_LOW ? (u2 < 0.5 ? CALDERA : CAUSEWAY) : (e > E_HIGH && u2 < CAN_SHARE ? CANYONS : G);
-        }
-        pc[slot] = p;
-        return p;
-    }
+    /** The patch of lattice cell (i, j) ({@link GalleriesLandscape#patch}). */
+    Patch patch(int i, int j) { return land.patch(i, j); }
 
-    private final ThreadLocal<Patch[]> patches = ThreadLocal.withInitial(() -> new Patch[64]);
-
-    void climate(double x, double z, Climate out) {
-        double wx = x + WARP_A * warpA.noise2(x / WARP_P, z / WARP_P), wz = z + WARP_A * warpB.noise2(x / WARP_P, z / WARP_P);
-        int gi = (int) Math.floor(wx / SP), gj = (int) Math.floor(wz / SP);
-        out.wCal = out.wCaus = out.wCan = 0;
-        out.dn = 9;
-        out.patch = 0;
-        out.kind = G;
-        double bestW = 0;
-        for (int di = -1; di <= 1; di++) for (int dj = -1; dj <= 1; dj++) {
-            Patch p = patch(gi + di, gj + dj);
-            if (p.kind == G) continue;
-            double d = len(wx - p.cx, wz - p.cz) / p.r;
-            if (d >= 1) continue;
-            double w = smooth((1 - d) / PATCH_BLEND);
-            switch (p.kind) {
-                case CALDERA -> out.wCal = Math.max(out.wCal, w);
-                case CAUSEWAY -> out.wCaus = Math.max(out.wCaus, w);
-                default -> out.wCan = Math.max(out.wCan, w);
-            }
-            if (w > bestW || (w == bestW && d < out.dn)) {
-                bestW = w;
-                out.dn = d;
-                out.patch = p.h;
-                out.kind = w >= 0.5 ? p.kind : G;
-            }
-        }
-        double sum = out.wCal + out.wCaus + out.wCan;
-        if (sum > 1) { out.wCal /= sum; out.wCaus /= sum; out.wCan /= sum; }
-    }
+    /** The climate at column (x, z) ({@link GalleriesLandscape#climate}). */
+    void climate(double x, double z, Climate out) { land.climate(x, z, out); }
 
     // ============================================================================================ cells
     /**
@@ -710,6 +662,8 @@ public final class GalleriesField {
         int deckDrop;
         /** The tube mouth's weight at the cell, and the lowest ceiling the cell must keep (a ramp's or a mouth's head room; -1e9: none). */
         double mouth, minC;
+        /** The mouth query's answer at the cell's site ({@link TubeField#mouth}). */
+        final double[] mq = new double[3];
         final double[] tmp2 = new double[2];
         boolean pillar, massif;
         /** Whether the cell's column top may stand FLOOR_OFF higher (flat ground, or a sub-biome). */
@@ -746,9 +700,11 @@ public final class GalleriesField {
     // ---- one open cavern with standing massifs
     /**
      * Massifs: rock from floor to vault where a 2-octave noise of period M_P, read in the large shapes' warped plane,
-     * passes M_T (about 30 % of the area). Weaker in the Caldera and Causeway basins (M_SUB x their weight) and none in a
-     * tube country's apron. Within M_NEAR of the threshold the blocks to the edge are measured; the flare and the skirt
-     * take effect over the first M_SEAM of that band (no seam where the measuring starts).
+     * passes M_T (about 30 % of the area; {@link GalleriesLandscape#massif}). Weaker in the Caldera and Causeway basins
+     * (M_SUB x their weight); none inside a standing tube country's rim, where its massif and its collapse gaps stand for
+     * them. Within M_NEAR of the threshold the blocks to the edge are measured; the flare and the skirt take effect over
+     * the first M_SEAM of that band (no seam where the measuring starts). A tube country's massif is one more: its blocks
+     * to the edge are its own ({@link TubeField#massifAt}).
      */
     static final double M_P = 170, M_T = 0.21, M_SUB = 0.25, M_NEAR = 0.32, M_SEAM = 0.1;
     /**
@@ -802,8 +758,6 @@ public final class GalleriesField {
      */
     static final double RB_G = 64, RB_P = 0.55, RB_DP = 500, RB_DG = 1.3, RB_R0 = 12, RB_R1 = 30, RB_H0 = 0.11, RB_H1 = 0.18,
             RB_RS = 0.4, RB_L0 = 12, RB_L1 = 30, RB_W0 = 7, RB_W1 = 14, RB_HR0 = 0.15, RB_HR1 = 0.26, RB_LO = 44, RB_FADE = 8;
-    /** Massifs fade out in a tube country's apron from AP_M0 to AP_M0 + 0.5 of its weight. */
-    static final double AP_M0 = 0.7;
     /**
      * Rivers end short of the Caldera's and the Causeway's basins: their beds rise RV_PATCH rows as the nearest such
      * patch's middle comes from RV_PD1 to RV_PD0 of its radius (warped plane), under a row a block. (Read from the
@@ -827,18 +781,8 @@ public final class GalleriesField {
     /** Rivers end short of the massifs: within RV_DM blocks of one the bed rises up to RV_DMH rows. Canyon slots pinch out where the ground is under W + CAN_LOW. */
     static final double RV_DM = 50, RV_DMH = 9, CAN_LOW = 44;
     /**
-     * The apron's ramps: the floor keeps within AP_S a block of the apron's floor, and from AP_D0 on within AP_S + AP_R a
-     * block (a slope the low ground's stairs, {@link #stairs}, can climb), released upward from AP_D over AP_FD blocks. (Released
-     * from AP_S alone, an apron standing over a river's valley ended in a cliff of 30 to 40 rows: seed 77's basin.) Over
-     * lava the shelf is not released: it runs on down into the lava at its own slope (released, it ended in a ledge over
-     * the lake 5 to 10 rows under the shelf, a pit).
-     */
-    static final double AP_S = 0.2, AP_D0 = 12, AP_R = 0.75, AP_D = 54, AP_FD = 10;
-    /**
-     * The apron's shelf is never released downward ({@link #apronFit}): where the floor lies lower it runs on down at its
-     * own slope past AP_D + AP_FD, out to AP_SHELF blocks, until it meets it (released there, the shelf ended in a cliff
-     * of 12 to 20 rows over a Caldera's lake and its dry column tops: a closed pit of 339 places in seed 2's box at
-     * (-5900, -3600)).
+     * The ramps read the ground with a tube's mouths blended in out to AP_SHELF blocks past a country's keep-out
+     * ({@link #rampGround}, {@link #apronFit}).
      */
     static final double AP_SHELF = 128;
     // ---- the sub-biomes' terrain
@@ -850,8 +794,8 @@ public final class GalleriesField {
      * Scoria Canyons: lava slots (W - 4) along the zero lines of a noise of period CAN_P, sheer walls up to W + CAN_DRY,
      * then stepped cliffs of CAN_STEP rows up to the high ground; the terrain fades out with the patch's weight, and the
      * slots pinch out before it does (a slot's floor is lava or none, never in the flood's reach); they pinch out too
-     * over CAN_AP blocks before a tube country's apron, which draws the floor toward the tubes' level (fix round 2b: it
-     * lifted a slot's lava floor into a trench 20 rows deep, closed at the massif: a pit in seed -42's box).
+     * over CAN_AP blocks before a tube's mouth's blend, which draws the floor toward the run's (fix round 2b: the old
+     * apron lifted a slot's lava floor into a trench 20 rows deep, closed at the massif: a pit in seed -42's box).
      */
     static final double CAN_P = 160, CAN_STEP = 5, CAN_DRY = 40, CAN_AP = 8;
     /** Slope of the basins' shores: column stairs, 1 row in 3 to 4 blocks. */
@@ -985,35 +929,15 @@ public final class GalleriesField {
         return blocks(c, st ? g : c.dkGround, c.c, bl, row, y);
     }
 
-    /**
-     * The Caldera and Causeway basins at the warped point w: {the shore cone (rows; +inf away from any), the mounds' cap}.
-     * Each basin is flat at its lake out to CAL_LAKE (CAUS_FLAT) of its radius, then its shore rises SHORE_S a block of
-     * the warped plane; the refuge mounds may stand over the shore by MD_SS a block from the lake's edge, at most MD_SH.
-     * The lowest of the 5 x 5 patches round the point (so no seam).
-     */
-    double[] patchCone(double[] w) {
-        double px = w[0], pz = w[1];
-        int gi = (int) Math.floor(px / SP), gj = (int) Math.floor(pz / SP);
-        double lo = 1e9, cap = 1e9;
-        for (int di = -2; di <= 2; di++) for (int dj = -2; dj <= 2; dj++) {
-            Patch p = patch(gi + di, gj + dj);
-            if (p.kind == G || p.kind == CANYONS) continue;
-            double d = len(px - p.cx, pz - p.cz);
-            double q = Math.max(0, d - p.r * (p.kind == CALDERA ? CAL_LAKE : CAUS_FLAT));
-            if (q * SHORE_S > 110) continue;
-            double base = (p.kind == CALDERA ? W - 4 : W - 1) + SHORE_S * q;
-            lo = Math.min(lo, base);
-            cap = Math.min(cap, base + Math.min(MD_SH, MD_SS * q));
-        }
-        return new double[]{lo, cap};
-    }
+    /** The Caldera and Causeway basins at the warped point w ({@link GalleriesLandscape#patchCone}). */
+    double[] patchCone(double[] w) { return land.patchCone(w); }
 
     static final double MD_SH = 60, MD_SS = 0.15;
 
     /**
      * The 2D shape at a cell's site: floor F and ceiling C (rows, unrounded), the cap, hanging length, spire rise, massif,
      * and a ramp's deck. In order: massifs; the floor (landscape, fine relief, rivers, rubble, skirts, terraces, column
-     * stairs, the sub-biomes, a tube country's apron, a ramp's talus); the vault (the cap less its relief, flaring onto
+     * stairs, the sub-biomes, a tube's mouth, a ramp's talus); the vault (the cap less its relief, flaring onto
      * the massifs, lifted under the breakthrough patches and into the opened openings); a ramp's deck and head room;
      * hanging clusters and spires, kept out of mouths, openings and ramps.
      */
@@ -1026,10 +950,10 @@ public final class GalleriesField {
         out.deck = Double.NaN;
         out.deckTh = 0;
         out.mouth = 0;
-        // ---- the tube country's apron (TubeField): no massif stands in it
-        double ap = tubesAt(x, z) ? tubes.apronAt(x, z) : 0;
-        // ---- massifs
-        double m = massN.fbm2(wx / M_P, wz / M_P, 2) - M_SUB * (cl.wCal + cl.wCaus) - 2 * smooth((ap - AP_M0) / 0.5);
+        // ---- massifs: the cavern's own, but none inside a standing tube country's rim, where its massif and its
+        // collapse gaps stand for them (TubeField.rimAt)
+        boolean tube = tubesAt(x, z);
+        double m = tube && tubes.rimAt(x, z) > 0 ? M_T - M_NEAR - 1 : massN.fbm2(wx / M_P, wz / M_P, 2) - M_SUB * (cl.wCal + cl.wCaus);
         out.mass = m - M_T;
         if (m > M_T) {
             out.massif = true;
@@ -1045,6 +969,12 @@ public final class GalleriesField {
             double gz = (massN.fbm2(wx / M_P, (wz + 1) / M_P, 2) - massN.fbm2(wx / M_P, (wz - 1) / M_P, 2)) * 0.5;
             dm = (M_T - m) / Math.max(realGrad(gx, gz, w), 1e-6);
             sw = smooth((m - (M_T - M_NEAR)) / M_SEAM);
+        }
+        // a tube country's massif is one more standing massif (its gaps' walls too): its feet, its flare, the rivers
+        // ending short of it
+        if (tube) {
+            double mc = -tubes.massifAt(x, z);
+            if (mc < dm) { dm = mc; sw = 1; }
         }
         out.dm = dm;
         double fl = dm < FL_R ? sw * (1 - smooth(dm / FL_R)) : 0;
@@ -1086,17 +1016,14 @@ public final class GalleriesField {
             F = lerp(F, F + st, smooth((cl.wCaus - 0.2) / 0.5) * smooth((W + 6 - F) / 6.0));
         }
         if (cl.wCan > 0) F = canyonFloor(x, z, w, cl, F);
-        // ---- a tube country's apron (TubeField): the floor goes to the tubes' level; where a tube runs out of the massif
-        // (its mouth) the space is kept open with head room
+        // ---- a tube's mouth (TubeField.mouth): near where a run's air meets the cavern the floor keeps to the run's
+        // floor (column steps of a row over it, a talus under it, mouthFit), and the mouth's weight keeps head room over
+        // it and the hanging rock, the spires and the bands out of it
         double mouth = 0;
-        double ad = tubesAt(x, z) ? -tubes.massifAt(x, z) - (TubeField.APRON_OUT - TubeField.APRON_FADE) : 1e9;
-        if (ad < AP_SHELF) {
-            double Fa = apronFit(x, z, ad, F);
-            if (ad < AP_D + AP_FD || Fa != F) F = terrace(Fa, 1, 0.5);
-        }
-        if (ap > 0) {
-            int ix = (int) Math.floor(x), iz = (int) Math.floor(z);
-            if (tubes.runs(ix, iz)) mouth = ap;
+        if (tube && tubes.mouth(x, z, out.mq)) {
+            double Fm = mouthFit(out.mq[1], out.mq[2], F);
+            if (Fm != F) F = terrace(Fm, 1, 0.5);
+            mouth = out.mq[0];
         }
         out.mouth = mouth;
         // ---- a ramp's talus beside its solid part: the floor rises to its deck, TALUS_S rows a block lower outwards, or
@@ -1262,31 +1189,29 @@ public final class GalleriesField {
     }
 
     /**
-     * How free column (x, z) is of a tube country's apron for the canyons' slots: 1 where no apron reaches it, falling to 0
-     * over CAN_AP blocks before the apron's released stretch ({@link #AP_D} + {@link #AP_FD} from the massif's edge), or
-     * before its shelf has run down under the slots' lava ({@link #apronFit}: a slot under the shelf would be lifted into
+     * How free column (x, z) is of a tube's mouth's blend for the canyons' slots: 1 where no blend reaches it, falling to
+     * 0 over CAN_AP blocks before the blend's talus has come down to the slots' lava (a slot under it would be lifted into
      * a dry trench).
      */
-    double apronFree(double x, double z) {
-        if (!tubesAt(x, z)) return 1;
-        double ad = -tubes.massifAt(x, z) - (TubeField.APRON_OUT - TubeField.APRON_FADE);
-        if (ad >= AP_SHELF + CAN_AP) return 1;
-        // where the shelf (af - apronLim(ad), past AP_D0) comes down to the slots' lava at W - 4
-        double af = tubes.apronFloorAt(x, z), end = Math.max(AP_D + AP_FD, (af - (W - 4) + AP_R * AP_D0) / (AP_S + AP_R));
-        return smooth((Math.min(ad, AP_SHELF + CAN_AP) - Math.min(end, AP_SHELF)) / CAN_AP);
+    double mouthFree(double x, double z) {
+        double[] mq = new double[3];
+        if (!tubesAt(x, z) || !tubes.mouth(x, z, mq)) return 1;
+        double y = mq[1], d = mq[2], end = 0;
+        while (end < TubeField.BLEND_MAX && y - tubes.below(y, end) > W - 4) end += 1;
+        return smooth((d - end) / CAN_AP);
     }
 
     /**
      * The Scoria Canyons over the floor F at (x, z) (where cl.wCan > 0): lava slots along the zero lines of a noise, sheer
      * walls up to the dry ground, then stepped cliffs up to the ridges; the terrain fades out with the patch's weight, the
-     * slots pinch out before it fades and before a tube country's apron ({@link #apronFree}). Never over F. {@code w} is
+     * slots pinch out before it fades and before a tube's mouth's blend ({@link #mouthFree}). Never over F. {@code w} is
      * the warp at (x, z).
      */
     double canyonFloor(double x, double z, double[] w, Climate cl, double F) {
         double dc = lineDistW(canN, w, CAN_P);
         double cw0 = smooth((cl.wCan - 0.15) / 0.35);
         double fw = (2.5 + 3.5 * smooth(0.5 + canW.noise2(x / 70.0, z / 70.0))) * smooth((cw0 - 0.8) / 0.15)
-                * smooth((F - (W + CAN_LOW)) / 8.0) * apronFree(x, z);
+                * smooth((F - (W + CAN_LOW)) / 8.0) * mouthFree(x, z);
         double ws = 1.0 + 1.8 * smooth(0.5 + canW.noise2(x / 110.0 + 20, z / 110.0));
         double u = dc - fw;
         double Fk = fw > 0 && u <= 0 ? W - 4 : W + CAN_DRY + terrace(ws * Math.max(0, u), CAN_STEP, 0.45) + 300 * (1 - cw0);
@@ -1294,29 +1219,29 @@ public final class GalleriesField {
     }
 
     /**
-     * A tube country's apron: the floor F at a column {@code ad} blocks out past the apron's fade (ad under AP_SHELF)
-     * drawn toward the tubes' level, to within AP_S x ad (+ AP_R x (ad - AP_D0)) rows of it (unrounded). Released upward
-     * from AP_D over AP_FD blocks; never downward: where the floor lies lower the shelf runs on down at its own slope until
-     * it meets it, over dry ground or into the lava (released there, it ended in a ledge 5 to 10 rows under the shelf over
-     * a lake, closed pits in seed 8675309's Caldera, and in a cliff of 12 to 20 rows over a lake's dry column tops, a pit
-     * of 339 places in seed 2's).
+     * The floor F at (x, z) with a tube's mouth blended in ({@link #mouthFit}; F where no mouth's blend reaches): the
+     * ground the ramps are laid against ({@link #rampGround}). {@code ad} (blocks past a country's keep-out) is not read.
      */
     double apronFit(double x, double z, double ad, double F) {
-        double af = tubes.apronFloorAt(x, z);
-        double lim = apronLim(ad), rel = 1000 * smooth((ad - AP_D) / AP_FD);
-        return af + Math.max(-lim, Math.min(lim + rel, F - af));
+        double[] mq = new double[3];
+        return tubes.mouth(x, z, mq) ? mouthFit(mq[1], mq[2], F) : F;
     }
 
-    /** The rows the floor may stand from the tubes' level {@code ad} blocks out on the apron ({@link #apronFit}). */
-    static double apronLim(double ad) {
-        return AP_S * Math.max(0, ad) + AP_R * Math.max(0, ad - AP_D0);
+    /**
+     * The floor F at d blocks from where a tube's run meets the cavern, its floor y there: within the blend's rows of it
+     * ({@link TubeField#above}, {@link TubeField#below}): column steps of a row (a third of a row a block) up from the
+     * mouth; under it the same down to W + MOUTH_TAL, then a talus of a row a block, which the low ground's stairs wear
+     * into steps of a row ({@link #stairs}).
+     */
+    double mouthFit(double y, double d, double F) {
+        return Math.max(y - tubes.below(y, d), Math.min(y + TubeField.above(d), F));
     }
 
     /**
      * The ground a ramp is laid against at (x, z) (rows, unrounded): the floor a player meets there before any ramp, less
      * the parts that only raise it by a few rows (the massifs' feet, the rubble, the terraces' and prisms' steps): the
      * landscape with the lava rivers' valleys cut in (their beds rising over the patches' shores), the Caldera's stacks,
-     * the Canyons' slots and cliffs, and a tube country's apron drawn to the tubes' level. {@code w} holds the warped point
+     * the Canyons' slots and cliffs, and a tube's mouths blended in ({@link #apronFit}). {@code w} holds the warped point
      * at (x, z) (its Jacobian is filled in here where the rivers or the canyons read it), {@code cl} its climate.
      */
     double rampGround(double x, double z, double[] w, Climate cl) {
@@ -2300,18 +2225,9 @@ public final class GalleriesField {
 
     /**
      * The landscape at (x, z) (rows, unrounded): the elevation with its hills, the sub-biomes' basins and the refuge
-     * mounds. {@code w} must hold the warp at (x, z) ({@link #warp}).
+     * mounds ({@link GalleriesLandscape#landscape}, which the tubes read too). {@code w} must hold the warp at (x, z).
      */
-    double landscape(double x, double z, double[] w) {
-        double wx = w[0], wz = w[1];
-        double Fs = W + ELEV_MID + ELEV_AMP * elevN.fbm2(wx / ELEV_P, wz / ELEV_P, 2) + HL_A * hillN.fbm2(wx / HL_P, wz / HL_P, 2);
-        double[] pc = patchCone(w);
-        double cone = pc[0], cap = pc[1];
-        Fs = Math.min(Fs, cone);
-        // the refuge mounds stand over the low ground, no higher than the basins' shores allow
-        if (Fs < W + MD_TOP0 + MD_TOP1) Fs = Math.max(Fs, Math.min(cap, mounds(w)));
-        return Fs;
-    }
+    double landscape(double x, double z, double[] w) { return land.landscape(x, z, w); }
 
     /**
      * Refuge mounds: on a hash lattice of MD_G blocks in the warped plane, a share MD_P of the cells holds a broad mound
@@ -2322,44 +2238,23 @@ public final class GalleriesField {
     static final double MD_G = 210, MD_P = 0.85, MD_TOP0 = 44, MD_TOP1 = 12,
             MD_R0 = 14, MD_R1 = 30, MD_S0 = 0.14, MD_S1 = 0.19;
 
-    /** The highest mound floor at the warped point w (rows, unrounded), or -inf. */
-    double mounds(double[] w) {
-        double wx = w[0], wz = w[1];
-        int gi = (int) Math.floor(wx / MD_G), gj = (int) Math.floor(wz / MD_G);
-        double best = -1e9;
-        for (int di = -2; di <= 2; di++) for (int dj = -2; dj <= 2; dj++) {
-            long h = Hashing.mix(seed, 53001, gi + di, gj + dj);
-            if (Hashing.unit(h) >= MD_P) continue;
-            double cx = (gi + di + 0.15 + 0.7 * Hashing.unit(Hashing.mix(h, 1, 0, 0))) * MD_G;
-            double cz = (gj + dj + 0.15 + 0.7 * Hashing.unit(Hashing.mix(h, 2, 0, 0))) * MD_G;
-            double top = W + MD_TOP0 + MD_TOP1 * Hashing.unit(Hashing.mix(h, 3, 0, 0));
-            double r = MD_R0 + MD_R1 * Hashing.unit(Hashing.mix(h, 4, 0, 0));
-            double sl = MD_S0 + (MD_S1 - MD_S0) * Hashing.unit(Hashing.mix(h, 5, 0, 0));
-            double d = len(wx - cx, wz - cz);
-            best = Math.max(best, top - sl * Math.max(0, d - r));
-        }
-        return best;
-    }
+    /** The highest mound floor at the warped point w ({@link GalleriesLandscape#mounds}). */
+    double mounds(double[] w) { return land.mounds(w); }
 
     // ------------------------------------------------------------------------------------------- tube countries
     /**
-     * A tube country stands only where the landscape round it reaches the tubes' level: of TV_N points on a ring
-     * TV_OUT blocks outside its rim, at least TV_MIN must lie within TV_TOL rows of the apron's floor there. Elsewhere
-     * its apron would stand as a cliff round it and the tubes could not be walked into: the Galleries ignore it (no
-     * massif, no apron, no tubes, pools or lining).
+     * A tube country stands where it carves runs: tubes whose mouths meet the landscape where it already is
+     * ({@link TubeField#stands}). Elsewhere the Galleries ignore it (no massif, no tubes, pools or lining, no mouths).
      */
-    static final int TV_N = 16, TV_MIN = 3;
-    static final double TV_OUT = 76, TV_TOL = 10;
-
     private final ThreadLocal<long[]> standCache = ThreadLocal.withInitial(() -> { long[] a = new long[64]; Arrays.fill(a, Long.MIN_VALUE); return a; });
 
-    /** Whether the tube country of the column (x, z)'s tube cell stands (see {@link #TV_MIN}). */
+    /** Whether the tube country of the column (x, z)'s tube cell stands ({@link #countryStands}). */
     public boolean tubesAt(double x, double z) {
         if (tubes == null) return false;
         int ci = (int) Math.floor(x / TubeField.CELL), cj = (int) Math.floor(z / TubeField.CELL);
         long key = ((long) ci << 32) ^ (cj & 0xFFFFFFFFL);
         long[] sc = standCache.get();
-        int slot = (ci & 7) << 3 | (cj & 7);
+        int slot = (int) ((key * 0x9E3779B97F4A7C15L) >>> 58);   // by a hash: cells 8 apart (5,000 blocks) shared a slot
         if (sc[slot] == (key << 1 | 1)) return true;
         if (sc[slot] == (key << 1)) return false;
         boolean on = countryStands(ci, cj);
@@ -2368,19 +2263,7 @@ public final class GalleriesField {
     }
 
     boolean countryStands(int ci, int cj) {
-        TubeField.Country c = tubes.countryAt((ci + 0.5) * TubeField.CELL, (cj + 0.5) * TubeField.CELL);
-        if (!c.on) return false;
-        double[] w = new double[6];
-        int ok = 0;
-        for (int k = 0; k < TV_N; k++) {
-            int a = k * (DIRS / TV_N);
-            double v = (c.a + TV_OUT) * DIR_X[a], u = (c.b + TV_OUT) * DIR_Z[a];
-            double x = c.ox + v * c.cos - u * c.sin, z = c.oz + v * c.sin + u * c.cos;
-            warp(x, z, w);
-            double fs = landscape(x, z, w);
-            if (Math.abs(fs - tubes.apronFloorAt(x, z)) <= TV_TOL) ok++;
-        }
-        return ok >= TV_MIN;
+        return tubes.stands(ci, cj);
     }
 
     /** A stack stands where its middle's Caldera weight passes this. */
@@ -2433,10 +2316,10 @@ public final class GalleriesField {
      * A ramp's strip cuts a band (its deck's cells run none), so beside it the band comes down to the ground the same
      * way: on it within BAND_CUT cells of the strip ({@code side}, {@link RampHit#side}), its underside rising back over
      * the next BAND_CUT_F blocks (cut off between a ramp and the band's end, or between two ramps, with no pier, a
-     * stretch floated: 5100 blocks in seed 1's box at (-9372, 907), 2775 in its box at (4128, -7480)). A tube's path
-     * through its apron (the cells whose mouth weight passes 0, {@link #shape}) runs none either, and a band cell beside
-     * such a cell ({@link #besideMouth}) stands on the ground, a pier at the path's side (the band narrowed and cut there
-     * left a cell of band with no pier, 96 blocks afloat in seed 161803's box at (-1023, 8485)). Lava holds nothing up: a
+     * stretch floated: 5100 blocks in seed 1's box at (-9372, 907), 2775 in its box at (4128, -7480)). A tube's mouth
+     * (the cells whose mouth weight passes 0, {@link #shape}) runs none either, and a band cell beside such a cell
+     * ({@link #besideMouth}) stands on the ground, a pier at the mouth's side (the band narrowed and cut there left a cell
+     * of band with no pier, 96 blocks afloat in seed 161803's box at (-1023, 8485)). Lava holds nothing up: a
      * pier whose foot comes down to the lava's table stands on the lake's bed (one 2 rows short of a Caldera lake's bed
      * stood on the lava, a cell of band afloat over its rows W-1..W+70, 720 blocks in seed -2468's box at (8174, -1594)).
      */
@@ -2467,17 +2350,15 @@ public final class GalleriesField {
     }
 
     /**
-     * Whether one of the six cells round c lies on a tube's path through its apron: its site's column one a tube runs at
-     * ({@link TubeField#runs}) where the apron's weight passes 0, so its mouth weight does ({@link #shape}) and it runs no
-     * band ({@link #band}).
+     * Whether one of the six cells round c lies in a tube's mouth: the mouth's weight at its site passes 0
+     * ({@link TubeField#mouth}), so it runs no band ({@link #band}).
      */
     boolean besideMouth(Cell c) {
         int[] di = NB_DI[c.j & 1];
-        double[] p = new double[2];
+        double[] p = new double[2], mq = new double[3];
         for (int q = 0; q < 6; q++) {
             site(c.coarse, c.i + di[q], c.j + NB_DJ[q], p);
-            if (!tubesAt(p[0], p[1]) || !(tubes.apronAt(p[0], p[1]) > 0)) continue;
-            if (tubes.runs((int) Math.floor(p[0]), (int) Math.floor(p[1]))) return true;
+            if (tubesAt(p[0], p[1]) && tubes.mouth(p[0], p[1], mq) && mq[0] > 0) return true;
         }
         return false;
     }
@@ -2556,9 +2437,9 @@ public final class GalleriesField {
     private static final int SPAN_UNREAD = Integer.MIN_VALUE;
 
     /**
-     * The per-block density in blocks: the cell's profile, and the tubes carved in it (min(cave, tube), the cavern's
-     * roofs kept: {@link #roofed}) in the rows the tube field asks to be looked at where a country stands, read once per
-     * column and kept with it.
+     * The per-block density in blocks: the cell's profile, and the tubes carved in it (min(cave, tube) where the cavern's
+     * column is rock: {@link #roofed}) in the rows the tube field asks to be looked at where a country stands, read once
+     * per column and kept with it.
      */
     public double fineBlocks(int x, int y, int z) {
         Caches k = caches.get();
@@ -2576,24 +2457,18 @@ public final class GalleriesField {
         return d;
     }
 
-    /** Rows of rock a tube keeps under the cavern's open space where that space floats over it (see {@link #roofed}). */
-    static final int TUBE_ROOF = 2;
-    /** The most rows the cavern's open space may stand over a tube's walking level and still open into the tube. */
-    static final int TUBE_DROP = 15;
-
     /**
-     * The tube field's value at a block (TubeField.tube; the country stands), keeping the cavern's roofs: where the tube
-     * would open one of the TUBE_ROOF rows just under the cavern's own open space (its exact per-block profile), and that
-     * space starts more than TUBE_DROP rows over the tube's walking level there (the cavern's floor or a band standing
-     * high over a tube where the apron has not brought it down to the tube's level), the block stays rock (0.5, inside
-     * the tube's lining), so the tube runs under it and no hole in it drops a walker into the tube. Lower, the cavern
-     * opens into the tube. c is column(k, x, z), the thread's last look at the column.
+     * The tube field's value at a block (TubeField.tube; the country stands) where the cavern's column cell is rock: a
+     * massif's, the country's own or one of the cavern's that a run goes on through. The tubes are cut only into the
+     * cavern's rock, never into an open column's floor or roof, so no trench crosses the open floor and no hole opens in
+     * it (the mouths' blend brings the floor to the run's floor there, TubeField.mouth). In an open column the tube opens
+     * nothing but its rock still reads as its lining (at most 0.5 where the tube would be, or where its air beside it
+     * faces the column's rock), so every face of the cavern's rock that a tube's air meets is dressed surface rock. c is
+     * column(k, x, z), the thread's last look at the column.
      */
     private double roofed(Caches k, Cell c, int x, int y, int z) {
         double tv = tubes.tube(x, y, z);
-        if (tv >= 0) return tv;
-        for (int r = 1; r <= TUBE_ROOF; r++) if (profile(k, c, x, y + r, z) < 0) return y + r - tubes.walk(x, z) > TUBE_DROP ? 0.5 : tv;
-        return tv;
+        return c.closed() ? tv : Math.max(0.5, tv);
     }
 
     /** {@link #roofed(Caches, Cell, int, int, int)} with c = column(x, z) just looked at (TubeFieldTest's cost). */
@@ -2607,12 +2482,13 @@ public final class GalleriesField {
     }
 
     /**
-     * The sub-biome at a block: OBSIDIAN_TUBES in a tube's air and lining where the cavern itself is rock, else the
-     * column cell's climate kind.
+     * The sub-biome at a block: OBSIDIAN_TUBES in a tube's air and lining where the cavern itself is rock (its cell's rows
+     * and the block's own profile: the low ground's stairs wear a cell's floor down by the block, and near a mouth they can
+     * open the cavern beside a tube's lining), else the column cell's climate kind.
      */
     public DeepBiome biome(int x, int y, int z) {
         Cell c = column(x, z);
-        if (tubes != null && !c.open(y) && tubes.inLining(x, y, z) && tubesAt(x + 0.5, z + 0.5)) return DeepBiome.OBSIDIAN_TUBES;
+        if (tubes != null && !c.open(y) && tubes.inLining(x, y, z) && tubesAt(x + 0.5, z + 0.5) && density(x, y, z) > 0) return DeepBiome.OBSIDIAN_TUBES;
         return switch (c.kind) {
             case CALDERA -> DeepBiome.CALDERA;
             case CAUSEWAY -> DeepBiome.CAUSEWAY;
@@ -2779,9 +2655,12 @@ public final class GalleriesField {
             int ci = (int) Math.floor(x / (double) TubeField.CELL), cj = (int) Math.floor(z / (double) TubeField.CELL);
             boolean stands = tubesAt(x + 0.5, z + 0.5);
             TubeField.Country k = tubes.countryAt((ci + 0.5) * TubeField.CELL, (cj + 0.5) * TubeField.CELL);
-            out.add(String.format(java.util.Locale.ROOT, "  tube cell %d %d: %s%s", ci, cj, !k.on ? "no country" : stands ? "a country" : "a country the cavern does not let stand",
-                    stands ? String.format(java.util.Locale.ROOT, ", massif %.2f, apron %.2f, tube %.1f, lining depth %.1f", tubes.massifAt(x + 0.5, z + 0.5),
-                            tubes.apronAt(x + 0.5, z + 0.5), tubes.tube(x, y, z), tubes.shellDepth(x, y, z)) : ""));
+            double[] mq = new double[3];
+            boolean mouth = stands && tubes.mouth(x + 0.5, z + 0.5, mq);
+            out.add(String.format(java.util.Locale.ROOT, "  tube cell %d %d: %s%s%s", ci, cj, !k.on ? "no country" : stands ? "a country" : "a country that carves no runs",
+                    stands ? String.format(java.util.Locale.ROOT, ", massif %.2f, tube %.1f, lining depth %.1f", tubes.massifAt(x + 0.5, z + 0.5),
+                            tubes.tube(x, y, z), tubes.shellDepth(x, y, z)) : "",
+                    mouth ? String.format(java.util.Locale.ROOT, "; a mouth %.1f blocks off (weight %.2f), its floor y %.1f", mq[2], mq[0], mq[1]) : ""));
         }
         if (join != null) {
             RampHit rh = new RampHit();

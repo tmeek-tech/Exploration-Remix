@@ -107,8 +107,9 @@ public final class Terrain {
         detail = new Perlin(Hashing.mix(s, 18, 0, 0));
         this.plans = new Plans(this, seed);
         // The noise layers, each built from what it reads (no cycles): the Wasteland's sheets and the breakthrough both
-        // read, the tubes, the Galleries (which see the breakthrough as their join), the Wasteland (which reads the
-        // Galleries' density under its openings) and the join of the two.
+        // read, the tubes (which first build the Galleries' landscape as it stands without them, GalleriesLandscape, and
+        // take their floors from it), the Galleries (which reuse that landscape and see the breakthrough as their join),
+        // the Wasteland (which reads the Galleries' density under its openings) and the join of the two.
         this.sheets = shape.layerCount > WASTELAND ? new WastelandSheets(seed, shape, settings, plans) : null;
         this.breakthrough = Join.on(shape) ? new Breakthrough(seed, shape, sheets) : null;
         this.tubes = shape.layerCount > GALLERIES ? new TubeField(seed, shape.waterY(GALLERIES)) : null;

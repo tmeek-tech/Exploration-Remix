@@ -938,13 +938,17 @@ class GalleriesFieldTest {
      * a lava lake's bed, the apron's shelf never released downward, spires sinking near the lava, the crater's floor
      * opened by a cell's site's place alone (a ramp's head room where it rises a row past the crater's floor there, its
      * space reaching that row; a cell ringed by opened cells opened with them), and the talus over all ground that
-     * stands dry, the column tops lifted out of the shallows among it. A change to the Galleries' shapes shows here: pin
-     * again only on purpose.
+     * stands dry, the column tops lifted out of the shallows among it. Pinned again for the tube country without the ring
+     * (spec-tubes 0.2; it was 93c7012faa9e939e and fa813a23102fb0aa): the runs' floors from the Galleries' landscape and
+     * only where rock encloses them, the mouths' blend in place of the apron's ring and shelf (its blocks measured from
+     * the runs' axis samples where their air meets the cavern), no veto, none of the cavern's massifs inside a standing
+     * country's rim, the shallow dish, the pools on level floors and the narrower keep-out the openings and ramps stay out
+     * of, every one of which moves it. A change to the Galleries' shapes shows here: pin again only on purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("93c7012faa9e939e", digest(8675309), "seed 8675309");
-        assertEquals("fa813a23102fb0aa", digest(12345), "seed 12345");
+        assertEquals("fb1ca815ba4ddea8", digest(8675309), "seed 8675309");
+        assertEquals("3b00eae887e3dc90", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {
