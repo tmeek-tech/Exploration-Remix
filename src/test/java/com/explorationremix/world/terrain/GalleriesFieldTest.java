@@ -789,13 +789,15 @@ class GalleriesFieldTest {
      * candidates in the order of an estimate (9a44061bac098872 and f7af35eb63184c62), then the closed pits' fixes and
      * RAMP_GAP 5 ({@link #noClosedPits}: ebaffa279749c19a and e96e139ac587ceda); and when the ways down were reshaped as
      * natural rock (the head's gully and breach, bent ramps of varying width with landings, arches or filled ridges,
-     * the broken rim, the breakdown funnel, RAMP_GAP 4). A change to the Galleries' shapes shows here: pin again only on
-     * purpose.
+     * the broken rim, the breakdown funnel, RAMP_GAP 4: 8ee39f04e3e71a5d and a52ba6472e293d49), and seed 12345's again
+     * when the decks on the Causeway's coarse prisms kept HW_CO blocks to either side of their centre lines (a narrower
+     * deck there was cut across by prisms whose sites lay off it). A change to the Galleries' shapes shows here: pin again
+     * only on purpose.
      */
     @Test
     void digestPinned() {
         assertEquals("8ee39f04e3e71a5d", digest(8675309), "seed 8675309");
-        assertEquals("a52ba6472e293d49", digest(12345), "seed 12345");
+        assertEquals("05dc8c46f4d79178", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {
@@ -1100,9 +1102,12 @@ class GalleriesFieldTest {
      * round 2b it failed on seed 77's box: 17.6 % of the low places there never walked up out of the flood (escape within
      * 384 moves 82.4 %), nearly all (27 750 places) one Causeway basin round (40850, -11130) closed by a tube apron's
      * cliff and column steps of 2-3 rows (spec-galleries-field-v2 15.3); the low ground's stairs and the apron's release
-     * opened it (escape 100.0 %, never 0.01 %), and all four boxes pass. Closed pits are not held to 0 here: 25, 12, 1 and
+     * opened it (escape 100.0 %, never 0.01 %), and all four boxes pass. Closed pits are not held to 0 here: 25, 17, 0 and
      * 0 places stay (the largest, 9 places, shelves at the lava's level under a Caldera's higher cells in seeds 12345 and
-     * 2000023), and seed 77's and 4242's boxes keep 2 and 1 floating pieces (352 and 90 blocks), not looked into.
+     * 2000023; 25, 12, 1 and 0 before the ways down were reshaped as natural rock), and floating rock is not held either:
+     * seed 2000023's box keeps a band's stretch of 3087 blocks at (21197..21218, 21276..21289), cut off between two
+     * ramps' strips with no pier (the band rule that brings a band down to the ground beside a ramp's strip belongs to
+     * the landing of r2), and seed 77's and 4242's boxes 2 and 3 pieces (352 and 114 blocks; 2 and 1, 352 and 90, before).
      */
     @Test
     @Tag("slow")

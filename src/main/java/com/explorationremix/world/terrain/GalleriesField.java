@@ -872,7 +872,7 @@ public final class GalleriesField {
         double fl = dm < FL_R ? sw * (1 - smooth(dm / FL_R)) : 0;
         // ---- the join: the opened openings' discs and the ramps round the column, and the breakthrough noise
         RampHit rh = out.rh;
-        rampsAt(x, z, rh);
+        rampsAt(x, z, rh, cl.wCaus > 0.5 ? HW_CO : 0);
         double beta = join != null ? join.beta(x, z) : 0;
         out.open = 1 - fl;
         // ---- the floor
@@ -1407,6 +1407,15 @@ public final class GalleriesField {
      * over a run of LD_RUN (up to RAMP_S1).
      */
     static final double HW_LO = 2.5, HW_HI = RAMP_HW1, HW_P = 30, HW_G = 1.2, HW_IN = 16, BF_MAX = 1.6, HW_SLACK = 0.75;
+    /**
+     * On the Causeway's coarse prisms the deck is at least HW_CO blocks to either side of the centre line: a column takes
+     * its cell's shape, read at the cell's site, and a prism's site lies up to about 4 blocks off its columns (CS_COARSE
+     * 5), so on a narrower deck rows of prisms whose sites lay off it cut the deck across its whole width (seed 12345's
+     * slow box: an arch's deck in a slab of 3839 blocks floating at (4112..4139, -1856..-1838); seeds 2000023 and 77: gaps
+     * of 2 to 4 columns near the heads of the ramps of the holes at (21319, 21168) and (40854, -11094) left them no way
+     * down). Its 1.5 blocks over HW_LO lie within the samples' HW_SLACK twice over and the reach's margin.
+     */
+    static final double HW_CO = 4;
     static final double ARCH_P = 0.22, DK_FILL_R = 64;
     static final int LD_N = 3;
     static final double LD_U0 = 14, LD_SP = 30, LD_J = 0.6, LD_L0 = 4, LD_L1 = 4, LD_K = 0.25, LD_RUN = 110;
@@ -1878,8 +1887,9 @@ public final class GalleriesField {
     /**
      * The openings' effects at column (x, z): the discs' and clearing weights (and the cap the strongest disc opens to),
      * the lowest ramp deck over the column, the head room rows over ramps, and the talus floor beside the ramps' solid parts.
+     * hwMin: the least half width a deck takes there ({@link #HW_CO} at a coarse prism's site, else 0).
      */
-    void rampsAt(double x, double z, RampHit rh) {
+    void rampsAt(double x, double z, RampHit rh, double hwMin) {
         rh.jt = 0;
         rh.jtTop = 0;
         rh.clr = 0;
@@ -1924,7 +1934,7 @@ public final class GalleriesField {
             double l = dx * rp.uz - dz * rp.ux, bt = bend(rp, t0, t);
             double dl = Math.abs(l - bt);
             if (dl >= HW_HI * BF_MAX + TALUS_MAX) continue;
-            double hw = halfWidth(rp, t0, t, bt);
+            double hw = Math.max(hwMin, halfWidth(rp, t0, t, bt));
             if (dl >= hw + TALUS_MAX) continue;
             if (dl < hw + NEAR_IN + NEAR_F) rh.near = Math.max(rh.near, 1 - smooth((dl - hw - NEAR_IN) / NEAR_F));
             double u = Math.max(0, t - t0), plane = top - deckDrop(rp, u);
@@ -2858,7 +2868,7 @@ public final class GalleriesField {
         }
         if (join != null) {
             RampHit rh = new RampHit();
-            rampsAt(c.x, c.z, rh);
+            rampsAt(c.x, c.z, rh, c.coarse ? HW_CO : 0);
             double ring = craterRing(x, z);
             out.add(String.format(java.util.Locale.ROOT, "  join: beta %.2f, opening site %.2f (the band's top y %d); disc %.2f%s%s", join.beta(x + 0.5, z + 0.5),
                     join.openingSite(x + 0.5, z + 0.5), join.bandTop(), rh.jt, rh.jt > 0 ? String.format(java.util.Locale.ROOT, " (open to y %.0f)", rh.jtTop - 1) : "",
