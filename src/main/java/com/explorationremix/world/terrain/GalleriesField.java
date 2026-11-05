@@ -388,7 +388,7 @@ public final class GalleriesField {
     }
 
     // ------------------------------------------------------------------------------------------- caches
-    private static final int CELL_CACHE = 4096, COL_CACHE = 1024, GROUND_CACHE = 128 * 128;
+    private static final int CELL_CACHE = 4096, COL_CACHE = 1024, GROUND_CACHE = 128 * 128, BLOCK_CACHE = 64 * 64;
 
     private static final class Caches {
         final Cell[] cells = new Cell[CELL_CACHE];
@@ -413,10 +413,15 @@ public final class GalleriesField {
          */
         final long[] grKey = new long[GROUND_CACHE], stairKey = new long[GROUND_CACHE];
         final int[] grRow = new int[GROUND_CACHE], stairRow = new int[GROUND_CACHE];
+        /** The lowest own floor under W + STAIR_TOP of each square of 4 x 4 columns ({@link #blockLow}), 64 x 64 squares, the square as a key. */
+        final long[] blKey = new long[BLOCK_CACHE];
+        final int[] blLow = new int[BLOCK_CACHE];
         /** The stairs' search ({@link #stairs}): the floors, distances and marks of the square round the column. */
         final int[] stFl = new int[STAIR_SQ], stHave = new int[STAIR_SQ], stSeen = new int[STAIR_SQ], stQ = new int[STAIR_SQ];
         final byte[] stD = new byte[STAIR_SQ];
         int stStamp;
+        /** The lowest floor of the squares within the stairs' reach of the column last searched ({@link #lowBound}). */
+        int stLow;
         final int[] ij = new int[2];
         /** The lattice of the last column {@link #latticeOf} placed. */
         boolean coarse;
@@ -432,6 +437,7 @@ public final class GalleriesField {
             Arrays.fill(colX, Integer.MIN_VALUE);
             Arrays.fill(grKey, Long.MIN_VALUE);
             Arrays.fill(stairKey, Long.MIN_VALUE);
+            Arrays.fill(blKey, Long.MIN_VALUE);
         }
     }
 
@@ -499,10 +505,17 @@ public final class GalleriesField {
      * and closed cells are not crossed, and a floor only ever sinks: no open row closes, no lava is covered, and no
      * column ends lower than a row over the floor it was worn from (so never into the lava). The grey-level erosion of
      * the floor by a cone, cut off at STAIR_R: pure (the cells and the ramps' rows are), kept per column ({@link #stairsOf}).
+     * The walk is not made where no floor within reach lies lower than the column's by more than the blocks between them
+     * ({@link #lowBound}), and ends once no floor within reach can bring the column lower; either way the floor is the
+     * same. On wide low ground most columns stand flat or with no riser near: in the cost test's second region 203 of a
+     * chunk's 256 walks found nothing, after some 200 columns each, nearly a third of the chunk's cost; 134 of them are no
+     * longer made, and a chunk's walks take 12 444 steps, not 53 098.
      */
     private int stairs(Caches k, Cell c, int x, int z) {
         int f0 = floorOf(c, x, z);
         if (f0 == NO_GROUND || f0 < W + 2 || f0 >= W + STAIR_TOP + STAIR_R) return NO_STAIRS;
+        if (lowBound(k, x, z) >= f0) return NO_STAIRS;
+        final int low = k.stLow;
         final int R = STAIR_R, D = STAIR_D;
         int stamp = ++k.stStamp;
         if (stamp == Integer.MAX_VALUE) {
@@ -519,7 +532,7 @@ public final class GalleriesField {
         q[tail++] = c0;
         while (head < tail) {
             int n = q[head++], d = dd[n], fn = fl[n];
-            if (W + d + 1 >= best) break;                // nothing farther can bring the floor lower
+            if (low + d + 1 >= best) break;              // nothing farther can bring the floor lower
             int nx = n / D - R, nz = n % D - R;
             for (int dir = 0; dir < 4; dir++) {
                 int mx = nx + STAIR_DX[dir], mz = nz + STAIR_DZ[dir], m = (mx + R) * D + mz + R;
@@ -543,6 +556,49 @@ public final class GalleriesField {
             }
         }
         return best < f0 ? best : NO_STAIRS;
+    }
+
+    /**
+     * The least a walk of the stairs from column (x, z) can bring its floor to ({@link #stairs}): over the squares of 4 x 4
+     * columns with a column within STAIR_R blocks of it, a square's lowest floor under W + STAIR_TOP ({@link #blockLow})
+     * plus the blocks from the column to the square's nearest column (a walk is never shorter; at least 1, the column
+     * itself is no step); NO_GROUND where none. The lowest of the squares' floors themselves is left in the thread's
+     * caches ({@link Caches#stLow}): no walk within reach ends lower.
+     */
+    private int lowBound(Caches k, int x, int z) {
+        final int R = STAIR_R;
+        int lb = NO_GROUND, low = NO_GROUND;
+        for (int bx = (x - R) >> 2; bx <= (x + R) >> 2; bx++) {
+            int dx = Math.max(0, Math.max(4 * bx - x, x - 4 * bx - 3));
+            for (int bz = (z - R) >> 2; bz <= (z + R) >> 2; bz++) {
+                int d = dx + Math.max(0, Math.max(4 * bz - z, z - 4 * bz - 3));
+                if (d > R) continue;
+                int f = blockLow(k, bx, bz);
+                if (f == NO_GROUND) continue;
+                low = Math.min(low, f);
+                lb = Math.min(lb, f + Math.max(1, d));
+            }
+        }
+        k.stLow = low;
+        return lb;
+    }
+
+    /**
+     * The lowest own floor under W + STAIR_TOP of the square of columns 4 bx .. 4 bx + 3, 4 bz .. 4 bz + 3, or NO_GROUND;
+     * kept per thread for 64 x 64 squares, in slots turned by their tile as {@link #groundSlot} turns columns.
+     */
+    private int blockLow(Caches k, int bx, int bz) {
+        int slot = ((bx + 41 * (bz >> 6)) & 63) << 6 | ((bz + 67 * (bx >> 6)) & 63);
+        long key = (long) bx << 32 | (bz & 0xffffffffL);
+        if (k.blKey[slot] == key) return k.blLow[slot];
+        int low = NO_GROUND;
+        for (int i = 0; i < 4; i++) for (int j = 0; j < 4; j++) {
+            int f = ground(k, 4 * bx + i, 4 * bz + j);
+            if (f < W + STAIR_TOP && f < low) low = f;
+        }
+        k.blKey[slot] = key;
+        k.blLow[slot] = low;
+        return low;
     }
 
     /**
