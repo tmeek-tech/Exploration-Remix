@@ -280,13 +280,12 @@ class GalleriesFieldTest {
                     || !v.inColumns((int) Math.floor(o.x + rp.ux * t0) + 8, (int) Math.floor(o.z + rp.uz * t0) + 8)) continue;
             s.rampsWalked++;
             int lastX = Integer.MIN_VALUE, lastZ = 0, lastFeet = 0;
-            double top = g.headTop;
             for (double tt = t0 + 1; tt <= rp.tEnd - 3; tt += 0.25) {
                 double b = g.bend(rp, t0, tt);
                 int x = (int) Math.floor(o.x + rp.ux * tt + rp.uz * b), z = (int) Math.floor(o.z + rp.uz * tt - rp.ux * b);
                 if (x == lastX && z == lastZ) continue;
                 double tc = (x + 0.5 - o.x) * rp.ux + (z + 0.5 - o.z) * rp.uz;
-                int deck = (int) Math.floor(top - rp.s * Math.max(0, tc - t0) + 0.5);
+                int deck = (int) Math.floor(g.deckPlane(rp, t0, tc) + 0.5);
                 int feet = Integer.MIN_VALUE;
                 for (int y = deck + 3; y >= deck - 4 && feet == Integer.MIN_VALUE; y--) if (v.stand(x, y, z)) feet = y;
                 s.centreColumns++;
@@ -514,7 +513,7 @@ class GalleriesFieldTest {
                 for (int x = (int) Math.floor(rp.minX) - 2; x <= (int) Math.ceil(rp.maxX) + 2; x++)
                     for (int z = (int) Math.floor(rp.minZ) - 2; z <= (int) Math.ceil(rp.maxZ) + 2; z++) {
                         double dx = x + 0.5 - o.x, dz = z + 0.5 - o.z, tt = dx * rp.ux + dz * rp.uz;
-                        if (tt < t0 - 1 || tt > rp.tEnd || Math.abs(dx * rp.uz - dz * rp.ux - g.bend(rp, t0, tt)) >= rp.hw) continue;
+                        if (tt < t0 - 1 || tt > rp.tEnd || Math.abs(dx * rp.uz - dz * rp.ux - g.bend(rp, t0, tt)) >= g.halfWidth(rp, t0, tt)) continue;
                         int i = x - gx0, k = z - gz0;
                         assertTrue(i >= 0 && k >= 0 && i < gn && k < gn, "a deck outside the grid at " + x + " " + z);
                         assertTrue(owner[i * gn + k] == 0 || owner[i * gn + k] == id + 1, "seed " + ar[0] + ": two decks on column " + x + " " + z);
@@ -788,12 +787,15 @@ class GalleriesFieldTest {
      * of the port (ramps with terraces, a way up from every hole, no hole without a ramp; it was a25a9bf4bf313878 and
      * 0da260ed6d0a26e3 at the port) and twice in fix round 2b: the openings resolved by lattice cell priority, their
      * candidates in the order of an estimate (9a44061bac098872 and f7af35eb63184c62), then the closed pits' fixes and
-     * RAMP_GAP 5 ({@link #noClosedPits}). A change to the Galleries' shapes shows here: pin again only on purpose.
+     * RAMP_GAP 5 ({@link #noClosedPits}: ebaffa279749c19a and e96e139ac587ceda); and when the ways down were reshaped as
+     * natural rock (the head's gully and breach, bent ramps of varying width with landings, arches or filled ridges,
+     * the broken rim, the breakdown funnel, RAMP_GAP 4). A change to the Galleries' shapes shows here: pin again only on
+     * purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("ebaffa279749c19a", digest(8675309), "seed 8675309");
-        assertEquals("e96e139ac587ceda", digest(12345), "seed 12345");
+        assertEquals("8ee39f04e3e71a5d", digest(8675309), "seed 8675309");
+        assertEquals("a52ba6472e293d49", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {

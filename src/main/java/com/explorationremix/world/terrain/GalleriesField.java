@@ -50,6 +50,7 @@ public final class GalleriesField {
     // ============================================================================================ noise
     final Perlin warpA, warpB, elevN, detailN, riverN, riverW, ceilN2, bandN, bandMask, bandH, pierN, canN, canW, causN,
             massN, fordN, densN, roofN, hillN, stepN, bendN, sagN, clumpN, rubN, deckN;
+    final Perlin widthN, rimN;
 
     /**
      * The join with the Wasteland above, as the Galleries need it; null: no join (the seal stays). Every method reads the
@@ -123,6 +124,8 @@ public final class GalleriesField {
         clumpN = new Perlin(Hashing.mix(s, 57, 0, 0));
         rubN = new Perlin(Hashing.mix(s, 58, 0, 0));
         deckN = new Perlin(Hashing.mix(s, 59, 0, 0));
+        widthN = new Perlin(Hashing.mix(s, 60, 0, 0));
+        rimN = new Perlin(Hashing.mix(s, 61, 0, 0));
     }
 
     // ============================================================================================ helpers
@@ -244,8 +247,10 @@ public final class GalleriesField {
      * the basins sit in low ground and the canyons are cut into high ground: a lowland patch is a Caldera or a Causeway
      * (hashed), a highland one Scoria Canyons (CAN_SHARE of them), and the ground between has none.
      */
-    Patch patch(int i, int j) {
-        Patch[] pc = patches.get();
+    Patch patch(int i, int j) { return patch(patches.get(), i, j); }
+
+    /** {@link #patch(int, int)} through the thread's cache pc (a loop over many patches reads the thread's cache once). */
+    Patch patch(Patch[] pc, int i, int j) {
         int slot = (i & 7) << 3 | (j & 7);
         Patch p = pc[slot];
         if (p != null && p.i == i && p.j == j) return p;
@@ -277,8 +282,9 @@ public final class GalleriesField {
         out.patch = 0;
         out.kind = G;
         double bestW = 0;
+        Patch[] pc = patches.get();
         for (int di = -1; di <= 1; di++) for (int dj = -1; dj <= 1; dj++) {
-            Patch p = patch(gi + di, gj + dj);
+            Patch p = patch(pc, gi + di, gj + dj);
             if (p.kind == G) continue;
             double d = len(wx - p.cx, wz - p.cz) / p.r;
             if (d >= 1) continue;
@@ -328,7 +334,8 @@ public final class GalleriesField {
          * the first open row there and the slope; the cell's own deck row and its ragged drop (rows); the ground under it.
          */
         byte deckMode;
-        double dkX, dkZ, dkUx, dkUz, dkT0, dkTop, dkS;
+        double dkX, dkZ, dkUx, dkUz, dkT0, dkTop;
+        Ramp dkRamp;
         int dkRow, dkDrop, dkGround;
 
         public boolean closed() { return f >= c; }
@@ -649,8 +656,9 @@ public final class GalleriesField {
     double riverPatch(double[] w) {
         double px = w[0], pz = w[1], best = 9;
         int gi = (int) Math.floor(px / SP), gj = (int) Math.floor(pz / SP);
+        Patch[] pc = patches.get();
         for (int di = -1; di <= 1; di++) for (int dj = -1; dj <= 1; dj++) {
-            Patch p = patch(gi + di, gj + dj);
+            Patch p = patch(pc, gi + di, gj + dj);
             if (p.kind != CALDERA && p.kind != CAUSEWAY) continue;
             best = Math.min(best, len(px - p.cx, pz - p.cz) / p.r);
         }
@@ -749,6 +757,7 @@ public final class GalleriesField {
         return c;
     }
 
+
     /**
      * A ramp's deck in the cell: rock rows [deck - thickness, deck), open over it; solid down to the floor where it is
      * filled (a stray cell's, see {@link #build}) or less than 4 rows would stay open under it.
@@ -759,7 +768,7 @@ public final class GalleriesField {
         if (d0 > c.c - 2) { c.f = c.c = W + 200; return; }
         int bl = s.deckTh > 1e8 ? Integer.MIN_VALUE : d0 - (int) Math.round(s.deckTh);
         RampHit rh = s.rh;
-        c.dkX = rh.rx; c.dkZ = rh.rz; c.dkUx = rh.rux; c.dkUz = rh.ruz; c.dkT0 = rh.rt0; c.dkTop = rh.rtop; c.dkS = rh.rs;
+        c.dkX = rh.rx; c.dkZ = rh.rz; c.dkUx = rh.rux; c.dkUz = rh.ruz; c.dkT0 = rh.rt0; c.dkTop = rh.rtop; c.dkRamp = rh.ramp;
         c.dkRow = d0;
         c.dkDrop = s.deckDrop;
         c.dkGround = c.f;
@@ -771,7 +780,8 @@ public final class GalleriesField {
 
     /**
      * The profile at block (x, y, z) of cell c: {@link #blocks(Cell, int)}, but on a ramp's deck the deck's row is read at
-     * the block itself (the ramp's plane, falling s rows a block along its axis, with its terraces, {@link #deckTerrace},
+     * the block itself (the ramp's plane, falling s rows a block along its axis but less on its landings, {@link #deckDrop},
+     * with its terraces, {@link #deckTerrace},
      * rounded), so walking along a ramp it steps a row at a time, never the 2 to 4 rows a whole cell's step would be, and
      * the steps' edges wander. The deck keeps 2 open rows under the cell's ceiling, stays on or over the ground, and an
      * arch's band keeps a row open under it or becomes a fill.
@@ -787,7 +797,7 @@ public final class GalleriesField {
     /** {@link #blocks(Cell, int, int, int)} of a column cell with a ramp's deck. */
     double deckBlocks(Cell c, int x, int y, int z) {
         double t = (x + 0.5 - c.dkX) * c.dkUx + (z + 0.5 - c.dkZ) * c.dkUz;
-        int row = (int) Math.floor(c.dkTop - c.dkS * Math.max(0, t - c.dkT0) + deckTerrace(x + 0.5, z + 0.5, t - c.dkT0) + 0.5) - c.dkDrop;
+        int row = (int) Math.floor(c.dkTop - deckDrop(c.dkRamp, t - c.dkT0) + deckTerrace(x + 0.5, z + 0.5, t - c.dkT0) + 0.5) - c.dkDrop;
         row = Math.min(row, c.c - 2);
         if (row == c.dkRow) return blocks(c, y);
         if (c.deckMode == 1) return blocks(c, Math.max(row, c.dkGround), c.c, 0, 0, y);
@@ -806,8 +816,9 @@ public final class GalleriesField {
         double px = w[0], pz = w[1];
         int gi = (int) Math.floor(px / SP), gj = (int) Math.floor(pz / SP);
         double lo = 1e9, cap = 1e9;
+        Patch[] pc = patches.get();
         for (int di = -2; di <= 2; di++) for (int dj = -2; dj <= 2; dj++) {
-            Patch p = patch(gi + di, gj + dj);
+            Patch p = patch(pc, gi + di, gj + dj);
             if (p.kind == G || p.kind == CANYONS) continue;
             double d = len(px - p.cx, pz - p.cz);
             double q = Math.max(0, d - p.r * (p.kind == CALDERA ? CAL_LAKE : CAUS_FLAT));
@@ -866,7 +877,8 @@ public final class GalleriesField {
         out.open = 1 - fl;
         // ---- the floor
         double Fs = landscape(x, z, w);
-        double Fb = floorBase(x, z, w, Fs, cl, dm, rh.clr);
+        double clrR = Math.max(rh.clr, rh.near);   // the rubble keeps off the discs and the ramps
+        double Fb = floorBase(x, z, w, Fs, cl, dm, clrR);
         double skirt = 0, skirtSlope = 0;
         if (dm < SK_R) {
             // the massifs' feet: column stairs up to the rock
@@ -882,8 +894,8 @@ public final class GalleriesField {
         boolean low = F > W - 1 && F < W + TR_HI + TR_HF + 2, mayRag = (cellHash & 3) == 0;
         out.ragged = false;
         if (low || mayRag) {
-            double fx = floorAt(x + SL_D, z, out.w2, cl, dm, rh.clr);
-            double fz = floorAt(x, z + SL_D, out.w2, cl, dm, rh.clr);
+            double fx = floorAt(x + SL_D, z, out.w2, cl, dm, clrR);
+            double fz = floorAt(x, z + SL_D, out.w2, cl, dm, clrR);
             double slope = len(fx - Fb, fz - Fb) / SL_D + skirtSlope;
             out.ragged = slope < FO_S || cl.kind != G;
             if (low) F = terraces(F, slope, x, z);
@@ -910,47 +922,85 @@ public final class GalleriesField {
         // ---- a ramp's talus beside its solid part: the floor rises to its deck, TALUS_S rows a block lower outwards, or
         // steeper where the column's own floor lies lower, so the talus meets it at its outer edge (measured against the
         // ground under the centre line it stood as a wall of up to 26 rows over a valley beside the ramp: seed -42's pit);
-        // none over lava (fix round 2b: in a Scoria Canyons slot the talus filled the lava up to a dry shelf between the
-        // slot's sheer walls, a pit in seed 8675309's box)
-        if (rh.talus > F && F >= W) {
-            double tal = rh.talDk - rh.talU * Math.max(TALUS_S * TALUS_MAX, rh.talDk - F);
-            if (tal > F) { F = Math.floor(tal); out.ragged = false; }
+        // only on ground out of the flood's reach, W + TREAD_TOP or over: the talus lies cell by cell, a step of up to 10
+        // rows a cell where a tall ridge's talus is steep, and in the low ground those steps walled in hollows between
+        // the talus and the ground, dimples where two joints' stairs met and a shelf over the lava (seeds 8675309 and
+        // -42, with the ridges' fill); there the ridge stands sheer on the ground (and none over lava, fix round 2b: in
+        // a Scoria Canyons slot the talus filled the lava up to a dry shelf). Each ramp's talus is read at the column's
+        // own floor and the highest kept ({@link RampHit#tn}).
+        if (rh.talus > F && F >= W + TREAD_TOP) {
+            double best = F;
+            for (int i = 0; i < rh.tn; i++) {
+                if (rh.tEst[i] <= F) continue;
+                double tal = rh.tDk[i] - rh.tU[i] * Math.max(TALUS_S * TALUS_MAX, rh.tDk[i] - F);
+                if (tal > best) best = tal;
+            }
+            // a ramp's deck in the column stays open through another ramp's talus (a ridge's talus, steep where it stands
+            // high, buried the deck of a lower ramp 18 blocks off for 33 blocks of its run in seed 8675309's box)
+            if (rh.deck == rh.deck) best = Math.min(best, Math.max(F, rh.deck));
+            if (best > F) { F = Math.floor(best); out.ragged = false; }
         }
         // ---- the vault: the cap less its relief; over an opened opening's disc it rises into the band; flaring down onto
         // the massifs, lifted back toward the cap under the breakthrough patches
         double clr = rh.clr;
         double cap0 = openHi + 1;
-        double cap = cap0 - vaultRelief(x, z, beta, F, clr, rh.jt);
+        double relief = vaultRelief(x, z, beta, F, clr, rh.jt), cap = cap0 - relief;
         if (rh.rb == rh.rb) cap = Math.max(cap, Math.min(cap0, rh.rb));   // the relief stays over a ramp's head room
+        // the openings' cuts into the vault (cut: the row they open the column to; hanging rock stays over it): a hole's
+        // breakdown funnel first, the vault's underside rising toward the hole (never over T - FUN_TOP)
+        double cut = rh.fun > -1e8 ? rh.fun : Double.NaN;
+        if (cut > cap) cap = cut;
         if (mouth > 0) cap = Math.max(cap, Math.min(cap0, F + TubeField.APRON_HEAD * mouth + 2));   // and over a tube's mouth
         out.jt = rh.jt;
         if (rh.jt > 0) cap = lerp(cap, rh.jtTop, rh.jt);
         double C = Fs + (cap - Fs) * (1 - FL_D * fl);
         if (beta > 0.35) C = Math.max(C, lerp(C, cap, smooth((beta - 0.35) / 0.25) * (1 - fl)));
+        if (cut > C) C = lerp(cut, C, fl);   // the funnel holds but where the vault flares down onto a massif
         if (rh.jt > 0) C = Math.max(C, cap);
         out.minC = -1e9;
+        // the column ends hang at most FUN_J rows under the funnel, so its underside stays a cone, ragged cell by cell
+        if (rh.fun > -1e8) out.minC = rh.fun - FUN_J;
         if (mouth > 0) {
             C = Math.max(C, F + TubeField.APRON_HEAD * mouth);
-            out.minC = F + TubeField.APRON_HEAD * mouth;
+            out.minC = Math.max(out.minC, F + TubeField.APRON_HEAD * mouth);
         }
-        // ---- a ramp's deck: ragged edges, an arch under its free span, filled to the floor where it comes near it
+        // ---- a ramp's deck: ragged edges, an arch under its free span, filled to the floor where it comes near it; head
+        // room over it, and a breach over its first stretch
         out.deckDrop = 0;
         if (rh.deck == rh.deck) {
             double dk = rh.deck;
-            if (rh.edge > 0) {
+            if (rh.edge > 0 && dk - F >= EDGE_G) {
                 out.deckDrop = (int) Math.floor(rh.edge * (EDGE_LOW + 1) * Hashing.unit(Hashing.mix(cellHash, 12, 0, 0)));
                 dk -= out.deckDrop;
             }
             out.deck = dk;
             double gap = dk - rh.th0 - F;
-            if (rh.fill || gap <= DK_FILL) out.deckTh = 1e9;
+            if (rh.fill || gap <= rh.dkFill) out.deckTh = 1e9;
             else {
                 double sp = (rh.sig + DK_ROOT) / (1 + DK_ROOT);
                 double a = 4 * sp * (1 - sp);
                 out.deckTh = rh.th0 + gap * (1 - a) + DK_J * Hashing.unit(Hashing.mix(cellHash, 10, 0, 0));
             }
-            C = Math.max(C, rh.deck + RAMP_HEAD);
+            // where the vault comes down near the deck, its head room grows along the first stretch: a breach up into the
+            // vault, under BR_F of its relief (so it keeps the relief's lie and never lies flat at the cap), not a cut
+            // stair tunnel
+            double top = Math.min(cap0, rh.deck + RAMP_HEAD);
+            if (C < rh.deck + RAMP_HEAD + BR_M)
+                top = Math.max(top, Math.min(cap0 - BR_F * relief, rh.deck + RAMP_HEAD + HR_G * rh.deckU * breach(rh.deckU)
+                        + HR_J * Hashing.unit(Hashing.mix(cellHash, 14, 0, 0))));
+            // where the crater's floor lies a little over the deck's head room (the gully, {@link #CR_T}) the head room
+            // reaches it, so the ramp runs down in a slot open to the crater, never under a lid of the floor's rock 1 to 3
+            // rows thick (2 rows of it lidded the ramp at the gully's end and cut its shelf off as a shut opening: JoinTest's
+            // seed 1 at (268, 423)); deeper the crater's floor runs on over the ramp as a natural bridge, and the way up
+            // from the ramp's foot crosses the slot on it (opened, the slot cut that way off: seed 1 at (442, 318), decks
+            // one row down)
+            boolean gully = rh.gf + 1 <= cap0 && rh.gf - rh.deck <= RAMP_HEAD + 2;
+            if (gully) top = Math.max(top, rh.gf + 1);
+            C = Math.max(C, top);
+            cap = Math.max(cap, top);
+            cut = cut == cut ? Math.max(cut, top) : top;
             out.minC = Math.max(out.minC, dk + RAMP_HEAD - 2);
+            if (gully) out.minC = Math.max(out.minC, rh.gf + 1);
         }
         // an opening's disc opens to its crater's floor, so no column end hangs into the hole there
         if (rh.jt >= 0.5) out.minC = Math.max(out.minC, cap);
@@ -988,7 +1038,7 @@ public final class GalleriesField {
         }
         // clusters, pillars and spires stay out of the tubes' mouths, the openings and the ramps; no pillars on skirts
         hang *= clear;
-        up *= clear;
+        up *= clear * (1 - rh.near);
         if (clear < 0.7) pillar = false;
         if (dm < SK_R) pillar = false;
         if (rh.rb == rh.rb) {
@@ -998,6 +1048,11 @@ public final class GalleriesField {
             up = 0;
             hang = Math.min(hang, Math.max(0, C - rh.rb));
             if (out.deck == out.deck && out.deckTh < 1e8 && cuBot < out.deck - out.deckTh) out.deckTh = 1e9;
+        }
+        if (cut == cut) {
+            // in a funnel or a breach: no pillar, clusters end over the cut
+            pillar = false;
+            hang = Math.min(hang, Math.max(0, C - cut));
         }
         if (up > 0 && hang > 0) up = Math.min(up, Math.max(0, head - hang - SPIRE_GAP));
         if (F + up >= C - hang - 4) pillar = pillar || (hang > 0 && up > 0) || up > head - 6;
@@ -1261,18 +1316,63 @@ public final class GalleriesField {
      * r + CR_IN, rising CR_S rows a block beyond, out to CR_REACH blocks further. The disc opens up to that floor only.
      */
     static final double CR_DROP = 6, CR_IN = 4, CR_S = 0.65, CR_REACH = 42;
+    /**
+     * The crater's rim and the ramp's gully (the ways down as natural rock: a level collar ran the whole way round every
+     * hole, and a ramp's first stretch ran under the layer's top rows, a lidded slot): {@link #ringOf} reads the ring up to
+     * CR_T blocks nearer over the ramp's first CR_TU blocks past the lip, so the crater's floor stays down at the head's
+     * level over the deck and the ramp runs down in a gully open to the crater; beside the deck the gully's flanks climb a
+     * ring every CR_TK blocks, and past CR_TU its end a ring every CR_TE blocks along the axis (the ring then grows
+     * 1 + 1 / CR_TE a block, the floor 0.87 rows), so both are walked up to the bowl and on into the Wasteland (as steep walls, 3 blocks
+     * wide, the flanks left the head no way up to the crater's bowl at 15 of 45 holes of JoinTest's seeds 1 and 2; an end
+     * fading over 6 blocks rose 2 to 3 rows a block, and the crater's floor round 7 of 23 ramps' heads in JoinTest's three
+     * boxes walked into the Wasteland only round by another hole, 240 to 714 moves). Off the ramp's side of the
+     * rim (from about 32 degrees off its axis: the bearing's cosine under CR_LA, fully from 57 degrees, CR_LF less), and
+     * out of the gully, the ring reads up to CR_B blocks further, by smooth(CR_BM + CR_BG x a noise of the bearing of
+     * scale CR_BK), rising from the hole's edge over CR_BQ blocks, so the rim there rises up to CR_B x CR_S rows and
+     * breaks, and a lip of a block or two stays low to look down from: the level tread is the ramp's side only.
+     */
+    static final double CR_T = 14, CR_TU = 16, CR_TE = 3, CR_TW = 3, CR_TK = 1.5, CR_LA = 0.85, CR_LF = 0.3, CR_B = 10,
+            CR_BK = 1.1, CR_BM = 0.75, CR_BG = 1.4, CR_BQ = 3;
+    /**
+     * The hole's outline ({@link #rimR}): off the ramp's side (the same bearings as the broken rim) its radius is r plus
+     * RIM_A x a noise of the bearing of scale RIM_K, so the rock juts into the hole in spurs and falls back in bays a few
+     * blocks across; on the ramp's side it is r, so the head meets the lip as before. The disc, the crater's ring and the
+     * funnel all read it.
+     */
+    static final double RIM_A = 3, RIM_K = 3.5;
+    /**
+     * A hole's breakdown funnel (holes were vertical chimneys through the vault): under the crater's floor the vault's
+     * underside rises toward the hole, its first rock row FUN_TOP rows under the layer's top at the disc's lip (r + LIP)
+     * and FUN_K rows a block lower outwards, out to FUN_R blocks past the lip, flaring down FUN_DROP rows more over its
+     * last FUN_FO blocks so it meets the vault round it without a ledge (cut off flat at FUN_R, the ceiling fell 16 rows
+     * or more within 3 columns of its edge on a tenth of the bearings from seed 5150's holes, against 9 elsewhere; with
+     * the flare 8, as elsewhere); a column's vault is raised to it, hanging rock ends over it and no pillar stands under
+     * it. FUN_K is under tan 31 degrees, so a look down through the hole at 30 degrees or steeper passes under the
+     * funnel's far side into the cavern; the column ends ({@link #CJ}) hang up to FUN_J rows under it, cell by cell (held
+     * at it, its rings of one row lay flat: 132 columns at T - 7 in seed 8675309's box, against the flat-lid test's 64).
+     */
+    static final double FUN_TOP = 6, FUN_K = 0.6, FUN_R = 43, FUN_FO = 20, FUN_DROP = 60, FUN_J = 3;
+    /**
+     * The breach over a ramp's first stretch (a constant head room read as a cut stair tunnel with a flat lid). Where the
+     * vault comes within RAMP_HEAD + BR_M rows of the deck, the head room is RAMP_HEAD + HR_G x u (u blocks past the head;
+     * the rise fades out from BR_U over BR_UF more) plus 0..HR_J rows per cell, up to the vault less BR_F of its relief
+     * (so the breach keeps the relief's lie: lifted to the cap itself, T - 3, beside the decks as well, it lay flat there
+     * in patches of up to 93 columns in seed -42's box, against the flat-lid test's 64).
+     */
+    static final double HR_G = 0.7, HR_J = 6, BR_M = 4, BR_U = 64, BR_UF = 16, BR_F = 0.5;
     static final double OP_G = 64;
     static final int OP_S = 3, OP_M = 18, OP_SEED = 6, RAMP_DIRS = 16;
     /**
-     * Ramps: head room RAMP_HEAD; run at most RAMP_MAX along the axis, sampled every RAMP_DT; slope (so gentle that with
-     * the deck's terraces, {@link #DK_TA}, the deck read block by block steps a row at a time), half width and base
-     * thickness ranges; bends of
-     * BEND_A0..+BEND_A1 blocks (a noise of period BEND_P along the axis, in over BEND_IN); RAMP_GAP blocks kept between
-     * any two ramps (6 before fix round 2b: with the openings resolved by lattice cell priority fewer candidates fitted,
-     * 17 ramped holes in the Wasteland test's three squares against 19, under its bar of 60 per km^2; at 5, 19 again).
+     * Ramps: head room RAMP_HEAD (more over the first stretch, {@link #HR_G}); run at most RAMP_MAX along the axis,
+     * sampled every RAMP_DT; slope (so gentle that with the deck's terraces, {@link #DK_TA}, the deck read block by block
+     * steps a row at a time), the head's half width ({@link #HW_LO} along the run) and base thickness ranges; bends of
+     * BEND_A0..+BEND_A1 blocks (a noise of period BEND_P along the axis, in over BEND_IN; 8..22 of period 60 before the
+     * ways down were reshaped, when the largest sideways bend over the chord was a median 0.04); RAMP_GAP blocks kept
+     * between any two ramps (6 before fix round 2b, 5 before the reshape: the bent ramps take more room, and at 4 the
+     * Wasteland test's three squares and JoinTest's three boxes keep their bars, 19 holes and 11 a box at the least).
      */
     static final double RAMP_HEAD = 7, RAMP_MAX = 175, RAMP_DT = 4, RAMP_S0 = 0.55, RAMP_S1 = 0.78,
-            RAMP_HW0 = 3.5, RAMP_HW1 = 5, RAMP_TH0 = 6, RAMP_TH1 = 4, BEND_A0 = 8, BEND_A1 = 14, BEND_P = 60, BEND_IN = 24, RAMP_GAP = 5;
+            RAMP_HW0 = 3.5, RAMP_HW1 = 5, RAMP_TH0 = 6, RAMP_TH1 = 4, BEND_A0 = 20, BEND_A1 = 30, BEND_P = 45, BEND_IN = 24, RAMP_GAP = 4;
     /**
      * A ramp's body: filled to the floor from where the free height under its base thickness first comes within DK_FILL
      * rows (tg, along the centre line, and wherever it does at a cell); before that an arch: thickness th0 + gap x (1 - a),
@@ -1286,6 +1386,30 @@ public final class GalleriesField {
      * ends) first stays under TS_OPEN rows to tg, so no stretch of the body stands as a wall without a walkable flank.
      */
     static final double DK_FILL = 7, DK_ROOT = 0.3, DK_J = 4, EDGE_LOW = 2, EDGE_IN = 3, TALUS_S = 0.35, TALUS_MAX = 32, TS_OPEN = 3;
+    /**
+     * The ragged edge drops only where the deck stands EDGE_G rows or more over its cell's ground (where the ground came
+     * up to the deck, a dropped edge cell lay between the deck and higher ground, a pit in seed -42's box). Each column
+     * keeps the TAL_N highest ramps' taluses ({@link RampHit#tn}). Spires and the rubble keep off the ramps: fully to
+     * NEAR_IN blocks past a deck's edge, coming back over NEAR_F more (a spire's foot beside a ramp's end walled its
+     * ragged edge in, and the talus raised the ground round a spire into a closed pit: seeds -42 and 8675309).
+     */
+    static final double EDGE_G = 6, NEAR_IN = 16, NEAR_F = 16;
+    static final int TAL_N = 4;
+    /**
+     * The ways down vary per hole and along each run (every hole had the same straight, even slab). The half width across
+     * the axis follows a noise of period HW_P along it, between HW_LO blocks and the head's own (RAMP_HW0..RAMP_HW1; it
+     * narrows, never widens, coming in over the first HW_IN; HW_HI is its bound for the searches), widened where the
+     * centre line runs across the axis so its true width holds (at most BF_MAX times); the samples' half widths carry
+     * HW_SLACK more where ramps are kept apart and bounded (the strip between two samples). A hole's ramp is a free arch
+     * (filled from DK_FILL rows over the ground) for ARCH_P of the holes, else a ridge, filled from DK_FILL_R rows, with
+     * talus flanks. 1..LD_N landings (LD_L0..LD_L0 + LD_L1 blocks where the deck falls LD_K of its slope) break its slope,
+     * the k-th LD_U0 + (k + LD_J x hash) LD_SP blocks past the head; the rest of the deck is steepened by what they take
+     * over a run of LD_RUN (up to RAMP_S1).
+     */
+    static final double HW_LO = 2.5, HW_HI = RAMP_HW1, HW_P = 30, HW_G = 1.2, HW_IN = 16, BF_MAX = 1.6, HW_SLACK = 0.75;
+    static final double ARCH_P = 0.22, DK_FILL_R = 64;
+    static final int LD_N = 3;
+    static final double LD_U0 = 14, LD_SP = 30, LD_J = 0.6, LD_L0 = 4, LD_L1 = 4, LD_K = 0.25, LD_RUN = 110;
     /**
      * The deck's terraces: its height is the ramp's plane plus DK_TA rows x a noise of period DK_TP blocks (read at the
      * block, unwarped), faded in over DK_TIN blocks past the head, so its steps are a row high but their edges wander and
@@ -1314,6 +1438,9 @@ public final class GalleriesField {
         if (SPIRE_R1 >= 1.15 * SPIRE_GRID) throw new IllegalStateException("SPIRE_GRID");
         if (OP_MAX_R + CR_IN + CR_REACH >= RAMP_REACH || CR_DROP != HEAD_DROP + 1) throw new IllegalStateException("CR_REACH");
         if (RAMP_S1 + DK_TA * (NOISE_D / DK_TP + 0.75 * 1.5 / DK_TIN) >= 1) throw new IllegalStateException("DK_TA");
+        // the funnel (out to r + RIM_A + LIP + FUN_R, in the opening's reach) stays within RAMP_REACH, and under the
+        // Galleries' guaranteed rock (T - CR_DROP and up)
+        if (OP_MAX_R + RIM_A + LIP + FUN_R >= RAMP_REACH || FUN_TOP < CR_DROP) throw new IllegalStateException("FUN_R");
     }
 
 
@@ -1321,8 +1448,12 @@ public final class GalleriesField {
     static final class Ramp {
         int dir;
         double ux, uz, s, hw, th0, tEnd, tg, ts, bendA, bk0, bk1, b0, reach, score;
-        /** Centre-line samples every RAMP_DT along the axis from t = r, and the ground under them ({@link #rampGround}). */
-        double[] px, pz, fl;
+        /** Its form ({@link #formOf}): the gap under its base it is filled from, its half width noise's offsets, its landings (from u past the head, lengths). */
+        double dkFill, hk0, hk1, sd;
+        int land;
+        final double[] lu = new double[LD_N], ll = new double[LD_N];
+        /** Centre-line samples every RAMP_DT along the axis from t = r, the ground under them ({@link #rampGround}) and the strip's half width there (with HW_SLACK). */
+        double[] px, pz, fl, hwq;
         int n;
         /** Bounding box of the strip and the ledge. */
         double minX, maxX, minZ, maxZ;
@@ -1380,10 +1511,29 @@ public final class GalleriesField {
          * talus's width out from the deck's edge (the talus meets the column's own floor at u = 1, {@link #shape}).
          */
         double rb, talus, talDk, talU;
+        /** The highest breakdown funnel's underside over the column (its first rock row, unrounded; -1e9: none), {@link #FUN_K}. */
+        double fun;
+        /** The lowest deck: blocks past its head. */
+        double deckU;
         /** The cap the strongest disc opens to (its crater's floor). */
         double jtTop;
-        /** The lowest deck's ramp: its opening's middle, axis, the deck's start along it, first open row there and slope. */
-        double rx, rz, rux, ruz, rt0, rtop, rs;
+        /** The lowest deck's ramp: its opening's middle, axis, the deck's start along it and first open row there; the ramp. */
+        double rx, rz, rux, ruz, rt0, rtop;
+        Ramp ramp;
+        /** The lowest deck's ramp's form: the gap under its base it is filled from ({@link #formOf}). */
+        double dkFill;
+        /**
+         * The ramps' taluses over the column, up to TAL_N (the highest by the ground under their centre lines kept): each
+         * one's deck, share u of its width and that estimate; {@link #shape} takes the highest at the column's own floor.
+         */
+        int tn;
+        final double[] tDk = new double[TAL_N], tU = new double[TAL_N], tEst = new double[TAL_N];
+        /** The crater's floor over the lowest deck (its rock top, unrounded; +inf: none), {@link #CR_T}. */
+        double gf;
+        /** How near the column lies to a ramp's deck (1 to NEAR_IN past its edge, 0 from NEAR_IN + NEAR_F): no spire or rubble. */
+        double near;
+        /** The lowest deck's opening. */
+        Opening op;
     }
 
     private static final Opening[] NO_OPENINGS = new Opening[0];
@@ -1402,12 +1552,23 @@ public final class GalleriesField {
      * The lattice cells' openings are pure in the seed and the cell, and so is every choice made on them, so all threads
      * share them: the raw cells (the openings, with their candidates, choices and rivals as far as they were asked) and
      * each cell's opened openings, in two bounded caches keyed by the cell (the least recently used dropped first; a dropped
-     * cell is found again bit for bit). A cold chunk asks for about 830 to 880 raw cells (measured on three seeds), so
+     * cell is found again bit for bit). A cold chunk asks for about 900 to 1100 raw cells (measured at the cost test's
+     * three places: the openings after each resolved one along its runs, {@link #rampOrder}, as well as before it), so
      * RAW_CACHE holds many such windows; a resolution whose cells are dropped while it runs finds them again but repeats
      * its work, so the caches must hold the working set. The opened openings round a column are cached per thread
      * (nearCells, keyed by the whole cell).
      */
     static final int RAW_CACHE = 16384, OPEN_CACHE = 8192;
+    /**
+     * The sites' grid is read through tiles of SITE_T x SITE_T samples, shared by every cell's search and every thread:
+     * whether each sample's site passes 0.5 (0: not read yet). The cells' searches reach OP_M past their cells, so side by
+     * side they read the same samples (a cold chunk read 1.5 samples for every one it needed, a third of its time in the
+     * sites); the tiles read each once. Pure in the seed and the sample, so a dropped tile is found again bit for bit, and
+     * two threads reading one sample write the same state (a byte: no tearing). SITE_CACHE tiles (1 kB each) hold about
+     * 19 km2 of the grid, four times what a cold chunk's searches cover; a search spans at most SITE_W tiles each way.
+     */
+    static final int SITE_T = 32, SITE_W = 3, SITE_CACHE = 2048;
+    final LoadingCache<Long, byte[]> siteTiles = CacheBuilder.newBuilder().maximumSize(SITE_CACHE).build(CacheLoader.from(k -> new byte[SITE_T * SITE_T]));
     final LoadingCache<Long, OpCell> rawCells = CacheBuilder.newBuilder().maximumSize(RAW_CACHE).build(CacheLoader.from(this::loadRaw));
     final LoadingCache<Long, Opening[]> openCells = CacheBuilder.newBuilder().maximumSize(OPEN_CACHE).build(CacheLoader.from(this::loadOpen));
     private final ThreadLocal<NearCell[]> nearCells = ThreadLocal.withInitial(() -> new NearCell[1024]);
@@ -1458,7 +1619,7 @@ public final class GalleriesField {
         f.s = rp.s;
         f.tEnd = rp.tEnd;
         f.hw = rp.hw;
-        f.reach = Math.max(o.r + 9, Math.max(rp.reach, o.r + CR_IN + CR_REACH));
+        f.reach = Math.max(o.r + 9, Math.max(rp.reach, o.r + Math.max(CR_IN + CR_REACH, RIM_A + LIP + FUN_R)));
         return f;
     }
 
@@ -1582,17 +1743,16 @@ public final class GalleriesField {
         double g = RAMP_GAP + RAMP_DT * 0.5;
         if (a.maxX + g < b.minX || b.maxX + g < a.minX || a.maxZ + g < b.minZ || b.maxZ + g < a.minZ) return false;
         if (ledgesMeet(A, a, B, b, RAMP_GAP + 1.5)) return true;
-        double rr = a.hw + b.hw + g, m = a.hw + g;
         for (int i = 0; i < a.n; i++) {
-            double x = a.px[i], z = a.pz[i];
-            if (ledgeDist(B, b, x, z) < a.hw + g) return true;
+            double x = a.px[i], z = a.pz[i], m = a.hwq[i] + g;
+            if (ledgeDist(B, b, x, z) < m) return true;
             if (x + m < b.minX || x - m > b.maxX || z + m < b.minZ || z - m > b.maxZ) continue;
             for (int j = 0; j < b.n; j++) {
-                double dx = x - b.px[j], dz = z - b.pz[j];
+                double dx = x - b.px[j], dz = z - b.pz[j], rr = m + b.hwq[j];
                 if (dx * dx + dz * dz < rr * rr) return true;
             }
         }
-        for (int j = 0; j < b.n; j++) if (ledgeDist(A, a, b.px[j], b.pz[j]) < b.hw + g) return true;
+        for (int j = 0; j < b.n; j++) if (ledgeDist(A, a, b.px[j], b.pz[j]) < b.hwq[j] + g) return true;
         return false;
     }
 
@@ -1628,7 +1788,11 @@ public final class GalleriesField {
         return false;
     }
 
-    /** The final openings whose reach meets lattice cell (ci, cj), from the OP_NEAR cells round it (cached per thread). */
+    /**
+     * The final openings whose reach meets lattice cell (ci, cj), from the OP_NEAR cells round it (cached per thread): of
+     * those only the cells within RAMP_REACH of it, as no opening reaches further (the static checks), so the openings
+     * in the window's corners are never resolved for it.
+     */
     Opening[] nearOps(int ci, int cj) {
         NearCell[] nc = nearCells.get();
         int slot = (ci & 31) << 5 | (cj & 31);
@@ -1637,6 +1801,8 @@ public final class GalleriesField {
         double x0 = ci * OP_G, z0 = cj * OP_G, x1 = x0 + OP_G, z1 = z0 + OP_G;
         List<Opening> l = new ArrayList<>();
         for (int di = -OP_NEAR; di <= OP_NEAR; di++) for (int dj = -OP_NEAR; dj <= OP_NEAR; dj++) {
+            double gx = Math.max(0, Math.abs(di) - 1) * OP_G, gz = Math.max(0, Math.abs(dj) - 1) * OP_G;
+            if (gx * gx + gz * gz > RAMP_REACH * RAMP_REACH) continue;
             for (Opening o : openings(ci + di, cj + dj)) {
                 double ex = Math.max(0, Math.max(x0 - o.x, o.x - x1)), ez = Math.max(0, Math.max(z0 - o.z, o.z - z1));
                 if (ex * ex + ez * ez <= o.reach * o.reach) l.add(o);
@@ -1666,6 +1832,50 @@ public final class GalleriesField {
     }
 
     /**
+     * How far ramp rp's deck plane has fallen u blocks past its head (rows): sd a block (s steepened by what its landings
+     * take, up to RAMP_S1, so they lengthen the run little), LD_K of it on its landings.
+     */
+    static double deckDrop(Ramp rp, double u) {
+        if (u <= 0) return 0;
+        double run = u;
+        for (int k = 0; k < rp.land; k++) run -= (1 - LD_K) * Math.max(0, Math.min(u - rp.lu[k], rp.ll[k]));
+        return rp.sd * run;
+    }
+
+    /** Ramp rp's deck plane at t along its axis (its first open row before the terraces, unrounded), t0 its head. */
+    double deckPlane(Ramp rp, double t0, double t) { return headTop - deckDrop(rp, t - t0); }
+
+    /** Ramp rp's half width across its axis at t along it (blocks; see {@link #HW_LO}), t0 its head. */
+    double halfWidth(Ramp rp, double t0, double t) { return halfWidth(rp, t0, t, bend(rp, t0, t)); }
+
+    /** {@link #halfWidth(Ramp, double, double)} with the centre line's offset bt there. */
+    double halfWidth(Ramp rp, double t0, double t, double bt) {
+        double u = Math.max(0, t - t0);
+        double nw = HW_LO + (rp.hw - HW_LO) * smooth(0.5 + HW_G * widthN.noise2(u / HW_P + rp.hk0, rp.hk1));
+        double hw = lerp(rp.hw, nw, smooth(u / HW_IN));
+        double b1 = bend(rp, t0, t + 1) - bt;
+        return hw * Math.min(BF_MAX, Math.sqrt(1 + b1 * b1));
+    }
+
+    /** Opening o's ramps' form, the same in every direction (see {@link #HW_LO}): slope, the head's half width, base thickness, fill, width noise and landings. */
+    static void formOf(Opening o, Ramp rp) {
+        rp.s = rampSlope(o);
+        rp.hw = RAMP_HW0 + (RAMP_HW1 - RAMP_HW0) * Hashing.unit(Hashing.mix(o.h, 4, 0, 0));
+        rp.th0 = RAMP_TH0 + RAMP_TH1 * Hashing.unit(Hashing.mix(o.h, 9, 0, 0));
+        rp.dkFill = Hashing.unit(Hashing.mix(o.h, 21, 0, 0)) < ARCH_P ? DK_FILL : DK_FILL_R;
+        rp.hk0 = 64 * Hashing.unit(Hashing.mix(o.h, 22, 0, 0));
+        rp.hk1 = 64 * Hashing.unit(Hashing.mix(o.h, 23, 0, 0));
+        rp.land = 1 + (int) (LD_N * Hashing.unit(Hashing.mix(o.h, 24, 0, 0)));
+        double flat = 0;
+        for (int k = 0; k < rp.land; k++) {
+            rp.lu[k] = LD_U0 + (k + LD_J * Hashing.unit(Hashing.mix(o.h, 25, k, 0))) * LD_SP;
+            rp.ll[k] = LD_L0 + LD_L1 * Hashing.unit(Hashing.mix(o.h, 26, k, 0));
+            flat += (1 - LD_K) * rp.ll[k];
+        }
+        rp.sd = Math.min(RAMP_S1, rp.s * (1 + flat / LD_RUN));
+    }
+
+    /**
      * The openings' effects at column (x, z): the discs' and clearing weights (and the cap the strongest disc opens to),
      * the lowest ramp deck over the column, the head room rows over ramps, and the talus floor beside the ramps' solid parts.
      */
@@ -1680,6 +1890,14 @@ public final class GalleriesField {
         rh.fill = false;
         rh.rb = Double.NaN;
         rh.talus = -1e9;
+        rh.fun = -1e9;
+        rh.deckU = 0;
+        rh.ramp = null;
+        rh.dkFill = DK_FILL;
+        rh.tn = 0;
+        rh.gf = Double.POSITIVE_INFINITY;
+        rh.near = 0;
+        rh.op = null;
         if (join == null) return;
         int ci = (int) Math.floor(x / OP_G), cj = (int) Math.floor(z / OP_G);
         double top = headTop;
@@ -1690,52 +1908,90 @@ public final class GalleriesField {
             if (d2 > o.reach * o.reach) continue;
             double d = Math.sqrt(d2);
             Ramp rp = o.ramp;
-            double jt = smooth((o.r + LIP - d) / 1.5);
             if (rp == null) continue;                // (opened openings all keep a ramp)
+            double t0 = o.r + LIP, t = dx * rp.ux + dz * rp.uz, rr = rimR(o, dx, dz, d, t);
+            double jt = smooth((rr + LIP - d) / 1.5);
             if (jt > rh.jt) {
                 rh.jt = jt;
                 // an opening opens up to its crater's floor (the Wasteland's tunnels come down to it)
                 rh.jtTop = discTop;
             }
             rh.clr = Math.max(rh.clr, smooth((o.r + 6 - d) / 3));
-            double t0 = o.r + LIP, t = dx * rp.ux + dz * rp.uz;
+            // the breakdown funnel round the disc: the vault's underside rises toward the lip
+            double fu = d - rr - LIP;
+            if (fu < FUN_R) rh.fun = Math.max(rh.fun, T - FUN_TOP - FUN_K * Math.max(0, fu) - FUN_DROP * smooth((fu - FUN_R + FUN_FO) / FUN_FO));
             if (t < t0 - 1 || t > rp.tEnd) continue;
-            double l = dx * rp.uz - dz * rp.ux;
-            double dl = Math.abs(l - bend(rp, t0, t));
-            if (dl >= rp.hw + TALUS_MAX) continue;
-            double dk = top - rp.s * Math.max(0, t - t0) + deckTerrace(x, z, t - t0);
-            if (dl < rp.hw + 1) {
+            double l = dx * rp.uz - dz * rp.ux, bt = bend(rp, t0, t);
+            double dl = Math.abs(l - bt);
+            if (dl >= HW_HI * BF_MAX + TALUS_MAX) continue;
+            double hw = halfWidth(rp, t0, t, bt);
+            if (dl >= hw + TALUS_MAX) continue;
+            if (dl < hw + NEAR_IN + NEAR_F) rh.near = Math.max(rh.near, 1 - smooth((dl - hw - NEAR_IN) / NEAR_F));
+            double u = Math.max(0, t - t0), plane = top - deckDrop(rp, u);
+            double dk = plane + deckTerrace(x, z, u);
+            if (dl < hw + 1) {
                 // over the ramp and a block beside it rock hangs no lower than its head room; beside it no higher than
                 // the crater's floor's rock (T - CR_DROP), so round the head the crater's floor stays whole up to the
                 // deck and walks onto it (cells beside the deck opened up to the head room cut the head off the
                 // crater's floor at 3 of 81 holes measured, leaving those ramps no way back up)
                 double rb = dk + RAMP_HEAD + 1;
-                if (dl >= rp.hw) rb = Math.min(rb, T - CR_DROP);
+                if (dl >= hw) rb = Math.min(rb, T - CR_DROP);
                 if (!(rh.rb >= rb)) rh.rb = rb;
             }
-            if (dl < rp.hw) {
+            if (dl < hw) {
                 double sig = clamp01((t - t0) / Math.max(1, rp.tg - t0));
                 // the ragged edge fades in over the head's first EDGE_IN blocks: the head's full width stays at the
                 // crater's floor's level beside it, a row up or down whatever the deck's row (W-ENG-2's one-row check)
-                double edge = t > t0 ? clamp01((dl - 0.5 * rp.hw) / (0.5 * rp.hw)) * clamp01((t - t0) / EDGE_IN) : 0;
+                double edge = t > t0 ? clamp01((dl - 0.5 * hw) / (0.5 * hw)) * clamp01((t - t0) / EDGE_IN) : 0;
                 if (!(rh.deck <= dk)) {
                     rh.deck = dk;
                     rh.th0 = rp.th0;
                     rh.sig = sig;
-                    rh.fill = t >= rp.tg;
+                    // filled from where the talus starts (ts): a cell over a hollow of the ground short of tg kept an arch
+                    // with a few rows open under it between the filled cells and the talus, a closed pit in seed -42's box
+                    rh.fill = t >= rp.ts;
                     rh.edge = edge;
-                    rh.rx = o.x; rh.rz = o.z; rh.rux = rp.ux; rh.ruz = rp.uz; rh.rt0 = t0; rh.rtop = top; rh.rs = rp.s;
+                    rh.rx = o.x; rh.rz = o.z; rh.rux = rp.ux; rh.ruz = rp.uz; rh.rt0 = t0; rh.rtop = top; rh.ramp = rp;
+                    rh.dkFill = rp.dkFill;
+                    rh.deckU = u;
+                    rh.op = o;
                 }
             } else if (t >= rp.ts) {
                 // the talus beside the solid part: down from the deck at TALUS_S rows a block, or steeper where the deck
                 // stands higher, so that it meets the ground under the centre line TALUS_MAX blocks out
                 int q = Math.min(rp.n - 1, Math.max(0, (int) Math.round((t - t0) / RAMP_DT)));
                 double sl = Math.max(TALUS_S, (dk - rp.fl[q]) / TALUS_MAX);
-                double tal = dk - (dl - rp.hw) * sl;
-                if (tal > rh.talus) { rh.talus = tal; rh.talDk = dk; rh.talU = (dl - rp.hw) / TALUS_MAX; }
+                double tal = dk - (dl - hw) * sl;
+                if (tal > rh.talus) { rh.talus = tal; rh.talDk = dk; rh.talU = (dl - hw) / TALUS_MAX; }
+                // every ramp's talus is kept (the highest TAL_N): the highest at the column's own floor is not always the
+                // highest at the centre line's (two ramps' taluses meeting in a valley left its floor at the lower one's
+                // foot, a pit 15 rows deep in seed -42's box)
+                int k = rh.tn;
+                if (k == TAL_N) {
+                    k = 0;
+                    for (int i = 1; i < TAL_N; i++) if (rh.tEst[i] < rh.tEst[k]) k = i;
+                    if (rh.tEst[k] >= tal) k = -1;
+                } else rh.tn++;
+                if (k >= 0) { rh.tDk[k] = dk; rh.tU[k] = (dl - hw) / TALUS_MAX; rh.tEst[k] = tal; }
             }
         }
+        if (rh.op != null) rh.gf = craterFloor(T, ringOf(rh.op, x, z, len(x - rh.op.x, z - rh.op.z)));
     }
+
+    /**
+     * Opened opening o's hole's radius on the bearing (dx, dz) from its middle, d blocks out and t along its ramp's axis
+     * (see {@link #RIM_A}): r on the ramp's side, r + RIM_A x a noise of the bearing off it.
+     */
+    double rimR(Opening o, double dx, double dz, double d, double t) {
+        if (d < 1) return o.r;
+        double off = smooth((CR_LA - t / d) / CR_LF);
+        if (off <= 0) return o.r;
+        double ox = 64 * Hashing.unit(Hashing.mix(o.h, 33, 0, 0)), oz = 64 * Hashing.unit(Hashing.mix(o.h, 34, 0, 0));
+        return o.r + RIM_A * off * rimN.noise2(dx / d * RIM_K + ox, dz / d * RIM_K + oz);
+    }
+
+    /** How much of the breach's growth holds u blocks past a ramp's head: all of it to BR_U, none from BR_U + BR_UF. */
+    static double breach(double u) { return 1 - smooth((u - BR_U) / BR_UF); }
 
     /**
      * Blocks from column (x, z) to the edge of the nearest disc the Galleries open with a ramp (its distance from the
@@ -1751,10 +2007,42 @@ public final class GalleriesField {
             double dx = px - o.x, dz = pz - o.z;
             double lim = o.r + CR_IN + CR_REACH;
             if (Math.abs(dx) > lim || Math.abs(dz) > lim) continue;
-            double q = len(dx, dz) - o.r;
-            if (q <= CR_IN + CR_REACH) best = Math.min(best, q);
+            double d = len(dx, dz);
+            if (d - o.r <= CR_IN + CR_REACH) best = Math.min(best, ringOf(o, px, pz, d));
         }
         return best;
+    }
+
+    /**
+     * The crater's ring of opened opening o at (px, pz), d blocks from its middle: d less the hole's radius on that bearing
+     * ({@link #rimR}) inside the hole; outside it, that distance read CR_T nearer over the ramp's gully and up to CR_B
+     * further off the ramp's side of the rim (see {@link #CR_T}), never under 0.
+     */
+    double ringOf(Opening o, double px, double pz, double d) {
+        Ramp rp = o.ramp;
+        double dx = px - o.x, dz = pz - o.z, t0 = o.r + LIP, t = dx * rp.ux + dz * rp.uz, sh = 0;
+        double q = d - rimR(o, dx, dz, d, t);
+        if (q <= 0) return q;
+        double gw = 0;
+        if (t > t0 - CR_TW && t < t0 + CR_TU + CR_T * CR_TE) {
+            // the gully: over the deck of the ramp's first stretch, its flanks climbing a ring every CR_TK blocks beside it
+            // and its end a ring every CR_TE blocks along the axis
+            double tt = Math.max(t0, t), bt = bend(rp, t0, tt);
+            double e = Math.max(0, Math.abs(dx * rp.uz - dz * rp.ux - bt) - halfWidth(rp, t0, tt, bt));
+            double s = e / CR_TK + Math.max(0, t - t0 - CR_TU) / CR_TE;
+            if (s < CR_T) {
+                sh = s - CR_T;
+                gw = 1 - s / CR_T;
+            }
+        }
+        double off = smooth((CR_LA - t / d) / CR_LF) * (1 - gw);
+        if (off > 0) {
+            // the rim off the ramp's side: a noise of the bearing (the unit vector, no angle taken), per hole, rising from
+            // the hole's edge
+            double ox = 64 * Hashing.unit(Hashing.mix(o.h, 31, 0, 0)), oz = 64 * Hashing.unit(Hashing.mix(o.h, 32, 0, 0));
+            sh += CR_B * off * smooth(q / CR_BQ) * smooth(CR_BM + CR_BG * rimN.noise2(dx / d * CR_BK + ox, dz / d * CR_BK + oz));
+        }
+        return Math.max(0, q + sh);
     }
 
     /**
@@ -1775,7 +2063,7 @@ public final class GalleriesField {
      * at first on every other sample (a checkerboard: of two samples side by side one is looked at), within OP_SEED
      * blocks of the cell; each blob a looked-at sample falls in is then flooded at full resolution out to the margin,
      * every sample it touches read once. A blob of one sample, missed on the off squares, stays shut (it is the same from
-     * every cell: the checkerboard is the world's).
+     * every cell: the checkerboard is the world's). The samples are read through the shared tiles ({@link #SITE_T}).
      */
     Opening[] findOpenings(int i, int j, OpCell cell) {
         if (join == null) return NO_OPENINGS;
@@ -1788,8 +2076,9 @@ public final class GalleriesField {
         if (!any) return NO_OPENINGS;
         int gx0 = (int) Math.floor((x0 - OP_M) / OP_S), gz0 = (int) Math.floor((z0 - OP_M) / OP_S);
         int nx = (int) Math.ceil((x0 + OP_G + OP_M) / OP_S) - gx0 + 1, nz = (int) Math.ceil((z0 + OP_G + OP_M) / OP_S) - gz0 + 1;
-        float[] v = new float[nx * nz];
-        Arrays.fill(v, Float.NaN);
+        byte[] v = new byte[nx * nz];
+        int tx0 = Math.floorDiv(gx0, SITE_T), tz0 = Math.floorDiv(gz0, SITE_T);
+        byte[][] tiles = new byte[SITE_W * SITE_W][];
         boolean[] seen = new boolean[nx * nz];
         int[] stack = new int[nx * nz], mem = new int[nx * nz];
         List<Opening> out = new ArrayList<>();
@@ -1798,7 +2087,7 @@ public final class GalleriesField {
         for (int a0 = Math.max(0, a1); a0 <= Math.min(nx - 1, a2); a0++)
             for (int b0 = Math.max(0, b1) + Math.floorMod(gx0 + a0 + gz0 + Math.max(0, b1), 2); b0 <= Math.min(nz - 1, b2); b0 += 2) {
             int s0 = a0 * nz + b0;
-            if (seen[s0] || site(v, s0, nz, gx0, gz0) < 0.5) continue;
+            if (seen[s0] || !site(v, tiles, tx0, tz0, s0, nz, gx0, gz0)) continue;
             int sp = 0, mn = 0;
             stack[sp++] = s0;
             seen[s0] = true;
@@ -1809,10 +2098,10 @@ public final class GalleriesField {
                 int a = q / nz, b = q % nz;
                 sx += (gx0 + a) * OP_S;
                 sz += (gz0 + b) * OP_S;
-                if (a > 0 && !seen[q - nz] && site(v, q - nz, nz, gx0, gz0) >= 0.5) { seen[q - nz] = true; stack[sp++] = q - nz; }
-                if (a < nx - 1 && !seen[q + nz] && site(v, q + nz, nz, gx0, gz0) >= 0.5) { seen[q + nz] = true; stack[sp++] = q + nz; }
-                if (b > 0 && !seen[q - 1] && site(v, q - 1, nz, gx0, gz0) >= 0.5) { seen[q - 1] = true; stack[sp++] = q - 1; }
-                if (b < nz - 1 && !seen[q + 1] && site(v, q + 1, nz, gx0, gz0) >= 0.5) { seen[q + 1] = true; stack[sp++] = q + 1; }
+                if (a > 0 && !seen[q - nz] && site(v, tiles, tx0, tz0, q - nz, nz, gx0, gz0)) { seen[q - nz] = true; stack[sp++] = q - nz; }
+                if (a < nx - 1 && !seen[q + nz] && site(v, tiles, tx0, tz0, q + nz, nz, gx0, gz0)) { seen[q + nz] = true; stack[sp++] = q + nz; }
+                if (b > 0 && !seen[q - 1] && site(v, tiles, tx0, tz0, q - 1, nz, gx0, gz0)) { seen[q - 1] = true; stack[sp++] = q - 1; }
+                if (b < nz - 1 && !seen[q + 1] && site(v, tiles, tx0, tz0, q + 1, nz, gx0, gz0)) { seen[q + 1] = true; stack[sp++] = q + 1; }
             }
             double cx = sx / mn, cz = sz / mn;
             if (cx < x0 || cx >= x0 + OP_G || cz < z0 || cz >= z0 + OP_G) continue;
@@ -1838,11 +2127,23 @@ public final class GalleriesField {
         return out.isEmpty() ? NO_OPENINGS : out.toArray(new Opening[0]);
     }
 
-    /** The sites' grid's sample q (read once: NaN until then). */
-    private float site(float[] v, int q, int nz, int gx0, int gz0) {
-        float f = v[q];
-        if (f != f) v[q] = f = (float) join.openingSite((gx0 + q / nz) * OP_S, (gz0 + q % nz) * OP_S);
-        return f;
+    /**
+     * Whether the sites' grid's sample q passes 0.5 (its float form, as the search always read it): the search's own copy
+     * v first, then the shared tile ({@link #SITE_T}), and only where neither holds it the Wasteland's opening site (0:
+     * not read, 1: under, 2: over).
+     */
+    private boolean site(byte[] v, byte[][] tiles, int tx0, int tz0, int q, int nz, int gx0, int gz0) {
+        byte f = v[q];
+        if (f == 0) {
+            int gx = gx0 + q / nz, gz = gz0 + q % nz, tx = Math.floorDiv(gx, SITE_T) - tx0, tz = Math.floorDiv(gz, SITE_T) - tz0;
+            byte[] tile = tiles[tx * SITE_W + tz];
+            if (tile == null) tiles[tx * SITE_W + tz] = tile = siteTiles.getUnchecked(cellKey(tx + tx0, tz + tz0));
+            int k = Math.floorMod(gx, SITE_T) * SITE_T + Math.floorMod(gz, SITE_T);
+            f = tile[k];
+            if (f == 0) tile[k] = f = (byte) ((float) join.openingSite(gx * OP_S, gz * OP_S) >= 0.5 ? 2 : 1);
+            v[q] = f;
+        }
+        return f == 2;
     }
 
     /** An opening is opened only over the cavern: not on a massif (or within 0.06 of its threshold), not in a tube country. */
@@ -1868,49 +2169,119 @@ public final class GalleriesField {
 
     /** The ground's look for the candidates' order ({@link #rampOrder}) reads the ground every RO_STEP samples of a centre line. */
     static final int RO_STEP = 6;
+    /**
+     * The candidates' order offers a run that passes within RAMP_GAP of the disc (r + 3.5) of an opening after o, a hole
+     * its ramp would shut, RO_PEN blocks later for each.
+     */
+    static final double RO_PEN = 80;
+    /**
+     * A run's sample passes near an opening's disc (within the run's half width, at most HW_HI BF_MAX, of r + 3.5 + the
+     * gap) only within RV_R of its middle (a block's margin over the sum).
+     */
+    static final double RV_R = OP_MAX_R + 3.5 + RAMP_GAP + RAMP_DT * 0.5 + HW_SLACK + HW_HI * BF_MAX + 1;
 
     /**
-     * The order in which opening o's ramp candidates are built and offered (direction slots): by the run each would take,
-     * read along its bent centre line (massifs, tube countries and RAMP_REACH at every sample, the ground every RO_STEP
-     * samples: where the deck's plane comes within 2 rows of it, straight between), a dry end (W + 40 or more) before a wet one by 60 blocks; a slot whose look meets a massif, a
-     * tube country or RAMP_REACH, never comes down to the ground, or ends under W + 6, in a canyon, the Caldera or a
-     * river, last, and not built (a slot -1 - k: the look reads the ground more sparsely than the candidate, so it may
-     * pass over a short run that would end before what stops the look; such a slot is dropped all the same); ties in the
-     * slots' hashed order. (Building every candidate to find the shortest cost an opening RAMP_DIRS runs, and most were
-     * never asked for.)
+     * The order in which opening o's ramp candidates are built and offered (direction slots): by the run each would take
+     * (a dry end, W + 40 or more, before a wet one by 60 blocks), read along its bent centre line as {@link
+     * #rampCandidate} reads it: massifs, tube countries and RAMP_REACH at every sample, the ground every RO_STEP samples,
+     * and where the deck has come down to the ground (or the look stops) the samples since the last read one by one, so
+     * the run's end is the candidate's own; RO_PEN more for each lower-priority opening's disc the run passes near. A slot
+     * whose run meets a massif, a tube country or RAMP_REACH first, never comes down, or ends under W + 6, in a canyon,
+     * the Caldera or a river is last and never built (a slot -1 - k); ties in the slots' hashed order. (Building every
+     * candidate to find the shortest cost an opening RAMP_DIRS runs, most never asked for; reading the ground only every
+     * RO_STEP samples, the look's end overshot the run's and dropped openings that had a way down.)
      */
     int[] rampOrder(Opening o) {
         int[] ord = o.order;
         if (ord != null) return ord;
-        double s = rampSlope(o), hw = RAMP_HW1, top = headTop, t0 = o.r + LIP;
-        double[] w2 = new double[6];
+        double t0 = o.r + LIP;
+        double[] w2 = new double[6], gf = new double[1];
         Climate cl = new Climate();
         Ramp rp = new Ramp();
+        formOf(o, rp);
         double[] est = new double[RAMP_DIRS];
+        int nMax = (int) Math.floor(RAMP_MAX / RAMP_DT + 1e-9);
+        // the openings after o whose discs its runs could pass over: their middles and reach (r + 3.5 + the gap), those
+        // within far of o, read from the lattice cells after o's (their middles lie in their own) only as a run's sample
+        // comes within RV_R of a cell: an opening whose middle lies further than RV_R from a sample is not passed near
+        // there, so the cells no run comes near are never searched and the order is the same as from all the cells within
+        // far (searched for this alone, those cost a cold chunk a third of its time)
+        double far = RAMP_REACH - TALUS_MAX - 4 + OP_MAX_R + 3.5 + HW_HI * BF_MAX + RAMP_GAP + RAMP_DT * 0.5;
+        int ia = (int) Math.floor((o.x - far) / OP_G), ib = (int) Math.floor((o.x + far) / OP_G);
+        int ja = (int) Math.floor((o.z - far) / OP_G), jb = (int) Math.floor((o.z + far) / OP_G), nj = jb - ja + 1;
+        boolean[] seen = new boolean[(ib - ia + 1) * nj];
+        double[] nx = new double[16], nz = new double[16], nr = new double[16];
+        int[] first = new int[16];
+        int nn = 0;
         for (int k = 0; k < RAMP_DIRS; k++) {
+            Arrays.fill(first, 0, nn, Integer.MAX_VALUE);
             int dir = slotDir(o, k);
             rp.ux = DIR_X[dir];
             rp.uz = DIR_Z[dir];
             bendOf(o, k, t0, rp);
-            double prevGap = Double.NaN, prevT = t0, e = 1e6;
-            int step = 0;
-            for (double t = t0; t <= t0 + RAMP_MAX; t += RAMP_DT, step++) {
-                double b = bend(rp, t0, t);
-                double px = o.x + rp.ux * t + rp.uz * b, pz = o.z + rp.uz * t - rp.ux * b;
-                if (len(px - o.x, pz - o.z) + hw + TALUS_MAX + 4 > RAMP_REACH) break;
-                warpXZ(px, pz, w2);
-                if (massN.fbm2(w2[0] / M_P, w2[1] / M_P, 2) > M_T - 0.08 || (tubesAt(px, pz) && tubes.apronAt(px, pz) > 0.02)) break;
-                if (step % RO_STEP != 0) continue;
-                climate(px, pz, cl);
-                double fl = rampGround(px, pz, w2, cl), gap = top - s * (t - t0) - (fl + 2);
-                if (gap <= 0) {
-                    if (fl < W + 6 || cl.wCan > 0.05 || cl.wCal > 0.3 || (fl < W + RIVER_LOW + 16 && lineDistW(riverN, w2, RIVER_P) < 14)) break;
-                    double te = prevGap != prevGap ? t : t - (t - prevT) * gap / (gap - prevGap);
-                    e = te + (fl < W + 40 ? 60 : 0);
+            double e = 1e6;
+            int read = -1;                   // the last sample whose ground was read
+            for (int step = 0; ; step++) {
+                double t = t0 + step * RAMP_DT;
+                boolean stop = step > nMax;
+                if (!stop) {
+                    double b = bend(rp, t0, t);
+                    double px = o.x + rp.ux * t + rp.uz * b, pz = o.z + rp.uz * t - rp.ux * b, d = len(px - o.x, pz - o.z);
+                    if (d + HW_LO + HW_SLACK + TALUS_MAX + 4 > RAMP_REACH) stop = true;
+                    else if (d + HW_HI * BF_MAX + HW_SLACK + TALUS_MAX + 4 > RAMP_REACH)
+                        stop = d + halfWidth(rp, t0, t, b) + HW_SLACK + TALUS_MAX + 4 > RAMP_REACH;
+                    if (!stop) {
+                        int i1 = Math.max(ia, (int) Math.floor((px - RV_R) / OP_G)), i2 = Math.min(ib, (int) Math.floor((px + RV_R) / OP_G));
+                        int j1 = Math.max(ja, (int) Math.floor((pz - RV_R) / OP_G)), j2 = Math.min(jb, (int) Math.floor((pz + RV_R) / OP_G));
+                        for (int i = i1; i <= i2; i++)
+                            for (int j = j1; j <= j2; j++) {
+                                if (seen[(i - ia) * nj + j - ja]) continue;
+                                seen[(i - ia) * nj + j - ja] = true;
+                                // a cell before o's holds no opening after o
+                                if (cellPrio(i, j) > o.prio) continue;
+                                for (Opening p : rawCell(i, j).ops) {
+                                    if (!before(o, p) || len(p.x - o.x, p.z - o.z) > far) continue;
+                                    if (nn == nx.length) {
+                                        nx = Arrays.copyOf(nx, 2 * nn);
+                                        nz = Arrays.copyOf(nz, 2 * nn);
+                                        nr = Arrays.copyOf(nr, 2 * nn);
+                                        first = Arrays.copyOf(first, 2 * nn);
+                                    }
+                                    nx[nn] = p.x;
+                                    nz[nn] = p.z;
+                                    nr[nn] = p.r + 3.5 + RAMP_GAP + RAMP_DT * 0.5 + HW_SLACK;
+                                    first[nn] = Integer.MAX_VALUE;
+                                    nn++;
+                                }
+                            }
+                    }
+                    for (int m = 0; m < nn && !stop; m++) {
+                        if (first[m] < step) continue;
+                        // far off (a block's margin): not near
+                        double ex = px - nx[m], ez = pz - nz[m], lim = nr[m] + HW_HI * BF_MAX + 1;
+                        if (ex * ex + ez * ez >= lim * lim) continue;
+                        double dd = len(ex, ez) - nr[m];
+                        if (dd < HW_HI * BF_MAX && (dd < HW_LO || dd < halfWidth(rp, t0, t, b))) first[m] = step;
+                    }
+                    if (!stop) {
+                        warpXZ(px, pz, w2);
+                        stop = massN.fbm2(w2[0] / M_P, w2[1] / M_P, 2) > M_T - 0.08 || (tubesAt(px, pz) && tubes.apronAt(px, pz) > 0.02);
+                    }
+                }
+                if (!stop && step % RO_STEP != 0) continue;
+                int last = stop ? step - 1 : step;
+                if (stop || groundGap(o, rp, t0, step, w2, cl, gf) <= 0) {
+                    // the run ends at the first sample since the last read where the deck comes within 2 rows of the ground
+                    int end = -1;
+                    for (int q = read + 1; q <= last && end < 0; q++) if (groundGap(o, rp, t0, q, w2, cl, gf) <= 0) end = q;
+                    if (end >= 0 && dryEnd(gf[0], cl, w2)) {
+                        int cross = 0;
+                        for (int m = 0; m < nn; m++) if (first[m] <= end) cross++;
+                        e = t0 + end * RAMP_DT + (gf[0] < W + 40 ? 60 : 0) + RO_PEN * cross;
+                    }
                     break;
                 }
-                prevGap = gap;
-                prevT = t;
+                read = step;
             }
             est[k] = e;
         }
@@ -1921,6 +2292,29 @@ public final class GalleriesField {
         for (int k = 0; k < RAMP_DIRS; k++) ord[k] = est[idx[k]] < 1e6 ? idx[k] : -1 - idx[k];
         o.order = ord;
         return ord;
+    }
+
+    /**
+     * Whether a run that comes down on ground fl (rows) ends dry: over W + 6, out of the Canyons and the Caldera and off a
+     * lava river's bed ({@code cl} the climate there, {@code w2} the warped point).
+     */
+    boolean dryEnd(double fl, Climate cl, double[] w2) {
+        return !(fl < W + 6 || cl.wCan > 0.05 || cl.wCal > 0.3 || (fl < W + RIVER_LOW + 16 && lineDistW(riverN, w2, RIVER_P) < 14));
+    }
+
+    /**
+     * How far the deck of ramp rp (opening o's, its head at t0) stands over the ground plus 2 rows at its centre line's
+     * sample q (rows; at most 0: the run has come down): the warped point and the climate there are left in w2 and cl,
+     * the ground in gf[0].
+     */
+    double groundGap(Opening o, Ramp rp, double t0, int q, double[] w2, Climate cl, double[] gf) {
+        double t = t0 + q * RAMP_DT, b = bend(rp, t0, t);
+        double px = o.x + rp.ux * t + rp.uz * b, pz = o.z + rp.uz * t - rp.ux * b;
+        warpXZ(px, pz, w2);
+        climate(px, pz, cl);
+        double fl = rampGround(px, pz, w2, cl);
+        gf[0] = fl;
+        return headTop - deckDrop(rp, t - t0) - (fl + 2);
     }
 
     /** Ramp rp's bend for opening o's direction slot k (its centre line's sideways offset, {@link #bend}). */
@@ -1934,29 +2328,26 @@ public final class GalleriesField {
 
     /** Opening o's ramp candidate in direction slot k (see the openings' notes above), or null where none can be built. */
     Ramp rampCandidate(Opening o, int k) {
-        double s = rampSlope(o);
-        double hw = RAMP_HW0 + (RAMP_HW1 - RAMP_HW0) * Hashing.unit(Hashing.mix(o.h, 4, 0, 0));
-        double th0 = RAMP_TH0 + RAMP_TH1 * Hashing.unit(Hashing.mix(o.h, 9, 0, 0));
+        Ramp rp = new Ramp();
+        formOf(o, rp);
+        double th0 = rp.th0;
         double top = headTop, t0 = o.r + LIP;
         double[] w2 = new double[6];
         Climate cl = new Climate();
         int nMax = (int) (RAMP_MAX / RAMP_DT) + 2;
-        double[] bx = new double[nMax], bz = new double[nMax], bf = new double[nMax];
+        double[] bx = new double[nMax], bz = new double[nMax], bf = new double[nMax], bh = new double[nMax];
         int dir = slotDir(o, k);
-        Ramp rp = new Ramp();
         rp.dir = dir;
         rp.ux = DIR_X[dir];
         rp.uz = DIR_Z[dir];
-        rp.s = s;
-        rp.hw = hw;
-        rp.th0 = th0;
         bendOf(o, k, t0, rp);
         int n = 0;
         double tEnd = -1, endF = 0, reach = 0;
         for (double t = t0; t <= t0 + RAMP_MAX; t += RAMP_DT) {
             double b = bend(rp, t0, t);
             double px = o.x + rp.ux * t + rp.uz * b, pz = o.z + rp.uz * t - rp.ux * b;
-            double ext = len(px - o.x, pz - o.z) + hw + TALUS_MAX + 4;
+            double hq = halfWidth(rp, t0, t, b) + HW_SLACK;
+            double ext = len(px - o.x, pz - o.z) + hq + TALUS_MAX + 4;
             if (ext > RAMP_REACH) return null;
             warpXZ(px, pz, w2);
             if (massN.fbm2(w2[0] / M_P, w2[1] / M_P, 2) > M_T - 0.08) return null;
@@ -1966,9 +2357,10 @@ public final class GalleriesField {
             bx[n] = px;
             bz[n] = pz;
             bf[n] = Fl;
+            bh[n] = hq;
             n++;
             reach = Math.max(reach, ext);
-            if (top - s * (t - t0) <= Fl + 2) { tEnd = t; endF = Fl; break; }
+            if (top - deckDrop(rp, t - t0) <= Fl + 2) { tEnd = t; endF = Fl; break; }
         }
         if (tEnd < 0 || endF < W + 6) return null;
         double ex = bx[n - 1], ez = bz[n - 1];
@@ -1976,11 +2368,11 @@ public final class GalleriesField {
         if (cl.wCan > 0.05 || cl.wCal > 0.3) return null;
         warp(ex, ez, w2);
         if (endF < W + RIVER_LOW + 16 && lineDistW(riverN, w2, RIVER_P) < 14) return null;
-        // the fill starts where the free height under the base thickness first comes within DK_FILL rows
+        // the fill starts where the free height under the base thickness first comes within its form's rows
         double tg = tEnd;
         for (int q = 0; q < n; q++) {
             double t = t0 + q * RAMP_DT;
-            if (top - s * (t - t0) - th0 - bf[q] <= DK_FILL) { tg = t; break; }
+            if (top - deckDrop(rp, t - t0) - th0 - bf[q] <= rp.dkFill) { tg = t; break; }
         }
         // the talus starts where the arch's opening under the deck closes: going back from tg, the last sample whose
         // opening over the ground, less the column ends' DK_J rows, is under TS_OPEN rows
@@ -1989,7 +2381,7 @@ public final class GalleriesField {
             double t = t0 + q * RAMP_DT;
             if (t >= tg) continue;
             double sp = (clamp01((t - t0) / Math.max(1, tg - t0)) + DK_ROOT) / (1 + DK_ROOT);
-            if ((top - s * (t - t0) - th0 - bf[q]) * 4 * sp * (1 - sp) - DK_J >= TS_OPEN) break;
+            if ((top - deckDrop(rp, t - t0) - th0 - bf[q]) * 4 * sp * (1 - sp) - DK_J >= TS_OPEN) break;
             ts = t;
         }
         rp.tEnd = tEnd + 2;
@@ -1999,12 +2391,13 @@ public final class GalleriesField {
         rp.px = Arrays.copyOf(bx, n);
         rp.pz = Arrays.copyOf(bz, n);
         rp.fl = Arrays.copyOf(bf, n);
+        rp.hwq = Arrays.copyOf(bh, n);
         rp.reach = Math.max(o.r + 9, reach);
         double l = o.r + 3.5;
         rp.minX = o.x - l; rp.maxX = o.x + l; rp.minZ = o.z - l; rp.maxZ = o.z + l;
         for (int q = 0; q < n; q++) {
-            rp.minX = Math.min(rp.minX, bx[q] - hw); rp.maxX = Math.max(rp.maxX, bx[q] + hw);
-            rp.minZ = Math.min(rp.minZ, bz[q] - hw); rp.maxZ = Math.max(rp.maxZ, bz[q] + hw);
+            rp.minX = Math.min(rp.minX, bx[q] - bh[q]); rp.maxX = Math.max(rp.maxX, bx[q] + bh[q]);
+            rp.minZ = Math.min(rp.minZ, bz[q] - bh[q]); rp.maxZ = Math.max(rp.maxZ, bz[q] + bh[q]);
         }
         rp.score = tEnd + (endF < W + 40 ? 60 : 0);
         return rp;
@@ -2034,21 +2427,42 @@ public final class GalleriesField {
     static final double MD_G = 210, MD_P = 0.85, MD_TOP0 = 44, MD_TOP1 = 12,
             MD_R0 = 14, MD_R1 = 30, MD_S0 = 0.14, MD_S1 = 0.19;
 
-    /** The highest mound floor at the warped point w (rows, unrounded), or -inf. */
+    /** The mounds of the 5 x 5 lattice cells round one (gi, gj), as {@link #mounds} reads them; one per thread. */
+    private static final class Mounds {
+        int gi = Integer.MIN_VALUE, gj, n;
+        final double[] cx = new double[25], cz = new double[25], top = new double[25], r = new double[25], sl = new double[25];
+    }
+
+    private final ThreadLocal<Mounds> moundCells = ThreadLocal.withInitial(Mounds::new);
+
+    /**
+     * The highest mound floor at the warped point w (rows, unrounded), or -inf. The mounds of the 5 x 5 lattice cells round
+     * w's are kept per thread while the points read stay in one cell (a ramp's run reads tens of points in one).
+     */
     double mounds(double[] w) {
         double wx = w[0], wz = w[1];
         int gi = (int) Math.floor(wx / MD_G), gj = (int) Math.floor(wz / MD_G);
+        Mounds ms = moundCells.get();
+        if (ms.gi != gi || ms.gj != gj) {
+            int n = 0;
+            for (int di = -2; di <= 2; di++) for (int dj = -2; dj <= 2; dj++) {
+                long h = Hashing.mix(seed, 53001, gi + di, gj + dj);
+                if (Hashing.unit(h) >= MD_P) continue;
+                ms.cx[n] = (gi + di + 0.15 + 0.7 * Hashing.unit(Hashing.mix(h, 1, 0, 0))) * MD_G;
+                ms.cz[n] = (gj + dj + 0.15 + 0.7 * Hashing.unit(Hashing.mix(h, 2, 0, 0))) * MD_G;
+                ms.top[n] = W + MD_TOP0 + MD_TOP1 * Hashing.unit(Hashing.mix(h, 3, 0, 0));
+                ms.r[n] = MD_R0 + MD_R1 * Hashing.unit(Hashing.mix(h, 4, 0, 0));
+                ms.sl[n] = MD_S0 + (MD_S1 - MD_S0) * Hashing.unit(Hashing.mix(h, 5, 0, 0));
+                n++;
+            }
+            ms.n = n;
+            ms.gi = gi;
+            ms.gj = gj;
+        }
         double best = -1e9;
-        for (int di = -2; di <= 2; di++) for (int dj = -2; dj <= 2; dj++) {
-            long h = Hashing.mix(seed, 53001, gi + di, gj + dj);
-            if (Hashing.unit(h) >= MD_P) continue;
-            double cx = (gi + di + 0.15 + 0.7 * Hashing.unit(Hashing.mix(h, 1, 0, 0))) * MD_G;
-            double cz = (gj + dj + 0.15 + 0.7 * Hashing.unit(Hashing.mix(h, 2, 0, 0))) * MD_G;
-            double top = W + MD_TOP0 + MD_TOP1 * Hashing.unit(Hashing.mix(h, 3, 0, 0));
-            double r = MD_R0 + MD_R1 * Hashing.unit(Hashing.mix(h, 4, 0, 0));
-            double sl = MD_S0 + (MD_S1 - MD_S0) * Hashing.unit(Hashing.mix(h, 5, 0, 0));
-            double d = len(wx - cx, wz - cz);
-            best = Math.max(best, top - sl * Math.max(0, d - r));
+        for (int k = 0; k < ms.n; k++) {
+            double d = len(wx - ms.cx[k], wz - ms.cz[k]);
+            best = Math.max(best, ms.top[k] - ms.sl[k] * Math.max(0, d - ms.r[k]));
         }
         return best;
     }
