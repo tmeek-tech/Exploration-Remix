@@ -362,6 +362,40 @@ class SkeinSpineTest {
     }
 
     @Test
+    void whereTheHeadDipsOverAnEdgeAndPopsBackUpTheBodyTurnsRoundRatherThanFoldingFlat() {
+        // along the floor (y 0, +x) to the edge of a step down at x 3; the middle of the head goes a little past it, so
+        // the point under the head sinks down the step's face (its rock still the floor); then the head turns right
+        // round, pops straight back up onto the floor and goes back along it. The body, partway down the face by then,
+        // turns round on the face: never folded flat on itself, nor flicking between folded and not from tick to tick
+        for (double over : new double[]{0.2, 0.3}) {
+            for (int sink : new int[]{5, 10}) {
+                for (double back : new double[]{0.05, 0.2}) {
+                    Walk w = new Walk(0, 0, 0, 1, 0);
+                    w.walk(3.0, 0.25);
+                    w.x = 3.0 + over; w.tick();
+                    for (int k = 1; k <= sink; k++) { w.y = -1.0 + Math.pow(0.6, k); w.tick(); }
+                    w.y = -1.0; w.tick();
+                    w.turn(180, 1);
+                    w.x = 3.0 - back; w.y = 0.0; w.tick();
+                    double worst = 0, change = 0, last = -1;
+                    for (int k = 0; k < 40; k++) {
+                        w.x -= 0.25; w.tick();
+                        double bend = 0;
+                        for (int j = NECK + 1; j < JOINTS - 1; j++) bend = Math.max(bend, SkeinSpine.bendAt(w.spine.data(), j));
+                        worst = Math.max(worst, bend);
+                        if (last >= 0) change = Math.max(change, Math.abs(bend - last));
+                        last = bend;
+                    }
+                    String at = "past the edge " + over + ", sunk over " + sink + " ticks, back " + back + ": ";
+                    assertTrue(worst < Math.toRadians(45), at + "the body bends " + Math.toDegrees(worst) + " degrees at a joint");
+                    assertTrue(change < Math.toRadians(20), at + "its sharpest bend changes " + Math.toDegrees(change) + " degrees in a tick");
+                    assertEquals(0.0, w.back, 1.0E-9, at + "behind the neck it never slides back");
+                }
+            }
+        }
+    }
+
+    @Test
     void whenItsHeadPopsUpAStepItsNeckStretchesAndItsBodyComesOnAtItsPace() {
         // along the floor at a quarter a tick, the point under the head up a whole step in one tick, and on
         Walk w = new Walk(0, 0, 0, 1, 0);

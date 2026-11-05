@@ -24,7 +24,9 @@ import java.util.Locale;
  *
  * <p>Over an edge, from a floor onto a wall, the lead and the neck keep to the rock the trail crosses, so the body pours
  * over edges as the head went; only its turns across the rock are smoothed. Where the head went down a step or up one
- * (its rock still the floor), the body goes over the edge and down (or up) the step's face, as if it crossed that rock.
+ * (its rock still the floor), the body goes over the edge and down (or up) the step's face, as if it crossed that rock;
+ * where the head dipped over an edge and came straight back up, the body turns round on the step's face rather than
+ * folding flat on itself there ({@link #TURNED_BACK}).
  * When the head pops up a step at once, or hops, the lead comes on after it at its own pace, the neck stretched a
  * moment, rather than the body being thrown forward; and laid afresh near where it lay (landing from a fall or a
  * lunge), the body settles onto the rock over a few ticks ({@link #SETTLE}) rather than snapping there. Its back
@@ -103,6 +105,14 @@ public final class SkeinSpine {
      * points, the body runs into the rock's normal, and only its turn says how it faces.
      */
     static final double SQUARE_FROM = 0.3, SQUARE_TO = 0.7;
+    /**
+     * Where the trail turns further round than this from one stretch to the next (the cosine of the turn) while it runs
+     * along the rock it holds (the point under the head sunk down off an edge and popped straight back up, say), it has
+     * turned back the way it came on the same rock, not gone over another edge: laid out flat so, it stays folded, and
+     * the lead turns round on the step's face as it turns anywhere, rather than following the trail down and straight
+     * back up, the body folded flat on itself.
+     */
+    static final double TURNED_BACK = Math.cos(Math.toRadians(120));
     private static final int STRIDE = 6;
 
     private final int joints;
@@ -800,7 +810,9 @@ public final class SkeinSpine {
          * trail runs (nearly) along that (the point under the head sinking down a step, or climbing one, or falling,
          * its rock still the floor) it has gone over an edge and down (or up) the face beyond, as the rock it came off
          * turned as the trail bent: so a drop down a step lies on the flat as the face it went down, at its length,
-         * between the floors above and below, never folded up to nothing.
+         * between the floors above and below, never folded up to nothing; and a sink down off an edge and a pop
+         * straight back up lies on it as a fold on that face ({@link #TURNED_BACK}), not as a face down and another on
+         * down beyond it.
          */
         void build(SkeinTrail trail, double from, double to, double ref) {
             int count = Math.max(2, Math.min(MAX, (int) Math.ceil((to - from) / STEP) + 1));
@@ -877,7 +889,9 @@ public final class SkeinSpine {
             k = k * k * (3.0 - 2.0 * k);
             int a = 3 * i, b = 3 * j;
             c[0] = rock[b]; c[1] = rock[b + 1]; c[2] = rock[b + 2];
-            carry(c, way[b], way[b + 1], way[b + 2], way[a], way[a + 1], way[a + 2]);
+            // (turned right back on the same rock, it is not carried round: see TURNED_BACK)
+            if (way[b] * way[a] + way[b + 1] * way[a + 1] + way[b + 2] * way[a + 2] > TURNED_BACK)
+                carry(c, way[b], way[b + 1], way[b + 2], way[a], way[a + 1], way[a + 2]);
             double d = c[0] * way[a] + c[1] * way[a + 1] + c[2] * way[a + 2];
             c[0] -= way[a] * d; c[1] -= way[a + 1] * d; c[2] -= way[a + 2] * d;
             double cl = Math.sqrt(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]);
