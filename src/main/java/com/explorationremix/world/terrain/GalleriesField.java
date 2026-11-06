@@ -52,6 +52,8 @@ public final class GalleriesField {
     final Perlin warpA, warpB, elevN, detailN, riverN, riverW, ceilN2, bandN, bandMask, bandH, pierN, canN, canW, causN,
             massN, fordN, densN, roofN, hillN, stepN, bendN, sagN, clumpN, rubN, deckN;
     final Perlin widthN, rimN;
+    /** The floor's lava ({@link #floorLavaRow}): its rills' lines and widths, and the gaps that break them into pools. */
+    final Perlin rillN, rillW, poolN;
 
     /**
      * The join with the Wasteland above, as the Galleries need it; null: no join (the seal stays). Every method reads the
@@ -133,6 +135,9 @@ public final class GalleriesField {
         deckN = new Perlin(Hashing.mix(s, 59, 0, 0));
         widthN = new Perlin(Hashing.mix(s, 60, 0, 0));
         rimN = new Perlin(Hashing.mix(s, 61, 0, 0));
+        rillN = new Perlin(Hashing.mix(s, 62, 0, 0));
+        rillW = new Perlin(Hashing.mix(s, 63, 0, 0));
+        poolN = new Perlin(Hashing.mix(s, 64, 0, 0));
     }
 
     // ============================================================================================ helpers
@@ -395,6 +400,10 @@ public final class GalleriesField {
         final int[] colLo = new int[COL_CACHE], colHi = new int[COL_CACHE];
         /** The column's floor on the low ground's stairs ({@link #stairs}; NO_STAIRS: its cell's own floor). */
         final int[] colF = new int[COL_CACHE];
+        /** The row of the column's floor lava ({@link #floorLavaRow}; NO_LAVA: none), LAVA_UNREAD until first asked. */
+        final int[] colLv = new int[COL_CACHE];
+        /** The warped point and its Jacobian for the floor lava's lines. */
+        final double[] wl = new double[6];
         /**
          * The columns' own floors the stairs read ({@link #ground}) and the columns' floors on them ({@link #stairsOf}),
          * 128 x 128 columns each ({@link #groundSlot}), the column (x, z) as a key: a chunk's search, 41 x 41 columns, and
@@ -465,6 +474,7 @@ public final class GalleriesField {
         k.colCone[slot] = Double.NaN;
         k.colConeTop[slot] = Double.NaN;
         k.colLo[slot] = SPAN_UNREAD;
+        k.colLv[slot] = LAVA_UNREAD;
         return c;
     }
 
@@ -3317,6 +3327,140 @@ public final class GalleriesField {
         if (y < W) return Terrain.LAVA;
         if (tubes != null && tubes.pool(x, y, z) && tubesAt(x + 0.5, z + 0.5)) return Terrain.WATER;
         return Terrain.AIR;
+    }
+
+    // ============================================================================================ the floor's lava
+    /** No floor lava in the column ({@link #floorLavaRow}); a column's lava not looked for yet. */
+    public static final int NO_LAVA = Integer.MIN_VALUE;
+    static final int LAVA_UNREAD = Integer.MIN_VALUE + 1;
+    /**
+     * The floor's lava (fix round 2 after the 0.8.0 pack runs: "the Galleries should be brightly lit", and Taran's
+     * picture of them has a lava river winding along a terraced floor; with the falls cut back the halls read dim): lava
+     * lies on the floor along the low lines of the halls, a block deep and flush with the floor, in winding channels
+     * broken into chains of pools. Its lines: the lava rivers' own (RIVER_P), whose beds rise out of the table into dry
+     * valleys and then run on over the higher ground, a channel FLV_V0..FLV_V1 blocks either side of the line; and
+     * rills, the zero lines of a noise of period FLV_P (warped as the rivers), FLV_L0..FLV_L1 either side, on the floors
+     * under W + FLV_TOP only. A noise of period FLV_GP breaks both into pools where it passes FLV_GT (the dry gaps a
+     * player crosses), as do the rivers' fords, and it keeps off cliffs and walls ({@link #levelRound}).
+     *
+     * <p>It is not the terrain's: the density and {@link #fluid} know nothing of it, and the decoration
+     * {@code FloorLavaFeature} lays it in the game after the terrain stands, last but the glow, where the blocks it reads
+     * still hold (the rule's rock under and beside every block of it), so the shapes, the palette's magma and the tubes'
+     * gates are the terrain's as before. The tests lay it on the blocks they walk (GalleriesFieldTest: its pits and the
+     * steps into it, counted on their own; GalleriesDecorTest: with the other decorations, on the ways down).
+     */
+    static final double FLV_P = 100, FLV_L0 = 1.0, FLV_L1 = 3.2, FLV_V0 = 1.2, FLV_V1 = 2.6, FLV_GP = 14, FLV_GT = 0.35, FLV_TOP = 70;
+    /**
+     * How far the floor's lava keeps from the ways down: FLV_WAY blocks past their guard, FLV_HEAD at heads and throats,
+     * the margins a lava fall keeps (Walkway.nearWayDown with margin 2 and FluidFallFeature.HEAD_KEEP), over the rows of
+     * the block and of a place that would stand on it (its feet and the two rows over them). So it never lies under a
+     * place that guard holds for a way down (JoinTest.theGuardHoldsAWayDown walks the ways on those places alone).
+     */
+    static final double FLV_WAY = 2, FLV_HEAD = 10;
+    /** Head room the floor's lava keeps over it (rows), so it lies in the halls, not in low crawls. */
+    static final int FLV_ROOM = 12;
+    /** The highest floor (its first open row) a river's lava lies on, over the table. */
+    public static final int FLV_HIGH = (int) FLV_TOP + 40;
+
+    /**
+     * The row of the lava on the floor of column (x, z), or NO_LAVA. The top block of the floor (the row under its first
+     * open row, on the stairs where they wear it) holds lava where the column lies on one of the lava's lines
+     * ({@link #lavaLine}) and the lava is held on every side: the block and the one under it rock, and the four beside it
+     * rock at its row (the terrain's rock: so every block of lava has rock or lava under it and on its four sides, and
+     * none can flow, whatever ticks it). Where the floor steps down to a neighbour, that edge stays rock: a lip, so the
+     * lines run as pools on the treads. Never under the lava's table's row W, on a ramp's deck, in a tube country, on a
+     * spire's top, under a band or with less than FLV_ROOM rows over it, nor on or by the ways down from the Wasteland
+     * and the holes they leave by ({@link #wayNear}: FLV_WAY blocks past their guard, FLV_HEAD at their heads and
+     * throats).
+     */
+    public int floorLavaRow(int x, int z) {
+        Caches k = caches.get();
+        Cell c = column(k, x, z);
+        if (c.deckMode != 0 || c.f >= c.c) return NO_LAVA;
+        return lavaRow(k, c, x, z, (x & 31) << 5 | (z & 31));
+    }
+
+    /** {@link #floorLavaRow} with c = column(k, x, z) just looked at, kept per column. */
+    private int lavaRow(Caches k, Cell c, int x, int z, int slot) {
+        int r = k.colLv[slot];
+        if (r != LAVA_UNREAD) return r;
+        r = findLava(k, c, x, z, slot);
+        // kept only while the slot still holds the column (the rule's looks round it may have taken it)
+        if (k.colX[slot] == x && k.colZ[slot] == z) k.colLv[slot] = r;
+        return r;
+    }
+
+    private int findLava(Caches k, Cell c, int x, int z, int slot) {
+        int g = k.colF[slot];
+        if (g == NO_STAIRS) g = c.f;
+        int y = g - 1;
+        if (y < W || g > W + FLV_HIGH || c.c - g < FLV_ROOM || c.rise > 0) return NO_LAVA;
+        if (c.bl < c.bh && c.bl < g + FLV_ROOM) return NO_LAVA;
+        if (tubes != null && tubesAt(x + 0.5, z + 0.5)) return NO_LAVA;
+        if (!lavaLine(k, x, z, g)) return NO_LAVA;
+        // held on every side
+        if (fineBlocks(x, y - 1, z) <= 0 || fineBlocks(x + 1, y, z) <= 0 || fineBlocks(x - 1, y, z) <= 0
+                || fineBlocks(x, y, z + 1) <= 0 || fineBlocks(x, y, z - 1) <= 0) return NO_LAVA;
+        if (wayNear(x, z, y, y + 3, FLV_WAY, FLV_HEAD)) return NO_LAVA;
+        if (!levelRound(x, z, g)) return NO_LAVA;
+        return y;
+    }
+
+    /** How far round a block of the floor's lava the floor stays a walk every way (columns; {@link #levelRound}). */
+    static final int FLV_HALO = 2;
+
+    /**
+     * Whether the floor round column (x, z), whose floor's first open row is g, is a walk every way out to FLV_HALO
+     * columns (a square): each of those columns has a standing place within two rows of g (rock under the feet, three
+     * rows open over them, by the terrain's rock {@link #fineBlocks}), and no two side by side step more than a row. So
+     * the lava keeps off the foot and the brink of every cliff, wall and pillar: round each pool's end lies level floor,
+     * a walk gets round it, and a pool and a cliff never close a pocket between them that a player could drop into and
+     * not walk out of (with the lava in the terrain, a pool along a 2-row riser's foot closed 10 places at seed
+     * 8675309's (432, -799, 729) before this).
+     */
+    private boolean levelRound(int x, int z, int g) {
+        final int n = 2 * FLV_HALO + 1, lo = g - 3, rows = 8;
+        int[] feet = new int[n * n];
+        double[] d = new double[rows];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++) {
+                if (i == FLV_HALO && j == FLV_HALO) continue;
+                int qx = x + i - FLV_HALO, qz = z + j - FLV_HALO;
+                for (int r = 0; r < rows; r++) d[r] = fineBlocks(qx, lo + r, qz);
+                int best = Integer.MIN_VALUE;
+                // feet rows g - 2 .. g + 2 (d index 1 .. 5), the nearest to g
+                for (int off : NEAR_G) {
+                    int r = 3 + off;
+                    if (d[r - 1] > 0 && d[r] <= 0 && d[r + 1] <= 0 && d[r + 2] <= 0) { best = g + off; break; }
+                }
+                if (best == Integer.MIN_VALUE) return false;
+                feet[i * n + j] = best;
+                if (i > 0 && !(i - 1 == FLV_HALO && j == FLV_HALO) && Math.abs(best - feet[(i - 1) * n + j]) > 1) return false;
+                if (j > 0 && !(i == FLV_HALO && j - 1 == FLV_HALO) && Math.abs(best - feet[i * n + j - 1]) > 1) return false;
+            }
+        return true;
+    }
+
+    /** The feet rows {@link #levelRound} tries, from g out. */
+    private static final int[] NEAR_G = {0, 1, -1, 2, -2};
+
+    /**
+     * Whether column (x, z), its floor's first open row g, lies on one of the floor lava's lines ({@link #FLV_P}): within a
+     * river's channel (but at its fords) or, on floors under W + FLV_TOP, a rill's, and not in a gap between pools.
+     */
+    private boolean lavaLine(Caches k, int x, int z, int g) {
+        double[] w = k.wl;
+        double px = x + 0.5, pz = z + 0.5;
+        warpXZ(px, pz, w);
+        if (poolN.noise2(w[0] / FLV_GP, w[1] / FLV_GP) > FLV_GT) return false;
+        warpJ(px, pz, w);
+        double hv = FLV_V0 + (FLV_V1 - FLV_V0) * smooth(0.5 + riverW.noise2(px / 90.0, pz / 90.0));
+        if (lineDistW(riverN, w, RIVER_P) < hv && fordN.noise2(w[0] / FORD_P, w[1] / FORD_P) < FORD_T) return true;
+        if (g < W + FLV_TOP) {
+            double hw = FLV_L0 + (FLV_L1 - FLV_L0) * smooth(0.5 + rillW.noise2(px / 60.0, pz / 60.0));
+            return lineDistW(rillN, w, FLV_P) < hw;
+        }
+        return false;
     }
 
     /**

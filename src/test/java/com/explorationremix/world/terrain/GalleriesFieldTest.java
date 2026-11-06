@@ -66,6 +66,13 @@ class GalleriesFieldTest {
         String trapAt = "", floatAt = "";
         int water, waterUnsealed, waterInOpenCavern, waterLow, waterByLava;
         String unsealedAt = "", byLavaAt = "", lavaAt = "";
+        /**
+         * The floor's lava laid on the blocks (fix round 2: FloorLavaFeature, {@link GalleriesDecor#layFloorLava}): blocks
+         * in the box; the moves from the inner square's places on the blocks with it, and those that step onto it or off
+         * an edge down onto it.
+         */
+        int floorLava;
+        long lavaMoves, floorSteps;
         double buildSeconds;
 
         double scc() { return (double) inMain / places; }
@@ -76,15 +83,16 @@ class GalleriesFieldTest {
 
         double dropShare() { return (double) drops / moves; }
         double fallShare() { return (double) falls / moves; }
+        double floorShare() { return (double) floorSteps / lavaMoves; }
 
         @Override public String toString() {
             return String.format(java.util.Locale.ROOT, "seed %d (built in %.1f s): places %d, SCC %.1f %%, walk into it %.1f %%; low %d, escape <= 384 %.1f %%, never %.2f %%;"
-                            + " moves %d: drops %.2f %%, falls %.2f %%; openings %d, with a ramp %d, way down %d%s, view down %d, without a ramp %d;"
+                            + " moves %d: drops %.2f %%, falls %.2f %%, into the floor's lava %.2f %% (%d blocks of it); openings %d, with a ramp %d, way down %d%s, view down %d, without a ramp %d;"
                             + " ramps walked %d (%d columns): no place near the deck %d%s, steps over a row %d; their first 30 blocks %d samples: slot %.1f %%, flat lid %.1f %%, slot under a flat lid %.1f %%%s;"
                             + " views from %d: 80+ %.1f %%, 160+ %.2f %%, 192+ %.3f %%; largest flat patch under the top %d columns%s; Wasteland lava %d, beside air %d%s, near an opening %d (%d opening columns);"
                             + " water %d, unsealed %d%s, in open cavern %d, under W+40 %d, by lava %d%s; closed pits %d places in %d sets%s; floating rock %d%s; NaN %d",
                     seed, buildSeconds, places, 100 * scc(), 100 * walkIntoMain(), low, 100 * within384(), 100 * neverShare(), moves, 100 * dropShare(), 100 * fallShare(),
-                    opened, ramped, waysDown, noWayAt, viewsDown, withoutRamp, rampsWalked, centreColumns, centreMissing, missingAt, centreSteps,
+                    100 * floorShare(), floorLava, opened, ramped, waysDown, noWayAt, viewsDown, withoutRamp, rampsWalked, centreColumns, centreMissing, missingAt, centreSteps,
                     headSamples, 100.0 * headSlots / Math.max(1, headSamples), 100.0 * headLids / Math.max(1, headSamples), 100.0 * headSlotLids / Math.max(1, headSamples), slotLidAt,
                     views.length, 100 * over(80),
                     100 * over(160), 100 * over(192), flatPatch, flatAt, wastelandLava, lavaBesideAir, lavaAt, lavaNearOpening, openingColumns, water, waterUnsealed, unsealedAt,
@@ -164,11 +172,14 @@ class GalleriesFieldTest {
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, b[0]);
             int W = t.shape.waterY(Terrain.GALLERIES), T = t.shape.top(Terrain.GALLERIES);
             int size = 768, margin = 128, x0 = (int) b[1] - size / 2, z0 = (int) b[2] - size / 2;
-            NoiseVox v = NoiseVox.build(t, x0, z0, size, size, YLO, YHI).graph();
+            NoiseVox v = NoiseVox.build(t, x0, z0, size, size, YLO, YHI);
+            int floorLava = GalleriesDecor.layFloorLava(t, v).size();
+            v.graph();
             int xa = x0 + margin, za = z0 + margin, xb = x0 + size - margin, zb = z0 + size - margin;
             s = new Stats();
             s.seed = b[0];
             s.nans = v.nans;
+            s.floorLava = floorLava;
             int[] count = new int[v.compSize.length];
             boolean[] area = new boolean[v.places];
             for (int p = 0; p < v.places; p++) if (v.inArea(p, xa, za, xb, zb, W, T)) { area[p] = true; s.places++; count[v.comp[p]]++; }
@@ -188,9 +199,9 @@ class GalleriesFieldTest {
             s.views = new double[0];
             s.buildSeconds = (System.nanoTime() - t0) / 1e9;
             System.out.printf(java.util.Locale.ROOT, "GalleriesFieldTest %s: seed %d centre %d %d (%.1f s): places %d, main %.1f %%; low %d, escape <= 384 %.2f %%, never %.3f %%;"
-                            + " closed pits %d places in %d sets%s; floating rock %d%s; NaN %d%n",
+                            + " closed pits %d places in %d sets%s; floating rock %d%s; floor lava %d; NaN %d%n",
                     name, b[0], b[1], b[2], s.buildSeconds, s.places, 100 * s.scc(), s.low, 100 * s.within384(), 100 * s.neverShare(), s.trapped, s.trapSets, s.trapAt,
-                    s.floating, s.floatAt, s.nans);
+                    s.floating, s.floatAt, s.floorLava, s.nans);
             SWEEP_STATS.put(name, s);
             return s;
         }
@@ -217,8 +228,26 @@ class GalleriesFieldTest {
         Stats s = new Stats();
         s.seed = seed;
         s.nans = v.nans;
-        s.buildSeconds = (System.nanoTime() - t0) / 1e9;
         int xa = x0 + margin, za = z0 + margin, xb = x0 + size - margin, zb = z0 + size - margin;
+        // the terrain's own moves, before the floor's lava is laid (as these bars have always read them): drops of 2..15
+        // rows, and falls (a step off an edge with nothing to stand on 15 rows under, or into the table's lava). The floor's
+        // lava makes no fall of either kind, only steps onto it, counted below on the blocks with it; it takes the places
+        // over it away, which would raise these shares by their share of the moves alone.
+        for (int p = 0; p < v.places; p++) {
+            if (!v.inArea(p, xa, za, xb, zb, W, T)) continue;
+            int x = v.px(p), y = v.py(p), z = v.pz(p);
+            for (int d = 0; d < 4; d++) {
+                int q = v.next[p * 4 + d];
+                if (q >= 0) { s.moves++; if (y - v.py(q) >= 2) s.drops++; continue; }
+                int qx = x + NoiseVox.DX[d], qz = z + NoiseVox.DZ[d];
+                if (v.inColumns(qx, qz) && v.open(qx, y, qz) && v.open(qx, y + 1, qz)) { s.moves++; s.falls++; }
+            }
+        }
+        // everything else on the blocks with the floor's lava laid, as the game lays it
+        Set<Long> floorLava = GalleriesDecor.layFloorLava(t, v);
+        v.graph();
+        s.floorLava = floorLava.size();
+        s.buildSeconds = (System.nanoTime() - t0) / 1e9;
         // the Galleries' places: feet from the lava table to their top row, in the inner square
         int n = v.places;
         int[] count = new int[v.compSize.length];
@@ -241,15 +270,17 @@ class GalleriesFieldTest {
         pits(v, W, up, s);
         rockHeld(v, s);
         s.views = v.longestViews(4, xa, za, xb, zb, W, T, YLO, YHI, true, 260);
-        // the moves: drops of 2..15 rows, and falls (a step off an edge with nothing to stand on 15 rows under, or lava)
+        // the moves on the blocks with the floor's lava: a step onto it, or off an edge down onto it, counted on its own
         for (int p = 0; p < n; p++) {
             if (!area[p]) continue;
             int x = v.px(p), y = v.py(p), z = v.pz(p);
             for (int d = 0; d < 4; d++) {
-                int q = v.next[p * 4 + d];
-                if (q >= 0) { s.moves++; if (y - v.py(q) >= 2) s.drops++; continue; }
+                if (v.next[p * 4 + d] >= 0) { s.lavaMoves++; continue; }
                 int qx = x + NoiseVox.DX[d], qz = z + NoiseVox.DZ[d];
-                if (v.inColumns(qx, qz) && v.open(qx, y, qz) && v.open(qx, y + 1, qz)) { s.moves++; s.falls++; }
+                if (v.inColumns(qx, qz) && v.open(qx, y, qz) && v.open(qx, y + 1, qz)) {
+                    s.lavaMoves++;
+                    if (ontoFloorLava(v, floorLava, qx, y, qz)) s.floorSteps++;
+                }
             }
         }
         openings(t, v, s, toMain, xa, za, xb, zb);
@@ -300,6 +331,19 @@ class GalleriesFieldTest {
         s.byLavaAt = byLavaAt.toString();
         s.lavaAt = lavaAt.toString();
         return s;
+    }
+
+    /**
+     * Whether a step to column (x, z) at feet row y (feet and head open there) that finds no place comes down onto the
+     * floor's lava: the first block under it that is not open, within the walk's longest drop and the row under it, is
+     * one of the blocks laid.
+     */
+    static boolean ontoFloorLava(NoiseVox v, Set<Long> floorLava, int x, int y, int z) {
+        for (int yy = y; yy >= y - NoiseVox.MAX_DROP - 1 && yy > v.y0; yy--) {
+            if (v.open(x, yy, z)) continue;
+            return v.mat(x, yy, z) == NoiseVox.LAVA && floorLava.contains(GalleriesDecor.key(x, yy, z));
+        }
+        return false;
     }
 
     /**
@@ -513,7 +557,10 @@ class GalleriesFieldTest {
     /**
      * A way out of the flood: from the places under the flood's reach (feet under W + {@link Terrain#FLOOD_RISE}) a walk
      * of at most 384 moves reaches a place over it for 97 % or more, and at most 1 % have none in the box (the box's edge
-     * counts in this; spec 9.2: 98.9-100 and 0.02-0.66 %).
+     * counts in this; spec 9.2: 98.9-100 and 0.02-0.66 %). Walked with the floor's lava laid (fix round 2): never 0.27 and
+     * 0.23 % at the two boxes (0.00 and 0.00 without it), every such place on a little island of 1 to 12 places that a
+     * ring of the floor's lava closes, none of them reached from the main cavern and none reaching the box's edge (seed
+     * 8675309: 1057 places in 596 pieces; seed -42: 538 in 301), so no pit (noClosedPits) and no walk is cut.
      */
     @Test
     void theFloodHasAWayOut() {
@@ -578,7 +625,9 @@ class GalleriesFieldTest {
         for (long[] b : pits) {
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, b[0]);
             int W = t.shape.waterY(Terrain.GALLERIES);
-            NoiseVox v = NoiseVox.build(t, (int) b[1], (int) b[2], 512, 512, YLO, YHI).graph();
+            NoiseVox v = NoiseVox.build(t, (int) b[1], (int) b[2], 512, 512, YLO, YHI);
+            GalleriesDecor.layFloorLava(t, v);
+            v.graph();
             Stats s = new Stats();
             s.seed = b[0];
             pits(v, W, v.walkUpTo(W + Terrain.FLOOD_RISE), s);
@@ -636,7 +685,11 @@ class GalleriesFieldTest {
     /**
      * Falls and drops stay rare: falls (a step off an edge with nothing to stand on within 15 rows, or into lava) at most
      * 0.8 % of the moves from the inner square's places, drops of 2 to 15 rows at most 5 % (spec 9.2: 0.34-0.64 and
-     * 2.34-3.92).
+     * 2.34-3.92). Both are read on the terrain's own blocks, before the floor's lava is laid, as they always were: the
+     * floor's lava makes no fall and no drop, only steps onto it, which {@link #theFloorsLavaIsThereAndSeldomUnderfoot}
+     * bounds on their own (with it laid the places over it are gone, and with them 2 % of the moves, which alone raised
+     * seed 12345's slow box from 0.79 to 0.81 %). Now falls 0.68 and 0.48 %, drops 2.91 and 3.16 % (slow boxes: falls
+     * 0.79, 0.55, 0.56 and 0.75 %).
      */
     @Test
     void fallsAndDrops() {
@@ -647,6 +700,34 @@ class GalleriesFieldTest {
             assertTrue(s.dropShare() <= 0.05, "too many drops: " + s);
         }
     }
+
+    /**
+     * The floor's lava (fix round 2 after the 0.8.0 pack runs: "brightly lit", and the lava river winding along a terraced
+     * floor in Taran's picture of the Galleries): FloorLavaFeature lays it on the halls' floors where
+     * {@link GalleriesField#floorLavaRow} puts it and the blocks hold it, and the boxes are walked with it laid
+     * ({@link GalleriesDecor#layFloorLava}: the closed pits, the flood's way out and the moves count it). Each box holds
+     * enough of it to tell, at least FLOOR_LEAST blocks, and a walk seldom meets it: steps onto it or off an edge down
+     * onto it at most FLOOR_STEPS of the moves from the inner square's places, counted apart from the falls that
+     * {@link #fallsAndDrops} bounds as before. It keeps off the ways down at least as far as a lava fall does (the falls'
+     * margin of 2 and FluidFallFeature.HEAD_KEEP). Measured: 39 244 and 18 530 blocks in the two boxes, steps onto it 0.88
+     * and 0.37 % of the moves; the slow boxes (seeds 12345, 2000023, 77, 4242) 34 610, 12 214, 12 279 and 18 653 blocks,
+     * 0.85, 0.10, 0.35 and 0.49 %. A step onto it is a step into lava a block deep with the floor at its brim on every
+     * side, not a fall: the walk steps back up out of it.
+     */
+    @Test
+    void theFloorsLavaIsThereAndSeldomUnderfoot() {
+        assertTrue(GalleriesField.FLV_WAY >= 2 && GalleriesField.FLV_HEAD >= com.explorationremix.world.feature.FluidFallFeature.HEAD_KEEP,
+                "the floor's lava keeps nearer the ways down than a lava fall");
+        for (int i = 0; i < BOXES.length; i++) {
+            Stats s = stats(i);
+            assertTrue(s.floorLava >= FLOOR_LEAST, "too little floor lava to tell: " + s);
+            assertTrue(s.floorShare() <= FLOOR_STEPS, "too many steps into the floor's lava: " + s);
+        }
+    }
+
+    /** The bars of {@link #theFloorsLavaIsThereAndSeldomUnderfoot}: blocks in a box, and the share of the moves onto it. */
+    static final int FLOOR_LEAST = 10_000;
+    static final double FLOOR_STEPS = 0.01;
 
     /**
      * Ways down (spec 7.3, 7.6; Taran: "many ways to climb down"): per box, every opened opening keeps a ramp (one left
@@ -1381,7 +1462,10 @@ class GalleriesFieldTest {
      * the side). Now (seeds 12345, 2000023, 77 and 4242): ways down 72 of 72, 55 of 55, 72 of 72 and 71 of 71; no place
      * near the deck 0 of 12 240, 7972, 9239 and 11 003 centre columns; steps over a row 12, 11, 23 and 14; never 0.00,
      * 0.10, 0.01 and 0.02 %; in a slot under a flat lid 0, 0, 2 and 0 of 2213, 1694, 2201 and 2184 samples of the
-     * ramps' first 30 blocks; no closed pit, no floating rock.
+     * ramps' first 30 blocks; no closed pit, no floating rock. With the floor's lava laid (fix round 2) never 0.20, 0.14,
+     * 0.17 and 0.16 % (islands it rings, as in {@link #theFloodHasAWayOut}), still no closed pit; falls 0.79, 0.55, 0.56
+     * and 0.75 % as before; the floor's lava 34 610, 12 214, 12 279 and 18 653 blocks, steps onto it 0.85, 0.10, 0.35 and
+     * 0.49 % of the moves.
      */
     @Test
     @Tag("slow")
@@ -1399,6 +1483,7 @@ class GalleriesFieldTest {
             assertTrue(s.within384() >= 0.97 && s.neverShare() <= 0.015, "the flood's way out: " + s);
             assertTrue(s.over(80) >= 0.90 && s.over(160) >= 0.80, "views: " + s);
             assertTrue(s.fallShare() <= 0.008 && s.dropShare() <= 0.05, "falls and drops: " + s);
+            assertTrue(s.floorLava >= FLOOR_LEAST && s.floorShare() <= FLOOR_STEPS, "the floor's lava: " + s);
             assertEquals(0, s.lavaBesideAir + s.lavaNearOpening + s.waterUnsealed + s.waterInOpenCavern + s.waterLow + s.waterByLava, "fluid rules: " + s);
             assertEquals(s.opened, s.ramped, "openings without a ramp: " + s);
             assertTrue(s.waysDown >= 0.9 * s.ramped, "ramps with no way down into the cavern: " + s);

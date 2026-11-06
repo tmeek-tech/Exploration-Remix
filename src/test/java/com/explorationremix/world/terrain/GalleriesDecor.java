@@ -26,11 +26,12 @@ import java.util.TreeMap;
 
 /**
  * The Galleries' decorations laid on blocks made as the game makes them ({@link NoiseVox}): the features the four hall
- * biomes place in steps 2 and 8 (basalt_galleries/lava_pools and hanging_columns; vault_falls and caldera/lava_falls,
- * and the cliff_falls of older data), with their placements and numbers read from the data the game reads (count,
- * rarity_filter, in_square, open_span, random_offset, fall_sites, biome) and the features' own rules followed line by
- * line (TerracePoolsFeature, ColumnClusterFeature, FluidFallFeature in its three modes with its tries, spread, sites and
- * min_width, every source of a try planned before any is set),
+ * biomes place in steps 2, 8 and 10 (basalt_galleries/lava_pools and hanging_columns; vault_falls and caldera/lava_falls,
+ * and the cliff_falls of older data; the floor's lava, basalt_galleries/floor_lava, of fix round 2), with their
+ * placements and numbers read from the data the game reads (count, rarity_filter, in_square, open_span, random_offset,
+ * fall_sites, biome) and the features' own rules followed line by line (TerracePoolsFeature, ColumnClusterFeature,
+ * FluidFallFeature in its three modes with its tries, spread, sites and min_width, every source of a try planned before
+ * any is set; FloorLavaFeature on every column of the chunk),
  * asking the real walk guard ({@link Walkway} for this terrain). The other features of these biomes set no block in a
  * player's way (the climbing chains, the open way pass, the glow, whose light {@code GlowLight} measures).
  *
@@ -38,11 +39,11 @@ import java.util.TreeMap;
  * and number, not block for block. Data and code of an older tree run too (no fall_sites, no ways-down guard).
  */
 final class GalleriesDecor {
-    static final int POOLS = 0, HANGING = 1, VAULT = 2, CLIFF = 3, CALDERA = 4, N = 5;
+    static final int POOLS = 0, HANGING = 1, VAULT = 2, CLIFF = 3, CALDERA = 4, FLOOR = 5, N = 6;
     static final String[] IDS = {"basalt_galleries/lava_pools", "basalt_galleries/hanging_columns", "basalt_galleries/vault_falls",
-            "basalt_galleries/cliff_falls", "caldera/lava_falls"};
-    static final String[] NAMES = {"lava pools", "hanging columns", "vault falls", "cliff falls", "caldera falls"};
-    static final int K_COLUMN = 1, K_POOL = 2, K_BED = 3, K_RIM = 4, K_SOURCE = 5, K_FALL = 6, K_SUMP = 7;
+            "basalt_galleries/cliff_falls", "caldera/lava_falls", "basalt_galleries/floor_lava"};
+    static final String[] NAMES = {"lava pools", "hanging columns", "vault falls", "cliff falls", "caldera falls", "floor lava"};
+    static final int K_COLUMN = 1, K_POOL = 2, K_BED = 3, K_RIM = 4, K_SOURCE = 5, K_FALL = 6, K_SUMP = 7, K_FLOOR = 8;
     static final int[] HX = {0, 1, 0, -1}, HZ = {-1, 0, 1, 0};   // north, east, south, west (Direction.Plane.HORIZONTAL)
     private static final int NONE = Integer.MIN_VALUE;
     static final String[] BIOMES = {"basalt_galleries", "caldera", "causeway", "scoria_canyons", "obsidian_tubes"};
@@ -151,7 +152,9 @@ final class GalleriesDecor {
             }
         }
         JsonObject cf = json(worldgen, "configured_feature/" + IDS[f]).getAsJsonObject("config");
-        if (f == POOLS) a.radius = cf.get("radius").getAsInt();
+        if (f == FLOOR) {
+            if (cf.size() > 0) throw new IllegalStateException(IDS[f] + ": a configuration this emulation does not know: " + cf);
+        } else if (f == POOLS) a.radius = cf.get("radius").getAsInt();
         else if (f == HANGING) {
             a.radius = cf.get("radius").getAsInt();
             a.n = cf.get("count").getAsInt();
@@ -215,6 +218,12 @@ final class GalleriesDecor {
     private void place(Random r, int f, int bx, int bz) {
         Feat a = feats[f];
         if (a.biomes.isEmpty()) return;   // in no biome's list: the game never runs it
+        if (f == FLOOR) {
+            // no placement and no biome filter: it runs in every chunk with a hall biome in its 3 x 3 chunks' sections,
+            // which is every chunk of the Galleries (only the tubes' rock lining takes the tubes' biome)
+            floor(bx, bz);
+            return;
+        }
         List<int[]> starts = new ArrayList<>();
         if (a.sites != null) {
             starts.addAll(Sites.inChunk(t, a.sites, bx, bz, a.shareMin, a.shareMax));
@@ -487,7 +496,57 @@ final class GalleriesDecor {
     private boolean lavaSource(int x, int y, int z) {
         if (v.mat(x, y, z) != NoiseVox.LAVA) return false;
         Integer k = kinds.get(key(x, y, z));
-        return k == null || k == K_POOL || k == K_SOURCE || k == K_SUMP;
+        return k == null || k == K_POOL || k == K_SOURCE || k == K_SUMP || k == K_FLOOR;
+    }
+
+    // ------------------------------------------------------------------------------------------ FloorLavaFeature
+    /**
+     * FloorLavaFeature.place on the chunk at (bx, bz): on each of its columns, a lava source in the floor's top block
+     * where the field's rule puts one ({@link GalleriesField#floorLavaRow}) and the blocks still hold it (rock there and
+     * under it, rock or a lava source on its four sides).
+     */
+    private void floor(int bx, int bz) {
+        tries[FLOOR]++;
+        int n = 0;
+        for (int dx = 0; dx < 16; dx++)
+            for (int dz = 0; dz < 16; dz++) {
+                int x = bx + dx, z = bz + dz, y = Floor.row(t, x, z);
+                if (y == NONE || !holds(x, y, z)) continue;
+                put(x, y, z, NoiseVox.LAVA, K_FLOOR);
+                n++;
+            }
+        if (n > 0) placed[FLOOR]++;
+        blocks[FLOOR] += n;
+    }
+
+    /** FloorLavaFeature's test for the block at (x, y, z): rock there and under it, rock or a lava source on its four sides. */
+    private boolean holds(int x, int y, int z) {
+        if (!rock(x, y, z) || !rock(x, y - 1, z)) return false;
+        for (int d = 0; d < 4; d++) if (!rock(x + HX[d], y, z + HZ[d]) && !lavaSource(x + HX[d], y, z + HZ[d])) return false;
+        return true;
+    }
+
+    /**
+     * The floor's lava laid on plain blocks, no other decoration with it (what the terrain's tests walk on): FloorLavaFeature
+     * on every column of the box, whose order does not change it (it turns rock into lava sources only, and both hold a
+     * neighbour). Returns the blocks laid ({@link #key}).
+     */
+    static java.util.Set<Long> layFloorLava(Terrain t, NoiseVox v) {
+        java.util.Set<Long> laid = new java.util.HashSet<>();
+        for (int x = v.x0; x < v.x0 + v.nx; x++)
+            for (int z = v.z0; z < v.z0 + v.nz; z++) {
+                int y = Floor.row(t, x, z);
+                if (y == NONE || !v.in(x, y - 1, z) || !v.in(x, y, z) || v.mat(x, y, z) != NoiseVox.ROCK || v.mat(x, y - 1, z) != NoiseVox.ROCK) continue;
+                boolean held = true;
+                for (int d = 0; d < 4 && held; d++) {
+                    int m = v.mat(x + HX[d], y, z + HZ[d]);
+                    held = m == NoiseVox.ROCK || m == NoiseVox.LAVA;   // no decoration here: every lava is a source
+                }
+                if (!held) continue;
+                v.set(x, y, z, NoiseVox.LAVA);
+                laid.add(key(x, y, z));
+            }
+        return laid;
     }
 
     /**
@@ -681,7 +740,7 @@ final class GalleriesDecor {
 
     /**
      * The decorations' lava on the ways down from the Wasteland of the opened openings given: blocks of a pool, fall,
-     * source or sump in a ramp's deck band (its deck widened by 2 blocks each way, from 2 rows under the deck's row to
+     * source, sump or the floor's lava in a ramp's deck band (its deck widened by 2 blocks each way, from 2 rows under the deck's row to
      * RAMP_HEAD over it) or in a hole's throat (within 2 blocks of its outline and lip, any row of the Galleries). {ramps
      * with any, blocks}; the first few listed into {@code where}.
      */
@@ -694,7 +753,7 @@ final class GalleriesDecor {
             int hit = 0;
             for (Map.Entry<Long, Integer> e : kinds.entrySet()) {
                 int k = e.getValue();
-                if (k != K_POOL && k != K_FALL && k != K_SOURCE && k != K_SUMP) continue;
+                if (k != K_POOL && k != K_FALL && k != K_SOURCE && k != K_SUMP && k != K_FLOOR) continue;
                 long p = e.getKey();
                 int x = kx(p), y = ky(p), z = kz(p);
                 if (v.mat(x, y, z) != NoiseVox.LAVA) continue;
@@ -711,12 +770,35 @@ final class GalleriesDecor {
                 }
                 if (!on) continue;
                 hit++;
-                if (where.size() < 8) where.add(String.format(Locale.ROOT, "hole %.1f,%.1f: %s at (%d,%d,%d)", o.x, o.z, k == K_POOL ? "pool" : k == K_SUMP ? "sump" : "fall", x, y, z));
+                if (where.size() < 8) where.add(String.format(Locale.ROOT, "hole %.1f,%.1f: %s at (%d,%d,%d)", o.x, o.z, k == K_POOL ? "pool" : k == K_SUMP ? "sump" : k == K_FLOOR ? "floor lava" : "fall", x, y, z));
             }
             if (hit > 0) rampsHit++;
             n += hit;
         }
         return new int[]{rampsHit, n};
+    }
+
+    /**
+     * The floor's lava laid (FloorLavaFeature) as it stands once every chunk is decorated: {blocks, blocks that could
+     * flow}, a block that could flow having under it or on one of its four sides anything but rock or a lava source (a
+     * fall's flowing lava, air); the first few listed into {@code where}. Blocks on the box's edge are left out.
+     */
+    int[] floorLavaHeld(List<String> where) {
+        int n = 0, loose = 0;
+        for (Map.Entry<Long, Integer> e : kinds.entrySet()) {
+            if (e.getValue() != K_FLOOR) continue;
+            long p = e.getKey();
+            int x = kx(p), y = ky(p), z = kz(p);
+            if (v.mat(x, y, z) != NoiseVox.LAVA || x == v.x0 || z == v.z0 || x == v.x0 + v.nx - 1 || z == v.z0 + v.nz - 1) continue;
+            n++;
+            String open = !rock(x, y - 1, z) ? "under" : null;
+            for (int d = 0; d < 4 && open == null; d++)
+                if (!rock(x + HX[d], y, z + HZ[d]) && !lavaSource(x + HX[d], y, z + HZ[d])) open = new String[]{"north", "east", "south", "west"}[d];
+            if (open == null) continue;
+            loose++;
+            if (where.size() < 8) where.add(String.format(Locale.ROOT, "(%d,%d,%d) open %s", x, y, z, open));
+        }
+        return new int[]{n, loose};
     }
 
     int placedFalls() { return placed[VAULT] + placed[CLIFF] + placed[CALDERA]; }
@@ -754,6 +836,14 @@ final class GalleriesDecor {
 
         static boolean clear(Terrain t, double[] s, int siteX, int siteZ, int x, int z) {
             return com.explorationremix.world.feature.FallSites.clear(t, spec(s), siteX, siteZ, x, z);
+        }
+    }
+
+    /** GalleriesField.floorLavaRow (absent from older trees: called only when the data has the floor's lava). */
+    static final class Floor {
+        static int row(Terrain t, int x, int z) {
+            int y = t.galleries.floorLavaRow(x, z);
+            return y == GalleriesField.NO_LAVA ? NONE : y;
         }
     }
 

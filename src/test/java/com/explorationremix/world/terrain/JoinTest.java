@@ -117,7 +117,10 @@ class JoinTest {
         GalleriesField g = t.galleries;
         int T = j.gTop, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
         NoiseVox v = NoiseVox.build(t, x0, z0, SIZE, SIZE, YLO, YHI);
-        if (walk) v.graph();
+        if (walk) {
+            GalleriesDecor.layFloorLava(t, v);   // the floor's lava, which the game lays over the terrain (FloorLavaFeature)
+            v.graph();
+        }
         Box b = new Box();
         b.seed = seed;
         assertEquals(0, v.nans, "NaN densities");
@@ -537,7 +540,8 @@ class JoinTest {
 
     /**
      * One voxel build of all the rows from the Galleries' bottom to the Wasteland's top round gate 3's landing of cell
-     * (0, 0), 512 x 512 columns, and what the tests below ask of it:
+     * (0, 0), 512 x 512 columns, the floor's lava laid on it as the game lays it (FloorLavaFeature,
+     * {@link GalleriesDecor#layFloorLava}), and what the tests below ask of it:
      * <ul>
      * <li>the walk graph's main component's share of each layer's places;</li>
      * <li>for each hole the Galleries open (all keep a ramp) wholly in the box: a way down (from the Wasteland's places 12
@@ -566,7 +570,9 @@ class JoinTest {
         int T = j.gTop, wBot = j.wBot, Wg = t.shape.waterY(Terrain.GALLERIES);
         Plans.Gate land = t.plans.gate(Terrain.WASTELAND + 1, 0, 0);
         int size = 512, x0 = (int) Math.floor(land.lx) - size / 2, z0 = (int) Math.floor(land.lz) - size / 2;
-        NoiseVox v = NoiseVox.build(t, x0, z0, size, size, t.shape.bottom(Terrain.GALLERIES), t.shape.top(Terrain.WASTELAND) + 1).graph();
+        NoiseVox v = NoiseVox.build(t, x0, z0, size, size, t.shape.bottom(Terrain.GALLERIES), t.shape.top(Terrain.WASTELAND) + 1);
+        GalleriesDecor.layFloorLava(t, v);
+        v.graph();
         assertEquals(0, v.nans, "NaN densities");
         Ways w = new Ways();
         w.seed = seed;
@@ -954,13 +960,16 @@ class JoinTest {
 
     /**
      * The blocks of rows from the Galleries' bottom to the Wasteland's bottom + 40 round opened opening o and its ramp
-     * (16 columns past both), with their walk graph (one box a hole, as the 0.8.0 pack run walked them).
+     * (16 columns past both), the floor's lava laid on them as the game lays it (FloorLavaFeature,
+     * {@link GalleriesDecor#layFloorLava}), with their walk graph (one box a hole, as the 0.8.0 pack run walked them).
      */
     static NoiseVox holeBox(Terrain t, GalleriesField.Opening o) {
         GalleriesField.Ramp rp = o.ramp;
         double minX = Math.min(o.x - o.reach, rp.minX), maxX = Math.max(o.x + o.reach, rp.maxX), minZ = Math.min(o.z - o.reach, rp.minZ), maxZ = Math.max(o.z + o.reach, rp.maxZ);
         int x0 = (int) Math.floor(minX) - 16, z0 = (int) Math.floor(minZ) - 16, nx = (int) Math.ceil(maxX) + 16 - x0, nz = (int) Math.ceil(maxZ) + 16 - z0;
-        return NoiseVox.build(t, x0, z0, nx, nz, t.shape.bottom(Terrain.GALLERIES), t.join.wBot + 40).graph();
+        NoiseVox v = NoiseVox.build(t, x0, z0, nx, nz, t.shape.bottom(Terrain.GALLERIES), t.join.wBot + 40);
+        GalleriesDecor.layFloorLava(t, v);
+        return v.graph();
     }
 
     /** The opened openings with middles in [xa, xb) x [za, zb). */
@@ -1135,7 +1144,9 @@ class JoinTest {
             for (int cx = -1; cx <= 1; cx++) for (int cz = -1; cz <= 1; cz++) {
                 Plans.Gate land = t.plans.gate(Terrain.WASTELAND + 1, cx, cz);
                 int size = 512, x0 = (int) Math.floor(land.lx) - size / 2, z0 = (int) Math.floor(land.lz) - size / 2;
-                NoiseVox v = NoiseVox.build(t, x0, z0, size, size, t.shape.bottom(Terrain.GALLERIES), t.shape.top(Terrain.WASTELAND) + 1).graph();
+                NoiseVox v = NoiseVox.build(t, x0, z0, size, size, t.shape.bottom(Terrain.GALLERIES), t.shape.top(Terrain.WASTELAND) + 1);
+                GalleriesDecor.layFloorLava(t, v);
+                v.graph();
                 Ways w = new Ways();
                 w.seed = seed;
                 landingWalks(v, land, T, Wg, w);

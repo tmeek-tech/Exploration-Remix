@@ -10,6 +10,7 @@ import com.explorationremix.world.feature.DaylightShaftFeature;
 import com.explorationremix.world.feature.DenLairFeature;
 import com.explorationremix.world.feature.FallSitesPlacement;
 import com.explorationremix.world.feature.FallbackStateProvider;
+import com.explorationremix.world.feature.FloorLavaFeature;
 import com.explorationremix.world.feature.FluidFallFeature;
 import com.explorationremix.world.feature.GiantFungusFeature;
 import com.explorationremix.world.feature.GiantSpikeFeature;
@@ -70,6 +71,8 @@ public final class ERWorldgen {
     // in the plant caves are gone)
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> DEN_LAIR = FEATURES.register("den_lair", () -> new DenLairFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
+    // the Galleries' floor lava (fix round 2 after the 0.8.0 pack runs): the field's rule laid on its floors
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> FLOOR_LAVA = FEATURES.register("floor_lava", () -> new FloorLavaFeature(NoneFeatureConfiguration.CODEC));
 
     public static final RegistryObject<BlockStateProviderType<FallbackStateProvider>> FALLBACK_PROVIDER = STATE_PROVIDERS.register("fallback", () -> new BlockStateProviderType<>(FallbackStateProvider.CODEC));
     public static final RegistryObject<BlockStateProviderType<MixStateProvider>> MIX_PROVIDER = STATE_PROVIDERS.register("mix", () -> new BlockStateProviderType<>(MixStateProvider.CODEC));

@@ -26,6 +26,11 @@ class GalleriesDecorTest {
     static final long SEED = 8675309L;
     /** The least distance between two falls (FallSites keep 24: the falls' blocks keep to their sites' shares). */
     static final double FALL_KEEP = 24;
+    /**
+     * The least floor lava ({@link Box#floorLavaHeld}) the three ways' box and the pack run's region hold, to tell (fix
+     * round 2: 1678 and 7250 blocks, every one held).
+     */
+    static final int FLOOR_LEAST_BOX = 1_200, FLOOR_LEAST_REGION = 5_000;
 
     /**
      * The three ways down round (4, 125), (21, 126) and (19, 151), with their whole reach, decorated: no lava on a ramp's
@@ -54,6 +59,7 @@ class GalleriesDecorTest {
         b.fewSpacedAndWide(40, 200, 4, 5);
         b.asBright(10.33, 0.077);
         b.litFromTheFloorUp(12.2, 0.005);
+        b.floorLavaHeld(FLOOR_LEAST_BOX);
     }
 
     /**
@@ -124,6 +130,7 @@ class GalleriesDecorTest {
         assertTrue(bad.isEmpty(), "ways down that do not walk down and back up through the decorations: " + bad);
         b.fewSpacedAndWide(40, 200, 5, 5);
         b.asBright(10.30, 0.076);
+        b.floorLavaHeld(FLOOR_LEAST_REGION);
     }
 
     /** A box of the Galleries, decorated, and the ways down whose whole reach lies in it. */
@@ -199,6 +206,20 @@ class GalleriesDecorTest {
             assertTrue(GlowLight.mean(all) >= mean, "the halls darker than " + mean + " on average: " + gl);
             assertTrue(GlowLight.under(all, 8) <= under8 * faces, "more hall faces under 8 than " + under8 + ": " + gl);
             assertTrue(GlowLight.mean(low) >= GlowLight.mean(gl.hall[2]) + 0.5, "not lit from the floor up: " + gl);
+        }
+
+        /**
+         * The floor's lava (fix round 2, FloorLavaFeature: GalleriesField.floorLavaRow) as it stands once every chunk is
+         * decorated: at least {@code least} blocks of it, and every one held, with rock under it and rock or a lava source
+         * on its four sides, whatever the decorations laid round it before or after it ({@link GalleriesDecor#floorLavaHeld}),
+         * so none flows when a tick comes. (On the ways down none lies: {@link GalleriesDecor#lavaOnWays} counts it.)
+         */
+        void floorLavaHeld(int least) {
+            List<String> loose = new ArrayList<>();
+            int[] held = d.floorLavaHeld(loose);
+            System.out.println(String.format(Locale.ROOT, "GalleriesDecorTest floor lava: %d blocks (%.0f a km2), %d could flow %s", held[0], held[0] / (d.area / 1e6), held[1], loose));
+            assertTrue(held[0] >= least, "too little floor lava to tell: " + held[0]);
+            assertEquals(0, held[1], "floor lava that could flow: " + loose);
         }
 
         /** The halls' faces (GlowLight: every lava block and glow spot) at least {@code mean} on average, at most {@code under8} of them under 8. */

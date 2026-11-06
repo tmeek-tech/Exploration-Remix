@@ -1093,6 +1093,15 @@ def build_features():
     # 30 to 60 and 60+ rows over the table) the faces' mean weight rises from 5.4 and 3.9 to 12.5 and 8.4, still lit
     # from the floor up; 2.7 times the spots. At the pack's cameras (the land run's blocks relit) the rock reads about
     # 15 brighter.
+    # The Galleries' floor lava (FloorLavaFeature; fix round 2 after the 0.8.0 pack runs, Taran's picture: a lava river
+    # winding along a terraced basalt floor, and the halls read dim with the falls cut back): the field's rule
+    # (GalleriesField.floorLavaRow) lays lava a block deep and flush in the floor along the lava rivers' channels over
+    # the table and along rills on the low floors, in chains of pools with dry gaps and the rivers' fords between them,
+    # held by rock under and beside every block of it, kept off the ways down, the tube country and the cliffs' feet and
+    # brinks. Once per chunk, after the ways are opened and before the glow, so the glow sees it. A rule of the field, not
+    # of a biome: its placement has no biome filter, and the hall biomes all carry it (the Obsidian Tubes do not: the rule
+    # keeps out of the tube country anyway).
+    feature("basalt_galleries/floor_lava", "top_layer_modification", halls, {"type": f"{MOD}:floor_lava", "config": {}}, [])
     feature("basalt_galleries/glow", "top_layer_modification", GALLERIES,
             {"type": f"{MOD}:hall_glow", "config": {"spacing": 2, "reach": 1, "low": 15, "high": 14, "fade": 70, "patch": 1,
                                                     "vault": 2, "tubes": 14}}, [])
