@@ -8,7 +8,6 @@ import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
@@ -19,15 +18,14 @@ import net.minecraft.server.level.ThreadedLevelLightEngine;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.BlockTags;
-import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -37,8 +35,8 @@ import java.util.Locale;
 
 /**
  * The Basalt Galleries' terrain reset on the server (0.5.1): once a cycle, as the lava stands full, everything changed
- * in the Galleries since the last reset (by players, quakes and eruptions; recorded in each chunk's {@link ChangeLog}
- * by {@link GalleryChanges}) is put back as it was generated. Runs every overworld tick after the flood, while the
+ * in the Galleries since the last reset (by players, and by quakes and eruptions once they are built; recorded in each
+ * chunk's {@link ChangeLog} by {@link GalleryChanges}) is put back as it was generated. Runs every overworld tick after the flood, while the
  * reset and the lava cycle are on in the config.
  *
  * <p><b>Where and when.</b> Only the loaded chunks round the players in or near the Galleries are put back, the way the
@@ -54,9 +52,13 @@ import java.util.Locale;
  * neighbour or shape updates (so a torch on a placed block is not popped off as an item before its own entry puts it
  * back, and nothing is set off round it). Recording is off while it writes. Under the lava sea ({@link Restore}) an open
  * block comes back as the sea itself, written straight into the chunk the way the flood writes it (no fluid tick, so the
- * sea never flows), with its bits set in the chunk's flood masks so the drain takes it away again; everywhere else the
- * block comes back as it was generated, and a fluid next to it above the sea gets a tick so lava falls flow again round
- * rock that came back (never one of the sea's own sources). Mined ores and gilded blackstone come back as plain rock
+ * sea never flows), with what the rising lava would have taken there in the chunk's flood records (its mask bit, and
+ * the glow bit or the kept block of a fall's flowing lava) so the drain puts exactly that back; everywhere else the block
+ * comes back as it was generated. A fluid (a pool's source, a fall's flowing lava at its level) is written straight into
+ * the chunk too: {@code setBlock} would give it a fluid tick, so a fall would pour again by vanilla's rules, and Immersive
+ * Weathering would turn lava beside magma to blackstone and flowing lava on basalt to basalt. Nothing round a block put
+ * back is woken: the fluids that changed round it (they are recorded like any block, {@link GalleryChanges}) come back
+ * exactly with it, and the terrain's own stay as they were. Mined ores and gilded blackstone come back as plain rock
  * ({@link #RESET_AS_ROCK}). A block with a block entity (a chest, a shulker box, a furnace, a machine) is broken the way
  * a player's pick breaks it, so its contents drop, and only once the chunk's lava is down at its table, so they never
  * fall into lava. Above the sea a block where a player stands (inside a player's box grown a block down, so also the
@@ -73,7 +75,6 @@ public final class TerrainReset {
     private static final int FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
     private static final BlockState LAVA = Blocks.LAVA.defaultBlockState();
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final Direction[] DIRECTIONS = Direction.values();
     /** Blocks that come back as plain rock: ores and gilded blackstone, so a mined vein is not a farm that regrows every cycle. */
     static final TagKey<Block> RESET_AS_ROCK = BlockTags.create(new ResourceLocation(ExplorationRemix.MOD_ID, "reset_as_rock"));
     /** Most puffs of smoke over blocks put back in one tick, and how near a player they show. */
@@ -148,7 +149,7 @@ public final class TerrainReset {
         final int bottom, gen, target, max;
         final List<ServerPlayer> near;
         final List<AABB> keepClear = new ArrayList<>();
-        final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(), side = new BlockPos.MutableBlockPos();
+        final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         int chunks, stale, held, waiting, floodBehind, written, restored, effects;
         long entries, old;
         boolean spent;
@@ -226,21 +227,20 @@ public final class TerrainReset {
                 int what = Restore.decide(LavaFlood.kindOf(original), slice, d.level);
                 if (what == Restore.ORIGINAL) {
                     if (cur != original) {
-                        GalleryChanges.setQuietly(level, pos, original, FLAGS);
+                        // a fluid goes back the flood's way, with no fluid tick (see the class comment)
+                        if (original.getBlock() instanceof LiquidBlock) writeRaw(chunk, pos, cur, original);
+                        else GalleryChanges.setQuietly(level, pos, original, FLAGS);
                         written++;
                     }
                 } else if (cur != LAVA) {
                     // the sea comes back the flood's way: no fluid tick, so it never flows (see Restore)
-                    if (!cur.isAir()) GalleryChanges.setQuietly(level, pos, AIR, FLAGS);
-                    writeSea(chunk, pos);
+                    writeRaw(chunk, pos, cur, LAVA);
                     written++;
                 }
-                Restore.mark(what, d.mask, d.glow, slice, lx, lz);
+                Restore.mark(what, d.mask, d.glow, d.kept, slice, lx, lz, Block.getId(original));
                 log.remove(key);
                 restored++;
                 changed = true;
-                // above the sea: lava falls and pools round the block flow again (never the sea's own sources)
-                if (!underSea) wakeFluids(chunk, x, y, z);
                 if (!heard) heard = show(x, y, z, true);
                 else if ((restored & 3) == 0) show(x, y, z, false);
             }
@@ -252,42 +252,20 @@ public final class TerrainReset {
             return false;
         }
 
-        /** Writes a lava source of the sea straight into the chunk's section, as the flood does: re-lit, sent, no fluid tick. */
-        private void writeSea(LevelChunk chunk, BlockPos at) {
+        /**
+         * Writes {@code state} (the sea's lava source, or a fluid put back) straight into the chunk's section, as the
+         * flood writes: re-lit, sent, no fluid tick and no {@code onPlace}. What stood there goes first, quietly, the
+         * way {@code setBlock} takes it away (its own removal runs, nothing round it is updated).
+         */
+        private void writeRaw(LevelChunk chunk, BlockPos at, BlockState cur, BlockState state) {
+            if (!cur.isAir()) GalleryChanges.setQuietly(level, at, AIR, FLAGS);
             LevelChunkSection sec = chunk.getSection(chunk.getSectionIndex(at.getY()));
             boolean wasEmpty = sec.hasOnlyAir();
-            sec.setBlockState(at.getX() & 15, at.getY() & 15, at.getZ() & 15, LAVA);
+            sec.setBlockState(at.getX() & 15, at.getY() & 15, at.getZ() & 15, state);
             ThreadedLevelLightEngine light = level.getChunkSource().getLightEngine();
             light.checkBlock(at);
             if (wasEmpty != sec.hasOnlyAir()) light.updateSectionStatus(SectionPos.of(at), sec.hasOnlyAir());
             level.getChunkSource().blockChanged(at);
-        }
-
-        /** Gives the fluid at (x, y, z) and at its six neighbours a tick, in loaded chunks only. */
-        private void wakeFluids(LevelChunk chunk, int x, int y, int z) {
-            tickFluid(chunk, side.set(x, y, z));
-            for (Direction dir : DIRECTIONS) {
-                side.set(x + dir.getStepX(), y + dir.getStepY(), z + dir.getStepZ());
-                LevelChunk c = (side.getX() >> 4) == chunk.getPos().x && (side.getZ() >> 4) == chunk.getPos().z
-                        ? chunk : level.getChunkSource().getChunkNow(side.getX() >> 4, side.getZ() >> 4);
-                if (c != null) tickFluid(c, side);
-            }
-        }
-
-        private void tickFluid(LevelChunk c, BlockPos at) {
-            if (level.isOutsideBuildHeight(at)) return;
-            FluidState f = c.getFluidState(at);
-            if (f.isEmpty()) return;
-            if (f.isSource() && f.is(FluidTags.LAVA)) {
-                // the sea's own sources never flow: the flood brings and takes them itself
-                LavaChunk cd = LavaChunk.of(c);
-                int i = at.getY() - band.tableY();
-                if (cd != null && i >= 0 && i < band.rise()) {
-                    cd.align(band.tableY());
-                    if (cd.mask.get(i, at.getX() & 15, at.getZ() & 15)) return;
-                }
-            }
-            level.scheduleTick(at.immutable(), f.getType(), f.getType().getTickDelay(level));
         }
 
         /**

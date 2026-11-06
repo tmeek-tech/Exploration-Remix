@@ -1,6 +1,5 @@
 package com.explorationremix.world.lava;
 
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.feature.HallGlowFeature;
 import com.explorationremix.world.terrain.Shape;
@@ -10,7 +9,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 
@@ -20,16 +18,18 @@ import javax.annotation.Nullable;
  * Records every change to the Basalt Galleries' blocks in the chunk's {@link ChangeLog}, so the terrain reset can put
  * the terrain back (0.5.1). Called by {@code LevelChunkMixin} at the head of {@code LevelChunk#setBlockState}, which
  * every block change in a loaded chunk goes through: players breaking and placing, explosions, falling blocks leaving
- * and landing, fire, pistons, buckets. The lava flood writes straight into the chunk's sections and is never seen here;
- * the reset turns recording off while it writes ({@link #setQuietly}). The quakes read the log too: a block whose
- * terrain block was open is a placed one.
+ * and landing, fire, pistons, buckets, and fluids flowing. The lava flood writes straight into the chunk's sections and
+ * is never seen here; the reset turns recording off while it writes ({@link #setQuietly}). The quakes (not built yet)
+ * are to read the log too: a block whose terrain block was open is a placed one (or a fluid that flowed there).
  *
- * <p>Left out, so the log never churns with fluids settling: flowing (not source) fluid spreading into open space or
- * into other fluid, and flowing fluid going back to open space or changing its level. A lava fall's flow over a block
- * of the halls' glow is therefore not put back (as in 0.5.0). A source placed from a bucket is recorded.
+ * <p>Fluids are recorded like any other block (0.8.0; before, flowing fluid spreading, receding or changing its level was
+ * left out): lava a player lets flow, a lava fall a player cuts or re-routes, a fall's flow over the halls' glow, and
+ * Immersive Weathering's turning flowing lava to basalt or blackstone all go back with the reset, exactly. This no longer
+ * churns, as nothing of the mod's own sets the terrain's fluids flowing: the flood's drain gives a fall back as it was
+ * and wakes only lava that changed, and the reset writes fluids straight into the chunk with no fluid tick.
  *
  * <p>The log sees through the flood ({@link Restore#seeThrough}): a lava source the flood put there is recorded as the
- * air, or the glow, it took.
+ * air, the glow or the kept block (a fall's flowing lava, fire) it took.
  */
 public final class GalleryChanges {
     private GalleryChanges() {}
@@ -96,7 +96,7 @@ public final class GalleryChanges {
         LavaChunk d = LavaChunk.of(chunk);
         if (d == null) return;
         BlockState cur = chunk.getBlockState(pos);
-        if (cur == next || settling(cur, next)) return;
+        if (cur == next) return;
         ChangeLog log = d.log;
         log.align(lo);
         int x = pos.getX() & 15, z = pos.getZ() & 15;
@@ -113,25 +113,22 @@ public final class GalleryChanges {
         log.record(key, Block.getId(first), gen);
     }
 
-    /** True for a change of fluid settling, which the log leaves out (see the class comment). */
-    static boolean settling(BlockState cur, BlockState next) {
-        if (flowing(next) && (GlowBlock.open(cur) || cur.getBlock() instanceof LiquidBlock)) return true;
-        return flowing(cur) && (GlowBlock.open(next) || flowing(next));
-    }
-
-    private static boolean flowing(BlockState s) { return s.getBlock() instanceof LiquidBlock && !s.getFluidState().isSource(); }
-
-    /** The terrain's own block where the chunk holds {@code cur}: the air or glow the flood took, if the lava there is the flood's. */
+    /**
+     * The terrain's own block where the chunk holds {@code cur}: what the flood took (the air, the glow, or the kept
+     * block), if the lava there is the flood's.
+     */
     private static BlockState terrainBlock(LavaChunk d, BlockState cur, int x, int y, int z) {
         LavaFlood.Band b = LavaFlood.band();
         if (b == null) return cur;
         int i = y - b.tableY();
         if (i < 0 || i >= b.rise()) return cur;
         d.align(b.tableY());
-        int kind = Restore.seeThrough(LavaFlood.kindOf(cur), d.mask.get(i, x, z), d.glow.get(i, x, z));
+        int keptId = d.kept.get(i, x, z);
+        int kind = Restore.seeThrough(LavaFlood.kindOf(cur), d.mask.get(i, x, z), d.glow.get(i, x, z), keptId >= 0);
         return switch (kind) {
             case Flood.AIR -> kindOf(cur) == Flood.AIR ? cur : Blocks.AIR.defaultBlockState();
             case Flood.GLOW -> kindOf(cur) == Flood.GLOW ? cur : HallGlowFeature.bandGlow();
+            case Restore.KEPT -> Block.stateById(keptId);
             default -> cur;
         };
     }

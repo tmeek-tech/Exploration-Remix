@@ -16,6 +16,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ThreadedLevelLightEngine;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -59,6 +60,13 @@ import java.util.function.Predicate;
  * by hand: the light engine re-lights the block, a section that turns empty or not is reported to it, the chunk is
  * marked unsaved, and the change goes to the players watching the chunk (one section packet per chunk per step).
  * Heightmaps and sky light sources are left alone: they never change this far under the ground.
+ *
+ * <p><b>Nothing left behind.</b> The drain writes back exactly what the rise took (air, the glow, and a fall's flowing
+ * lava at its level, kept in the chunk's record) the same way, and wakes no lava of the terrain's own, so a cycle leaves
+ * the Galleries as it found them. (Until 0.8.0 it cleared a fall's lava to air and woke the lava round it to pour it
+ * again: a re-poured fall ran out over the floor at its foot, nudged the sea in a neighbour chunk that had not drained
+ * yet into blocks this chunk had, where the fall then fed that lava for good, and Immersive Weathering turned flowing
+ * lava on basalt into basalt.)
  *
  * <p><b>The clock</b> is the overworld's game time less the start of the current cycle, so every player on a server
  * sees the same cycle and it carries on where it was after a restart. Clients hear where it is ({@link LavaNet.Sync})
@@ -335,11 +343,12 @@ public final class LavaFlood {
             int y = b.tableY() + i;
             int si = chunk.getSectionIndex(y);
             LevelChunkSection sec = chunk.getSection(si);
-            SLICE.begin(level, chunk, sec, si, y, i, d.mask);
+            // a slice flooded by a build that kept no taken blocks drains the old way (LavaChunk)
+            SLICE.begin(level, chunk, sec, si, y, i, d, !up && i < d.legacyTop);
             int changed;
             if (up) {
                 if (sec.maybeHas(TAKEN)) {
-                    changed = Flood.rise(SLICE, d.mask, d.glow, i);
+                    changed = Flood.rise(SLICE, d.mask, d.glow, d.kept, i);
                     w.checks += 256;
                 } else {
                     changed = 0;
@@ -348,8 +357,9 @@ public final class LavaFlood {
                 d.level++;
             } else {
                 w.checks += Math.max(1, d.mask.count(i));
-                changed = Flood.drain(SLICE, d.mask, d.glow, i);
+                changed = Flood.drain(SLICE, d.mask, d.glow, d.kept, i);
                 d.level--;
+                if (d.legacyTop > i) d.legacyTop = i;
             }
             SLICE.end();
             w.changes += changed;
@@ -378,14 +388,19 @@ public final class LavaFlood {
         private ThreadedLevelLightEngine light;
         private LevelChunk chunk;
         private LevelChunkSection sec;
+        private LavaChunk data;
         private Flood.Mask mask;
         private int si, y, ly, x0, z0, i;
-        private boolean wasEmpty;
+        /** The Galleries' bottom the change logs count from (MIN_VALUE: none). */
+        private int logBottom;
+        private boolean wasEmpty, legacy;
         private final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
-        void begin(ServerLevel level, LevelChunk chunk, LevelChunkSection sec, int si, int y, int i, Flood.Mask mask) {
+        void begin(ServerLevel level, LevelChunk chunk, LevelChunkSection sec, int si, int y, int i, LavaChunk data, boolean legacy) {
             this.level = level;
-            this.mask = mask;
+            this.data = data;
+            this.mask = data.mask;
+            this.legacy = legacy;
             this.source = level.getChunkSource();
             this.light = source.getLightEngine();
             this.chunk = chunk;
@@ -396,6 +411,7 @@ public final class LavaFlood {
             this.x0 = chunk.getPos().getMinBlockX();
             this.z0 = chunk.getPos().getMinBlockZ();
             this.i = i;
+            this.logBottom = GalleryChanges.bottom();
             this.wasEmpty = sec.hasOnlyAir();
         }
 
@@ -412,11 +428,15 @@ public final class LavaFlood {
             light = null;
             chunk = null;
             sec = null;
+            data = null;
             mask = null;
         }
 
         @Override
         public int kind(int x, int z) { return kindOf(sec.getBlockState(x, ly, z)); }
+
+        @Override
+        public int state(int x, int z) { return Block.getId(sec.getBlockState(x, ly, z)); }
 
         @Override
         public void fill(int x, int z) { put(x, z, LAVA); }
@@ -427,6 +447,9 @@ public final class LavaFlood {
         @Override
         public void glow(int x, int z) { put(x, z, HallGlowFeature.bandGlow()); }
 
+        @Override
+        public void put(int x, int z, int state) { put(x, z, Block.stateById(state)); }
+
         private void put(int x, int z, BlockState s) {
             sec.setBlockState(x, ly, z, s);
             pos.set(x0 + x, y, z0 + z);
@@ -434,8 +457,60 @@ public final class LavaFlood {
             source.blockChanged(pos);
         }
 
+        /**
+         * After the drain put back what the lava took at (x, z): wakes only lava that changed since the last terrain
+         * reset (its chunk's change log holds the position: lava a player let in, a shaft dug under the sea), at the
+         * block itself, above, below and on its four sides, so it drains away; never the terrain's own lava (a fall the
+         * drain gave back as it was, a pool), which a fluid tick would pour again by vanilla's rules, and never the
+         * sea's own sources in a chunk that has not drained this slice yet. A slice flooded by an older build drains
+         * the old way ({@link #wakeLegacy}).
+         */
         @Override
         public void wake(int x, int z) {
+            if (legacy) {
+                wakeLegacy(x, z);
+                return;
+            }
+            if (logBottom == Integer.MIN_VALUE) return;
+            wakeChanged(x0 + x, y, z0 + z);
+            wakeChanged(x0 + x, y + 1, z0 + z);
+            wakeChanged(x0 + x, y - 1, z0 + z);
+            wakeChanged(x0 + x - 1, y, z0 + z);
+            wakeChanged(x0 + x + 1, y, z0 + z);
+            wakeChanged(x0 + x, y, z0 + z - 1);
+            wakeChanged(x0 + x, y, z0 + z + 1);
+        }
+
+        private void wakeChanged(int wx, int wy, int wz) {
+            int dy = wy - logBottom;
+            if (!ChangeLog.holds(dy) || !GalleryChanges.inLayer(wy)) return;
+            boolean here = (wx >> 4) == chunk.getPos().x && (wz >> 4) == chunk.getPos().z;
+            LevelChunk c = here ? chunk : source.getChunkNow(wx >> 4, wz >> 4);
+            if (c == null) return;
+            LavaChunk d = here ? data : LavaChunk.of(c);
+            if (d == null || d.log.isEmpty()) return;
+            d.log.align(logBottom);
+            if (!d.log.has(ChangeLog.key(wx & 15, dy, wz & 15))) return;
+            BlockState s = c.getBlockState(pos.set(wx, wy, wz));
+            FluidState f = s.getFluidState();
+            if (f.getType() != Fluids.LAVA && f.getType() != Fluids.FLOWING_LAVA) return;
+            if (f.isSource()) {
+                // the sea's own sources never flow: a chunk that has not drained this slice yet takes them itself
+                int j = wy - (y - i);
+                if (j >= 0 && j < d.mask.slices()) {
+                    d.align(y - i);
+                    if (d.mask.get(j, wx & 15, wz & 15)) return;
+                }
+            }
+            level.scheduleTick(new BlockPos(wx, wy, wz), f.getType(), f.getType().getTickDelay(level));
+        }
+
+        /**
+         * The drain's wake before this build kept the taken blocks: the lava above, below (unless the sea's own) and on
+         * the four sides of a block the drain cleared gets a tick, so a fall whose flowing lava the sea took and the drain
+         * cleared to air pours down again.
+         */
+        private void wakeLegacy(int x, int z) {
             // above: the slices over this one were drained before it, so lava there is never the sea's
             BlockState up = ly < 15 ? sec.getBlockState(x, ly + 1, z) : chunk.getBlockState(pos.set(x0 + x, y + 1, z0 + z));
             tickIfLava(up, x0 + x, y + 1, z0 + z);

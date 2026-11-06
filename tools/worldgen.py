@@ -1181,6 +1181,12 @@ def spawners(name):
 # Biomes open to the sky in places keep a sky of the usual colour (the Rootvaults' ravines and skylights).
 SKY = {"rootvaults": "#78a7ff", "frozen_rootvaults": "#7ba4ff", "sinkhole": "#78a7ff", "oasis_hollow": "#6eb1ff"}
 
+# Vanilla's deep dark, in the Blue Reaches' caverns and ancient cities (0.8.0): a sky and fog darker than the Deep Blue
+# Rift's (it is the darkest of the Reaches), in place of vanilla's daylight blue sky and pale fog, which the game darkens
+# only just over the bottom of the world: hundreds of blocks over it the caverns opened onto a bright sky past the edge
+# of the drawn world at short render distances. Special effects only (DarkSkyModifier): nothing generates differently.
+DEEP_DARK_SKY = "#080d18"
+
 
 def effects(name):
     fog, water, water_fog, grass, foliage = (rgb(c) for c in LOOKS[name])
@@ -1244,6 +1250,10 @@ def write_all(data_dir, res_dir, write):
     write(os.path.join(data_dir, "forge", "biome_modifier", "deep_dark_open_way.json"), {
         "type": "forge:add_features", "biomes": "minecraft:deep_dark",
         "features": [f"{MOD}:climb_vines", f"{MOD}:shelf_vines", f"{MOD}:open_way"], "step": "top_layer_modification"})
+    # Its sky and fog, dark like the Reaches' own (DEEP_DARK_SKY).
+    write(os.path.join(data_dir, "forge", "biome_modifier", "deep_dark_sky.json"), {
+        "type": f"{MOD}:dark_sky", "biomes": "minecraft:deep_dark",
+        "sky_color": rgb(DEEP_DARK_SKY), "fog_color": rgb(DEEP_DARK_SKY)})
     # Biome tags.
     def tag(ns, kind, tname, values):
         write(os.path.join(res_dir, "data", ns, "tags", kind, tname + ".json"), {"replace": False, "values": values})
