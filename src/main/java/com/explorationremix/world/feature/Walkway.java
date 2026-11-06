@@ -1,6 +1,7 @@
 package com.explorationremix.world.feature;
 
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.terrain.GalleriesField;
 import com.explorationremix.world.terrain.Network;
 import com.explorationremix.world.terrain.Plans;
 import com.explorationremix.world.terrain.Route;
@@ -14,6 +15,11 @@ import com.explorationremix.world.terrain.WastelandField;
  * waterfall stands on a way or hangs into its headroom. The ways are the network's (section 12.2): every tunnel, inner
  * walk, ledge passage and stub of every cell, the rift's ledge path, the Causeway's column path (a walking line for this
  * guard only: nothing carves it), the gates' passages and landings, and the den gates' ramps up into the pack's caves.
+ *
+ * <p>The Galleries' ways down from the Wasteland are a noise field's too: the ramps of the holes it opens, with their
+ * feet and the holes' throats ({@link GalleriesField#wayNear}). No feature lays lava on them, takes their floor or hangs
+ * into their head room (the 0.8.0 pack run found a lava pool and a fall cutting one), and lava falls keep further from
+ * the heads and the throats ({@link #nearWayDown}).
  *
  * <p>The Wasteland has no planned ways: its tunnels are a noise field's ({@link WastelandField}), and nothing carves a
  * way through them. There the guard keeps to the field's walking channels instead ({@link #nearChannel}): the middle
@@ -47,7 +53,11 @@ public final class Walkway {
         return nearWays(t, x, z, y0, y1, margin) || nearChannel(t, x, z, y0, y1, margin);
     }
 
-    /** The planned layers' ways and the gates alone: {@link #near} without the Wasteland's walking channels. */
+    /**
+     * The planned layers' ways, the gates and the Galleries' ways down from the Wasteland (their ramps' decks, feet and
+     * heads and the holes' throats, {@link GalleriesField#wayNear}): {@link #near} without the Wasteland's walking
+     * channels.
+     */
     public static boolean nearWays(int x, int z, int y0, int y1, double margin) {
         Terrain t = terrain();
         return t != null && nearWays(t, x, z, y0, y1, margin);
@@ -58,6 +68,7 @@ public final class Walkway {
         int lo = Math.min(y0, y1), hi = Math.max(y0, y1);
         if (nearGate(t, x, z, lo, hi, margin)) return true;
         if (lo >= t.shape.packFloor) return false;
+        if (t.galleries != null && t.galleries.wayNear(x, z, lo, hi, margin, margin)) return true;
         int li0 = t.shape.layerAt(Math.min(hi, t.shape.packFloor - 1)), li1 = t.shape.layerAt(lo);
         for (int li = 0; li < t.shape.layerCount; li++) {
             if (li != li0 && li != li1 || !Terrain.planned(li)) continue;
@@ -69,6 +80,21 @@ public final class Walkway {
             }
         }
         return false;
+    }
+
+    /**
+     * The ways down from the Wasteland into the Galleries alone, with their heads and the holes' throats kept
+     * {@code headMargin} away at any row ({@link GalleriesField#wayNear}): a lava fall keeps far enough off that it hides
+     * no way from the cavern.
+     */
+    public static boolean nearWayDown(int x, int z, int y0, int y1, double margin, double headMargin) {
+        Terrain t = terrain();
+        return t != null && nearWayDown(t, x, z, y0, y1, margin, headMargin);
+    }
+
+    /** {@link #nearWayDown(int, int, int, int, double, double)} for a given terrain. */
+    public static boolean nearWayDown(Terrain t, int x, int z, int y0, int y1, double margin, double headMargin) {
+        return t.galleries != null && t.galleries.wayNear(x, z, Math.min(y0, y1), Math.max(y0, y1), margin, headMargin);
     }
 
     /** The Wasteland's walking channels alone (see {@link #nearChannel(Terrain, int, int, int, int, double)}). */

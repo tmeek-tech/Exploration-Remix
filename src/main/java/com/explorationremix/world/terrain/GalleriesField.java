@@ -255,6 +255,17 @@ public final class GalleriesField {
     /** The climate at column (x, z) ({@link GalleriesLandscape#climate}). */
     void climate(double x, double z, Climate out) { land.climate(x, z, out); }
 
+    /**
+     * How far column (x, z) lies from the middle of the Caldera whose climate it has, in the patch's radii (the climate's
+     * dn: 0 the middle, the lake's rim at {@link #CAL_LAKE}, the patch's edge at 1), or 9 where its climate is not the
+     * Caldera's (FallSites keeps the Caldera's lava falls on its lake's rim).
+     */
+    public double calderaDn(double x, double z) {
+        Climate cl = new Climate();
+        climate(x, z, cl);
+        return cl.kind == CALDERA ? cl.dn : 9;
+    }
+
     // ============================================================================================ cells
     /**
      * One basalt column cell and its vertical profile. Open rows are {@code [f, c)} less the band's rock {@code [bl, bh)};
@@ -285,8 +296,8 @@ public final class GalleriesField {
         int[] near;
         int nearN;
         /**
-         * A ramp's deck, read block by block ({@link #blocks(Cell, int, int, int)}): 0 none, 1 the deck is the floor f, 2
-         * it is the band's top bh. Its ramp's axis (from (dkX, dkZ) along (dkUx, dkUz)), where the deck starts along it,
+         * A ramp's deck, read block by block ({@link #blocks(Cell, int, int, int)}): 0 none, 1 the deck is the floor f (or
+         * the ground, where that stands higher: at a ramp's foot), 2 it is the band's top bh. Its ramp's axis (from (dkX, dkZ) along (dkUx, dkUz)), where the deck starts along it,
          * the first open row there and the slope; the cell's own deck row and its ragged drop (rows); the ground under it.
          */
         byte deckMode;
@@ -925,14 +936,19 @@ public final class GalleriesField {
      */
     void deck(Cell c, Shape0 s, boolean filled) {
         int d0 = (int) Math.floor(s.deck + 0.5);
-        if (d0 <= c.f) return;                       // the ground already stands at the deck
-        if (d0 > c.c - 2) { c.f = c.c = W + 200; return; }
+        if (d0 > c.f && d0 > c.c - 2) { c.f = c.c = W + 200; return; }
         int bl = s.deckTh > 1e8 ? Integer.MIN_VALUE : d0 - (int) Math.round(s.deckTh);
         RampHit rh = s.rh;
         c.dkX = rh.rx; c.dkZ = rh.rz; c.dkUx = rh.rux; c.dkUz = rh.ruz; c.dkT0 = rh.rt0; c.dkTop = rh.rtop; c.dkRamp = rh.ramp;
         c.dkRow = d0;
         c.dkDrop = s.deckDrop;
         c.dkGround = c.f;
+        // the ground stands at or over the deck's row at the site (where a ramp comes down onto the floor, its foot): the
+        // deck is still read block by block, over the ground (the higher of its row and the ground), so the cell's flat
+        // floor is no riser of 2 rows or more where the deck's plane runs over it in the cell's other columns; a ramp's
+        // foot ended on such risers at cell joints (2 rows at (136, 155) and (139, 155) of seed 8675309's hole at
+        // (21, 126), the way back up cut there in a world)
+        if (d0 <= c.f) { c.deckMode = 1; return; }
         if (filled || bl <= c.f + 3 || seamCut(c)) { c.f = d0; c.deckMode = 1; return; }     // filled: a ridge of columns on the ground
         c.bl = bl;
         c.bh = d0;
@@ -2519,6 +2535,64 @@ public final class GalleriesField {
 
     /** {@link #craterFloor(int, double)} at column (x, z). */
     public double craterFloor(int x, int z) { return craterFloor(T, craterRing(x, z)); }
+
+    // ============================================================================================ the ways' guard
+    /**
+     * Blocks past a way down's deck, foot and throat that a feature keeps clear of besides its own margin ({@link
+     * #wayNear}): the pack run of 0.8.0 asked for the deck's band plus 2.
+     */
+    public static final double WAY_KEEP = 2;
+    /** A way's head: the first HEAD_RUN blocks of its deck past the hole's lip ({@link #wayNear}). */
+    public static final double HEAD_RUN = 32;
+    /** A way's foot: the ground within FOOT_R blocks of its ramp's end (JoinTest's foot). */
+    public static final double FOOT_R = 6;
+
+    /**
+     * Whether a structure in column (x, z) spanning rows lo..hi would stand on one of the ways down from the Wasteland or
+     * within {@code margin} blocks of it (the guard every feature asks, {@code Walkway.nearWays}; the 0.8.0 pack run found
+     * lava pools and falls laid on the ramps by features that asked only the planned layers' ways: a pool on the deck and
+     * a fall beside it cut one way both ways, and 18 of 25 ramps had lava in their deck's band). A way down is an opened
+     * opening's ramp ({@link #rampsAt}) and the hole it leaves by:
+     * <ul>
+     * <li>the deck: within WAY_KEEP + margin of its strip (from a block short of its head to its end, its half width
+     * either side of the bent centre line) at the rows from 3 under the deck's row (its rock, the ragged edge's and a
+     * pool's bed) to its head room over it (RAMP_HEAD + 1);</li>
+     * <li>the foot: within FOOT_R + WAY_KEEP + margin of the ramp's end, at the rows from 3 under the lower of the deck's
+     * end and the ground there to the head room over the higher;</li>
+     * <li>the head and the throat, at any row of the Galleries (a fall in front of them hides the way from the cavern, the
+     * judge's pictures of the 0.8.0 pack run): within WAY_KEEP + {@code headMargin} of the hole's outline and lip, or of
+     * the deck's first HEAD_RUN blocks.</li>
+     * </ul>
+     * Pure (the openings are), and false over T + 8 or under B, so the planned layers' features are not touched.
+     */
+    public boolean wayNear(int x, int z, int lo, int hi, double margin, double headMargin) {
+        if (join == null || lo > T + 8 || hi < B) return false;
+        double px = x + 0.5, pz = z + 0.5, keep = WAY_KEEP + margin, keepHead = WAY_KEEP + headMargin;
+        for (Opening o : nearOps((int) Math.floor(px / OP_G), (int) Math.floor(pz / OP_G))) {
+            Ramp rp = o.ramp;
+            if (rp == null) continue;
+            double dx = px - o.x, dz = pz - o.z, lim = o.reach + Math.max(keep, keepHead) + FOOT_R;
+            if (Math.abs(dx) > lim || Math.abs(dz) > lim) continue;
+            double d = len(dx, dz), t0 = o.r + LIP, t = dx * rp.ux + dz * rp.uz;
+            // the throat: the hole's outline and its lip
+            if (d - rimR(o, dx, dz, d, t) - LIP < keepHead) return true;
+            // the deck's strip, measured from its edge (negative inside), and past its ends along the axis
+            double ts = Math.max(t0 - 1, Math.min(rp.tEnd, t)), bs = bend(rp, t0, ts), l = dx * rp.uz - dz * rp.ux;
+            double e = Math.abs(l - bs) - halfWidth(rp, t0, ts, bs), along = Math.abs(t - ts);
+            double dist = along > 0 ? len(along, Math.max(0, e)) : e, u = Math.max(0, ts - t0);
+            if (u < HEAD_RUN && dist < keepHead) return true;
+            if (dist < keep) {
+                int row = (int) Math.floor(deckPlane(rp, t0, ts) + deckTerrace(px, pz, u) + 0.5);
+                if (hi >= row - 3 && lo <= row + RAMP_HEAD + 1) return true;
+            }
+            // the foot
+            if (len(px - rp.px[rp.n - 1], pz - rp.pz[rp.n - 1]) < FOOT_R + keep) {
+                double g = rp.fl[rp.n - 1], de = deckPlane(rp, t0, rp.tEnd);
+                if (hi >= Math.floor(Math.min(g, de)) - 3 && lo <= Math.ceil(Math.max(g, de)) + RAMP_HEAD + 1) return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * The search of lattice cell (i, j) (see the openings' notes above): the openable openings. The sites' grid is looked

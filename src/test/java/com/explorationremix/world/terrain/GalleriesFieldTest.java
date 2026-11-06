@@ -1046,13 +1046,16 @@ class GalleriesFieldTest {
      * ringed cell opened a row past its crater's floor (RING_UP), the head's wedge and the breach under the crater's
      * floor (WG_K, WG_CJ, the wedge's limit falling a row every WG_KL blocks out from the deck), the Scoria Canyons'
      * banks over the stairs' reach and broken cell by cell (CAN_DRY, CAN_J), and the Wasteland's floor guards, column
-     * ends and terraces in the join's rows (WastelandField.GUARD_GAP). A change to the Galleries' shapes shows here: pin
-     * again only on purpose.
+     * ends and terraces in the join's rows (WastelandField.GUARD_GAP). Pinned again in the fix round after the 0.8.0
+     * pack run (it was 657f03d778b8355c and b2257d4eece3e4b8): a ramp's cell where the ground stands at or over the
+     * deck's row, at its foot, keeps the deck block by block over the ground ({@link GalleriesField#deck}), so the foot
+     * ends on no riser of 2 rows at the cells' joints. A change to the Galleries' shapes shows here: pin again only on
+     * purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("657f03d778b8355c", digest(8675309), "seed 8675309");
-        assertEquals("b2257d4eece3e4b8", digest(12345), "seed 12345");
+        assertEquals("99d103d778b8355c", digest(8675309), "seed 8675309");
+        assertEquals("91a37d4eece3e4b8", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) {

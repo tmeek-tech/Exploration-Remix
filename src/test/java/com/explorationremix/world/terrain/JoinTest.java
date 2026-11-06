@@ -481,6 +481,12 @@ class JoinTest {
         int wPlaces, wMain, gPlaces, gMain;
         /** The holes the Galleries open (all with a ramp) with middles in the box; those measured (wholly inside it). */
         int opened, measured, down, down3, up, both;
+        /**
+         * Of those measured, the ones walked down to their ramp's foot itself and back up from it, every drop 3 at most
+         * ({@link #footWalks}); the first that are not.
+         */
+        int foot3;
+        String footFailed = "";
         /** The Galleries' dry places in the main component: to the nearest way up, and up into the Wasteland. */
         int gDry, toWayUp400, toWayUpNever, toWayUpMedian, toWayUp90;
         int intoWasteland400, intoWastelandNever, intoWastelandMedian, intoWasteland90;
@@ -505,13 +511,13 @@ class JoinTest {
 
         @Override public String toString() {
             return String.format(java.util.Locale.ROOT, "seed %d: main component %.1f %% of %d Wasteland places, %.1f %% of %d Galleries dry places;"
-                            + " %d holes opened (%.0f per km2), %d measured: way down %d (every drop <= 3: %d), way up %d, both %d;"
+                            + " %d holes opened (%.0f per km2), %d measured: way down %d (every drop <= 3: %d), way up %d, both %d, down to the foot itself and back up with drops <= 3 %d%s;"
                             + " Galleries dry places to the nearest way up within 400 moves %.1f %% (none %d; median %d, 90 %% %d), up into the Wasteland within 400 %.1f %% (none %d; median %d, 90 %% %d);"
                             + " the Wasteland's places to the nearest way down median %d, 90 %% %d (none %d), down to the Galleries' floor median %d, 90 %% %d (none %d of %d);"
                             + " gate 3's landing to the nearest rim %d moves (in the main component %b; down to the Galleries' floor %d moves, back up from the nearest floor place %d, from the dry places median %d);"
                             + " keyholes %d: with a reachable rim %d, best rim 10 %% or more %d (median best %.1f %%), edge-aimed median %.1f %%, floor columns seen min %d median %d;"
                             + " views of 192 or more from %.2f %% of the Wasteland's places, %.2f %% of rim places%s%s",
-                    seed, 100.0 * wMain / wPlaces, wPlaces, 100.0 * gMain / gPlaces, gPlaces, opened, perKm2(opened), measured, down, down3, up, both,
+                    seed, 100.0 * wMain / wPlaces, wPlaces, 100.0 * gMain / gPlaces, gPlaces, opened, perKm2(opened), measured, down, down3, up, both, foot3, footFailed,
                     100.0 * toWayUp400 / gDry, toWayUpNever, toWayUpMedian, toWayUp90, 100.0 * intoWasteland400 / gDry, intoWastelandNever, intoWastelandMedian, intoWasteland90,
                     toWayDownMedian, toWayDown90, toWayDownNever, downToFloorMedian, downToFloor90, downToFloorNever, wLow, landingWalk,
                     landingInMain, landingToFloor, floorToLanding, floorToLandingMedian,
@@ -621,6 +627,9 @@ class JoinTest {
             if (up) w.up++;
             if (dn && up) w.both++;
             else if (failed.length() < 300) failed.append(String.format(java.util.Locale.ROOT, " (hole %.0f,%.0f: down %b, up %b)", o.x, o.z, dn, up));
+            String foot = footWalks(v, g, o, T, wBot);
+            if (foot == null) w.foot3++;
+            else if (w.footFailed.length() < 300) w.footFailed += " (" + foot + ")";
         }
         w.failed = failed.toString();
         // the Galleries' dry ground to the nearest way up, and up into the Wasteland
@@ -857,6 +866,183 @@ class JoinTest {
         return false;
     }
 
+    /**
+     * A way down to its ramp's foot itself and back up from it, every drop 3 at most (the 0.8.0 pack run: seed 8675309's
+     * hole at (21, 126) walked down but not back up, on real blocks and on NoiseVox's alike: its foot ended on risers of 2
+     * rows at the joints of cells whose ground stood at the deck's row, while {@link #ways}' walk up started within 6
+     * blocks of the ramp's end and so from the deck's own last stretch): from the Wasteland's places r + 12 to r + 30
+     * from the hole's middle down to the foot (the places with feet at T - 12 or lower within 6 blocks of the ramp's end
+     * and off its deck: the Galleries' own floor there) and back up, inside the hole's region (its reach + 8). Null when
+     * both walks go, else what failed, with the highest place the walk up from the foot reached.
+     */
+    static String footWalks(NoiseVox v, GalleriesField g, GalleriesField.Opening o, int T, int wBot) {
+        GalleriesField.Ramp rp = o.ramp;
+        double ex = rp.px[rp.n - 1], ez = rp.pz[rp.n - 1];
+        boolean[][] sets = footSets(v, g, o, T, wBot);
+        boolean[] from = sets[0], foot = sets[1], region = sets[2];
+        int nFoot = 0;
+        for (boolean f : foot) if (f) nFoot++;
+        boolean dn = reach(v, from, foot, region, 3), up = reach(v, foot, from, region, 3);
+        if (dn && up) return null;
+        // the highest place the walk up from the foot reaches
+        ArrayDeque<Integer> q = new ArrayDeque<>();
+        boolean[] seen = new boolean[v.places];
+        for (int p = 0; p < v.places; p++) if (foot[p]) { seen[p] = true; q.add(p); }
+        int best = -1;
+        while (!q.isEmpty()) {
+            int p = q.poll();
+            if (best < 0 || v.py(p) > v.py(best)) best = p;
+            for (int d = 0; d < 4; d++) {
+                int n = v.next[p * 4 + d];
+                if (n < 0 || seen[n] || !region[n] || v.py(p) - v.py(n) > 3) continue;
+                seen[n] = true;
+                q.add(n);
+            }
+        }
+        return String.format(java.util.Locale.ROOT, "hole %.0f,%.0f, foot %.0f,%.0f: %d foot places, down %b, up %b%s", o.x, o.z, ex, ez, nFoot, dn, up,
+                best < 0 ? "" : String.format(java.util.Locale.ROOT, ", up from the foot to feet %d at %d %d at the highest", v.py(best), v.px(best), v.pz(best)));
+    }
+
+    /**
+     * {@link #footWalks}' places round opened opening o: {the Wasteland's places r + 12 to r + 30 from the hole's middle,
+     * the foot (feet at T - 12 or lower within 6 blocks of the ramp's end, off its deck), the hole's region (its reach + 8)}.
+     */
+    static boolean[][] footSets(NoiseVox v, GalleriesField g, GalleriesField.Opening o, int T, int wBot) {
+        GalleriesField.Ramp rp = o.ramp;
+        double t0 = o.r + GalleriesField.LIP, ex = rp.px[rp.n - 1], ez = rp.pz[rp.n - 1];
+        boolean[] from = new boolean[v.places], foot = new boolean[v.places], region = new boolean[v.places];
+        for (int p = 0; p < v.places; p++) {
+            double d = Math.hypot(v.px(p) + 0.5 - o.x, v.pz(p) + 0.5 - o.z);
+            if (d > o.reach + 8) continue;
+            region[p] = true;
+            int y = v.py(p);
+            if (y >= wBot + 2 && d >= o.r + 12 && d <= o.r + 30) from[p] = true;
+            if (y > T - 12 || Math.hypot(v.px(p) + 0.5 - ex, v.pz(p) + 0.5 - ez) > 6) continue;
+            double dx = v.px(p) + 0.5 - o.x, dz = v.pz(p) + 0.5 - o.z, tt = dx * rp.ux + dz * rp.uz, l = dx * rp.uz - dz * rp.ux;
+            if (tt >= t0 - 1 && tt <= rp.tEnd && Math.abs(l - g.bend(rp, t0, tt)) < g.halfWidth(rp, t0, tt)) continue;   // the deck
+            foot[p] = true;
+        }
+        return new boolean[][]{from, foot, region};
+    }
+
+    /**
+     * A shortest walk (fewest moves) from some place of {@code from} to some place of {@code to} inside {@code region},
+     * every move dropping at most maxDrop: its places in order, or an empty list when there is none.
+     */
+    static List<Integer> walk(NoiseVox v, boolean[] from, boolean[] to, boolean[] region, int maxDrop) {
+        ArrayDeque<Integer> q = new ArrayDeque<>();
+        int[] prev = new int[v.places];
+        Arrays.fill(prev, -2);
+        for (int p = 0; p < v.places; p++) if (from[p]) { prev[p] = -1; q.add(p); }
+        while (!q.isEmpty()) {
+            int p = q.poll();
+            if (to[p]) {
+                List<Integer> path = new ArrayList<>();
+                for (int u = p; u >= 0; u = prev[u]) path.add(u);
+                Collections.reverse(path);
+                return path;
+            }
+            for (int d = 0; d < 4; d++) {
+                int n = v.next[p * 4 + d];
+                if (n < 0 || prev[n] != -2 || !region[n] || v.py(p) - v.py(n) > maxDrop) continue;
+                prev[n] = p;
+                q.add(n);
+            }
+        }
+        return List.of();
+    }
+
+    /**
+     * The blocks of rows from the Galleries' bottom to the Wasteland's bottom + 40 round opened opening o and its ramp
+     * (16 columns past both), with their walk graph (one box a hole, as the 0.8.0 pack run walked them).
+     */
+    static NoiseVox holeBox(Terrain t, GalleriesField.Opening o) {
+        GalleriesField.Ramp rp = o.ramp;
+        double minX = Math.min(o.x - o.reach, rp.minX), maxX = Math.max(o.x + o.reach, rp.maxX), minZ = Math.min(o.z - o.reach, rp.minZ), maxZ = Math.max(o.z + o.reach, rp.maxZ);
+        int x0 = (int) Math.floor(minX) - 16, z0 = (int) Math.floor(minZ) - 16, nx = (int) Math.ceil(maxX) + 16 - x0, nz = (int) Math.ceil(maxZ) + 16 - z0;
+        return NoiseVox.build(t, x0, z0, nx, nz, t.shape.bottom(Terrain.GALLERIES), t.join.wBot + 40).graph();
+    }
+
+    /** The opened openings with middles in [xa, xb) x [za, zb). */
+    static List<GalleriesField.Opening> openingsIn(GalleriesField g, int xa, int za, int xb, int zb) {
+        List<GalleriesField.Opening> ops = new ArrayList<>();
+        for (int i = Math.floorDiv(xa, 64) - 1; i <= Math.floorDiv(xb, 64) + 1; i++)
+            for (int k = Math.floorDiv(za, 64) - 1; k <= Math.floorDiv(zb, 64) + 1; k++)
+                for (GalleriesField.Opening o : g.openings(i, k)) if (o.x >= xa && o.x < xb && o.z >= za && o.z < zb) ops.add(o);
+        return ops;
+    }
+
+    /**
+     * Every way down walks to its ramp's foot itself and back up from it, every drop 3 at most ({@link #footWalks}): the
+     * 0.8.0 pack run's one-way hole (seed 8675309 at (21, 126): down 142 moves, but no way back up, its foot ending on
+     * risers of 2 rows at (136, 155) and (139, 155)) and the other holes of the first 256 x 256 of that run's region
+     * round it. The deck now lies over the ground at such a cell ({@code GalleriesField.deck}), so the foot steps a row
+     * at a time onto the floor ({@link #waysDownAndUp} bars every measured hole of its three boxes the same way).
+     */
+    @Test
+    void waysWalkBackUpFromTheirFoot() {
+        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 8675309L);
+        int T = t.join.gTop, wBot = t.join.wBot;
+        List<GalleriesField.Opening> ops = openingsIn(t.galleries, -100, 0, 156, 256);
+        assertTrue(ops.stream().anyMatch(o -> Math.abs(o.x - 21) < 1 && Math.abs(o.z - 126) < 1), "the pack run's hole at (21, 126) is gone");
+        List<String> bad = new ArrayList<>();
+        for (GalleriesField.Opening o : ops) {
+            String foot = footWalks(holeBox(t, o), t.galleries, o, T, wBot);
+            System.out.println("JoinTest foot walk " + String.format(java.util.Locale.ROOT, "hole %.1f,%.1f r %.1f: %s", o.x, o.z, o.r, foot == null ? "down and back up" : foot));
+            if (foot != null) bad.add(foot);
+        }
+        assertTrue(ops.size() >= 5, "too few holes: " + ops.size());
+        assertTrue(bad.isEmpty(), "ways that do not walk down to their foot and back up: " + bad);
+    }
+
+    /**
+     * The features keep off the ways down (the 0.8.0 pack run: a lava terrace pool and a lava fall on the ramp of seed
+     * 8675309's hole at (-121.5, -19.9), and lava in the deck's band of 18 of the region's 25 ramps, the walk guard having
+     * kept only the planned layers' ways and the Wasteland's walking channels). Every way down still walks down from the
+     * Wasteland to its ramp's foot and back up from it (drops of 3 at most, {@link #footSets}) on the places the guard
+     * holds alone, wherever their feet stand under the rows where the Wasteland's rules keep every walk round a feature
+     * (Walkway.channelled: the Wasteland's rows and the 16 under them, where lava pools and falls keep the walks round them
+     * as they were, WalkWindow): places that the guard every feature asks holds with the head room over them
+     * ({@code Walkway.nearWays}, margin 0: no pool, column, root or spike there) and that a lava fall keeps off
+     * ({@code Walkway.nearWayDown} with the falls' margin of 2 and their head keep, FluidFallFeature.HEAD_KEEP). So
+     * whatever the features do off those places, the way stays. How many of the shortest walks' places the guard leaves
+     * is printed. Over the holes of the pack run's region round the B2 holes (x -200 to 156, z -100 to 256).
+     */
+    @Test
+    void theGuardHoldsAWayDown() {
+        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 8675309L);
+        int T = t.join.gTop, wBot = t.join.wBot;
+        List<GalleriesField.Opening> ops = openingsIn(t.galleries, -200, -100, 156, 256);
+        assertTrue(ops.stream().anyMatch(o -> Math.abs(o.x + 121.5) < 1 && Math.abs(o.z + 19.9) < 1), "the pack run's hole at (-121.5, -19.9) is gone");
+        List<String> bad = new ArrayList<>();
+        int held = 0;
+        for (GalleriesField.Opening o : ops) {
+            NoiseVox v = holeBox(t, o);
+            boolean[][] sets = footSets(v, t.galleries, o, T, wBot);
+            boolean[] guarded = new boolean[v.places];
+            int n = 0, k = 0;
+            for (int p = 0; p < v.places; p++) {
+                if (!sets[2][p]) continue;
+                int x = v.px(p), y = v.py(p), z = v.pz(p);
+                boolean walks = com.explorationremix.world.feature.Walkway.channelled(t, y);
+                guarded[p] = walks || com.explorationremix.world.feature.Walkway.nearWays(t, x, z, y, y + 2, 0)
+                        && com.explorationremix.world.feature.Walkway.nearWayDown(t, x, z, y, y + 2, 2, com.explorationremix.world.feature.FluidFallFeature.HEAD_KEEP);
+                if (!walks && guarded[p]) n++;
+            }
+            List<Integer> down = walk(v, sets[0], sets[1], guarded, 3), up = walk(v, sets[1], sets[0], guarded, 3);
+            List<Integer> freeDown = walk(v, sets[0], sets[1], sets[2], 3), freeUp = walk(v, sets[1], sets[0], sets[2], 3);
+            for (List<Integer> path : List.of(freeDown, freeUp)) for (int p : path) if (!guarded[p]) k++;
+            held += n;
+            String line = String.format(java.util.Locale.ROOT, "hole %.1f,%.1f: %d places held under the Wasteland's rows; on them down %d and up %d moves (free %d and %d, %d of their places not held)",
+                    o.x, o.z, n, down.size(), up.size(), freeDown.size(), freeUp.size(), k);
+            System.out.println("JoinTest guard on the way down: " + line);
+            if (down.isEmpty() || up.isEmpty()) bad.add(line);
+        }
+        assertTrue(ops.size() >= 8, "too few holes: " + ops.size());
+        assertTrue(held >= 200 * ops.size(), "too few places held: " + held);
+        assertTrue(bad.isEmpty(), "ways down that do not walk down and back up on the places the guard holds: " + bad);
+    }
+
     static final long[] WAY_SEEDS = {1, 2, 8004};
 
     /**
@@ -870,8 +1056,10 @@ class JoinTest {
      * holes' ground), 42-65 since the ways down were reshaped, 46-65 since fix round 2b resolved the openings by lattice
      * cell priority, 53-72 before). 90 % or more of the Galleries' dry places reach the nearest way up within 400 moves
      * (W-ENG-3's bar: measured 98.4-100 % at the landing, 99.8-100 % on wip/r2 with the ways reshaped; 95.0-100 % and
-     * 99.2-100 % in earlier rounds). The walks on up into the Wasteland and from the Wasteland's low places to the
-     * nearest way down are printed.
+     * 99.2-100 % in earlier rounds). Every hole measured also walks down to its ramp's foot itself, off the deck, and
+     * back up from it with every drop 3 at most ({@link #footWalks}; the 0.8.0 pack run found a foot that went down but
+     * not back up, {@link #waysWalkBackUpFromTheirFoot}). The walks on up into the Wasteland and from the Wasteland's
+     * low places to the nearest way down are printed.
      */
     @Test
     void waysDownAndUp() {
@@ -881,6 +1069,7 @@ class JoinTest {
             assertTrue(w.measured >= 3, "too few holes to measure: " + w);
             assertTrue(w.down >= 0.9 * w.measured && w.up >= 0.9 * w.measured && w.both >= 0.9 * w.measured, "holes without a way down and back up: " + w);
             assertTrue(w.down3 >= 0.75 * w.measured, "ways down that take long drops: " + w);
+            assertEquals(w.measured, w.foot3, "ways that do not walk down to their ramp's foot itself and back up with drops of 3 at most: " + w);
             assertTrue(w.perKm2(w.opened) * w.both / w.measured >= 40, "too few ways down and up per km2: " + w);
             assertTrue(w.toWayUp400 >= 0.9 * w.gDry && w.toWayUpNever == 0, "the Galleries' ground is far from a way up: " + w);
             assertEquals(0, w.toWayDownNever, "Wasteland places with no way down: " + w);

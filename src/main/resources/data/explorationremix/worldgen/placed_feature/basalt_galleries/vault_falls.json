@@ -2,11 +2,15 @@
   "feature": "explorationremix:basalt_galleries/vault_falls",
   "placement": [
     {
-      "type": "minecraft:count",
-      "count": 3
-    },
-    {
-      "type": "minecraft:in_square"
+      "type": "explorationremix:fall_sites",
+      "sites": {
+        "salt": 1,
+        "grid": 8,
+        "spacing": 28,
+        "keep": 24,
+        "ring_min": 0.42,
+        "ring_max": 0.62
+      }
     },
     {
       "type": "explorationremix:open_span",

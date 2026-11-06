@@ -280,14 +280,36 @@ def attach(provider, faces, tries, on, radius=6, height=6, in_water=False):
                                                       "height": height, "on": on, "in_water": in_water}}
 
 
-def fall(fluid, min_drop, width=(1, 1), search=10, rock=f"#{MOD}:cave_rock", mode=None):
+def fall(fluid, min_drop, width=(1, 1), search=10, rock=f"#{MOD}:cave_rock", mode=None, tries=1, spread=0, sites=None, min_width=1):
     """A waterfall or lava fall (FluidFallFeature). mode: where its source goes, "wall" (the default: the wall the try
-    faces in a random direction), "nearest_wall" or "ceiling" (the vault right over the try)."""
+    faces in a random direction), "nearest_wall" or "ceiling" (the vault right over the try). tries over 1: tries again
+    up to spread columns each way round the origin until one places. sites: the set of spaced sites (FallSites) the
+    fall's placement takes its origins from, whose shares of the ground its blocks keep to. min_width over 1: one
+    curtain, its row of sources ending at the first that cannot pour, and no fall where fewer than min_width pour."""
     c = {"fluid": state(fluid, level=0), "rock": rock, "min_drop": min_drop, "search": search,
          "width": uniform(*width) if width[0] != width[1] else width[0]}
+    if min_width != 1:
+        c["min_width"] = min_width
     if mode:
         c["mode"] = mode
+    if tries != 1:
+        c["tries"] = tries
+    if spread:
+        c["spread"] = spread
+    if sites:
+        c["sites"] = sites
     return {"type": f"{MOD}:fluid_fall", "config": c}
+
+
+def fall_sites(sites, share=(0.0, 1.0)):
+    """One try at each of the chunk's sites of a set of spaced sites (FallSitesPlacement) whose share lies in
+    [share[0], share[1])."""
+    p = {"type": f"{MOD}:fall_sites", "sites": sites}
+    if share[0] > 0:
+        p["share_min"] = share[0]
+    if share[1] < 1:
+        p["share_max"] = share[1]
+    return p
 
 
 def span(name, anchor="any", min_span=16, inset=2, above_water=False):
@@ -990,26 +1012,28 @@ def build_features():
     feature("ash_hollows/amber_shards", "underground_decoration", ["ash_hollows"],
             attach(simple(f"{MOD}:amber_shard"), "any", 8, f"#{MOD}:cave_rock", radius=5, height=4),
             [count(2), SQUARE, layer("wasteland", above_water=True), BIOME])
-    # Lava falls, many more than the Wasteland's: from the high vaults straight down into the middle of the halls, and
-    # down the cliffs from the nearest wall (a try in the middle of a hall finds no wall within 15 and gives no fall).
-    # Every one ends in lava, in the lava sea, a pool or its own sump, and none pours onto a walk (FluidFallFeature).
-    # Measured over whole cells, about a quarter of the vault tries place a fall and about one cliff try in seven (the
-    # rest find their source open to the air, no wall in reach, a walk below or too short a drop), so a hall 100 across
-    # gets about 8 falls from its vault and 15 down its cliffs, six or more in any view of it. The Caldera's walls
-    # overhang and its ring walk runs along their foot, so wall falls almost never place there (about one try in 40);
-    # its falls come from the dome instead, about 18 to a crater, into the crater's lava and onto its terraces.
-    # 0.5.1 (the first picture: falls from the vault and down the column walls into the lowlands): three times the vault
-    # tries and half again the cliff tries, and wider, 2 to 3 and 2 to 4 blocks. With no planned ways in the Galleries
-    # no fall is refused for a walk: one landing on a terrace digs its own sealed sump (FluidFallFeature).
-    feature("basalt_galleries/vault_falls", "fluid_springs", halls,
-            fall("minecraft:lava", 16, (2, 3), rock=hall_rock, mode="ceiling"),
-            [count(3), SQUARE] + hall("ceiling", 24) + [BIOME])
-    feature("basalt_galleries/cliff_falls", "fluid_springs", halls,
-            fall("minecraft:lava", 10, (2, 4), search=15, rock=hall_rock, mode="nearest_wall"),
-            [count(6), SQUARE] + hall("any", 20) + [BIOME])
+    # Lava falls: a few big ones, from the high vaults straight down into the halls, every one ending in lava, in the lava
+    # sea, a pool or its own sump, none pouring onto a walk, onto a way down from the Wasteland or in front of its head or
+    # its hole (FluidFallFeature, Walkway). 0.8.0 fix round (the pack run: 1557 falls in 2400 chunks from tries per chunk,
+    # 3 from the vaults, 6 at the cliffs and 12 in the Caldera, standing side by side as curtains and forests of orange
+    # poles that hid the halls' long views; Taran's picture has a handful of falls in a whole cavern): the falls pour only
+    # at spaced sites (FallSites), at least 28 blocks apart and packed at random, not on a grid, and in the Caldera only
+    # on its lake's rim, from 0.42 to 0.62 of the patch's radius (the lake reaches 0.5, its lava a little past it), so its
+    # falls ring the lake and none hides the crater. A fall tries 32 spots up to 3 columns round its site and keeps every
+    # block 24 or more nearer its own site than any other, so no two falls come within 24 blocks of each other. Each is
+    # one curtain of 2 to 5 sources side by side along the vault's rock, never a lone thread (min_width). The cliff falls
+    # are gone: kept that near their sites they found a wall within reach at one site in fifty. On the pack run's region
+    # (GalleriesDecor, the emulation the tests use): 221 falls where the old tries placed 2925 (2606 as fallcount.py
+    # counts them; the pack counted 1557), at most 12 in a 128-block square (133 before), the nearest other fall 25
+    # blocks away at the least and 31 at the median (5 before); 172 two wide, 43 three, 6 four.
+    gal_falls = {"salt": 1, "grid": 8, "spacing": 28, "keep": 24, "ring_min": 0.42, "ring_max": 0.62}
+    fall_halls = ["basalt_galleries", "causeway", "scoria_canyons"]
+    feature("basalt_galleries/vault_falls", "fluid_springs", fall_halls,
+            fall("minecraft:lava", 16, (3, 5), rock=hall_rock, mode="ceiling", tries=32, spread=3, sites=gal_falls, min_width=2),
+            [fall_sites(gal_falls)] + hall("ceiling", 24) + [BIOME])
     feature("caldera/lava_falls", "fluid_springs", ["caldera"],
-            fall("minecraft:lava", 16, (1, 2), rock=hall_rock, mode="ceiling"),
-            [count(12), SQUARE] + hall("ceiling", 24) + [BIOME])
+            fall("minecraft:lava", 16, (3, 5), rock=hall_rock, mode="ceiling", tries=32, spread=3, sites=gal_falls, min_width=2),
+            [fall_sites(gal_falls)] + hall("ceiling", 24) + [BIOME])
 
     # ---- top layer: roots of the trees above, once the chunk's trees have grown; the way down is kept open after
     # everything else. The roots take the wood of the trees over them (match_trees): oak, birch, spruce, jungle, dark
@@ -1034,16 +1058,21 @@ def build_features():
     # The Galleries' lava glow (HallGlowFeature, after everything else): invisible light along the rock above the flood
     # band, one try in every 4-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
     # rock near black. 0.5.1, "brightly lit" but not flat: lit from the lava and the floor up. Level 15 just over the
-    # flood band, fading to 13 seventy blocks higher; a spot with no floor in reach under it but only a vault over it one
+    # flood band, fading to 14 seventy blocks higher; a spot with no floor in reach under it but only a vault over it one
     # less; one up or down in slow patches. A face gets about 3 to 4 levels under the spot that lights it: on the look
-    # prototype's stand-in cavern the floors measured 11.1, 10.1 and 9.0 on average 0-30, 30-60 and 60+ blocks over the
-    # band and the undersides 10.8, 9.9 and 9.2 (0.5.0's 15-to-14: 11.2 to 9.9 and 11.2 to 10.4, nearly flat). The first
-    # fade to 11 left the vaults at 8 on average, a third of the faces under 8. The Obsidian Tubes take 13, as bright as
-    # the high halls (Taran's second picture: tubes lit to their far ends): on the real tube field their faces measure
-    # 9.3 on average from the glow alone, one in eight under 8 (HallGlowFeatureTest); at 9, about 6, four in five under 8.
+    # prototype's stand-in cavern, at 15 fading to 13, the floors measured 11.1, 10.1 and 9.0 on average 0-30, 30-60 and
+    # 60+ blocks over the band and the undersides 10.8, 9.9 and 9.2 (0.5.0's 15-to-14: 11.2 to 9.9 and 11.2 to 10.4,
+    # nearly flat). The first fade to 11 left the vaults at 8 on average, a third of the faces under 8. 0.8.0 fix round:
+    # the falls' columns lit the halls too, so with a tenth of the falls the fade goes to 14, not 13: on the pack run's
+    # region (GlowLight, every lava block and glow spot) the halls' faces measure 10.6 on average, 1 in 23 under 8, where
+    # the old falls with the fade to 13 gave 10.3 and 1 in 13 (the thinned falls with 13: 10.0 and 1 in 10); the lowest
+    # 60 rows stay a little under the old (11.5 and 11.25 on average against 11.8 and 11.4), the high halls, four faces in
+    # five, gain (10.5 against 10.0). The Obsidian Tubes take 14, as bright as the high halls (Taran's second picture:
+    # tubes lit to their far ends): on the real tube field their faces measure 10.3 on average from the glow alone, 1 in
+    # 27 under 8 (HallGlowFeatureTest; at 13, 9.3 and one in eight; at 9, about 6).
     feature("basalt_galleries/glow", "top_layer_modification", GALLERIES,
-            {"type": f"{MOD}:hall_glow", "config": {"spacing": 4, "reach": 4, "low": 15, "high": 13, "fade": 70, "patch": 1,
-                                                    "vault": 1, "tubes": 13}}, [])
+            {"type": f"{MOD}:hall_glow", "config": {"spacing": 4, "reach": 4, "low": 15, "high": 14, "fade": 70, "patch": 1,
+                                                    "vault": 1, "tubes": 14}}, [])
 
 
 # The vanilla deep dark, moved down into the Blue Reaches: its sculk, which vanilla only places relative to the old

@@ -8,6 +8,7 @@ import com.explorationremix.world.feature.ClimbVinesFeature;
 import com.explorationremix.world.feature.ColumnClusterFeature;
 import com.explorationremix.world.feature.DaylightShaftFeature;
 import com.explorationremix.world.feature.DenLairFeature;
+import com.explorationremix.world.feature.FallSitesPlacement;
 import com.explorationremix.world.feature.FallbackStateProvider;
 import com.explorationremix.world.feature.FluidFallFeature;
 import com.explorationremix.world.feature.GiantFungusFeature;
@@ -80,5 +81,7 @@ public final class ERWorldgen {
     public static final RegistryObject<PlacementModifierType<BiomeAroundFilter>> BIOME_AROUND = PLACEMENT_TYPES.register("biome_around", () -> () -> BiomeAroundFilter.CODEC);
     // 0.5: tries aimed at the Basalt Galleries' tall halls, their vaults and floors, past the 32 steps of an environment scan
     public static final RegistryObject<PlacementModifierType<OpenSpanPlacement>> OPEN_SPAN = PLACEMENT_TYPES.register("open_span", () -> () -> OpenSpanPlacement.CODEC);
+    // 0.8.0 fix round: the Galleries' lava falls at spaced sites, not tries per chunk
+    public static final RegistryObject<PlacementModifierType<FallSitesPlacement>> FALL_SITES = PLACEMENT_TYPES.register("fall_sites", () -> () -> FallSitesPlacement.CODEC);
     public static final RegistryObject<HeightProviderType<LayerHeight>> LAYER_HEIGHT = HEIGHT_PROVIDERS.register("layer_height", () -> () -> LayerHeight.CODEC);
 }

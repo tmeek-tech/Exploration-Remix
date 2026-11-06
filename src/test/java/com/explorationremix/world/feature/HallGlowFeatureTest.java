@@ -83,7 +83,8 @@ class HallGlowFeatureTest {
 
     @Test
     void theShippedGlowIsBrightAndLitFromTheFloorUp() throws Exception {
-        // tools/worldgen.py (0.5.1): {"low": 15, "high": 13, "fade": 70, "patch": 1, "vault": 1}. A face gets about 3 to
+        // tools/worldgen.py (0.5.1): {"low": 15, "high": 13, "fade": 70, "patch": 1, "vault": 1}; high 14 since the 0.8.0
+        // fix round. A face gets about 3 to
         // 4 levels under the spot that lights it. On the look prototype's stand-in cavern (reshape/proc-looks) this
         // lit floor tops at 11.1, 10.1 and 9.0 on average 0-30, 30-60 and 60+ over the band, walls 10.9, 10.1, 9.3 and
         // undersides 10.8, 9.9, 9.2 (0.5.0's flat glow: 11.2 to 9.9, 11.1 to 10.3, 11.2 to 10.4). The first fade, to
@@ -91,8 +92,9 @@ class HallGlowFeatureTest {
         HallGlowFeature.Config shipped = shipped();
         assertEquals(HallGlow.BAND_LEVEL, shipped.low(), "the band's glow and the glow just over it meet without a step");
         // 0.8.0: the Obsidian Tubes as bright as the high halls (Taran's second picture, the tubes lit to their far ends);
-        // at 9 their faces measured a mean of 6 (theTubesFacesAreLit)
-        assertEquals(13, shipped.tubes(), "the tubes' glow");
+        // at 9 their faces measured a mean of 6 (theTubesFacesAreLit). 0.8.0 fix round: with a tenth of the lava falls
+        // the halls fade to 14, not 13 (their falls' columns lit them too: GalleriesDecorTest), and the tubes keep up.
+        assertEquals(14, shipped.tubes(), "the tubes' glow");
         assertTrue(shipped.tubes() >= shipped.high(), "the tubes no darker than the high halls");
         assertEquals(15, HallGlow.levelAt(shipped, 0, HallGlow.FLOOR, null, 0, 0, 0));
         int floorHigh = HallGlow.levelAt(shipped, 200, HallGlow.FLOOR, null, 0, 0, 0);

@@ -63,6 +63,28 @@ public final class WalkWindow {
         }
 
         public int size() { return n; }
+
+        /** A copy, to add to without changing this one. */
+        public Change copy() {
+            Change c = new Change();
+            c.n = n;
+            c.x = x.clone();
+            c.y = y.clone();
+            c.z = z.clone();
+            c.kind = kind.clone();
+            return c;
+        }
+    }
+
+    /** The blocks b gives with the change made (a later entry for a block over an earlier one). */
+    public static Detour.Blocks with(Detour.Blocks b, Change c) {
+        if (c.n == 0) return b;
+        java.util.HashMap<Long, Integer> made = new java.util.HashMap<>();
+        for (int i = 0; i < c.n; i++) made.put(BlockPos.asLong(c.x[i], c.y[i], c.z[i]), c.kind[i]);
+        return (x, y, z) -> {
+            Integer k = made.get(BlockPos.asLong(x, y, z));
+            return k != null ? k : b.at(x, y, z);
+        };
     }
 
     /** The level's blocks as a walker meets them ({@link #kind}). */

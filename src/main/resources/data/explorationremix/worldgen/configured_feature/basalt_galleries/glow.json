@@ -4,10 +4,10 @@
     "spacing": 4,
     "reach": 4,
     "low": 15,
-    "high": 13,
+    "high": 14,
     "fade": 70,
     "patch": 1,
     "vault": 1,
-    "tubes": 13
+    "tubes": 14
   }
 }
