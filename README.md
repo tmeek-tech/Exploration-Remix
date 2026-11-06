@@ -138,7 +138,8 @@ regenerated.
   beds, lava falls, magma and glowing ember crust in the Wasteland and the Basalt Galleries, cinder chains instead of
   vines in the lifeless biomes, each biome's own fog, water colour, particles and ambient sound, steam over hot pools,
   embers over lava, and pollen in daylight shafts. Tuned for vanilla lighting without shaders: every biome carries
-  enough glowing things to see by.
+  enough glowing things to see by. While the camera is under the old world floor (y -64) the clouds are moved far
+  above it, so no clouds (a shader pack's included) show past the edge of the drawn world in the deep caves.
 
 ## Commands
 
