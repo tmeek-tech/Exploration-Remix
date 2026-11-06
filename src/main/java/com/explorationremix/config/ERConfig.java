@@ -37,7 +37,8 @@ public final class ERConfig {
     public final ForgeConfigSpec.DoubleValue lavaCycleMinutes, lavaCalm, lavaWarning, lavaRise, lavaFull, lavaDrain;
     public final ForgeConfigSpec.IntValue lavaChecksPerTick, lavaChangesPerTick, lavaRadius;
     // 0.5.1: the Basalt Galleries' quakes (world.quake.Quakes), eruptions (world.eruption.Eruptions) and the terrain reset
-    // (world.lava.TerrainReset), read while the server runs.
+    // (world.lava.TerrainReset), read while the server runs. Quakes and eruptions are not built yet: their sections are
+    // kept, but do nothing in this build.
     public final ForgeConfigSpec.BooleanValue quakesEnabled;
     public final ForgeConfigSpec.DoubleValue quakeMinMinutes, quakeMaxMinutes, quakeSeconds, quakeDebrisPerSecond;
     public final ForgeConfigSpec.IntValue quakeDebrisRadius;
@@ -136,10 +137,12 @@ public final class ERConfig {
                 "up when a player comes near. 0: one chunk past the server's view distance (every chunk a client can see).").defineInRange("playerRadius", 0, 0, 64);
         b.pop();
 
-        b.comment("Earthquakes in the Basalt Galleries, at random times: the view shakes, dust falls, basalt drops from the ceilings, and",
+        b.comment("NOT BUILT YET: this build has no quakes, so everything in this section does nothing (it is kept for the build that",
+                "adds them, and /remix quake says so).",
+                "Earthquakes in the Basalt Galleries, at random times: the view shakes, dust falls, basalt drops from the ceilings, and",
                 "blocks players placed fall unless natural rock is at most 2 blocks under them (pillars, towers and bridges fall; steps",
                 "and low walls stay). Felt only by players in the Galleries. Read while the server runs.").push("quakes");
-        quakesEnabled = b.comment("Have quakes.").define("enabled", true);
+        quakesEnabled = b.comment("Have quakes (not built yet: does nothing in this build).").define("enabled", true);
         quakeMinMinutes = b.comment("Shortest time between two quakes, in minutes.").defineInRange("minMinutes", 3.0, 0.25, 240.0);
         quakeMaxMinutes = b.comment("Longest time between two quakes, in minutes (a smaller value than minMinutes counts as minMinutes).")
                 .defineInRange("maxMinutes", 7.0, 0.25, 240.0);
@@ -149,9 +152,11 @@ public final class ERConfig {
         quakeDebrisRadius = b.comment("How far from a player the ceiling drops its basalt, in blocks.").defineInRange("debrisRadius", 24, 4, 64);
         b.pop();
 
-        b.comment("Eruptions in the Caldera of the Basalt Galleries: a vent smokes and rumbles, then throws up a fountain of lava and lava",
+        b.comment("NOT BUILT YET: this build has no eruptions, so everything in this section does nothing (it is kept for the build that",
+                "adds them, and /remix erupt says so).",
+                "Eruptions in the Caldera of the Basalt Galleries: a vent smokes and rumbles, then throws up a fountain of lava and lava",
                 "bombs that blow holes in the rock. Only Calderas near players erupt. Read while the server runs.").push("eruptions");
-        eruptionsEnabled = b.comment("Have eruptions.").define("enabled", true);
+        eruptionsEnabled = b.comment("Have eruptions (not built yet: does nothing in this build).").define("enabled", true);
         eruptionMinMinutes = b.comment("Shortest time between two eruptions of one Caldera while the lava is calm or draining, in minutes.")
                 .defineInRange("minMinutes", 3.0, 0.25, 240.0);
         eruptionMaxMinutes = b.comment("Longest time between them while the lava is calm or draining, in minutes.").defineInRange("maxMinutes", 7.0, 0.25, 240.0);
@@ -168,8 +173,8 @@ public final class ERConfig {
         b.pop();
 
         b.comment("The Basalt Galleries' terrain reset: while the lava stands full, everything changed in the Galleries since the last reset",
-                "(by players, quakes and eruptions) is put back as it was generated, round the players there; other chunks catch up when",
-                "a player comes near. Only runs with the lava cycle. Read while the server runs.").push("terrainReset");
+                "(by players, and by quakes and eruptions once they are built) is put back as it was generated, round the players there;",
+                "other chunks catch up when a player comes near. Only runs with the lava cycle. Read while the server runs.").push("terrainReset");
         resetEnabled = b.comment("Reset the Galleries' terrain once a cycle.").define("enabled", true);
         resetChangesPerTick = b.comment("Most blocks the reset puts back in one tick, over all players (halved while the server is falling behind).")
                 .defineInRange("changesPerTick", 2048, 16, 100_000);

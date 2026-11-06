@@ -1,5 +1,9 @@
 package com.explorationremix.world.lava;
 
+import it.unimi.dsi.fastutil.ints.Int2IntMap;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntIterator;
+
 /**
  * What the rising and falling lava does to the blocks of one chunk, one layer of blocks (a slice) at a time: pure
  * rules, so they are tested without Minecraft. {@link LavaFlood} feeds them real chunks.
@@ -12,15 +16,21 @@ package com.explorationremix.world.lava;
  * <ul>
  *     <li><b>Rising</b>, the lava takes every block of the slice that is air, fire, flowing lava (a fall or a
  *     spill, which the sea swallows) or the halls' invisible glow, putting a lava source there, and records it in the
- *     chunk's {@link Mask}; a glow it takes is also marked in a second mask, so the drain can put it back.
- *     Everything else stays as it is: rock, water, natural lava sources (pools, which join the sea while it covers
- *     them), and anything else that is not air, so the terrain's own decoration and players' torches, rungs and signs
- *     come through a flood (the lava closes round them, as vanilla lava does round a ladder). Every open block under
- *     the lava's height is filled, connected to the sea or not: lava seeps through the rock into sealed pockets.</li>
- *     <li><b>Draining</b>, the lava leaves only the blocks it recorded that still hold lava, putting back air, or the
- *     glow where it took one; natural lava, players' lava, and whatever a player put in its place stay. Then the lava
- *     next to each block it left is woken (a fluid tick) so lava falls whose foot the sea swallowed flow down
- *     again.</li>
+ *     chunk's {@link Mask}; a glow it takes is also marked in a second mask, and any other block it takes (a fall's
+ *     flowing lava at its level, fire) is kept exactly in the chunk's {@link Kept} record, so the drain can put back
+ *     exactly what was there. Everything else stays as it is: rock, water, natural lava sources (pools, which join
+ *     the sea while it covers them), and anything else that is not air, so the terrain's own decoration and players'
+ *     torches, rungs and signs come through a flood (the lava closes round them, as vanilla lava does round a ladder).
+ *     Every open block under the lava's height is filled, connected to the sea or not: lava seeps through the rock
+ *     into sealed pockets.</li>
+ *     <li><b>Draining</b>, the lava leaves only the blocks it recorded that still hold lava, putting back exactly what
+ *     it took there: air, the glow, or the kept block (a lava fall comes back as the same falling lava, level for
+ *     level, so it is the fall the terrain made, not one vanilla's flow rules pour again: re-poured, a fall runs out
+ *     over the floor at its foot, feeds lava that leaked from the sea into the blocks beside it for good, and turns to
+ *     basalt where Immersive Weathering finds flowing lava on basalt). Natural lava, players' lava, and whatever a
+ *     player put in its place stay. Then the slice's caller is asked to wake the lava round each block the drain
+ *     left ({@link Slice#wake}); the game wakes only lava that changed since the last terrain reset (players'), never
+ *     the terrain's own.</li>
  * </ul>
  */
 public final class Flood {
@@ -55,32 +65,49 @@ public final class Flood {
          * {@link #GLOW}.
          */
         int kind(int x, int z);
+        /**
+         * The block at (x, z) exactly, as a non-negative id the slice can {@link #put} back (the game's block state id),
+         * or -1 when it keeps no such ids. Asked only for blocks the lava takes that are neither air nor the glow: a
+         * fall's flowing lava, fire.
+         */
+        default int state(int x, int z) { return -1; }
         /** Puts a lava source at (x, z). */
         void fill(int x, int z);
         /** Puts air at (x, z). */
         void clear(int x, int z);
         /** Puts the halls' glow back at (x, z), where the lava took one; air when the slice has no glow to give. */
         default void glow(int x, int z) { clear(x, z); }
+        /** Puts back at (x, z) the block {@link #state} gave for it before the lava took it. */
+        default void put(int x, int z, int state) { clear(x, z); }
         /**
-         * After a drain: wakes the lava next to (x, z), above it, below it (unless that is the sea's own) and on its four
-         * sides, so falls flow again and lava the sea fed downward drains away.
+         * After a drain: the drain has put back what the lava took at (x, z); the caller may wake lava next to it (the
+         * game wakes only lava changed since the last terrain reset, never the terrain's own: see the class comment).
          */
         void wake(int x, int z);
     }
 
-    /** {@link #rise(Slice, Mask, Mask, int)} with no glow to keep. */
-    public static int rise(Slice s, Mask m, int i) { return rise(s, m, null, i); }
+    /** {@link #rise(Slice, Mask, Mask, Kept, int)} with no glow and nothing else to keep. */
+    public static int rise(Slice s, Mask m, int i) { return rise(s, m, null, null, i); }
+
+    /** {@link #rise(Slice, Mask, Mask, Kept, int)} keeping the glow but no other block. */
+    public static int rise(Slice s, Mask m, Mask glow, int i) { return rise(s, m, glow, null, i); }
 
     /**
-     * Floods slice i of a chunk: every block the lava takes gets a lava source and its bit in the mask, and a glow it
-     * takes its bit in {@code glow} too (when given). Returns how many blocks changed.
+     * Floods slice i of a chunk: every block the lava takes gets a lava source and its bit in the mask, a glow it takes
+     * its bit in {@code glow} too (when given), and any other block it takes that is not air (a fall's flowing lava,
+     * fire) its exact state in {@code kept} (when given and the slice gives states). Returns how many blocks changed.
      */
-    public static int rise(Slice s, Mask m, Mask glow, int i) {
+    public static int rise(Slice s, Mask m, Mask glow, Kept kept, int i) {
         int n = 0;
         for (int z = 0; z < 16; z++) {
             for (int x = 0; x < 16; x++) {
                 int k = s.kind(x, z);
                 if (!takes(k)) continue;
+                if (kept != null) {
+                    int st = k != AIR && k != GLOW ? s.state(x, z) : -1;
+                    if (st >= 0) kept.put(i, x, z, st);
+                    else kept.remove(i, x, z);
+                }
                 s.fill(x, z);
                 m.set(i, x, z);
                 if (k == GLOW && glow != null) glow.set(i, x, z);
@@ -90,16 +117,24 @@ public final class Flood {
         return n;
     }
 
-    /** {@link #drain(Slice, Mask, Mask, int)} with no glow to put back. */
-    public static int drain(Slice s, Mask m, int i) { return drain(s, m, null, i); }
+    /** {@link #drain(Slice, Mask, Mask, Kept, int)} with no glow and nothing else to put back. */
+    public static int drain(Slice s, Mask m, int i) { return drain(s, m, null, null, i); }
+
+    /** {@link #drain(Slice, Mask, Mask, Kept, int)} putting back the glow but no other block. */
+    public static int drain(Slice s, Mask m, Mask glow, int i) { return drain(s, m, glow, null, i); }
 
     /**
-     * Drains slice i of a chunk: every block whose bit is set loses its bit (in {@code glow} too), and if it still holds
-     * lava becomes air, or the glow again where the lava took one; then the lava round each block it left is woken.
-     * Returns how many blocks changed.
+     * Drains slice i of a chunk: every block whose bit is set loses its bit (in {@code glow} and {@code kept} too), and
+     * if it still holds lava gets back exactly what the lava took there: the glow where it took one, the kept block
+     * where it kept one, air everywhere else; then the slice is asked to wake round each block it put back. Returns how
+     * many blocks changed.
      */
-    public static int drain(Slice s, Mask m, Mask glow, int i) {
-        if (!m.any(i)) return 0;
+    public static int drain(Slice s, Mask m, Mask glow, Kept kept, int i) {
+        if (!m.any(i)) {
+            // nothing of the lava's in the slice: no kept block can be left there either
+            if (kept != null) kept.clear(i);
+            return 0;
+        }
         // the blocks the lava left, one bit each as in the mask (z << 4 | x)
         long[] cleared = new long[4];
         int n = 0;
@@ -109,14 +144,18 @@ public final class Flood {
                 m.unset(i, x, z);
                 boolean lit = glow != null && glow.get(i, x, z);
                 if (lit) glow.unset(i, x, z);
+                int st = kept == null ? -1 : kept.remove(i, x, z);
                 if (!leaves(s.kind(x, z))) continue;
                 if (lit) s.glow(x, z);
+                else if (st >= 0) s.put(x, z, st);
                 else s.clear(x, z);
                 int b = z << 4 | x;
                 cleared[b >>> 6] |= 1L << (b & 63);
                 n++;
             }
         }
+        // a kept block whose lava bit was gone (never so in the game's records) is dropped with the slice
+        if (kept != null) kept.clear(i);
         // wake only once the whole slice is dry, so no lava of this slice is woken to flow into its neighbours
         for (int w = 0; w < 4; w++) {
             for (long bits = cleared[w]; bits != 0; bits &= bits - 1) {
@@ -210,6 +249,98 @@ public final class Flood {
             }
             bits = n;
             if (isEmpty()) bits = null;
+        }
+    }
+
+    /**
+     * The blocks the rising lava took that were neither air nor the glow (a fall's flowing lava at its level, fire),
+     * kept exactly so the drain puts them back as they were: one id per block (the game's block state id), keyed like
+     * the {@link Mask}'s bits. Empty in almost every chunk (only the falls' columns and their spills in the band).
+     */
+    public static final class Kept {
+        private final int slices;
+        private final Int2IntOpenHashMap map = new Int2IntOpenHashMap();
+
+        public Kept(int slices) {
+            if (slices < 0) throw new IllegalArgumentException("slices " + slices);
+            this.slices = slices;
+            map.defaultReturnValue(-1);
+        }
+
+        public int slices() { return slices; }
+
+        private static int bit(int i, int x, int z) { return i << 8 | z << 4 | x; }
+
+        /** The kept block at (i, x, z), or -1. */
+        public int get(int i, int x, int z) {
+            if (i < 0 || i >= slices) return -1;
+            return map.get(bit(i, x, z));
+        }
+
+        /** Keeps block {@code state} (non-negative) at (i, x, z), in place of any kept there before. */
+        public void put(int i, int x, int z, int state) {
+            if (i < 0 || i >= slices) throw new IndexOutOfBoundsException("slice " + i + " of " + slices);
+            if (state < 0) throw new IllegalArgumentException("state " + state);
+            map.put(bit(i, x, z), state);
+        }
+
+        /** Forgets the block kept at (i, x, z); returns it, or -1 when none was. */
+        public int remove(int i, int x, int z) {
+            if (i < 0 || i >= slices || map.isEmpty()) return -1;
+            return map.remove(bit(i, x, z));
+        }
+
+        /** Forgets every block kept in slice i. */
+        public void clear(int i) {
+            if (map.isEmpty()) return;
+            for (IntIterator it = map.keySet().iterator(); it.hasNext(); ) if (it.nextInt() >> 8 == i) it.remove();
+        }
+
+        public void clear() { map.clear(); }
+        public boolean isEmpty() { return map.isEmpty(); }
+        public int size() { return map.size(); }
+
+        /** How many blocks of slice i are kept. */
+        public int count(int i) {
+            int n = 0;
+            for (IntIterator it = map.keySet().iterator(); it.hasNext(); ) if (it.nextInt() >> 8 == i) n++;
+            return n;
+        }
+
+        /** Moves every kept block up by {@code by} slices (down when negative), dropping those that leave the band. */
+        public void shift(int by) {
+            if (by == 0 || map.isEmpty()) return;
+            Int2IntOpenHashMap moved = new Int2IntOpenHashMap();
+            for (Int2IntMap.Entry e : map.int2IntEntrySet()) {
+                int b = e.getIntKey(), j = (b >> 8) + by;
+                if (j < 0 || j >= slices) continue;
+                moved.put(j << 8 | (b & 255), e.getIntValue());
+            }
+            map.clear();
+            map.putAll(moved);
+        }
+
+        /** The kept blocks as {keys, states} (a key is i << 8 | z << 4 | x), for saving. */
+        public int[][] toArrays() {
+            int n = map.size(), k = 0;
+            int[] keys = new int[n], states = new int[n];
+            for (Int2IntMap.Entry e : map.int2IntEntrySet()) {
+                keys[k] = e.getIntKey();
+                states[k] = e.getIntValue();
+                k++;
+            }
+            return new int[][]{keys, states};
+        }
+
+        /** Reads saved blocks back (replacing what was kept); keys outside the band and negative states are skipped. */
+        public void fromArrays(int[] keys, int[] states) {
+            map.clear();
+            int n = Math.min(keys.length, states.length);
+            for (int k = 0; k < n; k++) {
+                int b = keys[k];
+                if (b < 0 || b >> 8 >= slices || states[k] < 0) continue;
+                map.put(b, states[k]);
+            }
         }
     }
 

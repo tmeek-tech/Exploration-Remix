@@ -1,6 +1,7 @@
 package com.explorationremix.registry;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.world.biome.DarkSkyModifier;
 import com.explorationremix.world.biome.RemoveCreateStriationsModifier;
 import com.explorationremix.world.biome.RemoveUpperLavaModifier;
 import com.mojang.serialization.Codec;
@@ -18,4 +19,7 @@ public final class ERBiomeModifiers {
             SERIALIZERS.register("remove_create_striations", () -> RemoveCreateStriationsModifier.CODEC);
     public static final RegistryObject<Codec<RemoveUpperLavaModifier>> REMOVE_UPPER_LAVA =
             SERIALIZERS.register("remove_upper_lava", () -> RemoveUpperLavaModifier.CODEC);
+    /** A dark sky and fog for biomes far under the ground (the deep dark in the Blue Reaches): special effects only. */
+    public static final RegistryObject<Codec<DarkSkyModifier>> DARK_SKY =
+            SERIALIZERS.register("dark_sky", () -> DarkSkyModifier.CODEC);
 }
