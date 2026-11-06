@@ -1025,15 +1025,30 @@ def build_features():
     # are gone: kept that near their sites they found a wall within reach at one site in fifty. On the pack run's region
     # (GalleriesDecor, the emulation the tests use): 221 falls where the old tries placed 2925 (2606 as fallcount.py
     # counts them; the pack counted 1557), at most 12 in a 128-block square (133 before), the nearest other fall 25
-    # blocks away at the least and 31 at the median (5 before); 172 two wide, 43 three, 6 four.
-    gal_falls = {"salt": 1, "grid": 8, "spacing": 28, "keep": 24, "ring_min": 0.42, "ring_max": 0.62}
+    # blocks away at the least and 31 at the median (5 before); 172 two wide, 43 three, 6 four. Fix round 2 (the land
+    # run: spaced evenly through the halls' middles, the falls stood in rows, colonnades of tall poles down the Causeway
+    # and the Scoria Canyons, 11 to 19 in a camera's view): outside the Caldera a kept site holds a fall only by a wall
+    # or under a hanging mass (anchor: GalleriesField.fallAnchor, a closed column, a hanging cluster 8 rows deep or a
+    # floor 12 rows over or under the site's within 8 blocks, or a cluster over the site), so the falls pour down the
+    # halls' sides, off the masses and over the ledges' edges, some ending on a ledge, and a hall's middle stays clear;
+    # the sites stand 44 apart; a fall is 1 to 3 sources wide, as many as the rock lets pour of the 2 or 3 it tries. On
+    # the pack run's region (GalleriesDecor, 600 views from random standing places, FOV 70, 192 blocks, the falls seen
+    # past no rock): 53 falls where the data before placed 221 (the land run's world held 178), 30 one source wide, 20
+    # two and 3 three, at most 3 seen in 95 views of 100 and 4 in 99 (one long view across a hall sees 7); the
+    # Causeway's 190-block square holds 4, not 18.
+    # Sites 40 apart left 66 falls, 4 in 95 views of 100 and 6 in the worst of the tests' 400.
+    # The Caldera's falls ring its lake on their own sites, 40 apart as before: its ring (0.42 to 0.62 of the patch's
+    # radius) lies far inside the patch and the halls' sites outside it, so the two sets never meet; at 44 the ring of
+    # the pack region's south-west Caldera held 2 falls where it held 3 or more.
+    gal_falls = {"salt": 1, "grid": 8, "spacing": 44, "keep": 24, "ring_min": 0.42, "ring_max": 0.62, "anchor": 8}
+    cal_falls = dict(gal_falls, spacing=40)
     fall_halls = ["basalt_galleries", "causeway", "scoria_canyons"]
     feature("basalt_galleries/vault_falls", "fluid_springs", fall_halls,
-            fall("minecraft:lava", 16, (3, 5), rock=hall_rock, mode="ceiling", tries=32, spread=3, sites=gal_falls, min_width=2),
+            fall("minecraft:lava", 16, (2, 3), rock=hall_rock, mode="ceiling", tries=32, spread=3, sites=gal_falls),
             [fall_sites(gal_falls)] + hall("ceiling", 24) + [BIOME])
     feature("caldera/lava_falls", "fluid_springs", ["caldera"],
-            fall("minecraft:lava", 16, (3, 5), rock=hall_rock, mode="ceiling", tries=32, spread=3, sites=gal_falls, min_width=2),
-            [fall_sites(gal_falls)] + hall("ceiling", 24) + [BIOME])
+            fall("minecraft:lava", 16, (2, 3), rock=hall_rock, mode="ceiling", tries=32, spread=3, sites=cal_falls),
+            [fall_sites(cal_falls)] + hall("ceiling", 24) + [BIOME])
 
     # ---- top layer: roots of the trees above, once the chunk's trees have grown; the way down is kept open after
     # everything else. The roots take the wood of the trees over them (match_trees): oak, birch, spruce, jungle, dark
@@ -1056,7 +1071,7 @@ def build_features():
     # chunk, and the feature works out from the plan which chunks hold a lair.
     feature("den_lair", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:den_lair", "config": {}}, [])
     # The Galleries' lava glow (HallGlowFeature, after everything else): invisible light along the rock above the flood
-    # band, one try in every 4-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
+    # band, one try in every few-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
     # rock near black. 0.5.1, "brightly lit" but not flat: lit from the lava and the floor up. Level 15 just over the
     # flood band, fading to 14 seventy blocks higher; a spot with no floor in reach under it but only a vault over it one
     # less; one up or down in slow patches. A face gets about 3 to 4 levels under the spot that lights it: on the look
@@ -1069,10 +1084,18 @@ def build_features():
     # 60 rows stay a little under the old (11.5 and 11.25 on average against 11.8 and 11.4), the high halls, four faces in
     # five, gain (10.5 against 10.0). The Obsidian Tubes take 14, as bright as the high halls (Taran's second picture:
     # tubes lit to their far ends): on the real tube field their faces measure 10.3 on average from the glow alone, 1 in
-    # 27 under 8 (HallGlowFeatureTest; at 13, 9.3 and one in eight; at 9, about 6).
+    # 27 under 8 (HallGlowFeatureTest; at 13, 9.3 and one in eight; at 9, about 6). Fix round 2 after the 0.8.0 pack
+    # runs (the halls read dim with the falls cut back: rock 36.6 on average at the pack's cameras against 44.0 in the
+    # first run, whose brightness came from lava filling the views, not from brighter faces): one try in every 2-block
+    # cube, lit only with rock right beside it (reach 1), so the spots hug the rock and light the faces themselves, and
+    # a vault's spot two less, so the vaults stay the dimmest. Under Complementary a face's brightness follows its block
+    # light steeply (15 about twice 14, 14 about twice 13): on a 256-block box of the pack's region (GlowCurve, the faces
+    # 30 to 60 and 60+ rows over the table) the faces' mean weight rises from 5.4 and 3.9 to 12.5 and 8.4, still lit
+    # from the floor up; 2.7 times the spots. At the pack's cameras (the land run's blocks relit) the rock reads about
+    # 15 brighter.
     feature("basalt_galleries/glow", "top_layer_modification", GALLERIES,
-            {"type": f"{MOD}:hall_glow", "config": {"spacing": 4, "reach": 4, "low": 15, "high": 14, "fade": 70, "patch": 1,
-                                                    "vault": 1, "tubes": 14}}, [])
+            {"type": f"{MOD}:hall_glow", "config": {"spacing": 2, "reach": 1, "low": 15, "high": 14, "fade": 70, "patch": 1,
+                                                    "vault": 2, "tubes": 14}}, [])
 
 
 # The vanilla deep dark, moved down into the Blue Reaches: its sculk, which vanilla only places relative to the old

@@ -30,10 +30,12 @@ class GalleriesDecorTest {
     /**
      * The three ways down round (4, 125), (21, 126) and (19, 151), with their whole reach, decorated: no lava on a ramp's
      * deck band or in a hole's throat, every way walking down to its foot and back up through the decorations, the halls'
-     * falls few, spaced and two or more sources wide, and the halls' faces as bright as with the old falls. On the 0.8.0
-     * data the same box held 634 falls (the nearest other fall 5.8 blocks off at the median, 84 in one 128-block square),
-     * lava on all three ramps (235 blocks), the way at (21, 126) one way at its foot, and faces at 10.33 on average, 7.7 %
-     * under 8; now 50 falls, the nearest 27.7 blocks off at the least, and 10.6, 4.6 %.
+     * falls few, spaced and 1 to 3 sources wide, and the halls' faces as bright as with the old falls. On the 0.8.0 data
+     * the same box held 634 falls (the nearest other fall 5.8 blocks off at the median, 84 in one 128-block square), lava
+     * on all three ramps (235 blocks), the way at (21, 126) one way at its foot, and faces at 10.33 on average, 7.7 %
+     * under 8; the 0.8.0 fix round's data 50 falls, the nearest 27.7 blocks off at the least, and 10.6, 4.6 %. Fix round
+     * 2: 14 falls (7 one source wide, 7 two), the nearest 43.7 apart, at most 4 in a view; the faces at 12.5 on
+     * average, 13.1 under 60 rows over the table and 12.3 higher up, none under 8.
      */
     @Test
     void theFallsAreFewSpacedAndWideAndKeepOffTheWaysDown() throws Exception {
@@ -49,8 +51,27 @@ class GalleriesDecorTest {
             if (foot != null) bad.add(foot);
         }
         assertTrue(bad.isEmpty(), "ways down that do not walk down and back up through the decorations: " + bad);
-        b.fewSpacedAndWide(150, 600, 8);
+        b.fewSpacedAndWide(40, 200, 4, 5);
         b.asBright(10.33, 0.077);
+        b.litFromTheFloorUp(12.2, 0.005);
+    }
+
+    /**
+     * Fix round 2 after the 0.8.0 pack runs: the Causeway's falls, spaced evenly through its middle, stood in a colonnade
+     * of tall poles (the land run: 18 falls in the 190-block square round the pictures' Causeway, 17 of them 80 blocks
+     * tall or more; the data before this round: 22 here). Now its falls pour by its walls and masses (FallSites'
+     * anchor), their sites 44 apart: at most 6 in the square (4 now), and of 400 views from random standing places in a
+     * box round it, 95 in 100 show at most 4 falls and none more than 5 (3 and 5 now).
+     */
+    @Test
+    void theCausewaysFallsAreFew() throws Exception {
+        Box b = new Box(-300, 120, 500, 360);
+        int n = 0;
+        for (int[] f : b.d.falls) if (f[1] >= -230 && f[1] < -40 && f[3] >= 240 && f[3] < 431) n++;
+        System.out.println("GalleriesDecorTest Causeway square: " + n + " falls");
+        assertTrue(n <= 6, "too many falls in the Causeway's square: " + n);
+        assertTrue(n >= 1, "no falls in the Causeway's square");
+        b.fewSpacedAndWide(40, 200, 4, 5);
     }
 
     /**
@@ -82,7 +103,9 @@ class GalleriesDecorTest {
      * The pack run's whole region, decorated: about a tenth of the falls the 0.8.0 tries placed (2925 falls there, 2606
      * as fallcount.py counts them, the pack 1557; 133 in one 128-block square), every way down clear of lava and walking
      * both ways (the 0.8.0 data: lava on all 20 ramps, the way at (21, 126) one way), and the halls' faces as bright as
-     * before (the 0.8.0 data: 10.30 on average, 7.6 % under 8).
+     * before (the 0.8.0 data: 10.30 on average, 7.6 % under 8). Fix round 2: 53 falls (86 a km2; 30 one source wide, 20
+     * two, 3 three), at most 3 in a 128-block square, the nearest 43.3 apart, at most 5 in a view of 400 and 3 in 95 of
+     * 100 (sites 40 apart left 66 falls and 6 in a view); faces at 12.45 on average, none under 8.
      */
     @Test
     @Tag("slow")
@@ -99,7 +122,7 @@ class GalleriesDecorTest {
             if (foot != null) bad.add(foot);
         }
         assertTrue(bad.isEmpty(), "ways down that do not walk down and back up through the decorations: " + bad);
-        b.fewSpacedAndWide(150, 600, 16);
+        b.fewSpacedAndWide(40, 200, 5, 5);
         b.asBright(10.30, 0.076);
     }
 
@@ -126,25 +149,56 @@ class GalleriesDecorTest {
         }
 
         /**
-         * Falls per km2 within [lo, hi], two or more sources each, no two nearer than {@link #FALL_KEEP}, and at most
-         * {@code tile} in a 128-block square.
+         * Falls per km2 within [lo, hi], 1 to 3 sources wide with a quarter or more of them 2 or 3 (fix round 2: varied
+         * widths, 1 to 3; before, two or more sources each and up to 5), no two nearer than {@link #FALL_KEEP}, at most
+         * {@code tile} in a 128-block square, and few in a view: of 400 views from random standing places in the halls
+         * ({@link GalleriesDecor#fallsPerView}), 95 in 100 show at most 4 falls and none more than {@code view}.
          */
-        void fewSpacedAndWide(double lo, double hi, int tile) {
+        void fewSpacedAndWide(double lo, double hi, int tile, int view) {
             int n = d.falls.size();
             double km2 = d.area / 1e6, nn = Arrays.stream(d.nearestFalls()).min().orElse(Double.MAX_VALUE);
             Map<Long, Integer> tiles = new HashMap<>();
-            int thin = 0, most = 0;
+            int[] widths = new int[8];
+            int most = 0;
             for (int[] f : d.falls) {
-                if (f.length < 7) thin++;
+                widths[Math.min(7, (f.length - 1) / 3)]++;
                 most = Math.max(most, tiles.merge((long) Math.floorDiv(f[1], 128) << 32 | (Math.floorDiv(f[3], 128) & 0xFFFFFFFFL), 1, Integer::sum));
             }
-            String what = String.format(Locale.ROOT, "%d falls in %.3f km2 (%.0f a km2), %d one source wide, the nearest two %.1f apart, %d in one 128-block square; %s",
-                    n, km2, n / km2, thin, nn, most, d);
+            int[] views = d.fallsPerView(400, 23);
+            String what = String.format(Locale.ROOT, "%d falls in %.3f km2 (%.0f a km2), widths 1..4 %d %d %d %d, the nearest two %.1f apart, %d in one 128-block square;"
+                            + " %d views: most seen %d, the 20th most %d; %s",
+                    n, km2, n / km2, widths[1], widths[2], widths[3], widths[4], nn, most, views.length, views.length > 0 ? views[0] : -1,
+                    views.length > 19 ? views[19] : -1, d);
             System.out.println("GalleriesDecorTest: " + what);
             assertTrue(n / km2 >= lo && n / km2 <= hi, "falls per km2 out of [" + lo + ", " + hi + "]: " + what);
-            assertEquals(0, thin, "lone threads: " + what);
+            assertEquals(0, widths[0] + widths[4] + widths[5] + widths[6] + widths[7], "falls not 1 to 3 sources wide: " + what);
+            assertTrue(widths[2] + widths[3] >= 0.25 * n, "too few falls 2 or 3 wide: " + what);
             assertTrue(nn >= FALL_KEEP, "two falls nearer than " + FALL_KEEP + ": " + what);
             assertTrue(most <= tile, "too many falls in one 128-block square: " + what);
+            assertTrue(views.length >= 300, "too few views to tell: " + what);
+            assertTrue(views[views.length / 20] <= 4, "more than 4 falls in 1 view of 20: " + what);
+            assertTrue(views[0] <= view, "more than " + view + " falls in a view: " + what);
+        }
+
+        /**
+         * Fix round 2 after the 0.8.0 pack runs (the halls read dim, rock 36.6 on average at the pack's cameras against 44.0 in
+         * the first run): the halls' faces (GlowLight: every lava block and glow spot) at least
+         * {@code mean} on average and at most {@code under8} of them under 8, and still lit from the floor up: the faces
+         * under 60 rows over the table brighter on average than those higher up by half a level or more. With the glow
+         * before this round the box measured 10.6 on average (GalleriesDecorTest light).
+         */
+        void litFromTheFloorUp(double mean, double under8) throws Exception {
+            GlowLight gl = GlowLight.measure(t, GlowLight.shipped(WORLDGEN), (x, y, z) -> v.mat(x, y, z), x0, z0, nx, nz, 16);
+            long[] all = new long[16], low = new long[16];
+            for (int band = 0; band < 3; band++) for (int l = 0; l < 16; l++) {
+                all[l] += gl.hall[band][l];
+                if (band < 2) low[l] += gl.hall[band][l];
+            }
+            long faces = Arrays.stream(all).sum();
+            System.out.println("GalleriesDecorTest lit from the floor up: " + gl);
+            assertTrue(GlowLight.mean(all) >= mean, "the halls darker than " + mean + " on average: " + gl);
+            assertTrue(GlowLight.under(all, 8) <= under8 * faces, "more hall faces under 8 than " + under8 + ": " + gl);
+            assertTrue(GlowLight.mean(low) >= GlowLight.mean(gl.hall[2]) + 0.5, "not lit from the floor up: " + gl);
         }
 
         /** The halls' faces (GlowLight: every lava block and glow spot) at least {@code mean} on average, at most {@code under8} of them under 8. */

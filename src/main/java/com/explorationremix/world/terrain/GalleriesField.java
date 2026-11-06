@@ -266,6 +266,29 @@ public final class GalleriesField {
         return cl.kind == CALDERA ? cl.dn : 9;
     }
 
+    /** A fall's anchor ({@link #fallAnchor}): the step of floor that reads as a wall or a ledge's edge, the hang of a mass (rows). */
+    static final int ANCHOR_STEP = 12, ANCHOR_HANG = 8;
+
+    /**
+     * Whether an open column (x, z) stands by a wall or under a hanging mass, where a lava fall may pour (fix round 2
+     * after the 0.8.0 pack runs: the falls spaced evenly through the halls' middles stood in rows, colonnades down the
+     * Causeway): a cluster hanging ANCHOR_HANG rows or more over it, or within r blocks (sixteen looks, on two rings) a
+     * closed column, a cluster as deep, or a floor ANCHOR_STEP rows or more over or under its own: a wall or a cliff's
+     * foot, or a ledge's edge whose fall ends on the ledge.
+     */
+    public boolean fallAnchor(int x, int z, double r) {
+        Cell c = column(x, z);
+        if (c.closed()) return false;
+        if (c.hang >= ANCHOR_HANG) return true;
+        int f = c.f;
+        for (int k = 0; k < 16; k++) {
+            double a = k * (Math.PI / 8), d = (k & 1) == 0 ? r : 0.5 * r;
+            Cell n = column((int) Math.floor(x + 0.5 + d * Math.cos(a)), (int) Math.floor(z + 0.5 + d * Math.sin(a)));
+            if (n.closed() || n.hang >= ANCHOR_HANG || Math.abs(n.f - f) >= ANCHOR_STEP) return true;
+        }
+        return false;
+    }
+
     // ============================================================================================ cells
     /**
      * One basalt column cell and its vertical profile. Open rows are {@code [f, c)} less the band's rock {@code [bl, bh)};

@@ -13,21 +13,21 @@
     "width": {
       "type": "minecraft:uniform",
       "value": {
-        "min_inclusive": 3,
-        "max_inclusive": 5
+        "min_inclusive": 2,
+        "max_inclusive": 3
       }
     },
-    "min_width": 2,
     "mode": "ceiling",
     "tries": 32,
     "spread": 3,
     "sites": {
       "salt": 1,
       "grid": 8,
-      "spacing": 28,
+      "spacing": 44,
       "keep": 24,
       "ring_min": 0.42,
-      "ring_max": 0.62
+      "ring_max": 0.62,
+      "anchor": 8
     }
   }
 }

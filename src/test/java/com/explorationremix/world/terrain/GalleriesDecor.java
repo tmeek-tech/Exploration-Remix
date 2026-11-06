@@ -56,7 +56,7 @@ final class GalleriesDecor {
         int minSpan, inset = 2;
         boolean aboveWater, offset;
         int offLo, offHi;
-        /** fall_sites: the set (salt, grid, spacing, chance, keep, ring_min, ring_max) and the share. */
+        /** fall_sites: the set (salt, grid, spacing, chance, keep, ring_min, ring_max, anchor) and the share. */
         double[] sites;
         double shareMin, shareMax = 1;
         final EnumSet<DeepBiome> biomes = EnumSet.noneOf(DeepBiome.class);
@@ -114,7 +114,8 @@ final class GalleriesDecor {
     private static double[] sites(JsonObject o) {
         return new double[]{o.get("salt").getAsInt(), o.has("grid") ? o.get("grid").getAsInt() : 16, o.get("spacing").getAsDouble(),
                 o.has("chance") ? o.get("chance").getAsDouble() : 1, o.has("keep") ? o.get("keep").getAsDouble() : 0,
-                o.has("ring_min") ? o.get("ring_min").getAsDouble() : 0, o.has("ring_max") ? o.get("ring_max").getAsDouble() : 9};
+                o.has("ring_min") ? o.get("ring_min").getAsDouble() : 0, o.has("ring_max") ? o.get("ring_max").getAsDouble() : 9,
+                o.has("anchor") ? o.get("anchor").getAsDouble() : 0};
     }
 
     private static Feat read(Path worldgen, int f) {
@@ -590,6 +591,75 @@ final class GalleriesDecor {
         return groups;
     }
 
+    /**
+     * How many falls a view shows (fix round 2 after the 0.8.0 pack runs: the Causeway's falls stood in colonnades, a
+     * dozen and more in a view): a fall is seen from an eye when a point of its column (under its first source, down to
+     * rock, at five heights) lies in the frame (FOV 70 up and down, 16:9), within 192 blocks (render distance 12), with no
+     * rock on the line to it. Yaw and pitch as Minecraft's (yaw 0 south, 90 west; pitch down).
+     */
+    int fallsSeen(double ex, double ey, double ez, double yaw, double pitch) {
+        double yr = Math.toRadians(yaw), pr = Math.toRadians(pitch);
+        double[] fwd = {-Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr)};
+        double[] right = {-Math.cos(yr), 0, -Math.sin(yr)};
+        double[] up = {right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]};
+        double tv = Math.tan(Math.toRadians(35)), th = tv * 16 / 9.0;
+        int seen = 0;
+        for (int[] f : falls) {
+            int sx = f[1], sy = f[2], sz = f[3], y = sy - 1;
+            while (y > v.y0 && v.mat(sx, y, sz) != NoiseVox.ROCK) y--;
+            double cx = sx + 0.5, cz = sz + 0.5, dx = cx - ex, dz = cz - ez;
+            if (dx * dx + dz * dz > 192 * 192) continue;
+            for (int k = 0; k < 5; k++) {
+                double py = y + 1 + (sy - y - 1) * (k + 0.5) / 5.0, dy = py - ey;
+                double fw = dx * fwd[0] + dy * fwd[1] + dz * fwd[2];
+                if (fw <= 1) continue;
+                double rr = dx * right[0] + dy * right[1] + dz * right[2], uu = dx * up[0] + dy * up[1] + dz * up[2];
+                if (Math.abs(rr) > th * fw || Math.abs(uu) > tv * fw) continue;
+                if (clearTo(ex, ey, ez, cx, py, cz)) { seen++; break; }
+            }
+        }
+        return seen;
+    }
+
+    /** No rock on the line from an eye to a point of a fall's column (the column and the blocks round it aside), inside the box. */
+    private boolean clearTo(double ax, double ay, double az, double bx, double by, double bz) {
+        double dx = bx - ax, dy = by - ay, dz = bz - az;
+        int n = (int) Math.ceil(Math.sqrt(dx * dx + dy * dy + dz * dz) / 0.4);
+        for (int i = 1; i < n; i++) {
+            double q = i / (double) n, x = ax + dx * q, y = ay + dy * q, z = az + dz * q;
+            if (Math.abs(x - bx) < 1.6 && Math.abs(z - bz) < 1.6) return true;
+            int xi = (int) Math.floor(x), yi = (int) Math.floor(y), zi = (int) Math.floor(z);
+            if (!v.in(xi, yi, zi) || v.mat(xi, yi, zi) == NoiseVox.ROCK) return false;
+        }
+        return true;
+    }
+
+    /**
+     * The falls {@code n} views show: from standing places drawn at random in the box (a column, then one of its floors
+     * over the lava table at random, in the Galleries' halls), looking a random way and 0 to 15 degrees down. Returns the
+     * views' counts, highest first.
+     */
+    int[] fallsPerView(int n, long seed) {
+        java.util.Random r = new java.util.Random(seed);
+        int[] out = new int[n];
+        int made = 0, w = t.galleries.W;
+        for (int tries = 0; made < n && tries < 200 * n; tries++) {
+            int x = v.x0 + r.nextInt(v.nx), z = v.z0 + r.nextInt(v.nz);
+            List<Integer> floors = new ArrayList<>();
+            for (int y = w + 1; y < v.y0 + v.ny - 3; y++)
+                if (v.mat(x, y - 1, z) == NoiseVox.ROCK && v.mat(x, y, z) == NoiseVox.AIR && v.mat(x, y + 1, z) == NoiseVox.AIR && v.mat(x, y + 2, z) == NoiseVox.AIR) floors.add(y);
+            if (floors.isEmpty()) continue;
+            int y = floors.get(r.nextInt(floors.size()));
+            DeepBiome b = t.biomeAt(x, y + 1, z);
+            if (b != DeepBiome.BASALT_GALLERIES && b != DeepBiome.CAUSEWAY && b != DeepBiome.SCORIA_CANYONS && b != DeepBiome.CALDERA) continue;
+            out[made++] = fallsSeen(x + 0.5, y + 1.62, z + 0.5, r.nextDouble() * 360, r.nextDouble() * 15);
+        }
+        int[] got = Arrays.copyOf(out, made);
+        Arrays.sort(got);
+        for (int i = 0; i < got.length / 2; i++) { int q = got[i]; got[i] = got[got.length - 1 - i]; got[got.length - 1 - i] = q; }
+        return got;
+    }
+
     /** Each placed fall's distance to the nearest other fall (the nearest two of their sources' columns). */
     double[] nearestFalls() {
         double[] out = new double[falls.size()];
@@ -673,7 +743,7 @@ final class GalleriesDecor {
     /** FallSites (absent from older trees: loaded only when the data names a set of sites). */
     static final class Sites {
         static com.explorationremix.world.feature.FallSites.Spec spec(double[] s) {
-            return new com.explorationremix.world.feature.FallSites.Spec((int) s[0], (int) s[1], s[2], s[3], s[4], s[5], s[6]);
+            return new com.explorationremix.world.feature.FallSites.Spec((int) s[0], (int) s[1], s[2], s[3], s[4], s[5], s[6], s.length > 7 ? s[7] : 0);
         }
 
         static List<int[]> inChunk(Terrain t, double[] s, int x0, int z0, double lo, double hi) {

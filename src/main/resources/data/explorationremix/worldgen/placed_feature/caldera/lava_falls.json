@@ -6,10 +6,11 @@
       "sites": {
         "salt": 1,
         "grid": 8,
-        "spacing": 28,
+        "spacing": 40,
         "keep": 24,
         "ring_min": 0.42,
-        "ring_max": 0.62
+        "ring_max": 0.62,
+        "anchor": 8
       }
     },
     {

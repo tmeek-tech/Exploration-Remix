@@ -1,13 +1,13 @@
 {
   "type": "explorationremix:hall_glow",
   "config": {
-    "spacing": 4,
-    "reach": 4,
+    "spacing": 2,
+    "reach": 1,
     "low": 15,
     "high": 14,
     "fade": 70,
     "patch": 1,
-    "vault": 1,
+    "vault": 2,
     "tubes": 14
   }
 }

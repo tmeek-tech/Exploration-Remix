@@ -28,10 +28,18 @@ import java.util.List;
  * its own site than any other kept site ({@link #clear}): such points of two sites lie on either side of the two
  * branches of a hyperbola whose foci are the sites, which nowhere come nearer each other than {@code keep}, so no two
  * falls do either.
+ *
+ * <p>With an {@code anchor} (fix round 2 after the 0.8.0 pack runs: spaced evenly through the halls' middles, the falls
+ * stood in colonnades down the Causeway and the Scoria Canyons), a kept candidate outside the Caldera holds a fall only
+ * by a wall or under a hanging mass ({@link #site}), so the falls pour down the halls' sides and off their masses.
  */
 public final class FallSites {
-    /** A set of sites: its salt, lattice, spacing, draw, the falls' keep and the Caldera's rim. */
-    public record Spec(int salt, int grid, double spacing, double chance, double keep, double ringMin, double ringMax) {
+    /** A set of sites: its salt, lattice, spacing, draw, the falls' keep, the Caldera's rim and the halls' anchor. */
+    public record Spec(int salt, int grid, double spacing, double chance, double keep, double ringMin, double ringMax, double anchor) {
+        public Spec(int salt, int grid, double spacing, double chance, double keep, double ringMin, double ringMax) {
+            this(salt, grid, spacing, chance, keep, ringMin, ringMax, 0);
+        }
+
         public static final Codec<Spec> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.INT.fieldOf("salt").forGetter(Spec::salt),
                 Codec.intRange(4, 64).optionalFieldOf("grid", 16).forGetter(Spec::grid),
@@ -39,7 +47,8 @@ public final class FallSites {
                 Codec.doubleRange(0, 1).optionalFieldOf("chance", 1.0).forGetter(Spec::chance),
                 Codec.doubleRange(0, 64).optionalFieldOf("keep", 0.0).forGetter(Spec::keep),
                 Codec.doubleRange(0, 9).optionalFieldOf("ring_min", 0.0).forGetter(Spec::ringMin),
-                Codec.doubleRange(0, 9).optionalFieldOf("ring_max", 9.0).forGetter(Spec::ringMax)
+                Codec.doubleRange(0, 9).optionalFieldOf("ring_max", 9.0).forGetter(Spec::ringMax),
+                Codec.doubleRange(0, 32).optionalFieldOf("anchor", 0.0).forGetter(Spec::anchor)
         ).apply(i, Spec::new));
     }
 
@@ -63,6 +72,21 @@ public final class FallSites {
         if (t.galleries == null) return true;
         double dn = t.galleries.calderaDn(x(t.seed, s, i, j) + 0.5, z(t.seed, s, i, j) + 0.5);
         return dn > 8 || (dn >= s.ringMin() && dn <= s.ringMax());
+    }
+
+    /**
+     * Whether candidate (i, j) holds a fall: kept and, with an {@code anchor}, outside the Caldera by a wall or under a
+     * hanging mass ({@code GalleriesField.fallAnchor}, within the anchor's blocks; fix round 2 after the 0.8.0 pack runs,
+     * when the falls spaced through the halls' middles stood in colonnades). The anchor is weighed after the packing, on
+     * the kept candidates only: so a hall's middle is left without a fall rather than filled from its walls, and the
+     * packing reads no more than the climate, as before (the anchor reads the field's cells, which a candidate's chain of
+     * priorities would otherwise read far round every chunk).
+     */
+    public static boolean site(Terrain t, Spec s, int i, int j) {
+        if (!kept(t, s, i, j)) return false;
+        if (s.anchor() <= 0 || t.galleries == null) return true;
+        int x = x(t.seed, s, i, j), z = z(t.seed, s, i, j);
+        return t.galleries.calderaDn(x + 0.5, z + 0.5) <= 8 || t.galleries.fallAnchor(x, z, s.anchor());
     }
 
     /**
@@ -97,7 +121,7 @@ public final class FallSites {
         return c.state[slot] != NOT_COUNTED;
     }
 
-    /** The sites in the 16 x 16 columns from (x0, z0) whose share lies in [shareMin, shareMax), as {x, z} pairs. */
+    /** The sites ({@link #site}) in the 16 x 16 columns from (x0, z0) whose share lies in [shareMin, shareMax), as {x, z} pairs. */
     public static void inChunk(Terrain t, Spec s, int x0, int z0, double shareMin, double shareMax, List<int[]> out) {
         int g = s.grid();
         for (int i = Math.floorDiv(x0, g); i <= Math.floorDiv(x0 + 15, g); i++)
@@ -105,7 +129,7 @@ public final class FallSites {
                 int x = x(t.seed, s, i, j), z = z(t.seed, s, i, j);
                 if (x < x0 || x >= x0 + 16 || z < z0 || z >= z0 + 16) continue;
                 double sh = share(t.seed, s, i, j);
-                if (sh < shareMin || sh >= shareMax || !kept(t, s, i, j)) continue;
+                if (sh < shareMin || sh >= shareMax || !site(t, s, i, j)) continue;
                 out.add(new int[]{x, z});
             }
     }
