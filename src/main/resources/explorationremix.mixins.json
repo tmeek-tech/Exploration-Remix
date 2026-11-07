@@ -26,7 +26,8 @@
     "BaseFireBlockMixin",
     "LevelChunkMixin",
     "rune.ItemStackRuneMixin",
-    "rune.FurnaceRuneMixin"
+    "rune.FurnaceRuneMixin",
+    "rune.ArrowPassByMixin"
   ],
   "client": [
     "client.LightTextureMixin",

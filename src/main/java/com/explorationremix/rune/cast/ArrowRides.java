@@ -37,10 +37,13 @@ import java.util.UUID;
  * back), as Swift does for every rune.
  *
  * <p>Runes never touch who they mustn't (RuneHits.canHit), however far the arrow has come: a copy Fan made passes them
- * by, and so does the shot once it has struck something (a piercing arrow flying on); the shot's first contact hits
- * them as the plain arrow it was, its runes spent. Whenever the runes let go of an arrow that could still fly (its
- * caster gone, past the simulation distance, kept a minute), the shot is made plain and a copy goes; one saved with its
- * chunk is marked, and comes back plain (a copy doesn't come back).
+ * by (and whatever isn't a creature), and so does the shot once it has struck something (a piercing arrow flying on);
+ * they are left out of the arrow's own search for what it hits (ArrowPassByMixin), so it finds the foe or the wall
+ * behind them. The shot's first contact hits them as the plain arrow it was, its runes spent. Whenever the runes let
+ * go of an arrow that could still fly (its caster gone, past the simulation distance, kept a minute), the shot is made
+ * plain and a copy goes. One that carries the runes' mark into the world again (saved with its chunk, or through a
+ * portal or a teleport to another world, which copy the arrow but not its ride) comes back plain, and a copy doesn't
+ * come back.
  *
  * <p>Hits are noted when the arrow strikes and settled at the end of the tick, once the arrow's own damage has landed:
  * that is when a kill or a throat hit is known for Siphon.
@@ -106,7 +109,8 @@ public final class ArrowRides {
         Plain plain = new Plain(arrow.getBaseDamage(), arrow.getPierceLevel(), arrow.isOnFire());
         for (Plan.Node n : roots) {
             if (n.act.rune != RuneId.ARROW) continue;
-            AbstractArrow carrier = n.copy == 0 ? arrow : copy(arrow, asLoosed, Origin.turn(v, n.yaw));
+            // a copy flies as fast as the arrow left the bow, turned to its place in the fan
+            AbstractArrow carrier = n.copy == 0 ? arrow : copy(arrow, asLoosed, Origin.turn(v.normalize(), n.yaw).scale(v.length()));
             if (carrier == null) continue;
             mark(carrier, plain, n.act.count(RuneId.SWIFT), n.copy > 0);
             shape(carrier, n.act);
@@ -165,11 +169,16 @@ public final class ArrowRides {
         arrow.hasImpulse = true;
     }
 
+    /** Whether the runes shaped this arrow and it hasn't been put back plain yet (it carries their mark). */
+    public static boolean marked(AbstractArrow arrow) {
+        return arrow.getPersistentData().contains(MARK);
+    }
+
     /**
-     * An arrow came back with its chunk. One the runes shaped comes back plain, its runes long spent; true for a copy Fan
-     * made, which doesn't come back at all.
+     * An arrow the runes shaped joins a world again: with its chunk, or as the copy a portal or a teleport to another
+     * world makes of it. It comes back plain, its runes long spent; true for a copy Fan made, which doesn't come back.
      */
-    public static boolean loadedDropsCopy(AbstractArrow arrow) {
+    public static boolean returningDropsCopy(AbstractArrow arrow) {
         CompoundTag data = arrow.getPersistentData();
         if (!data.contains(MARK)) return false;
         if (data.getCompound(MARK).getBoolean("copy")) return true;
@@ -210,7 +219,7 @@ public final class ArrowRides {
         if (hr instanceof EntityHitResult eh) {
             body = RuneHits.body(eh.getEntity());
             if (body == null || !RuneHits.canHit(r.ctx.owner, body)) {
-                spare(e, r, arrow);
+                spare(e, r, arrow, body != null);
                 return;
             }
         }
@@ -235,17 +244,33 @@ public final class ArrowRides {
     }
 
     /**
-     * The arrow meets someone runes never touch (or something that isn't a creature). A copy Fan made passes them by,
-     * and so does the shot flying on after a hit (a piercing arrow, its runes still on it). The shot's first contact
-     * hits as the plain arrow it was, and its runes are spent. A hit already noted this tick still settles.
+     * The arrow meets someone runes never touch, or something that isn't a creature ({@code creature} false), that its
+     * hit search didn't leave out already (ArrowPassByMixin; this is the fallback). A copy Fan made passes both by, and
+     * the shot flying on after a hit (a piercing arrow, its runes still on it) passes the creature by but strikes the
+     * thing (a boat, a crystal) as it is. The shot's first contact hits as the plain arrow it was, and its runes are
+     * spent. A hit already noted this tick still settles.
      */
-    private static void spare(ProjectileImpactEvent e, Ride r, AbstractArrow arrow) {
-        if (r.node.copy > 0 || r.hitAt != null) {
+    private static void spare(ProjectileImpactEvent e, Ride r, AbstractArrow arrow, boolean creature) {
+        if (r.node.copy > 0 || (creature && r.hitAt != null)) {
             e.setImpactResult(ProjectileImpactEvent.ImpactResult.SKIP_ENTITY);
             return;
         }
+        if (r.hitAt != null) return;
         makePlain(arrow);
         r.released = true;
+    }
+
+    /**
+     * Whether the arrow's own search for what it hits leaves {@code e} out, so it finds what is behind: a copy Fan made
+     * passes by those runes never touch and whatever isn't a creature, and the shot, once it has struck something,
+     * passes by those runes never touch. The shot's first contact is never left out (it is made plain then). Server side.
+     */
+    public static boolean passesBy(AbstractArrow arrow, Entity e) {
+        Ride r = RIDES.get(arrow.getId());
+        if (r == null || r.arrow != arrow) return false;
+        LivingEntity body = RuneHits.body(e);
+        if (r.node.copy > 0) return body == null || !RuneHits.canHit(r.ctx.owner, body);
+        return r.hitAt != null && body != null && !RuneHits.canHit(r.ctx.owner, body);
     }
 
     /** At the end of each server tick: steer Seek arrows, settle hits, let payloads go. */

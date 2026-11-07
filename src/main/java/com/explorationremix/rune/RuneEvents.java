@@ -114,14 +114,16 @@ public final class RuneEvents {
     }
 
     /**
-     * A bow's or crossbow's shot came into the world. An arrow the runes shaped that comes back with its chunk comes
-     * back plain, and a copy Fan made doesn't come back.
+     * A bow's or crossbow's shot came into the world. An arrow the runes shaped that comes back (with its chunk, or
+     * through a portal or a teleport to another world) comes back plain, and a copy Fan made doesn't come back.
      */
     @SubscribeEvent
     public static void entityJoin(EntityJoinLevelEvent e) {
         if (e.getLevel().isClientSide() || !(e.getEntity() instanceof AbstractArrow arrow)) return;
-        if (e.loadedFromDisk()) {
-            if (ArrowRides.loadedDropsCopy(arrow)) e.setCanceled(true);
+        // a marked arrow is never a new shot (a shot is marked only once it has joined, a Fan copy only once it has been
+        // added): it came back with its chunk, or a portal or a teleport to another world copied it, mark and all
+        if (e.loadedFromDisk() || ArrowRides.marked(arrow)) {
+            if (ArrowRides.returningDropsCopy(arrow)) e.setCanceled(true);
             return;
         }
         CastService.arrowLoosed(arrow);
