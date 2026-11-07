@@ -3,7 +3,6 @@ package com.explorationremix.rune.cast;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -24,10 +23,7 @@ final class Caster {
     }
 
     final Set<Entity> carriers = new HashSet<>();
-    final ArrayDeque<Executor.Pending> queue = new ArrayDeque<>();
-    boolean draining;
-    long releaseTick = -1;
-    int released;
+    final ReleaseQueue<Executor.Pending> queue = new ReleaseQueue<>();
 
     final Hand main = new Hand(), off = new Hand();
 

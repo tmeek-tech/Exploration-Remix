@@ -9,9 +9,6 @@ import com.explorationremix.rune.engine.Row;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.item.RuneItem;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.StringTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
@@ -25,7 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Where a piece of gear keeps its runes, and what kind of gear it is. Two tags on the stack:
+ * Where a piece of gear keeps its runes, and what kind of gear it is. Two tags on the stack (read and written by
+ * {@link RuneTags}):
  * <ul>
  *   <li>{@value #ROW_TAG}: {@code {v: 1, s: ["spark", "", "burst"], b: <break mask>}}, written only when the row is
  *   edited;</li>
@@ -37,8 +35,8 @@ import java.util.List;
  * A rune in a row is only its id: rune items carry nothing else, so taking a rune out makes the same item again.
  */
 public final class RuneGear {
-    public static final String ROW_TAG = "explorationremix:runes";
-    public static final String CAST_TAG = "explorationremix:cast";
+    public static final String ROW_TAG = RuneTags.ROW;
+    public static final String CAST_TAG = RuneTags.CAST;
 
     private RuneGear() {}
 
@@ -86,55 +84,23 @@ public final class RuneGear {
     /** The gear's row, as long as the gear has slots. Runes stored past its end (edited data) are not read. */
     public static Row row(ItemStack stack) {
         HostSpec spec = spec(stack);
-        int n = spec == null ? 0 : spec.slotCount();
-        RuneId[] slots = new RuneId[n];
-        int breaks = 0;
-        CompoundTag tag = stack.getTag();
-        if (tag != null && tag.contains(ROW_TAG, Tag.TAG_COMPOUND)) {
-            CompoundTag row = tag.getCompound(ROW_TAG);
-            ListTag list = row.getList("s", Tag.TAG_STRING);
-            for (int i = 0; i < Math.min(n, list.size()); i++) slots[i] = RuneId.byId(list.getString(i));
-            breaks = row.getInt("b");
-        }
-        return new Row(slots, breaks);
+        return RuneTags.readRow(stack.getTag(), spec == null ? 0 : spec.slotCount());
     }
 
     /** Runes stored past the gear's last slot (only edited data can put them there). */
     public static List<RuneId> overflow(ItemStack stack) {
-        List<RuneId> out = new ArrayList<>();
         HostSpec spec = spec(stack);
-        CompoundTag tag = stack.getTag();
-        if (spec == null || tag == null || !tag.contains(ROW_TAG, Tag.TAG_COMPOUND)) return out;
-        ListTag list = tag.getCompound(ROW_TAG).getList("s", Tag.TAG_STRING);
-        for (int i = spec.slotCount(); i < list.size(); i++) {
-            RuneId r = RuneId.byId(list.getString(i));
-            if (r != null) out.add(r);
-        }
-        return out;
+        return spec == null ? new ArrayList<>() : RuneTags.readOverflow(stack.getTag(), spec.slotCount());
     }
 
     /** Writes the row (an empty row with no breaks removes the tag). */
     public static void setRow(ItemStack stack, Row row) {
-        if (row.isEmpty() && row.breaks() == 0) {
-            stack.removeTagKey(ROW_TAG);
-            return;
-        }
-        CompoundTag t = new CompoundTag();
-        t.putInt("v", 1);
-        ListTag list = new ListTag();
-        for (int i = 0; i < row.size(); i++) list.add(StringTag.valueOf(row.get(i) == null ? "" : row.get(i).id));
-        t.put("s", list);
-        t.putInt("b", row.breaks());
-        stack.addTagElement(ROW_TAG, t);
+        CompoundTag t = RuneTags.writeRow(row);
+        if (t == null) stack.removeTagKey(ROW_TAG);
+        else stack.addTagElement(ROW_TAG, t);
     }
 
-    public static boolean hasRunes(ItemStack stack) {
-        CompoundTag tag = stack.getTag();
-        if (tag == null || !tag.contains(ROW_TAG, Tag.TAG_COMPOUND)) return false;
-        ListTag list = tag.getCompound(ROW_TAG).getList("s", Tag.TAG_STRING);
-        for (int i = 0; i < list.size(); i++) if (RuneId.byId(list.getString(i)) != null) return true;
-        return false;
-    }
+    public static boolean hasRunes(ItemStack stack) { return RuneTags.hasRunes(stack.getTag()); }
 
     /** The row read for this gear at a run depth, with the server's limits. */
     @Nullable
@@ -147,12 +113,9 @@ public final class RuneGear {
     /** Every rune in the row and past it, as items (a broken tool's, a grindstone's). */
     public static List<ItemStack> runeItems(ItemStack stack) {
         List<ItemStack> out = new ArrayList<>();
-        CompoundTag tag = stack.getTag();
-        if (tag == null || !tag.contains(ROW_TAG, Tag.TAG_COMPOUND)) return out;
-        ListTag list = tag.getCompound(ROW_TAG).getList("s", Tag.TAG_STRING);
-        for (int i = 0; i < list.size(); i++) {
-            RuneId r = RuneId.byId(list.getString(i));
-            if (r != null) out.add(RuneItem.stack(r, 1));
+        for (RuneId r : RuneTags.storedRunes(stack.getTag())) {
+            ItemStack item = RuneItem.stack(r, 1);
+            if (!item.isEmpty()) out.add(item);
         }
         return out;
     }
@@ -190,48 +153,30 @@ public final class RuneGear {
 
     /** The gear's casting state, or a fresh one (starting energy, nothing cast). */
     public static CastState state(ItemStack stack, HostSpec spec, long now) {
-        CompoundTag tag = stack.getTag();
-        if (tag == null || !tag.contains(CAST_TAG, Tag.TAG_COMPOUND)) return CastState.fresh(spec, now);
-        CompoundTag c = tag.getCompound(CAST_TAG);
-        return new CastState(c.getFloat("e"), c.getLong("t"), c.contains("g") ? c.getLong("g") : -1, c.getInt("c"), c.getLong("r"),
-                c.contains("l") ? c.getLong("l") : Long.MIN_VALUE / 4);
+        CastState s = RuneTags.readState(stack.getTag());
+        return s == null ? CastState.fresh(spec, now) : s;
     }
 
-    public static boolean hasState(ItemStack stack) {
-        CompoundTag tag = stack.getTag();
-        return tag != null && tag.contains(CAST_TAG, Tag.TAG_COMPOUND);
-    }
+    /** Whether something has happened to the gear yet (a cast, a hit, a mote; not just being given an id). */
+    public static boolean hasState(ItemStack stack) { return RuneTags.readState(stack.getTag()) != null; }
 
     /** Writes the casting state, only if it changed (every write is sent to the client). Keeps the gear id. */
     public static void setState(ItemStack stack, CastState s) {
-        CompoundTag c = new CompoundTag();
-        int id = gearId(stack);
-        if (id != 0) c.putInt("i", id);
-        c.putFloat("e", s.energy);
-        c.putLong("t", s.energyTick);
-        c.putLong("g", s.regenSince);
-        c.putInt("c", s.cursor);
-        c.putLong("r", s.readyAt);
-        c.putLong("l", s.lastCast);
+        CompoundTag c = RuneTags.writeState(s, gearId(stack));
         CompoundTag tag = stack.getTag();
         if (tag != null && c.equals(tag.get(CAST_TAG))) return;
         stack.addTagElement(CAST_TAG, c);
     }
 
     /** The gear's id (0 if it has none yet). */
-    public static int gearId(ItemStack stack) {
-        CompoundTag tag = stack.getTag();
-        return tag != null && tag.contains(CAST_TAG, Tag.TAG_COMPOUND) ? tag.getCompound(CAST_TAG).getInt("i") : 0;
-    }
+    public static int gearId(ItemStack stack) { return RuneTags.gearId(stack.getTag()); }
 
     /** The gear's id, giving it one first if it has none (server only: the stack is written). */
     public static int ensureGearId(ItemStack stack, net.minecraft.util.RandomSource random) {
         int id = gearId(stack);
         if (id != 0) return id;
         do id = random.nextInt(); while (id == 0);
-        CompoundTag c = stack.getOrCreateTag().getCompound(CAST_TAG);
-        c.putInt("i", id);
-        stack.addTagElement(CAST_TAG, c);
+        stack.addTagElement(CAST_TAG, RuneTags.withGearId(stack.getTag(), id));
         return id;
     }
 

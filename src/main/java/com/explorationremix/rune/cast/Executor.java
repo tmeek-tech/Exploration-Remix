@@ -32,33 +32,16 @@ public final class Executor {
         if (nodes.isEmpty() || gone(ctx)) return;
         Caster c = CastService.caster(ctx.owner);
         for (Plan.Node n : nodes) {
-            if (c.queue.size() >= MAX_QUEUE) {
-                fizzle(ctx, o.pos());
-                continue;
-            }
-            c.queue.addLast(new Pending(ctx, n, o, root));
+            if (!c.queue.offer(new Pending(ctx, n, o, root), MAX_QUEUE)) fizzle(ctx, o.pos());
         }
         drain(c, ctx.level.getServer().getTickCount());
     }
 
     /** Lets go as many waiting actions as this tick allows. Never re-entered: actions let go while draining queue up. */
     static void drain(Caster c, long tick) {
-        if (c.draining) return;
-        if (c.releaseTick != tick) {
-            c.releaseTick = tick;
-            c.released = 0;
-        }
-        int budget = RuneConfig.get(RuneConfig.INSTANCE.releasesPerTick);
-        c.draining = true;
-        try {
-            while (!c.queue.isEmpty() && c.released < budget) {
-                Pending p = c.queue.pollFirst();
-                c.released++;
-                if (!gone(p.ctx())) fire(p);
-            }
-        } finally {
-            c.draining = false;
-        }
+        c.queue.drain(tick, RuneConfig.get(RuneConfig.INSTANCE.releasesPerTick), p -> {
+            if (!gone(p.ctx())) fire(p);
+        });
     }
 
     private static void fire(Pending p) {

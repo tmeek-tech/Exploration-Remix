@@ -71,13 +71,13 @@ DESC = {
     "spark": "A quick bolt that flies straight and hits for 4.",
     "shard": "A cheap, fast splinter that hits for 3.",
     "orb": "A slow, heavy ball that hits for 7.",
-    "glow": "A drifting mote that lights where it stops for a minute.",
-    "burst": "A blast all round where it happens; hits for 6.",
+    "glow": "A drifting mote that lights where it stops, or makes the creature it hits glow, for a minute.",
+    "burst": "A blast all round where it happens; hits for 6. Your own blast throws you but never hurts you.",
     "cleave": "A wide slash in front of where it happens; hits for 6.",
     "field": "A patch on the ground that pulses its element into all who stand in it.",
     "barrier": "A wall of rune glass across your aim, for 8 seconds.",
     "dash": "Throws you along your aim; what follows goes off when you hit something.",
-    "reel": "Yanks the nearest creature toward you.",
+    "reel": "Yanks a creature toward you, or you toward the wall it catches.",
     "swift": "Faster, with a shorter delay.",
     "heavy": "Hits harder and knocks back further, but slower.",
     "wide": "Bigger: a wider blast, a longer wall, a fatter bolt.",
@@ -119,8 +119,17 @@ LANG = {
     f"message.{MOD}.runes.busy": "Too many runes in flight",
     f"message.{MOD}.runes.deeper": "%s: your gear's deeper rune slots wake",
     f"message.{MOD}.runes.home": "Home: your gear's deeper rune slots sleep until you go down again",
-    f"death.attack.{MOD}.rune": "%1$s was struck down by runes",
-    f"death.attack.{MOD}.rune.player": "%1$s was struck down by %2$s's runes",
+    # the rune damage type's death messages: %2$s is the caster, %3$s their named weapon (.item); .player is
+    # for the rare death with no caster known, where %2$s is whoever was fighting the victim
+    f"death.attack.{MOD}.rune": "%1$s was struck down by %2$s's runes",
+    f"death.attack.{MOD}.rune.item": "%1$s was struck down by %2$s using %3$s",
+    f"death.attack.{MOD}.rune.player": "%1$s was struck down by runes while fighting %2$s",
+    # a rune's element set off a reaction (the action bar, in the element's colour)
+    f"rune.{MOD}.reaction.shock": "Shock!",
+    f"rune.{MOD}.reaction.freeze": "Freeze!",
+    f"rune.{MOD}.reaction.shatter": "Shatter!",
+    f"rune.{MOD}.reaction.steam": "Steam!",
+    f"rune.{MOD}.reaction.thaw": "Thaw!",
 }
 
 

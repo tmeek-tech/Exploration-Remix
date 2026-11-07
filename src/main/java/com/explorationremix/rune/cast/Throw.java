@@ -29,6 +29,8 @@ public final class Throw {
     public static Result to(double dx, double dy, double dz, double quick) {
         double flat = Math.sqrt(dx * dx + dz * dz);
         int byDistance = clamp((int) Math.round((MIN_TICKS + 0.5 * Math.sqrt(flat * flat + dy * dy)) / Math.max(1.0, quick)), MIN_TICKS - 1, MAX_TICKS);
+        // no faster than the flat cap: a far point takes longer instead of falling short
+        while (byDistance < MAX_TICKS && flatSpeed(flat, byDistance) > MAX_FLAT) byDistance++;
         int t;
         double vy;
         double top = dy > 0.5 ? speedToTop(dy) : -1.0;
@@ -44,10 +46,13 @@ public final class Throw {
             vy = (dy - r0) / (r1 - r0);
         }
         vy = Math.max(-MAX_DOWN, Math.min(MAX_UP, vy));
-        double vflat = flat < 1.0E-6 ? 0.0 : Math.min(MAX_FLAT, flat * (1.0 - DRAG_FLAT) / (1.0 - Math.pow(DRAG_FLAT, t)));
+        double vflat = flat < 1.0E-6 ? 0.0 : Math.min(MAX_FLAT, flatSpeed(flat, t));
         double vx = flat < 1.0E-6 ? 0.0 : dx / flat * vflat, vz = flat < 1.0E-6 ? 0.0 : dz / flat * vflat;
         return new Result(vx, vy, vz, t);
     }
+
+    /** The flat speed that covers {@code flat} in {@code ticks} ticks. */
+    static double flatSpeed(double flat, int ticks) { return flat * (1.0 - DRAG_FLAT) / (1.0 - Math.pow(DRAG_FLAT, ticks)); }
 
     /** How high a throw up at {@code vy} is after {@code ticks} ticks. */
     static double rise(double vy, int ticks) {
