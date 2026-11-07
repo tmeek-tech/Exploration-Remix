@@ -145,18 +145,6 @@
         "weight": 3
       },
       {
-        "name": "minecraft:ambient/nether/basalt_deltas/debris1",
-        "volume": 0.5
-      },
-      {
-        "name": "minecraft:ambient/nether/basalt_deltas/debris2",
-        "volume": 0.5
-      },
-      {
-        "name": "minecraft:ambient/nether/basalt_deltas/debris3",
-        "volume": 0.5
-      },
-      {
         "name": "explorationremix:ambient/rumble1",
         "volume": 0.8
       },
@@ -228,39 +216,96 @@
   "quake.rumble": {
     "sounds": [
       {
-        "name": "explorationremix:ambient/lava_rumble1",
-        "volume": 1.0,
-        "pitch": 0.7
+        "name": "explorationremix:ambient/quake_rumble1",
+        "volume": 1.0
       },
       {
-        "name": "explorationremix:ambient/lava_rumble2",
-        "volume": 1.0,
-        "pitch": 0.7
-      },
-      {
-        "name": "explorationremix:ambient/lava_rumble3",
-        "volume": 1.0,
-        "pitch": 0.7
+        "name": "explorationremix:ambient/quake_rumble2",
+        "volume": 1.0
       }
     ],
     "subtitle": "subtitles.explorationremix.quake.rumble"
   },
+  "quake.tremor": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/quake_tremor1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/quake_tremor2",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/quake_tremor3",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.quake.tremor"
+  },
+  "quake.crack": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/quake_crack1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/quake_crack2",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/quake_crack3",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.quake.crack"
+  },
+  "quake.creak": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/quake_creak1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/quake_creak2",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/quake_creak3",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.quake.creak"
+  },
   "quake.debris": {
     "sounds": [
       {
-        "name": "minecraft:ambient/nether/basalt_deltas/debris1",
+        "name": "explorationremix:ambient/quake_land1",
         "volume": 1.0
       },
       {
-        "name": "minecraft:ambient/nether/basalt_deltas/debris2",
+        "name": "explorationremix:ambient/quake_land2",
         "volume": 1.0
       },
       {
-        "name": "minecraft:ambient/nether/basalt_deltas/debris3",
+        "name": "explorationremix:ambient/quake_land3",
         "volume": 1.0
       }
     ],
     "subtitle": "subtitles.explorationremix.quake.debris"
+  },
+  "lava_bomb.fizz": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/bomb_fizz1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/bomb_fizz2",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.lava_bomb.fizz"
   },
   "eruption.boom": {
     "sounds": [

@@ -25,6 +25,8 @@ public final class ClientSetup {
         event.registerSpriteSet(ERParticles.EMBER.get(), CaveParticles.Ember.Provider::new);
         event.registerSpriteSet(ERParticles.POLLEN.get(), CaveParticles.Pollen.Provider::new);
         event.registerSpriteSet(ERParticles.VOLCANIC_SMOKE.get(), CaveParticles.VolcanicSmoke.Provider::new);
+        // 0.9.0: the quakes' grit
+        event.registerSpriteSet(ERParticles.GRIT.get(), CaveParticles.Grit.Provider::new);
     }
 
     @SubscribeEvent

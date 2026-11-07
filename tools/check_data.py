@@ -150,6 +150,8 @@ def main():
                 errors.append(f"immersive_weathering icy tag: {b} keeps Immersive Weathering's own icicle clusters")
     errors += bottom_layers(configured, placed)
     errors += particle_sprites()
+    errors += particle_types()
+    errors += sound_files()
     return sorted(set(errors))
 
 
@@ -162,6 +164,39 @@ def particle_sprites():
             ns, _, tex = sprite.partition(":") if ":" in sprite else ("minecraft", "", sprite)
             if ns == MOD and not os.path.exists(os.path.join(RES, "assets", MOD, "textures", "particle", tex + ".png")):
                 errors.append(f"particles/{name}: no texture particle/{tex}.png")
+    return errors
+
+
+def particle_types():
+    """Every particle type ERParticles.java registers must have its particles/<name>.json: a type the game binds a sprite
+    set to but finds no file for keeps an empty set, and spawning one crashes the game."""
+    errors = []
+    src = open(os.path.join(ROOT, "src/main/java/com/explorationremix/registry/ERParticles.java")).read()
+    folder = os.path.join(RES, "assets", MOD, "particles")
+    for name in re.findall(r'PARTICLES\.register\(\s*"([a-z0-9_]+)"', src):
+        if not os.path.exists(os.path.join(folder, name + ".json")):
+            errors.append(f"particle {MOD}:{name}: registered in ERParticles but no particles/{name}.json")
+    return errors
+
+
+def sound_files():
+    """Every sound event ERSounds.java registers must be in sounds.json, and every file of the mod's that sounds.json names
+    must be there: the game only logs a missing one and plays nothing."""
+    errors = []
+    src = open(os.path.join(ROOT, "src/main/java/com/explorationremix/registry/ERSounds.java")).read()
+    path = os.path.join(RES, "assets", MOD, "sounds.json")
+    events = load(path) if os.path.exists(path) else {}
+    for name in re.findall(r'register\(\s*"([a-z0-9_.]+)"\s*\)', src):
+        if name not in events:
+            errors.append(f"sound {MOD}:{name}: registered in ERSounds but not in sounds.json")
+    for name, event in events.items():
+        for sound in event.get("sounds", []):
+            ref = sound["name"] if isinstance(sound, dict) else sound
+            if isinstance(sound, dict) and sound.get("type") == "event":
+                continue
+            ns, _, file = ref.partition(":") if ":" in ref else ("minecraft", "", ref)
+            if ns == MOD and not os.path.exists(os.path.join(RES, "assets", MOD, "sounds", file + ".ogg")):
+                errors.append(f"sounds.json {name}: no sounds/{file}.ogg")
     return errors
 
 

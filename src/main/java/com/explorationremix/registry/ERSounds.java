@@ -19,9 +19,19 @@ public final class ERSounds {
     /** The Basalt Galleries' lava cycle (client.LavaWarnings): a rumble through the rock before the rise, the rise's surge. */
     public static final RegistryObject<SoundEvent> LAVA_RUMBLE = register("lava.rumble");
     public static final RegistryObject<SoundEvent> LAVA_SURGE = register("lava.surge");
-    /** 0.5.1: a quake's long rumble (client.QuakeEffects) and the thud of ceiling basalt landing (world.quake.Quakes). */
+    /**
+     * The quakes (client.QuakeEffects, 0.9.0; tools/synth_quake_sounds.py makes them, dry and with nothing under 80 Hz, so
+     * they never sound like the lava's deep warning): a big quake's crack and long grinding of stone, a tremor's short
+     * crackle, the crack overhead of a ceiling block about to drop, the creak of a build under a player, and the thud of
+     * rock landing or breaking on someone.
+     */
     public static final RegistryObject<SoundEvent> QUAKE_RUMBLE = register("quake.rumble");
+    public static final RegistryObject<SoundEvent> QUAKE_TREMOR = register("quake.tremor");
+    public static final RegistryObject<SoundEvent> QUAKE_CRACK = register("quake.crack");
+    public static final RegistryObject<SoundEvent> QUAKE_CREAK = register("quake.creak");
     public static final RegistryObject<SoundEvent> QUAKE_DEBRIS = register("quake.debris");
+    /** 0.9.0: lava hissing where something falls into it (a ceiling block now, a lava bomb with the eruptions). */
+    public static final RegistryObject<SoundEvent> LAVA_BOMB_FIZZ = register("lava_bomb.fizz");
     /** 0.5.1: an eruption's burst and its roar (client.EruptionEffects). */
     public static final RegistryObject<SoundEvent> ERUPTION_BOOM = register("eruption.boom");
     public static final RegistryObject<SoundEvent> ERUPTION_ROAR = register("eruption.roar");

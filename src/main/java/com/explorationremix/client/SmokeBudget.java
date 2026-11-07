@@ -1,5 +1,7 @@
 package com.explorationremix.client;
 
+import net.minecraft.client.Minecraft;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -49,6 +51,19 @@ final class SmokeBudget {
         if (RESTING.size() > 512) RESTING.values().removeIf(t -> t <= now);
         RESTING.put(plume, now + REST);
         return false;
+    }
+
+    /**
+     * The share of the forced particles to spawn (the far-seen smoke, the grit that warns of falling rock): forced
+     * particles skip the vanilla Particles option, so they follow it by hand, 1 at "All", 0.4 at "Decreased" and 0.1 at
+     * "Minimal".
+     */
+    static float share() {
+        return switch (Minecraft.getInstance().options.particles().get()) {
+            case ALL -> 1F;
+            case DECREASED -> 0.4F;
+            case MINIMAL -> 0.1F;
+        };
     }
 
     /** A new level: its particles are gone and its clock is another. */

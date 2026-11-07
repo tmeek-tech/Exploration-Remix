@@ -96,6 +96,57 @@ public final class CaveParticles {
         }
     }
 
+    /**
+     * A small grey pebble of grit falling (0.9.0): the dust a quake shakes out of the rock, the trickle from a ceiling
+     * block about to come down and the patter where it will land, a build's crumbs as it creaks. It takes the spawn's
+     * velocity, falls as a falling block does (gravity 1, 2 % drag a tick), stops on what it lands on and is gone a second
+     * after, or after up to 6 seconds in the air. Opaque, off the smoke's translucent sheet; lit by the world, but never
+     * darker than block light 6, so it shows in the dark halls.
+     */
+    public static final class Grit extends TextureSheetParticle {
+        /** The least block light it is drawn with. */
+        static final int LIGHT_FLOOR = 6;
+        private int grounded;
+
+        Grit(ClientLevel level, double x, double y, double z, double dx, double dy, double dz, SpriteSet sprites) {
+            super(level, x, y, z);
+            this.xd = dx;
+            this.yd = dy;
+            this.zd = dz;
+            this.gravity = 1.0F;
+            this.friction = 0.98F;
+            this.hasPhysics = true;
+            this.lifetime = 60 + random.nextInt(61);
+            this.quadSize = 0.06F + 0.05F * random.nextFloat();
+            float g = 0.85F + 0.15F * random.nextFloat();
+            this.setColor(g, g * 0.98F, g * 0.95F);
+            this.roll = this.oRoll = random.nextFloat() * Mth.TWO_PI;
+            this.pickSprite(sprites);
+        }
+
+        @Override
+        public void tick() {
+            super.tick();
+            if (!removed && onGround && ++grounded > 20) remove();
+        }
+
+        @Override
+        public int getLightColor(float partialTick) {
+            int own = super.getLightColor(partialTick);
+            return LightTexture.pack(Math.max(LightTexture.block(own), LIGHT_FLOOR), LightTexture.sky(own));
+        }
+
+        @Override
+        public ParticleRenderType getRenderType() { return ParticleRenderType.PARTICLE_SHEET_OPAQUE; }
+
+        public record Provider(SpriteSet sprites) implements ParticleProvider<SimpleParticleType> {
+            @Override
+            public Particle createParticle(SimpleParticleType type, ClientLevel level, double x, double y, double z, double dx, double dy, double dz) {
+                return new Grit(level, x, y, z, dx, dy, dz, sprites);
+            }
+        }
+    }
+
     /** A soft puff of steam that rises off a hot pool, swells and fades. */
     public static final class Steam extends TextureSheetParticle {
         private final SpriteSet sprites;

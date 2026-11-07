@@ -1,10 +1,15 @@
-"""Particle textures the mod paints itself (0.8.0): the volcanic smoke of the Basalt Galleries and the Wasteland.
+"""Particle textures the mod paints itself: (0.8.0) the volcanic smoke of the Basalt Galleries and the Wasteland, and
+(0.9.0) the quakes' grit.
 
 16 by 16 like the block textures, vanilla style: a short ramp of pale warm greys and alpha in a few hard steps, from a
 thick core to a thin rim, no blur. The particle tints the puff (client/CaveParticles.VolcanicSmoke: a warm grey that
 the lava's light under it turns orange under a shader), so the texture is drawn pale. The outline is lumpy, a few round
 lobes on a core, so a column of them reads as billows rather than discs, and the corners stay clear: the quad turns
-slowly as the puff rises. The particle picks one of the four at random. textures.py merges this file.
+slowly as the puff rises. The particle picks one of the four at random.
+
+The grit (client/CaveParticles.Grit) is a small stone: a lumpy pebble of a few mid greys, lit from the upper left, with a
+hard edge and nothing translucent (it is drawn on the opaque sheet, which drops the clear pixels), pale enough to show
+against the dark basalt under Cave Fog. Three of them. textures.py merges this file.
 """
 import math, random
 from PIL import Image
@@ -50,3 +55,36 @@ def _puff(seed):
 
 for i, seed in enumerate(SEEDS):
     PAINTERS[f"particle/volcanic_smoke_{i}"] = (lambda s=seed: _puff(s))
+
+
+# the grit: light to dark stone greys, a little warm, and their seeds
+GRIT_SHADES = [(196, 192, 186), (164, 160, 154), (134, 130, 125), (104, 101, 97)]
+GRIT_SEEDS = [6201, 6202, 6203]
+
+
+def _pebble(seed):
+    rng = random.Random(seed)
+    # a lumpy outline: a radius that wanders round the middle
+    base = rng.uniform(4.2, 5.2)
+    bumps = [(rng.uniform(0.4, 1.1), rng.randrange(2, 5), rng.random() * 2 * math.pi) for _ in range(2)]
+    cx, cy = 8 + rng.uniform(-0.5, 0.5), 8 + rng.uniform(-0.5, 0.5)
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    px = img.load()
+    for y in range(16):
+        for x in range(16):
+            dx, dy = x + 0.5 - cx, y + 0.5 - cy
+            d = math.hypot(dx, dy)
+            a = math.atan2(dy, dx)
+            r = base + sum(h * math.sin(k * a + ph) for h, k, ph in bumps)
+            if d > r:
+                continue
+            # light from the upper left, darker to the lower right and toward the rim, a little grain
+            light = -(dx + dy) / (2 * r) * 0.6 + (1 - d / r) * 0.3 + (rng.random() - 0.5) * 0.35
+            i = 1 if light > 0.15 else 2 if light > -0.12 else 3
+            if light > 0.4: i = 0
+            px[x, y] = GRIT_SHADES[i] + (255,)
+    return img
+
+
+for i, seed in enumerate(GRIT_SEEDS):
+    PAINTERS[f"particle/grit_{i}"] = (lambda s=seed: _pebble(s))
