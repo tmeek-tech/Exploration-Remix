@@ -27,6 +27,33 @@
           ]
         }
       ]
+    },
+    {
+      "rolls": 1,
+      "conditions": [
+        {
+          "condition": "minecraft:killed_by_player"
+        },
+        {
+          "condition": "minecraft:random_chance_with_looting",
+          "chance": 0.35,
+          "looting_multiplier": 0.05
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:tag",
+          "name": "explorationremix:runes/blue_reaches",
+          "expand": true,
+          "weight": 8
+        },
+        {
+          "type": "minecraft:tag",
+          "name": "explorationremix:runes/deep_gardens",
+          "expand": true,
+          "weight": 2
+        }
+      ]
     }
   ]
 }
