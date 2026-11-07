@@ -113,7 +113,8 @@ public final class QuakeSchedule {
 
     /**
      * A big quake started at {@code start} and lasts {@code duration} ticks (by the schedule, or by a command): the next
-     * one is drawn from its end, and the next tremor keeps {@link #AROUND_BIG} ticks clear of it.
+     * one is drawn from its end, and the next tremor keeps {@link #AROUND_BIG} ticks clear of it. Called again with the
+     * moved start when a big quake held by command is released, as it then ends later than it was drawn to.
      */
     public void bigStarted(long start, int duration, Settings s) {
         if (!begun) {

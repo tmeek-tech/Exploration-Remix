@@ -205,6 +205,31 @@ class QuakeScheduleTest {
     }
 
     @Test
+    void aBigQuakeHeldAndReleasedKeepsItsRest() {
+        // a big quake held by command (for a picture) runs on past the end the schedule drew it to. At the release Quakes
+        // tells the schedule its moved start (bigStarted again), so the tremor and the big quake that fell due while it
+        // was held do not start at the release, which would cut the rest of it short
+        QuakeSchedule q = new QuakeSchedule(10);
+        long now = 0;
+        QuakeSchedule.Start big = null;
+        while (big == null) {
+            QuakeSchedule.Start s = q.tick(now, PICK, 0, false, true);
+            if (s != null && s.kind() == QuakeSchedule.BIG) big = s;
+            else now++;
+        }
+        long held = 40, release = now + held + 20_000;
+        for (long t = now + 1; t < release; t++) assertNull(q.tick(t, PICK, 0, true, true));
+        assertTrue(q.nextTremor() < release && q.nextBig() < release, "both fell due while it was held");
+        long start = release - held;
+        q.bigStarted(start, big.duration(), PICK);
+        long end = start + big.duration();
+        for (long t = release; t < end + QuakeSchedule.AROUND_BIG; t++) {
+            assertNull(q.tick(t, PICK, 0, false, true), "at " + t + ": the released big quake runs to " + end);
+        }
+        assertTrue(q.nextBig() >= end + 3600 && q.nextBig() <= end + 8400, "the next big quake is drawn from its real end");
+    }
+
+    @Test
     void aBigQuakeFromACommandMovesTheSchedule() {
         QuakeSchedule q = new QuakeSchedule(9);
         assertNull(q.tick(0, PICK, 0, false, true));

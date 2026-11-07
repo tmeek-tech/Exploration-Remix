@@ -173,10 +173,10 @@ public final class Quakes {
     /**
      * The actors among the watchers (gate 3): those not in spectator mode, or every one of them with
      * {@code /remix quake spectators act}. They drive what changes the world: topples, climb answers, ceiling debris,
-     * and for the eruptions the Calderas' clocks and the bombs' aims.
+     * and for the eruptions the Calderas' clocks and the bombs' aims. Always a list of its own, never the one given.
      */
     public static List<ServerPlayer> actors(List<ServerPlayer> watchers) {
-        if (spectatorsAct) return watchers;
+        if (spectatorsAct) return new ArrayList<>(watchers);
         List<ServerPlayer> out = new ArrayList<>(watchers.size());
         for (ServerPlayer p : watchers) if (!p.isSpectator()) out.add(p);
         return out;
@@ -417,6 +417,9 @@ public final class Quakes {
         }
         e.start = level.getGameTime() - e.held;
         e.held = -1;
+        // a big quake held ends later than the schedule drew it: tell the schedule its new start, or the tremor (and the
+        // next big quake) that fell due while it was held would start at once and cut the rest of it short
+        if (e.kind == QuakeSchedule.BIG) schedule(level).bigStarted(e.start, e.duration, settings(ERConfig.INSTANCE));
         retell(level, e);
         say(c, "The quake goes on.");
         return 1;
