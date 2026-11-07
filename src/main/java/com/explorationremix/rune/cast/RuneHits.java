@@ -259,7 +259,8 @@ public final class RuneHits {
             seen.add(next);
             Vec3 p0 = at.position().add(0, at.getBbHeight() * 0.6, 0), p1 = next.position().add(0, next.getBbHeight() * 0.6, 0);
             RuneFx.line(ctx.level, p0, p1, ParticleTypes.ELECTRIC_SPARK, 0.4);
-            hurt(ctx, next, next, damage, null, p0, p1.subtract(p0), 0.1F);
+            // a leap the game refuses does nothing else: no hold, and the spark goes no further
+            if (!hurt(ctx, next, next, damage, null, p0, p1.subtract(p0), 0.1F) && next.isAlive()) return;
             if (Statuses.wet(next) && !Statuses.immune(next)) Statuses.hold(next, Reactions.holdTicks(Reactions.Reaction.SHOCK, hunter(next)));
             at = next;
         }

@@ -23,11 +23,13 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -50,6 +52,8 @@ public class RuneMote extends Entity {
     public static final int LIFE = 1200;
     /** Roughly how much energy one mote carries; a refund splits into 1 to 5 of them. */
     private static final float PER_MOTE = 3.0F;
+    /** Every player's motes out now, oldest first, wherever they lie: the cap holds per player. Server side only. */
+    private static final Map<UUID, Set<RuneMote>> OUT = new HashMap<>();
 
     @Nullable
     private UUID owner;
@@ -75,20 +79,24 @@ public class RuneMote extends Entity {
     public UUID owner() { return owner; }
 
     /**
-     * Knocks {@code energy} loose at {@code at} for {@code owner}'s gear {@code gear}: a few motes, or, when the player
-     * already has too many out (on their way, or lying where far-off foes were struck), more energy in the nearest one.
+     * Knocks {@code energy} loose at {@code at} for {@code owner}'s gear {@code gear}: a few motes. When the player
+     * already has too many out, wherever they lie, it goes into the nearest of that gear's motes near the hit or the
+     * player instead; with none near, the player's oldest mote (left lying where a far-off foe was struck) fades to make
+     * room for one.
      */
     public static void spawn(ServerLevel level, Vec3 at, ServerPlayer owner, int gear, float energy) {
         if (energy <= 0.0F || gear == 0) return;
         int cap = RuneConfig.get(RuneConfig.INSTANCE.maxMotes);
-        java.util.function.Predicate<RuneMote> theirs = m -> owner.getUUID().equals(m.owner) && m.isAlive();
-        Set<RuneMote> out = new LinkedHashSet<>(level.getEntities(RuneRegistry.MOTE.get(), owner.getBoundingBox().inflate(RANGE * 2), theirs));
-        out.addAll(level.getEntities(RuneRegistry.MOTE.get(), new AABB(at, at).inflate(RANGE * 2), theirs));
+        Set<RuneMote> out = OUT.computeIfAbsent(owner.getUUID(), u -> new LinkedHashSet<>());
+        out.removeIf(Entity::isRemoved);
         int n = Mth.clamp(Math.round(energy / PER_MOTE), 1, 5);
         if (out.size() + n > cap) {
+            double reach = RANGE * 2;
             RuneMote nearest = null;
             for (RuneMote m : out) {
-                if (m.gear == gear && (nearest == null || m.distanceToSqr(at) < nearest.distanceToSqr(at))) nearest = m;
+                if (m.gear != gear || m.level() != level) continue;
+                if (m.distanceToSqr(at) > reach * reach && m.distanceToSqr(owner) > reach * reach) continue;
+                if (nearest == null || m.distanceToSqr(at) < nearest.distanceToSqr(at)) nearest = m;
             }
             if (nearest != null) {
                 nearest.energy += energy;
@@ -96,6 +104,11 @@ public class RuneMote extends Entity {
                 return;
             }
             n = 1;
+            for (RuneMote old : new ArrayList<>(out)) {
+                if (out.size() < cap) break;
+                out.remove(old);
+                old.fade();
+            }
         }
         RandomSource r = level.random;
         for (int i = 0; i < n; i++) {
@@ -107,9 +120,20 @@ public class RuneMote extends Entity {
             m.setPos(at.x, at.y, at.z);
             m.setDeltaMovement((r.nextDouble() - 0.5) * 0.35, 0.12 + r.nextDouble() * 0.18, (r.nextDouble() - 0.5) * 0.35);
             m.resize();
-            level.addFreshEntity(m);
+            if (level.addFreshEntity(m)) out.add(m);
         }
     }
+
+    /** However it ends (collected, faded, its chunk unloaded), it stops counting against its player. */
+    @Override
+    public void onRemovedFromWorld() {
+        super.onRemovedFromWorld();
+        if (level().isClientSide || owner == null) return;
+        Set<RuneMote> out = OUT.get(owner);
+        if (out != null && out.remove(this) && out.isEmpty()) OUT.remove(owner);
+    }
+
+    public static void clearAll() { OUT.clear(); }
 
     private void resize() { entityData.set(DATA_SIZE, Mth.clamp(0.55F + energy / 8.0F, 0.6F, 1.4F)); }
 
@@ -194,6 +218,10 @@ public class RuneMote extends Entity {
 
     @Override
     public boolean isPickable() { return false; }
+
+    /** A portal never takes it: it belongs to the world it was knocked loose in. */
+    @Override
+    public boolean canChangeDimensions() { return false; }
 
     @Override
     public boolean isAttackable() { return false; }

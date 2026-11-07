@@ -4,6 +4,7 @@ import com.explorationremix.rune.RunDepth;
 import com.explorationremix.rune.RuneConfig;
 import com.explorationremix.rune.RuneGear;
 import com.explorationremix.rune.effect.RuneFx;
+import com.explorationremix.rune.effect.RuneMote;
 import com.explorationremix.rune.engine.Act;
 import com.explorationremix.rune.engine.CastMachine;
 import com.explorationremix.rune.engine.CastReading;
@@ -20,6 +21,7 @@ import com.explorationremix.rune.menu.RuneEditorMenu;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -171,6 +173,9 @@ public final class CastService {
             return Result.WAIT;
         }
         if (dash && !Dashes.canDash(p, c)) return Result.WAIT;
+        // the caster's own ground isn't running yet (the first ticks after a long teleport): wait, rather than pay for
+        // a cast that could only fizzle
+        if (!p.serverLevel().isPositionEntityTicking(p.blockPosition())) return Result.WAIT;
         CastMachine.Outcome o = CastMachine.attempt(s, r, now, false, lim);
         if (o.kind() == CastMachine.Kind.SPUTTER) {
             sputter(p, c, now, o);
@@ -303,11 +308,30 @@ public final class CastService {
         p.hurtMarked = true;
     }
 
-    /** The end of each server tick: payloads that waited their turn, and the arrows' casts. */
+    /** The end of each server tick: payloads that waited their turn, carriers left on still ground, the arrows' casts. */
     public static void serverTick(MinecraftServer server) {
         long tick = server.getTickCount();
-        for (Caster c : CASTERS.values()) if (!c.queue.isEmpty()) Executor.drain(c, tick);
+        for (Caster c : CASTERS.values()) {
+            if (!c.queue.isEmpty()) Executor.drain(c, tick);
+            if (!c.carriers.isEmpty()) dropStill(c);
+        }
         ArrowRides.tick();
+    }
+
+    /**
+     * A bolt or field whose ground stopped running while it was out (its caster went far off, past the simulation
+     * distance): it would hang there holding its slot, so it goes, its runes spent.
+     */
+    private static void dropStill(Caster c) {
+        for (Entity e : new ArrayList<>(c.carriers)) {
+            if (e.isRemoved()) {
+                c.carriers.remove(e);
+            } else if (e.level() instanceof ServerLevel l && !l.isPositionEntityTicking(e.blockPosition())) {
+                e.discard();
+                // a carrier on ground nobody is near isn't told it went, so its slot is freed here
+                c.carriers.remove(e);
+            }
+        }
     }
 
     private static void trackHands(ServerPlayer p, Caster c, long now) {
@@ -389,5 +413,6 @@ public final class CastService {
         ArrowRides.clear();
         TempBlocks.clear();
         Statuses.clear();
+        RuneMote.clearAll();
     }
 }
