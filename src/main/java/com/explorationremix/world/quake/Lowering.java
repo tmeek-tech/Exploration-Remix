@@ -108,7 +108,10 @@ final class Lowering {
         if (p == null || p.isRemoved() || p.level() != w.level || p.isSpectator()) return false;
         AABB b = p.getBoundingBox();
         int ty = Support.feetBlockY(b.minY);
-        if (!Support.standsOn(j.x, ty, j.z, b.minX, b.minY, b.minZ, b.maxX, b.maxZ)) {
+        BlockPos t = new BlockPos(j.x, ty, j.z);
+        // standing on a block of the column: not on the open cell the last step left, where the server still sees them
+        // until their client tells it they dropped (a player's moves reach it a tick or more late)
+        if (!Support.standsOn(j.x, ty, j.z, b.minX, b.minY, b.minZ, b.maxX, b.maxZ) || Topple.kindAt(w.level, t) == Support.OPEN) {
             // still dropping onto the column after the last step, or jumping on it as they tower: wait for them to land
             if (over(w, j, b) && j.waited++ < MAX_WAIT) {
                 j.nextStep = w.now + 1;
@@ -117,7 +120,6 @@ final class Lowering {
             return false;
         }
         j.waited = 0;
-        BlockPos t = new BlockPos(j.x, ty, j.z);
         if (!Support.lowersOn(Topple.fallsNow(w.level, t, w.depth), true, j.steps)) return false;
         int mode = Support.lowering(Topple.kindAt(w.level, t.below()), w.lowerTicks);
         if (mode == Support.SINKS) {

@@ -265,7 +265,8 @@ final class Topple {
                     found.add(pos);
                     continue;
                 }
-                ServerPlayer on = standsOn(w, x, y, z);
+                // standing on the column's top, or in the air over it as they jump to tower
+                ServerPlayer on = rider(w, x, y, z);
                 if (on != null) {
                     LongArrayList ps = new LongArrayList();
                     ps.add(pos);
@@ -301,8 +302,8 @@ final class Topple {
                 } else {
                     index++;
                 }
-                // a player who has since stepped onto it keeps it: the next pass lowers it under them
-                if (standsOn(w, pos.getX(), pos.getY(), pos.getZ()) != null) continue;
+                // a player who has since stepped onto it, or towered on over it, keeps it: the next pass lowers it under them
+                if (rider(w, pos.getX(), pos.getY(), pos.getZ()) != null) continue;
                 int r = take(w, pos, state, false, Support.sideStart(columnStart(seed, pos.getX(), pos.getZ()), index), spawned);
                 Topple.count(e, r, false);
                 if (r != LEFT) w.taken++;
@@ -392,7 +393,9 @@ final class Topple {
         ServerLevel level = w.level;
         if (!GalleryChanges.inLayer(pos.getY())) return LEFT;
         LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
-        if (chunk == null) return LEFT;
+        // only where entities tick (gate 6): there every chunk round is loaded, so the neighbour updates of the writes
+        // below never load one; a block found where a player has since gone waits for a later pass
+        if (chunk == null || !level.isPositionEntityTicking(pos)) return LEFT;
         ChangeLog log = GalleryChanges.logOf(chunk);
         int bottom = GalleryChanges.bottom(), dy = pos.getY() - bottom;
         if (log == null || !ChangeLog.holds(dy)) return LEFT;
@@ -438,7 +441,6 @@ final class Topple {
         }
         boolean drops = Support.drops(w.terrainDamage, cur.is(ERTags.GALLERIES_ROCK));
         if (fw == Support.DOWN) {
-            if (!level.isPositionEntityTicking(pos)) return LEFT;
             write(level, chunk, pos);
             // fall() writes the dry block's fluid (air) where it stands, which is already air: nothing round it wakes
             FallingBlockEntity e = FallingBlockEntity.fall(level, pos, dry(cur));
@@ -546,12 +548,23 @@ final class Topple {
         return false;
     }
 
-    /** The player (not a spectator) who stands on the block at (x, y, z), or null ({@link Support#standsOn}). */
+    /** How far over a block found a rider of its column is looked for, in rows. */
+    private static final int RIDE_REACH = 32;
+
+    /**
+     * The player (not a spectator) who rides the column (x, z) at or over the placed block at row {@code y}
+     * ({@link Support#rides}): standing on it or on the placed blocks stacked on it, or in the air just over their top, as
+     * a player towering is for part of every jump. The find files such a column under them, and a block found is left
+     * when someone rides its column at its turn: taken from under the blocks they placed since, it would leave those
+     * hanging, to give way at a later pass and drop them the whole height. Null when nobody does.
+     */
     @Nullable
-    static ServerPlayer standsOn(Work w, int x, int y, int z) {
+    static ServerPlayer rider(Work w, int x, int y, int z) {
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         for (ServerPlayer p : w.standing) {
             AABB b = p.getBoundingBox();
-            if (Support.standsOn(x, y, z, b.minX, b.minY, b.minZ, b.maxX, b.maxZ)) return p;
+            if (b.minY < y + 1 || b.minY >= y + 1 + RIDE_REACH || !Support.overCell(x, z, b.minX, b.minZ, b.maxX, b.maxZ)) continue;
+            if (Support.ridesFrom(y, b.minY, !p.onGround(), row -> kindAt(w.level, m.set(x, row, z)))) return p;
         }
         return null;
     }
@@ -640,7 +653,7 @@ final class Topple {
             int start = columnStart((int) w.now, base.getX(), base.getZ());
             for (int i = falling.size() - 1, index = 0; i >= 0; i--, index++) {
                 BlockPos p = BlockPos.of(falling.getLong(i));
-                ServerPlayer on = standsOn(w, p.getX(), p.getY(), p.getZ());
+                ServerPlayer on = rider(w, p.getX(), p.getY(), p.getZ());
                 if (on != null) {
                     if (!Lowering.runningAt(p.getX(), p.getZ()) && Lowering.room()) {
                         LongArrayList ps = new LongArrayList();

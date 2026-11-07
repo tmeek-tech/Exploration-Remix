@@ -298,6 +298,79 @@ class SupportTest {
         assertFalse(inColumn(4, 4, 5, 10, 4.2, 2.0, 4.2, 4.8, 3.8, 4.8), "under its landing row");
     }
 
+    /**
+     * A player towers on a column of placed stone the way players do (jump 0.42, gravity 0.08, drag 0.98): once their
+     * feet are a block over the top they place the next block under them when their held click comes round, 0 to 3 ticks
+     * later. Through every tick they ride the column, though for the ticks before a placement they stand on no block of
+     * it: a find that only asked who stands on its top would miss them then, and take the tower from under the blocks
+     * they place next (review G2).
+     */
+    @Test
+    void aPlayerToweringRidesTheColumnThroughEveryJump() {
+        for (int late = 0; late < 4; late++) {
+            Column c = pillar(0, 3);
+            int top = 3;
+            double feet = top + 1, v = 0;
+            boolean onGround = true, alwaysStanding = true;
+            int clear = -1, placed = 0;
+            for (int tick = 0; tick < 400 && top < 60; tick++) {
+                if (onGround) {
+                    v = 0.42;
+                    onGround = false;
+                }
+                feet += v;
+                if (feet <= top + 1) {
+                    feet = top + 1;
+                    v = 0;
+                    onGround = true;
+                } else {
+                    v = (v - 0.08) * 0.98;
+                }
+                if (!onGround && feet >= top + 2) {
+                    if (clear < 0) clear = tick;
+                    if (tick - clear >= late) {
+                        c.put(++top, STONE);
+                        placed++;
+                        clear = -1;
+                    }
+                }
+                assertTrue(ridesFrom(top, feet, !onGround, c::kindAt), "late " + late + " tick " + tick + ": feet " + feet + " over the top at " + top);
+                assertTrue(ridesFrom(3, feet, !onGround, c::kindAt), "late " + late + " tick " + tick + ": the third block over rock is under them");
+                if (!standsOn(0, top, 0, 0.2, feet, 0.2, 0.8, 0.8)) alwaysStanding = false;
+            }
+            assertTrue(placed > 30, "late " + late);
+            if (late > 0) assertFalse(alwaysStanding, "late " + late + ": some ticks stand on no block");
+        }
+    }
+
+    @Test
+    void ridingNeedsTheColumnUnderTheFeet() {
+        Column c = pillar(0, 6);
+        assertTrue(ridesFrom(6, 7.0, false, c::kindAt), "standing on its top");
+        assertTrue(ridesFrom(3, 7.0, false, c::kindAt), "on the blocks stacked on it");
+        assertTrue(ridesFrom(6, 8.3, true, c::kindAt), "in the air over its top");
+        assertFalse(ridesFrom(6, 8.3, false, c::kindAt), "standing on something else beside it, over its top");
+        assertFalse(ridesFrom(6, 8.6, true, c::kindAt), "higher than a jump");
+        assertFalse(ridesFrom(6, 6.0, false, c::kindAt), "beside it, lower down");
+        // a gap: a bridge or a ledge over the column is something else to stand on
+        Column gap = pillar(0, 4).put(7, STONE);
+        assertFalse(ridesFrom(3, 8.0, false, gap::kindAt), "standing on a block over a gap");
+        assertTrue(ridesFrom(7, 8.0, false, gap::kindAt));
+        // rock over the top: a player over it stands on the rock
+        Column ledge = pillar(0, 4).natural(5, STONE);
+        assertFalse(ridesFrom(4, 6.2, true, ledge::kindAt), "in the air over rock over the top");
+        assertFalse(ridesFrom(4, 6.0, false, ledge::kindAt), "standing on rock over the top");
+        // the pure test by itself
+        assertTrue(rides(10, 11.0, false, false));
+        assertTrue(rides(10, 12.4, true, true));
+        assertFalse(rides(10, 12.4, true, false));
+        assertFalse(rides(10, 12.4, false, true));
+        assertFalse(rides(10, 12.5, true, true));
+        assertFalse(rides(10, 10.9, true, true));
+        assertTrue(overCell(4, 4, 3.5, 4.2, 4.1, 4.8));
+        assertFalse(overCell(4, 4, 2.0, 4.2, 2.6, 4.8));
+    }
+
     // ================================================================================================ lowering
 
     @Test

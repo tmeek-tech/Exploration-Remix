@@ -203,10 +203,11 @@ public final class Quakes {
             placements(w);
             if (!anyHeld()) {
                 for (ClimbAnswers.Answer a : climbs(level).due(now)) {
-                    // gate 4: with no actor left near, an answer that comes due is dropped
-                    if (actors.isEmpty()) continue;
+                    // gate 4: with no actor left near, an answer that comes due is dropped; so is one still pending when
+                    // quakes.climbTremors was turned off (the config is read live)
+                    if (actors.isEmpty() || !cfg.quakeClimbTremors.get()) continue;
                     BlockPos at = BlockPos.of(a.pos());
-                    begin(QuakeSchedule.CLIMB, now, a.duration(), a.strength(), a.seed(), quiet > 0, at, a.placer(), watchers, actors, w);
+                    begin(level, QuakeSchedule.CLIMB, now, a.duration(), a.strength(), a.seed(), quiet > 0, at, a.placer(), watchers, actors, w);
                 }
             }
             // the builds under players first: a player's safety does not wait for the budget
@@ -232,7 +233,7 @@ public final class Quakes {
         // gate 2: nothing starts on its own while the lava clock or a quake is held; the quiet window of the warning
         QuakeSchedule.Settings s = settings(cfg);
         QuakeSchedule.Start start = schedule(level).tick(now, s, quiet, LavaFlood.held() || anyHeld(), !actors.isEmpty());
-        if (start != null) begin(start.kind(), now, start.duration(), start.strength(), start.seed(), start.silent(), null, null, watchers, actors, w);
+        if (start != null) begin(level, start.kind(), now, start.duration(), start.strength(), start.seed(), start.silent(), null, null, watchers, actors, w);
     }
 
     /**
@@ -384,13 +385,13 @@ public final class Quakes {
      * whose end is sent; a big quake is told to the watchers at once, a tremor and a climb answer once their find is
      * done. With toppling on ({@code w} not null) its pass starts now. Returns it.
      */
-    private static Event begin(int kind, long now, int duration, float strength, int seed, boolean silent, @Nullable BlockPos origin,
+    private static Event begin(ServerLevel level, int kind, long now, int duration, float strength, int seed, boolean silent, @Nullable BlockPos origin,
                                @Nullable UUID placer, List<ServerPlayer> watchers, List<ServerPlayer> actors, @Nullable Topple.Work w) {
         if (kind != QuakeSchedule.CLIMB) {
             for (Iterator<Event> it = RUNNING.iterator(); it.hasNext(); ) {
                 Event e = it.next();
                 if (e.kind == QuakeSchedule.CLIMB) continue;
-                endEarly(e);
+                endEarly(level, e);
                 it.remove();
             }
         } else {
@@ -447,8 +448,16 @@ public final class Quakes {
         }
     }
 
-    /** A quake ends before its time: every client in the overworld drops it. */
-    private static void endEarly(Event e) {
+    /**
+     * A quake ends before its time: every client in the overworld drops it. A held one is let go first: its lowering jobs
+     * and its ceiling blocks wait while it is held, and nothing could release it once it is off the list (its jobs would
+     * keep their columns from every later pass, and its blocks would hang in the air).
+     */
+    private static void endEarly(ServerLevel level, Event e) {
+        if (e.held >= 0) {
+            e.held = -1;
+            Debris.released(level, e);
+        }
         if (!e.silent) LavaNet.CHANNEL.send(PacketDistributor.DIMENSION.with(() -> Level.OVERWORLD), LavaNet.Quake.end(e.id));
         finish(e);
     }
@@ -464,7 +473,7 @@ public final class Quakes {
      * the queues are forgotten.
      */
     private static void stop(ServerLevel level, LavaFlood.Band band) {
-        for (Event e : RUNNING) endEarly(e);
+        for (Event e : RUNNING) endEarly(level, e);
         RUNNING.clear();
         Debris.stop(NearChunks.players(level, band));
         schedule = null;
@@ -640,7 +649,7 @@ public final class Quakes {
         BlockPos origin = kind == QuakeSchedule.CLIMB ? BlockPos.containing(c.getSource().getPosition()) : null;
         // the find runs now, within a tick's budget, so the answer can say what it found
         Topple.Work w = cfg.quakeTopple.get() ? new Topple.Work(level, now, watchers) : null;
-        Event e = begin(kind, now, duration, str, q.drawSeed(), false, origin, null, watchers, actors(watchers), w);
+        Event e = begin(level, kind, now, duration, str, q.drawSeed(), false, origin, null, watchers, actors(watchers), w);
         int found = e.pass == null ? 0 : e.pass.found();
         if (kind == QuakeSchedule.BIG) {
             q.bigStarted(now, duration, s);

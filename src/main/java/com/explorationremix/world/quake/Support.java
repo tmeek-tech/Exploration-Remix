@@ -245,7 +245,43 @@ public final class Support {
      * column is not toppled by the pass but lowered under them (spectators stand on nothing: callers leave them out).
      */
     public static boolean standsOn(int x, int y, int z, double minX, double minY, double minZ, double maxX, double maxZ) {
-        return minY >= y + 1 && minY < y + 2 && maxX > x - 0.3 && minX < x + 1.3 && maxZ > z - 0.3 && minZ < z + 1.3;
+        return minY >= y + 1 && minY < y + 2 && overCell(x, z, minX, minZ, maxX, maxZ);
+    }
+
+    /** True when a player's box is over the cell (x, z) grown by 0.3 on each side, as {@link #standsOn} grows it. */
+    public static boolean overCell(int x, int z, double minX, double minZ, double maxX, double maxZ) {
+        return maxX > x - 0.3 && minX < x + 1.3 && maxZ > z - 0.3 && minZ < z + 1.3;
+    }
+
+    /** How far over the top of a column a player's feet may be and they still ride it: a jump from it reaches 1.25. */
+    public static final double JUMP = 1.5;
+
+    /**
+     * True when a player over a column, with their feet at {@code minY}, rides it: the column's top block (the highest
+     * of the placed, climbing and poured blocks stacked there) is at row {@code topY}, and they stand on it, or are in
+     * the air ({@code airborne}: not on the ground, as their client tells the server) at most {@link #JUMP} over its top
+     * with nothing solid between ({@code openOver}: the cell over it is open). A player towering is in the air more than
+     * a block over the top for part of every jump, before they place the next block under them: such a column is still
+     * under them. A pass never takes a block from a column someone rides (it would leave the top hanging under them, to
+     * give way later and drop them its whole height): it is lowered under them instead ({@code Lowering}).
+     */
+    public static boolean rides(int topY, double minY, boolean openOver, boolean airborne) {
+        if (minY < topY + 1) return false;
+        if (minY < topY + 2) return true;
+        return openOver && airborne && minY < topY + 1 + JUMP;
+    }
+
+    /**
+     * True when a player over a column, with their feet at {@code minY} ({@code airborne}: in the air), rides it at or
+     * over the block at row {@code y}: going up from that block through the placed, climbing and poured blocks stacked
+     * on it ({@code kind} gives the kind at a row of the column) to the column's top, they {@link #rides ride} that top.
+     * A gap or rock between the block and their feet means they stand on something else.
+     */
+    public static boolean ridesFrom(int y, double minY, boolean airborne, IntUnaryOperator kind) {
+        if (minY < y + 1) return false;
+        int top = y;
+        while (top + 1 < minY && topples(kind.applyAsInt(top + 1))) top++;
+        return rides(top, minY, kind.applyAsInt(top + 1) == OPEN, airborne);
     }
 
     /**
