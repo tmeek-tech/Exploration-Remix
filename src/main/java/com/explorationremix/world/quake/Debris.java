@@ -8,7 +8,6 @@ import com.explorationremix.world.lava.Falling;
 import com.explorationremix.world.lava.GalleryChanges;
 import com.explorationremix.world.lava.LavaFlood;
 import com.explorationremix.world.lava.LavaNet;
-import com.explorationremix.world.lava.NearChunks;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -296,7 +295,7 @@ final class Debris {
     // ================================================================================================ drops
 
     /** Every tick the quakes run: the blocks whose time has come drop, or are called off. */
-    static void tick(ServerLevel level, List<ServerPlayer> watchers, long now) {
+    static void tick(ServerLevel level, long now) {
         if (PIECES.isEmpty()) return;
         LavaFlood.Band band = LavaFlood.band();
         Reader reader = new Reader(level);
@@ -310,7 +309,8 @@ final class Debris {
             if (pc.entity != null || now < pc.dropAt) continue;
             if (band == null || !dropOk(level, reader, band, pc)) {
                 it.remove();
-                Falling.send(watchers, pc.message(LavaNet.Debris.CANCEL, -1), pc.pos, LavaNet.Debris.WARN_RANGE);
+                // to everyone a hold or a release may have told of it, watchers or not (tell)
+                Falling.send(level.players(), pc.message(LavaNet.Debris.CANCEL, -1), pc.pos, LavaNet.Debris.WARN_RANGE);
                 continue;
             }
             if (due == null) due = new ArrayList<>();
@@ -406,18 +406,24 @@ final class Debris {
         return false;
     }
 
-    /** Sends a debris message to the watchers within reach of a WARN. */
+    /**
+     * Sends a hold or a release of a block to every player within reach of a WARN, watchers or not: a client keeps a
+     * block it was warned of until it is that far from it, and one that had climbed out of the Galleries since would
+     * otherwise keep a held block's warning for ever.
+     */
     private static void tell(ServerLevel level, LavaNet.Debris d) {
-        LavaFlood.Band band = LavaFlood.band();
-        if (band == null) return;
-        Falling.send(NearChunks.players(level, band), d, BlockPos.of(d.pos()), LavaNet.Debris.WARN_RANGE);
+        Falling.send(level.players(), d, BlockPos.of(d.pos()), LavaNet.Debris.WARN_RANGE);
     }
 
-    /** Gate 1: the blocks waiting are called off; those in the air are let go and fall on, tracked for their hits. */
-    static void stop(List<ServerPlayer> watchers) {
+    /**
+     * Gate 1: the blocks waiting are called off (told to {@code players}, everyone in the overworld, as {@link #tell}'s
+     * holds and releases may have reached more than the watchers); those in the air are let go and fall on, tracked for
+     * their hits.
+     */
+    static void stop(List<ServerPlayer> players) {
         for (Piece pc : PIECES) {
             pc.stopped = true;
-            if (pc.entity == null) Falling.send(watchers, pc.message(LavaNet.Debris.CANCEL, -1), pc.pos, LavaNet.Debris.WARN_RANGE);
+            if (pc.entity == null) Falling.send(players, pc.message(LavaNet.Debris.CANCEL, -1), pc.pos, LavaNet.Debris.WARN_RANGE);
         }
         PIECES.clear();
     }

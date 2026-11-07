@@ -69,7 +69,8 @@ import java.util.UUID;
  * message goes out once its find of the blocks to topple is done, with each player's {@code felt} flag (in full only
  * near something that topples); a climb answer only to watchers within {@link #CLIMB_RANGE} blocks of the block placed.
  * Players who come near while a quake runs are told it then, so their clients play the rest of it; a hold and a release
- * are told again to everyone told before; a quake that is stopped early sends its end to everyone in the overworld.
+ * are told again to everyone told before (one who leaves while it is held is told its end); a quake that is stopped
+ * early sends its end to everyone in the overworld.
  *
  * <p><b>Toppling</b> ({@link Topple}, with {@code quakes.topple}): every quake runs a topple pass. A big quake's find
  * starts at once and its blocks fall from 20 ticks in until it ends (what is left falls at the next); a tremor's and a
@@ -181,7 +182,7 @@ public final class Quakes {
         ERConfig cfg = ERConfig.INSTANCE;
         // gate 1: turned off, every quake ends and everything is forgotten
         if (!cfg.quakesEnabled.get()) {
-            if (schedule != null || !RUNNING.isEmpty() || Lowering.running() > 0 || climbs != null || Debris.pending() > 0) stop(level, band);
+            if (schedule != null || !RUNNING.isEmpty() || Lowering.running() > 0 || climbs != null || Debris.pending() > 0) stop(level);
             return;
         }
         boolean cycleOn = cfg.lavaCycleEnabled.get();
@@ -221,14 +222,14 @@ public final class Quakes {
                 work(e, w, watchers, actors);
                 Debris.picks(level, e, actors, watchers, now);
             }
-            if (e.announced) tellLate(e, watchers);
+            if (e.announced) tellLate(level, e, watchers);
             if (e.held < 0 && now - e.start >= e.duration) {
                 finish(e);
                 it.remove();
             }
         }
         // the ceiling blocks warned of drop when their time comes (a held quake's wait)
-        Debris.tick(level, watchers, now);
+        Debris.tick(level, now);
         if (w != null) Topple.atOnce(w);
         // gate 2: nothing starts on its own while the lava clock or a quake is held; the quiet window of the warning
         QuakeSchedule.Settings s = settings(cfg);
@@ -423,13 +424,22 @@ public final class Quakes {
     /**
      * Tells the quake to watchers who came near since it started (a big quake felt in full, the others by where its
      * blocks fall), and forgets those no longer near, so they are told again if they come back (a client takes a quake
-     * it already has by its id).
+     * it already has by its id). One who leaves while the quake is held is told its end: the release is told only to
+     * those still near, and a client left holding a quake would keep its whole view still (the lava's warning too)
+     * after the quake was let go and ran out.
      */
-    private static void tellLate(Event e, List<ServerPlayer> watchers) {
+    private static void tellLate(ServerLevel level, Event e, List<ServerPlayer> watchers) {
         if (e.silent) return;
         if (!e.told.isEmpty()) {
             List<UUID> near = new ArrayList<>(watchers.size());
             for (ServerPlayer p : watchers) if (e.reaches(p)) near.add(p.getUUID());
+            if (e.held >= 0) {
+                for (UUID id : e.told.keySet()) {
+                    if (near.contains(id)) continue;
+                    ServerPlayer p = level.getServer().getPlayerList().getPlayer(id);
+                    if (p != null) send(p, LavaNet.Quake.end(e.id));
+                }
+            }
             e.told.keySet().retainAll(near);
         }
         for (ServerPlayer p : watchers) {
@@ -472,10 +482,10 @@ public final class Quakes {
      * waiting to drop are called off (those in the air are let go and fall on), and the schedule, the climb answers and
      * the queues are forgotten.
      */
-    private static void stop(ServerLevel level, LavaFlood.Band band) {
+    private static void stop(ServerLevel level) {
         for (Event e : RUNNING) endEarly(level, e);
         RUNNING.clear();
-        Debris.stop(NearChunks.players(level, band));
+        Debris.stop(level.players());
         schedule = null;
         lastPhase = null;
         stopToppling();

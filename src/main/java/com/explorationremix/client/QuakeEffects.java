@@ -80,8 +80,11 @@ public final class QuakeEffects {
     static final int SOUNDS_PER_TICK = 4;
     /** A block is forgotten this long after its drop time if nothing ended it, ticks (the longest fall is about 110). */
     static final int FORGET = 400;
-    /** A block warned of is forgotten when the camera is this far from it: past the warning's reach, no message comes. */
-    static final double FAR = 200;
+    /**
+     * A block warned of is forgotten when the camera is farther from it than a warning reaches: no message about it comes
+     * there (a held one would wait for a release that never came, trickling grit for ever).
+     */
+    static final double FAR = LavaNet.Debris.WARN_RANGE;
 
     /** The dust a falling block shakes up: gravel's grey (basalt's own dust is black and does not show here). */
     private static final BlockParticleOption DUST = new BlockParticleOption(ParticleTypes.FALLING_DUST, Blocks.GRAVEL.defaultBlockState());
@@ -317,7 +320,7 @@ public final class QuakeEffects {
         Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
         if (!QUAKES.isEmpty()) quakes(level, player, cam, now, random);
         if (!PIECES.isEmpty()) pieces(level, cam, now, random);
-        if (!CREAKS.isEmpty()) creaks(mc, now, random);
+        if (!CREAKS.isEmpty()) creaks(mc, level, now, random);
     }
 
     /** The quakes' dust in the air round the camera, and forgetting the quakes that have run out. */
@@ -447,7 +450,7 @@ public final class QuakeEffects {
     }
 
     /** Each creaking build: crumbs off the sides of its top blocks, until it goes. */
-    private static void creaks(Minecraft mc, long now, RandomSource random) {
+    private static void creaks(Minecraft mc, ClientLevel level, long now, RandomSource random) {
         double rate = forcedRate();
         for (Iterator<Creak> it = CREAKS.iterator(); it.hasNext(); ) {
             Creak c = it.next();
@@ -459,7 +462,10 @@ public final class QuakeEffects {
             int top = c.pos.getY(), low = Math.max(c.low, top - 2);
             for (c.crumbs += rate; c.crumbs >= 1; c.crumbs--) {
                 BlockPos at = new BlockPos(c.pos.getX(), low + random.nextInt(top - low + 1), c.pos.getZ());
-                // the game's own crumbs off a block's face (forced: the warning shows whatever the options)
+                // the game's own crumbs off a block's face (forced: the warning shows whatever the options); crack()
+                // takes the bounds of the block's shape, which throws for an empty one (a block drawn with no outline,
+                // as some climbing blocks of other mods are, or whatever the column holds by now)
+                if (level.getBlockState(at).getShape(level, at).isEmpty()) continue;
                 mc.particleEngine.crack(at, Direction.from2DDataValue(random.nextInt(4)));
             }
         }
