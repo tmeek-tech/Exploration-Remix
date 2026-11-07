@@ -193,7 +193,7 @@ public final class ArrowRides {
             if (t.isDeadOrDying()) back += r.ctx.siphon.kill(id);
             if (back > 0.0F) RuneMote.spawn(r.ctx.level, t.position().add(0, t.getBbHeight() * 0.6, 0), r.ctx.owner, r.ctx.gearId, back);
         }
-        if (r.hasPayload()) release(r, new Origin(r.hitAt, r.hitDir, r.hitWall ? null : t));
+        if (r.hasPayload()) release(r, new Origin(r.hitAt, r.hitDir, r.hitWall ? null : t, r.hitWall));
         r.released = true;
     }
 

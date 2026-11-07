@@ -166,6 +166,26 @@ public final class RuneGear {
         stack.removeTagKey(ROW_TAG);
     }
 
+    /**
+     * What a grindstone makes of one runed piece of gear: the same piece with no runes and no casting state and, as a
+     * grindstone does, without its enchantments (curses stay) and with its repair cost reset. Its wear stays.
+     */
+    public static ItemStack ground(ItemStack stack) {
+        ItemStack out = stack.copyWithCount(1);
+        out.removeTagKey(ROW_TAG);
+        out.removeTagKey(CAST_TAG);
+        out.removeTagKey("Enchantments");
+        out.removeTagKey("StoredEnchantments");
+        java.util.Map<net.minecraft.world.item.enchantment.Enchantment, Integer> curses = new java.util.LinkedHashMap<>();
+        net.minecraft.world.item.enchantment.EnchantmentHelper.getEnchantments(stack).forEach((en, lvl) -> {
+            if (en.isCurse()) curses.put(en, lvl);
+        });
+        net.minecraft.world.item.enchantment.EnchantmentHelper.setEnchantments(curses, out);
+        out.setRepairCost(0);
+        for (int i = 0; i < curses.size(); i++) out.setRepairCost(net.minecraft.world.inventory.AnvilMenu.calculateIncreasedRepairCost(out.getBaseRepairCost()));
+        return out;
+    }
+
     // ------------------------------------------------------------------------------------------------ casting state
 
     /** The gear's casting state, or a fresh one (starting energy, nothing cast). */

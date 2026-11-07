@@ -6,6 +6,7 @@ import com.explorationremix.rune.cast.CastService;
 import com.explorationremix.rune.cast.Statuses;
 import com.explorationremix.rune.engine.Host;
 import com.explorationremix.rune.menu.RuneEditorMenu;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -13,9 +14,11 @@ import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
+import net.minecraft.world.inventory.GrindstoneMenu;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.ToolActions;
+import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.AnvilUpdateEvent;
 import net.minecraftforge.event.GrindstoneEvent;
 import net.minecraftforge.event.TickEvent;
@@ -33,6 +36,9 @@ import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.server.ServerLifecycleHooks;
+
+import javax.annotation.Nullable;
 
 /**
  * Where the runes meet the game (Forge bus). The client only ever asks; the server decides every cast, every hit and
@@ -55,6 +61,7 @@ public final class RuneEvents {
     @SubscribeEvent
     public static void rightClickItem(PlayerInteractEvent.RightClickItem e) {
         Player p = e.getEntity();
+        if (p instanceof FakePlayer) return;
         ItemStack s = e.getItemStack();
         Host h = RuneGear.host(s);
         if (h == Host.CROSSBOW && p instanceof ServerPlayer sp && CrossbowItem.isCharged(s) && RuneGear.hasRunes(s)) {
@@ -199,12 +206,46 @@ public final class RuneEvents {
         if (RuneGear.hasRunes(e.getRight())) e.setCanceled(true);
     }
 
-    /** A grindstone won't merge runed gear (the merged item would come out without its runes). */
+    /**
+     * A grindstone takes the runes off one runed piece of gear: it comes out plain (and, as ever, without its
+     * enchantments), and the runes come back as items when it is taken out. It won't merge two pieces when either has
+     * runes (the merged one would come out without them).
+     */
     @SubscribeEvent
     public static void grindstone(GrindstoneEvent.OnPlaceItem e) {
-        if (!e.getTopItem().isEmpty() && !e.getBottomItem().isEmpty() && (RuneGear.hasRunes(e.getTopItem()) || RuneGear.hasRunes(e.getBottomItem()))) {
-            e.setCanceled(true);
+        ItemStack top = e.getTopItem(), bottom = e.getBottomItem();
+        if (!top.isEmpty() && !bottom.isEmpty()) {
+            if (RuneGear.hasRunes(top) || RuneGear.hasRunes(bottom)) e.setCanceled(true);
+            return;
         }
+        ItemStack one = top.isEmpty() ? bottom : top;
+        if (one.getCount() == 1 && RuneGear.hasRunes(one)) e.setOutput(RuneGear.ground(one));
+    }
+
+    /** The plain gear is taken out of the grindstone: its runes go to the player using it (or drop at their feet). */
+    @SubscribeEvent
+    public static void grindstoneTake(GrindstoneEvent.OnTakeItem e) {
+        ItemStack top = e.getTopItem(), bottom = e.getBottomItem();
+        if (!top.isEmpty() && !bottom.isEmpty()) return;
+        ItemStack one = top.isEmpty() ? bottom : top;
+        if (!RuneGear.hasRunes(one)) return;
+        ServerPlayer user = grindstoneUser(one);
+        if (user == null) {
+            ExplorationRemix.LOGGER.warn("A grindstone took the runes off {} with no player using it; the runes stay on it", one);
+            return;
+        }
+        RuneGear.dropRunes(one.copy(), user);
+    }
+
+    /** The player whose open grindstone holds this exact stack. */
+    @Nullable
+    private static ServerPlayer grindstoneUser(ItemStack stack) {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) return null;
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            if (p.containerMenu instanceof GrindstoneMenu m && (m.getSlot(0).getItem() == stack || m.getSlot(1).getItem() == stack)) return p;
+        }
+        return null;
     }
 
     /** Crafting with runed gear in the grid (a repair): its runes come back to the player unless the result kept them. */

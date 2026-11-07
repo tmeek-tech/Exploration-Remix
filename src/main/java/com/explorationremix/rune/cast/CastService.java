@@ -34,6 +34,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.ToolActions;
+import net.minecraftforge.common.util.FakePlayer;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -48,7 +49,8 @@ import java.util.UUID;
  * {@code swapTicks} casts, so swapping between pieces of gear can't skip their delays.
  *
  * <p>Also here: a full-strength sword hit on a creature fighting you charges the sword; a bow regains energy while it
- * is held; the run depth is checked once a second.
+ * is held; the run depth is checked once a second. Fake players (a Create deployer holding a sword) never cast or
+ * charge.
  */
 public final class CastService {
     private static final Map<UUID, Caster> CASTERS = new HashMap<>();
@@ -82,6 +84,7 @@ public final class CastService {
 
     /** The player casts the sword in this hand: a right-click, held or tapped. */
     public static Result castSword(ServerPlayer p, InteractionHand hand) {
+        if (p instanceof FakePlayer) return Result.NONE;
         ItemStack gear = p.getItemInHand(hand);
         if (RuneGear.host(gear) != Host.SWORD || !RuneGear.hasRunes(gear)) return Result.NONE;
         if (p.isSpectator() || !p.isAlive() || p.containerMenu instanceof RuneEditorMenu) return Result.NONE;
@@ -95,6 +98,7 @@ public final class CastService {
 
     /** A charged crossbow with runes is about to fire from this hand. */
     public static void crossbowAboutToFire(ServerPlayer p, InteractionHand hand) {
+        if (p instanceof FakePlayer) return;
         Caster c = caster(p);
         c.crossbowHand = hand;
         c.crossbowTick = p.level().getGameTime();
@@ -106,7 +110,7 @@ public final class CastService {
      * energy) stays a plain arrow.
      */
     public static void arrowLoosed(AbstractArrow arrow) {
-        if (ArrowRides.spawning() || !(arrow.getOwner() instanceof ServerPlayer p)) return;
+        if (ArrowRides.spawning() || !(arrow.getOwner() instanceof ServerPlayer p) || p instanceof FakePlayer) return;
         Caster c = CASTERS.get(p.getUUID());
         if (c == null) return;
         long now = p.level().getGameTime();
@@ -221,6 +225,7 @@ public final class CastService {
 
     /** The player swings at {@code target}: noted, so the damage that follows knows whether it was a full-strength hit. */
     public static void swing(ServerPlayer p, Entity target) {
+        if (p instanceof FakePlayer) return;
         Caster c = caster(p);
         LivingEntity body = RuneHits.body(target);
         c.swingTarget = body == null ? -1 : body.getId();
@@ -231,7 +236,7 @@ public final class CastService {
     /** Melee damage landed: a full-strength hit with a runed sword on a creature fighting you charges the sword. */
     public static void meleeDamage(ServerPlayer p, LivingEntity target, float amount) {
         Caster c = CASTERS.get(p.getUUID());
-        if (c == null || amount <= 0.0F) return;
+        if (c == null || amount <= 0.0F || p instanceof FakePlayer) return;
         long now = p.level().getGameTime();
         if (c.swingTarget != target.getId() || c.swingTick != now || !c.swingFull) return;
         c.swingTarget = -1;
@@ -253,12 +258,15 @@ public final class CastService {
 
     // ------------------------------------------------------------------------------------------------ ticks
 
-    /** Each player's tick: which gear is in hand, dashes, and once a second the run depth. */
+    /** Each player's tick: which gear is in hand, dashes, safe landings from their own throws, and once a second the run depth. */
     public static void tick(ServerPlayer p) {
+        if (p instanceof FakePlayer) return;
         Caster c = caster(p);
         long now = p.level().getGameTime();
         trackHands(p, c, now);
         if (!c.dashes.isEmpty() || c.airDashUsed) Dashes.tick(p, c, now);
+        if (now <= c.safeUntil) p.fallDistance = 0.0F;
+        if (c.airBlastUsed && (p.onGround() || p.isInWater())) c.airBlastUsed = false;
         if (p.tickCount % 20 == 0) depth(p);
     }
 

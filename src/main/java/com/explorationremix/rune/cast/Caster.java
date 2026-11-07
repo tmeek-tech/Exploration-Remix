@@ -11,8 +11,9 @@ import java.util.Set;
 
 /**
  * One player's casting on the server: what they have out (bolts and fields, for the limit), payloads waiting their
- * turn, which gear has been in each hand since when (the swap delay, a bow's regeneration), their dashes, their last
- * sword swing (a full-strength hit charges the sword), and a crossbow shot about to fire. Never saved.
+ * turn, which gear has been in each hand since when (the swap delay, a bow's regeneration), their dashes and the
+ * throws of their own blasts and Reels, their last sword swing (a full-strength hit charges the sword), and a crossbow
+ * shot about to fire. Never saved.
  */
 final class Caster {
     /** A hand's gear: its id (0 for none), the inventory slot it is in, and since when. */
@@ -32,6 +33,12 @@ final class Caster {
 
     final List<Dashes.Dash> dashes = new ArrayList<>();
     boolean airDashUsed;
+
+    /** Their own blasts: one throw a tick, one while off the ground. */
+    long blastTick = -1;
+    boolean airBlastUsed;
+    /** Until this tick a throw of their own (a Reel to a wall, a blast) can't hurt them when they land. */
+    long safeUntil = -1;
 
     int swingTarget = -1;
     long swingTick = -1;

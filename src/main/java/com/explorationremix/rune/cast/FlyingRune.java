@@ -15,6 +15,8 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ClipContext;
@@ -38,11 +40,14 @@ import java.util.Set;
  *   <li>old age: it stops where it has got to.</li>
  * </ul>
  * Where it stops it lets go what it carries (On hit), or earlier, a moment after it was cast (After a moment). Off a
- * wall the payload faces back out; through a creature it carries on and its bolts pass that creature by. A Glow mote
- * leaves a light where it stops.
+ * wall the payload faces back out (and a Reel there pulls the caster to the wall); through a creature it carries on
+ * and its bolts pass that creature by. A Glow mote leaves a light where it stops, or sticks to the creature it hits,
+ * which then glows for a minute.
  */
 final class FlyingRune implements BoltLogic {
     static final int AFTER_TICKS = 12;
+    /** How long a Glow mote stuck on a creature makes it glow. */
+    static final int GLOW_TAG_TICKS = 20 * 60;
 
     private final CastContext ctx;
     private final Plan.Node node;
@@ -334,10 +339,15 @@ final class FlyingRune implements BoltLogic {
         RuneFx.play(l, at, RuneFx.sound(a.rune, a.element), a.rune == RuneId.ORB ? 0.7F : 0.45F, 1.1F + l.random.nextFloat() * 0.3F);
         if (a.element != Element.NONE) RuneHits.world(ctx, a.element, at, 1.0 + 0.5 * a.count(RuneId.WIDE));
         if (a.rune == RuneId.GLOW) {
-            BlockPos p = BlockPos.containing(at);
-            if (!TempBlocks.place(l, p, TempBlock.Kind.LIGHT, ctx.owner.getUUID())) TempBlocks.place(l, p.above(), TempBlock.Kind.LIGHT, ctx.owner.getUUID());
+            if (hit != null) {
+                // on a creature it sticks: it glows, through walls, for a minute
+                hit.addEffect(new MobEffectInstance(MobEffects.GLOWING, GLOW_TAG_TICKS, 0, false, false, true), ctx.owner);
+            } else {
+                BlockPos p = BlockPos.containing(at);
+                if (!TempBlocks.place(l, p, TempBlock.Kind.LIGHT, ctx.owner.getUUID())) TempBlocks.place(l, p.above(), TempBlock.Kind.LIGHT, ctx.owner.getUUID());
+            }
         }
-        if (hasPayload()) Executor.release(ctx, node.children, new Origin(at, d, hit));
+        if (hasPayload()) Executor.release(ctx, node.children, new Origin(at, d, hit, wall != null));
         b.discard();
     }
 }

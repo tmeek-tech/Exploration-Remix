@@ -7,22 +7,26 @@ import net.minecraft.world.phys.Vec3;
 import javax.annotation.Nullable;
 
 /**
- * Where a part of a cast is let go: a point, the way it faces, and what was just hit there (a creature the payload
- * carries on through, so flying runes let go there do not strike it again at once).
+ * Where a part of a cast is let go: a point, the way it faces, what was just hit there (a creature the payload
+ * carries on through, so flying runes let go there do not strike it again at once), and whether it was a wall (a Reel
+ * let go there pulls the caster to it).
  *
- * @param pos  the point
- * @param dir  the way it faces (unit length)
- * @param hit  the creature just hit there, or null
+ * @param pos   the point
+ * @param dir   the way it faces (unit length)
+ * @param hit   the creature just hit there, or null
+ * @param wall  whether the carrier stopped against a block there
  */
-public record Origin(Vec3 pos, Vec3 dir, @Nullable Entity hit) {
+public record Origin(Vec3 pos, Vec3 dir, @Nullable Entity hit, boolean wall) {
+    public Origin(Vec3 pos, Vec3 dir, @Nullable Entity hit) { this(pos, dir, hit, false); }
+
     /** A player's eyes, facing where they look; flying runes start a little in front. */
     public static Origin eyes(ServerPlayer p) {
         return new Origin(p.getEyePosition(), p.getLookAngle().normalize(), null);
     }
 
-    public Origin at(Vec3 p) { return new Origin(p, dir, hit); }
+    public Origin at(Vec3 p) { return new Origin(p, dir, hit, wall); }
 
-    public Origin facing(Vec3 d) { return new Origin(pos, d.lengthSqr() < 1.0E-8 ? dir : d.normalize(), hit); }
+    public Origin facing(Vec3 d) { return new Origin(pos, d.lengthSqr() < 1.0E-8 ? dir : d.normalize(), hit, wall); }
 
     /** {@code dir} turned {@code degrees} about the up axis (Fan's spread). */
     public static Vec3 turn(Vec3 dir, float degrees) {

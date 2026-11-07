@@ -30,8 +30,11 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ambient.AmbientCreature;
+import net.minecraft.world.entity.animal.AbstractGolem;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
@@ -70,13 +73,18 @@ public final class RuneHits {
         return e instanceof LivingEntity le ? le : null;
     }
 
-    /** Runes touch every creature but their caster, the caster's own pets, and (unless the server says) other players. */
+    /**
+     * Runes touch every creature but their caster, pets (anyone's), villagers, golems, and other players unless the
+     * server turns rune damage between players on. Bats and armor stands are passed through (fireflies are no creature
+     * at all). A shulker is a golem that fights, so runes touch it.
+     */
     public static boolean canHit(ServerPlayer owner, @Nullable Entity e) {
         LivingEntity t = body(e);
         if (t == null || t == owner || !t.isAlive() || t.isSpectator()) return false;
-        if (t instanceof Player && !RuneConfig.get(RuneConfig.INSTANCE.runesHurtPlayers)) return false;
-        if (t instanceof OwnableEntity o && owner.getUUID().equals(o.getOwnerUUID())) return false;
-        return !(t instanceof ArmorStand a && a.isMarker());
+        if (t instanceof Player) return RuneConfig.get(RuneConfig.INSTANCE.runesHurtPlayers);
+        if (t instanceof OwnableEntity o && o.getOwnerUUID() != null) return false;
+        if (t instanceof AbstractVillager || t instanceof AmbientCreature || t instanceof ArmorStand) return false;
+        return !(t instanceof AbstractGolem) || t instanceof Enemy;
     }
 
     /** A creature that is fighting the player: a monster, or anything hunting or angry at them. Only these feed Siphon. */

@@ -97,7 +97,7 @@ final class Dashes {
                 // off the wall they ran into, the payload faces back out
                 Vec3 f = Origin.flat(d.dir);
                 Vec3 out = f == Vec3.ZERO ? d.dir.reverse() : Origin.reflect(d.dir, f.reverse());
-                release(d, new Origin(mid.add(f.scale(0.3)), out, null));
+                release(d, new Origin(mid.add(f.scale(0.3)), out, null, true));
             } else if (age >= HIT_TICKS) {
                 release(d, new Origin(mid, d.dir, null));
             }
