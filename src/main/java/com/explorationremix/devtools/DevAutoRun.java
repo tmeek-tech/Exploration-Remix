@@ -26,8 +26,9 @@ import java.util.TreeMap;
 
 /**
  * Headless world generation check, enabled with the environment variable ER_DEVRUN=1. Once the server is up it
- * generates the spawn cell's gates (in band 1 the den gate nearest spawn), checks that every passage is open, lists
- * each layer's network, writes pictures of the real blocks into {@code remix_devrun/}, then stops the server (unless
+ * generates the spawn cell's gates (in band 1 the den gate nearest spawn), checks that every passage is open,
+ * describes each layer where it is entered (the network's plan, or the noise field's values in the Wasteland and the
+ * Galleries), writes pictures of the real blocks into {@code remix_devrun/}, then stops the server (unless
  * ER_DEVRUN=keep).
  */
 public final class DevAutoRun {
@@ -75,8 +76,10 @@ public final class DevAutoRun {
             if (level.getMinBuildHeight() != t.shape.floorY) out.println("HEIGHT MISMATCH: the world's floor is not the deep floor");
             Shape s = t.shape;
             for (int i = 0; i < s.layerCount; i++) {
-                out.printf(Locale.ROOT, "layer %d %s: y %d..%d, fluid table y %d (%s), band above y %d..%d%n", i + 1, s.id(i), s.bottom(i), s.top(i),
-                        s.waterY(i) - 1, s.lava(i) ? "lava" : "water", s.bandBottom(i + 1), s.bandTop(i + 1));
+                String band = s.bandThickness(i + 1) > 0 ? String.format(Locale.ROOT, "band above y %d..%d", s.bandBottom(i + 1), s.bandTop(i + 1))
+                        : "no band above (the layer above opens into it)";
+                out.printf(Locale.ROOT, "layer %d %s: y %d..%d, fluid table y %d (%s), %s%n", i + 1, s.id(i), s.bottom(i), s.top(i),
+                        s.waterY(i) - 1, s.lava(i) ? "lava" : "water", band);
             }
             BlockPos spawn = level.getSharedSpawnPos();
             int cx = t.plans.cellOf(spawn.getX()), cz = t.plans.cellOf(spawn.getZ());
@@ -98,6 +101,10 @@ public final class DevAutoRun {
             // Gates: walk each passage's centre line; every block on it must be open and dry. Plants and other
             // blocks a player walks through are listed but don't block the way.
             for (int b = 1; b <= s.layerCount; b++) {
+                if (s.bandThickness(b) == 0) {
+                    out.printf(Locale.ROOT, "gate %d: none (no band: %s opens into %s)%n", b, s.id(b - 2), s.id(b - 1));
+                    continue;
+                }
                 Plans.Gate g = b == 1 ? den : t.plans.gate(b, cx, cz);
                 long t0 = System.nanoTime();
                 int samples = 0, solid = 0, wet = 0;
@@ -125,14 +132,24 @@ public final class DevAutoRun {
                 BlockImages.write(along(level, g.ux, g.uz, g.lx, g.lz, 40, (int) y0, (int) y1), new File(dir, "gate_" + b + ".png"), 3);
             }
 
-            // The network of each layer, as /remix info tells it at the layer's entry landing (the Blue Reaches' at the
-            // den gate checked above). (0.2.0 walked its route here; the route is gone, and the voxel tests walk the
-            // network instead.)
+            // Each layer as /remix info tells it where it is entered: at its landing (the Blue Reaches' at the den gate
+            // checked above), or for a layer the one above opens into, at the cell's middle half way up it. (0.2.0 walked
+            // its route here; the route is gone, and the voxel tests walk the network instead.)
             for (int li = 0; li < s.layerCount; li++) {
-                Plans.Gate en = li == 0 ? den : t.plans.gate(li + 1, cx, cz);
                 out.println("layer " + (li + 1) + " " + s.id(li) + ":");
-                for (String line : t.network.describe(li, (int) Math.floor(en.lx), (int) Math.floor(en.lFloor) + 1, (int) Math.floor(en.lz)))
-                    out.println("  " + line);
+                int x, y, z;
+                if (s.bandThickness(li + 1) > 0) {
+                    Plans.Gate en = li == 0 ? den : t.plans.gate(li + 1, cx, cz);
+                    x = (int) Math.floor(en.lx);
+                    y = (int) Math.floor(en.lFloor) + 1;
+                    z = (int) Math.floor(en.lz);
+                } else {
+                    x = mx;
+                    y = (s.top(li) + s.bottom(li)) / 2;
+                    z = mz;
+                }
+                out.println("  at " + x + " " + y + " " + z);
+                for (String line : t.describe(x, y, z)) out.println("  " + line);
                 out.flush();
             }
 

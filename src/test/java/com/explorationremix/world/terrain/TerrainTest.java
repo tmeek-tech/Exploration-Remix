@@ -28,18 +28,23 @@ class TerrainTest {
         Shape s = terrain(1).shape;
         assertEquals(-832, s.floorY);
         // Blue Reaches, Deep Gardens, Wasteland, Basalt Galleries (Taran swapped the two middle layers on 2026-10-28
-        // and split the bottom one into the Wasteland and the Galleries on 2026-11-01, keeping bedrock at -832).
-        int[][] expected = {{-81, -272}, {-289, -528}, {-545, -672}, {-689, -832}};
+        // and split the bottom one into the Wasteland and the Galleries on 2026-11-01, keeping bedrock at -832). In
+        // 0.5.1 the Wasteland opens into the Galleries with no band between them: the band's 16 rows are the Wasteland's.
+        int[][] expected = {{-81, -272}, {-289, -528}, {-545, -688}, {-689, -832}};
         assertEquals(4, s.layerCount);
         assertEquals("blue_reaches", s.id(0));
         assertEquals("deep_gardens", s.id(1));
         assertEquals("wasteland", s.id(2));
         assertEquals("basalt_galleries", s.id(3));
+        assertEquals(-678, s.waterY(Terrain.WASTELAND), "the Wasteland's lava table (10 over its bottom)");
         assertEquals(-822, s.waterY(Terrain.GALLERIES), "the Galleries' lava table (its top block at -823, as before 0.5)");
         for (int i = 0; i < 4; i++) {
             assertEquals(expected[i][0], s.top(i), "top of layer " + i);
             assertEquals(expected[i][1], s.bottom(i), "bottom of layer " + i);
-            assertEquals(16, s.bandTop(i + 1) - s.bandBottom(i + 1) + 1, "band " + (i + 1) + " thickness");
+            // band i + 1 lies over layer i: none over the Galleries
+            int thick = i == Terrain.GALLERIES ? 0 : 16;
+            assertEquals(thick, s.bandThickness(i + 1), "band " + (i + 1) + " thickness");
+            assertEquals(thick, s.bandTop(i + 1) - s.bandBottom(i + 1) + 1, "band " + (i + 1) + " rows");
         }
         assertEquals(-65, s.bandTop(1));
         assertEquals(0, Math.floorMod(s.floorY, 16));
@@ -50,6 +55,8 @@ class TerrainTest {
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
             for (int[] c : CELLS) for (int b = 1; b <= t.shape.layerCount; b++) {
+                // no band, no gate: the layer above opens into the one below
+                if (t.shape.bandThickness(b) == 0) continue;
                 Plans.Gate g = t.plans.gate(b, c[0], c[1]);
                 for (int i = 0; i <= 200; i++) {
                     double tt = i / 200.0;
@@ -58,6 +65,27 @@ class TerrainTest {
                     assertTrue(d < 0, "gate " + b + " blocked at t=" + tt + " (" + x + " " + y + " " + z + ") seed " + seed + " d=" + d);
                     if (y < t.shape.packFloor) assertEquals(Terrain.AIR, t.fluidAt(x, y, z), "gate " + b + " flooded at " + x + " " + y + " " + z);
                 }
+            }
+        }
+    }
+
+    /**
+     * Gate 3 comes down onto the Wasteland's walking floor (fix round 1, landing-plaza): with no landing dome, the
+     * passage's lower end is a tunnel of the field at the landing's floor, so within 2 blocks of the landing's centre a
+     * player stands with his feet within a row of it.
+     */
+    @Test
+    void gateThreeEndsOnTheWalkingFloor() {
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            for (int[] c : CELLS) {
+                Plans.Gate g = t.plans.gate(Terrain.WASTELAND + 1, c[0], c[1]);
+                int lx = (int) Math.floor(g.lx), lz = (int) Math.floor(g.lz), lf = (int) Math.ceil(g.lFloor);
+                NoiseVox v = NoiseVox.build(t, lx - 2, lz - 2, 5, 5, lf - 12, lf + 12);
+                boolean stands = false;
+                for (int x = lx - 2; x <= lx + 2 && !stands; x++) for (int z = lz - 2; z <= lz + 2 && !stands; z++)
+                    for (int y = lf - 1; y <= lf + 1 && !stands; y++) stands = v.stand(x, y, z);
+                assertTrue(stands, "no walking floor at gate 3's lower end, seed " + seed + " cell " + c[0] + "," + c[1] + " (" + lx + " " + lf + " " + lz + ")");
             }
         }
     }
@@ -142,8 +170,9 @@ class TerrainTest {
         int open = 0;
         for (int k = 0; k < 20000; k++) {
             int b = 1 + r.nextInt(t.shape.layerCount);
+            if (t.shape.bandThickness(b) == 0) continue;   // no band: the Wasteland opens into the Galleries
             int x = r.nextInt(1800) - 900, z = r.nextInt(1800) - 900;
-            int y = t.shape.bandBottom(b) + r.nextInt(t.shape.bandThickness);
+            int y = t.shape.bandBottom(b) + r.nextInt(t.shape.bandThickness(b));
             int cx = t.plans.cellOf(x), cz = t.plans.cellOf(z);
             // band 1 has every den gate of the cell, the deeper bands one gate each
             boolean near = false;
@@ -155,11 +184,12 @@ class TerrainTest {
         assertEquals(0, open, "open blocks inside bands away from the passages");
     }
 
+    /** Over the planned layers (the Wasteland and the Basalt Galleries are noise fields, with no ways). */
     @Test
     void everyWayHasAnOpenWalkingPathWithRockUnderIt() {
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
-            for (int[] c : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
+            for (int[] c : CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
                 Net n = t.network.net(li, c[0], c[1]);
                 // the ways in: every den gate's passage comes down into the Blue Reaches
                 java.util.List<Plans.Gate> en = li == Terrain.BLUE ? t.plans.denGates(c[0], c[1]) : java.util.List.of(t.plans.gate(li + 1, c[0], c[1]));
@@ -168,13 +198,11 @@ class TerrainTest {
                 double cell = t.network.cell, x0 = c[0] * cell, z0 = c[1] * cell;
                 // every tunnel, inner walk, ledge passage and stub, every 2 blocks along its line
                 for (Net.Way wy : n.ways) {
-                    double carry = 0, acc = 0;
+                    double carry = 0;
                     for (int i = 0; i + 1 < wy.n; i++) {
                         double dx = wy.x[i + 1] - wy.x[i], dz = wy.z[i + 1] - wy.z[i], len = Math.hypot(dx, dz);
                         double s = carry;
                         for (; s < len; s += 2) {
-                            // a blind tube ending in lava: its walking line stops 3 blocks short of the pool
-                            if (acc + s > wy.walkTo) break;
                             double q = s / len, px = wy.x[i] + dx * q, pz = wy.z[i] + dz * q;
                             // a portal's stub runs on past the seam: the neighbour's own plan carves (and checks) that half
                             if (px < x0 || pz < z0 || px >= x0 + cell || pz >= z0 + cell) continue;
@@ -187,7 +215,6 @@ class TerrainTest {
                             wayPoint(t, li, en, ex, px, f, pz, "way #" + wy.id + " (" + wy.kind + ")", seed, counts);
                         }
                         carry = s - len;
-                        acc += len;
                     }
                 }
                 // the Deep Blue Rift's ledge path, checked as in 0.2.0
@@ -242,24 +269,36 @@ class TerrainTest {
         if (t.rawDensity(x, feet - 1, z) < 0 && t.rawDensity(x, feet - 2, z) < 0) counts[1]++;
     }
 
+    /**
+     * Each layer's fluid lies flat at its table. Above it only perched water: the Lantern Lake's perched lakes, each flat
+     * at its own level, and the pools of the Basalt Galleries' Obsidian Tubes. Under it the table's fluid but in a gate's
+     * passage, and in the Wasteland, where the Galleries open into it, air ({@link Join#AIR_BETA}), and within {@link
+     * WastelandField#crDry} of a hole the Galleries open with a ramp (its crater may go under the table): its lava pools
+     * only where beta is under that, further from such a hole.
+     */
     @Test
     void waterTablesAreFlat() {
         Terrain t = terrain(SEEDS[1]);
         java.util.Random r = new java.util.Random(3);
+        int wasteAir = 0, wasteLava = 0;
         for (int k = 0; k < 20000; k++) {
             int li = r.nextInt(t.shape.layerCount);
             int x = r.nextInt(1200) - 600, z = r.nextInt(1200) - 600;
             int y = t.shape.bottom(li) + r.nextInt(t.shape.height(li));
             int f = t.fluidAt(x, y, z);
             if (y >= t.shape.waterY(li)) {
-                // Above the table only the Lantern Lake's perched lakes hold water, each flat at its own level.
-                if (f != Terrain.AIR) assertTrue(f == Terrain.WATER && inPerchedLake(t, li, x, y, z), "fluid above the table at " + x + " " + y + " " + z);
+                if (f != Terrain.AIR) assertTrue(f == Terrain.WATER && (li == Terrain.GALLERIES || inPerchedLake(t, li, x, y, z)), "fluid above the table at " + x + " " + y + " " + z);
+            } else if (li == Terrain.WASTELAND) {
+                boolean air = t.breakthrough != null && (t.breakthrough.beta(x, z) >= Join.AIR_BETA || t.wasteland.column(x, z).ring < t.wasteland.crDry);
+                if (air) wasteAir++; else wasteLava++;
+                assertEquals(air ? Terrain.AIR : Terrain.LAVA, f, "the Wasteland under its table at " + x + " " + y + " " + z);
             } else if (f == Terrain.AIR) {
                 boolean last = li == t.shape.layerCount - 1;
                 Plans.Gate ex = t.plans.gate(last ? li + 1 : li + 2, t.plans.cellOf(x), t.plans.cellOf(z));
                 assertTrue(last || ex.passageXZ(x, y, z) < ex.radius * 1.45 + 3.01, "dry pocket below the table at " + x + " " + y + " " + z);
             }
         }
+        assertTrue(wasteAir > 0 && wasteLava > 0, "the Wasteland under its table: " + wasteAir + " air, " + wasteLava + " lava");
     }
 
     private static boolean inPerchedLake(Terrain t, int li, int x, int y, int z) {
@@ -269,13 +308,13 @@ class TerrainTest {
         return false;
     }
 
-    /** No perched lake drains: every water block in its top layers is walled by rock or more water. */
+    /** No perched lake drains: every water block in its top layers is walled by rock or more water (planned layers). */
     @Test
     void perchedLakesHoldTheirWater() {
         int lakes = 0;
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
-            for (int[] c : CELLS) for (int li = 0; li < t.shape.layerCount; li++) {
+            for (int[] c : CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
                 for (Net.Chamber hl : t.network.net(li, c[0], c[1]).ch) {
                     // the perched lakes and the pools at the wells' feet
                     if (!hl.keep || !Network.pool(hl) || hl.lakeY <= t.shape.waterY(li) + 0.5) continue;
@@ -323,6 +362,14 @@ class TerrainTest {
             boolean xLine = r.nextBoolean();
             samples.add(new int[]{li, xLine ? 1 : 0, line, Math.floorDiv(along, 600), along, y});
         }
+        // the rows where the Wasteland and the Galleries meet with no band between them (the join's), which the samples
+        // above mostly miss
+        if (t.join != null && t.join.on) for (int k = 0; k < 600; k++) {
+            int line = (r.nextInt(6) - 3) * 600, along = r.nextInt(2400) - 1200;
+            int y = t.join.lo + r.nextInt(t.join.hi - t.join.lo + 1);
+            boolean xLine = r.nextBoolean();
+            samples.add(new int[]{t.shape.layerAt(y), xLine ? 1 : 0, line, Math.floorDiv(along, 600), along, y});
+        }
         // Taken grouped by layer, line and cell along the line, so each cell-layer is planned once: in random order
         // the samples visit about 150 cell-layers and thrashed the plan cache.
         samples.sort(java.util.Comparator.<int[]>comparingInt(s -> s[0]).thenComparingInt(s -> s[1]).thenComparingInt(s -> s[2]).thenComparingInt(s -> s[3]));
@@ -344,27 +391,39 @@ class TerrainTest {
 
     /**
      * Spaces are sized to each biome's picture, not grown with depth (Taran, 2026-10-28): the Deep Blue Rift keeps its
-     * full depth inside the shorter Blue Reaches, and the Basalt Galleries keep their cathedral halls. The rift is looked
-     * for in three cells: where 0.2.0's rift would cut a den gate's landing (0.6.1) it is laid on another line, and
-     * there it can stand a little less deep (136 in cell 0,0 of the first seed).
+     * full depth inside the shorter Blue Reaches, and the Basalt Galleries keep their tall caverns. The rift is looked for
+     * in three cells: where 0.2.0's rift would cut a den gate's landing (0.6.1) it is laid on another line, and there it
+     * can stand a little less deep (136 in cell 0,0 of the first seed). The noise layers' open blocks take their own
+     * biomes: the Wasteland's one of its two, the Galleries' one of their five.
      */
     @Test
     void spacesFollowTheirBiomes() {
         Terrain t = terrain(SEEDS[0]);
         int[] tallest = new int[t.shape.layerCount];
+        java.util.Map<Integer, java.util.Set<DeepBiome>> own = java.util.Map.of(
+                Terrain.WASTELAND, java.util.EnumSet.of(DeepBiome.WASTELAND, DeepBiome.ASH_HOLLOWS),
+                Terrain.GALLERIES, java.util.EnumSet.of(DeepBiome.BASALT_GALLERIES, DeepBiome.CALDERA, DeepBiome.CAUSEWAY,
+                        DeepBiome.SCORIA_CANYONS, DeepBiome.OBSIDIAN_TUBES));
+        java.util.List<String> strays = new java.util.ArrayList<>();
         for (int li = 0; li < t.shape.layerCount; li++) {
+            java.util.Set<DeepBiome> mine = own.get(li);
             int[][] cells = li == Terrain.BLUE ? new int[][]{{0, 0}, {-1, 0}, {0, -1}} : new int[][]{{0, 0}};
             for (int[] c : cells)
                 for (int x = c[0] * 600; x < c[0] * 600 + 600; x += 6) for (int z = c[1] * 600; z < c[1] * 600 + 600; z += 6) {
                     int run = 0;
                     for (int y = t.shape.bottom(li); y <= t.shape.top(li); y++) {
-                        if (t.rawDensity(x, y, z) < 0) { run++; tallest[li] = Math.max(tallest[li], run); } else run = 0;
+                        if (t.rawDensity(x, y, z) < 0) {
+                            run++;
+                            tallest[li] = Math.max(tallest[li], run);
+                            if (mine != null && !mine.contains(t.biomeAt(x, y, z)) && strays.size() < 10) strays.add(x + " " + y + " " + z + ": " + t.biomeAt(x, y, z));
+                        } else run = 0;
                     }
                 }
         }
+        assertTrue(strays.isEmpty(), "open blocks of the noise layers in another biome: " + strays);
         assertTrue(tallest[Terrain.BLUE] > 140, "the Deep Blue Rift is only " + tallest[Terrain.BLUE] + " blocks deep");
         assertTrue(tallest[Terrain.GARDENS] > 60, "the Deep Gardens' tallest hall is only " + tallest[Terrain.GARDENS] + " blocks");
-        // the Basalt Galleries' halls (0.5): about 100 from the lava to the vault
+        // the Basalt Galleries' caverns: tall from the lava up
         assertTrue(tallest[Terrain.GALLERIES] >= 60, "the Basalt Galleries' tallest open space is only " + tallest[Terrain.GALLERIES] + " blocks");
     }
 }

@@ -42,10 +42,7 @@
   "features": [
     [],
     [],
-    [
-      "explorationremix:obsidian_tubes/vault_columns",
-      "explorationremix:obsidian_tubes/lava_pool"
-    ],
+    [],
     [],
     [],
     [],
@@ -56,6 +53,7 @@
     [
       "explorationremix:climb_vines",
       "explorationremix:open_way",
+      "explorationremix:lava_pockets",
       "explorationremix:basalt_galleries/glow"
     ]
   ]

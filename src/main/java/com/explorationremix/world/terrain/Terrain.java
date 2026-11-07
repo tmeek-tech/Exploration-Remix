@@ -5,17 +5,20 @@ package com.explorationremix.world.terrain;
  * negative is open space; values are in blocks (a signed distance, roughly) until {@link #density} scales them for
  * Minecraft's interpolation.
  *
- * <p>The bands between the layers are solid but for the gate passages ({@link Plans.Gate}). Every block inside a layer
- * is the layer's cave network's ({@link Network}): chambers joined by tunnels and climbs, planned per cell, with the
- * Deep Blue Rift and the deep dark in the Blue Reaches. Band 1 has every den gate of a cell ({@link Plans#denGates}),
- * the deeper bands one gate each. Above the pack's old floor, this carves only the den gates' upper landings and ramps
- * and the cell's upper set piece (the Silver Fern Rift or the Ivory Root Cavern).
+ * <p>The bands between the layers are solid but for the gate passages ({@link Plans.Gate}): band 1 has every den gate
+ * of a cell ({@link Plans#denGates}), the deeper bands one gate each. Every block inside the Blue Reaches and the Deep
+ * Gardens is the layer's cave network's ({@link Network}): chambers joined by tunnels and climbs, planned per cell, with
+ * the Deep Blue Rift and the deep dark in the Blue Reaches. Since 0.5.1 the Wasteland and the Basalt Galleries are noise
+ * fields with nothing planned ({@link WastelandField}, {@link GalleriesField} with the {@link TubeField}), and the
+ * Wasteland opens into the Galleries with no band between them ({@link Join}, where the {@link Breakthrough} noise says).
+ * Above the pack's old floor, this carves only the den gates' upper landings and ramps and the cell's upper set piece
+ * (the Silver Fern Rift or the Ivory Root Cavern).
  */
 public final class Terrain {
     /**
      * The deep layers, top down. Since 0.5 the old bottom layer is two: the Wasteland (the old Basalt Galleries' look,
-     * winding tunnels and medium caves) above a fourth band, and the Basalt Galleries under it (wide bright halls over a
-     * lava sea that rises and falls).
+     * winding tunnels and medium caves) and, since 0.5.1 with no band between them, the Basalt Galleries under it (a
+     * wide bright cavern over a lava sea that rises and falls).
      */
     public static final int BLUE = 0, GARDENS = 1, WASTELAND = 2, GALLERIES = 3;
     /**
@@ -27,6 +30,13 @@ public final class Terrain {
 
     /** Layers with the basalt look (columns in the walls, basalt rock, lava below): the Wasteland and the Galleries. */
     public static boolean basaltLook(int li) { return li == WASTELAND || li == GALLERIES; }
+
+    /**
+     * Layers whose caves come from the network's plans, with ways, climbs and gates the features keep clear (Walkway,
+     * OpenWayFeature, ClimbVinesFeature): the Blue Reaches and the Deep Gardens. Since 0.5.1 the Wasteland and the
+     * Galleries are noise fields with no planned ways, so nothing guards a way there (players can always dig).
+     */
+    public static boolean planned(int li) { return li < WASTELAND; }
 
     /** How far the layer's lava rises over its table at the height of its cycle: only the Galleries' does. */
     public static int surge(int li) { return li == GALLERIES ? FLOOD_RISE : 0; }
@@ -42,8 +52,28 @@ public final class Terrain {
     public final long seed;
     public final Plans plans;
     public final Palette palette;
-    /** The deep layers' cave networks: every block inside a layer is theirs. */
+    /**
+     * What the two bottom layers' noise fields tell the rock dressing and the Galleries' glow: column cells, hanging
+     * clusters, tubes, cones ({@link LookQueries}), answered by the Galleries' field, and the Wasteland's lava rule.
+     */
+    public final LookQueries looks;
+    /**
+     * The planned layers' cave networks: every block inside the Blue Reaches and the Deep Gardens is theirs ({@link
+     * #planned}). Nothing asks it about the Wasteland or the Galleries.
+     */
     public final Network network;
+    /** The Wasteland's tunnel sheets (warp, lattices, floors, opening sites), shared by both fields; null without a Wasteland. */
+    final WastelandSheets sheets;
+    /** Where the Wasteland opens into the Galleries; null when the layout keeps a band between them ({@link Join#on}). */
+    public final Breakthrough breakthrough;
+    /** The Galleries' Obsidian Tubes; null when the layout has no Galleries. */
+    public final TubeField tubes;
+    /** The Basalt Galleries (layer 3) as noise; null when the layout has no Galleries. */
+    public final GalleriesField galleries;
+    /** The Wasteland (layer 2) as noise; null when the layout has no Wasteland. */
+    public final WastelandField wasteland;
+    /** The rows where the Wasteland and the Galleries meet, both fields combined; null without either of them. */
+    public final Join join;
     /** Asked before an upper set piece is placed, so none is carved under an ocean or river. Null in tests. */
     public volatile Upper.SurfaceProbe surfaceProbe;
 
@@ -57,6 +87,14 @@ public final class Terrain {
     boolean everyDenGate;
 
     public Terrain(TerrainSettings settings, int packFloor, long seed) {
+        this(settings, packFloor, seed, 0, 0);
+    }
+
+    /**
+     * As above, with the Galleries' ramp decks and disc caps moved {@code deckShift} and {@code capShift} rows against the
+     * Wasteland's craters (JoinTest's one-row check only; the game keeps both at 0).
+     */
+    Terrain(TerrainSettings settings, int packFloor, long seed, int deckShift, int capShift) {
         this.settings = settings;
         this.cache = ThreadLocal.withInitial(() -> {
             Column[] a = new Column[1024];
@@ -68,7 +106,19 @@ public final class Terrain {
         long s = seed ^ 0x6A09E667F3BCC909L;
         detail = new Perlin(Hashing.mix(s, 18, 0, 0));
         this.plans = new Plans(this, seed);
-        this.palette = new Palette(this, seed);
+        // The noise layers, each built from what it reads (no cycles): the Wasteland's sheets and the breakthrough both
+        // read, the tubes (which first build the Galleries' landscape as it stands without them, GalleriesLandscape, and
+        // take their floors from it), the Galleries (which reuse that landscape and see the breakthrough as their join),
+        // the Wasteland (which reads the Galleries' density under its openings) and the join of the two.
+        this.sheets = shape.layerCount > WASTELAND ? new WastelandSheets(seed, shape, settings, plans) : null;
+        this.breakthrough = Join.on(shape) ? new Breakthrough(seed, shape, sheets) : null;
+        this.tubes = shape.layerCount > GALLERIES ? new TubeField(seed, shape.waterY(GALLERIES)) : null;
+        this.galleries = tubes != null ? new GalleriesField(seed, shape.bottom(GALLERIES), shape.top(GALLERIES), shape.waterY(GALLERIES), tubes, breakthrough, deckShift, capShift) : null;
+        Join.Lower lower = galleries != null ? Join.Lower.of(galleries) : null;
+        this.wasteland = shape.layerCount > WASTELAND ? new WastelandField(this, breakthrough, lower) : null;
+        this.join = wasteland != null && lower != null ? new Join(shape, wasteland, lower, breakthrough) : null;
+        this.looks = LookQueries.of(galleries, wasteland);
+        this.palette = new Palette(this, seed, looks);
         this.network = new Network(this);
     }
 
@@ -222,6 +272,9 @@ public final class Terrain {
             if (band == 1) return denPassages(c, x, y, z);
             return passage(plans.gate(band, c.cellX, c.cellZ), x, y, z);
         }
+        if (join != null && join.inBand(y)) return join.density(x, y, z);
+        if (li == WASTELAND) return wasteland.density(x, y, z);
+        if (li == GALLERIES) return galleries.density(x, y, z);
         return network.layerDensity(li, x, y, z);
     }
 
@@ -254,15 +307,37 @@ public final class Terrain {
     /**
      * Minecraft only samples the density every 8 blocks up and every 4 across, and interpolates in between, which
      * rounds off anything thinner than that. The network puts the thin pieces back block by block ({@link
-     * Network#fine}): rock that has to be there (walking floors, bridges, arches, landing floors, pool rims) and space
-     * that has to stay open (the walking cores, the climbs, the landings and the way down). {@code coarse} is the
-     * interpolated density on Minecraft's scale; so is the result.
+     * Network#fine}): rock that has to be there (walking floors, bridges, landing floors, pool rims) and space that
+     * has to stay open (the walking cores, the climbs, the landings and the way down). The noise layers have their own
+     * per-block passes ({@link WastelandField#fine}, {@link GalleriesField#fine}, {@link Join#fine} where they meet).
+     * {@code coarse} is the interpolated density on Minecraft's scale; so is the result.
      */
     public double fine(int x, int y, int z, double coarse) {
         int li = shape.layerAt(y);
         if (li < 0) return coarse;
+        if (join != null && join.inBand(y)) return join.fine(x, y, z, coarse);
+        if (li == WASTELAND) return wasteland.fine(x, y, z, coarse);
+        if (li == GALLERIES) return galleries.fine(x, y, z, coarse);
         return network.fine(li, x, y, z, coarse);
     }
+
+    /**
+     * Whether the game builds rock at a block below the pack's old floor, as its noise pass does: {@link #density} at
+     * Minecraft's 4 x 8 x 4 corners, interpolated in NoiseChunk's order (along y, then x, then z), then {@link #fine}.
+     * Pure and thread safe like the fields. It costs eight corner densities and one fine(), so the rock dressing asks it
+     * only of the few blocks whose look turns on a neighbour (Palette: lava beside a bank's top).
+     */
+    public boolean rockAt(int x, int y, int z) {
+        int x0 = Math.floorDiv(x, 4) * 4, y0 = Math.floorDiv(y, 8) * 8, z0 = Math.floorDiv(z, 4) * 4;
+        double fx = (x - x0) / 4.0, fy = (y - y0) / 8.0, fz = (z - z0) / 4.0;
+        double x00 = lerp(fy, density(x0, y0, z0), density(x0, y0 + 8, z0));
+        double x10 = lerp(fy, density(x0 + 4, y0, z0), density(x0 + 4, y0 + 8, z0));
+        double x01 = lerp(fy, density(x0, y0, z0 + 4), density(x0, y0 + 8, z0 + 4));
+        double x11 = lerp(fy, density(x0 + 4, y0, z0 + 4), density(x0 + 4, y0 + 8, z0 + 4));
+        return fine(x, y, z, lerp(fz, lerp(fx, x00, x10), lerp(fx, x01, x11))) > 0;
+    }
+
+    private static double lerp(double t, double a, double b) { return a + t * (b - a); }
 
     private double landing(double dxz, double rad, double cy, double half, double floor, int x, int y, int z) {
         double ex = dxz / rad, ey = (y - cy) / half;
@@ -354,6 +429,8 @@ public final class Terrain {
     public int fluidAt(int x, int y, int z) {
         int li = shape.layerAt(y);
         if (li < 0) return AIR;
+        if (li == WASTELAND) return wasteland.fluid(x, y, z);
+        if (li == GALLERIES) return galleries.fluid(x, y, z);
         return network.fluidAt(li, x, y, z);
     }
 
@@ -368,6 +445,8 @@ public final class Terrain {
             li = band > 0 ? band - 1 : shape.layerCount - 1;
             return routeBiome(li);
         }
+        if (li == WASTELAND) return wasteland.biome(x, y, z);
+        if (li == GALLERIES) return galleries.biome(x, y, z);
         return network.biomeAt(li, x, y, z);
     }
 
@@ -386,55 +465,93 @@ public final class Terrain {
     /** Depth into the rock around the nearest refuge geode (0 at its inner surface), or a large value when none is near. */
     public double geodeShellDepth(int x, int y, int z) {
         int li = shape.layerAt(y);
-        return li < 0 ? 1e9 : network.geodeShellDepth(li, x, y, z);
+        return li < 0 || !planned(li) ? 1e9 : network.geodeShellDepth(li, x, y, z);
     }
 
-    /** Depth into the rock around the nearest obsidian tube (0 at its inner surface), or a large value when none is near. */
+    /**
+     * Depth into the rock around the nearest obsidian tube (0 at its inner surface), or a large value when none is near.
+     * Only the Galleries have tubes, and they answer through the Galleries' field, which ignores a tube country it does
+     * not let stand.
+     */
     public double tubeShellDepth(int x, int y, int z) {
-        int li = shape.layerAt(y);
-        return li < 0 ? 1e9 : network.tubeShellDepth(li, x, y, z);
-    }
-
-    /** True at the floor of a blind tube's end that has magma instead of a lava pool (within 2 blocks of the end). */
-    public boolean tubeStubEnd(int x, int y, int z) {
-        int li = shape.layerAt(y);
-        return li >= 0 && network.tubeStubEnd(li, x, y, z);
-    }
-
-    /** True in the bowl of the bedrock landing at the bottom of the last layer. */
-    public boolean bedrockLanding(int x, int y, int z) {
-        int li = shape.layerAt(y);
-        return li >= 0 && network.bedrockLanding(li, x, y, z);
+        return shape.layerAt(y) == GALLERIES ? galleries.tubeShellDepth(x, y, z) : 1e9;
     }
 
     // ------------------------------------------------------------------------------- the network's queries (12.1)
+    /** No way lines: what a layer that is not planned has. A per-thread result, as the network's. */
+    private static final ThreadLocal<Network.WayLines> NO_LINES = ThreadLocal.withInitial(Network.WayLines::new);
+
+    private static Network.WayLines noLines() {
+        Network.WayLines w = NO_LINES.get();
+        w.n = 0;
+        return w;
+    }
+
     /**
      * Every walking line of layer li within {@code reach} of column (x, z), nearest first: tunnels, inner walks, ledge
-     * passages, stubs, the rift's ledge path and the Causeway's column path ({@link Network#wayLinesAt}). A per-thread
-     * result.
+     * passages, stubs and the rift's ledge path ({@link Network#wayLinesAt}). A per-thread result. None in a layer
+     * that is not {@link #planned}.
      */
-    public Network.WayLines wayLinesAt(int li, int x, int z, double reach) { return network.wayLinesAt(li, x, z, reach); }
+    public Network.WayLines wayLinesAt(int li, int x, int z, double reach) {
+        return planned(li) ? network.wayLinesAt(li, x, z, reach) : noLines();
+    }
 
     /** The lines of {@link #wayLinesAt} that the terrain carved in column (x, z): its own cell's plan only. */
-    public Network.WayLines carvedLinesAt(int li, int x, int z, double reach) { return network.carvedLinesAt(li, x, z, reach); }
+    public Network.WayLines carvedLinesAt(int li, int x, int z, double reach) {
+        return planned(li) ? network.carvedLinesAt(li, x, z, reach) : noLines();
+    }
 
-    /** The climbs and climb stages of layer li reaching into the box minX..maxX, minZ..maxZ (inclusive). */
-    public java.util.List<Net.Shaft> shaftsIn(int minX, int minZ, int maxX, int maxZ, int li) { return network.shaftsIn(li, minX, minZ, maxX, maxZ); }
-
-    /** The plan of layer li in cell (cx, cz). */
-    public Net network(int li, int cx, int cz) { return network.network(li, cx, cz); }
-
-    /**
-     * The Basalt Galleries' Caldera vents within {@code r} of (x, z): where eruptions break out ({@link
-     * Network#ventsNear}). Each has a centre, a radius and the top of the rock or lava there.
-     */
-    public java.util.List<Net.Vent> ventsNear(int x, int z, double r) { return network.ventsNear(GALLERIES, x, z, r); }
+    /** The climbs and climb stages of layer li reaching into the box minX..maxX, minZ..maxZ (inclusive); none unplanned. */
+    public java.util.List<Net.Shaft> shaftsIn(int minX, int minZ, int maxX, int maxZ, int li) {
+        return planned(li) ? network.shaftsIn(li, minX, minZ, maxX, maxZ) : java.util.List.of();
+    }
 
     /**
-     * The Basalt Galleries' hall over column (x, z): {floor, ceiling, lava bed} there, or null outside the halls
-     * ({@link Network#hallSpanAt}). The decoration's aim at the halls' vaults and walls.
+     * The plan of layer li in cell (cx, cz). Only the {@link #planned} layers have one: asking for another's is a mistake
+     * (it would plan caves nobody sees), so it is null in the game, which the dev tools refuse, and throws under the
+     * tests ({@link Network#hasPlan}).
      */
-    public double[] hallSpanAt(int x, int z) { return network.hallSpanAt(GALLERIES, x, z); }
+    public Net network(int li, int cx, int cz) {
+        return network.network(li, cx, cz);
+    }
+
+    /**
+     * The Basalt Galleries' Caldera vents within {@code r} of (x, z): where eruptions break out (the craters of the
+     * Caldera's cones, {@link GalleriesField#ventsNear}). Each has a centre, a radius and the top of the rock or lava
+     * there. None when the layout has no Galleries.
+     */
+    public java.util.List<Net.Vent> ventsNear(int x, int z, double r) {
+        return galleries != null ? galleries.ventsNear(x, z, r) : java.util.List.of();
+    }
+
+    // ------------------------------------------------------------------------------- dev tools
+    /**
+     * For /remix info: what makes the caves at a block of a deep layer, in words (the network's plan in the planned
+     * layers, the noise field's values in the others). Empty outside the layers.
+     */
+    public java.util.List<String> describe(int x, int y, int z) {
+        int li = shape.layerAt(y);
+        if (li < 0) return java.util.List.of();
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (li == WASTELAND) out.addAll(wasteland.describe(x, y, z));
+        else if (li == GALLERIES) out.addAll(galleries.describe(x, y, z));
+        else out.addAll(network.describe(li, x, y, z));
+        if (join != null && join.inBand(y)) out.add(join.describe(x, y, z));
+        return out;
+    }
+
+    /**
+     * The places of a deep biome near (x, z), nearest first (set pieces first in the planned layers), with spots to
+     * stand on: for /remix tp biome and /remix view. Each layer's own: the network's chambers in the planned layers,
+     * the noise fields' sampled spots in the Wasteland and the Galleries.
+     */
+    public java.util.List<Network.Place> places(DeepBiome b, double x, double z) {
+        int li = Network.layerOf(b);
+        if (li < 0 || li >= shape.layerCount) return java.util.List.of();
+        if (li == WASTELAND) return wasteland.places(b, x, z);
+        if (li == GALLERIES) return galleries.places(b, x, z);
+        return network.places(b, x, z);
+    }
 
     /**
      * True when a structure starting at (x, y, z) is a planned ancient city: a CITY chamber's centre within 24 blocks

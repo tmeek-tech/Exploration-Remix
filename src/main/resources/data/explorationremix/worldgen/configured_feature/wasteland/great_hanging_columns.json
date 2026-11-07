@@ -20,10 +20,7 @@
           "data": {
             "type": "minecraft:simple_state_provider",
             "state": {
-              "Name": "minecraft:polished_basalt",
-              "Properties": {
-                "axis": "y"
-              }
+              "Name": "minecraft:smooth_basalt"
             }
           },
           "weight": 1
@@ -39,6 +36,7 @@
         "max_inclusive": 18
       }
     },
-    "hang_chance": 1.0
+    "hang_chance": 1.0,
+    "clearance": 3
   }
 }

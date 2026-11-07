@@ -35,9 +35,10 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * lava setting things alight stop at it. It drops nothing, makes no sound and has no item.
  * <p>
  * Once something else has taken a glow's place (a block placed and later mined, a bucket, a flow that recedes, an
- * explosion, a piston, a falling block) nothing puts it back; only the flood band's glow, which the rising lava takes and
- * marks, comes back with the drain ({@code Flood}, {@code LavaChunk} "glow"), always at {@code HallGlowFeature.BAND_LEVEL}
- * (the mask keeps no level, and worldgen gives the band no other).
+ * explosion, a piston, a falling block) the glow itself never comes back; in the Basalt Galleries the terrain reset puts
+ * it back from its change log (which records a fluid flowing into a glow like any other change), and the flood band's
+ * glow, which the rising lava takes and marks, comes back with the drain ({@code Flood}, {@code LavaChunk} "glow"),
+ * always at {@code HallGlowFeature.BAND_LEVEL} (the mask keeps no level, and worldgen gives the band no other).
  * <p>
  * For the quakes, eruptions and the terrain reset: ask {@link #open}, not {@code isAir()}, whether a spot is empty
  * (under a placed block, under a ceiling); never count a glow as support. {@code FallingBlockEntity.fall(level, pos,

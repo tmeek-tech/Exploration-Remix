@@ -23,10 +23,12 @@
     "RuinedPortalPieceMixin",
     "BiomeFilterMixin",
     "PortalShapeMixin",
-    "BaseFireBlockMixin"
+    "BaseFireBlockMixin",
+    "LevelChunkMixin"
   ],
   "client": [
-    "client.LightTextureMixin"
+    "client.LightTextureMixin",
+    "client.DimensionSpecialEffectsMixin"
   ],
   "injectors": {
     "defaultRequire": 1

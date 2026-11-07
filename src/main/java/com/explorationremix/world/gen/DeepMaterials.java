@@ -48,7 +48,7 @@ public final class DeepMaterials {
                 case CRIMSITE -> create("crimsite", Blocks.GRANITE, missing);
                 case VERIDIUM -> create("veridium", Blocks.WARPED_WART_BLOCK, missing);
                 case SCORIA -> create("scoria", Blocks.BROWN_TERRACOTTA, missing);
-                case SCORCHIA -> create("scorchia", Blocks.POLISHED_BLACKSTONE, missing);
+                case SCORCHIA -> create("scorchia", Blocks.BLACKSTONE, missing);
                 case BLACKSTONE -> Blocks.BLACKSTONE.defaultBlockState();
                 case BASALT -> Blocks.BASALT.defaultBlockState().setValue(RotatedPillarBlock.AXIS, Direction.Axis.Y);
                 case SMOOTH_BASALT -> Blocks.SMOOTH_BASALT.defaultBlockState();
@@ -91,11 +91,6 @@ public final class DeepMaterials {
                 case ORANGE_TERRACOTTA -> Blocks.ORANGE_TERRACOTTA.defaultBlockState();
                 case ANDESITE -> Blocks.ANDESITE.defaultBlockState();
                 case FROST_MOSS -> ERBlocks.FROST_MOSS.get().defaultBlockState();
-                case POLISHED_BASALT -> Blocks.POLISHED_BASALT.defaultBlockState().setValue(RotatedPillarBlock.AXIS, Direction.Axis.Y);
-                case POLISHED_BLACKSTONE -> Blocks.POLISHED_BLACKSTONE.defaultBlockState();
-                // Create's layered stones stand upright by default, so their layers lie flat like the canyons' bands.
-                case LAYERED_SCORIA -> create("layered_scoria", Blocks.TERRACOTTA, missing);
-                case LAYERED_SCORCHIA -> create("layered_scorchia", Blocks.BLACKSTONE, missing);
                 case EMBER_CRUST -> ERBlocks.EMBER_CRUST.get().defaultBlockState();
             };
             STATES.put(r, s);
@@ -122,8 +117,8 @@ public final class DeepMaterials {
 
     /**
      * Rock below the pack's old floor, as decided while the noise is filled: bedrock at the very bottom, band stone in
-     * the bands, the bedrock landing's bowl, and the layer's deep rock far from any open space. Returns null for rock
-     * near open space, which is left as plain stone for the surface pass to dress per biome.
+     * the bands, and the layer's deep rock far from any open space. Returns null for rock near open space, which is left
+     * as plain stone for the surface pass to dress per biome.
      */
     @Nullable
     public static BlockState solid(Terrain t, int x, int y, int z, double density) {
@@ -135,7 +130,6 @@ public final class DeepMaterials {
         }
         int li = s.layerAt(y);
         if (li < 0) return BY_ORDINAL[Rock.BAND_STONE.ordinal()];
-        if (li == s.layerCount - 1 && y < s.waterY(li) + 4 && t.bedrockLanding(x, y, z)) return BY_ORDINAL[Rock.BEDROCK.ordinal()];
         if (density > 0.75) return BY_ORDINAL[t.palette.interior(li, x, y, z).ordinal()];
         return null;
     }

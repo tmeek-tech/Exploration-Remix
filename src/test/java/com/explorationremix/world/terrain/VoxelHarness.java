@@ -249,6 +249,91 @@ final class VoxelHarness {
         return vines;
     }
 
+    /**
+     * The rock nothing holds: the pieces of rock, joined face to face, that reach none of the box's six faces (the world
+     * goes on past them, so a piece a face cuts counts as held). Each piece is a list of runs of rock up a column,
+     * {x, z, lowest y, highest y}. Works on the runs, not the blocks: a box of 2 x 2 Blue Reaches cells holds a few
+     * million runs and some hundred million blocks.
+     */
+    java.util.List<java.util.List<int[]>> floatingRock() {
+        int cols = nx * nz;
+        // the runs of rock up each column, lowest first, as lo << 16 | hi (rows from y0); column c's are start[c]..
+        int[] start = new int[cols + 1], runs = null;
+        for (int pass = 0; pass < 2; pass++) {
+            int r = 0;
+            for (int c = 0; c < cols; c++) {
+                start[c] = r;
+                int base = c * mw, lo = -1;
+                for (int j = 0; j <= ny; j++) {
+                    boolean rock = j < ny && ((mat[base + (j >> 5)] >>> ((j & 31) << 1)) & 3) == ROCK;
+                    if (rock && lo < 0) lo = j;
+                    if (!rock && lo >= 0) {
+                        if (runs != null) runs[r] = lo << 16 | (j - 1);
+                        r++;
+                        lo = -1;
+                    }
+                }
+            }
+            start[cols] = r;
+            if (runs == null) runs = new int[r];
+        }
+        int n = runs.length;
+        int[] col = new int[n];
+        for (int c = 0; c < cols; c++) for (int r = start[c]; r < start[c + 1]; r++) col[r] = c;
+        // held: the runs in the columns of the box's sides, those touching its floor or its top, and all they touch
+        long[] seen = new long[(n + 63) >> 6];
+        IntStack stack = new IntStack();
+        for (int r = 0; r < n; r++) {
+            int c = col[r], i = c / nz, k = c % nz;
+            if (i == 0 || k == 0 || i == nx - 1 || k == nz - 1 || runs[r] >>> 16 == 0 || (runs[r] & 0xFFFF) == ny - 1) {
+                seen[r >> 6] |= 1L << r;
+                stack.push(r);
+            }
+        }
+        while (stack.size > 0) touching(stack.pop(), col, start, runs, seen, stack);
+        java.util.List<java.util.List<int[]>> pieces = new java.util.ArrayList<>();
+        for (int r0 = 0; r0 < n; r0++) {
+            if ((seen[r0 >> 6] & 1L << r0) != 0) continue;
+            java.util.List<int[]> piece = new java.util.ArrayList<>();
+            seen[r0 >> 6] |= 1L << r0;
+            stack.push(r0);
+            while (stack.size > 0) {
+                int r = stack.pop(), c = col[r];
+                piece.add(new int[]{x0 + c / nz, z0 + c % nz, y0 + (runs[r] >>> 16), y0 + (runs[r] & 0xFFFF)});
+                touching(r, col, start, runs, seen, stack);
+            }
+            pieces.add(piece);
+        }
+        return pieces;
+    }
+
+    /** Marks and pushes the unseen runs of the four columns beside run r's that share a block's face with it. */
+    private void touching(int r, int[] col, int[] start, int[] runs, long[] seen, IntStack stack) {
+        int c = col[r], i = c / nz, k = c % nz, lo = runs[r] >>> 16, hi = runs[r] & 0xFFFF;
+        for (int d = 0; d < 4; d++) {
+            int qi = i + DX[d], qk = k + DZ[d];
+            if (qi < 0 || qk < 0 || qi >= nx || qk >= nz) continue;
+            int q = qi * nz + qk;
+            for (int s = start[q]; s < start[q + 1]; s++) {
+                if ((seen[s >> 6] & 1L << s) != 0 || runs[s] >>> 16 > hi || (runs[s] & 0xFFFF) < lo) continue;
+                seen[s >> 6] |= 1L << s;
+                stack.push(s);
+            }
+        }
+    }
+
+    private static final class IntStack {
+        int[] a = new int[1 << 16];
+        int size;
+
+        void push(int v) {
+            if (size == a.length) a = Arrays.copyOf(a, size * 2);
+            a[size++] = v;
+        }
+
+        int pop() { return a[--size]; }
+    }
+
     // ================================================================================================ the walk graph
     /** A place a player can be, feet in block (x, y, z). */
     boolean place(int x, int y, int z) {
@@ -622,8 +707,8 @@ final class VoxelHarness {
     }
 
     /**
-     * The share of the chamber's planned interior that is open: the columns well inside its footprint (e under 0.95)
-     * and off its pillars, from a block over its floor to a block under its ceiling. Returns {open, planned}.
+     * The share of the chamber's planned interior that is open: the columns well inside its footprint (e under 0.95),
+     * from a block over its floor to a block under its ceiling. Returns {open, planned}.
      */
     long[] openShare(Network w, Chamber ch) {
         long plan = 0, open = 0;
@@ -633,7 +718,6 @@ final class VoxelHarness {
             Network.LCol lc = w.layer(w.column(x, z), li);
             for (int k = 0; k < lc.nc; k++) {
                 if (lc.c[k] != ch || lc.e[k] >= 0.95) continue;
-                if (lc.pr[k] > 0 && lc.pd[k] < lc.pr[k] + 1) continue;
                 int ya = (int) Math.ceil(lc.F[k] + 1), yb = (int) Math.floor(lc.C[k] - 1);
                 for (int y = ya; y <= yb; y++) {
                     if (!in(x, y, z)) continue;

@@ -25,6 +25,11 @@ import java.util.Optional;
  * lava pool can step out. On a terraced floor every step gets its own pool, so they read as a staircase of pools.
  * Plants for the pool edges ({@code edge}) grow in the water along the rim. Plants for the bed ({@code inner}) grow on
  * a share ({@code inner_chance}) of the other water cells.
+ *
+ * <p>In the Wasteland, whose tunnels are a noise field with no planned ways, a pool takes no floor cell on a tunnel's
+ * walking channel ({@link Walkway#nearChannel}): it forms beside the channel, its rim flush along it. A lava pool keeps
+ * 3 columns or more from the openings into the Galleries ({@link Walkway#nearOpening}), and forms only where the walks
+ * round it stay as they were ({@link WalkWindow}).
  */
 public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Config> {
     public record Config(BlockStateProvider rim, BlockStateProvider bed, int radius, Optional<BlockStateProvider> edge,
@@ -54,14 +59,15 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
         RandomSource random = ctx.random();
         BlockPos o = ctx.origin();
         int fy = o.getY() - 1; // the floor's top block
-        if (!isFloor(level, o.getX(), fy, o.getZ())) return false;
+        if (!floor(level, o.getX(), fy, o.getZ())) return false;
         // Pools never flood a way or put a rim across it. Beside a way a water pool shrinks until its rim keeps a
         // block clear of the way's corridor (in the network every room has ways through it); a lava pool keeps away
-        // altogether.
+        // altogether. The Wasteland's walking channels are kept by the floor test instead (floor()).
         int r = c.radius();
         int smallest = c.lava() ? r : Math.min(r, 3);
-        while (r >= smallest && Walkway.near(o.getX(), o.getZ(), fy, fy + 1, r + 1)) r--;
+        while (r >= smallest && Walkway.nearWays(o.getX(), o.getZ(), fy, fy + 1, r + 1)) r--;
         if (r < smallest) return false;
+        if (c.lava() && Walkway.nearOpening(o.getX(), o.getZ(), fy, r + 3)) return false;
         int size = 2 * r + 1;
         byte[] cell = new byte[size * size]; // 0 unknown/outside, 1 flat floor in the region
         ArrayDeque<int[]> queue = new ArrayDeque<>();
@@ -76,7 +82,7 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
                 if (Math.abs(nx) > r || Math.abs(nz) > r || nx * nx + nz * nz > r * r) continue;
                 int idx = (nz + r) * size + nx + r;
                 if (cell[idx] != 0) continue;
-                if (!isFloor(level, o.getX() + nx, fy, o.getZ() + nz)) { cell[idx] = 2; continue; }
+                if (!floor(level, o.getX() + nx, fy, o.getZ() + nz)) { cell[idx] = 2; continue; }
                 cell[idx] = 1;
                 queue.add(new int[]{nx, nz});
             }
@@ -96,6 +102,17 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
             if (!edge) { water[idx] = true; interior++; }
         }
         if (interior < 4) return false;
+        // In the Wasteland a lava pool takes no floor a walk needs. Its lava is no floor and no way, so where its cells
+        // close a gap (between the cave's own lava, or walls) a passage round it would be cut or left one way, and a nook
+        // beside it whose way out crossed them a pit (0.8.0). The walks round it must stay as they were (WalkWindow).
+        if (c.lava() && Walkway.channelled(fy)) {
+            WalkWindow.Change change = new WalkWindow.Change();
+            for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
+                if (!water[(dz + r) * size + dx + r]) continue;
+                change.add(o.getX() + dx, fy, o.getZ() + dz, Detour.OTHER).add(o.getX() + dx, fy - 1, o.getZ() + dz, Detour.SOLID);
+            }
+            if (!WalkWindow.keeps(WalkWindow.of(level), change)) return false;
+        }
         for (int dz = -r; dz <= r; dz++) for (int dx = -r; dx <= r; dx++) {
             int idx = (dz + r) * size + dx + r;
             if (cell[idx] != 1) continue;
@@ -171,6 +188,14 @@ public final class TerracePoolsFeature extends Feature<TerracePoolsFeature.Confi
         }
         return true;
     }
+
+    /** Floor a pool may take: solid with two blocks of air above it, and not on a Wasteland tunnel's walking channel. */
+    private static boolean floor(WorldGenLevel level, int x, int y, int z) {
+        return isFloor(level, x, y, z) && !Walkway.nearChannel(x, z, y, y + 1, CHANNEL_MARGIN);
+    }
+
+    /** How far past a walking channel's 2-block middle strip its floor stays no floor to a pool. */
+    public static final double CHANNEL_MARGIN = 0.5;
 
     /** Solid floor with two blocks of air above it. */
     private static boolean isFloor(WorldGenLevel level, int x, int y, int z) {

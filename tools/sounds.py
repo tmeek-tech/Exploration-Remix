@@ -39,13 +39,13 @@ EVENTS = {
     "ambient.blue.additions": [own(f"echo_drip{i}", 0.45, pitch=0.7) for i in range(1, 5)],
     # Basalt Galleries: rumbling and lava pops.
     "ambient.basalt.loop": [own("basalt_rumble", 0.8, stream=True)],
-    "ambient.basalt.additions": [vanilla("block/lava/pop", 0.7, 0.9, 3)]
+    "ambient.basalt.additions": [vanilla("liquid/lavapop", 0.7, 0.9, 3)]
                                 + [vanilla(f"ambient/nether/basalt_deltas/debris{i}", 0.5) for i in range(1, 4)]
                                 + [own(f"rumble{i}", 0.8) for i in range(1, 3)],
     # Ash Hollows (0.5), the Wasteland's refuge: the same rock heard from far off, lower and much quieter, and now and
     # then a distant rumble or a lava pop; no debris rattling down.
     "ambient.hollows.loop": [own("basalt_rumble", 0.35, stream=True, pitch=0.8)],
-    "ambient.hollows.additions": [own(f"rumble{i}", 0.35, pitch=0.75) for i in range(1, 3)] + [vanilla("block/lava/pop", 0.25, 0.8)],
+    "ambient.hollows.additions": [own(f"rumble{i}", 0.35, pitch=0.75) for i in range(1, 3)] + [vanilla("liquid/lavapop", 0.25, 0.8)],
 }
 
 SUBTITLES = {
@@ -66,6 +66,20 @@ LAVA_EVENTS = {
 }
 
 LAVA_SUBTITLES = {"lava.rumble": "The deep rock rumbles", "lava.surge": "Lava surges up"}
+
+
+# 0.5.1's quakes and eruptions (ERSounds registers their events; nothing plays them until the quakes and the eruptions
+# are built): the mod's own rumbles, lower, and vanilla sounds, until those builds give them their own.
+QUAKE_EVENTS = {
+    "quake.rumble": [own(f"lava_rumble{i}", 1.0, pitch=0.7) for i in range(1, 4)],
+    "quake.debris": [vanilla(f"ambient/nether/basalt_deltas/debris{i}", 1.0) for i in range(1, 4)],
+    "eruption.boom": [vanilla(f"random/explode{i}", 1.0, 0.7) for i in range(1, 5)],
+    "eruption.roar": [own("lava_surge", 1.0, pitch=0.8)],
+}
+QUAKE_SUBTITLES = {
+    "quake.rumble": "The ground shakes", "quake.debris": "Rock falls",
+    "eruption.boom": "An eruption bursts", "eruption.roar": "Lava roars",
+}
 
 
 # The Mossback (tools/synth_creature_sounds.py makes the files): its call carries far, so you hear it coming.
@@ -113,8 +127,8 @@ CREATURE_SUBTITLES.update(SKEIN_SUBTITLES)
 def write_all(assets_dir, write):
     out = {}
     lang = {}
-    subtitles = {**SUBTITLES, **LAVA_SUBTITLES, **CREATURE_SUBTITLES}
-    for ev, sounds in {**EVENTS, **LAVA_EVENTS, **CREATURE_EVENTS}.items():
+    subtitles = {**SUBTITLES, **LAVA_SUBTITLES, **QUAKE_SUBTITLES, **CREATURE_SUBTITLES}
+    for ev, sounds in {**EVENTS, **LAVA_EVENTS, **QUAKE_EVENTS, **CREATURE_EVENTS}.items():
         sub = f"subtitles.{MOD}.{ev}"
         out[ev] = {"sounds": sounds, "subtitle": sub}
         lang[sub] = subtitles[ev]

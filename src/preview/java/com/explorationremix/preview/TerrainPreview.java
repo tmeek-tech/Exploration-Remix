@@ -14,6 +14,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -25,7 +26,10 @@ import java.util.Map;
  * 4 corners, interpolated, then the network's per-block pass), without starting Minecraft. Per layer of cell (0, 0):
  * the longest tunnel unrolled with its walking floor, sections across the six longest tunnels, a map and the same map
  * with the plan drawn over it, x and z sections through each set piece, and straight sections through the cell; then
- * the stack of layers through a gate. Usage: TerrainPreview outDir [seed] [all|0|1|2|3|mat].
+ * the stack of layers through a gate. The layers made by the noise fields have no plan: a map and two sections each, and
+ * in {@code mat} mode their cavern views (spec-looks 7.1: material slices and biome maps at four heights, material
+ * sections through the largest open regions) and the join's views ({@code join_*}: a map of the seal, the openings and
+ * any lid, sections through the openings over the join's rows). Usage: TerrainPreview outDir [seed] [all|0|1|2|3|mat].
  */
 public final class TerrainPreview {
     private final Terrain t;
@@ -224,7 +228,6 @@ public final class TerrainPreview {
             }
             int li = shape.layerAt(y);
             if (li < 0) { m[i] = Rock.BAND_STONE.ordinal(); continue; }
-            if (li == shape.layerCount - 1 && y < shape.waterY(li) + 4 && t.bedrockLanding(x, y, z)) { m[i] = Rock.BEDROCK.ordinal(); continue; }
             if (d > 0.75) m[i] = t.palette.interior(li, x, y, z).ordinal();
         }
         // surface pass, top down, as SurfaceSystem.buildSurface does it
@@ -297,6 +300,223 @@ public final class TerrainPreview {
         g.dispose();
     }
 
+    // ------------------------------------------------------------------------------------------ the noise layers' caverns
+
+    /**
+     * The block the game places at (x, y, z), as {@link #column} decides it but from the rows round it only: the palette
+     * reads at most 8 rows of rock over or under a block, so the run of rock is followed 12 rows each way.
+     */
+    int materialAt(int x, int y, int z) {
+        double d = blockDensity(x, y, z);
+        if (d <= 0) {
+            int f = t.fluidAt(x, y, z);
+            return f == Terrain.WATER ? M_WATER : f == Terrain.LAVA ? M_LAVA : M_AIR;
+        }
+        if (y <= shape.floorY + 4) {
+            double chance = (shape.floorY + 5 - y) / 5.0;
+            if (y == shape.floorY || Hashing.unit(Hashing.mix(t.seed ^ 0x51ED270B27F1A3C9L, x, y, z)) < chance) return Rock.BEDROCK.ordinal();
+        }
+        int li = shape.layerAt(y);
+        if (li < 0) return Rock.BAND_STONE.ordinal();
+        if (d > 0.75) return t.palette.interior(li, x, y, z).ordinal();
+        int above = 1, below = 1;
+        boolean wet = false;
+        for (int k = 1; k <= 12 && y + k < shape.packFloor; k++) {
+            if (blockDensity(x, y + k, z) <= 0) { wet = t.fluidAt(x, y + k, z) != Terrain.AIR; break; }
+            above++;
+        }
+        for (int k = 1; k <= 12 && y - k >= shape.floorY; k++) {
+            if (blockDensity(x, y - k, z) <= 0) break;
+            below++;
+        }
+        return t.palette.shell(x, y, z, above, below, wet).ordinal();
+    }
+
+    /** A horizontal slice of the blocks at row y, size x size columns from (x0, z0); x right, z down. */
+    BufferedImage materialSlice(int x0, int z0, int size, int y) {
+        BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+        for (int i = 0; i < size; i++) for (int j = 0; j < size; j++) img.setRGB(i, j, matColor(materialAt(x0 + i, y, z0 + j)));
+        return img;
+    }
+
+    /** The sub-biome at row y over size x size columns from (x0, z0): its colour in the open, a dark shade of it in rock. */
+    BufferedImage biomeSlice(int x0, int z0, int size, int y) {
+        BufferedImage img = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+        for (int i = 0; i < size; i++) for (int j = 0; j < size; j++) {
+            int x = x0 + i, z = z0 + j, c = biomeColor(t.biomeAt(x, y, z));
+            if (blockDensity(x, y, z) > 0) c = ((c >> 16 & 0xFF) * 2 / 5) << 16 | ((c >> 8 & 0xFF) * 2 / 5) << 8 | (c & 0xFF) * 2 / 5;
+            img.setRGB(i, j, c);
+        }
+        return img;
+    }
+
+    /**
+     * The largest open regions of layer li over size x size columns from (x0, z0): a flood fill of the density under 0 on
+     * a 4-block grid; {x, y, z, grid points} of each region's middle, largest first.
+     */
+    List<int[]> largestOpen(int li, int x0, int z0, int size, int count) {
+        int g = 4, n = size / g, bot = shape.bottom(li), ny = (shape.top(li) - bot) / g + 1;
+        boolean[] open = new boolean[n * n * ny];
+        for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) for (int k = 0; k < ny; k++)
+            open[(i * n + j) * ny + k] = t.density(x0 + i * g, bot + k * g, z0 + j * g) < 0;
+        boolean[] seen = new boolean[open.length];
+        List<int[]> out = new ArrayList<>();
+        ArrayDeque<Integer> q = new ArrayDeque<>();
+        for (int p0 = 0; p0 < open.length; p0++) {
+            if (!open[p0] || seen[p0]) continue;
+            seen[p0] = true;
+            q.add(p0);
+            long sx = 0, sy = 0, sz = 0, cnt = 0;
+            while (!q.isEmpty()) {
+                int pp = q.poll(), i = pp / (n * ny), j = pp / ny % n, k = pp % ny;
+                sx += i; sy += k; sz += j; cnt++;
+                int[][] nb = {{i + 1, j, k}, {i - 1, j, k}, {i, j + 1, k}, {i, j - 1, k}, {i, j, k + 1}, {i, j, k - 1}};
+                for (int[] c : nb) {
+                    if (c[0] < 0 || c[1] < 0 || c[2] < 0 || c[0] >= n || c[1] >= n || c[2] >= ny) continue;
+                    int qq = (c[0] * n + c[1]) * ny + c[2];
+                    if (open[qq] && !seen[qq]) { seen[qq] = true; q.add(qq); }
+                }
+            }
+            out.add(new int[]{x0 + (int) (sx * g / cnt), bot + (int) (sy * g / cnt), z0 + (int) (sz * g / cnt), (int) cnt});
+        }
+        out.sort(Comparator.comparingInt((int[] r) -> -r[3]));
+        return out.subList(0, Math.min(count, out.size()));
+    }
+
+    /** Pictures side by side, 10 pixels apart. */
+    static BufferedImage strip(List<BufferedImage> parts) {
+        int w = 0, h = 1;
+        for (BufferedImage b : parts) { w += b.getWidth() + 10; h = Math.max(h, b.getHeight()); }
+        BufferedImage img = new BufferedImage(Math.max(1, w), h, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        int at = 0;
+        for (BufferedImage b : parts) { g.drawImage(b, at, 0, null); at += b.getWidth() + 10; }
+        g.dispose();
+        return img;
+    }
+
+    /**
+     * A noise layer's cavern views (spec-looks 7.1), 512 x 512 columns round (0, 0): material slices and biome maps at
+     * W+1 (shores, rims), W+12 (the tide), W+40 (the mark) and W+80 (walls and clusters), and material sections along x
+     * and z through the middles of the four largest open regions, from under the layer to over it.
+     */
+    void caverns(int li, File out) throws Exception {
+        int W = shape.waterY(li), size = 512, x0 = -size / 2, z0 = -size / 2;
+        for (int h : new int[]{1, 12, 40, 80}) {
+            int y = W + h;
+            if (y > shape.top(li)) continue;
+            save(materialSlice(x0, z0, size, y), new File(out, "mat_slice_" + li + "_" + h + ".png"));
+            save(biomeSlice(x0, z0, size, y), new File(out, "biome_" + li + "_" + h + ".png"));
+            corners.clear();
+        }
+        List<int[]> regions = largestOpen(li, x0, z0, size, 4);
+        List<BufferedImage> xs = new ArrayList<>(), zs = new ArrayList<>();
+        int y0 = shape.bottom(li) - 8, y1 = shape.top(li) + 20;
+        for (int[] r : regions) {
+            System.out.printf("layer %d: open region of %d grid points round %d %d %d%n", li, r[3], r[0], r[1], r[2]);
+            xs.add(materialSection(r[0] - 128, r[2] + 0.5, r[0] + 128, r[2] + 0.5, y0, y1));
+            zs.add(materialSection(r[0] + 0.5, r[2] - 128, r[0] + 0.5, r[2] + 128, y0, y1));
+            corners.clear();
+        }
+        save(strip(xs), new File(out, "mat_sec_" + li + "_x.png"));
+        save(strip(zs), new File(out, "mat_sec_" + li + "_z.png"));
+    }
+
+    /**
+     * The join of the Wasteland and the Galleries over 512 x 512 columns round (0, 0). {@code join_map}: per column,
+     * dark grey where the Wasteland's bottom row and the Galleries' top row are both rock (the seal), light blue where
+     * the column is open from 2 under the Wasteland's bottom to 8 over it (an opening), red where the Galleries' top row
+     * is open under rock at the Wasteland's bottom (a lid), mid grey for the rest; yellow where lava in the join's rows
+     * (the Wasteland's bottom 32 rows over the Galleries' top) has air beside it or under it (a lake's open top is not
+     * counted). {@code join_ceiling}: where the Galleries are open 4 rows under their top row, the row their open space
+     * ends under: red 4 rows under the top row (the closed join's seal), orange 1 to 3 under, yellow at the Wasteland's
+     * bottom rows (up to 4 over), light blue 5 or more over (into the Wasteland), dark where they are rock there; flat
+     * ceilings show as patches of one colour. {@code join_sec_x/z} and
+     * {@code join_kind_x/z}: sections 3 times enlarged along x and z through the four largest openings over the join's
+     * rows (materials, and kinds: rock, air coloured by biome, water, lava).
+     */
+    void join(File out) throws Exception {
+        int wBot = shape.bottom(Terrain.WASTELAND), gTop = shape.top(Terrain.GALLERIES);
+        int size = 512, x0 = -size / 2, z0 = -size / 2, ylo = gTop - 31, yhi = wBot + 28;
+        BufferedImage map = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB), ceiling = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+        boolean[] hole = new boolean[size * size];
+        int sealed = 0, holes = 0, lids = 0, lavaByAir = 0;
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                int x = x0 + i, z = z0 + j;
+                int[] k = new int[yhi - ylo + 1];
+                for (int y = ylo; y <= yhi; y++) k[y - ylo] = kind(x, y, z);
+                boolean open = true;
+                for (int y = wBot - 2; y <= wBot + 8 && open; y++) open = k[y - ylo] == 1;
+                boolean wRock = k[wBot - ylo] == 0 || k[wBot - ylo] == 4, gRock = k[gTop - ylo] == 0 || k[gTop - ylo] == 4;
+                int c;
+                if (open) { c = 0x9FD2FF; holes++; hole[i * size + j] = true; }
+                else if (wRock && gRock) { c = 0x303030; sealed++; }
+                else if (wRock && k[gTop - ylo] == 1) { c = 0xE02020; lids++; }
+                else c = 0x707070;
+                for (int y = gTop + 1; y <= wBot + 31 && y < yhi; y++) {
+                    if (k[y - ylo] != 3) continue;
+                    if (k[y - 1 - ylo] == 1 || kind(x + 1, y, z) == 1 || kind(x - 1, y, z) == 1 || kind(x, y, z + 1) == 1 || kind(x, y, z - 1) == 1) {
+                        c = 0xFFE000;
+                        lavaByAir++;
+                        break;
+                    }
+                }
+                map.setRGB(i, j, c);
+                int cc = 0x202020;
+                if (k[gTop - 4 - ylo] != 0) {
+                    int y = gTop - 3;
+                    while (y < yhi && k[y - ylo] != 0) y++;
+                    int over = y - gTop;   // the first rock row over the Galleries' open space, against their top row
+                    cc = over <= -3 ? 0xE02020 : over <= 0 ? 0xF09030 : over <= 5 ? 0xE0E040 : 0x9FD2FF;
+                }
+                ceiling.setRGB(i, j, cc);
+            }
+            if (i % 64 == 63) corners.clear();
+        }
+        save(map, new File(out, "join_map.png"));
+        save(ceiling, new File(out, "join_ceiling.png"));
+        System.out.printf("join: %d sealed columns, %d open through, %d lid columns, %d columns with air beside or under lava, of %d%n",
+                sealed, holes, lids, lavaByAir, size * size);
+        // the four largest openings (groups of open columns)
+        int[] lab = new int[size * size];
+        java.util.Arrays.fill(lab, -1);
+        List<int[]> groups = new ArrayList<>();
+        ArrayDeque<Integer> q = new ArrayDeque<>();
+        for (int p0 = 0; p0 < hole.length; p0++) {
+            if (!hole[p0] || lab[p0] >= 0) continue;
+            lab[p0] = p0;
+            q.add(p0);
+            long si = 0, sj = 0, n = 0;
+            while (!q.isEmpty()) {
+                int pp = q.poll(), i = pp / size, j = pp % size;
+                si += i; sj += j; n++;
+                int[][] nb = {{i + 1, j}, {i - 1, j}, {i, j + 1}, {i, j - 1}};
+                for (int[] c : nb) {
+                    if (c[0] < 0 || c[1] < 0 || c[0] >= size || c[1] >= size) continue;
+                    int qq = c[0] * size + c[1];
+                    if (hole[qq] && lab[qq] < 0) { lab[qq] = p0; q.add(qq); }
+                }
+            }
+            groups.add(new int[]{x0 + (int) (si / n), z0 + (int) (sj / n), (int) n});
+        }
+        groups.sort(Comparator.comparingInt((int[] g) -> -g[2]));
+        List<BufferedImage> mx = new ArrayList<>(), mz = new ArrayList<>(), kx = new ArrayList<>(), kz = new ArrayList<>();
+        for (int[] g : groups.subList(0, Math.min(4, groups.size()))) {
+            System.out.printf("join: opening of %d columns round %d %d%n", g[2], g[0], g[1]);
+            int x = g[0], z = g[1];
+            mx.add(scale(materialSection(x - 64, z + 0.5, x + 64, z + 0.5, ylo, yhi), 3, 3));
+            mz.add(scale(materialSection(x + 0.5, z - 64, x + 0.5, z + 64, ylo, yhi), 3, 3));
+            kx.add(scale(section(x - 64, z + 0.5, x + 64, z + 0.5, ylo, yhi), 3, 3));
+            kz.add(scale(section(x + 0.5, z - 64, x + 0.5, z + 64, ylo, yhi), 3, 3));
+            corners.clear();
+        }
+        save(strip(mx), new File(out, "join_sec_x.png"));
+        save(strip(mz), new File(out, "join_sec_z.png"));
+        save(strip(kx), new File(out, "join_kind_x.png"));
+        save(strip(kz), new File(out, "join_kind_z.png"));
+    }
+
     static void save(BufferedImage img, File f) throws Exception { ImageIO.write(img, "png", f); }
 
     static BufferedImage scale(BufferedImage src, int sx, int sy) {
@@ -318,11 +538,15 @@ public final class TerrainPreview {
         }
         long t0 = System.nanoTime();
         if (what.equals("mat")) {
-            // Rock across each layer's four longest tunnels, as the game would place it.
+            // Rock across each planned layer's four longest tunnels, as the game would place it; the noise layers' caverns.
             for (int li = 0; li < s.layerCount; li++) {
-                save(scale(p.fan(t.network(li, 0, 0), li, 4, 60, true), 2, 2), new File(out, "mat_fan_" + li + ".png"));
+                if (Terrain.planned(li)) save(scale(p.fan(t.network(li, 0, 0), li, 4, 60, true), 2, 2), new File(out, "mat_fan_" + li + ".png"));
+                else p.caverns(li, out);
                 p.corners.clear();
+                System.out.printf("layer %d done at %.1f s%n", li, (System.nanoTime() - t0) / 1e9);
             }
+            if (s.layerCount > Terrain.GALLERIES) p.join(out);
+            p.corners.clear();
             Plans.Gate g = t.plans.gate(2, 0, 0);
             save(p.materialSection(g.ux - 100, g.uz, g.ux + 100, g.uz, s.floorY - 2, s.packFloor + 2), new File(out, "mat_stack.png"));
             System.out.printf("done in %.1f s%n", (System.nanoTime() - t0) / 1e9);
@@ -332,10 +556,19 @@ public final class TerrainPreview {
         while (t.plans.cellOf(size) == 0) size++;   // the cell size
         for (int li = 0; li < s.layerCount; li++) {
             if (!what.equals("all") && !what.equals(String.valueOf(li))) continue;
+            if (!Terrain.planned(li)) {
+                // a noise field (the Wasteland, the Galleries): no plan to draw, only its blocks
+                System.out.printf("layer %d: a noise field%n", li);
+                save(p.topDown(li, -size / 4, -size / 4, size * 3 / 2, 2), new File(out, "map_" + li + ".png"));
+                save(p.section(0, size / 2.0, size, size / 2.0, s.bottom(li) - 8, s.top(li) + 20), new File(out, "secx_" + li + ".png"));
+                save(p.section(size / 2.0, 0, size / 2.0, size, s.bottom(li) - 8, s.top(li) + 20), new File(out, "secz_" + li + ".png"));
+                p.corners.clear();
+                continue;
+            }
             Net n = t.network(li, 0, 0);
             List<Net.Way> ts = tunnels(n);
-            System.out.printf("layer %d: %d chambers, %d ways (%d tunnels, longest %.0f), %d climbs, %d pools%s%n", li, n.ch.size(), n.ways.size(), ts.size(),
-                    ts.isEmpty() ? 0 : ts.get(0).length, n.shafts.size(), n.pools.size(), n.ch.stream().anyMatch(c -> c.kind == Net.Kind.CANYON) ? ", the rift" : "");
+            System.out.printf("layer %d: %d chambers, %d ways (%d tunnels, longest %.0f), %d climbs%s%n", li, n.ch.size(), n.ways.size(), ts.size(),
+                    ts.isEmpty() ? 0 : ts.get(0).length, n.shafts.size(), n.ch.stream().anyMatch(c -> c.kind == Net.Kind.CANYON) ? ", the rift" : "");
             if (!ts.isEmpty()) save(p.waySection(ts.get(0), li), new File(out, "way_" + li + ".png"));
             // cross-sections across the longest tunnels
             save(p.fan(n, li, 6, 80, false), new File(out, "fan_" + li + ".png"));

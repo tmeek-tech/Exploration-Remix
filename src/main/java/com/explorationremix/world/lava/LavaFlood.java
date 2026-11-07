@@ -16,6 +16,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ThreadedLevelLightEngine;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -60,21 +61,33 @@ import java.util.function.Predicate;
  * marked unsaved, and the change goes to the players watching the chunk (one section packet per chunk per step).
  * Heightmaps and sky light sources are left alone: they never change this far under the ground.
  *
+ * <p><b>Nothing left behind.</b> The drain writes back exactly what the rise took (air, the glow, and a fall's flowing
+ * lava at its level, kept in the chunk's record) the same way, and wakes no lava of the terrain's own, so a cycle leaves
+ * the Galleries as it found them. (Until 0.8.0 it cleared a fall's lava to air and woke the lava round it to pour it
+ * again: a re-poured fall ran out over the floor at its foot, nudged the sea in a neighbour chunk that had not drained
+ * yet into blocks this chunk had, where the fall then fed that lava for good, and Immersive Weathering turned flowing
+ * lava on basalt into basalt.)
+ *
  * <p><b>The clock</b> is the overworld's game time less the start of the current cycle, so every player on a server
  * sees the same cycle and it carries on where it was after a restart. Clients hear where it is ({@link LavaNet.Sync})
  * when they join, on each phase change, after a command and every five seconds while in or near the Galleries, and
  * count on with their own game time in between ({@code client.LavaWarnings} plays the warning signs).
  *
- * <p>The next build's quakes, eruptions and terrain reset run on this clock ({@link #phaseChanged} is their hook, and
- * {@link LavaClock#cycles} their epoch) and keep their per-chunk change log in {@link LavaChunk}.
+ * <p><b>0.5.1.</b> The quakes, eruptions and the terrain reset run on this clock, each tick after the flood. The reset's
+ * generation (kept with the clock, {@link LavaCycleData#resetGen}) goes up once a cycle as the lava stands full: every
+ * change the Galleries' change logs ({@link ChangeLog}, kept in {@link LavaChunk}) hold from before then is put back.
  */
 public final class LavaFlood {
     private LavaFlood() {}
 
     /** How many blocks the Galleries' lava climbs over its table at the height of its cycle. */
     public static final int RISE = Terrain.surge(Terrain.GALLERIES);
-    /** A player up to this many blocks over the band above the Galleries counts as near them. */
-    static final int NEAR = 32;
+    /**
+     * A player up to this many blocks over the Galleries' top counts as near them: 0.5.0's reach (the band's 16 rows and
+     * 32 over them), kept since 0.5.1 removed the band, as the Wasteland's two lowest sheets look down into the Galleries
+     * through its openings.
+     */
+    static final int NEAR = 48;
     /** How often the clients of players in or near the Galleries hear where the cycle is, in ticks. */
     static final int SYNC_EVERY = 100;
     /** How often, with nothing left to do, the chunks round players are looked over again (as well as whenever a chunk loads). */
@@ -134,7 +147,12 @@ public final class LavaFlood {
     public static void changedDimension(PlayerEvent.PlayerChangedDimensionEvent event) { tell(event.getEntity()); }
 
     @SubscribeEvent
-    public static void serverStopped(ServerStoppedEvent event) { reset(); }
+    public static void serverStopped(ServerStoppedEvent event) {
+        reset();
+        TerrainReset.reset();
+        com.explorationremix.world.quake.Quakes.reset();
+        com.explorationremix.world.eruption.Eruptions.reset();
+    }
 
     private static void reset() {
         setUp = false;
@@ -173,7 +191,7 @@ public final class LavaFlood {
                 return;
             }
         }
-        band = new Band(table, rise, s.top(g), s.bottom(g), s.bandTop(g + 1) + NEAR);
+        band = new Band(table, rise, s.top(g), s.bottom(g), s.top(g) + NEAR);
         data = LavaCycleData.get(level, nextLengths(0));
         LavaClock c = data.clock;
         ExplorationRemix.LOGGER.info("Lava cycle: the Galleries' lava rises from its table at y {} to y {} on a {} cycle ({}){}; {} cycles so far",
@@ -208,8 +226,22 @@ public final class LavaFlood {
         } else if (now % SYNC_EVERY == 0) {
             for (ServerPlayer p : level.players()) if (p.getY() < band.nearY()) send(level, PacketDistributor.PLAYER.with(() -> p));
         }
+        // the terrain is put back once a cycle, from when the lava stands full (or from the drain, if a command skipped
+        // the full phase); the cycle count keeps a restart or a clock command inside that cycle from adding another
+        if (on && (s.phase() == LavaCycle.Phase.FULL || s.phase() == LavaCycle.Phase.DRAIN) && data.resetCycle != clock.cycles()) {
+            data.resetCycle = clock.cycles();
+            data.resetGen++;
+            data.setDirty();
+            if (ERConfig.INSTANCE.resetEnabled.get()) {
+                ExplorationRemix.LOGGER.info("Terrain reset: the lava stands full, so everything changed in the Basalt Galleries since the last reset goes back (generation {})", data.resetGen);
+            }
+        }
         STATS.tick();
         flood(level, target, now);
+        // 0.5.1: the terrain reset follows the flood (it reads the heights the flood left), then the quakes and eruptions
+        TerrainReset.tick(level, band, s, now);
+        com.explorationremix.world.quake.Quakes.tick(level, band, s, now);
+        com.explorationremix.world.eruption.Eruptions.tick(level, band, s, now);
     }
 
     /**
@@ -311,11 +343,12 @@ public final class LavaFlood {
             int y = b.tableY() + i;
             int si = chunk.getSectionIndex(y);
             LevelChunkSection sec = chunk.getSection(si);
-            SLICE.begin(level, chunk, sec, si, y, i, d.mask);
+            // a slice flooded by a build that kept no taken blocks drains the old way (LavaChunk)
+            SLICE.begin(level, chunk, sec, si, y, i, d, !up && i < d.legacyTop);
             int changed;
             if (up) {
                 if (sec.maybeHas(TAKEN)) {
-                    changed = Flood.rise(SLICE, d.mask, d.glow, i);
+                    changed = Flood.rise(SLICE, d.mask, d.glow, d.kept, i);
                     w.checks += 256;
                 } else {
                     changed = 0;
@@ -324,8 +357,9 @@ public final class LavaFlood {
                 d.level++;
             } else {
                 w.checks += Math.max(1, d.mask.count(i));
-                changed = Flood.drain(SLICE, d.mask, d.glow, i);
+                changed = Flood.drain(SLICE, d.mask, d.glow, d.kept, i);
                 d.level--;
+                if (d.legacyTop > i) d.legacyTop = i;
             }
             SLICE.end();
             w.changes += changed;
@@ -354,14 +388,19 @@ public final class LavaFlood {
         private ThreadedLevelLightEngine light;
         private LevelChunk chunk;
         private LevelChunkSection sec;
+        private LavaChunk data;
         private Flood.Mask mask;
         private int si, y, ly, x0, z0, i;
-        private boolean wasEmpty;
+        /** The Galleries' bottom the change logs count from (MIN_VALUE: none). */
+        private int logBottom;
+        private boolean wasEmpty, legacy;
         private final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
-        void begin(ServerLevel level, LevelChunk chunk, LevelChunkSection sec, int si, int y, int i, Flood.Mask mask) {
+        void begin(ServerLevel level, LevelChunk chunk, LevelChunkSection sec, int si, int y, int i, LavaChunk data, boolean legacy) {
             this.level = level;
-            this.mask = mask;
+            this.data = data;
+            this.mask = data.mask;
+            this.legacy = legacy;
             this.source = level.getChunkSource();
             this.light = source.getLightEngine();
             this.chunk = chunk;
@@ -372,6 +411,7 @@ public final class LavaFlood {
             this.x0 = chunk.getPos().getMinBlockX();
             this.z0 = chunk.getPos().getMinBlockZ();
             this.i = i;
+            this.logBottom = GalleryChanges.bottom();
             this.wasEmpty = sec.hasOnlyAir();
         }
 
@@ -388,11 +428,15 @@ public final class LavaFlood {
             light = null;
             chunk = null;
             sec = null;
+            data = null;
             mask = null;
         }
 
         @Override
         public int kind(int x, int z) { return kindOf(sec.getBlockState(x, ly, z)); }
+
+        @Override
+        public int state(int x, int z) { return Block.getId(sec.getBlockState(x, ly, z)); }
 
         @Override
         public void fill(int x, int z) { put(x, z, LAVA); }
@@ -403,6 +447,9 @@ public final class LavaFlood {
         @Override
         public void glow(int x, int z) { put(x, z, HallGlowFeature.bandGlow()); }
 
+        @Override
+        public void put(int x, int z, int state) { put(x, z, Block.stateById(state)); }
+
         private void put(int x, int z, BlockState s) {
             sec.setBlockState(x, ly, z, s);
             pos.set(x0 + x, y, z0 + z);
@@ -410,8 +457,60 @@ public final class LavaFlood {
             source.blockChanged(pos);
         }
 
+        /**
+         * After the drain put back what the lava took at (x, z): wakes only lava that changed since the last terrain
+         * reset (its chunk's change log holds the position: lava a player let in, a shaft dug under the sea), at the
+         * block itself, above, below and on its four sides, so it drains away; never the terrain's own lava (a fall the
+         * drain gave back as it was, a pool), which a fluid tick would pour again by vanilla's rules, and never the
+         * sea's own sources in a chunk that has not drained this slice yet. A slice flooded by an older build drains
+         * the old way ({@link #wakeLegacy}).
+         */
         @Override
         public void wake(int x, int z) {
+            if (legacy) {
+                wakeLegacy(x, z);
+                return;
+            }
+            if (logBottom == Integer.MIN_VALUE) return;
+            wakeChanged(x0 + x, y, z0 + z);
+            wakeChanged(x0 + x, y + 1, z0 + z);
+            wakeChanged(x0 + x, y - 1, z0 + z);
+            wakeChanged(x0 + x - 1, y, z0 + z);
+            wakeChanged(x0 + x + 1, y, z0 + z);
+            wakeChanged(x0 + x, y, z0 + z - 1);
+            wakeChanged(x0 + x, y, z0 + z + 1);
+        }
+
+        private void wakeChanged(int wx, int wy, int wz) {
+            int dy = wy - logBottom;
+            if (!ChangeLog.holds(dy) || !GalleryChanges.inLayer(wy)) return;
+            boolean here = (wx >> 4) == chunk.getPos().x && (wz >> 4) == chunk.getPos().z;
+            LevelChunk c = here ? chunk : source.getChunkNow(wx >> 4, wz >> 4);
+            if (c == null) return;
+            LavaChunk d = here ? data : LavaChunk.of(c);
+            if (d == null || d.log.isEmpty()) return;
+            d.log.align(logBottom);
+            if (!d.log.has(ChangeLog.key(wx & 15, dy, wz & 15))) return;
+            BlockState s = c.getBlockState(pos.set(wx, wy, wz));
+            FluidState f = s.getFluidState();
+            if (f.getType() != Fluids.LAVA && f.getType() != Fluids.FLOWING_LAVA) return;
+            if (f.isSource()) {
+                // the sea's own sources never flow: a chunk that has not drained this slice yet takes them itself
+                int j = wy - (y - i);
+                if (j >= 0 && j < d.mask.slices()) {
+                    d.align(y - i);
+                    if (d.mask.get(j, wx & 15, wz & 15)) return;
+                }
+            }
+            level.scheduleTick(new BlockPos(wx, wy, wz), f.getType(), f.getType().getTickDelay(level));
+        }
+
+        /**
+         * The drain's wake before this build kept the taken blocks: the lava above, below (unless the sea's own) and on
+         * the four sides of a block the drain cleared gets a tick, so a fall whose flowing lava the sea took and the drain
+         * cleared to air pours down again.
+         */
+        private void wakeLegacy(int x, int z) {
             // above: the slices over this one were drained before it, so lava there is never the sea's
             BlockState up = ly < 15 ? sec.getBlockState(x, ly + 1, z) : chunk.getBlockState(pos.set(x0 + x, y + 1, z0 + z));
             tickIfLava(up, x0 + x, y + 1, z0 + z);
@@ -492,9 +591,35 @@ public final class LavaFlood {
     /** After a command changed the clock: save it, tell every client, and look the chunks over on the next tick. */
     static void clockChanged(ServerLevel level) {
         if (data == null) return;
+        // a command that puts the cycle back before its full lava lets that full lava reset the terrain again
+        if (band != null) {
+            LavaCycle.Phase p = data.clock.cycle(band.rise()).at(data.clock.tick(level.getGameTime())).phase();
+            if (p == LavaCycle.Phase.CALM || p == LavaCycle.Phase.WARNING || p == LavaCycle.Phase.RISE) data.resetCycle = -1;
+        }
         data.setDirty();
         wake = true;
         send(level, PacketDistributor.DIMENSION.with(() -> Level.OVERWORLD));
+    }
+
+    /**
+     * The terrain reset's generation (0.5.1): the change logs put back everything recorded before it. 0 when the cycle
+     * cannot run in this world.
+     */
+    public static long resetGen(ServerLevel level) {
+        if (!setUp) setUp(level);
+        return data == null ? 0 : data.resetGen;
+    }
+
+    /** The cycle count the reset's generation last went up in for a full lava, or -1 (for the reset's status). */
+    static long resetCycle() { return data == null ? -1 : data.resetCycle; }
+
+    /** {@code /remix reset now}: the reset's generation goes up, so everything changed so far is put back now. */
+    static long resetNow(ServerLevel level) {
+        if (!setUp) setUp(level);
+        if (data == null) return -1;
+        data.resetGen++;
+        data.setDirty();
+        return data.resetGen;
     }
 
     /** Phase lengths for a cycle of {@code totalTicks} (0: the config's length), shared out by the config's shares. */

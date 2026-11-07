@@ -13,10 +13,22 @@
     "width": {
       "type": "minecraft:uniform",
       "value": {
-        "min_inclusive": 1,
-        "max_inclusive": 2
+        "min_inclusive": 3,
+        "max_inclusive": 5
       }
     },
-    "mode": "ceiling"
+    "min_width": 2,
+    "mode": "ceiling",
+    "tries": 32,
+    "spread": 3,
+    "sites": {
+      "salt": 1,
+      "grid": 8,
+      "spacing": 72,
+      "keep": 24,
+      "ring_min": 0.42,
+      "ring_max": 0.62,
+      "rim_only": true
+    }
   }
 }

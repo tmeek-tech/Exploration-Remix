@@ -44,9 +44,7 @@
     [],
     [
       "explorationremix:basalt_galleries/lava_pools",
-      "explorationremix:basalt_galleries/columns",
-      "explorationremix:basalt_galleries/hanging_columns",
-      "explorationremix:basalt_galleries/great_hanging_columns"
+      "explorationremix:basalt_galleries/hanging_columns"
     ],
     [],
     [],
@@ -54,13 +52,14 @@
     [],
     [],
     [
-      "explorationremix:basalt_galleries/vault_falls",
-      "explorationremix:basalt_galleries/cliff_falls"
+      "explorationremix:basalt_galleries/vault_falls"
     ],
     [],
     [
       "explorationremix:climb_vines",
       "explorationremix:open_way",
+      "explorationremix:lava_pockets",
+      "explorationremix:basalt_galleries/floor_lava",
       "explorationremix:basalt_galleries/glow"
     ]
   ]

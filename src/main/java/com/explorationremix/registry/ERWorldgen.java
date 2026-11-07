@@ -8,13 +8,16 @@ import com.explorationremix.world.feature.ClimbVinesFeature;
 import com.explorationremix.world.feature.ColumnClusterFeature;
 import com.explorationremix.world.feature.DaylightShaftFeature;
 import com.explorationremix.world.feature.DenLairFeature;
+import com.explorationremix.world.feature.FallSitesPlacement;
 import com.explorationremix.world.feature.FallbackStateProvider;
+import com.explorationremix.world.feature.FloorLavaFeature;
 import com.explorationremix.world.feature.FluidFallFeature;
 import com.explorationremix.world.feature.GiantFungusFeature;
 import com.explorationremix.world.feature.GiantSpikeFeature;
 import com.explorationremix.world.feature.HallGlowFeature;
 import com.explorationremix.world.feature.JoinDeadEndsFeature;
 import com.explorationremix.world.feature.JunctionsPlacement;
+import com.explorationremix.world.feature.LavaPocketsFeature;
 import com.explorationremix.world.feature.LayerHeight;
 import com.explorationremix.world.feature.LayerRangePlacement;
 import com.explorationremix.world.feature.MixStateProvider;
@@ -69,6 +72,10 @@ public final class ERWorldgen {
     // in the plant caves are gone)
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> DEN_LAIR = FEATURES.register("den_lair", () -> new DenLairFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
+    // the Galleries' floor lava (fix round 2 after the 0.8.0 pack runs): the field's rule laid on its floors
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> FLOOR_LAVA = FEATURES.register("floor_lava", () -> new FloorLavaFeature(NoneFeatureConfiguration.CODEC));
+    // the lava's pockets another mod's slab pass filled with water, given back in the Wasteland and the Galleries (fix round 3)
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> LAVA_POCKETS = FEATURES.register("lava_pockets", () -> new LavaPocketsFeature(NoneFeatureConfiguration.CODEC));
 
     public static final RegistryObject<BlockStateProviderType<FallbackStateProvider>> FALLBACK_PROVIDER = STATE_PROVIDERS.register("fallback", () -> new BlockStateProviderType<>(FallbackStateProvider.CODEC));
     public static final RegistryObject<BlockStateProviderType<MixStateProvider>> MIX_PROVIDER = STATE_PROVIDERS.register("mix", () -> new BlockStateProviderType<>(MixStateProvider.CODEC));
@@ -80,5 +87,7 @@ public final class ERWorldgen {
     public static final RegistryObject<PlacementModifierType<BiomeAroundFilter>> BIOME_AROUND = PLACEMENT_TYPES.register("biome_around", () -> () -> BiomeAroundFilter.CODEC);
     // 0.5: tries aimed at the Basalt Galleries' tall halls, their vaults and floors, past the 32 steps of an environment scan
     public static final RegistryObject<PlacementModifierType<OpenSpanPlacement>> OPEN_SPAN = PLACEMENT_TYPES.register("open_span", () -> () -> OpenSpanPlacement.CODEC);
+    // 0.8.0 fix round: the Galleries' lava falls at spaced sites, not tries per chunk
+    public static final RegistryObject<PlacementModifierType<FallSitesPlacement>> FALL_SITES = PLACEMENT_TYPES.register("fall_sites", () -> () -> FallSitesPlacement.CODEC);
     public static final RegistryObject<HeightProviderType<LayerHeight>> LAYER_HEIGHT = HEIGHT_PROVIDERS.register("layer_height", () -> () -> LayerHeight.CODEC);
 }

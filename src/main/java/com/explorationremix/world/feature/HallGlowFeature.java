@@ -3,7 +3,6 @@ package com.explorationremix.world.feature;
 import com.explorationremix.block.GlowBlock;
 import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Hashing;
 import com.explorationremix.world.terrain.Perlin;
 import com.explorationremix.world.terrain.Shape;
@@ -32,9 +31,11 @@ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfigur
  * try at a spot hashed from the world seed and the cube: it lights if that spot is air with rock (any block that is not
  * air, a fluid or another glow) within {@code reach} along one of the six axes, so the light sits along the rock and
  * none in the middle of a hall. Over the flood band its level is {@code low} at the band's top and fades to
- * {@code high} at {@code fade} blocks above it, brightest near the lava as the lava's own glow would be, and a slow noise
- * moves it up to {@code patch} either way so the light comes in warmer and duller stretches. The Obsidian Tubes, the
- * refuge, take {@code tubes} (0: none).
+ * {@code high} at {@code fade} blocks above it, brightest near the lava as the lava's own glow would be; a spot with no
+ * floor under it within reach is {@code wall} darker beside a wall and {@code vault} darker under a vault, so the halls
+ * read lit from the lava and the floor up (0.5.1, Taran: "brightly lit", but not flat); and a slow noise moves it up to
+ * {@code patch} either way so the light comes in warmer and duller stretches. The Obsidian Tubes, the refuge, take
+ * {@code tubes} (0: none).
  * <p>
  * In the flood band (the {@code Terrain.surge} blocks over the lava table) every glow is {@link #BAND_LEVEL}: the
  * rising sea takes it with the air and marks it, and the drain puts {@link #bandGlow()} back where it was
@@ -42,7 +43,8 @@ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfigur
  * every other feature (top_layer_modification, after open_way), on its own chunk's columns and again on the neighbours
  * decorated before it, whose tries must see the columns this chunk built into them. The other features of the layer ask
  * {@link GlowBlock#open} where they look for open space across a border, so a neighbour's glow never stops them. The
- * second pass only adds glow, so next to lava a later neighbour laid the glow can still differ by generation order.
+ * second pass lights new spots and raises a glow over the band that the new rock brightens, never lowers one, so the
+ * glow is the one it would be had every neighbour's columns stood first, except next to lava a later neighbour laid.
  */
 public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
     public HallGlowFeature(Codec<Config> codec) { super(codec); }
@@ -53,7 +55,11 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
     /** The glow the drain puts back in the flood band. */
     public static BlockState bandGlow() { return ERBlocks.GLOW.get().defaultBlockState().setValue(GlowBlock.LEVEL, BAND_LEVEL); }
 
-    public record Config(int spacing, int reach, int low, int high, int fade, int patch, int tubes) implements FeatureConfiguration {
+    /**
+     * {@code wall} and {@code vault} (0.5.1): how many levels a spot whose nearest rock is a wall, or only a vault over
+     * it, is under a spot over a floor at the same height (HallGlow.side), so the halls are lit from the floor up.
+     */
+    public record Config(int spacing, int reach, int low, int high, int fade, int patch, int wall, int vault, int tubes) implements FeatureConfiguration {
         public static final Codec<Config> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.intRange(2, 8).fieldOf("spacing").forGetter(Config::spacing),
                 Codec.intRange(1, 8).fieldOf("reach").forGetter(Config::reach),
@@ -61,6 +67,8 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
                 Codec.intRange(1, 15).fieldOf("high").forGetter(Config::high),
                 Codec.intRange(1, 384).fieldOf("fade").forGetter(Config::fade),
                 Codec.intRange(0, 6).optionalFieldOf("patch", 0).forGetter(Config::patch),
+                Codec.intRange(0, 6).optionalFieldOf("wall", 0).forGetter(Config::wall),
+                Codec.intRange(0, 6).optionalFieldOf("vault", 0).forGetter(Config::vault),
                 Codec.intRange(0, 15).optionalFieldOf("tubes", 0).forGetter(Config::tubes)
         ).apply(i, Config::new));
     }
@@ -78,12 +86,14 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
         boolean any = lightChunk(level, t, ctx.config(), cp.x, cp.z);
         // Neighbours are decorated in no fixed order, and a feature writes up to a chunk over its border (a column
         // cluster reaches 9 blocks). A neighbour decorated before this chunk ran its pass before this chunk's columns
-        // stood in it, so its tries go again now and see them: a try already holding its glow is not air, added rock
-        // only makes a spot nearer rock, and columns overwrite a glow in their way (GlowBlock.open), so columns built
-        // into a neighbour later are lit as if they had stood first. The second pass only adds, though: where this
-        // chunk's lava pool or fall put lava between a neighbour's glow and its only rock, the glow placed first stays,
-        // while the other order leaves that spot dark, so beside such lava (which lights the spot anyway) the glow still
-        // follows the order by a light or two. A neighbour not yet decorated is still at CARVERS.
+        // stood in it, so its tries go again now and see them: a try still air is lit if the new rock is in its reach,
+        // and a try already holding its glow over the flood band is weighed again and raised when the new rock gives it
+        // a brighter side (a floor or a wall where it had only a vault), never lowered (HallGlow.tryLevel). Added rock
+        // only brightens a spot and columns overwrite a glow in their way (GlowBlock.open), so every spot ends at the
+        // most of its passes: the level it has when the columns stood first. One case still follows the order: where
+        // this chunk's lava pool or fall put lava between a neighbour's glow and its only rock, the glow placed first
+        // stays, while the other order leaves that spot dark (the lava lights it anyway). A neighbour not yet decorated
+        // is still at CARVERS.
         for (int dx = -1; dx <= 1; dx++)
             for (int dz = -1; dz <= 1; dz++)
                 if ((dx != 0 || dz != 0) && level.getChunk(cp.x + dx, cp.z + dz).getStatus().isOrAfter(ChunkStatus.FEATURES))
@@ -111,23 +121,12 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
                     int y = cy * n + (int) Long.remainderUnsigned(h >>> 16, n);
                     int z = cz * n + (int) Long.remainderUnsigned(h >>> 32, n);
                     if (x < minX || x > maxX || z < minZ || z > maxZ || y < table || y > y1) continue;
-                    if (!level.getBlockState(pos.set(x, y, z)).isAir()) continue;
-                    if (!nearRock(level, pos, probe, c.reach(), glow)) continue;
-                    DeepBiome b = t.biomeAt(x, y, z);
-                    // The refuge's biome reaches 4 blocks round a tube (6 round a hub) through the rock, for its
-                    // obsidian lining, so hall air at a tube's mouth is in it too: that air takes the hall's light.
-                    // Hall air is air over 1 block out of the tube's shell (the carved wall lies up to a block off it)
-                    // or inside a hall's floor-to-ceiling span (a tube's round end runs 3 blocks into the hall).
-                    if (b == DeepBiome.OBSIDIAN_TUBES) {
-                        double[] span;
-                        if (t.tubeShellDepth(x, y, z) > 1 || (span = t.hallSpanAt(x, z)) != null && y >= span[0] && y <= span[1])
-                            b = DeepBiome.BASALT_GALLERIES;
-                    }
-                    int lv;
-                    if (y < y0) lv = galleries(b) ? BAND_LEVEL : 0;
-                    else if (b == DeepBiome.OBSIDIAN_TUBES) lv = c.tubes();
-                    else if (galleries(b)) lv = HallGlow.levelAt(c, y - y0, noise, x, y, z);
-                    else continue;
+                    BlockState st = level.getBlockState(pos.set(x, y, z));
+                    int held = st.isAir() ? 0 : st.is(glow) ? st.getValue(GlowBlock.LEVEL) : -1;
+                    if (held < 0 || (held > 0 && y < y0)) continue;   // rock, a fluid, or the band's glow
+                    int side = rockSide(level, pos, probe, c.reach(), glow);
+                    if (side < 0) continue;
+                    int lv = HallGlow.tryLevel(held, HallGlow.spotLevel(t, c, y0, side, noise, x, y, z), y, y0);
                     if (lv <= 0) continue;
                     level.setBlock(pos, glow.defaultBlockState().setValue(GlowBlock.LEVEL, lv), 2);
                     any = true;
@@ -137,23 +136,26 @@ public final class HallGlowFeature extends Feature<HallGlowFeature.Config> {
         return any;
     }
 
-    /** Whether rock lies within {@code reach} of {@code pos} along one of the six axes. */
-    static boolean nearRock(BlockGetter level, BlockPos pos, BlockPos.MutableBlockPos probe, int reach, Block glow) {
-        for (Direction d : Direction.values()) {
-            probe.set(pos);
-            for (int k = 1; k <= reach; k++) {
-                BlockState st = level.getBlockState(probe.move(d));
-                if (st.isAir() || st.is(glow)) continue;
-                if (!st.getFluidState().isEmpty()) break;
-                return true;
-            }
-        }
-        return false;
+    /**
+     * Where rock lies within {@code reach} of {@code pos} along the six axes ({@link HallGlow#side}: under it first, then
+     * beside it, then over it), or -1 for none. A fluid stops the look along its axis.
+     */
+    static int rockSide(BlockGetter level, BlockPos pos, BlockPos.MutableBlockPos probe, int reach, Block glow) {
+        boolean under = rockAlong(level, pos, probe, Direction.DOWN, reach, glow);
+        boolean beside = !under && (rockAlong(level, pos, probe, Direction.NORTH, reach, glow) || rockAlong(level, pos, probe, Direction.SOUTH, reach, glow)
+                || rockAlong(level, pos, probe, Direction.WEST, reach, glow) || rockAlong(level, pos, probe, Direction.EAST, reach, glow));
+        boolean over = !under && !beside && rockAlong(level, pos, probe, Direction.UP, reach, glow);
+        return HallGlow.side(under, beside, over);
     }
 
-    /** The Galleries' biomes that glow with the halls' light (the Obsidian Tubes take their own). */
-    static boolean galleries(DeepBiome b) {
-        return b == DeepBiome.BASALT_GALLERIES || b == DeepBiome.CALDERA || b == DeepBiome.CAUSEWAY || b == DeepBiome.SCORIA_CANYONS;
+    private static boolean rockAlong(BlockGetter level, BlockPos pos, BlockPos.MutableBlockPos probe, Direction d, int reach, Block glow) {
+        probe.set(pos);
+        for (int k = 1; k <= reach; k++) {
+            BlockState st = level.getBlockState(probe.move(d));
+            if (st.isAir() || st.is(glow)) continue;
+            return st.getFluidState().isEmpty();
+        }
+        return false;
     }
 
     private static Perlin patches(long seed) {

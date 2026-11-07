@@ -5,15 +5,14 @@ import java.util.List;
 
 /**
  * One deep layer's cave network inside one cell: chambers (nodes) joined by tunnels and climbs (edges). Built once by
- * {@link NetPlanner}, read-only afterwards, so any number of worldgen threads can read it.
+ * {@link NetPlanner}, read-only afterwards, so any number of worldgen threads can read it. Only the planned layers
+ * (the Blue Reaches and the Deep Gardens, {@link Terrain#planned}) have them.
  */
 public final class Net {
     /**
-     * Chamber kinds, appended over time so the older kinds keep their numbers. JUNCTION (the Wasteland, since 0.5) is
-     * a small fork room where three or more tunnels meet, so a branch point need not be a whole cave. The last four are
-     * the Basalt Galleries' halls (since 0.5): a column hall's ledge round a lava lake, the Caldera's crater, the
-     * Causeway's column field and the Scoria Canyons' rift. Their walking floors are ledges at the dry level, their
-     * bottoms the lava sea.
+     * Chamber kinds, appended over time so the older kinds keep their numbers. Since 0.5.1 the Wasteland and the Basalt
+     * Galleries are noise fields, and the kinds only their plans had (BEDROCK, GALLERY, GREAT, CHIMNEY, TUBEHUB, LAVA,
+     * JUNCTION, HALL, CALDERA, CAUSEWAY, RIFT) are no longer made.
      */
     public enum Kind { ENTRY, EXIT, BEDROCK, PORTAL, GROTTO, LAKE, TERRACE, SPRING, WELL, GALLERY, GREAT, CHIMNEY, TUBEHUB, CAVERN, CITY, POCKET, CANYON, GEODE, LAVA,
         JUNCTION, HALL, CALDERA, CAUSEWAY, RIFT }
@@ -34,47 +33,22 @@ public final class Net {
         public double f0, h, rise, terr, pend;
         double rampX, rampZ, rampDrop;
         public double lakeY = Double.NaN, lakeE;
-        /** Wells and chimneys: the top of the shaft. */
+        /** Wells: the top of the shaft. */
         public double top;
-        /** The spiral ledge walk of a well or chimney. */
+        /** The spiral ledge walk of a well. */
         double helixR, helixA0, helixDir = 1, helixSlope = 0.42, helixTop;
-        public boolean refuge, hunting, required, set, keep = true, low, court;
+        public boolean refuge, hunting, required, set, keep = true, court;
         int deg, parent = -1, strand = -1;
-        /** Pillars as x, z, r triples (tube hubs: x and z relative to the centre). */
-        double[] pillars = new double[0];
         /** Canyon nodes (Blue Reaches): the canyon and the arc length along its walk. */
         int canyon = -1;
         /** Blue Reaches: the deep dark region ({@link NetDark}) this node stands for, or -1. */
         public int dark = -1;
         double canyonS, doorDX, doorDZ;
-        /**
-         * The Basalt Galleries' halls ({@link #hall()}): the bed of the lava under them (NaN for every other chamber),
-         * and the shape numbers of each kind (see {@link Network#floorAt}). {@code f0} is the dry walking level: a
-         * column hall's ledge, the Caldera's outer ring, the Causeway's wall ledge, the rift's upper ledges.
-         */
-        public double base = Double.NaN;
-        /** Column hall: where the lake ends and the ledge begins (in e), and the shelf's thickness at its lip. */
-        double lakeEdge, shelf;
-        /** Caldera: the crest of the crater rim (its height and where it stands, in e). Rift: the low ledges' level. */
-        public double crest;
-        double crestE;
-        /**
-         * Causeway: the side of its wall ledge (+1 or -1 across), the ledge's width, the end ramps' depth, the column
-         * path's line across and its heights (middle and ends), the column lattice's spacing. Rift: the river's half
-         * width, the low ledges' width, and per side the ramp's top (along), its direction and the low ledge's length.
-         */
-        double side = 1, ledgeW, endW, pathV, pathMid, pathEnd, hexS;
-        double riverW, lowW;
-        double[] rampU = new double[2], rampDir = new double[2], lowLen = new double[2];
-        /** A flight court (Basalt Galleries): a long stair from the bedrock landing up to the dry level. */
-        boolean flight;
 
         public double R() { return Math.max(rx, rz) * (1 + warp) + 2; }
-        public boolean helix() { return kind == Kind.WELL || kind == Kind.CHIMNEY; }
-        public boolean landing() { return kind == Kind.ENTRY || kind == Kind.EXIT || kind == Kind.BEDROCK; }
-        /** One of the Basalt Galleries' halls: a column hall, the Caldera, the Causeway or a rift. */
-        public boolean hall() { return kind == Kind.HALL || kind == Kind.CALDERA || kind == Kind.CAUSEWAY || kind == Kind.RIFT; }
-        double yLo() { return Double.isNaN(base) ? f0 - 3 : base; }
+        public boolean helix() { return kind == Kind.WELL; }
+        public boolean landing() { return kind == Kind.ENTRY || kind == Kind.EXIT; }
+        double yLo() { return f0 - 3; }
         double yHi() { return helix() ? top : f0 + h + rise + rampDrop + 2; }
 
         void setRot(double r) { rot = r; cos = Math.cos(r); sin = Math.sin(r); }
@@ -85,7 +59,7 @@ public final class Net {
         public int id;
         public EK kind;
         public DeepBiome biome;
-        public boolean trunk, round, inner, keyhole;
+        public boolean trunk, inner;
         /** Chambers at the ends (-1 for none). */
         public int a = -1, b = -1;
         public int n;
@@ -95,11 +69,6 @@ public final class Net {
         public boolean taper;
         /** A ledge passage between two stages of a climb (it joins no room). */
         public boolean ledge;
-        /**
-         * Where the walking line ends, as arc length from the way's first point: a blind tube ending in a lava pool
-         * stops 3 blocks short of it ({@link Pool}). The way is carved to its end all the same.
-         */
-        public double walkTo = Double.POSITIVE_INFINITY;
 
         void bounds() {
             minX = minZ = minY = 1e18;
@@ -157,26 +126,8 @@ public final class Net {
     static final Way[] NO_WAYS = new Way[0];
 
     /**
-     * A Basalt arch (section 5): a rock span across a hall's short axis, its feet sunk in the walls. {@code ux, uz} is
-     * the hall's long axis (the arch's thickness runs along it), {@code vx, vz} the span's direction.
-     */
-    public static final class Arch {
-        public double x, z, ux, uz, vx, vz;
-        /** Half the span (to the feet, in the walls), half the crown's thickness along the hall, the crown's top. */
-        public double span, halfAlong, deck;
-        public int chamber;
-        /**
-         * How far the top falls from the crown to the feet ({@code deck - drop q^2}). A walkable arch (the Basalt
-         * Galleries' crossings and the Scoria Canyons' bridges) falls 2, so its top meets the ledges at both ends and a
-         * walk runs over it; the Wasteland's arches fall 4.
-         */
-        public double drop = 4;
-        public boolean walk;
-    }
-
-    /**
-     * A vent of the Caldera (Basalt Galleries): where eruptions will break out, on the crater's lava lake and on its
-     * crest. The runtime asks for them with {@link Network#ventsNear}.
+     * A vent of the Caldera (Basalt Galleries): where eruptions break out, the crater of one of its cones. The Galleries'
+     * field finds them ({@link GalleriesField#ventsNear}); the runtime asks for them with {@link Terrain#ventsNear}.
      */
     public static final class Vent {
         /** Centre, radius, and the top of the rock (or the lava's surface) there. */
@@ -186,68 +137,19 @@ public final class Net {
         public boolean crest;
     }
 
-    /**
-     * A lava pool cut 1 deep into a floor (the lead's list of 2026-10-29): the blocks whose centres lie within
-     * {@code half} of the segment a..b (square ends), at level {@code y}, the floor's top block there; rock under them
-     * and round them at that level ({@link #bank} wide), open over them. A Basalt great hall's perched channel along
-     * its lowest terrace ({@code channel}: its banks are kept level with the lava, open over them), and the end of a
-     * blind tube of an Obsidian Tubes hub (lava only under the tube's open space at the feet: the corners of its
-     * pinched end stay rock).
-     */
-    public static final class Pool {
-        public double ax, az, bx, bz, half;
-        public int y;
-        public boolean channel;
-        /** The chamber (a great hall, or a tube's hub) and the way (a blind tube; -1 for a channel). */
-        public int chamber = -1, way = -1;
-        double ux, uz, len;
-
-        Pool(double ax, double az, double bx, double bz, double half, int y) {
-            this.ax = ax; this.az = az; this.bx = bx; this.bz = bz; this.half = half; this.y = y;
-            len = Math.hypot(bx - ax, bz - az);
-            ux = len < 1e-9 ? 1 : (bx - ax) / len;
-            uz = len < 1e-9 ? 0 : (bz - az) / len;
-        }
-
-        /** The width of rock kept round the lava at its level and under it (blocks past its edge). */
-        public double bank() { return channel ? 1.0 : 1.5; }
-
-        /** Distance from (x, z) to the pool's footprint: negative or 0 inside. */
-        public double dist(double x, double z) {
-            double dx = x - ax, dz = z - az;
-            double along = dx * ux + dz * uz, across = Math.abs(-dx * uz + dz * ux);
-            double da = Math.max(-along, along - len), dc = across - half;
-            if (da <= 0 && dc <= 0) return Math.max(da, dc);
-            return Math.hypot(Math.max(0, da), Math.max(0, dc));
-        }
-    }
-
     public final int li, cx, cz;
     public final List<Chamber> ch = new ArrayList<>();
     public final List<Edge> edges = new ArrayList<>();
     public final List<Way> ways = new ArrayList<>();
     public final List<Shaft> shafts = new ArrayList<>();
-    public final List<Arch> arches = new ArrayList<>();
-    /** The Basalt Galleries' lava pools: the great halls' channels and the blind tubes' ends. */
-    public final List<Pool> pools = new ArrayList<>();
-    /** Blind tube ends whose pool could not be held by rock: {x, floor block y, z}; their floor is magma instead. */
-    public final List<double[]> magmaEnds = new ArrayList<>();
-    /** The Basalt Galleries' Caldera vents (3 to 6 per caldera). */
-    public final List<Vent> vents = new ArrayList<>();
     final List<Route> canyons = new ArrayList<>();
     public int entry = -1, exit = -1;
-    int surgeNiches;
     /** The portal vestibules planned for this cell (dropped ones included; see {@link #droppedPortals}). */
     public final List<Integer> portals = new ArrayList<>();
     /** Portal vestibules no tunnel could reach: removed with their stub, a blind end carved in its place. */
     public final List<Integer> droppedPortals = new ArrayList<>();
     /** Plan statistics. */
-    int attached, tries, embedFail, forced, droppedChambers, loopsAdded, stubsAdded, gateAug, cutRepairs, strandBreaks, walkRepairs, tubeStubs, chokeRepairs;
-    /**
-     * The Wasteland's: tunnels added to close dead ends and bridges, chambers dropped as dead ends, tunnels added to
-     * branch, junction rooms cut into tunnels.
-     */
-    int deadEndWays, deadEndDrops, branchWays, junctionsCut;
+    int attached, tries, embedFail, forced, droppedChambers, loopsAdded, stubsAdded, gateAug, cutRepairs, strandBreaks, walkRepairs, chokeRepairs;
     /** The Blue Reaches: den landings joined after connectRequired, and tunnels added so one walks to the exit. */
     int denJoins, denWalks;
     /** Blue Reaches: 1 when the rift was left out because every try cut through a den gate's landing. */
@@ -265,8 +167,6 @@ public final class Net {
     final List<List<Integer>> strands = new ArrayList<>();
     final List<List<double[]>> strandLines = new ArrayList<>();
     double planMs;
-    /** Of which the deep dark's view breaker (Blue Reaches). */
-    double sightMs;
     /**
      * The planner's attempts that threw before this plan was made ({@link NetPlanner#plan}): 0 for a plan made at the
      * first, 1 or 2 for one made again with its layout salted, all of them ({@link NetPlanner#ATTEMPTS}) when

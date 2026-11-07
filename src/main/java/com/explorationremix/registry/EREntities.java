@@ -5,6 +5,7 @@ import com.explorationremix.creature.FireflySwarm;
 import com.explorationremix.creature.MossbackDen;
 import com.explorationremix.creature.MossbackEntity;
 import com.explorationremix.creature.SkeinEntity;
+import com.explorationremix.entity.LavaBomb;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -16,7 +17,11 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
-/** The mod's creatures, their spawn eggs and drops, and the dens that keep them. */
+/**
+ * The mod's entities: the creatures, their spawn eggs and drops, and the dens that keep the Mossbacks; and the
+ * Caldera's lava bombs (0.5.1). The Mossbacks live in the Upper Caves' dens only, the Skein and the blue fireflies in the
+ * Blue Reaches only (creature.BlueReachesSpawner): nothing lives in the Basalt Galleries.
+ */
 public final class EREntities {
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, ExplorationRemix.MOD_ID);
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, ExplorationRemix.MOD_ID);
@@ -54,6 +59,11 @@ public final class EREntities {
     // a swing can hit (it blocks nothing); clients track it from eight chunks off, as its lights show far.
     public static final RegistryObject<EntityType<FireflySwarm>> FIREFLY_SWARM = ENTITIES.register("firefly_swarm",
             () -> EntityType.Builder.<FireflySwarm>of(FireflySwarm::new, MobCategory.MISC).sized(0.6F, 0.6F).clientTrackingRange(8).build("firefly_swarm"));
+
+    /** A lava bomb thrown by an eruption (world.eruption.Eruptions): bursts where it lands. Seen from 10 chunks away. */
+    public static final RegistryObject<EntityType<LavaBomb>> LAVA_BOMB = ENTITIES.register("lava_bomb", () ->
+            EntityType.Builder.<LavaBomb>of(LavaBomb::new, MobCategory.MISC).sized(0.6F, 0.6F).clientTrackingRange(10).updateInterval(2)
+                    .fireImmune().build(ExplorationRemix.MOD_ID + ":lava_bomb"));
 
     public static void onAttributes(EntityAttributeCreationEvent e) {
         e.put(MOSSBACK.get(), MossbackEntity.attributes().build());

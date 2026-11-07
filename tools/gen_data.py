@@ -567,6 +567,10 @@ def creature_data():
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/skein_plate"}})
 
 
+# Entities that are not creatures (creatures.py names those): 0.5.1's lava bomb, thrown by the Caldera's eruptions.
+ENTITY_NAMES = {"lava_bomb": "Lava Bomb"}
+
+
 def lang(extra):
     out = dict(extra)
     # the blue fireflies (creature.FireflySwarm; tools/fireflies.py paints their glow): one entity is a whole swarm
@@ -574,11 +578,14 @@ def lang(extra):
     write(os.path.join(ASSETS, "lang", "en_us.json"), dict(sorted(out.items())))
 
 
-# The mod's particle types (ERParticles) reuse vanilla sprites; CaveParticles tints and animates them.
+# The mod's particle types (ERParticles): the first three reuse vanilla sprites, the volcanic smoke has its own
+# (textures/particle); CaveParticles tints and animates them.
 PARTICLES = {
     "steam": [f"minecraft:big_smoke_{i}" for i in range(12)],
     "ember": ["minecraft:generic_0", "minecraft:generic_1"],
     "pollen": ["minecraft:generic_0"],
+    # 0.8.0: painted by tools/particles.py
+    "volcanic_smoke": [f"{MOD}:volcanic_smoke_{i}" for i in range(4)],
 }
 
 
@@ -598,6 +605,7 @@ def main():
     biome_modifiers()
     names.update(sounds.write_all(ASSETS, write))
     names.update(creatures.write_all(ASSETS, write))
+    names.update({f"entity.{MOD}.{e}": n for e, n in ENTITY_NAMES.items()})
     creature_data()
     particles()
     lang(names)

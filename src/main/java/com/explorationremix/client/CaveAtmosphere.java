@@ -4,6 +4,7 @@ import com.explorationremix.ExplorationRemix;
 import com.explorationremix.block.GlowBlock;
 import com.explorationremix.config.ERClientConfig;
 import com.explorationremix.registry.ERParticles;
+import com.explorationremix.world.lava.LavaNet;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -29,14 +30,21 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Each cave biome's air, on the client: fog that tints the distance in the biome's colour without hiding it, light
  * from glowing blocks tinted with the biome's colour (vanilla's is always warm), steam rising off hot pools, embers
- * and smoke off lava, pollen in daylight shafts, and drips falling from ceilings. All of it is worked out from the
- * biome and blocks around the camera, so every player on a server sees the same.
+ * off lava, the volcanic smoke of the Galleries and the Wasteland, pollen in daylight shafts, and drips falling from
+ * ceilings. All of it is worked out from the biome and blocks around the camera, so every player on a server sees the
+ * same.
+ *
+ * <p>Under a shader pack the fog and the light tint do not show: Complementary Reimagined (r5.9.3, Taran's) draws its own
+ * grey cave fog, 0.9(1 - e^(-0.015 d)), and a border fog in the sky's colour, and reads vanilla's fog colour only with
+ * the eye in lava or powder snow; its block light is always warm. So FOG_REACH and the biomes' fog colours are the look
+ * without shaders, and a warm haze must come from particles and blocks: the Galleries' haze is their smoke.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, value = Dist.CLIENT)
 public final class CaveAtmosphere {
@@ -63,15 +71,16 @@ public final class CaveAtmosphere {
         FOG_REACH.put(RUST_SPRINGS, 1.0F);    // steam
         FOG_REACH.put(DEEP_BLUE_RIFT, 1.2F);
         FOG_REACH.put(ASURINE_GEODES, 1.2F);
-        // The Galleries' halls are 60 to 110 across: their haze is the smoke rising off the lava, and the fog keeps the
-        // far wall in sight (the Caldera smokiest, the Causeway's open lava the clearest).
-        FOG_REACH.put(BASALT_GALLERIES, 1.35F);
-        FOG_REACH.put(OBSIDIAN_TUBES, 1.2F);
+        // Without shaders, the Galleries' haze (0.5.1: "Volcanic Smoke"): the fog ends about 175 blocks out and thickens
+        // from about 50, so the far side of the cavern (80 to 160 blocks) reads hazy but in sight. The Caldera is the
+        // smokiest, the Causeway's open lava the clearest. Under the shader the smoke itself is the haze (class javadoc).
+        FOG_REACH.put(BASALT_GALLERIES, 1.1F);
+        FOG_REACH.put(OBSIDIAN_TUBES, 1.0F);
         FOG_REACH.put(WASTELAND, 0.9F);        // smoke, as the old Basalt Galleries
         FOG_REACH.put(ASH_HOLLOWS, 1.1F);      // the refuge's still air, clearer than the tunnels' smoke
-        FOG_REACH.put(CALDERA, 1.2F);
-        FOG_REACH.put(CAUSEWAY, 1.45F);
-        FOG_REACH.put(SCORIA_CANYONS, 1.3F);
+        FOG_REACH.put(CALDERA, 1.0F);
+        FOG_REACH.put(CAUSEWAY, 1.25F);
+        FOG_REACH.put(SCORIA_CANYONS, 1.15F);
         FOG_REACH.put(FROZEN_ROOTVAULTS, 1.3F);
         FOG_REACH.put(SINKHOLE, 1.4F);
         FOG_REACH.put(OASIS_HOLLOW, 1.3F);
@@ -237,7 +246,26 @@ public final class CaveAtmosphere {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos above = new BlockPos.MutableBlockPos();
         int px = player.getBlockX(), py = player.getBlockY(), pz = player.getBlockZ();
-        if (galleries(level.getBiome(player.blockPosition()))) smokeColumns(level, random, px, py, pz, p);
+        Holder<Biome> here = level.getBiome(player.blockPosition());
+        long time = level.getGameTime();
+        if (smokeLevel.get() != level) {
+            SmokeBudget.clear();
+            smokeLevel = new WeakReference<>(level);
+        }
+        int budget = smokeBudget(mc);
+        // The volcanic smoke's plumes: over the Galleries' lava, and from either layer up through the openings between
+        // them (SmokeColumns).
+        boolean inGalleries = galleries(here);
+        if (inGalleries || here.is(WASTELAND) || here.is(ASH_HOLLOWS)) {
+            LavaNet.Sync s = LavaWarnings.lastSync();
+            BLOCKS.level = level;
+            SmokeColumns.puff(BLOCKS, time, px, py, pz, inGalleries, s != null ? s.top() : SmokeColumns.UNKNOWN, s != null ? s.tableY() : 0,
+                    (x, y, z, reach, over, plume, far) -> {
+                        if (SmokeBudget.admit(plume, far, time, budget))
+                            level.addAlwaysVisibleParticle(ERParticles.VOLCANIC_SMOKE.get(), true, x, y, z, reach, over, 0);
+                    });
+            BLOCKS.level = null;
+        }
         for (int i = 0; i < 400; i++) {
             p.set(px + random.nextInt(49) - 24, py + random.nextInt(25) - 12, pz + random.nextInt(49) - 24);
             BlockState s = level.getBlockState(p);
@@ -252,12 +280,14 @@ public final class CaveAtmosphere {
                         level.addParticle(ERParticles.STEAM.get(), p.getX() + random.nextDouble(), p.getY() + 0.9, p.getZ() + random.nextDouble(), 0, 0, 0);
                 } else if (f.is(FluidTags.LAVA) && (h.is(BASALT_GALLERIES) || h.is(OBSIDIAN_TUBES) || h.is(WASTELAND)
                         || h.is(ASH_HOLLOWS) || h.is(CALDERA) || h.is(CAUSEWAY) || h.is(SCORIA_CANYONS))) {
-                    // Embers, and now and then a column of smoke, off the lava (more smoke in the Galleries).
+                    // Embers, and now and then a puff of smoke, off the lava near the player (more smoke in the Galleries;
+                    // the plumes stand further out). In the Wasteland's low tunnels a puff soon meets the roof and
+                    // spreads along it.
                     if (random.nextFloat() < 0.3F)
                         level.addParticle(ERParticles.EMBER.get(), p.getX() + random.nextDouble(), p.getY() + 1.0, p.getZ() + random.nextDouble(), 0, 0, 0);
-                    if (random.nextFloat() < (galleries(h) ? 0.03F : 0.012F))
-                        level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, true, p.getX() + random.nextDouble(), p.getY() + 1.2,
-                                p.getZ() + random.nextDouble(), 0, 0.03, 0);
+                    if (random.nextFloat() < (galleries(h) ? 0.02F : 0.01F) && SmokeBudget.alive(time) < budget)
+                        level.addAlwaysVisibleParticle(ERParticles.VOLCANIC_SMOKE.get(), true, p.getX() + random.nextDouble(), p.getY() + 1.1,
+                                p.getZ() + random.nextDouble(), 0, 0.1, 0);
                 }
                 continue;
             }
@@ -295,39 +325,29 @@ public final class CaveAtmosphere {
         return h.is(BASALT_GALLERIES) || h.is(OBSIDIAN_TUBES) || h.is(CALDERA) || h.is(CAUSEWAY) || h.is(SCORIA_CANYONS);
     }
 
-    /** How far apart the Galleries' smoke columns may stand, and how far out from the player they rise. */
-    private static final int SMOKE_CELL = 6, SMOKE_CELLS = 11;
+    /** The level the smoke's count belongs to (a new one has none of the old one's puffs, and another clock). */
+    private static WeakReference<ClientLevel> smokeLevel = new WeakReference<>(null);
 
-    /**
-     * Columns of smoke rising off the Galleries' lava, seen across their wide halls: the sampler above only reaches 24
-     * blocks, and the lava often lies 50 or more under a player on a ledge. The ground round the player is cut into cells
-     * {@link #SMOKE_CELL} blocks across, out to about 66 blocks; each tick a few cells are scanned down from over the
-     * player's head for the first lava under open air, and that lava sends up a puff. A cell always puffs from the same
-     * spot of it, so its puffs stack into a column, now and then a tall one; the smoke takes the lava's light as it rises,
-     * the orange haze of the halls.
-     */
-    private static void smokeColumns(ClientLevel level, RandomSource random, int px, int py, int pz, BlockPos.MutableBlockPos p) {
-        int cx = Math.floorDiv(px, SMOKE_CELL), cz = Math.floorDiv(pz, SMOKE_CELL);
-        for (int i = 0; i < 24; i++) {
-            int gx = cx + random.nextInt(2 * SMOKE_CELLS + 1) - SMOKE_CELLS, gz = cz + random.nextInt(2 * SMOKE_CELLS + 1) - SMOKE_CELLS;
-            long h = (gx * 0x9E3779B97F4A7C15L) ^ (gz * 0xC2B2AE3D27D4EB4FL);
-            h ^= h >>> 29;
-            int x = gx * SMOKE_CELL + (int) Long.remainderUnsigned(h, SMOKE_CELL);
-            int z = gz * SMOKE_CELL + (int) Long.remainderUnsigned(h >>> 17, SMOKE_CELL);
-            boolean open = false;
-            for (int y = py + 16; y >= py - 96; y--) {
-                BlockState s = level.getBlockState(p.set(x, y, z));
-                if (GlowBlock.open(s)) { open = true; continue; }
-                if (open && s.getFluidState().is(FluidTags.LAVA)) {
-                    if (random.nextFloat() < 0.75F)
-                        level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE, true, x + 0.3 + random.nextDouble() * 0.4, y + 1.1,
-                                z + 0.3 + random.nextDouble() * 0.4, 0, 0.06, 0);
-                    if (random.nextFloat() < 0.06F)
-                        level.addAlwaysVisibleParticle(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, true, x + 0.5, y + 1.1, z + 0.5, 0, 0.07, 0);
-                    break;
-                }
-                open = false;
-            }
-        }
+    /** The blocks round the player, as the plumes read them. Client thread only. */
+    private static final LevelBlocks BLOCKS = new LevelBlocks();
+
+    private static final class LevelBlocks implements SmokeColumns.Blocks {
+        ClientLevel level;
+        private final BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+
+        @Override
+        public boolean open(int x, int y, int z) { return GlowBlock.open(level.getBlockState(p.set(x, y, z))); }
+
+        @Override
+        public boolean lava(int x, int y, int z) { return level.getBlockState(p.set(x, y, z)).getFluidState().is(FluidTags.LAVA); }
+    }
+
+    /** How many puffs of smoke may be alive: SmokeBudget.MAX, a half at "Decreased" particles, a quarter at "Minimal". */
+    private static int smokeBudget(Minecraft mc) {
+        return switch (mc.options.particles().get()) {
+            case ALL -> SmokeBudget.MAX;
+            case DECREASED -> SmokeBudget.MAX / 2;
+            case MINIMAL -> SmokeBudget.MAX / 4;
+        };
     }
 }

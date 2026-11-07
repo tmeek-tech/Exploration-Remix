@@ -100,7 +100,6 @@
     [],
     [
       "explorationremix:wasteland/lava_pools",
-      "explorationremix:wasteland/columns",
       "explorationremix:wasteland/hanging_columns",
       "explorationremix:wasteland/great_hanging_columns"
     ],
@@ -121,7 +120,8 @@
     ],
     [
       "explorationremix:climb_vines",
-      "explorationremix:open_way"
+      "explorationremix:open_way",
+      "explorationremix:lava_pockets"
     ]
   ]
 }
