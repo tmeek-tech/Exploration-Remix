@@ -17,7 +17,9 @@ import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
@@ -59,16 +61,18 @@ import java.util.Optional;
  * whose face or column lies over the edge does not pour. A block set in a neighbour that is not decorated yet would be
  * there before that neighbour's own decorations, and Terrain Slabs' slab pass, which takes any block with a fluid in it
  * for a puddle, makes a sump there into a waterlogged slab with the falling lava over it (0.8.0, 8 of 50 falls).
- * So every lava fall meets its own chunk's slabs, which that pass laid before it (at underground_structures): a top slab
- * under a step of the vault, a bottom slab on a step of the floor. A lava fall takes such a slab, dry, for the open
- * block it was laid in, as the voxels the tests decorate have it (they hold no slabs): room where its face or its column
- * passes (the fall's lava takes its place, the sump going into the floor block under it), and no seal where a source or
- * a sump must be closed in, so a slab neither stops a fall the voxels pour nor seals one they refuse. Without the rule
- * the pack run's region held 27 Galleries falls where the voxels place 40, and a slab stood in the way at 10 of the 14
- * missing; with a slab taken for rock beside a source or a sump as well (lava never runs into one) it held 44 Galleries
- * falls, 14 of them closed in by a slab, one of those pouring within two blocks of a way down's ramp, where the region's
- * voxels hold no lava, and 56 Wasteland falls, 20 closed in by a slab (36 needed none). Water falls (the upper layers')
- * are as they were.
+ * So every lava fall meets its own chunk's slabs, which that pass laid before it (at underground_structures), and it
+ * reads each, dry, as the block the voxels the tests decorate hold there (they hold no slabs). A top slab takes the
+ * place of the vault's lowest block at a step of the vault (that pass lays it in a full block with an open one under
+ * it): the fall takes it for the rock it was laid in, a seal beside a source and a block a source may be set in, never
+ * room. A bottom slab fills the open block at the foot of a step of the floor: the fall takes it for that open block,
+ * room where its column passes (the fall's lava takes its place, the sump going into the floor block under it), never a
+ * seal. So a slab neither stops a fall the voxels pour nor seals one they refuse. Where the region's voxels place 40
+ * Galleries falls, the pack held 27 with no slab read as anything (a slab in the way at 10 of the 14 missing), 44 with
+ * every slab both rock and room (14 closed in by a slab: 7 by a top slab at a source, 9 by a bottom slab at a sump, one
+ * of those pouring within two blocks of a way down's ramp, where the voxels hold no lava; and 56 Wasteland falls, about
+ * 20 closed in by a bottom slab), and 31 with every slab read as an open block (a top slab beside a source at 4 of the
+ * 10 missing). Water falls (the upper layers') are as they were.
  */
 public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
     public record Config(BlockState fluid, HolderSet<Block> rock, int minDrop, int search, IntProvider width, int minWidth, Mode mode, int tries,
@@ -181,7 +185,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         if (ceiling) {
             // The vault over the origin; dir only lays out a wider fall's row of sources.
             wall = origin.above();
-            if (!level.getBlockState(wall).is(c.rock())) return false;
+            if (!rock(c, level.getBlockState(wall))) return false;
         } else {
             if (c.mode() == Mode.NEAREST_WALL) {
                 // The nearest wall of the four, the first found in turn from dir on a tie.
@@ -228,7 +232,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
     private static BlockPos face(WorldGenLevel level, Config c, BlockPos p, Direction into) {
         for (int k : new int[]{0, 1, -1, 2, -2}) {
             BlockPos q = p.relative(into, k);
-            if (level.getBlockState(q).is(c.rock()) && room(c, level.getBlockState(q.relative(into.getOpposite())))) return q;
+            if (rock(c, level.getBlockState(q)) && room(c, level.getBlockState(q.relative(into.getOpposite())))) return q;
         }
         return null;
     }
@@ -240,7 +244,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
             p.move(dir);
             BlockState s = level.getBlockState(p);
             if (room(c, s)) continue;
-            return s.is(c.rock()) ? k : Integer.MAX_VALUE;
+            return rock(c, s) ? k : Integer.MAX_VALUE;
         }
         return Integer.MAX_VALUE;
     }
@@ -276,7 +280,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         // The open face: in front of the wall, or under the vault.
         BlockPos front = ceiling ? src.below() : src.relative(dir.getOpposite());
         if (own != null && (!inChunk(own, src) || !inChunk(own, front))) return null;
-        if (!level.getBlockState(src).is(c.rock()) || !room(c, level.getBlockState(front))) return null;
+        if (!rock(c, level.getBlockState(src)) || !room(c, level.getBlockState(front))) return null;
         // Its own site's share of the ground, source and column.
         if (share != null && (!share.clear(src) || !share.clear(front))) return null;
         // Sealed on every side but the open face, so the fluid only pours out of the rock.
@@ -290,7 +294,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
             if (!sealed(level, c, src.above()) || !sealed(level, c, src.below()) || !sealed(level, c, src.relative(dir))) return null;
             for (Direction d : new Direction[]{dir.getClockWise(), dir.getCounterClockWise()}) {
                 BlockState s = level.getBlockState(src.relative(d));
-                if (!(s.is(c.rock()) || s.getFluidState().getType().isSame(fluid))) return null;
+                if (!(rock(c, s) || s.getFluidState().getType().isSame(fluid))) return null;
             }
         }
         // The drop below the open face.
@@ -314,7 +318,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         BlockPos sump = null;
         if (!intoPool && fluid.isSame(Fluids.LAVA)) {
             sump = p.immutable();
-            if (!below.is(c.rock()) || !sealed(level, c, sump.below())) return null;
+            if (!rock(c, below) || !sealed(level, c, sump.below())) return null;
             for (Direction d : Direction.Plane.HORIZONTAL) {
                 BlockPos n = sump.relative(d);
                 FluidState fs = level.getFluidState(n);
@@ -338,27 +342,45 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         return new Pour(src, front, drop, sump, ceiling, kept);
     }
 
-    /** Rock, or a full block with no fluid in it (a laid slab is not: see the class comment). */
+    /** Rock ({@link #rock}), or a full block with no fluid in it (a laid bottom slab is neither: see the class comment). */
     private static boolean sealed(WorldGenLevel level, Config c, BlockPos pos) {
         BlockState s = level.getBlockState(pos);
-        return s.is(c.rock()) || (s.isSolidRender(level, pos) && s.getFluidState().isEmpty());
+        return rock(c, s) || (s.isSolidRender(level, pos) && s.getFluidState().isEmpty());
     }
 
     /**
-     * Room for a fall's face and column: an open block (air or a glow), or for a lava fall a laid slab as well
-     * ({@link #laidSlab}), which the fall's lava takes the place of (see the class comment).
+     * The fall's rock, or for a lava fall a laid top slab as well ({@link #laidTop}), which stands where the vault's
+     * rock was (see the class comment).
+     */
+    private static boolean rock(Config c, BlockState s) {
+        return s.is(c.rock()) || (lava(c) && laidTop(s));
+    }
+
+    /**
+     * Room for a fall's face and column: an open block (air or a glow), or for a lava fall a laid bottom slab as well
+     * ({@link #laidBottom}), which the fall's lava takes the place of (see the class comment).
      */
     private static boolean room(Config c, BlockState s) {
-        return GlowBlock.open(s) || (lava(c) && laidSlab(s));
+        return GlowBlock.open(s) || (lava(c) && laidBottom(s));
     }
 
     private static boolean lava(Config c) { return c.fluid().getFluidState().getType().isSame(Fluids.LAVA); }
 
-    /**
-     * A dry slab another mod's slab pass laid in the terrain ({@link LavaPocketsFeature#generated}: Terrain Slabs' top
-     * slabs under the vaults' steps and bottom slabs on the floors'), in a block that was open before it.
-     */
+    /** A dry slab another mod's slab pass laid in the terrain ({@link LavaPocketsFeature#generated}). */
     static boolean laidSlab(BlockState s) {
         return LavaPocketsFeature.generated(s) && !LavaPocketsFeature.wet(s);
+    }
+
+    /**
+     * A laid top slab: Terrain Slabs' pass lays one in place of the vault's lowest block at a step of the vault, a full
+     * block with an open one under it, so it stands where there was rock.
+     */
+    static boolean laidTop(BlockState s) {
+        return laidSlab(s) && s.getValue(SlabBlock.TYPE) == SlabType.TOP;
+    }
+
+    /** A laid bottom slab: that pass lays one in the open block at the foot of a step of the floor. */
+    static boolean laidBottom(BlockState s) {
+        return laidSlab(s) && s.getValue(SlabBlock.TYPE) == SlabType.BOTTOM;
     }
 }
