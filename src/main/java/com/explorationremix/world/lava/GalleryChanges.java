@@ -219,7 +219,14 @@ public final class GalleryChanges {
      * when the flood has not brought the chunk's lava to its height yet (a later look tries again). {@code chunk} must be
      * the chunk holding {@code pos}.
      */
-    public static boolean giveBack(ServerLevel level, LevelChunk chunk, BlockPos pos) {
+    public static boolean giveBack(ServerLevel level, LevelChunk chunk, BlockPos pos) { return giveBack(level, chunk, pos, true); }
+
+    /**
+     * {@link #giveBack(ServerLevel, LevelChunk, BlockPos)}, with the hiss only when {@code sound} is true: a quake giving
+     * back a tower under the lava plays it once for the column rather than once a block (the reset plays it once a chunk
+     * a look); the smoke shows over every block either way.
+     */
+    public static boolean giveBack(ServerLevel level, LevelChunk chunk, BlockPos pos, boolean sound) {
         LavaFlood.Band band = LavaFlood.band();
         int b = bottom(), y = pos.getY();
         if (band == null || b == Integer.MIN_VALUE || !inLayer(y) || !ChangeLog.holds(y - b)) return false;
@@ -237,7 +244,7 @@ public final class GalleryChanges {
         BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
         TerrainReset.putBack(level, chunk, d, band, b, key, at);
         chunk.setUnsaved(true);
-        TerrainReset.showPutBack(level, NearChunks.players(level, band), at.getX(), at.getY(), at.getZ(), true);
+        TerrainReset.showPutBack(level, NearChunks.players(level, band), at.getX(), at.getY(), at.getZ(), sound);
         return true;
     }
 }

@@ -2,6 +2,8 @@ package com.explorationremix.world.quake;
 
 import com.explorationremix.config.ERConfig;
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.lava.ChangeLog;
+import com.explorationremix.world.lava.GalleryChanges;
 import com.explorationremix.world.lava.LavaCycle;
 import com.explorationremix.world.lava.LavaFlood;
 import com.explorationremix.world.lava.LavaNet;
@@ -11,19 +13,32 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.common.util.BlockSnapshot;
+import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -54,6 +69,13 @@ import java.util.UUID;
  * near something that topples); a climb answer only to watchers within {@link #CLIMB_RANGE} blocks of the block placed.
  * Players who come near while a quake runs are told it then, so their clients play the rest of it; a hold and a release
  * are told again to everyone told before; a quake that is stopped early sends its end to everyone in the overworld.
+ *
+ * <p><b>Toppling</b> ({@link Topple}, with {@code quakes.topple}): every quake runs a topple pass. A big quake's find
+ * starts at once and its blocks fall from 20 ticks in until it ends (what is left falls at the next); a tremor's and a
+ * climb answer's message waits for the find, and its blocks fall 10 ticks after it. Every column found under a player
+ * creaks when the find is done and is lowered under them 20 ticks later ({@link Lowering}). The one placement listener
+ * ({@link #placed}) schedules the climb answers ({@link ClimbAnswers}, {@code quakes.climbTremors}) and feeds
+ * {@code quakes.toppleAtOnce}'s check, with the break listener ({@link #broken}).
  */
 public final class Quakes {
     private Quakes() {}
@@ -75,6 +97,10 @@ public final class Quakes {
     private static boolean lastCycleOn;
     @Nullable private static LavaCycle.Phase lastPhase;
     private static int climbsThisCycle;
+    /** The climb answers waiting to come ({@code quakes.climbTremors}). */
+    @Nullable private static ClimbAnswers climbs;
+    /** Positions placed since the last tick, with who placed them, as the placement listener saw them (each once). */
+    private static final Map<Long, UUID> PLACED = new LinkedHashMap<>();
 
     /** One quake under way. */
     static final class Event {
@@ -83,6 +109,12 @@ public final class Quakes {
         final boolean silent;
         /** For a climb answer, the block placed (the find and the message are round it). */
         @Nullable final BlockPos origin;
+        /** For a climb answer, who placed the block (its cooldown runs from the find), or null. */
+        @Nullable final UUID placer;
+        /** Its topple pass, or null with toppling off. */
+        @Nullable Topple.Pass pass;
+        /** The tick its found blocks start to fall from (MAX_VALUE until its find is done). */
+        long fallsAt = Long.MAX_VALUE;
         /** The game time it started at; a release moves it on by the time it was held. */
         long start;
         /** Ticks into it while held by command, or -1. */
@@ -94,7 +126,8 @@ public final class Quakes {
         /** What it did, for the status. */
         int toppled, fell, givenBack, takenOut, lowered, debris, shattered;
 
-        Event(int kind, int id, long start, int duration, float strength, int seed, boolean silent, @Nullable BlockPos origin) {
+        Event(int kind, int id, long start, int duration, float strength, int seed, boolean silent, @Nullable BlockPos origin,
+              @Nullable UUID placer) {
             this.kind = kind;
             this.id = id;
             this.start = start;
@@ -103,6 +136,7 @@ public final class Quakes {
             this.seed = seed;
             this.silent = silent;
             this.origin = origin;
+            this.placer = placer;
         }
 
         /** Ticks into it now. */
@@ -116,6 +150,21 @@ public final class Quakes {
         boolean reaches(ServerPlayer p) {
             return origin == null || p.distanceToSqr(origin.getX() + 0.5, origin.getY() + 0.5, origin.getZ() + 0.5) <= CLIMB_RANGE * CLIMB_RANGE;
         }
+
+        /**
+         * Whether the quake is felt in full by {@code p}: a big quake always; a tremor or a climb answer only within
+         * {@link Topple#FELT_RANGE} blocks of a block its find found (elsewhere the client plays it faintly now and then).
+         */
+        boolean feltBy(ServerPlayer p) {
+            if (kind == QuakeSchedule.BIG) return true;
+            if (pass == null) return false;
+            double r2 = (double) Topple.FELT_RANGE * Topple.FELT_RANGE;
+            for (int i = 0; i < pass.found.size(); i++) {
+                long q = pass.found.getLong(i);
+                if (p.distanceToSqr(BlockPos.getX(q) + 0.5, BlockPos.getY(q) + 0.5, BlockPos.getZ(q) + 0.5) <= r2) return true;
+            }
+            return false;
+        }
     }
 
     // ================================================================================================ the tick
@@ -125,7 +174,7 @@ public final class Quakes {
         ERConfig cfg = ERConfig.INSTANCE;
         // gate 1: turned off, every quake ends and everything is forgotten
         if (!cfg.quakesEnabled.get()) {
-            if (schedule != null || !RUNNING.isEmpty()) stop();
+            if (schedule != null || !RUNNING.isEmpty() || Lowering.running() > 0 || climbs != null) stop();
             return;
         }
         boolean cycleOn = cfg.lavaCycleEnabled.get();
@@ -137,26 +186,154 @@ public final class Quakes {
         }
         List<ServerPlayer> watchers = NearChunks.players(level, band);
         List<ServerPlayer> actors = actors(watchers);
+        int quiet = QuakeSchedule.quietLeft(cycleOn, state.phase() == LavaCycle.Phase.WARNING, state.phase() == LavaCycle.Phase.RISE,
+                state.into(), state.left());
+        Build.tick(level, now);
+        // toppling has its own switch: off, its jobs, queues and answers are forgotten and the quakes only shake
+        Topple.Work w = null;
+        if (cfg.quakeTopple.get()) {
+            w = new Topple.Work(level, now, watchers);
+            placements(w);
+            if (!anyHeld()) {
+                for (ClimbAnswers.Answer a : climbs(level).due(now)) {
+                    // gate 4: with no actor left near, an answer that comes due is dropped
+                    if (actors.isEmpty()) continue;
+                    BlockPos at = BlockPos.of(a.pos());
+                    begin(QuakeSchedule.CLIMB, now, a.duration(), a.strength(), a.seed(), quiet > 0, at, a.placer(), watchers, actors, w);
+                }
+            }
+            // the builds under players first: a player's safety does not wait for the budget
+            Lowering.tick(w);
+        } else {
+            stopToppling();
+        }
         for (Iterator<Event> it = RUNNING.iterator(); it.hasNext(); ) {
             Event e = it.next();
-            if (!e.announced) {
-                // a tremor's or a climb answer's message waits for its find; nothing finds placed blocks to topple yet,
-                // so it goes out on the tick after the start with every felt flag false (the faint one in three)
-                announce(e, watchers, false);
-            } else {
-                tellLate(e, watchers);
-            }
+            if (e.held < 0) work(e, w, watchers, actors);
+            if (e.announced) tellLate(e, watchers);
             if (e.held < 0 && now - e.start >= e.duration) {
                 finish(e);
                 it.remove();
             }
         }
+        if (w != null) Topple.atOnce(w);
         // gate 2: nothing starts on its own while the lava clock or a quake is held; the quiet window of the warning
         QuakeSchedule.Settings s = settings(cfg);
-        int quiet = QuakeSchedule.quietLeft(cycleOn, state.phase() == LavaCycle.Phase.WARNING, state.phase() == LavaCycle.Phase.RISE,
-                state.into(), state.left());
         QuakeSchedule.Start start = schedule(level).tick(now, s, quiet, LavaFlood.held() || anyHeld(), !actors.isEmpty());
-        if (start != null) begin(start.kind(), now, start.duration(), start.strength(), start.seed(), start.silent(), null, watchers);
+        if (start != null) begin(start.kind(), now, start.duration(), start.strength(), start.seed(), start.silent(), null, null, watchers, actors, w);
+    }
+
+    /**
+     * One tick of a running quake that is not held: its find goes on; once the find is done its message goes out (a
+     * tremor's and a climb answer's, with each player's felt flag) with the creaks of the columns under players; then its
+     * blocks fall in turn. With toppling off ({@code w} null) a tremor's message goes out at once, felt by no one in full.
+     */
+    private static void work(Event e, @Nullable Topple.Work w, List<ServerPlayer> watchers, List<ServerPlayer> actors) {
+        if (w == null || e.pass == null) {
+            e.pass = null;
+            if (!e.announced) announce(e, watchers);
+            return;
+        }
+        if (!e.pass.findDone) {
+            e.pass.find(w, actors);
+            if (e.pass.findDone) found(e, w, watchers);
+        }
+        if (e.announced && w.now >= e.fallsAt) e.pass.falls(w, e);
+    }
+
+    /**
+     * A quake's find is done: a tremor's or a climb answer's message goes out now and its blocks fall 10 ticks on (a big
+     * quake was told at its start, and its blocks fall from 20 ticks in); the columns under players creak now and come
+     * down 20 ticks on. A climb answer's placer's cooldown runs from here.
+     */
+    private static void found(Event e, Topple.Work w, List<ServerPlayer> watchers) {
+        if (e.kind == QuakeSchedule.BIG) {
+            e.fallsAt = Math.min(e.fallsAt, e.start + BIG_FALLS);
+        } else {
+            announce(e, watchers);
+            e.fallsAt = w.now + FALLS_AFTER;
+        }
+        e.pass.startJobs(w, e, LOWER_AFTER);
+        if (e.placer != null) climbs(w.level).found(e.placer, w.now);
+    }
+
+    /** A tremor's and a climb answer's blocks fall this many ticks after its message, a big quake's this many into it. */
+    static final int FALLS_AFTER = 10, BIG_FALLS = 20;
+    /** The columns under players come down this many ticks after their creak. */
+    static final int LOWER_AFTER = 20;
+
+    /**
+     * The placements since the last tick (each position once): with {@code quakes.climbTremors} one that falls by the rule
+     * schedules a climb answer for its placer, and with {@code quakes.toppleAtOnce} each is checked soon.
+     */
+    private static void placements(Topple.Work w) {
+        if (PLACED.isEmpty()) return;
+        ERConfig cfg = ERConfig.INSTANCE;
+        boolean answer = cfg.quakeClimbTremors.get();
+        ClimbAnswers c = climbs(w.level);
+        boolean big = bigRunning();
+        for (Map.Entry<Long, UUID> pl : PLACED.entrySet()) {
+            BlockPos pos = BlockPos.of(pl.getKey());
+            if (w.atOnce) Topple.queue(pos);
+            if (answer) c.placed(pl.getValue(), pl.getKey(), w.now, Topple.fallsNow(w.level, pos, w.depth), big, Lowering.runningAt(pos.getX(), pos.getZ()));
+        }
+        PLACED.clear();
+    }
+
+    /** Toppling is off: its jobs, queue, answers and passes are forgotten (the quakes only shake). */
+    private static void stopToppling() {
+        Lowering.clear();
+        Topple.clear();
+        PLACED.clear();
+        if (climbs != null) climbs.clear();
+    }
+
+    private static boolean bigRunning() {
+        for (Event e : RUNNING) if (e.kind == QuakeSchedule.BIG) return true;
+        return false;
+    }
+
+    /** True while {@code e} runs (a lowering job gives its leftovers back to it only then). */
+    static boolean running(Event e) { return RUNNING.contains(e); }
+
+    private static ClimbAnswers climbs(ServerLevel level) {
+        if (climbs == null) climbs = new ClimbAnswers(level.getRandom().nextLong());
+        return climbs;
+    }
+
+    // ================================================================================================ the listeners
+
+    /**
+     * A block was placed by an entity (a player, a deployer's fake player, anything that places items; a bed's or a
+     * door's parts come as one event): noted for the next tick, after which the block is in the change log. Blocks set
+     * by commands, pistons, landings or blasts post nothing; the next quake's pass finds those.
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void placed(BlockEvent.EntityPlaceEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || level.dimension() != Level.OVERWORLD) return;
+        ERConfig cfg = ERConfig.INSTANCE;
+        if (!cfg.quakesEnabled.get() || !cfg.quakeTopple.get() || !cfg.quakeClimbTremors.get() && !cfg.quakeToppleAtOnce.get()) return;
+        Entity by = event.getEntity();
+        if (event instanceof BlockEvent.EntityMultiPlaceEvent multi) {
+            for (BlockSnapshot snap : multi.getReplacedBlockSnapshots()) note(snap.getPos(), by);
+        } else {
+            note(event.getPos(), by);
+        }
+    }
+
+    private static void note(BlockPos pos, @Nullable Entity by) {
+        if (!GalleryChanges.inLayer(pos.getY()) || PLACED.size() >= Topple.QUEUE_MAX) return;
+        PLACED.put(pos.asLong(), by != null ? by.getUUID() : new UUID(0, pos.asLong()));
+    }
+
+    /** With {@code quakes.toppleAtOnce}, a block a player breaks takes the support of the block over it: that is checked next tick. */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void broken(BlockEvent.BreakEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || level.dimension() != Level.OVERWORLD) return;
+        ERConfig cfg = ERConfig.INSTANCE;
+        if (!cfg.quakesEnabled.get() || !cfg.quakeTopple.get() || !cfg.quakeToppleAtOnce.get()) return;
+        BlockPos above = event.getPos().above();
+        if (GalleryChanges.inLayer(above.getY())) Topple.queue(above);
     }
 
     /** The config's numbers for the schedule. */
@@ -192,11 +369,11 @@ public final class Quakes {
 
     /**
      * Starts a quake of {@code kind} at game time {@code now}: a big quake (or a tremor) takes the place of one running,
-     * whose end is sent; a big quake is told to the watchers at once, a tremor and a climb answer on the next tick, once
-     * their find is done. Returns it.
+     * whose end is sent; a big quake is told to the watchers at once, a tremor and a climb answer once their find is
+     * done. With toppling on ({@code w} not null) its pass starts now. Returns it.
      */
     private static Event begin(int kind, long now, int duration, float strength, int seed, boolean silent, @Nullable BlockPos origin,
-                               List<ServerPlayer> watchers) {
+                               @Nullable UUID placer, List<ServerPlayer> watchers, List<ServerPlayer> actors, @Nullable Topple.Work w) {
         if (kind != QuakeSchedule.CLIMB) {
             for (Iterator<Event> it = RUNNING.iterator(); it.hasNext(); ) {
                 Event e = it.next();
@@ -207,27 +384,33 @@ public final class Quakes {
         } else {
             climbsThisCycle++;
         }
-        Event e = new Event(kind, nextId++, now, duration, strength, seed, silent, origin);
+        Event e = new Event(kind, nextId++, now, duration, strength, seed, silent, origin, placer);
         RUNNING.add(e);
-        if (kind == QuakeSchedule.BIG) announce(e, watchers, true);
+        if (w != null) e.pass = new Topple.Pass(origin, seed);
+        if (kind == QuakeSchedule.BIG) {
+            announce(e, watchers);
+            e.fallsAt = now + BIG_FALLS;
+        }
+        if (w != null) work(e, w, watchers, actors);
         return e;
     }
 
-    /** Sends the quake's message to every watcher it reaches, with {@code felt} (silent quakes send nothing). */
-    private static void announce(Event e, List<ServerPlayer> watchers, boolean felt) {
+    /** Sends the quake's message to every watcher it reaches, with that player's felt flag (silent quakes send nothing). */
+    private static void announce(Event e, List<ServerPlayer> watchers) {
         e.announced = true;
         if (e.silent) return;
         for (ServerPlayer p : watchers) {
             if (!e.reaches(p)) continue;
+            boolean felt = e.feltBy(p);
             e.told.put(p.getUUID(), felt);
             send(p, e.message(felt));
         }
     }
 
     /**
-     * Tells the quake to watchers who came near since it started (a big quake felt in full, the others faintly), and
-     * forgets those no longer near, so they are told again if they come back (a client takes a quake it already has by
-     * its id).
+     * Tells the quake to watchers who came near since it started (a big quake felt in full, the others by where its
+     * blocks fall), and forgets those no longer near, so they are told again if they come back (a client takes a quake
+     * it already has by its id).
      */
     private static void tellLate(Event e, List<ServerPlayer> watchers) {
         if (e.silent) return;
@@ -238,7 +421,7 @@ public final class Quakes {
         }
         for (ServerPlayer p : watchers) {
             if (e.told.containsKey(p.getUUID()) || !e.reaches(p)) continue;
-            boolean felt = e.kind == QuakeSchedule.BIG;
+            boolean felt = e.feltBy(p);
             e.told.put(p.getUUID(), felt);
             send(p, e.message(felt));
         }
@@ -263,12 +446,18 @@ public final class Quakes {
 
     private static void send(ServerPlayer p, LavaNet.Quake q) { LavaNet.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), q); }
 
-    /** Gate 1: every quake ends now (its end sent to the clients) and the schedule is forgotten. */
+    /**
+     * Gate 1: every quake ends now (its end sent to the clients), the lowering jobs and builds stop, and the schedule,
+     * the climb answers and the queues are forgotten.
+     */
     private static void stop() {
         for (Event e : RUNNING) endEarly(e);
         RUNNING.clear();
         schedule = null;
         lastPhase = null;
+        stopToppling();
+        climbs = null;
+        Build.clear();
     }
 
     /** When the server stops: forgets everything (the next world may differ). */
@@ -282,6 +471,11 @@ public final class Quakes {
         lastCycleOn = false;
         lastPhase = null;
         climbsThisCycle = 0;
+        climbs = null;
+        PLACED.clear();
+        Lowering.clear();
+        Topple.clear();
+        Build.clear();
     }
 
     // ================================================================================================ the command
@@ -290,8 +484,9 @@ public final class Quakes {
      * {@code /remix quake}: when the next tremor and big quake come and what the last one did; {@code now [tremor|big|
      * climb] [seconds] [strength]} starts one at once (a climb answer at the source's block), even while the lava warns
      * or its clock is held; {@code hold [ticks]} holds the newest running quake that many ticks in (now if left out), for
-     * pictures, and {@code release} lets it go on; {@code spectators act|watch} makes spectators actors or only watchers
-     * (not saved; watchers at start), for quakes and eruptions both.
+     * pictures, and {@code release} lets it go on; {@code build <pos> <height> [ticksPerBlock] [rider <player>]} towers
+     * up a column of cobblestone as a player would, for the in-pack checks ({@link Build}); {@code spectators
+     * act|watch} makes spectators actors or only watchers (not saved; watchers at start), for quakes and eruptions both.
      */
     public static LiteralArgumentBuilder<CommandSourceStack> command() {
         return Commands.literal("quake").executes(Quakes::status)
@@ -302,6 +497,16 @@ public final class Quakes {
                 .then(Commands.literal("hold").executes(c -> hold(c, -1))
                         .then(Commands.argument("ticks", IntegerArgumentType.integer(0)).executes(c -> hold(c, IntegerArgumentType.getInteger(c, "ticks")))))
                 .then(Commands.literal("release").executes(Quakes::release))
+                .then(Commands.literal("build")
+                        .then(Commands.argument("pos", BlockPosArgument.blockPos())
+                                .then(Commands.argument("height", IntegerArgumentType.integer(1, 256))
+                                        .executes(c -> build(c, 10, false))
+                                        .then(Commands.argument("ticksPerBlock", IntegerArgumentType.integer(1, 200))
+                                                .executes(c -> build(c, IntegerArgumentType.getInteger(c, "ticksPerBlock"), false))
+                                                .then(Commands.literal("rider").then(Commands.argument("rider", EntityArgument.player())
+                                                        .executes(c -> build(c, IntegerArgumentType.getInteger(c, "ticksPerBlock"), true)))))
+                                        .then(Commands.literal("rider").then(Commands.argument("rider", EntityArgument.player())
+                                                .executes(c -> build(c, 10, true)))))))
                 .then(Commands.literal("spectators")
                         .then(Commands.literal("act").executes(c -> spectators(c, true)))
                         .then(Commands.literal("watch").executes(c -> spectators(c, false))));
@@ -352,10 +557,35 @@ public final class Quakes {
                     name(l.kind), time(now - l.start), Math.round(l.duration / 20.0), l.strength, l.toppled, l.fell, l.givenBack, l.takenOut, l.lowered,
                     l.debris, l.shattered));
         }
-        int pending = 0;
+        int pending = climbs == null ? 0 : climbs.pending();
         for (Event r : RUNNING) if (r.kind == QuakeSchedule.CLIMB) pending++;
-        say(c, String.format(Locale.ROOT, "  climb answers: %d pending, %d this cycle", pending, climbsThisCycle));
+        say(c, String.format(Locale.ROOT, "  climb answers: %d pending, %d this cycle; lowering jobs: %d running", pending, climbsThisCycle,
+                Lowering.running()));
+        say(c, String.format(Locale.ROOT, "  topple pass: %d chunks with changes round %d players, %d changes looked at, %.2f ms (at most %.2f in a tick)",
+                Topple.lastChunks, Topple.lastPlayers, Topple.lastEntries, Topple.lastMs, Topple.lastMaxMs));
+        here(c, level);
         return 1;
+    }
+
+    /** The status's last line: what the source's chunk holds (the debris in the air comes with the ceiling debris). */
+    private static void here(CommandContext<CommandSourceStack> c, ServerLevel level) {
+        Vec3 p = c.getSource().getPosition();
+        LevelChunk chunk = level.getChunkSource().getChunkNow((int) Math.floor(p.x) >> 4, (int) Math.floor(p.z) >> 4);
+        ChangeLog log = chunk == null ? null : GalleryChanges.logOf(chunk);
+        if (chunk == null || log == null) return;
+        int depth = ERConfig.INSTANCE.quakeSupportDepth.get();
+        int bottom = GalleryChanges.bottom(), seaTop = GalleryChanges.seaTop(chunk);
+        int x0 = chunk.getPos().getMinBlockX(), z0 = chunk.getPos().getMinBlockZ();
+        int[] n = new int[2];
+        BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos(), under = new BlockPos.MutableBlockPos();
+        log.forEach((key, first, gen) -> {
+            int x = x0 + ChangeLog.x(key), y = bottom + ChangeLog.dy(key), z = z0 + ChangeLog.z(key);
+            int k = BlockKinds.kindAt(chunk, log, bottom, seaTop, at.set(x, y, z));
+            if (!Support.topples(k)) return;
+            n[0]++;
+            if (Support.falls(k, j -> BlockKinds.kindAt(chunk, log, bottom, seaTop, under.set(x, y - j, z)), depth)) n[1]++;
+        });
+        say(c, String.format(Locale.ROOT, "  this chunk holds %d placed blocks, %d of them more than %d over rock", n[0], n[1], depth));
     }
 
     private static int now(CommandContext<CommandSourceStack> c, int kind, int seconds, float strength) {
@@ -378,16 +608,34 @@ public final class Quakes {
             default -> 0.25F + q.drawFloat() * 0.15F;
         };
         BlockPos origin = kind == QuakeSchedule.CLIMB ? BlockPos.containing(c.getSource().getPosition()) : null;
-        Event e = begin(kind, now, duration, str, q.drawSeed(), false, origin, watchers);
+        // the find runs now, within a tick's budget, so the answer can say what it found
+        Topple.Work w = cfg.quakeTopple.get() ? new Topple.Work(level, now, watchers) : null;
+        Event e = begin(kind, now, duration, str, q.drawSeed(), false, origin, null, watchers, actors(watchers), w);
+        int found = e.pass == null ? 0 : e.pass.found();
         if (kind == QuakeSchedule.BIG) {
             q.bigStarted(now, duration, s);
             say(c, String.format(Locale.ROOT, "A big quake starts: %d s at strength %.2f (%d players feel it).", Math.round(duration / 20.0), str, e.told.size()));
         } else if (kind == QuakeSchedule.TREMOR) {
-            say(c, String.format(Locale.ROOT, "A tremor starts: %d placed blocks will topple.", e.toppled));
+            say(c, String.format(Locale.ROOT, "A tremor starts: %d placed blocks will topple.", found));
         } else {
             say(c, String.format(Locale.ROOT, "The ground answers a climb at %d %d %d: %d placed blocks will topple.",
-                    origin.getX(), origin.getY(), origin.getZ(), e.toppled));
+                    origin.getX(), origin.getY(), origin.getZ(), found));
         }
+        return 1;
+    }
+
+    private static int build(CommandContext<CommandSourceStack> c, int every, boolean withRider) throws CommandSyntaxException {
+        ServerLevel level = galleries(c);
+        if (level == null) return 0;
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(c, level, "pos");
+        int height = IntegerArgumentType.getInteger(c, "height");
+        ServerPlayer rider = withRider ? EntityArgument.getPlayer(c, "rider") : null;
+        if (!Build.start(level, pos, height, every, rider, c.getSource())) {
+            c.getSource().sendFailure(Component.literal(String.format(Locale.ROOT, "There is no room to build at %d %d %d.", pos.getX(), pos.getY(), pos.getZ())));
+            return 0;
+        }
+        say(c, String.format(Locale.ROOT, "Building %d blocks at %d %d %d, one every %d ticks%s.", height, pos.getX(), pos.getY(), pos.getZ(), every,
+                rider == null ? "" : ", with " + rider.getGameProfile().getName() + " on top"));
         return 1;
     }
 

@@ -202,6 +202,31 @@ class RestoreTest {
         }
 
         /**
+         * A quake topples the placed block at (i, x, z) (0.9.0, {@code world.quake.Topple}): it goes to air where it
+         * stood (never its own fluid), and lands at (qi, qx, qz), an open cell (air, the glow, the sea's or a pool's lava
+         * it sinks into), or is taken out ({@code qi} -1). Both are block changes the game records like any other.
+         */
+        void topple(int i, int x, int z, int qi, int qx, int qz) {
+            int block = st[i][z][x];
+            set(i, x, z, S_AIR);
+            if (qi >= 0) set(qi, qx, qz, block);
+        }
+
+        /** True for a cell a falling block can come to rest in: air, the glow, or a lava source (the sea's or a pool's). */
+        boolean landable(int i, int x, int z) {
+            int k = kindOf(st[i][z][x]);
+            return k == AIR || k == GLOW || k == LAVA;
+        }
+
+        /** True for a block a quake topples: held in the log with an open first block, and solid now. */
+        boolean placed(int i, int x, int z) {
+            int key = ChangeLog.key(x, i, z);
+            if (!log.has(key)) return false;
+            int first = kindOf(log.state(key)), cur = st[i][z][x];
+            return first != OTHER && (cur == S_PLANK || cur == S_BRICK || cur == S_ROCK);
+        }
+
+        /**
          * What the flood's own record must always hold: the glow mask and the kept blocks lie inside the lava mask, never
          * both in one place, and nothing is set at or over the lava's height.
          */
@@ -405,6 +430,136 @@ class RestoreTest {
             assertEquals(Restore.ORIGINAL, Restore.putBack(log, key, LAVA, S_LAVA, -1, level, m, g, k), "level " + level);
             assertTrue(log.isEmpty());
             assertTrue(m.isEmpty() && g.isEmpty() && k.isEmpty());
+        }
+    }
+
+    @Test
+    void aToppledBlockGoesBackWhereverItLands() {
+        // a plank placed in the air (and one in a glow spot) topples onto the floor, into a glow, into the sea and into a
+        // pool's lava; after the reset at full lava and the drain the band is as generated, the flood holding nothing
+        for (int level : new int[]{0, 12, RISE}) {
+            for (int where = 0; where < 5; where++) {
+                Band b = new Band();
+                b.st[15][4][4] = S_GLOW;
+                b.st[2][6][6] = S_GLOW;
+                b.st[3][7][7] = S_LAVA;
+                int[][][] generated = copy(b.st);
+                b.bring(level);
+                b.set(15, 4, 4, S_PLANK);
+                b.set(16, 4, 4, S_BRICK);
+                int[] q = switch (where) {
+                    case 0 -> new int[]{30, 9, 9};      // the floor, over the sea (or in it at full)
+                    case 1 -> new int[]{2, 6, 6};       // a glow (in the sea once it has risen)
+                    case 2 -> new int[]{5, 1, 1};       // the sea, or the air at calm
+                    case 3 -> new int[]{3, 7, 7};       // a pool's lava
+                    default -> new int[]{-1, 0, 0};     // taken out
+                };
+                assertTrue(q[0] < 0 || b.landable(q[0], q[1], q[2]));
+                assertTrue(b.placed(16, 4, 4));
+                b.topple(16, 4, 4, q[0], q[1], q[2]);
+                b.topple(15, 4, 4, q[0] < 0 ? -1 : q[0] + 1, q[1], q[2]);
+                assertEquals(S_GLOW, b.log.state(ChangeLog.key(4, 15, 4)), "the glow spot's entry stays: the glow comes back");
+                b.checkRecord();
+                b.bring(RISE);
+                b.gen++;
+                b.reset(Integer.MAX_VALUE);
+                assertTrue(b.log.isEmpty(), "level " + level + " where " + where);
+                b.bring(0);
+                assertTrue(b.mask.isEmpty() && b.glow.isEmpty() && b.kept.isEmpty(), "level " + level + " where " + where);
+                for (int i = 0; i < RISE; i++) {
+                    for (int z = 0; z < 16; z++) {
+                        for (int x = 0; x < 16; x++) {
+                            assertEquals(generated[i][z][x], b.st[i][z][x], "level " + level + " where " + where + " slice " + i + " x " + x + " z " + z);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static int[][][] copy(int[][][] a) {
+        int[][][] out = new int[a.length][][];
+        for (int i = 0; i < a.length; i++) {
+            out[i] = new int[a[i].length][];
+            for (int z = 0; z < a[i].length; z++) out[i][z] = a[i][z].clone();
+        }
+        return out;
+    }
+
+    @Test
+    void aBandWithQuakesComesBackAsGenerated() {
+        // as aBandComesBackAsGenerated, with quakes toppling placed blocks (onto open cells, into the sea or a pool, or
+        // taken out) and giving them back, at any time and whatever their generation
+        Random r = new Random(9090);
+        for (int round = 0; round < 40; round++) {
+            Band b = new Band();
+            int[][][] generated = new int[RISE][16][16];
+            for (int i = 0; i < RISE; i++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        int p = r.nextInt(100);
+                        int s = p < 50 ? S_AIR : p < 55 ? S_GLOW : p < 57 ? S_LAVA : p < 58 ? S_FIRE : p < 59 ? S_FRONT
+                                : p < 61 ? S_SPILL : p < 63 ? S_FALL : S_ROCK;
+                        generated[i][z][x] = s;
+                        b.st[i][z][x] = s;
+                    }
+                }
+            }
+            int toppled = 0, given = 0;
+            for (int step = 0; step < 400; step++) {
+                int op = r.nextInt(100);
+                if (op < 15) {
+                    b.bring(r.nextInt(RISE + 1));
+                } else if (op < 60) {
+                    int n = 1 + r.nextInt(12);
+                    for (int c = 0; c < n; c++) {
+                        int q = r.nextInt(100);
+                        int next = q < 30 ? S_AIR : q < 50 ? S_PLANK : q < 65 ? S_BRICK : q < 80 ? S_ROCK : q < 88 ? S_LAVA
+                                : q < 93 ? S_SPILL : q < 96 ? S_FIRE : S_GLOW;
+                        b.set(r.nextInt(RISE), r.nextInt(16), r.nextInt(16), next);
+                    }
+                } else if (op < 80) {
+                    // a tremor: placed blocks topple, landing on open cells (into the sea or a pool too) or taken out
+                    int[][] e = b.log.toArrays();
+                    for (int k = 0; k < e[0].length; k++) {
+                        int key = e[0][k], i = ChangeLog.dy(key), x = ChangeLog.x(key), z = ChangeLog.z(key);
+                        if (!b.placed(i, x, z) || r.nextInt(3) != 0) continue;
+                        int qi = r.nextInt(RISE), qx = r.nextInt(16), qz = r.nextInt(16);
+                        boolean out = r.nextInt(4) == 0 || !b.landable(qi, qx, qz) || qi == i && qx == x && qz == z;
+                        b.topple(i, x, z, out ? -1 : qi, qx, qz);
+                        toppled++;
+                    }
+                } else if (op < 88) {
+                    // under the lava (and an old entry with the reset on) a placed block is given back at once instead
+                    int[][] e = b.log.toArrays();
+                    for (int k = 0; k < e[0].length; k++) {
+                        int key = e[0][k], i = ChangeLog.dy(key);
+                        if ((i < b.level || r.nextInt(4) == 0) && b.giveBack(i, ChangeLog.x(key), ChangeLog.z(key))) given++;
+                    }
+                } else if (op < 96) {
+                    b.bring(RISE);
+                    b.gen++;
+                    b.reset(r.nextInt(3) == 0 ? r.nextInt(200) : Integer.MAX_VALUE);
+                } else {
+                    b.reset(Integer.MAX_VALUE);
+                }
+                b.checkRecord();
+            }
+            b.bring(RISE);
+            b.gen++;
+            b.reset(Integer.MAX_VALUE);
+            assertTrue(b.log.isEmpty());
+            b.checkRecord();
+            b.bring(0);
+            assertTrue(b.mask.isEmpty() && b.glow.isEmpty() && b.kept.isEmpty(), "round " + round);
+            assertTrue(toppled > 0 && given > 0, "round " + round);
+            for (int i = 0; i < RISE; i++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        assertEquals(generated[i][z][x], b.st[i][z][x], "round " + round + " slice " + i + " x " + x + " z " + z);
+                    }
+                }
+            }
         }
     }
 
