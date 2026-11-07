@@ -46,7 +46,11 @@ public class RuneItem extends Item {
         tips.add(Component.translatable("rune.explorationremix.kind." + rune.kind.name().toLowerCase(java.util.Locale.ROOT))
                 .withStyle(net.minecraft.ChatFormatting.DARK_AQUA));
         tips.add(Component.translatable("rune.explorationremix." + rune.id + ".desc").withStyle(net.minecraft.ChatFormatting.GRAY));
-        if (rune.cost > 0) tips.add(Component.translatable("rune.explorationremix.cost", rune.cost).withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        if (rune.cost > 0) {
+            // an action costs its own energy; a modifier or element adds its cost to every action it changes
+            String key = rune.isAction() ? "rune.explorationremix.cost" : "rune.explorationremix.cost_each";
+            tips.add(Component.translatable(key, rune.cost).withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        }
     }
 
     // ---- nothing is lost by tinkering
