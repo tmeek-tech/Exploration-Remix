@@ -3,6 +3,7 @@ package com.explorationremix.world.quake;
 import com.explorationremix.config.ERConfig;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.lava.ChangeLog;
+import com.explorationremix.world.lava.Falling;
 import com.explorationremix.world.lava.GalleryChanges;
 import com.explorationremix.world.lava.LavaCycle;
 import com.explorationremix.world.lava.LavaFlood;
@@ -76,6 +77,10 @@ import java.util.UUID;
  * creaks when the find is done and is lowered under them 20 ticks later ({@link Lowering}). The one placement listener
  * ({@link #placed}) schedules the climb answers ({@link ClimbAnswers}, {@code quakes.climbTremors}) and feeds
  * {@code quakes.toppleAtOnce}'s check, with the break listener ({@link #broken}).
+ *
+ * <p><b>Ceiling debris</b> ({@link Debris}, only with the terrain reset putting the holes back): in a big quake natural
+ * ceiling rock comes loose round each actor in the layer, is warned of and drops a second later as a falling block,
+ * which {@link Falling} tracks for its hits; a held quake's blocks wait or hang in the air.
  */
 public final class Quakes {
     private Quakes() {}
@@ -113,6 +118,8 @@ public final class Quakes {
         @Nullable final UUID placer;
         /** Its topple pass, or null with toppling off. */
         @Nullable Topple.Pass pass;
+        /** For a big quake, what its ceiling debris has done ({@link Debris}), or null before its first pick. */
+        @Nullable Debris.Plan drops;
         /** The tick its found blocks start to fall from (MAX_VALUE until its find is done). */
         long fallsAt = Long.MAX_VALUE;
         /** The game time it started at; a release moves it on by the time it was held. */
@@ -174,7 +181,7 @@ public final class Quakes {
         ERConfig cfg = ERConfig.INSTANCE;
         // gate 1: turned off, every quake ends and everything is forgotten
         if (!cfg.quakesEnabled.get()) {
-            if (schedule != null || !RUNNING.isEmpty() || Lowering.running() > 0 || climbs != null) stop();
+            if (schedule != null || !RUNNING.isEmpty() || Lowering.running() > 0 || climbs != null || Debris.pending() > 0) stop(level, band);
             return;
         }
         boolean cycleOn = cfg.lavaCycleEnabled.get();
@@ -209,13 +216,18 @@ public final class Quakes {
         }
         for (Iterator<Event> it = RUNNING.iterator(); it.hasNext(); ) {
             Event e = it.next();
-            if (e.held < 0) work(e, w, watchers, actors);
+            if (e.held < 0) {
+                work(e, w, watchers, actors);
+                Debris.picks(level, e, actors, watchers, now);
+            }
             if (e.announced) tellLate(e, watchers);
             if (e.held < 0 && now - e.start >= e.duration) {
                 finish(e);
                 it.remove();
             }
         }
+        // the ceiling blocks warned of drop when their time comes (a held quake's wait)
+        Debris.tick(level, watchers, now);
         if (w != null) Topple.atOnce(w);
         // gate 2: nothing starts on its own while the lava clock or a quake is held; the quiet window of the warning
         QuakeSchedule.Settings s = settings(cfg);
@@ -447,12 +459,14 @@ public final class Quakes {
     private static void send(ServerPlayer p, LavaNet.Quake q) { LavaNet.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), q); }
 
     /**
-     * Gate 1: every quake ends now (its end sent to the clients), the lowering jobs and builds stop, and the schedule,
-     * the climb answers and the queues are forgotten.
+     * Gate 1: every quake ends now (its end sent to the clients), the lowering jobs and builds stop, the ceiling blocks
+     * waiting to drop are called off (those in the air are let go and fall on), and the schedule, the climb answers and
+     * the queues are forgotten.
      */
-    private static void stop() {
+    private static void stop(ServerLevel level, LavaFlood.Band band) {
         for (Event e : RUNNING) endEarly(e);
         RUNNING.clear();
+        Debris.stop(NearChunks.players(level, band));
         schedule = null;
         lastPhase = null;
         stopToppling();
@@ -476,6 +490,7 @@ public final class Quakes {
         Lowering.clear();
         Topple.clear();
         Build.clear();
+        Debris.reset();
     }
 
     // ================================================================================================ the command
@@ -484,7 +499,9 @@ public final class Quakes {
      * {@code /remix quake}: when the next tremor and big quake come and what the last one did; {@code now [tremor|big|
      * climb] [seconds] [strength]} starts one at once (a climb answer at the source's block), even while the lava warns
      * or its clock is held; {@code hold [ticks]} holds the newest running quake that many ticks in (now if left out), for
-     * pictures, and {@code release} lets it go on; {@code build <pos> <height> [ticksPerBlock] [rider <player>]} towers
+     * pictures, and {@code release} lets it go on (and lets go of the staged drops); {@code drop [<pos>] [above
+     * <blocks>]} stages a ceiling drop near the position, which hangs that many blocks over its landing row until the
+     * release, for pictures; {@code build <pos> <height> [ticksPerBlock] [rider <player>]} towers
      * up a column of cobblestone as a player would, for the in-pack checks ({@link Build}); {@code spectators
      * act|watch} makes spectators actors or only watchers (not saved; watchers at start), for quakes and eruptions both.
      */
@@ -497,6 +514,10 @@ public final class Quakes {
                 .then(Commands.literal("hold").executes(c -> hold(c, -1))
                         .then(Commands.argument("ticks", IntegerArgumentType.integer(0)).executes(c -> hold(c, IntegerArgumentType.getInteger(c, "ticks")))))
                 .then(Commands.literal("release").executes(Quakes::release))
+                .then(Commands.literal("drop").executes(c -> drop(c, false, -1))
+                        .then(above(false))
+                        .then(Commands.argument("pos", BlockPosArgument.blockPos()).executes(c -> drop(c, true, -1))
+                                .then(above(true))))
                 .then(Commands.literal("build")
                         .then(Commands.argument("pos", BlockPosArgument.blockPos())
                                 .then(Commands.argument("height", IntegerArgumentType.integer(1, 256))
@@ -510,6 +531,11 @@ public final class Quakes {
                 .then(Commands.literal("spectators")
                         .then(Commands.literal("act").executes(c -> spectators(c, true)))
                         .then(Commands.literal("watch").executes(c -> spectators(c, false))));
+    }
+
+    private static ArgumentBuilder<CommandSourceStack, ?> above(boolean withPos) {
+        return Commands.literal("above").then(Commands.argument("blocks", IntegerArgumentType.integer(0, 256))
+                .executes(c -> drop(c, withPos, IntegerArgumentType.getInteger(c, "blocks"))));
     }
 
     private static ArgumentBuilder<CommandSourceStack, ?> nowOf(String name, int kind) {
@@ -567,12 +593,15 @@ public final class Quakes {
         return 1;
     }
 
-    /** The status's last line: what the source's chunk holds (the debris in the air comes with the ceiling debris). */
+    /** The status's last line: the blocks in the air, and what the source's chunk holds. */
     private static void here(CommandContext<CommandSourceStack> c, ServerLevel level) {
         Vec3 p = c.getSource().getPosition();
         LevelChunk chunk = level.getChunkSource().getChunkNow((int) Math.floor(p.x) >> 4, (int) Math.floor(p.z) >> 4);
         ChangeLog log = chunk == null ? null : GalleryChanges.logOf(chunk);
-        if (chunk == null || log == null) return;
+        if (chunk == null || log == null) {
+            say(c, String.format(Locale.ROOT, "  falling now: %d", Falling.count()));
+            return;
+        }
         int depth = ERConfig.INSTANCE.quakeSupportDepth.get();
         int bottom = GalleryChanges.bottom(), seaTop = GalleryChanges.seaTop(chunk);
         int x0 = chunk.getPos().getMinBlockX(), z0 = chunk.getPos().getMinBlockZ();
@@ -585,7 +614,8 @@ public final class Quakes {
             n[0]++;
             if (Support.falls(k, j -> BlockKinds.kindAt(chunk, log, bottom, seaTop, under.set(x, y - j, z)), depth)) n[1]++;
         });
-        say(c, String.format(Locale.ROOT, "  this chunk holds %d placed blocks, %d of them more than %d over rock", n[0], n[1], depth));
+        say(c, String.format(Locale.ROOT, "  falling now: %d; this chunk holds %d placed blocks, %d of them more than %d over rock",
+                Falling.count(), n[0], n[1], depth));
     }
 
     private static int now(CommandContext<CommandSourceStack> c, int kind, int seconds, float strength) {
@@ -639,6 +669,33 @@ public final class Quakes {
         return 1;
     }
 
+    /**
+     * {@code /remix quake drop [<pos>] [above <blocks>]}: a ceiling block near the position (the source's by default)
+     * comes loose as in a big quake, warned of and dropped a second later, with no quake running; with {@code above}
+     * it hangs that many blocks over its landing row until {@code release}.
+     */
+    private static int drop(CommandContext<CommandSourceStack> c, boolean withPos, int above) throws CommandSyntaxException {
+        ServerLevel level = galleries(c);
+        if (level == null) return 0;
+        if (!Debris.terrainDamage()) {
+            c.getSource().sendFailure(Component.literal(
+                    "No ceiling debris: the terrain reset is off, and only the reset puts it back (terrainReset.enabled, lavaCycle.enabled)."));
+            return 0;
+        }
+        BlockPos from = withPos ? BlockPosArgument.getLoadedBlockPos(c, level, "pos") : BlockPos.containing(c.getSource().getPosition());
+        LavaFlood.Band band = LavaFlood.band();
+        List<ServerPlayer> watchers = band == null ? List.of() : NearChunks.players(level, band);
+        Debris.Piece pc = Debris.stage(level, from, above, watchers, level.getGameTime());
+        if (pc == null) {
+            c.getSource().sendFailure(Component.literal("No ceiling block within 8 blocks over here can fall (natural rock in "
+                    + "#explorationremix:quake_debris with open space under it, solid rock over it and somewhere to land)."));
+            return 0;
+        }
+        say(c, String.format(Locale.ROOT, "A ceiling block at %d %d %d falls %d blocks%s.", pc.pos.getX(), pc.pos.getY(), pc.pos.getZ(),
+                pc.pos.getY() - pc.landY, pc.above < 0 ? "" : String.format(Locale.ROOT, " (held %d over the floor)", pc.above)));
+        return 1;
+    }
+
     private static int hold(CommandContext<CommandSourceStack> c, int ticks) {
         ServerLevel level = galleries(c);
         if (level == null) return 0;
@@ -650,6 +707,7 @@ public final class Quakes {
         long now = level.getGameTime();
         e.held = ticks < 0 ? Math.min(e.into(now), Math.max(0, e.duration - 1)) : Math.min(ticks, Math.max(0, e.duration - 1));
         retell(level, e);
+        Debris.held(level, e);
         say(c, String.format(Locale.ROOT, "The quake is held %d ticks in.", e.held));
         return 1;
     }
@@ -659,7 +717,12 @@ public final class Quakes {
         if (level == null) return 0;
         Event e = null;
         for (Event r : RUNNING) if (r.held >= 0) e = r;
+        int staged = Debris.releaseStaged(level);
         if (e == null) {
+            if (staged > 0) {
+                say(c, "The quake goes on.");
+                return 1;
+            }
             c.getSource().sendFailure(Component.literal("There is no held quake."));
             return 0;
         }
@@ -669,6 +732,7 @@ public final class Quakes {
         // next big quake) that fell due while it was held would start at once and cut the rest of it short
         if (e.kind == QuakeSchedule.BIG) schedule(level).bigStarted(e.start, e.duration, settings(ERConfig.INSTANCE));
         retell(level, e);
+        Debris.released(level, e);
         say(c, "The quake goes on.");
         return 1;
     }

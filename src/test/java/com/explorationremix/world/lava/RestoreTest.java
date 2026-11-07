@@ -218,6 +218,20 @@ class RestoreTest {
             return k == AIR || k == GLOW || k == LAVA;
         }
 
+        /**
+         * A ceiling block comes loose in a big quake (0.9.0, {@code world.quake.Debris}): the natural rock at (i, x, z)
+         * goes to air where it hung (the falling block's {@code fall}) and lands at (qi, qx, qz), an open cell or a lava
+         * source it sinks into (the sea's, a pool's), or vanishes ({@code qi} -1: it could not land, or broke on
+         * someone). Both are block changes the game records like any other.
+         */
+        void debris(int i, int x, int z, int qi, int qx, int qz) {
+            set(i, x, z, S_AIR);
+            if (qi >= 0) set(qi, qx, qz, S_ROCK);
+        }
+
+        /** True for natural rock, which ceiling debris comes from: rock the log holds nothing for. */
+        boolean natural(int i, int x, int z) { return st[i][z][x] == S_ROCK && !log.has(ChangeLog.key(x, i, z)); }
+
         /** True for a block a quake topples: held in the log with an open first block, and solid now. */
         boolean placed(int i, int x, int z) {
             int key = ChangeLog.key(x, i, z);
@@ -477,6 +491,64 @@ class RestoreTest {
         }
     }
 
+    @Test
+    void aCeilingBlockGoesBackWhereverItLands() {
+        // a block of an overhang comes loose and lands on the floor, in a glow, in the sea, in a pool's lava, or vanishes;
+        // after the reset at full lava and the drain the band is as generated: the hole filled, the landed block gone
+        for (int level : new int[]{0, 12, RISE}) {
+            for (int where = 0; where < 5; where++) {
+                Band b = new Band();
+                b.st[33][8][8] = S_ROCK;
+                b.st[2][6][6] = S_GLOW;
+                b.st[3][7][7] = S_LAVA;
+                int[][][] generated = copy(b.st);
+                b.bring(level);
+                int[] q = switch (where) {
+                    case 0 -> new int[]{30, 8, 8};      // the floor under it, over the sea (or in it at full)
+                    case 1 -> new int[]{2, 6, 6};       // a glow (in the sea once it has risen)
+                    case 2 -> new int[]{5, 1, 1};       // the sea, or the air at calm
+                    case 3 -> new int[]{3, 7, 7};       // a pool's lava
+                    default -> new int[]{-1, 0, 0};     // it vanished
+                };
+                assertTrue(b.natural(33, 8, 8));
+                assertTrue(q[0] < 0 || b.landable(q[0], q[1], q[2]));
+                b.debris(33, 8, 8, q[0], q[1], q[2]);
+                assertEquals(S_ROCK, b.log.state(ChangeLog.key(8, 33, 8)), "the hole's entry holds the rock");
+                b.checkRecord();
+                b.bring(RISE);
+                b.gen++;
+                b.reset(Integer.MAX_VALUE);
+                assertTrue(b.log.isEmpty(), "level " + level + " where " + where);
+                b.bring(0);
+                assertTrue(b.mask.isEmpty() && b.glow.isEmpty() && b.kept.isEmpty(), "level " + level + " where " + where);
+                for (int i = 0; i < RISE; i++) {
+                    for (int z = 0; z < 16; z++) {
+                        for (int x = 0; x < 16; x++) {
+                            assertEquals(generated[i][z][x], b.st[i][z][x], "level " + level + " where " + where + " slice " + i + " x " + x + " z " + z);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void aCeilingBlockInTheLakeGoesBackAsTheTablesLava() {
+        // a ceiling block that sinks into the lake (the table's lava, under the flood band) replaces a source there: the
+        // log holds that lava, and the reset puts it back raw at every height of the sea, touching no flood record
+        for (int level = 0; level <= RISE; level += 5) {
+            Mask m = new Mask(RISE), g = new Mask(RISE);
+            Kept k = new Kept(RISE);
+            ChangeLog log = new ChangeLog();
+            int key = ChangeLog.key(4, 2, 9);
+            log.record(key, S_LAVA, 0);
+            assertEquals(Restore.ORIGINAL, Restore.decide(LAVA, -1, level), "level " + level);
+            assertEquals(Restore.ORIGINAL, Restore.putBack(log, key, LAVA, S_LAVA, -1, level, m, g, k), "level " + level);
+            assertTrue(log.isEmpty());
+            assertTrue(m.isEmpty() && g.isEmpty() && k.isEmpty());
+        }
+    }
+
     private static int[][][] copy(int[][][] a) {
         int[][][] out = new int[a.length][][];
         for (int i = 0; i < a.length; i++) {
@@ -489,7 +561,7 @@ class RestoreTest {
     @Test
     void aBandWithQuakesComesBackAsGenerated() {
         // as aBandComesBackAsGenerated, with quakes toppling placed blocks (onto open cells, into the sea or a pool, or
-        // taken out) and giving them back, at any time and whatever their generation
+        // taken out) and giving them back, at any time and whatever their generation, and ceiling rock coming loose
         Random r = new Random(9090);
         for (int round = 0; round < 40; round++) {
             Band b = new Band();
@@ -505,18 +577,29 @@ class RestoreTest {
                     }
                 }
             }
-            int toppled = 0, given = 0;
+            int toppled = 0, given = 0, fell = 0;
             for (int step = 0; step < 400; step++) {
                 int op = r.nextInt(100);
                 if (op < 15) {
                     b.bring(r.nextInt(RISE + 1));
-                } else if (op < 60) {
+                } else if (op < 52) {
                     int n = 1 + r.nextInt(12);
                     for (int c = 0; c < n; c++) {
                         int q = r.nextInt(100);
                         int next = q < 30 ? S_AIR : q < 50 ? S_PLANK : q < 65 ? S_BRICK : q < 80 ? S_ROCK : q < 88 ? S_LAVA
                                 : q < 93 ? S_SPILL : q < 96 ? S_FIRE : S_GLOW;
                         b.set(r.nextInt(RISE), r.nextInt(16), r.nextInt(16), next);
+                    }
+                } else if (op < 60) {
+                    // a big quake: natural rock with open space under it comes loose and lands on an open cell (into the
+                    // sea or a pool too), or vanishes
+                    for (int c = 0; c < 8; c++) {
+                        int i = 1 + r.nextInt(RISE - 1), x = r.nextInt(16), z = r.nextInt(16);
+                        if (!b.natural(i, x, z) || !b.landable(i - 1, x, z) || kindOf(b.st[i - 1][z][x]) == LAVA) continue;
+                        int qi = r.nextInt(i), qx = r.nextInt(16), qz = r.nextInt(16);
+                        boolean gone = r.nextInt(5) == 0 || !b.landable(qi, qx, qz);
+                        b.debris(i, x, z, gone ? -1 : qi, qx, qz);
+                        fell++;
                     }
                 } else if (op < 80) {
                     // a tremor: placed blocks topple, landing on open cells (into the sea or a pool too) or taken out
@@ -552,7 +635,7 @@ class RestoreTest {
             b.checkRecord();
             b.bring(0);
             assertTrue(b.mask.isEmpty() && b.glow.isEmpty() && b.kept.isEmpty(), "round " + round);
-            assertTrue(toppled > 0 && given > 0, "round " + round);
+            assertTrue(toppled > 0 && given > 0 && fell > 0, "round " + round);
             for (int i = 0; i < RISE; i++) {
                 for (int z = 0; z < 16; z++) {
                     for (int x = 0; x < 16; x++) {

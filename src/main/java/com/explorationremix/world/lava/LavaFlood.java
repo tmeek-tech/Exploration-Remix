@@ -242,6 +242,8 @@ public final class LavaFlood {
         TerrainReset.tick(level, band, s, now);
         com.explorationremix.world.quake.Quakes.tick(level, band, s, now);
         com.explorationremix.world.eruption.Eruptions.tick(level, band, s, now);
+        // 0.9.0: the falling blocks they let go of, for their hits, holds and discards
+        Falling.tick(level, band);
     }
 
     /**
