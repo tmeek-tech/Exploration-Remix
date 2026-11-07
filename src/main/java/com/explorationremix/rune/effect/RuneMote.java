@@ -36,7 +36,8 @@ import java.util.UUID;
  * it. It pops out of what was hit, hangs there for a moment, then streaks to its player from up to {@link #RANGE}
  * blocks, through anything in the way (Taran chose "snap to you fast", 2026-11-07). Only the player who earned it can
  * collect it, and it refills only that piece of gear. A player further off, or gone, leaves it to settle on the ground
- * like an experience orb until they come back or it fades after a minute. Never saved.
+ * like an experience orb until they come back or it fades after a minute. Never saved: it is gone when its chunk
+ * unloads (its type is never written, and a chunk unload removes it as any entity).
  */
 public class RuneMote extends Entity {
     private static final EntityDataAccessor<Float> DATA_SIZE = SynchedEntityData.defineId(RuneMote.class, EntityDataSerializers.FLOAT);
@@ -202,7 +203,4 @@ public class RuneMote extends Entity {
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {}
-
-    @Override
-    public boolean shouldBeSaved() { return false; }
 }

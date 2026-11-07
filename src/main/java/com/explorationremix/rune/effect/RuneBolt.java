@@ -103,7 +103,4 @@ public class RuneBolt extends Entity {
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {}
-
-    @Override
-    public boolean shouldBeSaved() { return false; }
 }

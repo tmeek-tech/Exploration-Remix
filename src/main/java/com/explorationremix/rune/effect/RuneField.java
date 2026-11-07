@@ -13,7 +13,8 @@ import javax.annotation.Nullable;
 
 /**
  * A Field: a lingering patch on the ground that pulses its element into whatever stands in it. The server decides who
- * it touches; the client is told its element, its radius and how long it lasts, and draws a glowing ring. Never saved.
+ * it touches; the client is told its element, its radius and how long it lasts, and draws a glowing ring. Never saved:
+ * it is gone when its chunk unloads.
  */
 public class RuneField extends Entity {
     private static final EntityDataAccessor<Byte> DATA_ELEMENT = SynchedEntityData.defineId(RuneField.class, EntityDataSerializers.BYTE);
@@ -94,7 +95,4 @@ public class RuneField extends Entity {
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {}
-
-    @Override
-    public boolean shouldBeSaved() { return false; }
 }
