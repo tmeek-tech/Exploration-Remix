@@ -5,7 +5,7 @@ package com.explorationremix.rune.engine;
  * slots.
  *
  * @param maxEnergy   the most energy it holds; a cast dearer than this is never cast (shown red)
- * @param regenPerTick energy regained per tick while it regenerates (wand and bow: while held), 0 if never
+ * @param regenPerTick energy regained per tick while it regenerates (a bow: while held), 0 if never
  * @param startEnergy energy a fresh piece of gear starts with
  * @param power       rune damage multiplier (a netherite sword's runes hit harder than a stone sword's)
  * @param bonusSlots  extra slots (diamond and netherite gear: 1)
@@ -20,8 +20,6 @@ public record HostSpec(Host host, float maxEnergy, float regenPerTick, float sta
         return switch (host) {
             case SWORD -> new HostSpec(host, 70, 0, 30, 1.0F, 0);
             case BOW, CROSSBOW -> new HostSpec(host, 60, 0.2F, 60, 1.0F, 0);
-            case SHIELD -> new HostSpec(host, 50, 0, 30, 1.0F, 0);
-            case WAND -> new HostSpec(host, 100, 0.8F, 100, 1.0F, 0);
         };
     }
 

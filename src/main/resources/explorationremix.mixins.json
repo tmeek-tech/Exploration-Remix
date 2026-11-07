@@ -24,11 +24,13 @@
     "BiomeFilterMixin",
     "PortalShapeMixin",
     "BaseFireBlockMixin",
-    "LevelChunkMixin"
+    "LevelChunkMixin",
+    "rune.ItemStackRuneMixin"
   ],
   "client": [
     "client.LightTextureMixin",
-    "client.DimensionSpecialEffectsMixin"
+    "client.DimensionSpecialEffectsMixin",
+    "client.RuneHandRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

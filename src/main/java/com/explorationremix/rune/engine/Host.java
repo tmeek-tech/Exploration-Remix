@@ -1,16 +1,16 @@
 package com.explorationremix.rune.engine;
 
 /**
- * The kinds of gear that carry a rune row. The rules never change between them; what changes is when the gear casts,
- * where from, how it fills up, and how many slots wake at each depth.
+ * The kinds of gear that carry a rune row: the weapons, which only ever cast when the player makes them (a right-click,
+ * a loosed arrow). The rules never change between them; what changes is when the gear casts, where from, how it fills
+ * up, and how many slots wake at each depth. There is no wand (the sword does that job) and shields never cast. Armor
+ * will carry runes of its own, a different set from these.
  */
 public enum Host {
     //            title       baseDelay recovery maxSlots  slots at home / Blue Reaches / Deep Gardens and below
-    SWORD("sword", 6, 12, 4, new int[]{2, 3, 4}, false),
+    SWORD("sword", 5, 10, 5, new int[]{3, 4, 5}, false),
     BOW("bow", 0, 8, 4, new int[]{2, 3, 4}, true),
-    CROSSBOW("crossbow", 0, 8, 4, new int[]{2, 3, 4}, true),
-    SHIELD("shield", 0, 16, 3, new int[]{2, 2, 3}, false),
-    WAND("wand", 4, 10, 6, new int[]{4, 5, 6}, false);
+    CROSSBOW("crossbow", 0, 8, 4, new int[]{2, 3, 4}, true);
 
     public final String word;
     /** Ticks added to every cast's delay. */

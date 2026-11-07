@@ -55,7 +55,7 @@ public final class CastMachine {
         s.regenSince = held ? now : -1;
     }
 
-    /** Adds energy (a sword hit, a shield block, a Siphon refund), up to what the gear holds. */
+    /** Adds energy (a sword hit, a blocked hit, a Siphon mote), up to what the gear holds. */
     public static float add(CastState s, HostSpec h, long now, float amount) {
         settle(s, h, now);
         float before = s.energy;
@@ -81,7 +81,7 @@ public final class CastMachine {
      * Tries to cast. On {@link Kind#CAST} the state has paid and moved on; otherwise it is unchanged (apart from going
      * back to the first cast after an idle spell).
      *
-     * @param free a just-in-time shield block: the cast costs nothing
+     * @param free the cast costs nothing (commands and tests)
      */
     public static Outcome attempt(CastState s, Reading r, long now, boolean free, Limits lim) {
         HostSpec h = r.spec();

@@ -14,12 +14,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Rules that must hold for every row: checked on every row of up to four slots over a test alphabet, and on random
- * longer rows, for a wand, a bow and a sword.
+ * longer rows, for long-row swords and a bow.
  */
 class ReaderPropertiesTest {
     static final RuneId[] ALPHABET = {null, RuneId.SPARK, RuneId.ORB, RuneId.BURST, RuneId.CLEAVE, RuneId.DASH, RuneId.WIDE, RuneId.SWIFT,
             RuneId.BOUNCE, RuneId.EMBER, RuneId.FROST, RuneId.ON_HIT, RuneId.AFTER, RuneId.FAN};
-    static final HostSpec[] GEAR = {HostSpec.of(Host.WAND).withBonus(3), HostSpec.of(Host.BOW).withBonus(5), HostSpec.of(Host.SWORD).withBonus(5)};
+    static final HostSpec[] GEAR = {HostSpec.of(Host.SWORD).withBonus(4), HostSpec.of(Host.BOW).withBonus(5), HostSpec.of(Host.SWORD).withBonus(5)};
     static final Limits LIM = Limits.DEFAULT;
 
     /** Every row of up to {@code n} slots, then {@code random} random rows of 5 to 9 slots with random breaks. */

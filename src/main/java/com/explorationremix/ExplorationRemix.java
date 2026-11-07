@@ -11,6 +11,9 @@ import com.explorationremix.registry.ERParticles;
 import com.explorationremix.registry.ERRemaps;
 import com.explorationremix.registry.ERSounds;
 import com.explorationremix.registry.ERWorldgen;
+import com.explorationremix.rune.RuneConfig;
+import com.explorationremix.rune.RuneRegistry;
+import com.explorationremix.rune.net.RuneNet;
 import com.explorationremix.world.gen.DeepWorldInstaller;
 import com.explorationremix.world.lava.LavaChunk;
 import com.explorationremix.world.lava.LavaFlood;
@@ -57,6 +60,11 @@ public final class ExplorationRemix {
         modBus.addListener(LavaChunk::register);
         MinecraftForge.EVENT_BUS.register(LavaFlood.class);
         LavaNet.register();
+        // Runes (0.10.0): the rune items, the blocks and entities runes make, the rune screen; the server's rune settings
+        // (sent to each client that joins); the runes' channel
+        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, RuneConfig.SPEC, MOD_ID + "-runes.toml");
+        RuneRegistry.register(modBus);
+        RuneNet.register();
         if (DevAutoRun.enabled()) MinecraftForge.EVENT_BUS.register(DevAutoRun.class);
     }
 }
