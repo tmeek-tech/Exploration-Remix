@@ -25,7 +25,8 @@
     "PortalShapeMixin",
     "BaseFireBlockMixin",
     "LevelChunkMixin",
-    "rune.ItemStackRuneMixin"
+    "rune.ItemStackRuneMixin",
+    "rune.FurnaceRuneMixin"
   ],
   "client": [
     "client.LightTextureMixin",

@@ -69,7 +69,7 @@ public final class Plan {
                     roots.add(node);
                     level.add(node);
                     planned++;
-                    cost += a.unitCost;
+                    cost += a.copyCost(c);
                 }
             }
         }
@@ -85,7 +85,7 @@ public final class Plan {
                         carrier.children.add(node);
                         next.add(node);
                         planned++;
-                        cost += a.unitCost;
+                        cost += a.copyCost(c);
                     }
                 }
             }

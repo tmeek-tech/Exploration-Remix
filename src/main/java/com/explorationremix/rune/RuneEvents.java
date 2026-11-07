@@ -14,7 +14,13 @@ import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.Container;
+import net.minecraft.world.inventory.AnvilMenu;
+import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.GrindstoneMenu;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraftforge.common.ForgeHooks;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.ToolActions;
@@ -33,6 +39,7 @@ import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -192,6 +199,14 @@ public final class RuneEvents {
         Combat.forget(p);
     }
 
+    /** The server is stopping: rune screens close first, so what is on a cursor is back in the inventory to be saved. */
+    @SubscribeEvent
+    public static void stopping(ServerStoppingEvent e) {
+        for (ServerPlayer p : e.getServer().getPlayerList().getPlayers()) {
+            if (p.containerMenu instanceof RuneEditorMenu) p.closeContainer();
+        }
+    }
+
     @SubscribeEvent
     public static void stopped(ServerStoppedEvent e) {
         CastService.clear();
@@ -200,10 +215,18 @@ public final class RuneEvents {
 
     // ------------------------------------------------------------------------------------------------ keeping runes safe
 
-    /** An anvil never eats a runed piece of gear as the second input (its runes would be lost). */
+    /**
+     * An anvil never eats a runed piece of gear as the second input (its runes would be lost). Refusing leaves the last
+     * result standing in the output, so it is cleared with its price: otherwise it could be taken again for nothing.
+     */
     @SubscribeEvent
     public static void anvil(AnvilUpdateEvent e) {
-        if (RuneGear.hasRunes(e.getRight())) e.setCanceled(true);
+        if (!RuneGear.hasRunes(e.getRight())) return;
+        e.setCanceled(true);
+        if (e.getPlayer() != null && e.getPlayer().containerMenu instanceof AnvilMenu m) {
+            m.getSlot(m.getResultSlot()).set(ItemStack.EMPTY);
+            m.setMaximumCost(0);
+        }
     }
 
     /**
@@ -248,17 +271,33 @@ public final class RuneEvents {
         return null;
     }
 
-    /** Crafting with runed gear in the grid (a repair): its runes come back to the player unless the result kept them. */
+    /**
+     * Crafting with runed gear in the grid (a repair): its runes come back to the player unless the result kept them,
+     * or the recipe hands the gear back with its runes still on (a pack's recipe that only wears a tool in the grid).
+     */
     @SubscribeEvent
     public static void crafted(PlayerEvent.ItemCraftedEvent e) {
-        if (e.getEntity().level().isClientSide() || RuneGear.hasRunes(e.getCrafting())) return;
-        for (int i = 0; i < e.getInventory().getContainerSize(); i++) {
-            ItemStack s = e.getInventory().getItem(i);
-            // gear the recipe hands back (a tool used in the grid) keeps its own runes
-            if (RuneGear.hasRunes(s) && !s.hasCraftingRemainingItem()) {
-                for (ItemStack r : RuneGear.runeItems(s)) {
-                    if (!e.getEntity().getInventory().add(r)) e.getEntity().drop(r, false);
-                }
+        Player p = e.getEntity();
+        if (p.level().isClientSide() || RuneGear.hasRunes(e.getCrafting())) return;
+        Container grid = e.getInventory();
+        boolean any = false;
+        for (int i = 0; i < grid.getContainerSize() && !any; i++) any = RuneGear.hasRunes(grid.getItem(i));
+        if (!any) return;
+        NonNullList<ItemStack> left = null;
+        if (grid instanceof CraftingContainer cc) {
+            // what the grid will hold once this craft is taken, worked out as the result slot does
+            ForgeHooks.setCraftingPlayer(p);
+            left = p.level().getRecipeManager().getRemainingItemsFor(RecipeType.CRAFTING, cc, p.level());
+            ForgeHooks.setCraftingPlayer(null);
+        }
+        for (int i = 0; i < grid.getContainerSize(); i++) {
+            ItemStack s = grid.getItem(i);
+            if (!RuneGear.hasRunes(s)) continue;
+            // handed back: a new stack that still has the runes (the same stack is used up with the rest)
+            boolean handedBack = left != null ? i < left.size() && left.get(i) != s && RuneGear.hasRunes(left.get(i)) : s.hasCraftingRemainingItem();
+            if (handedBack) continue;
+            for (ItemStack r : RuneGear.runeItems(s)) {
+                if (!p.getInventory().add(r)) p.drop(r, false);
             }
         }
     }

@@ -35,6 +35,10 @@ final class Instants {
     static final double BLAST_REACH = 2.2;
     /** How far a Reel let go at a wall can pull its caster. */
     static final double GRAPPLE_RANGE = 24.0;
+    /** How far a Reel cast from the gear reaches. */
+    static final double REEL_REACH = 16.0;
+    /** How long after a blast of your own landing can't hurt you (if no lower than you were). */
+    static final int SAFE_TICKS = 30;
 
     private Instants() {}
 
@@ -108,10 +112,11 @@ final class Instants {
         Vec3 u = away.scale(1.0 / d);
         double s = (0.85 + 0.2 * heavy) * (1.0 - 0.5 * d / r);
         Vec3 v = p.getDeltaMovement();
-        p.setDeltaMovement(v.x * 0.3 + u.x * s, Math.max(0.0, v.y) * 0.3 + u.y * s + 0.1, v.z * 0.3 + u.z * s);
-        p.hurtMarked = true;
+        CastService.launch(p, new Vec3(v.x * 0.3 + u.x * s, Math.max(0.0, v.y) * 0.3 + u.y * s + 0.1, v.z * 0.3 + u.z * s));
         p.fallDistance = 0.0F;
-        cs.safeUntil = Math.max(cs.safeUntil, now + 2);
+        // coming back down to about where they were doesn't hurt; a fall on past that counts from there
+        cs.safeUntil = now + SAFE_TICKS;
+        cs.safeAboveY = p.getY() - 1.5;
     }
 
     // ------------------------------------------------------------------------------------------------ Cleave
@@ -198,7 +203,7 @@ final class Instants {
     private static Origin reel(CastContext ctx, Act a, Origin o, Vec3 dir, boolean root) {
         int swift = a.count(RuneId.SWIFT);
         if (root) {
-            double range = 12.0 + 2 * swift;
+            double range = REEL_REACH + 2 * swift;
             BlockHitResult bh = FlyingRune.clip(ctx.level, o.pos(), o.pos().add(dir.scale(range)), ctx.owner);
             boolean wall = bh.getType() != HitResult.Type.MISS;
             LivingEntity t = aimedCreature(ctx, o.pos(), dir, wall ? Math.min(range, bh.getLocation().distanceTo(o.pos()) + 0.5) : range);
@@ -234,25 +239,20 @@ final class Instants {
     }
 
     /**
-     * Pulls the caster to a point on a wall, in sight and within reach: a throw that tops out just above the point when
-     * it is above them (so they land on a ledge), or comes down onto it. Landing from the throw doesn't hurt.
+     * Pulls the caster to a point on a wall, in sight and within reach ({@link Grapples}): over onto its top when that
+     * is within reach above the point, else to hang there a moment.
      */
     private static Origin grapple(CastContext ctx, Act a, Vec3 at, Vec3 dir, int swift, Origin o) {
         ServerPlayer p = ctx.owner;
         Vec3 chest = p.getEyePosition().add(0, -0.3, 0);
         double dist = at.distanceTo(chest);
         Vec3 back = dist < 1.0E-6 ? Vec3.ZERO : chest.subtract(at).scale(0.3 / dist);
-        if (dist < 1.5 || dist > GRAPPLE_RANGE + 4 * swift || !RuneHits.clear(ctx.level, chest, at.add(back), p)) {
+        int colour = RuneFx.colour(a.rune, a.element);
+        if (!RuneHits.clear(ctx.level, chest, at.add(back), p) || !Grapples.start(p, at, swift, colour)) {
             Executor.fizzle(ctx, at);
             return o;
         }
-        Throw.Result th = Throw.to(at.x - p.getX(), at.y + Throw.LEDGE_CLEAR - p.getY(), at.z - p.getZ(), 1.0 + 0.25 * swift);
-        p.setDeltaMovement(th.vx(), th.vy(), th.vz());
-        p.hurtMarked = true;
-        p.fallDistance = 0.0F;
-        Caster cs = CastService.caster(p);
-        cs.safeUntil = Math.max(cs.safeUntil, ctx.level.getGameTime() + th.ticks() + 8);
-        RuneFx.line(ctx.level, chest, at, RuneFx.dust(RuneFx.colour(a.rune, a.element), 0.8F), 0.35);
+        RuneFx.line(ctx.level, chest, at, RuneFx.dust(colour, 0.8F), 0.35);
         RuneFx.puff(ctx.level, at, a.rune, a.element, 6, 0.15);
         RuneFx.play(ctx.level, chest, SoundEvents.FISHING_BOBBER_RETRIEVE, 1.0F, 1.2F);
         return new Origin(at, dir, null, true);

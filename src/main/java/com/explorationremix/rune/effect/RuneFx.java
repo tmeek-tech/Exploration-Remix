@@ -15,12 +15,19 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
+import java.util.function.Supplier;
+
 /**
  * How runes look and sound: each element its own colour, particles and sound, so a glance tells what a cast is doing.
  * The trails are drawn by each client from the entities it is sent; everything else is sent from the server as
  * vanilla particles and sounds, so nothing extra crosses the network.
  */
 public final class RuneFx {
+    /** How near a client's camera trail particles aren't drawn: a bolt leaving the hand or flying back past your face. */
+    static final double TRAIL_CLEAR = 1.6;
+    /** Where the camera is, on a client (its setup sets this; null until there is one): see {@link #boltTrail}. */
+    public static Supplier<Vec3> camera = () -> null;
+
     private RuneFx() {}
 
     /** A rune's colour: its element's, or the rune's own when it has none. */
@@ -65,6 +72,8 @@ public final class RuneFx {
         RandomSource r = l.random;
         Vec3 v = b.getDeltaMovement();
         double x = b.getX(), y = b.getY() + b.getBbHeight() * 0.5, z = b.getZ();
+        Vec3 cam = camera.get();
+        if (cam != null && cam.distanceToSqr(x, y, z) < (TRAIL_CLEAR + v.length()) * (TRAIL_CLEAR + v.length())) return;
         DustParticleOptions d = dust(colour(b.rune(), b.element()), 0.45F + 0.35F * b.size());
         int n = b.rune() == RuneId.ORB ? 3 : 2;
         for (int i = 0; i < n; i++) {

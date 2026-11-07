@@ -19,6 +19,11 @@ public final class Act {
     public final int copies;
     /** The energy one copy costs: the action, each modifier on it, and its element. */
     public final int unitCost;
+    /**
+     * What each arrow past the first costs when Fan copies a bow's or crossbow's own arrow: the loosed arrow is free (it
+     * is the shot), the extra ones are made by the runes.
+     */
+    public static final int ARROW_COPY = 6;
 
     Act(RuneId rune, int slot, int part, int[] mods, Element element, int copies) {
         this.rune = rune;
@@ -32,6 +37,9 @@ public final class Act {
         if (element != Element.NONE) c += RuneId.EMBER.cost;
         this.unitCost = c;
     }
+
+    /** What copy {@code copy} (0 the middle one) costs: {@link #unitCost}, and for an extra arrow {@link #ARROW_COPY} more. */
+    public int copyCost(int copy) { return unitCost + (rune == RuneId.ARROW && copy > 0 ? ARROW_COPY : 0); }
 
     public static int modIndex(RuneId m) {
         for (int i = 0; i < MODS.length; i++) if (MODS[i] == m) return i;

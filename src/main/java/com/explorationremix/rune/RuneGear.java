@@ -120,6 +120,9 @@ public final class RuneGear {
         return out;
     }
 
+    /** Takes the row off (its runes have been handed out). */
+    public static void clearRunes(ItemStack stack) { stack.removeTagKey(ROW_TAG); }
+
     /** Gives every rune on a breaking tool back to its owner (into the inventory, or dropped at their feet). */
     public static void dropRunes(ItemStack stack, Player player) {
         if (player.level().isClientSide) return;
@@ -130,13 +133,19 @@ public final class RuneGear {
     }
 
     /**
-     * What a grindstone makes of one runed piece of gear: the same piece with no runes and no casting state and, as a
-     * grindstone does, without its enchantments (curses stay) and with its repair cost reset. Its wear stays.
+     * What a grindstone makes of one runed piece of gear: the same piece with no runes and, as a grindstone does,
+     * without its enchantments (curses stay) and with its repair cost reset. Its wear stays, and so do its energy and
+     * its wait, so a round trip through a grindstone never refills it.
      */
     public static ItemStack ground(ItemStack stack) {
         ItemStack out = stack.copyWithCount(1);
         out.removeTagKey(ROW_TAG);
-        out.removeTagKey(CAST_TAG);
+        // its energy and its wait stay (taking the runes off doesn't refill it); only its place in a row starts over
+        CastState s = RuneTags.readState(out.getTag());
+        if (s != null) {
+            s.cursor = 0;
+            out.addTagElement(CAST_TAG, RuneTags.writeState(s, gearId(out)));
+        }
         out.removeTagKey("Enchantments");
         out.removeTagKey("StoredEnchantments");
         java.util.Map<net.minecraft.world.item.enchantment.Enchantment, Integer> curses = new java.util.LinkedHashMap<>();

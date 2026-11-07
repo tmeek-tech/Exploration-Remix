@@ -285,7 +285,20 @@ class ReaderTest {
     void fanAtTheFrontLoosesThreeArrows() {
         CastReading c = read("fan on_hit burst", BOW).cast(0);
         assertEquals("[3xarrow]", acts(c.part(0)));
-        assertEquals(3 * 14, c.cost());
+        // three bursts, and the two arrows the runes add
+        assertEquals(3 * 14 + 2 * Act.ARROW_COPY, c.cost());
+    }
+
+    @Test
+    void theArrowsFanAddsAreNeverFree() {
+        CastReading three = read("fan", BOW).cast(0), five = read("fan fan", BOW).cast(0);
+        assertEquals("[3xarrow]", acts(three.part(0)));
+        assertEquals(2 * Act.ARROW_COPY, three.cost());
+        assertEquals("[5xarrow]", acts(five.part(0)));
+        assertEquals(4 * Act.ARROW_COPY, five.cost());
+        // a crossbow's too; the shot itself stays free
+        assertEquals(4 * Act.ARROW_COPY, read("fan fan", HostSpec.of(Host.CROSSBOW)).cast(0).cost());
+        assertEquals(6, read("seek pierce", BOW).cast(0).cost());
     }
 
     @Test

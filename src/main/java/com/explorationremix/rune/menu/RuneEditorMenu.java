@@ -1,10 +1,12 @@
 package com.explorationremix.rune.menu;
 
 import com.explorationremix.rune.Combat;
+import com.explorationremix.rune.RunDepth;
 import com.explorationremix.rune.RuneGear;
 import com.explorationremix.rune.RuneRegistry;
 import com.explorationremix.rune.engine.CastState;
 import com.explorationremix.rune.engine.HostSpec;
+import com.explorationremix.rune.engine.Reading;
 import com.explorationremix.rune.engine.Row;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.item.RuneItem;
@@ -12,7 +14,6 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
-import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -24,8 +25,10 @@ import net.minecraftforge.network.NetworkHooks;
 
 /**
  * The rune screen: one piece of gear in the gear slot, its row of rune slots, and the player's inventory. Opened with
- * the rune key (R) anywhere, once nothing has hurt the player for a few seconds; the gear in the main hand (or else
- * the off hand) is put in the gear slot, and goes back there when the screen closes.
+ * the rune key (R) anywhere, once nothing has hurt the player for a few seconds. The gear slot is the hand itself (the
+ * main hand, or the off hand when only it holds gear): the gear never leaves the player's inventory, so it is saved
+ * with them, travels with them and can't be lost whatever happens while the screen is open. Its hotbar slot is left
+ * out of the screen's hotbar, so it shows in one place.
  *
  * <p>The rune slots are a view of the gear's row, never a store of their own: placing a rune writes it into the gear
  * and uses the item up, taking one out clears it from the gear and hands back the same item. So a rune is always in
@@ -45,17 +48,16 @@ public class RuneEditorMenu extends AbstractContainerMenu {
     public static final int GEAR_SLOT = 0, RUNE_SLOTS = 1, INV_SLOTS = RUNE_SLOTS + MAX_SLOTS, INV_END = INV_SLOTS + 36;
 
     private final Player player;
-    private final SimpleContainer gearBox;
     private final RowView row = new RowView();
     /** Ticks until runes can be moved (0: now); the server keeps it, the client is told. */
     private final DataSlot lock = DataSlot.standalone();
-    /** The inventory slot the gear came from, to put it back there (-1: none). */
-    private final int sourceSlot;
+    /** The inventory slot the gear slot shows: a hotbar slot, or the off hand. */
+    private final int handSlot;
 
     public static int runeX(int i) { return ROW_X + i * ROW_STEP; }
 
-    /** The client's copy: the server says what is in it. */
-    public static RuneEditorMenu client(int id, Inventory inv, FriendlyByteBuf buf) { return new RuneEditorMenu(id, inv, -1); }
+    /** The client's copy: the server says which hand it shows, and what is in it. */
+    public static RuneEditorMenu client(int id, Inventory inv, FriendlyByteBuf buf) { return new RuneEditorMenu(id, inv, buf.readVarInt()); }
 
     /** Opens the rune screen for a player, with the gear in hand in the gear slot. Refused in combat. */
     public static void open(ServerPlayer p) {
@@ -66,35 +68,30 @@ public class RuneEditorMenu extends AbstractContainerMenu {
             return;
         }
         Inventory inv = p.getInventory();
-        int source = RuneGear.isGear(inv.getSelected()) ? inv.selected : RuneGear.isGear(inv.offhand.get(0)) ? Inventory.SLOT_OFFHAND : -1;
-        NetworkHooks.openScreen(p, new SimpleMenuProvider((id, pinv, pl) -> new RuneEditorMenu(id, pinv, source),
-                Component.translatable("container.explorationremix.rune_editor")));
+        int hand = !RuneGear.isGear(inv.getSelected()) && RuneGear.isGear(inv.offhand.get(0)) ? Inventory.SLOT_OFFHAND : inv.selected;
+        NetworkHooks.openScreen(p, new SimpleMenuProvider((id, pinv, pl) -> new RuneEditorMenu(id, pinv, hand),
+                Component.translatable("container.explorationremix.rune_editor")), buf -> buf.writeVarInt(hand));
     }
 
-    public RuneEditorMenu(int id, Inventory inv, int sourceSlot) {
+    public RuneEditorMenu(int id, Inventory inv, int handSlot) {
         super(RuneRegistry.EDITOR.get(), id);
         this.player = inv.player;
-        this.sourceSlot = sourceSlot;
-        this.gearBox = new SimpleContainer(1) {
-            @Override
-            public int getMaxStackSize() { return 1; }
-        };
-        if (!player.level().isClientSide && sourceSlot >= 0 && RuneGear.isGear(inv.getItem(sourceSlot))) {
-            gearBox.setItem(0, inv.removeItemNoUpdate(sourceSlot));
-        }
-        addSlot(new GearSlot(gearBox, 0, GEAR_X, GEAR_Y));
+        this.handSlot = handSlot == Inventory.SLOT_OFFHAND || Inventory.isHotbarSlot(handSlot) ? handSlot : inv.selected;
+        addSlot(new GearSlot(inv, this.handSlot, GEAR_X, GEAR_Y));
         for (int i = 0; i < MAX_SLOTS; i++) addSlot(new RuneSlot(row, i, runeX(i), ROW_Y));
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 9; c++) addSlot(new Slot(inv, c + r * 9 + 9, INV_X + c * 18, INV_Y + r * 18));
         }
-        for (int c = 0; c < 9; c++) addSlot(new Slot(inv, c, INV_X + c * 18, HOTBAR_Y));
+        for (int c = 0; c < 9; c++) addSlot(c == this.handSlot ? new LeftOutSlot(inv, c, INV_X + c * 18, HOTBAR_Y) : new Slot(inv, c, INV_X + c * 18, HOTBAR_Y));
         addDataSlot(lock);
+        // runes stored past the gear's last slot (only edited data puts them there) go back to the player at once
+        returnOverflow(gear());
     }
 
     // ------------------------------------------------------------------------------------------------ what the screen reads
 
     /** The gear in the gear slot (empty if none). */
-    public ItemStack gear() { return gearBox.getItem(0); }
+    public ItemStack gear() { return slots.get(GEAR_SLOT).getItem(); }
 
     /** Slots the gear has (0 if there is no gear). */
     public int slotCount() {
@@ -183,7 +180,11 @@ public class RuneEditorMenu extends AbstractContainerMenu {
         return false;
     }
 
-    /** The gear goes back where it came from (or into the inventory); whatever is on the cursor goes back too. */
+    /**
+     * Whatever is on the cursor goes back into the inventory (the gear never left it). The player is only "not alive"
+     * while being moved to another world, so being dead is what counts, as it does for a logout (the screen is closed
+     * before they are saved: RuneEvents).
+     */
     @Override
     public void removed(Player p) {
         if (!p.level().isClientSide) {
@@ -192,26 +193,21 @@ public class RuneEditorMenu extends AbstractContainerMenu {
                 setCarried(ItemStack.EMPTY);
                 giveBack(p, carried);
             }
-            ItemStack g = gearBox.removeItemNoUpdate(0);
-            if (!g.isEmpty()) {
-                Inventory inv = p.getInventory();
-                if (p.isAlive() && sourceSlot >= 0 && inv.getItem(sourceSlot).isEmpty()) inv.setItem(sourceSlot, g);
-                else giveBack(p, g);
-            }
         }
         super.removed(p);
     }
 
-    /**
-     * Into the inventory, or dropped at the player's feet if it is full or they are dead. A player who logged out with
-     * the screen open has it closed before they are saved (RuneEvents), so their gear is saved with them.
-     */
+    /** Into the inventory (or dropped at the player's feet if there is no room, or they are dead). */
     private static void giveBack(Player p, ItemStack s) {
         if (s.isEmpty()) return;
-        if (!p.isAlive() || !p.getInventory().add(s)) p.drop(s, false);
+        if (p.isDeadOrDying()) p.drop(s, false);
+        else p.getInventory().placeItemBackInInventory(s);
     }
 
-    /** Writes a row into the gear, which then starts again from its first cast. */
+    /**
+     * Writes a row into the gear, which then starts again from its first cast. A row left part-way through waits out
+     * the new row's recovery from its last cast, as finishing it would have, so an edit can't repeat a first cast early.
+     */
     private void write(Row r) {
         ItemStack g = gear();
         HostSpec spec = RuneGear.spec(g);
@@ -220,10 +216,14 @@ public class RuneEditorMenu extends AbstractContainerMenu {
         if (!player.level().isClientSide && RuneGear.hasState(g)) {
             long now = player.level().getGameTime();
             CastState s = RuneGear.state(g, spec, now);
+            if (s.cursor != 0) {
+                Reading after = RuneGear.reading(g, RunDepth.get(player));
+                if (after != null) s.readyAt = Math.max(s.readyAt, s.lastCast + after.recovery());
+            }
             s.cursor = 0;
             RuneGear.setState(g, s);
         }
-        gearBox.setChanged();
+        slots.get(GEAR_SLOT).setChanged();
     }
 
     /** Runes stored past the gear's last slot (only edited data puts them there) go back to the player. */
@@ -235,6 +235,7 @@ public class RuneEditorMenu extends AbstractContainerMenu {
 
     // ------------------------------------------------------------------------------------------------ slots
 
+    /** The hand the screen edits: the player's own inventory slot. */
     private final class GearSlot extends Slot {
         GearSlot(Container c, int i, int x, int y) { super(c, i, x, y); }
 
@@ -249,6 +250,20 @@ public class RuneEditorMenu extends AbstractContainerMenu {
             super.set(s);
             returnOverflow(s);
         }
+    }
+
+    /** The hand's own hotbar slot, left out of the screen's hotbar (it is the gear slot): not drawn, not clickable. */
+    private static final class LeftOutSlot extends Slot {
+        LeftOutSlot(Container c, int i, int x, int y) { super(c, i, x, y); }
+
+        @Override
+        public boolean mayPlace(ItemStack s) { return false; }
+
+        @Override
+        public boolean mayPickup(Player p) { return false; }
+
+        @Override
+        public boolean isActive() { return false; }
     }
 
     private final class RuneSlot extends Slot {

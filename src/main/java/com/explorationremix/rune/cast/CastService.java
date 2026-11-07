@@ -25,6 +25,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -184,12 +185,16 @@ public final class CastService {
         return Result.CAST;
     }
 
-    /** The cast leaves the hand: the arm flicks, a spell sound, a puff of the first rune's colour. */
+    /** The cast leaves the hand: the arm flicks, a spell sound, a puff of the first rune's colour at the hand. */
     private static void castFx(ServerPlayer p, InteractionHand hand, Plan plan) {
         if (plan.roots.isEmpty()) return;
         Act first = plan.roots.get(0).act;
-        Vec3 at = p.getEyePosition().add(p.getLookAngle().scale(0.8)).add(0, -0.3, 0);
-        RuneFx.puff(p.serverLevel(), at, first.rune, first.element, 4, 0.08);
+        Vec3 look = p.getLookAngle();
+        // beside the view, where the hand is, not over the crosshair
+        boolean right = (hand == InteractionHand.MAIN_HAND) == (p.getMainArm() == HumanoidArm.RIGHT);
+        Vec3 side = Origin.flat(new Vec3(-look.z, 0, look.x)).scale(right ? 0.45 : -0.45);
+        Vec3 at = p.getEyePosition().add(look.scale(0.9)).add(side).add(0, -0.45, 0);
+        RuneFx.puff(p.serverLevel(), at, first.rune, first.element, 3, 0.06);
         if (first.rune.shape == Shape.BOLT || first.rune == RuneId.REEL) {
             RuneFx.play(p.serverLevel(), at, SoundEvents.ILLUSIONER_CAST_SPELL, 0.45F, 1.5F + p.getRandom().nextFloat() * 0.3F);
         }
@@ -244,7 +249,9 @@ public final class CastService {
         if (RuneGear.host(gear) != Host.SWORD || !RuneGear.hasRunes(gear) || !RuneHits.isFoe(p, target)) return;
         HostSpec spec = RuneGear.spec(gear);
         if (spec == null) return;
-        float add = (float) Math.min(RuneConfig.get(RuneConfig.INSTANCE.swordChargeMaxPerHit), amount * RuneConfig.get(RuneConfig.INSTANCE.swordChargePerDamage));
+        // no more than the creature had left (still its health before this hit): overkill on a weak one charges nothing extra
+        float dealt = Math.min(amount, target.getHealth());
+        float add = (float) Math.min(RuneConfig.get(RuneConfig.INSTANCE.swordChargeMaxPerHit), dealt * RuneConfig.get(RuneConfig.INSTANCE.swordChargePerDamage));
         CastState s = RuneGear.state(gear, spec, now);
         float got = CastMachine.add(s, spec, now, add);
         if (got <= 0.0F) return;
@@ -258,16 +265,38 @@ public final class CastService {
 
     // ------------------------------------------------------------------------------------------------ ticks
 
-    /** Each player's tick: which gear is in hand, dashes, safe landings from their own throws, and once a second the run depth. */
+    /**
+     * Each player's tick, at its end (after the server has moved them): which gear is in hand, dashes, a Reel's pull,
+     * throws set this tick, safe landings from their own blasts, and once a second the run depth.
+     */
     public static void tick(ServerPlayer p) {
         if (p instanceof FakePlayer) return;
         Caster c = caster(p);
         long now = p.level().getGameTime();
         trackHands(p, c, now);
         if (!c.dashes.isEmpty() || c.airDashUsed) Dashes.tick(p, c, now);
-        if (now <= c.safeUntil) p.fallDistance = 0.0F;
+        if (c.pull != null) Grapples.tick(p, c, now);
+        if (c.launch != null) {
+            // not sent yet: the move the server just made slowed it (by ground friction, even), so it goes as it was set
+            if (p.hurtMarked) p.setDeltaMovement(c.launch);
+            c.launch = null;
+        }
+        if (now <= c.safeUntil && p.getY() > c.safeAboveY) p.fallDistance = 0.0F;
         if (c.airBlastUsed && (p.onGround() || p.isInWater())) c.airBlastUsed = false;
+        if (c.airPullUsed && c.pull == null && now - c.pullTick > 4 && (p.onGround() || p.isInWater())) c.airPullUsed = false;
         if (p.tickCount % 20 == 0) depth(p);
+    }
+
+    /**
+     * Throws the player (a dash, a blast). A speed set in the middle of a tick, as a carrier's payload is, would be
+     * slowed by the server's own move of the player before it is sent; this keeps it until it goes. A throw ends a pull.
+     */
+    static void launch(ServerPlayer p, Vec3 v) {
+        Caster c = caster(p);
+        c.pull = null;
+        c.launch = v;
+        p.setDeltaMovement(v);
+        p.hurtMarked = true;
     }
 
     /** The end of each server tick: payloads that waited their turn, and the arrows' casts. */

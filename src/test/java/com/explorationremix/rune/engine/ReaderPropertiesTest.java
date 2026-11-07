@@ -85,7 +85,7 @@ class ReaderPropertiesTest {
                     while (!todo.isEmpty()) {
                         Plan.Node node = todo.remove(todo.size() - 1);
                         nodes++;
-                        cost += node.act.unitCost;
+                        cost += node.act.copyCost(node.copy);
                         todo.addAll(node.children);
                     }
                     assertEquals(c.planned(), nodes, row.toString());

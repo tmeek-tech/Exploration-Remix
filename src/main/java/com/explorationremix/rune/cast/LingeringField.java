@@ -24,6 +24,8 @@ import net.minecraft.world.phys.Vec3;
  */
 final class LingeringField implements FieldLogic {
     static final int LIFE = 60, PULSE = 10;
+    /** How far below the point it is let go a Field looks for a floor to settle on (none: it stays where it is). */
+    static final double DROP = 16.0;
 
     private final CastContext ctx;
     private final Plan.Node node;
@@ -48,7 +50,8 @@ final class LingeringField implements FieldLogic {
             Executor.fizzle(ctx, o.pos());
             return;
         }
-        Vec3 at = root ? aimed(ctx) : ground(ctx.level, o.pos(), 4.0, ctx);
+        // let go by a carrier (a lobbed orb, a dash), it settles on the floor below, however high it was let go
+        Vec3 at = root ? aimed(ctx) : ground(ctx.level, o.pos(), DROP, ctx);
         float radius = 2.0F + a(node).count(RuneId.WIDE);
         LingeringField logic = new LingeringField(ctx, node, c, radius);
         RuneField f = new RuneField(RuneRegistry.FIELD.get(), ctx.level);

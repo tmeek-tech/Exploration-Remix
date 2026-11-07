@@ -30,7 +30,12 @@ import java.util.UUID;
  * shape it (Swift flies faster, Heavy hits harder, Pierce passes through, Seek bends toward a foe, Ember sets it
  * alight, the other elements and Siphon act where it hits), and what follows goes off where it lands (On hit), or a
  * moment after the shot, wherever it has got to, and the arrow with it (After a moment). Fan at the front looses
- * copies to either side; copies can't be picked up. The arrow deals its own damage.
+ * copies to either side, made from the arrow as it left the bow; copies can't be picked up. The arrow deals its own
+ * damage. Swift makes it faster, not harder-hitting (an arrow's hit grows with its speed, so its damage is scaled
+ * back), as Swift does for every rune.
+ *
+ * <p>Runes never touch who they mustn't (RuneHits.canHit): a copy Fan made passes them by, and the shot itself hits
+ * them as the plain arrow it was, its runes spent.
  *
  * <p>Hits are noted when the arrow strikes and settled at the end of the tick, once the arrow's own damage has landed:
  * that is when a kill or a throat hit is known for Siphon.
@@ -52,17 +57,23 @@ public final class ArrowRides {
         Vec3 hitAt, hitDir;
         boolean hitWall, hitFoe;
         Vec3 last;
+        /** The arrow as it left the bow, before the runes shaped it. */
+        final Plain plain;
 
-        Ride(CastContext ctx, Plan.Node node, AbstractArrow arrow) {
+        Ride(CastContext ctx, Plan.Node node, AbstractArrow arrow, Plain plain) {
             this.ctx = ctx;
             this.node = node;
             this.a = node.act;
             this.arrow = arrow;
             this.last = arrow.position();
+            this.plain = plain;
         }
 
         boolean hasPayload() { return node.relay != null && !node.children.isEmpty(); }
     }
+
+    /** What the runes change on an arrow, as it was before they did (Swift's speed is undone by its own factor). */
+    private record Plain(double damage, byte pierce, boolean onFire) {}
 
     private static final Map<Integer, Ride> RIDES = new HashMap<>();
     /** Set while this class adds Fan's copies, so they aren't taken for new shots. */
@@ -74,23 +85,26 @@ public final class ArrowRides {
 
     /** The cast fired with this shot: its arrow, and copies for a Fan, carry it. */
     static void shoot(CastContext ctx, List<Plan.Node> roots, AbstractArrow arrow) {
+        // copies are made from the arrow as it left the bow, never from one the runes have shaped already
         Vec3 v = arrow.getDeltaMovement();
+        CompoundTag asLoosed = arrow.saveWithoutId(new CompoundTag());
+        Plain plain = new Plain(arrow.getBaseDamage(), arrow.getPierceLevel(), arrow.isOnFire());
         for (Plan.Node n : roots) {
             if (n.act.rune != RuneId.ARROW) continue;
-            AbstractArrow carrier = n.copy == 0 ? arrow : copy(arrow, Origin.turn(v, n.yaw));
+            AbstractArrow carrier = n.copy == 0 ? arrow : copy(arrow, asLoosed, Origin.turn(v, n.yaw));
             if (carrier == null) continue;
             shape(carrier, n.act);
-            RIDES.put(carrier.getId(), new Ride(ctx, n, carrier));
+            RIDES.put(carrier.getId(), new Ride(ctx, n, carrier, plain));
         }
         RuneFx.play(ctx.level, arrow.position(), RuneFx.sound(RuneId.SPARK, roots.isEmpty() ? Element.NONE : roots.get(0).act.element), 0.5F, 1.4F);
     }
 
     /** A copy of the arrow flying along {@code v} (Fan's spread). It can't be picked up. */
     @Nullable
-    private static AbstractArrow copy(AbstractArrow arrow, Vec3 v) {
+    private static AbstractArrow copy(AbstractArrow arrow, CompoundTag asLoosed, Vec3 v) {
         Entity e = arrow.getType().create(arrow.level());
         if (!(e instanceof AbstractArrow c)) return null;
-        CompoundTag tag = arrow.saveWithoutId(new CompoundTag());
+        CompoundTag tag = asLoosed.copy();
         tag.remove("UUID");
         c.load(tag);
         c.setUUID(Mth.createInsecureUUID(arrow.level().random));
@@ -114,7 +128,12 @@ public final class ArrowRides {
     /** The front modifiers and element on the arrow itself. */
     private static void shape(AbstractArrow arrow, Act a) {
         int swift = a.count(RuneId.SWIFT), heavy = a.count(RuneId.HEAVY), pierce = a.count(RuneId.PIERCE);
-        if (swift > 0) arrow.setDeltaMovement(arrow.getDeltaMovement().scale(Math.pow(1.3, swift)));
+        if (swift > 0) {
+            // faster and further, not harder: an arrow hits for its speed times its base damage
+            double k = Math.pow(1.3, swift);
+            arrow.setDeltaMovement(arrow.getDeltaMovement().scale(k));
+            arrow.setBaseDamage(arrow.getBaseDamage() / k);
+        }
         if (heavy > 0) arrow.setBaseDamage(arrow.getBaseDamage() * (1.0 + 0.35 * heavy));
         if (pierce > 0) arrow.setPierceLevel((byte) Math.min(127, arrow.getPierceLevel() + 2 * pierce));
         if (a.element == Element.EMBER) arrow.setSecondsOnFire(100);
@@ -130,7 +149,10 @@ public final class ArrowRides {
         Vec3 dir = arrow.getDeltaMovement().lengthSqr() < 1.0E-8 ? new Vec3(0, 0, 1) : arrow.getDeltaMovement().normalize();
         if (hr instanceof EntityHitResult eh) {
             LivingEntity body = RuneHits.body(eh.getEntity());
-            if (body == null || !RuneHits.canHit(r.ctx.owner, body)) return;
+            if (body == null || !RuneHits.canHit(r.ctx.owner, body)) {
+                spare(e, r, arrow);
+                return;
+            }
             if (r.ctx.firstStrike(r.a, body) && (r.a.element != Element.NONE || r.a.has(RuneId.SIPHON))) {
                 RuneHits.strike(r.ctx, r.a, body, eh.getEntity(), eh.getLocation(), dir, 0.0F, 0.0F, arrow, null);
             }
@@ -146,6 +168,24 @@ public final class ArrowRides {
             r.hitDir = Origin.reflect(dir, n);
             r.hitWall = true;
         }
+    }
+
+    /**
+     * The arrow meets someone runes never touch (or something that isn't a creature): a copy Fan made passes them by;
+     * the shot itself hits as the plain arrow it was, and its runes are spent.
+     */
+    private static void spare(ProjectileImpactEvent e, Ride r, AbstractArrow arrow) {
+        if (r.node.copy > 0) {
+            e.setImpactResult(ProjectileImpactEvent.ImpactResult.SKIP_ENTITY);
+            return;
+        }
+        Plain p = r.plain;
+        arrow.setBaseDamage(p.damage());
+        arrow.setPierceLevel(p.pierce());
+        int swift = r.a.count(RuneId.SWIFT);
+        if (swift > 0) arrow.setDeltaMovement(arrow.getDeltaMovement().scale(Math.pow(1.3, -swift)));
+        if (!p.onFire()) arrow.clearFire();
+        r.released = true;
     }
 
     /** At the end of each server tick: steer Seek arrows, settle hits, let payloads go. */

@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 
 /**
@@ -25,6 +26,11 @@ final class RuneBoltRenderer extends EntityRenderer<RuneBolt> {
     private static final float HALO = 1.9F, HALO_ALPHA = 0.3F;
     /** How far the sprite's colour is taken towards white, so its middle reads hotter than the halo. */
     private static final float CORE_WHITE = 0.25F;
+    /**
+     * Near the camera a bolt fades out (one leaving the hand, or a shard sprayed back off a wall past your face, would
+     * fill the view): gone nearer than the first, whole beyond the second, in blocks.
+     */
+    private static final double FADE_NEAR = 0.9, FADE_FAR = 2.4;
 
     RuneBoltRenderer(EntityRendererProvider.Context ctx) {
         super(ctx);
@@ -69,9 +75,20 @@ final class RuneBoltRenderer extends EntityRenderer<RuneBolt> {
         return b.shouldRender(camX, camY, camZ) && frustum.isVisible(b.getBoundingBox().inflate(half(b) * HALO + 0.25F));
     }
 
+    /** 0 (not drawn) to 1 (whole): how much of the bolt is drawn, by how near the camera its middle is. */
+    private float fade(RuneBolt b, float partialTick) {
+        Vec3 cam = entityRenderDispatcher.camera.getPosition();
+        double x = Mth.lerp(partialTick, b.xo, b.getX()) - cam.x;
+        double y = Mth.lerp(partialTick, b.yo, b.getY()) + b.getBbHeight() * 0.5 - cam.y;
+        double z = Mth.lerp(partialTick, b.zo, b.getZ()) - cam.z;
+        double d = Math.sqrt(x * x + y * y + z * z);
+        return (float) Mth.clamp((d - FADE_NEAR) / (FADE_FAR - FADE_NEAR), 0.0, 1.0);
+    }
+
     @Override
     public void render(RuneBolt b, float yaw, float partialTick, PoseStack pose, MultiBufferSource buffers, int light) {
-        if (!b.isInvisible()) {
+        float fade = fade(b, partialTick);
+        if (!b.isInvisible() && fade > 0.0F) {
             RuneId rune = b.rune();
             int rgb = RuneFx.colour(rune, b.element());
             float half = half(b);
@@ -81,9 +98,9 @@ final class RuneBoltRenderer extends EntityRenderer<RuneBolt> {
             // its middle, where the trail comes from
             pose.translate(0.0F, b.getBbHeight() * 0.5F, 0.0F);
             GlowSprite.facing(pose, buffers.getBuffer(RenderType.entityTranslucentEmissive(GLOW)), camera, half * HALO, -0.5F * turn,
-                    0.02F, rgb, HALO_ALPHA);
+                    0.02F, rgb, HALO_ALPHA * fade);
             GlowSprite.facing(pose, buffers.getBuffer(RenderType.entityTranslucentEmissive(getTextureLocation(b))), camera, half, turn,
-                    0.0F, RuneLook.mix(0xFF000000 | rgb, 0xFFFFFFFF, CORE_WHITE) & 0xFFFFFF, 1.0F);
+                    0.0F, RuneLook.mix(0xFF000000 | rgb, 0xFFFFFFFF, CORE_WHITE) & 0xFFFFFF, fade);
             pose.popPose();
         }
         super.render(b, yaw, partialTick, pose, buffers, light);

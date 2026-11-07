@@ -55,8 +55,7 @@ final class Dashes {
         double speed = 1.2 + 0.4 * node.act.count(RuneId.SWIFT);
         Vec3 v = dir.scale(speed);
         if (p.onGround()) v = v.add(0, 0.2, 0);
-        p.setDeltaMovement(v);
-        p.hurtMarked = true;
+        CastService.launch(p, v);
         p.fallDistance = 0;
         long now = ctx.level.getGameTime();
         c.dashes.add(new Dash(ctx, node, dir, now));

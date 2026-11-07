@@ -2,6 +2,9 @@ package com.explorationremix.rune.cast;
 
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
+
+import javax.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -10,9 +13,9 @@ import java.util.Set;
 
 /**
  * One player's casting on the server: what they have out (bolts and fields, for the limit), payloads waiting their
- * turn, which gear has been in each hand since when (the swap delay, a bow's regeneration), their dashes and the
- * throws of their own blasts and Reels, their last sword swing (a full-strength hit charges the sword), and a crossbow
- * shot about to fire. Never saved.
+ * turn, which gear has been in each hand since when (the swap delay, a bow's regeneration), their dashes, a Reel
+ * pulling them, the throws of their own blasts, their last sword swing (a full-strength hit charges the sword), and a
+ * crossbow shot about to fire. Never saved.
  */
 final class Caster {
     /** A hand's gear: its id (0 for none), the inventory slot it is in, and since when. */
@@ -30,11 +33,22 @@ final class Caster {
     final List<Dashes.Dash> dashes = new ArrayList<>();
     boolean airDashUsed;
 
+    /** A Reel pulling them to a wall, if one is. */
+    @Nullable
+    Grapples.Grapple pull;
+    /** One pull to a wall each time they touch the ground (or water): set by a pull, cleared once they stand again. */
+    boolean airPullUsed;
+    long pullTick = -1;
+    /** A throw (a dash, a blast) set this tick: kept until it is sent, so the server's own move doesn't slow it. */
+    @Nullable
+    Vec3 launch;
+
     /** Their own blasts: one throw a tick, one while off the ground. */
     long blastTick = -1;
     boolean airBlastUsed;
-    /** Until this tick a throw of their own (a Reel to a wall, a blast) can't hurt them when they land. */
+    /** Until this tick, and while no lower than {@code safeAboveY}, landing from a blast of their own can't hurt them. */
     long safeUntil = -1;
+    double safeAboveY = Double.NEGATIVE_INFINITY;
 
     int swingTarget = -1;
     long swingTick = -1;
