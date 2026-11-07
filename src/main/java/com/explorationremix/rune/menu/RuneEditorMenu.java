@@ -217,6 +217,9 @@ public class RuneEditorMenu extends AbstractContainerMenu {
         ItemStack g = gear();
         HostSpec spec = RuneGear.spec(g);
         if (spec == null) return;
+        // runes stored past the last slot go back before the row is written over them, however this gear reached the
+        // slot (a number-key swap or a pickup never runs GearSlot.set)
+        returnOverflow(g);
         RuneGear.setRow(g, r);
         if (!player.level().isClientSide && RuneGear.hasState(g)) {
             long now = player.level().getGameTime();
