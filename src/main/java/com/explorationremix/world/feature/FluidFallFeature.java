@@ -60,11 +60,15 @@ import java.util.Optional;
  * there before that neighbour's own decorations, and Terrain Slabs' slab pass, which takes any block with a fluid in it
  * for a puddle, makes a sump there into a waterlogged slab with the falling lava over it (0.8.0, 8 of 50 falls).
  * So every lava fall meets its own chunk's slabs, which that pass laid before it (at underground_structures): a top slab
- * under a step of the vault, a bottom slab on a step of the floor. A lava fall takes such a slab, dry, for rock where it
- * seals a source or a sump (lava never runs into a slab) and for room where its face or its column passes (the fall's
- * lava takes its place, the sump going into the floor block under it). Before that rule the pack run's region held 27
- * falls where the voxels, which hold no slabs, place 40, and a slab stood in the way at 10 of the 14 missing. Water falls
- * (the upper layers') are as they were.
+ * under a step of the vault, a bottom slab on a step of the floor. A lava fall takes such a slab, dry, for the open
+ * block it was laid in, as the voxels the tests decorate have it (they hold no slabs): room where its face or its column
+ * passes (the fall's lava takes its place, the sump going into the floor block under it), and no seal where a source or
+ * a sump must be closed in, so a slab neither stops a fall the voxels pour nor seals one they refuse. Without the rule
+ * the pack run's region held 27 Galleries falls where the voxels place 40, and a slab stood in the way at 10 of the 14
+ * missing; with a slab taken for rock beside a source or a sump as well (lava never runs into one) it held 44 Galleries
+ * falls, 14 of them closed in by a slab, one of those pouring within two blocks of a way down's ramp, where the region's
+ * voxels hold no lava, and 56 Wasteland falls, 20 closed in by a slab (36 needed none). Water falls (the upper layers')
+ * are as they were.
  */
 public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
     public record Config(BlockState fluid, HolderSet<Block> rock, int minDrop, int search, IntProvider width, int minWidth, Mode mode, int tries,
@@ -334,10 +338,10 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         return new Pour(src, front, drop, sump, ceiling, kept);
     }
 
-    /** Rock, a full block with no fluid in it, or for a lava fall a laid slab ({@link #laidSlab}), which lava never runs into. */
+    /** Rock, or a full block with no fluid in it (a laid slab is not: see the class comment). */
     private static boolean sealed(WorldGenLevel level, Config c, BlockPos pos) {
         BlockState s = level.getBlockState(pos);
-        return s.is(c.rock()) || (s.isSolidRender(level, pos) && s.getFluidState().isEmpty()) || (lava(c) && laidSlab(s));
+        return s.is(c.rock()) || (s.isSolidRender(level, pos) && s.getFluidState().isEmpty());
     }
 
     /**
@@ -352,7 +356,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
 
     /**
      * A dry slab another mod's slab pass laid in the terrain ({@link LavaPocketsFeature#generated}: Terrain Slabs' top
-     * slabs under the vaults' steps and bottom slabs on the floors'): lava never runs into one (a slab takes only water).
+     * slabs under the vaults' steps and bottom slabs on the floors'), in a block that was open before it.
      */
     static boolean laidSlab(BlockState s) {
         return LavaPocketsFeature.generated(s) && !LavaPocketsFeature.wet(s);

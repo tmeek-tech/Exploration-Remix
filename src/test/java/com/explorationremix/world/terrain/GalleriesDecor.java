@@ -36,8 +36,8 @@ import java.util.TreeMap;
  * asking the real walk guard ({@link Walkway} for this terrain). The other features of these biomes set no block in a
  * player's way (the climbing chains, the open way pass, the glow, whose light {@code GlowLight} measures, and the lava
  * pockets' pass, which finds no other mod's slabs in these blocks). Nor do these blocks hold Terrain Slabs' slabs, which
- * the game lays before the falls and which a lava fall takes for rock or room (FluidFallFeature, fix round 3): here every
- * fall pours as it would where no slab stood in its way.
+ * the game lays before the falls and which a lava fall takes for the open block they were laid in (FluidFallFeature, fix
+ * round 3): here every fall pours, and is refused, as it is there.
  *
  * <p>Each chunk draws from its own random, not from the game's decoration seeds: the placements are the game's in kind
  * and number, not block for block. Data and code of an older tree run too (no fall_sites, no ways-down guard).
