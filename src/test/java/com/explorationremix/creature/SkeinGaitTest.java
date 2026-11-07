@@ -170,6 +170,44 @@ class SkeinGaitTest {
     }
 
     @Test
+    void aJourneyRunsLongAndStraightWithBriefFreezesThenRestsLong() {
+        SkeinGait g = new SkeinGait();
+        DoubleSupplier r = rng(11);
+        int[] seen = new int[4];    // freezes, pauses among them, ticks running, ticks frozen
+        for (int j = 0; j < 40; j++) {
+            journey(g, r, seen);
+            // there: a long rest, as after roaming
+            assertFalse(g.outing());
+            assertTrue(g.left() >= 240 && g.left() <= 240 + 1800, "rest after a journey " + g.left());
+        }
+        double share = seen[1] / (double) seen[0];
+        assertTrue(seen[0] > 200, "freezes " + seen[0]);
+        assertTrue(share > 0.12 && share < 0.3, "now and then a longer pause: " + seen[1] + " of " + seen[0]);
+        assertTrue(seen[2] > 2 * seen[3], "mostly on the move: running " + seen[2] + ", frozen " + seen[3]);
+    }
+
+    /** One journey of 150 blocks, start to rest, checking each run and freeze and counting them into {@code seen}. */
+    private static void journey(SkeinGait g, DoubleSupplier r, int[] seen) {
+        g.startOuting(SkeinGait.Mood.JOURNEY, 150.0, r);
+        assertEquals(SkeinGait.Mood.JOURNEY, g.mood());
+        for (int i = 0; i < 50_000 && g.outing(); i++) {
+            if (g.phase() == SkeinGait.Phase.PIVOT) {
+                assertTrue(g.burstTicks() >= 24 && g.burstTicks() <= 50, "journey burst " + g.burstTicks());
+                assertTrue(g.speed() >= 0.95 && g.speed() <= 1.1 + 1.0E-9, "journey speed " + g.speed());
+                assertTrue(Math.toDegrees(Math.abs(g.turn())) <= 12 + 1.0E-9, "a journey only jitters off its way");
+            }
+            if (g.phase() == SkeinGait.Phase.BURST) seen[2]++;
+            if (g.phase() == SkeinGait.Phase.FREEZE) seen[3]++;
+            boolean changed = g.tick(g.phase() == SkeinGait.Phase.BURST ? g.speed() * PER_TICK : 0, r);
+            if (changed && g.phase() == SkeinGait.Phase.FREEZE) {
+                seen[0]++;
+                assertTrue(g.left() >= 2 && g.left() <= 45, "journey freeze " + g.left());
+                if (g.left() >= 20) seen[1]++;
+            }
+        }
+    }
+
+    @Test
     void burstsThatGetNowhereEndTheOuting() {
         SkeinGait g = new SkeinGait();
         DoubleSupplier r = rng(10);
