@@ -180,10 +180,8 @@ final class Instants {
             double off = i - (width - 1) * 0.5;
             Vec3 p = centre.add(right.scale(off));
             for (int h = 0; h < height; h++) {
-                BlockPos bp = BlockPos.containing(p.x, baseY + h, p.z);
-                // never round a creature (or the caster): it would be stuck in the glass
-                if (!l.getEntitiesOfClass(LivingEntity.class, new AABB(bp)).isEmpty()) continue;
-                if (TempBlocks.place(l, bp, TempBlock.Kind.BARRIER, ctx.owner.getUUID())) made++;
+                // never round a creature (or the caster), nor over a frame or painting: TempBlocks.place
+                if (TempBlocks.place(l, BlockPos.containing(p.x, baseY + h, p.z), TempBlock.Kind.BARRIER, ctx.owner)) made++;
             }
         }
         Vec3 mid = new Vec3(centre.x, baseY + height * 0.5, centre.z);

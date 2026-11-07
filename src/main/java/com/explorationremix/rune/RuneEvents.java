@@ -159,6 +159,8 @@ public final class RuneEvents {
 
     @SubscribeEvent
     public static void attackBy(LivingAttackEvent e) {
+        // the client's own copy of a hit is no matter (and the held list is the server's)
+        if (e.getEntity().level().isClientSide()) return;
         if (e.getSource().getEntity() instanceof LivingEntity att && e.getSource().getDirectEntity() == att && Statuses.held(att)) e.setCanceled(true);
     }
 

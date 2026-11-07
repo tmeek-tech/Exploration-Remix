@@ -1,5 +1,6 @@
 package com.explorationremix.rune.world;
 
+import com.explorationremix.rune.cast.TempBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
@@ -59,6 +60,13 @@ public class TempBlock extends Block {
     @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         fade(level, pos);
+    }
+
+    /** However it ends (its timer, mined, blown up, melted, washed away), it stops counting against whoever made it. */
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
+        if (!level.isClientSide && !newState.is(this)) TempBlocks.gone(level.dimension(), pos);
+        super.onRemove(state, level, pos, newState, moving);
     }
 
     /** Ends it now: glass shatters, ice melts, a light goes out. */

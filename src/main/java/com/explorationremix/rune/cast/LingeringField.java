@@ -9,6 +9,7 @@ import com.explorationremix.rune.engine.Act;
 import com.explorationremix.rune.engine.Element;
 import com.explorationremix.rune.engine.Plan;
 import com.explorationremix.rune.engine.RuneId;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
@@ -46,7 +47,8 @@ final class LingeringField implements FieldLogic {
 
     static void place(CastContext ctx, Plan.Node node, Origin o, boolean root) {
         Caster c = CastService.caster(ctx.owner);
-        if (c.carriers.size() >= RuneConfig.get(RuneConfig.INSTANCE.maxCarriers)) {
+        // never in ground that is loaded but still (past the simulation distance): it would never tick, or end
+        if (c.carriers.size() >= RuneConfig.get(RuneConfig.INSTANCE.maxCarriers) || !ctx.level.isPositionEntityTicking(BlockPos.containing(o.pos()))) {
             Executor.fizzle(ctx, o.pos());
             return;
         }

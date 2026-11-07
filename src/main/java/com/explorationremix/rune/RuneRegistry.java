@@ -83,7 +83,7 @@ public final class RuneRegistry {
     public static final RegistryObject<Block> ICE = BLOCKS.register("rune_ice", () -> new TempBlock(TempBlock.Kind.ICE,
             BlockBehaviour.Properties.of().mapColor(MapColor.ICE).friction(0.98F).strength(0.5F).sound(SoundType.GLASS).noOcclusion()
                     .noLootTable().isValidSpawn((s, l, p, t) -> false).isRedstoneConductor((s, l, p) -> false)
-                    .pushReaction(PushReaction.BLOCK)));
+                    .isSuffocating((s, l, p) -> false).pushReaction(PushReaction.BLOCK)));
 
     /** Glow's light: a minute, no collision, anything placed there replaces it. */
     public static final RegistryObject<Block> LIGHT = BLOCKS.register("rune_light", () -> new TempBlock(TempBlock.Kind.LIGHT,

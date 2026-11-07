@@ -30,7 +30,9 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ambient.AmbientCreature;
+import net.minecraft.world.entity.animal.allay.Allay;
 import net.minecraft.world.entity.animal.AbstractGolem;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.monster.Enemy;
@@ -74,15 +76,19 @@ public final class RuneHits {
     }
 
     /**
-     * Runes touch every creature but their caster, pets (anyone's), villagers, golems, and other players unless the
-     * server turns rune damage between players on. Bats and armor stands are passed through (fireflies are no creature
-     * at all). A shulker is a golem that fights, so runes touch it.
+     * Runes touch every creature but their caster, pets (anyone's), an allay working for a player, villagers, golems,
+     * and other players unless the server turns rune damage between players on (and then only those the game itself
+     * lets them hurt: not with pvp off, not a teammate without friendly fire, not one in creative). Bats and armor
+     * stands are passed through (fireflies are no creature at all). A shulker is a golem that fights, so runes touch it.
      */
     public static boolean canHit(ServerPlayer owner, @Nullable Entity e) {
         LivingEntity t = body(e);
         if (t == null || t == owner || !t.isAlive() || t.isSpectator()) return false;
-        if (t instanceof Player) return RuneConfig.get(RuneConfig.INSTANCE.runesHurtPlayers);
+        if (t instanceof Player pt) {
+            return RuneConfig.get(RuneConfig.INSTANCE.runesHurtPlayers) && !pt.getAbilities().invulnerable && owner.canHarmPlayer(pt);
+        }
         if (t instanceof OwnableEntity o && o.getOwnerUUID() != null) return false;
+        if (t instanceof Allay al && al.getBrain().hasMemoryValue(MemoryModuleType.LIKED_PLAYER)) return false;
         if (t instanceof AbstractVillager || t instanceof AmbientCreature || t instanceof ArmorStand) return false;
         return !(t instanceof AbstractGolem) || t instanceof Enemy;
     }
@@ -121,7 +127,11 @@ public final class RuneHits {
         boolean ok = box.hurt(src, amount);
         t.invulnerableTime = immunity;
         t.setDeltaMovement(v0);
-        if (ok && push > 0.0F) push(t, dir, push);
+        if (ok) {
+            // as a sword or an arrow does: their tamed wolves join in
+            ctx.owner.setLastHurtMob(t);
+            if (push > 0.0F) push(t, dir, push);
+        }
         return ok;
     }
 
@@ -144,7 +154,15 @@ public final class RuneHits {
      */
     public static void strike(CastContext ctx, Act a, LivingEntity t, Entity box, Vec3 at, Vec3 dir, float damage, float push,
                               @Nullable Entity direct, @Nullable Vec3 from) {
-        boolean foe = isFoe(ctx.owner, t);
+        strike(ctx, a, t, box, at, dir, damage, push, direct, from, isFoe(ctx.owner, t));
+    }
+
+    /**
+     * As above, with whether {@code t} was fighting the caster when it was struck ({@code foe}): an arrow's runes act
+     * once its own hit has landed, and by then its hit may have killed it.
+     */
+    static void strike(CastContext ctx, Act a, LivingEntity t, Entity box, Vec3 at, Vec3 dir, float damage, float push,
+                       @Nullable Entity direct, @Nullable Vec3 from, boolean foe) {
         boolean heavy = a.has(RuneId.HEAVY) || a.rune == RuneId.ORB;
         Reactions.Reaction r = Reactions.react(a.element, heavy, Statuses.wet(t), Statuses.frozen(t), Statuses.immune(t));
         float mult = r == Reactions.Reaction.SHATTER ? Reactions.SHATTER_MULT : r == Reactions.Reaction.THAW ? Reactions.THAW_MULT : 1.0F;
@@ -152,6 +170,8 @@ public final class RuneHits {
         else damage *= mult;
         if (a.element == Element.TIDE) push += 0.15F;
         boolean hurt = damage > 0.0F && hurt(ctx, t, box, damage, direct, from, dir, push);
+        // a hit the game refused (a guarded creature, a shield, one that dodged) does nothing else either
+        if (damage > 0.0F && !hurt && t.isAlive()) return;
         if (damage <= 0.0F && push > 0.0F) push(t, dir, push);
         if (hurt) ctx.confirmHit(r != Reactions.Reaction.NONE);
         if (r != Reactions.Reaction.NONE) ctx.owner.displayClientMessage(net.minecraft.network.chat.Component.translatable(
@@ -249,7 +269,8 @@ public final class RuneHits {
 
     /**
      * What an element does to the world round {@code c}: Frost freezes still water into rune ice, Tide puts out fire,
-     * Ember lights campfires and candles and melts rune ice. Bounded: at most a few dozen blocks looked at per call.
+     * Ember lights campfires and candles and melts rune ice. Only where the caster could change those blocks
+     * themself (TempBlocks.mayChange). Bounded: a few hundred blocks looked at per call, and at most 24 frozen.
      */
     public static void world(CastContext ctx, Element e, Vec3 c, double radius) {
         if (e == Element.NONE || e == Element.STORM) return;
@@ -266,13 +287,15 @@ public final class RuneHits {
                     BlockState s = l.getBlockState(p);
                     switch (e) {
                         case FROST -> {
-                            if (changed < 24 && TempBlocks.fits(l, p, TempBlock.Kind.ICE) && TempBlocks.place(l, p, TempBlock.Kind.ICE, ctx.owner.getUUID())) changed++;
+                            if (changed < 24 && TempBlocks.place(l, p, TempBlock.Kind.ICE, ctx.owner)) changed++;
                         }
                         case TIDE -> {
                             if (s.getBlock() instanceof BaseFireBlock) {
+                                if (!TempBlocks.mayChange(l, p, ctx.owner)) continue;
                                 l.removeBlock(p, false);
                                 changed++;
                             } else if (s.getBlock() instanceof CampfireBlock && s.getValue(CampfireBlock.LIT)) {
+                                if (!TempBlocks.mayChange(l, p, ctx.owner)) continue;
                                 CampfireBlock.dowse(null, l, p, s);
                                 l.setBlock(p, s.setValue(CampfireBlock.LIT, false), Block.UPDATE_ALL);
                                 changed++;
@@ -282,9 +305,11 @@ public final class RuneHits {
                             if ((s.getBlock() instanceof CampfireBlock || s.getBlock() instanceof CandleBlock || s.getBlock() instanceof CandleCakeBlock)
                                     && s.hasProperty(BlockStateProperties.LIT) && !s.getValue(BlockStateProperties.LIT)
                                     && !(s.hasProperty(BlockStateProperties.WATERLOGGED) && s.getValue(BlockStateProperties.WATERLOGGED))) {
+                                if (!TempBlocks.mayChange(l, p, ctx.owner)) continue;
                                 l.setBlock(p, s.setValue(BlockStateProperties.LIT, true), Block.UPDATE_ALL);
                                 changed++;
                             } else if (s.getBlock() instanceof TempBlock tb && tb.kind == TempBlock.Kind.ICE) {
+                                if (!TempBlocks.mayChange(l, p, ctx.owner)) continue;
                                 tb.fade(l, p);
                                 changed++;
                             }

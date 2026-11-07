@@ -23,10 +23,12 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
-import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -73,13 +75,14 @@ public class RuneMote extends Entity {
 
     /**
      * Knocks {@code energy} loose at {@code at} for {@code owner}'s gear {@code gear}: a few motes, or, when the player
-     * already has too many on their way, more energy in the nearest one.
+     * already has too many out (on their way, or lying where far-off foes were struck), more energy in the nearest one.
      */
     public static void spawn(ServerLevel level, Vec3 at, ServerPlayer owner, int gear, float energy) {
         if (energy <= 0.0F || gear == 0) return;
         int cap = RuneConfig.get(RuneConfig.INSTANCE.maxMotes);
-        List<RuneMote> out = level.getEntities(RuneRegistry.MOTE.get(), owner.getBoundingBox().inflate(RANGE * 2),
-                m -> owner.getUUID().equals(m.owner) && m.isAlive());
+        java.util.function.Predicate<RuneMote> theirs = m -> owner.getUUID().equals(m.owner) && m.isAlive();
+        Set<RuneMote> out = new LinkedHashSet<>(level.getEntities(RuneRegistry.MOTE.get(), owner.getBoundingBox().inflate(RANGE * 2), theirs));
+        out.addAll(level.getEntities(RuneRegistry.MOTE.get(), new AABB(at, at).inflate(RANGE * 2), theirs));
         int n = Mth.clamp(Math.round(energy / PER_MOTE), 1, 5);
         if (out.size() + n > cap) {
             RuneMote nearest = null;

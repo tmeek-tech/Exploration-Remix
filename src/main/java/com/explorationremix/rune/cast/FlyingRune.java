@@ -134,7 +134,7 @@ final class FlyingRune implements BoltLogic {
 
     static void launch(CastContext ctx, Plan.Node node, Origin o, boolean root) {
         Caster c = CastService.caster(ctx.owner);
-        if (c.carriers.size() >= RuneConfig.get(RuneConfig.INSTANCE.maxCarriers)) {
+        if (c.carriers.size() >= RuneConfig.get(RuneConfig.INSTANCE.maxCarriers) || !ctx.level.isPositionEntityTicking(BlockPos.containing(o.pos()))) {
             Executor.fizzle(ctx, o.pos());
             return;
         }
@@ -200,7 +200,8 @@ final class FlyingRune implements BoltLogic {
         steer(pos);
         if (gravity > 0) vel = vel.add(0, -gravity, 0);
         Vec3 from = pos, to = pos.add(vel);
-        if (!ctx.level.isLoaded(BlockPos.containing(to))) {
+        // never on into ground that is loaded but still (past the simulation distance): it would hang there, out
+        if (!ctx.level.isPositionEntityTicking(BlockPos.containing(to))) {
             done = true;
             b.discard();
             return;
@@ -344,7 +345,7 @@ final class FlyingRune implements BoltLogic {
                 hit.addEffect(new MobEffectInstance(MobEffects.GLOWING, GLOW_TAG_TICKS, 0, false, false, true), ctx.owner);
             } else {
                 BlockPos p = BlockPos.containing(at);
-                if (!TempBlocks.place(l, p, TempBlock.Kind.LIGHT, ctx.owner.getUUID())) TempBlocks.place(l, p.above(), TempBlock.Kind.LIGHT, ctx.owner.getUUID());
+                if (!TempBlocks.place(l, p, TempBlock.Kind.LIGHT, ctx.owner)) TempBlocks.place(l, p.above(), TempBlock.Kind.LIGHT, ctx.owner);
             }
         }
         if (hasPayload()) Executor.release(ctx, node.children, new Origin(at, d, hit, wall != null));

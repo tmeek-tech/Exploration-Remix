@@ -9,6 +9,7 @@ import com.explorationremix.rune.engine.Plan;
 import com.explorationremix.rune.engine.RuneId;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.projectile.AbstractArrow;
@@ -19,6 +20,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.entity.ProjectileImpactEvent;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -56,6 +58,8 @@ public final class ArrowRides {
         @Nullable
         Vec3 hitAt, hitDir;
         boolean hitWall, hitFoe;
+        /** The creatures it struck this tick, for its runes to act on once its own hit has landed. */
+        final List<Struck> struck = new ArrayList<>(2);
         Vec3 last;
         /** The arrow as it left the bow, before the runes shaped it. */
         final Plain plain;
@@ -74,6 +78,9 @@ public final class ArrowRides {
 
     /** What the runes change on an arrow, as it was before they did (Swift's speed is undone by its own factor). */
     private record Plain(double damage, byte pierce, boolean onFire) {}
+
+    /** A creature the arrow struck (through the box {@code box}), and whether it was fighting the caster then. */
+    private record Struck(LivingEntity body, Entity box, Vec3 at, Vec3 dir, boolean foe) {}
 
     private static final Map<Integer, Ride> RIDES = new HashMap<>();
     /** Set while this class adds Fan's copies, so they aren't taken for new shots. */
@@ -154,7 +161,7 @@ public final class ArrowRides {
                 return;
             }
             if (r.ctx.firstStrike(r.a, body) && (r.a.element != Element.NONE || r.a.has(RuneId.SIPHON))) {
-                RuneHits.strike(r.ctx, r.a, body, eh.getEntity(), eh.getLocation(), dir, 0.0F, 0.0F, arrow, null);
+                r.struck.add(new Struck(body, eh.getEntity(), eh.getLocation(), dir, RuneHits.isFoe(r.ctx.owner, body)));
             }
             if (r.hitAt == null) {
                 r.hitBody = body;
@@ -202,8 +209,15 @@ public final class ArrowRides {
                 settle(r);
             } else if (!r.released) {
                 if (r.arrow.isRemoved()) {
-                    // gone without a hit we saw (out of the world, or a chunk unloaded): its payload goes where it was
-                    if (r.hasPayload() && r.last.y > r.ctx.level.getMinBuildHeight()) release(r, new Origin(r.last, new Vec3(0, -1, 0), null));
+                    // gone without a hit we saw: out of the world, its payload goes where it was; packed away with
+                    // its chunk, the payload is spent (it would go off in ground nobody is near)
+                    if (r.hasPayload() && r.last.y > r.ctx.level.getMinBuildHeight() && r.arrow.getRemovalReason() != Entity.RemovalReason.UNLOADED_TO_CHUNK) {
+                        release(r, new Origin(r.last, new Vec3(0, -1, 0), null));
+                    }
+                    r.released = true;
+                } else if (!r.ctx.level.isPositionEntityTicking(r.arrow.blockPosition())) {
+                    // flown into ground that is loaded but still (past the simulation distance): it hangs there as a
+                    // plain arrow, its runes spent
                     r.released = true;
                 } else {
                     r.last = r.arrow.position();
@@ -223,8 +237,16 @@ public final class ArrowRides {
         }
     }
 
-    /** A hit noted this tick: Siphon's kill and throat refunds now that the arrow's damage has landed, then the payload. */
+    /**
+     * A hit noted this tick, now that the arrow's own hit has landed or been refused: its runes on each creature whose
+     * hit landed (a guarded creature, a shield or a dodge leaves nothing), Siphon's kill and throat refunds, then the
+     * payload.
+     */
     private static void settle(Ride r) {
+        for (Struck s : r.struck) {
+            if (landed(s.body(), r.arrow)) RuneHits.strike(r.ctx, r.a, s.body(), s.box(), s.at(), s.dir(), 0.0F, 0.0F, r.arrow, null, s.foe());
+        }
+        r.struck.clear();
         LivingEntity t = r.hitBody;
         if (t != null && r.hitFoe && r.a.has(RuneId.SIPHON)) {
             int id = t.getId();
@@ -235,6 +257,12 @@ public final class ArrowRides {
         }
         if (r.hasPayload()) release(r, new Origin(r.hitAt, r.hitDir, r.hitWall ? null : t, r.hitWall));
         r.released = true;
+    }
+
+    /** Whether the arrow's own hit on {@code t} landed: the game took it as {@code t}'s latest damage. */
+    private static boolean landed(LivingEntity t, AbstractArrow arrow) {
+        DamageSource last = t.getLastDamageSource();
+        return last != null && last.getDirectEntity() == arrow;
     }
 
     private static void release(Ride r, Origin o) {
