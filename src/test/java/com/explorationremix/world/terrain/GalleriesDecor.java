@@ -35,7 +35,9 @@ import java.util.TreeMap;
  * column of the chunk),
  * asking the real walk guard ({@link Walkway} for this terrain). The other features of these biomes set no block in a
  * player's way (the climbing chains, the open way pass, the glow, whose light {@code GlowLight} measures, and the lava
- * pockets' pass, which finds no other mod's slabs in these blocks).
+ * pockets' pass, which finds no other mod's slabs in these blocks). Nor do these blocks hold Terrain Slabs' slabs, which
+ * the game lays before the falls and which a lava fall takes for rock or room (FluidFallFeature, fix round 3): here every
+ * fall pours as it would where no slab stood in its way.
  *
  * <p>Each chunk draws from its own random, not from the game's decoration seeds: the placements are the game's in kind
  * and number, not block for block. Data and code of an older tree run too (no fall_sites, no ways-down guard).
@@ -89,6 +91,14 @@ final class GalleriesDecor {
      * false lets a fall reach over the chunk's edge as before, to measure what the bound changes.
      */
     boolean ownChunk = true;
+
+    /**
+     * The views' frame for {@link #fallsSeen}: its height in degrees (16:9). 70, the frame of a player who walks with the
+     * game's own field of view; the rig's pictures are 88 high (the shot driver sets 80 and a flying spectator sees 1.1
+     * times the setting), and show a few more falls at the frame's edges (fix round 3: the Caldera views of the big box,
+     * 6 at most where 70 shows 5).
+     */
+    double viewFov = 70;
     /** The chunk being decorated. */
     private int ownCx, ownCz;
     /** The blocks the falls set outside the chunk being decorated, per feature. */
@@ -695,7 +705,7 @@ final class GalleriesDecor {
     /**
      * How many falls a view shows (fix round 2 after the 0.8.0 pack runs: the Causeway's falls stood in colonnades, a
      * dozen and more in a view): a fall is seen from an eye when a point of its column (under its first source, down to
-     * rock, at five heights) lies in the frame (FOV 70 up and down, 16:9), within 192 blocks (render distance 12), with no
+     * rock, at five heights) lies in the frame ({@link #viewFov}, 16:9), within 192 blocks (render distance 12), with no
      * rock on the line to it. Yaw and pitch as Minecraft's (yaw 0 south, 90 west; pitch down).
      */
     int fallsSeen(double ex, double ey, double ez, double yaw, double pitch) { return fallsSeen(ex, ey, ez, yaw, pitch, -1); }
@@ -706,7 +716,7 @@ final class GalleriesDecor {
         double[] fwd = {-Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr)};
         double[] right = {-Math.cos(yr), 0, -Math.sin(yr)};
         double[] up = {right[1] * fwd[2] - right[2] * fwd[1], right[2] * fwd[0] - right[0] * fwd[2], right[0] * fwd[1] - right[1] * fwd[0]};
-        double tv = Math.tan(Math.toRadians(35)), th = tv * 16 / 9.0;
+        double tv = Math.tan(Math.toRadians(viewFov / 2)), th = tv * 16 / 9.0;
         int seen = 0;
         for (int[] f : falls) {
             if (kind >= 0 && f[0] != kind) continue;
