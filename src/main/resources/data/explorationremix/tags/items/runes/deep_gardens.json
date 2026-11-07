@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "explorationremix:rune_siphon",
+    "explorationremix:rune_ember",
+    "explorationremix:rune_frost",
+    "explorationremix:rune_storm",
+    "explorationremix:rune_tide"
+  ]
+}
