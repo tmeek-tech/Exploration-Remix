@@ -1,6 +1,7 @@
 package com.explorationremix.rune;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.mixin.accessor.ProjectileAccessor;
 import com.explorationremix.rune.cast.ArrowRides;
 import com.explorationremix.rune.cast.CastService;
 import com.explorationremix.rune.cast.Grapples;
@@ -126,6 +127,9 @@ public final class RuneEvents {
             if (ArrowRides.returningDropsCopy(arrow)) e.setCanceled(true);
             return;
         }
+        // nor is one that has flown already (a portal's or a teleport's copy of an arrow the runes let go of, or never
+        // had): a new shot joins before its first tick, and the copy keeps the game's own note that it has flown
+        if (((ProjectileAccessor) arrow).er$hasBeenShot()) return;
         CastService.arrowLoosed(arrow);
     }
 

@@ -7,8 +7,10 @@ import net.minecraft.world.phys.Vec3;
 import javax.annotation.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -26,6 +28,8 @@ final class Caster {
     }
 
     final Set<Entity> carriers = new HashSet<>();
+    /** The server tick each carrier was first seen on ground that has stopped running. */
+    final Map<Entity, Long> stillSince = new HashMap<>();
     final ReleaseQueue<Executor.Pending> queue = new ReleaseQueue<>();
 
     final Hand main = new Hand(), off = new Hand();

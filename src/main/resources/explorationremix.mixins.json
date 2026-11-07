@@ -10,6 +10,7 @@
     "accessor.NoiseBasedChunkGeneratorAccessor",
     "accessor.SurfaceContextAccessor",
     "accessor.MultiNoiseBiomeSourceAccessor",
+    "accessor.ProjectileAccessor",
     "MinecraftServerMixin",
     "NoiseBasedChunkGeneratorMixin",
     "BiomeSourceMixin",

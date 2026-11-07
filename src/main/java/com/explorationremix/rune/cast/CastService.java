@@ -313,23 +313,33 @@ public final class CastService {
         long tick = server.getTickCount();
         for (Caster c : CASTERS.values()) {
             if (!c.queue.isEmpty()) Executor.drain(c, tick);
-            if (!c.carriers.isEmpty()) dropStill(c);
+            if (!c.carriers.isEmpty() || !c.stillSince.isEmpty()) dropStill(c, tick);
         }
         ArrowRides.tick();
     }
 
+    /** How long a carrier may wait on ground that isn't running before it goes (five seconds). */
+    private static final int STILL_TICKS = 100;
+
     /**
      * A bolt or field whose ground stopped running while it was out (its caster went far off, past the simulation
-     * distance): it would hang there holding its slot, so it goes, its runes spent.
+     * distance), or hasn't started yet (a field cast into ground still loading after a teleport): it waits a few
+     * seconds for it to run, and then, rather than hang there holding its slot, it goes, its runes spent.
      */
-    private static void dropStill(Caster c) {
+    private static void dropStill(Caster c, long tick) {
+        if (!c.stillSince.isEmpty()) c.stillSince.keySet().retainAll(c.carriers);
         for (Entity e : new ArrayList<>(c.carriers)) {
             if (e.isRemoved()) {
                 c.carriers.remove(e);
+                c.stillSince.remove(e);
             } else if (e.level() instanceof ServerLevel l && !l.isPositionEntityTicking(e.blockPosition())) {
+                if (tick - c.stillSince.computeIfAbsent(e, k -> tick) < STILL_TICKS) continue;
                 e.discard();
                 // a carrier on ground nobody is near isn't told it went, so its slot is freed here
                 c.carriers.remove(e);
+                c.stillSince.remove(e);
+            } else {
+                c.stillSince.remove(e);
             }
         }
     }

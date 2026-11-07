@@ -39,7 +39,7 @@ public final class RuneConfig {
         releasesPerTick = b.comment("Payloads one player's runes can let go in one tick; more wait their turn.").defineInRange("releasesPerTick", 16, 1, 256);
         maxBarrierBlocks = b.comment("Barrier blocks one player can have standing; a new wall shatters the oldest.").defineInRange("maxBarrierBlocks", 12, 0, 256);
         maxGlowBlocks = b.comment("Glow motes one player can have lit; a new one puts out the oldest.").defineInRange("maxGlowBlocks", 16, 0, 256);
-        maxMotes = b.comment("Siphon motes one player can have on their way at once; past it, new ones join the nearest.")
+        maxMotes = b.comment("Siphon motes one player can have out at once; past it, new ones join the nearest, or one lying out of reach fades.")
                 .defineInRange("maxMotes", 64, 1, 512);
         maxIceBlocks = b.comment("Rune ice blocks one player can have on the water; the oldest melts first.").defineInRange("maxIceBlocks", 48, 0, 512);
         b.pop();

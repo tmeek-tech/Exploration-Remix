@@ -81,8 +81,9 @@ public class RuneMote extends Entity {
     /**
      * Knocks {@code energy} loose at {@code at} for {@code owner}'s gear {@code gear}: a few motes. When the player
      * already has too many out, wherever they lie, it goes into the nearest of that gear's motes near the hit or the
-     * player instead; with none near, the player's oldest mote (left lying where a far-off foe was struck) fades to make
-     * room for one.
+     * player instead; with none near, it comes as one mote, and the player's oldest mote left lying (out of their reach,
+     * or in another world) fades to make room. A mote on its way home is never cut short: with none to spare, the cap
+     * is passed by one until those land.
      */
     public static void spawn(ServerLevel level, Vec3 at, ServerPlayer owner, int gear, float energy) {
         if (energy <= 0.0F || gear == 0) return;
@@ -106,6 +107,7 @@ public class RuneMote extends Entity {
             n = 1;
             for (RuneMote old : new ArrayList<>(out)) {
                 if (out.size() < cap) break;
+                if (old.level() == owner.level() && old.distanceToSqr(owner) < RANGE * RANGE) continue;
                 out.remove(old);
                 old.fade();
             }

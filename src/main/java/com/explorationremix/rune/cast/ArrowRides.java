@@ -253,6 +253,7 @@ public final class ArrowRides {
     private static void spare(ProjectileImpactEvent e, Ride r, AbstractArrow arrow, boolean creature) {
         if (r.node.copy > 0 || (creature && r.hitAt != null)) {
             e.setImpactResult(ProjectileImpactEvent.ImpactResult.SKIP_ENTITY);
+            arrow.hasImpulse = true;
             return;
         }
         if (r.hitAt != null) return;
