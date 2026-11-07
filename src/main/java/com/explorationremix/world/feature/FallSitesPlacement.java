@@ -16,8 +16,10 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * One try at each of the chunk's lava fall sites ({@link FallSites}) whose share lies in [share_min, share_max): its
- * column at the height the try came in with, for open_span to move to the column's vault or a run of its air. Two
+ * One try at each of the chunk's lava fall sites ({@link FallSites}) whose share lies in [share_min, share_max): the
+ * column its fall pours from ({@link FallSites#aimsInChunk}: the site's own, or with an aim the one under the hanging
+ * mass by it, in whichever chunk holds that column) at the height the try came in with, for open_span to move to the
+ * column's vault or a run of its air. Two
  * features that split one set of sites by share (the vault falls and the cliff falls) never stand closer than its
  * spacing, nor do their falls come nearer each other than its keep.
  */
@@ -46,7 +48,7 @@ public final class FallSitesPlacement extends PlacementModifier {
         Terrain t = DeepWorld.terrain();
         if (t == null || !DeepWorld.installed()) return Stream.empty();
         List<int[]> out = new ArrayList<>();
-        FallSites.inChunk(t, sites, Math.floorDiv(pos.getX(), 16) * 16, Math.floorDiv(pos.getZ(), 16) * 16, shareMin, shareMax, out);
+        FallSites.aimsInChunk(t, sites, Math.floorDiv(pos.getX(), 16) * 16, Math.floorDiv(pos.getZ(), 16) * 16, shareMin, shareMax, out);
         return out.stream().map(c -> new BlockPos(c[0], pos.getY(), c[1]));
     }
 

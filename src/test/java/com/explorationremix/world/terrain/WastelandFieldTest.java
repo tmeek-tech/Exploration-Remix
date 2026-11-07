@@ -982,9 +982,11 @@ class WastelandFieldTest {
      * place of the featureless box's main component that is still a place is walked into from the main component without
      * a walk back (on the whole box's graph, not only round each placement); lava keeps from the openings and the
      * channels keep their places as on the measured boxes. At least 15 pools and 50 falls must be placed for the check to
-     * mean anything: 17 and 57 are, with 2 pools and 1 fall kept off the walks (29 and 77 before the v2 Galleries landed,
-     * 0.8.0: the craters round every hole they give a ramp keep 427 of the 3170 pools' tries from the openings, 94
-     * before, and the falls 85 against 16).
+     * mean anything: 15 and 52 are, with 4 pools kept off the walks. Fix round 3 (review3): every block a fall sets lies
+     * in the chunk being decorated (none outside, {@link DecorBox#fallsOutside}), at 80 tries a chunk; at the 48 before,
+     * 52 falls set 225 of their 675 blocks in a neighbour chunk, and bound so they placed 31. (17 and 57 before, with 2
+     * pools and 1 fall kept off the walks; 29 and 77 before the v2 Galleries landed, 0.8.0: the craters round every hole
+     * they give a ramp keep 427 of the 3170 pools' tries from the openings, 94 before, and the falls 85 against 16.)
      */
     @Test
     void decorationsLeaveNoPits() {
@@ -998,6 +1000,7 @@ class WastelandFieldTest {
             assertEquals(0, d.pits, "pits, " + what);
             assertEquals(0, d.lavaNearOpening, "lava within 3 columns of an opening, " + what);
             assertEquals(0, d.channelLost, "lane places taken, " + what);
+            assertEquals(0, d.fallsOutside, "fall blocks outside the chunk being decorated, " + what);
             for (int f = 0; f < DecorBox.FEATURES; f++) { placed[f] += d.placed[f]; walks[f] += d.walks[f]; }
         }
         System.out.println("WastelandFieldTest decorated alone: placed " + Arrays.toString(placed) + ", kept off the walks " + Arrays.toString(walks)

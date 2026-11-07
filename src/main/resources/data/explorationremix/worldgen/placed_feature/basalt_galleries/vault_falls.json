@@ -10,7 +10,8 @@
         "keep": 24,
         "ring_min": 0.42,
         "ring_max": 0.62,
-        "anchor": 8
+        "anchor": 8,
+        "aim": 24
       }
     },
     {

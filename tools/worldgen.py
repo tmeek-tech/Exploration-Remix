@@ -566,9 +566,12 @@ def build_features():
     # Lava falls lighting the Wasteland's caves (basalt_galleries.jpg), each from 3 to 6 blocks under a vault; every one
     # ends in lava, in a pool or in its own sump, so none runs onto a walk. 48 tries where the old galleries had 80: the
     # shorter layer finds a vault 2.4 times as often, so a little more light than they had, and the tunnels stay clear.
+    # Fix round 3: a lava fall now keeps every block in the chunk being decorated (FluidFallFeature), which turns away
+    # the tries whose wall lies over the chunk's edge (WastelandFieldTest's decorated boxes: 31 falls where 52 poured,
+    # 225 of their 675 blocks in a neighbour chunk), so 80 tries, which place 52 there again.
     feature("wasteland/lava_falls", "fluid_springs", ["wasteland"],
             fall("minecraft:lava", 6, (1, 2), rock=f"#{MOD}:basalt_rock"),
-            [count(48), SQUARE, layer("wasteland", above_water=True)] + ceiling(offset=uniform(-6, -3)) + [BIOME])
+            [count(80), SQUARE, layer("wasteland", above_water=True)] + ceiling(offset=uniform(-6, -3)) + [BIOME])
 
     # ---- vegetal decoration: roots, vines and plants
     feature("rootvaults/hanging_roots", "vegetal_decoration", rv + ["frozen_rootvaults"],
@@ -1037,17 +1040,32 @@ def build_features():
     # two and 3 three, at most 3 seen in 95 views of 100 and 4 in 99 (one long view across a hall sees 7); the
     # Causeway's 190-block square holds 4, not 18.
     # Sites 40 apart left 66 falls, 4 in 95 views of 100 and 6 in the worst of the tests' 400.
-    # The Caldera's falls ring its lake on their own sites, 40 apart as before: its ring (0.42 to 0.62 of the patch's
-    # radius) lies far inside the patch and the halls' sites outside it, so the two sets never meet; at 44 the ring of
-    # the pack region's south-west Caldera held 2 falls where it held 3 or more.
-    gal_falls = {"salt": 1, "grid": 8, "spacing": 44, "keep": 24, "ring_min": 0.42, "ring_max": 0.62, "anchor": 8}
-    cal_falls = dict(gal_falls, spacing=40)
+    # The Caldera's falls ring its lake on their own sites: its ring (0.42 to 0.62 of the patch's radius) lies far inside
+    # the patch and the halls' sites outside it, so the two sets never meet; at 44 the ring of the pack region's
+    # south-west Caldera held 2 falls where it held 3 or more.
+    # Fix round 3 (judge3: 37 of the pack region's 50 falls were one source wide, every fall a thin straight line from the
+    # vault, none pouring from a hanging mass, and the Caldera's rim views showed five or six at once):
+    # - a fall is one curtain of 2 or more sources (min_width 2: no lone thread) of the 3 to 5 it tries, as many as the
+    #   rock lets pour: on the pack region (GalleriesDecor) 32 two wide, 6 three and 2 four of 40 falls;
+    # - a site with no mass over it but one within the anchor's reach pours from under that mass (aim: its try comes in
+    #   at the column under the deepest cluster by it whose underside stands 24 rows or more over the floor, as the try's
+    #   own span asks), so 12 of the 40 pour from a mass's underside (31 of 73 over a 976 x 1088 box round both
+    #   Calderas, where 18 of 94 did); every fall keeps to its own chunk as well (FluidFallFeature), which with the
+    #   curtains leaves 40 falls where 51 poured;
+    # - the Caldera's own sites stand 72 apart (40 before; the look agent proposed 56) and count only the rim's
+    #   candidates (rim_only), so its packing no longer reads the halls' candidates: at 56 views from the Caldera still
+    #   saw 5 or 6 falls (6 of 400 views round both of the region's Calderas), at 64 too; at 72 one view of 400 sees 5, one
+    #   rim fall and four hall falls 110 to 182 blocks off across the second Caldera's lake, and the main Caldera's rim
+    #   holds 3 falls, the second's 2. With the halls' candidates counted, a chunk's sites took 44 ms to find at 56 on a
+    #   cold cache (1.3 at 40): chains of rising priority ran out through them the further the wider the spacing.
+    gal_falls = {"salt": 1, "grid": 8, "spacing": 44, "keep": 24, "ring_min": 0.42, "ring_max": 0.62, "anchor": 8, "aim": 24}
+    cal_falls = {"salt": 1, "grid": 8, "spacing": 72, "keep": 24, "ring_min": 0.42, "ring_max": 0.62, "rim_only": True}
     fall_halls = ["basalt_galleries", "causeway", "scoria_canyons"]
     feature("basalt_galleries/vault_falls", "fluid_springs", fall_halls,
-            fall("minecraft:lava", 16, (2, 3), rock=hall_rock, mode="ceiling", tries=32, spread=3, sites=gal_falls),
+            fall("minecraft:lava", 16, (3, 5), rock=hall_rock, mode="ceiling", tries=32, spread=3, sites=gal_falls, min_width=2),
             [fall_sites(gal_falls)] + hall("ceiling", 24) + [BIOME])
     feature("caldera/lava_falls", "fluid_springs", ["caldera"],
-            fall("minecraft:lava", 16, (2, 3), rock=hall_rock, mode="ceiling", tries=32, spread=3, sites=cal_falls),
+            fall("minecraft:lava", 16, (3, 5), rock=hall_rock, mode="ceiling", tries=32, spread=3, sites=cal_falls, min_width=2),
             [fall_sites(cal_falls)] + hall("ceiling", 24) + [BIOME])
 
     # ---- top layer: roots of the trees above, once the chunk's trees have grown; the way down is kept open after
@@ -1093,6 +1111,14 @@ def build_features():
     # 30 to 60 and 60+ rows over the table) the faces' mean weight rises from 5.4 and 3.9 to 12.5 and 8.4, still lit
     # from the floor up; 2.7 times the spots. At the pack's cameras (the land run's blocks relit) the rock reads about
     # 15 brighter.
+    # The lava's pockets given back in the bottom two layers (LavaPocketsFeature; fix round 3 after the 0.8.0 pack runs):
+    # the pack's Terrain Slabs lays its slabs at underground_structures into any spot a body can pass, lava too, and
+    # waterlogs every slab whose spot holds a fluid, so each 1 x 1 dip of the Wasteland's lava table (117 in the pack run's
+    # region) and a fall's sump poured into a chunk before that chunk's own slab pass (9) held a slab full of water beside
+    # lava. Once per chunk, after the falls and before the floor's lava, every such slab holding water in these two layers'
+    # rows, outside the terrain's own water (the Obsidian Tubes' pools), becomes the lava source it filled where the lava
+    # is held there, and is dried otherwise. A rule of the layers, not of a biome: no biome filter, all their biomes carry it.
+    feature("lava_pockets", "top_layer_modification", ["wasteland", "ash_hollows"] + GALLERIES, {"type": f"{MOD}:lava_pockets", "config": {}}, [])
     # The Galleries' floor lava (FloorLavaFeature; fix round 2 after the 0.8.0 pack runs, Taran's picture: a lava river
     # winding along a terraced basalt floor, and the halls read dim with the falls cut back): the field's rule
     # (GalleriesField.floorLavaRow) lays lava a block deep and flush in the floor along the lava rivers' channels over

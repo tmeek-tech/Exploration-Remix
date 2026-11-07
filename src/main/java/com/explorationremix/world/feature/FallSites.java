@@ -32,12 +32,27 @@ import java.util.List;
  * <p>With an {@code anchor} (fix round 2 after the 0.8.0 pack runs: spaced evenly through the halls' middles, the falls
  * stood in colonnades down the Causeway and the Scoria Canyons), a kept candidate outside the Caldera holds a fall only
  * by a wall or under a hanging mass ({@link #site}), so the falls pour down the halls' sides and off their masses.
+ *
+ * <p>With an {@code aim} as well (fix round 3: every fall poured from the high vault as a thin line, none from a hanging
+ * mass, though a mass stood by a fifth of the sites), a site with no mass over it but one within the anchor's reach
+ * pours from under that mass ({@link #aim}: GalleriesField.massNear, the deepest cluster whose underside stands
+ * {@code aim} rows or more over the floor), and its try comes in at that column ({@link #aimsInChunk}), in the chunk
+ * that holds it. The site stays where it is for the keep ({@link #clear}, {@link #siteOf}).
  */
 public final class FallSites {
-    /** A set of sites: its salt, lattice, spacing, draw, the falls' keep, the Caldera's rim and the halls' anchor. */
-    public record Spec(int salt, int grid, double spacing, double chance, double keep, double ringMin, double ringMax, double anchor) {
+    /**
+     * A set of sites: its salt, lattice, spacing, draw, the falls' keep, the Caldera's rim, the halls' anchor, the rows of
+     * open air under a hanging mass a site's fall moves to (0: none) and whether only the candidates on a Caldera's rim
+     * count (fix round 3).
+     */
+    public record Spec(int salt, int grid, double spacing, double chance, double keep, double ringMin, double ringMax, double anchor, int aim,
+                       boolean rimOnly) {
         public Spec(int salt, int grid, double spacing, double chance, double keep, double ringMin, double ringMax) {
-            this(salt, grid, spacing, chance, keep, ringMin, ringMax, 0);
+            this(salt, grid, spacing, chance, keep, ringMin, ringMax, 0, 0, false);
+        }
+
+        public Spec(int salt, int grid, double spacing, double chance, double keep, double ringMin, double ringMax, double anchor) {
+            this(salt, grid, spacing, chance, keep, ringMin, ringMax, anchor, 0, false);
         }
 
         public static final Codec<Spec> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -48,7 +63,9 @@ public final class FallSites {
                 Codec.doubleRange(0, 64).optionalFieldOf("keep", 0.0).forGetter(Spec::keep),
                 Codec.doubleRange(0, 9).optionalFieldOf("ring_min", 0.0).forGetter(Spec::ringMin),
                 Codec.doubleRange(0, 9).optionalFieldOf("ring_max", 9.0).forGetter(Spec::ringMax),
-                Codec.doubleRange(0, 32).optionalFieldOf("anchor", 0.0).forGetter(Spec::anchor)
+                Codec.doubleRange(0, 32).optionalFieldOf("anchor", 0.0).forGetter(Spec::anchor),
+                Codec.intRange(0, 128).optionalFieldOf("aim", 0).forGetter(Spec::aim),
+                Codec.BOOL.optionalFieldOf("rim_only", false).forGetter(Spec::rimOnly)
         ).apply(i, Spec::new));
     }
 
@@ -66,12 +83,18 @@ public final class FallSites {
     /** Candidate (i, j)'s share, uniform in [0, 1): features that split a set of sites take their own range of it. */
     public static double share(long seed, Spec s, int i, int j) { return Hashing.unit(Hashing.mix(hash(seed, s, i, j), 4, 0, 0)); }
 
-    /** Whether candidate (i, j) is drawn and, in the Caldera, lies on its lake's rim. */
+    /**
+     * Whether candidate (i, j) is drawn and, in the Caldera, lies on its lake's rim; with {@code rim_only} (the Caldera's
+     * own set, fix round 3), only a candidate on a rim counts, so the set's packing reads none of the halls' candidates,
+     * which its falls never stand at: kept candidates there were never sites of its feature, yet a chain of rising
+     * priorities ran through them, the longer the wider the spacing (a chunk's sites took 44 ms to find at 56, 1.3 at 40,
+     * on a cold cache).
+     */
     public static boolean counted(Terrain t, Spec s, int i, int j) {
         if (Hashing.unit(Hashing.mix(hash(t.seed, s, i, j), 5, 0, 0)) >= s.chance()) return false;
-        if (t.galleries == null) return true;
+        if (t.galleries == null) return !s.rimOnly();
         double dn = t.galleries.calderaDn(x(t.seed, s, i, j) + 0.5, z(t.seed, s, i, j) + 0.5);
-        return dn > 8 || (dn >= s.ringMin() && dn <= s.ringMax());
+        return (dn > 8 && !s.rimOnly()) || (dn >= s.ringMin() && dn <= s.ringMax());
     }
 
     /**
@@ -119,6 +142,57 @@ public final class FallSites {
     private static boolean counted(Cache c, Terrain t, Spec s, int i, int j, int slot) {
         if (c.state[slot] == UNREAD) c.state[slot] = counted(t, s, i, j) ? COUNTED : NOT_COUNTED;
         return c.state[slot] != NOT_COUNTED;
+    }
+
+    /**
+     * The column site (i, j)'s fall pours from (fix round 3): with an {@code aim}, outside the Caldera, the column under
+     * the hanging mass by it (GalleriesField.massNear within the anchor's reach, the site's own column when a mass hangs
+     * over it), else, or with none, the site's own column. For a site ({@link #site}) only.
+     */
+    public static int[] aim(Terrain t, Spec s, int i, int j) {
+        int x = x(t.seed, s, i, j), z = z(t.seed, s, i, j);
+        if (s.aim() <= 0 || s.anchor() <= 0 || t.galleries == null || t.galleries.calderaDn(x + 0.5, z + 0.5) <= 8) return new int[]{x, z};
+        int[] m = t.galleries.massNear(x, z, s.anchor(), s.aim());
+        return m == null ? new int[]{x, z} : m;
+    }
+
+    /**
+     * The columns the falls of the sites whose share lies in [shareMin, shareMax) pour from ({@link #aim}) that lie in
+     * the 16 x 16 columns from (x0, z0), as {x, z} pairs: a site's try comes in where its fall pours, in that column's
+     * chunk, which keeps every block of the fall ({@code FluidFallFeature}). Without an aim, {@link #inChunk}.
+     */
+    public static void aimsInChunk(Terrain t, Spec s, int x0, int z0, double shareMin, double shareMax, List<int[]> out) {
+        if (s.aim() <= 0 || s.anchor() <= 0) {
+            inChunk(t, s, x0, z0, shareMin, shareMax, out);
+            return;
+        }
+        int g = s.grid(), r = (int) Math.ceil(s.anchor()) + 1;
+        for (int i = Math.floorDiv(x0 - r, g); i <= Math.floorDiv(x0 + 15 + r, g); i++)
+            for (int j = Math.floorDiv(z0 - r, g); j <= Math.floorDiv(z0 + 15 + r, g); j++) {
+                int x = x(t.seed, s, i, j), z = z(t.seed, s, i, j);
+                if (x < x0 - r || x >= x0 + 16 + r || z < z0 - r || z >= z0 + 16 + r) continue;
+                double sh = share(t.seed, s, i, j);
+                if (sh < shareMin || sh >= shareMax || !site(t, s, i, j)) continue;
+                int[] a = aim(t, s, i, j);
+                if (a[0] >= x0 && a[0] < x0 + 16 && a[1] >= z0 && a[1] < z0 + 16) out.add(a);
+            }
+    }
+
+    /**
+     * The site whose fall pours from column (x, z) ({@link #aim}), as {x, z}: the column itself without an aim, or where
+     * no site's fall pours from it.
+     */
+    public static int[] siteOf(Terrain t, Spec s, int x, int z) {
+        if (s.aim() <= 0 || s.anchor() <= 0) return new int[]{x, z};
+        int g = s.grid(), r = (int) Math.ceil(s.anchor()) + 1;
+        for (int i = Math.floorDiv(x - r, g); i <= Math.floorDiv(x + r, g); i++)
+            for (int j = Math.floorDiv(z - r, g); j <= Math.floorDiv(z + r, g); j++) {
+                int sx = x(t.seed, s, i, j), sz = z(t.seed, s, i, j);
+                if (Math.abs(sx - x) > r || Math.abs(sz - z) > r || !site(t, s, i, j)) continue;
+                int[] a = aim(t, s, i, j);
+                if (a[0] == x && a[1] == z) return new int[]{sx, sz};
+            }
+        return new int[]{x, z};
     }
 
     /** The sites ({@link #site}) in the 16 x 16 columns from (x0, z0) whose share lies in [shareMin, shareMax), as {x, z} pairs. */

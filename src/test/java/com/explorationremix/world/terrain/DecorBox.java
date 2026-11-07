@@ -32,9 +32,10 @@ import java.util.Set;
  * ash_hollows/lava_pool), with their numbers read from the data the game reads. Their placement modifiers (count,
  * in_square, layer_range over the lava table with inset 2, environment_scan of 32, random_offset, the air filter, biome)
  * and the features' own rules are followed line by line (TerracePoolsFeature, ColumnClusterFeature with its
- * clearance, FluidFallFeature in wall mode for lava), and they ask the real walk guard ({@link Walkway} for this
- * terrain) and {@link ColumnFit}. Every other feature of the two biomes is one that sets no block in a player's way
- * (lichen, shards, plants, the climbing vines and the open way pass, which do nothing in a layer with no plan).
+ * clearance, FluidFallFeature in wall mode for lava, every block of a fall in the chunk being decorated), and they ask
+ * the real walk guard ({@link Walkway} for this terrain) and {@link ColumnFit}. Every other feature of the two biomes is
+ * one that sets no block in a player's way (lichen, shards, plants, the climbing vines and the open way pass, which do
+ * nothing in a layer with no plan, and the lava pockets' pass, which finds no other mod's slabs in these blocks).
  *
  * <p>Around each placement a window's walk graph (NoiseVox's moves) is compared before and after it. Its ways out are
  * the window's rim places that belonged to the featureless box's main component; a cut is two of them that were joined
@@ -57,7 +58,9 @@ final class DecorBox {
             "explorationremix:wasteland/great_hanging_columns", "explorationremix:wasteland/lava_falls", "explorationremix:ash_hollows/lava_pool");
     static final Set<String> HARMLESS = Set.of("explorationremix:wasteland/smoulder_lichen", "explorationremix:wasteland/amber_shards",
             "explorationremix:wasteland/cinder_blooms", "explorationremix:wasteland/ash_ferns", "explorationremix:ash_hollows/amber_shards",
-            "explorationremix:climb_vines", "explorationremix:open_way");
+            "explorationremix:climb_vines", "explorationremix:open_way",
+            // gives back the lava of the pockets another mod's slab pass filled with water (none in these blocks)
+            "explorationremix:lava_pockets");
     static final int[] HX = {0, 1, 0, -1}, HZ = {-1, 0, 1, 0};   // north, east, south, west (Direction.Plane.HORIZONTAL)
     private static final int NONE = Integer.MIN_VALUE;
     private static final Path DATA = Path.of("src/main/resources/data/explorationremix/worldgen");
@@ -137,6 +140,15 @@ final class DecorBox {
      * the gates are kept, as before fix round 1 (for measuring what the guards do).
      */
     boolean guards = true;
+    /**
+     * Whether a lava fall keeps every block it sets in the chunk being decorated (FluidFallFeature, fix round 3); false
+     * lets a fall reach over the chunk's edge as before, to measure what the bound changes.
+     */
+    boolean ownChunk = true;
+    /** The chunk being decorated. */
+    private int ownCx, ownCz;
+    /** The blocks the lava falls set outside the chunk being decorated. */
+    int fallsOutside;
 
     // what the run counted, per feature
     final int[] tries = new int[FEATURES], placed = new int[FEATURES], blocks = new int[FEATURES], cuts = new int[FEATURES], oneWay = new int[FEATURES];
@@ -220,6 +232,8 @@ final class DecorBox {
             Random r = new Random(Hashing.mix(seed, cx, cz, 4242));
             int bx = cx * 16, bz = cz * 16;
             area += 256;
+            ownCx = cx;
+            ownCz = cz;
             // step 2 (local modifications), then step 8 (fluid springs)
             for (int i = 0; i < cfg.count[POOLS]; i++) onFloor(r, bx, bz, lo, hi, POOLS);
             for (int i = 0; i < cfg.count[HANGING]; i++) underCeiling(r, bx, bz, lo, hi, HANGING);
@@ -425,8 +439,13 @@ final class DecorBox {
         return k == null || k == K_POOL || k == K_SOURCE || k == K_SUMP;
     }
 
+    /** Whether column (x, z) lies in the chunk being decorated. */
+    private boolean own(int x, int z) { return x >> 4 == ownCx && z >> 4 == ownCz; }
+
     private int[] fallOne(int sx, int sy, int sz, int dir) {
         int fx = sx - HX[dir], fz = sz - HZ[dir];
+        // its source and face, and so its column and sump, in the chunk being decorated
+        if (ownChunk && (!own(sx, sz) || !own(fx, fz))) return null;
         if (!rock(sx, sy, sz) || !air(fx, sy, fz)) return null;
         if (!rock(sx, sy + 1, sz) || !rock(sx, sy - 1, sz) || !rock(sx + HX[dir], sy, sz + HZ[dir])) return null;
         for (int d : new int[]{(dir + 1) & 3, (dir + 3) & 3}) {
@@ -458,6 +477,8 @@ final class DecorBox {
         for (int q = 0; q <= drop; q++) put(fx, sy - q, fz, NoiseVox.LAVA, K_FALL);
         if (sump) put(fx, py, fz, NoiseVox.LAVA, K_SUMP);
         blocks[FALLS] += drop + 2 + (sump ? 1 : 0);
+        if (!own(sx, sz)) fallsOutside++;
+        if (!own(fx, fz)) fallsOutside += drop + 1 + (sump ? 1 : 0);
         return new int[]{fx, py + 1, fz};
     }
 
@@ -674,9 +695,9 @@ final class DecorBox {
         for (int f = 0; f < FEATURES; f++)
             b.append(String.format(java.util.Locale.ROOT, " %s %d of %d tries (%d blocks; guard %d, openings %d, walks %d, shortened %d; cuts %d, one way %d);",
                     NAMES[f], placed[f], tries[f], blocks[f], guarded[f], nearOpening[f], walks[f], shortened[f], cuts[f], oneWay[f]));
-        b.append(String.format(java.util.Locale.ROOT, " pool cells kept off channels %d; falls kept from passages' mouths %d; lava blocks %d, within 3 columns of"
-                + " an opening %d; channel places %d, taken %d; first cuts %s; main places that left it %d, pits %d %s", poolCellsOnChannels, detoured, lavaBlocks,
-                lavaNearOpening, channelPlaces, channelLost, cutAt, leftMain, pits, pitAt));
+        b.append(String.format(java.util.Locale.ROOT, " pool cells kept off channels %d; falls kept from passages' mouths %d; fall blocks outside their chunk %d;"
+                + " lava blocks %d, within 3 columns of an opening %d; channel places %d, taken %d; first cuts %s; main places that left it %d, pits %d %s",
+                poolCellsOnChannels, detoured, fallsOutside, lavaBlocks, lavaNearOpening, channelPlaces, channelLost, cutAt, leftMain, pits, pitAt));
         return b.toString();
     }
 

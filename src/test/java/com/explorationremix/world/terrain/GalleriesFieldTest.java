@@ -84,6 +84,12 @@ class GalleriesFieldTest {
         double dropShare() { return (double) drops / moves; }
         double fallShare() { return (double) falls / moves; }
         double floorShare() { return (double) floorSteps / lavaMoves; }
+        /**
+         * The moves a walker would rather not make, the two together (fix round 3, review3): falls, of the moves on the
+         * blocks before the floor's lava, and steps onto the floor's lava, of the moves on the blocks with it (each share
+         * over its own blocks' moves, as its own bar reads it).
+         */
+        double underfootShare() { return fallShare() + floorShare(); }
 
         @Override public String toString() {
             return String.format(java.util.Locale.ROOT, "seed %d (built in %.1f s): places %d, SCC %.1f %%, walk into it %.1f %%; low %d, escape <= 384 %.1f %%, never %.2f %%;"
@@ -728,6 +734,25 @@ class GalleriesFieldTest {
     /** The bars of {@link #theFloorsLavaIsThereAndSeldomUnderfoot}: blocks in a box, and the share of the moves onto it. */
     static final int FLOOR_LEAST = 10_000;
     static final double FLOOR_STEPS = 0.01;
+
+    /**
+     * Fix round 3 (review3): the two bars above leave room for a box with falls up to 0.8 % of its moves and steps onto
+     * the floor's lava up to 1 % besides, 1.8 % of the moves going where a walker would rather not. So the two together
+     * keep to UNDERFOOT as well ({@link Stats#underfootShare}), a little over the most a box holds now, each split bar
+     * kept as it was. Measured: 1.56 and 0.85 % in the two boxes (falls 0.68 and 0.48 %, the floor's lava 0.88 and
+     * 0.37 %); the slow boxes 1.64, 0.65, 0.91 and 1.24 %.
+     */
+    @Test
+    void fallsAndTheFloorsLavaTogetherStayRare() {
+        for (int i = 0; i < BOXES.length; i++) {
+            Stats s = stats(i);
+            assertTrue(s.underfootShare() <= UNDERFOOT, "too many falls and steps into the floor's lava together ("
+                    + String.format(java.util.Locale.ROOT, "%.2f %%", 100 * s.underfootShare()) + "): " + s);
+        }
+    }
+
+    /** The bar of {@link #fallsAndTheFloorsLavaTogetherStayRare}. */
+    static final double UNDERFOOT = 0.017;
 
     /**
      * Ways down (spec 7.3, 7.6; Taran: "many ways to climb down"): per box, every opened opening keeps a ramp (one left
@@ -1465,7 +1490,7 @@ class GalleriesFieldTest {
      * ramps' first 30 blocks; no closed pit, no floating rock. With the floor's lava laid (fix round 2) never 0.20, 0.14,
      * 0.17 and 0.16 % (islands it rings, as in {@link #theFloodHasAWayOut}), still no closed pit; falls 0.79, 0.55, 0.56
      * and 0.75 % as before; the floor's lava 34 610, 12 214, 12 279 and 18 653 blocks, steps onto it 0.85, 0.10, 0.35 and
-     * 0.49 % of the moves.
+     * 0.49 % of the moves; the two together (fix round 3, {@link #UNDERFOOT}) 1.64, 0.65, 0.91 and 1.24 %.
      */
     @Test
     @Tag("slow")
@@ -1484,6 +1509,7 @@ class GalleriesFieldTest {
             assertTrue(s.over(80) >= 0.90 && s.over(160) >= 0.80, "views: " + s);
             assertTrue(s.fallShare() <= 0.008 && s.dropShare() <= 0.05, "falls and drops: " + s);
             assertTrue(s.floorLava >= FLOOR_LEAST && s.floorShare() <= FLOOR_STEPS, "the floor's lava: " + s);
+            assertTrue(s.underfootShare() <= UNDERFOOT, "falls and the floor's lava together: " + s);
             assertEquals(0, s.lavaBesideAir + s.lavaNearOpening + s.waterUnsealed + s.waterInOpenCavern + s.waterLow + s.waterByLava, "fluid rules: " + s);
             assertEquals(s.opened, s.ramped, "openings without a ramp: " + s);
             assertTrue(s.waysDown >= 0.9 * s.ramped, "ramps with no way down into the cavern: " + s);

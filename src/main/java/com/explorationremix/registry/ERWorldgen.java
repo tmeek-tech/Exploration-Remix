@@ -17,6 +17,7 @@ import com.explorationremix.world.feature.GiantSpikeFeature;
 import com.explorationremix.world.feature.HallGlowFeature;
 import com.explorationremix.world.feature.JoinDeadEndsFeature;
 import com.explorationremix.world.feature.JunctionsPlacement;
+import com.explorationremix.world.feature.LavaPocketsFeature;
 import com.explorationremix.world.feature.LayerHeight;
 import com.explorationremix.world.feature.LayerRangePlacement;
 import com.explorationremix.world.feature.MixStateProvider;
@@ -73,6 +74,8 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
     // the Galleries' floor lava (fix round 2 after the 0.8.0 pack runs): the field's rule laid on its floors
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> FLOOR_LAVA = FEATURES.register("floor_lava", () -> new FloorLavaFeature(NoneFeatureConfiguration.CODEC));
+    // the lava's pockets another mod's slab pass filled with water, given back in the Wasteland and the Galleries (fix round 3)
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> LAVA_POCKETS = FEATURES.register("lava_pockets", () -> new LavaPocketsFeature(NoneFeatureConfiguration.CODEC));
 
     public static final RegistryObject<BlockStateProviderType<FallbackStateProvider>> FALLBACK_PROVIDER = STATE_PROVIDERS.register("fallback", () -> new BlockStateProviderType<>(FallbackStateProvider.CODEC));
     public static final RegistryObject<BlockStateProviderType<MixStateProvider>> MIX_PROVIDER = STATE_PROVIDERS.register("mix", () -> new BlockStateProviderType<>(MixStateProvider.CODEC));

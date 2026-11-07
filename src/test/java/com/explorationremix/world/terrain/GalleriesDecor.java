@@ -29,11 +29,13 @@ import java.util.TreeMap;
  * biomes place in steps 2, 8 and 10 (basalt_galleries/lava_pools and hanging_columns; vault_falls and caldera/lava_falls,
  * and the cliff_falls of older data; the floor's lava, basalt_galleries/floor_lava, of fix round 2), with their
  * placements and numbers read from the data the game reads (count, rarity_filter, in_square, open_span, random_offset,
- * fall_sites, biome) and the features' own rules followed line by line (TerracePoolsFeature, ColumnClusterFeature,
- * FluidFallFeature in its three modes with its tries, spread, sites and min_width, every source of a try planned before
- * any is set; FloorLavaFeature on every column of the chunk),
+ * fall_sites with its sites' aims, biome) and the features' own rules followed line by line (TerracePoolsFeature,
+ * ColumnClusterFeature, FluidFallFeature in its three modes with its tries, spread, sites and min_width, every source of
+ * a try planned before any is set and every block of a fall in the chunk being decorated; FloorLavaFeature on every
+ * column of the chunk),
  * asking the real walk guard ({@link Walkway} for this terrain). The other features of these biomes set no block in a
- * player's way (the climbing chains, the open way pass, the glow, whose light {@code GlowLight} measures).
+ * player's way (the climbing chains, the open way pass, the glow, whose light {@code GlowLight} measures, and the lava
+ * pockets' pass, which finds no other mod's slabs in these blocks).
  *
  * <p>Each chunk draws from its own random, not from the game's decoration seeds: the placements are the game's in kind
  * and number, not block for block. Data and code of an older tree run too (no fall_sites, no ways-down guard).
@@ -79,7 +81,18 @@ final class GalleriesDecor {
     final int[] tries = new int[N], placed = new int[N], blocks = new int[N], guarded = new int[N], shared = new int[N];
     /** The falls placed: kind, then x, y, z of each source. */
     final List<int[]> falls = new ArrayList<>();
+    /** Each placed fall's origin column (its site's, for a set of sites), x and z. */
+    final List<int[]> fallOrigins = new ArrayList<>();
     long area;
+    /**
+     * Whether a fall keeps every block it sets in the chunk being decorated (FluidFallFeature's lava falls, fix round 3);
+     * false lets a fall reach over the chunk's edge as before, to measure what the bound changes.
+     */
+    boolean ownChunk = true;
+    /** The chunk being decorated. */
+    private int ownCx, ownCz;
+    /** The blocks the falls set outside the chunk being decorated, per feature. */
+    final int[] outside = new int[N];
 
     GalleriesDecor(Terrain t, NoiseVox v, Path worldgen) {
         this.t = t;
@@ -116,7 +129,8 @@ final class GalleriesDecor {
         return new double[]{o.get("salt").getAsInt(), o.has("grid") ? o.get("grid").getAsInt() : 16, o.get("spacing").getAsDouble(),
                 o.has("chance") ? o.get("chance").getAsDouble() : 1, o.has("keep") ? o.get("keep").getAsDouble() : 0,
                 o.has("ring_min") ? o.get("ring_min").getAsDouble() : 0, o.has("ring_max") ? o.get("ring_max").getAsDouble() : 9,
-                o.has("anchor") ? o.get("anchor").getAsDouble() : 0};
+                o.has("anchor") ? o.get("anchor").getAsDouble() : 0, o.has("aim") ? o.get("aim").getAsInt() : 0,
+                o.has("rim_only") && o.get("rim_only").getAsBoolean() ? 1 : 0};
     }
 
     private static Feat read(Path worldgen, int f) {
@@ -207,13 +221,34 @@ final class GalleriesDecor {
     // ================================================================================================ the run
     /** Decorates every chunk lying wholly inside [xa, xb) x [za, zb), chunk by chunk, each in the game's feature order. */
     GalleriesDecor run(long seed, int xa, int za, int xb, int zb) {
-        for (int cx = Math.floorDiv(xa + 15, 16); cx * 16 + 16 <= xb; cx++) for (int cz = Math.floorDiv(za + 15, 16); cz * 16 + 16 <= zb; cz++) {
-            Random r = new Random(Hashing.mix(seed, cx, cz, 4243));
-            area += 256;
-            for (int f = 0; f < N; f++) place(r, f, cx * 16, cz * 16);
-        }
+        for (int cx = Math.floorDiv(xa + 15, 16); cx * 16 + 16 <= xb; cx++)
+            for (int cz = Math.floorDiv(za + 15, 16); cz * 16 + 16 <= zb; cz++) decorate(seed, cx, cz);
         return this;
     }
+
+    /**
+     * As {@link #run(long, int, int, int, int)}, the chunks in the order a random drawn from {@code order} shuffles them
+     * into (the game decorates a chunk once its neighbours are generated, in no set order).
+     */
+    GalleriesDecor run(long seed, int xa, int za, int xb, int zb, long order) {
+        List<int[]> chunks = new ArrayList<>();
+        for (int cx = Math.floorDiv(xa + 15, 16); cx * 16 + 16 <= xb; cx++)
+            for (int cz = Math.floorDiv(za + 15, 16); cz * 16 + 16 <= zb; cz++) chunks.add(new int[]{cx, cz});
+        java.util.Collections.shuffle(chunks, new Random(order));
+        for (int[] c : chunks) decorate(seed, c[0], c[1]);
+        return this;
+    }
+
+    private void decorate(long seed, int cx, int cz) {
+        Random r = new Random(Hashing.mix(seed, cx, cz, 4243));
+        area += 256;
+        ownCx = cx;
+        ownCz = cz;
+        for (int f = 0; f < N; f++) place(r, f, cx * 16, cz * 16);
+    }
+
+    /** Whether column (x, z) lies in the chunk being decorated. */
+    private boolean own(int x, int z) { return x >> 4 == ownCx && z >> 4 == ownCz; }
 
     private void place(Random r, int f, int bx, int bz) {
         Feat a = feats[f];
@@ -226,7 +261,7 @@ final class GalleriesDecor {
         }
         List<int[]> starts = new ArrayList<>();
         if (a.sites != null) {
-            starts.addAll(Sites.inChunk(t, a.sites, bx, bz, a.shareMin, a.shareMax));
+            starts.addAll(Sites.aimsInChunk(t, a.sites, bx, bz, a.shareMin, a.shareMax));
         } else {
             for (int i = 0; i < a.count; i++) {
                 if (a.rarity > 1 && r.nextFloat() >= 1F / a.rarity) continue;
@@ -379,22 +414,23 @@ final class GalleriesDecor {
     // ------------------------------------------------------------------------------------------ FluidFallFeature
     /** A lava fall (FluidFallFeature.place) from the origin, with its tries round it and its site's share. */
     private boolean fall(Random r, int ox, int oy, int oz, Feat a, int f) {
-        int[] site = a.fallSites != null && modern ? new int[]{ox, oz} : null;
+        int[] site = a.fallSites != null && modern ? Sites.siteOf(t, a.fallSites, ox, oz) : null;
         List<int[]> src = new ArrayList<>();
-        if (fallAt(r, ox, oy, oz, a, f, site, src)) return record(f, src);
+        if (fallAt(r, ox, oy, oz, a, f, site, src)) return record(f, src, ox, oz);
         for (int k = 1; k < a.tries; k++) {
             int dx = r.nextInt(2 * a.spread + 1) - a.spread, dz = r.nextInt(2 * a.spread + 1) - a.spread;
             int y = moved(a, ox + dx, oy, oz + dz);
-            if (y != NONE && fallAt(r, ox + dx, y, oz + dz, a, f, site, src)) return record(f, src);
+            if (y != NONE && fallAt(r, ox + dx, y, oz + dz, a, f, site, src)) return record(f, src, ox, oz);
         }
         return false;
     }
 
-    private boolean record(int f, List<int[]> src) {
+    private boolean record(int f, List<int[]> src, int ox, int oz) {
         int[] e = new int[1 + 3 * src.size()];
         e[0] = f;
         for (int i = 0; i < src.size(); i++) System.arraycopy(src.get(i), 0, e, 1 + 3 * i, 3);
         falls.add(e);
+        fallOrigins.add(new int[]{ox, oz});
         return true;
     }
 
@@ -502,8 +538,9 @@ final class GalleriesDecor {
     // ------------------------------------------------------------------------------------------ FloorLavaFeature
     /**
      * FloorLavaFeature.place on the chunk at (bx, bz): on each of its columns, a lava source in the floor's top block
-     * where the field's rule puts one ({@link GalleriesField#floorLavaRow}) and the blocks still hold it (rock there and
-     * under it, rock or a lava source on its four sides).
+     * where the field's rule puts one ({@link GalleriesField#floorLavaRow}), the blocks still hold it (rock there and
+     * under it, rock or a lava source on its four sides) and it lies open to the air above it (fix round 3: these blocks
+     * have no slabs another mod lays, which the feature clears).
      */
     private void floor(int bx, int bz) {
         tries[FLOOR]++;
@@ -511,7 +548,7 @@ final class GalleriesDecor {
         for (int dx = 0; dx < 16; dx++)
             for (int dz = 0; dz < 16; dz++) {
                 int x = bx + dx, z = bz + dz, y = Floor.row(t, x, z);
-                if (y == NONE || !holds(x, y, z)) continue;
+                if (y == NONE || !holds(x, y, z) || !air(x, y + 1, z)) continue;
                 put(x, y, z, NoiseVox.LAVA, K_FLOOR);
                 n++;
             }
@@ -529,14 +566,15 @@ final class GalleriesDecor {
     /**
      * The floor's lava laid on plain blocks, no other decoration with it (what the terrain's tests walk on): FloorLavaFeature
      * on every column of the box, whose order does not change it (it turns rock into lava sources only, and both hold a
-     * neighbour). Returns the blocks laid ({@link #key}).
+     * neighbour), open to the air above every block of it. Returns the blocks laid ({@link #key}).
      */
     static java.util.Set<Long> layFloorLava(Terrain t, NoiseVox v) {
         java.util.Set<Long> laid = new java.util.HashSet<>();
         for (int x = v.x0; x < v.x0 + v.nx; x++)
             for (int z = v.z0; z < v.z0 + v.nz; z++) {
                 int y = Floor.row(t, x, z);
-                if (y == NONE || !v.in(x, y - 1, z) || !v.in(x, y, z) || v.mat(x, y, z) != NoiseVox.ROCK || v.mat(x, y - 1, z) != NoiseVox.ROCK) continue;
+                if (y == NONE || !v.in(x, y - 1, z) || !v.in(x, y + 1, z) || v.mat(x, y, z) != NoiseVox.ROCK || v.mat(x, y - 1, z) != NoiseVox.ROCK
+                        || v.mat(x, y + 1, z) != NoiseVox.AIR) continue;
                 boolean held = true;
                 for (int d = 0; d < 4 && held; d++) {
                     int m = v.mat(x + HX[d], y, z + HZ[d]);
@@ -556,6 +594,8 @@ final class GalleriesDecor {
      */
     private Object[] planOne(Feat a, int f, int sx, int sy, int sz, int dir, boolean ceiling, int[] site, List<long[]> walks) {
         int fx = ceiling ? sx : sx - HX[dir], fy = ceiling ? sy - 1 : sy, fz = ceiling ? sz : sz - HZ[dir];
+        // a lava fall's source and face, and so its column and sump, in the chunk being decorated
+        if (ownChunk && (!own(sx, sz) || !own(fx, fz))) return null;
         if (!rock(sx, sy, sz) || !air(fx, fy, fz)) return null;
         if (site != null && (!Sites.clear(t, a.fallSites, site[0], site[1], sx, sz) || !Sites.clear(t, a.fallSites, site[0], site[1], fx, fz))) { shared[f]++; return null; }
         if (ceiling) {
@@ -612,6 +652,8 @@ final class GalleriesDecor {
         for (int q = 0; q <= drop; q++) put(fx, fy - q, fz, NoiseVox.LAVA, K_FALL);
         if (sump) put(fx, fy - drop - 1, fz, NoiseVox.LAVA, K_SUMP);
         blocks[f] += drop + 2 + (sump ? 1 : 0);
+        if (!own(sx, sz)) outside[f]++;
+        if (!own(fx, fz)) outside[f] += drop + 1 + (sump ? 1 : 0);
     }
 
     // ================================================================================================ the measures
@@ -656,7 +698,10 @@ final class GalleriesDecor {
      * rock, at five heights) lies in the frame (FOV 70 up and down, 16:9), within 192 blocks (render distance 12), with no
      * rock on the line to it. Yaw and pitch as Minecraft's (yaw 0 south, 90 west; pitch down).
      */
-    int fallsSeen(double ex, double ey, double ez, double yaw, double pitch) {
+    int fallsSeen(double ex, double ey, double ez, double yaw, double pitch) { return fallsSeen(ex, ey, ez, yaw, pitch, -1); }
+
+    /** As {@link #fallsSeen(double, double, double, double, double)}, the falls of feature {@code kind} only (all for -1). */
+    int fallsSeen(double ex, double ey, double ez, double yaw, double pitch, int kind) {
         double yr = Math.toRadians(yaw), pr = Math.toRadians(pitch);
         double[] fwd = {-Math.sin(yr) * Math.cos(pr), -Math.sin(pr), Math.cos(yr) * Math.cos(pr)};
         double[] right = {-Math.cos(yr), 0, -Math.sin(yr)};
@@ -664,6 +709,7 @@ final class GalleriesDecor {
         double tv = Math.tan(Math.toRadians(35)), th = tv * 16 / 9.0;
         int seen = 0;
         for (int[] f : falls) {
+            if (kind >= 0 && f[0] != kind) continue;
             int sx = f[1], sy = f[2], sz = f[3], y = sy - 1;
             while (y > v.y0 && v.mat(sx, y, sz) != NoiseVox.ROCK) y--;
             double cx = sx + 0.5, cz = sz + 0.5, dx = cx - ex, dz = cz - ez;
@@ -699,6 +745,17 @@ final class GalleriesDecor {
      * views' counts, highest first.
      */
     int[] fallsPerView(int n, long seed) {
+        return fallsPerView(n, seed, EnumSet.of(DeepBiome.BASALT_GALLERIES, DeepBiome.CAUSEWAY, DeepBiome.SCORIA_CANYONS, DeepBiome.CALDERA));
+    }
+
+    /** As {@link #fallsPerView(int, long)}, from standing places in the Caldera only. */
+    int[] fallsPerCalderaView(int n, long seed) { return fallsPerView(n, seed, EnumSet.of(DeepBiome.CALDERA)); }
+
+    /** As {@link #fallsPerView(int, long)}, from standing places in the biomes given. */
+    int[] fallsPerView(int n, long seed, EnumSet<DeepBiome> in) { return fallsPerView(n, seed, in, -1); }
+
+    /** As {@link #fallsPerView(int, long, EnumSet)}, counting the falls of feature {@code kind} only (all for -1). */
+    int[] fallsPerView(int n, long seed, EnumSet<DeepBiome> in, int kind) {
         java.util.Random r = new java.util.Random(seed);
         int[] out = new int[n];
         int made = 0, w = t.galleries.W;
@@ -709,14 +766,28 @@ final class GalleriesDecor {
                 if (v.mat(x, y - 1, z) == NoiseVox.ROCK && v.mat(x, y, z) == NoiseVox.AIR && v.mat(x, y + 1, z) == NoiseVox.AIR && v.mat(x, y + 2, z) == NoiseVox.AIR) floors.add(y);
             if (floors.isEmpty()) continue;
             int y = floors.get(r.nextInt(floors.size()));
-            DeepBiome b = t.biomeAt(x, y + 1, z);
-            if (b != DeepBiome.BASALT_GALLERIES && b != DeepBiome.CAUSEWAY && b != DeepBiome.SCORIA_CANYONS && b != DeepBiome.CALDERA) continue;
-            out[made++] = fallsSeen(x + 0.5, y + 1.62, z + 0.5, r.nextDouble() * 360, r.nextDouble() * 15);
+            if (!in.contains(t.biomeAt(x, y + 1, z))) continue;
+            out[made++] = fallsSeen(x + 0.5, y + 1.62, z + 0.5, r.nextDouble() * 360, r.nextDouble() * 15, kind);
         }
         int[] got = Arrays.copyOf(out, made);
         Arrays.sort(got);
         for (int i = 0; i < got.length / 2; i++) { int q = got[i]; got[i] = got[got.length - 1 - i]; got[got.length - 1 - i] = q; }
         return got;
+    }
+
+    /**
+     * The falls that pour from the underside of a hanging mass (fix round 3): a source in the rock of a cluster hanging
+     * GalleriesField.ANCHOR_HANG rows or more ({@link GalleriesField#hang} over 0 at the source).
+     */
+    int fromMasses() {
+        int n = 0;
+        for (int[] f : falls)
+            for (int i = 1; i < f.length; i += 3)
+                if (t.galleries.hang(f[i], f[i + 1], f[i + 2]) > 0 && t.galleries.column(f[i], f[i + 2]).hang >= GalleriesField.ANCHOR_HANG) {
+                    n++;
+                    break;
+                }
+        return n;
     }
 
     /** Each placed fall's distance to the nearest other fall (the nearest two of their sources' columns). */
@@ -780,17 +851,22 @@ final class GalleriesDecor {
 
     /**
      * The floor's lava laid (FloorLavaFeature) as it stands once every chunk is decorated: {blocks, blocks that could
-     * flow}, a block that could flow having under it or on one of its four sides anything but rock or a lava source (a
-     * fall's flowing lava, air); the first few listed into {@code where}. Blocks on the box's edge are left out.
+     * flow, blocks under anything but air}, a block that could flow having under it or on one of its four sides anything
+     * but rock or a lava source (a fall's flowing lava, air), and a covered one a block over it (one that could rest on
+     * the lava alone); the first few of either listed into {@code where}. Blocks on the box's edge are left out.
      */
     int[] floorLavaHeld(List<String> where) {
-        int n = 0, loose = 0;
+        int n = 0, loose = 0, covered = 0;
         for (Map.Entry<Long, Integer> e : kinds.entrySet()) {
             if (e.getValue() != K_FLOOR) continue;
             long p = e.getKey();
             int x = kx(p), y = ky(p), z = kz(p);
             if (v.mat(x, y, z) != NoiseVox.LAVA || x == v.x0 || z == v.z0 || x == v.x0 + v.nx - 1 || z == v.z0 + v.nz - 1) continue;
             n++;
+            if (!air(x, y + 1, z)) {
+                covered++;
+                if (where.size() < 8) where.add(String.format(Locale.ROOT, "(%d,%d,%d) under %d", x, y, z, v.mat(x, y + 1, z)));
+            }
             String open = !rock(x, y - 1, z) ? "under" : null;
             for (int d = 0; d < 4 && open == null; d++)
                 if (!rock(x + HX[d], y, z + HZ[d]) && !lavaSource(x + HX[d], y, z + HZ[d])) open = new String[]{"north", "east", "south", "west"}[d];
@@ -798,7 +874,7 @@ final class GalleriesDecor {
             loose++;
             if (where.size() < 8) where.add(String.format(Locale.ROOT, "(%d,%d,%d) open %s", x, y, z, open));
         }
-        return new int[]{n, loose};
+        return new int[]{n, loose, covered};
     }
 
     int placedFalls() { return placed[VAULT] + placed[CLIFF] + placed[CALDERA]; }
@@ -806,7 +882,7 @@ final class GalleriesDecor {
     @Override public String toString() {
         StringBuilder b = new StringBuilder(String.format(Locale.ROOT, "decorated %.3f km2 (%d chunks):", area / 1e6, area / 256));
         for (int f = 0; f < N; f++)
-            b.append(String.format(Locale.ROOT, " %s %d of %d tries (%d blocks; guard %d, site share %d);", NAMES[f], placed[f], tries[f], blocks[f], guarded[f], shared[f]));
+            b.append(String.format(Locale.ROOT, " %s %d of %d tries (%d blocks, %d outside the chunk; guard %d, site share %d);", NAMES[f], placed[f], tries[f], blocks[f], outside[f], guarded[f], shared[f]));
         return b.toString();
     }
 
@@ -824,7 +900,15 @@ final class GalleriesDecor {
     // ------------------------------------------------------------------------- calls only a tree with them makes
     /** FallSites (absent from older trees: loaded only when the data names a set of sites). */
     static final class Sites {
+        /** Whether the set has an aim (fix round 3: a site's fall pours from under the hanging mass by it). */
+        static boolean aims(double[] s) { return s.length > 8 && s[8] > 0; }
+
+        /** Whether the set has fix round 3's fields (an aim, or only its rim candidates counted). */
+        static boolean round3(double[] s) { return aims(s) || (s.length > 9 && s[9] > 0); }
+
         static com.explorationremix.world.feature.FallSites.Spec spec(double[] s) {
+            if (round3(s)) return new com.explorationremix.world.feature.FallSites.Spec((int) s[0], (int) s[1], s[2], s[3], s[4], s[5], s[6], s[7], (int) s[8],
+                    s.length > 9 && s[9] > 0);
             return new com.explorationremix.world.feature.FallSites.Spec((int) s[0], (int) s[1], s[2], s[3], s[4], s[5], s[6], s.length > 7 ? s[7] : 0);
         }
 
@@ -832,6 +916,19 @@ final class GalleriesDecor {
             List<int[]> out = new ArrayList<>();
             com.explorationremix.world.feature.FallSites.inChunk(t, spec(s), x0, z0, lo, hi, out);
             return out;
+        }
+
+        /** FallSitesPlacement: the columns the falls of the chunk pour from (the sites themselves without an aim). */
+        static List<int[]> aimsInChunk(Terrain t, double[] s, int x0, int z0, double lo, double hi) {
+            if (!aims(s)) return inChunk(t, s, x0, z0, lo, hi);
+            List<int[]> out = new ArrayList<>();
+            com.explorationremix.world.feature.FallSites.aimsInChunk(t, spec(s), x0, z0, lo, hi, out);
+            return out;
+        }
+
+        /** The site a fall pouring from column (x, z) belongs to (the column itself without an aim). */
+        static int[] siteOf(Terrain t, double[] s, int x, int z) {
+            return aims(s) ? com.explorationremix.world.feature.FallSites.siteOf(t, spec(s), x, z) : new int[]{x, z};
         }
 
         static boolean clear(Terrain t, double[] s, int siteX, int siteZ, int x, int z) {

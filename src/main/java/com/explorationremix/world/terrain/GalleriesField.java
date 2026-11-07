@@ -272,7 +272,7 @@ public final class GalleriesField {
     }
 
     /** A fall's anchor ({@link #fallAnchor}): the step of floor that reads as a wall or a ledge's edge, the hang of a mass (rows). */
-    static final int ANCHOR_STEP = 12, ANCHOR_HANG = 8;
+    public static final int ANCHOR_STEP = 12, ANCHOR_HANG = 8;
 
     /**
      * Whether an open column (x, z) stands by a wall or under a hanging mass, where a lava fall may pour (fix round 2
@@ -292,6 +292,33 @@ public final class GalleriesField {
             if (n.closed() || n.hang >= ANCHOR_HANG || Math.abs(n.f - f) >= ANCHOR_STEP) return true;
         }
         return false;
+    }
+
+    /**
+     * The column under the hanging mass a lava fall by open column (x, z) pours from (fix round 3 after the 0.8.0 pack
+     * runs: every fall poured from the high vault as a thin line and none from a hanging mass, where Taran's picture has
+     * some): the column itself when a cluster hangs ANCHOR_HANG rows or more over it; else, of the {@link #fallAnchor}
+     * looks within r blocks, the open one under the deepest such cluster whose underside stands {@code span} rows or more
+     * over the floor under it (or over a band's top), so that a fall from it drops as far as one from a vault; null when
+     * there is none.
+     */
+    public int[] massNear(int x, int z, double r, int span) {
+        Cell c = column(x, z);
+        if (c.closed()) return null;
+        if (c.hang >= ANCHOR_HANG) return new int[]{x, z};
+        int[] best = null;
+        float deepest = 0;
+        for (int k = 0; k < 16; k++) {
+            double a = k * (Math.PI / 8), d = (k & 1) == 0 ? r : 0.5 * r;
+            int nx = (int) Math.floor(x + 0.5 + d * Math.cos(a)), nz = (int) Math.floor(z + 0.5 + d * Math.sin(a));
+            Cell n = column(nx, nz);
+            if (n.closed() || n.hang < ANCHOR_HANG || n.hang <= deepest) continue;
+            int floor = n.bl < n.bh ? Math.max(n.f, n.bh) : n.f;
+            if (n.c - floor < span) continue;
+            deepest = n.hang;
+            best = new int[]{nx, nz};
+        }
+        return best;
     }
 
     // ============================================================================================ cells

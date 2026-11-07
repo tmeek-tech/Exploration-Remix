@@ -31,9 +31,14 @@ class FallSitesTest {
     static final FallSites.Spec ALL = new FallSites.Spec(GAL.salt(), GAL.grid(), GAL.spacing(), GAL.chance(), GAL.keep(), GAL.ringMin(), GAL.ringMax(), 0);
     static final Terrain T = new Terrain(TerrainSettings.defaults(), -64, 8675309L);
 
+    /** The Caldera's own falls' sites as tools/worldgen.py ships them (configured_feature/caldera/lava_falls.json). */
+    static final FallSites.Spec CAL = shipped("caldera/lava_falls");
+
     /** The halls' falls' sites as tools/worldgen.py ships them (configured_feature/basalt_galleries/vault_falls.json). */
-    static FallSites.Spec shipped() {
-        try (Reader r = Files.newBufferedReader(Path.of("src/main/resources/data/explorationremix/worldgen/configured_feature/basalt_galleries/vault_falls.json"))) {
+    static FallSites.Spec shipped() { return shipped("basalt_galleries/vault_falls"); }
+
+    static FallSites.Spec shipped(String feature) {
+        try (Reader r = Files.newBufferedReader(Path.of("src/main/resources/data/explorationremix/worldgen/configured_feature/" + feature + ".json"))) {
             JsonElement sites = JsonParser.parseReader(r).getAsJsonObject().getAsJsonObject("config").get("sites");
             return FallSites.Spec.CODEC.parse(JsonOps.INSTANCE, sites).result().orElseThrow();
         } catch (IOException e) {
@@ -138,6 +143,15 @@ class FallSitesTest {
             assertEquals(a, b);
             assertTrue(a.size() > (spec == ALL ? 50 : 10), "too few sites to tell: " + a.size());
         }
+        // and the columns the shipped sites' falls pour from (fix round 3: aims), each found by the chunk holding it
+        List<int[]> aimsInOrder = new ArrayList<>(), aimsMixed = new ArrayList<>();
+        for (int[] c : order) FallSites.aimsInChunk(T, GAL, c[0] * 16, c[1] * 16, 0, 1, aimsInOrder);
+        for (int[] c : mixed) FallSites.aimsInChunk(T, GAL, c[0] * 16, c[1] * 16, 0, 1, aimsMixed);
+        Set<String> a = set(aimsInOrder), b = new HashSet<>();
+        for (int[] p : aimsMixed) if (p[0] >= -256 && p[0] < 256 && p[1] >= -256 && p[1] < 256) b.add(p[0] + "," + p[1]);
+        assertEquals(a, b);
+        assertEquals(a.size(), aimsInOrder.size(), "an aim found by two chunks");
+        assertTrue(a.size() > 10, "too few aims to tell: " + a.size());
     }
 
     /**
@@ -168,6 +182,63 @@ class FallSitesTest {
             }
         }
         assertTrue(pairs > 20 && tried > 10_000, "too few pairs to tell: " + pairs + " pairs, " + tried + " column pairs");
+    }
+
+    /**
+     * Fix round 3 (judge3: every fall poured from the high vault as a thin line and none from a hanging mass, though a
+     * mass hung over or by a fifth of the sites): a site with no mass over it but one within the anchor's reach pours
+     * from under that mass ({@link FallSites#aim}). Every aim lies within the anchor's reach of its site, under a cluster
+     * hanging GalleriesField.ANCHOR_HANG rows or more wherever it is not the site's own column, and leads back to its
+     * site ({@link FallSites#siteOf}), so the fall keeps to its site's share; a good share of the sites pour from under a
+     * mass (measured: see the assertion's message); and each aim is found by the one chunk that holds it, the same in any
+     * order ({@link #sitesAreTheSameInAnyOrder}).
+     */
+    @Test
+    void sitesPourFromUnderTheMassesByThem() {
+        assertTrue(GAL.aim() > 0, "the shipped sites have no aim");
+        int sites = 0, moved = 0, under = 0;
+        for (int i = -100; i < 100; i++) for (int j = -100; j < 100; j++) {
+            if (!FallSites.site(T, GAL, i, j)) continue;
+            int x = FallSites.x(T.seed, GAL, i, j), z = FallSites.z(T.seed, GAL, i, j);
+            if (T.galleries.calderaDn(x + 0.5, z + 0.5) <= 8) continue;
+            sites++;
+            int[] a = FallSites.aim(T, GAL, i, j), back = FallSites.siteOf(T, GAL, a[0], a[1]);
+            String what = "site " + x + "," + z + " aims at " + a[0] + "," + a[1];
+            assertTrue(back[0] == x && back[1] == z, what + ", which leads back to " + back[0] + "," + back[1]);
+            assertTrue(Math.hypot(a[0] - x, a[1] - z) <= GAL.anchor() + 1, what + ": past the anchor's reach");
+            boolean mass = T.galleries.column(a[0], a[1]).hang >= com.explorationremix.world.terrain.GalleriesField.ANCHOR_HANG;
+            if (mass) under++;
+            if (a[0] != x || a[1] != z) {
+                moved++;
+                assertTrue(mass, what + ": no mass hangs there");
+                assertTrue(!T.galleries.column(a[0], a[1]).closed(), what + ": a closed column");
+            }
+        }
+        String got = sites + " sites outside the Caldera, " + moved + " moved under a mass by them, " + under + " under a mass";
+        System.out.println("FallSitesTest aims: " + got);
+        assertTrue(sites >= 300, "too few sites to tell: " + got);
+        assertTrue(moved > 0 && under >= 0.3 * sites, "too few sites pour from under a mass: " + got);
+    }
+
+    /**
+     * Fix round 3: the Caldera's own set counts only the candidates on a Caldera's rim (rim_only), so its packing reads
+     * none of the halls' candidates, where its falls never stand (at its wider spacing a chain of rising priorities
+     * through them took 44 ms a chunk on a cold cache): every kept candidate of the set lies on a rim, no two nearer than
+     * its spacing, and there are some.
+     */
+    @Test
+    void theCalderasSetCountsItsRimOnly() {
+        assertTrue(CAL.rimOnly(), "the Caldera's set counts the halls' candidates");
+        List<int[]> s = new ArrayList<>();
+        for (int i = -200; i < 200; i++) for (int j = -200; j < 200; j++) {
+            if (!FallSites.kept(T, CAL, i, j)) continue;
+            int x = FallSites.x(T.seed, CAL, i, j), z = FallSites.z(T.seed, CAL, i, j);
+            double dn = T.galleries.calderaDn(x + 0.5, z + 0.5);
+            assertTrue(dn >= CAL.ringMin() && dn <= CAL.ringMax(), "a kept candidate of the Caldera's set off a rim: " + x + "," + z + " dn " + dn);
+            s.add(new int[]{x, z});
+        }
+        assertTrue(s.size() >= 10, "too few Caldera sites to tell: " + s.size());
+        assertTrue(least(s) >= CAL.spacing(), "two Caldera sites " + least(s) + " apart");
     }
 
     /** In the Caldera only its lake's rim holds sites (0.42 to 0.62 of the patch's radius from its middle). */

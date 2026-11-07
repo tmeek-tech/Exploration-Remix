@@ -13,6 +13,8 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.util.valueproviders.IntProvider;
+import net.minecraft.server.level.WorldGenRegion;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -49,7 +51,15 @@ import java.util.Optional;
  * fall is never a lone thread. A fall placed at a site of a set of
  * {@code sites} ({@link FallSites}: the Galleries' falls, at spaced sites) keeps every block of its sources and its
  * column to its own site's share of the ground ({@link FallSites#clear}), so no two falls of the set come within the
- * set's keep of each other.
+ * set's keep of each other; its origin is the column the site's fall pours from, the site's own or the one under a
+ * hanging mass by it ({@link FallSites#aim}), and the share stays the site's ({@link FallSites#siteOf}).
+ *
+ * <p>A lava fall keeps every block it sets, its sources, its column and its sump, in the chunk being decorated (fix
+ * round 3): a try whose row would reach over the chunk's edge sets only the sources on this side of it, and a source
+ * whose face or column lies over the edge does not pour. A block set in a neighbour that is not decorated yet would be
+ * there before that neighbour's own decorations, and Terrain Slabs' slab pass, which takes any block with a fluid in it
+ * for a puddle, makes a sump there into a waterlogged slab with the falling lava over it (0.8.0, 8 of 50 falls).
+ * Water falls (the upper layers') are as they were.
  */
 public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
     public record Config(BlockState fluid, HolderSet<Block> rock, int minDrop, int search, IntProvider width, int minWidth, Mode mode, int tries,
@@ -96,19 +106,34 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
         RandomSource random = ctx.random();
         BlockPos origin = ctx.origin();
         if (!(c.fluid().getFluidState().getType() instanceof FlowingFluid fluid)) return false;
-        // the site's own share of the ground (a set of sites: the origin's column is its site)
+        // the site's own share of the ground (a set of sites: the origin's column is where the site's fall pours from)
         Share share = null;
         if (c.sites().isPresent()) {
             Terrain t = DeepWorld.terrain();
-            if (t != null && DeepWorld.installed()) share = new Share(t, c.sites().get(), origin.getX(), origin.getZ());
+            if (t != null && DeepWorld.installed()) {
+                int[] site = FallSites.siteOf(t, c.sites().get(), origin.getX(), origin.getZ());
+                share = new Share(t, c.sites().get(), site[0], site[1]);
+            }
         }
-        if (placeAt(level, c, fluid, random, origin, share)) return true;
+        // A lava fall's blocks all lie in the chunk being decorated (see the class comment).
+        ChunkPos own = fluid.isSame(Fluids.LAVA) ? decorating(level, origin) : null;
+        if (placeAt(level, c, fluid, random, origin, share, own)) return true;
         for (int k = 1; k < c.tries(); k++) {
             int dx = random.nextInt(2 * c.spread() + 1) - c.spread(), dz = random.nextInt(2 * c.spread() + 1) - c.spread();
             BlockPos o = moved(level, c, origin.offset(dx, 0, dz));
-            if (o != null && placeAt(level, c, fluid, random, o, share)) return true;
+            if (o != null && placeAt(level, c, fluid, random, o, share, own)) return true;
         }
         return false;
+    }
+
+    /** The chunk being decorated: the region's centre, or the origin's chunk on a level that is no region. */
+    static ChunkPos decorating(WorldGenLevel level, BlockPos origin) {
+        return level instanceof WorldGenRegion r ? r.getCenter() : new ChunkPos(origin);
+    }
+
+    /** Whether p lies in chunk c. */
+    static boolean inChunk(ChunkPos c, BlockPos p) {
+        return (p.getX() >> 4) == c.x && (p.getZ() >> 4) == c.z;
     }
 
     /** A site's share of the ground, for {@link FallSites#clear}. */
@@ -138,7 +163,8 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
     }
 
     /** One try at origin: the fall's row of sources into its wall or vault, or false. */
-    private static boolean placeAt(WorldGenLevel level, Config c, FlowingFluid fluid, RandomSource random, BlockPos origin, Share share) {
+    private static boolean placeAt(WorldGenLevel level, Config c, FlowingFluid fluid, RandomSource random, BlockPos origin, Share share,
+                                   ChunkPos own) {
         if (!GlowBlock.open(level.getBlockState(origin))) return false;
         Direction dir = Direction.Plane.HORIZONTAL.getRandomDirection(random);
         boolean ceiling = c.mode() == Mode.CEILING;
@@ -172,7 +198,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
             BlockPos src = wall.relative(side, w);
             // a wider fall's later sources follow the rough rock, a row up or down the vault, a block in or out of the wall
             if (w > 0 && c.tries() > 1) src = face(level, c, src, ceiling ? Direction.UP : dir);
-            Pour p = src == null ? null : plan(level, c, fluid, src, dir, ceiling, share, walks);
+            Pour p = src == null ? null : plan(level, c, fluid, src, dir, ceiling, share, own, walks);
             if (p == null) {
                 if (w == 0) return false;
                 if (c.minWidth() > 1) break;   // one curtain: the row ends at a gap
@@ -233,12 +259,14 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
 
     /**
      * The source at src, if it may pour: the checks below, made on the level as it stands with the row's earlier sources
-     * not yet set ({@code walks}: their change to the kept walks). Null if it may not.
+     * not yet set ({@code walks}: their change to the kept walks). Null if it may not. {@code own}: for a lava fall, the
+     * chunk being decorated, which the source and its face (and so the column and the sump under the face) keep to.
      */
     private static Pour plan(WorldGenLevel level, Config c, FlowingFluid fluid, BlockPos src, Direction dir, boolean ceiling, Share share,
-                             WalkWindow.Change walks) {
+                             ChunkPos own, WalkWindow.Change walks) {
         // The open face: in front of the wall, or under the vault.
         BlockPos front = ceiling ? src.below() : src.relative(dir.getOpposite());
+        if (own != null && (!inChunk(own, src) || !inChunk(own, front))) return null;
         if (!level.getBlockState(src).is(c.rock()) || !GlowBlock.open(level.getBlockState(front))) return null;
         // Its own site's share of the ground, source and column.
         if (share != null && (!share.clear(src) || !share.clear(front))) return null;

@@ -120,7 +120,8 @@
     ],
     [
       "explorationremix:climb_vines",
-      "explorationremix:open_way"
+      "explorationremix:open_way",
+      "explorationremix:lava_pockets"
     ]
   ]
 }
