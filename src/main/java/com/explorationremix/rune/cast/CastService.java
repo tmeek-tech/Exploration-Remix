@@ -62,6 +62,9 @@ public final class CastService {
 
     static Caster caster(ServerPlayer p) { return CASTERS.computeIfAbsent(p.getUUID(), u -> new Caster()); }
 
+    @Nullable
+    static Caster casterOrNull(ServerPlayer p) { return CASTERS.get(p.getUUID()); }
+
     // ------------------------------------------------------------------------------------------------ the sword
 
     /**
@@ -117,7 +120,8 @@ public final class CastService {
         long now = p.level().getGameTime();
         InteractionHand hand;
         boolean full;
-        if (p.isUsingItem() && RuneGear.host(p.getUseItem()) == Host.BOW) {
+        // a crossbow's arrows only ever take the crossbow's cast, even with a bow drawn in the other hand
+        if (!arrow.shotFromCrossbow() && p.isUsingItem() && RuneGear.host(p.getUseItem()) == Host.BOW) {
             hand = p.getUsedItemHand();
             full = arrow.isCritArrow();
         } else if (c.crossbowTick == now && c.crossbowHand != null && arrow.shotFromCrossbow()) {
@@ -293,7 +297,7 @@ public final class CastService {
      */
     static void launch(ServerPlayer p, Vec3 v) {
         Caster c = caster(p);
-        c.pull = null;
+        Grapples.letGo(p, c);
         c.launch = v;
         p.setDeltaMovement(v);
         p.hurtMarked = true;

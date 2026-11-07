@@ -3,6 +3,8 @@ package com.explorationremix.client.rune;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.rune.RunDepth;
 import com.explorationremix.rune.RuneGear;
+import com.explorationremix.rune.cast.LocalPull;
+import com.explorationremix.rune.cast.Pull;
 import com.explorationremix.rune.engine.CastMachine;
 import com.explorationremix.rune.engine.CastReading;
 import com.explorationremix.rune.engine.Explain;
@@ -17,6 +19,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.player.Input;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.MutableComponent;
@@ -25,19 +28,23 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.client.event.MovementInputUpdateEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.common.Mod;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The runes' client game events, on the Forge bus: the rune key asks the server for the rune screen, gear tooltips show
- * the row and what it does, and a rune sword held up to cast does not slow its player to a crawl.
+ * The runes' client game events, on the Forge bus: the rune key asks the server for the rune screen, Reel's pull is
+ * steered, gear tooltips show the row and what it does, and a rune sword held up to cast does not slow its player to a
+ * crawl.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class RuneClientEvents {
@@ -63,6 +70,61 @@ public final class RuneClientEvents {
             RuneNet.CHANNEL.sendToServer(new RuneNet.OpenEditor());
             keyCooldown = KEY_COOLDOWN;
         }
+    }
+
+    // ------------------------------------------------------------------------------------------------ Reel's pull
+
+    /** The pull this game is steering, and what it noted when it took it up: the level, and whether sneak was held. */
+    private static int steering = -1;
+    @Nullable
+    private static Level steerLevel;
+    private static boolean steerSneak;
+
+    /**
+     * Reel's pull on this game's player, steered at the start of each of their ticks, before they move: from where they
+     * really are, so a slow link or a stuttering game can't make it shoot past or let go early ({@link Pull.Steer}).
+     * A fresh sneak lets go, as does anything that would end a pull on the server; done, it tells the server.
+     */
+    @SubscribeEvent
+    public static void steer(TickEvent.PlayerTickEvent event) {
+        if (event.phase != TickEvent.Phase.START || event.side != LogicalSide.CLIENT) return;
+        LocalPlayer p = Minecraft.getInstance().player;
+        if (p == null || event.player != p) return;
+        Pull.Steer s = LocalPull.current();
+        if (s == null) {
+            steering = -1;
+            return;
+        }
+        boolean sneak = p.isShiftKeyDown();
+        if (s.id != steering) {
+            steering = s.id;
+            steerLevel = p.level();
+            steerSneak = sneak;
+        }
+        boolean pressed = sneak && !steerSneak;
+        steerSneak = sneak;
+        if (pressed || p.level() != steerLevel || !p.isAlive() || p.isSpectator() || p.isPassenger() || p.isFallFlying() || p.isSleeping()) {
+            pullDone();
+            return;
+        }
+        double[] v = s.tick(p.getX(), p.getY(), p.getZ());
+        if (v != null) p.setDeltaMovement(v[0], v[1], v[2]);
+        if (s.over()) pullDone();
+    }
+
+    private static void pullDone() {
+        int id = LocalPull.finish();
+        steering = -1;
+        steerLevel = null;
+        if (id >= 0 && Minecraft.getInstance().getConnection() != null) RuneNet.CHANNEL.sendToServer(new RuneNet.PullDone(id));
+    }
+
+    /** Leaving a world drops any pull this game was steering. */
+    @SubscribeEvent
+    public static void loggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        LocalPull.finish();
+        steering = -1;
+        steerLevel = null;
     }
 
     // ------------------------------------------------------------------------------------------------ tooltips

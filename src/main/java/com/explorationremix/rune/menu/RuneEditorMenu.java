@@ -14,6 +14,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -82,7 +83,11 @@ public class RuneEditorMenu extends AbstractContainerMenu {
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 9; c++) addSlot(new Slot(inv, c + r * 9 + 9, INV_X + c * 18, INV_Y + r * 18));
         }
-        for (int c = 0; c < 9; c++) addSlot(c == this.handSlot ? new LeftOutSlot(inv, c, INV_X + c * 18, HOTBAR_Y) : new Slot(inv, c, INV_X + c * 18, HOTBAR_Y));
+        // the hand's own hotbar place is the gear slot above; here it is left out, backed by nothing, so no two slots
+        // ever hold the same stack (a shift-click would merge it into itself)
+        for (int c = 0; c < 9; c++) {
+            addSlot(c == this.handSlot ? new LeftOutSlot(new SimpleContainer(1), 0, INV_X + c * 18, HOTBAR_Y) : new Slot(inv, c, INV_X + c * 18, HOTBAR_Y));
+        }
         addDataSlot(lock);
         // runes stored past the gear's last slot (only edited data puts them there) go back to the player at once
         returnOverflow(gear());

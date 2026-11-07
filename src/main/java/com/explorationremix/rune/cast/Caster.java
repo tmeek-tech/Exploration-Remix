@@ -39,6 +39,8 @@ final class Caster {
     /** One pull to a wall each time they touch the ground (or water): set by a pull, cleared once they stand again. */
     boolean airPullUsed;
     long pullTick = -1;
+    /** The last pull's number, so the player's game and the server agree on which pull a word is about. */
+    int pullIds;
     /** A throw (a dash, a blast) set this tick: kept until it is sent, so the server's own move doesn't slow it. */
     @Nullable
     Vec3 launch;

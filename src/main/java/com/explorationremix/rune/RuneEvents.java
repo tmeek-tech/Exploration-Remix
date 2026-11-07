@@ -3,6 +3,7 @@ package com.explorationremix.rune;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.rune.cast.ArrowRides;
 import com.explorationremix.rune.cast.CastService;
+import com.explorationremix.rune.cast.Grapples;
 import com.explorationremix.rune.cast.Statuses;
 import com.explorationremix.rune.engine.Host;
 import com.explorationremix.rune.menu.RuneEditorMenu;
@@ -34,6 +35,7 @@ import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
+import net.minecraftforge.event.entity.living.LivingFallEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -78,7 +80,10 @@ public final class RuneEvents {
         if (h != Host.SWORD || !CastService.swordTakesRightClick(p, e.getHand())) return;
         e.setCanceled(true);
         e.setCancellationResult(InteractionResult.CONSUME);
-        if (!p.isUsingItem()) p.startUsingItem(e.getHand());
+        // a click casts only when it starts the hold: a click for the other hand while one is held (no vanilla client
+        // sends one) would cast a second sword, or a sword behind a raised shield; held casting is useTick's
+        if (p.isUsingItem()) return;
+        p.startUsingItem(e.getHand());
         if (p instanceof ServerPlayer sp) CastService.castSword(sp, e.getHand());
     }
 
@@ -91,7 +96,7 @@ public final class RuneEvents {
     /** Each tick a runed sword is held up, it casts whenever it's ready. */
     @SubscribeEvent
     public static void useTick(LivingEntityUseItemEvent.Tick e) {
-        if (e.getEntity() instanceof ServerPlayer p && RuneGear.host(e.getItem()) == Host.SWORD) {
+        if (e.getEntity() instanceof ServerPlayer p && RuneGear.host(e.getItem()) == Host.SWORD && RuneGear.hasRunes(e.getItem())) {
             CastService.castSword(p, p.getUsedItemHand());
             e.setDuration(HOLD_TICKS);
         }
@@ -104,7 +109,8 @@ public final class RuneEvents {
         ItemStack shield = e.getItem();
         if (!shield.canPerformAction(ToolActions.SHIELD_BLOCK)) return;
         int used = shield.getUseDuration() - e.getDuration();
-        if (used <= RuneConfig.get(RuneConfig.INSTANCE.tapTicks)) CastService.castSword(p, InteractionHand.MAIN_HAND);
+        // a tap is let go before the shield ever blocks (vanilla blocks from 5 ticks of use), whatever the config says
+        if (used < 5 && used <= RuneConfig.get(RuneConfig.INSTANCE.tapTicks)) CastService.castSword(p, InteractionHand.MAIN_HAND);
     }
 
     /** A bow's or crossbow's shot came into the world. */
@@ -145,6 +151,12 @@ public final class RuneEvents {
     }
 
     /** A held creature (stunned, rooted) can't strike. */
+    /** A player landing while Reel pulls them takes only the fall they had before it caught them (a pull adds none). */
+    @SubscribeEvent
+    public static void fall(LivingFallEvent e) {
+        if (e.getEntity() instanceof ServerPlayer p) e.setDistance(Grapples.landing(p, e.getDistance()));
+    }
+
     @SubscribeEvent
     public static void attackBy(LivingAttackEvent e) {
         if (e.getSource().getEntity() instanceof LivingEntity att && e.getSource().getDirectEntity() == att && Statuses.held(att)) e.setCanceled(true);
@@ -185,6 +197,12 @@ public final class RuneEvents {
         if (e.getEntity() instanceof ServerPlayer p) RunDepth.sync(p);
     }
 
+    /** Back from the End is a new player without a death: the run depth, and an operator's pin, come along. */
+    @SubscribeEvent
+    public static void clone(PlayerEvent.Clone e) {
+        if (!e.isWasDeath()) RunDepth.copy(e.getOriginal(), e.getEntity());
+    }
+
     @SubscribeEvent
     public static void changedDimension(PlayerEvent.PlayerChangedDimensionEvent e) {
         if (e.getEntity() instanceof ServerPlayer p) RunDepth.sync(p);
@@ -196,7 +214,7 @@ public final class RuneEvents {
         if (!(e.getEntity() instanceof ServerPlayer p)) return;
         if (p.containerMenu instanceof RuneEditorMenu) p.closeContainer();
         CastService.forget(p);
-        Combat.forget(p);
+        // the combat lock is kept: it runs on the level's clock, so leaving and rejoining doesn't skip it
     }
 
     /** The server is stopping: rune screens close first, so what is on a cursor is back in the inventory to be saved. */

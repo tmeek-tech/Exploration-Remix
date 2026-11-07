@@ -51,6 +51,12 @@ public final class RunDepth {
 
     public static boolean pinned(Player p) { return p.getPersistentData().getBoolean(PIN); }
 
+    /** A player made anew without dying (back from the End): the depth and the pin carry over. */
+    public static void copy(Player from, Player to) {
+        if (from.getPersistentData().contains(KEY)) to.getPersistentData().putInt(KEY, from.getPersistentData().getInt(KEY));
+        if (pinned(from)) to.getPersistentData().putBoolean(PIN, true);
+    }
+
     public static void sync(ServerPlayer p) {
         RuneNet.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new RuneNet.DepthSync(get(p)));
     }

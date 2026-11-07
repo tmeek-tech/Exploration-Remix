@@ -1,79 +1,75 @@
 package com.explorationremix.rune.cast;
 
 import com.explorationremix.rune.effect.RuneFx;
+import com.explorationremix.rune.net.RuneNet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraftforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
-import java.util.ArrayDeque;
-import java.util.Iterator;
-import java.util.List;
 
 /**
- * Reel pulling its caster to a wall ({@link Pull} steers). The way goes straight to the wall; when the wall's top is
- * within reach above the point caught, it goes on up to the edge and over onto the top, and otherwise they hang at the
- * point a moment, then drop. A point caught on a floor is stood on; one on a ceiling is hung under.
+ * Reel pulling its caster to a wall. The way goes straight to the wall; when the wall's top is within reach above the
+ * point caught, it goes on up to the edge and over onto the top, and otherwise they hang at the point a moment, then
+ * drop. A point caught on a floor is stood on; one on a ceiling is hung under.
  *
- * <p>The pull is set at the end of each of the player's ticks, after the server has moved them, so it reaches their
- * client as it is. Sneaking lets go and keeps the speed they have; so does something in the way, or taking too long.
+ * <p>The server decides the pull and its way and sends it to the player's game, which steers it ({@link Pull.Steer})
+ * and says when it is done. The server lets go itself on a sneak, a throw, the block caught being broken, a fall
+ * well below the way, or the pull taking far too long, and tells the game to stop.
  *
  * <p>One pull each time they touch the ground (or water), so a sheer face can't be climbed pull after pull and a
  * fall can't be stopped again and again. A pull adds nothing to a fall, but a fall already under way when it started
  * still counts when they land.
  */
-final class Grapples {
-    /** How long they hang at a wall with no top within reach. */
-    static final int HANG_TICKS = 12;
+public final class Grapples {
     /** How far above the point caught a wall's top may be and still be climbed onto. */
     static final double CLIMB = 2.6;
     /** How far from a face they hang: half a player's width, and a little. */
     private static final double OFF_FACE = 0.36;
-    /** How far onto a top they are set down, past its edge. */
-    private static final double ONTO = 0.8;
+    /** How far onto a top they are set down, past its edge; and how far above the top the edge is cleared. */
+    private static final double ONTO = 0.8, CLEAR = 0.25;
+    /**
+     * Ticks the server waits beyond twice the pull's own time for the player's game to say it is done. Only a backstop
+     * (a game that never says): a fall well below the way ends a pull anyway, so a long wait buys nothing.
+     */
+    private static final int SLACK_TICKS = 100;
+    /** How far below the way, and where it started, they may get before the server lets go: they are falling, not pulled. */
+    private static final double DROP_BELOW = 2.0;
 
     /** One pull under way. */
     static final class Grapple {
+        final int id;
         final ServerLevel level;
-        /** Where their feet go, in order. */
-        final Vec3[] way;
         /** The point caught, and the block it holds on to. */
         final Vec3 hold;
         final BlockPos caught;
-        /** Ends standing (on a top, a floor) rather than hanging. */
-        final boolean stand;
-        final double speed;
         final int colour;
         final long start, until;
-        final Pull.Progress progress = new Pull.Progress();
-        /** The speeds set lately, the newest last: on a slow connection some are still on their way. */
-        final ArrayDeque<Vec3> sent = new ArrayDeque<>();
+        /** The lowest their feet should get: the way's lowest point, or where they started. */
+        final double lowest;
         /** How far they had already fallen when the pull caught them: that fall still counts. */
         final float fall;
-        int next;
-        long hangUntil = -1;
         boolean sneaking;
 
-        Grapple(ServerLevel level, Vec3[] way, Vec3 hold, BlockPos caught, boolean stand, double speed, int colour, long start, long until,
-                boolean sneaking, float fall) {
-            this.fall = fall;
+        Grapple(int id, ServerLevel level, Vec3 hold, BlockPos caught, int colour, long start, long until, double lowest, boolean sneaking,
+                float fall) {
+            this.id = id;
             this.level = level;
-            this.way = way;
             this.hold = hold;
             this.caught = caught;
-            this.stand = stand;
-            this.speed = speed;
             this.colour = colour;
             this.start = start;
             this.until = until;
+            this.lowest = lowest;
             this.sneaking = sneaking;
+            this.fall = fall;
         }
     }
 
@@ -86,6 +82,8 @@ final class Grapples {
     static boolean start(ServerPlayer p, Vec3 at, int swift, int colour) {
         ServerLevel level = p.serverLevel();
         if (p.isPassenger() || p.isFallFlying() || p.isSpectator() || p.isSleeping()) return false;
+        Caster c = CastService.caster(p);
+        if (c.airPullUsed) return false;
         Vec3 chest = p.getEyePosition().add(0, -0.3, 0);
         Vec3 to = at.subtract(chest);
         double dist = to.length();
@@ -111,7 +109,7 @@ final class Grapples {
             double az = nz == 0 ? Mth.clamp(hit.z, caught.getZ() + 0.3, caught.getZ() + 0.7) : hit.z;
             Double top = top(level, caught, side, hit.y);
             if (top != null) {
-                way = new Vec3[]{new Vec3(ax + nx * OFF_FACE, top + 0.08, az + nz * OFF_FACE),
+                way = new Vec3[]{new Vec3(ax + nx * OFF_FACE, top + CLEAR, az + nz * OFF_FACE),
                         new Vec3(ax - nx * ONTO, top + 0.08, az - nz * ONTO)};
                 stand = true;
             } else {
@@ -119,21 +117,30 @@ final class Grapples {
                 stand = false;
             }
         }
-        double length = 0.0;
+        double length = 0.0, lowest = p.getY();
         Vec3 from = p.position();
-        for (Vec3 w : way) {
+        double[][] points = new double[way.length][];
+        for (int i = 0; i < way.length; i++) {
+            Vec3 w = way[i];
             length += w.distanceTo(from);
             from = w;
+            lowest = Math.min(lowest, w.y);
+            points[i] = new double[]{w.x, w.y, w.z};
         }
         double speed = Pull.SPEED * (1.0 + 0.25 * swift);
+        int ticks = Pull.ticks(length, speed);
         long now = level.getGameTime();
-        Caster c = CastService.caster(p);
-        if (c.airPullUsed) return false;
+        // the player's game takes half a round trip to hear of it, and as long again to say it is done; a game that
+        // stutters or falls behind takes longer
+        int roundTrip = Mth.clamp(Mth.ceil(p.latency / 50.0F), 0, 20);
+        long until = now + 2L * (ticks + (stand ? 0 : Pull.HANG_TICKS)) + roundTrip + SLACK_TICKS;
         c.launch = null;
-        long until = now + Pull.ticks(length, speed) + Pull.lead(p.latency);
-        c.pull = new Grapple(level, way, hit, caught, stand, speed, colour, now, until, p.isShiftKeyDown(), p.fallDistance);
+        if (c.pull != null) letGo(p, c);
+        int id = ++c.pullIds;
+        c.pull = new Grapple(id, level, hit, caught, colour, now, until, lowest, p.isShiftKeyDown(), p.fallDistance);
         c.airPullUsed = true;
         c.pullTick = now;
+        RuneNet.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new RuneNet.PullStart(id, stand, speed, ticks, points));
         return true;
     }
 
@@ -164,10 +171,11 @@ final class Grapples {
         return !level.getBlockState(b).getCollisionShape(level, b).isEmpty();
     }
 
-    /** Each tick of the player's while pulled, at its end: on along the way, hanging, or letting go. */
+    /** Each tick of the player's while pulled, at its end: the tether, the fall held where it was, or letting go. */
     static void tick(ServerPlayer p, Caster c, long now) {
         Grapple g = c.pull;
-        if (g.level != p.level() || !p.isAlive() || p.isSpectator() || p.isPassenger() || p.isFallFlying() || p.isSleeping() || now > g.until) {
+        if (g.level != p.level() || !p.isAlive() || p.isSpectator() || p.isPassenger() || p.isFallFlying() || p.isSleeping() || now > g.until
+                || p.getY() < g.lowest - DROP_BELOW || !solid(g.level, g.caught)) {
             letGo(p, c);
             return;
         }
@@ -181,62 +189,31 @@ final class Grapples {
         if ((now - g.start) % 2 == 0) {
             RuneFx.line(g.level, p.position().add(0, p.getBbHeight() * 0.6, 0), g.hold, RuneFx.dust(g.colour, 0.55F), 0.7);
         }
-        if (g.hangUntil >= 0) {
-            if (now >= g.hangUntil || !solid(g.level, g.caught)) {
-                letGo(p, c);
-                return;
-            }
-            set(p, g, Vec3.ZERO);
-            return;
-        }
-        Vec3 feet = ahead(p, g);
-        Vec3 aim = g.way[g.next];
-        double dist = aim.distanceTo(feet);
-        while (g.next < g.way.length - 1 && dist < Pull.PASS) {
-            g.next++;
-            g.progress.reset();
-            aim = g.way[g.next];
-            dist = aim.distanceTo(feet);
-        }
-        if (g.next == g.way.length - 1 && dist < Pull.ARRIVE) {
-            set(p, g, Vec3.ZERO);
-            if (g.stand) letGo(p, c);
-            else g.hangUntil = now + HANG_TICKS;
-            return;
-        }
-        if (!g.progress.update(dist)) {
-            letGo(p, c);
-            return;
-        }
-        double[] v = Pull.step(aim.x - feet.x, aim.y - feet.y, aim.z - feet.z, g.speed, (int) (now - g.start));
-        set(p, g, new Vec3(v[0], v[1], v[2]));
     }
 
-    /**
-     * Where their feet will be when this tick's speed reaches them: where the server has them (its own move by the last
-     * speed included) and, on a slow connection, on by the speeds still on their way, as far as blocks let them go.
-     */
-    private static Vec3 ahead(ServerPlayer p, Grapple g) {
-        int lead = Pull.lead(p.latency);
-        if (lead <= 0 || g.sent.size() < 2) return p.position();
-        Vec3 more = Vec3.ZERO;
-        Iterator<Vec3> it = g.sent.descendingIterator();
-        it.next();
-        for (int j = 0; j < lead && it.hasNext(); j++) more = more.add(it.next());
-        if (more.lengthSqr() < 1.0E-6) return p.position();
-        return p.position().add(Entity.collideBoundingBox(p, more, p.getBoundingBox(), p.level(), List.of()));
+    /** The player's game says pull {@code id} is done: it stood them on the top, hung its time, or met something in the way. */
+    public static void done(ServerPlayer p, int id) {
+        Caster c = CastService.caster(p);
+        if (c.pull != null && c.pull.id == id) end(p, c);
+    }
+
+    /** The server lets go: the pull ends, and the player's game is told to stop steering it. */
+    static void letGo(ServerPlayer p, Caster c) {
+        if (c.pull == null) return;
+        int id = c.pull.id;
+        end(p, c);
+        RuneNet.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new RuneNet.PullStop(id));
     }
 
     /** The pull ends; they keep the speed they have, and a fall counts on from what it was when the pull caught them. */
-    static void letGo(ServerPlayer p, Caster c) {
-        if (c.pull != null) p.fallDistance = c.pull.fall;
+    private static void end(ServerPlayer p, Caster c) {
+        p.fallDistance = c.pull.fall;
         c.pull = null;
     }
 
-    private static void set(ServerPlayer p, Grapple g, Vec3 v) {
-        p.setDeltaMovement(v);
-        p.hurtMarked = true;
-        g.sent.addLast(v);
-        while (g.sent.size() > Pull.MAX_LEAD + 1) g.sent.removeFirst();
+    /** The fall that counts for a player landing while pulled: only what they had fallen before it caught them. */
+    public static float landing(ServerPlayer p, float distance) {
+        Caster c = CastService.casterOrNull(p);
+        return c == null || c.pull == null ? distance : Math.min(distance, c.pull.fall);
     }
 }
