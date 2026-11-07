@@ -188,6 +188,20 @@ class RestoreTest {
         }
 
         /**
+         * A quake gives the block at (i, x, z) back at once, whatever its generation ({@code GalleryChanges.giveBack},
+         * 0.9.0): through the reset's own put-back of one entry ({@code TerrainReset.putBack}), whose records' side is
+         * {@link Restore#putBack}. Nothing happens when the log does not hold the position. Returns true when it did.
+         */
+        boolean giveBack(int i, int x, int z) {
+            int key = ChangeLog.key(x, i, z);
+            if (!log.has(key)) return false;
+            int original = log.state(key);
+            int what = Restore.putBack(log, key, kindOf(original), original, i, level, mask, glow, kept);
+            st[i][z][x] = what == Restore.ORIGINAL ? original : S_LAVA;
+            return true;
+        }
+
+        /**
          * What the flood's own record must always hold: the glow mask and the kept blocks lie inside the lava mask, never
          * both in one place, and nothing is set at or over the lava's height.
          */
@@ -290,6 +304,170 @@ class RestoreTest {
                     b.bring(0);
                     for (int i = 0; i < RISE; i++) assertEquals(orig, b.st[i][7][7], "after the drain: orig " + orig + " placed " + placed + " level " + level);
                     assertTrue(b.mask.isEmpty() && b.glow.isEmpty() && b.kept.isEmpty());
+                }
+            }
+        }
+    }
+    // ================================================================================================ the give-back (0.9.0)
+
+    @Test
+    void thePutBackOfOneEntryIsTheResetsOwn() {
+        // Restore.putBack, which TerrainReset.putBack (the reset's pass and the quakes' give-back) runs, decides and marks
+        // exactly as the reset's loop did before it was moved out of it, and drops the entry
+        int[] kinds = {OTHER, AIR, FIRE, LAVA, FLOWING, GLOW};
+        for (int level = 0; level <= RISE; level += 5) {
+            for (int slice = -1; slice <= RISE; slice += 3) {
+                for (int k : kinds) {
+                    Mask m = new Mask(RISE), g = new Mask(RISE), m2 = new Mask(RISE), g2 = new Mask(RISE);
+                    Kept kp = new Kept(RISE), kp2 = new Kept(RISE);
+                    int i = Math.min(slice, RISE - 1);
+                    if (i >= 0) {
+                        // records left by an earlier rise, which the put-back must set or clear as mark does
+                        m.set(i, 3, 4);
+                        g.set(i, 3, 4);
+                        m2.set(i, 3, 4);
+                        g2.set(i, 3, 4);
+                    }
+                    ChangeLog log = new ChangeLog();
+                    int key = ChangeLog.key(3, Math.max(0, slice), 4);
+                    log.record(key, 77, 5);
+                    int d = Restore.putBack(log, key, k, 77, slice, level, m, g, kp);
+                    int want = Restore.decide(k, slice, level);
+                    Restore.mark(want, m2, g2, kp2, slice, 3, 4, 77);
+                    String at = "kind " + k + " slice " + slice + " level " + level;
+                    assertEquals(want, d, at);
+                    assertFalse(log.has(key), at);
+                    for (int j = 0; j < RISE; j++) {
+                        assertEquals(m2.get(j, 3, 4), m.get(j, 3, 4), at);
+                        assertEquals(g2.get(j, 3, 4), g.get(j, 3, 4), at);
+                        assertEquals(kp2.get(j, 3, 4), kp.get(j, 3, 4), at);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void aBlockGivenBackUnderTheSeaIsTheSeaAgain() {
+        // a rider's tower in the risen sea: its blocks come back as the sea with their mask bits, and the drain then
+        // leaves the air and the glow that were there; entries of this generation go too (the give-back takes any)
+        Band b = new Band();
+        b.st[3][5][5] = S_GLOW;
+        b.bring(20);
+        for (int i = 0; i < 25; i++) b.set(i, 5, 5, S_PLANK);
+        for (int i = 0; i < 20; i++) {
+            assertTrue(b.giveBack(i, 5, 5));
+            assertEquals(S_LAVA, b.st[i][5][5], "slice " + i);
+            assertTrue(b.mask.get(i, 5, 5), "slice " + i + ": the sea's bit, so the drain takes it");
+            assertEquals(i == 3, b.glow.get(i, 5, 5), "slice " + i);
+        }
+        assertFalse(b.giveBack(0, 5, 5), "nothing left to give back there");
+        b.checkRecord();
+        // over the sea the planks are still the player's until the reset (or a quake's fall) takes them
+        for (int i = 20; i < 25; i++) assertEquals(S_PLANK, b.st[i][5][5]);
+        for (int i = 20; i < 25; i++) b.set(i, 5, 5, S_AIR);
+        assertTrue(b.log.isEmpty());
+        b.bring(0);
+        for (int i = 0; i < RISE; i++) assertEquals(i == 3 ? S_GLOW : S_AIR, b.st[i][5][5], "after the drain, slice " + i);
+        assertTrue(b.mask.isEmpty() && b.glow.isEmpty() && b.kept.isEmpty());
+    }
+
+    @Test
+    void aBlockGivenBackInAPoolIsThePoolsLava() {
+        // a block put into a natural pool's source (above the sea, and under it once the sea has risen past it) comes back
+        // as the pool's own lava, with no flood record: the drain leaves it alone
+        for (int level : new int[]{0, 10, 35, RISE}) {
+            Band b = new Band();
+            b.st[30][2][9] = S_LAVA;
+            b.bring(level);
+            b.set(30, 9, 2, S_BRICK);
+            assertEquals(S_LAVA, b.log.state(ChangeLog.key(9, 30, 2)), "the log holds the pool's lava, level " + level);
+            assertTrue(b.giveBack(30, 9, 2));
+            assertEquals(S_LAVA, b.st[30][2][9], "level " + level);
+            assertFalse(b.mask.get(30, 9, 2), "level " + level);
+            b.checkRecord();
+            b.bring(0);
+            assertEquals(S_LAVA, b.st[30][2][9], "the pool after the drain, level " + level);
+            assertTrue(b.mask.isEmpty() && b.log.isEmpty());
+        }
+    }
+
+    @Test
+    void aBlockGivenBackInTheLakesRowsIsTheTablesLava() {
+        // a bridge laid into the lake's top row (under the table, outside the flood band): its block comes back as the
+        // lake's lava source at every height of the sea, and no flood record is touched
+        for (int level = 0; level <= RISE; level += 10) {
+            Mask m = new Mask(RISE), g = new Mask(RISE);
+            Kept k = new Kept(RISE);
+            ChangeLog log = new ChangeLog();
+            int key = ChangeLog.key(6, 5, 7);
+            log.record(key, S_LAVA, 0);
+            assertEquals(Restore.ORIGINAL, Restore.putBack(log, key, LAVA, S_LAVA, -1, level, m, g, k), "level " + level);
+            assertTrue(log.isEmpty());
+            assertTrue(m.isEmpty() && g.isEmpty() && k.isEmpty());
+        }
+    }
+
+    @Test
+    void aBandWithGiveBacksComesBackAsGenerated() {
+        // as aBandComesBackAsGenerated, with quakes giving placed blocks back at any time, whatever their generation
+        Random r = new Random(4321);
+        for (int round = 0; round < 40; round++) {
+            Band b = new Band();
+            int[][][] generated = new int[RISE][16][16];
+            for (int i = 0; i < RISE; i++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        int p = r.nextInt(100);
+                        int s = p < 50 ? S_AIR : p < 55 ? S_GLOW : p < 57 ? S_LAVA : p < 58 ? S_FIRE : p < 59 ? S_FRONT
+                                : p < 61 ? S_SPILL : p < 63 ? S_FALL : S_ROCK;
+                        generated[i][z][x] = s;
+                        b.st[i][z][x] = s;
+                    }
+                }
+            }
+            int given = 0;
+            for (int step = 0; step < 400; step++) {
+                int op = r.nextInt(100);
+                if (op < 15) {
+                    b.bring(r.nextInt(RISE + 1));
+                } else if (op < 70) {
+                    int n = 1 + r.nextInt(12);
+                    for (int c = 0; c < n; c++) {
+                        int q = r.nextInt(100);
+                        int next = q < 30 ? S_AIR : q < 50 ? S_PLANK : q < 65 ? S_BRICK : q < 80 ? S_ROCK : q < 88 ? S_LAVA
+                                : q < 93 ? S_SPILL : q < 96 ? S_FIRE : S_GLOW;
+                        b.set(r.nextInt(RISE), r.nextInt(16), r.nextInt(16), next);
+                    }
+                } else if (op < 85) {
+                    // a tremor: placed blocks under the sea (and some others) are given back at once
+                    int[][] e = b.log.toArrays();
+                    for (int k = 0; k < e[0].length; k++) {
+                        int key = e[0][k], i = ChangeLog.dy(key);
+                        if ((i < b.level || r.nextInt(4) == 0) && b.giveBack(i, ChangeLog.x(key), ChangeLog.z(key))) given++;
+                    }
+                } else if (op < 95) {
+                    b.bring(RISE);
+                    b.gen++;
+                    b.reset(r.nextInt(3) == 0 ? r.nextInt(200) : Integer.MAX_VALUE);
+                } else {
+                    b.reset(Integer.MAX_VALUE);
+                }
+                b.checkRecord();
+            }
+            b.bring(RISE);
+            b.gen++;
+            b.reset(Integer.MAX_VALUE);
+            assertTrue(b.log.isEmpty());
+            b.checkRecord();
+            b.bring(0);
+            assertTrue(b.mask.isEmpty() && b.glow.isEmpty() && b.kept.isEmpty(), "round " + round);
+            assertTrue(given > 0);
+            for (int i = 0; i < RISE; i++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        assertEquals(generated[i][z][x], b.st[i][z][x], "round " + round + " slice " + i + " x " + x + " z " + z);
+                    }
                 }
             }
         }

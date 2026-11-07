@@ -35,9 +35,10 @@ import java.util.Locale;
 
 /**
  * The Basalt Galleries' terrain reset on the server (0.5.1): once a cycle, as the lava stands full, everything changed
- * in the Galleries since the last reset (by players, and by quakes and eruptions once they are built; recorded in each
- * chunk's {@link ChangeLog} by {@link GalleryChanges}) is put back as it was generated. Runs every overworld tick after the flood, while the
- * reset and the lava cycle are on in the config.
+ * in the Galleries since the last reset (by players, quakes and eruptions; recorded in each chunk's {@link ChangeLog} by
+ * {@link GalleryChanges}) is put back as it was generated. Runs every overworld tick after the flood, while the reset and
+ * the lava cycle are on in the config. The put-back of one entry ({@link #putBack}) is shared with the quakes' give-back
+ * ({@link GalleryChanges#giveBack}, 0.9.0), which puts a placed block under the lava back into it at once.
  *
  * <p><b>Where and when.</b> Only the loaded chunks round the players in or near the Galleries are put back, the way the
  * flood walks them ({@link NearChunks}), nearest first and within a budget of blocks a tick (config, halved while the
@@ -142,6 +143,81 @@ public final class TerrainReset {
         return original.is(Blocks.GILDED_BLACKSTONE) ? Blocks.BLACKSTONE.defaultBlockState() : Blocks.BASALT.defaultBlockState();
     }
 
+    // ================================================================================================ one entry put back
+
+    /**
+     * Puts the logged position {@code key} of {@code chunk} back the way the reset does and drops its entry: the first
+     * block the log holds there ({@link #resetAs} applied), or under the chunk's sea the sea itself with its flood records
+     * ({@link Restore#putBack}). Written quietly (not recorded; flags 2 | 16), and a fluid or the sea
+     * straight into the chunk's section with no fluid tick ({@link #writeRaw}); see the class comment. Shared by the
+     * reset's own pass and the quakes' give-back ({@link GalleryChanges#giveBack}).
+     *
+     * <p>The caller has lined the log up with {@code bottom} and the flood record with the band's table, has dealt with a
+     * block entity at the position (the reset breaks it first; the give-back leaves such a position alone), and knows the
+     * chunk's lava stands at the flood's height. {@code pos} is set to the position. Returns 1 when it wrote a block, 0
+     * when the block there was already right.
+     */
+    static int putBack(ServerLevel level, LevelChunk chunk, LavaChunk d, LavaFlood.Band band, int bottom, int key, BlockPos.MutableBlockPos pos) {
+        int y = bottom + ChangeLog.dy(key);
+        int i = y - band.tableY();
+        int slice = i >= 0 && i < band.rise() ? i : -1;
+        pos.set(chunk.getPos().getMinBlockX() + ChangeLog.x(key), y, chunk.getPos().getMinBlockZ() + ChangeLog.z(key));
+        BlockState cur = chunk.getBlockState(pos);
+        BlockState original = resetAs(Block.stateById(d.log.state(key)));
+        // the records first (the decision, the flood's bits and the entry dropped), then the block: the writes are quiet,
+        // so the order does not matter to the log
+        int what = Restore.putBack(d.log, key, LavaFlood.kindOf(original), Block.getId(original), slice, d.level, d.mask, d.glow, d.kept);
+        int written = 0;
+        if (what == Restore.ORIGINAL) {
+            if (cur != original) {
+                // a fluid goes back the flood's way, with no fluid tick (see the class comment)
+                if (original.getBlock() instanceof LiquidBlock) writeRaw(level, chunk, pos, cur, original);
+                else GalleryChanges.setQuietly(level, pos, original, FLAGS);
+                written = 1;
+            }
+        } else if (cur != LAVA) {
+            // the sea comes back the flood's way: no fluid tick, so it never flows (see Restore)
+            writeRaw(level, chunk, pos, cur, LAVA);
+            written = 1;
+        }
+        return written;
+    }
+
+    /**
+     * Writes {@code state} (the sea's lava source, or a fluid put back) straight into the chunk's section, as the flood
+     * writes: re-lit, sent, no fluid tick and no {@code onPlace}. What stood there goes first, quietly, the way
+     * {@code setBlock} takes it away (its own removal runs, nothing round it is updated).
+     */
+    private static void writeRaw(ServerLevel level, LevelChunk chunk, BlockPos at, BlockState cur, BlockState state) {
+        if (!cur.isAir()) GalleryChanges.setQuietly(level, at, AIR, FLAGS);
+        LevelChunkSection sec = chunk.getSection(chunk.getSectionIndex(at.getY()));
+        boolean wasEmpty = sec.hasOnlyAir();
+        sec.setBlockState(at.getX() & 15, at.getY() & 15, at.getZ() & 15, state);
+        ThreadedLevelLightEngine light = level.getChunkSource().getLightEngine();
+        light.checkBlock(at);
+        if (wasEmpty != sec.hasOnlyAir()) light.updateSectionStatus(SectionPos.of(at), sec.hasOnlyAir());
+        level.getChunkSource().blockChanged(at);
+    }
+
+    /**
+     * A puff of smoke and lava over a block put back, to each of {@code near} within {@link #SHOW_RANGE} of it, so the
+     * land is seen to re-form rather than snap back, and with {@code sound} a hiss. Returns true when a player was near
+     * enough to see it (the reset counts those against its cap of {@link #EFFECTS} a tick).
+     */
+    static boolean showPutBack(ServerLevel level, List<ServerPlayer> near, int x, int y, int z, boolean sound) {
+        double cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
+        boolean any = false;
+        for (ServerPlayer p : near) {
+            if (p.distanceToSqr(cx, cy, cz) > SHOW_RANGE * SHOW_RANGE) continue;
+            level.sendParticles(p, ParticleTypes.LARGE_SMOKE, true, cx, cy, cz, 3, 0.35, 0.35, 0.35, 0.02);
+            level.sendParticles(p, ParticleTypes.LAVA, true, cx, cy, cz, 1, 0.3, 0.3, 0.3, 0);
+            any = true;
+        }
+        if (!any) return false;
+        if (sound) level.playSound(null, cx, cy, cz, SoundEvents.LAVA_EXTINGUISH, SoundSource.BLOCKS, 0.6F, 0.6F + level.random.nextFloat() * 0.3F);
+        return true;
+    }
+
     /** One look over the chunks round the players: puts back what it can within the budget, and counts the rest. */
     private static final class Pass {
         final ServerLevel level;
@@ -221,24 +297,8 @@ public final class TerrainReset {
                         continue;
                     }
                     GalleryChanges.destroyQuietly(level, pos);
-                    cur = chunk.getBlockState(pos);
                 }
-                BlockState original = resetAs(Block.stateById(log.state(key)));
-                int what = Restore.decide(LavaFlood.kindOf(original), slice, d.level);
-                if (what == Restore.ORIGINAL) {
-                    if (cur != original) {
-                        // a fluid goes back the flood's way, with no fluid tick (see the class comment)
-                        if (original.getBlock() instanceof LiquidBlock) writeRaw(chunk, pos, cur, original);
-                        else GalleryChanges.setQuietly(level, pos, original, FLAGS);
-                        written++;
-                    }
-                } else if (cur != LAVA) {
-                    // the sea comes back the flood's way: no fluid tick, so it never flows (see Restore)
-                    writeRaw(chunk, pos, cur, LAVA);
-                    written++;
-                }
-                Restore.mark(what, d.mask, d.glow, d.kept, slice, lx, lz, Block.getId(original));
-                log.remove(key);
+                written += putBack(level, chunk, d, band, bottom, key, pos);
                 restored++;
                 changed = true;
                 if (!heard) heard = show(x, y, z, true);
@@ -253,39 +313,14 @@ public final class TerrainReset {
         }
 
         /**
-         * Writes {@code state} (the sea's lava source, or a fluid put back) straight into the chunk's section, as the
-         * flood writes: re-lit, sent, no fluid tick and no {@code onPlace}. What stood there goes first, quietly, the
-         * way {@code setBlock} takes it away (its own removal runs, nothing round it is updated).
-         */
-        private void writeRaw(LevelChunk chunk, BlockPos at, BlockState cur, BlockState state) {
-            if (!cur.isAir()) GalleryChanges.setQuietly(level, at, AIR, FLAGS);
-            LevelChunkSection sec = chunk.getSection(chunk.getSectionIndex(at.getY()));
-            boolean wasEmpty = sec.hasOnlyAir();
-            sec.setBlockState(at.getX() & 15, at.getY() & 15, at.getZ() & 15, state);
-            ThreadedLevelLightEngine light = level.getChunkSource().getLightEngine();
-            light.checkBlock(at);
-            if (wasEmpty != sec.hasOnlyAir()) light.updateSectionStatus(SectionPos.of(at), sec.hasOnlyAir());
-            level.getChunkSource().blockChanged(at);
-        }
-
-        /**
-         * A puff of smoke and lava over a block put back near a player, so the land is seen to re-form rather than snap
-         * back, and with {@code sound} a hiss (once a chunk a look). At most {@link #EFFECTS} puffs a tick. Returns true
-         * when a player was near enough to hear it.
+         * The reset's smoke and hiss over a block put back near a player ({@link #showPutBack}), with {@code sound} a
+         * hiss (once a chunk a look). At most {@link #EFFECTS} puffs a tick. Returns true when a player was near enough
+         * to hear it.
          */
         private boolean show(int x, int y, int z, boolean sound) {
             if (effects >= EFFECTS) return false;
-            double cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
-            boolean any = false;
-            for (ServerPlayer p : near) {
-                if (p.distanceToSqr(cx, cy, cz) > SHOW_RANGE * SHOW_RANGE) continue;
-                level.sendParticles(p, ParticleTypes.LARGE_SMOKE, true, cx, cy, cz, 3, 0.35, 0.35, 0.35, 0.02);
-                level.sendParticles(p, ParticleTypes.LAVA, true, cx, cy, cz, 1, 0.3, 0.3, 0.3, 0);
-                any = true;
-            }
-            if (!any) return false;
+            if (!showPutBack(level, near, x, y, z, sound)) return false;
             effects++;
-            if (sound) level.playSound(null, cx, cy, cz, SoundEvents.LAVA_EXTINGUISH, SoundSource.BLOCKS, 0.6F, 0.6F + level.random.nextFloat() * 0.3F);
             return true;
         }
     }

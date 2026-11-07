@@ -1233,6 +1233,18 @@ BLOCK_TAGS = {
     # 0.5.1's terrain reset (TerrainReset.RESET_AS_ROCK): blocks a reset puts back as plain rock, whatever the palette
     # chose there (ores and gilded blackstone are not given back to a player who mined them).
     "reset_as_rock": [{"id": "#forge:ores", "required": False}, "minecraft:gilded_blackstone"],
+    # 0.9.0: the Galleries' natural stone kinds (ERTags.GALLERIES_ROCK): a lava bomb's blast treats them as soft, and with
+    # the terrain reset on a quake or an eruption never turns one into an item (the reset regrows it where it was, so no
+    # farm). Terrain Slabs' slabs are the ones its generation lays on the Galleries' rock.
+    "galleries_rock": ["minecraft:basalt", "minecraft:polished_basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:tuff",
+                       "minecraft:magma_block", f"{MOD}:ember_crust"]
+                      + optional(["create:scoria", "create:scorchia", "terrain_slabs:basalt_slab", "terrain_slabs:smooth_basalt_slab",
+                                  "terrain_slabs:terrain_blackstone_slab", "terrain_slabs:terrain_tuff_slab"]),
+    # 0.9.0: ceiling rock a big quake can shake loose (ERTags.QUAKE_DEBRIS), and the only rock a bomb's crater throws out.
+    # Not obsidian or crying obsidian (they never fall), magma, slabs, ores or gilded blackstone (#reset_as_rock: an ore
+    # that fell would come back as rock and be lost).
+    "quake_debris": ["minecraft:basalt", "minecraft:polished_basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:tuff",
+                     f"{MOD}:ember_crust"] + optional(["create:scoria", "create:scorchia"]),
 }
 
 # ----------------------------------------------------------------------------------------------- writing
