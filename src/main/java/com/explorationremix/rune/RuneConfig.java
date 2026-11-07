@@ -27,7 +27,8 @@ public final class RuneConfig {
     private RuneConfig(ForgeConfigSpec.Builder b) {
         b.push("players");
         runesHurtPlayers = b.comment("Whether runes touch other players at all: damage, pushes, chains and homing. Off, other players are",
-                "passed through.").define("runesHurtPlayers", false);
+                "passed through; on, only those the game lets the caster hurt (pvp on, not a teammate without friendly fire,",
+                "not in creative).").define("runesHurtPlayers", false);
         b.pop();
         b.push("limits");
         maxParts = b.comment("Parts in one cast (relays deep, plus one). Deeper parts are grey: \"too deep\".").defineInRange("maxParts", 4, 1, 8);
