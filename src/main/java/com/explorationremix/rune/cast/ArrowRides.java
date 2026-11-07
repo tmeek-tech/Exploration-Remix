@@ -36,8 +36,11 @@ import java.util.UUID;
  * damage. Swift makes it faster, not harder-hitting (an arrow's hit grows with its speed, so its damage is scaled
  * back), as Swift does for every rune.
  *
- * <p>Runes never touch who they mustn't (RuneHits.canHit): a copy Fan made passes them by, and the shot itself hits
- * them as the plain arrow it was, its runes spent.
+ * <p>Runes never touch who they mustn't (RuneHits.canHit), however far the arrow has come: a copy Fan made passes them
+ * by, and so does the shot once it has struck something (a piercing arrow flying on); the shot's first contact hits
+ * them as the plain arrow it was, its runes spent. Whenever the runes let go of an arrow that could still fly (its
+ * caster gone, past the simulation distance, kept a minute), the shot is made plain and a copy goes; one saved with its
+ * chunk is marked, and comes back plain (a copy doesn't come back).
  *
  * <p>Hits are noted when the arrow strikes and settled at the end of the tick, once the arrow's own damage has landed:
  * that is when a kill or a throat hit is known for Siphon.
@@ -61,16 +64,13 @@ public final class ArrowRides {
         /** The creatures it struck this tick, for its runes to act on once its own hit has landed. */
         final List<Struck> struck = new ArrayList<>(2);
         Vec3 last;
-        /** The arrow as it left the bow, before the runes shaped it. */
-        final Plain plain;
 
-        Ride(CastContext ctx, Plan.Node node, AbstractArrow arrow, Plain plain) {
+        Ride(CastContext ctx, Plan.Node node, AbstractArrow arrow) {
             this.ctx = ctx;
             this.node = node;
             this.a = node.act;
             this.arrow = arrow;
             this.last = arrow.position();
-            this.plain = plain;
         }
 
         boolean hasPayload() { return node.relay != null && !node.children.isEmpty(); }
@@ -78,6 +78,14 @@ public final class ArrowRides {
 
     /** What the runes change on an arrow, as it was before they did (Swift's speed is undone by its own factor). */
     private record Plain(double damage, byte pierce, boolean onFire) {}
+
+    /**
+     * The mark on an arrow the runes shaped: how to put it back as it left the bow, and whether Fan made it. It goes
+     * once the arrow is plain again, so an arrow is never put back twice.
+     */
+    private static final String MARK = "explorationremix_rune_arrow";
+    /** How long a ride is kept once its runes are spent, while its arrow may still fly into someone (a minute). */
+    private static final int KEEP_TICKS = 1200;
 
     /** A creature the arrow struck (through the box {@code box}), and whether it was fighting the caster then. */
     private record Struck(LivingEntity body, Entity box, Vec3 at, Vec3 dir, boolean foe) {}
@@ -100,8 +108,9 @@ public final class ArrowRides {
             if (n.act.rune != RuneId.ARROW) continue;
             AbstractArrow carrier = n.copy == 0 ? arrow : copy(arrow, asLoosed, Origin.turn(v, n.yaw));
             if (carrier == null) continue;
+            mark(carrier, plain, n.act.count(RuneId.SWIFT), n.copy > 0);
             shape(carrier, n.act);
-            RIDES.put(carrier.getId(), new Ride(ctx, n, carrier, plain));
+            RIDES.put(carrier.getId(), new Ride(ctx, n, carrier));
         }
         RuneFx.play(ctx.level, arrow.position(), RuneFx.sound(RuneId.SPARK, roots.isEmpty() ? Element.NONE : roots.get(0).act.element), 0.5F, 1.4F);
     }
@@ -132,6 +141,49 @@ public final class ArrowRides {
         }
     }
 
+    private static void mark(AbstractArrow arrow, Plain p, int swift, boolean copy) {
+        CompoundTag t = new CompoundTag();
+        t.putDouble("damage", p.damage());
+        t.putByte("pierce", p.pierce());
+        t.putBoolean("fire", p.onFire());
+        t.putInt("swift", swift);
+        t.putBoolean("copy", copy);
+        arrow.getPersistentData().put(MARK, t);
+    }
+
+    /** Puts an arrow the runes shaped back as it left the bow; nothing if it is plain already. */
+    private static void makePlain(AbstractArrow arrow) {
+        CompoundTag data = arrow.getPersistentData();
+        if (!data.contains(MARK)) return;
+        CompoundTag t = data.getCompound(MARK);
+        data.remove(MARK);
+        arrow.setBaseDamage(t.getDouble("damage"));
+        arrow.setPierceLevel(t.getByte("pierce"));
+        int swift = t.getInt("swift");
+        if (swift > 0) arrow.setDeltaMovement(arrow.getDeltaMovement().scale(Math.pow(1.3, -swift)));
+        if (!t.getBoolean("fire")) arrow.clearFire();
+        arrow.hasImpulse = true;
+    }
+
+    /**
+     * An arrow came back with its chunk. One the runes shaped comes back plain, its runes long spent; true for a copy Fan
+     * made, which doesn't come back at all.
+     */
+    public static boolean loadedDropsCopy(AbstractArrow arrow) {
+        CompoundTag data = arrow.getPersistentData();
+        if (!data.contains(MARK)) return false;
+        if (data.getCompound(MARK).getBoolean("copy")) return true;
+        makePlain(arrow);
+        return false;
+    }
+
+    /** The runes let go of an arrow that may still fly: the shot goes on as the plain arrow it was, a copy goes. */
+    private static void drop(Ride r) {
+        if (r.arrow.isRemoved()) return;
+        if (r.node.copy > 0) r.arrow.discard();
+        else makePlain(r.arrow);
+    }
+
     /** The front modifiers and element on the arrow itself. */
     private static void shape(AbstractArrow arrow, Act a) {
         int swift = a.count(RuneId.SWIFT), heavy = a.count(RuneId.HEAVY), pierce = a.count(RuneId.PIERCE);
@@ -151,15 +203,20 @@ public final class ArrowRides {
     public static void impact(ProjectileImpactEvent e) {
         if (!(e.getProjectile() instanceof AbstractArrow arrow)) return;
         Ride r = RIDES.get(arrow.getId());
-        if (r == null || r.released || Executor.gone(r.ctx)) return;
+        if (r == null) return;
         HitResult hr = e.getRayTraceResult();
-        Vec3 dir = arrow.getDeltaMovement().lengthSqr() < 1.0E-8 ? new Vec3(0, 0, 1) : arrow.getDeltaMovement().normalize();
+        // first of all, and for as long as the ride is kept: runes never touch who they mustn't, even after their hit
+        LivingEntity body = null;
         if (hr instanceof EntityHitResult eh) {
-            LivingEntity body = RuneHits.body(eh.getEntity());
+            body = RuneHits.body(eh.getEntity());
             if (body == null || !RuneHits.canHit(r.ctx.owner, body)) {
                 spare(e, r, arrow);
                 return;
             }
+        }
+        if (r.released || Executor.gone(r.ctx)) return;
+        Vec3 dir = arrow.getDeltaMovement().lengthSqr() < 1.0E-8 ? new Vec3(0, 0, 1) : arrow.getDeltaMovement().normalize();
+        if (hr instanceof EntityHitResult eh && body != null) {
             if (r.ctx.firstStrike(r.a, body) && (r.a.element != Element.NONE || r.a.has(RuneId.SIPHON))) {
                 r.struck.add(new Struck(body, eh.getEntity(), eh.getLocation(), dir, RuneHits.isFoe(r.ctx.owner, body)));
             }
@@ -178,20 +235,16 @@ public final class ArrowRides {
     }
 
     /**
-     * The arrow meets someone runes never touch (or something that isn't a creature): a copy Fan made passes them by;
-     * the shot itself hits as the plain arrow it was, and its runes are spent.
+     * The arrow meets someone runes never touch (or something that isn't a creature). A copy Fan made passes them by,
+     * and so does the shot flying on after a hit (a piercing arrow, its runes still on it). The shot's first contact
+     * hits as the plain arrow it was, and its runes are spent. A hit already noted this tick still settles.
      */
     private static void spare(ProjectileImpactEvent e, Ride r, AbstractArrow arrow) {
-        if (r.node.copy > 0) {
+        if (r.node.copy > 0 || r.hitAt != null) {
             e.setImpactResult(ProjectileImpactEvent.ImpactResult.SKIP_ENTITY);
             return;
         }
-        Plain p = r.plain;
-        arrow.setBaseDamage(p.damage());
-        arrow.setPierceLevel(p.pierce());
-        int swift = r.a.count(RuneId.SWIFT);
-        if (swift > 0) arrow.setDeltaMovement(arrow.getDeltaMovement().scale(Math.pow(1.3, -swift)));
-        if (!p.onFire()) arrow.clearFire();
+        makePlain(arrow);
         r.released = true;
     }
 
@@ -201,6 +254,8 @@ public final class ArrowRides {
         for (Iterator<Map.Entry<Integer, Ride>> it = RIDES.entrySet().iterator(); it.hasNext(); ) {
             Ride r = it.next().getValue();
             if (Executor.gone(r.ctx)) {
+                // the caster died, left or changed world: the shot flies on plain, Fan's copies go
+                drop(r);
                 it.remove();
                 continue;
             }
@@ -216,8 +271,9 @@ public final class ArrowRides {
                     }
                     r.released = true;
                 } else if (!r.ctx.level.isPositionEntityTicking(r.arrow.blockPosition())) {
-                    // flown into ground that is loaded but still (past the simulation distance): it hangs there as a
-                    // plain arrow, its runes spent
+                    // flown into ground that is loaded but still (past the simulation distance): its runes are spent,
+                    // and it hangs there as the plain arrow it was (a copy goes)
+                    drop(r);
                     r.released = true;
                 } else {
                     r.last = r.arrow.position();
@@ -233,7 +289,13 @@ public final class ArrowRides {
                     }
                 }
             }
-            if (r.released && (r.arrow.isRemoved() || r.age > 40)) it.remove();
+            // kept while its arrow may still fly into someone runes mustn't touch, then let go plain
+            if (r.released && r.arrow.isRemoved()) {
+                it.remove();
+            } else if (r.released && r.age > KEEP_TICKS) {
+                drop(r);
+                it.remove();
+            }
         }
     }
 
@@ -288,8 +350,16 @@ public final class ArrowRides {
         r.arrow.hasImpulse = true;
     }
 
-    /** The player left: their arrows fly on as plain arrows. */
-    static void forget(UUID owner) { RIDES.values().removeIf(r -> r.ctx.owner.getUUID().equals(owner)); }
+    /** The player left: their shots fly on as plain arrows, and Fan's copies go. */
+    static void forget(UUID owner) {
+        for (Iterator<Ride> it = RIDES.values().iterator(); it.hasNext(); ) {
+            Ride r = it.next();
+            if (r.ctx.owner.getUUID().equals(owner)) {
+                drop(r);
+                it.remove();
+            }
+        }
+    }
 
     public static void clear() { RIDES.clear(); }
 }

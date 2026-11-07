@@ -220,13 +220,17 @@ public class RuneEditorMenu extends AbstractContainerMenu {
         // runes stored past the last slot go back before the row is written over them, however this gear reached the
         // slot (a number-key swap or a pickup never runs GearSlot.set)
         returnOverflow(g);
+        // an edit part-way through a row waits out the row's recovery, the longer of the row before and after it, so
+        // no change (taking the first cast's action out, say) can shorten the wait
+        Reading before = player.level().isClientSide ? null : RuneGear.reading(g, RunDepth.get(player));
         RuneGear.setRow(g, r);
         if (!player.level().isClientSide && RuneGear.hasState(g)) {
             long now = player.level().getGameTime();
             CastState s = RuneGear.state(g, spec, now);
             if (s.cursor != 0) {
                 Reading after = RuneGear.reading(g, RunDepth.get(player));
-                if (after != null) s.readyAt = Math.max(s.readyAt, s.lastCast + after.recovery());
+                int recovery = Math.max(before == null ? 0 : before.recovery(), after == null ? 0 : after.recovery());
+                s.readyAt = Math.max(s.readyAt, s.lastCast + recovery);
             }
             s.cursor = 0;
             RuneGear.setState(g, s);

@@ -113,10 +113,17 @@ public final class RuneEvents {
         if (used < 5 && used <= RuneConfig.get(RuneConfig.INSTANCE.tapTicks)) CastService.castSword(p, InteractionHand.MAIN_HAND);
     }
 
-    /** A bow's or crossbow's shot came into the world. */
+    /**
+     * A bow's or crossbow's shot came into the world. An arrow the runes shaped that comes back with its chunk comes
+     * back plain, and a copy Fan made doesn't come back.
+     */
     @SubscribeEvent
     public static void entityJoin(EntityJoinLevelEvent e) {
-        if (e.getLevel().isClientSide() || e.loadedFromDisk() || !(e.getEntity() instanceof AbstractArrow arrow)) return;
+        if (e.getLevel().isClientSide() || !(e.getEntity() instanceof AbstractArrow arrow)) return;
+        if (e.loadedFromDisk()) {
+            if (ArrowRides.loadedDropsCopy(arrow)) e.setCanceled(true);
+            return;
+        }
         CastService.arrowLoosed(arrow);
     }
 
