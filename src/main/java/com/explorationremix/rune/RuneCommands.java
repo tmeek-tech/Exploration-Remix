@@ -33,7 +33,8 @@ import java.util.List;
  *   id, {@code _} for an empty slot, {@code |} for a cast break);</li>
  *   <li>{@code clear}: empties the gear's row (the runes are not given back);</li>
  *   <li>{@code energy [amount]}: fills the gear (or sets its energy);</li>
- *   <li>{@code depth <0|1|2>}: sets your run depth (how many slots are awake);</li>
+ *   <li>{@code depth <0|1|2>}: sets your run depth (how many slots are awake) and keeps it there wherever you go;
+ *   {@code depth auto} goes back to following the run;</li>
  *   <li>{@code info}: the gear's row read out, with its energy.</li>
  * </ul>
  */
@@ -52,7 +53,9 @@ public final class RuneCommands {
                 .then(Commands.literal("clear").executes(RuneCommands::clear))
                 .then(Commands.literal("energy").executes(c -> energy(c, -1.0F))
                         .then(Commands.argument("amount", FloatArgumentType.floatArg(0.0F)).executes(c -> energy(c, FloatArgumentType.getFloat(c, "amount")))))
-                .then(Commands.literal("depth").then(Commands.argument("depth", IntegerArgumentType.integer(0, RunDepth.MAX)).executes(RuneCommands::depth)))
+                .then(Commands.literal("depth")
+                        .then(Commands.literal("auto").executes(RuneCommands::depthAuto))
+                        .then(Commands.argument("depth", IntegerArgumentType.integer(0, RunDepth.MAX)).executes(RuneCommands::depth)))
                 .then(Commands.literal("info").executes(RuneCommands::info));
     }
 
@@ -158,8 +161,16 @@ public final class RuneCommands {
     private static int depth(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
         ServerPlayer p = c.getSource().getPlayerOrException();
         int d = IntegerArgumentType.getInteger(c, "depth");
-        RunDepth.set(p, d);
-        c.getSource().sendSuccess(() -> Component.literal("Run depth " + d + " (" + Explain.depthName(d) + ")"), false);
+        RunDepth.pin(p, d);
+        c.getSource().sendSuccess(() -> Component.literal("Run depth " + d + " (" + Explain.depthName(d) + "), kept until /remix rune depth auto"), false);
+        return 1;
+    }
+
+    private static int depthAuto(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
+        ServerPlayer p = c.getSource().getPlayerOrException();
+        RunDepth.unpin(p);
+        int d = RunDepth.get(p);
+        c.getSource().sendSuccess(() -> Component.literal("Run depth follows the run again: " + d + " (" + Explain.depthName(d) + ")"), false);
         return 1;
     }
 

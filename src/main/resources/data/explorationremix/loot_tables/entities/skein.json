@@ -45,13 +45,13 @@
           "type": "minecraft:tag",
           "name": "explorationremix:runes/blue_reaches",
           "expand": true,
-          "weight": 8
+          "weight": 20
         },
         {
           "type": "minecraft:tag",
           "name": "explorationremix:runes/deep_gardens",
           "expand": true,
-          "weight": 2
+          "weight": 7
         }
       ]
     }

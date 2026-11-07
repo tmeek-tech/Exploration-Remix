@@ -16,6 +16,8 @@ import net.minecraftforge.network.PacketDistributor;
  */
 public final class RunDepth {
     public static final String KEY = "explorationremix:run_depth";
+    /** Set when an operator chose the depth by command: it then stays put, wherever the player goes, until unpinned. */
+    public static final String PIN = "explorationremix:run_depth_pinned";
     public static final int MAX = 2;
     /** The local player's run depth, as the server last said. */
     private static volatile int clientDepth;
@@ -34,6 +36,20 @@ public final class RunDepth {
         }
         sync(p);
     }
+
+    /** An operator's choice (/remix rune depth): kept wherever the player goes, until {@link #unpin} or death. */
+    public static void pin(ServerPlayer p, int depth) {
+        p.getPersistentData().putBoolean(PIN, true);
+        set(p, depth);
+    }
+
+    /** Back to following the run, which starts again from where the player stands. */
+    public static void unpin(ServerPlayer p) {
+        p.getPersistentData().remove(PIN);
+        set(p, Math.max(0, depthAt(p.level(), p.getY())));
+    }
+
+    public static boolean pinned(Player p) { return p.getPersistentData().getBoolean(PIN); }
 
     public static void sync(ServerPlayer p) {
         RuneNet.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new RuneNet.DepthSync(get(p)));
@@ -60,6 +76,7 @@ public final class RunDepth {
 
     /** Once a second: deeper than ever this run wakes slots; home again ends the run. */
     public static void update(ServerPlayer p) {
+        if (pinned(p)) return;
         int here = depthAt(p.level(), p.getY());
         if (here < 0) return;
         int now = get(p);

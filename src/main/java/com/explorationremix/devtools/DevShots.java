@@ -26,7 +26,8 @@ import java.util.List;
  * view searched for round x z), or "file-name @ x y z yaw pitch" for a picture from a chosen spot. Two more kinds of
  * line take no picture: "! command" runs a command (for example "! remix lava level 40", to set the Basalt Galleries'
  * flood before the next pictures) and waits for its reply, and "! wait ticks" idles that many client ticks (to let the
- * server finish work the last command started). Screenshots go to the game's screenshots folder.
+ * server finish work the last command started). Steps for testing gear press, hold and release keys, turn, pick a
+ * hotbar slot, show the HUD and snap a frame at once (see clientStep). Screenshots go to the game's screenshots folder.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, value = Dist.CLIENT)
 public final class DevShots {
@@ -133,7 +134,12 @@ public final class DevShots {
                 }
                 String[] s = shots.get(index);
                 if (s[0].equals("!")) {
-                    // a step without a picture: a command, or a pause
+                    // a step without a picture: a command, a pause, or something the player does
+                    if (s.length >= 2 && clientStep(mc, s)) {
+                        // the next line follows at once (the game reads the keys in its next tick)
+                        ticks = 39;
+                        return;
+                    }
                     if (s.length == 3 && s[1].equals("wait")) {
                         try {
                             waitTicks = Math.max(0, Integer.parseInt(s[2]));
@@ -256,10 +262,77 @@ public final class DevShots {
             case WAITING -> {
                 if (ticks < waitTicks) return;
                 phase = Phase.NEXT;
-                ticks = 0;
+                // the next line follows at once: the wait was the pause
+                ticks = 39;
             }
             default -> {}
         }
+    }
+
+    /**
+     * What the player does, for testing gear in the game: "! press use|attack|runes|inventory" (one click of that
+     * key), "! hold use|attack" and "! release use|attack" (keep it held down until released), "! slot n" (hotbar slot
+     * 0 to 8), "! look yaw pitch", "! gui on|off" (the hotbar and HUD), "! close" (the open screen) and "! snap name"
+     * (a picture of this very frame, without moving or settling, for things in flight and screens). False if the
+     * line is none of these.
+     */
+    private static boolean clientStep(Minecraft mc, String[] s) {
+        String what = s[1], arg = s.length > 2 ? s[2] : "";
+        switch (what) {
+            case "press", "hold", "release" -> {
+                net.minecraft.client.KeyMapping key = switch (arg) {
+                    case "use" -> mc.options.keyUse;
+                    case "attack" -> mc.options.keyAttack;
+                    case "inventory" -> mc.options.keyInventory;
+                    case "runes" -> com.explorationremix.client.rune.RuneKeys.OPEN;
+                    default -> null;
+                };
+                if (key == null) return false;
+                if (!what.equals("release")) net.minecraft.client.KeyMapping.click(key.getKey());
+                if (!what.equals("press")) key.setDown(what.equals("hold"));
+            }
+            case "slot" -> {
+                try {
+                    mc.player.getInventory().selected = Math.max(0, Math.min(8, Integer.parseInt(arg)));
+                } catch (NumberFormatException ex) {
+                    return false;
+                }
+            }
+            case "look" -> {
+                if (s.length < 4) return false;
+                try {
+                    float yaw = Float.parseFloat(s[2]), pitch = Float.parseFloat(s[3]);
+                    mc.player.setYRot(yaw);
+                    mc.player.setXRot(pitch);
+                    mc.player.yRotO = yaw;
+                    mc.player.xRotO = pitch;
+                    mc.player.setYHeadRot(yaw);
+                } catch (NumberFormatException ex) {
+                    return false;
+                }
+            }
+            case "gui" -> mc.options.hideGui = !arg.equals("on");
+            case "close" -> {
+                if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) mc.player.closeContainer();
+                else if (mc.screen != null) mc.setScreen(null);
+            }
+            case "snap" -> {
+                if (arg.isEmpty()) return false;
+                String name = arg + ".png";
+                Screenshot.grab(mc.gameDirectory, name, mc.getMainRenderTarget(), msg -> {});
+                String where = String.format(java.util.Locale.ROOT, "%s %.1f %.1f %.1f yaw %.0f pitch %.0f (snap%s)", name, mc.player.getX(),
+                        mc.player.getY(), mc.player.getZ(), mc.player.getYRot(), mc.player.getXRot(),
+                        mc.screen == null ? "" : ", screen " + mc.screen.getClass().getSimpleName());
+                log.add(where);
+                ExplorationRemix.LOGGER.info("[shots] snapped {}", where);
+            }
+            default -> {
+                return false;
+            }
+        }
+        ExplorationRemix.LOGGER.info("[shots] {} of {}: {}", index + 1, shots.size(), String.join(" ", java.util.Arrays.copyOfRange(s, 1, s.length)));
+        if (!what.equals("snap")) log.add("! " + String.join(" ", java.util.Arrays.copyOfRange(s, 1, s.length)));
+        return true;
     }
 
     /** How many chunks within radius (a circle) of the camera the client has not got yet. */
