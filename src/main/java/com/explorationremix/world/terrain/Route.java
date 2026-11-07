@@ -420,6 +420,32 @@ public final class Route {
         return true;
     }
 
+    /**
+     * Where along the walking path (its arc length, 0 to {@link #walkLength}) a creature at (x, y, z) is, when it is
+     * within {@code reach} of the path across and {@code rise} of its floor up or down: on the nearer of the stretches
+     * that pass it (the path may come back by itself, or run under itself). NaN when it is on none.
+     */
+    public double walkArcNear(double x, double y, double z, double reach, double rise) {
+        double[] o = new double[6];
+        if (!nearestWalk(x, z, o)) return Double.NaN;
+        double best = Double.NaN, bestD = Double.MAX_VALUE;
+        for (int k = 0; k < 2; k++) {
+            double d = k == 0 ? o[0] : o[4], fi = k == 0 ? o[1] : o[5];
+            if (d > reach) continue;
+            double up = Math.abs(y - feetAt(atIndex(floor, fi)));
+            if (up > rise) continue;
+            double dd = d * d + up * up;
+            if (dd < bestD) { bestD = dd; best = atIndex(ws, fi); }
+        }
+        return best;
+    }
+
+    /**
+     * The height feet stand at on the path where its floor line is at {@code floorY}: it is carved open from half a
+     * block above the line (on a slope a block's own floor can sit a block higher still).
+     */
+    public static int feetAt(double floorY) { return (int) Math.floor(floorY + 0.5) + 1; }
+
     /** Nearest point on the walking line: [distance, fractional point index]. False when it is out of reach. */
     boolean nearestWalk(double x, double z, double[] out) {
         return nearestOn(wx, wz, walkBuckets, x, z, out);
