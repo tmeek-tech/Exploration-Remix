@@ -10,7 +10,11 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -74,6 +78,18 @@ public class TempBlock extends Block {
             }
             case LIGHT -> level.sendParticles(ParticleTypes.WAX_OFF, x, y, z, 2, 0.1, 0.1, 0.1, 0.0);
         }
+    }
+
+    /** Broken rune ice is water again, like any ice. */
+    @Override
+    public void playerDestroy(Level level, Player player, BlockPos pos, BlockState state, @javax.annotation.Nullable BlockEntity be, ItemStack tool) {
+        super.playerDestroy(level, player, pos, state, be, tool);
+        if (kind == Kind.ICE && !level.isClientSide && level.getBlockState(pos).isAir()) level.setBlockAndUpdate(pos, Blocks.WATER.defaultBlockState());
+    }
+
+    @Override
+    public void wasExploded(Level level, BlockPos pos, Explosion explosion) {
+        if (kind == Kind.ICE && level.getBlockState(pos).isAir()) level.setBlockAndUpdate(pos, Blocks.WATER.defaultBlockState());
     }
 
     @Override

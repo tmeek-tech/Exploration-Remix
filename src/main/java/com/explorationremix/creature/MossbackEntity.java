@@ -1223,8 +1223,11 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         if (isInvulnerableTo(source)) return false;
         Entity attacker = source.getEntity();
         throatHit = false;
-        if (state() == REAR && attacker != null) {
-            Vec3 to = attacker.position().subtract(position());
+        // where the blow came from: the arrow or rune that struck, else whoever struck
+        Vec3 from = source.getSourcePosition();
+        if (from == null && attacker != null) from = attacker.position();
+        if (state() == REAR && from != null) {
+            Vec3 to = from.subtract(position());
             if (to.lengthSqr() > 1.0E-4 && to.normalize().dot(lookDir()) > 0.3) {
                 amount *= THROAT_MULTIPLIER;
                 throatHit = true;
@@ -1253,6 +1256,9 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         }
         return hurt;
     }
+
+    /** Whether the last blow it took landed on its throat (for runes that pay back on a weak spot). */
+    public boolean lastHitWasThroat() { return throatHit; }
 
     /** One of its own family (they share the den as home), or of the family one of them left: kin never fight. */
     private boolean denMate(Entity e) {

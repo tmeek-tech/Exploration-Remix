@@ -107,6 +107,8 @@ public final class RemixCommands {
                 .then(com.explorationremix.creature.MossbackCommands.command())
                 // the Skein
                 .then(com.explorationremix.creature.SkeinCommands.command())
+                // runes: rune items, rows, energy and run depth for trying them out
+                .then(com.explorationremix.rune.RuneCommands.command())
                 .then(Commands.literal("entrances").executes(c -> entrances(c, 8))
                         .then(Commands.argument("cells", IntegerArgumentType.integer(1, 24)).executes(c -> entrances(c, IntegerArgumentType.getInteger(c, "cells")))))
                 .then(Commands.literal("deadends").executes(c -> deadEnds(c, 4))

@@ -31,4 +31,6 @@ public final class Combat {
     }
 
     public static void forget(Player p) { LAST_HURT.remove(p.getUUID()); }
+
+    public static void clear() { LAST_HURT.clear(); }
 }
