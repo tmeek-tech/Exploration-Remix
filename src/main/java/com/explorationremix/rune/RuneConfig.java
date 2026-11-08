@@ -21,7 +21,7 @@ public final class RuneConfig {
     public final ForgeConfigSpec.IntValue maxParts, maxActions, idleTicks;
     public final ForgeConfigSpec.IntValue maxCarriers, releasesPerTick, maxBarrierBlocks, maxGlowBlocks, maxIceBlocks;
     public final ForgeConfigSpec.IntValue combatSeconds, swapTicks, tapTicks, maxMotes;
-    public final ForgeConfigSpec.DoubleValue swordChargePerDamage, swordChargeMaxPerHit;
+    public final ForgeConfigSpec.DoubleValue energyPerDamage, energyMaxPerHit, energyFloor, fadeDelaySeconds, fadePerSecond, refillPerSecond;
     public final ForgeConfigSpec.DoubleValue runeDamage;
 
     private RuneConfig(ForgeConfigSpec.Builder b) {
@@ -48,12 +48,30 @@ public final class RuneConfig {
         swapTicks = b.comment("Ticks gear must be in your hand before it casts.").defineInRange("swapTicks", 10, 0, 100);
         tapTicks = b.comment("With a shield in the off hand, a right-click this short (in ticks) casts the sword; held longer, it",
                 "only raises the shield.").defineInRange("tapTicks", 4, 1, 20);
-        swordChargePerDamage = b.comment("Energy a sword gains per point of damage from a full-strength hit on a creature fighting you.")
-                .defineInRange("swordChargePerDamage", 2.0, 0.0, 20.0);
-        swordChargeMaxPerHit = b.comment("The most energy one sword hit can give.").defineInRange("swordChargeMaxPerHit", 30.0, 0.0, 200.0);
         runeDamage = b.comment("Multiplies all rune damage.").defineInRange("runeDamage", 1.0, 0.0, 10.0);
         b.pop();
+        b.push("energy");
+        energyPerDamage = b.comment("Energy knocked loose, per point of damage, when gear with runes hits a creature fighting you (a sword's",
+                "swing, a bow's or crossbow's arrow). It flies back as motes into the gear that hit. Rune hits knock loose a",
+                "share of what their cast cost instead (much more with Siphon).").defineInRange("energyPerDamage", 2.0, 0.0, 20.0);
+        energyMaxPerHit = b.comment("The most energy one sword or arrow hit can knock loose.").defineInRange("energyMaxPerHit", 30.0, 0.0, 200.0);
+        energyFloor = b.comment("The share of its most energy gear settles back to once a fight goes quiet, and starts with: enough to",
+                "open the next fight with a cast.").defineInRange("energyFloor", 0.3, 0.0, 1.0);
+        fadeDelaySeconds = b.comment("Seconds after gear last gained energy or cast before the fight counts as quiet and its energy",
+                "starts going back to the floor.").defineInRange("fadeDelaySeconds", 4.0, 0.0, 120.0);
+        fadePerSecond = b.comment("How fast energy above the floor fades once the fight is quiet.").defineInRange("fadePerSecond", 7.0, 0.0, 1000.0);
+        refillPerSecond = b.comment("How fast energy below the floor comes back once the fight is quiet.").defineInRange("refillPerSecond", 3.0, 0.0, 1000.0);
+        b.pop();
     }
+
+    /** How gear's energy goes back to its floor, safe to call before the config is loaded (defaults then). */
+    public static com.explorationremix.rune.engine.HostSpec.Fade fade() {
+        return new com.explorationremix.rune.engine.HostSpec.Fade((int) Math.round(get(INSTANCE.fadeDelaySeconds) * 20.0),
+                (float) (get(INSTANCE.fadePerSecond) / 20.0), (float) (get(INSTANCE.refillPerSecond) / 20.0));
+    }
+
+    /** The share of its most energy gear settles back to. */
+    public static float floorShare() { return (float) get(INSTANCE.energyFloor); }
 
     /** The reading limits, safe to call before the config is loaded (defaults then). */
     public static Limits limits() {

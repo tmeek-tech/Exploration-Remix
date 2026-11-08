@@ -13,8 +13,6 @@ import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.world.TempBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
-import net.minecraft.core.particles.BlockParticleOption;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -40,7 +38,6 @@ import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.CandleBlock;
 import net.minecraft.world.level.block.CandleCakeBlock;
@@ -56,9 +53,9 @@ import java.util.List;
 
 /**
  * What happens when a rune strikes a creature: its damage (credited to the caster, never blocked by a shield), its own
- * push, its element and the reaction that sets off, and Siphon's refund as white motes. Also who runes touch at all,
- * and what the elements do to the world nearby (Frost freezes still water, Tide puts out fire, Ember lights campfires
- * and candles).
+ * push, its element and the reaction that sets off, and the energy it knocks loose as white motes (much more with
+ * Siphon). Also who runes touch at all, and what the elements do to the world nearby (Frost freezes still water, Tide
+ * puts out fire, Ember lights campfires and candles).
  *
  * <p>Rune hits never wait out a creature's hit immunity and never give it any: each rune lands, and a sword swing
  * right after still lands too. One rune strikes a creature once per cast (CastContext).
@@ -169,7 +166,14 @@ public final class RuneHits {
         if (damage <= 0.0F && mult > 1.0F) damage = 2.0F * ctx.power;      // an arrow's shatter or thaw still adds its bit
         else damage *= mult;
         if (a.element == Element.TIDE) push += 0.15F;
-        boolean hurt = damage > 0.0F && hurt(ctx, t, box, damage, direct, from, dir, push);
+        boolean hurt;
+        // the hit wears the creature's poise as this rune does: an Orb hard, a Field's pulse a little
+        com.explorationremix.combat.CombatEvents.runePoise(poise(a));
+        try {
+            hurt = damage > 0.0F && hurt(ctx, t, box, damage, direct, from, dir, push);
+        } finally {
+            com.explorationremix.combat.CombatEvents.runePoise(1.0F);
+        }
         // a hit the game refused (a guarded creature, a shield, one that dodged) does nothing else either
         if (damage > 0.0F && !hurt && t.isAlive()) return;
         if (damage <= 0.0F && push > 0.0F) push(t, dir, push);
@@ -178,14 +182,30 @@ public final class RuneHits {
                 "rune.explorationremix.reaction." + r.name().toLowerCase(java.util.Locale.ROOT)).withStyle(s -> s.withColor(a.element.colour)), true);
         boolean weak = hurt && t instanceof MossbackEntity m && m.lastHitWasThroat();
         element(ctx, a, t, r, damage);
-        if (a.has(RuneId.SIPHON) && foe) {
+        // a rune that hurt a creature fighting you knocks a little of its cost loose; with Siphon, much more
+        boolean siphon = a.has(RuneId.SIPHON);
+        if (foe && (siphon || hurt)) {
             int id = t.getId();
-            float back = ctx.siphon.hit(id);
-            if (weak) back += ctx.siphon.weakSpot(id);
-            if (r != Reactions.Reaction.NONE) back += ctx.siphon.reaction(id);
-            if (hurt && t.isDeadOrDying()) back += ctx.siphon.kill(id);
+            float back = ctx.siphon.hit(id, siphon);
+            if (weak) back += ctx.siphon.weakSpot(id, siphon);
+            if (r != Reactions.Reaction.NONE) back += ctx.siphon.reaction(id, siphon);
+            if (hurt && t.isDeadOrDying()) back += ctx.siphon.kill(id, siphon);
             if (back > 0.0F) RuneMote.spawn(ctx.level, t.position().add(0, t.getBbHeight() * 0.6, 0), ctx.owner, ctx.gearId, back);
         }
+    }
+
+    /** How hard a rune's hit wears poise, per point of its damage. */
+    static float poise(Act a) {
+        float f = switch (a.rune) {
+            case ORB -> 1.5F;
+            case BURST -> 1.2F;
+            case SPARK -> 0.8F;
+            case SHARD -> 0.6F;
+            case FIELD -> 0.2F;
+            case ARROW -> 0.7F;
+            default -> 1.0F;
+        };
+        return f + 0.5F * a.count(RuneId.HEAVY);
     }
 
     /** The element's mark on a creature, and the reaction it set off. */
@@ -193,33 +213,13 @@ public final class RuneHits {
         ServerLevel l = ctx.level;
         Vec3 c = t.position().add(0, t.getBbHeight() * 0.5, 0);
         switch (r) {
-            case STEAM -> {
-                Statuses.dry(t);
-                l.sendParticles(ParticleTypes.CLOUD, c.x, c.y, c.z, 8, 0.4, 0.4, 0.4, 0.02);
-                RuneFx.play(l, c, SoundEvents.FIRE_EXTINGUISH, 0.6F, 1.2F);
-            }
-            case THAW -> {
-                Statuses.thaw(t);
-                l.sendParticles(ParticleTypes.FALLING_WATER, c.x, c.y, c.z, 10, 0.4, 0.4, 0.4, 0.0);
-                RuneFx.play(l, c, SoundEvents.FIRE_EXTINGUISH, 0.5F, 1.6F);
-            }
-            case SHATTER -> {
-                Statuses.thaw(t);
-                l.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, Blocks.ICE.defaultBlockState()), c.x, c.y, c.z, 24, 0.4, 0.5, 0.4, 0.1);
-                RuneFx.play(l, c, SoundEvents.GLASS_BREAK, 0.9F, 0.8F);
-            }
-            case FREEZE -> {
-                Statuses.freeze(t, Reactions.holdTicks(r, hunter(t)));
-                l.sendParticles(ParticleTypes.SNOWFLAKE, c.x, c.y, c.z, 16, 0.4, 0.5, 0.4, 0.02);
-                RuneFx.play(l, c, SoundEvents.PLAYER_HURT_FREEZE, 0.8F, 1.2F);
-            }
-            case SHOCK -> {
-                Statuses.hold(t, Reactions.holdTicks(r, hunter(t)));
-                l.sendParticles(ParticleTypes.ELECTRIC_SPARK, c.x, c.y, c.z, 16, 0.4, 0.5, 0.4, 0.2);
-                RuneFx.play(l, c, SoundEvents.LIGHTNING_BOLT_IMPACT, 0.4F, 1.8F);
-            }
+            case STEAM -> Statuses.dry(t);
+            case THAW, SHATTER -> Statuses.thaw(t);
+            case FREEZE -> Statuses.freeze(t, Reactions.holdTicks(r, hunter(t)));
+            case SHOCK -> Statuses.hold(t, Reactions.holdTicks(r, hunter(t)));
             default -> {}
         }
+        if (r != Reactions.Reaction.NONE) RuneFx.reaction(l, c, r, a.element, t.getBbWidth());
         switch (a.element) {
             case EMBER -> {
                 if (r != Reactions.Reaction.STEAM && r != Reactions.Reaction.THAW) t.setSecondsOnFire(a.has(RuneId.HEAVY) ? 5 : 3);
@@ -258,7 +258,7 @@ public final class RuneHits {
             if (next == null || !ctx.firstStrike(a, next)) return;
             seen.add(next);
             Vec3 p0 = at.position().add(0, at.getBbHeight() * 0.6, 0), p1 = next.position().add(0, next.getBbHeight() * 0.6, 0);
-            RuneFx.line(ctx.level, p0, p1, ParticleTypes.ELECTRIC_SPARK, 0.4);
+            RuneFx.beam(ctx.level, p0, p1, Element.STORM.colour, Element.STORM);
             // a leap the game refuses does nothing else: no hold, and the spark goes no further
             if (!hurt(ctx, next, next, damage, null, p0, p1.subtract(p0), 0.1F) && next.isAlive()) return;
             if (Statuses.wet(next) && !Statuses.immune(next)) Statuses.hold(next, Reactions.holdTicks(Reactions.Reaction.SHOCK, hunter(next)));

@@ -61,8 +61,7 @@ final class LingeringField implements FieldLogic {
         f.start(logic, node.act.element, radius, LIFE);
         if (ctx.level.addFreshEntity(f)) {
             c.carriers.add(f);
-            RuneFx.ring(ctx.level, at.add(0, 0.1, 0), radius, node.act.rune, node.act.element);
-            RuneFx.play(ctx.level, at, RuneFx.sound(node.act.rune, node.act.element), 0.6F, 1.3F);
+            RuneFx.field(ctx.level, at.add(0, 0.1, 0), radius, node.act.element, false);
             if (node.act.element != Element.NONE) RuneHits.world(ctx, node.act.element, at.add(0, 0.5, 0), radius);
         }
     }
@@ -114,7 +113,7 @@ final class LingeringField implements FieldLogic {
                     RuneHits.strike(ctx, a, t.body(), t.box(), RuneHits.middle(t.box()), dir, damage, 0.05F, null, c);
                 }
             }
-            if (pulse) RuneFx.ring(ctx.level, c.add(0, 0.1, 0), radius * 0.85, a.rune, a.element);
+            if (pulse) RuneFx.field(ctx.level, c.add(0, 0.1, 0), radius, a.element, true);
         }
         if (hasPayload() && !released && node.relay == RuneId.AFTER && age > FlyingRune.AFTER_TICKS) {
             released = true;

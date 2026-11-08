@@ -187,7 +187,7 @@ public final class Grapples {
         }
         p.fallDistance = g.fall;
         if ((now - g.start) % 2 == 0) {
-            RuneFx.line(g.level, p.position().add(0, p.getBbHeight() * 0.6, 0), g.hold, RuneFx.dust(g.colour, 0.55F), 0.7);
+            RuneFx.rope(g.level, p.position().add(0, p.getBbHeight() * 0.6, 0), g.hold, g.colour);
         }
     }
 

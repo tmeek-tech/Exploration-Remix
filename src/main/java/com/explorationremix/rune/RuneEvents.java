@@ -12,6 +12,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -38,7 +39,6 @@ import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingFallEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
-import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
@@ -138,18 +138,18 @@ public final class RuneEvents {
         if (!e.getProjectile().level().isClientSide()) ArrowRides.impact(e);
     }
 
-    // ------------------------------------------------------------------------------------------------ the sword's charge
+    // ------------------------------------------------------------------------------------------------ hits fill gear
 
-    @SubscribeEvent
-    public static void attack(AttackEntityEvent e) {
-        if (e.getEntity() instanceof ServerPlayer p) CastService.swing(p, e.getTarget());
-    }
-
+    /** Damage landed: a runed sword's swing, or an arrow runed gear loosed, knocks energy loose into that gear. */
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void damage(LivingDamageEvent e) {
         if (e.isCanceled() || e.getEntity().level().isClientSide()) return;
-        if (e.getSource().is(DamageTypes.PLAYER_ATTACK) && e.getSource().getEntity() instanceof ServerPlayer p && e.getSource().getDirectEntity() == p) {
+        DamageSource src = e.getSource();
+        if (!(src.getEntity() instanceof ServerPlayer p)) return;
+        if (src.is(DamageTypes.PLAYER_ATTACK) && src.getDirectEntity() == p) {
             CastService.meleeDamage(p, e.getEntity(), e.getAmount());
+        } else if (src.getDirectEntity() instanceof AbstractArrow arrow && !src.is(RuneRegistry.RUNE_DAMAGE)) {
+            CastService.arrowDamage(p, arrow, e.getEntity(), e.getAmount());
         }
     }
 

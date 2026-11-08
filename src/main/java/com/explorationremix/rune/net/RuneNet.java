@@ -5,6 +5,8 @@ import com.explorationremix.rune.RunDepth;
 import com.explorationremix.rune.cast.Grapples;
 import com.explorationremix.rune.cast.LocalPull;
 import com.explorationremix.rune.cast.Pull;
+import com.explorationremix.rune.effect.Fx;
+import com.explorationremix.rune.effect.RuneFx;
 import com.explorationremix.rune.menu.RuneEditorMenu;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
@@ -18,13 +20,14 @@ import java.util.function.Supplier;
 
 /**
  * The runes' channel, {@code explorationremix:runes}. Small on purpose: the gear carries its own row and energy (sent
- * as item data, like any item change), the rune screen is a vanilla menu, and effects are vanilla particles and
- * entities. Only these need words of their own: the run depth (server to client), "open the rune screen" (client to
- * server, which the server is free to refuse), and Reel's pull on a player: the server starts it and may stop it, the
- * player's own game steers it and says when it is done.
+ * as item data, like any item change), the rune screen is a vanilla menu, and bolts, fields and motes are entities.
+ * Only these need words of their own: the run depth (server to client), "open the rune screen" (client to server,
+ * which the server is free to refuse), Reel's pull on a player (the server starts it and may stop it, the player's own
+ * game steers it and says when it is done), and effects: one small message per flash, blast or slam, which each nearby
+ * client turns into its own particles, rings and shake.
  */
 public final class RuneNet {
-    private static final String VERSION = "2";
+    private static final String VERSION = "3";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(new ResourceLocation(ExplorationRemix.MOD_ID, "runes"),
             () -> VERSION, VERSION::equals, VERSION::equals);
 
@@ -42,6 +45,19 @@ public final class RuneNet {
                 .encoder(PullStop::write).decoder(PullStop::read).consumerMainThread(PullStop::handle).add();
         CHANNEL.messageBuilder(PullDone.class, 4, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(PullDone::write).decoder(PullDone::read).consumerMainThread(PullDone::handle).add();
+        CHANNEL.messageBuilder(FxMsg.class, 5, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(FxMsg::write).decoder(FxMsg::read).consumerMainThread(FxMsg::handle).add();
+    }
+
+    /** An effect to draw ({@link Fx}); null when it was of a kind this game doesn't know. */
+    public record FxMsg(@javax.annotation.Nullable Fx fx) {
+        void write(FriendlyByteBuf b) { fx.write(b); }
+
+        static FxMsg read(FriendlyByteBuf b) { return new FxMsg(Fx.read(b)); }
+
+        void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (fx != null && fx.sane()) RuneFx.client.play(fx);
+        }
     }
 
     /** The player's run depth (0 to 2), which says how many slots their gear has awake. */

@@ -272,7 +272,8 @@ public final class DevShots {
     /**
      * What the player does, for testing gear in the game: "! press use|attack|runes|inventory" (one click of that
      * key), "! hold use|attack" and "! release use|attack" (keep it held down until released), "! slot n" (hotbar slot
-     * 0 to 8), "! look yaw pitch", "! gui on|off" (the hotbar and HUD), "! close" (the open screen) and "! snap name"
+     * 0 to 8), "! look yaw pitch", "! gui on|off" (the hotbar and HUD), "! view first|third|front" (the camera),
+     * "! close" (the open screen) and "! snap name"
      * (a picture of this very frame, without moving or settling, for things in flight and screens). False if the
      * line is none of these.
      */
@@ -312,6 +313,11 @@ public final class DevShots {
                 }
             }
             case "gui" -> mc.options.hideGui = !arg.equals("on");
+            case "view" -> mc.options.setCameraType(switch (arg) {
+                case "third" -> net.minecraft.client.CameraType.THIRD_PERSON_BACK;
+                case "front" -> net.minecraft.client.CameraType.THIRD_PERSON_FRONT;
+                default -> net.minecraft.client.CameraType.FIRST_PERSON;
+            });
             case "close" -> {
                 if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) mc.player.closeContainer();
                 else if (mc.screen != null) mc.setScreen(null);

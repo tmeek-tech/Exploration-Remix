@@ -307,7 +307,8 @@ public final class ArrowRides {
                     if (r.node.relay == RuneId.AFTER && r.hasPayload() && r.age > FlyingRune.AFTER_TICKS) {
                         Vec3 d = r.arrow.getDeltaMovement();
                         release(r, new Origin(r.arrow.position(), d.lengthSqr() < 1.0E-8 ? new Vec3(0, 0, 1) : d.normalize(), null));
-                        RuneFx.puff(r.ctx.level, r.arrow.position(), RuneId.SPARK, r.a.element, 8, 0.2);
+                        RuneFx.impact(r.ctx.level, r.arrow.position(), d.lengthSqr() < 1.0E-8 ? new Vec3(0, 1, 0) : d.normalize(), RuneId.SPARK,
+                                r.a.element, 0.8F, false);
                         r.arrow.discard();
                     } else if (r.age > 200) {
                         if (r.hasPayload()) release(r, new Origin(r.arrow.position(), new Vec3(0, 0, 1), null));

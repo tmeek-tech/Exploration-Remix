@@ -152,6 +152,8 @@ public final class RuneCommands {
         CastState s = RuneGear.state(g, spec, now);
         CastMachine.settle(s, spec, now);
         s.energy = amount < 0 ? spec.maxEnergy() : Math.min(amount, spec.maxEnergy());
+        // as if a hit had just filled it: it holds for the fade's delay before going back to the floor
+        s.lastGain = now;
         RuneGear.setState(g, s);
         float e = s.energy;
         c.getSource().sendSuccess(() -> Component.literal("Energy " + Math.round(e) + " of " + Math.round(spec.maxEnergy())), false);

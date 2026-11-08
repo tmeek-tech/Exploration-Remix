@@ -11,6 +11,7 @@
     "accessor.SurfaceContextAccessor",
     "accessor.MultiNoiseBiomeSourceAccessor",
     "accessor.ProjectileAccessor",
+    "accessor.ServerGamePacketListenerAccessor",
     "MinecraftServerMixin",
     "NoiseBasedChunkGeneratorMixin",
     "BiomeSourceMixin",
@@ -28,7 +29,8 @@
     "LevelChunkMixin",
     "rune.ItemStackRuneMixin",
     "rune.FurnaceRuneMixin",
-    "rune.ArrowPassByMixin"
+    "rune.ArrowPassByMixin",
+    "LivingImmobileMixin"
   ],
   "client": [
     "client.LightTextureMixin",

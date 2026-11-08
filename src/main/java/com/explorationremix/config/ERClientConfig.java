@@ -19,6 +19,8 @@ public final class ERClientConfig {
     public final ForgeConfigSpec.BooleanValue caveLight;
     /** The view shakes a little while the Basalt Galleries' lava is about to rise and rising (client.LavaWarnings). */
     public final ForgeConfigSpec.BooleanValue screenShake;
+    /** The view shakes when a rune blast, a slam or a stagger goes off near you, and kicks when your hit lands (client.rune.fx.RuneCamera). */
+    public final ForgeConfigSpec.BooleanValue runeShake;
 
     private ERClientConfig(ForgeConfigSpec.Builder b) {
         b.push("caves");
@@ -31,6 +33,10 @@ public final class ERClientConfig {
         b.push("lavaCycle");
         screenShake = b.comment("Shake the view a little in the Basalt Galleries while the lava is about to rise and while it rises (scaled by",
                 "the game's Distortion Effects setting).").define("screenShake", true);
+        b.pop();
+        b.push("runes");
+        runeShake = b.comment("Shake the view a little when a rune blast, a wall slam or a stagger goes off near you, and kick it when your own",
+                "hit lands (scaled by the game's Distortion Effects setting).").define("runeShake", true);
         b.pop();
     }
 }

@@ -3,10 +3,7 @@ package com.explorationremix.rune.cast;
 import com.explorationremix.rune.effect.RuneFx;
 import com.explorationremix.rune.engine.Plan;
 import com.explorationremix.rune.engine.RuneId;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Iterator;
@@ -59,10 +56,7 @@ final class Dashes {
         p.fallDistance = 0;
         long now = ctx.level.getGameTime();
         c.dashes.add(new Dash(ctx, node, dir, now));
-        Vec3 at = p.position().add(0, 0.6, 0);
-        ctx.level.sendParticles(ParticleTypes.CLOUD, at.x, at.y, at.z, 6, 0.3, 0.2, 0.3, 0.02);
-        RuneFx.puff(ctx.level, at, node.act.rune, node.act.element, 8, 0.3);
-        RuneFx.play(ctx.level, at, SoundEvents.PHANTOM_FLAP, 0.8F, 1.6F);
+        RuneFx.dash(ctx.level, p.position(), dir, node.act.element, p.getId());
     }
 
     /** Each tick of the caster's: no fall damage while thrown, and each dash's payload when its moment comes. */

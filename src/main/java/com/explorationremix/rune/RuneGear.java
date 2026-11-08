@@ -27,7 +27,7 @@ import java.util.List;
  * <ul>
  *   <li>{@value #ROW_TAG}: {@code {v: 1, s: ["spark", "", "burst"], b: <break mask>}}, written only when the row is
  *   edited;</li>
- *   <li>{@value #CAST_TAG}: {@code {e: energy, t: tick, g: regenerating since (-1), c: cursor, r: ready at, l: last
+ *   <li>{@value #CAST_TAG}: {@code {e: energy, t: tick, g: last gained energy (-1), c: cursor, r: ready at, l: last
  *   cast, i: gear id}}, written only when something happens to the gear (a cast, a hit, a mote, taken in hand or put
  *   away); the energy in between is worked out from the ticks, so the stack is not rewritten every tick. The gear id
  *   is how a Siphon mote finds the gear that earned it.</li>
@@ -52,15 +52,19 @@ public final class RuneGear {
 
     public static boolean isGear(ItemStack stack) { return host(stack) != null; }
 
-    /** This piece of gear's numbers: energy, regeneration, power and bonus slots by its kind and material. */
+    /**
+     * This piece of gear's numbers: the most energy it holds, power and bonus slots by its kind and material, and the
+     * floor its energy settles back to and how fast, from the server's settings.
+     */
     @Nullable
     public static HostSpec spec(ItemStack stack) {
         Host h = host(stack);
         if (h == null) return null;
-        return switch (h) {
+        HostSpec base = switch (h) {
             case SWORD -> sword((SwordItem) stack.getItem());
-            case BOW, CROSSBOW -> new HostSpec(h, 60, 0.2F, 60, 1.0F, 0);
+            case BOW, CROSSBOW -> new HostSpec(h, 60, 0, 1.0F, 0, HostSpec.Fade.DEFAULT);
         };
+        return base.withFloor(Math.round(base.maxEnergy() * RuneConfig.floorShare())).withFade(RuneConfig.fade());
     }
 
     private static HostSpec sword(SwordItem item) {
@@ -76,7 +80,7 @@ public final class RuneGear {
         // an iron sword (6 attack damage) hits with plain rune damage; a netherite one a third harder
         float power = Math.max(0.6F, Math.min(1.6F, (item.getDamage() + 1.0F) / 6.0F));
         int bonus = t.getLevel() >= 3 ? 1 : 0;
-        return new HostSpec(Host.SWORD, max, 0, Math.min(30, max), power, bonus);
+        return new HostSpec(Host.SWORD, max, 0, power, bonus, HostSpec.Fade.DEFAULT);
     }
 
     // ------------------------------------------------------------------------------------------------ the row

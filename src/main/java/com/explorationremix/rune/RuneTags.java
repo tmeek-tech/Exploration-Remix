@@ -103,7 +103,7 @@ public final class RuneTags {
         if (gearId != 0) c.putInt("i", gearId);
         c.putFloat("e", s.energy);
         c.putLong("t", s.energyTick);
-        c.putLong("g", s.regenSince);
+        c.putLong("g", s.lastGain);
         c.putInt("c", s.cursor);
         c.putLong("r", s.readyAt);
         c.putLong("l", s.lastCast);

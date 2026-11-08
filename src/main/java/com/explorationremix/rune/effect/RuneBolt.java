@@ -9,18 +9,26 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
 
 /**
  * A flying rune: a Spark, Shard, Orb or Glow mote. The server moves it and decides what it hits; the client is told
- * only what it looks like (which rune, its element, its size) and draws it with a trail. Never saved: a bolt is gone
+ * only what it looks like (which rune, its element, its size) and draws it with a ribbon of light behind it, from the
+ * places it has been ({@link #trail}). Never saved: a bolt is gone
  * when its chunk unloads.
  */
 public class RuneBolt extends Entity {
     private static final EntityDataAccessor<Byte> DATA_RUNE = SynchedEntityData.defineId(RuneBolt.class, EntityDataSerializers.BYTE);
     private static final EntityDataAccessor<Byte> DATA_ELEMENT = SynchedEntityData.defineId(RuneBolt.class, EntityDataSerializers.BYTE);
     private static final EntityDataAccessor<Float> DATA_SIZE = SynchedEntityData.defineId(RuneBolt.class, EntityDataSerializers.FLOAT);
+
+    /** How many of its last places the client keeps, for the ribbon of light behind it. */
+    public static final int TRAIL = 10;
+    /** Client only: where it was at the end of each of its last ticks, newest first ({@link #trailCount} of them). */
+    public final Vec3[] trail = new Vec3[TRAIL];
+    public int trailCount;
 
     /** Server only: what it does in flight and what it carries (null on the client). */
     @Nullable
@@ -73,7 +81,8 @@ public class RuneBolt extends Entity {
         if (level().isClientSide) {
             // the client moves it along its last known motion between updates, so it flies smoothly
             setPos(getX() + getDeltaMovement().x, getY() + getDeltaMovement().y, getZ() + getDeltaMovement().z);
-            RuneFx.boltTrail(this);
+            pushTrail();
+            RuneFx.client.boltTick(this);
             return;
         }
         if (logic == null) {
@@ -81,6 +90,12 @@ public class RuneBolt extends Entity {
             return;
         }
         logic.tick(this);
+    }
+
+    private void pushTrail() {
+        System.arraycopy(trail, 0, trail, 1, TRAIL - 1);
+        trail[0] = position();
+        if (trailCount < TRAIL) trailCount++;
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.explorationremix.client.rune;
 
+import com.explorationremix.client.rune.fx.GlowRender;
 import com.explorationremix.rune.effect.RuneField;
 import com.explorationremix.rune.effect.RuneFx;
 import com.explorationremix.rune.engine.RuneId;
@@ -14,11 +15,12 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.AABB;
 
 /**
- * A Field: a glowing ring flat on the ground, as wide as the Field reaches, in its element's colour. It breathes gently
- * and turns slowly, comes up over a few ticks, and fades away over the last fifth of its life.
+ * A Field: a glowing ring flat on the ground, as wide as the Field reaches, in its element's colour, with its light
+ * added over the ground under it. It breathes gently and turns slowly, comes up over a few ticks, and fades away over
+ * the last fifth of its life.
  */
 final class RuneFieldRenderer extends EntityRenderer<RuneField> {
-    private static final ResourceLocation TEXTURE = GlowSprite.texture("field");
+    private static final ResourceLocation TEXTURE = GlowSprite.texture("field"), GLOW = GlowSprite.texture("field_glow");
     /** Just above the ground under it, so the ground does not flicker through. */
     private static final float LIFT = 0.02F;
     /** Ticks it takes to come up. */
@@ -52,8 +54,12 @@ final class RuneFieldRenderer extends EntityRenderer<RuneField> {
             float breath = Mth.sin(t * 0.15F);
             float alpha = fade * (0.8F + 0.2F * breath);
             if (alpha > 0.004F) {
+                int rgb = RuneFx.colour(RuneId.FIELD, f.element());
                 GlowSprite.flat(pose, buffers.getBuffer(RenderType.entityTranslucentEmissive(TEXTURE)), LIFT, radius * (1.0F + 0.02F * breath),
-                        t * 0.6F, RuneFx.colour(RuneId.FIELD, f.element()), alpha);
+                        t * 0.6F, rgb, alpha);
+                // and its light, added over the ground (it glows on a dark floor, and barely shows on a bright one)
+                GlowSprite.flat(pose, buffers.getBuffer(GlowRender.glow(GLOW)), LIFT + 0.01F, radius * (1.03F + 0.02F * breath), -t * 0.4F,
+                        RuneBoltRenderer.scale(rgb, 0.6F * alpha), 1.0F);
             }
         }
         super.render(f, yaw, partialTick, pose, buffers, light);

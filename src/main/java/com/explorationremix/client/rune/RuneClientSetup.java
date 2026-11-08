@@ -2,9 +2,8 @@ package com.explorationremix.client.rune;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.rune.RuneRegistry;
+import com.explorationremix.client.rune.fx.RuneFxClient;
 import com.explorationremix.rune.effect.RuneFx;
-import net.minecraft.client.Camera;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
@@ -32,10 +31,8 @@ public final class RuneClientSetup {
     @SubscribeEvent
     public static void setup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> MenuScreens.register(RuneRegistry.EDITOR.get(), RuneEditorScreen::new));
-        RuneFx.camera = () -> {
-            Camera c = Minecraft.getInstance().gameRenderer.getMainCamera();
-            return c.isInitialized() ? c.getPosition() : null;
-        };
+        // effects the server sends, and the trails behind bolts, motes and Fields
+        RuneFx.client = RuneFxClient.INSTANCE;
     }
 
     @SubscribeEvent

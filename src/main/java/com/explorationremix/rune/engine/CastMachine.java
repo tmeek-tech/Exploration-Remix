@@ -9,8 +9,9 @@ package com.explorationremix.rune.engine;
  *   <li>Each cast adds its delay before the next one. After the last cast the gear waits the longer of that delay and
  *   the row's recovery, then starts again from the first.</li>
  *   <li>After {@link Limits#idleTicks()} without casting, once it is ready, the gear goes back to its first cast.</li>
- *   <li>Energy regained while held is counted from {@code regenSince}, so the gear is written only when something
- *   happens to it.</li>
+ *   <li>Energy comes from hits (their motes). Once the gear has neither gained energy nor cast for the fade's delay,
+ *   the fight has gone quiet: its energy goes back down to the floor, or up to it from below. It is worked out from
+ *   the ticks when asked, so the gear is written only when something happens to it.</li>
  * </ul>
  */
 public final class CastMachine {
@@ -33,15 +34,23 @@ public final class CastMachine {
         public boolean fired() { return kind == Kind.CAST; }
     }
 
-    /** Energy at {@code now}, counting what it regained while held. */
+    /** Energy at {@code now}: as it stood, gone back towards the floor since the fight went quiet. */
     public static float energyAt(CastState s, HostSpec h, long now) {
-        float e = s.energy;
-        if (h.regenPerTick() > 0 && s.regenSince >= 0) {
-            long from = Math.max(s.energyTick, s.regenSince);
-            if (now > from) e += h.regenPerTick() * (now - from);
-        }
-        return Math.max(0.0F, Math.min(e, h.maxEnergy()));
+        float max = h.maxEnergy();
+        float e = Math.max(0.0F, Math.min(s.energy, max));
+        HostSpec.Fade f = h.fade();
+        long quiet = Math.max(s.lastGain, s.lastCast) + f.delayTicks();
+        long from = Math.max(s.energyTick, quiet);
+        if (now <= from) return e;
+        float dt = now - from;
+        float floor = Math.max(0.0F, Math.min(h.floor(), max));
+        if (e > floor) return Math.max(floor, e - f.downPerTick() * dt);
+        if (e < floor) return Math.min(floor, e + f.upPerTick() * dt);
+        return e;
     }
+
+    /** The tick the gear's fight goes (or went) quiet: from then its energy goes back to the floor. */
+    public static long quietAt(CastState s, HostSpec h) { return Math.max(s.lastGain, s.lastCast) + h.fade().delayTicks(); }
 
     /** Writes the energy as it stands at {@code now} into the state. */
     public static void settle(CastState s, HostSpec h, long now) {
@@ -49,17 +58,12 @@ public final class CastMachine {
         s.energyTick = now;
     }
 
-    /** The gear starts or stops regaining energy (taken in hand, put away). */
-    public static void setHeld(CastState s, HostSpec h, long now, boolean held) {
-        settle(s, h, now);
-        s.regenSince = held ? now : -1;
-    }
-
-    /** Adds energy (a sword hit, a blocked hit, a Siphon mote), up to what the gear holds. */
+    /** Adds energy (a hit's motes landing), up to what the gear holds; the fight is on again, so it stops fading. */
     public static float add(CastState s, HostSpec h, long now, float amount) {
         settle(s, h, now);
         float before = s.energy;
         s.energy = Math.max(0.0F, Math.min(h.maxEnergy(), s.energy + amount));
+        if (amount > 0.0F) s.lastGain = now;
         return s.energy - before;
     }
 

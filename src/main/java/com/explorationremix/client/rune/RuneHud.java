@@ -21,7 +21,8 @@ import net.minecraftforge.client.gui.overlay.ForgeGui;
  * The runes on the HUD, while the gear in hand carries runes: its energy bar, and under the bar's top a strip of one
  * small square per cast (each in its cast's colour, red when it can never fire). The cast the gear fires next is
  * outlined bright, and pulses amber while there is too little energy for it, with a tick on the bar where it becomes
- * affordable. While the gear waits between casts a thin line sweeps across.
+ * affordable. While the gear waits between casts a thin line sweeps across. A small mark on the bar's bottom edge shows
+ * the floor its energy settles back to once a fight goes quiet; while it fades there the bar greys.
  *
  * <p>It sits beside the hotbar, vertically inside the hotbar's band, on the main hand's side: vanilla draws the off
  * hand's slot on the other side, and nothing on this one except the attack indicator when that is set to show by the
@@ -34,6 +35,7 @@ final class RuneHud {
     /** Space between the hotbar's end and the group; more when the attack indicator stands there. */
     private static final int GAP = 6, GAP_PAST_INDICATOR = 30;
     private static final int BACKING = 0x60000000, BAR_BACK = 0xE0101820, BAR_TOP = 0xFFE6FFFF, BAR_BOTTOM = 0xFF38CFF2;
+    private static final int BAR_TOP_FADING = 0xFFD0DCE0, BAR_BOTTOM_FADING = 0xFF6E98A8, FLOOR_TICK = 0xB0FFFFFF;
     private static final int OUTLINE = 0xFFFFFFFF, SWEEP = 0xC0FFFFFF;
     /** The most ticks a wait set by a cast can last (delays and recovery are capped well below this). */
     private static final int LONGEST_WAIT = 400;
@@ -99,7 +101,14 @@ final class RuneHud {
         g.fill(x0, barY, x0 + BAR_W, barY + BAR_H, BAR_BACK);
         int inner = BAR_W - 2;
         int fill = Math.round(inner * Mth.clamp(energy / max, 0.0F, 1.0F));
-        if (fill > 0) g.fillGradient(x0 + 1, barY + 1, x0 + 1 + fill, barY + BAR_H - 1, BAR_TOP, BAR_BOTTOM);
+        float floor = Math.min(spec.floor(), max);
+        // once the fight has gone quiet, what is above the floor fades, and the bar greys while it does
+        boolean fading = now >= CastMachine.quietAt(s, spec) && energy > floor + 0.01F;
+        if (fill > 0) g.fillGradient(x0 + 1, barY + 1, x0 + 1 + fill, barY + BAR_H - 1, fading ? BAR_TOP_FADING : BAR_TOP, fading ? BAR_BOTTOM_FADING : BAR_BOTTOM);
+        if (floor > 0.0F && floor < max) {
+            int fx = x0 + 1 + Math.min(inner - 1, Math.round(inner * floor / max));
+            g.fill(fx, barY + BAR_H - 2, fx + 1, barY + BAR_H, FLOOR_TICK);
+        }
         if (next >= 0) {
             int cost = r.casts().get(next).cost();
             if (cost > energy + 1.0E-3F && cost <= max) {

@@ -34,10 +34,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * One of Siphon's white motes: energy knocked loose by a well-placed Siphon hit, on its way back to the gear that earned
- * it. It pops out of what was hit, hangs there for a moment, then streaks to its player from up to {@link #RANGE}
- * blocks, through anything in the way (Taran chose "snap to you fast", 2026-11-07). Only the player who earned it can
- * collect it, and it refills only that piece of gear. A player further off, or gone, leaves it to settle on the ground
+ * One white mote: energy a hit knocked loose (a sword's swing, an arrow, a rune; most with Siphon), on its way back to
+ * the gear that earned it. It pops out of what was hit, hangs there for a moment, then streaks to its player from up to
+ * {@link #RANGE} blocks, through anything in the way (Taran chose "snap to you fast", 2026-11-07). Only the player who
+ * earned it can collect it, and it fills only that piece of gear. A player further off, or gone, leaves it to settle on the ground
  * like an experience orb until they come back or it fades after a minute. Never saved: it is gone when its chunk
  * unloads (its type is never written, and a chunk unload removes it as any entity).
  */
@@ -50,10 +50,12 @@ public class RuneMote extends Entity {
     public static final double RANGE = 24.0;
     /** Ticks before an uncollected mote fades. */
     public static final int LIFE = 1200;
-    /** Roughly how much energy one mote carries; a refund splits into 1 to 5 of them. */
-    private static final float PER_MOTE = 3.0F;
+    /** Roughly how much energy one mote carries; a hit's energy splits into 1 to 5 of them. */
+    private static final float PER_MOTE = 4.0F;
     /** Every player's motes out now, oldest first, wherever they lie: the cap holds per player. Server side only. */
     private static final Map<UUID, Set<RuneMote>> OUT = new HashMap<>();
+    /** The tick each player last heard motes land: a hit's motes land together, and are heard once. */
+    private static final Map<UUID, Long> HEARD = new HashMap<>();
 
     @Nullable
     private UUID owner;
@@ -135,7 +137,10 @@ public class RuneMote extends Entity {
         if (out != null && out.remove(this) && out.isEmpty()) OUT.remove(owner);
     }
 
-    public static void clearAll() { OUT.clear(); }
+    public static void clearAll() {
+        OUT.clear();
+        HEARD.clear();
+    }
 
     private void resize() { entityData.set(DATA_SIZE, Mth.clamp(0.55F + energy / 8.0F, 0.6F, 1.4F)); }
 
@@ -146,7 +151,7 @@ public class RuneMote extends Entity {
         if (level().isClientSide) {
             // the client moves it along its last known motion between updates
             if (noPhysics) setPos(getX() + v.x, getY() + v.y, getZ() + v.z);
-            RuneFx.moteTrail(this);
+            RuneFx.client.moteTick(this);
             return;
         }
         age++;
@@ -202,8 +207,15 @@ public class RuneMote extends Entity {
             CastMachine.add(s, spec, now, energy);
             RuneGear.setState(stack, s);
             float full = spec.maxEnergy() <= 0 ? 1.0F : s.energy / spec.maxEnergy();
-            level().playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.12F,
-                    1.25F + 0.75F * full + (random.nextFloat() - 0.5F) * 0.1F);
+            Long heard = HEARD.get(p.getUUID());
+            if (heard == null || now - heard >= 3 || now < heard) {
+                HEARD.put(p.getUUID(), now);
+                // the pitch climbs as the gear fills
+                level().playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.22F,
+                        1.1F + 0.8F * full + (random.nextFloat() - 0.5F) * 0.1F);
+                level().playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.35F, 0.9F + 0.9F * full);
+                RuneFx.moteIn((ServerLevel) level(), p.position().add(0, p.getBbHeight() * 0.55, 0), full);
+            }
         } else {
             level().playSound(null, getX(), getY(), getZ(), SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.1F, 2.0F);
         }

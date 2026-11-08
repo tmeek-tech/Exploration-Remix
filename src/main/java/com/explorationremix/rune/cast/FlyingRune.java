@@ -11,9 +11,7 @@ import com.explorationremix.rune.engine.Plan;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.world.TempBlock;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -39,7 +37,8 @@ import java.util.Set;
  *   <li>a wall: with Bounce it glances off, otherwise it stops there;</li>
  *   <li>old age: it stops where it has got to.</li>
  * </ul>
- * Where it stops it lets go what it carries (On hit), or earlier, a moment after it was cast (After a moment). Off a
+ * Where it stops it flashes and throws sparks ({@link RuneFx#impact}), and lets go what it carries (On hit), or earlier,
+ * a moment after it was cast (After a moment). Off a
  * wall the payload faces back out (and a Reel there pulls the caster to the wall); through a creature it carries on
  * and its bolts pass that creature by. A Glow mote leaves a light where it stops, or sticks to the creature it hits,
  * which then glows for a minute.
@@ -118,12 +117,13 @@ final class FlyingRune implements BoltLogic {
         };
     }
 
+    /** How hard a bolt throws what it hits (an Orb hard enough to slam a creature into a wall close behind it). */
     static float push(RuneId r) {
         return switch (r) {
-            case SHARD -> 0.15F;
-            case ORB -> 0.7F;
+            case SHARD -> 0.2F;
+            case ORB -> 1.1F;
             case GLOW -> 0.0F;
-            default -> 0.3F;
+            default -> 0.4F;
         };
     }
 
@@ -215,14 +215,14 @@ final class FlyingRune implements BoltLogic {
                 passed.add(h.body.getId());
                 if (!ctx.firstStrike(a, h.body)) {
                     // this rune already struck it in this cast: the copy passes on through
-                    ctx.level.sendParticles(RuneFx.dust(RuneFx.colour(a.rune, a.element), 0.6F), h.at.x, h.at.y, h.at.z, 2, 0.05, 0.05, 0.05, 0.0);
+                    RuneFx.pierce(ctx.level, h.at, dir(), a.rune, a.element);
                     from = h.at;
                     continue;
                 }
                 if (a.rune.damaging()) RuneHits.strike(ctx, a, h.body, h.box, h.at, dir(), damage, push, b, null);
                 if (pierces > 0 && a.rune != RuneId.GLOW && h.body.isAlive()) {
                     pierces--;
-                    ctx.level.sendParticles(ParticleTypes.CRIT, h.at.x, h.at.y, h.at.z, 4, 0.1, 0.1, 0.1, 0.1);
+                    RuneFx.pierce(ctx.level, h.at, dir(), a.rune, a.element);
                     from = h.at;
                     continue;
                 }
@@ -235,8 +235,7 @@ final class FlyingRune implements BoltLogic {
                     bounces--;
                     vel = Origin.reflect(dir(), n).scale(vel.length() * 0.92);
                     Vec3 at = bh.getLocation().add(n.scale(0.06));
-                    RuneFx.puff(ctx.level, at, a.rune, a.element, 3, 0.05);
-                    RuneFx.play(ctx.level, at, SoundEvents.AMETHYST_BLOCK_HIT, 0.4F, 1.6F + 0.1F * bounces);
+                    RuneFx.bounce(ctx.level, at, dir(), a.rune, a.element, bounces);
                     b.setPos(at);
                     b.setDeltaMovement(vel);
                     face(b);
@@ -336,8 +335,8 @@ final class FlyingRune implements BoltLogic {
         done = true;
         b.setPos(at);
         ServerLevel l = ctx.level;
-        RuneFx.puff(l, at, a.rune, a.element, a.rune == RuneId.ORB ? 14 : 6, 0.12 + radius * 0.5);
-        RuneFx.play(l, at, RuneFx.sound(a.rune, a.element), a.rune == RuneId.ORB ? 0.7F : 0.45F, 1.1F + l.random.nextFloat() * 0.3F);
+        // off a wall the sparks fly back out of it; from a creature, back the way the bolt came
+        RuneFx.impact(l, at, hit != null ? d.scale(-1) : d, a.rune, a.element, b.size(), hit != null);
         if (a.element != Element.NONE) RuneHits.world(ctx, a.element, at, 1.0 + 0.5 * a.count(RuneId.WIDE));
         if (a.rune == RuneId.GLOW) {
             if (hit != null) {

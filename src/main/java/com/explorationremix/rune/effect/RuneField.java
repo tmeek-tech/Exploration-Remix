@@ -65,7 +65,7 @@ public class RuneField extends Entity {
     public void tick() {
         super.tick();
         if (level().isClientSide) {
-            RuneFx.fieldAmbient(this);
+            RuneFx.client.fieldTick(this);
             return;
         }
         if (logic == null) {

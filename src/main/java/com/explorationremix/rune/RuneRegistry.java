@@ -50,6 +50,8 @@ public final class RuneRegistry {
 
     /** Rune damage: credited to the caster, never blocked by a shield (data/explorationremix/damage_type/rune.json). */
     public static final ResourceKey<DamageType> RUNE_DAMAGE = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation(MOD, "rune"));
+    /** A creature knocked hard into a wall (the combat layer's slams). */
+    public static final ResourceKey<DamageType> SLAM_DAMAGE = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation(MOD, "slam"));
 
     private RuneRegistry() {}
 

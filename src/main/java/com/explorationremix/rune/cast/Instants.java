@@ -7,7 +7,6 @@ import com.explorationremix.rune.engine.Plan;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.world.TempBlock;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -61,7 +60,7 @@ final class Instants {
         ServerLevel l = ctx.level;
         int wide = a.count(RuneId.WIDE), heavy = a.count(RuneId.HEAVY);
         double r = 2.5 + wide;
-        float base = FlyingRune.damage(ctx, a), push = 0.5F + 0.3F * heavy;
+        float base = FlyingRune.damage(ctx, a), push = 0.7F + 0.3F * heavy;
         for (RuneHits.Touch t : RuneHits.touched(ctx, new AABB(c, c).inflate(r), c)) {
             double d = Math.sqrt(t.distSqr());
             if (d > r) continue;
@@ -71,10 +70,7 @@ final class Instants {
             float falloff = (float) (1.0 - 0.4 * Math.min(1.0, d / r));
             RuneHits.strike(ctx, a, t.body(), t.box(), m, m.subtract(c), base * falloff, push, null, c);
         }
-        l.sendParticles(ParticleTypes.EXPLOSION, c.x, c.y, c.z, 1, 0, 0, 0, 0);
-        RuneFx.ring(l, c, r, a.rune, a.element);
-        RuneFx.puff(l, c, a.rune, a.element, 16 + 6 * wide, r * 0.35);
-        RuneFx.play(l, c, RuneFx.sound(a.rune, a.element), 0.9F, 0.9F + l.random.nextFloat() * 0.2F);
+        RuneFx.burst(l, c, r, a.rune, a.element);
         if (a.element != Element.NONE) RuneHits.world(ctx, a.element, c, r);
         blastSelf(ctx, c, r, heavy);
         return new Origin(c, o.dir(), o.hit(), o.wall());
@@ -128,7 +124,7 @@ final class Instants {
         double cosHalf = Math.cos(Math.toRadians(Math.min(170.0, 55.0 + 15.0 * wide)));
         Vec3 flat = Origin.flat(dir);
         if (flat == Vec3.ZERO) flat = Origin.flat(ctx.owner.getLookAngle());
-        float dmg = FlyingRune.damage(ctx, a), push = 0.4F + 0.2F * heavy;
+        float dmg = FlyingRune.damage(ctx, a), push = 0.55F + 0.2F * heavy;
         LivingEntity first = null;
         for (RuneHits.Touch t : RuneHits.touched(ctx, new AABB(from, from).inflate(range), from)) {
             Vec3 m = RuneHits.middle(t.box());
@@ -141,17 +137,8 @@ final class Instants {
             RuneHits.strike(ctx, a, t.body(), t.box(), m, flat, dmg, push, null, from);
             if (first == null) first = t.body();
         }
-        // the slash: sweeps along its arc
-        double half = Math.acos(cosHalf);
-        int n = 5 + 2 * wide;
-        for (int i = 0; i < n; i++) {
-            double ang = -half + 2 * half * i / (n - 1);
-            Vec3 d = Origin.turn(flat, (float) Math.toDegrees(ang));
-            Vec3 p = from.add(d.scale(range * 0.65)).add(0, -0.3, 0);
-            l.sendParticles(ParticleTypes.SWEEP_ATTACK, p.x, p.y, p.z, 1, 0, 0, 0, 0);
-            l.sendParticles(RuneFx.dust(RuneFx.colour(a.rune, a.element), 1.0F), p.x, p.y, p.z, 2, 0.1, 0.1, 0.1, 0);
-        }
-        RuneFx.play(l, from, a.element == Element.NONE ? SoundEvents.PLAYER_ATTACK_SWEEP : RuneFx.sound(a.rune, a.element), 0.9F, 1.0F);
+        // the slash: a sweep of light along its arc
+        RuneFx.cleave(l, from, flat, range, Math.acos(cosHalf), a.rune, a.element);
         if (a.element != Element.NONE) RuneHits.world(ctx, a.element, from.add(flat.scale(range * 0.5)), range * 0.5);
         return new Origin(from.add(flat.scale(1.5)), flat, first != null ? first : o.hit());
     }
@@ -185,9 +172,8 @@ final class Instants {
             }
         }
         Vec3 mid = new Vec3(centre.x, baseY + height * 0.5, centre.z);
-        if (made > 0) RuneFx.play(l, mid, SoundEvents.AMETHYST_BLOCK_PLACE, 1.0F, 0.8F);
+        if (made > 0) RuneFx.barrier(l, mid, right, width, height, a.element);
         else Executor.fizzle(ctx, mid);
-        RuneFx.puff(l, mid, a.rune, a.element, 10, width * 0.25);
         return new Origin(mid, flat, o.hit());
     }
 
@@ -231,8 +217,9 @@ final class Instants {
             t.hurtMarked = true;
             if (t instanceof Mob m) m.getNavigation().stop();
         }
-        RuneFx.line(ctx.level, ctx.owner.getEyePosition().add(0, -0.3, 0), from, RuneFx.dust(RuneFx.colour(a.rune, a.element), 0.8F), 0.35);
+        RuneFx.beam(ctx.level, ctx.owner.getEyePosition().add(0, -0.3, 0), from, RuneFx.colour(a.rune, a.element), a.element);
         RuneFx.play(ctx.level, from, SoundEvents.FISHING_BOBBER_RETRIEVE, 1.0F, 0.8F);
+        RuneFx.play(ctx.level, from, SoundEvents.TRIDENT_RETURN, 0.6F, 1.4F);
         return new Origin(from, dir, t);
     }
 
@@ -250,8 +237,8 @@ final class Instants {
             Executor.fizzle(ctx, at);
             return o;
         }
-        RuneFx.line(ctx.level, chest, at, RuneFx.dust(colour, 0.8F), 0.35);
-        RuneFx.puff(ctx.level, at, a.rune, a.element, 6, 0.15);
+        RuneFx.beam(ctx.level, chest, at, colour, a.element);
+        RuneFx.bounce(ctx.level, at, dir.scale(-1), a.rune, a.element, 0);
         RuneFx.play(ctx.level, chest, SoundEvents.FISHING_BOBBER_RETRIEVE, 1.0F, 1.2F);
         return new Origin(at, dir, null, true);
     }

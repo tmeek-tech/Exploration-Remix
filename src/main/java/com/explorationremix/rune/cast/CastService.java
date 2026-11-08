@@ -51,9 +51,9 @@ import java.util.UUID;
  * from the gear's own energy before anything happens (CastMachine), and only gear that has been in the hand for
  * {@code swapTicks} casts, so swapping between pieces of gear can't skip their delays.
  *
- * <p>Also here: a full-strength sword hit on a creature fighting you charges the sword; a bow regains energy while it
- * is held; the run depth is checked once a second. Fake players (a Create deployer holding a sword) never cast or
- * charge.
+ * <p>Also here: a hit with runed gear on a creature fighting you (a sword's swing, a bow's or crossbow's arrow) knocks
+ * energy loose as motes that fly back into that gear; the run depth is checked once a second. Fake players (a Create
+ * deployer holding a sword) never cast or fill gear.
  */
 public final class CastService {
     private static final Map<UUID, Caster> CASTERS = new HashMap<>();
@@ -108,12 +108,16 @@ public final class CastService {
         Caster c = caster(p);
         c.crossbowHand = hand;
         c.crossbowTick = p.level().getGameTime();
+        c.crossbowCast = false;
     }
+
+    /** On an arrow runed gear loosed (never on a copy Fan made): the gear's id, which its hit fills. */
+    public static final String GEAR_TAG = "explorationremix_gear";
 
     /**
      * An arrow came into the world: if a player's runed bow loosed it fully drawn, or their runed crossbow fired it,
      * the gear casts and the cast rides the arrow. Anything else (a half-drawn shot, a bow still recovering, short of
-     * energy) stays a plain arrow.
+     * energy) stays a plain arrow. Either way, when it hits a creature fighting its player it fills the gear.
      */
     public static void arrowLoosed(AbstractArrow arrow) {
         if (ArrowRides.spawning() || !(arrow.getOwner() instanceof ServerPlayer p) || p instanceof FakePlayer) return;
@@ -128,15 +132,17 @@ public final class CastService {
             full = arrow.isCritArrow();
         } else if (c.crossbowTick == now && c.crossbowHand != null && arrow.shotFromCrossbow()) {
             hand = c.crossbowHand;
-            full = true;
-            c.crossbowTick = -1;                 // a multishot's other arrows fly plain
+            full = !c.crossbowCast;             // a multishot's other arrows fly plain
+            c.crossbowCast = true;
         } else {
             return;
         }
         ItemStack gear = p.getItemInHand(hand);
-        if (!full || !RuneGear.isGear(gear) || !RuneGear.hasRunes(gear) || p.containerMenu instanceof RuneEditorMenu) return;
-        if (!inHandLongEnough(p, c, hand, gear, now)) return;
-        cast(p, c, hand, gear, now, arrow);
+        if (!RuneGear.isGear(gear) || !RuneGear.hasRunes(gear)) return;
+        int id = RuneGear.ensureGearId(gear, p.getRandom());
+        if (full && !(p.containerMenu instanceof RuneEditorMenu) && inHandLongEnough(p, c, hand, gear, now)) cast(p, c, hand, gear, now, arrow);
+        // marked once the cast has made its copies, so only the arrow itself fills the gear
+        arrow.getPersistentData().putInt(GEAR_TAG, id);
     }
 
     // ------------------------------------------------------------------------------------------------ casting
@@ -194,7 +200,7 @@ public final class CastService {
         return Result.CAST;
     }
 
-    /** The cast leaves the hand: the arm flicks, a spell sound, a puff of the first rune's colour at the hand. */
+    /** The cast leaves the hand: the arm flicks, a spell sound, a flash and sparks of the first rune's colour at the hand. */
     private static void castFx(ServerPlayer p, InteractionHand hand, Plan plan) {
         if (plan.roots.isEmpty()) return;
         Act first = plan.roots.get(0).act;
@@ -203,11 +209,10 @@ public final class CastService {
         boolean right = (hand == InteractionHand.MAIN_HAND) == (p.getMainArm() == HumanoidArm.RIGHT);
         Vec3 side = Origin.flat(new Vec3(-look.z, 0, look.x)).scale(right ? 0.45 : -0.45);
         Vec3 at = p.getEyePosition().add(look.scale(0.9)).add(side).add(0, -0.45, 0);
-        RuneFx.puff(p.serverLevel(), at, first.rune, first.element, 3, 0.06);
-        if (first.rune.shape == Shape.BOLT || first.rune == RuneId.REEL) {
-            RuneFx.play(p.serverLevel(), at, SoundEvents.ILLUSIONER_CAST_SPELL, 0.45F, 1.5F + p.getRandom().nextFloat() * 0.3F);
-        }
-        p.swing(hand, true);
+        RuneFx.cast(p.serverLevel(), at, look, first.rune, first.element, first.rune.shape == Shape.BOLT || first.rune == RuneId.REEL, p.getId(), hand);
+        // others see the arm flick from here; the caster's own game flicks it on the cast's effect, since a swing sent to
+        // the caster comes back as one of theirs, and the server would take it for a swing and spend their attack charge
+        p.swing(hand, false);
     }
 
     private static void sputter(ServerPlayer p, Caster c, long now, CastMachine.Outcome o) {
@@ -235,41 +240,33 @@ public final class CastService {
         return id != 0 && h.id == id && h.slot == slot && now - h.since >= swap;
     }
 
-    // ------------------------------------------------------------------------------------------------ the sword's charge
+    // ------------------------------------------------------------------------------------------------ hits fill gear
 
-    /** The player swings at {@code target}: noted, so the damage that follows knows whether it was a full-strength hit. */
-    public static void swing(ServerPlayer p, Entity target) {
+    /** Melee damage landed: a runed sword's hit on a creature fighting you knocks energy loose into the sword. */
+    public static void meleeDamage(ServerPlayer p, LivingEntity target, float amount) {
         if (p instanceof FakePlayer) return;
-        Caster c = caster(p);
-        LivingEntity body = RuneHits.body(target);
-        c.swingTarget = body == null ? -1 : body.getId();
-        c.swingTick = p.level().getGameTime();
-        c.swingFull = p.getAttackStrengthScale(0.5F) >= 0.9F;
+        ItemStack gear = p.getMainHandItem();
+        if (RuneGear.host(gear) != Host.SWORD || !RuneGear.hasRunes(gear)) return;
+        knockLoose(p, target, amount, RuneGear.ensureGearId(gear, p.getRandom()));
     }
 
-    /** Melee damage landed: a full-strength hit with a runed sword on a creature fighting you charges the sword. */
-    public static void meleeDamage(ServerPlayer p, LivingEntity target, float amount) {
-        Caster c = CASTERS.get(p.getUUID());
-        if (c == null || amount <= 0.0F || p instanceof FakePlayer) return;
-        long now = p.level().getGameTime();
-        if (c.swingTarget != target.getId() || c.swingTick != now || !c.swingFull) return;
-        c.swingTarget = -1;
-        ItemStack gear = p.getMainHandItem();
-        if (RuneGear.host(gear) != Host.SWORD || !RuneGear.hasRunes(gear) || !RuneHits.isFoe(p, target)) return;
-        HostSpec spec = RuneGear.spec(gear);
-        if (spec == null) return;
-        // no more than the creature had left (still its health before this hit): overkill on a weak one charges nothing extra
+    /** An arrow's own hit landed: if runed gear loosed it, the hit knocks energy loose into that gear. */
+    public static void arrowDamage(ServerPlayer p, AbstractArrow arrow, LivingEntity target, float amount) {
+        if (p instanceof FakePlayer) return;
+        knockLoose(p, target, amount, arrow.getPersistentData().getInt(GEAR_TAG));
+    }
+
+    /**
+     * A hit for {@code amount} with the gear {@code gearId} on {@code target}: if it is fighting the player, energy for
+     * the damage it took flies back as motes. No more than the creature had left counts (still its health before this
+     * hit), so overkill on a weak one gives nothing extra.
+     */
+    private static void knockLoose(ServerPlayer p, LivingEntity target, float amount, int gearId) {
+        if (gearId == 0 || amount <= 0.0F || !RuneHits.isFoe(p, target)) return;
         float dealt = Math.min(amount, target.getHealth());
-        float add = (float) Math.min(RuneConfig.get(RuneConfig.INSTANCE.swordChargeMaxPerHit), dealt * RuneConfig.get(RuneConfig.INSTANCE.swordChargePerDamage));
-        CastState s = RuneGear.state(gear, spec, now);
-        float got = CastMachine.add(s, spec, now, add);
-        if (got <= 0.0F) return;
-        RuneGear.ensureGearId(gear, p.getRandom());
-        RuneGear.setState(gear, s);
-        float fill = s.energy / Math.max(1.0F, spec.maxEnergy());
-        p.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.7F, 0.7F + fill);
-        Vec3 at = target.position().add(0, target.getBbHeight() * 0.6, 0);
-        p.serverLevel().sendParticles(RuneFx.dust(0xFFFFFF, 0.7F), at.x, at.y, at.z, 5, 0.25, 0.25, 0.25, 0.0);
+        float energy = (float) Math.min(RuneConfig.get(RuneConfig.INSTANCE.energyMaxPerHit), dealt * RuneConfig.get(RuneConfig.INSTANCE.energyPerDamage));
+        if (energy <= 0.0F) return;
+        RuneMote.spawn(p.serverLevel(), target.position().add(0, target.getBbHeight() * 0.6, 0), p, gearId, energy);
     }
 
     // ------------------------------------------------------------------------------------------------ ticks
@@ -345,15 +342,8 @@ public final class CastService {
     }
 
     private static void trackHands(ServerPlayer p, Caster c, long now) {
-        int beforeMain = c.main.id, beforeOff = c.off.id;
-        int main = handGear(p, InteractionHand.MAIN_HAND), off = handGear(p, InteractionHand.OFF_HAND);
-        // gear put away stops regaining energy; gear taken up starts
-        if (beforeMain != 0 && beforeMain != main && beforeMain != off) putAway(p, beforeMain, now);
-        if (beforeOff != 0 && beforeOff != main && beforeOff != off && beforeOff != beforeMain) putAway(p, beforeOff, now);
-        if (main != 0 && main != beforeMain && main != beforeOff) takeUp(p.getMainHandItem(), now);
-        if (off != 0 && off != beforeMain && off != beforeOff && off != main) takeUp(p.getOffhandItem(), now);
-        update(c.main, main, p.getInventory().selected, now);
-        update(c.off, off, 40, now);
+        update(c.main, handGear(p, InteractionHand.MAIN_HAND), p.getInventory().selected, now);
+        update(c.off, handGear(p, InteractionHand.OFF_HAND), 40, now);
     }
 
     private static int handGear(ServerPlayer p, InteractionHand hand) {
@@ -368,27 +358,6 @@ public final class CastService {
             h.slot = slot;
             h.since = now;
         }
-    }
-
-    /** Taken in hand: a bow starts regaining energy. Anything it says about regaining while it was away is stale. */
-    private static void takeUp(ItemStack gear, long now) {
-        HostSpec spec = RuneGear.spec(gear);
-        if (spec == null || spec.regenPerTick() <= 0) return;
-        CastState s = RuneGear.state(gear, spec, now);
-        s.regenSince = -1;
-        CastMachine.setHeld(s, spec, now, true);
-        RuneGear.setState(gear, s);
-    }
-
-    /** Put away: a bow stops regaining energy (if the player still has it; if not, it is stale and dropped later). */
-    private static void putAway(ServerPlayer p, int id, long now) {
-        ItemStack gear = RuneGear.findGear(p, id);
-        if (gear == null) return;
-        HostSpec spec = RuneGear.spec(gear);
-        if (spec == null || spec.regenPerTick() <= 0) return;
-        CastState s = RuneGear.state(gear, spec, now);
-        CastMachine.setHeld(s, spec, now, false);
-        RuneGear.setState(gear, s);
     }
 
     private static void depth(ServerPlayer p) {
