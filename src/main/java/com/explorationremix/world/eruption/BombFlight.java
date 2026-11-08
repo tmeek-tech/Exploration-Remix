@@ -41,6 +41,12 @@ public final class BombFlight {
     public static final double CLEAR_ROWS = 3, CLEAR = 1.5;
     /** Times the target moves out for the clearance before the bomb is given up. */
     public static final int CLEAR_TRIES = 10;
+    /**
+     * How far across from a vent's axis an eruption's bombs come down at most: the ring's edge, the clearance's moves
+     * outward, and a block for the blast's centre (the square of this reach round the vent is where its blasts ask for a
+     * way down).
+     */
+    public static final double REACH = RING_MAX + CLEAR_TRIES + 2;
     /** Draws of a near bomb's target before it is a ring bomb. */
     public static final int NEAR_DRAWS = 6;
     /** A player farther than this across from the vent takes no near bomb. */

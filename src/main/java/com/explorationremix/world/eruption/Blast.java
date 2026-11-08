@@ -189,6 +189,8 @@ public final class Blast {
                 continue;
             }
             BlockState s = ch.getBlockState(p);
+            // most of the list is the air the rays crossed, which is the game's (it skips air): no need to read its bits
+            if (s.isAir()) continue;
             int part = Crater.part(bits(ch, p, s), true);
             if (part == Crater.VANILLA) continue;
             it.remove();

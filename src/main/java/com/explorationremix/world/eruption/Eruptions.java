@@ -4,6 +4,7 @@ import com.explorationremix.config.ERConfig;
 import com.explorationremix.entity.LavaBomb;
 import com.explorationremix.registry.EREntities;
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.feature.Walkway;
 import com.explorationremix.world.lava.Falling;
 import com.explorationremix.world.lava.LavaCycle;
 import com.explorationremix.world.lava.LavaFlood;
@@ -17,6 +18,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.minecraft.Util;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
@@ -384,6 +386,7 @@ public final class Eruptions {
         Eruption e = new Eruption(nextId++, c, v, at, now, EruptionSchedule.pre(s), sched.drawBurst(s), strength,
                 EruptionSchedule.scale(phase, s.risingScale()), seed, ERConfig.INSTANCE.eruptionHeardRange.get());
         e.plan = BombFlight.launches((int) Math.round(ERConfig.INSTANCE.eruptionBombs.get() * strength), e.burst, e.random);
+        if (e.plan.length > 0) warmWays(at);
         RUNNING.add(e);
         c.last = e;
         sched.started(c.clock, now, s);
@@ -393,6 +396,34 @@ public final class Eruptions {
             send(p, e.message());
         }
         return e;
+    }
+
+    /**
+     * Reads the ways down round the vent {@code at} on a worker thread, while the eruption warns. Each bomb's blast asks
+     * whether a way down is near ({@link Blast}'s way guard), and the first such question round a place in a server's
+     * run makes the field find the holes' openings for the lattice cells about it, which costs about a tenth of a second
+     * (measured: 70 to 150 ms cold); the field keeps them in caches every thread shares, so asking here, off the server's
+     * thread, at the four corners of the square its bombs come down in ({@link BombFlight#REACH}), leaves the bursts only
+     * the cheap look-up (well under a millisecond). Pure in the seed: the answers are not used, and a failure only means
+     * the first burst pays as before.
+     */
+    private static void warmWays(Vents.Read at) {
+        int x = at.x(), z = at.z(), y = at.top(), d = (int) Math.ceil(BombFlight.REACH);
+        try {
+            Util.backgroundExecutor().execute(() -> {
+                try {
+                    for (int sx = -1; sx <= 1; sx += 2) {
+                        for (int sz = -1; sz <= 1; sz += 2) {
+                            Walkway.nearWayDown(x + sx * d, z + sz * d, y - Blast.WAY_ROWS, y + Blast.WAY_ROWS, Blast.WAY_MARGIN, Blast.WAY_MARGIN);
+                        }
+                    }
+                } catch (RuntimeException ignored) {
+                    // the bursts ask again on the server's thread
+                }
+            });
+        } catch (RuntimeException ignored) {
+            // the executor is shutting down with the server
+        }
     }
 
     /**
@@ -466,6 +497,9 @@ public final class Eruptions {
         if (Double.isNaN(a)) return;
         double ang = r.nextDouble() * Math.PI * 2, off = 0.6 * v.r * Math.sqrt(r.nextDouble());
         double ox = off * Math.cos(ang), oz = off * Math.sin(ang);
+        // the launch point itself must be on entity-ticking ground too: up to 1.8 blocks off the axis it can lie in the
+        // next chunk, and a bomb added there would never fly (the sweep would fizzle it at the mouth)
+        if (!level.isPositionEntityTicking(BlockPos.containing(vx + ox, launchY, vz + oz))) return;
         double clearY = at.mouthY() + BombFlight.CLEAR_ROWS - launchY;
         int mouth = at.mouthY(), orElse = band.tableY() + 9;
         // the ground under a target: the first cell down from the mouth's row that is not open or holds lava, its top
@@ -749,11 +783,12 @@ public final class Eruptions {
             Caldera cd = CALDERAS.get(en.getKey());
             int reach = 0;
             for (Net.Vent v : en.getValue()) if (dist(v, here) <= range) reach++;
-            String next = cd == null ? "nobody near enough to wake it"
-                    : busy(cd, now) ? "now" : cd.clock.nextAt() == EruptionSchedule.NEVER ? "none due" : time(cd.clock.nextAt() - now);
+            String next = cd == null ? "asleep, with nobody near enough to wake it"
+                    : busy(cd, now) ? "erupting now" : cd.clock.nextAt() == EruptionSchedule.NEVER ? "no eruption due"
+                    : "the next eruption in " + time(cd.clock.nextAt() - now);
             Eruption l = cd == null ? null : cd.last;
-            say(c, String.format(Locale.ROOT, "  Caldera %d (%d vents, %d within reach): the next eruption in %s; %s", en.getKey(), en.getValue().size(),
-                    reach, next, l == null ? "none yet" : lastLine(l, now)));
+            say(c, String.format(Locale.ROOT, "  Caldera %d (%d vents, %d within reach): %s; %s", en.getKey(), en.getValue().size(),
+                    reach, next, l == null ? "no eruption yet" : lastLine(l, now)));
             List<Net.Vent> vs = new ArrayList<>(en.getValue());
             vs.sort(Comparator.comparingDouble(v -> dist(v, here)));
             StringBuilder b = new StringBuilder("  vents:");
