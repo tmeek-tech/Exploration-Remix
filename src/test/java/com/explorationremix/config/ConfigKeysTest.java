@@ -54,7 +54,7 @@ class ConfigKeysTest {
         want.put("quakes.tremors", true);
         want.put("quakes.tremorMinSeconds", 30.0);
         want.put("quakes.tremorMaxSeconds", 60.0);
-        want.put("quakes.climbTremors", true);
+        want.put("quakes.climbTremors", false); // Taran's answer (2026-11-07): timed tremors only
         want.put("quakes.topple", true);
         want.put("quakes.supportDepth", 2);
         want.put("quakes.toppleAtOnce", false);

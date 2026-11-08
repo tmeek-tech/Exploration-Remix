@@ -143,10 +143,10 @@ public final class ERConfig {
         b.pop();
 
         b.comment("Earthquakes in the Basalt Galleries: big quakes every few minutes shake the view and drop rock from the ceilings round",
-                "the players there; light tremors between them, and one wherever someone builds up. All of them make blocks players placed",
-                "fall unless natural rock is at most supportDepth blocks under them (pillars, towers, ladders and bridges fall; steps and",
-                "low walls stay); under the lava such blocks melt back into it. Rock that falls, and anything that toppled, goes back with",
-                "the terrain reset. Read while the server runs.").push("quakes");
+                "the players there; light tremors between them (and, with climbTremors, one wherever someone builds up). All of them make",
+                "blocks players placed fall unless natural rock is at most supportDepth blocks under them (pillars, towers, ladders and",
+                "bridges fall; steps and low walls stay); under the lava such blocks melt back into it. Rock that falls, and anything that",
+                "toppled, goes back with the terrain reset. Read while the server runs.").push("quakes");
         quakesEnabled = b.comment("Have quakes and tremors.").define("enabled", true);
         quakeTremors = b.comment("Light tremors between the big quakes: a short shiver and a little dust that topple placed blocks; no rock falls",
                 "from the ceilings.").define("tremors", true);
@@ -154,7 +154,8 @@ public final class ERConfig {
         quakeTremorMaxSeconds = b.comment("Longest time between two tremors (less than tremorMinSeconds counts as it).")
                 .defineInRange("tremorMaxSeconds", 60.0, 5.0, 600.0);
         quakeClimbTremors = b.comment("The ground answers a climb: a block placed more than supportDepth over rock brings a tremor round it 1.5 to 3",
-                "seconds later (at most once in 5 seconds for each player).").define("climbTremors", true);
+                "seconds later (at most once in 5 seconds for each player). Off by default: Taran chose timed tremors only.")
+                .define("climbTremors", false);
         quakeMinMinutes = b.comment("Shortest time between two big quakes, in minutes.").defineInRange("minMinutes", 3.0, 0.25, 240.0);
         quakeMaxMinutes = b.comment("Longest time between two big quakes (less than minMinutes counts as it).").defineInRange("maxMinutes", 7.0, 0.25, 240.0);
         quakeSeconds = b.comment("How long a big quake lasts (each a quarter more or less).").defineInRange("seconds", 10.0, 2.0, 60.0);
