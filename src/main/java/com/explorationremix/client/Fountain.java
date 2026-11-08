@@ -3,8 +3,8 @@ package com.explorationremix.client;
 /**
  * The numbers of an eruption as each client plays it (0.9.0, spec 5.5), kept apart from Minecraft so a test can follow
  * them, as {@link Shake} and {@link SmokePuff} are: how hard the fountain throws at each moment of the burst, how the
- * roar swells and dies, how loud the boom and the roar are from afar, how a lava bomb's whistle rises and falls, and how
- * the far particles are thinned and grown. Time is in ticks into the burst (the server's game time against the
+ * roar swells and dies, how loud the boom and the roar are from afar, when the vent's rumble may still start, how a lava
+ * bomb's whistle rises and falls, and how the far particles are thinned and grown. Time is in ticks into the burst (the server's game time against the
  * eruption's start, or the held moment), so a slow client and a held eruption play the same moment as the server.
  */
 final class Fountain {
@@ -43,6 +43,19 @@ final class Fountain {
     static final int PLUME_TAIL = 200;
     /** A lava bomb's burst nearer the player than this jolts the view, at most this many degrees. */
     static final double BOMB_JOLT_REACH = 32, BOMB_JOLT = 0.4;
+    /** The vent's rumble starts only with at least this many ticks of the warning still to come (or half of a shorter one). */
+    static final int RUMBLE_LEFT = 20;
+
+    /**
+     * Whether the vent's rumble may still start {@code t} ticks into an eruption that warns for {@code pre} ticks: with
+     * at least {@link #RUMBLE_LEFT} ticks of the warning to come, or, for a warning shorter than twice that (warnSeconds
+     * under 2), half of it, so a short warning still rumbles when it is heard from its start. Never once the burst has
+     * begun, and never with no warning at all.
+     */
+    static boolean rumbleInTime(double t, int pre) {
+        double left = pre - t;
+        return left > 0 && left >= Math.min(RUMBLE_LEFT, pre / 2.0);
+    }
 
     /**
      * How hard the fountain throws {@code t} ticks into a burst of {@code burst} ticks, 0 to 1: in full for its first

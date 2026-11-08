@@ -180,7 +180,10 @@ public final class CaveParticles {
         @Override
         public void tick() {
             super.tick();
-            if (removed || !onGround) return;
+            // the game's particle stops dead for good once something stops it up or down, and only one stopped by the
+            // ground is onGround: a gob thrown into the rock overhead stays stuck there, so it cools there too
+            boolean stuck = x == xo && y == yo && z == zo;
+            if (removed || !onGround && !stuck) return;
             // cooling where it landed: smaller and redder, never fainter
             this.quadSize *= COOL_SIZE;
             this.gCol *= COOL_COLOUR;

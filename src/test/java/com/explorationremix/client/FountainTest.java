@@ -10,7 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * between 0.6 and 1 the same way on every client and every frame of a held moment, and dies away over its last 30
  * ticks; its spatter climbs 10 to 27 blocks under its own physics (15 to 40 for a woken eruption); the roar swells and
  * dies with it; the boom and the roar keep a floor of loudness to the eruption's range; far particles thin with the
- * Particles option and the distance and the spatter grows; a bomb's jolt and whistle follow their rules.
+ * Particles option and the distance and the spatter grows; the vent's rumble starts only in time, a short warning's too;
+ * a bomb's jolt and whistle follow their rules.
  */
 class FountainTest {
     private static final long[] SEEDS = {0, 1, 7, -42, 8675309, Long.MIN_VALUE, Long.MAX_VALUE};
@@ -110,6 +111,22 @@ class FountainTest {
         int n = 0;
         for (int i = 0; i < 1000; i++) n += Fountain.count(0.25, (i + 0.5) / 1000);
         assertEquals(250, n, "on average the share asked for");
+    }
+
+    @Test
+    void theVentRumblesWhenItsWarningIsHeardInTime() {
+        // the default warning (4 s): only with 20 ticks or more of it to come
+        assertTrue(Fountain.rumbleInTime(0, 80));
+        assertTrue(Fountain.rumbleInTime(60, 80));
+        assertTrue(!Fountain.rumbleInTime(60.5, 80), "too late with under 20 ticks left");
+        assertTrue(!Fountain.rumbleInTime(80, 80), "never once the burst has begun");
+        // a short warning (warnSeconds 1, 0.5, 0.1) still rumbles when it is heard from its start, with half of it to come
+        for (int pre : new int[]{20, 10, 2}) {
+            assertTrue(Fountain.rumbleInTime(0, pre), "a warning of " + pre + " ticks heard from its start");
+            assertTrue(Fountain.rumbleInTime(1, pre) == (pre - 1 >= pre / 2.0), "a warning of " + pre + " ticks, one tick in");
+            assertTrue(!Fountain.rumbleInTime(pre, pre));
+        }
+        assertTrue(!Fountain.rumbleInTime(0, 0), "no warning, no rumble");
     }
 
     @Test

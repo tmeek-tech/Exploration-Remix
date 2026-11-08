@@ -58,8 +58,6 @@ import java.util.PriorityQueue;
 public final class EruptionEffects {
     private EruptionEffects() {}
 
-    /** The vent's rumble is played to a client that has at least this many ticks of the warning still to come. */
-    static final int RUMBLE_LEFT = 20;
     /** The boom is played to a client that sees the burst start, or comes within this many ticks of its start. */
     static final int BOOM_LATE = 20;
     /** The rumble's volume: heard 96 blocks off. */
@@ -204,10 +202,11 @@ public final class EruptionEffects {
     /** The eruption's sounds at {@code t} ticks into it, heard {@code d} blocks from the vent: the rumble, the boom, the roar. */
     private static void sounds(Minecraft mc, ClientLevel level, Vent v, double t, double d) {
         RandomSource random = level.random;
-        if (!v.rumbled) {
-            if (t < 0 || v.pre - t < RUMBLE_LEFT) {
-                // too late for it (or not yet begun on this clock): the warning goes unheard
-                if (t >= 0) v.rumbled = true;
+        // not yet begun on this clock: the rumble waits for it
+        if (!v.rumbled && t >= 0) {
+            if (!Fountain.rumbleInTime(t, v.pre)) {
+                // too late for it: the warning goes unheard
+                v.rumbled = true;
             } else if (v.held < 0 && spend(level)) {
                 v.rumbled = true;
                 level.playLocalSound(v.x, v.mouthY + 0.5, v.z, ERSounds.ERUPTION_RUMBLE.get(), SoundSource.BLOCKS, RUMBLE_VOLUME,
@@ -232,8 +231,9 @@ public final class EruptionEffects {
             return;
         }
         float volume = d > v.range ? 0 : (float) (Fountain.roarEnvelope(tb, v.burst) * Fountain.roarVolume(d, v.range));
-        // a roar the sound engine dropped (a reload, a device change) is started again
-        if (v.roar != null && (v.roar.isStopped() || ticks % 20 == 0 && !mc.getSoundManager().isActive(v.roar))) v.roar = null;
+        // a roar the sound engine dropped (a reload, a device change) is started again; the old one is stopped first, so
+        // one the engine still plays under another instance (a mod may swap it as it starts) is never doubled
+        if (v.roar != null && (v.roar.isStopped() || ticks % 20 == 0 && !mc.getSoundManager().isActive(v.roar))) v.silence();
         if (v.roar == null) {
             v.roar = new Roar(v.x, v.mouthY + 0.5, v.z, volume);
             mc.getSoundManager().play(v.roar);

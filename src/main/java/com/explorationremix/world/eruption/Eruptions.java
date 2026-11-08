@@ -144,7 +144,7 @@ public final class Eruptions {
     /** The rocks thrown by the craters of bombs a command dropped, while they are in the air (held with the drops). */
     private static final Set<FallingBlockEntity> DROP_ROCKS = Collections.newSetFromMap(new IdentityHashMap<>());
     private static int nextId = 1;
-    /** The eruption whose burst last cost the server anything, for the status's cost figures, or null. */
+    /** The latest eruption whose burst has cost the server anything, for the status's cost figures, or null. */
     @Nullable private static Eruption lastCosted;
     /** The lava's phase as of the last tick (-1 before the first). */
     private static int lastPhase = -1;
@@ -195,13 +195,10 @@ public final class Eruptions {
         int[] plan = new int[0];
         int next;
         /**
-         * What its burst costs the server (spec 5.6, 5.7), in nanoseconds: the game tick being counted and what it has
-         * cost so far, then the ticks counted before it, their sum and the most any one of them cost. A tick counts when
-         * the eruption launches or burns in it (every tick of its burst it is not held) or one of its bombs flies or
-         * bursts in it.
+         * What its burst costs the server (spec 5.6, 5.7). A tick counts when the eruption launches or burns in it (every
+         * tick of its burst it is not held) or one of its bombs flies or bursts in it.
          */
-        long costTick = -1, costNow, costAll, costMost;
-        int costTicks;
+        final BurstCost cost = new BurstCost();
 
         Eruption(int id, Caldera caldera, Net.Vent vent, Vents.Read at, long start, int pre, int burst, float strength, float scale,
                  long seed, int range) {
@@ -239,25 +236,15 @@ public final class Eruptions {
                     strength, scale, seed, held, range);
         }
 
-        /** Counts {@code nanos} of the server's time in game tick {@code now} against its burst. */
+        /**
+         * Counts {@code nanos} of the server's time in game tick {@code now} against its burst. The status's "last burst"
+         * is the latest eruption whose burst has cost anything (ids grow with each start), so two bursts at once, or the
+         * last bombs of an older one, do not take turns there.
+         */
         void cost(long now, long nanos) {
-            if (now != costTick) {
-                if (costTick >= 0) {
-                    costAll += costNow;
-                    costMost = Math.max(costMost, costNow);
-                    costTicks++;
-                }
-                costTick = now;
-                costNow = 0;
-            }
-            costNow += nanos;
-            lastCosted = this;
+            cost.add(now, nanos);
+            if (lastCosted == null || id >= lastCosted.id) lastCosted = this;
         }
-
-        /** Its burst's cost so far, in milliseconds: the mean over the ticks counted, and the most in one of them. */
-        double meanMs() { return (costAll + costNow) / 1.0e6 / Math.max(1, costTicks + (costTick >= 0 ? 1 : 0)); }
-
-        double mostMs() { return Math.max(costMost, costNow) / 1.0e6; }
 
         /** True for a player within its range of the mouth. */
         boolean reaches(ServerPlayer p) {
@@ -846,7 +833,7 @@ public final class Eruptions {
         Eruption lc = lastCosted;
         say(c, lc == null ? String.format(Locale.ROOT, "  bombs in flight: %d; no burst yet", BOMBS.size())
                 : String.format(Locale.ROOT, "  bombs in flight: %d; the last burst cost %.2f ms a tick (at most %.2f)", BOMBS.size(),
-                lc.meanMs(), lc.mostMs()));
+                lc.cost.meanMs(), lc.cost.mostMs()));
         return 1;
     }
 
