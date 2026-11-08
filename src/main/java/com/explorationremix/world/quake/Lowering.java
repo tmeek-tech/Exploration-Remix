@@ -123,7 +123,7 @@ final class Lowering {
         if (!Support.lowersOn(Topple.fallsNow(w.level, t, w.depth), true, j.steps)) return false;
         int mode = Support.lowering(Topple.kindAt(w.level, t.below()), w.lowerTicks);
         if (mode == Support.SINKS) {
-            int r = Topple.take(w, t, -1, false, Support.sideStart(Topple.columnStart(j.player.hashCode(), j.x, j.z), j.steps), j.spawned);
+            int r = Topple.take(w, t, false, Support.sideStart(Topple.columnStart(j.player.hashCode(), j.x, j.z), j.steps), j.spawned);
             if (r != Topple.LEFT) w.taken++;
             Topple.count(j.event, r, true);
             j.steps++;
@@ -145,7 +145,7 @@ final class Lowering {
         int start = Topple.columnStart(j.player.hashCode(), j.x, j.z);
         while (!going.isEmpty() && w.budget()) {
             BlockPos p = BlockPos.of(going.removeLong(0));
-            int r = Topple.take(w, p, -1, j.out, Support.sideStart(start, j.steps++), j.spawned);
+            int r = Topple.take(w, p, j.out, Support.sideStart(start, j.steps++), j.spawned);
             if (r != Topple.LEFT) w.taken++;
             Topple.count(j.event, r, true);
         }

@@ -170,13 +170,14 @@ public final class Support {
 
     /**
      * How a block that falls by {@link #FALL} comes down: straight down when what is under it is open (or a poured
-     * source) and no player is in the column under it; off its stump to a side when it rests on a placed or climbing
-     * block (a falling block that starts on a block lands back in its own cell) and a side is free; taken out otherwise,
-     * and always when it cannot fall as an entity.
+     * source) and nothing blocks the column under it ({@code blockedUnder}: a player in it, or lava in it, which the
+     * block would sink through to lie on the floor under the lava); off its stump to a side when it rests on a placed or
+     * climbing block (a falling block that starts on a block lands back in its own cell) and a side is free; taken out
+     * otherwise, and always when it cannot fall as an entity.
      */
-    public static int fallWay(boolean canFall, int below1, boolean playerUnder, boolean sideFree) {
+    public static int fallWay(boolean canFall, int below1, boolean blockedUnder, boolean sideFree) {
         if (!canFall) return OUT;
-        if (below1 == OPEN || below1 == FLUID) return playerUnder ? OUT : DOWN;
+        if (below1 == OPEN || below1 == FLUID) return blockedUnder ? OUT : DOWN;
         return sideFree ? SIDE : OUT;
     }
 
@@ -215,12 +216,29 @@ public final class Support {
 
     /**
      * True when the block beside a toppling one can take it: in a loaded chunk where entities tick, air or the glow, with
-     * no fluid on its four sides or over it, not in a column a player's box is within half a block of, and not a column
-     * another block of this pass was dropped into.
+     * no fluid on its four sides or over it (the toppling block itself not counted: it is about to be air), no lava in
+     * the column under it down to where the block would land (it would sink through and lie on the floor under the lava,
+     * there when the sea drains), not in a column a player's box is within half a block of, and not a column another
+     * block of this pass was dropped into. For a waterlogged block, its own leak (flowing water, no source) counts as
+     * neither a fluid nor a block in the way ({@link #ownLeak}).
      */
-    public static boolean sideAllowed(boolean ticking, boolean open, boolean fluidNear, boolean playerColumn, boolean taken) {
-        return ticking && open && !fluidNear && !playerColumn && !taken;
+    public static boolean sideAllowed(boolean ticking, boolean open, boolean fluidNear, boolean lavaUnder, boolean playerColumn, boolean taken) {
+        return ticking && open && !fluidNear && !lavaUnder && !playerColumn && !taken;
     }
+
+    /**
+     * True for a fluid a waterlogged block's fall may meet beside it: flowing water, no source. It is the block's own
+     * leak (its water runs out over its sides), which recedes once the block goes (the write wakes it,
+     * {@link #wakesWater}); without this a waterlogged block could never fall to a side, its own water being on every one.
+     */
+    public static boolean ownLeak(boolean wet, boolean water, boolean source) { return wet && water && !source; }
+
+    /**
+     * True when a quiet write at a toppled block must still wake the water beside it: the block carried water (it was
+     * waterlogged) and no lava touches it. Its leak, flowing down the build's sides, would otherwise stand with no source
+     * (still climbable) until something next to it updates. Only the flowing water is woken, never a source or lava.
+     */
+    public static boolean wakesWater(boolean carriedWater, boolean lavaNear) { return carriedWater && !lavaNear; }
 
     /**
      * The side a block tumbles to: the four sides tried from {@code start} round, the first that is allowed and has free

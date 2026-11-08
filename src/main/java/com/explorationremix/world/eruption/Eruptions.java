@@ -501,9 +501,12 @@ public final class Eruptions {
 
     /**
      * Throws one bomb of eruption {@code e} (spec 5.4.2): a near bomb when {@code near} and an actor can take one, else a
-     * ring bomb, its target drawn again up to 4 times while it is not on entity-ticking ground or its flight does not
-     * clear the stack. Not thrown when the vent is not on entity-ticking ground, the room over its mouth is too low for
-     * the apex, or no target is found. It goes from within {@code 0.6 r} of the axis, half a block over the start row,
+     * ring bomb, its target drawn again up to {@link BombFlight#RING_DRAWS} times in all while it is not on entity-ticking
+     * ground, its flight does not clear the stack, it would come down within {@code nearMaxBlocks} of someone on a refuge,
+     * or its flight, flown through the world, would hit the rock hanging over the vent (or a fluid there) before it comes
+     * back down past the mouth; such a target is tried at lower apexes first ({@link BombFlight#aimUnder}). Not thrown
+     * when the vent is not on entity-ticking ground, the room over its mouth is too low for the apex, or no target is
+     * found. It goes from within {@code 0.6 r} of the axis, half a block over the start row,
      * with its motion set before it is added, so the packet that brings it to the clients carries it.
      */
     private static void throwBomb(ServerLevel level, LavaFlood.Band band, Eruption e, List<ServerPlayer> actors, boolean near, ERConfig cfg) {
@@ -524,23 +527,30 @@ public final class Eruptions {
         // the ground under a target: the first cell down from the mouth's row that is not open or holds lava, its top
         BombFlight.Drop drop = (tx, tz) -> launchY - (Vents.ground(level, Mth.floor(vx + tx), Mth.floor(vz + tz), mouth, orElse) + 1);
         BombFlight.Ticking ticking = (tx, tz) -> level.isPositionEntityTicking(BlockPos.containing(vx + tx, mouth, vz + tz));
+        int lo = cfg.eruptionNearMinBlocks.get(), hi = Math.max(lo, cfg.eruptionNearMaxBlocks.get());
+        // a flight is thrown only when it clears the rock hanging over the vent (flown through the world up to where it
+        // comes back down past the mouth: the room straight up the axis does not see rock off it) and does not come down
+        // within nearMaxBlocks of someone on a refuge, whose ground a blast must not blow away
+        List<double[]> refuges = refuges(level, v, actors, hi);
+        BombFlight.Grid grid = Vents.grid(level);
+        double over = mouth + 1 - launchY;
+        BombFlight.Accept accept = g -> !nearAny(refuges, vx + g.tx(), vz + g.tz(), hi)
+                && BombFlight.clearsOver(grid, vx + ox, launchY, vz + oz, g, over, mouth);
         BombFlight.Flight f = null;
         boolean wasNear = false;
         if (near) {
             List<ServerPlayer> eligible = eligible(level, v, actors);
             if (!eligible.isEmpty()) {
                 ServerPlayer p = eligible.get(r.nextInt(eligible.size()));
-                int lo = cfg.eruptionNearMinBlocks.get(), hi = Math.max(lo, cfg.eruptionNearMaxBlocks.get());
-                f = BombFlight.near(ox, oz, p.getX() - vx, p.getZ() - vz, lo, hi, v.stackR, drop, ticking, a, clearY, r);
+                f = BombFlight.near(ox, oz, p.getX() - vx, p.getZ() - vz, lo, hi, v.stackR, drop, ticking, a, clearY, r, accept);
                 wasNear = f != null;
             }
         }
         for (int i = 0; f == null && i < BombFlight.RING_DRAWS; i++) {
             double ta = r.nextDouble() * Math.PI * 2, d = BombFlight.ringDistance(v.stackR, r.nextDouble());
             double tx = d * Math.cos(ta), tz = d * Math.sin(ta);
-            if (!ticking.at(tx, tz)) continue;
-            BombFlight.Flight g = BombFlight.aim(ox, oz, tx, tz, drop, a, v.stackR, clearY);
-            if (g != null && ticking.at(g.tx(), g.tz())) f = g;
+            if (!ticking.at(tx, tz) || nearAny(refuges, vx + tx, vz + tz, hi)) continue;
+            f = BombFlight.aimUnder(ox, oz, tx, tz, drop, a, v.stackR, clearY, g -> ticking.at(g.tx(), g.tz()) && accept.test(g));
         }
         if (f == null) return;
         LavaBomb b = EREntities.LAVA_BOMB.get().create(level);
@@ -567,6 +577,31 @@ public final class Eruptions {
             if (!Vents.refuge(level, p.blockPosition())) out.add(p);
         }
         return out;
+    }
+
+    /**
+     * Where the actors who stand on a refuge ({@link Vents#refuge}: a stack top, a ledge, a strip of shore by the lava)
+     * within the ring's reach of the vent have their feet, {x, z}: no bomb comes down within {@code nearMaxBlocks} of
+     * them, ring bombs included (a ring bomb's crater on a stack top could blow the ground from under them).
+     */
+    private static List<double[]> refuges(ServerLevel level, Net.Vent v, List<ServerPlayer> actors, int nearMax) {
+        List<double[]> out = new ArrayList<>();
+        double reach = BombFlight.REACH + nearMax;
+        for (ServerPlayer p : actors) {
+            double dx = p.getX() - v.x, dz = p.getZ() - v.z;
+            if (dx * dx + dz * dz > reach * reach || p.level() != level || !p.isAlive()) continue;
+            if (Vents.refuge(level, p.blockPosition())) out.add(new double[]{p.getX(), p.getZ()});
+        }
+        return out;
+    }
+
+    /** True when (x, z) lies within {@code d} blocks across of one of {@code at}. */
+    private static boolean nearAny(List<double[]> at, double x, double z, double d) {
+        for (double[] p : at) {
+            double dx = x - p[0], dz = z - p[1];
+            if (dx * dx + dz * dz <= d * d) return true;
+        }
+        return false;
     }
 
     /** Every tick: bombs gone are forgotten, and one no longer on entity-ticking ground fizzles (gate 6 of 3.1). */

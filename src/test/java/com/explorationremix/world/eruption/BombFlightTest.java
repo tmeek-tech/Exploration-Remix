@@ -336,4 +336,45 @@ class BombFlightTest {
         // open air all the way: still flying
         assertEquals(BombFlight.FLYING, BombFlight.fly((x, y, z) -> BombFlight.OPEN, new double[]{0, 0, 0}, new double[]{1, 1, 0}, 50, cell));
     }
+
+    // ================================================================================================ under an overhang
+
+    @Test
+    void aBombFliesOutUnderRockHangingOverItsVent() {
+        // rock hangs 6 to 10 blocks east of the axis, 14 to 20 rows over the launch point (half a block over the mouth's
+        // row 0); open everywhere else
+        BombFlight.Grid hang = (x, y, z) -> x >= 6 && x <= 10 && y >= 14 && y <= 20 && z >= -3 && z <= 3 ? BombFlight.SOLID : BombFlight.OPEN;
+        BombFlight.Drop drop = (x, z) -> 40;
+        BombFlight.Accept clears = f -> BombFlight.clearsOver(hang, 0, 0.5, 0, f, 0.5, 0);
+        // thrown east at apex 25 it would burst in the rock; west it clears
+        BombFlight.Flight east = BombFlight.aim(0, 0, 30, 0, drop, 25, 7, 2.5);
+        assertNotNull(east);
+        assertFalse(clears.test(east), "the room up the axis is open, but the flight off it meets the rock");
+        BombFlight.Flight west = BombFlight.aim(0, 0, -30, 0, drop, 25, 7, 2.5);
+        assertNotNull(west);
+        assertTrue(clears.test(west));
+        // aimed under it: a lower apex flies out under the rock and still comes down at the target
+        BombFlight.Flight under = BombFlight.aimUnder(0, 0, 30, 0, drop, 25, 7, 2.5, clears);
+        assertNotNull(under);
+        assertTrue(under.vy() < east.vy(), "it goes lower");
+        assertTrue(BombFlight.apexOf(under.vy()) >= BombFlight.APEX_MIN - 1e-6);
+        assertEquals(30, Math.hypot(under.tx(), under.tz()), 1e-6);
+        assertEquals(BombFlight.FLYING, BombFlight.fly(hang, new double[]{0, 0.5, 0}, new double[]{under.vx(), under.vy(), under.vz()},
+                (int) under.ticks() - 2, new int[3]), "it flies all the way to its ground");
+        // the drawn apex is used when it clears; nothing clears: no flight
+        BombFlight.Flight w2 = BombFlight.aimUnder(0, 0, -30, 0, drop, 25, 7, 2.5, clears);
+        assertNotNull(w2);
+        assertEquals(west.vy(), w2.vy(), 1e-12);
+        assertNull(BombFlight.aimUnder(0, 0, 30, 0, drop, 25, 7, 2.5, f -> false));
+        // what a flight meets past the stack, under the mouth's row, is its landing, not the overhang
+        BombFlight.Grid ridge = (x, y, z) -> x >= 20 && x <= 21 && y <= -5 ? BombFlight.SOLID : BombFlight.OPEN;
+        assertTrue(BombFlight.clearsOver(ridge, 0, 0.5, 0, east, 0.5, 0));
+        // a near bomb for a player beyond the rock comes down by them all the same
+        Random r = new Random(3);
+        BombFlight.Flight n = BombFlight.near(0, 0, 25, 0, 3, 8, 7, drop, (x, z) -> true, 25, 2.5, r, clears);
+        assertNotNull(n);
+        assertTrue(clears.test(n));
+        double fd = Math.hypot(n.tx() - 25, n.tz());
+        assertTrue(fd >= 3 - 1e-9 && fd <= 8 + 1e-9, "within 3 to 8 of the player: " + fd);
+    }
 }

@@ -60,8 +60,16 @@ public final class BombFlight {
     public static final int HEAD_TICKS = 20;
     /** At most this many bombs are thrown in one tick. */
     public static final int PER_TICK = 2;
-    /** Draws of a ring bomb's target (the first and up to 4 more) before it is not thrown. */
-    public static final int RING_DRAWS = 5;
+    /**
+     * Draws of a ring bomb's target (the first and up to 7 more) before it is not thrown: more than the 5 of spec 5.4.2,
+     * since a draw is now also refused when its flight would hit the rock over the vent or come down by a refuge.
+     */
+    public static final int RING_DRAWS = 8;
+    /**
+     * Apexes tried for one target ({@link #aimUnder}): the drawn one and, when its flight hits what hangs over the vent,
+     * lower ones evenly down to {@link #APEX_MIN}.
+     */
+    public static final int UNDER_TRIES = 3;
 
     /** A solved flight: the launch velocity, the ticks to the ground (with the fraction of the last), and where it lands, from the axis. */
     public record Flight(double vx, double vy, double vz, double ticks, double tx, double tz) {
@@ -171,6 +179,42 @@ public final class BombFlight {
         return null;
     }
 
+    /** Whether a solved flight may be thrown: it clears what hangs over the vent, and comes down where it may. */
+    @FunctionalInterface
+    public interface Accept {
+        boolean test(Flight f);
+    }
+
+    /**
+     * {@link #aim} for the target (tx, tz) at apex {@code a}, kept when {@code accept} takes it; else at lower apexes,
+     * evenly down to {@link #APEX_MIN} ({@link #UNDER_TRIES} in all), so a bomb thrown under rock hanging over its vent
+     * flies out under it rather than bursting in it. Null when no apex gives a flight {@code accept} takes.
+     */
+    @Nullable
+    public static Flight aimUnder(double ox, double oz, double tx, double tz, Drop drop, double a, double stackR, double clearY, Accept accept) {
+        for (int i = 0; i < UNDER_TRIES; i++) {
+            double ai = i == 0 ? a : a - (a - APEX_MIN) * i / (UNDER_TRIES - 1);
+            if (i > 0 && ai >= a - 1e-9) break;
+            Flight f = aim(ox, oz, tx, tz, drop, ai, stackR, clearY);
+            if (f != null && accept.test(f)) return f;
+        }
+        return null;
+    }
+
+    /**
+     * Whether a flight thrown from (x, y, z) clears what hangs over its vent (spec 5.4.3's overhangs, which the room
+     * straight up the axis does not see): flown through {@code g} until it comes back down through {@code over} blocks
+     * over the launch point, it neither bursts on a block nor fizzles in a fluid above row {@code row} (the mouth's).
+     * What it meets lower, past the stack, is its landing.
+     */
+    public static boolean clearsOver(Grid g, double x, double y, double z, Flight f, double over, int row) {
+        double t = ticksDownThrough(f.vy, over);
+        int n = (int) Math.ceil(Double.isNaN(t) ? f.ticks : t);
+        int[] cell = new int[3];
+        int out = fly(g, new double[]{x, y, z}, new double[]{f.vx, f.vy, f.vz}, Math.min(MAX_TICKS, Math.max(1, n)), cell);
+        return out == FLYING || cell[1] <= row;
+    }
+
     /** The ring's inner edge round a stack of foot radius {@code stackR}. */
     public static double ringMin(double stackR) { return stackR + RING_IN; }
 
@@ -238,16 +282,26 @@ public final class BombFlight {
     @Nullable
     public static Flight near(double ox, double oz, double px, double pz, double min, double max, double stackR, Drop drop, Ticking ticking,
                               double a, double clearY, Random r) {
+        return near(ox, oz, px, pz, min, max, stackR, drop, ticking, a, clearY, r, f -> true);
+    }
+
+    /**
+     * {@link #near} with {@code accept} also asked of each flight ({@link #aimUnder}: at the drawn apex, then lower ones),
+     * so a near bomb comes down by a player on the far side of rock hanging over the vent.
+     */
+    @Nullable
+    public static Flight near(double ox, double oz, double px, double pz, double min, double max, double stackR, Drop drop, Ticking ticking,
+                              double a, double clearY, Random r, Accept accept) {
         double lo = Math.min(min, max), hi = Math.max(min, max);
         for (int i = 0; i < NEAR_DRAWS; i++) {
             double[] o = nearDraw(lo, hi, r);
             double tx = px + o[0], tz = pz + o[1], d = Math.sqrt(tx * tx + tz * tz);
             if (d < ringMin(stackR) || d > RING_MAX || !ticking.at(tx, tz)) continue;
-            Flight f = aim(ox, oz, tx, tz, drop, a, stackR, clearY);
-            if (f == null) continue;
-            double fx = f.tx - px, fz = f.tz - pz, fd = Math.sqrt(fx * fx + fz * fz);
-            if (fd < lo - 1e-9 || fd > hi + 1e-9 || !ticking.at(f.tx, f.tz)) continue;
-            return f;
+            Flight f = aimUnder(ox, oz, tx, tz, drop, a, stackR, clearY, g -> {
+                double fx = g.tx - px, fz = g.tz - pz, fd = Math.sqrt(fx * fx + fz * fz);
+                return fd >= lo - 1e-9 && fd <= hi + 1e-9 && ticking.at(g.tx, g.tz) && accept.test(g);
+            });
+            if (f != null) return f;
         }
         return null;
     }

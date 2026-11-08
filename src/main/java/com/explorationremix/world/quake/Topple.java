@@ -8,7 +8,6 @@ import com.explorationremix.world.lava.GalleryChanges;
 import com.explorationremix.world.lava.LavaFlood;
 import com.explorationremix.world.lava.LavaNet;
 import com.explorationremix.world.lava.NearChunks;
-import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -22,10 +21,12 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FallingBlock;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.network.PacketDistributor;
@@ -44,7 +45,7 @@ import java.util.UUID;
  * <p><b>The find.</b> The chunks round the actors (within the simulation distance less one, where falling blocks tick)
  * or the 5 by 5 chunks round a climb answer's block, each once, skipping a chunk whose middle is not entity-ticking; in
  * each, the change log's entries whose first block was open (air, the glow, fire, a fluid), read with the block there
- * now and the two under it. At most {@link #ENTRIES_PER_TICK} entries a tick (the chunk in hand is finished; the rest
+ * now and the two under it. At most {@link #ENTRIES_PER_TICK} entries and {@link #FIND_NANOS} a tick (the chunk in hand is finished; the rest
  * wait for the next tick), at most {@code quakes.toppleMax} blocks a quake. A chunk's finds are taken top-down, so the
  * upper blocks of a column go before the ones under them. A block a player stands on (and the falling blocks of that
  * column under it) is not toppled but lowered under them ({@link Lowering}), after a creak.
@@ -66,8 +67,18 @@ final class Topple {
 
     /** Most change-log entries the finds look at in one tick (the chunk in hand is finished). */
     static final int ENTRIES_PER_TICK = 8192;
-    /** Most placed blocks taken down in one tick, lowering steps included. */
-    static final int TAKEN_PER_TICK = 64;
+    /**
+     * Most time a find spends in one tick, in nanoseconds: once it is spent, the chunk in hand is finished and the rest
+     * wait for the next tick, so a find round a big build (2000 placed blocks: up to 5.6 ms cold) spreads over a few
+     * ticks rather than taking one long one.
+     */
+    static final long FIND_NANOS = 2_000_000L;
+    /**
+     * Most placed blocks taken down in one tick, lowering steps included: 32 (spec 4.3.6 had 64, whose ticks cost 6 to
+     * 9 ms over the server's usual at a big build; 32 keeps a falls tick within the quakes' 5 ms and takes the 256 of a
+     * quake's cap in 8 ticks).
+     */
+    static final int TAKEN_PER_TICK = 32;
     /** A tremor or climb answer is felt in full by a player within this many blocks of a block it found. */
     static final int FELT_RANGE = 32;
     /** A climb answer's find covers the chunks this many chunks round the block placed (5 by 5). */
@@ -144,9 +155,8 @@ final class Topple {
         final int seed;
         final LongOpenHashSet done = new LongOpenHashSet();
         boolean findDone;
-        /** The blocks found, in their order (packed positions), with the block state each was found as. */
+        /** The blocks found, in their order (packed positions). */
         final LongArrayList list = new LongArrayList();
-        final IntArrayList states = new IntArrayList();
         int next;
         final List<UnderPlayer> under = new ArrayList<>();
         /** Every block found, list and lowered columns both: whom the quake is felt by in full. */
@@ -186,7 +196,7 @@ final class Topple {
                 for (int dx = -CLIMB_CHUNKS; dx <= CLIMB_CHUNKS; dx++) {
                     for (int dz = -CLIMB_CHUNKS; dz <= CLIMB_CHUNKS; dz++) {
                         if (full(w)) break outer;
-                        if (w.entries >= ENTRIES_PER_TICK) {
+                        if (w.entries >= ENTRIES_PER_TICK || System.nanoTime() - t0 > FIND_NANOS) {
                             stopped[0] = true;
                             break outer;
                         }
@@ -203,7 +213,7 @@ final class Topple {
                 NearChunks.walk(w.level, actors, rad, w.now, c -> {
                     if (full(w)) return false;
                     if (!done.contains(c.getPos().toLong())) {
-                        if (w.entries >= ENTRIES_PER_TICK) {
+                        if (w.entries >= ENTRIES_PER_TICK || System.nanoTime() - t0 > FIND_NANOS) {
                             stopped[0] = true;
                             return false;
                         }
@@ -275,7 +285,6 @@ final class Topple {
                     continue;
                 }
                 list.add(pos);
-                states.add(Block.getId(chunk.getBlockState(at.set(x, y, z))));
                 found.add(pos);
             }
         }
@@ -293,7 +302,6 @@ final class Topple {
         void falls(Work w, Quakes.Event e) {
             while (next < list.size() && w.budget()) {
                 BlockPos pos = BlockPos.of(list.getLong(next));
-                int state = states.getInt(next);
                 next++;
                 long col = column(pos.getX(), pos.getZ());
                 if (col != lastColumn) {
@@ -304,7 +312,7 @@ final class Topple {
                 }
                 // a player who has since stepped onto it, or towered on over it, keeps it: the next pass lowers it under them
                 if (rider(w, pos.getX(), pos.getY(), pos.getZ()) != null) continue;
-                int r = take(w, pos, state, false, Support.sideStart(columnStart(seed, pos.getX(), pos.getZ()), index), spawned);
+                int r = take(w, pos, false, Support.sideStart(columnStart(seed, pos.getX(), pos.getZ()), index), spawned);
                 Topple.count(e, r, false);
                 if (r != LEFT) w.taken++;
             }
@@ -314,10 +322,8 @@ final class Topple {
         void requeue(LongArrayList positions, ServerLevel level) {
             for (int i = 0; i < positions.size(); i++) {
                 long p = positions.getLong(i);
-                BlockState s = stateAt(level, BlockPos.of(p));
-                if (s == null) continue;
+                if (stateAt(level, BlockPos.of(p)) == null) continue;
                 list.add(p);
-                states.add(Block.getId(s));
             }
         }
 
@@ -383,13 +389,14 @@ final class Topple {
     // ================================================================================================ one block down
 
     /**
-     * Takes the placed block at {@code pos} down by its way (spec 4.3.3, 4.3.4), if it still falls by the rule and, when
-     * {@code expect} is not -1, is still the block state found. {@code noFall} takes it out rather than letting it fall
+     * Takes the placed block at {@code pos} down by its way (spec 4.3.3, 4.3.4), if it still falls by the rule, judged
+     * from the block there now: a block whose state changed since the find (a fence or vine whose neighbour went, or a
+     * block a player swapped) is judged by what it is now, never skipped for the change. {@code noFall} takes it out rather than letting it fall
      * (a bridge giving way under a player: a falling block would land in their feet cell). {@code sideStart} is the side
      * it tries first; {@code spawned} the columns this pass's falling blocks went into. Returns {@link #LEFT} when it
      * stays (for now: the next look tries again), or {@link #FELL}, {@link #GIVEN} or {@link #OUT}.
      */
-    static int take(Work w, BlockPos pos, int expect, boolean noFall, int sideStart, LongOpenHashSet spawned) {
+    static int take(Work w, BlockPos pos, boolean noFall, int sideStart, LongOpenHashSet spawned) {
         ServerLevel level = w.level;
         if (!GalleryChanges.inLayer(pos.getY())) return LEFT;
         LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
@@ -403,7 +410,6 @@ final class Topple {
         int first = log.state(key);
         if (first == ChangeLog.NONE) return LEFT;
         BlockState cur = chunk.getBlockState(pos);
-        if (expect >= 0 && Block.getId(cur) != expect) return LEFT;
         int seaTop = GalleryChanges.seaTop(chunk);
         boolean underSea = pos.getY() < seaTop;
         int ft = BlockKinds.firstTraits(Block.stateById(first));
@@ -433,15 +439,18 @@ final class Topple {
         if (!canFall) {
             fw = Support.OUT;
         } else if (below == Support.OPEN || below == Support.FLUID) {
-            boolean playerUnder = playerInColumn(w, pos.getX(), pos.getZ(), restRow(level, pos.getX(), pos.getY() - 1, pos.getZ()), pos.getY());
-            fw = Support.fallWay(true, below, playerUnder, false);
+            // nothing falls onto a player, nor into lava (it would sink through and lie on the floor under it)
+            boolean blocked = playerInColumn(w, pos.getX(), pos.getZ(), restRow(level, pos.getX(), pos.getY() - 1, pos.getZ()), pos.getY())
+                    || lavaUnder(level, pos);
+            fw = Support.fallWay(true, below, blocked, false);
         } else {
-            side = Support.side(sideStart, d -> sideAllowed(w, pos, d, spawned), d -> freeUnder(level, pos, d));
+            boolean wet = carriesWater(cur);
+            side = Support.side(sideStart, d -> sideAllowed(w, pos, d, wet, spawned), d -> freeUnder(level, pos, d));
             fw = Support.fallWay(true, below, false, side >= 0);
         }
         boolean drops = Support.drops(w.terrainDamage, cur.is(ERTags.GALLERIES_ROCK));
         if (fw == Support.DOWN) {
-            write(level, chunk, pos);
+            write(level, pos, cur);
             // fall() writes the dry block's fluid (air) where it stands, which is already air: nothing round it wakes
             FallingBlockEntity e = FallingBlockEntity.fall(level, pos, dry(cur));
             e.dropItem = drops;
@@ -451,7 +460,7 @@ final class Topple {
         }
         if (fw == Support.SIDE) {
             BlockPos n = pos.relative(SIDES[side]);
-            write(level, chunk, pos);
+            write(level, pos, cur);
             FallingBlockEntity e = FallingBlockEntity.fall(level, n, dry(cur));
             double v = 0.08 + level.random.nextDouble() * 0.08;
             e.setDeltaMovement(Support.SIDE_X[side] * v + (level.random.nextDouble() - 0.5) * 0.06, 0.04,
@@ -467,7 +476,7 @@ final class Topple {
         BlockEntity be = blockEntity ? chunk.getBlockEntity(pos) : null;
         if (Support.waitsForLava(be != null, be != null && lavaUnder(level, pos))) return LEFT;
         if (drops) Block.dropResources(cur, level, pos, be);
-        write(level, chunk, pos);
+        write(level, pos, cur);
         level.levelEvent(2001, pos, Block.getId(cur));
         tookAway(w, pos);
         return OUT;
@@ -476,10 +485,34 @@ final class Topple {
     /**
      * Writes air where a toppled block stood: quietly (sent to clients, no neighbour or shape updates) when a fluid
      * touches it, so the lava or water beside a plug gets no fluid tick; else with neighbour updates, so torches and
-     * plants on it pop by vanilla's rules. Recorded by the change log like any change.
+     * plants on it pop by vanilla's rules. Recorded by the change log like any change. A waterlogged block's own leak is
+     * woken even so ({@link Support#wakesWater}): each flowing water cell beside it gets a fluid tick and recedes by
+     * vanilla's rules, as a bucket's pickup of a source lets its flow recede; sources and lava are never woken.
      */
-    private static void write(ServerLevel level, LevelChunk chunk, BlockPos pos) {
-        level.setBlock(pos, AIR, Support.writeFlags(fluidNear(level, pos, true)));
+    private static void write(ServerLevel level, BlockPos pos, BlockState cur) {
+        boolean quiet = fluidNear(level, pos, true);
+        level.setBlock(pos, AIR, Support.writeFlags(quiet));
+        if (!quiet || !Support.wakesWater(carriesWater(cur), lavaNear(level, pos))) return;
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        for (Direction d : Direction.values()) {
+            BlockState s = stateAt(level, m.setWithOffset(pos, d));
+            if (s == null) continue;
+            FluidState f = s.getFluidState();
+            if (f.is(FluidTags.WATER) && !f.isSource()) level.scheduleTick(m.immutable(), f.getType(), f.getType().getTickDelay(level));
+        }
+    }
+
+    /** True when the block carries water of its own: a waterlogged block. */
+    private static boolean carriesWater(BlockState s) { return s.getFluidState().is(FluidTags.WATER); }
+
+    /** True when lava touches {@code pos} on any of its six sides (a block not loaded counts as lava: the careful answer). */
+    private static boolean lavaNear(ServerLevel level, BlockPos pos) {
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        for (Direction d : Direction.values()) {
+            BlockState s = stateAt(level, m.setWithOffset(pos, d));
+            if (s == null || s.getFluidState().is(FluidTags.LAVA)) return true;
+        }
+        return false;
     }
 
     /** After a block was taken away: with {@code toppleAtOnce} the block over it is checked next (spec 4.3.8). */
@@ -487,16 +520,41 @@ final class Topple {
         if (w.atOnce) queue(pos.above());
     }
 
-    /** True when the side {@code d} of {@code pos} can take a toppling block ({@link Support#sideAllowed}). */
-    private static boolean sideAllowed(Work w, BlockPos pos, int d, LongOpenHashSet spawned) {
+    /**
+     * True when the side {@code d} of {@code pos} can take a toppling block ({@link Support#sideAllowed}); {@code wet}
+     * when the block is waterlogged, whose own leak beside it is no bar ({@link Support#ownLeak}).
+     */
+    private static boolean sideAllowed(Work w, BlockPos pos, int d, boolean wet, LongOpenHashSet spawned) {
         BlockPos n = pos.relative(SIDES[d]);
         LevelChunk c = w.level.getChunkSource().getChunkNow(n.getX() >> 4, n.getZ() >> 4);
         boolean ticking = c != null && w.level.isPositionEntityTicking(n) && GalleryChanges.inLayer(n.getY());
         if (!ticking) return false;
-        boolean open = GlowBlock.open(c.getBlockState(n));
-        boolean fluid = fluidNear(w.level, n, false);
+        BlockState at = c.getBlockState(n);
+        FluidState af = at.getFluidState();
+        boolean open = GlowBlock.open(at) || (at.getBlock() instanceof LiquidBlock && Support.ownLeak(wet, af.is(FluidTags.WATER), af.isSource()));
+        if (!open) return false;
+        boolean fluid = fluidBeside(w.level, n, pos, wet);
         boolean player = playerInColumn(w, n.getX(), n.getZ(), restRow(w.level, n.getX(), n.getY() - 1, n.getZ()), n.getY());
-        return Support.sideAllowed(true, open, fluid, player, spawned.contains(column(n.getX(), n.getZ())));
+        return Support.sideAllowed(true, open, fluid, lavaUnder(w.level, n), player, spawned.contains(column(n.getX(), n.getZ())));
+    }
+
+    /**
+     * True when a fluid stands on the four sides of the side cell {@code n} or over it, leaving out {@code from} (the
+     * toppling block, about to be air) and, for a waterlogged one ({@code wet}), its own leak ({@link Support#ownLeak}).
+     * A block not loaded counts as a fluid.
+     */
+    private static boolean fluidBeside(ServerLevel level, BlockPos n, BlockPos from, boolean wet) {
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        for (Direction d : Direction.values()) {
+            if (d == Direction.DOWN) continue;
+            m.setWithOffset(n, d);
+            if (m.equals(from)) continue;
+            BlockState s = stateAt(level, m);
+            if (s == null) return true;
+            FluidState f = s.getFluidState();
+            if (!f.isEmpty() && !Support.ownLeak(wet, f.is(FluidTags.WATER), f.isSource())) return true;
+        }
+        return false;
     }
 
     /** True when the block under the side {@code d} of {@code pos} is free for a falling block ({@code FallingBlock.isFree}). */
@@ -667,7 +725,7 @@ final class Topple {
                     queue(base);
                     break;
                 }
-                if (take(w, p, -1, false, Support.sideStart(start, index), w.spawned) != LEFT) w.taken++;
+                if (take(w, p, false, Support.sideStart(start, index), w.spawned) != LEFT) w.taken++;
             }
         }
     }

@@ -229,6 +229,22 @@ class SupportTest {
         // a plug next to a fluid goes quietly, so the fluid gets no tick
         assertEquals(2 | 16, writeFlags(true));
         assertEquals(OUT, fallWay(false, OPEN, false, true), "what cannot fall as an entity is taken out");
+        // nothing falls straight down onto a player or into lava (it would lie on the floor under the lava): taken out
+        assertEquals(OUT, fallWay(true, OPEN, true, true));
+        assertEquals(DOWN, fallWay(true, OPEN, false, false));
+    }
+
+    @Test
+    void aWaterloggedBlockTakesItsWaterWithIt() {
+        // its own leak (flowing water) is no bar to its tumbling aside; a water source, lava or a dry block's water is
+        assertTrue(ownLeak(true, true, false));
+        assertFalse(ownLeak(true, true, true), "a source beside it is not its leak");
+        assertFalse(ownLeak(true, false, false), "lava never is");
+        assertFalse(ownLeak(false, true, false), "a dry block's side in water stays barred");
+        // its quiet write still wakes the flowing water beside it, so the leak recedes; never next to lava
+        assertTrue(wakesWater(true, false));
+        assertFalse(wakesWater(true, true));
+        assertFalse(wakesWater(false, false), "a dry plug stays quiet: the water it holds back gets no tick");
     }
 
     // ================================================================================================ order and sides
@@ -261,13 +277,14 @@ class SupportTest {
             for (int index = 0; index < 4; index++) got.add(side(sideStart(start, index), d -> true, d -> true));
             assertEquals(4, got.size(), "four blocks of one column go four ways");
         }
-        // a side next to a fluid, in a player's column, already taken by this pass, unloaded or not open is never used
-        assertFalse(sideAllowed(true, true, true, false, false));
-        assertFalse(sideAllowed(true, true, false, true, false));
-        assertFalse(sideAllowed(true, true, false, false, true));
-        assertFalse(sideAllowed(false, true, false, false, false));
-        assertFalse(sideAllowed(true, false, false, false, false));
-        assertTrue(sideAllowed(true, true, false, false, false));
+        // a side next to a fluid, over lava, in a player's column, already taken by this pass, unloaded or not open is never used
+        assertFalse(sideAllowed(true, true, true, false, false, false));
+        assertFalse(sideAllowed(true, true, false, true, false, false), "a block never tumbles into lava, to lie under it");
+        assertFalse(sideAllowed(true, true, false, false, true, false));
+        assertFalse(sideAllowed(true, true, false, false, false, true));
+        assertFalse(sideAllowed(false, true, false, false, false, false));
+        assertFalse(sideAllowed(true, false, false, false, false, false));
+        assertTrue(sideAllowed(true, true, false, false, false, false));
         // free space under the side is preferred; otherwise the first allowed; none: taken out
         assertEquals(2, side(0, d -> d != 0, d -> d == 2));
         assertEquals(1, side(0, d -> d != 0, d -> false));

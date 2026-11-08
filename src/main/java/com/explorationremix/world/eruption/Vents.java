@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -137,6 +138,37 @@ final class Vents {
             if (s.getFluidState().is(FluidTags.LAVA)) return BombFlight.LAVA;
             return open(c, m, s) ? BombFlight.OPEN : BombFlight.SOLID;
         });
+    }
+
+    /**
+     * The world as a bomb's own hit tests see it ({@link BombFlight#Grid}), for flying a solved flight before it is
+     * thrown: a block with any collision is {@link BombFlight#SOLID} (a slab or stair counts whole: the careful answer),
+     * a fluid with none {@link BombFlight#LAVA}, the rest open. A cell whose chunk is not loaded is solid (nothing is
+     * thrown through what cannot be read); over the world's top is open, under its bottom solid.
+     */
+    static BombFlight.Grid grid(ServerLevel level) {
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        int lo = level.getMinBuildHeight(), hi = level.getMaxBuildHeight();
+        return new BombFlight.Grid() {
+            private long key = Long.MIN_VALUE;
+            @Nullable private LevelChunk chunk;
+
+            @Override
+            public int at(int x, int y, int z) {
+                if (y >= hi) return BombFlight.OPEN;
+                if (y < lo) return BombFlight.SOLID;
+                long k = ChunkPos.asLong(x >> 4, z >> 4);
+                if (k != key) {
+                    key = k;
+                    chunk = level.getChunkSource().getChunkNow(x >> 4, z >> 4);
+                }
+                if (chunk == null) return BombFlight.SOLID;
+                m.set(x, y, z);
+                BlockState s = chunk.getBlockState(m);
+                if (!s.getCollisionShape(chunk, m).isEmpty()) return BombFlight.SOLID;
+                return s.getFluidState().isEmpty() ? BombFlight.OPEN : BombFlight.LAVA;
+            }
+        };
     }
 
     /** True for a cell a scan passes through: air, the glow, fire, a liquid, or a block with no collision. */
