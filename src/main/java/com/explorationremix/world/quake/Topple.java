@@ -328,15 +328,27 @@ final class Topple {
         }
 
         /**
-         * The find is done: every column found under a player gets a lowering job, starting {@code delay} ticks on, and,
-         * with a delay, a creak now (the job waits for it: nothing is taken in the meantime).
+         * The find is done: every column found under a player creaks now and gets a lowering job that starts when the
+         * creak is over ({@link Support#creakTicks}: a tower sinks after 1 s, a bridge or an overhang, or a column that
+         * sinks onto one ({@link Support#comesDown}), gives way after about 3 s; nothing is taken in the meantime).
+         * Returns the tick the last bridge or overhang gives way, or {@code Long.MIN_VALUE} when none does: the quake's
+         * other blocks wait for it (the caller moves their turn), so the player still has the rest of the bridge to run
+         * back along.
          */
-        void startJobs(Work w, @Nullable Quakes.Event e, int delay) {
+        long startJobs(Work w, @Nullable Quakes.Event e) {
+            long bridges = Long.MIN_VALUE;
             for (UnderPlayer u : under) {
                 if (Lowering.runningAt(u.x(), u.z()) || !Lowering.room()) continue;
-                Lowering.add(new Lowering.Job(u.player(), u.x(), u.z(), e, w.now + delay, u.positions()));
-                if (delay > 0) creak(w, u, w.now + delay);
+                // by how it comes down in the end: the stack from its top (positions are top-down) down to a gap
+                int n = 0;
+                while (n < u.positions().size() && BlockPos.getY(u.positions().getLong(n)) == u.topY() - n) n++;
+                int mode = Support.comesDown(n, k -> kindAt(w.level, new BlockPos(u.x(), u.topY() - k - 1, u.z())), w.lowerTicks);
+                long goes = w.now + Support.creakTicks(mode);
+                Lowering.add(new Lowering.Job(u.player(), u.x(), u.z(), e, goes, u.positions()));
+                creak(w, u, goes);
+                if (mode == Support.GIVES_WAY) bridges = Math.max(bridges, goes);
             }
+            return bridges;
         }
     }
 

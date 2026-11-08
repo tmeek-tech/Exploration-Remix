@@ -89,6 +89,10 @@ public final class QuakeEffects {
     static final float SPLASH_VOLUME = 0.7F;
     /** A creak sheds crumbs for this many ticks. */
     static final int CREAK_TICKS = 20;
+    /** The longest a creak lasts, whatever the server says (a bridge's is 60 ticks). */
+    static final int CREAK_MAX = 100;
+    /** A long creak creaks again this often. */
+    static final int CREAK_REPEAT = 20;
     /** At most this many new positioned sounds a tick from these effects (Sound Physics Remastered drops a burst). */
     static final int SOUNDS_PER_TICK = 4;
     /** A block is forgotten this long after its drop time if nothing ended it, ticks (the longest fall is about 110). */
@@ -169,11 +173,14 @@ public final class QuakeEffects {
         final long until;
         /** Crumbs owed, carried from tick to tick. */
         double crumbs;
+        /** When it creaks again (a long creak, a bridge's, creaks each second until it goes). */
+        long nextSound;
 
-        Creak(BlockPos pos, int low, long until) {
+        Creak(BlockPos pos, int low, long now, long until) {
             this.pos = pos;
             this.low = low;
             this.until = until;
+            this.nextSound = now + CREAK_REPEAT;
         }
     }
 
@@ -212,9 +219,10 @@ public final class QuakeEffects {
             case LavaNet.Debris.CANCEL -> PIECES.remove(d.pos());
             case LavaNet.Debris.SHATTER -> shatter(level, d, pos);
             case LavaNet.Debris.CREAK -> {
-                CREAKS.add(new Creak(pos, Math.min(pos.getY(), d.landY()), now + CREAK_TICKS));
-                if (spend()) level.playLocalSound(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, ERSounds.QUAKE_CREAK.get(), SoundSource.BLOCKS,
-                        1.0F, 0.9F + 0.2F * level.random.nextFloat(), false);
+                // until the build goes (dropAt, the server's tick: a tower's 1 s, a bridge's 3 s), at least CREAK_TICKS
+                long until = Math.max(now + CREAK_TICKS, Math.min(d.dropAt(), now + CREAK_MAX));
+                CREAKS.add(new Creak(pos, Math.min(pos.getY(), d.landY()), now, until));
+                creakSound(level, pos, level.random);
             }
             default -> {}
         }
@@ -496,6 +504,10 @@ public final class QuakeEffects {
                 it.remove();
                 continue;
             }
+            if (now >= c.nextSound && c.until - now > CREAK_REPEAT / 2) {
+                c.nextSound = now + CREAK_REPEAT;
+                creakSound(level, c.pos, random);
+            }
             // its top block and the two under it
             int top = c.pos.getY(), low = Math.max(c.low, top - 2);
             for (c.crumbs += rate; c.crumbs >= 1; c.crumbs--) {
@@ -507,6 +519,12 @@ public final class QuakeEffects {
                 mc.particleEngine.crack(at, Direction.from2DDataValue(random.nextInt(4)));
             }
         }
+    }
+
+    /** A build creaks under a player. */
+    private static void creakSound(ClientLevel level, BlockPos pos, RandomSource random) {
+        if (spend()) level.playLocalSound(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, ERSounds.QUAKE_CREAK.get(), SoundSource.BLOCKS,
+                1.0F, 0.9F + 0.2F * random.nextFloat(), false);
     }
 
     // ================================================================================================ helpers

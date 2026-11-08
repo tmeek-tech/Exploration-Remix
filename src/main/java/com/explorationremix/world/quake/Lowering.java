@@ -22,9 +22,13 @@ import java.util.UUID;
  *     {@code quakes.lowerTicks} ticks the job takes the block right under their feet by its way, so they drop one block
  *     onto the next and land before the next step (fall damage starts at a drop of 4). Blocks they place under
  *     themselves meanwhile go the same way.</li>
- *     <li>A bridge or an overhang (open space under the block they stand on) gives way at once: it and every falling
- *     block of its column are taken out (or given back under the lava), never dropped as falling blocks, which fall half
- *     as fast as a player and would land in their feet cell. The player falls the bridge's height.</li>
+ *     <li>A bridge or an overhang (open space under the block they stand on) creaks for about 3 s
+ *     ({@link Support#GIVE_WAY_CREAK}, time to run back to solid ground; the quake's other blocks wait for it), then
+ *     gives way at once: it and every falling block of its column are taken out (or given back under the lava), never
+ *     dropped as falling blocks, which fall half as fast as a player and would land in their feet cell. A player still
+ *     on it falls the bridge's height; one who has stepped off ends the job, and its blocks go back into the quake's
+ *     list. A column that sinks onto a bridge (one two blocks thick, a tower standing on one) creaks as long
+ *     ({@link Support#comesDown}).</li>
  *     <li>With {@code lowerTicks} 0 (the deadly alternative) a tower's falling blocks go at once by their ways.</li>
  * </ul>
  * A job ends when the block under the player no longer falls (the tower is down to {@code supportDepth} over rock), when

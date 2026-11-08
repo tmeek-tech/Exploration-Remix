@@ -438,6 +438,27 @@ class SupportTest {
     }
 
     @Test
+    void aBridgeCreaksLongerThanATowerBeforeItGoes() {
+        // Taran's "Longer warning, then drop": about 3 s to run back off a bridge, a tower still sinks after 1 s
+        assertEquals(GIVE_WAY_CREAK, creakTicks(lowering(OPEN, lowerTicks(6))));
+        assertEquals(GIVE_WAY_CREAK, creakTicks(lowering(FLUID, lowerTicks(6))), "a bridge over a poured source");
+        assertEquals(SINK_CREAK, creakTicks(lowering(PLACED, lowerTicks(6))));
+        assertEquals(SINK_CREAK, creakTicks(lowering(CLIMB, lowerTicks(0))));
+        assertEquals(60, GIVE_WAY_CREAK);
+        assertEquals(20, SINK_CREAK);
+        assertEquals(Quakes.LOWER_AFTER, SINK_CREAK);
+        // by how the column comes down in the end, from the kinds under its stack's blocks from the top down
+        assertEquals(GIVES_WAY, comesDown(1, k -> OPEN, lowerTicks(6)), "a bridge over the lake (its lava is open space)");
+        assertEquals(GIVES_WAY, comesDown(2, k -> k == 0 ? PLACED : OPEN, lowerTicks(6)), "a bridge two blocks thick sinks a block, then gives way");
+        assertEquals(GIVES_WAY, comesDown(5, k -> k < 4 ? PLACED : OPEN, lowerTicks(6)), "a tower on a bridge");
+        assertEquals(SINKS, comesDown(10, k -> PLACED, lowerTicks(6)), "a tower over rock: its lowest falling block stands on its base");
+        assertEquals(SINKS, comesDown(3, k -> k == 1 ? CLIMB : PLACED, lowerTicks(6)));
+        assertEquals(AT_ONCE, comesDown(4, k -> k < 3 ? PLACED : OPEN, lowerTicks(0)), "lowerTicks 0: a tower goes at once, all of it");
+        assertEquals(SINK_CREAK, creakTicks(comesDown(10, k -> PLACED, lowerTicks(6))));
+        assertEquals(GIVE_WAY_CREAK, creakTicks(comesDown(2, k -> k == 0 ? PLACED : OPEN, lowerTicks(6))));
+    }
+
+    @Test
     void theRulesArePure() throws Exception {
         String src = Files.readString(Path.of("src/main/java/com/explorationremix/world/quake/Support.java"));
         assertFalse(src.contains("import net.minecraft") || src.contains("import com.mojang") || src.contains("import net.minecraftforge"),

@@ -76,7 +76,9 @@ import java.util.function.IntConsumer;
  * <p><b>Toppling</b> ({@link Topple}, with {@code quakes.topple}): every quake runs a topple pass. A big quake's find
  * starts at once and its blocks fall from 20 ticks in until it ends (what is left falls at the next); a tremor's and a
  * climb answer's message waits for the find, and its blocks fall 10 ticks after it. Every column found under a player
- * creaks when the find is done and is lowered under them 20 ticks later ({@link Lowering}). The one placement listener
+ * creaks when the find is done and is lowered under them ({@link Lowering}): a tower sinks 20 ticks later; a bridge or
+ * an overhang gives way 60 ticks later, and the quake's other blocks wait for it, the quake running on until 40 ticks
+ * after it ({@link Event#keep}). The one placement listener
  * ({@link #placed}) schedules the climb answers ({@link ClimbAnswers}, {@code quakes.climbTremors}) and feeds
  * {@code quakes.toppleAtOnce}'s check, with the break listener ({@link #broken}).
  *
@@ -124,6 +126,11 @@ public final class Quakes {
         @Nullable Debris.Plan drops;
         /** The tick its found blocks start to fall from (MAX_VALUE until its find is done). */
         long fallsAt = Long.MAX_VALUE;
+        /**
+         * It runs on, on the server only, at least until this tick: while a bridge under a player creaks past the
+         * quake's own length, so the bridge and the blocks waiting for it still go in this quake.
+         */
+        long keep = Long.MIN_VALUE;
         /** The game time it started at; a release moves it on by the time it was held. */
         long start;
         /** Ticks into it while held by command, or -1. */
@@ -229,7 +236,7 @@ public final class Quakes {
                 Debris.picks(level, e, actors, watchers, now);
             }
             if (e.announced) tellLate(level, e, watchers);
-            if (e.held < 0 && now - e.start >= e.duration) {
+            if (e.held < 0 && now - e.start >= e.duration && now >= e.keep) {
                 finish(e);
                 it.remove();
             }
@@ -266,8 +273,9 @@ public final class Quakes {
 
     /**
      * A quake's find is done: a tremor's or a climb answer's message goes out now and its blocks fall 10 ticks on (a big
-     * quake was told at its start, and its blocks fall from 20 ticks in); the columns under players creak now and come
-     * down 20 ticks on. A climb answer's placer's cooldown runs from here.
+     * quake was told at its start, and its blocks fall from 20 ticks in); the columns under players creak now, a tower
+     * sinking 20 ticks on and a bridge or an overhang giving way 60 ticks on, and while a bridge creaks the quake's other
+     * blocks wait for it too (Taran's "Longer warning, then drop"). A climb answer's placer's cooldown runs from here.
      */
     private static void found(Event e, Topple.Work w, List<ServerPlayer> watchers) {
         answer(e);
@@ -277,14 +285,23 @@ public final class Quakes {
             announce(e, watchers);
             e.fallsAt = w.now + FALLS_AFTER;
         }
-        e.pass.startJobs(w, e, LOWER_AFTER);
+        long bridges = e.pass.startJobs(w, e);
+        if (bridges != Long.MIN_VALUE) {
+            e.fallsAt = Math.max(e.fallsAt, bridges);
+            e.keep = bridges + KEEP_AFTER_BRIDGE;
+        }
         if (e.placer != null) climbs(w.level).found(e.placer, w.now);
     }
 
     /** A tremor's and a climb answer's blocks fall this many ticks after its message, a big quake's this many into it. */
     static final int FALLS_AFTER = 10, BIG_FALLS = 20;
-    /** The columns under players come down this many ticks after their creak. */
-    static final int LOWER_AFTER = 20;
+    /**
+     * A quake whose bridge gives way runs on this many ticks after it, so a player who stepped off in time sees what is
+     * left of the bridge go in this quake (the job's blocks go back into the quake's list) rather than the next.
+     */
+    static final int KEEP_AFTER_BRIDGE = 40;
+    /** A tower under a player starts to sink this many ticks after its creak (a bridge waits {@link Support#GIVE_WAY_CREAK}). */
+    static final int LOWER_AFTER = Support.SINK_CREAK;
 
     /**
      * The placements since the last tick (each position once): with {@code quakes.climbTremors} one that falls by the rule

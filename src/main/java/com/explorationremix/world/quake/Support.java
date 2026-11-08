@@ -365,6 +365,29 @@ public final class Support {
         return GIVES_WAY;
     }
 
+    /** How long the column under a player creaks before a tower starts to sink under them, in ticks (spec 4.3.5). */
+    public static final int SINK_CREAK = 20;
+    /**
+     * How long a bridge or an overhang creaks before it gives way, in ticks: about 3 s, time to run a few blocks back to
+     * solid ground (Taran, 2026-11-08, "Longer warning, then drop"). The rest of the quake's blocks wait for it.
+     */
+    public static final int GIVE_WAY_CREAK = 60;
+
+    /** How long the column under a player creaks before it comes down, by how it comes down ({@link #comesDown}). */
+    public static int creakTicks(int mode) { return mode == GIVES_WAY ? GIVE_WAY_CREAK : SINK_CREAK; }
+
+    /**
+     * How the column under a player comes down in the end ({@link #lowering}), from the kinds under the {@code n} blocks
+     * of its stack from the top down ({@code under.applyAsInt(k)}: the kind under the k-th block down): a tower sinks
+     * onto whatever its stack stands on, so a bridge two blocks thick, or a tower standing on a bridge, gives way in the
+     * end and creaks as long as a bridge does. A tower over rock sinks, as {@link #lowering} of its top says.
+     */
+    public static int comesDown(int n, IntUnaryOperator under, int lowerTicks) {
+        int mode = SINKS;
+        for (int k = 0; k < n && mode == SINKS; k++) mode = lowering(under.applyAsInt(k), lowerTicks);
+        return mode;
+    }
+
     /**
      * True while a lowering job goes on after {@code steps} steps: the block under the player still falls by the rule
      * (the tower is not yet down to {@code supportDepth} over rock), an actor still stands on the column, and it has not
