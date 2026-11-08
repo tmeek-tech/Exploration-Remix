@@ -30,12 +30,15 @@ public final class ClientSetup {
         // 0.9.0: the eruptions' lava spatter
         event.registerSpriteSet(ERParticles.LAVA_SPATTER.get(), CaveParticles.Spatter.Provider::new);
         // 0.9.0 (pack look fixes): the fountain's lava gobs, the fire at the mouth, the plume's dark ash, the blasts' ash
-        // and the crashes' rock dust (the rubble is made directly, with the block's own sprite)
+        // and the crashes' rock dust
         event.registerSpriteSet(ERParticles.LAVA_GOB.get(), CaveParticles.LavaGob.Provider::new);
         event.registerSpriteSet(ERParticles.FIREBALL.get(), CaveParticles.Fireball.Provider::new);
         event.registerSpriteSet(ERParticles.ERUPTION_ASH.get(), CaveParticles.EruptionAsh.Provider::new);
         event.registerSpriteSet(ERParticles.BLAST_ASH.get(), CaveParticles.Dust.BlastProvider::new);
         event.registerSpriteSet(ERParticles.ROCK_DUST.get(), CaveParticles.Dust.RockProvider::new);
+        // 0.9.0 (eruption effects, round 2): the blasts' flash and the vents' glow, and the rubble's chunks
+        event.registerSpriteSet(ERParticles.FLASH.get(), CaveParticles.Flash.Provider::new);
+        event.registerSpriteSet(ERParticles.RUBBLE.get(), CaveParticles.Rubble.Provider::new);
     }
 
     @SubscribeEvent

@@ -11,14 +11,19 @@ import net.minecraft.client.particle.Particle;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
@@ -45,14 +50,16 @@ import java.util.List;
  *     <li><b>The whistle</b> ({@code lava_bomb.whistle}): a loop that follows the bomb, heard 96 blocks off, higher while
  *     it climbs and falling as it comes down, from the moment the bomb comes into this client's world (or into its
  *     hearing) until it is gone.</li>
- *     <li><b>The burst</b>: the server's own blast packet reaches players within 64 blocks of it and plays the game's
- *     explosion there; this adds a burst of spatter, lava gobs and fire, a dark cloud of ash and rock dust that billows
- *     out and hangs for several seconds (with caveParticles on), chunks of the ground's own rock thrown out to lie round
- *     the crater a while ({@link CaveParticles.Rubble}, within 64 blocks) and, within 32 blocks, a jolt of the view.
- *     Farther out, where no
- *     packet comes, it is this that shows the blast: the game's large explosion, the spatter and the far blast's sound
- *     ({@code lava_bomb.burst}, heard 128 blocks off, as late as sound travels). The same 64-block test the server makes,
- *     on the player's own position, so a client gets one or the other, never both.</li>
+ *     <li><b>The burst</b> (eruption effects, round 2: the game's white explosion puffs made it read as TNT, and the
+ *     server no longer sends its blast packet, {@code Blast#burst}): a blaze of orange-white light over the strike for
+ *     three ticks ({@link CaveParticles.Flash}, always shown, as the game's explosion was), a burst of spatter, lava
+ *     gobs and fire, a dark cloud of ash 4 to 6 blocks across that billows up over the crater and is gone within 4
+ *     seconds ({@link Billow#BLAST_ASH}, with caveParticles on), chunks of the ground's own rock thrown out to bounce
+ *     and lie round the crater a while ({@link CaveParticles.Rubble}, within 64 blocks) and, within 32 blocks, a jolt
+ *     of the view. Within 64 blocks of the player (the packet's reach) it plays the game's own explosion sound as its
+ *     packet did; farther out the far blast's sound ({@code lava_bomb.burst}, heard 128 blocks off, as late as sound
+ *     travels). All of it where the bomb struck: the client's bomb may have flown on into the rock a tick past the
+ *     server's hit, so its path is traced back to the face it went through ({@link #impact}).</li>
  *     <li><b>The fizzle</b>: a splash of spatter, the lava's own pops and smoke, and a hiss ({@code lava_bomb.fizz}).</li>
  * </ul>
  * The new positioned sounds share the eruptions' cap of four a tick ({@link EruptionEffects#spend}); a whistle refused
@@ -67,12 +74,18 @@ public final class BombEffects {
     static final double WHISTLE_REACH = 96;
     /** The far blast's volume: heard 128 blocks off. */
     static final float BURST_VOLUME = 8;
-    /** The server's blast packet reaches players within this far of the blast (ServerLevel.explode). */
+    /**
+     * Within this far of the player a burst plays the game's own explosion sound: the reach of the blast packet
+     * ({@code ServerLevel.explode}) that brought it before the server stopped sending one for bombs.
+     */
     static final double PACKET_REACH = 64;
     /** Spatter thrown out by a burst, and up by a fizzle. */
     static final int BURST_SPATTER = 30, FIZZLE_SPATTER = 12;
-    /** A burst's lava gobs, fireballs, puffs of ash and chunks of rock (0.9.0 pack look fixes). */
-    static final int BURST_GOBS = 14, BURST_FIRE = 6, BURST_ASH = 20, BURST_RUBBLE = 24;
+    /** A burst's lava gobs, fireballs and chunks of rock (0.9.0 pack look fixes; fewer, larger chunks in round 2). */
+    static final int BURST_GOBS = 14, BURST_FIRE = 8, BURST_RUBBLE = 9;
+    /** The blaze over a burst: a flash this many blocks in half-width, this far over the strike, for this many ticks. */
+    static final double FLASH_SIZE = 1.9, FLASH_OVER = 0.7;
+    static final int FLASH_LIFE = 3;
     /** Rock chunks are thrown only within this far of the camera (smaller than a pixel beyond). */
     static final double RUBBLE_REACH = 64;
     /** A far bomb's trail of gobs lasts this many ticks. */
@@ -172,52 +185,72 @@ public final class BombEffects {
         Player player = mc.player;
         if (level == null || player == null) return;
         RandomSource random = level.random;
-        double x = bomb.getX(), y = bomb.getY() + MIDDLE, z = bomb.getZ();
-        double d = mc.gameRenderer.getMainCamera().getPosition().distanceTo(new Vec3(x, y, z));
+        Vec3 at = impact(level, bomb);
+        double x = at.x, y = at.y, z = at.z;
+        double d = mc.gameRenderer.getMainCamera().getPosition().distanceTo(at);
         double far = Fountain.farShare(d, SmokeBudget.share());
         for (int i = Fountain.count(BURST_SPATTER * far, random.nextDouble()); i > 0; i--) {
             double a = random.nextDouble() * Mth.TWO_PI, out = 0.15 + 0.35 * random.nextDouble();
             EruptionEffects.put(mc, level, ERParticles.LAVA_SPATTER.get(), d, x, y, z, out * Math.cos(a), 0.15 + 0.45 * random.nextDouble(), out * Math.sin(a));
         }
         blast(mc, level, x, y, z, d, far, random);
-        // the server's own test for who gets its blast packet: the player's position within 64 blocks of it
+        // within the server's old 64-block reach of its blast packet, the game's own explosion sound, as that packet's
+        // finalizeExplosion played it (the same volume, pitch and source); a jolt from one close by
         double toPlayer = Math.sqrt(player.distanceToSqr(x, y, z));
         if (toPlayer < PACKET_REACH) {
-            // the game's own explosion plays here; a jolt from one close by
+            level.playLocalSound(x, y, z, SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 4.0F,
+                    (1.0F + (random.nextFloat() - random.nextFloat()) * 0.2F) * 0.7F, false);
             double jolt = Fountain.bombJolt(toPlayer);
             if (jolt > 0) CameraShake.jolt(0, jolt);
             return;
         }
-        level.addParticle(ParticleTypes.EXPLOSION_EMITTER, x, y, z, 1.0, 0, 0);
         if (EruptionEffects.spend(level)) {
             level.playLocalSound(x, y, z, ERSounds.LAVA_BOMB_BURST.get(), SoundSource.BLOCKS, BURST_VOLUME, 0.85F + 0.25F * random.nextFloat(), true);
         }
     }
 
     /**
-     * What a burst throws up besides the game's explosion and the spatter: lava gobs and fire, a dark cloud of ash and
-     * rock dust that billows out and hangs (caveParticles), and chunks of the ground's own rock.
+     * Where the bomb struck, as near as this client can tell: it flies its own copy of the bomb, which may have gone on a
+     * tick or two into the rock past the server's hit before the burst reached it, so its path from three ticks back to
+     * one tick on is traced to the first face it passes, and the strike lies a tenth of a block out of that face (as the
+     * server's blast's centre does). With no face on that path (it struck a living thing), its middle.
+     */
+    static Vec3 impact(ClientLevel level, LavaBomb bomb) {
+        Vec3 p = new Vec3(bomb.getX(), bomb.getY() + MIDDLE, bomb.getZ());
+        Vec3 v = bomb.getDeltaMovement();
+        if (v.lengthSqr() < 1e-6) return p;
+        BlockHitResult hit = level.clip(new ClipContext(p.subtract(v.scale(3)), p.add(v), ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, bomb));
+        if (hit.getType() != HitResult.Type.BLOCK) return p;
+        Direction f = hit.getDirection();
+        return hit.getLocation().add(f.getStepX() * 0.1, f.getStepY() * 0.1, f.getStepZ() * 0.1);
+    }
+
+    /**
+     * What a burst throws up besides the spatter: the blaze over the strike, lava gobs and fire, a dark cloud of ash that
+     * billows up over the crater and thins away (caveParticles), and chunks of the ground's own rock.
      */
     private static void blast(Minecraft mc, ClientLevel level, double x, double y, double z, double d, double far, RandomSource random) {
+        EruptionEffects.flash(mc, d, x, y + FLASH_OVER, z, FLASH_SIZE, FLASH_LIFE, 0, Fountain.BLAST_FORWARD);
         for (int i = Fountain.count(BURST_GOBS * far, random.nextDouble()); i > 0; i--) {
             double a = random.nextDouble() * Mth.TWO_PI, out = 0.15 + 0.3 * random.nextDouble();
             EruptionEffects.put(mc, level, ERParticles.LAVA_GOB.get(), d, x, y, z, out * Math.cos(a), 0.3 + 0.3 * random.nextDouble(), out * Math.sin(a));
         }
         for (int i = Fountain.count(BURST_FIRE * far, random.nextDouble()); i > 0; i--) {
-            Particle f = EruptionEffects.put(mc, level, ERParticles.FIREBALL.get(), d, x + jitter(random) * 2, y + jitter(random), z + jitter(random) * 2,
+            Particle f = EruptionEffects.put(mc, level, ERParticles.FIREBALL.get(), d, x + jitter(random) * 2, y + 0.3 + jitter(random), z + jitter(random) * 2,
                     jitter(random) * 0.3, 0.04 + 0.08 * random.nextDouble(), jitter(random) * 0.3);
             if (f instanceof CaveParticles.Sized s) s.grow(1.3F);
         }
         if (ERClientConfig.INSTANCE.caveParticles.get()) {
-            // the cloud: thrown out low and up, then hanging over the crater for several seconds
-            for (int i = Fountain.count(BURST_ASH * far, random.nextDouble()); i > 0; i--) {
-                double a = random.nextDouble() * Mth.TWO_PI, out = 0.08 + 0.2 * random.nextDouble();
-                EruptionEffects.put(mc, level, ERParticles.BLAST_ASH.get(), d, x + 0.8 * Math.cos(a), y + random.nextDouble(), z + 0.8 * Math.sin(a),
-                        out * Math.cos(a), 0.04 + 0.12 * random.nextDouble(), out * Math.sin(a));
+            // the cloud: many small soft puffs thrown out low and up from a ring round the strike, over the crater
+            Billow.Kind k = Billow.BLAST_ASH;
+            for (int i = Fountain.count(k.puffs() * far, random.nextDouble()); i > 0; i--) {
+                double a = random.nextDouble() * Mth.TWO_PI, out = k.out0() + (k.out1() - k.out0()) * random.nextDouble();
+                EruptionEffects.put(mc, level, ERParticles.BLAST_ASH.get(), d, x + k.ring() * Math.cos(a), y + 0.3 + 0.6 * random.nextDouble(),
+                        z + k.ring() * Math.sin(a), out * Math.cos(a), k.up0() + (k.up1() - k.up0()) * random.nextDouble(), out * Math.sin(a));
             }
         }
-        if (d < RUBBLE_REACH) rubble(mc, level, ground(level, x, y, z), x, y, z, Fountain.count(BURST_RUBBLE * SmokeBudget.share(), random.nextDouble()),
-                0.12, 0.4, 0.25, 0.6, random);
+        if (d < RUBBLE_REACH) rubble(mc, level, ground(level, x, y, z), x, y + 0.4, z, Fountain.count(BURST_RUBBLE * SmokeBudget.share(), random.nextDouble()),
+                0.12, 0.35, 0.3, 0.55, random);
     }
 
     /** The rock a bomb burst on: the first solid block at or up to three under it, else basalt. */
@@ -232,16 +265,17 @@ public final class BombEffects {
 
     /**
      * {@code n} chunks of {@code state} thrown out from (x, y, z): out {@code outMin} to {@code outMax} blocks a tick
-     * and up {@code upMin} to {@code upMax}, to lie where they land a while ({@link CaveParticles.Rubble}). Shared with
-     * the ceiling blocks that crash down (QuakeEffects).
+     * and up {@code upMin} to {@code upMax}, to bounce and lie where they land a while ({@link CaveParticles.Rubble},
+     * tinted as the rock). Shared with the ceiling blocks that crash down (QuakeEffects).
      */
     static void rubble(Minecraft mc, ClientLevel level, BlockState state, double x, double y, double z, int n, double outMin, double outMax,
                        double upMin, double upMax, RandomSource random) {
         if (state.isAir() || state.getRenderShape() == RenderShape.INVISIBLE) return;
         for (int i = 0; i < n; i++) {
             double a = random.nextDouble() * Mth.TWO_PI, out = outMin + (outMax - outMin) * random.nextDouble();
-            mc.particleEngine.add(new CaveParticles.Rubble(level, x + 0.3 * Math.cos(a), y + 0.3 * random.nextDouble(), z + 0.3 * Math.sin(a),
-                    out * Math.cos(a), upMin + (upMax - upMin) * random.nextDouble(), out * Math.sin(a), state));
+            Particle p = mc.particleEngine.createParticle(ERParticles.RUBBLE.get(), x + 0.3 * Math.cos(a), y + 0.3 * random.nextDouble(), z + 0.3 * Math.sin(a),
+                    out * Math.cos(a), upMin + (upMax - upMin) * random.nextDouble(), out * Math.sin(a));
+            if (p instanceof CaveParticles.Rubble r) r.tint(state);
         }
     }
 

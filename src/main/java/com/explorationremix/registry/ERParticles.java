@@ -10,7 +10,8 @@ import net.minecraftforge.registries.RegistryObject;
 /**
  * The cave particles: steam off hot pools, embers off lava, pollen in daylight shafts, (0.8.0) the volcanic smoke of
  * the Galleries and the Wasteland, and (0.9.0) the grit of the quakes and the lava spatter of the eruptions, and the
- * eruptions' lava gobs, fireballs and dark ash, the blasts' ash and the crashes' rock dust. Spawned by each client.
+ * eruptions' lava gobs, fireballs and dark ash, the blasts' ash and the crashes' rock dust, the blasts' flash and the
+ * rubble. Spawned by each client.
  */
 public final class ERParticles {
     public static final DeferredRegister<ParticleType<?>> PARTICLES = DeferredRegister.create(ForgeRegistries.PARTICLE_TYPES, ExplorationRemix.MOD_ID);
@@ -49,4 +50,11 @@ public final class ERParticles {
     public static final RegistryObject<SimpleParticleType> BLAST_ASH = PARTICLES.register("blast_ash", () -> new SimpleParticleType(false));
     /** 0.9.0: the pale billow of rock dust where a ceiling block crashes down. */
     public static final RegistryObject<SimpleParticleType> ROCK_DUST = PARTICLES.register("rock_dust", () -> new SimpleParticleType(false));
+    /**
+     * 0.9.0 (eruption effects, round 2): the blaze of a lava bomb's blast and of an eruption's first ticks, and the glow
+     * building at a vent's mouth while it warns.
+     */
+    public static final RegistryObject<SimpleParticleType> FLASH = PARTICLES.register("flash", () -> new SimpleParticleType(false));
+    /** 0.9.0 (eruption effects, round 2): a chunk of broken rock thrown out by a blast or a crashed block, tinted as the rock. */
+    public static final RegistryObject<SimpleParticleType> RUBBLE = PARTICLES.register("rubble", () -> new SimpleParticleType(false));
 }

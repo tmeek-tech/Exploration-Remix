@@ -229,3 +229,193 @@ def _fireball(seed):
 
 for i, seed in enumerate(FIRE_SEEDS):
     PAINTERS[f"particle/fireball_{i}"] = (lambda s=seed: _fireball(s))
+
+
+# 0.9.0 (eruption effects, round 2): soft puffs for the dust and ash clouds, the eruption plume's billows, the flash of
+# a blast and the vent's glow, and the rubble's chunks.
+#
+# The clouds (client/CaveParticles.Dust: a bomb's ash, a crashed block's rock dust) were drawn with the volcanic smoke's
+# puffs, whose hard alpha steps show as flat square facets once a puff is blown up to a few blocks. A soft puff is the
+# same lumpy outline of a core and lobes, but its alpha ramps down over the last two and a half pixels to its rim in
+# fine steps, and its shade is mottled in blotches a few pixels across rather than per pixel, so many small ones build
+# a cloud that reads as billowing dust rather than stacked panes. Pale, as the particle tints it.
+SOFT_SHADES = [(255, 253, 250), (241, 238, 233), (226, 222, 216), (210, 206, 200), (194, 190, 184)]
+SOFT_SEEDS = [6501, 6502, 6503, 6504]
+# The eruption plume's ash (client/CaveParticles.EruptionAsh): each lobe light at its edge and dark at its heart, so a
+# column of them, tinted a charcoal brown, shows lit billows with dark cores instead of a flat black shaft.
+ASH_SHADES = [(92, 88, 84), (122, 117, 111), (156, 150, 142), (194, 187, 177), (230, 222, 211), (252, 246, 236)]
+ASH_SEEDS = [6601, 6602, 6603, 6604]
+
+
+def _lobes(rng):
+    lobes = [(8 + rng.uniform(-0.5, 0.5), 8 + rng.uniform(-0.5, 0.5), rng.uniform(4.4, 5.0))]
+    start = rng.random() * 2 * math.pi
+    count = rng.randrange(4, 6)
+    for k in range(count):
+        a = start + k * 2 * math.pi / count + rng.uniform(-0.35, 0.35)
+        d = rng.uniform(2.3, 3.0)
+        lobes.append((8 + d * math.cos(a), 8 + d * math.sin(a), rng.uniform(2.6, 3.3)))
+    return lobes
+
+
+def _blotches(rng):
+    """Value noise of blotches about four pixels across: a 5 x 5 grid of draws, smoothly blended."""
+    g = [[rng.random() for _ in range(6)] for _ in range(6)]
+
+    def at(x, y):
+        fx, fy = x / 4.0, y / 4.0
+        ix, iy = int(fx), int(fy)
+        tx, ty = fx - ix, fy - iy
+        tx, ty = tx * tx * (3 - 2 * tx), ty * ty * (3 - 2 * ty)
+        a = g[iy][ix] + (g[iy][ix + 1] - g[iy][ix]) * tx
+        b = g[iy + 1][ix] + (g[iy + 1][ix + 1] - g[iy + 1][ix]) * tx
+        return a + (b - a) * ty
+    return at
+
+
+def _soft(seed, shades, shade_of):
+    rng = random.Random(seed)
+    lobes = _lobes(rng)
+    blot = _blotches(rng)
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    px = img.load()
+    for y in range(16):
+        for x in range(16):
+            cx, cy = x + 0.5, y + 0.5
+            if math.hypot(cx - 8, cy - 8) > 7.6:
+                continue  # the corners stay clear
+            depths = [r - math.hypot(cx - lx, cy - ly) for lx, ly, r in lobes]
+            depth = max(depths)
+            if depth <= 0:
+                continue
+            # the lobe in front here (the outer lobes lie over the core), and how deep inside it
+            own = next(d for d in reversed(depths) if d > 0)
+            n = blot(x, y)
+            # alpha: a soft ramp over the outer 2.6 pixels in twelfths, a little thinner in the blotches' gaps
+            a = min(1.0, depth / 2.6) ** 0.85 * (0.86 + 0.14 * n)
+            a = round(a * 12) / 12.0
+            if a <= 0:
+                continue
+            v = shade_of(depth, own, n, rng.random())
+            shade = shades[max(0, min(len(shades) - 1, int(v * len(shades))))]
+            px[x, y] = shade + (int(round(255 * a)),)
+    return img
+
+
+def _soft_puff(seed):
+    # pale all through, a shade paler inside, mottled in blotches
+    return _soft(seed, SOFT_SHADES, lambda depth, own, n, g: 0.15 + 0.35 * min(1.0, depth / 4.0) + 0.55 * n + (g - 0.5) * 0.15)
+
+
+def _ash_puff(seed):
+    # each lobe light at its own edge and darker inside it (a billow lit round its rim), the core lobe's heart darkest
+    return _soft(seed, ASH_SHADES, lambda depth, own, n, g: 0.95 - 0.55 * min(1.0, max(0.0, own - 0.6) / 2.6)
+                 - 0.15 * min(1.0, max(0.0, depth - 2.5) / 2.0) + (n - 0.5) * 0.3 + (g - 0.5) * 0.1)
+
+
+for i, seed in enumerate(SOFT_SEEDS):
+    PAINTERS[f"particle/soft_puff_{i}"] = (lambda s=seed: _soft_puff(s))
+for i, seed in enumerate(ASH_SEEDS):
+    PAINTERS[f"particle/ash_puff_{i}"] = (lambda s=seed: _ash_puff(s))
+
+
+# A flash (client/CaveParticles.Flash): the blaze of a lava bomb's blast and of an eruption's first ticks, and the glow
+# building at a vent's mouth while it warns. A round glow with a slightly ragged rim: a white-yellow heart, yellow,
+# orange and a deep orange edge, its alpha falling with the light to nothing before the square's edge (the particle
+# tints it deeper orange for the vent's glow). Full-bright on the translucent sheet. Two of them.
+FLASH_RAMP = [(0.0, (255, 252, 236)), (0.22, (255, 236, 168)), (0.45, (255, 188, 92)), (0.7, (250, 128, 40)), (1.0, (214, 72, 18))]
+FLASH_SEEDS = [6701, 6702]
+
+
+def _flash(seed):
+    rng = random.Random(seed)
+    bumps = [(rng.uniform(0.03, 0.07), rng.randrange(5, 9), rng.random() * 2 * math.pi) for _ in range(2)]
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    px = img.load()
+    for y in range(16):
+        for x in range(16):
+            dx, dy = x + 0.5 - 8, y + 0.5 - 8
+            a = math.atan2(dy, dx)
+            rim = 7.8 * (1 - sum(h * (1 + math.sin(k * a + ph)) for h, k, ph in bumps))
+            r = math.hypot(dx, dy) / rim
+            if r >= 1.0:
+                continue
+            light = min(1.0, 1.15 * (1 - r) ** 1.3 + 0.35 * math.exp(-(r / 0.3) ** 2))
+            light = round(light * 14) / 14.0
+            if light <= 0:
+                continue
+            c = _ramp([(t * 1.0, col) for t, col in FLASH_RAMP], min(1.0, r))
+            px[x, y] = c + (int(round(255 * light)),)
+    return img
+
+
+for i, seed in enumerate(FLASH_SEEDS):
+    PAINTERS[f"particle/flash_{i}"] = (lambda s=seed: _flash(s))
+
+
+# Rubble (client/CaveParticles.Rubble): a broken chunk of rock a third to half a block across, thrown out by a blast or
+# a crashed block, which lies on the floor a while. The block's own texture shrunk to a patch reads as a flat tile and
+# vanishes on the same rock, so the chunk has its own sprite: an angular outline of five to seven corners, its faces
+# lit from the upper left (a pale lit facet, a mid face, a shadowed face lower right), a darker crack or two and a dark
+# rim pixel round it, all greys the particle tints with the colour of the struck block's own texture, lightened (fresh
+# broken stone). Opaque (the opaque sheet drops the clear pixels). Four of them.
+RUBBLE_SHADES = [(250, 248, 244), (214, 211, 206), (176, 173, 168), (138, 135, 131)]
+RUBBLE_RIM = (92, 90, 87)
+RUBBLE_SEEDS = [6801, 6802, 6803, 6804]
+
+
+def _chunk(seed):
+    rng = random.Random(seed)
+    n = rng.randrange(5, 8)
+    cx, cy = 8 + rng.uniform(-0.4, 0.4), 8 + rng.uniform(-0.4, 0.4)
+    start = rng.random() * 2 * math.pi
+    corners = []
+    for k in range(n):
+        a = start + k * 2 * math.pi / n + rng.uniform(-0.3, 0.3)
+        r = rng.uniform(5.2, 6.8)
+        corners.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+
+    def inside(px_, py_):
+        hit = False
+        for i in range(n):
+            x1, y1 = corners[i]
+            x2, y2 = corners[(i + 1) % n]
+            if (y1 > py_) != (y2 > py_) and px_ < x1 + (py_ - y1) * (x2 - x1) / (y2 - y1):
+                hit = not hit
+        return hit
+    # a ridge through the chunk splits its lit facet (upper left) from its shadowed face (lower right)
+    ridge = rng.uniform(-1.2, 1.2)
+    cracks = set()
+    for _ in range(rng.randrange(1, 3)):
+        a = rng.random() * 2 * math.pi
+        x0, y0 = cx + rng.uniform(-2, 2), cy + rng.uniform(-2, 2)
+        for k in range(rng.randrange(2, 4)):
+            cracks.add((int(x0 + k * math.cos(a)), int(y0 + k * math.sin(a))))
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    px = img.load()
+    filled = [[inside(x + 0.5, y + 0.5) for x in range(16)] for y in range(16)]
+    for y in range(16):
+        for x in range(16):
+            if not filled[y][x]:
+                continue
+            edge = any(not (0 <= x + ex < 16 and 0 <= y + ey < 16 and filled[y + ey][x + ex])
+                       for ex, ey in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+            dx, dy = x + 0.5 - cx, y + 0.5 - cy
+            # which side of the ridge, and how far toward the light
+            side = dx + dy - ridge
+            if edge and side > 0:
+                c = RUBBLE_RIM
+            elif edge:
+                c = RUBBLE_SHADES[0]
+            elif (x, y) in cracks:
+                c = RUBBLE_SHADES[3]
+            else:
+                g = (rng.random() - 0.5) * 0.6
+                i = 0 if side < -3.5 + g else 1 if side < 0 + g else 2 if side < 3.5 + g else 3
+                c = RUBBLE_SHADES[i]
+            px[x, y] = c + (255,)
+    return img
+
+
+for i, seed in enumerate(RUBBLE_SEEDS):
+    PAINTERS[f"particle/rubble_{i}"] = (lambda s=seed: _chunk(s))

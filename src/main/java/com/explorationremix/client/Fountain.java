@@ -75,12 +75,74 @@ final class Fountain {
     /** The warning: dark ash puffs a tick, leaving the mouth this fast (it billows 7 to 15 blocks over the rim, then creeps on). */
     static final double WARN_ASH = 1.2, WARN_THRUST_MIN = 0.2, WARN_THRUST_MAX = 0.45;
     /**
-     * The warning: the chance a tick of a lava pop (a spot of the crater floor flings a few gobs up 4 to 11 blocks, over
-     * the crater's rim, with a flare of fire at the mouth), and fire flickering at the mouth a tick.
+     * The warning: a lava pop flings about this many gobs up 5 to 11 blocks, over the crater's rim, with a flare of fire
+     * at the mouth (on a cadence, {@link #popEvery}); and fire flickers at the mouth this much a tick as it starts.
      */
-    static final double POP_CHANCE = 0.2;
     static final int POP_GOBS = 8;
-    static final double POP_SPEED_MIN = 0.7, POP_SPEED_MAX = 1.0, WARN_FIRE = 0.3;
+    static final double POP_SPEED_MIN = 0.8, POP_SPEED_MAX = 1.05, WARN_FIRE = 0.4;
+
+    // ------------------------------------------------------------------------------------------------ round 2
+    // (0.9.0 eruption effects, round 2: the warning showed only by luck, the burst's start had no blaze)
+
+    /**
+     * The warning's lava pops come on a cadence, not by chance: every {@link #POP_EVERY_START} ticks as it begins,
+     * quickening to every {@link #POP_EVERY_END} as the burst comes ({@link #popEvery}), each flinging
+     * {@link #popGobs} gobs, more toward the end.
+     */
+    static final double POP_EVERY_START = 20, POP_EVERY_END = 3;
+    /**
+     * The glow building at the mouth through the warning: a deep orange billboard (CaveParticles.Flash) from
+     * {@link #GLOW_MIN} to {@link #GLOW_MAX} blocks in half-width, a new one every {@link #GLOW_EVERY} ticks living
+     * {@link #GLOW_LIFE}, so there is always one; its strength from {@link #GLOW_LOW} to 1.
+     */
+    static final double GLOW_MIN = 2.0, GLOW_MAX = 6.0, GLOW_LOW = 0.4;
+    static final int GLOW_EVERY = 3, GLOW_LIFE = 7;
+    /** Fire licking over the mouth a tick, from {@link #WARN_FIRE} as the warning starts to this as the burst comes. */
+    static final double WARN_FIRE_MAX = 3.0;
+    /**
+     * The burst's start: a blaze over the mouth, one flash billboard {@link #BLAZE_SIZE} blocks in half-width (times
+     * the root of the eruption's size), larger than the fireballs of the flash, for its first {@link #BLAZE_TICKS} ticks.
+     */
+    static final int BLAZE_TICKS = 3;
+    static final double BLAZE_SIZE = 7;
+
+    /** How far through a warning of {@code pre} ticks the eruption is {@code t} ticks in, 0 to 1 (1 with no warning). */
+    static double warned(double t, int pre) { return pre <= 0 ? 1 : clamp(t / pre, 0, 1); }
+
+    /**
+     * Ticks between two lava pops {@code w} (0 to 1) through the warning: {@code 20 (3 / 20)^w}, 20 as it starts, 7.7
+     * halfway, 3 as the burst comes.
+     */
+    static double popEvery(double w) { return POP_EVERY_START * Math.pow(POP_EVERY_END / POP_EVERY_START, clamp(w, 0, 1)); }
+
+    /** Gobs a lava pop flings {@code w} through the warning: from 0.75 to 1.5 times {@link #POP_GOBS}. */
+    static double popGobs(double w) { return POP_GOBS * (0.75 + 0.75 * clamp(w, 0, 1)); }
+
+    /** The mouth's glow's half-width {@code w} through the warning, blocks. */
+    static double glowSize(double w) { return GLOW_MIN + (GLOW_MAX - GLOW_MIN) * clamp(w, 0, 1); }
+
+    /** The mouth's glow's strength {@code w} through the warning, 0.4 to 1. */
+    static double glowStrength(double w) { return GLOW_LOW + (1 - GLOW_LOW) * clamp(w, 0, 1); }
+
+    /** Fireballs over the mouth a tick {@code w} through the warning. */
+    static double warnFire(double w) { return WARN_FIRE + (WARN_FIRE_MAX - WARN_FIRE) * clamp(w, 0, 1); }
+
+    /**
+     * A flash is drawn this far, at most, toward the camera from where it burns (and never more than halfway to it), its
+     * half-width shrunk so it looks the same size ({@link #toward}): particles write depth and are drawn oldest first,
+     * so ash puffs and rock already drawn in front of its own spot would hide it. Blocks.
+     */
+    static final double BLAZE_FORWARD = 8, GLOW_FORWARD = 5, BLAST_FORWARD = 1.5;
+
+    /**
+     * The share of the way from a flash's spot to the camera, {@code dist} blocks off, that it is drawn at:
+     * {@code min(forward, dist / 2) / dist} (0 at the camera). Drawn there at {@code 1 - share} of its half-width, it
+     * covers the same part of the view.
+     */
+    static double toward(double forward, double dist) { return dist > 1e-3 ? Math.min(Math.max(0, forward), dist / 2) / dist : 0; }
+
+    /** Whether the burst's blaze shows {@code tb} ticks into it: its first {@link #BLAZE_TICKS}. */
+    static boolean blazing(double tb) { return tb >= 0 && tb < BLAZE_TICKS; }
 
     /**
      * The start flash's share {@code tb} ticks into the burst: 1 at its first tick, easing to nothing over

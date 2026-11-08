@@ -42,8 +42,8 @@ import java.util.Random;
 
 /**
  * A lava bomb bursts (0.9.0, spec 5.4.4 to 5.4.6): a vanilla blast at the point it struck, through the game's own
- * {@code ServerLevel.explode} (whose packet brings the blast's sound and smoke to the players within 64 blocks), with
- * three things of the mod's own:
+ * explosion ({@code Level.explode}'s worker, which sends no packet: the bomb's clients draw and sound its burst
+ * themselves from its entity event, so it never shows the game's white TNT puffs), with three things of the mod's own:
  * <ul>
  *     <li>{@link #CALC}: the Galleries' rock is soft to it ({@code eruptions.craterRock}), and it never touches a block
  *     outside the layer, an ore, gilded blackstone or obsidian;</li>
@@ -117,8 +117,15 @@ public final class Blast {
         boolean way = Walkway.nearWayDown(cx, cz, cy - WAY_ROWS, cy + WAY_ROWS, WAY_MARGIN, WAY_MARGIN);
         b.breaks = terrainDamage() && !way;
         b.power = (float) (power * (0.9 + 0.2 * r.nextDouble()));
+        // the 10-argument worker (0.9.0 eruption effects, round 2; the 9-argument ServerLevel.explode is it plus the
+        // explode packet), with spawnParticles false as ServerLevel passes it: the same start event, rays, Detonate,
+        // entity loop and finalize, without the packet, whose only work for a bomb's blast was the game's white explosion
+        // puffs and its sound on the clients within 64 blocks (BombEffects plays its own burst and that sound) and the
+        // client's copy of the block list. Its knockback was always none: the Detonate handler takes every living thing
+        // out of the blast and pushes it itself, a player's push reaching them by hurtMarked (the motion packet).
+        // BlastQuietTest holds both.
         level.explode(b, level.damageSources().explosion(b, null), CALC, c.x, c.y, c.z, b.power, false,
-                b.breaks ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE);
+                b.breaks ? Level.ExplosionInteraction.BLOCK : Level.ExplosionInteraction.NONE, false);
         try {
             if (b.breaks && !b.crater.isEmpty()) crater(level, b, hit, c, r, cfg);
         } finally {

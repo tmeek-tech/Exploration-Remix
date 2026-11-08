@@ -13,7 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Particles option and the distance and the spatter grows; the vent's rumble starts only in time, a short warning's too;
  * a bomb's jolt and whistle follow their rules; and (the pack's look fixes) the start's flash dies within 16 ticks, the
  * jet of gobs fans out but mostly stays tight, a gob lives until it has rained back down past the crater floor, and the
- * plume's ash is thrown up out of the mouth toward the vault and still spreads under rock.
+ * plume's ash is thrown up out of the mouth toward the vault and still spreads under rock; and (effects round 2) the
+ * warning shows steadily, its pops on a cadence that quickens toward the burst and its glow and fire growing, and the
+ * burst's start blazes for its first three ticks.
  */
 class FountainTest {
     private static final long[] SEEDS = {0, 1, 7, -42, 8675309, Long.MIN_VALUE, Long.MAX_VALUE};
@@ -234,5 +236,85 @@ class FountainTest {
         assertEquals(1.10, Fountain.whistlePitch(1.6), 1e-12);
         assertEquals(0.80, Fountain.whistlePitch(-2), 1e-12);
         assertTrue(Fountain.whistlePitch(0.5) > Fountain.whistlePitch(-0.5), "higher climbing than falling");
+    }
+
+    /**
+     * The warning's pops come on a cadence, not by chance: every 20 ticks as it starts, quickening steadily to every 3 as
+     * the burst comes, so in the last two seconds of the default 4-second warning a pop comes at least every 8 ticks,
+     * and a pop's gobs (in the air 30 ticks and more) never leave a gap; each pop flings more gobs toward the end.
+     */
+    @Test
+    void theWarningsPopsComeOnAQuickeningCadence() {
+        assertEquals(20, Fountain.popEvery(0), 1e-9);
+        assertEquals(3, Fountain.popEvery(1), 1e-9);
+        assertEquals(Math.sqrt(20 * 3), Fountain.popEvery(0.5), 1e-9);
+        assertEquals(20, Fountain.popEvery(-1), 1e-9);
+        assertEquals(3, Fountain.popEvery(2), 1e-9);
+        for (double w = 0; w < 1; w += 0.01) assertTrue(Fountain.popEvery(w + 0.01) < Fountain.popEvery(w), "quickening at " + w);
+        // played on a clock as EruptionEffects does: the pops of a 4-second warning, by the tick they come
+        int pre = 80, pops = 0, last = -1, widest = 0, lateWidest = 0;
+        double clock = 0;
+        for (int t = 0; t < pre; t++) {
+            clock += 1 / Fountain.popEvery(Fountain.warned(t, pre));
+            if (clock < 1) continue;
+            clock = Math.min(1, clock - 1);
+            pops++;
+            if (last >= 0) {
+                widest = Math.max(widest, t - last);
+                if (t >= pre - 40) lateWidest = Math.max(lateWidest, t - last);
+            }
+            last = t;
+        }
+        assertTrue(pops >= 10 && pops <= 16, pops + " pops in a 4-second warning");
+        assertTrue(widest <= 20, "never more than a second apart: " + widest);
+        assertTrue(lateWidest <= 8, "in its last two seconds at most 8 ticks apart: " + lateWidest);
+        assertTrue(Fountain.popGobs(1) > Fountain.popGobs(0), "more gobs a pop toward the end");
+        assertEquals(Fountain.POP_GOBS * 0.75, Fountain.popGobs(0), 1e-9);
+        assertEquals(Fountain.POP_GOBS * 1.5, Fountain.popGobs(1), 1e-9);
+        assertEquals(1, Fountain.warned(5, 0), 0, "no warning: all warned");
+        assertEquals(0.5, Fountain.warned(40, 80), 1e-12);
+        assertEquals(1, Fountain.warned(100, 80), 0);
+    }
+
+    /**
+     * The glow at the mouth and the fire over it grow steadily through the warning, and there is always a glow: a new
+     * one comes before the last is gone. The burst's blaze shows for its first three ticks, and is larger than the
+     * biggest fireball of its flash.
+     */
+    @Test
+    void theWarningGlowsSteadilyAndTheBurstBlazes() {
+        for (double w = 0; w < 1; w += 0.05) {
+            assertTrue(Fountain.glowSize(w + 0.05) > Fountain.glowSize(w), "the glow grows");
+            assertTrue(Fountain.glowStrength(w + 0.05) > Fountain.glowStrength(w), "and brightens");
+            assertTrue(Fountain.warnFire(w + 0.05) > Fountain.warnFire(w), "the fire grows");
+        }
+        assertEquals(Fountain.GLOW_MIN, Fountain.glowSize(0), 1e-12);
+        assertEquals(Fountain.GLOW_MAX, Fountain.glowSize(1), 1e-12);
+        assertEquals(1, Fountain.glowStrength(1), 1e-12);
+        assertEquals(Fountain.WARN_FIRE, Fountain.warnFire(0), 1e-12);
+        assertTrue(Fountain.glowSize(0.5) * 2 >= 6, "halfway through, the glow is six blocks across");
+        assertTrue(Fountain.GLOW_LIFE > Fountain.GLOW_EVERY, "a new glow comes before the last one is gone");
+        for (int tb = -1; tb <= 4; tb++) assertEquals(tb >= 0 && tb < 3, Fountain.blazing(tb), "the blaze at " + tb);
+        // a flash fireball is at most 1.2 blocks in half-width, drawn 2.2 times that, swelling to 1.9 times
+        double fireball = 1.2 * EruptionEffects.FLASH_SIZE * 1.9;
+        assertTrue(Fountain.BLAZE_SIZE > fireball, "the blaze (" + Fountain.BLAZE_SIZE + ") outgrows the fireballs (" + fireball + ")");
+    }
+
+    @Test
+    void aFlashIsDrawnTowardTheCameraAtTheSameApparentSize() {
+        // from the rim (40 blocks) the blaze comes the whole 8 blocks forward, in front of the ash round the mouth
+        assertEquals(8.0 / 40, Fountain.toward(Fountain.BLAZE_FORWARD, 40), 1e-12);
+        // close by, never more than halfway to the camera; at the camera, not at all
+        assertEquals(0.5, Fountain.toward(Fountain.BLAZE_FORWARD, 6), 1e-12);
+        assertEquals(0, Fountain.toward(Fountain.BLAZE_FORWARD, 0), 1e-12);
+        assertEquals(0, Fountain.toward(-1, 20), 1e-12);
+        for (double dist = 0.5; dist < 200; dist *= 1.7) {
+            double k = Fountain.toward(Fountain.GLOW_FORWARD, dist);
+            assertTrue(k >= 0 && k <= 0.5, "within halfway: " + k);
+            // drawn at (1 - k) of its half-width, (1 - k) of the distance off: the same angle in the view
+            double half = 3, angle = half / dist, drawn = half * (1 - k) / (dist * (1 - k));
+            assertEquals(angle, drawn, 1e-12);
+        }
+        assertTrue(Fountain.BLAST_FORWARD < Fountain.GLOW_FORWARD && Fountain.GLOW_FORWARD < Fountain.BLAZE_FORWARD);
     }
 }

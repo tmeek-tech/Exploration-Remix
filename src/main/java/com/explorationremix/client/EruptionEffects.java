@@ -37,27 +37,30 @@ import java.util.PriorityQueue;
  * {@code DistExecutor}, so a dedicated server never loads it. The lava bombs are the server's own entities; their trail,
  * whistle and bursts are {@link BombEffects}'.
  * <ul>
- *     <li><b>The warning</b>: dark ash billowing from the vent's mouth ({@link CaveParticles.EruptionAsh}, never the
- *     Caldera's own beige smoke), lava popping on the crater floor (a spot flings a few glowing gobs up with a flare of
- *     fire) and spatter hopping, and the vent's rumble ({@code eruption.rumble}, placed at the vent, heard 96 blocks
- *     off).</li>
+ *     <li><b>The warning</b>: a glow building at the vent's mouth and fire licking over its rim, both growing toward the
+ *     burst ({@link CaveParticles.Flash}), lava popping on the crater floor on a cadence that quickens toward the burst
+ *     (a spot flings glowing gobs up over the rim with a flare of fire), spatter hopping, dark ash billowing from the
+ *     mouth ({@link CaveParticles.EruptionAsh}, never the Caldera's own beige smoke), and the vent's rumble
+ *     ({@code eruption.rumble}, placed at the vent, heard 96 blocks off).</li>
  *     <li><b>The burst</b>: a deep boom ({@code eruption.boom}) placed at the vent with no fading, its volume set by the
  *     distance, so it is heard across the Caldera with its direction; it comes as late as sound travels (a block every
- *     half tick), and the view jolts as it arrives ({@link CameraShake}). A flash of fire and lava bursts from the mouth
- *     as it starts ({@link Fountain#flash}). Then the fountain's roar ({@code eruption.roar}, the same way, swelling in
- *     and dying away with the fountain) and the fountain itself: a dense jet of lava gobs ({@link CaveParticles.LavaGob},
- *     half a block to a block across) thrown 10 to 25 blocks up off the crater floor, fanning out and raining back down
- *     round the stack, fine spatter round them, fire roaring at the mouth, embers, and a thick column of dark ash
- *     thrown out of the mouth that climbs to the vault, spreads under it and goes on puffing for ten seconds after the
- *     fountain. All of it in full at strength 1, in gusts after the burst's first second, and larger by the eruption's
- *     {@code scale} once the lava rises.</li>
+ *     half tick), and the view jolts as it arrives ({@link CameraShake}). A blaze over the mouth for its first ticks
+ *     and a flash of fire and lava burst from the mouth as it starts ({@link Fountain#blazing}, {@link Fountain#flash}).
+ *     Then the fountain's roar ({@code eruption.roar}, the same way, swelling in and dying away with the fountain) and
+ *     the fountain itself: a dense jet of lava gobs ({@link CaveParticles.LavaGob}, half a block to a block across)
+ *     thrown 10 to 25 blocks up off the crater floor, fanning out and raining back down round the stack, fine spatter
+ *     round them, fire roaring at the mouth, embers, and a thick column of ash thrown out of the mouth, lit orange from
+ *     below by the fountain and billowing charcoal brown above, that climbs to the vault, spreads under it and goes on
+ *     puffing for ten seconds after the fountain. All of it in full at strength 1, in gusts after the burst's first
+ *     second, and larger by the eruption's {@code scale} once the lava rises.</li>
  * </ul>
  * Within 32 blocks the particles go through the game's own limits; farther out up to the eruption's range they are
  * forced and thinned by hand by the Particles option and the distance, and the gobs, the spatter and the fire are
  * drawn larger so they still show through the cave fog (the ash, always shown, a little larger). The ash takes at most
- * a quarter of the client's smoke on top of the Caldera's own, which gives way to it ({@link SmokeBudget}). With caveParticles off the ash and the embers go;
- * the gobs, the spatter and the fire stay, as they show the danger. A held eruption plays its moment steadily, and
- * nothing shakes the view while it is held.
+ * a quarter of the client's smoke on top of the Caldera's own, which gives way to it ({@link SmokeBudget}). The warning's
+ * glow and the burst's blaze are always shown, as the game's own explosion is. With caveParticles off the ash and the
+ * embers go; the gobs, the spatter, the fire, the glow and the blaze stay, as they show the danger. A held eruption
+ * plays its moment steadily, and nothing shakes the view while it is held.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, value = Dist.CLIENT)
 public final class EruptionEffects {
@@ -82,6 +85,16 @@ public final class EruptionEffects {
     static final float FLASH_SIZE = 2.2F, FLARE_SIZE = 1.4F;
     /** An eruption is forgotten this long after its plume ends, if no end came for it. */
     static final int FORGET = 20;
+    /**
+     * How strongly the vent lights its ash's foot from below (0 to 1, EruptionAsh): while it warns from this much to
+     * this much more as the burst comes (the crater's lava), while the fountain throws as hard as it throws, and in the
+     * plume's tail from this much down to nothing.
+     */
+    static final double WARN_GLOW = 0.35, WARN_GLOW_MORE = 0.45, TAIL_GLOW = 0.4;
+    /** The warning's mouth glow and the burst's blaze stand this far over the mouth, so they show over its rim from below. */
+    static final double GLOW_OVER = 3.0, BLAZE_OVER = 3.0;
+    /** The warning's fire licks this high over the mouth, from its foot, so it shows over the rim from below. */
+    static final double WARN_FIRE_FOOT = 0.8, WARN_FIRE_RISE = 2.5;
 
     /** The eruptions this client plays, by their id. */
     private static final Map<Integer, Vent> ERUPTIONS = new HashMap<>();
@@ -102,6 +115,8 @@ public final class EruptionEffects {
         int floorY, mouthY, pre, burst, held = -1, range;
         long start, seed;
         boolean rumbled, boomed;
+        /** The warning's lava pops' clock: a pop each time it passes 1 (it runs on while held, so a held warning pops too). */
+        double popClock;
         @Nullable Roar roar;
 
         void set(LavaNet.Eruption e) {
@@ -203,12 +218,15 @@ public final class EruptionEffects {
             // beyond its range it is not told, and nothing of it shows
             if (d > v.range) continue;
             double far = Fountain.farShare(d, share);
-            if (t < v.pre) warning(mc, level, v, d, far, particles, budget, now, random);
+            if (t < v.pre) warning(mc, level, v, t, d, far, particles, budget, now, random);
             else if (t < v.pre + v.burst) burst(mc, level, v, t - v.pre, d, far, particles, budget, now, random);
             else if (particles && ticks % Fountain.plumeEvery(v.scale) == 0) {
-                // the plume puffs on after the fountain, ever more weakly
+                // the plume puffs on after the fountain, ever more weakly, its foot's glow dying with it
                 double tail = 1 - (t - v.pre - v.burst) / Fountain.PLUME_TAIL;
-                if (tail > 0) ash(mc, v, d, now, budget, random, Fountain.ashThrust(random.nextDouble(), v.strength) * tail, PLUME_REACH_MIN, PLUME_REACH_MAX);
+                if (tail > 0) {
+                    ash(mc, v, d, now, budget, random, Fountain.ashThrust(random.nextDouble(), v.strength) * tail, PLUME_REACH_MIN, PLUME_REACH_MAX,
+                            TAIL_GLOW * tail);
+                }
             }
         }
     }
@@ -255,20 +273,36 @@ public final class EruptionEffects {
         v.roar.target = volume;
     }
 
-    /** The warning: dark ash billowing from the mouth, lava popping and spatter hopping on the crater floor. */
-    private static void warning(Minecraft mc, ClientLevel level, Vent v, double d, double far, boolean particles, int budget, long now,
+    /**
+     * The warning {@code t} ticks in: a glow building at the mouth and fire licking over it, both growing toward the
+     * burst, lava pops on a cadence that quickens toward it, spatter hopping on the crater floor, and dark ash billowing
+     * from the mouth. The glow, the fire and the pops are there in every frame of its last seconds, not by chance.
+     */
+    private static void warning(Minecraft mc, ClientLevel level, Vent v, double t, double d, double far, boolean particles, int budget, long now,
                                 RandomSource random) {
+        double w = Fountain.warned(t, v.pre);
         double floor = v.floorY + 1.05;
         for (int i = Fountain.count(HOPS * far, random.nextDouble()); i > 0; i--) {
             double[] p = onFloor(v, FLOOR_SHARE, random);
             double a = random.nextDouble() * Mth.TWO_PI, side = 0.03 * random.nextDouble();
             put(mc, level, ERParticles.LAVA_SPATTER.get(), d, p[0], floor, p[1], side * Math.cos(a), 0.25 + 0.25 * random.nextDouble(), side * Math.sin(a));
         }
-        // a pop now and then even thinned far off, so the vent still flickers; and fire licking over the rim
-        if (random.nextDouble() < Fountain.POP_CHANCE * Math.max(0.25, far)) pop(mc, level, v, d, floor, far, random);
-        for (int i = Fountain.count(Fountain.WARN_FIRE * far, random.nextDouble()); i > 0; i--) {
+        // the glow at the mouth: always one there (a new one every few ticks outlives the gap), growing and brightening
+        if (ticks % Fountain.GLOW_EVERY == 0) {
+            flash(mc, d, v.x, v.mouthY + GLOW_OVER, v.z, Fountain.glowSize(w), Fountain.GLOW_LIFE, Fountain.glowStrength(w), Fountain.GLOW_FORWARD);
+        }
+        // fire licking over the rim, more and bigger as the burst comes
+        for (int i = Fountain.count(Fountain.warnFire(w) * far, random.nextDouble()); i > 0; i--) {
             double[] p = onFloor(v, FLAME_SHARE, random);
-            put(mc, level, ERParticles.FIREBALL.get(), d, p[0], v.mouthY + random.nextDouble(), p[1], 0, 0.04 + 0.06 * random.nextDouble(), 0);
+            Particle f = put(mc, level, ERParticles.FIREBALL.get(), d, p[0], v.mouthY + WARN_FIRE_FOOT + WARN_FIRE_RISE * random.nextDouble(), p[1],
+                    0, 0.05 + 0.07 * random.nextDouble(), 0);
+            if (f instanceof CaveParticles.Sized s) s.grow((float) (1 + 0.6 * w));
+        }
+        // lava pops on a cadence that quickens toward the burst (each pop shown, its gobs thinned far off)
+        v.popClock += 1 / Fountain.popEvery(w);
+        if (v.popClock >= 1) {
+            v.popClock = Math.min(1, v.popClock - 1);
+            pop(mc, level, v, d, floor, far, w, random);
         }
         if (random.nextInt(3) == 0 && Fountain.count(far, random.nextDouble()) > 0) {
             double[] p = onFloor(v, FLOOR_SHARE, random);
@@ -277,16 +311,19 @@ public final class EruptionEffects {
         if (!particles) return;
         for (int i = Fountain.count(Fountain.WARN_ASH * SmokeBudget.share(), random.nextDouble()); i > 0; i--) {
             double thrust = Fountain.WARN_THRUST_MIN + (Fountain.WARN_THRUST_MAX - Fountain.WARN_THRUST_MIN) * random.nextDouble();
-            ash(mc, v, d, now, budget, random, thrust, WARN_REACH_MIN, WARN_REACH_MAX);
+            ash(mc, v, d, now, budget, random, thrust, WARN_REACH_MIN, WARN_REACH_MAX, WARN_GLOW + WARN_GLOW_MORE * w);
         }
     }
 
-    /** A lava pop: one spot of the crater floor flings a few gobs up 5 to 10 blocks, over the rim, with a flare of fire at the mouth. */
-    private static void pop(Minecraft mc, ClientLevel level, Vent v, double d, double floor, double far, RandomSource random) {
+    /**
+     * A lava pop {@code w} through the warning: one spot of the crater floor flings gobs up 5 to 10 blocks, over the rim,
+     * more toward the burst ({@link Fountain#popGobs}), with a flare of fire at the mouth.
+     */
+    private static void pop(Minecraft mc, ClientLevel level, Vent v, double d, double floor, double far, double w, RandomSource random) {
         double[] p = onFloor(v, FLOOR_SHARE, random);
         Particle flare = put(mc, level, ERParticles.FIREBALL.get(), d, p[0], v.mouthY + 0.5, p[1], 0, 0.08 + 0.08 * random.nextDouble(), 0);
         if (flare instanceof CaveParticles.Sized s) s.grow(FLARE_SIZE);
-        for (int i = Fountain.count(Fountain.POP_GOBS * Math.max(0.5, far), random.nextDouble()); i > 0; i--) {
+        for (int i = Fountain.count(Fountain.popGobs(w) * Math.max(0.5, far), random.nextDouble()); i > 0; i--) {
             double speed = Fountain.POP_SPEED_MIN + (Fountain.POP_SPEED_MAX - Fountain.POP_SPEED_MIN) * random.nextDouble();
             gob(mc, level, d, p[0] + (random.nextDouble() - 0.5) * 0.6, floor, p[1] + (random.nextDouble() - 0.5) * 0.6, speed,
                     25 * Math.sqrt(random.nextDouble()), random);
@@ -316,6 +353,10 @@ public final class EruptionEffects {
             put(mc, level, ERParticles.LAVA_SPATTER.get(), d, p[0], floor, p[1], side * Math.cos(a), speed * Math.cos(tilt), side * Math.sin(a));
         }
         double mouth = Math.max(1, v.mouthY + 1 - floor);
+        // the start's blaze: one big flash over the mouth, larger than its fireballs, for its first ticks (always shown)
+        if (Fountain.blazing(tb)) {
+            flash(mc, d, v.x, v.mouthY + BLAZE_OVER, v.z, Fountain.BLAZE_SIZE * Math.sqrt(size), 2, 0, Fountain.BLAZE_FORWARD);
+        }
         // the start: a flash of fire and lava thrown wide out of the mouth
         double flash = Fountain.flash(tb);
         if (flash > 0) {
@@ -349,9 +390,10 @@ public final class EruptionEffects {
             double[] p = onFloor(v, FLOOR_SHARE, random);
             put(mc, level, ERParticles.EMBER.get(), d, p[0], floor + (mouth + 8) * random.nextDouble(), p[1], 0, 0, 0);
         }
-        // the plume: dark ash thrown out of the mouth, thick while the fountain throws hardest
-        for (int i = Fountain.count(Fountain.ASH * Math.max(k, flash) * v.scale * SmokeBudget.share(), random.nextDouble()); i > 0; i--) {
-            ash(mc, v, d, now, budget, random, Fountain.ashThrust(random.nextDouble(), v.strength), PLUME_REACH_MIN, PLUME_REACH_MAX);
+        // the plume: ash thrown out of the mouth, thick while the fountain throws hardest, its foot lit by the fountain
+        double glow = Math.max(k, flash);
+        for (int i = Fountain.count(Fountain.ASH * glow * v.scale * SmokeBudget.share(), random.nextDouble()); i > 0; i--) {
+            ash(mc, v, d, now, budget, random, Fountain.ashThrust(random.nextDouble(), v.strength), PLUME_REACH_MIN, PLUME_REACH_MAX, glow);
         }
     }
 
@@ -362,19 +404,21 @@ public final class EruptionEffects {
     }
 
     /**
-     * A puff of dark ash thrown out of the mouth at {@code thrust} blocks a tick, rising {@code reachMin} to
-     * {@code reachMax} blocks more after it, when there is room: the eruptions' own puffs never fill more than a quarter
-     * of the smoke's count ({@link SmokeBudget}), and never more than that on top of a full count (the Caldera's own
-     * plumes are turned away for them). Always shown (forced); seen from {@code d} blocks past {@link Fountain#NEAR} it
-     * is drawn larger by {@link Fountain#farAshSize}, so the column stays a column through the haze.
+     * A puff of ash thrown out of the mouth at {@code thrust} blocks a tick, rising {@code reachMin} to
+     * {@code reachMax} blocks more after it, its foot lit by the vent's {@code glow} (0 to 1), when there is room: the
+     * eruptions' own puffs never fill more than a quarter of the smoke's count ({@link SmokeBudget}), and never more
+     * than that on top of a full count (the Caldera's own plumes are turned away for them). Always shown (forced); seen
+     * from {@code d} blocks past {@link Fountain#NEAR} it is drawn larger by {@link Fountain#farAshSize}, so the column
+     * stays a column through the haze.
      */
-    private static void ash(Minecraft mc, Vent v, double d, long now, int budget, RandomSource random, double thrust, double reachMin, double reachMax) {
+    private static void ash(Minecraft mc, Vent v, double d, long now, int budget, RandomSource random, double thrust, double reachMin, double reachMax,
+                            double glow) {
         while (!PUFFS.isEmpty() && PUFFS.peek() <= now) PUFFS.poll();
         if (PUFFS.size() >= budget / 4 || SmokeBudget.alive(now) >= budget + budget / 4) return;
         double reach = reachMin + (reachMax - reachMin) * random.nextDouble();
         PUFFS.add(now + SmokePuff.lifeFor(reach) + 60);
         double[] p = onFloor(v, FLAME_SHARE, random);
-        Particle puff = mc.particleEngine.createParticle(ERParticles.ERUPTION_ASH.get(), p[0], v.mouthY + 0.5, p[1], reach, thrust, 0);
+        Particle puff = mc.particleEngine.createParticle(ERParticles.ERUPTION_ASH.get(), p[0], v.mouthY + 0.5, p[1], reach, thrust, glow);
         if (d > Fountain.NEAR && puff instanceof CaveParticles.Sized s) s.grow((float) Fountain.farAshSize(d));
     }
 
@@ -397,6 +441,31 @@ public final class EruptionEffects {
         Particle p = mc.particleEngine.createParticle(type, x, y, z, dx, dy, dz);
         if (d > Fountain.NEAR && p instanceof CaveParticles.Sized s) s.grow((float) Fountain.farSize(d));
         return p;
+    }
+
+    /**
+     * One particle that shows whatever the Particles option (a sign of danger, as the game's own explosion's is): the
+     * warning's glow, the burst's blaze, a bomb's flash. Seen from {@code d} blocks past {@link Fountain#NEAR} it is
+     * drawn larger by {@link Fountain#farAshSize} (a big billboard grown as a spatter would swamp the view).
+     */
+    @Nullable
+    static Particle always(Minecraft mc, ParticleOptions type, double d, double x, double y, double z, double dx, double dy, double dz) {
+        Particle p = mc.particleEngine.createParticle(type, x, y, z, dx, dy, dz);
+        if (d > Fountain.NEAR && p instanceof CaveParticles.Sized s) s.grow((float) Fountain.farAshSize(d));
+        return p;
+    }
+
+    /**
+     * A flash (CaveParticles.Flash) of half-width {@code half} burning at (x, y, z), seen from {@code d} blocks: its
+     * life in ticks, its glow (0 for a blast's white flash), drawn up to {@code forward} blocks toward the camera at the
+     * size that covers the same part of the view ({@link Fountain#toward}), so the ash and rock right round its spot,
+     * drawn before it, do not hide it. Always shown ({@link #always}).
+     */
+    @Nullable
+    static Particle flash(Minecraft mc, double d, double x, double y, double z, double half, double life, double glow, double forward) {
+        Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
+        double k = Fountain.toward(forward, cam.distanceTo(new Vec3(x, y, z)));
+        return always(mc, ERParticles.FLASH.get(), d, x + (cam.x - x) * k, y + (cam.y - y) * k, z + (cam.z - z) * k, half * (1 - k), life, glow);
     }
 
     /** Drops everything when the level changes: its eruptions are the old level's. */
