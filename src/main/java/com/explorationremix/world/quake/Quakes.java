@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.IntConsumer;
 
 /**
  * The Basalt Galleries' quakes on the server (0.9.0): big quakes every few minutes, light tremors between them, and the
@@ -129,6 +130,11 @@ public final class Quakes {
         int held = -1;
         /** Its message has gone out (a tremor's and a climb answer's once its find is done). */
         boolean announced;
+        /**
+         * For a tremor or climb answer started by command whose find did not end in the command's tick (it stops for the
+         * tick after {@code Topple.FIND_NANOS}): the command's answer, given the count once the find is done.
+         */
+        @Nullable IntConsumer onFound;
         /** The players told of it, with their felt flag; dropped when they leave, so they are told again when they come back. */
         final Map<UUID, Boolean> told = new HashMap<>();
         /** What it did, for the status. */
@@ -246,6 +252,7 @@ public final class Quakes {
      */
     private static void work(Event e, @Nullable Topple.Work w, List<ServerPlayer> watchers, List<ServerPlayer> actors) {
         if (w == null || e.pass == null) {
+            answer(e);
             e.pass = null;
             if (!e.announced) announce(e, watchers);
             return;
@@ -263,6 +270,7 @@ public final class Quakes {
      * down 20 ticks on. A climb answer's placer's cooldown runs from here.
      */
     private static void found(Event e, Topple.Work w, List<ServerPlayer> watchers) {
+        answer(e);
         if (e.kind == QuakeSchedule.BIG) {
             e.fallsAt = Math.min(e.fallsAt, e.start + BIG_FALLS);
         } else {
@@ -486,7 +494,18 @@ public final class Quakes {
     }
 
     /** A quake is over: kept for the status. */
-    private static void finish(Event e) { last = e; }
+    private static void finish(Event e) {
+        answer(e);
+        last = e;
+    }
+
+    /** Gives a command's waiting answer ({@link Event#onFound}) the count found so far, once. */
+    private static void answer(Event e) {
+        if (e.onFound == null) return;
+        IntConsumer a = e.onFound;
+        e.onFound = null;
+        a.accept(e.pass == null ? 0 : e.pass.found());
+    }
 
     private static void send(ServerPlayer p, LavaNet.Quake q) { LavaNet.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), q); }
 
@@ -675,16 +694,19 @@ public final class Quakes {
         // the find runs now, within a tick's budget, so the answer can say what it found
         Topple.Work w = cfg.quakeTopple.get() ? new Topple.Work(level, now, watchers) : null;
         Event e = begin(level, kind, now, duration, str, q.drawSeed(), false, origin, null, watchers, actors(watchers), w);
-        int found = e.pass == null ? 0 : e.pass.found();
         if (kind == QuakeSchedule.BIG) {
             q.bigStarted(now, duration, s);
             say(c, String.format(Locale.ROOT, "A big quake starts: %d s at strength %.2f (%d players feel it).", Math.round(duration / 20.0), str, e.told.size()));
-        } else if (kind == QuakeSchedule.TREMOR) {
-            say(c, String.format(Locale.ROOT, "A tremor starts: %d placed blocks will topple.", found));
-        } else {
-            say(c, String.format(Locale.ROOT, "The ground answers a climb at %d %d %d: %d placed blocks will topple.",
-                    origin.getX(), origin.getY(), origin.getZ(), found));
+            return 1;
         }
+        CommandSourceStack src = c.getSource();
+        IntConsumer answer = kind == QuakeSchedule.TREMOR
+                ? n -> say(src, String.format(Locale.ROOT, "A tremor starts: %d placed blocks will topple.", n))
+                : n -> say(src, String.format(Locale.ROOT, "The ground answers a climb at %d %d %d: %d placed blocks will topple.",
+                        origin.getX(), origin.getY(), origin.getZ(), n));
+        // a find round a big build can go on for a tick or two: the answer waits for its count
+        if (e.pass != null && !e.pass.findDone) e.onFound = answer;
+        else answer.accept(e.pass == null ? 0 : e.pass.found());
         return 1;
     }
 
@@ -795,7 +817,9 @@ public final class Quakes {
         return String.format(Locale.ROOT, "%d:%02d", s / 60, s % 60);
     }
 
-    private static void say(CommandContext<CommandSourceStack> c, String msg) {
-        c.getSource().sendSuccess(() -> Component.literal(msg), false);
+    private static void say(CommandContext<CommandSourceStack> c, String msg) { say(c.getSource(), msg); }
+
+    private static void say(CommandSourceStack src, String msg) {
+        src.sendSuccess(() -> Component.literal(msg), false);
     }
 }
