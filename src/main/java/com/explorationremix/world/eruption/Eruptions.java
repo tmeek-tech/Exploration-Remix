@@ -4,6 +4,7 @@ import com.explorationremix.config.ERConfig;
 import com.explorationremix.entity.LavaBomb;
 import com.explorationremix.registry.EREntities;
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.lava.Falling;
 import com.explorationremix.world.lava.LavaCycle;
 import com.explorationremix.world.lava.LavaFlood;
 import com.explorationremix.world.lava.LavaNet;
@@ -24,8 +25,13 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.EntitySelector;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -33,6 +39,7 @@ import net.minecraftforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -80,7 +87,9 @@ import java.util.UUID;
  * ground within 48 blocks of the vent when one is there, the rest round the vent ({@link BombFlight}). A bomb is thrown
  * only from a vent on entity-ticking ground to a target on it: an eruption with none to throw is a show only, as the far
  * ones are. Every bomb in the air is tracked: one no longer on entity-ticking ground fizzles (gate 6 of 3.1), all of
- * them when eruptions are turned off, and those of a held eruption hang still ({@link #holds}).
+ * them when eruptions are turned off, and those of a held eruption hang still ({@link #holds}), as do their craters'
+ * rocks in the air. Where a bomb strikes it bursts ({@link Blast}). Through the burst, whoever stands in the vent's mouth
+ * burns ({@link #burn}).
  */
 public final class Eruptions {
     private Eruptions() {}
@@ -101,6 +110,14 @@ public final class Eruptions {
     static final int TAIL = 200;
     /** An eruption due whose vents could not be read is tried again this many ticks on. */
     static final int RETRY = 100;
+    /**
+     * Through the burst, every this many ticks, whoever stands in the vent's mouth burns: up to this many rows over the
+     * crater floor, and half a block past its rim.
+     */
+    static final int BURN_EVERY = 10, BURN_ROWS = 6;
+    static final double BURN_OVER = 0.5;
+    /** A bomb dropped by command falls from this many blocks over its target (or from under a lower roof). */
+    static final int DROP_FROM = 12;
 
     // ------------------------------------------------------------------------------------------- state of this server
     @Nullable private static EruptionSchedule schedule;
@@ -117,6 +134,13 @@ public final class Eruptions {
     private static final List<Eruption> RUNNING = new ArrayList<>();
     /** The bombs in the air, with the eruption that threw each (null for one a command dropped). */
     private static final Map<LavaBomb, Eruption> BOMBS = new IdentityHashMap<>();
+    /**
+     * Held by command while no eruption runs: the bombs a command dropped, and the rocks their craters threw, hang still
+     * until released, so they can be pictured in the air. It ends by itself once nothing it holds is left.
+     */
+    private static boolean dropsHeld;
+    /** The rocks thrown by the craters of bombs a command dropped, while they are in the air (held with the drops). */
+    private static final Set<FallingBlockEntity> DROP_ROCKS = Collections.newSetFromMap(new IdentityHashMap<>());
     private static int nextId = 1;
     /** The lava's phase as of the last tick (-1 before the first). */
     private static int lastPhase = -1;
@@ -237,7 +261,10 @@ public final class Eruptions {
                 retell(level, e);
             }
             if (now % TELL_EVERY == 0) tellLate(level, e, watchers);
-            if (e.held < 0) launch(level, band, e, actors, now, cfg);
+            if (e.held < 0) {
+                launch(level, band, e, actors, now, cfg);
+                burn(level, e, now, cfg);
+            }
             if (e.held < 0 && now - e.start >= e.pre + e.burst + TAIL) {
                 it.remove();
                 for (UUID id : e.told) {
@@ -467,6 +494,7 @@ public final class Eruptions {
         if (b == null) return;
         b.setPos(vx + ox, launchY, vz + oz);
         b.setDeltaMovement(f.vx(), f.vy(), f.vz());
+        b.seed(r.nextLong());
         if (!level.addFreshEntity(b)) return;
         BOMBS.put(b, e);
         e.bombs++;
@@ -501,12 +529,69 @@ public final class Eruptions {
             b.fizzle();
             it.remove();
         }
+        DROP_ROCKS.removeIf(f -> f.isRemoved() || f.level() != level);
+        if (dropsHeld && !dropsInAir()) dropsHeld = false;
     }
 
-    /** True while bomb {@code b} is to hang still in the air: the eruption that threw it is held by command. */
-    public static boolean holds(LavaBomb b) {
+    /**
+     * Through the burst, every {@link #BURN_EVERY} ticks (spec 5.3): the living things whose box lies within the crater's
+     * radius and half a block of the axis and within {@link #BURN_ROWS} rows over the crater floor are set on fire for 5
+     * s and take {@code ventBurn} as lava's damage. Standing in a vent's mouth burns.
+     */
+    private static void burn(ServerLevel level, Eruption e, long now, ERConfig cfg) {
+        int t = e.into(now) - e.pre;
+        if (t < 0 || t >= e.burst || t % BURN_EVERY != 0) return;
+        double x = e.vent.x, z = e.vent.z, reach = e.vent.r + BURN_OVER, floor = e.at.top() + 1;
+        AABB box = new AABB(x - reach, floor, z - reach, x + reach, floor + BURN_ROWS, z + reach);
+        int damage = cfg.eruptionVentBurn.get();
+        for (LivingEntity l : level.getEntitiesOfClass(LivingEntity.class, box, EntitySelector.NO_SPECTATORS)) {
+            AABB b = l.getBoundingBox();
+            double dx = Mth.clamp(x, b.minX, b.maxX) - x, dz = Mth.clamp(z, b.minZ, b.maxZ) - z;
+            if (dx * dx + dz * dz > reach * reach) continue;
+            l.setSecondsOnFire(5);
+            if (damage > 0) l.hurt(level.damageSources().lava(), damage);
+        }
+    }
+
+    /** The eruption that threw bomb {@code b}, or null (one a command dropped, or one not tracked). */
+    @Nullable
+    static Eruption eruptionOf(LavaBomb b) { return BOMBS.get(b); }
+
+    /** Bomb {@code b}'s blast took {@code blocks} blocks and {@code glow} of the glow: counted for the status. */
+    static void cratered(LavaBomb b, int blocks, int glow) {
         Eruption e = BOMBS.get(b);
-        return e != null && e.held >= 0;
+        if (e == null) return;
+        e.craters++;
+        e.craterBlocks += blocks;
+        e.glow += glow;
+    }
+
+    /**
+     * Who holds {@code rock}, a rock eruption {@code e}'s crater threw out: it hangs still while that eruption runs held
+     * by command; one of a command's bomb ({@code e} null) is kept with the drops while it is in the air, and hangs still
+     * while they are held.
+     */
+    static Falling.Owner ejectaOwner(@Nullable Eruption e, FallingBlockEntity rock) {
+        if (e == null) DROP_ROCKS.add(rock);
+        return new Falling.Owner() {
+            @Override public boolean holds(FallingBlockEntity f) { return e == null ? dropsHeld : e.held >= 0 && RUNNING.contains(e); }
+            @Override public void landed(FallingBlockEntity f, BlockPos at) { DROP_ROCKS.remove(f); }
+            @Override public void shattered(FallingBlockEntity f, BlockPos at) { DROP_ROCKS.remove(f); }
+            @Override public void gone(FallingBlockEntity f) { DROP_ROCKS.remove(f); }
+        };
+    }
+
+    /** True while a bomb a command dropped, or a rock its crater threw, is in the air. */
+    private static boolean dropsInAir() { return BOMBS.containsValue(null) || !DROP_ROCKS.isEmpty(); }
+
+    /**
+     * True while bomb {@code b} is to hang still in the air: the eruption that threw it is held by command, or, for one a
+     * command dropped, the drops are.
+     */
+    public static boolean holds(LavaBomb b) {
+        if (!BOMBS.containsKey(b)) return false;
+        Eruption e = BOMBS.get(b);
+        return e == null ? dropsHeld : e.held >= 0;
     }
 
     /** Bomb {@code b} came down in the lava (or another fluid) and fizzles there: counted for the status. */
@@ -525,8 +610,9 @@ public final class Eruptions {
         BOMBS.clear();
     }
 
-    /** True while an eruption is held by command (no quake or eruption starts on its own then). */
+    /** True while an eruption, or the drops, are held by command (no quake or eruption starts on its own then). */
     public static boolean held() {
+        if (dropsHeld) return true;
         for (Eruption e : RUNNING) if (e.held >= 0) return true;
         return false;
     }
@@ -556,6 +642,8 @@ public final class Eruptions {
             b.fizzle();
         }
         BOMBS.clear();
+        dropsHeld = false;
+        DROP_ROCKS.clear();
         CALDERAS.clear();
         schedule = null;
         lastPhase = -1;
@@ -569,6 +657,8 @@ public final class Eruptions {
         memoRange = -1;
         RUNNING.clear();
         BOMBS.clear();
+        dropsHeld = false;
+        DROP_ROCKS.clear();
         nextId = 1;
         lastPhase = -1;
     }
@@ -594,7 +684,9 @@ public final class Eruptions {
      * vents stand; {@code now [<pos>] [strength] [seed]} starts the vent nearest the position (the source's by default)
      * at once, even while the lava clock is held, a seed making it repeatable; {@code hold [ticks]} holds the running
      * eruption nearest the source that many ticks in (the burst's start if left out), for pictures, and {@code release}
-     * lets it go on.
+     * lets it go on; {@code bomb <pos> [seed]} drops one bomb onto a position from 12 blocks over it, eruption or not, for
+     * the blasts' checks. With no eruption running, {@code hold} holds the bombs a command dropped and the rocks in the
+     * air instead, and {@code release} lets them go.
      */
     public static LiteralArgumentBuilder<CommandSourceStack> command() {
         return Commands.literal("erupt").executes(Eruptions::status)
@@ -606,7 +698,10 @@ public final class Eruptions {
                                                 .executes(c -> now(c, true, FloatArgumentType.getFloat(c, "strength"), (long) IntegerArgumentType.getInteger(c, "seed")))))))
                 .then(Commands.literal("hold").executes(c -> hold(c, -1))
                         .then(Commands.argument("ticks", IntegerArgumentType.integer(0)).executes(c -> hold(c, IntegerArgumentType.getInteger(c, "ticks")))))
-                .then(Commands.literal("release").executes(Eruptions::release));
+                .then(Commands.literal("release").executes(Eruptions::release))
+                .then(Commands.literal("bomb").then(Commands.argument("pos", BlockPosArgument.blockPos()).executes(c -> bomb(c, null))
+                        .then(Commands.argument("seed", IntegerArgumentType.integer())
+                                .executes(c -> bomb(c, (long) IntegerArgumentType.getInteger(c, "seed"))))));
     }
 
     /** The overworld with its Galleries, or null after telling the source why there are no eruptions. */
@@ -749,8 +844,14 @@ public final class Eruptions {
         if (level == null) return 0;
         Eruption e = nearestRunning(c.getSource().getPosition(), level.getGameTime());
         if (e == null) {
-            c.getSource().sendFailure(Component.literal("There is no eruption to hold."));
-            return 0;
+            // no eruption runs: the bombs a command dropped, and the rocks in the air, are held instead
+            if (!dropsInAir()) {
+                c.getSource().sendFailure(Component.literal("There is no eruption to hold."));
+                return 0;
+            }
+            dropsHeld = true;
+            say(c, "The dropped bombs and the rocks in the air are held.");
+            return 1;
         }
         long now = level.getGameTime();
         int at = Math.min(ticks < 0 ? e.pre : ticks, Math.max(0, e.pre + e.burst - 1));
@@ -772,6 +873,11 @@ public final class Eruptions {
         Eruption e = null;
         for (Eruption r : RUNNING) if (r.held >= 0 || r.holdAt >= 0) e = r;
         if (e == null) {
+            if (dropsHeld) {
+                dropsHeld = false;
+                say(c, "The dropped bombs and their rocks go on.");
+                return 1;
+            }
             c.getSource().sendFailure(Component.literal("There is no held eruption."));
             return 0;
         }
@@ -782,6 +888,42 @@ public final class Eruptions {
             retell(level, e);
         }
         say(c, "The eruption goes on.");
+        return 1;
+    }
+
+    /**
+     * One bomb dropped onto {@code pos} from {@link #DROP_FROM} blocks over it at 0.6 blocks a tick (spec 5.6), bursting
+     * by the rules of every bomb; a seed repeats its blast's draws. Under a lower roof it drops from the highest open
+     * cell under the roof instead, so it never starts inside the rock and bursts there. Refused where the ground is not
+     * entity-ticking.
+     */
+    private static int bomb(CommandContext<CommandSourceStack> c, @Nullable Long seed) throws CommandSyntaxException {
+        ServerLevel level = galleries(c);
+        if (level == null) return 0;
+        BlockPos pos = BlockPosArgument.getBlockPos(c, "pos");
+        LevelChunk ch = level.isPositionEntityTicking(pos) ? level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4) : null;
+        if (ch == null) {
+            c.getSource().sendFailure(Component.literal(String.format(Locale.ROOT, "There is no ticking ground at %d %d %d for a bomb.",
+                    pos.getX(), pos.getY(), pos.getZ())));
+            return 0;
+        }
+        // the open cells over the target, up to the drop's height: it starts at the foot of the highest of them, or with
+        // none, in the target's own cell when that is open (else just over it, where it bursts at once)
+        int up = 0;
+        while (up < DROP_FROM) {
+            BlockPos p = pos.above(up + 1);
+            if (!Vents.open(ch, p, ch.getBlockState(p))) break;
+            up++;
+        }
+        if (up == 0 && !Vents.open(ch, pos, ch.getBlockState(pos))) up = 1;
+        LavaBomb b = EREntities.LAVA_BOMB.get().create(level);
+        if (b == null) return 0;
+        b.setPos(pos.getX() + 0.5, pos.getY() + up, pos.getZ() + 0.5);
+        b.setDeltaMovement(0, -0.6, 0);
+        if (seed != null) b.seed(seed);
+        if (!level.addFreshEntity(b)) return 0;
+        BOMBS.put(b, null);
+        say(c, String.format(Locale.ROOT, "A lava bomb falls on %d %d %d.", pos.getX(), pos.getY(), pos.getZ()));
         return 1;
     }
 

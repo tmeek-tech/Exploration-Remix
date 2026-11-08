@@ -11,6 +11,7 @@ import com.explorationremix.registry.ERParticles;
 import com.explorationremix.registry.ERRemaps;
 import com.explorationremix.registry.ERSounds;
 import com.explorationremix.registry.ERWorldgen;
+import com.explorationremix.world.eruption.Blast;
 import com.explorationremix.world.eruption.Eruptions;
 import com.explorationremix.world.gen.DeepWorldInstaller;
 import com.explorationremix.world.lava.Falling;
@@ -62,8 +63,9 @@ public final class ExplorationRemix {
         // 0.9.0: the quakes' placement and break listeners (climb answers, toppleAtOnce)
         MinecraftForge.EVENT_BUS.register(Quakes.class);
         MinecraftForge.EVENT_BUS.register(Falling.class);
-        // the eruptions' bombs, let go and discarded before the server's last save
+        // the eruptions' bombs, let go and discarded before the server's last save, and their blasts' handler
         MinecraftForge.EVENT_BUS.register(Eruptions.class);
+        MinecraftForge.EVENT_BUS.register(Blast.class);
         LavaNet.register();
         if (DevAutoRun.enabled()) MinecraftForge.EVENT_BUS.register(DevAutoRun.class);
     }

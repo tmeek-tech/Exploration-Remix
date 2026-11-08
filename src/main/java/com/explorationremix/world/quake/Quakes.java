@@ -346,9 +346,17 @@ public final class Quakes {
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void broken(BlockEvent.BreakEvent event) {
         if (!(event.getLevel() instanceof ServerLevel level) || level.dimension() != Level.OVERWORLD) return;
+        tookAway(event.getPos());
+    }
+
+    /**
+     * The block at {@code pos} in the overworld was taken away (a player broke it, or a lava bomb's crater took it): with
+     * {@code quakes.toppleAtOnce} the block over it is checked next tick (spec 4.3.8).
+     */
+    public static void tookAway(BlockPos pos) {
         ERConfig cfg = ERConfig.INSTANCE;
         if (!cfg.quakesEnabled.get() || !cfg.quakeTopple.get() || !cfg.quakeToppleAtOnce.get()) return;
-        BlockPos above = event.getPos().above();
+        BlockPos above = pos.above();
         if (GalleryChanges.inLayer(above.getY())) Topple.queue(above);
     }
 

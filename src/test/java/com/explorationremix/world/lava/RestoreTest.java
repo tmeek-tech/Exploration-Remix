@@ -3,6 +3,8 @@ package com.explorationremix.world.lava;
 import com.explorationremix.world.terrain.Terrain;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 import static com.explorationremix.world.lava.Flood.*;
@@ -104,11 +106,11 @@ class RestoreTest {
     // ================================================================================================ the band living on
 
     /**
-     * Blocks of the fake band: air, the glow, a lava source, rock, two blocks players place, fire, and a lava fall's
-     * flowing lava (its front at level 1, its spill at level 2, its falling column).
+     * Blocks of the fake band: air, the glow, a lava source, rock, two blocks players place, fire, a lava fall's flowing
+     * lava (its front at level 1, its spill at level 2, its falling column), and a magma block a bomb's crater keeps.
      */
     private static final int S_AIR = 0, S_GLOW = 1, S_LAVA = 2, S_ROCK = 3, S_PLANK = 4, S_BRICK = 5, S_FIRE = 6,
-            S_FRONT = 7, S_SPILL = 8, S_FALL = 9;
+            S_FRONT = 7, S_SPILL = 8, S_FALL = 9, S_MAGMA = 10;
 
     private static int kindOf(int s) {
         return switch (s) {
@@ -227,6 +229,66 @@ class RestoreTest {
         void debris(int i, int x, int z, int qi, int qx, int qz) {
             set(i, x, z, S_AIR);
             if (qi >= 0) set(qi, qx, qz, S_ROCK);
+        }
+
+        /**
+         * A lava bomb bursts at (ci, cx, cz) (0.9.0, {@code world.eruption.Blast}, its partition {@code Crater}): within
+         * {@code r} of it, the natural blocks (rock, the glow) and held rock go to air, but none with a fluid next to it
+         * (the sea's lava, a pool, a fall's flowing lava); the lowest of the middle column to magma instead when
+         * {@code magma}; players' other blocks are broken the game's way (to air); then up to 3 of the removed rocks are
+         * thrown out and land on the open cells {@code lands} gives ({i, x, z}, or i -1: it vanished), as ceiling debris
+         * does. All block changes the game records like any other. Returns how many blocks the crater took.
+         */
+        int crater(int ci, int cx, int cz, int r, boolean magma, List<int[]> lands) {
+            List<int[]> taken = new ArrayList<>();
+            for (int i = Math.max(0, ci - r); i <= Math.min(RISE - 1, ci + r); i++) {
+                for (int x = Math.max(0, cx - r); x <= Math.min(15, cx + r); x++) {
+                    for (int z = Math.max(0, cz - r); z <= Math.min(15, cz + r); z++) {
+                        if ((i - ci) * (i - ci) + (x - cx) * (x - cx) + (z - cz) * (z - cz) > r * r) continue;
+                        int s = st[i][z][x];
+                        boolean held = log.has(ChangeLog.key(x, i, z));
+                        boolean rock = s == S_ROCK || s == S_MAGMA;
+                        if (s == S_PLANK || s == S_BRICK || held && (s == S_GLOW || s == S_FIRE)) {
+                            // a player's block (or a held glow or fire): the game's blast breaks it
+                            set(i, x, z, S_AIR);
+                        } else if ((rock || s == S_GLOW || s == S_FIRE) && !fluidNear(i, x, z)) {
+                            taken.add(new int[]{i, x, z});
+                        }
+                    }
+                }
+            }
+            int low = -1;
+            if (magma) {
+                for (int k = 0; k < taken.size(); k++) {
+                    int[] t = taken.get(k);
+                    if (t[1] != cx || t[2] != cz) continue;
+                    if (low < 0 || t[0] < taken.get(low)[0]) low = k;
+                }
+                if (low >= 0 && (taken.get(low)[0] == 0 || st[taken.get(low)[0] - 1][cz][cx] != S_ROCK)) low = -1;
+            }
+            int rocks = 0;
+            for (int k = 0; k < taken.size(); k++) {
+                int[] t = taken.get(k);
+                if (st[t[0]][t[2]][t[1]] == S_ROCK && k != low) rocks++;
+                set(t[0], t[1], t[2], k == low ? S_MAGMA : S_AIR);
+            }
+            for (int k = 0; k < Math.min(3, Math.min(rocks, lands.size())); k++) {
+                int[] q = lands.get(k);
+                if (q[0] >= 0 && landable(q[0], q[1], q[2])) set(q[0], q[1], q[2], S_ROCK);
+            }
+            return taken.size();
+        }
+
+        /** True when a fluid (a lava source, the sea, a fall's flowing lava) is next to (i, x, z) within the band. */
+        boolean fluidNear(int i, int x, int z) {
+            int[][] d = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+            for (int[] o : d) {
+                int ni = i + o[0], nx = x + o[1], nz = z + o[2];
+                if (ni < 0 || ni >= RISE || nx < 0 || nx > 15 || nz < 0 || nz > 15) continue;
+                int k = kindOf(st[ni][nz][nx]);
+                if (k == LAVA || k == FLOWING) return true;
+            }
+            return false;
         }
 
         /** True for natural rock, which ceiling debris comes from: rock the log holds nothing for. */
@@ -708,6 +770,150 @@ class RestoreTest {
                     }
                 }
             }
+        }
+    }
+
+    @Test
+    void aBandWithCratersComesBackAsGenerated() {
+        // as aBandComesBackAsGenerated, with lava bombs blowing craters above the sea (natural rock, held rock and the
+        // glow taken, players' blocks broken, magma at the bottom, ejecta landing round about) at any time
+        Random r = new Random(5150);
+        int magmas = 0;
+        for (int round = 0; round < 40; round++) {
+            Band b = new Band();
+            int[][][] generated = new int[RISE][16][16];
+            for (int i = 0; i < RISE; i++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        int p = r.nextInt(100);
+                        int s = p < 40 ? S_AIR : p < 45 ? S_GLOW : p < 47 ? S_LAVA : p < 48 ? S_FIRE : p < 49 ? S_FRONT
+                                : p < 51 ? S_SPILL : p < 53 ? S_FALL : S_ROCK;
+                        generated[i][z][x] = s;
+                        b.st[i][z][x] = s;
+                    }
+                }
+            }
+            int taken = 0;
+            for (int step = 0; step < 400; step++) {
+                int op = r.nextInt(100);
+                if (op < 15) {
+                    b.bring(r.nextInt(RISE + 1));
+                } else if (op < 55) {
+                    int n = 1 + r.nextInt(12);
+                    for (int c = 0; c < n; c++) {
+                        int q = r.nextInt(100);
+                        int next = q < 30 ? S_AIR : q < 50 ? S_PLANK : q < 65 ? S_BRICK : q < 80 ? S_ROCK : q < 88 ? S_LAVA
+                                : q < 93 ? S_SPILL : q < 96 ? S_FIRE : S_GLOW;
+                        b.set(r.nextInt(RISE), r.nextInt(16), r.nextInt(16), next);
+                    }
+                } else if (op < 75) {
+                    // a bomb bursts above the sea: its crater, and its ejecta landing on open cells (into the sea too)
+                    if (b.level >= RISE) continue;
+                    int ci = b.level + r.nextInt(RISE - b.level), cx = r.nextInt(16), cz = r.nextInt(16);
+                    List<int[]> lands = new ArrayList<>();
+                    for (int k = 0; k < 3; k++) lands.add(r.nextInt(5) == 0 ? new int[]{-1, 0, 0} : new int[]{r.nextInt(RISE), r.nextInt(16), r.nextInt(16)});
+                    boolean magma = r.nextBoolean();
+                    int[][][] before = copy(b.st);
+                    taken += b.crater(ci, cx, cz, 1 + r.nextInt(2), magma, lands);
+                    for (int i = 0; i < RISE; i++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                        if (b.st[i][z][x] == S_MAGMA && before[i][z][x] != S_MAGMA) magmas++;
+                    }
+                } else if (op < 95) {
+                    b.bring(RISE);
+                    b.gen++;
+                    b.reset(r.nextInt(3) == 0 ? r.nextInt(200) : Integer.MAX_VALUE);
+                } else {
+                    b.reset(Integer.MAX_VALUE);
+                }
+                b.checkRecord();
+            }
+            b.bring(RISE);
+            b.gen++;
+            b.reset(Integer.MAX_VALUE);
+            assertTrue(b.log.isEmpty());
+            b.checkRecord();
+            b.bring(0);
+            assertTrue(b.mask.isEmpty() && b.glow.isEmpty() && b.kept.isEmpty(), "round " + round);
+            assertTrue(taken > 0, "round " + round);
+            for (int i = 0; i < RISE; i++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        assertEquals(generated[i][z][x], b.st[i][z][x], "round " + round + " slice " + i + " x " + x + " z " + z);
+                    }
+                }
+            }
+        }
+        assertTrue(magmas > 0, "no crater kept its magma");
+    }
+
+    @Test
+    void aCraterGoesBackWithItsMagma() {
+        // a floor of rock with the glow over it; a bomb's crater takes rock and glow and keeps magma at its bottom; the
+        // reset puts the rock back where the magma stood and the glow where it was
+        Band b = new Band();
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) for (int i = 20; i <= 26; i++) b.st[i][z][x] = S_ROCK;
+        for (int z = 6; z <= 10; z++) for (int x = 6; x <= 10; x++) b.st[27][z][x] = S_GLOW;
+        int[][][] generated = copy(b.st);
+        int taken = b.crater(26, 8, 8, 2, true, List.of(new int[]{27, 3, 3}, new int[]{27, 12, 12}, new int[]{-1, 0, 0}));
+        assertTrue(taken >= 20, "taken " + taken);
+        assertEquals(S_MAGMA, b.st[24][8][8], "magma at the bottom of the middle column");
+        assertEquals(S_AIR, b.st[27][8][8], "the glow cleared");
+        assertEquals(S_ROCK, b.st[27][3][3], "an ejected rock landed");
+        assertEquals(S_ROCK, b.log.state(ChangeLog.key(8, 24, 8)), "the magma's entry holds the rock");
+        b.bring(RISE);
+        b.gen++;
+        b.reset(Integer.MAX_VALUE);
+        assertTrue(b.log.isEmpty());
+        b.bring(0);
+        assertTrue(b.mask.isEmpty() && b.glow.isEmpty() && b.kept.isEmpty());
+        for (int i = 0; i < RISE; i++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+            assertEquals(generated[i][z][x], b.st[i][z][x], "slice " + i + " x " + x + " z " + z);
+        }
+        // a crater beside the sea's lava, or a pool, leaves the rock that holds it back
+        Band w = new Band();
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) for (int i = 0; i <= 26; i++) w.st[i][z][x] = S_ROCK;
+        w.st[26][8][9] = S_LAVA;
+        w.crater(26, 8, 8, 2, false, List.of());
+        assertEquals(S_ROCK, w.st[26][8][8], "the pool's wall stays");
+        assertEquals(S_ROCK, w.st[25][8][9], "the pool's bed stays");
+        assertEquals(S_LAVA, w.st[26][8][9]);
+        assertEquals(S_AIR, w.st[26][6][8], "the rest of the crater is taken");
+    }
+
+    @Test
+    void changesAfterTheBumpWaitForTheNextReset() {
+        // the lava stands full and the generation goes up (the bump): what changes after it (an ejected rock sinking into
+        // the risen sea at full, a crater as the lava drains) has the new generation, so that cycle's reset leaves it,
+        // and the next cycle's puts it back (spec 3.4)
+        Band b = new Band();
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) for (int i = 20; i <= 26; i++) b.st[i][z][x] = S_ROCK;
+        int[][][] generated = copy(b.st);
+        b.bring(RISE);
+        b.gen++;
+        b.reset(Integer.MAX_VALUE);
+        // at full: a rock lands in the sea over the floor
+        b.set(30, 4, 4, S_ROCK);
+        // the drain begins; a bomb bursts on the floor over the sea
+        b.bring(20);
+        int taken = b.crater(26, 8, 8, 2, true, List.of());
+        assertTrue(taken > 0);
+        b.checkRecord();
+        // that cycle's reset catches up: nothing it may put back
+        b.reset(Integer.MAX_VALUE);
+        assertFalse(b.log.isEmpty(), "the changes after the bump wait");
+        assertEquals(S_AIR, b.st[26][8][8], "the crater stays open until the next full");
+        assertEquals(S_MAGMA, b.st[24][8][8]);
+        b.checkRecord();
+        // the next cycle: calm, the rise, full, the bump, the reset
+        b.bring(0);
+        b.bring(RISE);
+        b.gen++;
+        b.reset(Integer.MAX_VALUE);
+        assertTrue(b.log.isEmpty());
+        b.bring(0);
+        assertTrue(b.mask.isEmpty() && b.glow.isEmpty() && b.kept.isEmpty());
+        for (int i = 0; i < RISE; i++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+            assertEquals(generated[i][z][x], b.st[i][z][x], "slice " + i + " x " + x + " z " + z);
         }
     }
 }

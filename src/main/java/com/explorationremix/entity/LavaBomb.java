@@ -1,5 +1,6 @@
 package com.explorationremix.entity;
 
+import com.explorationremix.world.eruption.Blast;
 import com.explorationremix.world.eruption.BombFlight;
 import com.explorationremix.world.eruption.Eruptions;
 import net.minecraft.core.BlockPos;
@@ -17,6 +18,9 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 
 /**
  * A lava bomb thrown by an eruption of the Caldera (0.9.0, spec 5.4.1; {@code world.eruption.Eruptions} throws it, and
@@ -28,7 +32,7 @@ import javax.annotation.Nullable;
  *     each tick, before the game's hit test, which passes through lava), when it has flown {@link BombFlight#MAX_TICKS}
  *     ticks, or when the eruptions let it go (off entity-ticking ground, or eruptions turned off);</li>
  *     <li>it <b>bursts</b> (entity event {@link #BURST}) when the game's hit test finds a block or a living thing in its
- *     way.</li>
+ *     way: a blast there ({@link Blast#burst}), which may leave a crater.</li>
  * </ul>
  * While its eruption is held by command it hangs still in the air with its clock stopped, and goes on as it was when
  * let go. A common class: it names no client type, and reaches the client's effects ({@code client.BombEffects}) only
@@ -42,6 +46,18 @@ public class LavaBomb extends ThrowableProjectile {
     private int life;
     /** While held, the motion it had when it was stopped. */
     @Nullable private Vec3 saved;
+    /** Its own draws as it bursts (the blast's power, the crater's magma and ejecta), from the seed it was thrown with. */
+    @Nullable private Random draws;
+
+    /**
+     * Set as it bursts, for the blast's handler ({@link Blast}, spec 5.4.4): whether its blast may break blocks (the reset
+     * on and no way down near), the blast's power, and the crater's blocks the handler took out of the blast's list
+     * with their states, which {@link Blast} then removes. Server only, never saved.
+     */
+    public boolean breaks;
+    public float power;
+    public final List<BlockPos> crater = new ArrayList<>();
+    public final List<BlockState> craterStates = new ArrayList<>();
 
     public LavaBomb(EntityType<? extends LavaBomb> type, Level level) { super(type, level); }
 
@@ -95,8 +111,18 @@ public class LavaBomb extends ThrowableProjectile {
     @Override
     protected void onHit(HitResult hit) {
         if (isRemoved() || level().isClientSide) return;
+        Blast.burst(this, hit);
         level().broadcastEntityEvent(this, BURST);
         discard();
+    }
+
+    /** Seeds its own draws (from its eruption's, or a command's seed), so a seeded eruption's craters repeat. */
+    public void seed(long seed) { draws = new Random(seed); }
+
+    /** Its own draws: from its seed, or from the level's random when it was given none. */
+    public Random draws() {
+        if (draws == null) draws = new Random(level().getRandom().nextLong());
+        return draws;
     }
 
     /** Only a living thing stops it: a falling block in the air, which can be picked, would burst it in mid-flight. */

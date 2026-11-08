@@ -23,4 +23,10 @@ public final class ERTags {
 
     /** 0.9.0: ceiling rock a big quake can shake loose, and the only rock a lava bomb's crater throws out. */
     public static final TagKey<Block> QUAKE_DEBRIS = TagKey.create(Registries.BLOCK, new ResourceLocation(ExplorationRemix.MOD_ID, "quake_debris"));
+
+    /**
+     * Blocks the terrain reset puts back as rock (ores, gilded blackstone: {@code TerrainReset.RESET_AS_ROCK}, the same
+     * tag). 0.9.0: a lava bomb's blast never breaks one, or it would come back as rock for good.
+     */
+    public static final TagKey<Block> RESET_AS_ROCK = TagKey.create(Registries.BLOCK, new ResourceLocation(ExplorationRemix.MOD_ID, "reset_as_rock"));
 }
