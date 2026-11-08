@@ -11,7 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * ticks; its spatter climbs 10 to 27 blocks under its own physics (15 to 40 for a woken eruption); the roar swells and
  * dies with it; the boom and the roar keep a floor of loudness to the eruption's range; far particles thin with the
  * Particles option and the distance and the spatter grows; the vent's rumble starts only in time, a short warning's too;
- * a bomb's jolt and whistle follow their rules.
+ * a bomb's jolt and whistle follow their rules; and (the pack's look fixes) the start's flash dies within 16 ticks, the
+ * jet of gobs fans out but mostly stays tight, a gob lives until it has rained back down past the crater floor, and the
+ * plume's ash is thrown up out of the mouth toward the vault and still spreads under rock.
  */
 class FountainTest {
     private static final long[] SEEDS = {0, 1, 7, -42, 8675309, Long.MIN_VALUE, Long.MAX_VALUE};
@@ -95,6 +97,10 @@ class FountainTest {
         assertEquals(1, Fountain.farSize(10), 0);
         assertEquals(1, Fountain.farSize(32), 0);
         assertEquals(4, Fountain.farSize(128), 1e-12);
+        // the ash grows more gently: twice at 128 blocks, so a far column keeps its width without swamping the view
+        assertEquals(1, Fountain.farAshSize(32), 0);
+        assertEquals(2, Fountain.farAshSize(128), 1e-12);
+        assertTrue(Fountain.farAshSize(113) > 1.8 && Fountain.farAshSize(113) < Fountain.farSize(113));
         assertEquals(5, Fountain.plumeEvery(1));
         assertEquals(3, Fountain.plumeEvery(1.5));
         assertEquals(2, Fountain.plumeEvery(3));
@@ -127,6 +133,95 @@ class FountainTest {
             assertTrue(!Fountain.rumbleInTime(pre, pre));
         }
         assertTrue(!Fountain.rumbleInTime(0, 0), "no warning, no rumble");
+    }
+
+    // ------------------------------------------------------------------------------------------------ the spectacle
+
+    @Test
+    void theStartFlashesAndDiesWithinItsSixteenTicks() {
+        assertEquals(1, Fountain.flash(0), 0, "in full at the burst's first tick");
+        assertEquals(0.25, Fountain.flash(Fountain.FLASH_TICKS / 2.0), 1e-12, "a quarter half way");
+        assertEquals(0, Fountain.flash(Fountain.FLASH_TICKS), 0);
+        assertEquals(0, Fountain.flash(-1), 0, "nothing in the warning");
+        assertEquals(0, Fountain.flash(200), 0);
+        for (double t = 0; t < Fountain.FLASH_TICKS - 0.5; t += 0.5)
+            assertTrue(Fountain.flash(t + 0.5) < Fountain.flash(t), "it only dies away");
+    }
+
+    @Test
+    void theJetFansOutButMostOfItStaysTight() {
+        int n = 2000, core = 0;
+        double widest = 0;
+        for (int i = 0; i < n; i++) {
+            double u = (i + 0.5) / n, w = ((i * 7919) % n + 0.5) / n;
+            double tilt = Fountain.tilt(u, w);
+            assertTrue(tilt >= 0 && tilt <= Fountain.SPRAY_CONE, "within the fan: " + tilt);
+            if (tilt <= Fountain.CORE_CONE) core++;
+            widest = Math.max(widest, tilt);
+        }
+        assertTrue(core > 0.6 * n, "most in the jet: " + core);
+        assertTrue(widest > 0.9 * Fountain.SPRAY_CONE, "some fan out to " + widest);
+        assertEquals(Fountain.CORE_CONE, Fountain.tilt(0.99, 1), 1e-12);
+        assertEquals(Fountain.SPRAY_CONE, Fountain.tilt(0, 1), 1e-12);
+        assertEquals(0, Fountain.tilt(0.5, 0), 0);
+    }
+
+    @Test
+    void aGobRainsBackDownBeforeItGoesOut() {
+        for (double u = 0; u <= 1; u += 0.25) {
+            double vy = Fountain.speed(u, 1);
+            int life = Fountain.flightTicks(vy, Fountain.GOB_DROP);
+            // it lives past its apex and back down through the crater floor it left, and on down the flanks
+            double y = 0, v = vy, top = 0;
+            int back = -1;
+            for (int t = 1; t <= life; t++) {
+                v -= 0.04 * Fountain.SPATTER_GRAVITY;
+                y += v;
+                v *= Fountain.SPATTER_FRICTION;
+                top = Math.max(top, y);
+                if (back < 0 && y < 0) back = t;
+            }
+            assertTrue(back > 0 && back < life, "back under the floor at " + back + " of its " + life + " ticks");
+            assertEquals(Fountain.apex(vy), top, 1e-9, "it reaches its full height");
+            assertTrue(y <= -Fountain.GOB_DROP + 2, "and ends " + y + " under the floor");
+            assertTrue(life <= Fountain.GOB_LIFE_MAX);
+        }
+        // a woken eruption's fastest reaches the cap rather than flying on for ever
+        assertEquals(Fountain.GOB_LIFE_MAX, Fountain.flightTicks(50, 1000));
+        // a pop's gobs clear the crater's rim (2 to 4 blocks over its floor) and fall back in a few seconds
+        assertTrue(Fountain.apex(Fountain.POP_SPEED_MIN) > 4, "the lowest pop climbs " + Fountain.apex(Fountain.POP_SPEED_MIN));
+        assertTrue(Fountain.apex(Fountain.POP_SPEED_MAX) < 12, "the highest pop climbs " + Fountain.apex(Fountain.POP_SPEED_MAX));
+        assertTrue(Fountain.flightTicks(Fountain.POP_SPEED_MAX, 1) < 70);
+    }
+
+    @Test
+    void thePlumeIsThrownToTheVault() {
+        assertEquals(Fountain.ASH_THRUST_MIN, Fountain.ashThrust(0, 1), 1e-12);
+        assertEquals(Fountain.ASH_THRUST_MAX, Fountain.ashThrust(1, 1), 1e-12);
+        assertTrue(Fountain.ashThrust(1, 2) > Fountain.ashThrust(1, 1), "a stronger eruption throws harder");
+        assertEquals(0, Fountain.ashThrust(1, 0), 0);
+        // the thrust alone carries a puff 15 to 27 blocks up out of the mouth; then it rises on as the smoke does
+        assertTrue(Fountain.thrustRise(Fountain.ashThrust(0, 1)) >= 14, "lowest " + Fountain.thrustRise(Fountain.ashThrust(0, 1)));
+        assertTrue(Fountain.thrustRise(Fountain.ashThrust(1, 1)) <= 28);
+        SmokePuff puff = new SmokePuff(0, 0, 0, 0, 60, () -> 0.5).launch(Fountain.ashThrust(0.5, 1));
+        SmokePuff still = new SmokePuff(0, 0, 0, 0, 60, () -> 0.5);
+        for (int t = 0; t < 100; t++) {
+            puff.tick((x, y, z) -> false, () -> 0.5);
+            still.tick((x, y, z) -> false, () -> 0.5);
+        }
+        double gained = puff.y - still.y, expected = Fountain.thrustRise(Fountain.ashThrust(0.5, 1));
+        assertTrue(gained > 0.85 * expected && gained < 1.05 * expected, "the thrust carried it " + gained + " of " + expected);
+        assertTrue(puff.y > 25, "five seconds out it is " + puff.y + " blocks up");
+        // under a vault it stops and spreads all the same
+        SmokePuff capped = new SmokePuff(0, 0, 0, 0, 60, () -> 0.5).launch(0.8);
+        for (int t = 0; t < 200; t++) capped.tick((x, y, z) -> y >= 20, () -> 0.5);
+        assertTrue(capped.y < 20, "held under the rock at " + capped.y);
+        assertTrue(capped.spreads > 0, "and spread under it");
+        // a slow puff is not slowed by a launch
+        SmokePuff slow = new SmokePuff(0, 0, 0, 0, 60, () -> 0.5);
+        double vy = slow.vy;
+        slow.launch(0);
+        assertEquals(vy, slow.vy, 0);
     }
 
     @Test

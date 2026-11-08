@@ -591,6 +591,13 @@ PARTICLES = {
     "grit": [f"{MOD}:grit_{i}" for i in range(3)],
     # 0.9.0: the eruptions' lava spatter, vanilla's lava sprite drawn full-bright (CaveParticles.Spatter)
     "lava_spatter": ["minecraft:lava"],
+    # 0.9.0 (pack look fixes): the fountain's lava gobs and the fire at the mouth, painted by tools/particles.py; the
+    # plume's dark ash, the blasts' ash and the crashes' rock dust tint the volcanic smoke's puffs
+    "lava_gob": [f"{MOD}:lava_gob_{i}" for i in range(4)],
+    "fireball": [f"{MOD}:fireball_{i}" for i in range(4)],
+    "eruption_ash": [f"{MOD}:volcanic_smoke_{i}" for i in range(4)],
+    "blast_ash": [f"{MOD}:volcanic_smoke_{i}" for i in range(4)],
+    "rock_dust": [f"{MOD}:volcanic_smoke_{i}" for i in range(4)],
 }
 
 

@@ -66,6 +66,19 @@ public final class SmokeBudget {
         };
     }
 
+    /**
+     * The share of the particles that are not forced the game itself shows by the Particles option (LevelRenderer's own
+     * draw for "decreased" particles): all at "All", two in three at "Decreased", one in fifteen at "Minimal". The
+     * eruptions' client makes its near particles itself (to size them) and keeps this share of them.
+     */
+    public static float nearShare() {
+        return switch (Minecraft.getInstance().options.particles().get()) {
+            case ALL -> 1F;
+            case DECREASED -> 2F / 3F;
+            case MINIMAL -> 1F / 15F;
+        };
+    }
+
     /** A new level: its particles are gone and its clock is another. */
     static void clear() {
         ENDS.clear();

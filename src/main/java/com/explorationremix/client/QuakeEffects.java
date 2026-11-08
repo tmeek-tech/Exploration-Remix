@@ -56,7 +56,9 @@ import java.util.Map;
  *     heard from far below with its direction) and trickles grit, and grit patters on the floor where it will land; this
  *     is gameplay, so it shows with caveParticles off and at "Minimal" (forced, thinned by hand). A falling block too far
  *     away for the game to draw leaves a streak of grit; it splashes and hisses where it passes the lava's surface, and
- *     lands with crumbs, grey dust and a thud ({@code quake.debris}), or shatters with them on whoever it hits.</li>
+ *     crashes down: chunks of its own rock thrown out to lie round it for a while ({@link CaveParticles.Rubble}), a pale
+ *     billow of rock dust rolling out along the floor and hanging there a few seconds (with caveParticles on), crumbs,
+ *     grey dust and a thud ({@code quake.debris}); or it shatters with them on whoever it hits.</li>
  *     <li><b>Creaks</b>: a build a player stands on creaks ({@code quake.creak}) and sheds crumbs from its sides for a
  *     second before it goes.</li>
  * </ul>
@@ -74,6 +76,8 @@ public final class QuakeEffects {
     static final double STREAK_FROM = 48;
     /** The crack of a block about to drop is heard this far, fading to a quarter, with its direction. */
     static final double CRACK_REACH = 160;
+    /** A crash: chunks of the block's rock and puffs of rock dust where it lands, fewer where it shatters on someone. */
+    static final int CRASH_RUBBLE = 30, CRASH_DUST = 16, SHATTER_RUBBLE = 18, SHATTER_DUST = 10;
     /** Lava spatter thrown up where a falling block passes the lava's surface, and its hiss's volume. */
     static final int SPLASH_SPATTER = 8;
     static final float SPLASH_VOLUME = 0.7F;
@@ -241,6 +245,7 @@ public final class QuakeEffects {
     private static void shatter(ClientLevel level, LavaNet.Debris d, BlockPos at) {
         BlockState s = Block.stateById(d.state());
         burst(level, s, at.getX() + 0.5, at.getY() + 0.5, at.getZ() + 0.5, 24, 0.25);
+        crash(level, s, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, SHATTER_RUBBLE, SHATTER_DUST);
         thud(level, at.getX() + 0.5, at.getY() + 0.5, at.getZ() + 0.5);
         // a ceiling block falls straight down its column
         PIECES.values().removeIf(pc -> pc.pos.getX() == at.getX() && pc.pos.getZ() == at.getZ() && pc.pos.getY() >= at.getY());
@@ -415,7 +420,32 @@ public final class QuakeEffects {
     private static void landed(ClientLevel level, Piece pc) {
         double x = pc.pos.getX() + 0.5, y = pc.landY + 0.2, z = pc.pos.getZ() + 0.5;
         burst(level, pc.state, x, y, z, 16, 0.15);
+        crash(level, pc.state, x, pc.landY, z, CRASH_RUBBLE, CRASH_DUST);
         thud(level, x, y + 0.3, z);
+    }
+
+    /**
+     * Rock crashing down on the floor at {@code floor} under (x, z): {@code rubble} chunks of {@code state} thrown out to
+     * lie round it a while, and (caveParticles) {@code dust} puffs of pale rock dust rolling out low along the floor in a
+     * ring and hanging there a few seconds; thinned by the Particles option and the distance, none of the chunks beyond
+     * 64 blocks.
+     */
+    private static void crash(ClientLevel level, BlockState state, double x, double floor, double z, int rubble, int dust) {
+        Minecraft mc = Minecraft.getInstance();
+        RandomSource random = level.random;
+        double d = mc.gameRenderer.getMainCamera().getPosition().distanceTo(new Vec3(x, floor + 0.5, z));
+        if (d < BombEffects.RUBBLE_REACH) {
+            BombEffects.rubble(mc, level, state, x, floor + 0.6, z, Fountain.count(rubble * SmokeBudget.share(), random.nextDouble()),
+                    0.08, 0.3, 0.15, 0.4, random);
+        }
+        if (!ERClientConfig.INSTANCE.caveParticles.get()) return;
+        double far = Fountain.farShare(d, SmokeBudget.share());
+        int n = Fountain.count(dust * far, random.nextDouble());
+        for (int i = 0; i < n; i++) {
+            double a = (i + random.nextDouble()) * Mth.TWO_PI / Math.max(1, n), out = 0.12 + 0.18 * random.nextDouble();
+            EruptionEffects.put(mc, level, ERParticles.ROCK_DUST.get(), d, x + 0.5 * Math.cos(a), floor + 0.3 + 0.5 * random.nextDouble(), z + 0.5 * Math.sin(a),
+                    out * Math.cos(a), 0.01 + 0.04 * random.nextDouble(), out * Math.sin(a));
+        }
     }
 
     /** Crumbs of {@code state} thrown out from (x, y, z), and 8 puffs of grey dust. */

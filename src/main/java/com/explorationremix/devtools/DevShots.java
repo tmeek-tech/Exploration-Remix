@@ -27,7 +27,10 @@ import java.util.List;
  * [ticks]" for a picture from where the camera is now, with no teleport: it waits that many client ticks (20 if not
  * given) for the server's messages and the particles they bring, then for the usual quiet and still view, but without
  * the least wait of ER_SHOTS_SETTLE (0.9.0, spec 6.7: a held quake or eruption, pictured from the spot the last view
- * left the camera at). Three more kinds of line take no picture: "! command" runs a command (for example "! remix lava
+ * left the camera at), or "file-name now [ticks]" for a picture from where the camera is after that many client ticks
+ * (0 if not given) after the line before it, with no settling at all, once the renderer has no section left to build
+ * (at most 40 ticks more): a moment that does not hold still, such as a block crashing down or a bomb's blast a few
+ * ticks after it (the driver's breath of 40 ticks between lines is left out before it). Three more kinds of line take no picture: "! command" runs a command (for example "! remix lava
  * level 40", to set the Basalt Galleries' flood before the next pictures) and waits for its reply, "! wait ticks" idles
  * that many client ticks (to let the server finish work the last command started), and "! waitgame ticks" waits until
  * the level's game time has gone that many server ticks past the line's start (the rig's client runs slower than the
@@ -59,7 +62,7 @@ public final class DevShots {
     /** A "here" line's wait for messages and particles when it gives none, in client ticks. */
     private static final int HERE_WAIT = 20;
 
-    private enum Phase { WAIT_WORLD, SETUP, NEXT, VIEWING, HERE, SETTLING, SHOOT, COMMAND, WAITING, WAIT_GAME, DONE }
+    private enum Phase { WAIT_WORLD, SETUP, NEXT, VIEWING, HERE, NOW, SETTLING, SHOOT, COMMAND, WAITING, WAIT_GAME, DONE }
 
     private static Phase phase = Phase.WAIT_WORLD;
     private static List<String[]> shots;
@@ -141,7 +144,9 @@ public final class DevShots {
                 ticks = 0;
             }
             case NEXT -> {
-                if (ticks < 40) return;
+                // a breath between lines, but none before a "now" line: its ticks count from the line before it
+                boolean now = index + 1 < shots.size() && shots.get(index + 1).length >= 2 && shots.get(index + 1)[1].equals("now");
+                if (ticks < 40 && !now) return;
                 index++;
                 if (index >= shots.size()) {
                     finish(mc);
@@ -168,6 +173,14 @@ public final class DevShots {
                         else server.execute(() -> run(server, server.getPlayerList().getPlayer(mc.player.getUUID()), command));
                         phase = Phase.COMMAND;
                     }
+                    ticks = 0;
+                    return;
+                }
+                if (s.length >= 2 && s[1].equals("now")) {
+                    // a picture of a passing moment from where the camera is: no settling, only the sections built
+                    waitTicks = s.length > 2 ? count(s[2], 0) : 0;
+                    ExplorationRemix.LOGGER.info("[shots] {} of {}: now, after {} ticks", index + 1, shots.size(), waitTicks);
+                    phase = Phase.NOW;
                     ticks = 0;
                     return;
                 }
@@ -226,6 +239,13 @@ public final class DevShots {
                 if (ticks < waitTicks) return;
                 settle();
             }
+            case NOW -> {
+                if (ticks < waitTicks || !mc.levelRenderer.hasRenderedAllChunks() && ticks < waitTicks + 40) return;
+                gaveUp = false;
+                ExplorationRemix.LOGGER.info("[shots] now after {} ticks, build queue empty {}", ticks, mc.levelRenderer.hasRenderedAllChunks());
+                phase = Phase.SHOOT;
+                ticks = 0;
+            }
             case SETTLING -> {
                 // Let the chunks arrive, get lit and every section in view get built before the picture. On a busy server
                 // the chunk count can stand still for seconds while chunks are still being generated, so every chunk
@@ -266,7 +286,8 @@ public final class DevShots {
                 String where = String.format(java.util.Locale.ROOT, "%s %.1f %.1f %.1f yaw %.0f pitch %.0f%s", name, mc.player.getX(), mc.player.getY(),
                         mc.player.getZ(), mc.player.getYRot(), mc.player.getXRot(), gaveUp ? " (never settled)" : "");
                 log.add(where);
-                ExplorationRemix.LOGGER.info("[shots] took {}", where);
+                // the particles alive and the frame rate over the last wait, for the effects' cost
+                ExplorationRemix.LOGGER.info("[shots] took {} (particles {}, fps {})", where, mc.particleEngine.countParticles(), mc.getFps());
                 phase = Phase.NEXT;
                 ticks = 0;
             }

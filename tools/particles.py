@@ -1,5 +1,5 @@
 """Particle textures the mod paints itself: (0.8.0) the volcanic smoke of the Basalt Galleries and the Wasteland, and
-(0.9.0) the quakes' grit and the glow round a lava bomb.
+(0.9.0) the quakes' grit, the glow round a lava bomb, and the eruptions' lava gobs and fireballs (at the end of the file).
 
 16 by 16 like the block textures, vanilla style: a short ramp of pale warm greys and alpha in a few hard steps, from a
 thick core to a thin rim, no blur. The particle tints the puff (client/CaveParticles.VolcanicSmoke: a warm grey that
@@ -130,3 +130,102 @@ def _bomb_halo():
 
 
 PAINTERS["entity/lava_bomb/halo"] = _bomb_halo
+
+
+# 0.9.0 (pack look fixes): the eruptions' lava gobs and fireballs.
+#
+# A lava gob (client/CaveParticles.LavaGob) is a clot of molten rock half a block to a block across, the body of a
+# fountain: a lumpy round outline that fills most of the square (so the drawn size is the quad's), a white-yellow heart,
+# yellow, orange and a deep red rim, with a few darker streaks of cooling skin in the orange so it reads as lava rather
+# than a coloured disc. Hard-edged and opaque (the opaque sheet drops the clear pixels); drawn full-bright, and the
+# particle reddens it as it cools. Four of them.
+GOB_RAMP = [(0.0, (150, 38, 12)), (1.1, (226, 92, 24)), (2.2, (255, 158, 46)), (3.4, (255, 214, 96)), (4.6, (255, 246, 196))]
+GOB_SKIN = (176, 58, 16)
+GOB_SEEDS = [6301, 6302, 6303, 6304]
+
+
+def _ramp(ramp, t):
+    if t <= ramp[0][0]:
+        return ramp[0][1]
+    for (t0, c0), (t1, c1) in zip(ramp, ramp[1:]):
+        if t <= t1:
+            k = (t - t0) / (t1 - t0)
+            return tuple(int(round(c0[i] + (c1[i] - c0[i]) * k)) for i in range(3))
+    return ramp[-1][1]
+
+
+def _gob(seed):
+    rng = random.Random(seed)
+    base = rng.uniform(6.0, 6.8)
+    bumps = [(rng.uniform(0.3, 0.8), rng.randrange(3, 6), rng.random() * 2 * math.pi) for _ in range(2)]
+    cx, cy = 8 + rng.uniform(-0.3, 0.3), 8 + rng.uniform(-0.3, 0.3)
+    # the heart sits a little off the middle, as in a clot that is still turning over
+    hx, hy = cx + rng.uniform(-0.8, 0.8), cy + rng.uniform(-0.8, 0.8)
+    skin = set()
+    for _ in range(rng.randrange(2, 4)):
+        a = rng.random() * 2 * math.pi
+        d = rng.uniform(3.0, 4.6)
+        x0, y0 = cx + d * math.cos(a), cy + d * math.sin(a)
+        t = a + math.pi / 2 + rng.uniform(-0.5, 0.5)
+        for k in range(rng.randrange(2, 4)):
+            skin.add((int(x0 + k * math.cos(t)), int(y0 + k * math.sin(t))))
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    px = img.load()
+    for y in range(16):
+        for x in range(16):
+            dx, dy = x + 0.5 - cx, y + 0.5 - cy
+            d = math.hypot(dx, dy)
+            a = math.atan2(dy, dx)
+            r = min(7.6, base + sum(h * math.sin(k * a + ph) for h, k, ph in bumps))
+            if d > r:
+                continue
+            # how deep inside: from the rim, and from the off-centre heart
+            depth = min(r - d + 0.4, 5.2 - 0.9 * math.hypot(x + 0.5 - hx, y + 0.5 - hy)) + (rng.random() - 0.5) * 0.5
+            c = _ramp(GOB_RAMP, depth)
+            if (x, y) in skin and 1.0 < depth < 3.6:
+                c = GOB_SKIN
+            px[x, y] = c + (255,)
+    return img
+
+
+for i, seed in enumerate(GOB_SEEDS):
+    PAINTERS[f"particle/lava_gob_{i}"] = (lambda s=seed: _gob(s))
+
+
+# A fireball (client/CaveParticles.Fireball): the flash of fire at a vent's mouth and a bomb's blast. Shaped as the smoke
+# puffs are (a core and lobes, corners clear, so a cluster reads as billows of flame), coloured from a white-yellow heart
+# through orange to a deep red rim, and see-through toward its rim in the same hard alpha steps. Drawn full-bright on
+# the translucent sheet; the particle reddens and thins it as it burns out.
+FIRE_SHADES = [(140, 32, 10), (224, 84, 22), (255, 150, 48), (255, 218, 118)]
+FIRE_ALPHA = [255, 224, 168, 104]
+FIRE_SEEDS = [6401, 6402, 6403, 6404]
+
+
+def _fireball(seed):
+    rng = random.Random(seed)
+    lobes = [(8 + rng.uniform(-0.6, 0.6), 8 + rng.uniform(-0.6, 0.6), rng.uniform(4.4, 5.0))]
+    start = rng.random() * 2 * math.pi
+    count = rng.randrange(4, 6)
+    for k in range(count):
+        a = start + k * 2 * math.pi / count + rng.uniform(-0.4, 0.4)
+        d = rng.uniform(2.3, 3.2)
+        lobes.append((8 + d * math.cos(a), 8 + d * math.sin(a), rng.uniform(2.6, 3.4)))
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    px = img.load()
+    for y in range(16):
+        for x in range(16):
+            cx, cy = x + 0.5, y + 0.5
+            if math.hypot(cx - 8, cy - 8) > 7.6:
+                continue
+            depth = max(r - math.hypot(cx - lx, cy - ly) for lx, ly, r in lobes)
+            if depth <= 0:
+                continue
+            step = next((i for i, d in enumerate(DEPTHS) if depth > d), len(DEPTHS))
+            v = min(1.0, max(0.0, (len(DEPTHS) - step) / len(DEPTHS) + (rng.random() - 0.5) * 0.3))
+            shade = FIRE_SHADES[min(len(FIRE_SHADES) - 1, int(v * len(FIRE_SHADES)))]
+            px[x, y] = shade + (FIRE_ALPHA[step],)
+    return img
+
+
+for i, seed in enumerate(FIRE_SEEDS):
+    PAINTERS[f"particle/fireball_{i}"] = (lambda s=seed: _fireball(s))
