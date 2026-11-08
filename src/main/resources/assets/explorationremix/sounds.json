@@ -294,6 +294,60 @@
     ],
     "subtitle": "subtitles.explorationremix.quake.debris"
   },
+  "eruption.rumble": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/eruption_rumble",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.eruption.rumble"
+  },
+  "eruption.boom": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/eruption_boom1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/eruption_boom2",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.eruption.boom"
+  },
+  "eruption.roar": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/eruption_roar",
+        "volume": 1.0,
+        "stream": true
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.eruption.roar"
+  },
+  "lava_bomb.whistle": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/bomb_whistle",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.lava_bomb.whistle"
+  },
+  "lava_bomb.burst": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/bomb_burst1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:ambient/bomb_burst2",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.lava_bomb.burst"
+  },
   "lava_bomb.fizz": {
     "sounds": [
       {
@@ -306,41 +360,6 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.lava_bomb.fizz"
-  },
-  "eruption.boom": {
-    "sounds": [
-      {
-        "name": "minecraft:random/explode1",
-        "volume": 1.0,
-        "pitch": 0.7
-      },
-      {
-        "name": "minecraft:random/explode2",
-        "volume": 1.0,
-        "pitch": 0.7
-      },
-      {
-        "name": "minecraft:random/explode3",
-        "volume": 1.0,
-        "pitch": 0.7
-      },
-      {
-        "name": "minecraft:random/explode4",
-        "volume": 1.0,
-        "pitch": 0.7
-      }
-    ],
-    "subtitle": "subtitles.explorationremix.eruption.boom"
-  },
-  "eruption.roar": {
-    "sounds": [
-      {
-        "name": "explorationremix:ambient/lava_surge",
-        "volume": 1.0,
-        "pitch": 0.8
-      }
-    ],
-    "subtitle": "subtitles.explorationremix.eruption.roar"
   },
   "mossback.call": {
     "sounds": [

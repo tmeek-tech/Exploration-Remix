@@ -18,8 +18,8 @@ import net.minecraftforge.fml.common.Mod;
  * The one camera hook for the Basalt Galleries' shaking (0.9.0): the lava's warning (LavaWarnings), the quakes
  * (QuakeEffects) and the eruptions' jolts, each with its own waveform, summed by {@link Shake} and added to the view's
  * angles. The gates are applied once, to the sum: nothing with the client's screenShake off; scaled by its
- * shakeStrength and the game's Distortion Effects; nothing while the lava clock or a quake is held (a picture is not
- * shaken). A big quake's thump of the field of view follows the game's FOV Effects instead of Distortion Effects.
+ * shakeStrength and the game's Distortion Effects; nothing while the lava clock, a quake or an eruption is held (a
+ * picture is not shaken). A big quake's thump of the field of view follows the game's FOV Effects instead of Distortion Effects.
  *
  * <p>The angles hook runs at {@link EventPriority#LOW}: Create sets the yaw and pitch outright while its own camera
  * animates, and this adds after it. The player's real rotation is never touched, so aiming and the server are not
@@ -56,10 +56,13 @@ public final class CameraShake {
     @SubscribeEvent
     public static void loggingOut(ClientPlayerNetworkEvent.LoggingOut event) { JOLTS.clear(); }
 
-    /** True while nothing may shake: the lava clock held by command (DevShots' setup holds it) or a quake held. */
+    /**
+     * True while nothing may shake: the lava clock held by command (DevShots' setup holds it), or a quake or an eruption
+     * held.
+     */
     private static boolean still() {
         LavaNet.Sync s = LavaWarnings.lastSync();
-        return s != null && s.frozen() || QuakeEffects.anyHeld();
+        return s != null && s.frozen() || QuakeEffects.anyHeld() || EruptionEffects.anyHeld();
     }
 
     @SubscribeEvent(priority = EventPriority.LOW)

@@ -578,8 +578,8 @@ def lang(extra):
     write(os.path.join(ASSETS, "lang", "en_us.json"), dict(sorted(out.items())))
 
 
-# The mod's particle types (ERParticles): the first three reuse vanilla sprites, the volcanic smoke and the grit have
-# their own (textures/particle); CaveParticles tints and animates them. Every type ERParticles registers needs its file
+# The mod's particle types (ERParticles): the first three and the lava spatter reuse vanilla sprites, the volcanic smoke
+# and the grit have their own (textures/particle); CaveParticles tints and animates them. Every type ERParticles registers needs its file
 # here (check_data checks it): one without crashes the game when it is spawned.
 PARTICLES = {
     "steam": [f"minecraft:big_smoke_{i}" for i in range(12)],
@@ -589,6 +589,8 @@ PARTICLES = {
     "volcanic_smoke": [f"{MOD}:volcanic_smoke_{i}" for i in range(4)],
     # 0.9.0: the quakes' grit, painted by tools/particles.py
     "grit": [f"{MOD}:grit_{i}" for i in range(3)],
+    # 0.9.0: the eruptions' lava spatter, vanilla's lava sprite drawn full-bright (CaveParticles.Spatter)
+    "lava_spatter": ["minecraft:lava"],
 }
 
 

@@ -1,5 +1,5 @@
 """Particle textures the mod paints itself: (0.8.0) the volcanic smoke of the Basalt Galleries and the Wasteland, and
-(0.9.0) the quakes' grit.
+(0.9.0) the quakes' grit and the glow round a lava bomb.
 
 16 by 16 like the block textures, vanilla style: a short ramp of pale warm greys and alpha in a few hard steps, from a
 thick core to a thin rim, no blur. The particle tints the puff (client/CaveParticles.VolcanicSmoke: a warm grey that
@@ -9,7 +9,13 @@ slowly as the puff rises. The particle picks one of the four at random.
 
 The grit (client/CaveParticles.Grit) is a small stone: a lumpy pebble of a few mid greys, lit from the upper left, with a
 hard edge and nothing translucent (it is drawn on the opaque sheet, which drops the clear pixels), pale enough to show
-against the dark basalt under Cave Fog. Three of them. textures.py merges this file.
+against the dark basalt under Cave Fog. Three of them.
+
+The lava bomb's halo (client.render.LavaBombRenderer, textures/entity/lava_bomb/halo) is a round glow drawn as eyes are:
+full-bright and added to whatever lies behind it, so black is see-through, and shader packs treat it as glowing. A small
+hot yellow-white heart, deep orange round it, dying through a dark red to nothing before the square's edge; the alpha
+falls with the light for packs that blend by alpha instead. Its colour is all in the texture, as the fireflies' is: the
+shader's block light is warm, and the renderer only scales it. textures.py merges this file.
 """
 import math, random
 from PIL import Image
@@ -88,3 +94,39 @@ def _pebble(seed):
 
 for i, seed in enumerate(GRIT_SEEDS):
     PAINTERS[f"particle/grit_{i}"] = (lambda s=seed: _pebble(s))
+
+
+# the bomb's halo: from its heart outwards, yellow-white, hot orange, deep orange, the dark red of its rim
+HALO_SIZE = 32
+HALO_RAMP = [(0.0, (255, 236, 170)), (0.15, (255, 176, 70)), (0.45, (240, 104, 28)), (0.75, (170, 44, 12)), (1.0, (90, 16, 6))]
+
+
+def _halo_colour(t):
+    for (t0, c0), (t1, c1) in zip(HALO_RAMP, HALO_RAMP[1:]):
+        if t <= t1:
+            k = (t - t0) / (t1 - t0)
+            return tuple(c0[i] + (c1[i] - c0[i]) * k for i in range(3))
+    return HALO_RAMP[-1][1]
+
+
+def _bomb_halo():
+    """A round orange glow, brightest in the middle (where the bomb lies over it), gone before the square's edge."""
+    img = Image.new("RGBA", (HALO_SIZE, HALO_SIZE), (0, 0, 0, 0))
+    px = img.load()
+    mid = (HALO_SIZE - 1) / 2.0
+    for y in range(HALO_SIZE):
+        for x in range(HALO_SIZE):
+            r = math.hypot(x - mid, y - mid) / (HALO_SIZE / 2.0)
+            if r >= 1.0:
+                continue
+            light = min(1.0, 0.55 * math.exp(-(r / 0.22) ** 2) + 0.6 * math.exp(-(r / 0.5) ** 2) * (1.0 - r) ** 0.6)
+            if light < 0.015:
+                continue
+            # quantized a little, as the mod's other textures are, so the glow reads as soft rings, not mush
+            light = round(light * 24) / 24.0
+            c = _halo_colour(min(1.0, r / 0.9))
+            px[x, y] = tuple(int(round(v * light)) for v in c) + (int(round(255 * light)),)
+    return img
+
+
+PAINTERS["entity/lava_bomb/halo"] = _bomb_halo

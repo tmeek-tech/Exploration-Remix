@@ -30,11 +30,17 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> QUAKE_CRACK = register("quake.crack");
     public static final RegistryObject<SoundEvent> QUAKE_CREAK = register("quake.creak");
     public static final RegistryObject<SoundEvent> QUAKE_DEBRIS = register("quake.debris");
-    /** 0.9.0: lava hissing where something falls into it (a ceiling block now, a lava bomb with the eruptions). */
-    public static final RegistryObject<SoundEvent> LAVA_BOMB_FIZZ = register("lava_bomb.fizz");
-    /** 0.5.1: an eruption's burst and its roar (client.EruptionEffects). */
+    /**
+     * The eruptions (client.EruptionEffects and client.BombEffects, 0.9.0; tools/synth_quake_sounds.py makes them): a
+     * vent rumbling as it warns, the deep boom of its burst and the roar of its fountain; a lava bomb's whistle in
+     * flight, its far blast, and lava hissing where it or a ceiling block falls into the lava.
+     */
+    public static final RegistryObject<SoundEvent> ERUPTION_RUMBLE = register("eruption.rumble");
     public static final RegistryObject<SoundEvent> ERUPTION_BOOM = register("eruption.boom");
     public static final RegistryObject<SoundEvent> ERUPTION_ROAR = register("eruption.roar");
+    public static final RegistryObject<SoundEvent> LAVA_BOMB_WHISTLE = register("lava_bomb.whistle");
+    public static final RegistryObject<SoundEvent> LAVA_BOMB_BURST = register("lava_bomb.burst");
+    public static final RegistryObject<SoundEvent> LAVA_BOMB_FIZZ = register("lava_bomb.fizz");
 
     public static final RegistryObject<SoundEvent> UPPER_LOOP = register("ambient.upper.loop");
     public static final RegistryObject<SoundEvent> UPPER_ADDITIONS = register("ambient.upper.additions");

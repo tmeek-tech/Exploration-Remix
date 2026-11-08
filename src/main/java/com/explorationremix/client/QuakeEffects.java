@@ -74,6 +74,9 @@ public final class QuakeEffects {
     static final double STREAK_FROM = 48;
     /** The crack of a block about to drop is heard this far, fading to a quarter, with its direction. */
     static final double CRACK_REACH = 160;
+    /** Lava spatter thrown up where a falling block passes the lava's surface, and its hiss's volume. */
+    static final int SPLASH_SPATTER = 8;
+    static final float SPLASH_VOLUME = 0.7F;
     /** A creak sheds crumbs for this many ticks. */
     static final int CREAK_TICKS = 20;
     /** At most this many new positioned sounds a tick from these effects (Sound Physics Remastered drops a burst). */
@@ -437,16 +440,13 @@ public final class QuakeEffects {
     }
 
     /**
-     * A block going into the lava where it passes the surface: lava thrown up, smoke and a hiss (the eruptions' lava
-     * spatter joins this when it is built). It sinks to the bed out of sight.
+     * A block going into the lava where it passes the surface: lava spatter thrown up, the lava's own pops and smoke
+     * (the splash a lava bomb makes, {@link BombEffects#splash}), and a hiss a little quieter than a bomb's. It sinks to
+     * the bed out of sight.
      */
     private static void splash(ClientLevel level, double x, double y, double z, RandomSource random) {
-        for (int i = 0; i < 6; i++) level.addParticle(ParticleTypes.LAVA, x + (random.nextDouble() - 0.5) * 0.8, y, z + (random.nextDouble() - 0.5) * 0.8, 0, 0, 0);
-        for (int i = 0; i < 4; i++) {
-            level.addParticle(ParticleTypes.LARGE_SMOKE, x + (random.nextDouble() - 0.5) * 0.8, y + 0.2, z + (random.nextDouble() - 0.5) * 0.8,
-                    0, 0.04 + 0.04 * random.nextDouble(), 0);
-        }
-        if (spend()) level.playLocalSound(x, y, z, ERSounds.LAVA_BOMB_FIZZ.get(), SoundSource.BLOCKS, 1.0F, 0.9F + 0.2F * random.nextFloat(), false);
+        BombEffects.splash(Minecraft.getInstance(), level, x, y, z, SPLASH_SPATTER, random);
+        if (spend()) level.playLocalSound(x, y, z, ERSounds.LAVA_BOMB_FIZZ.get(), SoundSource.BLOCKS, SPLASH_VOLUME, 0.9F + 0.2F * random.nextFloat(), false);
     }
 
     /** Each creaking build: crumbs off the sides of its top blocks, until it goes. */

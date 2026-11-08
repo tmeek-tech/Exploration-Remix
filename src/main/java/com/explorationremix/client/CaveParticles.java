@@ -147,6 +147,60 @@ public final class CaveParticles {
         }
     }
 
+    /**
+     * A gob of glowing lava (0.9.0): thrown up by an eruption's fountain, hopping in a vent's crater while it warns, off a
+     * lava bomb in flight, and splashed up where something falls into the lava. It takes the spawn's velocity, flies
+     * under {@link Fountain#SPATTER_GRAVITY} of the particles' gravity with {@link Fountain#SPATTER_FRICTION} drag, lands
+     * on what it meets and stops there, shrinking and darkening as it cools, and is gone after 30 to 60 ticks. It never
+     * fades its alpha and is always full-bright, so the shader and the cave fog do not drop it at a distance; drawn on
+     * the opaque sheet (the vanilla lava's sprite), away from the long-lived smoke on the translucent one. Unlike the
+     * game's own lava particle it leaves no smoke behind it each tick.
+     */
+    public static final class Spatter extends TextureSheetParticle {
+        /** Once landed it keeps this share of its size and of its green and blue each tick. */
+        static final float COOL_SIZE = 0.93F, COOL_COLOUR = 0.9F;
+
+        Spatter(ClientLevel level, double x, double y, double z, double dx, double dy, double dz, SpriteSet sprites) {
+            super(level, x, y, z);
+            this.xd = dx;
+            this.yd = dy;
+            this.zd = dz;
+            this.gravity = (float) Fountain.SPATTER_GRAVITY;
+            this.friction = (float) Fountain.SPATTER_FRICTION;
+            this.hasPhysics = true;
+            this.lifetime = 30 + random.nextInt(31);
+            this.quadSize = 0.07F + 0.09F * random.nextFloat();
+            this.setColor(1.0F, 0.75F + 0.25F * random.nextFloat(), 0.55F + 0.3F * random.nextFloat());
+            this.pickSprite(sprites);
+        }
+
+        /** Drawn {@code k} times its size (a far fountain's spatter keeps more of its size); its box for landing stays the same. */
+        void grow(float k) { this.quadSize *= k; }
+
+        @Override
+        public void tick() {
+            super.tick();
+            if (removed || !onGround) return;
+            // cooling where it landed: smaller and redder, never fainter
+            this.quadSize *= COOL_SIZE;
+            this.gCol *= COOL_COLOUR;
+            this.bCol *= COOL_COLOUR * COOL_COLOUR;
+        }
+
+        @Override
+        public int getLightColor(float partialTick) { return 0xF000F0; }
+
+        @Override
+        public ParticleRenderType getRenderType() { return ParticleRenderType.PARTICLE_SHEET_OPAQUE; }
+
+        public record Provider(SpriteSet sprites) implements ParticleProvider<SimpleParticleType> {
+            @Override
+            public Particle createParticle(SimpleParticleType type, ClientLevel level, double x, double y, double z, double dx, double dy, double dz) {
+                return new Spatter(level, x, y, z, dx, dy, dz, sprites);
+            }
+        }
+    }
+
     /** A soft puff of steam that rises off a hot pool, swells and fades. */
     public static final class Steam extends TextureSheetParticle {
         private final SpriteSet sprites;

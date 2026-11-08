@@ -9,7 +9,8 @@ import net.minecraftforge.registries.RegistryObject;
 
 /**
  * The cave particles: steam off hot pools, embers off lava, pollen in daylight shafts, (0.8.0) the volcanic smoke of
- * the Galleries and the Wasteland, and (0.9.0) the grit of the quakes. Spawned by each client.
+ * the Galleries and the Wasteland, and (0.9.0) the grit of the quakes and the lava spatter of the eruptions. Spawned by
+ * each client.
  */
 public final class ERParticles {
     public static final DeferredRegister<ParticleType<?>> PARTICLES = DeferredRegister.create(ForgeRegistries.PARTICLE_TYPES, ExplorationRemix.MOD_ID);
@@ -26,4 +27,10 @@ public final class ERParticles {
      * hand only where it warns, so held back by distance and the Particles option otherwise).
      */
     public static final RegistryObject<SimpleParticleType> GRIT = PARTICLES.register("grit", () -> new SimpleParticleType(false));
+    /**
+     * 0.9.0: a gob of glowing lava thrown up by an eruption's fountain, off a lava bomb in flight, or where something falls
+     * into the lava (forced by hand only for the far part of a fountain, so held back by distance and the Particles option
+     * otherwise).
+     */
+    public static final RegistryObject<SimpleParticleType> LAVA_SPATTER = PARTICLES.register("lava_spatter", () -> new SimpleParticleType(false));
 }

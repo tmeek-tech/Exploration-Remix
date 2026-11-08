@@ -2,7 +2,11 @@
 """Makes the Basalt Galleries' quake sounds from scratch (0.9.0), with synth_sounds.py's building blocks: a big quake's
 rumble (quake_rumble1-2), a tremor's crackle (quake_tremor1-3), the crack overhead of a ceiling block about to drop
 (quake_crack1-3), the creak of a build under a player (quake_creak1-3), the thud of rock landing (quake_land1-3), and the
-hiss of something falling into the lava (bomb_fizz1-2, shared with the eruptions' lava bombs).
+hiss of something falling into the lava (bomb_fizz1-2, shared with the eruptions' lava bombs); and the eruptions' own:
+a vent rumbling as it wakes (eruption_rumble), the deep boom of its burst (eruption_boom1-2), the roar of its fountain
+(eruption_roar, a seamless loop), a lava bomb's whistle in flight (bomb_whistle, a seamless loop) and its far blast
+(bomb_burst1-2). The eruptions' sounds may be deep (the boom is a 30 to 50 Hz thump): they are heard only in the
+Caldera, as a vent bursts, and never stand for the lava's clock; the band check below is for the quake files alone.
 
 The quakes speak their own language, never the lava's: the lava cycle's warning (synth_lava_sounds.py) is a deep
 sub-bass roll with grinding and cracks, and it is the layer's only clock, so the quake files are dry stone, cracking,
@@ -12,22 +16,24 @@ would be made deep here, never pitched down in sounds.json (the game clamps pitc
 own random seed.
 
 Needs numpy and ffmpeg with libvorbis (and ffprobe for the check). Writes
-src/main/resources/assets/explorationremix/sounds/ambient/{quake_*,bomb_fizz*}.ogg, then checks them.
+src/main/resources/assets/explorationremix/sounds/ambient/{quake_*,eruption_*,bomb_*}.ogg, then checks them.
 Run from anywhere: python3 tools/synth_quake_sounds.py          (make and check)
                    python3 tools/synth_quake_sounds.py --check  (check the files as they are)
 """
 import json, os, subprocess, sys
 import numpy as np
 
-from synth_sounds import (OUT, SR, add_clipped, bandpass, convolve, env_ad, fade_edges, filt, highpass, lowpass,
-                          normalize_peak, periodic_noise, pink, reverb_ir, save, tone)
-from synth_lava_sounds import gloop
+from synth_sounds import (OUT, SR, add_clipped, add_wrapped, bandpass, convolve, convolve_wrapped, env_ad, fade_edges,
+                          filt, highpass, lowpass, normalize_peak, normalize_rms, periodic_noise, pink, reverb_ir, save,
+                          slow_env, tone)
+from synth_lava_sounds import gloop, rumble_noise
 
 SEED = 20261107
 # The quake files and their lengths in seconds: each must keep under 1 % of its energy below 80 Hz.
 QUAKE_FILES = {"quake_rumble": (2, 10.0), "quake_tremor": (3, 1.5), "quake_crack": (3, 0.5), "quake_creak": (3, 1.0),
                "quake_land": (3, 1.2)}
-OTHER_FILES = {"bomb_fizz": (2, 1.2)}
+OTHER_FILES = {"bomb_fizz": (2, 1.2), "eruption_rumble": (1, 6.0), "eruption_boom": (2, 5.0), "eruption_roar": (1, 16.0),
+               "bomb_whistle": (1, 1.5), "bomb_burst": (2, 2.0)}
 LOW_HZ, LOW_SHARE = 80.0, 0.01
 
 
@@ -201,6 +207,116 @@ def bomb_fizz(rng, seconds=1.2):
     return fade_edges(normalize_peak(x, -2.0), 0.005)
 
 
+def fade_tail(x, attack_s=0.003, release_s=0.3):
+    """A one-shot's edges: a click-free start that keeps its attack, and a long fade at the end."""
+    n = len(x)
+    w = np.ones(n)
+    a, r = max(1, int(attack_s * SR)), max(1, int(release_s * SR))
+    w[:a] = np.linspace(0, 1, a)
+    w[-r:] = np.linspace(1, 0, r)
+    return x * w
+
+
+def wrapped_clicks(n, rng, rate, centre, amp=1.0):
+    """Pebble-like clicks all through a loop, about {rate} a second round {centre} Hz, wrapping round its end."""
+    out = np.zeros(n)
+    at = rng.uniform(0, 1.0 / rate)
+    while at < n / SR:
+        c = burst(rng, rng.uniform(0.002, 0.006), rng.uniform(0.0004, 0.0012)) * rng.lognormal(0, 0.5) * amp
+        add_wrapped(out, c, int(at * SR))
+        at += rng.exponential(1.0 / rate)
+    return filt(out, bandpass(centre, 0.8))
+
+
+def eruption_rumble(rng, seconds=6.0):
+    """A vent waking before it bursts: a deep roll through the rock that swells toward the burst, lava gulping and
+    spitting in the crater, and gas hissing out of it more and more, in the big hall."""
+    n = int(seconds * SR)
+    t = np.arange(n) / SR
+    u = t / seconds
+    env = np.clip(t / 0.6, 0, 1) ** 2 * (0.45 + 0.55 * u ** 1.5)
+    roll = rumble_noise(n, rng, 90) * (1 + 0.3 * np.sin(2 * np.pi * rng.uniform(0.9, 1.4) * t + rng.uniform(0, 6)))
+    body = periodic_noise(n, rng, lambda f: pink(f) * bandpass(160, 1.2)(f))
+    gulps = np.zeros(n)
+    at = 0.2
+    while at < seconds - 0.4:
+        add_clipped(gulps, gloop(rng) * rng.uniform(0.5, 1.0), int(at * SR))
+        at += rng.exponential(0.25) + 0.05
+    gulps = one_shot(gulps, lowpass(700, 2))
+    hiss = periodic_noise(n, rng, lambda f: pink(f) * bandpass(2500, 0.8)(f)) * u ** 2 * 0.12
+    x = env * (1.0 * roll + 0.6 * body) + env * 0.5 * gulps + hiss
+    x = x + convolve(x, reverb_ir(2.5, rng, 0.9, lp=900))[:n] * 0.45
+    return fade_tail(normalize_peak(x, -2.0), 0.05, 0.25)
+
+
+def eruption_boom(rng, seconds=5.0):
+    """A vent bursting: a deep thump of 50 falling to 30 Hz that hits at once, the crack of rock torn open in it, a blast
+    of dark noise, and a long dark tail rolling round the hall: nothing like the bright bang of TNT."""
+    n = int(seconds * SR)
+    t = np.arange(n) / SR
+    m = int(1.2 * SR)
+    k = np.arange(m) / SR
+    f = rng.uniform(46, 52) - rng.uniform(14, 18) * np.clip(k / 0.35, 0, 1)
+    thump = np.zeros(n)
+    add_clipped(thump, tone(f, env_ad(m, 0.004, rng.uniform(0.32, 0.4)), ((1, 1.0), (2, 0.3), (3, 0.1))), 0)
+    blast = np.zeros(n)
+    add_clipped(blast, one_shot(burst(rng, 0.8, 0.18), lowpass(320, 2)), int(0.002 * SR))
+    torn = np.zeros(n)
+    add_clipped(torn, crack(rng, 0.06, rng.uniform(900, 1300), 0.02), 0)
+    roll = rumble_noise(n, rng, 70) * np.exp(-t / rng.uniform(1.0, 1.4)) * np.clip(t / 0.05, 0, 1)
+    x = 1.0 * thump + 0.6 * blast + 0.35 * torn + 0.5 * roll
+    x = x + convolve(x, reverb_ir(4.0, rng, 1.3, lp=700))[:n] * 0.6
+    return fade_tail(normalize_peak(x, -1.0), 0.002, 0.6)
+
+
+def eruption_roar(rng, seconds=16):
+    """A fountain of lava going up: a heavy jet roar of 150 to 1500 Hz that surges and eases, lava gulping and spattering
+    through it. A seamless loop: its noise, its swells and its gulps wrap round its end."""
+    n = seconds * SR
+    jet = periodic_noise(n, rng, lambda f: pink(f) * highpass(150, 3)(f) * lowpass(1500, 2)(f)) * slow_env(n, rng, 2.5, 0.45)
+    body = filt(periodic_noise(n, rng, pink), bandpass(320, 1.2)) * slow_env(n, rng, 4, 0.5)
+    churn = np.zeros(n)
+    at = 0.0
+    while at < seconds:
+        add_wrapped(churn, gloop(rng), int(at * SR))
+        at += rng.exponential(0.18) + 0.03
+    churn = filt(churn, lowpass(800, 2)) * slow_env(n, rng, 3, 0.5)
+    spatter = wrapped_clicks(n, rng, 35, 2600, 0.6) * slow_env(n, rng, 1.5, 0.6)
+    x = 1.0 * jet + 0.5 * body + 0.6 * churn + 0.25 * spatter
+    x = x + convolve_wrapped(x, reverb_ir(2.0, rng, 0.7, lp=2000)) * 0.35
+    return normalize_rms(x, -16)
+
+
+def bomb_whistle(rng, seconds=1.5):
+    """A lump of glowing lava rushing through the air: a breathy whistle round 1.1 kHz over a rush of air and the
+    crackle of it spitting. A seamless loop, which the game raises and lowers in pitch as the bomb climbs and falls."""
+    n = int(seconds * SR)
+    whistle = periodic_noise(n, rng, bandpass(rng.uniform(1050, 1200), 14))
+    rush = periodic_noise(n, rng, lambda f: pink(f) * bandpass(700, 0.7)(f))
+    spit = wrapped_clicks(n, rng, 30, 4000, 0.5)
+    x = slow_env(n, rng, 0.4, 0.3) * (0.8 * whistle + 0.6 * rush) + 0.25 * spit
+    return normalize_rms(x, -14)
+
+
+def bomb_burst(rng, seconds=2.0):
+    """A lava bomb bursting far off: a short thump, a blast of noise and the crack of the rock, rubble pattering down
+    and the hall's tail. Played for players beyond the game's own blast sound (64 blocks)."""
+    n = int(seconds * SR)
+    m = int(0.5 * SR)
+    k = np.arange(m) / SR
+    f = rng.uniform(80, 95) - rng.uniform(25, 35) * np.clip(k / 0.15, 0, 1)
+    thump = np.zeros(n)
+    add_clipped(thump, tone(f, env_ad(m, 0.002, rng.uniform(0.1, 0.14)), ((1, 1.0), (2, 0.35), (3, 0.12))), 0)
+    blast = np.zeros(n)
+    add_clipped(blast, one_shot(burst(rng, 0.4, 0.08), lowpass(900, 2)), int(0.002 * SR))
+    torn = np.zeros(n)
+    add_clipped(torn, crack(rng, 0.04, rng.uniform(1800, 2500), 0.01), int(0.004 * SR))
+    rubble = clicks(n, rng, 0.06, seconds - 0.3, 30, 2500, amp=0.5, fade_s=0.35)
+    x = 1.0 * thump + 0.6 * blast + 0.4 * torn + rubble
+    x = x + convolve(x, reverb_ir(1.5, rng, 0.5, lp=1200))[:n] * 0.45
+    return fade_tail(normalize_peak(x, -1.5), 0.002, 0.3)
+
+
 # ----------------------------------------------------------------------------------------------- the check
 
 def probe(path):
@@ -227,26 +343,29 @@ def low_share(x, hz=LOW_HZ):
 
 
 def check():
-    """Every file there, mono, 44.1 kHz and of its length; the quake files under 1 % of their energy below 80 Hz.
+    """Every file there (numbered from 1 when a sound has several), mono, 44.1 kHz and of its length; the quake files
+    under 1 % of their energy below 80 Hz.
     Returns the problems found."""
     problems = []
     for files, band in ((QUAKE_FILES, True), (OTHER_FILES, False)):
         for name, (count, seconds) in files.items():
             for k in range(1, count + 1):
-                path = os.path.join(OUT, f"{name}{k}.ogg")
+                # a sound of one file has no number
+                file = f"{name}{k}.ogg" if count > 1 else f"{name}.ogg"
+                path = os.path.join(OUT, file)
                 if not os.path.exists(path):
-                    problems.append(f"{name}{k}.ogg: missing")
+                    problems.append(f"{file}: missing")
                     continue
                 channels, rate, length = probe(path)
-                if channels != 1: problems.append(f"{name}{k}.ogg: {channels} channels (only mono is placed in the world)")
-                if rate != SR: problems.append(f"{name}{k}.ogg: {rate} Hz")
-                if abs(length - seconds) > 0.05: problems.append(f"{name}{k}.ogg: {length:.2f} s, not {seconds} s")
+                if channels != 1: problems.append(f"{file}: {channels} channels (only mono is placed in the world)")
+                if rate != SR: problems.append(f"{file}: {rate} Hz")
+                if abs(length - seconds) > 0.05: problems.append(f"{file}: {length:.2f} s, not {seconds} s")
                 share = low_share(decode(path))
                 note = ""
                 if band and share >= LOW_SHARE:
-                    problems.append(f"{name}{k}.ogg: {share:.2%} of its energy below {LOW_HZ:.0f} Hz (the lava's deep roll)")
+                    problems.append(f"{file}: {share:.2%} of its energy below {LOW_HZ:.0f} Hz (the lava's deep roll)")
                     note = "  TOO LOW"
-                print(f"{name}{k}.ogg  {length:.2f} s  {channels} ch  {share:.3%} below {LOW_HZ:.0f} Hz{note}")
+                print(f"{file}  {length:.2f} s  {channels} ch  {share:.3%} below {LOW_HZ:.0f} Hz{note}")
     print(f"quake sounds check: {len(problems)} problems")
     return problems
 
@@ -265,6 +384,14 @@ def main():
         save(f"quake_land{k}", quake_land(rng))
     for k in range(1, 3):
         save(f"bomb_fizz{k}", bomb_fizz(rng))
+    # the eruptions' (after the quakes' files, so those stay as they were)
+    save("eruption_rumble", eruption_rumble(rng))
+    for k in range(1, 3):
+        save(f"eruption_boom{k}", eruption_boom(rng))
+    save("eruption_roar", eruption_roar(rng), 3)
+    save("bomb_whistle", bomb_whistle(rng))
+    for k in range(1, 3):
+        save(f"bomb_burst{k}", bomb_burst(rng))
 
 
 if __name__ == "__main__":
