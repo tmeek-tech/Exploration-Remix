@@ -1164,8 +1164,10 @@ class GalleriesFieldTest {
         assertEquals("91a37d4eece3e4b8", digest(12345), "seed 12345");
     }
 
-    static String digest(long seed) {
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+    static String digest(long seed) { return digest(new Terrain(TerrainSettings.defaults(), -64, seed), seed); }
+
+    /** {@link #digest(long)} on a terrain already made for {@code seed} (and perhaps already asked other things). */
+    static String digest(Terrain t, long seed) {
         int lo = t.shape.bottom(Terrain.GALLERIES), hi = t.join.hi;
         Random r = new Random(seed);
         long h = 17;

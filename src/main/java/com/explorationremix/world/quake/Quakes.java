@@ -57,7 +57,7 @@ import java.util.UUID;
  *     <li>With {@code quakes.enabled} off, any running quake ends (its end is sent to the clients) and everything is
  *     forgotten; the schedule is drawn again when it comes back on.</li>
  *     <li>Nothing starts on its own while the lava clock is held ({@link LavaFlood#held}, which DevShots' setup does) or
- *     while a quake is held by command; big quakes keep out of the lava's warning and the first 30 seconds of its rise,
+ *     while a quake or an eruption is held by command; big quakes keep out of the lava's warning and the first 30 seconds of its rise,
  *     and tremors then run silent (the warning is the layer's only clock). Commands still start quakes.</li>
  *     <li>The players in or near the Galleries ({@link NearChunks#players}) are the <b>watchers</b>, who are told of
  *     every quake; those of them not in spectator mode are the <b>actors</b>, who drive whatever changes the world. A
@@ -231,9 +231,11 @@ public final class Quakes {
         // the ceiling blocks warned of drop when their time comes (a held quake's wait)
         Debris.tick(level, now);
         if (w != null) Topple.atOnce(w);
-        // gate 2: nothing starts on its own while the lava clock or a quake is held; the quiet window of the warning
+        // gate 2: nothing starts on its own while the lava clock, a quake or an eruption is held; the quiet window of the
+        // warning
         QuakeSchedule.Settings s = settings(cfg);
-        QuakeSchedule.Start start = schedule(level).tick(now, s, quiet, LavaFlood.held() || anyHeld(), !actors.isEmpty());
+        boolean held = LavaFlood.held() || anyHeld() || com.explorationremix.world.eruption.Eruptions.held();
+        QuakeSchedule.Start start = schedule(level).tick(now, s, quiet, held, !actors.isEmpty());
         if (start != null) begin(level, start.kind(), now, start.duration(), start.strength(), start.seed(), start.silent(), null, null, watchers, actors, w);
     }
 
@@ -380,6 +382,9 @@ public final class Quakes {
         for (Event e : RUNNING) if (e.held >= 0) return true;
         return false;
     }
+
+    /** True while a quake is held by command (no quake or eruption starts on its own then). */
+    public static boolean held() { return anyHeld(); }
 
     /**
      * Starts a quake of {@code kind} at game time {@code now}: a big quake (or a tremor) takes the place of one running,
