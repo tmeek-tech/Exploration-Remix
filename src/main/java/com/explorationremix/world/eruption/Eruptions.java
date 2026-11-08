@@ -144,6 +144,8 @@ public final class Eruptions {
     /** The rocks thrown by the craters of bombs a command dropped, while they are in the air (held with the drops). */
     private static final Set<FallingBlockEntity> DROP_ROCKS = Collections.newSetFromMap(new IdentityHashMap<>());
     private static int nextId = 1;
+    /** The eruption whose burst last cost the server anything, for the status's cost figures, or null. */
+    @Nullable private static Eruption lastCosted;
     /** The lava's phase as of the last tick (-1 before the first). */
     private static int lastPhase = -1;
 
@@ -192,6 +194,14 @@ public final class Eruptions {
         /** When its bombs go, in ticks into the burst ({@link BombFlight#launches}), and how many of them have had their turn. */
         int[] plan = new int[0];
         int next;
+        /**
+         * What its burst costs the server (spec 5.6, 5.7), in nanoseconds: the game tick being counted and what it has
+         * cost so far, then the ticks counted before it, their sum and the most any one of them cost. A tick counts when
+         * the eruption launches or burns in it (every tick of its burst it is not held) or one of its bombs flies or
+         * bursts in it.
+         */
+        long costTick = -1, costNow, costAll, costMost;
+        int costTicks;
 
         Eruption(int id, Caldera caldera, Net.Vent vent, Vents.Read at, long start, int pre, int burst, float strength, float scale,
                  long seed, int range) {
@@ -229,6 +239,26 @@ public final class Eruptions {
                     strength, scale, seed, held, range);
         }
 
+        /** Counts {@code nanos} of the server's time in game tick {@code now} against its burst. */
+        void cost(long now, long nanos) {
+            if (now != costTick) {
+                if (costTick >= 0) {
+                    costAll += costNow;
+                    costMost = Math.max(costMost, costNow);
+                    costTicks++;
+                }
+                costTick = now;
+                costNow = 0;
+            }
+            costNow += nanos;
+            lastCosted = this;
+        }
+
+        /** Its burst's cost so far, in milliseconds: the mean over the ticks counted, and the most in one of them. */
+        double meanMs() { return (costAll + costNow) / 1.0e6 / Math.max(1, costTicks + (costTick >= 0 ? 1 : 0)); }
+
+        double mostMs() { return Math.max(costMost, costNow) / 1.0e6; }
+
         /** True for a player within its range of the mouth. */
         boolean reaches(ServerPlayer p) {
             return p.distanceToSqr(vent.x, at.startY() + 0.5, vent.z) < (double) range * range;
@@ -264,8 +294,10 @@ public final class Eruptions {
             }
             if (now % TELL_EVERY == 0) tellLate(level, e, watchers);
             if (e.held < 0) {
+                long t0 = System.nanoTime();
                 launch(level, band, e, actors, now, cfg);
                 burn(level, e, now, cfg);
+                if (e.bursting(now)) e.cost(now, System.nanoTime() - t0);
             }
             if (e.held < 0 && now - e.start >= e.pre + e.burst + TAIL) {
                 it.remove();
@@ -628,6 +660,15 @@ public final class Eruptions {
         return e == null ? dropsHeld : e.held >= 0;
     }
 
+    /**
+     * Bomb {@code b}'s server tick (its flight, and its blast if it burst) took {@code nanos}: counted against its
+     * eruption's burst for the status. A bomb a command dropped belongs to no eruption and is not counted.
+     */
+    public static void spent(LavaBomb b, long nanos) {
+        Eruption e = BOMBS.get(b);
+        if (e != null) e.cost(b.level().getGameTime(), nanos);
+    }
+
     /** Bomb {@code b} came down in the lava (or another fluid) and fizzles there: counted for the status. */
     public static void intoLava(LavaBomb b) {
         Eruption e = BOMBS.get(b);
@@ -681,6 +722,7 @@ public final class Eruptions {
         CALDERAS.clear();
         schedule = null;
         lastPhase = -1;
+        lastCosted = null;
     }
 
     /** When the server stops: forgets everything (the next world may differ). */
@@ -695,6 +737,7 @@ public final class Eruptions {
         DROP_ROCKS.clear();
         nextId = 1;
         lastPhase = -1;
+        lastCosted = null;
     }
 
     private static EruptionSchedule schedule(ServerLevel level) {
@@ -714,8 +757,8 @@ public final class Eruptions {
     // ================================================================================================ the command
 
     /**
-     * {@code /remix erupt}: the Calderas near here, when each erupts next and what its last eruption did, and where their
-     * vents stand; {@code now [<pos>] [strength] [seed]} starts the vent nearest the position (the source's by default)
+     * {@code /remix erupt}: the Calderas near here, when each erupts next and what its last eruption did, where their
+     * vents stand, the bombs in flight and what the last burst cost the server a tick; {@code now [<pos>] [strength] [seed]} starts the vent nearest the position (the source's by default)
      * at once, even while the lava clock is held, a seed making it repeatable; {@code hold [ticks]} holds the running
      * eruption nearest the source that many ticks in (the burst's start if left out), for pictures, and {@code release}
      * lets it go on; {@code bomb <pos> [seed]} drops one bomb onto a position from 12 blocks over it, eruption or not, for
@@ -800,7 +843,10 @@ public final class Eruptions {
             }
             say(c, b.toString());
         }
-        say(c, String.format(Locale.ROOT, "  bombs in flight: %d", BOMBS.size()));
+        Eruption lc = lastCosted;
+        say(c, lc == null ? String.format(Locale.ROOT, "  bombs in flight: %d; no burst yet", BOMBS.size())
+                : String.format(Locale.ROOT, "  bombs in flight: %d; the last burst cost %.2f ms a tick (at most %.2f)", BOMBS.size(),
+                lc.meanMs(), lc.mostMs()));
         return 1;
     }
 

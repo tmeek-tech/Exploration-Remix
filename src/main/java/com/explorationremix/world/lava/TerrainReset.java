@@ -3,6 +3,8 @@ package com.explorationremix.world.lava;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.config.ERConfig;
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.quake.BlockKinds;
+import com.explorationremix.world.quake.Support;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -406,6 +408,17 @@ public final class TerrainReset {
         say(c, String.format(Locale.ROOT, "  round the players in or near the Galleries: %d chunks remember %d changed blocks, %d of them to be put back (%d chunks)%s%s",
                 nearChunks, remembered, old, pendingChunks, heldBack > 0 ? ", " + heldBack + " held back where players stand" : "",
                 waiting > 0 ? ", " + waiting + " containers waiting for the lava to drain" : ""));
+        // how many of the changes are players' blocks (0.9.0): counted now, block by block, so it is right with the reset
+        // off too, when the last look counted nothing
+        List<ServerPlayer> players = NearChunks.players(level, b);
+        if (!players.isEmpty()) {
+            long[] n = new long[2];
+            NearChunks.walk(level, players, NearChunks.radius(level), level.getGameTime(), chunk -> {
+                countPlaced(chunk, n);
+                return true;
+            });
+            say(c, String.format(Locale.ROOT, "  of the %d changed blocks round them now, %d are placed blocks", n[0], n[1]));
+        }
         if (RUN.active) say(c, String.format(Locale.ROOT, "  putting back now: %d blocks so far in %d ticks with work", RUN.restored, RUN.ticks));
         if (RUN.lastSpan > 0) {
             say(c, String.format(Locale.ROOT, "  last reset here: %d blocks put back in %d ticks (%d with work: %.2f ms average, %.2f ms at most)",
@@ -414,8 +427,30 @@ public final class TerrainReset {
         Vec3 p = c.getSource().getPosition();
         LevelChunk here = level.getChunkSource().getChunkNow((int) Math.floor(p.x) >> 4, (int) Math.floor(p.z) >> 4);
         LavaChunk d = here == null ? null : LavaChunk.of(here);
-        if (d != null) say(c, String.format(Locale.ROOT, "  this chunk remembers %d changed blocks", d.log.size()));
+        if (d != null) {
+            long[] n = new long[2];
+            countPlaced(here, n);
+            say(c, String.format(Locale.ROOT, "  this chunk remembers %d changed blocks, %d of them placed blocks", d.log.size(), n[1]));
+        }
         return 1;
+    }
+
+    /**
+     * Adds {@code chunk}'s logged changes to {@code n[0]} and how many of them are placed blocks now to {@code n[1]}: the
+     * blocks a quake can topple ({@link Support#topples}: a player's block, ladder or fluid), as the quake status counts
+     * them. One block read for each change.
+     */
+    private static void countPlaced(LevelChunk chunk, long[] n) {
+        ChangeLog log = GalleryChanges.logOf(chunk);
+        if (log == null || log.isEmpty()) return;
+        int bottom = GalleryChanges.bottom(), seaTop = GalleryChanges.seaTop(chunk);
+        int x0 = chunk.getPos().getMinBlockX(), z0 = chunk.getPos().getMinBlockZ();
+        BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+        n[0] += log.size();
+        log.forEach((key, first, gen) -> {
+            at.set(x0 + ChangeLog.x(key), bottom + ChangeLog.dy(key), z0 + ChangeLog.z(key));
+            if (Support.topples(BlockKinds.kindAt(chunk, log, bottom, seaTop, at))) n[1]++;
+        });
     }
 
     private static int now(CommandContext<CommandSourceStack> c) {

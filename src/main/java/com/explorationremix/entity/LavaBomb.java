@@ -79,6 +79,17 @@ public class LavaBomb extends ThrowableProjectile {
             return;
         }
         if (saved != null) thaw();
+        // what its flight and its blast cost the server is counted against its eruption's burst, for the status
+        long t0 = System.nanoTime();
+        try {
+            fly();
+        } finally {
+            Eruptions.spent(this, System.nanoTime() - t0);
+        }
+    }
+
+    /** A tick of its flight on the server: its lifetime, the lava test, then the game's move and hit test. */
+    private void fly() {
         if (++life >= BombFlight.MAX_TICKS) {
             fizzle();
             return;

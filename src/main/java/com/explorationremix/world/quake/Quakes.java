@@ -614,6 +614,8 @@ public final class Quakes {
                             + "%d taken out, %d lowered under players), %d fell from the ceilings (%d shattered on someone)",
                     name(l.kind), time(now - l.start), Math.round(l.duration / 20.0), l.strength, l.toppled, l.fell, l.givenBack, l.takenOut, l.lowered,
                     l.debris, l.shattered));
+        } else {
+            say(c, "  last: no quake or tremor yet");
         }
         int pending = climbs == null ? 0 : climbs.pending();
         for (Event r : RUNNING) if (r.kind == QuakeSchedule.CLIMB) pending++;
