@@ -122,6 +122,23 @@ final class Vents {
         return n;
     }
 
+    /**
+     * Whether a player whose feet are in cell {@code feet} stands on a refuge ({@link BombFlight#refuge}), read from the
+     * world; a cell whose chunk is not loaded reads as rock.
+     */
+    static boolean refuge(ServerLevel level, BlockPos feet) {
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        return BombFlight.refuge((dx, dy, dz) -> {
+            int x = feet.getX() + dx, z = feet.getZ() + dz;
+            LevelChunk c = level.getChunkSource().getChunkNow(x >> 4, z >> 4);
+            if (c == null) return BombFlight.SOLID;
+            m.set(x, feet.getY() + dy, z);
+            BlockState s = c.getBlockState(m);
+            if (s.getFluidState().is(FluidTags.LAVA)) return BombFlight.LAVA;
+            return open(c, m, s) ? BombFlight.OPEN : BombFlight.SOLID;
+        });
+    }
+
     /** True for a cell a scan passes through: air, the glow, fire, a liquid, or a block with no collision. */
     static boolean open(LevelChunk c, BlockPos p, BlockState s) {
         return GlowBlock.open(s) || s.getBlock() instanceof LiquidBlock || s.is(BlockTags.FIRE) || s.getCollisionShape(c, p).isEmpty();

@@ -1,6 +1,8 @@
 package com.explorationremix.world.eruption;
 
 import com.explorationremix.config.ERConfig;
+import com.explorationremix.entity.LavaBomb;
+import com.explorationremix.registry.EREntities;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.lava.LavaCycle;
 import com.explorationremix.world.lava.LavaFlood;
@@ -25,12 +27,15 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -69,6 +74,13 @@ import java.util.UUID;
  * <p><b>Timeline</b> (spec 5.3): {@code warnSeconds} of warning, then a burst of {@code burstSeconds} (a quarter more or
  * less) at a strength of 0.8 to 1.2; the end is told {@link #TAIL} ticks after the burst, when the plume the client
  * keeps puffing after it is done. Players who come within {@code heardRange} while it runs are told it within a second.
+ *
+ * <p><b>Bombs</b> (spec 5.3, 5.4): through the burst, {@code bombs} times the strength of them, 40 % in its first second
+ * and at most two a tick ({@link BombFlight#launches}); the first {@code bombsNear} come down near an actor on open
+ * ground within 48 blocks of the vent when one is there, the rest round the vent ({@link BombFlight}). A bomb is thrown
+ * only from a vent on entity-ticking ground to a target on it: an eruption with none to throw is a show only, as the far
+ * ones are. Every bomb in the air is tracked: one no longer on entity-ticking ground fizzles (gate 6 of 3.1), all of
+ * them when eruptions are turned off, and those of a held eruption hang still ({@link #holds}).
  */
 public final class Eruptions {
     private Eruptions() {}
@@ -103,6 +115,8 @@ public final class Eruptions {
     private static int memoRange = -1;
     /** The eruptions under way, and those whose plume is still told. */
     private static final List<Eruption> RUNNING = new ArrayList<>();
+    /** The bombs in the air, with the eruption that threw each (null for one a command dropped). */
+    private static final Map<LavaBomb, Eruption> BOMBS = new IdentityHashMap<>();
     private static int nextId = 1;
     /** The lava's phase as of the last tick (-1 before the first). */
     private static int lastPhase = -1;
@@ -149,6 +163,9 @@ public final class Eruptions {
         final Set<UUID> told = new HashSet<>();
         /** What it did, for the status. */
         int bombs, near, craters, craterBlocks, glow, intoLava;
+        /** When its bombs go, in ticks into the burst ({@link BombFlight#launches}), and how many of them have had their turn. */
+        int[] plan = new int[0];
+        int next;
 
         Eruption(int id, Caldera caldera, Net.Vent vent, Vents.Read at, long start, int pre, int burst, float strength, float scale,
                  long seed, int range) {
@@ -199,7 +216,7 @@ public final class Eruptions {
         ERConfig cfg = ERConfig.INSTANCE;
         // gate 1: turned off, every eruption ends and everything is forgotten
         if (!cfg.eruptionsEnabled.get()) {
-            if (schedule != null || !RUNNING.isEmpty() || !CALDERAS.isEmpty()) stop();
+            if (schedule != null || !RUNNING.isEmpty() || !CALDERAS.isEmpty() || !BOMBS.isEmpty()) stop();
             return;
         }
         EruptionSchedule sched = schedule(level);
@@ -220,6 +237,7 @@ public final class Eruptions {
                 retell(level, e);
             }
             if (now % TELL_EVERY == 0) tellLate(level, e, watchers);
+            if (e.held < 0) launch(level, band, e, actors, now, cfg);
             if (e.held < 0 && now - e.start >= e.pre + e.burst + TAIL) {
                 it.remove();
                 for (UUID id : e.told) {
@@ -228,6 +246,7 @@ public final class Eruptions {
                 }
             }
         }
+        sweep(level);
         // gate 2: nothing starts on its own while the lava clock, an eruption or a quake is held
         if (LavaFlood.held() || held() || Quakes.held()) return;
         for (Caldera c : CALDERAS.values()) {
@@ -337,6 +356,7 @@ public final class Eruptions {
                                   EruptionSchedule sched, EruptionSchedule.Settings s, int phase, List<ServerPlayer> watchers) {
         Eruption e = new Eruption(nextId++, c, v, at, now, EruptionSchedule.pre(s), sched.drawBurst(s), strength,
                 EruptionSchedule.scale(phase, s.risingScale()), seed, ERConfig.INSTANCE.eruptionHeardRange.get());
+        e.plan = BombFlight.launches((int) Math.round(ERConfig.INSTANCE.eruptionBombs.get() * strength), e.burst, e.random);
         RUNNING.add(e);
         c.last = e;
         sched.started(c.clock, now, s);
@@ -386,6 +406,125 @@ public final class Eruptions {
 
     private static void send(ServerPlayer p, LavaNet.Eruption m) { LavaNet.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), m); }
 
+    // ================================================================================================ the bombs
+
+    /**
+     * Throws the bombs of eruption {@code e} whose turn has come by now (its plan's ticks into the burst), at most
+     * {@link BombFlight#PER_TICK} this tick; the first {@code bombsNear} of the plan try to come down near an actor. Not
+     * while it is held.
+     */
+    private static void launch(ServerLevel level, LavaFlood.Band band, Eruption e, List<ServerPlayer> actors, long now, ERConfig cfg) {
+        int t = e.into(now) - e.pre;
+        if (t < 0 || t >= e.burst) return;
+        for (int k = 0; k < BombFlight.PER_TICK && e.next < e.plan.length && e.plan[e.next] <= t; k++) {
+            throwBomb(level, band, e, actors, e.next < cfg.eruptionBombsNear.get(), cfg);
+            e.next++;
+        }
+    }
+
+    /**
+     * Throws one bomb of eruption {@code e} (spec 5.4.2): a near bomb when {@code near} and an actor can take one, else a
+     * ring bomb, its target drawn again up to 4 times while it is not on entity-ticking ground or its flight does not
+     * clear the stack. Not thrown when the vent is not on entity-ticking ground, the room over its mouth is too low for
+     * the apex, or no target is found. It goes from within {@code 0.6 r} of the axis, half a block over the start row,
+     * with its motion set before it is added, so the packet that brings it to the clients carries it.
+     */
+    private static void throwBomb(ServerLevel level, LavaFlood.Band band, Eruption e, List<ServerPlayer> actors, boolean near, ERConfig cfg) {
+        Vents.Read at = e.at;
+        Net.Vent v = e.vent;
+        double vx = v.x, vz = v.z, launchY = at.startY() + 0.5;
+        if (!level.isPositionEntityTicking(BlockPos.containing(vx, launchY, vz))) return;
+        Random r = e.random;
+        double a = BombFlight.apex(e.strength, at.room(), r.nextDouble());
+        if (Double.isNaN(a)) return;
+        double ang = r.nextDouble() * Math.PI * 2, off = 0.6 * v.r * Math.sqrt(r.nextDouble());
+        double ox = off * Math.cos(ang), oz = off * Math.sin(ang);
+        double clearY = at.mouthY() + BombFlight.CLEAR_ROWS - launchY;
+        int mouth = at.mouthY(), orElse = band.tableY() + 9;
+        // the ground under a target: the first cell down from the mouth's row that is not open or holds lava, its top
+        BombFlight.Drop drop = (tx, tz) -> launchY - (Vents.ground(level, Mth.floor(vx + tx), Mth.floor(vz + tz), mouth, orElse) + 1);
+        BombFlight.Ticking ticking = (tx, tz) -> level.isPositionEntityTicking(BlockPos.containing(vx + tx, mouth, vz + tz));
+        BombFlight.Flight f = null;
+        boolean wasNear = false;
+        if (near) {
+            List<ServerPlayer> eligible = eligible(level, v, actors);
+            if (!eligible.isEmpty()) {
+                ServerPlayer p = eligible.get(r.nextInt(eligible.size()));
+                int lo = cfg.eruptionNearMinBlocks.get(), hi = Math.max(lo, cfg.eruptionNearMaxBlocks.get());
+                f = BombFlight.near(ox, oz, p.getX() - vx, p.getZ() - vz, lo, hi, v.stackR, drop, ticking, a, clearY, r);
+                wasNear = f != null;
+            }
+        }
+        for (int i = 0; f == null && i < BombFlight.RING_DRAWS; i++) {
+            double ta = r.nextDouble() * Math.PI * 2, d = BombFlight.ringDistance(v.stackR, r.nextDouble());
+            double tx = d * Math.cos(ta), tz = d * Math.sin(ta);
+            if (!ticking.at(tx, tz)) continue;
+            BombFlight.Flight g = BombFlight.aim(ox, oz, tx, tz, drop, a, v.stackR, clearY);
+            if (g != null && ticking.at(g.tx(), g.tz())) f = g;
+        }
+        if (f == null) return;
+        LavaBomb b = EREntities.LAVA_BOMB.get().create(level);
+        if (b == null) return;
+        b.setPos(vx + ox, launchY, vz + oz);
+        b.setDeltaMovement(f.vx(), f.vy(), f.vz());
+        if (!level.addFreshEntity(b)) return;
+        BOMBS.put(b, e);
+        e.bombs++;
+        if (wasNear) e.near++;
+    }
+
+    /**
+     * The actors a near bomb may come down by: alive in this level, on the ground, within {@link BombFlight#NEAR_REACH}
+     * blocks across of the vent, and not on a refuge ({@link Vents#refuge}).
+     */
+    private static List<ServerPlayer> eligible(ServerLevel level, Net.Vent v, List<ServerPlayer> actors) {
+        List<ServerPlayer> out = new ArrayList<>();
+        double r2 = BombFlight.NEAR_REACH * BombFlight.NEAR_REACH;
+        for (ServerPlayer p : actors) {
+            double dx = p.getX() - v.x, dz = p.getZ() - v.z;
+            if (dx * dx + dz * dz > r2 || p.level() != level || !p.isAlive() || !p.onGround()) continue;
+            if (!Vents.refuge(level, p.blockPosition())) out.add(p);
+        }
+        return out;
+    }
+
+    /** Every tick: bombs gone are forgotten, and one no longer on entity-ticking ground fizzles (gate 6 of 3.1). */
+    private static void sweep(ServerLevel level) {
+        for (Iterator<LavaBomb> it = BOMBS.keySet().iterator(); it.hasNext(); ) {
+            LavaBomb b = it.next();
+            if (b.isRemoved() || b.level() != level) {
+                it.remove();
+                continue;
+            }
+            if (level.isPositionEntityTicking(b.blockPosition())) continue;
+            b.letGo();
+            b.fizzle();
+            it.remove();
+        }
+    }
+
+    /** True while bomb {@code b} is to hang still in the air: the eruption that threw it is held by command. */
+    public static boolean holds(LavaBomb b) {
+        Eruption e = BOMBS.get(b);
+        return e != null && e.held >= 0;
+    }
+
+    /** Bomb {@code b} came down in the lava (or another fluid) and fizzles there: counted for the status. */
+    public static void intoLava(LavaBomb b) {
+        Eruption e = BOMBS.get(b);
+        if (e != null) e.intoLava++;
+    }
+
+    /** Before the save (spec 6.6): every bomb is let go of any hold and discarded, so none is saved frozen. */
+    @SubscribeEvent
+    public static void stopping(ServerStoppingEvent event) {
+        for (LavaBomb b : BOMBS.keySet()) {
+            b.letGo();
+            b.discard();
+        }
+        BOMBS.clear();
+    }
+
     /** True while an eruption is held by command (no quake or eruption starts on its own then). */
     public static boolean held() {
         for (Eruption e : RUNNING) if (e.held >= 0) return true;
@@ -405,10 +544,18 @@ public final class Eruptions {
         return false;
     }
 
-    /** Gate 1: every eruption ends now (its end sent to the clients), and the clocks and Calderas are forgotten. */
+    /**
+     * Gate 1: every eruption ends now (its end sent to the clients), every bomb in the air fizzles, and the clocks and
+     * Calderas are forgotten.
+     */
     private static void stop() {
         for (Eruption e : RUNNING) endEarly(e);
         RUNNING.clear();
+        for (LavaBomb b : BOMBS.keySet()) {
+            b.letGo();
+            b.fizzle();
+        }
+        BOMBS.clear();
         CALDERAS.clear();
         schedule = null;
         lastPhase = -1;
@@ -421,6 +568,7 @@ public final class Eruptions {
         MEMO.clear();
         memoRange = -1;
         RUNNING.clear();
+        BOMBS.clear();
         nextId = 1;
         lastPhase = -1;
     }
@@ -522,6 +670,7 @@ public final class Eruptions {
             }
             say(c, b.toString());
         }
+        say(c, String.format(Locale.ROOT, "  bombs in flight: %d", BOMBS.size()));
         return 1;
     }
 
@@ -578,14 +727,20 @@ public final class Eruptions {
         for (Iterator<Eruption> it = RUNNING.iterator(); it.hasNext(); ) {
             Eruption e = it.next();
             if (e.caldera != cd) continue;
+            // its bombs in the air are let go of its hold, or they would hang there for good
+            e.held = -1;
+            e.holdAt = -1;
             endEarly(e);
             it.remove();
         }
         List<ServerPlayer> watchers = NearChunks.players(level, band);
         Eruption e = begin(level, cd, v, at, now, strength > 0 ? strength : sched.drawStrength(), seed != null ? seed : sched.drawSeed(), sched, s,
                 phase, watchers);
+        String show = e.plan.length == 0 ? ""
+                : !level.isPositionEntityTicking(BlockPos.containing(v.x, at.startY(), v.z)) ? ", a show only: no ticking ground within reach of its bombs"
+                : at.room() - BombFlight.ROOM_OVER < BombFlight.APEX_MIN ? ", a show only: too little room over the vent for its bombs" : "";
         say(c, String.format(Locale.ROOT, "The vent at %d %d %d erupts: %s of warning, then a %s burst at strength %.2f (%d bombs%s).",
-                at.x(), at.top(), at.z(), secs(e.pre), secs(e.burst), e.strength, 0, ""));
+                at.x(), at.top(), at.z(), secs(e.pre), secs(e.burst), e.strength, e.plan.length, show));
         return 1;
     }
 
