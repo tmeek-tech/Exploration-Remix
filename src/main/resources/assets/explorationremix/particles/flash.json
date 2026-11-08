@@ -1,6 +1,8 @@
 {
   "textures": [
     "explorationremix:flash_0",
-    "explorationremix:flash_1"
+    "explorationremix:flash_1",
+    "explorationremix:flash_hot_0",
+    "explorationremix:flash_hot_1"
   ]
 }

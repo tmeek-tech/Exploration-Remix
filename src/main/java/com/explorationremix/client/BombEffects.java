@@ -51,8 +51,8 @@ import java.util.List;
  *     it climbs and falling as it comes down, from the moment the bomb comes into this client's world (or into its
  *     hearing) until it is gone.</li>
  *     <li><b>The burst</b> (eruption effects, round 2: the game's white explosion puffs made it read as TNT, and the
- *     server no longer sends its blast packet, {@code Blast#burst}): a blaze of orange-white light over the strike for
- *     three ticks ({@link CaveParticles.Flash}, always shown, as the game's explosion was), a burst of spatter, lava
+ *     server no longer sends its blast packet, {@code Blast#burst}): a blaze of white-hot light over the strike for
+ *     three ticks ({@link CaveParticles.Flash#HOT}, always shown, as the game's explosion was), a burst of spatter, lava
  *     gobs and fire, a dark cloud of ash 4 to 6 blocks across that billows up over the crater and is gone within 4
  *     seconds ({@link Billow#BLAST_ASH}, with caveParticles on), chunks of the ground's own rock thrown out to bounce
  *     and lie round the crater a while ({@link CaveParticles.Rubble}, within 64 blocks) and, within 32 blocks, a jolt
@@ -230,7 +230,7 @@ public final class BombEffects {
      * billows up over the crater and thins away (caveParticles), and chunks of the ground's own rock.
      */
     private static void blast(Minecraft mc, ClientLevel level, double x, double y, double z, double d, double far, RandomSource random) {
-        EruptionEffects.flash(mc, d, x, y + FLASH_OVER, z, FLASH_SIZE, FLASH_LIFE, 0, Fountain.BLAST_FORWARD);
+        EruptionEffects.flash(mc, d, x, y + FLASH_OVER, z, FLASH_SIZE, FLASH_LIFE, CaveParticles.Flash.HOT, Fountain.BLAST_FORWARD);
         for (int i = Fountain.count(BURST_GOBS * far, random.nextDouble()); i > 0; i--) {
             double a = random.nextDouble() * Mth.TWO_PI, out = 0.15 + 0.3 * random.nextDouble();
             EruptionEffects.put(mc, level, ERParticles.LAVA_GOB.get(), d, x, y, z, out * Math.cos(a), 0.3 + 0.3 * random.nextDouble(), out * Math.sin(a));

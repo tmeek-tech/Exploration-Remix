@@ -389,7 +389,8 @@ public final class CaveParticles {
      * A ball of fire (0.9.0 pack look fixes): the flash of flame and lava at a vent's mouth as its burst starts, the fire
      * roaring at the mouth while the fountain throws, a lava pop's flare, a bomb's burst. One to two and a half blocks
      * across, full-bright and see-through, it swells to nearly twice that, reddens and is gone within a second, drifting
-     * the way it was thrown and slowing.
+     * the way it was thrown and slowing. (eruption effects, round 3) Turned a quarter at a time, as the ash and dust
+     * are: turned freely, the big late ones over a crater showed their sprite's alpha steps as tilted hard orange panes.
      */
     public static final class Fireball extends TextureSheetParticle implements Sized {
         private float size0;
@@ -405,7 +406,8 @@ public final class CaveParticles {
             this.lifetime = 10 + random.nextInt(12);
             this.quadSize = this.size0 = 0.6F + 0.6F * random.nextFloat();
             this.alpha = 0.95F;
-            this.roll = this.oRoll = random.nextFloat() * Mth.TWO_PI;
+            // a quarter turn at a time: its pixels square to the view
+            this.roll = this.oRoll = random.nextInt(4) * Mth.HALF_PI;
             this.pickSprite(sprites);
         }
 
@@ -459,6 +461,10 @@ public final class CaveParticles {
      * fountain's strength while it throws, the crater's lava while it warns, dying with the plume's tail). It is turned
      * a quarter at a time, never freely, so its pixels stay square to the view.
      *
+     * <p>(eruption effects, round 3) Its tan merged with the Caldera's own beige smoke far off: its hue now turns from
+     * the grey brown of its birth to a cooler ash grey over its first {@link #COOL} ticks (less red and yellow, set apart
+     * from the beige by hue), while it lightens as before and its foot keeps the fire's orange.
+     *
      * <p>The spawner passes the slow rise after the thrust as the x speed, the thrust as the y speed and the vent's glow
      * (0 to 1) as the z speed.
      */
@@ -471,8 +477,11 @@ public final class CaveParticles {
         static final float FIRE_R = 1.0F, FIRE_G = 0.5F, FIRE_B = 0.17F;
         /** Its grey at birth (the column's dark core), and how much lighter it grows by its end (the tops and edges it spreads to). */
         static final float GREY = 0.34F, GREY_SPREAD = 0.08F, LIFT = 0.6F;
+        /** Its hue at birth (a grey brown) and the ash grey it cools to over its first {@link #COOL} ticks, times its grey. */
+        static final float BIRTH_R = 1.08F, BIRTH_G = 0.95F, BIRTH_B = 0.84F, COOL_R = 0.88F, COOL_G = 1.0F, COOL_B = 1.16F;
+        static final int COOL = 160;
         private final SmokePuff puff;
-        private final float r0, g0, b0, glow;
+        private final float grey, glow;
         private final RockCache rock = new RockCache();
         /** Drawn this many times larger, for a far viewer. */
         private float scale = 1F;
@@ -487,11 +496,9 @@ public final class CaveParticles {
             this.friction = 1;
             this.xd = this.yd = this.zd = 0;
             this.quadSize = size();
-            // a dark grey brown, lighter as it spreads (the sprite's light edges and dark hearts make the billows)
-            float g = GREY + GREY_SPREAD * random.nextFloat();
-            this.r0 = g * 1.08F;
-            this.g0 = g * 0.95F;
-            this.b0 = g * 0.84F;
+            // a dark grey brown, cooling to ash grey and lighter as it spreads (the sprite's light edges and dark hearts
+            // make the billows)
+            this.grey = GREY + GREY_SPREAD * random.nextFloat();
             this.glow = (float) Mth.clamp(glow, 0, 1);
             colour();
             this.alpha = 0;
@@ -502,15 +509,19 @@ public final class CaveParticles {
         }
 
         /**
-         * Dark grey brown, lightening as it ages (the old puffs are the column's tops and the edges it spreads to), turning
-         * to the fire's orange low over the mouth as strongly as the vent glows.
+         * Dark grey brown cooling to ash grey, lightening as it ages (the old puffs are the column's tops and the edges it
+         * spreads to), turning to the fire's orange low over the mouth as strongly as the vent glows.
          */
         private void colour() {
-            double lift = 1 + LIFT * Math.min(1.0, puff.age / (double) puff.life);
+            double lift = grey * (1 + LIFT * Math.min(1.0, puff.age / (double) puff.life));
+            double c = Math.min(1.0, puff.age / (double) COOL);
+            double r = lift * (BIRTH_R + (COOL_R - BIRTH_R) * c);
+            double g = lift * (BIRTH_G + (COOL_G - BIRTH_G) * c);
+            double b = lift * (BIRTH_B + (COOL_B - BIRTH_B) * c);
             double k = glow * GLOW * Math.pow(Mth.clamp(1 - (puff.y - puff.base) / HOT, 0, 1), 0.9);
-            this.rCol = (float) (r0 * lift + (FIRE_R - r0 * lift) * k);
-            this.gCol = (float) (g0 * lift + (FIRE_G - g0 * lift) * k);
-            this.bCol = (float) (b0 * lift + (FIRE_B - b0 * lift) * k);
+            this.rCol = (float) (r + (FIRE_R - r) * k);
+            this.gCol = (float) (g + (FIRE_G - g) * k);
+            this.bCol = (float) (b + (FIRE_B - b) * k);
         }
 
         @Override
@@ -646,11 +657,19 @@ public final class CaveParticles {
      * fireballs at the mouth, each gone within two or three ticks; and the glow building at a vent's mouth while it
      * warns, deep orange and steady (a new one every few ticks, each living a little longer than that).
      *
+     * <p>(eruption effects, round 3) Turned a quarter at a time, as the ash and dust are: a 16-pixel glow blown up and
+     * turned freely showed as a stepped pixel diamond. A lava bomb's blast, drawn as the blaze, read as a dim amber
+     * diamond: it is white-hot for its three ticks, with two sprites of its own (the last two of the set: white far
+     * out, the alpha held up further), untinted, and thins only a little by its last tick.
+     *
      * <p>The spawner passes its half-width as the x speed, its life in ticks as the y speed, and, for a vent's glow,
-     * its strength (above 0, up to 1) as the z speed; 0 there makes a blast's flash.
+     * its strength (above 0, up to 1) as the z speed; 0 there makes the burst's blaze, and {@link #HOT} a bomb's blast.
      */
     public static final class Flash extends TextureSheetParticle implements Sized {
+        /** The z speed that makes a lava bomb's blast's white-hot flash. */
+        public static final double HOT = -1;
         private final float size0, strength;
+        private final boolean hot;
         /** Drawn this many times larger, for a far viewer. */
         private float scale = 1F;
 
@@ -661,18 +680,26 @@ public final class CaveParticles {
             this.xd = this.yd = this.zd = 0;
             this.lifetime = Math.max(1, (int) Math.round(life));
             this.quadSize = this.size0 = (float) (half > 0 ? half : 1.5);
+            this.hot = glow < 0;
             this.strength = (float) Mth.clamp(glow, 0, 1);
             if (strength > 0) this.setColor(1.0F, 0.42F + 0.2F * strength, 0.12F + 0.1F * strength);
+            else if (hot) this.setColor(1.0F, 1.0F, 0.97F);
             else this.setColor(1.0F, 0.97F, 0.88F);
             this.alpha = alphaAt(0);
-            this.roll = this.oRoll = random.nextFloat() * Mth.TWO_PI;
-            this.pickSprite(sprites);
+            // a quarter turn at a time: its pixels square to the view
+            this.roll = this.oRoll = random.nextInt(4) * Mth.HALF_PI;
+            // the glow and the blaze: one of the first two sprites; a blast: one of its two white-hot ones
+            this.setSprite(sprites.get((hot ? 2 : 0) + random.nextInt(2), 3));
         }
 
-        /** A blast's flash: bright at once, thinning over its life; a glow: up and down again over its life, never full. */
+        /**
+         * A blaze: bright at once, thinning over its life; a blast: bright at once, thinning a little by its last tick
+         * (seen then, the blaze's thinning left it a pale beige pane); a glow: up and down again over its life, never full.
+         */
         private float alphaAt(int age) {
             float u = (float) age / lifetime;
             if (strength > 0) return (0.35F + 0.6F * strength) * Math.min(1, 2.5F * Math.min(u + 0.2F, 1 - u));
+            if (hot) return 1 - 0.3F * u * u;
             return 1 - 0.6F * u * u;
         }
 
@@ -692,12 +719,12 @@ public final class CaveParticles {
                 return;
             }
             this.alpha = alphaAt(age);
-            // a blast's flash swells a little and reddens as it goes
+            // a blaze or a blast swells a little and reddens as it goes (a blast stays near white)
             if (strength == 0) {
                 float u = (float) age / lifetime;
                 this.quadSize = size0 * scale * (1 + 0.15F * u);
-                this.bCol = 0.88F - 0.5F * u;
-                this.gCol = 0.97F - 0.3F * u;
+                this.bCol = hot ? 0.97F - 0.2F * u : 0.88F - 0.5F * u;
+                this.gCol = hot ? 1.0F - 0.06F * u : 0.97F - 0.3F * u;
             }
         }
 
@@ -723,11 +750,11 @@ public final class CaveParticles {
      * out where a ceiling block crashes down or a lava bomb blasts the ground. The block's own texture shrunk to a patch
      * read as a flat tile and vanished on the same rock, so a chunk has its own sprite ({@code rubble}: an angular
      * outline, a pale lit facet, a shadowed face, a dark rim) tinted with the colour of the struck block's texture,
-     * lightened as fresh broken stone ({@link #tint}). It flies under the game's gravity with its own one-block test (no
-     * box test each tick), bounces once off the floor it strikes, comes to rest there and lies {@link #LIE_MIN} to
-     * {@link #LIE_MAX} ticks before it crumbles away over {@link #CRUMBLE}, so the floor round a landing or a crater
-     * reads as rubble well after its dust has cleared. Sinks into a fluid; never darker than block light
-     * {@link #LIGHT_FLOOR}.
+     * lightened as fresh broken stone ({@link #tint}; a little less in round 3, where it bordered on bone-white on the
+     * basalt). It flies under the game's gravity with its own one-block test (no box test each tick), bounces once off
+     * the floor it strikes, comes to rest there and lies {@link #LIE_MIN} to {@link #LIE_MAX} ticks before it crumbles
+     * away over {@link #CRUMBLE}, so the floor round a landing or a crater reads as rubble well after its dust has
+     * cleared. Sinks into a fluid; never darker than block light {@link #LIGHT_FLOOR}.
      */
     public static final class Rubble extends TextureSheetParticle {
         static final int LIE_MIN = 260, LIE_MAX = 380, CRUMBLE = 20, LIGHT_FLOOR = 9;
@@ -738,6 +765,8 @@ public final class CaveParticles {
         /** The struck rock's colours, from its texture, by sprite (a reload makes new sprites). */
         private static final Map<TextureAtlasSprite, float[]> COLOURS = new WeakHashMap<>();
         private static final float[] GREY = {0.55F, 0.55F, 0.57F};
+        /** A fresh broken face's colour channel from the rock's mean one {@code c}: {@code FRESH_BASE + FRESH_GAIN c}. */
+        static final float FRESH_BASE = 0.12F, FRESH_GAIN = 1.25F;
         private final BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
         private final int lie;
         private final float size0, spin;
@@ -767,7 +796,7 @@ public final class CaveParticles {
             this.setColor(fresh(c[0]), fresh(c[1]), fresh(c[2]));
         }
 
-        private static float fresh(float c) { return Math.min(1F, 0.18F + 1.35F * c); }
+        private static float fresh(float c) { return Math.min(1F, FRESH_BASE + FRESH_GAIN * c); }
 
         /** The mean colour of {@code state}'s particle texture (its opaque pixels, the first frame), or a stone grey. */
         static float[] colourOf(BlockState state) {

@@ -457,9 +457,9 @@ public final class EruptionEffects {
 
     /**
      * A flash (CaveParticles.Flash) of half-width {@code half} burning at (x, y, z), seen from {@code d} blocks: its
-     * life in ticks, its glow (0 for a blast's white flash), drawn up to {@code forward} blocks toward the camera at the
-     * size that covers the same part of the view ({@link Fountain#toward}), so the ash and rock right round its spot,
-     * drawn before it, do not hide it. Always shown ({@link #always}).
+     * life in ticks, its glow (0 for the burst's blaze, Flash.HOT for a bomb's blast), drawn up to {@code forward}
+     * blocks toward the camera at the size that covers the same part of the view ({@link Fountain#toward}), so the ash
+     * and rock right round its spot, drawn before it, do not hide it. Always shown ({@link #always}).
      */
     @Nullable
     static Particle flash(Minecraft mc, double d, double x, double y, double z, double half, double life, double glow, double forward) {

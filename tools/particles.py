@@ -325,9 +325,16 @@ for i, seed in enumerate(ASH_SEEDS):
 # tints it deeper orange for the vent's glow). Full-bright on the translucent sheet. Two of them.
 FLASH_RAMP = [(0.0, (255, 252, 236)), (0.22, (255, 236, 168)), (0.45, (255, 188, 92)), (0.7, (250, 128, 40)), (1.0, (214, 72, 18))]
 FLASH_SEEDS = [6701, 6702]
+# (eruption effects, round 3) A lava bomb's blast flash drawn with those read as a dim amber pixel diamond: their outer
+# half is a see-through orange, brown over dark rock. It has two white-hot sprites of its own: white out to over a third
+# of the way, pale yellow, a light orange only at the rim, and the alpha held up much further out before it falls away,
+# so its three ticks read as a blaze of white light. The particle picks them by index (the vents' glow and the burst's
+# blaze keep the first two).
+FLASH_HOT_RAMP = [(0.0, (255, 255, 250)), (0.38, (255, 250, 230)), (0.62, (255, 232, 166)), (0.85, (255, 190, 100)), (1.0, (244, 142, 56))]
+FLASH_HOT_SEEDS = [6711, 6712]
 
 
-def _flash(seed):
+def _glow(seed, ramp, light_of):
     rng = random.Random(seed)
     bumps = [(rng.uniform(0.03, 0.07), rng.randrange(5, 9), rng.random() * 2 * math.pi) for _ in range(2)]
     img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
@@ -340,17 +347,27 @@ def _flash(seed):
             r = math.hypot(dx, dy) / rim
             if r >= 1.0:
                 continue
-            light = min(1.0, 1.15 * (1 - r) ** 1.3 + 0.35 * math.exp(-(r / 0.3) ** 2))
+            light = min(1.0, light_of(r))
             light = round(light * 14) / 14.0
             if light <= 0:
                 continue
-            c = _ramp([(t * 1.0, col) for t, col in FLASH_RAMP], min(1.0, r))
+            c = _ramp([(t * 1.0, col) for t, col in ramp], min(1.0, r))
             px[x, y] = c + (int(round(255 * light)),)
     return img
 
 
+def _flash(seed):
+    return _glow(seed, FLASH_RAMP, lambda r: 1.15 * (1 - r) ** 1.3 + 0.35 * math.exp(-(r / 0.3) ** 2))
+
+
+def _flash_hot(seed):
+    return _glow(seed, FLASH_HOT_RAMP, lambda r: 1.6 * (1 - r) ** 0.9)
+
+
 for i, seed in enumerate(FLASH_SEEDS):
     PAINTERS[f"particle/flash_{i}"] = (lambda s=seed: _flash(s))
+for i, seed in enumerate(FLASH_HOT_SEEDS):
+    PAINTERS[f"particle/flash_hot_{i}"] = (lambda s=seed: _flash_hot(s))
 
 
 # Rubble (client/CaveParticles.Rubble): a broken chunk of rock a third to half a block across, thrown out by a blast or

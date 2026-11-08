@@ -78,10 +78,11 @@ public final class QuakeEffects {
     /** The crack of a block about to drop is heard this far, fading to a quarter, with its direction. */
     static final double CRACK_REACH = 160;
     /**
-     * A crash: chunks of the block's rock where it lands (fewer, larger ones that bounce, eruption effects round 2), and
-     * its cloud of rock dust ({@link Billow#ROCK_DUST}, in full where it lands, this share where it shatters on someone).
+     * A crash: chunks of the block's rock where it lands (fewer, larger ones that bounce, eruption effects round 2; a few
+     * more in round 3, where the landed block looked placed again once its dust cleared), and its cloud of rock dust
+     * ({@link Billow#ROCK_DUST}, in full where it lands, this share where it shatters on someone).
      */
-    static final int CRASH_RUBBLE = 6, SHATTER_RUBBLE = 5;
+    static final int CRASH_RUBBLE = 9, SHATTER_RUBBLE = 6;
     static final double SHATTER_DUST = 0.6;
     /** Lava spatter thrown up where a falling block passes the lava's surface, and its hiss's volume. */
     static final int SPLASH_SPATTER = 8;

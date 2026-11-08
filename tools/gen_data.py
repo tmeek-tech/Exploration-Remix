@@ -600,7 +600,8 @@ PARTICLES = {
     "eruption_ash": [f"{MOD}:ash_puff_{i}" for i in range(4)],
     "blast_ash": [f"{MOD}:soft_puff_{i}" for i in range(4)],
     "rock_dust": [f"{MOD}:soft_puff_{i}" for i in range(4)],
-    "flash": [f"{MOD}:flash_{i}" for i in range(2)],
+    # (round 3) the blasts' flash takes white-hot sprites of its own, after the glow's and the blaze's (picked by index)
+    "flash": [f"{MOD}:flash_{i}" for i in range(2)] + [f"{MOD}:flash_hot_{i}" for i in range(2)],
     "rubble": [f"{MOD}:rubble_{i}" for i in range(4)],
 }
 
