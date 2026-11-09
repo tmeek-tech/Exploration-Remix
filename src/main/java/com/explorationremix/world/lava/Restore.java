@@ -36,6 +36,24 @@ public final class Restore {
         return ORIGINAL;
     }
 
+    /**
+     * The records' side of putting one logged position back, shared by the terrain reset and the quakes' give-back (both
+     * through {@code TerrainReset.putBack}, 0.9.0): decides what to write for the first block the log holds there
+     * ({@link #decide}), sets or clears the position's flood records for it ({@link #mark}) and drops the entry. Returns
+     * the decision: the caller writes the original block for {@link #ORIGINAL} and the sea's lava source otherwise.
+     *
+     * @param kind     the original block's flood kind ({@link Flood#AIR} and the rest)
+     * @param original the original block's id, kept for {@link #SEA_KEPT}
+     * @param slice    the position's slice of the flood band, -1 outside it (the lake's rows under the table among them)
+     * @param level    how many blocks the chunk's lava stands over the table
+     */
+    public static int putBack(ChangeLog log, int key, int kind, int original, int slice, int level, Flood.Mask mask, Flood.Mask glow, Flood.Kept kept) {
+        int d = decide(kind, slice, level);
+        mark(d, mask, glow, kept, slice, ChangeLog.x(key), ChangeLog.z(key), original);
+        log.remove(key);
+        return d;
+    }
+
     /** {@link #mark(int, Flood.Mask, Flood.Mask, Flood.Kept, int, int, int, int)} with no kept blocks. */
     public static void mark(int d, Flood.Mask mask, Flood.Mask glow, int i, int x, int z) { mark(d, mask, glow, null, i, x, z, -1); }
 

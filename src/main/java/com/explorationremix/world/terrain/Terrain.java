@@ -524,6 +524,16 @@ public final class Terrain {
         return galleries != null ? galleries.ventsNear(x, z, r) : java.util.List.of();
     }
 
+    /**
+     * The Basalt Galleries' Caldera vent sites within {@code r} of (x, z), cheaply, for the eruptions (0.9.0,
+     * {@link GalleriesField#ventSites}): {@link #ventsNear}'s vents and their stacks' sizes, without reading the terrain,
+     * so their {@code y} is NaN (read the vent's rows from the world's blocks) and the rare closed stacks are listed too.
+     * None when the layout has no Galleries. A query only.
+     */
+    public java.util.List<Net.Vent> ventSitesNear(int x, int z, double r) {
+        return galleries != null ? galleries.ventSites(x, z, r) : java.util.List.of();
+    }
+
     // ------------------------------------------------------------------------------- dev tools
     /**
      * For /remix info: what makes the caves at a block of a deep layer, in words (the network's plan in the planned

@@ -14,10 +14,14 @@ import com.explorationremix.registry.ERWorldgen;
 import com.explorationremix.rune.RuneConfig;
 import com.explorationremix.rune.RuneRegistry;
 import com.explorationremix.rune.net.RuneNet;
+import com.explorationremix.world.eruption.Blast;
+import com.explorationremix.world.eruption.Eruptions;
 import com.explorationremix.world.gen.DeepWorldInstaller;
+import com.explorationremix.world.lava.Falling;
 import com.explorationremix.world.lava.LavaChunk;
 import com.explorationremix.world.lava.LavaFlood;
 import com.explorationremix.world.lava.LavaNet;
+import com.explorationremix.world.quake.Quakes;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -59,6 +63,12 @@ public final class ExplorationRemix {
         // The Basalt Galleries' lava cycle: its per-chunk record, the server side and the channel to the clients.
         modBus.addListener(LavaChunk::register);
         MinecraftForge.EVENT_BUS.register(LavaFlood.class);
+        // 0.9.0: the quakes' placement and break listeners (climb answers, toppleAtOnce)
+        MinecraftForge.EVENT_BUS.register(Quakes.class);
+        MinecraftForge.EVENT_BUS.register(Falling.class);
+        // the eruptions' bombs, let go and discarded before the server's last save, and their blasts' handler
+        MinecraftForge.EVENT_BUS.register(Eruptions.class);
+        MinecraftForge.EVENT_BUS.register(Blast.class);
         LavaNet.register();
         // Runes (0.10.0): the rune items, the blocks and entities runes make, the rune screen; the server's rune settings
         // (sent to each client that joins); the runes' channel

@@ -60,10 +60,13 @@ public final class EREntities {
     public static final RegistryObject<EntityType<FireflySwarm>> FIREFLY_SWARM = ENTITIES.register("firefly_swarm",
             () -> EntityType.Builder.<FireflySwarm>of(FireflySwarm::new, MobCategory.MISC).sized(0.6F, 0.6F).clientTrackingRange(8).build("firefly_swarm"));
 
-    /** A lava bomb thrown by an eruption (world.eruption.Eruptions): bursts where it lands. Seen from 10 chunks away. */
+    /**
+     * A lava bomb thrown by an eruption (world.eruption.Eruptions): bursts where it lands. Seen from 10 chunks away, and
+     * never saved: one in a chunk that unloads is gone, never reloaded to burst after a reset.
+     */
     public static final RegistryObject<EntityType<LavaBomb>> LAVA_BOMB = ENTITIES.register("lava_bomb", () ->
             EntityType.Builder.<LavaBomb>of(LavaBomb::new, MobCategory.MISC).sized(0.6F, 0.6F).clientTrackingRange(10).updateInterval(2)
-                    .fireImmune().build(ExplorationRemix.MOD_ID + ":lava_bomb"));
+                    .fireImmune().noSave().build(ExplorationRemix.MOD_ID + ":lava_bomb"));
 
     public static void onAttributes(EntityAttributeCreationEvent e) {
         e.put(MOSSBACK.get(), MossbackEntity.attributes().build());

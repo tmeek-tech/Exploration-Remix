@@ -1,0 +1,36 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:basalt",
+    "minecraft:polished_basalt",
+    "minecraft:smooth_basalt",
+    "minecraft:blackstone",
+    "minecraft:tuff",
+    "minecraft:magma_block",
+    "explorationremix:ember_crust",
+    {
+      "id": "create:scoria",
+      "required": false
+    },
+    {
+      "id": "create:scorchia",
+      "required": false
+    },
+    {
+      "id": "terrain_slabs:basalt_slab",
+      "required": false
+    },
+    {
+      "id": "terrain_slabs:smooth_basalt_slab",
+      "required": false
+    },
+    {
+      "id": "terrain_slabs:terrain_blackstone_slab",
+      "required": false
+    },
+    {
+      "id": "terrain_slabs:terrain_tuff_slab",
+      "required": false
+    }
+  ]
+}

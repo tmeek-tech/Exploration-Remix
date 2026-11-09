@@ -586,14 +586,31 @@ def lang(extra):
     write(os.path.join(ASSETS, "lang", "en_us.json"), dict(sorted(out.items())))
 
 
-# The mod's particle types (ERParticles): the first three reuse vanilla sprites, the volcanic smoke has its own
-# (textures/particle); CaveParticles tints and animates them.
+# The mod's particle types (ERParticles): the first three and the lava spatter reuse vanilla sprites, the others have
+# their own (textures/particle, painted by tools/particles.py); CaveParticles tints and animates them. Every type ERParticles registers needs its file
+# here (check_data checks it): one without crashes the game when it is spawned.
 PARTICLES = {
     "steam": [f"minecraft:big_smoke_{i}" for i in range(12)],
     "ember": ["minecraft:generic_0", "minecraft:generic_1"],
     "pollen": ["minecraft:generic_0"],
     # 0.8.0: painted by tools/particles.py
     "volcanic_smoke": [f"{MOD}:volcanic_smoke_{i}" for i in range(4)],
+    # 0.9.0: the quakes' grit, painted by tools/particles.py
+    "grit": [f"{MOD}:grit_{i}" for i in range(3)],
+    # 0.9.0: the eruptions' lava spatter, vanilla's lava sprite drawn full-bright (CaveParticles.Spatter)
+    "lava_spatter": ["minecraft:lava"],
+    # 0.9.0 (pack look fixes): the fountain's lava gobs and the fire at the mouth, painted by tools/particles.py; the
+    # plume's dark ash, the blasts' ash and the crashes' rock dust tint the volcanic smoke's puffs
+    "lava_gob": [f"{MOD}:lava_gob_{i}" for i in range(4)],
+    "fireball": [f"{MOD}:fireball_{i}" for i in range(4)],
+    # 0.9.0 (eruption effects, round 2): the clouds and the plume take soft puffs of their own (the smoke's hard-stepped
+    # puffs showed square facets blown up), and the blasts' flash, the vents' glow and the rubble have their own sprites
+    "eruption_ash": [f"{MOD}:ash_puff_{i}" for i in range(4)],
+    "blast_ash": [f"{MOD}:soft_puff_{i}" for i in range(4)],
+    "rock_dust": [f"{MOD}:soft_puff_{i}" for i in range(4)],
+    # (round 3) the blasts' flash takes white-hot sprites of its own, after the glow's and the blaze's (picked by index)
+    "flash": [f"{MOD}:flash_{i}" for i in range(2)] + [f"{MOD}:flash_hot_{i}" for i in range(2)],
+    "rubble": [f"{MOD}:rubble_{i}" for i in range(4)],
 }
 
 

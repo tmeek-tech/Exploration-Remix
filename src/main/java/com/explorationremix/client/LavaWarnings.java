@@ -26,7 +26,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.client.event.ViewportEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -46,9 +45,9 @@ import javax.annotation.Nullable;
  *     <li><b>Drain</b>: hissing and steam off the wet basalt the lava has just left.</li>
  * </ul>
  * The server tells the client where the cycle is ({@link LavaNet.Sync}) on joining, on each phase change and every
- * few seconds; in between the client counts on with its own game time. The shake follows the client's screenShake
- * setting and the game's Distortion Effects scale, and stops while the clock is held (for pictures); particles follow
- * caveParticles.
+ * few seconds; in between the client counts on with its own game time. The shake goes to the view through
+ * {@link CameraShake}, with the quakes' and eruptions' (the client's screenShake and shakeStrength and the game's
+ * Distortion Effects, none while the clock is held, for pictures); particles follow caveParticles.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, value = Dist.CLIENT)
 public final class LavaWarnings {
@@ -59,7 +58,7 @@ public final class LavaWarnings {
     /** The client's game time when the last sync came, or MIN_VALUE until a level is there to read it from. */
     private static long syncedAt = Long.MIN_VALUE;
     private static int ticks;
-    /** The view's shake in degrees, now and a tick ago (the camera hook draws between them), and the jolt decaying in it. */
+    /** The view's shake in degrees, now and a tick ago (CameraShake draws between them), and the jolt decaying in it. */
     private static float shake, shakeBefore, jolt;
     private static int nextRumble = 100;
     /** Sounds left this second, so a busy surface does not pile up pops and hisses. */
@@ -159,22 +158,15 @@ public final class LavaWarnings {
         surge(mc, surgeVolume);
     }
 
-    @SubscribeEvent
-    public static void camera(ViewportEvent.ComputeCameraAngles event) {
-        if (!ERClientConfig.INSTANCE.screenShake.get()) return;
-        float a = Mth.lerp((float) event.getPartialTick(), shakeBefore, shake);
-        if (a < 0.002F) return;
-        a *= Minecraft.getInstance().options.screenEffectScale().get().floatValue();
-        if (a <= 0) return;
-        // a few incommensurate waves of 2 to 10 a second: a rumble's tremor rather than a sway
-        double t = ticks + event.getPartialTick();
-        float yaw = (float) (Math.sin(t * 0.83 + 1.3) * 0.5 + Math.sin(t * 1.91 + 0.4) * 0.35 + Math.sin(t * 3.07 + 2.2) * 0.15);
-        float pitch = (float) (Math.sin(t * 0.97 + 2.9) * 0.5 + Math.sin(t * 2.23 + 1.7) * 0.35 + Math.sin(t * 3.41 + 0.9) * 0.15);
-        float roll = (float) (Math.sin(t * 1.13 + 0.6) * 0.6 + Math.sin(t * 2.71 + 2.4) * 0.4);
-        event.setYaw(event.getYaw() + a * yaw);
-        event.setPitch(event.getPitch() + a * pitch);
-        event.setRoll(event.getRoll() + 0.6F * a * roll);
-    }
+    /**
+     * The lava's shake now, in degrees, between the last two ticks: CameraShake adds it to the view with the lava's own
+     * waveform ({@link Shake#lava}) on the lava's clock ({@link #clock}), after its gates (screenShake, shakeStrength,
+     * Distortion Effects, the held clock).
+     */
+    static float amplitude(float partialTick) { return Mth.lerp(partialTick, shakeBefore, shake); }
+
+    /** The lava's waveform's clock: this client's unpaused ticks and the partial tick. */
+    static double clock(float partialTick) { return ticks + partialTick; }
 
     // ================================================================================================ the signs
 
@@ -192,7 +184,7 @@ public final class LavaWarnings {
     private static void surface(ClientLevel level, Player player, RandomSource random, int surface, double above, int samples, float u) {
         if (above > 56) return;
         boolean particles = ERClientConfig.INSTANCE.caveParticles.get();
-        float share = smokeShare();
+        float share = SmokeBudget.share();
         int y = surface - 1;
         for (int k = 0; k < samples; k++) {
             if (!lavaTop(level, player.getBlockX() + random.nextInt(57) - 28, y, player.getBlockZ() + random.nextInt(57) - 28)) continue;
@@ -217,22 +209,10 @@ public final class LavaWarnings {
         }
     }
 
-    /**
-     * The share of the forced (far-seen) smoke to spawn: forced particles skip the vanilla Particles option, so they
-     * follow it by hand.
-     */
-    private static float smokeShare() {
-        return switch (Minecraft.getInstance().options.particles().get()) {
-            case ALL -> 1F;
-            case DECREASED -> 0.4F;
-            case MINIMAL -> 0.1F;
-        };
-    }
-
     /** Heavy smoke over the full lava. */
     private static void smoke(ClientLevel level, Player player, RandomSource random, int surface, double above) {
         if (above > 56 || !ERClientConfig.INSTANCE.caveParticles.get()) return;
-        float share = smokeShare();
+        float share = SmokeBudget.share();
         int y = surface - 1;
         for (int k = 0; k < 96; k++) {
             if (!lavaTop(level, player.getBlockX() + random.nextInt(65) - 32, y, player.getBlockZ() + random.nextInt(65) - 32)) continue;

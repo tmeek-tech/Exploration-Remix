@@ -1,5 +1,7 @@
 package com.explorationremix.client;
 
+import net.minecraft.client.Minecraft;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -8,9 +10,9 @@ import java.util.PriorityQueue;
  * How many puffs of volcanic smoke are alive, so the plumes stay within the client's cost: each puff is counted until
  * the game time its life ends (the particle engine never says when it drops one, so a puff it dropped early still
  * counts until then). When the count is full the plumes go short whole, not gappy, the far ones first ({@link #admit}).
- * One client thread only.
+ * One client thread only. Public, as the eruptions' client thins its far particles by {@link #share}.
  */
-final class SmokeBudget {
+public final class SmokeBudget {
     /** At most this many puffs at once, at the "All" particle setting (they share the translucent sheet, 16384). */
     static final int MAX = 1800;
     /** The share of the count the far plumes may fill, so the near ones always find room. */
@@ -49,6 +51,32 @@ final class SmokeBudget {
         if (RESTING.size() > 512) RESTING.values().removeIf(t -> t <= now);
         RESTING.put(plume, now + REST);
         return false;
+    }
+
+    /**
+     * The share of the forced particles to spawn (the far-seen smoke, the grit that warns of falling rock): forced
+     * particles skip the vanilla Particles option, so they follow it by hand, 1 at "All", 0.4 at "Decreased" and 0.1 at
+     * "Minimal".
+     */
+    public static float share() {
+        return switch (Minecraft.getInstance().options.particles().get()) {
+            case ALL -> 1F;
+            case DECREASED -> 0.4F;
+            case MINIMAL -> 0.1F;
+        };
+    }
+
+    /**
+     * The share of the particles that are not forced the game itself shows by the Particles option (LevelRenderer's own
+     * draw for "decreased" particles): all at "All", two in three at "Decreased", one in fifteen at "Minimal". The
+     * eruptions' client makes its near particles itself (to size them) and keeps this share of them.
+     */
+    public static float nearShare() {
+        return switch (Minecraft.getInstance().options.particles().get()) {
+            case ALL -> 1F;
+            case DECREASED -> 2F / 3F;
+            case MINIMAL -> 1F / 15F;
+        };
     }
 
     /** A new level: its particles are gone and its clock is another. */

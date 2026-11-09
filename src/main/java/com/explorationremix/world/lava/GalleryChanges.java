@@ -19,8 +19,9 @@ import javax.annotation.Nullable;
  * the terrain back (0.5.1). Called by {@code LevelChunkMixin} at the head of {@code LevelChunk#setBlockState}, which
  * every block change in a loaded chunk goes through: players breaking and placing, explosions, falling blocks leaving
  * and landing, fire, pistons, buckets, and fluids flowing. The lava flood writes straight into the chunk's sections and
- * is never seen here; the reset turns recording off while it writes ({@link #setQuietly}). The quakes (not built yet)
- * are to read the log too: a block whose terrain block was open is a placed one (or a fluid that flowed there).
+ * is never seen here; the reset turns recording off while it writes ({@link #setQuietly}). The quakes and eruptions
+ * (0.9.0) read the log too ({@link #logOf}): a block whose terrain block was open is a placed one (or a fluid that flowed
+ * there), and a block the log does not hold is the terrain's own.
  *
  * <p>Fluids are recorded like any other block (0.8.0; before, flowing fluid spreading, receding or changing its level was
  * left out): lava a player lets flow, a lava fall a player cuts or re-routes, a fall's flow over the halls' glow, and
@@ -163,5 +164,87 @@ public final class GalleryChanges {
         d.log.align(lo);
         int s = d.log.state(ChangeLog.key(pos.getX() & 15, pos.getY() - lo, pos.getZ() & 15));
         return s == ChangeLog.NONE ? null : Block.stateById(s);
+    }
+
+    /**
+     * The chunk's change log, lined up with the Galleries' bottom ({@link #bottom}, which its keys' dy counts from), or
+     * null when the world has no Galleries or the chunk has no lava record (other dimensions, the client). For reading
+     * only (0.9.0: the quakes and eruptions tell placed blocks from the terrain's by it): nothing but this class and the
+     * reset writes it. Valid for this tick only; never keep it, as Forge never invalidates a chunk's capability. Callers
+     * check {@link ChangeLog#holds} before {@link ChangeLog#key}, which throws.
+     */
+    @Nullable
+    public static ChangeLog logOf(LevelChunk chunk) {
+        int b = bottom();
+        if (b == Integer.MIN_VALUE) return null;
+        LavaChunk d = LavaChunk.of(chunk);
+        if (d == null) return null;
+        d.log.align(b);
+        return d.log;
+    }
+
+    /**
+     * How many blocks the chunk's lava stands over the lava table now, as the flood has applied it to the chunk's blocks
+     * (its record's height), or 0 without a record or a lava table. The chunk's sea fills its open blocks from the
+     * table's Y up to {@link #seaTop} less one.
+     */
+    public static int seaLevel(LevelChunk chunk) {
+        LavaFlood.Band b = LavaFlood.band();
+        if (b == null) return 0;
+        LavaChunk d = LavaChunk.of(chunk);
+        if (d == null) return 0;
+        d.align(b.tableY());
+        return d.level;
+    }
+
+    /**
+     * The first Y over the chunk's lava: over the lake's rows (every open block under the lava table is the table's lava)
+     * and over its share of the risen sea ({@link #seaLevel}). Integer.MIN_VALUE when the world has no lava table.
+     */
+    public static int seaTop(LevelChunk chunk) {
+        LavaFlood.Band b = LavaFlood.band();
+        return b == null ? Integer.MIN_VALUE : b.tableY() + seaLevel(chunk);
+    }
+
+    /**
+     * Puts one logged position back at once, exactly as the terrain reset would, and drops its entry (0.9.0: a placed
+     * block a quake topples under the lake, a pool or the risen sea melts back into the lava rather than falling through
+     * it). The block comes back as the log's first block ({@link TerrainReset#resetAs} applied), or under the chunk's sea
+     * as the sea itself with its flood records, written quietly (not recorded; flags 2 | 16; a fluid or the sea straight
+     * into the chunk's section with no fluid tick), with the reset's smoke and hiss for a player within 48 blocks
+     * ({@link TerrainReset#putBack}, {@link TerrainReset#showPutBack}).
+     *
+     * <p>Returns false and changes nothing when the log does not hold the position, when the block there has a block
+     * entity (the reset breaks those itself once the lava is down at its table, so nothing they hold falls into lava), or
+     * when the flood has not brought the chunk's lava to its height yet (a later look tries again). {@code chunk} must be
+     * the chunk holding {@code pos}.
+     */
+    public static boolean giveBack(ServerLevel level, LevelChunk chunk, BlockPos pos) { return giveBack(level, chunk, pos, true); }
+
+    /**
+     * {@link #giveBack(ServerLevel, LevelChunk, BlockPos)}, with the hiss only when {@code sound} is true: a quake giving
+     * back a tower under the lava plays it once for the column rather than once a block (the reset plays it once a chunk
+     * a look); the smoke shows over every block either way.
+     */
+    public static boolean giveBack(ServerLevel level, LevelChunk chunk, BlockPos pos, boolean sound) {
+        LavaFlood.Band band = LavaFlood.band();
+        int b = bottom(), y = pos.getY();
+        if (band == null || b == Integer.MIN_VALUE || !inLayer(y) || !ChangeLog.holds(y - b)) return false;
+        if (pos.getX() >> 4 != chunk.getPos().x || pos.getZ() >> 4 != chunk.getPos().z) return false;
+        LavaChunk d = LavaChunk.of(chunk);
+        if (d == null) return false;
+        d.log.align(b);
+        int key = ChangeLog.key(pos.getX() & 15, y - b, pos.getZ() & 15);
+        if (!d.log.has(key)) return false;
+        d.align(band.tableY());
+        // the record of the sea must be the true one, or a block put back over this chunk's sea would be flooded by a
+        // neighbour's sea standing higher (the reset waits for the flood the same way)
+        if (d.level != LavaFlood.target()) return false;
+        if (chunk.getBlockState(pos).hasBlockEntity()) return false;
+        BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+        TerrainReset.putBack(level, chunk, d, band, b, key, at);
+        chunk.setUnsaved(true);
+        TerrainReset.showPutBack(level, NearChunks.players(level, band), at.getX(), at.getY(), at.getZ(), sound);
+        return true;
     }
 }
