@@ -343,7 +343,7 @@ public final class CaveAtmosphere {
     }
 
     /** How many puffs of smoke may be alive: SmokeBudget.MAX, a half at "Decreased" particles, a quarter at "Minimal". */
-    private static int smokeBudget(Minecraft mc) {
+    static int smokeBudget(Minecraft mc) {
         return switch (mc.options.particles().get()) {
             case ALL -> SmokeBudget.MAX;
             case DECREASED -> SmokeBudget.MAX / 2;

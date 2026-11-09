@@ -23,10 +23,19 @@ import java.util.List;
  * Development only, and only when the environment variable ER_SHOTS names a shot list: once a world is open (single
  * player, or a server where the player is an operator), takes a screenshot of each listed biome from the best view
  * /remix view finds, then quits. Each line of the list is "file-name biome [n]", "file-name biome [n] near x z" (the
- * view searched for round x z), or "file-name @ x y z yaw pitch" for a picture from a chosen spot. Two more kinds of
- * line take no picture: "! command" runs a command (for example "! remix lava level 40", to set the Basalt Galleries'
- * flood before the next pictures) and waits for its reply, and "! wait ticks" idles that many client ticks (to let the
- * server finish work the last command started). Screenshots go to the game's screenshots folder.
+ * view searched for round x z), "file-name @ x y z yaw pitch" for a picture from a chosen spot, or "file-name here
+ * [ticks]" for a picture from where the camera is now, with no teleport: it waits that many client ticks (20 if not
+ * given) for the server's messages and the particles they bring, then for the usual quiet and still view, but without
+ * the least wait of ER_SHOTS_SETTLE (0.9.0, spec 6.7: a held quake or eruption, pictured from the spot the last view
+ * left the camera at), or "file-name now [ticks]" for a picture from where the camera is after that many client ticks
+ * (0 if not given) after the line before it, with no settling at all, once the renderer has no section left to build
+ * (at most 40 ticks more): a moment that does not hold still, such as a block crashing down or a bomb's blast a few
+ * ticks after it (the driver's breath of 40 ticks between lines is left out before it). Three more kinds of line take no picture: "! command" runs a command (for example "! remix lava
+ * level 40", to set the Basalt Galleries' flood before the next pictures) and waits for its reply, "! wait ticks" idles
+ * that many client ticks (to let the server finish work the last command started), and "! waitgame ticks" waits until
+ * the level's game time has gone that many server ticks past the line's start (the rig's client runs slower than the
+ * server, so a moment of an eruption is reached by the server's clock, not the client's). Screenshots go to the game's
+ * screenshots folder.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, value = Dist.CLIENT)
 public final class DevShots {
@@ -50,12 +59,19 @@ public final class DevShots {
         }
     }
 
-    private enum Phase { WAIT_WORLD, SETUP, NEXT, VIEWING, SETTLING, SHOOT, COMMAND, WAITING, DONE }
+    /** A "here" line's wait for messages and particles when it gives none, in client ticks. */
+    private static final int HERE_WAIT = 20;
+
+    private enum Phase { WAIT_WORLD, SETUP, NEXT, VIEWING, HERE, NOW, SETTLING, SHOOT, COMMAND, WAITING, WAIT_GAME, DONE }
 
     private static Phase phase = Phase.WAIT_WORLD;
     private static List<String[]> shots;
     private static int index = -1, ticks, quiet, still, lastChunks, lastSections, frameCount, lastFrame, settleFrame, waitTicks;
     private static boolean gaveUp;
+    /** The picture under way is a "here" one: it settles without the {@link #SETTLE} floor. */
+    private static boolean here;
+    /** The game time a "! waitgame" line waits for. */
+    private static long gameUntil;
     private static volatile boolean viewDone;
     /** System chat lines received while the shots run (the view commands' replies), and the last of them. */
     private static volatile int replies;
@@ -103,9 +119,12 @@ public final class DevShots {
                 mc.options.hideGui = true;
                 mc.options.fov().set(80);
                 // the Basalt Galleries' lava is held at its table too: rising lava and the warnings' shake never let a
-                // view settle
+                // view settle (and with the lava clock held no quake or eruption starts on its own). The camera player
+                // is a spectator, so spectators are made actors: without that no debris falls and no Caldera erupts
+                // round it when a command starts one
                 String[] setup = {"time set noon", "gamerule doDaylightCycle false", "gamerule doWeatherCycle false",
-                        "gamerule doMobSpawning false", "weather clear", "remix lava level 0"};
+                        "gamerule doMobSpawning false", "weather clear", "remix lava level 0",
+                        "remix quake spectators act"};
                 if (remote) {
                     // /remix view generates chunks on the server thread, which can go quiet for longer than the
                     // client's 30 second read timeout. Give this test connection ten minutes instead.
@@ -125,7 +144,9 @@ public final class DevShots {
                 ticks = 0;
             }
             case NEXT -> {
-                if (ticks < 40) return;
+                // a breath between lines, but none before a "now" line: its ticks count from the line before it
+                boolean now = index + 1 < shots.size() && shots.get(index + 1).length >= 2 && shots.get(index + 1)[1].equals("now");
+                if (ticks < 40 && !now) return;
                 index++;
                 if (index >= shots.size()) {
                     finish(mc);
@@ -135,13 +156,15 @@ public final class DevShots {
                 if (s[0].equals("!")) {
                     // a step without a picture: a command, or a pause
                     if (s.length == 3 && s[1].equals("wait")) {
-                        try {
-                            waitTicks = Math.max(0, Integer.parseInt(s[2]));
-                        } catch (NumberFormatException ex) {
-                            waitTicks = 0;
-                        }
+                        waitTicks = count(s[2], 0);
                         ExplorationRemix.LOGGER.info("[shots] {} of {}: waiting {} ticks", index + 1, shots.size(), waitTicks);
                         phase = Phase.WAITING;
+                    } else if (s.length == 3 && s[1].equals("waitgame")) {
+                        int n = count(s[2], 0);
+                        gameUntil = mc.level.getGameTime() + n;
+                        ExplorationRemix.LOGGER.info("[shots] {} of {}: waiting {} game ticks, until game time {}", index + 1, shots.size(), n,
+                                gameUntil);
+                        phase = Phase.WAIT_GAME;
                     } else if (s.length > 1) {
                         String command = String.join(" ", java.util.Arrays.copyOfRange(s, 1, s.length));
                         ExplorationRemix.LOGGER.info("[shots] {} of {}: command {}", index + 1, shots.size(), command);
@@ -153,6 +176,25 @@ public final class DevShots {
                     ticks = 0;
                     return;
                 }
+                if (s.length >= 2 && s[1].equals("now")) {
+                    // a picture of a passing moment from where the camera is: no settling, only the sections built
+                    waitTicks = s.length > 2 ? count(s[2], 0) : 0;
+                    ExplorationRemix.LOGGER.info("[shots] {} of {}: now, after {} ticks", index + 1, shots.size(), waitTicks);
+                    phase = Phase.NOW;
+                    ticks = 0;
+                    return;
+                }
+                if (s.length >= 2 && s[1].equals("here")) {
+                    // a picture from where the camera is: no command, only a wait for the server's messages and their
+                    // particles before the usual settling
+                    waitTicks = s.length > 2 ? count(s[2], HERE_WAIT) : HERE_WAIT;
+                    ExplorationRemix.LOGGER.info("[shots] {} of {}: here, after {} ticks", index + 1, shots.size(), waitTicks);
+                    here = true;
+                    phase = Phase.HERE;
+                    ticks = 0;
+                    return;
+                }
+                here = false;
                 int near = java.util.Arrays.asList(s).indexOf("near");
                 String cmd = s[1].equals("@") && s.length >= 7 ? "tp @s " + String.join(" ", java.util.Arrays.copyOfRange(s, 2, 7))
                         : near > 0 && near + 2 < s.length
@@ -191,14 +233,18 @@ public final class DevShots {
                         return;
                     }
                 } else if (!viewDone) return;
-                phase = Phase.SETTLING;
+                settle();
+            }
+            case HERE -> {
+                if (ticks < waitTicks) return;
+                settle();
+            }
+            case NOW -> {
+                if (ticks < waitTicks || !mc.levelRenderer.hasRenderedAllChunks() && ticks < waitTicks + 40) return;
+                gaveUp = false;
+                ExplorationRemix.LOGGER.info("[shots] now after {} ticks, build queue empty {}", ticks, mc.levelRenderer.hasRenderedAllChunks());
+                phase = Phase.SHOOT;
                 ticks = 0;
-                quiet = 0;
-                still = 0;
-                lastChunks = -1;
-                lastSections = -1;
-                lastFrame = frameCount;
-                settleFrame = frameCount;
             }
             case SETTLING -> {
                 // Let the chunks arrive, get lit and every section in view get built before the picture. On a busy server
@@ -220,7 +266,7 @@ public final class DevShots {
                     still = calm && sections == lastSections ? still + 1 : 0;
                     lastSections = sections;
                 }
-                boolean settled = ticks > SETTLE && quiet > 80 && still >= STILL_FRAMES;
+                boolean settled = (here || ticks > SETTLE) && quiet > 80 && still >= STILL_FRAMES;
                 if (settled || ticks > GIVE_UP) {
                     gaveUp = !settled;
                     net.minecraft.core.BlockPos eye = net.minecraft.core.BlockPos.containing(mc.player.getEyePosition());
@@ -240,7 +286,8 @@ public final class DevShots {
                 String where = String.format(java.util.Locale.ROOT, "%s %.1f %.1f %.1f yaw %.0f pitch %.0f%s", name, mc.player.getX(), mc.player.getY(),
                         mc.player.getZ(), mc.player.getYRot(), mc.player.getXRot(), gaveUp ? " (never settled)" : "");
                 log.add(where);
-                ExplorationRemix.LOGGER.info("[shots] took {}", where);
+                // the particles alive and the frame rate over the last wait, for the effects' cost
+                ExplorationRemix.LOGGER.info("[shots] took {} (particles {}, fps {})", where, mc.particleEngine.countParticles(), mc.getFps());
                 phase = Phase.NEXT;
                 ticks = 0;
             }
@@ -258,7 +305,40 @@ public final class DevShots {
                 phase = Phase.NEXT;
                 ticks = 0;
             }
+            case WAIT_GAME -> {
+                // the game time comes from the server with every time update, a second apart; stop waiting after
+                // GIVE_UP client ticks all the same
+                if (mc.level.getGameTime() < gameUntil && ticks < GIVE_UP) return;
+                if (mc.level.getGameTime() < gameUntil) {
+                    ExplorationRemix.LOGGER.info("[shots] gave up waiting for game time {} (it is {})", gameUntil, mc.level.getGameTime());
+                    log.add("! " + String.join(" ", java.util.Arrays.copyOfRange(shots.get(index), 1, shots.get(index).length))
+                            + ": gave up at game time " + mc.level.getGameTime());
+                }
+                phase = Phase.NEXT;
+                ticks = 0;
+            }
             default -> {}
+        }
+    }
+
+    /** Starts settling at the view the camera has now (after a view's teleport, or at once for a "here" line). */
+    private static void settle() {
+        phase = Phase.SETTLING;
+        ticks = 0;
+        quiet = 0;
+        still = 0;
+        lastChunks = -1;
+        lastSections = -1;
+        lastFrame = frameCount;
+        settleFrame = frameCount;
+    }
+
+    /** A line's count of ticks, or {@code fallback} when it is not a number; never below 0. */
+    private static int count(String word, int fallback) {
+        try {
+            return Math.max(0, Integer.parseInt(word));
+        } catch (NumberFormatException ex) {
+            return fallback;
         }
     }
 

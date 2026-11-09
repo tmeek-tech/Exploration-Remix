@@ -242,11 +242,13 @@ public final class LavaFlood {
         TerrainReset.tick(level, band, s, now);
         com.explorationremix.world.quake.Quakes.tick(level, band, s, now);
         com.explorationremix.world.eruption.Eruptions.tick(level, band, s, now);
+        // 0.9.0: the falling blocks they let go of, for their hits, holds and discards
+        Falling.tick(level, band);
     }
 
     /**
      * The cycle has entered a new phase ({@code to}; null when the cycle has stopped, {@code from} null when it starts).
-     * Logs what the flood cost in the phase that ended. The next build starts its quakes and the terrain reset here.
+     * Logs what the flood cost in the phase that ended.
      */
     private static void phaseChanged(@Nullable LavaCycle.Phase from, @Nullable LavaCycle.Phase to, LavaCycle.State s) {
         if (from != null && STATS.phaseBlocks > 0) {
@@ -580,6 +582,18 @@ public final class LavaFlood {
     /** Where the flood sits, or null when the cycle cannot run in this world. */
     @Nullable
     public static Band band() { return band; }
+
+    /**
+     * True while the lava clock is held ({@code /remix lava freeze} or {@code level}, which DevShots' setup sends): no
+     * quake or eruption starts on its own then (0.9.0).
+     */
+    public static boolean held() { return data != null && data.clock.frozen(); }
+
+    /**
+     * The lava height the flood is bringing the chunks round the players to now: the cycle's height, 0 with the cycle
+     * turned off, -1 before the flood's first tick. A chunk whose record stands elsewhere is still catching up.
+     */
+    static int target() { return lastTarget; }
 
     /** The clock and the cycle, or null when the cycle cannot run in this world. */
     @Nullable

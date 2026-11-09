@@ -36,15 +36,20 @@ public final class ERConfig {
     public final ForgeConfigSpec.BooleanValue lavaCycleEnabled;
     public final ForgeConfigSpec.DoubleValue lavaCycleMinutes, lavaCalm, lavaWarning, lavaRise, lavaFull, lavaDrain;
     public final ForgeConfigSpec.IntValue lavaChecksPerTick, lavaChangesPerTick, lavaRadius;
-    // 0.5.1: the Basalt Galleries' quakes (world.quake.Quakes), eruptions (world.eruption.Eruptions) and the terrain reset
-    // (world.lava.TerrainReset), read while the server runs. Quakes and eruptions are not built yet: their sections are
-    // kept, but do nothing in this build.
-    public final ForgeConfigSpec.BooleanValue quakesEnabled;
-    public final ForgeConfigSpec.DoubleValue quakeMinMinutes, quakeMaxMinutes, quakeSeconds, quakeDebrisPerSecond;
-    public final ForgeConfigSpec.IntValue quakeDebrisRadius;
-    public final ForgeConfigSpec.BooleanValue eruptionsEnabled, eruptionFire;
-    public final ForgeConfigSpec.DoubleValue eruptionMinMinutes, eruptionMaxMinutes, eruptionActiveMinMinutes, eruptionActiveMaxMinutes, eruptionBombPower;
-    public final ForgeConfigSpec.IntValue eruptionBombs, eruptionRange;
+    // 0.9.0: the Basalt Galleries' quakes (world.quake.Quakes) and the Caldera's eruptions (world.eruption.Eruptions), and
+    // 0.5.1's terrain reset (world.lava.TerrainReset), read while the server runs. Keys whose meaning or default changed
+    // from 0.8.0's are new names, so Forge drops the old ones from a player's file and writes the new defaults.
+    public final ForgeConfigSpec.BooleanValue quakesEnabled, quakeTremors, quakeClimbTremors, quakeTopple, quakeToppleAtOnce;
+    public final ForgeConfigSpec.DoubleValue quakeTremorMinSeconds, quakeTremorMaxSeconds, quakeMinMinutes, quakeMaxMinutes, quakeSeconds,
+            quakeDebrisNear;
+    public final ForgeConfigSpec.IntValue quakeSupportDepth, quakeToppleMax, quakeLowerTicks, quakeDebrisPerQuake, quakeDebrisRadius,
+            quakeDebrisWarnTicks, quakeDebrisDamage, quakeDebrisMax;
+    public final ForgeConfigSpec.BooleanValue eruptionsEnabled;
+    public final ForgeConfigSpec.DoubleValue eruptionMinMinutes, eruptionMaxMinutes, eruptionRisingMinMinutes, eruptionRisingMaxMinutes,
+            eruptionWarnSeconds, eruptionBurstSeconds, eruptionBlastPower, eruptionCraterRock, eruptionBombDamage, eruptionBombKnockback,
+            eruptionCraterMagma, eruptionRisingScale;
+    public final ForgeConfigSpec.IntValue eruptionWakeSeconds, eruptionBombs, eruptionBombsNear, eruptionNearMinBlocks, eruptionNearMaxBlocks,
+            eruptionVentNearBias, eruptionVentBurn, eruptionEjecta, eruptionRange, eruptionHeardRange;
     public final ForgeConfigSpec.BooleanValue resetEnabled;
     public final ForgeConfigSpec.IntValue resetChangesPerTick;
 
@@ -137,44 +142,82 @@ public final class ERConfig {
                 "up when a player comes near. 0: one chunk past the server's view distance (every chunk a client can see).").defineInRange("playerRadius", 0, 0, 64);
         b.pop();
 
-        b.comment("NOT BUILT YET: this build has no quakes, so everything in this section does nothing (it is kept for the build that",
-                "adds them, and /remix quake says so).",
-                "Earthquakes in the Basalt Galleries, at random times: the view shakes, dust falls, basalt drops from the ceilings, and",
-                "blocks players placed fall unless natural rock is at most 2 blocks under them (pillars, towers and bridges fall; steps",
-                "and low walls stay). Felt only by players in the Galleries. Read while the server runs.").push("quakes");
-        quakesEnabled = b.comment("Have quakes (not built yet: does nothing in this build).").define("enabled", true);
-        quakeMinMinutes = b.comment("Shortest time between two quakes, in minutes.").defineInRange("minMinutes", 3.0, 0.25, 240.0);
-        quakeMaxMinutes = b.comment("Longest time between two quakes, in minutes (a smaller value than minMinutes counts as minMinutes).")
-                .defineInRange("maxMinutes", 7.0, 0.25, 240.0);
-        quakeSeconds = b.comment("How long a quake lasts, in seconds (each one a quarter more or less).").defineInRange("seconds", 10.0, 2.0, 60.0);
-        quakeDebrisPerSecond = b.comment("Basalt dropping from the ceiling round each player in a quake, blocks per second at full strength (0: none).")
-                .defineInRange("debrisPerSecond", 1.5, 0.0, 20.0);
-        quakeDebrisRadius = b.comment("How far from a player the ceiling drops its basalt, in blocks.").defineInRange("debrisRadius", 24, 4, 64);
+        b.comment("Earthquakes in the Basalt Galleries: big quakes every few minutes shake the view and drop rock from the ceilings round",
+                "the players there; light tremors between them (and, with climbTremors, one wherever someone builds up). All of them make",
+                "blocks players placed fall unless natural rock is at most supportDepth blocks under them (pillars, towers, ladders and",
+                "bridges fall; steps and low walls stay); under the lava such blocks melt back into it. Rock that falls, and anything that",
+                "toppled, goes back with the terrain reset. Read while the server runs.").push("quakes");
+        quakesEnabled = b.comment("Have quakes and tremors.").define("enabled", true);
+        quakeTremors = b.comment("Light tremors between the big quakes: a short shiver and a little dust that topple placed blocks; no rock falls",
+                "from the ceilings.").define("tremors", true);
+        quakeTremorMinSeconds = b.comment("Shortest time between two tremors, in seconds.").defineInRange("tremorMinSeconds", 30.0, 5.0, 600.0);
+        quakeTremorMaxSeconds = b.comment("Longest time between two tremors (less than tremorMinSeconds counts as it).")
+                .defineInRange("tremorMaxSeconds", 60.0, 5.0, 600.0);
+        quakeClimbTremors = b.comment("The ground answers a climb: a block placed more than supportDepth over rock brings a tremor round it 1.5 to 3",
+                "seconds later (at most once in 5 seconds for each player). Off by default: Taran chose timed tremors only.")
+                .define("climbTremors", false);
+        quakeMinMinutes = b.comment("Shortest time between two big quakes, in minutes.").defineInRange("minMinutes", 3.0, 0.25, 240.0);
+        quakeMaxMinutes = b.comment("Longest time between two big quakes (less than minMinutes counts as it).").defineInRange("maxMinutes", 7.0, 0.25, 240.0);
+        quakeSeconds = b.comment("How long a big quake lasts (each a quarter more or less).").defineInRange("seconds", 10.0, 2.0, 60.0);
+        quakeTopple = b.comment("Quakes and tremors make placed blocks without support fall.").define("topple", true);
+        quakeSupportDepth = b.comment("A placed block stays only with natural rock at most this many blocks under it, with only placed blocks between.")
+                .defineInRange("supportDepth", 2, 1, 8);
+        quakeToppleAtOnce = b.comment("Placed blocks without that support fall as soon as a player places them or takes their support away, like",
+                "sand, not at the next quake or tremor.").define("toppleAtOnce", false);
+        quakeToppleMax = b.comment("Most blocks one quake or tremor topples (the rest fall at the next).").defineInRange("toppleMax", 256, 0, 4096);
+        quakeLowerTicks = b.comment("A build a player stands on sinks with them one block every this many ticks, so they are not hurt (0: it drops",
+                "at once; 1 to 5 count as 6).").defineInRange("lowerTicks", 6, 0, 40);
+        quakeDebrisPerQuake = b.comment("Ceiling blocks that come loose round each player in one big quake at full strength (0: none); a quarter of",
+                "them bring 1 to 3 neighbours. Only with the terrain reset on.").defineInRange("debrisPerQuake", 16, 0, 64);
+        quakeDebrisRadius = b.comment("How far from a player ceiling rock comes loose, in blocks.").defineInRange("debrisRadius", 24, 4, 64);
+        quakeDebrisNear = b.comment("Share of them that land within 8 blocks of the player.").defineInRange("debrisNear", 0.3, 0.0, 1.0);
+        quakeDebrisWarnTicks = b.comment("Ticks of grit and a crack before a block drops.").defineInRange("debrisWarnTicks", 20, 0, 100);
+        quakeDebrisDamage = b.comment("Most damage a falling block does to whoever it lands on (2 for each block it fell; 8 is 4 hearts). It breaks",
+                "on them and is gone.").defineInRange("debrisDamage", 8, 0, 40);
+        quakeDebrisMax = b.comment("Most blocks that fall from the ceilings in one quake, over all players.").defineInRange("debrisMax", 128, 0, 1024);
         b.pop();
 
-        b.comment("NOT BUILT YET: this build has no eruptions, so everything in this section does nothing (it is kept for the build that",
-                "adds them, and /remix erupt says so).",
-                "Eruptions in the Caldera of the Basalt Galleries: a vent smokes and rumbles, then throws up a fountain of lava and lava",
-                "bombs that blow holes in the rock. Only Calderas near players erupt. Read while the server runs.").push("eruptions");
-        eruptionsEnabled = b.comment("Have eruptions (not built yet: does nothing in this build).").define("enabled", true);
-        eruptionMinMinutes = b.comment("Shortest time between two eruptions of one Caldera while the lava is calm or draining, in minutes.")
-                .defineInRange("minMinutes", 3.0, 0.25, 240.0);
-        eruptionMaxMinutes = b.comment("Longest time between them while the lava is calm or draining, in minutes.").defineInRange("maxMinutes", 7.0, 0.25, 240.0);
-        eruptionActiveMinMinutes = b.comment("Shortest time between two eruptions while the lava warns, rises or stands full, in minutes.")
-                .defineInRange("activeMinMinutes", 1.0, 0.25, 240.0);
-        eruptionActiveMaxMinutes = b.comment("Longest time between them while the lava warns, rises or stands full, in minutes.")
-                .defineInRange("activeMaxMinutes", 2.5, 0.25, 240.0);
+        b.comment("Eruptions in the Caldera of the Basalt Galleries: a vent smokes and rumbles, then throws up a fountain of lava and lava bombs",
+                "that blow craters in the rock. Only Calderas near players erupt; they wake as the lava rises. Craters go back with the",
+                "terrain reset; with it off, bombs blow none. Read while the server runs.").push("eruptions");
+        eruptionsEnabled = b.comment("Have eruptions.").define("enabled", true);
+        eruptionMinMinutes = b.comment("Shortest time between two eruptions of one Caldera while the lava is calm, warns or drains (0: none then).")
+                .defineInRange("minMinutes", 3.0, 0.0, 240.0);
+        eruptionMaxMinutes = b.comment("Longest time between them then.").defineInRange("maxMinutes", 7.0, 0.0, 240.0);
+        eruptionRisingMinMinutes = b.comment("Shortest time between two eruptions while the lava rises and stands full (0: none then).")
+                .defineInRange("risingMinMinutes", 1.0, 0.0, 240.0);
+        eruptionRisingMaxMinutes = b.comment("Longest time between them then.").defineInRange("risingMaxMinutes", 2.0, 0.0, 240.0);
+        eruptionWakeSeconds = b.comment("When the lava starts to rise, each Caldera erupts within this many seconds unless one is due sooner.")
+                .defineInRange("wakeSeconds", 40, 0, 600);
+        eruptionWarnSeconds = b.comment("Smoke and rumbling before the burst, in seconds.").defineInRange("warnSeconds", 4.0, 0.0, 30.0);
+        eruptionBurstSeconds = b.comment("How long the fountain lasts (each a quarter more or less).").defineInRange("burstSeconds", 10.0, 2.0, 60.0);
         eruptionBombs = b.comment("Lava bombs one eruption throws, on average (0: none).").defineInRange("bombs", 10, 0, 64);
-        eruptionBombPower = b.comment("Strength of a lava bomb's explosion, on average (a creeper's is 3; each bomb a fifth more or less; 0: no explosion).")
-                .defineInRange("bombPower", 2.5, 0.0, 6.0);
-        eruptionFire = b.comment("Lava bombs set fire round where they burst.").define("fire", true);
-        eruptionRange = b.comment("A Caldera erupts while a player in the Galleries is within this many blocks of one of its vents.")
-                .defineInRange("range", 192, 32, 320);
+        eruptionBombsNear = b.comment("Of them, how many come down near a player in the Caldera (never near one on a stack top, a ledge or the shore).")
+                .defineInRange("bombsNear", 2, 0, 8);
+        eruptionNearMinBlocks = b.comment("Closest such a bomb lands to the player, in blocks.").defineInRange("nearMinBlocks", 3, 0, 16);
+        eruptionNearMaxBlocks = b.comment("Farthest (less than nearMinBlocks counts as it).").defineInRange("nearMaxBlocks", 8, 1, 24);
+        eruptionVentNearBias = b.comment("Vents nearer the players erupt more often: a vent this many blocks from the nearest player erupts half as",
+                "often as one beside them (0: all alike).").defineInRange("ventNearBias", 48, 0, 256);
+        eruptionBlastPower = b.comment("Power of a lava bomb's blast (a creeper's is 3): its reach, its knockback and the size of its crater. 0: bombs",
+                "only splash.").defineInRange("blastPower", 3.0, 0.0, 6.0);
+        eruptionCraterRock = b.comment("How hard the Galleries' rock is to a bomb (vanilla basalt is 4.2, stone 6): lower blows bigger craters. At",
+                "blastPower 3, 0.5 blows about 60 blocks, 3 deep.").defineInRange("craterRock", 0.5, 0.05, 10.0);
+        eruptionBombDamage = b.comment("Share of a vanilla blast's damage a bomb does to players and creatures (1: a creeper's at blastPower 3).")
+                .defineInRange("bombDamage", 0.6, 0.0, 2.0);
+        eruptionBombKnockback = b.comment("Share of the blast's push a bomb gives players and creatures.").defineInRange("bombKnockback", 1.0, 0.0, 1.0);
+        eruptionVentBurn = b.comment("Damage every half second, with fire, to whoever stands in an erupting vent's mouth.").defineInRange("ventBurn", 4, 0, 20);
+        eruptionEjecta = b.comment("Rocks a bomb's crater throws out.").defineInRange("ejecta", 3, 0, 8);
+        eruptionCraterMagma = b.comment("Chance a crater keeps a magma block at its bottom.").defineInRange("craterMagma", 0.5, 0.0, 1.0);
+        eruptionRisingScale = b.comment("How much bigger the fountain and the plume are while the lava rises and stands full.")
+                .defineInRange("risingScale", 1.5, 1.0, 3.0);
+        eruptionRange = b.comment("A Caldera erupts while a player in or near the Galleries is within this many blocks of one of its vents (bombs",
+                "only within the server's simulation distance).").defineInRange("range", 192, 32, 320);
+        eruptionHeardRange = b.comment("Players within this many blocks of an erupting vent see and hear it.").defineInRange("heardRange", 256, 64, 2048);
         b.pop();
 
         b.comment("The Basalt Galleries' terrain reset: while the lava stands full, everything changed in the Galleries since the last reset",
-                "(by players, and by quakes and eruptions once they are built) is put back as it was generated, round the players there;",
-                "other chunks catch up when a player comes near. Only runs with the lava cycle. Read while the server runs.").push("terrainReset");
+                "(by players, quakes and eruptions) is put back as it was generated, round the players there; other chunks catch up when a",
+                "player comes near. Only runs with the lava cycle. Read while the server runs.").push("terrainReset");
         resetEnabled = b.comment("Reset the Galleries' terrain once a cycle.").define("enabled", true);
         resetChangesPerTick = b.comment("Most blocks the reset puts back in one tick, over all players (halved while the server is falling behind).")
                 .defineInRange("changesPerTick", 2048, 16, 100_000);

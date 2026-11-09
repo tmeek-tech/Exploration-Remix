@@ -9,11 +9,13 @@ import os
 MOD = "explorationremix"
 
 
-def own(name, volume=1.0, stream=False, weight=1, pitch=1.0):
+def own(name, volume=1.0, stream=False, weight=1, pitch=1.0, attenuation_distance=None):
     e = {"name": f"{MOD}:ambient/{name}", "volume": volume}
     if stream: e["stream"] = True
     if weight != 1: e["weight"] = weight
     if pitch != 1.0: e["pitch"] = pitch
+    # how far a sound at volume 1 carries, in blocks (the game's default is 16; a louder play carries that many times as far)
+    if attenuation_distance: e["attenuation_distance"] = attenuation_distance
     return e
 
 
@@ -37,10 +39,10 @@ EVENTS = {
     # Blue Reaches: a distant roar of falling water.
     "ambient.blue.loop": [own("blue_roar", 0.7, stream=True)],
     "ambient.blue.additions": [own(f"echo_drip{i}", 0.45, pitch=0.7) for i in range(1, 5)],
-    # Basalt Galleries: rumbling and lava pops.
+    # Basalt Galleries: rumbling and lava pops. 0.9.0: no rattle of stone any more (vanilla's basalt-deltas debris), now
+    # that rock really falls in the quakes: a rattle of stone means stone is coming down.
     "ambient.basalt.loop": [own("basalt_rumble", 0.8, stream=True)],
     "ambient.basalt.additions": [vanilla("liquid/lavapop", 0.7, 0.9, 3)]
-                                + [vanilla(f"ambient/nether/basalt_deltas/debris{i}", 0.5) for i in range(1, 4)]
                                 + [own(f"rumble{i}", 0.8) for i in range(1, 3)],
     # Ash Hollows (0.5), the Wasteland's refuge: the same rock heard from far off, lower and much quieter, and now and
     # then a distant rumble or a lava pop; no debris rattling down.
@@ -68,17 +70,34 @@ LAVA_EVENTS = {
 LAVA_SUBTITLES = {"lava.rumble": "The deep rock rumbles", "lava.surge": "Lava surges up"}
 
 
-# 0.5.1's quakes and eruptions (ERSounds registers their events; nothing plays them until the quakes and the eruptions
-# are built): the mod's own rumbles, lower, and vanilla sounds, until those builds give them their own.
+# 0.9.0's quakes (client.QuakeEffects plays them): the mod's own, made by synth_quake_sounds.py, mono so the positioned
+# ones have a place, dry and with nothing under 80 Hz so a quake never sounds like the lava's deep warning. The big
+# quake's rumble and the tremor's crackle are played all round the listener; the crack overhead is played where the
+# block is with no fading (it would be out of range 100 blocks up); the creak, the landing's thud (played at volume 2:
+# 32 blocks) and the hiss of something falling into the lava are positioned.
+# The eruptions (client.EruptionEffects and client.BombEffects), the mod's own too, made by the same script and mono: a
+# vent's rumble as it warns (played at volume 6: 96 blocks), the deep boom of its burst and the roar of its fountain
+# (both placed at the vent with no fading, their volume set by the distance, so they are heard across the Caldera with
+# their direction; the roar a seamless loop, streamed), a lava bomb's whistle (a loop that follows it at volume 6: 96
+# blocks) and its far blast (volume 8: 128 blocks).
 QUAKE_EVENTS = {
-    "quake.rumble": [own(f"lava_rumble{i}", 1.0, pitch=0.7) for i in range(1, 4)],
-    "quake.debris": [vanilla(f"ambient/nether/basalt_deltas/debris{i}", 1.0) for i in range(1, 4)],
-    "eruption.boom": [vanilla(f"random/explode{i}", 1.0, 0.7) for i in range(1, 5)],
-    "eruption.roar": [own("lava_surge", 1.0, pitch=0.8)],
+    "quake.rumble": [own(f"quake_rumble{i}", 1.0) for i in range(1, 3)],
+    "quake.tremor": [own(f"quake_tremor{i}", 1.0) for i in range(1, 4)],
+    "quake.crack": [own(f"quake_crack{i}", 1.0) for i in range(1, 4)],
+    "quake.creak": [own(f"quake_creak{i}", 1.0) for i in range(1, 4)],
+    "quake.debris": [own(f"quake_land{i}", 1.0) for i in range(1, 4)],
+    "eruption.rumble": [own("eruption_rumble", 1.0)],
+    "eruption.boom": [own(f"eruption_boom{i}", 1.0) for i in range(1, 3)],
+    "eruption.roar": [own("eruption_roar", 1.0, stream=True)],
+    "lava_bomb.whistle": [own("bomb_whistle", 1.0)],
+    "lava_bomb.burst": [own(f"bomb_burst{i}", 1.0) for i in range(1, 3)],
+    "lava_bomb.fizz": [own(f"bomb_fizz{i}", 1.0) for i in range(1, 3)],
 }
 QUAKE_SUBTITLES = {
-    "quake.rumble": "The ground shakes", "quake.debris": "Rock falls",
-    "eruption.boom": "An eruption bursts", "eruption.roar": "Lava roars",
+    "quake.rumble": "The ground shakes", "quake.tremor": "The rock settles", "quake.crack": "Rock cracks overhead",
+    "quake.creak": "The build creaks", "quake.debris": "Rock crashes down", "eruption.rumble": "A vent rumbles",
+    "eruption.boom": "An eruption bursts", "eruption.roar": "Lava roars", "lava_bomb.whistle": "A lava bomb whistles",
+    "lava_bomb.burst": "A lava bomb bursts", "lava_bomb.fizz": "Lava hisses",
 }
 
 

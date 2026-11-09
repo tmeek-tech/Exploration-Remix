@@ -68,6 +68,16 @@ final class SmokePuff {
         this.vz = draughtZ;
     }
 
+    /**
+     * Thrown up out of a vent at {@code vy} blocks a tick (an eruption's plume, 0.9.0): its speed eases back to its own
+     * slow rise at {@link #RESPONSE} a tick, so the thrust carries it about {@code vy / 0.03} blocks higher, within a few
+     * seconds.
+     */
+    SmokePuff launch(double vy) {
+        this.vy = Math.max(this.vy, vy);
+        return this;
+    }
+
     /** A puff's life for its rise: 600 ticks for a rise of 40 blocks, 1200 for 100, and on at that rate. */
     static int lifeFor(double reach) { return (int) Math.round(600 + 10 * Math.max(0, reach - REACH_MIN)); }
 

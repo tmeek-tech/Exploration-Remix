@@ -127,11 +127,14 @@ public final class Net {
 
     /**
      * A vent of the Caldera (Basalt Galleries): where eruptions break out, the crater of one of its cones. The Galleries'
-     * field finds them ({@link GalleriesField#ventsNear}); the runtime asks for them with {@link Terrain#ventsNear}.
+     * field finds them ({@link GalleriesField#ventsNear}, and without reading the terrain {@link GalleriesField#ventSites});
+     * the runtime asks for them with {@link Terrain#ventsNear} and {@link Terrain#ventSitesNear}.
      */
     public static final class Vent {
-        /** Centre, radius, and the top of the rock (or the lava's surface) there. */
+        /** Centre, the crater's radius, and the top of the rock (or the lava's surface) there (NaN from a vent site). */
         public double x, z, r, y;
+        /** The stack's foot radius (5 to 9), its height over the lava table (47 to 62) and its crater's depth (3 to 6). */
+        public double stackR, height, depth;
         public int chamber;
         /** On the crest of the crater rim, not in the lake. */
         public boolean crest;

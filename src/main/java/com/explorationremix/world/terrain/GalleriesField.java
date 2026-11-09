@@ -3528,16 +3528,53 @@ public final class GalleriesField {
             Cell c = column(vx, vz);
             if (c.closed()) continue;
             int fl = floorAt(vx, vz);
-            Net.Vent vt = new Net.Vent();
-            vt.x = v[0];
-            vt.z = v[1];
-            vt.r = v[4];
+            Net.Vent vt = site(v, cl);
             vt.crest = fl != NO_GROUND;
             vt.y = vt.crest ? fl - 1 : W - 1;
-            vt.chamber = (int) (cl.patch ^ (cl.patch >>> 32));
             out.add(vt);
         }
         return out;
+    }
+
+    /**
+     * The Caldera's vent sites within r of (x, z) (0.9.0, for the eruptions): {@link #ventsNear}'s cones and climate test
+     * without reading the terrain (no column, no floor and no closed test), so it costs well under a millisecond at r 192
+     * on a cold cache. Each vent has its x, z, crater radius and chamber as ventsNear gives them, and its stack's foot
+     * radius, height and crater depth; {@code y} is NaN (the runtime reads the vent's rows from the world's blocks) and
+     * {@code crest} true. It also lists the rare stacks whose crater cell is closed, which ventsNear leaves out. A query
+     * only: it changes nothing the terrain is made of.
+     */
+    public List<Net.Vent> ventSites(double x, double z, double r) {
+        List<Net.Vent> out = new ArrayList<>();
+        Climate cl = new Climate();
+        int g0 = (int) Math.floor((x - r - 20) / CONE_GRID), g1 = (int) Math.floor((x + r + 20) / CONE_GRID);
+        int h0 = (int) Math.floor((z - r - 20) / CONE_GRID), h1 = (int) Math.floor((z + r + 20) / CONE_GRID);
+        for (int gi = g0; gi <= g1; gi++) for (int gj = h0; gj <= h1; gj++) {
+            long h = Hashing.mix(seed, 36001, gi, gj);
+            if (Hashing.unit(h) > CONE_P) continue;
+            double[] v = cone(h, gi, gj);
+            if (len(v[0] - x, v[1] - z) > r + v[4]) continue;
+            climate(v[0], v[1], cl);
+            if (cl.wCal <= STACK_W) continue;
+            Net.Vent vt = site(v, cl);
+            vt.crest = true;
+            vt.y = Double.NaN;
+            out.add(vt);
+        }
+        return out;
+    }
+
+    /** A vent of the stack {@code v} ({@link #cone(long, int, int)}), whose middle's climate is {@code cl}, but its y and crest. */
+    private static Net.Vent site(double[] v, Climate cl) {
+        Net.Vent vt = new Net.Vent();
+        vt.x = v[0];
+        vt.z = v[1];
+        vt.r = v[4];
+        vt.stackR = v[2];
+        vt.height = v[3];
+        vt.depth = v[5];
+        vt.chamber = (int) (cl.patch ^ (cl.patch >>> 32));
+        return vt;
     }
 
     // ============================================================================================ places (dev tools)
