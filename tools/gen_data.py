@@ -12,6 +12,7 @@ import textures
 import worldgen
 import sounds
 import creatures
+import runes
 import check_data
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,6 +26,8 @@ OWNED = [
     os.path.join(RES, "data", "minecraft", "tags"), os.path.join(RES, "data", "forge", "tags"), os.path.join(RES, "data", "immersive_weathering"),
     os.path.join(ASSETS, "blockstates"), os.path.join(ASSETS, "models"), os.path.join(ASSETS, "textures"), os.path.join(ASSETS, "lang"),
     os.path.join(ASSETS, "sounds.json"), os.path.join(ASSETS, "particles"), os.path.join(ASSETS, "geometry"),
+    # the runes (runes.py): their damage type, and Create's tag that keeps contraptions off the rune blocks
+    os.path.join(DATA, "damage_type"), os.path.join(RES, "data", "create", "tags"),
 ]
 
 
@@ -550,7 +553,9 @@ def creature_data():
         "type": "minecraft:entity",
         "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:mossback_hide", "functions": [
             {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}},
-            {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]}]})
+            {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]},
+                  # now and then a rune of the Upper Caves, when a player kills it
+                  runes.drop_pool(0.25, 0.05, [("upper_caves", None)])]})
     # cave animals it catches when hungry (creepers live in the lush caves and Root Vaults)
     tag(MOD, "entity_types", "mossback_prey", ["minecraft:bat", "minecraft:axolotl", "minecraft:glow_squid", "minecraft:creeper",
                                                "minecraft:frog", "minecraft:rabbit", "minecraft:chicken", "minecraft:fox",
@@ -562,7 +567,10 @@ def creature_data():
         "type": "minecraft:entity",
         "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:skein_plate", "functions": [
             {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}},
-            {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]}]})
+            {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]},
+                  # a rune a little more often than a Mossback: four times in five one of the Blue Reaches', else one of
+                  # the Deep Gardens' (each item in a tag takes its entry's weight: 7 x 20 against 5 x 7)
+                  runes.drop_pool(0.35, 0.05, [("blue_reaches", 20), ("deep_gardens", 7)])]})
     write(os.path.join(ASSETS, "models", "item", "skein_plate.json"),
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/skein_plate"}})
 
@@ -622,6 +630,7 @@ def main():
     biome_modifiers()
     names.update(sounds.write_all(ASSETS, write))
     names.update(creatures.write_all(ASSETS, write))
+    names.update(runes.write_all(RES, write, tag))
     names.update({f"entity.{MOD}.{e}": n for e, n in ENTITY_NAMES.items()})
     creature_data()
     particles()

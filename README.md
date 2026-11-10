@@ -5,10 +5,9 @@ the pack's own caves, sealed from each other by unbreakable bands with natural g
 and Create stone and dressed to match a set of reference pictures. Made for a pack with Tectonic, Terrain Slabs,
 Immersive Weathering, Create and Better Combat.
 
-**Status: milestone 1 (0.5.0: the bottom layer split into the Wasteland and the Basalt Galleries, with the Galleries'
-lava cycle; with 0.4.2's fluffier silver ferns that also hang on walls), world generation and cave looks.** The first
-build's creatures, runs, runes and combat changes were removed (git history keeps them); they return in later
-milestones, built on these caves.
+**Status: 0.10.0: milestone 1's world generation and cave looks, the cave hunters, and stage 1 of the rune overhaul
+(rune rows on swords, bows and crossbows; see [Runes](#runes)).** The first build's runs and combat changes were
+removed (git history keeps them); they return in later milestones, built on these caves.
 
 ## Requirements
 
@@ -140,6 +139,26 @@ regenerated.
   embers over lava, and pollen in daylight shafts. Tuned for vanilla lighting without shaders: every biome carries
   enough glowing things to see by. While the camera is under the old world floor (y -64) the clouds are moved far
   above it, so no clouds (a shader pack's included) show past the edge of the drawn world in the deep caves.
+
+## Runes
+
+Runes are items set into a row on a sword, bow or crossbow. A row reads in speaking order, carrier first: `Spark, On
+hit, Burst` is a spark that bursts where it hits, and `Fan` copies whatever follows it. A sword casts on right-click
+and again each time it is ready while the button is held; a bow or crossbow casts with a full shot, its arrow the
+first carrier. Each cast is paid from the gear's energy in full or not at all; full-strength sword hits on creatures
+fighting you charge the sword, and Siphon knocks loose white motes that refill it. Slots wake as a run goes deeper.
+Press **R** with the gear in hand, once nothing has hurt you for 5 seconds, to edit the row; a rune that does nothing
+is grey and says why. The creative tab **Runes** holds every rune. Limits and who runes may touch (other players
+only with `runesHurtPlayers` on) are in the server config `explorationremix-runes.toml`.
+
+| Command | Does |
+|---|---|
+| `/remix rune give <rune\|all> [count]` | rune items |
+| `/remix rune row <runes>` | sets the held gear's row: rune ids in order, `_` for an empty slot, `\|` for a cast break |
+| `/remix rune clear` | empties the held gear's row |
+| `/remix rune energy [amount]` | fills the held gear's energy, or sets it |
+| `/remix rune depth <0\|1\|2\|auto>` | the run depth that wakes extra slots, kept until `auto` |
+| `/remix rune info` | the held gear's row, how it reads and what each cast costs |
 
 ## Commands
 

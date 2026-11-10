@@ -1,0 +1,30 @@
+{
+  "replace": false,
+  "values": [
+    "explorationremix:rune_spark",
+    "explorationremix:rune_shard",
+    "explorationremix:rune_orb",
+    "explorationremix:rune_glow",
+    "explorationremix:rune_burst",
+    "explorationremix:rune_cleave",
+    "explorationremix:rune_field",
+    "explorationremix:rune_barrier",
+    "explorationremix:rune_dash",
+    "explorationremix:rune_reel",
+    "explorationremix:rune_swift",
+    "explorationremix:rune_heavy",
+    "explorationremix:rune_wide",
+    "explorationremix:rune_seek",
+    "explorationremix:rune_arc",
+    "explorationremix:rune_bounce",
+    "explorationremix:rune_pierce",
+    "explorationremix:rune_siphon",
+    "explorationremix:rune_ember",
+    "explorationremix:rune_frost",
+    "explorationremix:rune_storm",
+    "explorationremix:rune_tide",
+    "explorationremix:rune_on_hit",
+    "explorationremix:rune_after",
+    "explorationremix:rune_fan"
+  ]
+}

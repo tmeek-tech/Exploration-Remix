@@ -22,6 +22,8 @@ public final class ERClientConfig {
      * and tremors and when an eruption bursts nearby (0.9.0).
      */
     public final ForgeConfigSpec.BooleanValue screenShake;
+    /** The view shakes when a rune blast, a slam or a stagger goes off near you, and kicks when your hit lands (client.rune.fx.RuneCamera). */
+    public final ForgeConfigSpec.BooleanValue runeShake;
     /** How strong that shaking is, 0 to 1 (0.9.0). */
     public final ForgeConfigSpec.DoubleValue shakeStrength;
     /** Which light tremors this player feels (0.9.0; big quakes always shake). */
@@ -52,6 +54,10 @@ public final class ERClientConfig {
         shakeStrength = b.comment("How strong that shaking is.").defineInRange("shakeStrength", 1.0, 0.0, 1.0);
         tremorEffects = b.comment("Which light tremors you feel: all of them; in full only those that topple something near you, with one in",
                 "three of the rest felt faintly; or none (big quakes still shake).").defineEnum("tremorEffects", TremorEffects.WHERE_BLOCKS_FALL);
+        b.pop();
+        b.push("runes");
+        runeShake = b.comment("Shake the view a little when a rune blast, a wall slam or a stagger goes off near you, and kick it when your own",
+                "hit lands (scaled by the game's Distortion Effects setting).").define("runeShake", true);
         b.pop();
     }
 }

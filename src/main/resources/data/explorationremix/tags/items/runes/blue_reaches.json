@@ -1,0 +1,12 @@
+{
+  "replace": false,
+  "values": [
+    "explorationremix:rune_field",
+    "explorationremix:rune_reel",
+    "explorationremix:rune_seek",
+    "explorationremix:rune_pierce",
+    "explorationremix:rune_on_hit",
+    "explorationremix:rune_after",
+    "explorationremix:rune_fan"
+  ]
+}

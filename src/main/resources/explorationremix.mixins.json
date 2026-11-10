@@ -10,6 +10,8 @@
     "accessor.NoiseBasedChunkGeneratorAccessor",
     "accessor.SurfaceContextAccessor",
     "accessor.MultiNoiseBiomeSourceAccessor",
+    "accessor.ProjectileAccessor",
+    "accessor.ServerGamePacketListenerAccessor",
     "MinecraftServerMixin",
     "NoiseBasedChunkGeneratorMixin",
     "BiomeSourceMixin",
@@ -24,11 +26,16 @@
     "BiomeFilterMixin",
     "PortalShapeMixin",
     "BaseFireBlockMixin",
-    "LevelChunkMixin"
+    "LevelChunkMixin",
+    "rune.ItemStackRuneMixin",
+    "rune.FurnaceRuneMixin",
+    "rune.ArrowPassByMixin",
+    "LivingImmobileMixin"
   ],
   "client": [
     "client.LightTextureMixin",
-    "client.DimensionSpecialEffectsMixin"
+    "client.DimensionSpecialEffectsMixin",
+    "client.RuneHandRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
