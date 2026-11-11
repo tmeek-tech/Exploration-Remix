@@ -9,8 +9,8 @@ import java.util.Objects;
  *
  * <p>The light lies on the item's own texels: each face the item is drawn with is cut into the squares of the texture
  * pixels it shows, and only the opaque ones are kept, so the light has the sword's own pixel edges, flat or 3D. It runs
- * from the guard (or, with no guard, from the hand) to the tip: a bright band up the blade, the tip flaring as it gets
- * there, then a short afterglow that fades to nothing.
+ * over the whole sword (Taran, 14:45 the same day), from the end in the hand to the tip: a bright band up it, the tip
+ * flaring as it gets there, then a short afterglow that fades to nothing.
  */
 public final class BladeLight {
     private BladeLight() {}
@@ -103,16 +103,15 @@ public final class BladeLight {
 
     private static int clamp(int v, int lo, int hi) { return v < lo ? lo : Math.min(v, hi); }
 
-    // ------------------------------------------------------------------------------------------------ the blade's run
+    // ------------------------------------------------------------------------------------------------ the sword's run
 
-    /** Where the light runs: each cell's place along the blade (0 where it starts, 1 at the tip; -1 unlit) and its length. */
+    /** Where the light runs: each cell's place along the sword (0 at the end in the hand, 1 at the tip) and its length. */
     public record Run(float[] along, float texels) {}
 
     /**
      * The way the light runs over cells whose middles are given in the hand's space (the hand at the origin), a texel
-     * being about {@code texel} long there. The blade's line is the cells' longest spread; the tip is the end away from
-     * the hand. A guard is a short stretch in the lower part much wider than the blade above it: the light starts just
-     * past it, and with none, at the hand. Cells before the start (the grip, the guard) stay dark.
+     * being about {@code texel} long there: along the cells' longest spread, over the whole sword, from the end the hand
+     * is nearer (the pommel) to the far end (the tip).
      */
     public static Run run(float[] mid, int n, float texel) {
         float[] along = new float[n];
@@ -150,64 +149,27 @@ public final class BladeLight {
             ay = ny / len;
             az = nz / len;
         }
-        float[] t = new float[n], r = new float[n];
+        float[] t = new float[n];
         float lo = Float.MAX_VALUE, hi = -Float.MAX_VALUE;
         for (int i = 0; i < n; i++) {
-            double dx = mid[i * 3] - mx, dy = mid[i * 3 + 1] - my, dz = mid[i * 3 + 2] - mz;
-            double ti = dx * ax + dy * ay + dz * az;
-            double px = dx - ti * ax, py = dy - ti * ay, pz = dz - ti * az;
-            t[i] = (float) ti;
-            r[i] = (float) Math.sqrt(px * px + py * py + pz * pz);
-        }
-        // the hand's end first
-        float hand = (float) (-mx * ax - my * ay - mz * az);
-        for (int i = 0; i < n; i++) {
+            t[i] = (float) ((mid[i * 3] - mx) * ax + (mid[i * 3 + 1] - my) * ay + (mid[i * 3 + 2] - mz) * az);
             lo = Math.min(lo, t[i]);
             hi = Math.max(hi, t[i]);
         }
+        // the hand's end first
+        float hand = (float) (-mx * ax - my * ay - mz * az);
         if (hand > (lo + hi) * 0.5F) {
             for (int i = 0; i < n; i++) t[i] = -t[i];
-            hand = -hand;
             float l = lo;
             lo = -hi;
             hi = -l;
         }
-        if (hi - lo < texel) {
-            Arrays.fill(along, -1);
-            return new Run(along, 0);
-        }
-        // the width of each texel-long stretch from the hand's end
-        int bins = (int) Math.ceil((hi - lo) / texel) + 1;
-        float[] wide = new float[bins];
-        for (int i = 0; i < n; i++) {
-            int b = Math.min(bins - 1, (int) ((t[i] - lo) / texel));
-            wide[b] = Math.max(wide[b], r[i]);
-        }
-        float[] upper = new float[bins];
-        int u = 0;
-        for (int b = (int) Math.ceil(bins * 0.6F); b < bins; b++) if (wide[b] > 0) upper[u++] = wide[b];
-        float blade = 0;
-        if (u > 0) {
-            Arrays.sort(upper, 0, u);
-            blade = upper[u / 2];
-        }
-        float guardWide = Math.max(blade * 1.8F, blade + 1.5F * texel);
-        int guard = -1, past = -1;
-        for (int b = 0; b < bins * 0.6F; b++) {
-            if (wide[b] >= guardWide) {
-                if (guard < 0) guard = b;
-                past = b + 1;
-            } else if (guard >= 0) {
-                break;
-            }
-        }
-        float start = guard >= 0 ? lo + past * texel : Math.min(Math.max(hand, lo), lo + 0.6F * (hi - lo));
-        float span = hi - start;
+        float span = hi - lo;
         if (span < texel) {
             Arrays.fill(along, -1);
             return new Run(along, 0);
         }
-        for (int i = 0; i < n; i++) along[i] = t[i] >= start - 1.0E-4F ? Math.min(1.0F, (t[i] - start) / span) : -1;
+        for (int i = 0; i < n; i++) along[i] = Math.min(1.0F, Math.max(0.0F, (t[i] - lo) / span));
         return new Run(along, span / texel);
     }
 
@@ -215,19 +177,19 @@ public final class BladeLight {
 
     /** Ticks the light lasts, all told. */
     public static final float END = 26.0F;
-    /** Ticks the band takes to run from just below its start to just past the tip. */
+    /** Ticks the band takes to run from just below the pommel to just past the tip. */
     static final float SWEEP = 9.0F;
-    /** Texels of the band's tail; of the band before and past the blade; of the tip that flares. */
+    /** Texels of the band's tail; of the band before and past the sword; of the tip that flares. */
     static final float TAIL = 2.5F, BEFORE = 2.0F, PAST = 3.0F, TIP = 2.0F;
     /** The afterglow's strength, and when it starts to fade. */
     static final float AFTER = 0.3F, AFTER_FADE = 12.0F;
     /** How long the tip's flare takes to die down (ticks). */
     static final float FLARE = 4.0F;
 
-    /** Where the band's front is ({@code texels} from the start) at tick {@code t}, on a blade {@code len} texels long. */
+    /** Where the band's front is ({@code texels} from the start) at tick {@code t}, on a sword {@code len} texels long. */
     static float front(float t, float len) { return smooth(0.0F, SWEEP, t) * (len + BEFORE + PAST) - BEFORE; }
 
-    /** When the band's front reaches the tip of a blade {@code len} texels long. */
+    /** When the band's front reaches the tip of a sword {@code len} texels long. */
     static float tipAt(float len) {
         float y = (len + BEFORE) / (len + BEFORE + PAST);
         // the inverse of smoothstep
@@ -236,7 +198,7 @@ public final class BladeLight {
     }
 
     /**
-     * How bright the light is at tick {@code t} of its play, {@code x} texels along a blade {@code len} long; and in
+     * How bright the light is at tick {@code t} of its play, {@code x} texels along a sword {@code len} long; and in
      * {@code white[0]}, how near white it burns there (the band and the flare burn whitest).
      */
     public static float light(float x, float len, float t, float[] white) {

@@ -329,8 +329,8 @@ public final class DevShots {
     }
 
     /**
-     * What the player does, for testing gear in the game: "! press use|attack|runes|inventory" (one click of that
-     * key), "! hold use|attack" and "! release use|attack" (keep it held down until released), "! slot n" (hotbar slot
+     * What the player does, for testing gear in the game: "! press use|attack|cast|runes|inventory" (one click of that
+     * key), "! hold use|attack|cast" and "! release use|attack|cast" (keep it held down until released), "! slot n" (hotbar slot
      * 0 to 8), "! look yaw pitch", "! gui on|off" (the hotbar and HUD), "! view first|third|front" (the camera),
      * "! swing light|strong combo tau" (the player's own timed swing held still tau ticks in; "! swing off" lets go),
      * "! glow tick" (the ready light on the sword in hand held still that many ticks into its play; "! glow off" lets go),
@@ -346,6 +346,7 @@ public final class DevShots {
                     case "use" -> mc.options.keyUse;
                     case "attack" -> mc.options.keyAttack;
                     case "inventory" -> mc.options.keyInventory;
+                    case "cast" -> com.explorationremix.client.rune.RuneKeys.CAST;
                     case "runes" -> com.explorationremix.client.rune.RuneKeys.OPEN;
                     default -> null;
                 };

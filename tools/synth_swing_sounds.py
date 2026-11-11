@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Makes the timed swings' sounds from scratch (0.12.0; no recordings): a light swing's quick whoosh, the chain's chop
 (lower and heavier), a strong attack's thrust (sharp, with a thin ring of steel), the rising hum as a held swing turns
-strong, and the hunters' wind-ups: half a second that swells into the strike (the Mossback's throaty intake and growl,
-the Skein's clicks running faster and faster), so the strike can be timed by ear. Built from tones and filtered noise
-with the helpers in synth_sounds.py. Deterministic. (A rune sword's ready light plays silently: Taran, 2026-11-11.)
+strong, the quiet shimmer and note of a rune sword's ready light (0.12.2: subtler than 0.12.0's chime, which 0.12.1
+dropped), and the hunters' wind-ups: half a second that swells into the strike (the Mossback's throaty intake and
+growl, the Skein's clicks running faster and faster), so the strike can be timed by ear. Built from tones and filtered
+noise with the helpers in synth_sounds.py. Deterministic.
 
-Needs numpy and ffmpeg with libvorbis. Writes src/main/resources/assets/explorationremix/sounds/swing/*.ogg and
-sounds/creature/<who>/windup*.ogg (tools/sounds.py lists them in sounds.json).
-Run from anywhere: python3 tools/synth_swing_sounds.py
+Needs numpy and ffmpeg with libvorbis. Writes src/main/resources/assets/explorationremix/sounds/swing/*.ogg,
+sounds/runes/*.ogg and sounds/creature/<who>/windup*.ogg (tools/sounds.py lists them in sounds.json).
+Run from anywhere: python3 tools/synth_swing_sounds.py [folder ...] (only those sets, e.g. "runes")
 """
 import os, sys
 import numpy as np
@@ -100,6 +101,28 @@ def charge(rng):
     return S.normalize_peak(S.fade_edges(x, 0.004), -6.0)
 
 
+def ready(rng, note):
+    """A rune sword's ready light (Taran, 2026-11-11 14:45: a sound again, subtler than the old chime): a faint, airy
+    shimmer rising with the light as it runs up the sword, then one soft, round note as it reaches the tip (a third of a
+    second in), dying away. Near-harmonic partials and a slow onset keep it from ringing like glass."""
+    dur = 1.2
+    n = secs(dur)
+    t = np.arange(n) / SR
+    tip = 0.34
+    k = np.clip(t / tip, 0, 1)
+    shimmer = sweep_band(rng.standard_normal(n), 2000 + 3000 * k, 2.5)
+    shimmer *= k ** 1.5 * np.exp(-np.maximum(0, t - tip) / 0.06) * 0.12
+    tt = np.maximum(0, t - tip)
+    bell = np.zeros(n)
+    for ratio, amp, decay in ((1.0, 1.0, 0.4), (2.0, 0.15, 0.18), (3.01, 0.04, 0.1)):
+        bell += amp * np.sin(2 * np.pi * note * ratio * tt) * np.exp(-tt / decay)
+    bell *= (t >= tip) * np.minimum(1, tt / 0.02)
+    x = bell + shimmer
+    wet = S.convolve(x, S.reverb_ir(0.9, rng, 0.3, lp=4000))[:n]
+    x = S.filt(x + 0.3 * wet, S.lowpass(5000, 2))
+    return S.normalize_peak(S.fade_edges(x, 0.004), -14.0)
+
+
 def mossback_windup(rng):
     """Half a second: a throaty intake rising into a growl that swells to the snap (the bite follows it)."""
     dur = 0.5
@@ -143,18 +166,25 @@ SETS = [
     ("swing", "heavy", heavy, 2, 4200),
     ("swing", "thrust", thrust, 2, 4300),
     ("swing", "charge", charge, 2, 4400),
+    ("runes", "ready", ready, 2, 4500),
     ("creature/mossback", "windup", mossback_windup, 2, 4600),
     ("creature/skein", "windup", skein_windup, 2, 4700),
 ]
 
 
-def main():
+# the ready light's note, clear but not piercing: B5, then A5
+READY_NOTES = (987.8, 880.0)
+
+
+def main(only):
     for folder, name, maker, count, base in SETS:
+        if only and folder not in only:
+            continue
         S.OUT = os.path.join(SOUNDS, folder)
         for i in range(count):
             rng = np.random.default_rng(base + i)
-            S.save(f"{name}{i + 1}", maker(rng))
+            S.save(f"{name}{i + 1}", ready(rng, READY_NOTES[i]) if maker is ready else maker(rng))
 
 
 if __name__ == "__main__":
-    main()
+    main(set(sys.argv[1:]))

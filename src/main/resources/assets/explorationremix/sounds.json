@@ -626,6 +626,21 @@
     ],
     "subtitle": "subtitles.explorationremix.swing.charge"
   },
+  "runes.ready": {
+    "sounds": [
+      {
+        "name": "explorationremix:runes/ready1",
+        "volume": 0.8,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:runes/ready2",
+        "volume": 0.8,
+        "attenuation_distance": 12
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.runes.ready"
+  },
   "mossback.windup": {
     "sounds": [
       {

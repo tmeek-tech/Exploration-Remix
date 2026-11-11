@@ -7,8 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The rune sword's ready light (Taran, 2026-11-11 13:20): it lies on the sword's own texels and nowhere else, runs from
- * just past the guard (or the hand, with no guard) to the tip, plays once per recharge and is gone after.
+ * The rune sword's ready light (Taran, 2026-11-11 13:20 and 14:45): it lies on the sword's own texels and nowhere else,
+ * runs over the whole sword from the end in the hand to the tip, plays once per recharge and is gone after.
  */
 class BladeLightTest {
     /** Vanilla's sword outline (every vanilla sword has it): '.' clear, anything else opaque. Row 0 is the top. */
@@ -104,29 +104,29 @@ class BladeLightTest {
     }
 
     @Test
-    void aVanillaSwordLightsFromJustPastTheGuardToTheTip() {
+    void aVanillaSwordLightsWhollyFromThePommelToTheTip() {
         BladeLight.Cells[] faces = swordFaces();
         // held by the grip, a little above the pommel
         float[] mid = middles(faces, 2.5F / 16, 1 - 13.5F / 16, 0.5F);
         int n = faces[0].count + faces[1].count;
         BladeLight.Run run = BladeLight.run(mid, n, 1.0F / 16);
-        assertTrue(run.texels() > 10 && run.texels() < 15, "the blade's length: " + run.texels());
-        float tip = -1, handle = 0, guardEnd = 0;
-        float lowBlade = -1, highBlade = -1;
+        assertTrue(run.texels() > 18 && run.texels() < 24, "the whole sword's length, corner to corner: " + run.texels());
+        for (int i = 0; i < n; i++) assertTrue(run.along()[i] >= 0, "every texel is lit, grip and guard too");
+        float pommel = -1, grip = -1, guard = -1, low = -1, high = -1, tip = -1;
         for (int i = 0; i < faces[0].count; i++) {
             int[] t = texel(faces[0], i);
             float a = run.along()[i];
+            if (t[0] == 0 && t[1] == 15) pommel = a;
+            if (t[0] == 3 && t[1] == 12) grip = a;
+            if (t[0] == 5 && t[1] == 10) guard = a;
+            if (t[0] == 8 && t[1] == 7) low = a;
+            if (t[0] == 12 && t[1] == 3) high = a;
             if (t[0] == 15 && t[1] == 0) tip = a;
-            if (t[0] <= 3 && t[1] >= 13) handle = Math.max(handle, a + 1);
-            if ((t[0] == 2 && t[1] == 6) || (t[0] == 9 && t[1] == 13)) guardEnd = Math.max(guardEnd, a + 1);
-            if (t[0] == 8 && t[1] == 7) lowBlade = a;
-            if (t[0] == 12 && t[1] == 3) highBlade = a;
         }
-        assertEquals(1.0F, tip, 0.08F, "the tip is the light's far end");
-        assertEquals(0.0F, handle, "the grip and pommel stay dark");
-        assertEquals(0.0F, guardEnd, "the guard's arms stay dark");
-        assertTrue(lowBlade >= 0 && lowBlade < 0.3F, "the blade's foot is lit early: " + lowBlade);
-        assertTrue(highBlade > lowBlade + 0.25F, "and the light climbs to the tip: " + lowBlade + " then " + highBlade);
+        assertEquals(0.0F, pommel, 0.05F, "the pommel is the light's start");
+        assertEquals(1.0F, tip, 0.05F, "the tip its far end");
+        assertTrue(pommel < grip && grip < guard && guard < low && low < high && high < tip,
+                "the light climbs pommel, grip, guard, blade, tip: " + pommel + " " + grip + " " + guard + " " + low + " " + high + " " + tip);
         // the back face lights the same texels the same way
         for (int i = 0; i < faces[1].count; i++) {
             float bx = faces[1].middles[i * 3], by = faces[1].middles[i * 3 + 1];
@@ -139,7 +139,7 @@ class BladeLightTest {
     }
 
     @Test
-    void aSwordWithNoGuardLightsFromTheHand() {
+    void aTubeLightsEndToEndFromTheHand() {
         // Create's cardboard sword: a square tube 4 pixels across and 32 long, held 3 pixels from its bottom end
         BladeLight.Pixels solid = (x, y) -> 0xFF000000;
         float lo = 6 / 16F, hi = 10 / 16F, bottom = -8 / 16F, top = 24 / 16F;
@@ -150,20 +150,17 @@ class BladeLightTest {
                 BladeLight.cut(new float[]{hi, top, lo, hi, bottom, lo, lo, bottom, lo, lo, top, lo}, st, 4, 32, solid),
                 BladeLight.cut(new float[]{lo, top, hi, lo, bottom, hi, hi, bottom, hi, hi, top, hi}, st, 4, 32, solid),
         };
-        float handY = -5 / 16F;
-        float[] mid = middles(faces, 0.5F, handY, 0.5F);
+        float[] mid = middles(faces, 0.5F, -5 / 16F, 0.5F);
         int n = 4 * 4 * 32;
         BladeLight.Run run = BladeLight.run(mid, n, 1.0F / 16);
         int k = 0;
         for (BladeLight.Cells f : faces) {
             for (int i = 0; i < f.count; i++, k++) {
-                float y = f.middles[i * 3 + 1];
-                if (y < handY - 1.0F / 16) assertEquals(-1.0F, run.along()[k], "below the hand: dark");
-                if (y > handY + 1.0F / 16) assertTrue(run.along()[k] > 0, "above the hand: lit");
-                if (y > top - 1.0F / 16) assertEquals(1.0F, run.along()[k], 0.05F, "the top end is the tip");
+                float y = f.middles[i * 3 + 1], a = run.along()[k];
+                assertEquals((y - (bottom + 0.5F / 16)) / (top - bottom - 1.0F / 16), a, 1.0E-3F, "lit in step from the bottom end up");
             }
         }
-        assertEquals(28.5F, run.texels(), 1.0F);
+        assertEquals(31.0F, run.texels(), 0.01F);
     }
 
     @Test

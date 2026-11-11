@@ -1,7 +1,7 @@
 package com.explorationremix.rune.engine;
 
 /**
- * The kinds of gear that carry a rune row: the weapons, which only ever cast when the player makes them (a right-click,
+ * The kinds of gear that carry a rune row: the weapons, which only ever cast when the player makes them (the cast key,
  * a loosed arrow). The rules never change between them; what changes is when the gear casts, where from, how it fills
  * up, and how many slots wake at each depth. There is no wand (the sword does that job) and shields never cast. Armor
  * will carry runes of its own, a different set from these.

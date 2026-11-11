@@ -5,7 +5,7 @@ the pack's own caves, sealed from each other by unbreakable bands with natural g
 and Create stone and dressed to match a set of reference pictures. Made for a pack with Tectonic, Terrain Slabs,
 Immersive Weathering and Create (not Better Combat, which replaces the same attack as the timed swings).
 
-**Status: 0.12.1: milestone 1's world generation and cave looks, the cave hunters, stage 1 of the rune overhaul
+**Status: 0.12.2: milestone 1's world generation and cave looks, the cave hunters, stage 1 of the rune overhaul
 (rune rows on swords, bows and crossbows; see [Runes](#runes)) and timed swings for swords and axes (see
 [Swords and axes](#swords-and-axes)).** The first build's runs were removed (git history keeps them); they return in
 later milestones, built on these caves.
@@ -144,11 +144,11 @@ regenerated.
 ## Runes
 
 Runes are items set into a row on a sword, bow or crossbow. A row reads in speaking order, carrier first: `Spark, On
-hit, Burst` is a spark that bursts where it hits, and `Fan` copies whatever follows it. A sword casts on right-click
-and again each time it is ready while the button is held; a bow or crossbow casts with a full shot, its arrow the
-first carrier. Each cast is paid from the gear's energy in full or not at all; full-strength sword hits on creatures
+hit, Burst` is a spark that bursts where it hits, and `Fan` copies whatever follows it. A sword casts on the cast key
+(**R** by default) and again each time it is ready while the key is held; right click stays the game's own (a shield
+in the other hand blocks). A bow or crossbow casts with a full shot, its arrow the first carrier. Each cast is paid from the gear's energy in full or not at all; full-strength sword hits on creatures
 fighting you charge the sword, and Siphon knocks loose white motes that refill it. Slots wake as a run goes deeper.
-Press **R** with the gear in hand, once nothing has hurt you for 5 seconds, to edit the row; a rune that does nothing
+Press **K** with the gear in hand, once nothing has hurt you for 5 seconds, to edit the row; a rune that does nothing
 is grey and says why. The creative tab **Runes** holds every rune. Limits and who runes may touch (other players
 only with `runesHurtPlayers` on) are in the server config `explorationremix-runes.toml`.
 
@@ -172,8 +172,9 @@ press (an axe's 0.7), lunges about a block and a half and strikes everything in 
 attack that lands while a Mossback or a Skein rears to strike stops the strike and leaves it reeling. Marks under the
 crosshair show the chain and the cooldown. A press on a block the weapon is meant for (an axe on wood, a sword on a
 cobweb) with nothing in reach mines it as ever. When a runed sword gets back the energy for its next cast, a pale
-blue-white light runs up its blade's own pixels from the guard to the tip, once, and fades (silently; under shader packs
-too, and on swords drawn by their own renderer, such as Create's cardboard sword).
+blue-white light runs over the whole sword's own pixels from the pommel to the tip, once, and fades, with a quiet
+shimmer and a soft note in your own hands (under shader packs too, and on swords drawn by their own renderer, such as
+Create's cardboard sword).
 
 ## Commands
 

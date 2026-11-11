@@ -32,6 +32,8 @@ final class Caster {
     final ReleaseQueue<Executor.Pending> queue = new ReleaseQueue<>();
 
     final Hand main = new Hand(), off = new Hand();
+    /** The cast key is down: the runed sword in hand casts each time it is ready. */
+    boolean castHeld;
 
     final List<Dashes.Dash> dashes = new ArrayList<>();
     boolean airDashUsed;

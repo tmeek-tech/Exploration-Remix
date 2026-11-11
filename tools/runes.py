@@ -103,7 +103,8 @@ ENTITIES = {"rune_bolt": "Rune Bolt", "rune_field": "Rune Field", "rune_mote": "
 LANG = {
     f"itemGroup.{MOD}.runes": "Runes",
     f"container.{MOD}.rune_editor": "Runes",
-    f"key.{MOD}.runes": "Open the rune screen",
+    f"key.{MOD}.cast_runes": "Cast runes",
+    f"key.{MOD}.rune_screen": "Open the rune screen",
     f"key.categories.{MOD}": "Exploration Remix",
     f"rune.{MOD}.kind.action": "Action",
     f"rune.{MOD}.kind.modifier": "Modifier",

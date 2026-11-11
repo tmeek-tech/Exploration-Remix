@@ -2,6 +2,7 @@ package com.explorationremix.rune.net;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.rune.RunDepth;
+import com.explorationremix.rune.cast.CastService;
 import com.explorationremix.rune.cast.Grapples;
 import com.explorationremix.rune.cast.LocalPull;
 import com.explorationremix.rune.cast.Pull;
@@ -21,13 +22,13 @@ import java.util.function.Supplier;
 /**
  * The runes' channel, {@code explorationremix:runes}. Small on purpose: the gear carries its own row and energy (sent
  * as item data, like any item change), the rune screen is a vanilla menu, and bolts, fields and motes are entities.
- * Only these need words of their own: the run depth (server to client), "open the rune screen" (client to server,
- * which the server is free to refuse), Reel's pull on a player (the server starts it and may stop it, the player's own
+ * Only these need words of their own: the run depth (server to client), the cast key going down and up and "open
+ * the rune screen" (client to server, which the server is free to refuse), Reel's pull on a player (the server starts it and may stop it, the player's own
  * game steers it and says when it is done), and effects: one small message per flash, blast or slam, which each nearby
  * client turns into its own particles, rings and shake.
  */
 public final class RuneNet {
-    private static final String VERSION = "3";
+    private static final String VERSION = "4";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(new ResourceLocation(ExplorationRemix.MOD_ID, "runes"),
             () -> VERSION, VERSION::equals, VERSION::equals);
 
@@ -47,6 +48,8 @@ public final class RuneNet {
                 .encoder(PullDone::write).decoder(PullDone::read).consumerMainThread(PullDone::handle).add();
         CHANNEL.messageBuilder(FxMsg.class, 5, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(FxMsg::write).decoder(FxMsg::read).consumerMainThread(FxMsg::handle).add();
+        CHANNEL.messageBuilder(CastKey.class, 6, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(CastKey::write).decoder(CastKey::read).consumerMainThread(CastKey::handle).add();
     }
 
     /** An effect to draw ({@link Fx}); null when it was of a kind this game doesn't know. */
@@ -69,7 +72,22 @@ public final class RuneNet {
         void handle(Supplier<NetworkEvent.Context> ctx) { RunDepth.acceptClient(depth); }
     }
 
-    /** The rune key was pressed: open the rune screen if the player may (out of combat). */
+    /**
+     * The cast key went down (the runed sword in hand casts now, and again each time it is ready) or came up (no more).
+     * The server decides every cast, as ever.
+     */
+    public record CastKey(boolean down) {
+        void write(FriendlyByteBuf b) { b.writeBoolean(down); }
+
+        static CastKey read(FriendlyByteBuf b) { return new CastKey(b.readBoolean()); }
+
+        void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p != null) CastService.castKey(p, down);
+        }
+    }
+
+    /** The rune screen key was pressed: open the rune screen if the player may (out of combat). */
     public record OpenEditor() {
         void write(FriendlyByteBuf b) {}
 

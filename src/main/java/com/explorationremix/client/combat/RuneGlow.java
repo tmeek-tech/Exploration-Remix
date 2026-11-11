@@ -2,6 +2,7 @@ package com.explorationremix.client.combat;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.client.rune.fx.GlowRender;
+import com.explorationremix.registry.ERSounds;
 import com.explorationremix.rune.RunDepth;
 import com.explorationremix.rune.RuneConfig;
 import com.explorationremix.rune.RuneGear;
@@ -27,6 +28,7 @@ import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.Direction;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
@@ -58,16 +60,17 @@ import java.util.WeakHashMap;
 
 /**
  * A rune sword's light when it comes back to enough energy for its next cast (Taran, 2026-11-11: pale blue-white on
- * every sword; 13:20 the same day: on the blade's own pixels, played once per recharge, no sound, and working under
- * shaders). A band of light runs up the blade from just past the guard to the tip, the tip flares, and an afterglow
- * fades away, about a second and a third in all; it does not come back until the sword has run short and refilled.
- * BladeLight holds the shape and timing; this draws it.
+ * every sword; 13:20 the same day: on the sword's own pixels, played once per recharge, and working under shaders;
+ * 14:45: over the whole sword, and with a sound after all, subtler than 0.12.0's chime). A band of light runs up the
+ * sword from the pommel to the tip, the tip flares, and an afterglow fades away, about a second and a third in all;
+ * your own sword also makes a faint shimmer that ends in a soft note as the tip flares. It does not come back until the
+ * sword has run short and refilled. BladeLight holds the shape and timing; this draws it.
  *
  * <p>The light lies on what is actually drawn for the item: the faces of its model (or, for an item with its own
  * renderer such as Create's cardboard sword, the faces that renderer sends through ItemRenderer.renderQuadList), cut
  * into the texels they show. In first person, and in third person under a shader pack, it is drawn once the world is
  * finished (after the shader pack's last pass, which would otherwise paint its reflections over it), against the depth
- * the world left behind, with the same projection the sword was drawn with, so whatever covered the blade still covers
+ * the world left behind, with the same projection the sword was drawn with, so whatever covered the sword still covers
  * the light. Without a shader pack, a sword seen from outside gets its light among the world's own buffers.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
@@ -124,7 +127,12 @@ public final class RuneGlow {
                 long key = key(p.getId(), hand);
                 SEEN_NOW.add(key);
                 Object held = p == mc.player && hand == InteractionHand.MAIN_HAND ? new Held(stack.getItem(), p.getInventory().selected) : stack.getItem();
-                TRIGGERS.computeIfAbsent(key, k -> new BladeLight.Trigger()).update(held, readiness(stack, now), clock);
+                boolean starts = TRIGGERS.computeIfAbsent(key, k -> new BladeLight.Trigger()).update(held, readiness(stack, now), clock);
+                // only your own swords are heard (runes.ready: a quiet shimmer, and a soft note as the tip flares)
+                if (starts && p == mc.player) {
+                    mc.level.playLocalSound(p.getX(), p.getEyeY(), p.getZ(), ERSounds.RUNES_READY.get(), SoundSource.PLAYERS, 0.5F,
+                            0.97F + p.getRandom().nextFloat() * 0.06F, false);
+                }
             }
         }
         TRIGGERS.keySet().retainAll(SEEN_NOW);
@@ -413,7 +421,7 @@ public final class RuneGlow {
     /**
      * The kept lights, added onto the screen against the depth left there, each with the projection and view its sword
      * was drawn with (a hand's own, under a shader pack squeezed in depth as it was), nudged towards the eye so it wins
-     * against the blade it lies on.
+     * against the sword it lies on.
      */
     private static void flush() {
         if (PENDING.isEmpty()) return;
