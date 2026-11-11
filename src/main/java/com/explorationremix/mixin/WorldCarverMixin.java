@@ -3,6 +3,8 @@ package com.explorationremix.mixin;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.gen.DeepMaterials;
 import com.explorationremix.world.terrain.Entrances;
+import com.explorationremix.world.terrain.UpperShapes;
+import net.minecraft.world.level.levelgen.carver.CaveWorldCarver;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -21,7 +23,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * over the old floor) with lava, past the aquifer; in the deepened overworld they ask the aquifer instead, which gives
  * water there (see {@link NoiseBasedAquiferMixin}), or air where the deep world keeps the caves dry, as round the first
  * gate. The carvers also leave the rock that holds an entrance's water (see {@link Entrances#seals}), so no tunnel
- * hangs a pool over its air.
+ * hangs a pool over its air. Where the Upper Caves grow from noise ({@link UpperShapes}), the cave carver's worm tunnels
+ * stay out of them above the old floor (unless the config keeps them).
  */
 @Mixin(WorldCarver.class)
 public abstract class WorldCarverMixin {
@@ -30,6 +33,13 @@ public abstract class WorldCarverMixin {
         if (!DeepWorld.installed() || ctx.getMinGenY() != DeepWorld.floorY()) return;
         Entrances e = DeepWorld.entrances();
         if (e != null && e.seals(pos.getX(), pos.getY(), pos.getZ()) && e.carve(pos.getX(), pos.getY(), pos.getZ()) > 0) cir.setReturnValue(null);
+        UpperShapes s = DeepWorld.shapes();
+        if (s != null && pos.getY() >= DeepWorld.packFloor()) {
+            // Where the Upper Caves grow from noise their looping tunnels replace vanilla's worm tunnels, which end blind
+            // (the canyons stay), and no carver cuts a root, icicle or stalactite loose.
+            if (!s.wormTunnels && (Object) this instanceof CaveWorldCarver) cir.setReturnValue(null);
+            else if (s.formation(pos.getX(), pos.getY(), pos.getZ()) != 0) cir.setReturnValue(null);
+        }
     }
 
     @Inject(method = "getCarveState", at = @At("RETURN"), cancellable = true)

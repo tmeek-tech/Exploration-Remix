@@ -667,22 +667,31 @@ public final class Palette {
             if (n < 0.04) return Rock.ASURINE;
             return n > 0.38 ? Rock.COBBLED_DEEPSLATE : Rock.DEEPSLATE;
         }
-        if (b == DeepBiome.IVORY_ROOT_CAVERN) {
-            // Pale limestone and calcite over deepslate, a pale shore around the turquoise lake.
-            double lake = t.upperLakeY(x, z);
-            if (floor) {
-                if (wet) return n > 0.18 ? Rock.STONE : (n < -0.22 ? Rock.LIMESTONE : Rock.CALCITE);
-                if (top && y <= lake + 1) return Rock.CALCITE;
-                return n > 0.26 ? Rock.CALCITE : Rock.LIMESTONE;
-            }
-            double line = lake + 6 + 6 * wobN.noise2(x * 0.021, z * 0.021);
-            if (y < line) return vein(x, y, z, 0.024) ? Rock.IRON_ORE : Rock.STONE;
-            if (ceil && n < -0.3) return Rock.DRIPSTONE;
-            if (vein(x, y, z, 0.02)) return Rock.IRON_ORE;
-            if (seam(x, y, z)) return Rock.CALCITE;
-            return n > 0.24 ? Rock.CALCITE : Rock.LIMESTONE;
-        }
+        if (b == DeepBiome.IVORY_ROOT_CAVERN) return ivory(x, y, z, above, below, wet, t.upperLakeY(x, z));
         return null;
+    }
+
+    /**
+     * The Ivory Root Cavern's rock round a lake (or a hall's lowest terrace) at {@code lake}: pale limestone and calcite,
+     * plain stone low on the walls, dripstone in the ceilings.
+     */
+    public Rock ivory(int x, int y, int z, int above, int below, boolean wet, double lake) {
+        double n = patch(x, y, z);
+        boolean top = above <= 1;
+        boolean floor = above <= 3;
+        boolean ceil = !floor && below <= 2;
+        // Pale limestone and calcite over deepslate, a pale shore around the turquoise lake.
+        if (floor) {
+            if (wet) return n > 0.18 ? Rock.STONE : (n < -0.22 ? Rock.LIMESTONE : Rock.CALCITE);
+            if (top && y <= lake + 1) return Rock.CALCITE;
+            return n > 0.26 ? Rock.CALCITE : Rock.LIMESTONE;
+        }
+        double line = lake + 6 + 6 * wobN.noise2(x * 0.021, z * 0.021);
+        if (y < line) return vein(x, y, z, 0.024) ? Rock.IRON_ORE : Rock.STONE;
+        if (ceil && n < -0.3) return Rock.DRIPSTONE;
+        if (vein(x, y, z, 0.02)) return Rock.IRON_ORE;
+        if (seam(x, y, z)) return Rock.CALCITE;
+        return n > 0.24 ? Rock.CALCITE : Rock.LIMESTONE;
     }
 
     // ============================================================================================== entrances

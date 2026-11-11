@@ -2,6 +2,7 @@ package com.explorationremix.world.density;
 
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.Entrances;
+import com.explorationremix.world.terrain.UpperShapes;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.world.level.levelgen.DensityFunction;
@@ -10,7 +11,9 @@ import net.minecraft.world.level.levelgen.DensityFunction;
  * Rock the pack's own caves may not open: a bowl around the water of each entrance's chamber (see
  * {@link Entrances#seals}), so its pools and streams never drain into a cave beside or below them. Combined with the
  * pack's density through {@code max}, before {@link UpperCarve}'s {@code min} opens the chamber itself again. Not
- * interpolated: it is exact per block, and {@code max} only asks it where the pack's density is below 1.
+ * interpolated: it is exact per block, and {@code max} only asks it where the pack's density is below 1. Where the Upper
+ * Caves grow from noise, the noise shapes' roots, icicles and stalactites instead ({@link UpperShapes#seals}), so the
+ * pack's caves never cut them loose; their water is left free to spill into the pack's caves.
  */
 public final class UpperSeal implements DensityFunction {
     public static final UpperSeal INSTANCE = new UpperSeal();
@@ -23,7 +26,9 @@ public final class UpperSeal implements DensityFunction {
     @Override
     public double compute(FunctionContext ctx) {
         Entrances e = DeepWorld.entrances();
-        return e != null && e.seals(ctx.blockX(), ctx.blockY(), ctx.blockZ()) ? 1.0 : NONE;
+        if (e != null) return e.seals(ctx.blockX(), ctx.blockY(), ctx.blockZ()) ? 1.0 : NONE;
+        UpperShapes s = DeepWorld.shapes();
+        return s != null && s.seals(ctx.blockX(), ctx.blockY(), ctx.blockZ()) ? 1.0 : NONE;
     }
 
     @Override

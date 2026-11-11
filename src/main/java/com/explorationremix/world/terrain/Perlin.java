@@ -89,6 +89,49 @@ public final class Perlin {
                 lerp(u, grad2(p[a + 1], fx, fz - 1), grad2(p[b + 1], fx - 1, fz - 1)));
     }
 
+    /**
+     * {@link #noise2} with its gradient: the value, and {@code d[0]} and {@code d[1]} set to its slope along x and z (per
+     * unit of the noise's own coordinates). Used where a shape needs the distance to a zero line, |f| / |grad f|.
+     */
+    public double noise2(double x, double z, double[] d) {
+        x += ox; z += oz;
+        int X = floor(x), Z = floor(z);
+        double fx = x - X, fz = z - Z;
+        X &= 255; Z &= 255;
+        double u = fade(fx), v = fade(fz);
+        double du = 30 * fx * fx * (fx - 1) * (fx - 1), dv = 30 * fz * fz * (fz - 1) * (fz - 1);
+        int a = p[X] + Z, b = p[X + 1] + Z;
+        int h00 = p[a], h10 = p[b], h01 = p[a + 1], h11 = p[b + 1];
+        double g00 = grad2(h00, fx, fz), g10 = grad2(h10, fx - 1, fz), g01 = grad2(h01, fx, fz - 1), g11 = grad2(h11, fx - 1, fz - 1);
+        double lo = lerp(u, g00, g10), hi = lerp(u, g01, g11);
+        double loX = lerp(u, gx(h00), gx(h10)) + du * (g10 - g00), hiX = lerp(u, gx(h01), gx(h11)) + du * (g11 - g01);
+        double loZ = lerp(u, gz(h00), gz(h10)), hiZ = lerp(u, gz(h01), gz(h11));
+        d[0] = 0.75 * lerp(v, loX, hiX);
+        d[1] = 0.75 * (lerp(v, loZ, hiZ) + dv * (hi - lo));
+        return 0.75 * lerp(v, lo, hi);
+    }
+
+    /** The x and z parts of {@link #grad2}'s gradient for a hash. */
+    private static double gx(int h) {
+        switch (h & 7) {
+            case 0: case 2: return 1;
+            case 1: case 3: return -1;
+            case 4: return 1.4142;
+            case 5: return -1.4142;
+            default: return 0;
+        }
+    }
+
+    private static double gz(int h) {
+        switch (h & 7) {
+            case 0: case 1: return 1;
+            case 2: case 3: return -1;
+            case 6: return 1.4142;
+            case 7: return -1.4142;
+            default: return 0;
+        }
+    }
+
     /** Fractal 2D noise: {@code octaves} layers, each twice the frequency and half the weight. Normalised to about [-1, 1]. */
     public double fbm2(double x, double z, int octaves) {
         double sum = 0, amp = 1, norm = 0, f = 1;

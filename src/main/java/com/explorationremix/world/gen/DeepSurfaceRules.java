@@ -4,6 +4,9 @@ import com.explorationremix.mixin.accessor.SurfaceContextAccessor;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Entrances;
+import com.explorationremix.world.terrain.RootKind;
+import com.explorationremix.world.terrain.UpperShapes;
+import net.minecraft.world.level.block.Blocks;
 import com.explorationremix.world.terrain.Hashing;
 import com.explorationremix.world.terrain.Rock;
 import com.explorationremix.world.terrain.Terrain;
@@ -50,6 +53,7 @@ public final class DeepSurfaceRules {
             Holder<Biome> sinkhole = DeepBiomes.area(Entrances.Area.SINKHOLE), oasis = DeepBiomes.area(Entrances.Area.OASIS_HOLLOW);
             Holder<Biome> frost = DeepBiomes.frostGrotto();
             Entrances ent = DeepWorld.entrances();
+            UpperShapes sh = DeepWorld.shapes();
             Holder<Biome> fernRift = DeepBiomes.holder(DeepBiome.SILVER_FERN_RIFT), rootCavern = DeepBiomes.holder(DeepBiome.IVORY_ROOT_CAVERN);
             ChunkAccess chunk = a.er$chunk();
             int minX = chunk.getPos().getMinBlockX(), minZ = chunk.getPos().getMinBlockZ();
@@ -62,6 +66,11 @@ public final class DeepSurfaceRules {
                     return DeepMaterials.state(r);
                 }
                 if (y <= packFloor + 5) return deepslate; // the pack's old bedrock floor
+                if (sh != null) {
+                    // The noise shapes' roots, icicles, stalactites and stalagmites, whatever biome holds them.
+                    int f = sh.formation(x, y, z);
+                    if (f != 0) return formation(sh, f, t.seed, x, y, z);
+                }
                 // The biome stored for this block's 4x4x4 cell, read one to two blocks off so borders are ragged.
                 long h = Hashing.mix(t.seed, x, y, z);
                 int bx = clamp(x + (int) (h & 3) - 1, minX, minX + 15);
@@ -88,6 +97,21 @@ public final class DeepSurfaceRules {
                         return DeepMaterials.state(r);
                     }
                 }
+                if (sh != null) {
+                    boolean ours = b == vaults || b == frozen || b == sinkhole || b == oasis;
+                    // A sinkhole's pit walls up to two blocks under the ground keep its rock too.
+                    if (ours || sh.openWall(x, y, z)) {
+                        int look = sh.look(x, y, z);
+                        double shell = sh.shell(x, y, z);
+                        Rock r;
+                        if (b == oasis || look == Entrances.HOLLOW) r = t.palette.oasis(x, y, z, above, below, wet, shell, sh.red(x, z));
+                        else if (b == sinkhole || look == Entrances.SINKHOLE) r = t.palette.sinkhole(x, y, z, above, below, wet, shell, sh.cold(x, z));
+                        else if (b == frozen || sh.cold(x, z)) r = t.palette.frozenVaults(look < 0 ? Entrances.HALL : look, sh.chill(x, y, z), x, y, z, above, below, wet, shell);
+                        else r = t.palette.rootvaults(look < 0 ? Entrances.HALL : look, sh.tropical(x, z), x, y, z, above, below, wet, shell);
+                        return DeepMaterials.state(r);
+                    }
+                    if (b == rootCavern) return DeepMaterials.state(t.palette.ivory(x, y, z, above, below, wet, sh.hallLake(x, z)));
+                }
                 // The grotto's rock only under a roof: never on the top three blocks of a column (its open ground), should
                 // a grotto cell reach it next to a shaft of our own.
                 if (b == frost && frost != null && y < chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z) - 2)
@@ -101,6 +125,32 @@ public final class DeepSurfaceRules {
         }
 
         private static int clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+        /**
+         * A block of one of the noise shapes' formations: a root of the trees overhead (mangrove roots under mangroves),
+         * packed ice with specks of blue ice, or limestone and calcite with dripstone at the tip.
+         */
+        private static BlockState formation(UpperShapes sh, int f, long seed, int x, int y, int z) {
+            long h = Hashing.mix(seed ^ 0x6F726D61L, x, y, z);
+            return switch (f) {
+                case UpperShapes.ROOT -> rootLog(sh.trees(x, z));
+                case UpperShapes.ICICLE -> (h & 15) < 2 ? Blocks.BLUE_ICE.defaultBlockState() : Blocks.PACKED_ICE.defaultBlockState();
+                case UpperShapes.DRIP -> Blocks.DRIPSTONE_BLOCK.defaultBlockState();
+                default -> DeepMaterials.state((h & 7) < 3 ? Rock.CALCITE : Rock.LIMESTONE);
+            };
+        }
+
+        private static BlockState rootLog(RootKind kind) {
+            return switch (kind) {
+                case BIRCH -> Blocks.BIRCH_LOG.defaultBlockState();
+                case SPRUCE -> Blocks.SPRUCE_LOG.defaultBlockState();
+                case JUNGLE -> Blocks.JUNGLE_LOG.defaultBlockState();
+                case DARK_OAK -> Blocks.DARK_OAK_LOG.defaultBlockState();
+                case MANGROVE -> Blocks.MANGROVE_ROOTS.defaultBlockState();
+                case CHERRY -> Blocks.CHERRY_LOG.defaultBlockState();
+                default -> Blocks.OAK_LOG.defaultBlockState();
+            };
+        }
     }
 
     /** What the entrances put under one column, looked up once per column. */
