@@ -85,6 +85,27 @@ public final class Stagger {
         return true;
     }
 
+    /**
+     * A strong attack caught {@code e} winding up a strike (the strike itself is stopped by the creature, see WindUp):
+     * it reels for {@link Poise#INTERRUPT_TICKS}, open to harder hits, hunter or not. Not again while it reels or just
+     * after a stagger, as with any stagger; true if it reels now.
+     */
+    public static boolean interrupt(LivingEntity e) {
+        if (!staggerable(e)) return false;
+        long now = now(e);
+        S s = MAP.computeIfAbsent(e, k -> new S());
+        if (s.reelUntil > now || s.immuneUntil > now) return false;
+        int ticks = Poise.INTERRUPT_TICKS;
+        s.poise = -1.0F;
+        s.lastHit = now;
+        s.since = now;
+        s.reelUntil = now + ticks;
+        s.immuneUntil = now + ticks + Poise.IMMUNE_TICKS;
+        s.bonus = true;
+        reel(e, ticks);
+        return true;
+    }
+
     /** Its poise breaks: whatever it was about to do stops, its head drops, and everyone near sees and hears it. */
     private static void reel(LivingEntity e, int ticks) {
         if (e instanceof Mob m) {

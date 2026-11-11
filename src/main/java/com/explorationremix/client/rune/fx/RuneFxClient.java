@@ -192,6 +192,7 @@ public final class RuneFxClient implements RuneFx.ClientSide {
             case STAGGER -> stagger(r, at, s, (int) fx.a(), fx.entity(), dist);
             case SLAM -> slam(l, r, at, d, s, dist);
             case MOTE_IN -> moteIn(r, at, s, dist);
+            case WINDUP -> windup(at, d, s);
         }
     }
 
@@ -459,6 +460,14 @@ public final class RuneFxClient implements RuneFx.ClientSide {
         GlowParticle.ring(at, way).colour(WHITE).fadeTo(0xFFD9A0).size(0.2F, 1.0F + 0.6F * k).alpha(0.7F).life(6).spawn();
         sparks(r, at, count(8 + 8 * k), () -> cone(r, way, 22), 0.5 + 0.4 * k, 0xFFF0D0, 0.06F, 7, 0.2F);
         if (dist < 6.0) RuneCamera.shake((0.25F + 0.45F * k) * (float) (1.0 - dist / 6.0));
+    }
+
+    /** A hunter winding up: a cold, sharp glint at its eyes, a star that flares and is gone before the strike. */
+    private static void windup(Vec3 eyes, Vec3 facing, float s) {
+        float k = Mth.clamp(s, 0.3F, 2.0F);
+        Vec3 at = facing.lengthSqr() < 1.0E-6 ? eyes : eyes.add(facing.normalize().scale(0.12));
+        GlowParticle.flash(at).colour(WHITE).fadeTo(0xB8D8FF).size(0.08F * k, 0.75F * k).alpha(0.95F).life(5).spawn();
+        GlowParticle.dot(at).colour(WHITE).fadeTo(0xCFE4FF).size(0.42F * k, 0.04F * k).life(9).star().spawn();
     }
 
     private static void stagger(RandomSource r, Vec3 c, float width, int reel, int entity, double dist) {

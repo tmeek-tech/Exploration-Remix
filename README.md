@@ -3,11 +3,12 @@
 A Forge mod for Minecraft 1.20.1 that digs the overworld's underground much deeper: four new cave layers under
 the pack's own caves, sealed from each other by unbreakable bands with natural gates, each layer built from vanilla
 and Create stone and dressed to match a set of reference pictures. Made for a pack with Tectonic, Terrain Slabs,
-Immersive Weathering, Create and Better Combat.
+Immersive Weathering and Create (not Better Combat, which replaces the same attack as the timed swings).
 
-**Status: 0.10.0: milestone 1's world generation and cave looks, the cave hunters, and stage 1 of the rune overhaul
-(rune rows on swords, bows and crossbows; see [Runes](#runes)).** The first build's runs and combat changes were
-removed (git history keeps them); they return in later milestones, built on these caves.
+**Status: 0.12.0: milestone 1's world generation and cave looks, the cave hunters, stage 1 of the rune overhaul
+(rune rows on swords, bows and crossbows; see [Runes](#runes)) and timed swings for swords and axes (see
+[Swords and axes](#swords-and-axes)).** The first build's runs were removed (git history keeps them); they return in
+later milestones, built on these caves.
 
 ## Requirements
 
@@ -160,6 +161,19 @@ only with `runesHurtPlayers` on) are in the server config `explorationremix-rune
 | `/remix rune depth <0\|1\|2\|auto>` | the run depth that wakes extra slots, kept until `auto` |
 | `/remix rune info` | the held gear's row, how it reads and what each cast costs |
 
+## Swords and axes
+
+Swords (other mods' too) and axes swing the timed way. A tap of the attack button is a light swing that lands a
+quarter of a second after the press; light swings in a row make a chain (a sword's slash, backhand and overhead chop;
+an axe's slower slash and chop), and after the chain's last swing comes a 1.2 second cooldown in which only a strong
+attack can be made. Held, the swing turns strong: the blade draws back and fires on its own half a second after the
+press (an axe's 0.7), lunges about a block and a half and strikes everything in its line; then nothing can start for
+1.2 seconds. Every swing that lands is at full strength (vanilla's charge bar is gone for these weapons). A strong
+attack that lands while a Mossback or a Skein rears to strike stops the strike and leaves it reeling. Marks under the
+crosshair show the chain and the cooldown. A press on a block the weapon is meant for (an axe on wood, a sword on a
+cobweb) with nothing in reach mines it as ever. A runed sword lights up pale blue-white once it holds the energy for
+its next cast.
+
 ## Commands
 
 `/remix` is for operators, to look around a test world:
@@ -190,6 +204,7 @@ only with `runesHurtPlayers` on) are in the server config `explorationremix-rune
 python3 tools/gen_data.py       # regenerates every datapack JSON, model, texture and lang file from tools/*.py
 python3 tools/synth_sounds.py   # regenerates the ambient sound recordings
 python3 tools/synth_lava_sounds.py  # regenerates the lava cycle's rumbles and surge
+python3 tools/synth_swing_sounds.py # regenerates the swings', the sword chime's and the hunters' wind-up sounds
 ```
 
 `src/preview` holds an offline preview (`TerrainPreview`) that draws each deep layer's network, sections through its

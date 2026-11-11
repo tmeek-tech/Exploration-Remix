@@ -17,7 +17,7 @@ import net.minecraftforge.fml.common.Mod;
  * and bigger), and a kick of the view when your own hit lands, a little one for a light hit and a firm one for a full
  * swing or a critical. Both fade within a few ticks. Off with the client setting {@code runeShake}, and scaled by the
  * game's Distortion Effects slider, as the lava's tremor is. Your own Dash widens the view for a moment, by the game's
- * FOV Effects slider, as sprinting does.
+ * FOV Effects slider, as sprinting does, and a strong attack's lunge a little.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class RuneCamera {
@@ -44,6 +44,12 @@ public final class RuneCamera {
 
     /** Your own Dash throws you: the view widens at once and eases back as you slow. */
     public static void dash() { dashAt = ticks; }
+
+    /** When your last strong attack lunged (in this class's ticks): a smaller, quicker widening than a Dash's. */
+    private static long lungeAt = Long.MIN_VALUE / 2;
+
+    /** Your own strong attack lunges: the view widens a little and eases straight back. */
+    public static void lunge() { lungeAt = ticks; }
 
     /** Your own swing lands on a creature: the view kicks, by how strong the swing was. */
     @SubscribeEvent
@@ -76,12 +82,14 @@ public final class RuneCamera {
     @SubscribeEvent
     public static void fov(ViewportEvent.ComputeFov e) {
         if (!e.usedConfiguredFov()) return;
-        double t = ticks + e.getPartialTick() - dashAt;
-        if (t < 0.0 || t > 24.0) return;
         float scale = Minecraft.getInstance().options.fovEffectScale().get().floatValue();
         if (scale <= 0.0F) return;
-        double k = t < 1.5 ? t / 1.5 : Math.exp(-(t - 1.5) / 4.0);
-        e.setFOV(e.getFOV() * (1.0 + 0.16 * k * scale));
+        double widen = 0.0;
+        double t = ticks + e.getPartialTick() - dashAt;
+        if (t >= 0.0 && t <= 24.0) widen += 0.16 * (t < 1.5 ? t / 1.5 : Math.exp(-(t - 1.5) / 4.0));
+        double l = ticks + e.getPartialTick() - lungeAt;
+        if (l >= 0.0 && l <= 12.0) widen += 0.07 * (l < 1.0 ? l : Math.exp(-(l - 1.0) / 2.2));
+        if (widen > 0.0) e.setFOV(e.getFOV() * (1.0 + widen * scale));
     }
 
     @SubscribeEvent

@@ -41,6 +41,30 @@ public final class GlowRender extends RenderType {
     /** Additive light for entities, with a premultiplied texture: the colour given at each corner is added as it is. */
     public static RenderType glow(ResourceLocation texture) { return GLOW.apply(texture); }
 
+    /**
+     * The light on a sword's blade (its runes ready to cast): as {@link #glow}, its texture smoothed, drawn after the
+     * held items it lies on (it is one of the buffers the game draws last, see RenderBuffersMixin), so it adds onto the
+     * blade rather than being covered by it.
+     */
+    public static final RenderType BLADE = create("explorationremix_blade_glow", DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 4096,
+            false, true, CompositeState.builder()
+                    .setShaderState(RENDERTYPE_EYES_SHADER)
+                    .setTextureState(new TextureStateShard(new ResourceLocation("explorationremix", "textures/misc/blade_glow.png"), true, false))
+                    .setTransparencyState(ADDITIVE_TRANSPARENCY)
+                    .setCullState(NO_CULL)
+                    .setWriteMaskState(COLOR_WRITE)
+                    .createCompositeState(false));
+
+    /** A swing's sweep through the air: additive, soft, seen from both sides, drawn as {@link #BLADE} is. */
+    public static final RenderType SWEEP = create("explorationremix_swing_sweep", DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 4096,
+            false, true, CompositeState.builder()
+                    .setShaderState(RENDERTYPE_EYES_SHADER)
+                    .setTextureState(new TextureStateShard(new ResourceLocation("explorationremix", "textures/misc/swing_sweep.png"), true, false))
+                    .setTransparencyState(ADDITIVE_TRANSPARENCY)
+                    .setCullState(NO_CULL)
+                    .setWriteMaskState(COLOR_WRITE)
+                    .createCompositeState(false));
+
     /** The glow particles: added by their alpha, full bright, both sides, not written to depth. */
     public static final ParticleRenderType SHEET = new ParticleRenderType() {
         @Override

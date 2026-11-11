@@ -105,6 +105,12 @@ public class MossbackRenderer extends MobRenderer<MossbackEntity, MossbackModel>
             if (level < 0.02F) return;
             VertexConsumer vc = buffers.getBuffer(RenderType.eyes(textures[Mth.clamp(e.variant(), 0, 1)]));
             getParentModel().renderToBuffer(pose, vc, 0xF000F0, OverlayTexture.NO_OVERLAY, level, level, level, 1.0F);
+            // winding up a strike: the eyes blaze and the markings flare, drawn again over themselves (it adds up)
+            float wind = e.windup(partialTick);
+            float surge = wind * (eyes ? 1.0F : 0.6F);
+            if (surge > 0.02F && !e.isDeadOrDying()) {
+                getParentModel().renderToBuffer(pose, vc, 0xF000F0, OverlayTexture.NO_OVERLAY, surge, surge, surge, 1.0F);
+            }
         }
     }
 

@@ -27,15 +27,23 @@
     "PortalShapeMixin",
     "BaseFireBlockMixin",
     "LevelChunkMixin",
+    "accessor.LivingEntityAccessor",
     "rune.ItemStackRuneMixin",
     "rune.FurnaceRuneMixin",
     "rune.ArrowPassByMixin",
-    "LivingImmobileMixin"
+    "LivingImmobileMixin",
+    "PlayerSweepMixin"
   ],
   "client": [
     "client.LightTextureMixin",
     "client.DimensionSpecialEffectsMixin",
-    "client.RuneHandRendererMixin"
+    "client.RuneHandRendererMixin",
+    "client.RenderBuffersMixin",
+    "client.ItemInHandRendererMixin",
+    "client.ItemInHandLayerMixin",
+    "client.HumanoidModelMixin",
+    "client.MinecraftAttackMixin",
+    "client.GuiAttackIndicatorMixin"
   ],
   "injectors": {
     "defaultRequire": 1

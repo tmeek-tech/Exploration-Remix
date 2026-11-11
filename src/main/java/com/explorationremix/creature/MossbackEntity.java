@@ -1,6 +1,9 @@
 package com.explorationremix.creature;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.combat.WindUp;
+import com.explorationremix.combat.swing.Swordplay;
+import com.explorationremix.rune.effect.RuneFx;
 import com.explorationremix.creature.climb.ClimbMoveControl;
 import com.explorationremix.creature.climb.ClimbNavigation;
 import com.explorationremix.creature.climb.ClimbNodeEvaluator;
@@ -17,6 +20,7 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -63,8 +67,10 @@ import java.util.UUID;
  * plants to wait; still, it is dim and blends in, and its green markings light up as soon as it moves again.
  *
  * <p>It sees what is in front of it, not behind; it chases slower than a sprinting player, gives up about twenty
- * seconds after losing sight of you, and searches where it last saw you first. Close in, it rears up (its throat
- * open: a hit from in front then does far more and spoils the lunge), lunges, and clamps on to shake its catch,
+ * seconds after losing sight of you, and searches where it last saw you first. Close in, it rears up for half a second
+ * (trembling, a glint in its eyes, an intake swelling to a growl: 0.12.0), its throat open: a hit from in front then
+ * does far more, and spoils the lunge unless it was a light sword swing; a strong attack stops it whichever way it
+ * comes. Then it lunges, or drops from its wall or ceiling, and clamps on to shake its catch,
  * hurting it every second until the catch hits it hard enough or it lets go. A raised shield turns the lunge aside
  * but is knocked out of use for a while. It also hunts cave animals when hungry, and fights other Mossbacks that cross
  * its patch.
@@ -77,7 +83,7 @@ import java.util.UUID;
  * comes right up in front of it, and eats it at the den. One that catches nothing comes home after a while all the
  * same. Den-mates share their den as home, so they never fight each other; other families' lizards are rivals.
  */
-public class MossbackEntity extends Monster implements ClimbMoveControl.Climber {
+public class MossbackEntity extends Monster implements ClimbMoveControl.Climber, WindUp {
     // ------------------------------------------------------------------------------------------------ tuning
     public static final double HEALTH = 80.0, ARMOR = 4.0, SPEED = 0.2;
     static final double ROAM_SPEED = 0.5, SEARCH_SPEED = 0.85, CHASE_SPEED = 1.2;
@@ -109,7 +115,12 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     static final double LUNGE_RANGE = 3.4;
     static final float BITE = 5.0F, SHAKE_PLAYER = 2.5F, SHAKE_PREY = 4.0F, RIVAL_BITE = 6.0F;
     static final float BREAK_FREE = 8.0F, THROAT_MULTIPLIER = 2.5F;
-    static final int REAR_TICKS = 12, AMBUSH_REAR_TICKS = 6, LUNGE_TICKS = 10, MAX_HOLD = 80;
+    /**
+     * The rear before every strike (0.12.0, Taran's pick: half a second, the same from the plants or from a wall): seen
+     * (it rears, its throat swells, its jaw opens, it trembles, its eyes glint) and heard (an intake swelling to a
+     * growl), so the strike can be timed. A strong attack landing in it stops the strike and stuns it (WindUp).
+     */
+    static final int REAR_TICKS = 10, LUNGE_TICKS = 10, MAX_HOLD = 80;
 
     public static final TagKey<EntityType<?>> PREY = TagKey.create(Registries.ENTITY_TYPE, new ResourceLocation(ExplorationRemix.MOD_ID, "mossback_prey"));
     private static final UUID HELD_SLOW = UUID.fromString("7d3c6b1e-2f4a-4c55-9a1b-6a0d7b1c9e21");
@@ -158,6 +169,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     private long ignoreRivalsUntil;
     private float stepDist;
     private boolean throatHit;
+    /** The rear under way ends in a drop from its wall or ceiling, not a lunge. */
+    private boolean rearToDrop;
     private boolean frozen;                  // /remix mossback freeze: holds still where it is, in the state it is in
 
     // its family's den (see MossbackDen and DenRegistry; the den's record says which role it has)
@@ -179,6 +192,9 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
 
     // client-side animation state (see MossbackModel and MossbackRenderer)
     public float glow, glowO, jaw, jawO, rear, rearO, frill, frillO;
+    /** Client: how far through its rear it is (0 to 1), for the tremble and the eyes' blaze, and ticks into it. */
+    public float windup, windupO;
+    private int windupTicks;
     public final Quaternionf orient = new Quaternionf(), orientO = new Quaternionf();
     private Vec3 clientForward = new Vec3(0, 0, 1);
     private Vec3 clientUp = new Vec3(0, 1, 0);
@@ -434,6 +450,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         entityData.set(DATA_STATE, s);
         stateTicks = 0;
         stateLength = length;
+        rearToDrop = false;
         waitPathSent = false;
         if (s != CHASE) unreachable = 0;
         if (s != WAIT) { ambushing = false; waitSpot = null; }
@@ -788,9 +805,10 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         chaseFrom = blockPosition();
         Direction s = surface();
         if (fromAmbush) {
-            // from the plants: it strikes at once if the quarry is close, dropping on it from a wall or ceiling
-            if (s != null && s != Direction.DOWN && t.getY() < getY() - 0.5 && horizontalDistance(t) < 3.0) { startDrop(t); return; }
-            if (inStrikingReach(t, LUNGE_RANGE + 1.0)) { toState(REAR, AMBUSH_REAR_TICKS); return; }
+            // from the plants: it strikes at once if the quarry is close (after its rear), dropping on it from a wall or
+            // ceiling
+            if (s != null && s != Direction.DOWN && t.getY() < getY() - 0.5 && horizontalDistance(t) < 3.0) { startRear(true); return; }
+            if (inStrikingReach(t, LUNGE_RANGE + 1.0)) { startRear(false); return; }
         }
         toState(ALERT, 15);
         playSound(ERSounds.MOSSBACK_HISS.get(), 1.4F, 0.9F + random.nextFloat() * 0.2F);
@@ -827,8 +845,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         if (sees) { lastSeen = t.position(); lastSeenTime = now; }
         if (t instanceof MossbackEntity && getHealth() < getMaxHealth() * 0.4F) { flee(); return; }
         if (sees && inStrikingReach(t, LUNGE_RANGE)) {
-            toState(REAR, REAR_TICKS);
-            playSound(ERSounds.MOSSBACK_HISS.get(), 1.2F, 1.15F);
+            startRear(false);
             return;
         }
         if (now - lastSeenTime > SEARCH_AFTER_TICKS) { toState(SEARCH, 0); return; }
@@ -860,12 +877,30 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         return from != null && blockPosition().distSqr(from) > (double) LEASH * LEASH && !sees;
     }
 
+    /**
+     * It rears to strike at its target: half a second that can be seen and heard (an intake swelling to a growl, a
+     * glint in its eyes), then the lunge, or from a wall or ceiling ({@code thenDrop}) the drop.
+     */
+    private void startRear(boolean thenDrop) {
+        toState(REAR, REAR_TICKS);
+        rearToDrop = thenDrop;
+        playSound(ERSounds.MOSSBACK_WINDUP.get(), 1.4F, 0.95F + random.nextFloat() * 0.1F);
+        if (level() instanceof ServerLevel l) RuneFx.windup(l, eyes(), lookDir(), 1.0F);
+    }
+
     private void rear(@Nullable LivingEntity t) {
         getNavigation().stop();
         if (t == null) { toState(ROAM, 0); return; }
         getLookControl().setLookAt(t, 60.0F, 60.0F);
         Vec3 dm = getDeltaMovement();
         setDeltaMovement(0, clingsOffFloor() ? 0 : dm.y, 0);
+        if (stateTicks >= stateLength && rearToDrop) {
+            // still over its quarry: it drops on it; it moved off: it lunges if it can, else gives chase
+            Direction s = surface();
+            if (s != null && s != Direction.DOWN && t.getY() < getY() - 0.5 && horizontalDistance(t) < 3.5) { startDrop(t); return; }
+            rearToDrop = false;
+            if (!inStrikingReach(t, LUNGE_RANGE + 1.0)) { toState(CHASE, 0); return; }
+        }
         if (stateTicks >= stateLength) {
             Vec3 to = t.getBoundingBox().getCenter().subtract(mouth());
             lungeDir = to.lengthSqr() > 1.0E-4 ? to.normalize() : lookDir();
@@ -897,7 +932,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         Vec3 to = t.position().subtract(position());
         setDeltaMovement(to.x * 0.12, -0.1, to.z * 0.12);
         toState(DROP, 40);
-        playSound(ERSounds.MOSSBACK_HISS.get(), 1.4F, 0.8F);
+        playSound(ERSounds.MOSSBACK_BITE.get(), 1.2F, 0.75F + random.nextFloat() * 0.15F);
     }
 
     private void drop(@Nullable LivingEntity t) {
@@ -1237,7 +1272,11 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
         boolean hurt = super.hurt(source, amount);
         if (hurt && !level().isClientSide && isAlive()) {
             if (state() == GRAB && attacker != null && attacker.getId() == heldId()) grabDamage += Math.max(0.0F, before - getHealth());
-            if (throatHit) {
+            // a throat hit spoils the lunge, except a timed light swing's (0.12.0: only a strong attack stops a strike;
+            // a light one still lands on the throat for its extra damage, and the lunge comes all the same)
+            // (a strong one has already stopped it: see interrupt)
+            Swordplay.Landing swing = attacker instanceof ServerPlayer sp ? Swordplay.landing(sp) : null;
+            if (throatHit && swing == null && state() == REAR) {
                 toState(RECOIL, 25);
                 playSound(ERSounds.MOSSBACK_HURT.get(), 1.5F, 1.3F);
             }
@@ -1259,6 +1298,18 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
 
     /** Whether the last blow it took landed on its throat (for runes that pay back on a weak spot). */
     public boolean lastHitWasThroat() { return throatHit; }
+
+    // ------------------------------------------------------------------------------------------------ WindUp
+
+    @Override
+    public boolean windingUp() { return !level().isClientSide && state() == REAR; }
+
+    /** A strong attack caught it rearing: the strike is dropped and it backs off a moment once it stops reeling. */
+    @Override
+    public void interrupt(LivingEntity by) {
+        toState(RECOIL, 10);
+        playSound(ERSounds.MOSSBACK_HURT.get(), 1.5F, 0.8F);
+    }
 
     /** One of its own family (they share the den as home), or of the family one of them left: kin never fight. */
     private boolean denMate(Entity e) {
@@ -1382,7 +1433,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
                 + " on " + (d == null ? "nothing" : d == Direction.DOWN ? "floor" : d == Direction.UP ? "ceiling" : "wall " + d.getName())
                 + ", health " + Math.round(getHealth()) + ", target " + (getTarget() == null ? "none" : getTarget().getName().getString())
                 + ", den " + (den == null ? "none" : den.toShortString()) + family() + (carrying() ? ", carrying " + carried() : "")
-                + ", hunger " + hunger / 20 + "s" + motionNote();
+                + (com.explorationremix.combat.Stagger.reeling(this) ? ", reeling" : "") + ", hunger " + hunger / 20 + "s" + motionNote();
     }
 
     /** How it is moving, for {@link #describe}: in water or in the air, wedged, and where its path leads next. */
@@ -1478,7 +1529,9 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     }
 
     private void clientTick() {
-        glowO = glow; jawO = jaw; rearO = rear; frillO = frill;
+        glowO = glow; jawO = jaw; rearO = rear; frillO = frill; windupO = windup;
+        windupTicks = state() == REAR ? windupTicks + 1 : 0;
+        windup = windupTicks == 0 ? Math.max(0.0F, windup - 0.34F) : Math.min(1.0F, windupTicks / (float) REAR_TICKS);
         orientO.set(orient);
         byte s = state();
         double moved = Math.sqrt(Mth.square(getX() - xo) + Mth.square(getY() - yo) + Mth.square(getZ() - zo));
@@ -1540,4 +1593,5 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber 
     public float jaw(float pt) { return Mth.lerp(pt, jawO, jaw); }
     public float rear(float pt) { return Mth.lerp(pt, rearO, rear); }
     public float frill(float pt) { return Mth.lerp(pt, frillO, frill); }
+    public float windup(float pt) { return Mth.lerp(pt, windupO, windup); }
 }

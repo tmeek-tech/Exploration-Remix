@@ -143,6 +143,36 @@ CREATURE_EVENTS.update(SKEIN_EVENTS)
 CREATURE_SUBTITLES.update(SKEIN_SUBTITLES)
 
 
+# 0.12.0's timed swings (tools/synth_swing_sounds.py makes the files): each swing's whoosh, played by the swinger's own
+# game the moment it lands and by the server for everyone else near; the hum as a held swing turns strong; the chime of a
+# rune sword's light waking, played only for its holder. The hunters' wind-ups swell for half a second into the strike.
+def files(folder, name, count, volume=1.0, attenuation=None):
+    out = []
+    for i in range(1, count + 1):
+        e = {"name": f"{MOD}:{folder}/{name}{i}", "volume": volume}
+        if attenuation: e["attenuation_distance"] = attenuation
+        out.append(e)
+    return out
+
+
+SWING_EVENTS = {
+    "swing.light": files("swing", "light", 3),
+    "swing.heavy": files("swing", "heavy", 2),
+    "swing.thrust": files("swing", "thrust", 2),
+    "swing.charge": files("swing", "charge", 2, 0.9),
+    "runes.ready": files("runes", "ready", 2, 0.8, 12),
+    "mossback.windup": creature("windup", 2, 1.0, 24),
+    "skein.windup": creature("windup", 2, 1.0, 20, who="skein"),
+}
+SWING_SUBTITLES = {
+    "swing.light": "Blade swishes", "swing.heavy": "Blade chops", "swing.thrust": "Blade thrusts",
+    "swing.charge": "Blade gathers", "runes.ready": "Runes chime ready", "mossback.windup": "Mossback winds up",
+    "skein.windup": "Skein winds up",
+}
+CREATURE_EVENTS.update(SWING_EVENTS)
+CREATURE_SUBTITLES.update(SWING_SUBTITLES)
+
+
 def write_all(assets_dir, write):
     out = {}
     lang = {}

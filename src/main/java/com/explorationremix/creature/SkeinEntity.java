@@ -1,6 +1,9 @@
 package com.explorationremix.creature;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.combat.Stagger;
+import com.explorationremix.combat.WindUp;
+import com.explorationremix.rune.effect.RuneFx;
 import com.explorationremix.creature.climb.ClimbMoveControl;
 import com.explorationremix.creature.climb.ClimbNavigation;
 import com.explorationremix.creature.climb.ClimbNodeEvaluator;
@@ -22,6 +25,7 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
@@ -75,7 +79,8 @@ import java.util.function.DoubleSupplier;
  * head snaps round, the body comes after it in a curve and never folds.
  *
  * <p>It minds a player only when they come close: within about {@link #STRIKE_RANGE} blocks, if it can see or feel
- * them, it rears its front plates for a split second, lunges and bites, then skitters a few blocks off and freezes
+ * them, it rears its front plates for half a second (0.12.0: rattling faster and faster, trembling, eyes glinting; a
+ * strong attack landing then stops the strike), lunges and bites, then skitters a few blocks off and freezes
  * again. It never chases: it strikes at nobody further than {@link #STRIKE_LEASH} from where it first struck. Hurt from
  * close by, it strikes back; from further off, it bolts. Hungry, it stalks a swarm of blue fireflies that has landed
  * near it ({@link FireflySwarm}), creeping up in short bursts and long freezes, strikes into it and eats a few; then it
@@ -86,7 +91,7 @@ import java.util.function.DoubleSupplier;
  * section hurts the Skein. The trail is saved with it and sent to each client that starts tracking it, so its body
  * comes back lying where it lay.
  */
-public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IEntityAdditionalSpawnData {
+public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IEntityAdditionalSpawnData, WindUp {
     // ------------------------------------------------------------------------------------------------ tuning
     /** Movement speed is blocks a tick at a speed of 1 (ClimbMoveControl): its bursts run at about a player's sprint. */
     public static final double HEALTH = 60.0, ARMOR = 6.0, SPEED = 0.29, KNOCKBACK_RESISTANCE = 0.8;
@@ -101,10 +106,12 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
      */
     static final int ENCOUNTER_TICKS = 600;
     /**
-     * A split second rearing (shorter when it strikes back), the lunge, and four seconds before it strikes again: one
-     * standing in reach is bitten every few seconds, not worried to death in a breath.
+     * Half a second rearing at a player (0.12.0, Taran's pick, the same when it strikes back: its plates rattle faster
+     * and faster, it trembles, its eyes glint, so the strike can be timed; a strong attack landing in it stops the
+     * strike and stuns it, see WindUp), a quicker one at a swarm, the lunge, and four seconds before it strikes again:
+     * one standing in reach is bitten every few seconds, not worried to death in a breath.
      */
-    static final int REAR_TICKS = 7, SNAP_REAR_TICKS = 3, SWARM_REAR_TICKS = 5, LUNGE_TICKS = 8, STRIKE_COOLDOWN = 80;
+    static final int REAR_TICKS = 10, SNAP_REAR_TICKS = 10, SWARM_REAR_TICKS = 5, LUNGE_TICKS = 8, STRIKE_COOLDOWN = 80;
     static final double LUNGE_SPEED = 0.62;
     /** After a strike it skitters off this far before it freezes; hurt from afar, it bolts this far. */
     static final double AFTER_STRIKE_MIN = 3.0, AFTER_STRIKE_MAX = 6.0, BOLT_MIN = 10.0, BOLT_MAX = 20.0;
@@ -278,6 +285,9 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     // client-side animation state (see SkeinRenderer)
     public float run, runO, legPhase, legPhaseO, sway, swayO, shudder, shudderO, rear, rearO, jaw, jawO, glow, glowO;
+    /** Client: how far through a rear at a player it is (0 to 1), for its tremble and its glow's flare; ticks into it. */
+    public float windup, windupO;
+    private int windupTicks;
     public float ripple = -1, rippleO = -1;
     public final float[] feelerYaw = new float[2], feelerYawO = new float[2], feelerPitch = new float[2], feelerPitchO = new float[2];
     private final float[] feelerYawT = new float[2], feelerPitchT = new float[2];
@@ -1080,7 +1090,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         prey = null;
         if (anchor == null) anchor = position();
         toState(REAR, rearTicks);
-        playSound(ERSounds.SKEIN_RATTLE.get(), 1.3F, 0.9F + random.nextFloat() * 0.25F);
+        playSound(ERSounds.SKEIN_WINDUP.get(), 1.4F, 0.95F + random.nextFloat() * 0.1F);
+        if (level() instanceof ServerLevel l) RuneFx.windup(l, eyes(), forward, 0.9F);
     }
 
     private void startSwarmStrike(FireflySwarm s) {
@@ -1269,7 +1280,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
      */
     private void answer(LivingEntity by) {
         byte s = state();
-        if (s == REAR || s == LUNGE) return;
+        // reeling (a strong attack caught its strike, or its poise broke) it can do nothing
+        if (s == REAR || s == LUNGE || Stagger.reeling(this)) return;
         double d = Math.sqrt(by.getBoundingBox().distanceToSqr(mouth()));
         if ((d < STRIKE_RANGE + 0.5 || nearBody(by.getBoundingBox(), STRIKE_RANGE)) && !isRefuge(by.blockPosition())) {
             anchor = position();
@@ -1277,6 +1289,16 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         } else {
             boltFrom(by.position(), BOLT_MIN + random.nextDouble() * (BOLT_MAX - BOLT_MIN));
         }
+    }
+
+    @Override
+    public boolean windingUp() { return !level().isClientSide && state() == REAR && !atSwarm; }
+
+    /** A strong attack caught it rearing: no strike; once it stops reeling it skitters off and freezes, as after one. */
+    @Override
+    public void interrupt(LivingEntity by) {
+        afterStrike(by.position());
+        playSound(ERSounds.SKEIN_HURT.get(), 1.4F, 1.25F);
     }
 
     /** Whether box {@code b} comes within {@code r} of its body: the head's box or a section's. */
@@ -1579,6 +1601,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         b.append(s >= 0 && s < STATE_NAMES.length ? STATE_NAMES[s] : "?").append(" (").append(gait.describe()).append(')')
                 .append(" on ").append(d == null ? "nothing" : d == Direction.DOWN ? "floor" : d == Direction.UP ? "ceiling" : "wall " + d.getName())
                 .append(", health ").append(Math.round(getHealth()))
+                .append(Stagger.reeling(this) ? ", reeling" : "")
                 .append(", hunger ").append(hunger / 20).append('s');
         if (prey != null) b.append(", after a swarm of ").append(prey.count());
         if (journeyTo != null) b.append(String.format(Locale.ROOT, ", going along the rift to %.0f %.0f %.0f (%.0f blocks along it to go, %ds on the way)",
@@ -1724,6 +1747,9 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     private void clientTick() {
         runO = run; legPhaseO = legPhase; swayO = sway; shudderO = shudder; rearO = rear; jawO = jaw; glowO = glow; rippleO = ripple;
+        windupO = windup;
+        windupTicks = state() == REAR ? windupTicks + 1 : 0;
+        windup = windupTicks == 0 ? Math.max(0.0F, windup - 0.34F) : Math.min(1.0F, windupTicks / (float) REAR_TICKS);
         System.arraycopy(feelerYaw, 0, feelerYawO, 0, 2);
         System.arraycopy(feelerPitch, 0, feelerPitchO, 0, 2);
         headOrientO.set(headOrient);
@@ -1736,6 +1762,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         // stopped dead: a shudder runs through it
         if (movedO > 0.07 && moved < 0.02) shudder = 1.0F;
         else shudder *= 0.72F;
+        // coiled to strike: a tremble through it that grows to the strike
+        if (windupTicks > 0) shudder = Math.max(shudder, 0.25F + 0.5F * windup * windup);
         movedO = moved;
         byte s = state();
         float rearT = s == REAR ? 1.0F : s == LUNGE ? 0.55F : 0.0F;
@@ -1827,6 +1855,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     public float legPhase(float pt) { return Mth.lerp(pt, legPhaseO, legPhase); }
     public float sway(float pt) { return Mth.lerp(pt, swayO, sway); }
     public float shudder(float pt) { return Mth.lerp(pt, shudderO, shudder); }
+    public float windup(float pt) { return Mth.lerp(pt, windupO, windup); }
     public float rear(float pt) { return Mth.lerp(pt, rearO, rear); }
     public float jaw(float pt) { return Mth.lerp(pt, jawO, jaw); }
     public float glow(float pt) { return Mth.lerp(pt, glowO, glow); }

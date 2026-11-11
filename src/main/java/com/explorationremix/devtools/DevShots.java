@@ -332,6 +332,7 @@ public final class DevShots {
      * What the player does, for testing gear in the game: "! press use|attack|runes|inventory" (one click of that
      * key), "! hold use|attack" and "! release use|attack" (keep it held down until released), "! slot n" (hotbar slot
      * 0 to 8), "! look yaw pitch", "! gui on|off" (the hotbar and HUD), "! view first|third|front" (the camera),
+     * "! swing light|strong combo tau" (the player's own timed swing held still tau ticks in; "! swing off" lets go),
      * "! close" (the open screen) and "! snap name"
      * (a picture of this very frame, without moving or settling, for things in flight and screens). False if the
      * line is none of these.
@@ -372,6 +373,20 @@ public final class DevShots {
                 }
             }
             case "gui" -> mc.options.hideGui = !arg.equals("on");
+            case "swing" -> {
+                // "! swing light|strong combo tau": the player's own swing held still that many ticks in; "! swing off"
+                if (arg.equals("off")) {
+                    com.explorationremix.client.combat.SwingClient.devPose(com.explorationremix.combat.swing.SwingKind.LIGHT, 0, -1.0F);
+                } else {
+                    if (s.length < 5) return false;
+                    try {
+                        com.explorationremix.client.combat.SwingClient.devPose(arg.equals("strong") ? com.explorationremix.combat.swing.SwingKind.STRONG
+                                : com.explorationremix.combat.swing.SwingKind.LIGHT, Integer.parseInt(s[3]), Float.parseFloat(s[4]));
+                    } catch (NumberFormatException ex) {
+                        return false;
+                    }
+                }
+            }
             case "view" -> mc.options.setCameraType(switch (arg) {
                 case "third" -> net.minecraft.client.CameraType.THIRD_PERSON_BACK;
                 case "front" -> net.minecraft.client.CameraType.THIRD_PERSON_FRONT;

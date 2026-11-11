@@ -50,6 +50,20 @@ public final class Poise {
         return p * (1.0F + 1.5F * clamp01(momentum));
     }
 
+    // ------------------------------------------------------------------------------------------------ timed swings
+
+    /** A timed swing's damage multiplier: the chain's last light swing (the chop) a little more, a strong attack most. */
+    public static float swingDamage(boolean strong, boolean finisher) { return strong ? 1.75F : finisher ? 1.2F : 1.0F; }
+
+    /** And what it does to poise, on top of its damage: a strong attack breaks guards. */
+    public static float swingPoise(boolean strong, boolean finisher) { return strong ? 2.5F : finisher ? 1.5F : 1.0F; }
+
+    /** A strong attack throws what it hits this much harder (blocks a tick, on top of the game's own knockback). */
+    public static final float STRONG_PUSH = 0.45F;
+
+    /** A strong attack that lands on a creature winding up a strike stops it and stuns it this long (ticks). */
+    public static final int INTERRUPT_TICKS = 30;
+
     /** An arrow's poise: a little less than its damage. */
     public static float arrow(float damage) { return Math.max(0.0F, damage) * 0.7F; }
 
