@@ -114,13 +114,14 @@ public final class SwingAnim {
             0.45F,
             new Body(-2.95F, 0.1F, 0.0F, 0.0F, 0.1F, -0.12F),
             new Body(-0.55F, -0.15F, 0.0F, -1.5F, -0.05F, 0.28F));
+    // the thrust's arm turns against the body's twist, so its point stays on the line of sight
     static final Keys THRUST = new Keys(
-            Hand.of(-0.247F, 0.44F, 0.322F, -140.0F, -74.3F, 156.3F),
+            Hand.of(-0.247F, 0.44F, 0.322F, 142.0F, -62.8F, -118.9F),
             null,
-            Hand.of(-0.38F, 0.419F, -0.078F, -96.3F, -67.2F, 106.1F),
+            Hand.of(-0.38F, 0.419F, -0.078F, 121.9F, -39.1F, -90.1F),
             0.35F,
-            new Body(0.45F, 0.0F, 0.12F, 2.0F, 0.55F, -0.05F),
-            new Body(-1.55F, -0.1F, 0.0F, -3.0F, -0.35F, 0.16F));
+            new Body(0.45F, -0.55F, 0.12F, 2.0F, 0.55F, -0.05F),
+            new Body(-1.55F, 0.35F, 0.0F, -3.0F, -0.35F, 0.16F));
 
     static Keys keys(SwingKind kind, int combo, WeaponProfile w) {
         if (kind == SwingKind.STRONG) return THRUST;

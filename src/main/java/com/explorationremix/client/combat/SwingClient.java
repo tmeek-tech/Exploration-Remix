@@ -394,9 +394,10 @@ public final class SwingClient {
     /**
      * Dev pictures only (the shot driver's "! swing" step): the player's own swing of {@code kind}, {@code combo} in the
      * chain, shown {@code tau} ticks in and held there, the swings' clock stopped (a strong one became strong where a
-     * held press does); {@code tau} below 0 lets the clock run again and drops it.
+     * held press does); {@code chained}, a light one starts where the swings before it in the chain left the hand,
+     * each pressed as soon as the one before allowed; {@code tau} below 0 lets the clock run again and drops it.
      */
-    public static void devPose(SwingKind kind, int combo, float tau) {
+    public static void devPose(SwingKind kind, int combo, float tau, boolean chained) {
         LocalPlayer p = Minecraft.getInstance().player;
         if (p == null) return;
         if (tau < 0.0F) {
@@ -409,7 +410,15 @@ public final class SwingClient {
         heldAt = clock;
         SWINGS.remove(p.getId());
         int c = kind == SwingKind.STRONG ? 0 : Math.max(0, Math.min(combo, w.chain() - 1));
-        Swing s = new Swing(-1, kind == SwingKind.STRONG ? SwingKind.LIGHT : kind, c, w, heldAt - tau, Hand.REST);
+        Hand from = Hand.REST;
+        if (chained && kind == SwingKind.LIGHT) {
+            for (int i = 0; i < c; i++) {
+                SwingAnim.Keys k = SwingAnim.keys(SwingKind.LIGHT, i, w);
+                from = SwingAnim.hand(k, k, from, w.lightWindup() + w.lightRecover(), w.lightWindup(), w.lightWindup(), w.lightRecover(), false,
+                        -1.0F, 0.0F);
+            }
+        }
+        Swing s = new Swing(-1, kind == SwingKind.STRONG ? SwingKind.LIGHT : kind, c, w, heldAt - tau, from);
         if (kind == SwingKind.STRONG) {
             s.kind = SwingKind.STRONG;
             s.upgradeAt = w.holdAt() - 1.0F;

@@ -374,14 +374,16 @@ public final class DevShots {
             }
             case "gui" -> mc.options.hideGui = !arg.equals("on");
             case "swing" -> {
-                // "! swing light|strong combo tau": the player's own swing held still that many ticks in; "! swing off"
+                // "! swing light|strong combo tau [chain]": the player's own swing held still that many ticks in (with "chain",
+                // a light one starts where the chain's swings before it left the hand, pressed as fast as they go); "! swing off"
                 if (arg.equals("off")) {
-                    com.explorationremix.client.combat.SwingClient.devPose(com.explorationremix.combat.swing.SwingKind.LIGHT, 0, -1.0F);
+                    com.explorationremix.client.combat.SwingClient.devPose(com.explorationremix.combat.swing.SwingKind.LIGHT, 0, -1.0F, false);
                 } else {
                     if (s.length < 5) return false;
                     try {
                         com.explorationremix.client.combat.SwingClient.devPose(arg.equals("strong") ? com.explorationremix.combat.swing.SwingKind.STRONG
-                                : com.explorationremix.combat.swing.SwingKind.LIGHT, Integer.parseInt(s[3]), Float.parseFloat(s[4]));
+                                : com.explorationremix.combat.swing.SwingKind.LIGHT, Integer.parseInt(s[3]), Float.parseFloat(s[4]),
+                                s.length > 5 && s[5].equals("chain"));
                     } catch (NumberFormatException ex) {
                         return false;
                     }

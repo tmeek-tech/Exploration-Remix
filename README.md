@@ -164,7 +164,7 @@ only with `runesHurtPlayers` on) are in the server config `explorationremix-rune
 ## Swords and axes
 
 Swords (other mods' too) and axes swing the timed way. A tap of the attack button is a light swing that lands a
-quarter of a second after the press; light swings in a row make a chain (a sword's slash, backhand and overhead chop;
+quarter of a second after the press; light swings in a row make a chain (a sword's slash, rising backhand and overhead chop;
 an axe's slower slash and chop), and after the chain's last swing comes a 1.2 second cooldown in which only a strong
 attack can be made. Held, the swing turns strong: the blade draws back and fires on its own half a second after the
 press (an axe's 0.7), lunges about a block and a half and strikes everything in its line; then nothing can start for
