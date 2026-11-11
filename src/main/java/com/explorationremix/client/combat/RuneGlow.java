@@ -64,7 +64,8 @@ import java.util.WeakHashMap;
  * 14:45: over the whole sword, and with a sound after all, subtler than 0.12.0's chime). A band of light runs up the
  * sword from the pommel to the tip, the tip flares, and an afterglow fades away, about a second and a third in all;
  * your own sword also makes a faint shimmer that ends in a soft note as the tip flares. It does not come back until the
- * sword has run short and refilled. BladeLight holds the shape and timing; this draws it.
+ * sword has run short and refilled. And for as long as the sword has the energy to cast (Taran, 15:00), it sparkles:
+ * texels picked at random flash and fade, ten a second. BladeLight holds the shapes and timing; this draws them.
  *
  * <p>The light lies on what is actually drawn for the item: the faces of its model (or, for an item with its own
  * renderer such as Create's cardboard sword, the faces that renderer sends through ItemRenderer.renderQuadList), cut
@@ -79,14 +80,20 @@ public final class RuneGlow {
     static final float WAITING = 0.35F;
     /** The light's colour (pale blue-white); its hottest parts burn halfway to white. */
     static final float R = 0xD6 / 255.0F, G = 0xEC / 255.0F, B = 1.0F;
+    /** How near white a twinkle's flash burns at its brightest. */
+    static final float SPARK_WHITE = 0.8F;
     /** Players' swords are followed this far from the camera. */
     private static final double SEEN = 64.0;
 
     private static final Map<Long, BladeLight.Trigger> TRIGGERS = new HashMap<>();
     private static final Set<Long> SEEN_NOW = new HashSet<>();
+    /** The hands whose sword has the energy for its next cast this tick: they sparkle. */
+    private static final Set<Long> CHARGED = new HashSet<>();
     private static int clock;
     /** Dev: the local player's main-hand sword held still this many ticks into its light (-1: off). */
     private static float devTick = -1.0F;
+    /** Dev: the sparkle's clock held still at this tick (-1: off). */
+    private static float devSpark = -1.0F;
 
     private RuneGlow() {}
 
@@ -120,6 +127,7 @@ public final class RuneGlow {
         long now = mc.level.getGameTime();
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         SEEN_NOW.clear();
+        CHARGED.clear();
         for (Player p : mc.level.players()) {
             if (p.distanceToSqr(eye) > SEEN * SEEN) continue;
             for (InteractionHand hand : InteractionHand.values()) {
@@ -127,7 +135,9 @@ public final class RuneGlow {
                 long key = key(p.getId(), hand);
                 SEEN_NOW.add(key);
                 Object held = p == mc.player && hand == InteractionHand.MAIN_HAND ? new Held(stack.getItem(), p.getInventory().selected) : stack.getItem();
-                boolean starts = TRIGGERS.computeIfAbsent(key, k -> new BladeLight.Trigger()).update(held, readiness(stack, now), clock);
+                float readiness = readiness(stack, now);
+                if (readiness > 0) CHARGED.add(key);
+                boolean starts = TRIGGERS.computeIfAbsent(key, k -> new BladeLight.Trigger()).update(held, readiness, clock);
                 // only your own swords are heard (runes.ready: a quiet shimmer, and a soft note as the tip flares)
                 if (starts && p == mc.player) {
                     mc.level.playLocalSound(p.getX(), p.getEyeY(), p.getZ(), ERSounds.RUNES_READY.get(), SoundSource.PLAYERS, 0.5F,
@@ -141,12 +151,25 @@ public final class RuneGlow {
     @SubscribeEvent
     public static void loggingOut(ClientPlayerNetworkEvent.LoggingOut e) {
         TRIGGERS.clear();
+        CHARGED.clear();
         PENDING.clear();
         devTick = -1.0F;
+        devSpark = -1.0F;
     }
 
     /** Dev ("! glow tick" in DevShots): hold the main-hand sword's light still {@code tick} ticks in; below 0, let go. */
     public static void devHold(float tick) { devTick = tick; }
+
+    /** Dev ("! sparkle tick" in DevShots): hold the sparkle's clock still at {@code tick}; below 0, let go. */
+    public static void devSparkle(float tick) { devSpark = tick; }
+
+    /** Whether what {@code p} holds in {@code hand} sparkles: a sword with the energy for its next cast. */
+    private static boolean charged(Player p, InteractionHand hand, ItemStack stack) {
+        return RuneGear.host(stack) == Host.SWORD && CHARGED.contains(key(p.getId(), hand));
+    }
+
+    /** The sparkle's clock this frame. */
+    private static float sparkAt(float partialTick) { return devSpark >= 0 ? devSpark : clock + partialTick; }
 
     /** How far into its light (ticks, this frame) what {@code p} holds in {@code hand} is, or -1: no light. */
     private static float age(Player p, InteractionHand hand, ItemStack stack, float partialTick) {
@@ -160,22 +183,24 @@ public final class RuneGlow {
 
     // ------------------------------------------------------------------------------------------------ catching what is drawn
 
-    /** A held sword being drawn with its light playing: the faces drawn for it, and where. */
+    /** A held sword being drawn with its light playing or sparkling: the faces drawn for it, and where. */
     private static final class Capture {
         final int entity;
         final InteractionHand hand;
         final boolean firstPerson;
-        final float age;
+        /** Ticks into its light (-1: none); the sparkle's clock (-1: it isn't charged). */
+        final float age, sparkAt;
         /** Where the item was placed (the hand's space), and the projection and view it was drawn with. */
         final Matrix4f head, proj, view;
         final List<Matrix4f> poses = new ArrayList<>();
         final List<BakedQuad> quads = new ArrayList<>();
 
-        Capture(int entity, InteractionHand hand, boolean firstPerson, float age, Matrix4f head, Matrix4f proj, Matrix4f view) {
+        Capture(int entity, InteractionHand hand, boolean firstPerson, float age, float sparkAt, Matrix4f head, Matrix4f proj, Matrix4f view) {
             this.entity = entity;
             this.hand = hand;
             this.firstPerson = firstPerson;
             this.age = age;
+            this.sparkAt = sparkAt;
             this.head = new Matrix4f(head);
             this.proj = new Matrix4f(proj);
             this.view = new Matrix4f(view);
@@ -199,8 +224,8 @@ public final class RuneGlow {
 
     /**
      * Before a held item is drawn ({@code pose} as it is handed to ItemRenderer): if it is a sword whose light is
-     * playing, its faces are gathered: a plain model's here, as ItemRenderer will draw them; a custom renderer's as it
-     * draws them.
+     * playing or that sparkles, its faces are gathered: a plain model's here, as ItemRenderer will draw them; a custom
+     * renderer's as it draws them.
      */
     public static void beginItem(LivingEntity holder, ItemStack stack, ItemDisplayContext ctx, boolean leftHand, PoseStack pose) {
         current = null;
@@ -212,8 +237,10 @@ public final class RuneGlow {
         boolean right = ctx == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND || ctx == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND;
         InteractionHand hand = (right ? HumanoidArm.RIGHT : HumanoidArm.LEFT) == p.getMainArm() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
         float age = age(p, hand, stack, mc.getFrameTime());
-        if (age < 0 || Shaders.shadowPass()) return;
-        Capture c = new Capture(p.getId(), hand, first, age, pose.last().pose(), RenderSystem.getProjectionMatrix(), RenderSystem.getModelViewMatrix());
+        float sparkAt = charged(p, hand, stack) ? sparkAt(mc.getFrameTime()) : -1.0F;
+        if ((age < 0 && sparkAt < 0) || Shaders.shadowPass()) return;
+        Capture c = new Capture(p.getId(), hand, first, age, sparkAt, pose.last().pose(), RenderSystem.getProjectionMatrix(),
+                RenderSystem.getModelViewMatrix());
         BakedModel model = mc.getItemRenderer().getModel(stack, p.level(), p, p.getId() + ctx.ordinal());
         PoseStack at = new PoseStack();
         at.last().pose().set(pose.last().pose());
@@ -241,7 +268,7 @@ public final class RuneGlow {
         if (custom && current != null) current.add(pose.last().pose(), faces);
     }
 
-    /** After a held item is drawn: its light, if it has one playing, drawn among the world's buffers or kept for later. */
+    /** After a held item is drawn: its light (or sparkle), drawn among the world's buffers or kept for later. */
     public static void endItem(MultiBufferSource buffers) {
         Capture c = current;
         current = null;
@@ -334,7 +361,10 @@ public final class RuneGlow {
         }
     }
 
-    /** The light on a captured sword now: its cells, the way the light runs over them, and each one's brightness. */
+    /**
+     * The light on a captured sword now: its cells, the way the light runs over them, and each one's brightness, from the
+     * light's run and the sparkle.
+     */
     private static Lit light(Capture c) {
         BladeLight.Cells[] faces = new BladeLight.Cells[c.quads.size()];
         int n = 0;
@@ -346,6 +376,7 @@ public final class RuneGlow {
         Matrix4f toHand = new Matrix4f(c.head).invert();
         Matrix4f hand = new Matrix4f();
         float[] mid = new float[n * 3], corners = new float[n * 12], side = new float[n];
+        long[] texels = new long[n];
         Vector3f a = new Vector3f(), b = new Vector3f();
         int k = 0;
         for (int i = 0; i < faces.length; i++) {
@@ -353,7 +384,10 @@ public final class RuneGlow {
             if (f.count == 0) continue;
             Matrix4f m = c.poses.get(i);
             toHand.mul(m, hand);
+            TextureAtlasSprite sprite = c.quads.get(i).getSprite();
+            int salt = sprite == null ? 0 : sprite.contents().name().hashCode();
             for (int j = 0; j < f.count; j++, k++) {
+                texels[k] = BladeLight.key(salt, f.texels[j]);
                 for (int q = 0; q < 4; q++) {
                     int o = j * 12 + q * 3;
                     m.transformPosition(f.corners[o], f.corners[o + 1], f.corners[o + 2], a);
@@ -384,12 +418,29 @@ public final class RuneGlow {
         Lit lit = new Lit(c.proj, c.view);
         float[] white = new float[1];
         float len = run.texels();
+        // the sparkle, held back while the light's band runs up and coming in once it has reached the tip
+        float[] spark = null, sparkWhite = null;
+        float sparkIn = 0.0F;
+        if (c.sparkAt >= 0) {
+            float tip = BladeLight.tipAt(len);
+            sparkIn = c.age < 0 ? 1.0F : BladeLight.smooth(tip, tip + 6.0F, c.age);
+            if (sparkIn > 0) {
+                spark = new float[n];
+                sparkWhite = new float[n];
+                BladeLight.sparkle(texels, n, c.sparkAt, (int) key(c.entity, c.hand), spark, sparkWhite);
+            }
+        }
         for (int j = 0; j < n; j++) {
             float along = run.along()[j];
             if (along < 0) continue;
             float strength = BladeLight.light(along * len, len, c.age, white);
-            if (strength < 0.004F) continue;
             float w = 0.5F * white[0];
+            if (spark != null && spark[j] > 0) {
+                float s = sparkIn * spark[j];
+                strength = 1.0F - (1.0F - strength) * (1.0F - s);
+                w = Math.max(w, SPARK_WHITE * sparkIn * sparkWhite[j]);
+            }
+            if (strength < 0.004F) continue;
             lit.add(corners, j, R + (1.0F - R) * w, G + (1.0F - G) * w, B, Math.min(1.0F, strength));
         }
         return lit.count == 0 ? null : lit;

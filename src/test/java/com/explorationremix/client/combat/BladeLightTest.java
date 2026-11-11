@@ -8,7 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The rune sword's ready light (Taran, 2026-11-11 13:20 and 14:45): it lies on the sword's own texels and nowhere else,
- * runs over the whole sword from the end in the hand to the tip, plays once per recharge and is gone after.
+ * runs over the whole sword from the end in the hand to the tip, plays once per recharge and is gone after; and its
+ * sparkle while it has the energy to cast (15:00).
  */
 class BladeLightTest {
     /** Vanilla's sword outline (every vanilla sword has it): '.' clear, anything else opaque. Row 0 is the top. */
@@ -73,6 +74,7 @@ class BladeLightTest {
         for (int i = 0; i < faces[0].count; i++) {
             int[] t = texel(faces[0], i);
             assertTrue(SWORD[t[1]].charAt(t[0]) != '.', "a cell on a clear texel at " + t[0] + "," + t[1]);
+            assertEquals(BladeLight.texel(t[0], t[1]), faces[0].texels[i], "the cell knows its texel");
             // its corners on the texel's own edges
             for (int q = 0; q < 4; q++) {
                 float x = faces[0].corners[i * 12 + q * 3] * 16, y = faces[0].corners[i * 12 + q * 3 + 1] * 16;
@@ -236,5 +238,83 @@ class BladeLightTest {
         // and an empty one taken in hand plays when it fills
         assertFalse(t.update("c", 0.0F, now++));
         assertTrue(t.update("c", 1.0F, now++));
+    }
+
+    @Test
+    void aChargedSwordSparklesHereAndThereOnABeat() {
+        for (int texels : new int[]{40, 84, 200}) {
+            // each texel shown twice, as a generated item's front and back cells show it; none beside another
+            long[] keys = new long[texels * 2];
+            for (int i = 0; i < texels; i++) {
+                keys[i] = BladeLight.key(7, BladeLight.texel(2 * (i % 16), 2 * (i / 16)));
+                keys[texels + i] = keys[i];
+            }
+            float[] out = new float[keys.length], white = new float[keys.length];
+            boolean[] was = new boolean[texels];
+            float[] since = new float[texels];
+            int starts = 0, litAtOnce = 0, long_ = 0;
+            float seconds = 300.0F;
+            for (float t = 1000; t < 1000 + seconds * 20; t += 0.25F) {
+                BladeLight.sparkle(keys, keys.length, t, 99, out, white);
+                float brightest = 0;
+                for (int i = 0; i < texels; i++) {
+                    assertEquals(out[i], out[texels + i], "a texel's front and back sparkle together");
+                    assertTrue(out[i] >= 0.0F && out[i] <= 1.0F && white[i] >= 0.0F && white[i] <= 1.0F);
+                    brightest = Math.max(brightest, out[i]);
+                    boolean on = out[i] > 0;
+                    if (on && !was[i]) {
+                        starts++;
+                        since[i] = t;
+                    }
+                    if (on) litAtOnce++;
+                    // a quick flash (longer only where the same texel happens to be picked again as it fades)
+                    if (!on && was[i] && t - since[i] > BladeLight.TWINKLE + 0.25F) long_++;
+                    was[i] = on;
+                }
+                assertTrue(brightest > 0.1F, "never dark for a moment: " + brightest + " at " + t);
+            }
+            assertTrue(long_ < starts * 0.1F, "twinkles are quick flashes: " + long_ + " of " + starts + " ran long");
+            float perSecond = starts / seconds;
+            assertEquals(BladeLight.TWINKLES, perSecond, BladeLight.TWINKLES * 0.15F, texels + " texels: " + perSecond + " twinkles a second");
+            float atOnce = litAtOnce / (seconds * 20 * 4);
+            assertTrue(atOnce > 1.5F && atOnce < 4.5F, "a few at a time, not a blaze: " + atOnce);
+        }
+        // another sword (another seed) twinkles out of step
+        long[] keys = new long[40];
+        for (int i = 0; i < 40; i++) keys[i] = BladeLight.key(7, BladeLight.texel(2 * (i % 16), 2 * (i / 16)));
+        float[] a = new float[40], b = new float[40], w = new float[40];
+        int same = 0, samples = 0;
+        for (float t = 0; t < 2000; t += 1.0F) {
+            BladeLight.sparkle(keys, 40, t, 1, a, w);
+            BladeLight.sparkle(keys, 40, t, 2, b, w);
+            for (int i = 0; i < 40; i++) {
+                if (a[i] > 0 || b[i] > 0) {
+                    samples++;
+                    if (a[i] > 0 && b[i] > 0) same++;
+                }
+            }
+        }
+        assertTrue(same < samples / 5, "two swords' twinkles mostly fall apart: " + same + " of " + samples);
+    }
+
+    @Test
+    void aTwinkleLightsOnlyTheSwordsOwnTexelsBesideIt() {
+        // (3, 3) with one neighbour in the sword, (4, 3); (9, 9) alone
+        long a = BladeLight.key(1, BladeLight.texel(3, 3)), b = BladeLight.key(1, BladeLight.texel(4, 3)), lone = BladeLight.key(1, BladeLight.texel(9, 9));
+        long[] keys = {a, b, lone};
+        // the texels in order: a, b, lone (the same texture; a before b on the same row; lone on a later row)
+        float[] out = new float[3], white = new float[3];
+        boolean sawArm = false;
+        for (float t = 0; t < 20 * 300; t += 0.5F) {
+            BladeLight.sparkle(keys, 3, t, 5, out, white);
+            float[] own = BladeLight.twinkles(3, t, 5);
+            assertEquals(own[2], out[2], 1.0E-6F, "nothing round a lone texel lights it: what is beside it is clear");
+            assertEquals(Math.max(own[1], BladeLight.ARM * own[0] * own[0]), out[1], 1.0E-6F, "lit a little by its neighbour's twinkle, near its peak");
+            if (own[0] > 0.5F && own[1] == 0) {
+                sawArm = true;
+                assertTrue(white[1] < white[0], "the flash's middle burns whitest");
+            }
+        }
+        assertTrue(sawArm);
     }
 }

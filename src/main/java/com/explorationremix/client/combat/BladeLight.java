@@ -10,7 +10,8 @@ import java.util.Objects;
  * <p>The light lies on the item's own texels: each face the item is drawn with is cut into the squares of the texture
  * pixels it shows, and only the opaque ones are kept, so the light has the sword's own pixel edges, flat or 3D. It runs
  * over the whole sword (Taran, 14:45 the same day), from the end in the hand to the tip: a bright band up it, the tip
- * flaring as it gets there, then a short afterglow that fades to nothing.
+ * flaring as it gets there, then a short afterglow that fades to nothing. And while the sword has the energy to cast,
+ * it sparkles (Taran, 15:00): texels picked at random flash and fade, ten a second.
  */
 public final class BladeLight {
     private BladeLight() {}
@@ -27,19 +28,31 @@ public final class BladeLight {
     /** A face is cut into at most this many cells each way (a huge texture keeps its light in coarser squares). */
     static final int MAX_CUTS = 64;
 
-    /** Squares cut from one face: their corners (4 x xyz each, in the face's own space) and middles (xyz each). */
+    /**
+     * Squares cut from one face: their corners (4 x xyz each, in the face's own space), middles (xyz each), and the texel
+     * each shows ({@link #texel}: its x and y in the texture, packed).
+     */
     public static final class Cells {
-        public static final Cells NONE = new Cells(0, new float[0], new float[0]);
+        public static final Cells NONE = new Cells(0, new float[0], new float[0], new int[0]);
         public final int count;
         public final float[] corners;
         public final float[] middles;
+        public final int[] texels;
 
-        Cells(int count, float[] corners, float[] middles) {
+        Cells(int count, float[] corners, float[] middles, int[] texels) {
             this.count = count;
             this.corners = corners;
             this.middles = middles;
+            this.texels = texels;
         }
     }
+
+    /** A texel's x and y in its texture, packed into one number (and back: {@link #texelX}, {@link #texelY}). */
+    public static int texel(int x, int y) { return (x & 0xFFFF) | y << 16; }
+
+    public static int texelX(int texel) { return texel & 0xFFFF; }
+
+    public static int texelY(int texel) { return texel >>> 16; }
 
     /**
      * Cuts a face into the texels it shows. {@code pos}: its four corners (xyz each, in order round the face); {@code st}:
@@ -64,6 +77,7 @@ public final class BladeLight {
         }
         float[] corners = new float[na * nb * 12];
         float[] middles = new float[na * nb * 3];
+        int[] texels = new int[na * nb];
         int n = 0;
         float[] p = new float[3];
         float[] uv = new float[2];
@@ -85,10 +99,11 @@ public final class BladeLight {
                 System.arraycopy(p, 0, corners, c + 9, 3);
                 bilerp(pos, 3, am, bm, p);
                 System.arraycopy(p, 0, middles, n * 3, 3);
+                texels[n] = texel(x, y);
                 n++;
             }
         }
-        return n == 0 ? Cells.NONE : new Cells(n, Arrays.copyOf(corners, n * 12), Arrays.copyOf(middles, n * 3));
+        return n == 0 ? Cells.NONE : new Cells(n, Arrays.copyOf(corners, n * 12), Arrays.copyOf(middles, n * 3), Arrays.copyOf(texels, n));
     }
 
     private static int cuts(float span) { return clamp(Math.round(Math.abs(span)), 1, MAX_CUTS); }
@@ -222,6 +237,100 @@ public final class BladeLight {
         float k = Math.min(1.0F, Math.max(0.0F, (x - e0) / (e1 - e0)));
         return k * k * (3.0F - 2.0F * k);
     }
+
+    // ------------------------------------------------------------------------------------------------ the sparkle while charged
+
+    /**
+     * Twinkles a second over a whole sword while it has the energy to cast, however many texels it has: on a steady
+     * beat (a little loose), not by chance, so the sword never goes dark for a moment and never blazes.
+     */
+    static final float TWINKLES = 10.0F;
+    /** Ticks one twinkle lasts. */
+    static final float TWINKLE = 6.0F;
+    /**
+     * How much of a twinkle's flash comes up (the rest is its fade); how bright the four texels round it light at its
+     * peak (they fade faster than the middle, so a twinkle reads as a glint that shrinks to one texel).
+     */
+    static final float RISE = 0.15F, ARM = 0.4F;
+
+    /** A texel's name across the whole sword: which texture it is in ({@code salt}) and its place there. */
+    public static long key(int salt, int texel) { return (long) salt << 32 | (texel & 0xFFFFFFFFL); }
+
+    /**
+     * The sparkle over a sword's cells at tick {@code t} (any steady clock): {@code keys[i]} names the texel cell i shows
+     * ({@link #key}; a texel's front, back and edge cells share it), and {@code seed} tells one sword in hand from another
+     * so two don't twinkle in step. Into {@code out[i]} goes how brightly the cell sparkles, and into {@code white[i]}
+     * how near white: a texel picked at random flashes and fades, {@link #TWINKLES} a second, lighting the texels beside
+     * it a little (only the sword's own: nothing lights round its edge).
+     */
+    public static void sparkle(long[] keys, int n, float t, int seed, float[] out, float[] white) {
+        long[] texels = Arrays.copyOf(keys, n);
+        Arrays.sort(texels);
+        int d = 0;
+        for (int i = 0; i < n; i++) if (d == 0 || texels[i] != texels[d - 1]) texels[d++] = texels[i];
+        float[] own = twinkles(d, t, seed);
+        for (int i = 0; i < n; i++) {
+            long k = keys[i];
+            float self = at(texels, d, own, k);
+            float near = Math.max(Math.max(at(texels, d, own, beside(k, -1, 0)), at(texels, d, own, beside(k, 1, 0))),
+                    Math.max(at(texels, d, own, beside(k, 0, -1)), at(texels, d, own, beside(k, 0, 1))));
+            float arms = ARM * near * near;
+            out[i] = Math.max(self, arms);
+            white[i] = self >= arms ? self : 0.5F * arms;
+        }
+    }
+
+    /**
+     * Each of a sword's {@code d} texels' own twinkle at tick {@code t} (0 if it isn't twinkling), the texels counted in
+     * order. A twinkle starts each beat ({@code 20 / TWINKLES} ticks), somewhere in its first four fifths, on a texel picked
+     * from the beat and the seed.
+     */
+    static float[] twinkles(int d, float t, int seed) {
+        float[] own = new float[d];
+        if (d == 0) return own;
+        double beat = 20.0 / TWINKLES;
+        long last = (long) Math.floor(t / beat);
+        long first = last - (long) Math.ceil(TWINKLE / beat);
+        for (long j = last; j >= first; j--) {
+            int h = mix(seed * 0x01000193 ^ mix((int) j ^ (int) (j >>> 32)));
+            double age = t - (j + 0.8 * unit(h)) * beat;
+            if (age < 0 || age >= TWINKLE) continue;
+            int g = mix(h);
+            int pick = Math.min(d - 1, (int) (unit(g) * d));
+            float k = (float) (age / TWINKLE);
+            float fade = 1.0F - (k - RISE) / (1.0F - RISE);
+            float shape = k < RISE ? smooth(0.0F, RISE, k) : fade * fade;
+            own[pick] = Math.max(own[pick], (0.75F + 0.25F * unit(mix(g))) * shape);
+        }
+        return own;
+    }
+
+    /** The texel {@code dx, dy} from the one {@code key} names, in the same texture (or -1: off its edge). */
+    private static long beside(long key, int dx, int dy) {
+        int x = texelX((int) key) + dx, y = texelY((int) key) + dy;
+        if (x < 0 || y < 0 || x > 0xFFFF || y > 0xFFFF) return -1L;
+        return key(texelSalt(key), texel(x, y));
+    }
+
+    private static int texelSalt(long key) { return (int) (key >>> 32); }
+
+    private static float at(long[] texels, int d, float[] own, long key) {
+        if (key == -1L) return 0.0F;
+        int i = Arrays.binarySearch(texels, 0, d, key);
+        return i >= 0 ? own[i] : 0.0F;
+    }
+
+    private static int mix(int x) {
+        x ^= x >>> 16;
+        x *= 0x7FEB352D;
+        x ^= x >>> 15;
+        x *= 0x846CA68B;
+        x ^= x >>> 16;
+        return x;
+    }
+
+    /** 0 to 1 (never 1) from a mixed number. */
+    private static float unit(int h) { return (h >>> 8) / 16777216.0F; }
 
     // ------------------------------------------------------------------------------------------------ when it plays
 

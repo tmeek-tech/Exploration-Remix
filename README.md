@@ -173,8 +173,8 @@ attack that lands while a Mossback or a Skein rears to strike stops the strike a
 crosshair show the chain and the cooldown. A press on a block the weapon is meant for (an axe on wood, a sword on a
 cobweb) with nothing in reach mines it as ever. When a runed sword gets back the energy for its next cast, a pale
 blue-white light runs over the whole sword's own pixels from the pommel to the tip, once, and fades, with a quiet
-shimmer and a soft note in your own hands (under shader packs too, and on swords drawn by their own renderer, such as
-Create's cardboard sword).
+shimmer and a soft note in your own hands; then, for as long as it has that energy, its pixels sparkle here and there
+(under shader packs too, and on swords drawn by their own renderer, such as Create's cardboard sword).
 
 ## Commands
 

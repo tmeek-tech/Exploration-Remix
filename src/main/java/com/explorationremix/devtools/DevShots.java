@@ -334,6 +334,7 @@ public final class DevShots {
      * 0 to 8), "! look yaw pitch", "! gui on|off" (the hotbar and HUD), "! view first|third|front" (the camera),
      * "! swing light|strong combo tau" (the player's own timed swing held still tau ticks in; "! swing off" lets go),
      * "! glow tick" (the ready light on the sword in hand held still that many ticks into its play; "! glow off" lets go),
+     * "! sparkle tick" (a charged sword's sparkle held still at that tick of its clock; "! sparkle off" lets go),
      * "! close" (the open screen) and "! snap name"
      * (a picture of this very frame, without moving or settling, for things in flight and screens). False if the
      * line is none of these.
@@ -397,6 +398,17 @@ public final class DevShots {
                 } else {
                     try {
                         com.explorationremix.client.combat.RuneGlow.devHold(Float.parseFloat(arg));
+                    } catch (NumberFormatException ex) {
+                        return false;
+                    }
+                }
+            }
+            case "sparkle" -> {
+                if (arg.equals("off")) {
+                    com.explorationremix.client.combat.RuneGlow.devSparkle(-1.0F);
+                } else {
+                    try {
+                        com.explorationremix.client.combat.RuneGlow.devSparkle(Float.parseFloat(arg));
                     } catch (NumberFormatException ex) {
                         return false;
                     }
