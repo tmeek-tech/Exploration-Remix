@@ -333,6 +333,7 @@ public final class DevShots {
      * key), "! hold use|attack" and "! release use|attack" (keep it held down until released), "! slot n" (hotbar slot
      * 0 to 8), "! look yaw pitch", "! gui on|off" (the hotbar and HUD), "! view first|third|front" (the camera),
      * "! swing light|strong combo tau" (the player's own timed swing held still tau ticks in; "! swing off" lets go),
+     * "! glow tick" (the ready light on the sword in hand held still that many ticks into its play; "! glow off" lets go),
      * "! close" (the open screen) and "! snap name"
      * (a picture of this very frame, without moving or settling, for things in flight and screens). False if the
      * line is none of these.
@@ -384,6 +385,17 @@ public final class DevShots {
                         com.explorationremix.client.combat.SwingClient.devPose(arg.equals("strong") ? com.explorationremix.combat.swing.SwingKind.STRONG
                                 : com.explorationremix.combat.swing.SwingKind.LIGHT, Integer.parseInt(s[3]), Float.parseFloat(s[4]),
                                 s.length > 5 && s[5].equals("chain"));
+                    } catch (NumberFormatException ex) {
+                        return false;
+                    }
+                }
+            }
+            case "glow" -> {
+                if (arg.equals("off")) {
+                    com.explorationremix.client.combat.RuneGlow.devHold(-1.0F);
+                } else {
+                    try {
+                        com.explorationremix.client.combat.RuneGlow.devHold(Float.parseFloat(arg));
                     } catch (NumberFormatException ex) {
                         return false;
                     }

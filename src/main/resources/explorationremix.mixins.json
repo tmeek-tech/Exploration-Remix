@@ -40,6 +40,8 @@
     "client.RuneHandRendererMixin",
     "client.RenderBuffersMixin",
     "client.ItemInHandRendererMixin",
+    "client.ItemRendererMixin",
+    "client.GameRendererMixin",
     "client.ItemInHandLayerMixin",
     "client.HumanoidModelMixin",
     "client.MinecraftAttackMixin",

@@ -5,7 +5,7 @@ the pack's own caves, sealed from each other by unbreakable bands with natural g
 and Create stone and dressed to match a set of reference pictures. Made for a pack with Tectonic, Terrain Slabs,
 Immersive Weathering and Create (not Better Combat, which replaces the same attack as the timed swings).
 
-**Status: 0.12.0: milestone 1's world generation and cave looks, the cave hunters, stage 1 of the rune overhaul
+**Status: 0.12.1: milestone 1's world generation and cave looks, the cave hunters, stage 1 of the rune overhaul
 (rune rows on swords, bows and crossbows; see [Runes](#runes)) and timed swings for swords and axes (see
 [Swords and axes](#swords-and-axes)).** The first build's runs were removed (git history keeps them); they return in
 later milestones, built on these caves.
@@ -171,8 +171,9 @@ press (an axe's 0.7), lunges about a block and a half and strikes everything in 
 1.2 seconds. Every swing that lands is at full strength (vanilla's charge bar is gone for these weapons). A strong
 attack that lands while a Mossback or a Skein rears to strike stops the strike and leaves it reeling. Marks under the
 crosshair show the chain and the cooldown. A press on a block the weapon is meant for (an axe on wood, a sword on a
-cobweb) with nothing in reach mines it as ever. A runed sword lights up pale blue-white once it holds the energy for
-its next cast.
+cobweb) with nothing in reach mines it as ever. When a runed sword gets back the energy for its next cast, a pale
+blue-white light runs up its blade's own pixels from the guard to the tip, once, and fades (silently; under shader packs
+too, and on swords drawn by their own renderer, such as Create's cardboard sword).
 
 ## Commands
 
@@ -204,7 +205,7 @@ its next cast.
 python3 tools/gen_data.py       # regenerates every datapack JSON, model, texture and lang file from tools/*.py
 python3 tools/synth_sounds.py   # regenerates the ambient sound recordings
 python3 tools/synth_lava_sounds.py  # regenerates the lava cycle's rumbles and surge
-python3 tools/synth_swing_sounds.py # regenerates the swings', the sword chime's and the hunters' wind-up sounds
+python3 tools/synth_swing_sounds.py # regenerates the swings' and the hunters' wind-up sounds
 ```
 
 `src/preview` holds an offline preview (`TerrainPreview`) that draws each deep layer's network, sections through its

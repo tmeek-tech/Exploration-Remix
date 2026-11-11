@@ -42,20 +42,20 @@ public final class GlowRender extends RenderType {
     public static RenderType glow(ResourceLocation texture) { return GLOW.apply(texture); }
 
     /**
-     * The light on a sword's blade (its runes ready to cast): as {@link #glow}, its texture smoothed, drawn after the
-     * held items it lies on (it is one of the buffers the game draws last, see RenderBuffersMixin), so it adds onto the
-     * blade rather than being covered by it.
+     * A rune sword's ready light on its blade, seen from outside without a shader pack (RuneGlow): untextured squares on
+     * the blade's own texels, added by their alpha, nudged towards the eye so they win against the blade they lie on, and
+     * drawn after the held items (it is one of the buffers the game draws last, see RenderBuffersMixin).
      */
-    public static final RenderType BLADE = create("explorationremix_blade_glow", DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 4096,
-            false, true, CompositeState.builder()
-                    .setShaderState(RENDERTYPE_EYES_SHADER)
-                    .setTextureState(new TextureStateShard(new ResourceLocation("explorationremix", "textures/misc/blade_glow.png"), true, false))
-                    .setTransparencyState(ADDITIVE_TRANSPARENCY)
+    public static final RenderType BLADE = create("explorationremix_blade_light", DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS, 8192,
+            false, false, CompositeState.builder()
+                    .setShaderState(POSITION_COLOR_SHADER)
+                    .setTransparencyState(LIGHTNING_TRANSPARENCY)
                     .setCullState(NO_CULL)
+                    .setLayeringState(POLYGON_OFFSET_LAYERING)
                     .setWriteMaskState(COLOR_WRITE)
                     .createCompositeState(false));
 
-    /** A swing's sweep through the air: additive, soft, seen from both sides, drawn as {@link #BLADE} is. */
+    /** A swing's sweep through the air: additive, soft, seen from both sides, drawn last as {@link #BLADE} is. */
     public static final RenderType SWEEP = create("explorationremix_swing_sweep", DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 4096,
             false, true, CompositeState.builder()
                     .setShaderState(RENDERTYPE_EYES_SHADER)

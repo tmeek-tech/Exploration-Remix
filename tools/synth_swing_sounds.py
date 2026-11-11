@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Makes the timed swings' sounds from scratch (0.12.0; no recordings): a light swing's quick whoosh, the chain's chop
 (lower and heavier), a strong attack's thrust (sharp, with a thin ring of steel), the rising hum as a held swing turns
-strong, the soft chime of a rune sword's light waking, and the hunters' wind-ups: half a second that swells into the
-strike (the Mossback's throaty intake and growl, the Skein's clicks running faster and faster), so the strike can be
-timed by ear. Built from tones and filtered noise with the helpers in synth_sounds.py. Deterministic.
+strong, and the hunters' wind-ups: half a second that swells into the strike (the Mossback's throaty intake and growl,
+the Skein's clicks running faster and faster), so the strike can be timed by ear. Built from tones and filtered noise
+with the helpers in synth_sounds.py. Deterministic. (A rune sword's ready light plays silently: Taran, 2026-11-11.)
 
-Needs numpy and ffmpeg with libvorbis. Writes src/main/resources/assets/explorationremix/sounds/swing/*.ogg,
-sounds/runes/*.ogg and sounds/creature/<who>/windup*.ogg (tools/sounds.py lists them in sounds.json).
+Needs numpy and ffmpeg with libvorbis. Writes src/main/resources/assets/explorationremix/sounds/swing/*.ogg and
+sounds/creature/<who>/windup*.ogg (tools/sounds.py lists them in sounds.json).
 Run from anywhere: python3 tools/synth_swing_sounds.py
 """
 import os, sys
@@ -100,28 +100,6 @@ def charge(rng):
     return S.normalize_peak(S.fade_edges(x, 0.004), -6.0)
 
 
-def chime(rng, notes):
-    """The rune sword's light waking: two soft, glassy bell notes and a breath of shimmer above them."""
-    dur = 1.4
-    n = secs(dur)
-    t = np.arange(n) / SR
-    x = np.zeros(n)
-    for j, f in enumerate(notes):
-        at = 0.05 * j
-        tt = np.maximum(0, t - at)
-        on = (t >= at).astype(float)
-        bell = np.zeros(n)
-        for ratio, amp, decay in ((1.0, 1.0, 0.75), (2.76, 0.35, 0.32), (5.40, 0.16, 0.16), (8.93, 0.06, 0.08)):
-            bell += amp * np.sin(2 * np.pi * f * ratio * tt) * np.exp(-tt / decay)
-        bell *= on * np.minimum(1, tt / 0.004)
-        x += bell * (1.0 if j == 0 else 0.7)
-    shimmer = S.filt(rng.standard_normal(n), S.bandpass(6500, 2.0)) * np.exp(-t / 0.25) * 0.05
-    x += shimmer
-    ir = S.reverb_ir(1.0, rng, 0.35, lp=6000)
-    wet = S.convolve(x, ir)[:n]
-    return S.normalize_peak(S.fade_edges(x + 0.25 * wet, 0.004), -5.0)
-
-
 def mossback_windup(rng):
     """Half a second: a throaty intake rising into a growl that swells to the snap (the bite follows it)."""
     dur = 0.5
@@ -165,12 +143,9 @@ SETS = [
     ("swing", "heavy", heavy, 2, 4200),
     ("swing", "thrust", thrust, 2, 4300),
     ("swing", "charge", charge, 2, 4400),
-    ("runes", "ready", None, 2, 4500),
     ("creature/mossback", "windup", mossback_windup, 2, 4600),
     ("creature/skein", "windup", skein_windup, 2, 4700),
 ]
-# the chime's two notes, cool and clear: E6 and B6, then D6 and A6
-CHIMES = [(1318.5, 1975.5), (1174.7, 1760.0)]
 
 
 def main():
@@ -178,8 +153,7 @@ def main():
         S.OUT = os.path.join(SOUNDS, folder)
         for i in range(count):
             rng = np.random.default_rng(base + i)
-            x = chime(rng, CHIMES[i]) if maker is None else maker(rng)
-            S.save(f"{name}{i + 1}", x)
+            S.save(f"{name}{i + 1}", maker(rng))
 
 
 if __name__ == "__main__":

@@ -12,12 +12,21 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** After a held item is drawn, in first or third person: a rune sword's light over its blade (see RuneGlow). */
+/**
+ * A held item drawn in first or third person: a rune sword whose ready light is playing has the faces it is drawn with
+ * gathered as it is drawn, and its light laid on them after (see RuneGlow).
+ */
 @Mixin(ItemInHandRenderer.class)
 public abstract class ItemInHandRendererMixin {
+    @Inject(method = "renderItem", at = @At("HEAD"))
+    private void explorationremix$bladeFaces(LivingEntity holder, ItemStack stack, ItemDisplayContext ctx, boolean leftHand, PoseStack pose,
+                                             MultiBufferSource buffers, int light, CallbackInfo ci) {
+        RuneGlow.beginItem(holder, stack, ctx, leftHand, pose);
+    }
+
     @Inject(method = "renderItem", at = @At("TAIL"))
     private void explorationremix$bladeLight(LivingEntity holder, ItemStack stack, ItemDisplayContext ctx, boolean leftHand, PoseStack pose,
                                              MultiBufferSource buffers, int light, CallbackInfo ci) {
-        RuneGlow.draw(holder, stack, ctx, leftHand, pose, buffers);
+        RuneGlow.endItem(buffers);
     }
 }

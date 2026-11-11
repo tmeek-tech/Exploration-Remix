@@ -14,8 +14,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.SortedMap;
 
 /**
- * The blade's light and the swings' sweep join the buffers the game keeps for the end of a frame's world, after the
- * held items' own (and their enchantment glint): drawn any sooner, the blade drawn after them would cover them.
+ * The blade's light (seen from outside, without a shader pack) and the swings' sweep join the buffers the game keeps for
+ * the end of a frame's world, after the held items' own (and their enchantment glint): drawn any sooner, the blade drawn
+ * after them would cover them.
  */
 @Mixin(RenderBuffers.class)
 public abstract class RenderBuffersMixin {

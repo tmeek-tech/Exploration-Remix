@@ -77,12 +77,11 @@ public final class ERSounds {
 
     // The timed swings (0.12.0, client.combat.SwingClient and combat.swing.Swordplay; tools/synth_swing_sounds.py makes
     // them): a light swing's quick whoosh, the chain's chop (heavier), a strong attack's thrust, the rising hum as a held
-    // swing turns strong, and the soft chime of a rune sword's light waking (client.combat.RuneGlow).
+    // swing turns strong.
     public static final RegistryObject<SoundEvent> SWING_LIGHT = register("swing.light");
     public static final RegistryObject<SoundEvent> SWING_HEAVY = register("swing.heavy");
     public static final RegistryObject<SoundEvent> SWING_THRUST = register("swing.thrust");
     public static final RegistryObject<SoundEvent> SWING_CHARGE = register("swing.charge");
-    public static final RegistryObject<SoundEvent> RUNES_READY = register("runes.ready");
     // The hunters' wind-ups (0.12.0): half a second that swells into the strike, so the ear can time it
     public static final RegistryObject<SoundEvent> MOSSBACK_WINDUP = register("mossback.windup");
     public static final RegistryObject<SoundEvent> SKEIN_WINDUP = register("skein.windup");
