@@ -70,6 +70,7 @@ public final class UpperShapes {
         return a;
     });
     private final ThreadLocal<double[]> grads = ThreadLocal.withInitial(() -> new double[2]);
+    private final ThreadLocal<Cells> cells = ThreadLocal.withInitial(Cells::new);
 
     public UpperShapes(long seed, int packFloor, Overhead overhead, boolean warrens, boolean rifts, boolean halls, boolean sinkholes, boolean wormTunnels) {
         this.seed = seed;
@@ -138,7 +139,12 @@ public final class UpperShapes {
         final double[] wYc = new double[2], wHh = new double[2], wHw = new double[2], wLine = new double[2], wRoom = new double[2];
         /** Sheet 1 before the cap (the sinkholes' lake level). */
         double yc1Raw, hh1;
-        /** 0..1: the top sheet rises to the ground (a mouth); dips to the lower sheet (a link). */
+        /** The top sheet's roof cap: the column's cap, lifted where a mouth opens. */
+        double cap0;
+        /**
+         * 0..1: how far a mouth lifts the top sheet's roof cap toward 4 over the ground (1 where it opens fully); how far
+         * the top sheet dips to the lower one (a link).
+         */
         double mouth, link;
         /** The column's hanging root or icicle: kind, sheet, and its span [fBottom, fTop] (block centres). */
         int fKind;
@@ -297,23 +303,23 @@ public final class UpperShapes {
         c.yc1Raw = c.wYc[1];
         c.hh1 = c.wHh[1];
         int x = c.x, z = c.z;
-        // mouths: under forests the top sheet rises to just under the ground, so its tunnel opens as a sunken way in
-        double m = K2 * mouthN.noise2(x / 70.0, z / 70.0);
-        m = m > 0.33 ? smooth((m - 0.33) / 0.35) : 0;
-        if (m > 0 && c.forest) m *= gate(x, z, GATE_MOUTH);
-        else m = 0;
-        c.mouth = m;
+        // the roof caps (see roofCaps): under the lowest ground near, and lifted to the ground over a mouth
+        double cap = roofCaps(c);
+        // mouths: where a slow field is high the top sheet climbs toward the ground; under a forest the lifted cap lets
+        // it open there as a sunken way in, elsewhere it runs just under the cap
+        double m = mouthRamp(x, z);
         // links: here and there the top sheet dips to the lower one, so the two meet where their tunnels cross
         double k = K2 * linkN.noise2(x / 80.0, z / 80.0);
         k = k > 0.40 ? smooth((k - 0.40) / 0.45) * (1 - m) : 0;
         c.link = k;
         c.wYc[0] += k * (c.wYc[1] - c.wYc[0]);
-        if (m > 0) c.wYc[0] += m * (c.gF - 1.2 - c.wYc[0]);
-        // roofs stay under the lowest ground near (deeper under water), except where a mouth opens
-        double cap = c.low - (c.wet ? 9 : 5);
+        if (m > 0) {
+            double to = Math.min(c.gF - 1.2, c.wYc[0] + MOUTH_RISE);
+            if (to > c.wYc[0]) c.wYc[0] += m * (to - c.wYc[0]);
+        }
         for (int i = 0; i < 2; i++) {
-            double over = c.wYc[i] + c.wHh[i] - cap;
-            if (over > 0) c.wYc[i] -= over * (i == 0 ? 1 - m : 1);
+            double over = c.wYc[i] + c.wHh[i] - (i == 0 ? c.cap0 : cap);
+            if (over > 0) c.wYc[i] -= over;
             c.wOn[i] = warrens && c.wYc[i] - 0.6 * c.wHh[i] > minFloor + 2 && c.wLine[i] < 3 * c.wHw[i] + 3;
             c.wPool[i] = NO_Y;
             if (c.wOn[i]) {
@@ -322,6 +328,154 @@ public final class UpperShapes {
             }
         }
         if (c.forest && warrens) formation(c);
+    }
+
+    /** How far a mouth lets the top sheet climb from its own depth toward the ground, in blocks. */
+    static final double MOUTH_RISE = 20;
+
+    /** 0..1: how far the top sheet climbs toward the ground at a column (a slow field, whatever the ground). */
+    private double mouthRamp(int x, int z) {
+        double v = K2 * mouthN.noise2(x / 70.0, z / 70.0);
+        return v > 0.2 ? smooth((v - 0.2) / 0.45) : 0;
+    }
+
+    // ------------------------------------------------------------------------------------------------ roof caps
+
+    /**
+     * How steeply a warren roof's cap may fall or climb, in blocks per block along x or z (about 0.85 on a diagonal):
+     * near a valley the tunnels sink under it on a slope no steeper than this, and they climb into a mouth the same way,
+     * never down a chute.
+     */
+    static final double ROOF_SLOPE = 0.6;
+    /** How far round a cell the caps look for lower ground and for mouths, in 4x4 cells (48 blocks). */
+    static final int ROOF_REACH = 12;
+    private static final float STEP = (float) (4 * ROOF_SLOPE);
+    private static final int CELL_BITS = 7, CELL_MASK = (1 << CELL_BITS) - 1;
+
+    /**
+     * The 4x4 cells' roof caps, per thread: a direct-mapped cache of 128 x 128 cells (every cell one answer needs lies
+     * within 30 of the first, so none pushes out another). NaN marks a value not worked out yet.
+     */
+    private static final class Cells {
+        final long[] key = new long[1 << 2 * CELL_BITS];
+        /** The cell's own cap: 5 under its lowest ground, 9 under water. */
+        final float[] cap = new float[key.length];
+        /** The cap a mouth lifts it to (its own cap where none opens). */
+        final float[] lift = new float[key.length];
+        /** Along x, and then along z too: the least cap (or lifted cap) in reach, plus the slope times the distance. */
+        final float[] rowCap = new float[key.length], rowLift = new float[key.length], cone = new float[key.length], coneLift = new float[key.length];
+        /** The least cap in reach along x (and one cell more). */
+        final float[] rowMin = new float[key.length];
+
+        Cells() { java.util.Arrays.fill(key, Long.MIN_VALUE); }
+    }
+
+    /** Cell (cx, cz)'s slot, taken over and its own cap worked out if another cell held it. */
+    private int slot(Cells k, int cx, int cz) {
+        int i = ((cx & CELL_MASK) << CELL_BITS) | (cz & CELL_MASK);
+        long key = ((long) cx << 32) ^ (cz & 0xffffffffL);
+        if (k.key[i] != key) {
+            int bx = (cx << 2) + 2, bz = (cz << 2) + 2;
+            k.key[i] = key;
+            k.cap[i] = overhead.low(bx, bz) - (overhead.at(bx, bz).wet() ? 9 : 5);
+            k.lift[i] = k.rowCap[i] = k.rowLift[i] = k.cone[i] = k.coneLift[i] = k.rowMin[i] = Float.NaN;
+        }
+        return i;
+    }
+
+    /**
+     * The cap a mouth lifts cell (cx, cz)'s to: toward 4 over its ground where the mouths' field is high under a dry
+     * forest (the gate), its own cap elsewhere. A mouth needs no ground much lower than its own in the caps' reach, so the
+     * lifted cap falls toward the lowest of it on the slope within reach rather than dropping where it comes into reach.
+     */
+    private float lift(Cells k, int cx, int cz) {
+        int i = slot(k, cx, cz);
+        float v = k.lift[i];
+        if (v == v) return v;
+        v = k.cap[i];
+        int bx = (cx << 2) + 2, bz = (cz << 2) + 2;
+        Overhead.Surface s = overhead.at(bx, bz);
+        if (warrens && s.cover() == Overhead.Cover.FOREST && !s.wet()) {
+            double e = mouthRamp(bx, bz);
+            if (e > 0) e *= gate(bx, bz, GATE_MOUTH);
+            if (e > 0) {
+                double top = s.y() + 4;
+                e *= smooth((STEP * ROOF_REACH + 6 - (top - minCap(k, cx, cz))) / 12);
+                if (e > 0 && top > v) v = (float) lerp(e, v, top);
+            }
+        }
+        k.lift[i] = v;
+        return v;
+    }
+
+    /** The least own cap within the reach (and one cell more) of cell (cx, cz), along x and z. */
+    private float minCap(Cells k, int cx, int cz) {
+        float v = Float.POSITIVE_INFINITY;
+        for (int dz = -ROOF_REACH - 1; dz <= ROOF_REACH + 1; dz++) {
+            int i = slot(k, cx, cz + dz);
+            float r = k.rowMin[i];
+            if (r != r) {
+                r = Float.POSITIVE_INFINITY;
+                for (int dx = -ROOF_REACH - 1; dx <= ROOF_REACH + 1; dx++) r = Math.min(r, k.cap[slot(k, cx + dx, cz + dz)]);
+                k.rowMin[i] = r;
+            }
+            v = Math.min(v, r);
+        }
+        return v;
+    }
+
+    /**
+     * Cell (cx, cz)'s cap sunk toward every lower cap in reach, or with {@code lifted} its lifted cap sunk toward every
+     * lower lifted cap: the least of their caps plus {@link #ROOF_SLOPE} times the distance (along x, then z).
+     */
+    private float cone(Cells k, int cx, int cz, boolean lifted) {
+        int i = slot(k, cx, cz);
+        float v = lifted ? k.coneLift[i] : k.cone[i];
+        if (v == v) return v;
+        v = Float.POSITIVE_INFINITY;
+        for (int dz = -ROOF_REACH; dz <= ROOF_REACH; dz++) {
+            int j = slot(k, cx, cz + dz);
+            float r = lifted ? k.rowLift[j] : k.rowCap[j];
+            if (r != r) {
+                r = Float.POSITIVE_INFINITY;
+                for (int dx = -ROOF_REACH; dx <= ROOF_REACH; dx++) {
+                    float c = lifted ? lift(k, cx + dx, cz + dz) : k.cap[slot(k, cx + dx, cz + dz)];
+                    r = Math.min(r, c + STEP * Math.abs(dx));
+                }
+                if (lifted) k.rowLift[j] = r;
+                else k.rowCap[j] = r;
+            }
+            v = Math.min(v, r + STEP * Math.abs(dz));
+        }
+        if (lifted) k.coneLift[i] = v;
+        else k.cone[i] = v;
+        return v;
+    }
+
+    /**
+     * The roofs' caps at a column, straight between the cells' middles: the lower sheet's (returned) keeps under the
+     * lowest ground near, 5 blocks under it and 9 under water, sinking toward lower ground in reach on a slope; the top
+     * sheet's ({@link Col#cap0}) is the same but lifted to the ground over a mouth, so a mouth's tunnel falls from it on
+     * the same slope. Sets {@link Col#mouth}.
+     */
+    private double roofCaps(Col c) {
+        Cells k = cells.get();
+        double u = (c.x + 0.5 - 2) / 4.0, v = (c.z + 0.5 - 2) / 4.0;
+        int ci = (int) Math.floor(u), cj = (int) Math.floor(v);
+        double fu = u - ci, fv = v - cj;
+        double cone = lerp(fv, lerp(fu, cone(k, ci, cj, false), cone(k, ci + 1, cj, false)), lerp(fu, cone(k, ci, cj + 1, false), cone(k, ci + 1, cj + 1, false)));
+        double cap = Math.min(c.low - (c.wet ? 9 : 5), cone);
+        c.cap0 = cap;
+        c.mouth = 0;
+        int ox = c.x >> 2, oz = c.z >> 2;
+        if (lift(k, ox, oz) > k.cap[slot(k, ox, oz)]) {
+            double m = lerp(fv, lerp(fu, cone(k, ci, cj, true), cone(k, ci + 1, cj, true)), lerp(fu, cone(k, ci, cj + 1, true), cone(k, ci + 1, cj + 1, true)));
+            if (m > cap) {
+                c.cap0 = m;
+                c.mouth = clamp((m - cap) / Math.max(1, c.gF + 4 - cap), 0, 1);
+            }
+        }
+        return cap;
     }
 
     /** The column's hanging root (under trees), or in the snowy zone of a cold forest's warrens an icicle. */
@@ -942,8 +1096,9 @@ public final class UpperShapes {
     }
 
     /**
-     * Places to look at each shape, nearest first, for the dev commands: open blocks of a kind ({@code mouth} and
-     * {@code sky} for the warrens' mouths and the rifts open to the sky as well), searched on a 4-block grid in rings
+     * Places to look at each shape, nearest first, for the dev commands: open blocks of a kind ({@code mouth},
+     * {@code chambers}, {@code frozen} and {@code sky} for the warrens' mouths, their root chambers, a cold forest's
+     * warrens and the rifts open to the sky as well), searched on a 4-block grid in rings
      * round (x, z) out to {@code radius}, each at least {@code apart} from the others. Each is {x, y, z} with y the
      * lowest open block of that kind in its column.
      */
@@ -967,11 +1122,11 @@ public final class UpperShapes {
         Col c = column(x, z);
         int lo, hi, want;
         switch (kind) {
-            case "warrens", "mouth", "frozen" -> {
+            case "warrens", "chambers", "mouth", "frozen" -> {
                 if (kind.equals("mouth") && c.mouth < 0.9 || kind.equals("frozen") && !(c.forest && c.cold)) return null;
-                if (kind.equals("warrens") && !c.forest) return null;
+                if ((kind.equals("warrens") || kind.equals("chambers")) && !c.forest) return null;
                 int i = c.wOn[0] && c.wLine[0] < 0.5 * c.wHw[0] ? 0 : c.wOn[1] && c.wLine[1] < 0.5 * c.wHw[1] ? 1 : -1;
-                if (i < 0 || kind.equals("mouth") && i != 0) return null;
+                if (i < 0 || kind.equals("mouth") && i != 0 || kind.equals("chambers") && c.wRoom[i] < 0.6) return null;
                 lo = floorLevel(c, i);
                 hi = (int) Math.ceil(c.wYc[i] + c.wHh[i]);
                 want = WARRENS;

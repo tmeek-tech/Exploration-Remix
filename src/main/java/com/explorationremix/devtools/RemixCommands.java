@@ -89,9 +89,9 @@ import java.util.Locale;
  *     <li>{@code /remix deadends [radius]}: the blind cave ends left above the old floor in the loaded chunks round you
  *     (DeadEnds), with the nearest</li>
  *     <li>{@code /remix shapes}: what the Upper Caves' noise shapes hold over your column and whether you stand in one</li>
- *     <li>{@code /remix shapes <kind> [n]}: the n-th nearest place of a noise shape (warrens, mouth, frozen, rifts, sky,
+ *     <li>{@code /remix shapes <kind> [n] [view]}: the n-th nearest place of a noise shape (warrens, chambers, mouth, frozen, rifts, sky,
  *     halls, sinkholes, hollows; see UpperShapes.find) round the command's position, with a wide view into it when
- *     there is one</li>
+ *     there is one ("view" from the console: report that camera without moving anyone)</li>
  * </ul>
  */
 public final class RemixCommands {
@@ -121,9 +121,11 @@ public final class RemixCommands {
                 .then(Commands.literal("shapes").executes(RemixCommands::shapesHere)
                         .then(Commands.argument("kind", StringArgumentType.word())
                                 .suggests((c, b) -> SharedSuggestionProvider.suggest(SHAPE_KINDS, b))
-                                .executes(c -> shapes(c, StringArgumentType.getString(c, "kind"), 0))
+                                .executes(c -> shapes(c, StringArgumentType.getString(c, "kind"), 0, false))
                                 .then(Commands.argument("n", IntegerArgumentType.integer(0, 15))
-                                        .executes(c -> shapes(c, StringArgumentType.getString(c, "kind"), IntegerArgumentType.getInteger(c, "n"))))))
+                                        .executes(c -> shapes(c, StringArgumentType.getString(c, "kind"), IntegerArgumentType.getInteger(c, "n"), false))
+                                        .then(Commands.literal("view")
+                                                .executes(c -> shapes(c, StringArgumentType.getString(c, "kind"), IntegerArgumentType.getInteger(c, "n"), true))))))
                 .then(Commands.literal("dengates").executes(RemixCommands::denGates)
                         .then(Commands.literal("reach").executes(RemixCommands::denReach)))
                 .then(Commands.literal("tp")
@@ -1134,7 +1136,7 @@ public final class RemixCommands {
     // ============================================================================================== noise shapes
 
     /** The kinds of place {@code /remix shapes} finds (UpperShapes.find). */
-    private static final String[] SHAPE_KINDS = {"warrens", "mouth", "frozen", "rifts", "sky", "halls", "sinkholes", "hollows"};
+    private static final String[] SHAPE_KINDS = {"warrens", "chambers", "mouth", "frozen", "rifts", "sky", "halls", "sinkholes", "hollows"};
     /** How far round the command's position {@code /remix shapes} looks, and how far apart the places it counts lie. */
     private static final int SHAPE_RADIUS = 1024, SHAPE_APART = 96;
 
@@ -1162,7 +1164,7 @@ public final class RemixCommands {
      * The n-th nearest place of a kind the noise shapes hold: a wide view into it, or its floor when there is none; from
      * the console only where it is.
      */
-    private static int shapes(CommandContext<CommandSourceStack> c, String kind, int n) {
+    private static int shapes(CommandContext<CommandSourceStack> c, String kind, int n, boolean view) {
         UpperShapes s = shapes(c);
         if (s == null) return 0;
         String k = kind.toLowerCase(Locale.ROOT);
@@ -1178,12 +1180,12 @@ public final class RemixCommands {
         }
         int[] at = found.get(n);
         ServerPlayer pl = c.getSource().getPlayer();
-        if (pl == null) {
+        if (pl == null && !view) {
             // from the console: only where it is, so the place can be loaded before a player goes there
             say(c, String.format(Locale.ROOT, "%s %d at %d %d %d; %s", k, n, at[0], at[1], at[2], s.describe(at[0], at[2])));
             return 1;
         }
-        ServerLevel level = (ServerLevel) pl.level();
+        ServerLevel level = pl != null ? (ServerLevel) pl.level() : c.getSource().getLevel();
         final int want = switch (k) {
             case "rifts", "sky" -> UpperShapes.RIFTS;
             case "halls" -> UpperShapes.HALLS;
@@ -1193,6 +1195,13 @@ public final class RemixCommands {
         BlockPos spot = new BlockPos(at[0], at[1], at[2]);
         ViewFinder.View v = ViewFinder.find(level, spot, q -> s.kindAt(q.getX(), q.getY(), q.getZ()) == want, 20, 10);
         String desc = s.describe(at[0], at[2]);
+        if (pl == null) {
+            // from the console with "view": the camera a player would get, without moving anyone
+            say(c, v == null ? String.format(Locale.ROOT, "%s %d at %d %d %d: no wide view", k, n, at[0], at[1], at[2])
+                    : String.format(Locale.ROOT, "%s %d at %d %d %d: view at %.1f %.0f %.1f facing %.0f, pitch %.0f, %.0f blocks deep, score %.1f", k, n,
+                    at[0], at[1], at[2], v.x(), v.y(), v.z(), v.yaw(), v.pitch(), v.reach(), v.score()));
+            return 1;
+        }
         if (v == null) {
             BlockPos stand = findStand(level, at[0], at[1], at[2]);
             BlockPos to = stand != null ? stand : spot;
