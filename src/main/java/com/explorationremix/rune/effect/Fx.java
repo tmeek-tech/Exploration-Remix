@@ -42,7 +42,9 @@ public record Fx(Kind kind, double x, double y, double z, float dx, float dy, fl
         /** A creature slams into a wall: {@code d} out of the wall, {@code size} how hard (0 to 1). */
         SLAM,
         /** Motes land in the player's gear: {@code size} how full it is now (0 to 1). */
-        MOTE_IN
+        MOTE_IN,
+        /** A hunter starts winding up a strike (0.12.0): a glint at its eyes, {@code d} the way it faces, {@code size} how big. */
+        WINDUP
     }
 
     public Vec3 pos() { return new Vec3(x, y, z); }

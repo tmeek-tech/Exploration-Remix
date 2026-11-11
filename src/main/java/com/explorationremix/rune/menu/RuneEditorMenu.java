@@ -26,10 +26,10 @@ import net.minecraftforge.network.NetworkHooks;
 
 /**
  * The rune screen: one piece of gear in the gear slot, its row of rune slots, and the player's inventory. Opened with
- * the rune key (R) anywhere, once nothing has hurt the player for a few seconds. The gear slot is the hand itself (the
- * main hand, or the off hand when only it holds gear): the gear never leaves the player's inventory, so it is saved
- * with them, travels with them and can't be lost whatever happens while the screen is open. Its hotbar slot is left
- * out of the screen's hotbar, so it shows in one place.
+ * the rune screen key (K) anywhere, once nothing has hurt the player for a few seconds. The gear slot is the hand
+ * itself (the main hand, or the off hand when only it holds gear): the gear never leaves the player's inventory, so it
+ * is saved with them, travels with them and can't be lost whatever happens while the screen is open. Its hotbar slot is
+ * left out of the screen's hotbar, so it shows in one place.
  *
  * <p>The rune slots are a view of the gear's row, never a store of their own: placing a rune writes it into the gear
  * and uses the item up, taking one out clears it from the gear and hands back the same item. So a rune is always in

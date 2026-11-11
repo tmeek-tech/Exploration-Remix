@@ -32,11 +32,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.ToolActions;
 import net.minecraftforge.common.util.FakePlayer;
 
 import javax.annotation.Nullable;
@@ -46,8 +43,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Where gear casts, on the server, which alone decides: a sword when its player right-clicks (and again each time it
- * is ready while they hold the button), a bow or crossbow when it looses a fully drawn shot. Every cast is paid in full
+ * Where gear casts, on the server, which alone decides: a sword when its player presses the cast key (R by default,
+ * and again each time it is ready while they hold it), a bow or crossbow when it looses a fully drawn shot. Every cast is paid in full
  * from the gear's own energy before anything happens (CastMachine), and only gear that has been in the hand for
  * {@code swapTicks} casts, so swapping between pieces of gear can't skip their delays.
  *
@@ -70,25 +67,25 @@ public final class CastService {
     // ------------------------------------------------------------------------------------------------ the sword
 
     /**
-     * Whether a right-click with the sword in {@code hand} casts it (both sides ask, and answer alike). The other hand
-     * keeps its turn when the player sneaks with something in it, holds a shield there (tap to cast, hold to block),
-     * or holds a block there while aiming at a block (to place it).
+     * The cast key (R by default; Taran, 2026-11-11 14:45: no longer right click, which stays the game's own, a shield's
+     * included) went down or came up. Down casts the runed sword in hand at once (the main hand's, or else the off
+     * hand's); while it stays down, the sword casts again each time it is ready ({@link #tick}).
      */
-    public static boolean swordTakesRightClick(Player p, InteractionHand hand) {
-        ItemStack gear = p.getItemInHand(hand);
-        if (RuneGear.host(gear) != Host.SWORD || !RuneGear.hasRunes(gear)) return false;
-        if (hand == InteractionHand.MAIN_HAND) {
-            ItemStack off = p.getOffhandItem();
-            if (!off.isEmpty()) {
-                if (p.isShiftKeyDown()) return false;
-                if (off.canPerformAction(ToolActions.SHIELD_BLOCK)) return false;
-                if (off.getItem() instanceof BlockItem && p.pick(p.getBlockReach(), 1.0F, false).getType() == HitResult.Type.BLOCK) return false;
-            }
-        }
-        return true;
+    public static void castKey(ServerPlayer p, boolean down) {
+        if (p instanceof FakePlayer) return;
+        caster(p).castHeld = down;
+        if (down) castHeldSword(p);
     }
 
-    /** The player casts the sword in this hand: a right-click, held or tapped. */
+    private static void castHeldSword(ServerPlayer p) {
+        InteractionHand hand = runedSword(p.getMainHandItem()) ? InteractionHand.MAIN_HAND
+                : runedSword(p.getOffhandItem()) ? InteractionHand.OFF_HAND : null;
+        if (hand != null) castSword(p, hand);
+    }
+
+    private static boolean runedSword(ItemStack s) { return RuneGear.host(s) == Host.SWORD && RuneGear.hasRunes(s); }
+
+    /** The player casts the sword in this hand (the cast key, pressed or held). */
     public static Result castSword(ServerPlayer p, InteractionHand hand) {
         if (p instanceof FakePlayer) return Result.NONE;
         ItemStack gear = p.getItemInHand(hand);
@@ -272,14 +269,15 @@ public final class CastService {
     // ------------------------------------------------------------------------------------------------ ticks
 
     /**
-     * Each player's tick, at its end (after the server has moved them): which gear is in hand, dashes, a Reel's pull,
-     * throws set this tick, safe landings from their own blasts, and once a second the run depth.
+     * Each player's tick, at its end (after the server has moved them): which gear is in hand, a held cast key, dashes,
+     * a Reel's pull, throws set this tick, safe landings from their own blasts, and once a second the run depth.
      */
     public static void tick(ServerPlayer p) {
         if (p instanceof FakePlayer) return;
         Caster c = caster(p);
         long now = p.level().getGameTime();
         trackHands(p, c, now);
+        if (c.castHeld) castHeldSword(p);
         if (!c.dashes.isEmpty() || c.airDashUsed) Dashes.tick(p, c, now);
         if (c.pull != null) Grapples.tick(p, c, now);
         if (c.launch != null) {

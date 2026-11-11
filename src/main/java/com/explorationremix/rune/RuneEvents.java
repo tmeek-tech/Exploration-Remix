@@ -10,8 +10,6 @@ import com.explorationremix.rune.engine.Host;
 import com.explorationremix.rune.menu.RuneEditorMenu;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.LivingEntity;
@@ -26,7 +24,6 @@ import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraftforge.common.ForgeHooks;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.common.ToolActions;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.AnvilUpdateEvent;
 import net.minecraftforge.event.GrindstoneEvent;
@@ -35,7 +32,6 @@ import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.ProjectileImpactEvent;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
-import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingFallEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
@@ -56,62 +52,19 @@ import javax.annotation.Nullable;
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID)
 public final class RuneEvents {
-    /** How long a held sword "uses": it never runs out; the player lets go. */
-    private static final int HOLD_TICKS = 72000;
-
     private RuneEvents() {}
 
     // ------------------------------------------------------------------------------------------------ casting
 
     /**
-     * Right-click with a runed sword (both sides, so the client's hand acts at once): the sword is held up to cast, and
-     * the server casts at once and again each time it's ready while the button is held. A charged runed crossbow is
-     * marked so the shot it fires now carries its cast.
+     * A charged runed crossbow fired with right click is marked so the shot it fires now carries its cast. (A sword casts
+     * on the cast key, not right click: CastService.castKey.)
      */
     @SubscribeEvent
     public static void rightClickItem(PlayerInteractEvent.RightClickItem e) {
-        Player p = e.getEntity();
-        if (p instanceof FakePlayer) return;
+        if (!(e.getEntity() instanceof ServerPlayer sp) || sp instanceof FakePlayer) return;
         ItemStack s = e.getItemStack();
-        Host h = RuneGear.host(s);
-        if (h == Host.CROSSBOW && p instanceof ServerPlayer sp && CrossbowItem.isCharged(s) && RuneGear.hasRunes(s)) {
-            CastService.crossbowAboutToFire(sp, e.getHand());
-            return;
-        }
-        if (h != Host.SWORD || !CastService.swordTakesRightClick(p, e.getHand())) return;
-        e.setCanceled(true);
-        e.setCancellationResult(InteractionResult.CONSUME);
-        // a click casts only when it starts the hold: a click for the other hand while one is held (no vanilla client
-        // sends one) would cast a second sword, or a sword behind a raised shield; held casting is useTick's
-        if (p.isUsingItem()) return;
-        p.startUsingItem(e.getHand());
-        if (p instanceof ServerPlayer sp) CastService.castSword(sp, e.getHand());
-    }
-
-    /** A runed sword held up to cast "uses" for as long as the button is down. */
-    @SubscribeEvent
-    public static void useStart(LivingEntityUseItemEvent.Start e) {
-        if (e.getEntity() instanceof Player && RuneGear.host(e.getItem()) == Host.SWORD && RuneGear.hasRunes(e.getItem())) e.setDuration(HOLD_TICKS);
-    }
-
-    /** Each tick a runed sword is held up, it casts whenever it's ready. */
-    @SubscribeEvent
-    public static void useTick(LivingEntityUseItemEvent.Tick e) {
-        if (e.getEntity() instanceof ServerPlayer p && RuneGear.host(e.getItem()) == Host.SWORD && RuneGear.hasRunes(e.getItem())) {
-            CastService.castSword(p, p.getUsedItemHand());
-            e.setDuration(HOLD_TICKS);
-        }
-    }
-
-    /** A shield in the off hand: a tap (let go before it ever blocks) casts the runed sword in the main hand. */
-    @SubscribeEvent
-    public static void useStop(LivingEntityUseItemEvent.Stop e) {
-        if (!(e.getEntity() instanceof ServerPlayer p) || p.getUsedItemHand() != InteractionHand.OFF_HAND) return;
-        ItemStack shield = e.getItem();
-        if (!shield.canPerformAction(ToolActions.SHIELD_BLOCK)) return;
-        int used = shield.getUseDuration() - e.getDuration();
-        // a tap is let go before the shield ever blocks (vanilla blocks from 5 ticks of use), whatever the config says
-        if (used < 5 && used <= RuneConfig.get(RuneConfig.INSTANCE.tapTicks)) CastService.castSword(p, InteractionHand.MAIN_HAND);
+        if (RuneGear.host(s) == Host.CROSSBOW && CrossbowItem.isCharged(s) && RuneGear.hasRunes(s)) CastService.crossbowAboutToFire(sp, e.getHand());
     }
 
     /**

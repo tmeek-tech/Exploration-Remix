@@ -108,6 +108,18 @@ public class MossbackModel extends HierarchicalModel<MossbackEntity> {
         flUpper.zRot -= rear * 0.5F;
         frUpper.zRot += rear * 0.5F;
 
+        // --- winding up a strike (0.12.0): a tremble that grows to the moment it strikes
+        float wind = e.windup(pt);
+        if (wind > 0.0F) {
+            float tr = wind * wind;
+            chest.zRot += 0.05F * tr * Mth.sin(age * 4.6F);
+            neck.yRot += 0.07F * tr * Mth.sin(age * 5.3F + 1.0F);
+            head.xRot += 0.06F * tr * Mth.sin(age * 6.1F + 2.0F);
+            jaw.xRot += 0.12F * wind;
+            frillLeft.zRot -= 0.12F * tr * Mth.sin(age * 7.0F);
+            frillRight.zRot += 0.12F * tr * Mth.sin(age * 7.0F);
+        }
+
         // --- holding its catch, it thrashes
         if (e.state() == MossbackEntity.GRAB) {
             float thrash = Mth.sin(age * 1.1F);

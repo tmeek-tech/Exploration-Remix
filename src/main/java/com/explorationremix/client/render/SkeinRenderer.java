@@ -122,6 +122,9 @@ public class SkeinRenderer extends EntityRenderer<SkeinEntity> {
             float g = e.glow(pt);
             if (e.isDeadOrDying()) g *= Math.max(0.0F, 1.0F - e.deathTime / 20.0F);
             if (g > 0.02F) draw(e, pt, pose, buffers.getBuffer(RenderType.eyes(GLOW)), OverlayTexture.NO_OVERLAY, g, true);
+            // coiled to strike: its eyes and seam flare, drawn again over themselves (it adds up)
+            float wind = e.isDeadOrDying() ? 0.0F : e.windup(pt);
+            if (wind > 0.02F) draw(e, pt, pose, buffers.getBuffer(RenderType.eyes(GLOW)), OverlayTexture.NO_OVERLAY, 0.8F * wind, true);
         }
         super.render(e, yaw, pt, pose, buffers, light);
     }

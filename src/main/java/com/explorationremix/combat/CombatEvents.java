@@ -1,12 +1,14 @@
 package com.explorationremix.combat;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.combat.swing.Swordplay;
 import com.explorationremix.rune.RuneRegistry;
 import com.explorationremix.rune.effect.RuneFx;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
@@ -16,6 +18,7 @@ import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.util.FakePlayer;
+import net.minecraftforge.entity.PartEntity;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
@@ -49,7 +52,9 @@ public final class CombatEvents {
 
     @SubscribeEvent
     public static void attack(AttackEntityEvent e) {
-        if (e.getEntity() instanceof ServerPlayer p && !(p instanceof FakePlayer) && e.getTarget() instanceof LivingEntity t) {
+        // a blow on a part of a big creature (the Skein's body) is a blow on the creature
+        Entity target = e.getTarget() instanceof PartEntity<?> part ? part.getParent() : e.getTarget();
+        if (e.getEntity() instanceof ServerPlayer p && !(p instanceof FakePlayer) && target instanceof LivingEntity t) {
             Fighters.swing(p, t, p.getAttackStrengthScale(0.5F));
         }
     }
@@ -84,13 +89,25 @@ public final class CombatEvents {
         if (src.is(DamageTypes.PLAYER_ATTACK) && src.getDirectEntity() == p && Fighters.swungAt(p, t)) {
             float strength = Fighters.swingStrength(p, t);
             boolean crit = Fighters.crit(p, t);
-            float momentum = strength >= 0.9F ? Poise.momentum(Fighters.closing(p, t)) : 0.0F;
+            // a timed swing (a sword's or an axe's): the chop and the strong attack hit harder; a strong attack's own
+            // lunge is not momentum (it has its own push), and it stops a creature winding up a strike
+            Swordplay.Landing swing = Swordplay.landing(p);
+            boolean strong = swing != null && swing.strong(), finisher = swing != null && swing.finisher();
+            float momentum = strength >= 0.9F && !strong ? Poise.momentum(Fighters.closing(p, t)) : 0.0F;
+            if (swing != null) amount *= Poise.swingDamage(strong, finisher);
             if (momentum > 0.0F) {
                 amount *= Poise.momentumDamage(momentum);
                 Fighters.pushNext(p, t, Poise.momentumPush(momentum));
+            } else if (strong) {
+                Fighters.pushNext(p, t, Poise.STRONG_PUSH);
             }
             poise = Poise.melee(amount, weapon(p.getMainHandItem().getItem()), strength, crit, momentum);
-            feel(p, t, strength, crit, momentum);
+            if (swing != null) poise *= Poise.swingPoise(strong, finisher);
+            if (strong && t instanceof WindUp w && w.windingUp()) {
+                w.interrupt(p);
+                Stagger.interrupt(t);
+            }
+            feel(p, t, strength, crit, momentum, strong);
         } else if (src.is(DamageTypes.PLAYER_ATTACK)) {
             // a sweep's edge, on the creatures beside the one swung at
             poise = amount * 0.5F;
@@ -115,7 +132,7 @@ public final class CombatEvents {
     }
 
     /** Where a melee hit lands: a flash and sparks, and for a momentum hit a shockwave and a heavier sound. */
-    private static void feel(ServerPlayer p, LivingEntity t, float strength, boolean crit, float momentum) {
+    private static void feel(ServerPlayer p, LivingEntity t, float strength, boolean crit, float momentum, boolean strong) {
         if (!(t.level() instanceof ServerLevel l)) return;
         Vec3 eye = p.getEyePosition();
         Vec3 look = p.getLookAngle();
@@ -123,7 +140,7 @@ public final class CombatEvents {
         Vec3 at = box.clip(eye, eye.add(look.scale(8.0))).orElse(box.getCenter());
         Vec3 way = at.subtract(eye);
         way = way.lengthSqr() < 1.0E-6 ? look : way.normalize();
-        float k = strength < 0.9F ? 0.35F * strength : crit ? 1.5F : 1.0F;
+        float k = strength < 0.9F ? 0.35F * strength : crit || strong ? 1.5F : 1.0F;
         RuneFx.hit(l, at, way, k + momentum);
         if (momentum >= 0.1F) RuneFx.momentum(l, at, way, momentum);
     }
@@ -158,12 +175,16 @@ public final class CombatEvents {
 
     @SubscribeEvent
     public static void loggedOut(PlayerEvent.PlayerLoggedOutEvent e) {
-        if (e.getEntity() instanceof ServerPlayer p) Fighters.forget(p);
+        if (e.getEntity() instanceof ServerPlayer p) {
+            Fighters.forget(p);
+            Swordplay.forget(p);
+        }
     }
 
     @SubscribeEvent
     public static void stopped(ServerStoppedEvent e) {
         Fighters.clear();
+        Swordplay.clear();
         Stagger.clear();
         Slams.clear();
     }

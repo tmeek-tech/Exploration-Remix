@@ -103,7 +103,8 @@ ENTITIES = {"rune_bolt": "Rune Bolt", "rune_field": "Rune Field", "rune_mote": "
 LANG = {
     f"itemGroup.{MOD}.runes": "Runes",
     f"container.{MOD}.rune_editor": "Runes",
-    f"key.{MOD}.runes": "Open the rune screen",
+    f"key.{MOD}.cast_runes": "Cast runes",
+    f"key.{MOD}.rune_screen": "Open the rune screen",
     f"key.categories.{MOD}": "Exploration Remix",
     f"rune.{MOD}.kind.action": "Action",
     f"rune.{MOD}.kind.modifier": "Modifier",
@@ -124,6 +125,10 @@ LANG = {
     f"death.attack.{MOD}.rune": "%1$s was struck down by %2$s's runes",
     f"death.attack.{MOD}.rune.item": "%1$s was struck down by %2$s using %3$s",
     f"death.attack.{MOD}.rune.player": "%1$s was struck down by runes while fighting %2$s",
+    # 0.11.0's slams (combat.Slams): a creature knocked into a wall hard enough
+    f"death.attack.{MOD}.slam": "%1$s was slammed into a wall by %2$s",
+    f"death.attack.{MOD}.slam.item": "%1$s was slammed into a wall by %2$s using %3$s",
+    f"death.attack.{MOD}.slam.player": "%1$s was slammed into a wall while fighting %2$s",
     # a rune's element set off a reaction (the action bar, in the element's colour)
     f"rune.{MOD}.reaction.shock": "Shock!",
     f"rune.{MOD}.reaction.freeze": "Freeze!",
@@ -838,6 +843,8 @@ def write_all(res, write, tag):
         tag(MOD, "items", f"runes/{layer}", [f"{MOD}:rune_{r}" for r, (_, _, l) in RUNES.items() if l == i])
     # rune damage: the caster's, and never blocked by a shield
     write(os.path.join(data, "damage_type", "rune.json"), {"message_id": f"{MOD}.rune", "exhaustion": 0.1, "scaling": "never"})
+    # a slam (0.11.0, combat.Slams): a creature a player knocked into a wall
+    write(os.path.join(data, "damage_type", "slam.json"), {"message_id": f"{MOD}.slam", "exhaustion": 0.1, "scaling": "never"})
     tag("minecraft", "damage_type", "bypasses_shield", [f"{MOD}:rune"])
     # Create's contraptions leave the rune blocks where they are: they are gone in seconds anyway
     tag("create", "blocks", "non_movable", [f"{MOD}:{b}" for b in BLOCKS])

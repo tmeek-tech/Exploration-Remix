@@ -20,7 +20,7 @@ public final class RuneConfig {
     public final ForgeConfigSpec.BooleanValue runesHurtPlayers;
     public final ForgeConfigSpec.IntValue maxParts, maxActions, idleTicks;
     public final ForgeConfigSpec.IntValue maxCarriers, releasesPerTick, maxBarrierBlocks, maxGlowBlocks, maxIceBlocks;
-    public final ForgeConfigSpec.IntValue combatSeconds, swapTicks, tapTicks, maxMotes;
+    public final ForgeConfigSpec.IntValue combatSeconds, swapTicks, maxMotes;
     public final ForgeConfigSpec.DoubleValue energyPerDamage, energyMaxPerHit, energyFloor, fadeDelaySeconds, fadePerSecond, refillPerSecond;
     public final ForgeConfigSpec.DoubleValue runeDamage;
 
@@ -46,8 +46,6 @@ public final class RuneConfig {
         b.push("gear");
         combatSeconds = b.comment("Seconds after you were last hurt before you can rearrange runes.").defineInRange("combatSeconds", 5, 0, 60);
         swapTicks = b.comment("Ticks gear must be in your hand before it casts.").defineInRange("swapTicks", 10, 0, 100);
-        tapTicks = b.comment("With a shield in the off hand, a right-click this short (in ticks) casts the sword; held longer, it",
-                "only raises the shield.").defineInRange("tapTicks", 4, 1, 20);
         runeDamage = b.comment("Multiplies all rune damage.").defineInRange("runeDamage", 1.0, 0.0, 10.0);
         b.pop();
         b.push("energy");

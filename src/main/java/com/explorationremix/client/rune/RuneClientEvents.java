@@ -8,7 +8,6 @@ import com.explorationremix.rune.cast.Pull;
 import com.explorationremix.rune.engine.CastMachine;
 import com.explorationremix.rune.engine.CastReading;
 import com.explorationremix.rune.engine.Explain;
-import com.explorationremix.rune.engine.Host;
 import com.explorationremix.rune.engine.HostSpec;
 import com.explorationremix.rune.engine.Note;
 import com.explorationremix.rune.engine.Reading;
@@ -18,21 +17,17 @@ import com.explorationremix.rune.net.RuneNet;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.player.Input;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.client.event.MovementInputUpdateEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.ItemTooltipEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.common.Mod;
@@ -42,9 +37,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The runes' client game events, on the Forge bus: the rune key asks the server for the rune screen, Reel's pull is
- * steered, gear tooltips show the row and what it does, and a rune sword held up to cast does not slow its player to a
- * crawl.
+ * The runes' client game events, on the Forge bus: the cast key tells the server when it goes down and up, the rune
+ * screen key asks the server for the rune screen, Reel's pull is steered, and gear tooltips show the row and what it
+ * does.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class RuneClientEvents {
@@ -53,19 +48,34 @@ public final class RuneClientEvents {
     /** The widest a tooltip line about what the row does gets (GUI pixels) before it wraps. */
     private static final int TOOLTIP_WIDTH = 200;
     private static int keyCooldown;
+    /** Whether this game has told the server the cast key is down (and so owes it word when it comes up). */
+    private static boolean castDown;
 
     private RuneClientEvents() {}
 
-    // ------------------------------------------------------------------------------------------------ the rune key
+    // ------------------------------------------------------------------------------------------------ the keys
 
     @SubscribeEvent
     public static void tick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         if (keyCooldown > 0) keyCooldown--;
+        Minecraft mc = Minecraft.getInstance();
+        boolean inGame = mc.screen == null && mc.player != null && mc.getConnection() != null;
+        // the cast key: the server casts when it goes down and again each time the sword is ready until it comes up (a
+        // tap pressed and let go within one tick still casts once); a screen opening lets go of it
+        boolean cast = false;
+        while (RuneKeys.CAST.consumeClick()) cast = true;
+        if (cast && inGame && !castDown) {
+            castDown = true;
+            RuneNet.CHANNEL.sendToServer(new RuneNet.CastKey(true));
+        }
+        if (castDown && (!RuneKeys.CAST.isDown() || !inGame)) {
+            castDown = false;
+            if (mc.getConnection() != null) RuneNet.CHANNEL.sendToServer(new RuneNet.CastKey(false));
+        }
         boolean pressed = false;
         while (RuneKeys.OPEN.consumeClick()) pressed = true;
-        Minecraft mc = Minecraft.getInstance();
-        if (pressed && keyCooldown == 0 && mc.screen == null && mc.player != null && mc.getConnection() != null) {
+        if (pressed && keyCooldown == 0 && inGame) {
             // the server opens it, or says why not (in combat)
             RuneNet.CHANNEL.sendToServer(new RuneNet.OpenEditor());
             keyCooldown = KEY_COOLDOWN;
@@ -122,6 +132,7 @@ public final class RuneClientEvents {
     /** Leaving a world drops any pull this game was steering. */
     @SubscribeEvent
     public static void loggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        castDown = false;
         LocalPull.finish();
         steering = -1;
         steerLevel = null;
@@ -160,7 +171,7 @@ public final class RuneClientEvents {
         } else {
             int n = spec.awakeSlots(depth);
             MutableComponent line = Component.literal(n + (n == 1 ? " rune slot" : " rune slots"));
-            if (RuneKeys.OPEN.isUnbound()) line.append(" (set the rune key in Controls)");
+            if (RuneKeys.OPEN.isUnbound()) line.append(" (set the rune screen key in Controls)");
             else line.append(" (press ").append(RuneKeys.OPEN.getTranslatedKeyMessage()).append(" to open the rune screen)");
             add.add(line.withStyle(ChatFormatting.DARK_GRAY));
         }
@@ -201,24 +212,5 @@ public final class RuneClientEvents {
             String s = parts.get(k).getString();
             out.add(Component.literal(k == 0 ? s : "  " + s).withStyle(ChatFormatting.GRAY));
         }
-    }
-
-    // ------------------------------------------------------------------------------------------------ casting on the move
-
-    /**
-     * Vanilla slows a player using an item to a fifth of their speed, just after this event (LocalPlayer.aiStep). A rune
-     * sword is "used" for as long as right-click is held to keep casting, so for one the slowdown is undone here: five
-     * times the input, which the fifth brings back to walking pace. Bows and crossbows keep vanilla's slowdown.
-     */
-    @SubscribeEvent(priority = EventPriority.LOWEST)
-    public static void movement(MovementInputUpdateEvent event) {
-        Player p = event.getEntity();
-        // vanilla does not slow a rider, so there is nothing to undo
-        if (!p.isUsingItem() || p.isPassenger()) return;
-        ItemStack using = p.getUseItem();
-        if (RuneGear.host(using) != Host.SWORD || !RuneGear.hasRunes(using)) return;
-        Input in = event.getInput();
-        in.leftImpulse *= 5.0F;
-        in.forwardImpulse *= 5.0F;
     }
 }

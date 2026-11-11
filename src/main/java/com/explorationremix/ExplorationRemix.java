@@ -14,6 +14,7 @@ import com.explorationremix.registry.ERWorldgen;
 import com.explorationremix.rune.RuneConfig;
 import com.explorationremix.rune.RuneRegistry;
 import com.explorationremix.rune.net.RuneNet;
+import com.explorationremix.combat.swing.SwingNet;
 import com.explorationremix.world.eruption.Blast;
 import com.explorationremix.world.eruption.Eruptions;
 import com.explorationremix.world.gen.DeepWorldInstaller;
@@ -75,6 +76,8 @@ public final class ExplorationRemix {
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, RuneConfig.SPEC, MOD_ID + "-runes.toml");
         RuneRegistry.register(modBus);
         RuneNet.register();
+        // 0.12.0: the timed swings' channel (the swinger's game times them; the server checks and deals the hits)
+        SwingNet.register();
         if (DevAutoRun.enabled()) MinecraftForge.EVENT_BUS.register(DevAutoRun.class);
     }
 }

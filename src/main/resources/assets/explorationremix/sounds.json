@@ -569,5 +569,106 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.skein.death"
+  },
+  "swing.light": {
+    "sounds": [
+      {
+        "name": "explorationremix:swing/light1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:swing/light2",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:swing/light3",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.swing.light"
+  },
+  "swing.heavy": {
+    "sounds": [
+      {
+        "name": "explorationremix:swing/heavy1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:swing/heavy2",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.swing.heavy"
+  },
+  "swing.thrust": {
+    "sounds": [
+      {
+        "name": "explorationremix:swing/thrust1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:swing/thrust2",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.swing.thrust"
+  },
+  "swing.charge": {
+    "sounds": [
+      {
+        "name": "explorationremix:swing/charge1",
+        "volume": 0.9
+      },
+      {
+        "name": "explorationremix:swing/charge2",
+        "volume": 0.9
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.swing.charge"
+  },
+  "runes.ready": {
+    "sounds": [
+      {
+        "name": "explorationremix:runes/ready1",
+        "volume": 0.8,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:runes/ready2",
+        "volume": 0.8,
+        "attenuation_distance": 12
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.runes.ready"
+  },
+  "mossback.windup": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/mossback/windup1",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:creature/mossback/windup2",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.mossback.windup"
+  },
+  "skein.windup": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/windup1",
+        "volume": 1.0,
+        "attenuation_distance": 20
+      },
+      {
+        "name": "explorationremix:creature/skein/windup2",
+        "volume": 1.0,
+        "attenuation_distance": 20
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.skein.windup"
   }
 }

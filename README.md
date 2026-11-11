@@ -3,11 +3,12 @@
 A Forge mod for Minecraft 1.20.1 that digs the overworld's underground much deeper: four new cave layers under
 the pack's own caves, sealed from each other by unbreakable bands with natural gates, each layer built from vanilla
 and Create stone and dressed to match a set of reference pictures. Made for a pack with Tectonic, Terrain Slabs,
-Immersive Weathering, Create and Better Combat.
+Immersive Weathering and Create (not Better Combat, which replaces the same attack as the timed swings).
 
-**Status: 0.10.0: milestone 1's world generation and cave looks, the cave hunters, and stage 1 of the rune overhaul
-(rune rows on swords, bows and crossbows; see [Runes](#runes)).** The first build's runs and combat changes were
-removed (git history keeps them); they return in later milestones, built on these caves.
+**Status: 0.12.2: milestone 1's world generation and cave looks, the cave hunters, stage 1 of the rune overhaul
+(rune rows on swords, bows and crossbows; see [Runes](#runes)) and timed swings for swords and axes (see
+[Swords and axes](#swords-and-axes)).** The first build's runs were removed (git history keeps them); they return in
+later milestones, built on these caves.
 
 ## Requirements
 
@@ -143,11 +144,11 @@ regenerated.
 ## Runes
 
 Runes are items set into a row on a sword, bow or crossbow. A row reads in speaking order, carrier first: `Spark, On
-hit, Burst` is a spark that bursts where it hits, and `Fan` copies whatever follows it. A sword casts on right-click
-and again each time it is ready while the button is held; a bow or crossbow casts with a full shot, its arrow the
-first carrier. Each cast is paid from the gear's energy in full or not at all; full-strength sword hits on creatures
+hit, Burst` is a spark that bursts where it hits, and `Fan` copies whatever follows it. A sword casts on the cast key
+(**R** by default) and again each time it is ready while the key is held; right click stays the game's own (a shield
+in the other hand blocks). A bow or crossbow casts with a full shot, its arrow the first carrier. Each cast is paid from the gear's energy in full or not at all; full-strength sword hits on creatures
 fighting you charge the sword, and Siphon knocks loose white motes that refill it. Slots wake as a run goes deeper.
-Press **R** with the gear in hand, once nothing has hurt you for 5 seconds, to edit the row; a rune that does nothing
+Press **K** with the gear in hand, once nothing has hurt you for 5 seconds, to edit the row; a rune that does nothing
 is grey and says why. The creative tab **Runes** holds every rune. Limits and who runes may touch (other players
 only with `runesHurtPlayers` on) are in the server config `explorationremix-runes.toml`.
 
@@ -159,6 +160,21 @@ only with `runesHurtPlayers` on) are in the server config `explorationremix-rune
 | `/remix rune energy [amount]` | fills the held gear's energy, or sets it |
 | `/remix rune depth <0\|1\|2\|auto>` | the run depth that wakes extra slots, kept until `auto` |
 | `/remix rune info` | the held gear's row, how it reads and what each cast costs |
+
+## Swords and axes
+
+Swords (other mods' too) and axes swing the timed way. A tap of the attack button is a light swing that lands a
+quarter of a second after the press; light swings in a row make a chain (a sword's slash, rising backhand and overhead chop;
+an axe's slower slash and chop), and after the chain's last swing comes a 1.2 second cooldown in which only a strong
+attack can be made. Held, the swing turns strong: the blade draws back and fires on its own half a second after the
+press (an axe's 0.7), lunges about a block and a half and strikes everything in its line; then nothing can start for
+1.2 seconds. Every swing that lands is at full strength (vanilla's charge bar is gone for these weapons). A strong
+attack that lands while a Mossback or a Skein rears to strike stops the strike and leaves it reeling. Marks under the
+crosshair show the chain and the cooldown. A press on a block the weapon is meant for (an axe on wood, a sword on a
+cobweb) with nothing in reach mines it as ever. When a runed sword gets back the energy for its next cast, a pale
+blue-white light runs over the whole sword's own pixels from the pommel to the tip, once, and fades, with a quiet
+shimmer and a soft note in your own hands; then, for as long as it has that energy, its pixels sparkle here and there
+(under shader packs too, and on swords drawn by their own renderer, such as Create's cardboard sword).
 
 ## Commands
 
@@ -190,6 +206,7 @@ only with `runesHurtPlayers` on) are in the server config `explorationremix-rune
 python3 tools/gen_data.py       # regenerates every datapack JSON, model, texture and lang file from tools/*.py
 python3 tools/synth_sounds.py   # regenerates the ambient sound recordings
 python3 tools/synth_lava_sounds.py  # regenerates the lava cycle's rumbles and surge
+python3 tools/synth_swing_sounds.py # regenerates the swings' and the hunters' wind-up sounds
 ```
 
 `src/preview` holds an offline preview (`TerrainPreview`) that draws each deep layer's network, sections through its

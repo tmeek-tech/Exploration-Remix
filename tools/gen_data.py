@@ -13,6 +13,7 @@ import worldgen
 import sounds
 import creatures
 import runes
+import swings
 import check_data
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,6 +30,13 @@ OWNED = [
     # the runes (runes.py): their damage type, and Create's tag that keeps contraptions off the rune blocks
     os.path.join(DATA, "damage_type"), os.path.join(RES, "data", "create", "tags"),
 ]
+
+
+# Files in the folders this script owns that it does not paint itself: Runes 0.11.0's effect textures (the Field's
+# new look and glow, the bolts' halo and trail, the rune particles' sprites) were made by hand-run scripts. Kept as
+# they are across runs (the generator's own older Field texture is replaced by the kept one).
+KEPT = [os.path.join(ASSETS, "textures", "entity", "rune", n + ".png") for n in ("field", "field_glow", "halo", "trail")] + \
+       [os.path.join(ASSETS, "textures", "particle", f"rune_{n}.png") for n in ("dot", "flash", "ring", "spark", "star")]
 
 
 def write(path, obj):
@@ -620,11 +628,18 @@ def particles():
 
 
 def main():
+    kept = {}
+    for path in KEPT:
+        assert os.path.isfile(path), f"{path}: a kept file is missing (restore it from git)"
+        with open(path, "rb") as f:
+            kept[path] = f.read()
     for d in OWNED:
         if os.path.isdir(d): shutil.rmtree(d)
         elif os.path.isfile(d): os.remove(d)
     names = block_assets()
     textures.write_all(os.path.join(ASSETS, "textures"))
+    # 0.12.0: the timed swords' blade light and swing sweep (textures/misc)
+    swings.write_all(ASSETS)
     names.update(worldgen.write_all(DATA, RES, write))
     tags()
     biome_modifiers()
@@ -635,6 +650,10 @@ def main():
     creature_data()
     particles()
     lang(names)
+    for path, data in kept.items():
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
     print("data written")
     # The game refuses the whole datapack over one unknown id, and unit tests never load it.
     problems = check_data.main()

@@ -254,6 +254,14 @@ public final class RuneFx {
         play(l, c, SoundEvents.ANVIL_LAND, 0.2F, 1.7F);
     }
 
+    /**
+     * A hunter starts winding up a strike: a cold glint at its eyes ({@code eyes}, facing {@code dir}), so the half
+     * second before it strikes can be read from across a cave as well as heard. Its own wind-up sound plays with it.
+     */
+    public static void windup(ServerLevel l, Vec3 eyes, Vec3 dir, float size) {
+        send(l, Fx.Kind.WINDUP, eyes, dir, 0xFFFFFF, Element.NONE, size, 0.0F, -1, NEAR);
+    }
+
     /** A creature slams into a wall at {@code at}: {@code out} the way back out of the wall, {@code amount} 0 to 1. */
     public static void slam(ServerLevel l, Vec3 at, Vec3 out, float amount, SoundEvent blockSound) {
         send(l, Fx.Kind.SLAM, at, out, 0xFFFFFF, Element.NONE, amount, 0.0F, -1, NEAR);
