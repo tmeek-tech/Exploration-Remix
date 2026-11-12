@@ -336,20 +336,21 @@ public final class UpperShapes {
     /** 0..1: how far the top sheet climbs toward the ground at a column (a slow field, whatever the ground). */
     private double mouthRamp(int x, int z) {
         double v = K2 * mouthN.noise2(x / 70.0, z / 70.0);
-        return v > 0.2 ? smooth((v - 0.2) / 0.45) : 0;
+        return v > 0.15 ? smooth((v - 0.15) / 0.45) : 0;
     }
 
     // ------------------------------------------------------------------------------------------------ roof caps
 
     /**
-     * How steeply a warren roof's cap may fall or climb, in blocks per block along x or z (about 0.85 on a diagonal):
-     * near a valley the tunnels sink under it on a slope no steeper than this, and they climb into a mouth the same way,
-     * never down a chute.
+     * How steeply a warren roof's cap may fall or climb, in blocks per block along x or z (about 1 on a diagonal, so a
+     * tunnel never climbs more than a block per block): near a valley the tunnels sink under it on a slope no steeper
+     * than this, and they climb into a mouth the same way, never down a chute. A mouth opens where the forest floor
+     * falls no faster than this for the caps' reach round it.
      */
-    static final double ROOF_SLOPE = 0.6;
+    static final double ROOF_SLOPE = 0.7;
     /**
      * How far round a cell the caps look for lower ground and for mouths, in 4x4 cells (56 blocks): ground more than
-     * 34 blocks (the slope over this reach) under a cap's would still bring a step where it comes into reach.
+     * 39 blocks (the slope over this reach) under a cap's would still bring a step where it comes into reach.
      */
     static final int ROOF_REACH = 14;
     private static final float STEP = (float) (4 * ROOF_SLOPE);
