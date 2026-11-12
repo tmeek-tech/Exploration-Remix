@@ -17,7 +17,7 @@ DATA = os.path.join(RES, "data", MOD)
 
 
 # Immersive Weathering 2.0.5's ids the mod uses (a required dependency since 0.4.1), from its jar.
-IW_BLOCKS = {"frosty_fern", "frosty_grass", "frost", "icicle"}
+IW_BLOCKS = {"frosty_fern", "frosty_grass", "frost", "icicle", "ivy"}
 IW_FEATURES = {"icicle_cluster"}
 
 

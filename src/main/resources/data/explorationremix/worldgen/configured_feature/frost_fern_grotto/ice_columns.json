@@ -32,6 +32,7 @@
       }
     },
     "min_room": 6,
-    "max_room": 26
+    "max_room": 26,
+    "spacing": 12
   }
 }

@@ -7,25 +7,32 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.valueproviders.FloatProvider;
 import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvider;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * A column from the ceiling at the origin down to the floor, wide where it meets the rock and pinched in the middle,
  * like the great joined columns of a dripstone cave (the Frost Fern Grotto's are packed and blue ice). Only where the
  * floor lies between {@code min_room} and {@code max_room} open blocks under the ceiling and is dry rock, so a column
- * always joins both and never stands in a lake.
+ * always joins both and never stands in a lake, and (with {@code spacing}) only where no other column stands within
+ * that many blocks, so a big room that catches many tries gets columns spread through it rather than a wall of them.
  */
 public final class PillarFeature extends Feature<PillarFeature.Config> {
-    public record Config(BlockStateProvider body, FloatProvider radius, int minRoom, int maxRoom) implements FeatureConfiguration {
+    public record Config(BlockStateProvider body, FloatProvider radius, int minRoom, int maxRoom, int spacing) implements FeatureConfiguration {
         public static final Codec<Config> CODEC = RecordCodecBuilder.create(i -> i.group(
                 BlockStateProvider.CODEC.fieldOf("body").forGetter(Config::body),
                 FloatProvider.codec(1.0F, 8.0F).fieldOf("radius").forGetter(Config::radius),
                 Codec.intRange(3, 64).optionalFieldOf("min_room", 6).forGetter(Config::minRoom),
-                Codec.intRange(3, 64).optionalFieldOf("max_room", 28).forGetter(Config::maxRoom)
+                Codec.intRange(3, 64).optionalFieldOf("max_room", 28).forGetter(Config::maxRoom),
+                // at most 14: the look round a column stays inside the chunks a feature may read
+                Codec.intRange(0, 14).optionalFieldOf("spacing", 0).forGetter(Config::spacing)
         ).apply(i, Config::new));
     }
 
@@ -44,6 +51,7 @@ public final class PillarFeature extends Feature<PillarFeature.Config> {
         BlockPos floor = ceiling.below(room + 1);
         BlockState floorState = level.getBlockState(floor);
         if (!floorState.isSolid() || !floorState.getFluidState().isEmpty()) return false;
+        if (c.spacing() > 0 && columnNear(level, ceiling, room, c)) return false;
         float wide = c.radius().sample(random);
         // pinched to about a third in the middle, never thinner than a block
         float waist = Math.max(0.9F, wide * 0.36F);
@@ -68,5 +76,31 @@ public final class PillarFeature extends Feature<PillarFeature.Config> {
             }
         }
         return true;
+    }
+
+    /**
+     * Whether another column (a block the body gives) stands within {@code spacing} of this one's axis, looked for at
+     * every third height of its room.
+     */
+    private static boolean columnNear(WorldGenLevel level, BlockPos ceiling, int room, Config c) {
+        Set<Block> kinds = kinds(c.body(), ceiling);
+        int r = c.spacing();
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int k = 1; k <= room; k += 3) {
+            int y = ceiling.getY() - k;
+            for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) {
+                if (dx * dx + dz * dz > r * r) continue;
+                if (kinds.contains(level.getBlockState(pos.set(ceiling.getX() + dx, y, ceiling.getZ() + dz)).getBlock())) return true;
+            }
+        }
+        return false;
+    }
+
+    /** The blocks the body gives, from a fixed sample of it (a mix of packed and blue ice gives both). */
+    private static Set<Block> kinds(BlockStateProvider body, BlockPos pos) {
+        RandomSource r = RandomSource.create(0);
+        Set<Block> s = new HashSet<>();
+        for (int i = 0; i < 32; i++) s.add(body.getState(r, pos).getBlock());
+        return s;
     }
 }
