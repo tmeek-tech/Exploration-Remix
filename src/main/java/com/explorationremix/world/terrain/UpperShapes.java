@@ -7,15 +7,17 @@ package com.explorationremix.world.terrain;
  * pack's caves (Tectonic's) stay underneath as the base.
  * <ul>
  *     <li><b>Root warrens</b>, 5 to 45 blocks under the ground everywhere: two rolling sheets of tunnels along the zero
- *     lines of two crossing 2D fields per sheet, so they loop and fork but never end blind. They swell into root
- *     chambers, roots hang from their ceilings under trees, and pools lie in the chambers' floors. Under forests the top
- *     sheet rises to the ground in places (the mouths: rooty under warm forests, snowed in under cold ones), and here and
- *     there it dips down to the lower sheet (the links). Their rock follows the ground: the Root Vaults' under forests,
- *     limestone karst under plains, sandstone under deserts.</li>
- *     <li><b>Rifts</b>, 15 to 90 blocks down: tall cracks along the zero lines of two slow 2D fields, their walls stepping
- *     back in ledges every six blocks, a stream along the floor that steps down in pools with small falls between, and
- *     springs high on the walls whose water falls into it. In places the crack opens to the sky. The Silver Fern Rift's
- *     look.</li>
+ *     lines of two crossing 2D fields per sheet, so they loop and fork but never end blind; the top one just under the
+ *     soil, the lower one deeper. They swell into root chambers, roots hang from their ceilings under trees, and pools
+ *     lie in the chambers' floors. Under forests the top sheet rises to the ground in places (the mouths: rooty under
+ *     warm forests, snowed in under cold ones), and here and there it dips down to the lower sheet (the links). They are
+ *     carved into the ground's own rock (see {@code DeepSurfaceRules.HostRule}); only their floors are dressed: the
+ *     Root Vaults' under forests, the karst's under plains, sand under deserts.</li>
+ *     <li><b>Rifts</b>, 15 to 55 blocks down: tall cracks along the zero lines of two slow 2D fields, about 10 across and
+ *     35 tall (half 0.13's size, Taran 2026-11-12), their walls stepping back in ledges every six blocks, a stream sunk
+ *     into the floor's flat stretches (each held by a dry lip where the floor steps down), and springs high on the walls
+ *     whose water falls into it. In places the crack opens to the sky. The Silver Fern Rift's look. (The deep rifts down
+ *     to the Blue Reaches at the den gates are the terrain's, {@code Terrain.denRift}.)</li>
  *     <li><b>Halls</b>, about 60 to 85 blocks down: wide caverns where a slow field rises over its threshold, floors in
  *     three-block terraces with pools sunk into them, stalactites (icicles under cold ground) and stalagmites; here and
  *     there a chimney rises from the ceiling to a tunnel of the lower warren sheet. The Ivory Root Cavern's look.</li>
@@ -25,15 +27,28 @@ package com.explorationremix.world.terrain;
  * </ul>
  * One slow field leans each region towards rifts or halls. Each shape has its own switch.
  *
+ * <p>Still water (pools, the rifts' streams, the sinkholes' lakes) only lies where the rock round it holds it: every
+ * block beside it and under it is rock to every shape ({@link #holds}), and the pack's caves and the canyons may not
+ * open that rim ({@link #rim}). The pack's own water next to the shapes' open space turns to rock instead of standing
+ * as a wall (see {@code NoiseBasedAquiferMixin}). Only the springs flow.
+ *
  * <p>All of it is a pure function of the seed and the surface ({@link Overhead}): safe on any thread, the same on every
  * call. Everything a column needs that does not depend on y is computed once per column and cached per thread.
  */
 public final class UpperShapes {
     public static final int WARRENS = 0, RIFTS = 1, HALLS = 2, SINKHOLES = 3;
     public static final String[] NAMES = {"warrens", "rifts", "halls", "sinkholes"};
-    public static final int AIR = 0, WATER = 1;
+    /** What {@link #fluid} puts in an open block: air, still water, or a spring's water (which flows). */
+    public static final int AIR = 0, WATER = 1, SPRING = 2;
     /** Signed distance returned where nothing is near. */
     public static final double SOLID = 64;
+    /**
+     * How far a rift's open space reaches from its crack's middle line, per unit of its scale: its widest half width
+     * (with the ledges) and the roughness, so no rift block lies further out.
+     */
+    static final double RIFT_REACH = 7.5;
+    /** A rift's half width at its floor and top, and how much the middle of its height adds (per unit of its scale). */
+    static final double RIFT_EDGE = 1.3, RIFT_BELLY = 3.7;
     /** What a formation block is made of (see {@link #formation}). */
     public static final int ROOT = 1, ICICLE = 2, STALACTITE = 3, STALAGMITE = 4, DRIP = 5;
     /** The biome of a rift or hall (see {@link #piece}). */
@@ -41,8 +56,12 @@ public final class UpperShapes {
 
     /** Scale Java's noise to the spread of the round-1 previews' noise (values 2D and 3D). */
     static final double K2 = 1.381, K3 = 1.143;
-    /** Where each warren sheet lies under the ground (its middle), and how far it rolls up and down. */
-    static final double[] SHEET_MID = {14, 31}, SHEET_AMP = {9, 13};
+    /**
+     * Where each warren sheet lies under the ground (its middle), and how far it rolls up and down. The top sheet keeps
+     * close under the soil (0.14, Taran: the Root Vaults sit just under the dirt and rooted dirt), so most of its roofs
+     * are the soil's rooted dirt; the lower one rolls deep.
+     */
+    static final double[] SHEET_MID = {12, 31}, SHEET_AMP = {5, 13};
     /** No floor, pool or stream below this far over the pack's old floor: clear of the den gates' landings and ramps. */
     static final int FLOOR_CLEARANCE = 56;
     /** The sinkholes' field's scale: about 45 pits a square kilometre over plains and deserts, one every 150 blocks or so. */
@@ -173,6 +192,11 @@ public final class UpperShapes {
         boolean sOn;
         double sScore, sThick;
         int sLake;
+
+        // ---- still water (see waterLevels): the heights the column holds water at, and where its rim may lie
+        boolean waterDone, rimDone, rPoolDone, rPool;
+        int waterN, rimLo, rimHi;
+        final int[] waterY = new int[6];
     }
 
     /** The column's cached answers (package-private for the tests). */
@@ -208,6 +232,9 @@ public final class UpperShapes {
         c.poolDone = false;
         c.springDone = false;
         c.hPoolDone = false;
+        c.waterDone = false;
+        c.rimDone = false;
+        c.rPoolDone = false;
         c.stalBottom = Double.NaN;
         c.miteTop = NO_Y;
         warrenColumn(c);
@@ -507,7 +534,8 @@ public final class UpperShapes {
 
     /**
      * Pools in the warrens' root chambers: one block sunk under a flat stretch of floor where a fine field is high, and
-     * only where no neighbour's floor lies lower (the water stays in its basin).
+     * only where no neighbour's floor lies lower and no other shape opens the rock round it (the water stays in its
+     * basin, {@link #holds}).
      */
     private void warrenPools(Col c) {
         if (c.poolDone) return;
@@ -524,7 +552,7 @@ public final class UpperShapes {
                 Col n = column(x + (k == 0 ? 1 : k == 1 ? -1 : 0), z + (k == 2 ? 1 : k == 3 ? -1 : 0));
                 ok = n.wOn[i] && n.wLine[i] < 0.85 * n.wHw[i] && floorLevel(n, i) >= fl;
             }
-            if (ok) c.wPool[i] = fl - 1;
+            if (ok && holds(x, fl - 1, z, NO_Y)) c.wPool[i] = fl - 1;
         }
     }
 
@@ -546,11 +574,12 @@ public final class UpperShapes {
         double d1 = Math.abs(f1) / Math.max(Math.hypot(g[0] * (1 + wxx) + g[1] * wzx, g[0] * wxz + g[1] * (1 + wzz)) / 190.0, 0.53 / 190.0);
         double f2 = rB.noise2((x - wz) / 150.0 + 13, (z + wx) / 150.0 + 7, g);
         double d2 = Math.abs(f2) / Math.max(Math.hypot(g[0] * (1 - wzx) + g[1] * wxx, -g[0] * wzz + g[1] * (1 + wxz)) / 150.0, 0.53 / 150.0);
-        // the second set of cracks a little narrower
-        c.rLine = Math.min(d1, d2 + 4);
+        // the second set of cracks a little narrower (by as much as the cracks were halved, 0.14: by more, its narrow
+        // stretches pinch shut and leave short slots that open onto nothing)
+        c.rLine = Math.min(d1, d2 + 2);
         // wider where the region leans to rifts
         c.rScale = (0.8 + 0.25 * (K2 * rB.noise2(x / 70.0 + 3, z / 70.0 + 3) + 1)) * (1 - 0.25 * c.lean);
-        if (c.rLine > 15 * c.rScale + 6) return false;
+        if (c.rLine > RIFT_REACH * c.rScale + 3) return false;
         double closed = Math.min(c.gC - 16 - 8 * K2 * rB.noise2(x / 80.0, z / 80.0), c.low - (c.wet ? 10 : 6));
         // in places the crack opens to the sky (dry open land only), easing in so its walls do not jump
         double sky = K2 * rC.noise2(x / 60.0 + 20, z / 60.0 + 20);
@@ -558,9 +587,9 @@ public final class UpperShapes {
         if (sky > 0) sky *= gate(c.x, c.z, GATE_SKY);
         c.rSky = sky > 0.5;
         double top = lerp(sky, closed, c.gF + 2);
-        double floor = Math.max(c.gC - 92 + 14 * K2 * rB.noise2(x / 140.0 + 9, z / 140.0 + 9), minFloor);
+        double floor = Math.max(c.gC - 52 + 7 * K2 * rB.noise2(x / 140.0 + 9, z / 140.0 + 9), minFloor);
         int fq = 3 * (int) Math.ceil(floor / 3.0);
-        if (top - fq < 24) return false;
+        if (top - fq < 12) return false;
         c.rTop = top;
         c.rFloor = fq;
         c.rStep = 3 * K2 * rC.noise2(x / 30.0, z / 30.0);
@@ -573,27 +602,27 @@ public final class UpperShapes {
     private double riftDist(Col c, int x, int y, int z) {
         double yy = y + 0.5;
         double dV = Math.max(c.rFloor - yy, yy - c.rTop);
-        if (dV > 1) return Math.max(dV, c.rLine - 15 * c.rScale);
+        if (dV > 1) return Math.max(dV, c.rLine - RIFT_REACH * c.rScale);
         double t = clamp((yy - c.rFloor) / (c.rTop - c.rFloor), 0, 1);
         double lens = Math.sqrt(Math.sin(Math.PI * t));
         int step = (int) Math.floor((yy + c.rStep) / 6.0);
         double ledge = K3 * rC.noise3(x / 22.0, step * 1.7, z / 22.0);
-        double width = (2.5 + 7.5 * lens + 2.0 * ledge) * c.rScale;
+        double width = (RIFT_EDGE + RIFT_BELLY * lens + 1.0 * ledge) * c.rScale;
         double d = c.rLine - width;
-        if (d < 4 && d > -4) d += 0.9 * K3 * roughN.noise3(x / 7.0 + 40, y / 7.0, z / 7.0 + 40);
+        if (d < 4 && d > -4) d += 0.7 * K3 * roughN.noise3(x / 7.0 + 40, y / 7.0, z / 7.0 + 40);
         return Math.max(d, dV);
     }
 
     /**
      * A spring high on a rift's wall: one candidate column in each 24-block square (some squares have none) that lies in
      * the wall at some height in the crack's upper half; its block there opens and holds water that falls down the
-     * wall into the stream.
+     * wall into the stream (the only water of the shapes that flows, {@link #SPRING}).
      */
     int spring(Col c) {
         if (c.springDone) return c.springY;
         c.springDone = true;
         c.springY = NO_Y;
-        if (!c.rOn || c.rLine < 2.5) return NO_Y;
+        if (!c.rOn || c.rLine < RIFT_EDGE) return NO_Y;
         int cx = Math.floorDiv(c.x, 24), cz = Math.floorDiv(c.z, 24);
         long h = Hashing.mix(seed ^ 0x51F15EL, cx, cz, 7);
         if (Hashing.unit(h) > 0.45) return NO_Y;
@@ -601,13 +630,13 @@ public final class UpperShapes {
         if (sx != c.x || sz != c.z) return NO_Y;
         // the height where the crack's plain profile reaches this column, in its upper half
         double want = (c.rLine - 0.7) / c.rScale;
-        double l = (want - 2.5) / 7.5;
+        double l = (want - RIFT_EDGE) / RIFT_BELLY;
         if (l <= 0.05 || l >= 0.98) return NO_Y;
         double t = 1 - Math.asin(l * l) / Math.PI;
         int y0 = (int) Math.floor(c.rFloor + t * (c.rTop - c.rFloor));
         for (int k = 0; k < 9; k++) {
             int y = y0 + (k % 2 == 0 ? k / 2 : -(k + 1) / 2);
-            if (y < c.rFloor + 8 || y > c.rTop - 6 || y > c.gF - 8) continue;
+            if (y < c.rFloor + 5 || y > c.rTop - 4 || y > c.gF - 8) continue;
             double d = riftDist(c, c.x, y, c.z);
             if (d > 0.2 && d < 1.6 && riftDist(c, c.x, y + 1, c.z) > 0.5) {
                 c.springY = y;
@@ -615,6 +644,18 @@ public final class UpperShapes {
             }
         }
         return NO_Y;
+    }
+
+    /**
+     * The rift's stream at a column: water sunk one block under the floor wherever the floor over it is open and the rock
+     * round it holds it ({@link #holds}), so each flat stretch of the stepped floor holds a long pool that stops a block
+     * short of the step down (a dry lip), and no stream spills over a step or hangs over a cave.
+     */
+    private boolean riftPool(Col c) {
+        if (c.rPoolDone) return c.rPool;
+        c.rPoolDone = true;
+        c.rPool = c.rOn && riftDist(c, c.x, c.rFloor, c.z) <= -0.5 && holds(c.x, c.rFloor - 1, c.z, NO_Y);
+        return c.rPool;
     }
 
     // ------------------------------------------------------------------------------------------------ halls
@@ -651,7 +692,8 @@ public final class UpperShapes {
         // floor, so the halls open onto the warrens (water from the tunnel's pools falls down them)
         if (c.wOn[1]) {
             double q = c.wLine[1] / c.wHw[1];
-            double t = smooth((K2 * hK.noise2(x / 20.0, z / 20.0) - 0.25) / 0.2) * smooth((0.9 - q) / 0.5);
+            // (0.14: about twice as many as 0.13 had, now the halved rifts no longer reach down to the halls)
+            double t = smooth((K2 * hK.noise2(x / 20.0, z / 20.0) + 0.05) / 0.2) * smooth((0.9 - q) / 0.5);
             double floor1 = c.wYc[1] - 0.6 * c.wHh[1];
             if (t > 0 && floor1 > ceil) {
                 ceil = lerp(t, ceil, floor1 + 2.5);
@@ -689,8 +731,8 @@ public final class UpperShapes {
             if (!n.hOn || n.hFloor < c.hFloor || n.hCeil - n.hFloor < 3) return false;
             if (n.rOn && riftDist(n, n.x, c.hFloor - 1, n.z) < 0.5) return false;
         }
-        c.hPool = true;
-        return true;
+        c.hPool = holds(c.x, c.hFloor - 1, c.z, NO_Y);
+        return c.hPool;
     }
 
     // ------------------------------------------------------------------------------------------------ sinkholes
@@ -777,7 +819,24 @@ public final class UpperShapes {
         return carve(c, x, y, z);
     }
 
+    /** As {@link #carve(int, int, int)} inside the column's range: the open space with its still water carved in. */
     private double carve(Col c, int x, int y, int z) {
+        double d = raw(c, x, y, z);
+        if (d > -0.5 && water(c, y)) return -0.5;
+        // a sinkhole's lake where its rock cannot hold it fills in, so its water never meets air at its own level; not
+        // where another shape is open (a rift through the pit), which would leave the fill hanging in that open space
+        if (d < 0.5 && c.sOn && lakeBlock(c, x, y, z, c.sLake) && othersShut(c, x, y, z)) return 0.5;
+        return d;
+    }
+
+    /** True where no shape but the sinkhole is open: the warrens, the rift and the hall are rock there. */
+    private boolean othersShut(Col c, int x, int y, int z) { return raw(c, x, y, z, false) > 0; }
+
+    /** The shapes' open space before any still water: the minimum over every shape, its springs and formations. */
+    private double raw(Col c, int x, int y, int z) { return raw(c, x, y, z, true); }
+
+    /** {@link #raw(Col, int, int, int)}, leaving the sinkhole out unless {@code sink}. */
+    private double raw(Col c, int x, int y, int z, boolean sink) {
         double d = SOLID;
         int owner = -1;
         for (int i = 0; i < 2; i++) {
@@ -794,24 +853,110 @@ public final class UpperShapes {
             double h = hallDist(c, x, y, z);
             if (h < d) { d = h; owner = HALLS; }
         }
-        if (c.sOn) {
+        if (sink && c.sOn) {
             double s = sinkDist(c, x, y, z);
             if (s < d) { d = s; owner = SINKHOLES; }
         }
-        if (d > -0.5 && pool(c, y)) return -0.5;
         if (d < 0 && formationOf(c, owner, x, y, z) != 0) return 0.5;
         return d;
     }
 
-    /** A pool block (sunk under a warren's or hall's floor) at this column and height. */
-    boolean pool(Col c, int y) {
-        boolean near = false;
-        for (int i = 0; i < 2; i++) near |= c.wOn[i] && y == floorLevel(c, i) - 1;
-        if (near) {
+    /** {@link #raw} at any block, {@link #SOLID} outside its column's range. */
+    private double raw(int x, int y, int z) {
+        Col c = column(x, z);
+        return y < c.lo || y > c.hi ? SOLID : raw(c, x, y, z);
+    }
+
+    // ------------------------------------------------------------------------------------------------ still water
+
+    /**
+     * The heights a column holds still water at (each block sunk under a floor or lying in a sinkhole's lake): its
+     * warren pools, its hall pool, its stretch of rift stream and its sinkhole's lake, where the rock round each holds
+     * it. Worked out once per column.
+     */
+    private void waterLevels(Col c) {
+        if (c.waterDone) return;
+        c.waterDone = true;
+        c.waterN = 0;
+        if (c.wOn[0] || c.wOn[1]) {
             warrenPools(c);
-            if (y == c.wPool[0] || y == c.wPool[1]) return true;
+            for (int i = 0; i < 2; i++) if (c.wPool[i] != NO_Y) addWater(c, c.wPool[i]);
         }
-        return c.hOn && y == c.hFloor - 1 && hallPool(c);
+        if (c.hOn && hallPool(c)) addWater(c, c.hFloor - 1);
+        if (riftPool(c)) addWater(c, c.rFloor - 1);
+        if (c.sOn) {
+            for (int y = c.sLake - 1; y <= c.sLake; y++)
+                if (lakeBlock(c, c.x, y, c.z, c.sLake) && holds(c.x, y, c.z, c.sLake)) addWater(c, y);
+        }
+    }
+
+    private static void addWater(Col c, int y) {
+        for (int i = 0; i < c.waterN; i++) if (c.waterY[i] == y) return;
+        c.waterY[c.waterN++] = y;
+    }
+
+    /** Still water at this column and height (a pool, a stretch of stream or a sinkhole's lake). */
+    boolean water(Col c, int y) {
+        waterLevels(c);
+        for (int i = 0; i < c.waterN; i++) if (c.waterY[i] == y) return true;
+        return false;
+    }
+
+    /** A block of the sinkhole lake at height {@code lake}: inside a pit of that lake, at the lake's level or one under. */
+    private boolean lakeBlock(Col c, int x, int y, int z, int lake) {
+        return c.sOn && c.sLake == lake && y >= lake - 1 && y <= lake && inPit(c, x, y, z);
+    }
+
+    /**
+     * Whether still water at a block stays put: the four blocks beside it and the one under it are rock to every shape
+     * (for a sinkhole's lake, {@code lake}, they may also be the same lake's water or the rock it fills in with, see
+     * {@link #carve(Col, int, int, int)}, but not a block of it another shape opens). The pack's caves and the canyons
+     * are kept out of that rim by {@link #rim}.
+     */
+    private boolean holds(int x, int y, int z, int lake) {
+        for (int k = 0; k < 5; k++) {
+            int nx = x + (k == 0 ? 1 : k == 1 ? -1 : 0), nz = z + (k == 2 ? 1 : k == 3 ? -1 : 0), ny = k == 4 ? y - 1 : y;
+            if (lake != NO_Y) {
+                Col n = column(nx, nz);
+                if (lakeBlock(n, nx, ny, nz, lake) && othersShut(n, nx, ny, nz)) continue;
+            }
+            if (raw(nx, ny, nz) <= 0) return false;
+        }
+        return true;
+    }
+
+    /**
+     * The rim of the shapes' still water: a block beside a block of it or under one, that is not water itself. It is
+     * rock to every shape ({@link #holds}); the pack's caves may not open it ({@code UpperSeal}), nor the canyons.
+     */
+    public boolean rim(int x, int y, int z) {
+        Col c = column(x, z);
+        if (!c.rimDone) rimRange(c);
+        if (y < c.rimLo || y > c.rimHi || water(c, y)) return false;
+        if (water(c, y + 1)) return true;
+        return water(column(x + 1, z), y) || water(column(x - 1, z), y) || water(column(x, z + 1), y) || water(column(x, z - 1), y);
+    }
+
+    /** The heights a column's rim may lie at: under its own water, and beside its neighbours'. */
+    private void rimRange(Col c) {
+        c.rimDone = true;
+        int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+        waterLevels(c);
+        for (int i = 0; i < c.waterN; i++) {
+            lo = Math.min(lo, c.waterY[i] - 1);
+            hi = Math.max(hi, c.waterY[i] - 1);
+        }
+        int x = c.x, z = c.z;
+        for (int k = 0; k < 4; k++) {
+            Col n = column(x + (k == 0 ? 1 : k == 1 ? -1 : 0), z + (k == 2 ? 1 : k == 3 ? -1 : 0));
+            waterLevels(n);
+            for (int i = 0; i < n.waterN; i++) {
+                lo = Math.min(lo, n.waterY[i]);
+                hi = Math.max(hi, n.waterY[i]);
+            }
+        }
+        c.rimLo = lo;
+        c.rimHi = hi;
     }
 
     /**
@@ -874,33 +1019,26 @@ public final class UpperShapes {
     public boolean seals(int x, int y, int z) { return formation(x, y, z) != 0; }
 
     /**
-     * What fills an open block: {@link #WATER} in the rift's stream, its springs, the pools and the sinkholes' lakes,
-     * {@link #AIR} elsewhere in the shapes and within two blocks of them (so the pack's water tables do not flood them),
-     * or -1 to leave it to the pack. All the water is set to flow as the chunk finishes, so none hangs over air.
+     * What fills an open block: {@link #WATER} (still) in the pools, the rifts' streams and the sinkholes' lakes,
+     * {@link #SPRING} in a spring (it flows), {@link #AIR} elsewhere in the shapes (so the pack's water tables do not
+     * flood them), or -1 to leave it to the pack. Where the pack's water would then stand beside the shapes' open space
+     * it turns to rock ({@link #besideOpen}).
      */
     public int fluid(int x, int y, int z) {
         Col c = column(x, z);
-        if (y < c.lo - 3 || y > c.hi + 3) return -1;
-        double best = SOLID;
-        if (c.rOn) {
-            double r = riftDist(c, x, y, z);
-            if (r < 0.5 && y <= c.rFloor + 1) return WATER;
-            if (y == spring(c)) return WATER;
-            best = Math.min(best, r);
-        }
-        if (c.sOn) {
-            double s = sinkDist(c, x, y, z);
-            if (s < 0.5 && y <= c.sLake && inPit(c, x, y, z)) return WATER;
-            best = Math.min(best, s);
-        }
-        if (pool(c, y)) return WATER;
-        for (int i = 0; i < 2; i++) if (c.wOn[i]) best = Math.min(best, warrenDist(c, i, x, y, z));
-        if (c.hOn) best = Math.min(best, hallDist(c, x, y, z));
-        return best < 2.0 ? AIR : -1;
+        if (y < c.lo || y > c.hi) return -1;
+        if (water(c, y)) return WATER;
+        if (c.rOn && y == spring(c)) return SPRING;
+        return carve(c, x, y, z) < 0 ? AIR : -1;
     }
 
-    /** True within {@code r} blocks of any shape's open space (where the pack's water should flow into ours). */
-    public boolean near(int x, int y, int z, double r) { return carve(x, y, z) < r; }
+    /**
+     * True where a block beside this one or the one under it is open in a shape: the pack's water here would pour into
+     * the shapes (or hang over them), so it stays rock instead.
+     */
+    public boolean besideOpen(int x, int y, int z) {
+        return carve(x, y - 1, z) < 0 || carve(x + 1, y, z) < 0 || carve(x - 1, y, z) < 0 || carve(x, y, z + 1) < 0 || carve(x, y, z - 1) < 0;
+    }
 
     /**
      * How deep in the rock a block lies, for dressing the shapes' shells: {@link #carve}, which measures up and down its

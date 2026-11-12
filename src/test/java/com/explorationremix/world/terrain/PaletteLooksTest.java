@@ -105,9 +105,16 @@ class PaletteLooksTest {
                 hPublic = hPublic * 31 + p.shell(x, y, z, 1 + r.nextInt(8), 1 + r.nextInt(8), r.nextInt(4) == 0).name().hashCode();
             }
         }
+        // 0.14: band 1 is the Blue Reaches' deep rock where the den gates are rifts (Terrain.denRifts); with them off the
+        // answer is the last pin's
+        long hPublicOld = hPublic;
         for (int b = 1; b <= 3; b++) for (int k = 0; k < 2000; k++) {
             int y = s.bandBottom(b) + r.nextInt(Math.max(1, s.bandTop(b) - s.bandBottom(b) + 1));
-            hPublic = hPublic * 31 + p.shell(r.nextInt(2000), y, r.nextInt(2000), 3, 3, false).name().hashCode();
+            int x = r.nextInt(2000), z = r.nextInt(2000);
+            t.denRifts = false;
+            hPublicOld = hPublicOld * 31 + p.shell(x, y, z, 3, 3, false).name().hashCode();
+            t.denRifts = true;
+            hPublic = hPublic * 31 + p.shell(x, y, z, 3, 3, false).name().hashCode();
         }
         DeepBiome[] upper = {DeepBiome.SILVER_FERN_RIFT, DeepBiome.IVORY_ROOT_CAVERN};
         for (int k = 0; k < 400000; k++) {
@@ -124,8 +131,9 @@ class PaletteLooksTest {
         }
         assertEquals("d4480c4b98b9e541", String.format("%016x", hBiome), "layers 0 and 1, by biome");
         assertEquals("2604e01a1b4b2ee3", String.format("%016x", hInterior), "layers 0 and 1, interior");
-        assertEquals("625c6dfe796ad0fa", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
-        assertEquals("f1e881cc466dc49d", String.format("%016x", hUpper), "the upper caves");
+        assertEquals("625c6dfe796ad0fa", String.format("%016x", hPublicOld), "layers 0 and 1 through the public path, and the bands (den rifts off)");
+        assertEquals("1864a7d54800ec7a", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
+        assertEquals("99305fd532fd9d69", String.format("%016x", hUpper), "the upper caves");
     }
 
     private static int nz(Rock q) { return q == null ? 0 : q.name().hashCode(); }

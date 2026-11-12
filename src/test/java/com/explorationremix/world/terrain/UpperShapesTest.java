@@ -139,45 +139,41 @@ class UpperShapesTest {
     }
 
     /**
-     * Still water stays put: next to a pool or a sinkhole's lake lies water or rock, not open air, nearly everywhere (a
-     * pool beside a rift may spill into it as a small fall). The rifts' streams and springs flow on purpose.
+     * Still water stays put: beside every block of a pool, a rift's stream or a sinkhole's lake, and under it, lies water
+     * or rock to every shape, never open air, and each such rock block is in the rim the pack's caves may not open. Only
+     * the springs flow.
      */
     @Test
-    void poolsAndLakesHoldTheirWater() {
+    void stillWaterHolds() {
+        int[][] around = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}};
         for (long seed : SEEDS) {
             UpperShapes s = new UpperShapes(seed, PACK_FLOOR, WORLD);
-            int still = 0, spill = 0, pools = 0, lakes = 0;
+            int still = 0, stream = 0, lakes = 0, spill = 0, unsealed = 0;
             String first = null;
             for (int x = -256; x < 256; x++) for (int z = -256; z < 256; z++) {
                 UpperShapes.Col c = s.column(x, z);
                 if (c.lo > c.hi) continue;
-                for (int y = (int) c.lo; y <= (int) c.hi; y++) {
-                    boolean pool = s.pool(s.column(x, z), y);
-                    c = s.column(x, z);
-                    boolean lake = c.sOn && y <= c.sLake && s.fluid(x, y, z) == UpperShapes.WATER;
-                    if (!pool && !lake) continue;
-                    if (s.carve(x, y, z) >= 0) continue;
-                    // a rift's stream or spring in the same column flows anyway
-                    if (c.rOn && s.kindAt(x, y, z) == UpperShapes.RIFTS) continue;
+                int lo = (int) c.lo, hi = (int) c.hi, rFloor = c.rOn ? c.rFloor : Integer.MIN_VALUE, sLake = c.sOn ? c.sLake : Integer.MIN_VALUE;
+                for (int y = lo; y <= hi; y++) {
+                    if (s.fluid(x, y, z) != UpperShapes.WATER) continue;
                     still++;
-                    if (pool) pools++;
-                    else lakes++;
-                    int[][] around = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}};
+                    if (y == rFloor - 1) stream++;
+                    else if (y >= sLake - 1 && y <= sLake) lakes++;
                     for (int[] d : around) {
                         int nx = x + d[0], ny = y + d[1], nz = z + d[2];
-                        if (s.carve(nx, ny, nz) < 0 && s.fluid(nx, ny, nz) != UpperShapes.WATER) {
-                            spill++;
-                            if (first == null) first = nx + " " + ny + " " + nz + " beside " + (pool ? "a pool" : "a lake") + " at " + x + " " + y + " " + z;
-                            break;
-                        }
+                        if (s.fluid(nx, ny, nz) == UpperShapes.WATER) continue;
+                        if (s.carve(nx, ny, nz) < 0) spill++;
+                        else if (!s.rim(nx, ny, nz)) unsealed++;
+                        else continue;
+                        if (first == null) first = nx + " " + ny + " " + nz + " beside water at " + x + " " + y + " " + z;
                     }
-                    c = s.column(x, z);
                 }
             }
-            System.out.printf("seed %d: %d still water blocks (%d pool, %d lake) in 512 x 512, %d beside open air (first: %s)%n", seed, still, pools, lakes,
-                    spill, first);
-            assertTrue(still > 0, "no pools or lakes");
-            assertTrue(spill <= 0.03 * still, spill + " of " + still + " still water blocks spill; first " + first);
+            System.out.printf("seed %d: %d still water blocks (%d stream, %d lake) in 512 x 512; %d beside open air, %d beside unsealed rock (first: %s)%n",
+                    seed, still, stream, lakes, spill, unsealed, first);
+            assertTrue(still > 0 && stream > 0, "no pools or streams");
+            assertEquals(0, spill, "water beside open air; first " + first);
+            assertEquals(0, unsealed, "water beside rock the pack's caves may open; first " + first);
         }
     }
 

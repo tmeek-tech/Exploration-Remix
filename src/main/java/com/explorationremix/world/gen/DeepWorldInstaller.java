@@ -14,6 +14,7 @@ import com.explorationremix.world.density.UpperSeal;
 import com.explorationremix.world.density.InterpolationGater;
 import com.explorationremix.world.terrain.Entrances;
 import com.explorationremix.world.terrain.PlantCaves;
+import com.explorationremix.world.terrain.HostRock;
 import com.explorationremix.world.terrain.UpperShapes;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.Holder;
@@ -148,6 +149,7 @@ public final class DeepWorldInstaller {
         } else {
             DeepWorld.setUpper(upperOn ? new Entrances(seed, currentMin, oracle) : null, upperOn ? new PlantCaves(seed) : null, oracle);
         }
+        DeepWorld.setHost(upperOn && cfg.upperHostRock.get() ? new HostRock(seed, oracle) : null);
         if (upperOn) DeepBiomes.keepWithoutDeepDark(biomeSource);
         DeepMaterials.resolve();
         int floorY = terrain.shape.floorY;

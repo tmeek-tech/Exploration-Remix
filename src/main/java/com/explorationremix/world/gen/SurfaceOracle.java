@@ -2,6 +2,7 @@ package com.explorationremix.world.gen;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.world.terrain.Overhead;
+import com.explorationremix.world.terrain.Rock;
 import com.explorationremix.world.terrain.RootKind;
 import com.explorationremix.world.terrain.Upper;
 import com.mojang.serialization.MapCodec;
@@ -50,6 +51,13 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
     private static final int BITS = 16, SIZE = 1 << BITS;
     private static final TagKey<Biome> NO_RAVINES = tag("rootvaults/no_ravines");
     private static final TagKey<Biome> PLAINS = tag("upper/plains"), DESERT = tag("upper/desert"), BADLANDS = tag("upper/badlands");
+    /**
+     * The surface biomes whose stone the pack (WWOO) turns into another near the ground: the host rock round the caves
+     * under them is that stone ({@code upper/host/<rock>}), or plain stone ({@code upper/host/none}).
+     */
+    private static final Rock[] HOSTS = {Rock.GRANITE, Rock.DIORITE, Rock.ANDESITE, Rock.DEEPSLATE, Rock.BLACKSTONE, Rock.BASALT, Rock.TERRACOTTA};
+    private static final TagKey<Biome>[] HOST_TAGS = hostTags();
+    private static final TagKey<Biome> HOST_NONE = tag("upper/host/none");
     /** Snowy biomes by name (groves, snowy slopes and peaks), whatever temperature the pack gives them. */
     private static final TagKey<Biome> SNOWY = TagKey.create(Registries.BIOME, new ResourceLocation("forge", "is_snowy"));
     /** Snow falls on biomes this cold or colder (vanilla's line between rain and snow, before any height adjustment). */
@@ -70,12 +78,13 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
     private final AtomicReferenceArray<Corner> corners = new AtomicReferenceArray<>(SIZE);
     private final ConcurrentHashMap<Holder<Biome>, Info> infos = new ConcurrentHashMap<>();
 
-    private record Entry(long key, Surface surface, int low, Holder<Biome> biome) {}
+    private record Entry(long key, Surface surface, int low, Holder<Biome> biome, @Nullable Rock host) {}
 
     /** The ground in one noise-cell corner column. */
     private record Corner(long key, int ground) {}
 
-    private record Info(RootKind kind, boolean wet, boolean noRavine, Cover cover, boolean cold) {}
+    /** {@code host}: the pack's own stone under the biome (see {@link #HOSTS}), null to follow the cover; {@code noHost}: none. */
+    private record Info(RootKind kind, boolean wet, boolean noRavine, Cover cover, boolean cold, @Nullable Rock host, boolean noHost) {}
 
     /**
      * @param pack   built from the pack's noise settings before the deep world changed them
@@ -95,6 +104,13 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
         this.linearDepth = checkDepth();
         ExplorationRemix.LOGGER.info("Surface oracle: depth {} linear in y, biomes {}", linearDepth ? "is" : "is NOT (scanning the density instead)",
                 multiNoise != null ? "asked at depth 0" : "asked at the ground (not a multi-noise biome source)");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static TagKey<Biome>[] hostTags() {
+        TagKey<Biome>[] t = new TagKey[HOSTS.length];
+        for (int i = 0; i < HOSTS.length; i++) t[i] = tag("upper/host/" + HOSTS[i].name().toLowerCase(java.util.Locale.ROOT));
+        return t;
     }
 
     private static TagKey<Biome> tag(String path) {
@@ -126,6 +142,9 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
 
     @Override
     public int seaLevel() { return seaLevel; }
+
+    @Override
+    public Rock host(int x, int z) { return entry(x >> 2, z >> 2).host; }
 
     /** The pack's surface biome over a column. */
     public Holder<Biome> biome(int x, int z) { return entry(x >> 2, z >> 2).biome; }
@@ -164,7 +183,9 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
         // Snow lies where the biome is snowy or cold at the ground's height: groves and high taigas too, which the pack
         // (WWOO) makes a little warmer than vanilla.
         boolean cold = info.cold || b.value().coldEnoughToSnow(new BlockPos(x, y + 1, z));
-        return new Entry(key, new Surface(y, info.kind, info.wet, ravineOk, info.cover, cold), Math.min(low, y), b);
+        Surface surface = new Surface(y, info.kind, info.wet, ravineOk, info.cover, cold);
+        Rock host = info.noHost || info.wet ? null : info.host != null ? info.host : Overhead.hostOf(surface);
+        return new Entry(key, surface, Math.min(low, y), b, host);
     }
 
     /** Where the pack puts its ground for a climate: 128 times its depth at y 0, kept inside the world. */
@@ -281,7 +302,9 @@ public final class SurfaceOracle implements Overhead, Upper.SurfaceProbe {
         RootKind kind = wet ? RootKind.NONE : kindOf(b);
         Cover cover = wet ? Cover.OTHER : kind.trees() ? Cover.FOREST : b.is(DESERT) ? Cover.DESERT : b.is(BADLANDS) ? Cover.BADLANDS
                 : b.is(PLAINS) ? Cover.PLAINS : Cover.OTHER;
-        return new Info(kind, wet, b.is(NO_RAVINES), cover, b.value().getBaseTemperature() <= SNOW_LINE || b.is(SNOWY));
+        Rock host = null;
+        for (int i = 0; i < HOSTS.length && host == null; i++) if (b.is(HOST_TAGS[i])) host = HOSTS[i];
+        return new Info(kind, wet, b.is(NO_RAVINES), cover, b.value().getBaseTemperature() <= SNOW_LINE || b.is(SNOWY), host, b.is(HOST_NONE));
     }
 
     /** The kind of trees a biome grows, by the {@code explorationremix:rootvaults/<kind>} biome tags. */

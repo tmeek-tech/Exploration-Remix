@@ -92,6 +92,7 @@ public final class DeepMaterials {
                 case ANDESITE -> Blocks.ANDESITE.defaultBlockState();
                 case FROST_MOSS -> ERBlocks.FROST_MOSS.get().defaultBlockState();
                 case EMBER_CRUST -> ERBlocks.EMBER_CRUST.get().defaultBlockState();
+                case DIORITE -> Blocks.DIORITE.defaultBlockState();
             };
             STATES.put(r, s);
             BY_ORDINAL[r.ordinal()] = s;
@@ -117,7 +118,8 @@ public final class DeepMaterials {
 
     /**
      * Rock below the pack's old floor, as decided while the noise is filled: bedrock at the very bottom, band stone in
-     * the bands, and the layer's deep rock far from any open space. Returns null for rock near open space, which is left
+     * the bands (band 1 the Blue Reaches' deep rock where the den gates are rifts), and the layer's deep rock far from any
+     * open space. Returns null for rock near open space, which is left
      * as plain stone for the surface pass to dress per biome.
      */
     @Nullable
@@ -129,7 +131,11 @@ public final class DeepMaterials {
             if (Hashing.unit(Hashing.mix(t.seed ^ 0x51ED270B27F1A3C9L, x, y, z)) < chance) return BY_ORDINAL[Rock.BEDROCK.ordinal()];
         }
         int li = s.layerAt(y);
-        if (li < 0) return BY_ORDINAL[Rock.BAND_STONE.ordinal()];
+        if (li < 0) {
+            // band 1 is plain rock where the den gates are rifts (0.14): the Blue Reaches' deep rock, which can be dug
+            if (t.denRifts && s.bandAt(y) == 1) return BY_ORDINAL[t.palette.interior(Terrain.BLUE, x, y, z).ordinal()];
+            return BY_ORDINAL[Rock.BAND_STONE.ordinal()];
+        }
         if (density > 0.75) return BY_ORDINAL[t.palette.interior(li, x, y, z).ordinal()];
         return null;
     }

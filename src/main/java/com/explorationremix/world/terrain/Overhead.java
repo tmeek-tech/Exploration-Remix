@@ -34,6 +34,26 @@ public interface Overhead {
     /** The sea level: ground below it lies under water in swamps and wetlands even where no ocean or river is. */
     default int seaLevel() { return 63; }
 
+    /**
+     * The rock the caves near the surface are carved into under (x, z) (see {@link HostRock}), or null for none. The
+     * game answers from the surface biome, keeping the stone the pack (WWOO) gives it; by default it follows the cover.
+     */
+    default Rock host(int x, int z) { return hostOf(at(x, z)); }
+
+    /**
+     * The host rock a surface suggests by its cover: none under water, sandstone under deserts, terracotta under badlands,
+     * veridium under tropical forests, limestone anywhere else.
+     */
+    static Rock hostOf(Surface s) {
+        if (s.wet()) return null;
+        return switch (s.cover()) {
+            case DESERT -> Rock.SANDSTONE;
+            case BADLANDS -> Rock.TERRACOTTA;
+            case FOREST -> s.trees().tropical() ? Rock.VERIDIUM : Rock.LIMESTONE;
+            default -> Rock.LIMESTONE;
+        };
+    }
+
     /** What covers the ground, for the entrances into the caves (see {@code Entrances}). */
     enum Cover {
         /** Trees: Root Vault clusters. */

@@ -1,9 +1,9 @@
 {
-  "feature": "explorationremix:ivory_root_cavern/sage",
+  "feature": "explorationremix:frost_fern_grotto/floor_icicles",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 14
+      "count": 6
     },
     {
       "type": "minecraft:in_square"
@@ -13,7 +13,7 @@
       "layer": "upper",
       "inset": 2,
       "above_water": false,
-      "focus": "pieces"
+      "focus": "caves"
     },
     {
       "type": "minecraft:environment_scan",

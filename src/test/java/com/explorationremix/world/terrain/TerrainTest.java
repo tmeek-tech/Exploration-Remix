@@ -134,6 +134,50 @@ class TerrainTest {
     }
 
     /**
+     * Every den gate is a deep rift (0.14, {@link Terrain#denRifts}): along the passage's course its floor walks down from
+     * the den's ledge through band 1 a block at a time, with room to stand over it all the way, and its walls rise well
+     * over the ledge. (Below the band the Blue Reaches' network carves its foot round the lower landing.)
+     */
+    @Test
+    void denRiftsWalkDownThroughBandOne() {
+        int gates = 0;
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            Shape s = t.shape;
+            for (int[] c : CELLS) for (Plans.Gate g : t.plans.denGates(c[0], c[1])) {
+                gates++;
+                String tg = "den gate " + g.den + " of cell " + c[0] + "," + c[1] + " seed " + seed;
+                int prevX = Integer.MIN_VALUE, prevZ = 0, prevFeet = 0, tall = 0;
+                for (int i = 0; i <= 400; i++) {
+                    double tt = i / 400.0;
+                    int x = (int) Math.floor(g.px(tt)), z = (int) Math.floor(g.pz(tt));
+                    if (x == prevX && z == prevZ) continue;
+                    // the feet: the lowest open block of the column under the passage's centre line
+                    int feet = (int) Math.floor(g.py(tt));
+                    if (feet < s.bandBottom(1)) break;
+                    assertTrue(open(t, x, feet, z), tg + ": the rift is shut at " + x + " " + feet + " " + z);
+                    while (open(t, x, feet - 1, z)) feet--;
+                    for (int y = feet; y <= feet + 2; y++) assertTrue(open(t, x, y, z), tg + ": no room to stand at " + x + " " + y + " " + z);
+                    if (prevX != Integer.MIN_VALUE)
+                        assertTrue(Math.abs(feet - prevFeet) <= 1, tg + ": the floor steps " + (feet - prevFeet) + " at " + x + " " + feet + " " + z);
+                    int up = feet;
+                    while (up < feet + 60 && open(t, x, up + 1, z)) up++;
+                    if (up - feet >= 20) tall++;
+                    prevX = x;
+                    prevZ = z;
+                    prevFeet = feet;
+                }
+                assertTrue(tall >= 10, tg + ": the rift is low over its floor (" + tall + " columns 20 or more tall)");
+            }
+        }
+        assertTrue(gates >= SEEDS.length * CELLS.length * 3, "only " + gates + " den gates checked");
+    }
+
+    private static boolean open(Terrain t, int x, int y, int z) {
+        return (y >= t.shape.packFloor ? Math.min(t.rawDensity(x, y, z), t.upperCarve(x, y, z)) : t.rawDensity(x, y, z)) < 0;
+    }
+
+    /**
      * Band 1 and the den gates' carve look only at the den gates whose bounding boxes reach a column, found once per
      * column ({@link Terrain.Column}): every answer is the one trying every den gate of the cell everywhere gives, with
      * the columns visited in any order.
@@ -163,6 +207,7 @@ class TerrainTest {
         assertTrue(open > 100 && carved > 500, "too few samples in the gates: " + open + " open in the bands, " + carved + " carved above");
     }
 
+    /** The bands are rock but for their gates: in band 1 each den gate's rift, in the deeper bands each gate's passage. */
     @Test
     void bandsAreSolidAwayFromTheirPassage() {
         Terrain t = terrain(SEEDS[0]);
@@ -174,8 +219,8 @@ class TerrainTest {
             int x = r.nextInt(1800) - 900, z = r.nextInt(1800) - 900;
             int y = t.shape.bandBottom(b) + r.nextInt(t.shape.bandThickness(b));
             int cx = t.plans.cellOf(x), cz = t.plans.cellOf(z);
-            // band 1 has every den gate of the cell, the deeper bands one gate each
-            boolean near = false;
+            // band 1 has every den gate of the cell (a rift each, since 0.14), the deeper bands one gate each
+            boolean near = b == 1 && t.nearDenRift(x, z, Terrain.RIFT_REACH + 1);
             for (Plans.Gate g : b == 1 ? t.plans.denGates(cx, cz) : java.util.List.of(t.plans.gate(b, cx, cz)))
                 if (g.passageXZ(x, y, z) < g.radius * 2 + 6) near = true;
             if (near) continue;
