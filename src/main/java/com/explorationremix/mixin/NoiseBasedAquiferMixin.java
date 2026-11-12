@@ -97,11 +97,11 @@ public abstract class NoiseBasedAquiferMixin {
             cir.setReturnValue(null);
             return;
         }
-        // The den gates keep the pack's caves dry within 14 blocks of their landings, ramps and rifts (the head of this
-        // class): the pack's water just outside that, or over it where the dry zone stops, is rock, so its lakes end at
-        // a wall of stone rather than a wall of water.
+        // The den gates keep the pack's caves dry close to their landings, ramps and rifts (the head of this class):
+        // the pack's water just outside that, or over it where the dry zone stops, is rock, so its lakes end at a wall
+        // of stone rather than a wall of water.
         int y = ctx.blockY();
-        if (y <= t.shape.packFloor + 56 && t.denGateCarve(ctx.blockX(), y, ctx.blockZ()) < 16.0) {
+        if (y <= t.shape.packFloor + 56 && t.denDryDist(ctx.blockX(), y, ctx.blockZ()) < Terrain.DEN_SHELL) {
             this.shouldScheduleFluidUpdate = false;
             cir.setReturnValue(null);
             return;

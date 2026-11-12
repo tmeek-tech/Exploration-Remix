@@ -212,8 +212,15 @@ public final class Terrain {
     static final double RIFT_RISE = 34;
     /** A den rift's half width at its floor and top, and how much the middle of its height adds (blocks, at scale 1). */
     static final double RIFT_EDGE = 2.2, RIFT_BELLY = 3.4;
-    /** How far past the box round a ramp's ends it is carved (its radius and wobble) and kept dry, as it always was. */
-    private static final double RAMP_REACH = 12;
+    /** How far past the box round a ramp's ends it is carved (its radius and wobble) and kept dry (its dry zone and shell). */
+    private static final double RAMP_REACH = 16;
+    /** A den rift is never wider than this from its middle line (blocks): its widest, ledges and roughness, at scale 1.2. */
+    static final double RIFT_WIDEST = 9;
+    /**
+     * The den gates' dry zone above the old floor ({@link #denDryDist}): the pack's caves are kept dry this close to their
+     * open space, and the pack's water is rock out to {@link #DEN_SHELL} (blocks).
+     */
+    public static final double DEN_DRY = 5, DEN_SHELL = 7;
 
     /** The den gates of the column's cell whose upper landing or passage can reach it: {@code c.dens[0..denN)}. */
     private void densOf(Column c) {
@@ -249,7 +256,7 @@ public final class Terrain {
             Plans.Gate g = c.dens[k];
             g.lineNearest(c.x + 0.5, c.z + 0.5, line);
             double end = Math.min(line[1] + Plans.Gate.LINE_BACK, g.lineEnd() - line[1]);
-            double floor = g.riftFloor(line[2]);
+            double floor = g.riftFloorAt(line[1]);
             double scale = 0.95 + 0.25 * Hashing.unit(Hashing.mix(seed, 4301, g.cellX * 16L + g.den, g.cellZ));
             c.rv[k] = line[0];
             c.rFloor[k] = floor;
@@ -443,18 +450,62 @@ public final class Terrain {
     public double fine(int x, int y, int z, double coarse) {
         int li = shape.layerAt(y);
         if (li < 0) {
-            // band 1's den rifts keep their ledges and floors: every block of a rift is open, whatever the interpolation
+            // band 1's den rifts keep their ledges and floors: every block of a rift is open and every other block is
+            // rock, whatever the interpolation (it would sink the floor a block or two here and there)
             if (denRifts && shape.bandAt(y) == 1) {
                 double d = denPassages(column(x, z), x, y, z);
-                if (d <= 0) return Math.min(coarse, Math.max(-1, d / 8.0));
+                return d <= 0 ? Math.min(coarse, Math.max(-1, d / 8.0)) : Math.max(coarse, Math.min(1, d / 8.0));
             }
             return coarse;
         }
         if (join != null && join.inBand(y)) return join.fine(x, y, z, coarse);
         if (li == WASTELAND) return wasteland.fine(x, y, z, coarse);
         if (li == GALLERIES) return galleries.fine(x, y, z, coarse);
-        return network.fine(li, x, y, z, coarse);
+        double d = network.fine(li, x, y, z, coarse);
+        // a den rift that crosses over the Blue Reaches' caves keeps its floor, so the way down never has a hole no one
+        // climbs back out of: the two blocks under the bottom of its crack always, out past the lower landing's rim (a
+        // room or way under it is roofed there, a bridge on the rift's floor), and the shelf under that and under its
+        // walls where the density has rock (the interpolation alone lets a cave's space up through rock thinner than its
+        // 8-block step)
+        if (d <= 0 && denRifts && li == BLUE) {
+            int under = underDenRiftFloor(x, y, z);
+            if (under == 1 || (under == 2 && rawDensity(x, y, z) > 0)) return 0.1;
+        }
+        return d;
     }
+
+    /** How deep under a den rift's floor its shelf keeps the density's rock (blocks): the interpolation's vertical step. */
+    private static final double RIFT_SHELF = 8;
+
+    /**
+     * Where a block lies under a den rift, out past its lower landing's rim: 1 in its bridge ({@link #RIFT_BRIDGE} under
+     * its floor, where the rift is open within {@link #RIFT_LOW} over that floor: the bottom of its crack, whose walls
+     * slope out), 2 elsewhere in its shelf ({@link #RIFT_SHELF} under its floor, as far across as the rift can open), or 0.
+     * A bridge one block thick hovered over the lower landing's edge (pieces of 8 to 12 blocks that nothing held).
+     */
+    private int underDenRiftFloor(int x, int y, int z) {
+        Column c = column(x, z);
+        densOf(c);
+        int under = 0;
+        for (int k = 0; k < c.denN; k++) {
+            if (c.rv[k] > RIFT_WIDEST) continue;
+            double fl = c.rFloor[k], yy = y + 0.5;
+            if (yy >= fl || yy < fl - RIFT_SHELF) continue;
+            Plans.Gate g = c.dens[k];
+            if (Math.hypot(x + 0.5 - g.lx, z + 0.5 - g.lz) <= g.landR - Plans.Gate.LAND_IN) continue;
+            if (yy >= fl - RIFT_BRIDGE) {
+                int f = (int) Math.floor(fl + 0.5);
+                for (int j = 0; j <= RIFT_LOW; j++) if (riftAt(c, k, x, f + j, z) < 0) return 1;
+            }
+            under = 2;
+        }
+        return under;
+    }
+
+    /** How far over a den rift's floor its crack counts as the bottom that the floor under it holds up (blocks). */
+    private static final int RIFT_LOW = 4;
+    /** How thick the floor under the bottom of a den rift's crack always is (blocks): a bridge over any cave under it. */
+    private static final double RIFT_BRIDGE = 2;
 
     /**
      * Whether the game builds rock at a block below the pack's old floor, as its noise pass does: {@link #density} at
@@ -511,8 +562,33 @@ public final class Terrain {
             if (p instanceof Upper.Cavern cv && c.upD > cv.rxz + 1) return AIR;
             return WATER;
         }
-        if (y < shape.packFloor + 48 && denGateCarve(x, y, z) < 14.0) return AIR;
+        if (y < shape.packFloor + 48 && denDryDist(x, y, z) < DEN_DRY) return AIR;
         return -1;
+    }
+
+    /**
+     * How far a block lies from the den gates' open space above the old floor, for their dry zone ({@link #upperFluid})
+     * and the rock shell round it, where the pack's water turns to stone (NoiseBasedAquiferMixin): the upper landing as a
+     * cylinder from its floor to its top, the rift as a slab round its middle line as wide as it ever gets from its floor
+     * to its top, and the ramps. Unlike {@link #denGateCarve}, whose pieces stop at their own reach, it runs on smoothly
+     * past the shell, so the shell closes all round and the pack's lakes never stand as a wall of water beside the dry
+     * zone's air.
+     */
+    public double denDryDist(int x, int y, int z) {
+        if (y < shape.packFloor - 8 || y > shape.packFloor + 56) return SOLID;
+        Column c = column(x, z);
+        densOf(c);
+        rampsOf(c);
+        double d = SOLID, yy = y + 0.5;
+        for (int i = 0; i < c.denN; i++) {
+            Plans.Gate g = c.dens[i];
+            double dxz = Math.hypot(x + 0.5 - g.ux, z + 0.5 - g.uz);
+            d = Math.min(d, Math.max(dxz - g.landR, Math.max(g.uFloor - 1 - yy, yy - (g.uCy + g.landHalf))));
+            if (denRifts) d = Math.min(d, Math.max(c.rv[i] - RIFT_WIDEST, Math.max(c.rFloor[i] - 1 - yy, yy - c.rTop[i])));
+            else d = Math.min(d, passage(g, x, y, z));
+        }
+        for (int i = 0; i < c.rampN; i++) d = Math.min(d, c.ramps[i].dist(x, y, z));
+        return d;
     }
 
     /** The upper set piece's biome at a block, or a den rift's (with its den's ledge), or null. */

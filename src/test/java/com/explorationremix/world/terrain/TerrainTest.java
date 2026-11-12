@@ -135,15 +135,17 @@ class TerrainTest {
 
     /**
      * Every den gate is a deep rift (0.14, {@link Terrain#denRifts}): along the passage's course its floor walks down from
-     * the den's ledge through band 1 a block at a time, with room to stand over it all the way, and its walls rise well
-     * over the ledge. (Below the band the Blue Reaches' network carves its foot round the lower landing.)
+     * the den's ledge to the Blue Reaches' lower landing, as the game builds the blocks (Minecraft's interpolation and
+     * the fine pass under the pack's old floor), never stepping more than {@link #RIFT_STEP} (each diagonal move taken as
+     * two straight ones); with room to stand all the way, and tall over most of it. Most rifts never step more than a
+     * block; near the lower landing the Blue Reaches' ways can leave a step of 2 to 4, which a player pillars up (Taran,
+     * 2026-11-12: "To get out of a rift you could always just pillar up. There doesn't necessarily need to be a ramp").
      */
     @Test
-    void denRiftsWalkDownThroughBandOne() {
+    void denRiftsWalkDownToTheBlueReaches() {
         int gates = 0;
         for (long seed : SEEDS) {
             Terrain t = terrain(seed);
-            Shape s = t.shape;
             for (int[] c : CELLS) for (Plans.Gate g : t.plans.denGates(c[0], c[1])) {
                 gates++;
                 String tg = "den gate " + g.den + " of cell " + c[0] + "," + c[1] + " seed " + seed;
@@ -152,25 +154,47 @@ class TerrainTest {
                     double tt = i / 400.0;
                     int x = (int) Math.floor(g.px(tt)), z = (int) Math.floor(g.pz(tt));
                     if (x == prevX && z == prevZ) continue;
-                    // the feet: the lowest open block of the column under the passage's centre line
-                    int feet = (int) Math.floor(g.py(tt));
-                    if (feet < s.bandBottom(1)) break;
-                    assertTrue(open(t, x, feet, z), tg + ": the rift is shut at " + x + " " + feet + " " + z);
-                    while (open(t, x, feet - 1, z)) feet--;
-                    for (int y = feet; y <= feet + 2; y++) assertTrue(open(t, x, y, z), tg + ": no room to stand at " + x + " " + y + " " + z);
-                    if (prevX != Integer.MIN_VALUE)
-                        assertTrue(Math.abs(feet - prevFeet) <= 1, tg + ": the floor steps " + (feet - prevFeet) + " at " + x + " " + feet + " " + z);
+                    int top = (int) Math.floor(g.riftFloor(tt)) + 3;
+                    int feet = feet(t, x, z, top);
+                    for (int y = feet; y <= feet + 2; y++) assertFalse(built(t, x, y, z), tg + ": no room to stand at " + x + " " + y + " " + z);
+                    if (prevX != Integer.MIN_VALUE) {
+                        int step = Math.abs(feet - prevFeet);
+                        if (x != prevX && z != prevZ) {
+                            int a = feet(t, x, prevZ, Math.max(feet, prevFeet) + 3), b = feet(t, prevX, z, Math.max(feet, prevFeet) + 3);
+                            step = Math.min(Math.max(Math.abs(a - prevFeet), Math.abs(feet - a)), Math.max(Math.abs(b - prevFeet), Math.abs(feet - b)));
+                        }
+                        assertTrue(step <= RIFT_STEP, tg + ": the floor steps " + step + " at " + x + " " + feet + " " + z);
+                    }
                     int up = feet;
-                    while (up < feet + 60 && open(t, x, up + 1, z)) up++;
+                    while (up < feet + 60 && !built(t, x, up + 1, z)) up++;
                     if (up - feet >= 20) tall++;
                     prevX = x;
                     prevZ = z;
                     prevFeet = feet;
                 }
+                assertTrue(feetNear(prevFeet, g.lFloor), tg + ": the rift ends at " + prevFeet + ", not on the lower landing's floor " + g.lFloor);
                 assertTrue(tall >= 10, tg + ": the rift is low over its floor (" + tall + " columns 20 or more tall)");
             }
         }
         assertTrue(gates >= SEEDS.length * CELLS.length * 3, "only " + gates + " den gates checked");
+    }
+
+    /** The biggest step along a den rift's floor (blocks): a short pillar up, see {@link #denRiftsWalkDownToTheBlueReaches}. */
+    static final int RIFT_STEP = 4;
+
+    private static boolean feetNear(int feet, double floor) { return Math.abs(feet - floor) <= 2; }
+
+    /** The lowest open block under {@code from} in a column, scanning down to the first rock, as the game builds it. */
+    private static int feet(Terrain t, int x, int z, int from) {
+        int y = from;
+        while (!built(t, x, y - 1, z)) y--;
+        return y;
+    }
+
+    /** Whether the game builds rock at a block: {@link Terrain#rockAt} under the pack's old floor, the carve over it. */
+    private static boolean built(Terrain t, int x, int y, int z) {
+        if (y < t.shape.packFloor) return t.rockAt(x, y, z);
+        return Math.min(t.rawDensity(x, y, z), t.upperCarve(x, y, z)) >= 0;
     }
 
     private static boolean open(Terrain t, int x, int y, int z) {
