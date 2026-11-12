@@ -313,13 +313,14 @@ public final class UpperShapes {
         k = k > 0.40 ? smooth((k - 0.40) / 0.45) * (1 - m) : 0;
         c.link = k;
         c.wYc[0] += k * (c.wYc[1] - c.wYc[0]);
-        // where the cap is lifted the tunnel opens as a sunken way: wider and taller, its floor about 5 blocks under
-        // the ground and its sides overhanging a little
+        // where the cap is lifted the tunnel opens as a sunken way: wider, and tall enough that its roof meets the lifted
+        // cap a few blocks over the ground (the pack's real ground sits a block or two over the estimate here), so the
+        // opening is wide at the real ground, the floor about 5 blocks under it and the sides overhanging a little
         double mw = c.mouth;
         c.wHw[0] += 2.5 * mw;
-        c.wHh[0] += 1.5 * mw;
+        c.wHh[0] += 2.7 * mw;
         if (m > 0) {
-            double to = Math.min(c.gF - 1.2 - 1.3 * mw, c.wYc[0] + MOUTH_RISE);
+            double to = Math.min(c.gF - 1.2, c.wYc[0] + MOUTH_RISE);
             if (to > c.wYc[0]) c.wYc[0] += m * (to - c.wYc[0]);
         }
         for (int i = 0; i < 2; i++) {
