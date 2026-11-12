@@ -3,6 +3,7 @@ package com.explorationremix.world.gen;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Entrances;
+import com.explorationremix.world.terrain.UpperShapes;
 import com.explorationremix.world.terrain.Overhead;
 import com.explorationremix.world.terrain.PlantCaves;
 import com.explorationremix.world.terrain.Terrain;
@@ -33,6 +34,7 @@ public final class DeepBiomeResolver implements BiomeResolver {
     private final BiomeResolver inner;
     private final Terrain terrain;
     private final Entrances entrances;
+    private final UpperShapes shapes;
     private final Overhead overhead;
     private final PlantCaves plants;
     private final Holder<Biome> frost, lush;
@@ -42,6 +44,7 @@ public final class DeepBiomeResolver implements BiomeResolver {
         this.inner = inner;
         this.terrain = terrain;
         this.entrances = DeepWorld.entrances();
+        this.shapes = DeepWorld.shapes();
         this.overhead = DeepWorld.oracle();
         this.plants = DeepWorld.plants();
         this.frost = DeepBiomes.frostGrotto();
@@ -57,6 +60,19 @@ public final class DeepBiomeResolver implements BiomeResolver {
         if (upper != null) return DeepBiomes.holder(upper);
         if (entrances != null) {
             Entrances.Area a = entrances.areaAt(x, y, z);
+            if (a != null) {
+                Holder<Biome> h = DeepBiomes.area(a);
+                if (h != null) return h;
+            }
+        }
+        if (shapes != null && replace) {
+            // The noise shapes: a rift takes the Silver Fern Rift's biome, a hall the Ivory Root Cavern's (the Frost Fern
+            // Grotto's under cold ground); the warrens and sinkholes their entrance's, by what covers the ground.
+            int p = shapes.piece(x, y, z);
+            if (p == UpperShapes.PIECE_RIFT) return DeepBiomes.holder(DeepBiome.SILVER_FERN_RIFT);
+            if (p == UpperShapes.PIECE_HALL) return DeepBiomes.holder(DeepBiome.IVORY_ROOT_CAVERN);
+            if (p == UpperShapes.PIECE_COLD_HALL && frost != null) return frost;
+            Entrances.Area a = shapes.areaAt(x, y, z);
             if (a != null) {
                 Holder<Biome> h = DeepBiomes.area(a);
                 if (h != null) return h;

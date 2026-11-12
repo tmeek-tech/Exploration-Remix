@@ -14,6 +14,7 @@ import com.explorationremix.world.density.UpperSeal;
 import com.explorationremix.world.density.InterpolationGater;
 import com.explorationremix.world.terrain.Entrances;
 import com.explorationremix.world.terrain.PlantCaves;
+import com.explorationremix.world.terrain.UpperShapes;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.Holder;
 import net.minecraft.world.level.biome.BiomeSource;
@@ -135,7 +136,18 @@ public final class DeepWorldInstaller {
                 noise.getCellWidth(), noise.getCellHeight());
         terrain.surfaceProbe = oracle;
         boolean upperOn = ERConfig.INSTANCE.replaceVanillaCaveBiomes.get();
-        DeepWorld.setUpper(upperOn ? new Entrances(seed, currentMin, oracle) : null, upperOn ? new PlantCaves(seed) : null, oracle);
+        ERConfig cfg = ERConfig.INSTANCE;
+        if (upperOn && cfg.upperNoise.get()) {
+            // The Upper Caves from noise: no planned entrances, no set pieces (the den gates stay).
+            UpperShapes shapes = new UpperShapes(seed, currentMin, oracle, cfg.upperWarrens.get(), cfg.upperRifts.get(), cfg.upperHalls.get(),
+                    cfg.upperSinkholes.get(), cfg.upperWormTunnels.get());
+            terrain.upperPieces = false;
+            DeepWorld.setUpper(null, shapes, new PlantCaves(seed), oracle);
+            ExplorationRemix.LOGGER.info("Upper Caves from noise: warrens {}, rifts {}, halls {}, sinkholes {}, worm tunnels {}", shapes.warrens, shapes.rifts,
+                    shapes.halls, shapes.sinkholes, shapes.wormTunnels);
+        } else {
+            DeepWorld.setUpper(upperOn ? new Entrances(seed, currentMin, oracle) : null, upperOn ? new PlantCaves(seed) : null, oracle);
+        }
         if (upperOn) DeepBiomes.keepWithoutDeepDark(biomeSource);
         DeepMaterials.resolve();
         int floorY = terrain.shape.floorY;

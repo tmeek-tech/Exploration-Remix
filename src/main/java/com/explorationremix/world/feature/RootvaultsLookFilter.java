@@ -3,6 +3,7 @@ package com.explorationremix.world.feature;
 import com.explorationremix.registry.ERWorldgen;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.Entrances;
+import com.explorationremix.world.terrain.UpperShapes;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -50,6 +51,18 @@ public final class RootvaultsLookFilter extends PlacementFilter {
 
     @Override
     protected boolean shouldPlace(PlacementContext ctx, RandomSource random, BlockPos pos) {
+        UpperShapes sh = DeepWorld.shapes();
+        if (sh != null) {
+            // The noise shapes: the look by the ground's cover (and the warrens' mouths), cold by the ground, chill by
+            // depth under a cold forest.
+            int look = sh.look(pos.getX(), pos.getY(), pos.getZ());
+            if (look < 0 || !looks.contains(look)) return false;
+            if (cold.isPresent() && sh.cold(pos.getX(), pos.getZ()) != cold.get()) return false;
+            if (minChill.isEmpty() && maxChill.isEmpty()) return true;
+            double c = sh.chill(pos.getX(), pos.getY(), pos.getZ());
+            if (c == Double.POSITIVE_INFINITY) return false;
+            return (minChill.isEmpty() || c >= minChill.get()) && (maxChill.isEmpty() || c <= maxChill.get());
+        }
         Entrances e = DeepWorld.entrances();
         if (e == null) return false;
         int look = e.look(pos.getX(), pos.getZ());

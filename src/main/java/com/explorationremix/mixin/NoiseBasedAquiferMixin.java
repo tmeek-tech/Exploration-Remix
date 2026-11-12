@@ -3,6 +3,7 @@ package com.explorationremix.mixin;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.gen.DeepMaterials;
 import com.explorationremix.world.terrain.Entrances;
+import com.explorationremix.world.terrain.UpperShapes;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -41,15 +42,26 @@ public abstract class NoiseBasedAquiferMixin {
             // to lie below sea level.
             if (density <= 0.0) {
                 int f = t.upperFluid(ctx.blockX(), y, ctx.blockZ());
+                boolean flow = false;
                 if (f < 0) {
                     Entrances e = DeepWorld.entrances();
                     if (e != null) {
                         int ef = e.fluid(ctx.blockX(), y, ctx.blockZ());
                         if (ef >= 0) f = ef == Entrances.WATER ? Terrain.WATER : Terrain.AIR;
                     }
+                    UpperShapes s = DeepWorld.shapes();
+                    if (s != null) {
+                        // The noise shapes' streams, springs, pools and lakes: every block of their water flows as the
+                        // chunk finishes, so falls form where a stream steps down and nothing hangs over air.
+                        int sf = s.fluid(ctx.blockX(), y, ctx.blockZ());
+                        if (sf >= 0) {
+                            f = sf == UpperShapes.WATER ? Terrain.WATER : Terrain.AIR;
+                            flow = f == Terrain.WATER;
+                        }
+                    }
                 }
                 if (f >= 0) {
-                    this.shouldScheduleFluidUpdate = false;
+                    this.shouldScheduleFluidUpdate = flow;
                     cir.setReturnValue(f == Terrain.WATER ? DeepMaterials.WATER : DeepMaterials.AIR);
                 }
             }
@@ -64,13 +76,23 @@ public abstract class NoiseBasedAquiferMixin {
         cir.setReturnValue(f == Terrain.WATER ? DeepMaterials.WATER : f == Terrain.LAVA ? DeepMaterials.LAVA : DeepMaterials.AIR);
     }
 
-    /** The upper caves are safe: wherever vanilla's aquifer would leave lava above the old floor, it leaves water. */
+    /**
+     * The upper caves are safe: wherever vanilla's aquifer would leave lava above the old floor, it leaves water. Where
+     * the Upper Caves grow from noise, the pack's water next to their open space flows into it as the chunk finishes,
+     * instead of standing there as a wall.
+     */
     @Inject(method = "computeSubstance", at = @At("RETURN"), cancellable = true)
     private void er$noUpperLava(DensityFunction.FunctionContext ctx, double density, CallbackInfoReturnable<BlockState> cir) {
         BlockState s = cir.getReturnValue();
-        if (s == null || !s.is(Blocks.LAVA)) return;
+        if (s == null) return;
+        boolean lava = s.is(Blocks.LAVA);
+        if (!lava && !s.is(Blocks.WATER)) return;
         Terrain t = DeepWorld.terrain();
         if (t == null || !DeepWorld.installed() || this.minGridY != Math.floorDiv(t.shape.floorY, 12) - 1) return;
-        if (ctx.blockY() >= t.shape.packFloor) cir.setReturnValue(DeepMaterials.WATER);
+        if (ctx.blockY() < t.shape.packFloor) return;
+        if (lava) cir.setReturnValue(DeepMaterials.WATER);
+        UpperShapes shapes = DeepWorld.shapes();
+        if (shapes != null && !this.shouldScheduleFluidUpdate && shapes.near(ctx.blockX(), ctx.blockY(), ctx.blockZ(), 4.0))
+            this.shouldScheduleFluidUpdate = true;
     }
 }

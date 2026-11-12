@@ -3,6 +3,7 @@ package com.explorationremix.world.feature;
 import com.explorationremix.registry.ERWorldgen;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.Entrances;
+import com.explorationremix.world.terrain.UpperShapes;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -45,14 +46,15 @@ public final class UnderTreesPlacement extends PlacementModifier {
     @Override
     public Stream<BlockPos> getPositions(PlacementContext ctx, RandomSource random, BlockPos pos) {
         Entrances r = DeepWorld.entrances();
-        if (r == null) return Stream.empty();
+        UpperShapes sh = DeepWorld.shapes();
+        if (r == null && sh == null) return Stream.empty();
         WorldGenLevel level = ctx.getLevel();
         int x0 = pos.getX() & ~15, z0 = pos.getZ() & ~15;
         List<BlockPos> out = new ArrayList<>();
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         for (int dx = 0; dx < 16; dx++) for (int dz = 0; dz < 16; dz++) {
             int x = x0 + dx, z = z0 + dz;
-            if (!r.underRoots(x, z)) continue;
+            if (r != null ? !r.underRoots(x, z) : !sh.underRoots(x, z)) continue;
             BlockState log = CeilingRootsFeature.trunk(level, x, z);
             if (log == null) continue;
             // One root per big tree: its trunk's corner towards negative x and z.

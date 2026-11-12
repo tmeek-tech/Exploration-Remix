@@ -7,6 +7,7 @@ import com.explorationremix.world.terrain.Entrances;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import com.explorationremix.world.terrain.Upper;
+import com.explorationremix.world.terrain.UpperShapes;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -69,6 +70,8 @@ public final class LayerRangePlacement extends PlacementModifier {
                 if (hi <= lo) return Stream.empty();
                 return Stream.of(new BlockPos(x, lo + random.nextInt(hi - lo + 1), z));
             }
+            UpperShapes sh = DeepWorld.shapes();
+            if (sh != null) return noisePositions(ctx, random, sh, x, z, s);
             if (!focus.equals("grottos")) {
                 // A set piece is a small target in a 126-block range, and often under a grotto: aim at it.
                 Terrain t = DeepWorld.terrain();
@@ -101,6 +104,31 @@ public final class LayerRangePlacement extends PlacementModifier {
         int min = (aboveWater ? s.waterY(li) : s.bottom(li)) + inset, max = s.top(li) - inset;
         if (max < min) return Stream.empty();
         return Stream.of(new BlockPos(pos.getX(), min + random.nextInt(max - min + 1), pos.getZ()));
+    }
+
+    /**
+     * Where the Upper Caves grow from noise: {@code pieces} into the open space of a rift or hall over the column (none
+     * elsewhere), {@code grottos} mostly into the warrens or a sinkhole under it, {@code auto} into a rift or hall three
+     * times in four where there is one, else as {@code grottos}; otherwise anywhere from the old floor up 128 blocks.
+     */
+    private Stream<BlockPos> noisePositions(PlacementContext ctx, RandomSource random, UpperShapes sh, int x, int z, Shape s) {
+        if (!focus.equals("grottos")) {
+            int[] b = sh.pieceBand(x, z);
+            if (b != null && (focus.equals("pieces") || random.nextFloat() < 0.75F)) {
+                // Start in the open: the floor and ceiling scans that follow find nothing from rock or water.
+                BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos(x, b[0], z);
+                int open = 0, pick = b[0];
+                for (int y = b[0]; y <= b[1]; y++) {
+                    if (ctx.getBlockState(at.setY(y)).isAir() && random.nextInt(++open) == 0) pick = y;
+                }
+                return open > 0 ? Stream.of(new BlockPos(x, pick, z)) : Stream.empty();
+            }
+            if (focus.equals("pieces")) return Stream.empty();
+        }
+        int[] band = sh.band(x, z);
+        if (band != null && random.nextFloat() < 0.75F) return Stream.of(new BlockPos(x, band[0] + random.nextInt(band[1] - band[0] + 1), z));
+        int lo = s.packFloor + 6 + inset;
+        return Stream.of(new BlockPos(x, lo + random.nextInt(128 - inset), z));
     }
 
     @Override

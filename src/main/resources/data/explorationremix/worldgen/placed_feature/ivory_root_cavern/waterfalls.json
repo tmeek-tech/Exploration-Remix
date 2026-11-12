@@ -2,6 +2,9 @@
   "feature": "explorationremix:ivory_root_cavern/waterfalls",
   "placement": [
     {
+      "type": "explorationremix:planned_upper"
+    },
+    {
       "type": "minecraft:count",
       "count": 3
     },

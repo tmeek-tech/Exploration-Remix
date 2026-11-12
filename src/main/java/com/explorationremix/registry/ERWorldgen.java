@@ -25,6 +25,7 @@ import com.explorationremix.world.feature.MushroomShelfFeature;
 import com.explorationremix.world.feature.OpenSpanPlacement;
 import com.explorationremix.world.feature.OpenWayFeature;
 import com.explorationremix.world.feature.RootvaultsLookFilter;
+import com.explorationremix.world.feature.PlannedUpperFilter;
 import com.explorationremix.world.feature.RootvaultsOpeningsPlacement;
 import com.explorationremix.world.feature.ShelfVinesFeature;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
@@ -81,6 +82,7 @@ public final class ERWorldgen {
     public static final RegistryObject<BlockStateProviderType<MixStateProvider>> MIX_PROVIDER = STATE_PROVIDERS.register("mix", () -> new BlockStateProviderType<>(MixStateProvider.CODEC));
     public static final RegistryObject<PlacementModifierType<LayerRangePlacement>> LAYER_RANGE = PLACEMENT_TYPES.register("layer_range", () -> () -> LayerRangePlacement.CODEC);
     public static final RegistryObject<PlacementModifierType<RootvaultsLookFilter>> ROOTVAULTS_LOOK = PLACEMENT_TYPES.register("rootvaults_look", () -> () -> RootvaultsLookFilter.CODEC);
+    public static final RegistryObject<PlacementModifierType<PlannedUpperFilter>> PLANNED_UPPER = PLACEMENT_TYPES.register("planned_upper", () -> () -> PlannedUpperFilter.CODEC);
     public static final RegistryObject<PlacementModifierType<RootvaultsOpeningsPlacement>> ROOTVAULTS_OPENINGS = PLACEMENT_TYPES.register("rootvaults_openings", () -> () -> RootvaultsOpeningsPlacement.CODEC);
     public static final RegistryObject<PlacementModifierType<UnderTreesPlacement>> UNDER_TREES = PLACEMENT_TYPES.register("under_trees", () -> () -> UnderTreesPlacement.CODEC);
     public static final RegistryObject<PlacementModifierType<JunctionsPlacement>> JUNCTIONS = PLACEMENT_TYPES.register("junctions", () -> () -> JunctionsPlacement.CODEC);

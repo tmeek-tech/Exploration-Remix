@@ -8,6 +8,7 @@ import com.explorationremix.world.terrain.PlantCaves;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import com.explorationremix.world.terrain.TerrainSettings;
+import com.explorationremix.world.terrain.UpperShapes;
 import net.minecraft.world.level.biome.BiomeSource;
 
 import javax.annotation.Nullable;
@@ -23,6 +24,7 @@ public final class DeepWorld {
     private static volatile Terrain terrain;
     private static volatile Entrances entrances;
     private static volatile PlantCaves plants;
+    private static volatile UpperShapes shapes;
     private static volatile SurfaceOracle oracle;
     private static volatile boolean installed = false;
     private static final Set<BiomeSource> DEEP_SOURCES = Collections.newSetFromMap(new WeakHashMap<>());
@@ -47,6 +49,13 @@ public final class DeepWorld {
     @Nullable
     public static Entrances entrances() { return installed ? entrances : null; }
 
+    /**
+     * The Upper Caves grown from noise (warrens, rifts, halls and sinkholes) of the running world, or null where the
+     * planned entrances and set pieces build them instead, or before install.
+     */
+    @Nullable
+    public static UpperShapes shapes() { return installed ? shapes : null; }
+
     /** Where the Upper Caves grow plants, or null when the cave biomes are left to the pack or before install. */
     @Nullable
     public static PlantCaves plants() { return installed ? plants : null; }
@@ -56,7 +65,12 @@ public final class DeepWorld {
     public static SurfaceOracle oracle() { return oracle; }
 
     public static void setUpper(@Nullable Entrances e, @Nullable PlantCaves p, @Nullable SurfaceOracle o) {
+        setUpper(e, null, p, o);
+    }
+
+    public static void setUpper(@Nullable Entrances e, @Nullable UpperShapes s, @Nullable PlantCaves p, @Nullable SurfaceOracle o) {
         entrances = e;
+        shapes = s;
         plants = p;
         oracle = o;
     }
@@ -90,6 +104,7 @@ public final class DeepWorld {
         synchronized (DEEP_SOURCES) { DEEP_SOURCES.clear(); }
         installed = false;
         entrances = null;
+        shapes = null;
         plants = null;
         oracle = null;
     }

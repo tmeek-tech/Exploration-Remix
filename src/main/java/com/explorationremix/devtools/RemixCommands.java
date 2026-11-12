@@ -18,6 +18,7 @@ import com.explorationremix.world.terrain.Rock;
 import com.explorationremix.world.terrain.Route;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
+import com.explorationremix.world.terrain.UpperShapes;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -87,6 +88,10 @@ import java.util.Locale;
  *     the nearest of each kind</li>
  *     <li>{@code /remix deadends [radius]}: the blind cave ends left above the old floor in the loaded chunks round you
  *     (DeadEnds), with the nearest</li>
+ *     <li>{@code /remix shapes}: what the Upper Caves' noise shapes hold over your column and whether you stand in one</li>
+ *     <li>{@code /remix shapes <kind> [n] [view]}: the n-th nearest place of a noise shape (warrens, chambers, mouth, frozen, rifts, sky,
+ *     halls, sinkholes, hollows; see UpperShapes.find) round the command's position, with a wide view into it when
+ *     there is one ("view" from the console: report that camera without moving anyone)</li>
  * </ul>
  */
 public final class RemixCommands {
@@ -113,6 +118,14 @@ public final class RemixCommands {
                         .then(Commands.argument("cells", IntegerArgumentType.integer(1, 24)).executes(c -> entrances(c, IntegerArgumentType.getInteger(c, "cells")))))
                 .then(Commands.literal("deadends").executes(c -> deadEnds(c, 4))
                         .then(Commands.argument("radius", IntegerArgumentType.integer(1, 12)).executes(c -> deadEnds(c, IntegerArgumentType.getInteger(c, "radius")))))
+                .then(Commands.literal("shapes").executes(RemixCommands::shapesHere)
+                        .then(Commands.argument("kind", StringArgumentType.word())
+                                .suggests((c, b) -> SharedSuggestionProvider.suggest(SHAPE_KINDS, b))
+                                .executes(c -> shapes(c, StringArgumentType.getString(c, "kind"), 0, false))
+                                .then(Commands.argument("n", IntegerArgumentType.integer(0, 15))
+                                        .executes(c -> shapes(c, StringArgumentType.getString(c, "kind"), IntegerArgumentType.getInteger(c, "n"), false))
+                                        .then(Commands.literal("view")
+                                                .executes(c -> shapes(c, StringArgumentType.getString(c, "kind"), IntegerArgumentType.getInteger(c, "n"), true))))))
                 .then(Commands.literal("dengates").executes(RemixCommands::denGates)
                         .then(Commands.literal("reach").executes(RemixCommands::denReach)))
                 .then(Commands.literal("tp")
@@ -221,6 +234,14 @@ public final class RemixCommands {
             say(c, String.format(Locale.ROOT, "  plant caves here: %s (growth %.2f, %d under the ground, the cell's top %d under the lowest ground; "
                     + "plants need growth above 0 and %d or more)", plants.grows(x, cy, z, s.y(), low) ? "yes" : "no",
                     plants.growth(x, cy, z, s.y() - cy), s.y() - cy, low - (cy + 1), PlantCaves.MIN_DEPTH));
+        }
+        UpperShapes sh = DeepWorld.shapes();
+        if (sh != null) {
+            say(c, "  noise shapes over this column: " + sh.describe(x, z));
+            int k = sh.kindAt(x, y, z);
+            Entrances.Area a = sh.areaAt(x, y, z);
+            say(c, String.format(Locale.ROOT, "  here: %s, %.1f blocks from their open space%s", k < 0 ? "outside the shapes" : "in the " + UpperShapes.NAMES[k],
+                    sh.carve(x, y, z), a != null ? ", entrance biome " + a.name().toLowerCase(Locale.ROOT) : ""));
         }
         Entrances e = DeepWorld.entrances();
         if (e == null) return;
@@ -1110,6 +1131,89 @@ public final class RemixCommands {
                         + "no cave in reach %d; tunnels turned down: water %d, ground %d, other blocks %d, chunk edge %d",
                 seen, JoinDeadEndsFeature.FOUND.get(), JoinDeadEndsFeature.JOINED.get(), seen == 0 ? 0 : nanos / 1e6 / seen, JoinDeadEndsFeature.NO_CAVE.get(),
                 JoinDeadEndsFeature.NO_WET.get(), JoinDeadEndsFeature.NO_GROUND.get(), JoinDeadEndsFeature.NO_BLOCKED.get(), JoinDeadEndsFeature.NO_EDGE.get());
+    }
+
+    // ============================================================================================== noise shapes
+
+    /** The kinds of place {@code /remix shapes} finds (UpperShapes.find). */
+    private static final String[] SHAPE_KINDS = {"warrens", "chambers", "mouth", "frozen", "rifts", "sky", "halls", "sinkholes", "hollows"};
+    /** How far round the command's position {@code /remix shapes} looks, and how far apart the places it counts lie. */
+    private static final int SHAPE_RADIUS = 640, SHAPE_APART = 96;
+
+    @javax.annotation.Nullable
+    private static UpperShapes shapes(CommandContext<CommandSourceStack> c) {
+        UpperShapes s = DeepWorld.shapes();
+        if (s == null) c.getSource().sendFailure(Component.literal("The Upper Caves' noise shapes are off in this world (upperCaves.noiseShapes)."));
+        return s;
+    }
+
+    /** What the noise shapes hold over the column you stand in. */
+    private static int shapesHere(CommandContext<CommandSourceStack> c) {
+        UpperShapes s = shapes(c);
+        if (s == null) return 0;
+        Vec3 p = c.getSource().getPosition();
+        int x = (int) Math.floor(p.x), y = (int) Math.floor(p.y), z = (int) Math.floor(p.z);
+        int k = s.kindAt(x, y, z);
+        say(c, String.format(Locale.ROOT, "At %d %d %d: %s, %.1f blocks from their open space", x, y, z,
+                k < 0 ? "outside the shapes" : "in the " + UpperShapes.NAMES[k], s.carve(x, y, z)));
+        say(c, "  " + s.describe(x, z));
+        return 1;
+    }
+
+    /**
+     * The n-th nearest place of a kind the noise shapes hold: a wide view into it, or its floor when there is none; from
+     * the console only where it is.
+     */
+    private static int shapes(CommandContext<CommandSourceStack> c, String kind, int n, boolean view) {
+        UpperShapes s = shapes(c);
+        if (s == null) return 0;
+        String k = kind.toLowerCase(Locale.ROOT);
+        if (Arrays.stream(SHAPE_KINDS).noneMatch(k::equals)) {
+            c.getSource().sendFailure(Component.literal("Unknown shape " + kind + " (one of " + String.join(", ", SHAPE_KINDS) + ")"));
+            return 0;
+        }
+        Vec3 from = c.getSource().getPosition();
+        java.util.List<int[]> found = s.find(k, (int) Math.floor(from.x), (int) Math.floor(from.z), SHAPE_RADIUS, n + 1, SHAPE_APART);
+        if (found.size() <= n) {
+            c.getSource().sendFailure(Component.literal("Found " + found.size() + " " + k + " within " + SHAPE_RADIUS + " blocks."));
+            return 0;
+        }
+        int[] at = found.get(n);
+        ServerPlayer pl = c.getSource().getPlayer();
+        if (pl == null && !view) {
+            // from the console: only where it is, so the place can be loaded before a player goes there
+            say(c, String.format(Locale.ROOT, "%s %d at %d %d %d; %s", k, n, at[0], at[1], at[2], s.describe(at[0], at[2])));
+            return 1;
+        }
+        ServerLevel level = pl != null ? (ServerLevel) pl.level() : c.getSource().getLevel();
+        final int want = switch (k) {
+            case "rifts", "sky" -> UpperShapes.RIFTS;
+            case "halls" -> UpperShapes.HALLS;
+            case "sinkholes", "hollows" -> UpperShapes.SINKHOLES;
+            default -> UpperShapes.WARRENS;
+        };
+        BlockPos spot = new BlockPos(at[0], at[1], at[2]);
+        ViewFinder.View v = ViewFinder.find(level, spot, q -> s.kindAt(q.getX(), q.getY(), q.getZ()) == want, 20, 10);
+        String desc = s.describe(at[0], at[2]);
+        if (pl == null) {
+            // from the console with "view": the camera a player would get, without moving anyone
+            say(c, v == null ? String.format(Locale.ROOT, "%s %d at %d %d %d: no wide view", k, n, at[0], at[1], at[2])
+                    : String.format(Locale.ROOT, "%s %d at %d %d %d: view at %.1f %.0f %.1f facing %.0f, pitch %.0f, %.0f blocks deep, score %.1f", k, n,
+                    at[0], at[1], at[2], v.x(), v.y(), v.z(), v.yaw(), v.pitch(), v.reach(), v.score()));
+            return 1;
+        }
+        if (v == null) {
+            BlockPos stand = findStand(level, at[0], at[1], at[2]);
+            BlockPos to = stand != null ? stand : spot;
+            teleport(pl, to.getX() + 0.5, to.getY(), to.getZ() + 0.5);
+            say(c, String.format(Locale.ROOT, "%s %d at %d %d %d (no wide view found); %s", k, n, to.getX(), to.getY(), to.getZ(), desc));
+            return 1;
+        }
+        level.getChunk(((int) Math.floor(v.x())) >> 4, ((int) Math.floor(v.z())) >> 4, ChunkStatus.FULL, true);
+        pl.teleportTo(level, v.x(), v.y(), v.z(), v.yaw(), v.pitch());
+        say(c, String.format(Locale.ROOT, "%s %d at %d %d %d: view at %.0f %.0f %.0f facing %.0f, pitch %.0f, %.0f blocks deep; %s", k, n,
+                at[0], at[1], at[2], v.x(), v.y(), v.z(), v.yaw(), v.pitch(), v.reach(), desc));
+        return 1;
     }
 
     /** A real block position with air for feet and head and something solid underneath, near (x, y, z). */

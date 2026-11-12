@@ -31,6 +31,8 @@ public final class ERConfig {
     public final ForgeConfigSpec.BooleanValue joinDeadEnds;
     public final ForgeConfigSpec.BooleanValue removeCreateStriations;
     public final ForgeConfigSpec.BooleanValue upperRegions;
+    /** The Upper Caves grown from noise (0.13): the switch for all of it, one per shape, and vanilla's worm tunnels. */
+    public final ForgeConfigSpec.BooleanValue upperNoise, upperWarrens, upperRifts, upperHalls, upperSinkholes, upperWormTunnels;
     public final LayerConfig[] layers = new LayerConfig[4];
     // The Basalt Galleries' lava cycle (world.lava.LavaFlood), read while the server runs.
     public final ForgeConfigSpec.BooleanValue lavaCycleEnabled;
@@ -121,6 +123,25 @@ public final class ERConfig {
         // and the lava cycle floods 40 blocks: under 128 the halls lose their headroom and the band's landing stands in
         // the flood, and a lava table more than 24 over the floor leaves a 128-tall layer too little room above it.
         layers[3] = new LayerConfig(b, d.layers().get(3), "hall height", "hall width", false, 128, 256, 24);
+        b.pop();
+
+        b.comment("The Upper Caves grown from noise instead of placed pieces (needs replaceVanillaCaveBiomes). Changes apply to newly",
+                "generated chunks. With noiseShapes off, the planned Root Vaults, sinkholes, oasis hollows, Silver Fern Rift and Ivory",
+                "Root Cavern of 0.12 come back.").push("upperCaves");
+        upperNoise = b.comment("Grow the Upper Caves from noise: the shapes below over the pack's own caves, no planned entrances or set pieces.")
+                .define("noiseShapes", true);
+        upperWarrens = b.comment("Root warrens: two rolling sheets of looping tunnels 5 to 45 blocks under the ground, with root chambers,",
+                        "hanging roots and pools; rooty mouths under forests (snowed in under cold ones).")
+                .define("warrens", true);
+        upperRifts = b.comment("Rifts: tall cracks 15 to 90 blocks down with ledges, a stepped stream and springs, open to the sky in places",
+                        "(the Silver Fern Rift's look).")
+                .define("rifts", true);
+        upperHalls = b.comment("Halls: wide caverns about 60 to 85 blocks down with terraced pools and stalactites (the Ivory Root Cavern's look).")
+                .define("halls", true);
+        upperSinkholes = b.comment("Sinkholes under plains and sandy hollows under deserts: pits that drop to a lake and open onto the warrens.")
+                .define("sinkholes", true);
+        upperWormTunnels = b.comment("Keep vanilla's worm tunnels (the cave carver, whose tunnels end blind) above the old floor. Its canyons stay either way.")
+                .define("wormTunnels", false);
         b.pop();
 
         b.comment("The Basalt Galleries' lava cycle: one lava sea that rises 40 blocks over the layer's lava table and falls again on the",

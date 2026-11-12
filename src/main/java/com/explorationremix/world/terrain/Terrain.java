@@ -76,6 +76,11 @@ public final class Terrain {
     public final Join join;
     /** Asked before an upper set piece is placed, so none is carved under an ocean or river. Null in tests. */
     public volatile Upper.SurfaceProbe surfaceProbe;
+    /**
+     * Whether the Silver Fern Rift and Ivory Root Cavern set pieces are carved (false where the Upper Caves grow from
+     * noise, {@link UpperShapes}, whose rifts and halls take their looks). The den gates are carved either way.
+     */
+    public volatile boolean upperPieces = true;
 
     /** The wobble of the gate passages and landings (0.2.0's noise field 18, kept so the gates do not move). */
     private final Perlin detail;
@@ -158,7 +163,7 @@ public final class Terrain {
 
     private Upper.Piece upperOf(Column c) {
         if (!c.upDone) {
-            Upper.Piece p = plans.upper(c.cellX, c.cellZ);
+            Upper.Piece p = upperPieces ? plans.upper(c.cellX, c.cellZ) : null;
             c.up = null;
             if (p != null && p.near(c.x, c.z)) {
                 c.up = p;
