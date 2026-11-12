@@ -347,14 +347,17 @@ public final class UpperShapes {
      * never down a chute.
      */
     static final double ROOF_SLOPE = 0.6;
-    /** How far round a cell the caps look for lower ground and for mouths, in 4x4 cells (48 blocks). */
-    static final int ROOF_REACH = 12;
+    /**
+     * How far round a cell the caps look for lower ground and for mouths, in 4x4 cells (56 blocks): ground more than
+     * 34 blocks (the slope over this reach) under a cap's would still bring a step where it comes into reach.
+     */
+    static final int ROOF_REACH = 14;
     private static final float STEP = (float) (4 * ROOF_SLOPE);
     private static final int CELL_BITS = 7, CELL_MASK = (1 << CELL_BITS) - 1;
 
     /**
      * The 4x4 cells' roof caps, per thread: a direct-mapped cache of 128 x 128 cells (every cell one answer needs lies
-     * within 30 of the first, so none pushes out another). NaN marks a value not worked out yet.
+     * within 16 of the first, so none pushes out another). NaN marks a value not worked out yet.
      */
     private static final class Cells {
         final long[] key = new long[1 << 2 * CELL_BITS];
@@ -364,8 +367,6 @@ public final class UpperShapes {
         final float[] lift = new float[key.length];
         /** Along x, and then along z too: the least cap (or lifted cap) in reach, plus the slope times the distance. */
         final float[] rowCap = new float[key.length], rowLift = new float[key.length], cone = new float[key.length], coneLift = new float[key.length];
-        /** The least cap in reach along x (and one cell more). */
-        final float[] rowMin = new float[key.length];
 
         Cells() { java.util.Arrays.fill(key, Long.MIN_VALUE); }
     }
@@ -378,15 +379,15 @@ public final class UpperShapes {
             int bx = (cx << 2) + 2, bz = (cz << 2) + 2;
             k.key[i] = key;
             k.cap[i] = overhead.low(bx, bz) - (overhead.at(bx, bz).wet() ? 9 : 5);
-            k.lift[i] = k.rowCap[i] = k.rowLift[i] = k.cone[i] = k.coneLift[i] = k.rowMin[i] = Float.NaN;
+            k.lift[i] = k.rowCap[i] = k.rowLift[i] = k.cone[i] = k.coneLift[i] = Float.NaN;
         }
         return i;
     }
 
     /**
      * The cap a mouth lifts cell (cx, cz)'s to: toward 4 over its ground where the mouths' field is high under a dry
-     * forest (the gate), its own cap elsewhere. A mouth needs no ground much lower than its own in the caps' reach, so the
-     * lifted cap falls toward the lowest of it on the slope within reach rather than dropping where it comes into reach.
+     * forest (the gate), its own cap elsewhere. It asks nothing of cells further off, so the lifted caps' slope reaches
+     * no further than the caps' own.
      */
     private float lift(Cells k, int cx, int cz) {
         int i = slot(k, cx, cz);
@@ -398,29 +399,10 @@ public final class UpperShapes {
         if (warrens && s.cover() == Overhead.Cover.FOREST && !s.wet()) {
             double e = mouthRamp(bx, bz);
             if (e > 0) e *= gate(bx, bz, GATE_MOUTH);
-            if (e > 0) {
-                double top = s.y() + 4;
-                e *= smooth((STEP * ROOF_REACH + 6 - (top - minCap(k, cx, cz))) / 12);
-                if (e > 0 && top > v) v = (float) lerp(e, v, top);
-            }
+            double top = s.y() + 4;
+            if (e > 0 && top > v) v = (float) lerp(e, v, top);
         }
         k.lift[i] = v;
-        return v;
-    }
-
-    /** The least own cap within the reach (and one cell more) of cell (cx, cz), along x and z. */
-    private float minCap(Cells k, int cx, int cz) {
-        float v = Float.POSITIVE_INFINITY;
-        for (int dz = -ROOF_REACH - 1; dz <= ROOF_REACH + 1; dz++) {
-            int i = slot(k, cx, cz + dz);
-            float r = k.rowMin[i];
-            if (r != r) {
-                r = Float.POSITIVE_INFINITY;
-                for (int dx = -ROOF_REACH - 1; dx <= ROOF_REACH + 1; dx++) r = Math.min(r, k.cap[slot(k, cx + dx, cz + dz)]);
-                k.rowMin[i] = r;
-            }
-            v = Math.min(v, r);
-        }
         return v;
     }
 
