@@ -140,8 +140,9 @@ public final class DeepWorldInstaller {
         ERConfig cfg = ERConfig.INSTANCE;
         if (upperOn && cfg.upperNoise.get()) {
             // The Upper Caves from noise: no planned entrances, no set pieces (the den gates stay).
-            UpperShapes shapes = new UpperShapes(seed, currentMin, oracle, cfg.upperWarrens.get(), cfg.upperRifts.get(), cfg.upperHalls.get(),
-                    cfg.upperSinkholes.get(), cfg.upperWormTunnels.get());
+            // (the rifts lie as deep as the den gates' works and keep clear of them)
+            UpperShapes shapes = new UpperShapes(seed, currentMin, oracle, terrain::denClearance, cfg.upperWarrens.get(), cfg.upperRifts.get(),
+                    cfg.upperHalls.get(), cfg.upperSinkholes.get(), cfg.upperWormTunnels.get());
             terrain.upperPieces = false;
             DeepWorld.setUpper(null, shapes, new PlantCaves(seed), oracle);
             ExplorationRemix.LOGGER.info("Upper Caves from noise: warrens {}, rifts {}, halls {}, sinkholes {}, worm tunnels {}", shapes.warrens, shapes.rifts,

@@ -601,6 +601,30 @@ public final class Terrain {
         return pieceDist(x, y, z) < 6 ? p.biome() : null;
     }
 
+    /**
+     * How far across the ground a column lies from the den gates' works above the old floor: each upper landing (the
+     * den's ledge, to its rim), its rift ({@link #denRifts}, to its middle line) and its ramp (to its centre line). The
+     * Upper Caves' rifts, which lie as deep, pinch shut short of them ({@code UpperShapes.RIFT_KEEP}). Only the column's
+     * own cell's den gates: their works keep more than 60 blocks from its edges ({@link Plans#MARGIN}, less the line's
+     * ends past the landings).
+     */
+    public double denClearance(int x, int z) {
+        double px = x + 0.5, pz = z + 0.5, d = Double.MAX_VALUE;
+        double[] line = LINE.get();
+        for (Plans.Gate g : plans.denGates(plans.cellOf(px), plans.cellOf(pz))) {
+            d = Math.min(d, Math.hypot(px - g.ux, pz - g.uz) - g.landR);
+            if (denRifts) {
+                g.lineNearest(px, pz, line);
+                d = Math.min(d, line[0]);
+            }
+            Route.Link r = plans.ramp(g);
+            double dx = r.x2() - r.x1(), dz = r.z2() - r.z1(), len2 = dx * dx + dz * dz;
+            double t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((px - r.x1()) * dx + (pz - r.z1()) * dz) / len2));
+            d = Math.min(d, Math.hypot(px - r.x1() - dx * t, pz - r.z1() - dz * t));
+        }
+        return d;
+    }
+
     /** Signed distance to the den rifts and their dens' ledges (the upper landings) at a block: no ramps. */
     private double denLedgeOrRift(int x, int y, int z) {
         Column c = column(x, z);

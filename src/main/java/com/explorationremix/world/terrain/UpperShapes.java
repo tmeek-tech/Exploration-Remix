@@ -13,11 +13,13 @@ package com.explorationremix.world.terrain;
  *     warm forests, snowed in under cold ones), and here and there it dips down to the lower sheet (the links). They are
  *     carved into the ground's own rock (see {@code DeepSurfaceRules.HostRule}); only their floors are dressed: the
  *     Root Vaults' under forests, the karst's under plains, sand under deserts.</li>
- *     <li><b>Rifts</b>, 15 to 55 blocks down: tall cracks along the zero lines of two slow 2D fields, about 10 across and
- *     35 tall (half 0.13's size, Taran 2026-11-12), their walls stepping back in ledges every six blocks, a stream sunk
+ *     <li><b>Rifts</b>, deep down at the bottom of the Upper Caves, close to the Blue Reaches (Taran, 2026-11-12): tall
+ *     cracks along the zero lines of two slow 2D fields, about 10 across and 35 tall (half 0.13's size), their floors
+ *     about {@link #RIFT_FLOOR} over the old floor, their walls stepping back in ledges every six blocks, a stream sunk
  *     into the floor's flat stretches (each held by a dry lip where the floor steps down), and springs high on the walls
- *     whose water falls into it. In places the crack opens to the sky. The Silver Fern Rift's look. (The deep rifts down
- *     to the Blue Reaches at the den gates are the terrain's, {@code Terrain.denRift}.)</li>
+ *     whose water falls into it. They never reach the ground, and they pinch shut short of the den gates' works
+ *     ({@link Dens}), whose own rifts go on down into the Blue Reaches ({@code Terrain.denRift}). The Silver Fern Rift's
+ *     look.</li>
  *     <li><b>Halls</b>, about 60 to 85 blocks down: wide caverns where a slow field rises over its threshold, floors in
  *     three-block terraces with pools sunk into them, stalactites (icicles under cold ground) and stalagmites; here and
  *     there a chimney rises from the ceiling to a tunnel of the lower warren sheet. The Ivory Root Cavern's look.</li>
@@ -49,6 +51,18 @@ public final class UpperShapes {
     static final double RIFT_REACH = 7.5;
     /** A rift's half width at its floor and top, and how much the middle of its height adds (per unit of its scale). */
     static final double RIFT_EDGE = 1.3, RIFT_BELLY = 3.7;
+    /**
+     * A rift's floor lies about this far over the pack's old floor (give or take 8, never under {@link #RIFT_FLOOR_MIN}),
+     * and its top about {@link #RIFT_HEIGHT} over its floor (give or take 7, and at least 24 under the ground): the rifts
+     * lie at the bottom of the Upper Caves, close to the Blue Reaches (Taran, 2026-11-12).
+     */
+    static final double RIFT_FLOOR = 8, RIFT_FLOOR_MIN = 4, RIFT_HEIGHT = 35;
+    /**
+     * A rift pinches shut short of the den gates' works above the old floor (their landings, rifts and ramps, which lie
+     * as deep): its crack narrows from {@link #RIFT_KEEP} + {@link #RIFT_EASE} across the ground from the nearest of them
+     * and is shut by {@link #RIFT_KEEP}, past both reaches and a wall of rock between.
+     */
+    static final double RIFT_KEEP = 30, RIFT_EASE = 18;
     /** What a formation block is made of (see {@link #formation}). */
     public static final int ROOT = 1, ICICLE = 2, STALACTITE = 3, STALAGMITE = 4, DRIP = 5;
     /** The biome of a rift or hall (see {@link #piece}). */
@@ -62,15 +76,29 @@ public final class UpperShapes {
      * are the soil's rooted dirt; the lower one rolls deep.
      */
     static final double[] SHEET_MID = {12, 31}, SHEET_AMP = {5, 13};
-    /** No floor, pool or stream below this far over the pack's old floor: clear of the den gates' landings and ramps. */
+    /**
+     * No floor, pool or stream of the warrens, halls and sinkholes below this far over the pack's old floor: clear of the
+     * den gates' landings and ramps. The rifts lie below it, kept clear of the den gates across the ground instead
+     * ({@link #RIFT_KEEP}).
+     */
     static final int FLOOR_CLEARANCE = 56;
     /** The sinkholes' field's scale: about 45 pits a square kilometre over plains and deserts, one every 150 blocks or so. */
     static final double PIT_SCALE = 72;
     private static final int NO_Y = Integer.MIN_VALUE;
 
+    /**
+     * How far across the ground a column lies from the den gates' works above the old floor (their upper landings, rifts
+     * and ramps; {@code Terrain.denClearance}), which the rifts keep clear of. Safe on any thread.
+     */
+    public interface Dens {
+        double clearance(int x, int z);
+    }
+
     public final long seed;
     public final int packFloor;
     public final Overhead overhead;
+    /** The den gates the rifts keep clear of, or null for none (tests and tools). */
+    private final Dens dens;
     public final boolean warrens, rifts, halls, sinkholes;
     /** Vanilla's worm tunnels (the cave carver) above the old floor: off unless asked for (the canyons stay). */
     public final boolean wormTunnels;
@@ -91,10 +119,12 @@ public final class UpperShapes {
     private final ThreadLocal<double[]> grads = ThreadLocal.withInitial(() -> new double[2]);
     private final ThreadLocal<Cells> cells = ThreadLocal.withInitial(Cells::new);
 
-    public UpperShapes(long seed, int packFloor, Overhead overhead, boolean warrens, boolean rifts, boolean halls, boolean sinkholes, boolean wormTunnels) {
+    public UpperShapes(long seed, int packFloor, Overhead overhead, Dens dens, boolean warrens, boolean rifts, boolean halls, boolean sinkholes,
+                       boolean wormTunnels) {
         this.seed = seed;
         this.packFloor = packFloor;
         this.overhead = overhead;
+        this.dens = dens;
         this.warrens = warrens;
         this.rifts = rifts;
         this.halls = halls;
@@ -131,9 +161,14 @@ public final class UpperShapes {
         roughN = noise(s, 81);
     }
 
-    /** All four shapes, worm tunnels off (tests and tools). */
+    /** All four shapes, worm tunnels off (tests and tools); {@code dens} may be null. */
+    public UpperShapes(long seed, int packFloor, Overhead overhead, Dens dens) {
+        this(seed, packFloor, overhead, dens, true, true, true, true, false);
+    }
+
+    /** All four shapes, worm tunnels off, no den gates (tests and tools). */
     public UpperShapes(long seed, int packFloor, Overhead overhead) {
-        this(seed, packFloor, overhead, true, true, true, true, false);
+        this(seed, packFloor, overhead, null);
     }
 
     private static Perlin noise(long s, int i) { return new Perlin(Hashing.mix(s, i, 0, 0)); }
@@ -173,7 +208,7 @@ public final class UpperShapes {
         final int[] wPool = new int[2];
 
         // ---- rifts
-        boolean rOn, rSky;
+        boolean rOn;
         double rLine, rTop, rScale, rStep;
         int rFloor;
         boolean springDone;
@@ -275,7 +310,7 @@ public final class UpperShapes {
         return lerp(fv, lerp(fu, a, b), lerp(fu, c, d));
     }
 
-    private static final int GATE_MOUTH = 0, GATE_PIT = 1, GATE_SKY = 2;
+    private static final int GATE_MOUTH = 0, GATE_PIT = 1;
 
     /** How much of the ground round a column (its 3 x 3 surface columns) suits a kind of opening, eased to 0..1. */
     private double gate(int x, int z, int kind) {
@@ -284,11 +319,8 @@ public final class UpperShapes {
         for (int dx = -4; dx <= 4; dx += 4) for (int dz = -4; dz <= 4; dz += 4) {
             Overhead.Surface s = overhead.at(x + dx, z + dz);
             if (s.wet() || s.y() < sea + 2) continue;
-            boolean ok = switch (kind) {
-                case GATE_MOUTH -> s.cover() == Overhead.Cover.FOREST;
-                case GATE_PIT -> s.cover() == Overhead.Cover.PLAINS || s.cover() == Overhead.Cover.DESERT || s.cover() == Overhead.Cover.BADLANDS;
-                default -> s.ravineOk();
-            };
+            boolean ok = kind == GATE_MOUTH ? s.cover() == Overhead.Cover.FOREST
+                    : s.cover() == Overhead.Cover.PLAINS || s.cover() == Overhead.Cover.DESERT || s.cover() == Overhead.Cover.BADLANDS;
             if (ok) n++;
         }
         return smooth((n / 9.0 - 0.55) / 0.45);
@@ -580,15 +612,17 @@ public final class UpperShapes {
         // wider where the region leans to rifts
         c.rScale = (0.8 + 0.25 * (K2 * rB.noise2(x / 70.0 + 3, z / 70.0 + 3) + 1)) * (1 - 0.25 * c.lean);
         if (c.rLine > RIFT_REACH * c.rScale + 3) return false;
-        double closed = Math.min(c.gC - 16 - 8 * K2 * rB.noise2(x / 80.0, z / 80.0), c.low - (c.wet ? 10 : 6));
-        // in places the crack opens to the sky (dry open land only), easing in so its walls do not jump
-        double sky = K2 * rC.noise2(x / 60.0 + 20, z / 60.0 + 20);
-        sky = sky > 0.30 ? smooth((sky - 0.30) / 0.12) : 0;
-        if (sky > 0) sky *= gate(c.x, c.z, GATE_SKY);
-        c.rSky = sky > 0.5;
-        double top = lerp(sky, closed, c.gF + 2);
-        double floor = Math.max(c.gC - 52 + 7 * K2 * rB.noise2(x / 140.0 + 9, z / 140.0 + 9), minFloor);
+        // narrowing to shut short of the den gates' works, which lie as deep
+        if (dens != null) {
+            double keep = smooth((dens.clearance(c.x, c.z) - RIFT_KEEP) / RIFT_EASE);
+            if (keep < 0.15) return false;
+            c.rScale *= keep;
+            if (c.rLine > RIFT_REACH * c.rScale + 3) return false;
+        }
+        // deep down at the bottom of the Upper Caves, never reaching the ground
+        double floor = Math.max(packFloor + RIFT_FLOOR + 6 * K2 * rB.noise2(x / 140.0 + 9, z / 140.0 + 9), packFloor + RIFT_FLOOR_MIN);
         int fq = 3 * (int) Math.ceil(floor / 3.0);
+        double top = Math.min(fq + RIFT_HEIGHT + 5 * K2 * rB.noise2(x / 80.0, z / 80.0), Math.min(c.gC - 24, c.low - (c.wet ? 12 : 8)));
         if (top - fq < 12) return false;
         c.rTop = top;
         c.rFloor = fq;
@@ -692,7 +726,7 @@ public final class UpperShapes {
         // floor, so the halls open onto the warrens (water from the tunnel's pools falls down them)
         if (c.wOn[1]) {
             double q = c.wLine[1] / c.wHw[1];
-            // (0.14: about twice as many as 0.13 had, now the halved rifts no longer reach down to the halls)
+            // (0.14: about twice as many as 0.13 had, now the rifts, halved and since 0.14.1 deep down, seldom reach the halls)
             double t = smooth((K2 * hK.noise2(x / 20.0, z / 20.0) + 0.05) / 0.2) * smooth((0.9 - q) / 0.5);
             double floor1 = c.wYc[1] - 0.6 * c.wHh[1];
             if (t > 0 && floor1 > ceil) {
@@ -1215,8 +1249,7 @@ public final class UpperShapes {
                     c.wHh[i], c.wLine[i], c.wRoom[i]));
         if (c.mouth > 0) b.append(String.format(java.util.Locale.ROOT, "; mouth %.2f", c.mouth));
         if (c.link > 0) b.append(String.format(java.util.Locale.ROOT, "; link %.2f", c.link));
-        if (c.rOn) b.append(String.format(java.util.Locale.ROOT, "; rift floor %d top %.1f line %.1f scale %.2f%s", c.rFloor, c.rTop, c.rLine, c.rScale,
-                c.rSky ? " sky" : ""));
+        if (c.rOn) b.append(String.format(java.util.Locale.ROOT, "; rift floor %d top %.1f line %.1f scale %.2f", c.rFloor, c.rTop, c.rLine, c.rScale));
         if (c.hOn) b.append(String.format(java.util.Locale.ROOT, "; hall floor %d ceiling %.1f", c.hFloor, c.hCeil));
         if (c.sOn) b.append(String.format(java.util.Locale.ROOT, "; sinkhole lake %d score %.2f", c.sLake, c.sScore));
         return b.toString();
@@ -1224,8 +1257,8 @@ public final class UpperShapes {
 
     /**
      * Places to look at each shape, nearest first, for the dev commands: open blocks of a kind ({@code mouth},
-     * {@code chambers}, {@code frozen} and {@code sky} for the warrens' mouths, their root chambers, a cold forest's
-     * warrens and the rifts open to the sky as well), searched on a 4-block grid in rings
+     * {@code chambers} and {@code frozen} for the warrens' mouths, their root chambers and a cold forest's warrens as
+     * well), searched on a 4-block grid in rings
      * round (x, z) out to {@code radius}, each at least {@code apart} from the others. Each is {x, y, z} with y the
      * lowest open block of that kind in its column.
      */
@@ -1258,8 +1291,8 @@ public final class UpperShapes {
                 hi = (int) Math.ceil(c.wYc[i] + c.wHh[i]);
                 want = WARRENS;
             }
-            case "rifts", "sky" -> {
-                if (!c.rOn || c.rLine > 2 || kind.equals("sky") && !c.rSky) return null;
+            case "rifts" -> {
+                if (!c.rOn || c.rLine > 2) return null;
                 lo = c.rFloor + 2;
                 hi = (int) Math.ceil(c.rTop);
                 want = RIFTS;
