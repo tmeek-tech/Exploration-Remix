@@ -78,6 +78,101 @@ public final class Plans {
             this.y0 = uFloor + 3;
             this.y1 = lFloor + 3;
             this.phase = phase; this.wob = wob;
+            // the den rift's middle line across: the passage's course, carried straight on past both landings
+            int n = LINE_N;
+            lineX = new double[n + 3];
+            lineZ = new double[n + 3];
+            lineS = new double[n + 3];
+            lineT = new double[n + 3];
+            for (int i = 0; i <= n; i++) {
+                lineX[i + 1] = px(i / (double) n);
+                lineZ[i + 1] = pz(i / (double) n);
+                lineT[i + 1] = i / (double) n;
+            }
+            double bx = lineX[1] - lineX[2], bz = lineZ[1] - lineZ[2], bl = Math.max(1e-9, Math.hypot(bx, bz));
+            lineX[0] = lineX[1] + bx / bl * LINE_BACK;
+            lineZ[0] = lineZ[1] + bz / bl * LINE_BACK;
+            double fx = lineX[n + 1] - lineX[n], fz = lineZ[n + 1] - lineZ[n], fl = Math.max(1e-9, Math.hypot(fx, fz));
+            lineX[n + 2] = lineX[n + 1] + fx / fl * LINE_ON;
+            lineZ[n + 2] = lineZ[n + 1] + fz / fl * LINE_ON;
+            lineT[0] = 0;
+            lineT[n + 2] = 1;
+            lineS[0] = -LINE_BACK;
+            lineS[1] = 0;
+            for (int i = 2; i < n + 3; i++) lineS[i] = lineS[i - 1] + Math.hypot(lineX[i] - lineX[i - 1], lineZ[i] - lineZ[i - 1]);
+            // the rift's floor comes down to the lower landing's where the line reaches its rim, not its middle, and
+            // never steeper than FLOOR_SLOPE
+            double in = lineS[n + 1];
+            for (int i = 1; i <= n + 1; i++) {
+                if (Math.hypot(lineX[i] - lx, lineZ[i] - lz) <= landR - LAND_IN) { in = lineS[i]; break; }
+            }
+            this.floorIn = Math.max(in, (uFloor - lFloor - 1) / FLOOR_SLOPE);
+        }
+
+        /** Points along the den rift's middle line between the two landings. */
+        static final int LINE_N = 48;
+        /** How far the den rift's middle line runs on behind the upper landing's centre and past the lower one's (blocks). */
+        public static final double LINE_BACK = 10, LINE_ON = 6;
+        /**
+         * How far inside the lower landing's rim the den rift's floor reaches the landing's (blocks; negative: outside
+         * it). The landing is round, its floor curving up to the rim, so a floor that is still coming down there stands
+         * over the rim as a ledge too tall to climb.
+         */
+        static final double LAND_IN = -1;
+        /**
+         * The den rift's floor comes down at most this much a block along its middle line, so it never steps more than
+         * a block (a bit less than 1: across the line's bends the arc length runs a little faster than the blocks).
+         */
+        static final double FLOOR_SLOPE = 0.92;
+        /** The arc length where the den rift's floor reaches the lower landing's ({@link #riftFloorAt}). */
+        private final double floorIn;
+        /** The den rift's middle line ({@link #lineNearest}): points across, their arc length from the upper landing and passage parameter. */
+        private final double[] lineX, lineZ, lineS, lineT;
+
+        /** Arc length of the den rift's middle line at its far end, past the lower landing (it starts at -{@link #LINE_BACK}). */
+        public double lineEnd() { return lineS[lineS.length - 1]; }
+
+        /**
+         * The den rift's floor at arc length s along its middle line: level with the upper landing's floor behind its
+         * centre, then evenly down to a block over the lower landing's, which it reaches as the line comes to the lower
+         * landing's rim ({@link #LAND_IN}; further on for the shortest gates, {@link #FLOOR_SLOPE}), and level from
+         * there on.
+         */
+        public double riftFloorAt(double s) {
+            double f = s / floorIn;
+            return uFloor + (lFloor + 1 - uFloor) * (f < 0 ? 0 : (f > 1 ? 1 : f));
+        }
+
+        /** The den rift's floor at passage parameter t ({@link #riftFloorAt} at the arc length there). */
+        public double riftFloor(double t) {
+            int n = LINE_N;
+            double k = (t < 0 ? 0 : (t > 1 ? 1 : t)) * n;
+            int i = Math.min(n - 1, (int) Math.floor(k));
+            return riftFloorAt(lineS[i + 1] + (k - i) * (lineS[i + 2] - lineS[i + 1]));
+        }
+
+        /**
+         * The point of the den rift's middle line nearest (x, z) across: {@code out[0]} how far it is, {@code out[1]} the arc
+         * length there (0 at the upper landing's centre, negative behind it), {@code out[2]} the passage parameter there
+         * (0 at the upper landing, 1 at the lower one, held at the ends past them).
+         */
+        public void lineNearest(double x, double z, double[] out) {
+            double best = Double.MAX_VALUE, bs = 0, bt = 0;
+            for (int i = 0; i + 1 < lineX.length; i++) {
+                double ax = lineX[i], az = lineZ[i], dx = lineX[i + 1] - ax, dz = lineZ[i + 1] - az;
+                double l2 = dx * dx + dz * dz;
+                double u = l2 > 1e-12 ? ((x - ax) * dx + (z - az) * dz) / l2 : 0;
+                u = u < 0 ? 0 : (u > 1 ? 1 : u);
+                double qx = ax + u * dx - x, qz = az + u * dz - z, d2 = qx * qx + qz * qz;
+                if (d2 < best) {
+                    best = d2;
+                    bs = lineS[i] + u * (lineS[i + 1] - lineS[i]);
+                    bt = lineT[i] + u * (lineT[i + 1] - lineT[i]);
+                }
+            }
+            out[0] = Math.sqrt(best);
+            out[1] = bs;
+            out[2] = bt;
         }
 
         static double bez(double p0, double p1, double p2, double p3, double t) {

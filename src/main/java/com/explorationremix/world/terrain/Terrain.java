@@ -13,6 +13,11 @@ package com.explorationremix.world.terrain;
  * Wasteland opens into the Galleries with no band between them ({@link Join}, where the {@link Breakthrough} noise says).
  * Above the pack's old floor, this carves only the den gates' upper landings and ramps and the cell's upper set piece
  * (the Silver Fern Rift or the Ivory Root Cavern).
+ *
+ * <p>Since 0.14 (Taran, 2026-11-12: no unbreakable band, the Fern Rifts are the way between the Upper Caves and the Blue
+ * Reaches) each den gate's passage is a deep rift ({@link #denRifts}): a ferny crack from the den's ledge on the old floor
+ * down through band 1, which is plain rock, into the Blue Reaches' landing. Its floor follows the passage's course down,
+ * so it walks like the passage did; its walls rise about 36 blocks over the den's ledge.
  */
 public final class Terrain {
     /**
@@ -81,9 +86,16 @@ public final class Terrain {
      * noise, {@link UpperShapes}, whose rifts and halls take their looks). The den gates are carved either way.
      */
     public volatile boolean upperPieces = true;
+    /**
+     * Whether each den gate's passage is a deep rift through band 1, which is then plain rock, rather than a passage
+     * through the band's unbreakable stone (0.14, {@link #denRift}). Set before any chunk is made, never changed after.
+     */
+    public volatile boolean denRifts = true;
 
     /** The wobble of the gate passages and landings (0.2.0's noise field 18, kept so the gates do not move). */
     private final Perlin detail;
+    /** The den rifts' ledges and the roughness of their walls (0.14). */
+    private final Perlin ledgeN, roughN;
     private final ThreadLocal<Column[]> cache;
     /**
      * Tests only: band 1 and the den gates' carve try every den gate of the cell in every column, not only those whose
@@ -110,6 +122,8 @@ public final class Terrain {
         this.seed = seed;
         long s = seed ^ 0x6A09E667F3BCC909L;
         detail = new Perlin(Hashing.mix(s, 18, 0, 0));
+        ledgeN = new Perlin(Hashing.mix(s, 19, 0, 0));
+        roughN = new Perlin(Hashing.mix(s, 20, 0, 0));
         this.plans = new Plans(this, seed);
         // The noise layers, each built from what it reads (no cycles): the Wasteland's sheets and the breakthrough both
         // read, the tubes (which first build the Galleries' landscape as it stands without them, GalleriesLandscape, and
@@ -142,6 +156,10 @@ public final class Terrain {
         boolean densDone, rampsDone;
         Plans.Gate[] dens = new Plans.Gate[0];
         int denN;
+        // Each of those den gates' rift over the column ({@link #denRifts}): how far across from its middle line, its
+        // floor and top, and its width's scale (the gate's, narrowing towards the ends); the ledges' offset.
+        double[] rv = new double[0], rFloor = new double[0], rTop = new double[0], rW = new double[0];
+        double rStep;
         Route.Link[] ramps = new Route.Link[0];
         int rampN;
     }
@@ -184,11 +202,25 @@ public final class Terrain {
 
     /**
      * How far past a den gate's bounding box ({@link Plans.Gate#overlaps}, which adds the landing's radius) its upper
-     * landing or passage can carve anything: the landing reaches 6 past its radius, a passage 8 past its widest.
+     * landing, passage or rift can carve anything: the landing reaches 6 past its radius, a passage 8 past its widest, a
+     * rift {@link #RIFT_REACH} past its middle line, which runs {@link Plans.Gate#LINE_BACK} past the box.
      */
-    private static final double DEN_REACH = 8;
-    /** How far past the box round a ramp's ends it is carved (its radius and wobble) and kept dry, as it always was. */
-    private static final double RAMP_REACH = 12;
+    private static final double DEN_REACH = 12;
+    /** A den rift is rock further than this across from its middle line (blocks): past its widest, ledges and roughness. */
+    static final double RIFT_REACH = 12;
+    /** A den rift's top lies about this far over the den's ledge (the old floor), give or take 7 (blocks): no higher than the ramps reach. */
+    static final double RIFT_RISE = 34;
+    /** A den rift's half width at its floor and top, and how much the middle of its height adds (blocks, at scale 1). */
+    static final double RIFT_EDGE = 2.2, RIFT_BELLY = 3.4;
+    /** How far past the box round a ramp's ends it is carved (its radius and wobble) and kept dry (its dry zone and shell). */
+    private static final double RAMP_REACH = 16;
+    /** A den rift is never wider than this from its middle line (blocks): its widest, ledges and roughness, at scale 1.2. */
+    static final double RIFT_WIDEST = 9;
+    /**
+     * The den gates' dry zone above the old floor ({@link #denDryDist}): the pack's caves are kept dry this close to their
+     * open space, and the pack's water is rock out to {@link #DEN_SHELL} (blocks).
+     */
+    public static final double DEN_DRY = 5, DEN_SHELL = 7;
 
     /** The den gates of the column's cell whose upper landing or passage can reach it: {@code c.dens[0..denN)}. */
     private void densOf(Column c) {
@@ -198,7 +230,98 @@ public final class Terrain {
         int n = 0;
         for (Plans.Gate g : l) if (everyDenGate || g.overlaps(c.x, c.z, c.x, c.z, DEN_REACH)) c.dens[n++] = g;
         c.denN = n;
+        if (denRifts) riftsOf(c);
         c.densDone = true;
+    }
+
+    private static final ThreadLocal<double[]> LINE = ThreadLocal.withInitial(() -> new double[3]);
+
+    /**
+     * Each den gate's rift over a column: its middle line follows the passage's course across, carried 10 blocks on
+     * behind the upper landing and 6 past the lower one ({@link Plans.Gate#lineNearest}); its floor follows the passage's
+     * floor down from the den's ledge to a block over the lower landing's, so it walks as the passage did; its top lies
+     * about {@link #RIFT_RISE} over the ledge and comes down to the floor at both ends, where the crack narrows too.
+     */
+    private void riftsOf(Column c) {
+        if (c.rv.length < c.denN) {
+            int m = Math.max(c.denN, 4);
+            c.rv = new double[m];
+            c.rFloor = new double[m];
+            c.rTop = new double[m];
+            c.rW = new double[m];
+        }
+        double[] line = LINE.get();
+        double rise = RIFT_RISE + 7 * detail.noise2(c.x / 50.0 + 300, c.z / 50.0 + 300);
+        for (int k = 0; k < c.denN; k++) {
+            Plans.Gate g = c.dens[k];
+            g.lineNearest(c.x + 0.5, c.z + 0.5, line);
+            double end = Math.min(line[1] + Plans.Gate.LINE_BACK, g.lineEnd() - line[1]);
+            double floor = g.riftFloorAt(line[1]);
+            double scale = 0.95 + 0.25 * Hashing.unit(Hashing.mix(seed, 4301, g.cellX * 16L + g.den, g.cellZ));
+            c.rv[k] = line[0];
+            c.rFloor[k] = floor;
+            c.rTop[k] = floor + (g.uFloor + rise - floor) * smooth(end / 12.0);
+            c.rW[k] = scale * (0.45 + 0.55 * smooth(end / 10.0));
+        }
+        c.rStep = 3 * detail.noise2(c.x / 30.0 + 500, c.z / 30.0 + 500);
+    }
+
+    /**
+     * Signed distance to den gate k's rift at a block of column c (negative inside): a crack whose walls step back in
+     * ledges every six blocks, narrow at its floor and top and widest in the middle of its height (about 4 across at the
+     * floor, 11 halfway up), and rock beyond {@link #RIFT_REACH}.
+     */
+    private double riftAt(Column c, int k, int x, int y, int z) {
+        double v = c.rv[k];
+        if (v > RIFT_REACH) return SOLID;
+        double yy = y + 0.5, fl = c.rFloor[k], top = c.rTop[k];
+        double dV = Math.max(fl - yy, yy - top);
+        if (dV > 1) return Math.max(dV, v - RIFT_REACH);
+        double tv = (yy - fl) / Math.max(1, top - fl);
+        tv = tv < 0 ? 0 : (tv > 1 ? 1 : tv);
+        double lens = Math.sqrt(Math.sin(Math.PI * tv));
+        int step = (int) Math.floor((yy + c.rStep) / 6.0);
+        double ledge = ledgeN.noise3(x / 22.0, step * 1.7, z / 22.0);
+        double d = v - (RIFT_EDGE + RIFT_BELLY * lens + 1.3 * ledge) * c.rW[k];
+        if (d < 4 && d > -4) d += 0.8 * roughN.noise3(x / 7.0 + 40, y / 7.0, z / 7.0 + 40);
+        return Math.max(d, dV);
+    }
+
+    /**
+     * Signed distance to a den gate's rift at a block (negative inside), or {@link #SOLID} where it cannot reach: for the
+     * Blue Reaches' network, which carves the rift's foot round its lower landing as it carved the passage's.
+     */
+    double denRift(Plans.Gate g, int x, int y, int z) {
+        Column c = column(x, z);
+        densOf(c);
+        for (int k = 0; k < c.denN; k++) if (c.dens[k] == g) return riftAt(c, k, x, y, z);
+        return SOLID;
+    }
+
+    /** Whether a den rift's middle line passes within {@code pad} of (x, z) across (tests and tools). */
+    public boolean nearDenRift(int x, int z, double pad) {
+        if (!denRifts) return false;
+        Column c = column(x, z);
+        densOf(c);
+        for (int k = 0; k < c.denN; k++) if (c.rv[k] < pad) return true;
+        return false;
+    }
+
+    /**
+     * The heights over a column where a den rift is open: {lowest floor, highest top}, or null where none is (the fern
+     * rift's plants are aimed into it, see {@code LayerRangePlacement}).
+     */
+    public int[] denRiftBand(int x, int z) {
+        if (!denRifts) return null;
+        Column c = column(x, z);
+        densOf(c);
+        double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
+        for (int k = 0; k < c.denN; k++) {
+            if (c.rv[k] > (RIFT_EDGE + RIFT_BELLY + 1) * c.rW[k] || c.rTop[k] - c.rFloor[k] < 3) continue;
+            lo = Math.min(lo, c.rFloor[k]);
+            hi = Math.max(hi, c.rTop[k]);
+        }
+        return lo > hi ? null : new int[]{(int) Math.floor(lo), (int) Math.ceil(hi)};
     }
 
     /** The ramps of the column's cell's den gates that can reach it: {@code c.ramps[0..rampN)}. */
@@ -283,10 +406,17 @@ public final class Terrain {
         return network.layerDensity(li, x, y, z);
     }
 
-    /** The den gates' passages through band 1 at a block: the nearest of those that can reach the column. */
+    /**
+     * The den gates' passages through band 1 at a block, or their rifts ({@link #denRifts}): the nearest of those that can
+     * reach the column.
+     */
     private double denPassages(Column c, int x, int y, int z) {
         densOf(c);
         double d = SOLID;
+        if (denRifts) {
+            for (int i = 0; i < c.denN; i++) d = Math.min(d, riftAt(c, i, x, y, z));
+            return d;
+        }
         for (int i = 0; i < c.denN; i++) d = Math.min(d, passage(c.dens[i], x, y, z));
         return d;
     }
@@ -319,12 +449,63 @@ public final class Terrain {
      */
     public double fine(int x, int y, int z, double coarse) {
         int li = shape.layerAt(y);
-        if (li < 0) return coarse;
+        if (li < 0) {
+            // band 1's den rifts keep their ledges and floors: every block of a rift is open and every other block is
+            // rock, whatever the interpolation (it would sink the floor a block or two here and there)
+            if (denRifts && shape.bandAt(y) == 1) {
+                double d = denPassages(column(x, z), x, y, z);
+                return d <= 0 ? Math.min(coarse, Math.max(-1, d / 8.0)) : Math.max(coarse, Math.min(1, d / 8.0));
+            }
+            return coarse;
+        }
         if (join != null && join.inBand(y)) return join.fine(x, y, z, coarse);
         if (li == WASTELAND) return wasteland.fine(x, y, z, coarse);
         if (li == GALLERIES) return galleries.fine(x, y, z, coarse);
-        return network.fine(li, x, y, z, coarse);
+        double d = network.fine(li, x, y, z, coarse);
+        // a den rift that crosses over the Blue Reaches' caves keeps its floor, so the way down never has a hole no one
+        // climbs back out of: the two blocks under the bottom of its crack always, out past the lower landing's rim (a
+        // room or way under it is roofed there, a bridge on the rift's floor), and the shelf under that and under its
+        // walls where the density has rock (the interpolation alone lets a cave's space up through rock thinner than its
+        // 8-block step)
+        if (d <= 0 && denRifts && li == BLUE) {
+            int under = underDenRiftFloor(x, y, z);
+            if (under == 1 || (under == 2 && rawDensity(x, y, z) > 0)) return 0.1;
+        }
+        return d;
     }
+
+    /** How deep under a den rift's floor its shelf keeps the density's rock (blocks): the interpolation's vertical step. */
+    private static final double RIFT_SHELF = 8;
+
+    /**
+     * Where a block lies under a den rift, out past its lower landing's rim: 1 in its bridge ({@link #RIFT_BRIDGE} under
+     * its floor, where the rift is open within {@link #RIFT_LOW} over that floor: the bottom of its crack, whose walls
+     * slope out), 2 elsewhere in its shelf ({@link #RIFT_SHELF} under its floor, as far across as the rift can open), or 0.
+     * A bridge one block thick hovered over the lower landing's edge (pieces of 8 to 12 blocks that nothing held).
+     */
+    private int underDenRiftFloor(int x, int y, int z) {
+        Column c = column(x, z);
+        densOf(c);
+        int under = 0;
+        for (int k = 0; k < c.denN; k++) {
+            if (c.rv[k] > RIFT_WIDEST) continue;
+            double fl = c.rFloor[k], yy = y + 0.5;
+            if (yy >= fl || yy < fl - RIFT_SHELF) continue;
+            Plans.Gate g = c.dens[k];
+            if (Math.hypot(x + 0.5 - g.lx, z + 0.5 - g.lz) <= g.landR - Plans.Gate.LAND_IN) continue;
+            if (yy >= fl - RIFT_BRIDGE) {
+                int f = (int) Math.floor(fl + 0.5);
+                for (int j = 0; j <= RIFT_LOW; j++) if (riftAt(c, k, x, f + j, z) < 0) return 1;
+            }
+            under = 2;
+        }
+        return under;
+    }
+
+    /** How far over a den rift's floor its crack counts as the bottom that the floor under it holds up (blocks). */
+    private static final int RIFT_LOW = 4;
+    /** How thick the floor under the bottom of a den rift's crack always is (blocks): a bridge over any cave under it. */
+    private static final double RIFT_BRIDGE = 2;
 
     /**
      * Whether the game builds rock at a block below the pack's old floor, as its noise pass does: {@link #density} at
@@ -381,17 +562,81 @@ public final class Terrain {
             if (p instanceof Upper.Cavern cv && c.upD > cv.rxz + 1) return AIR;
             return WATER;
         }
-        if (y < shape.packFloor + 48 && denGateCarve(x, y, z) < 14.0) return AIR;
+        if (y < shape.packFloor + 48 && denDryDist(x, y, z) < DEN_DRY) return AIR;
         return -1;
     }
 
-    /** The upper set piece's biome at a block, or null. */
+    /**
+     * How far a block lies from the den gates' open space above the old floor, for their dry zone ({@link #upperFluid})
+     * and the rock shell round it, where the pack's water turns to stone (NoiseBasedAquiferMixin): the upper landing as a
+     * cylinder from its floor to its top, the rift as a slab round its middle line as wide as it ever gets from its floor
+     * to its top, and the ramps. Unlike {@link #denGateCarve}, whose pieces stop at their own reach, it runs on smoothly
+     * past the shell, so the shell closes all round and the pack's lakes never stand as a wall of water beside the dry
+     * zone's air.
+     */
+    public double denDryDist(int x, int y, int z) {
+        if (y < shape.packFloor - 8 || y > shape.packFloor + 56) return SOLID;
+        Column c = column(x, z);
+        densOf(c);
+        rampsOf(c);
+        double d = SOLID, yy = y + 0.5;
+        for (int i = 0; i < c.denN; i++) {
+            Plans.Gate g = c.dens[i];
+            double dxz = Math.hypot(x + 0.5 - g.ux, z + 0.5 - g.uz);
+            d = Math.min(d, Math.max(dxz - g.landR, Math.max(g.uFloor - 1 - yy, yy - (g.uCy + g.landHalf))));
+            if (denRifts) d = Math.min(d, Math.max(c.rv[i] - RIFT_WIDEST, Math.max(c.rFloor[i] - 1 - yy, yy - c.rTop[i])));
+            else d = Math.min(d, passage(g, x, y, z));
+        }
+        for (int i = 0; i < c.rampN; i++) d = Math.min(d, c.ramps[i].dist(x, y, z));
+        return d;
+    }
+
+    /** The upper set piece's biome at a block, or a den rift's (with its den's ledge), or null. */
     public DeepBiome upperBiome(int x, int y, int z) {
         if (y < shape.packFloor) return null;
+        if (denRifts && y < shape.packFloor + 56 && denLedgeOrRift(x, y, z) < 6) return DeepBiome.SILVER_FERN_RIFT;
         Column c = column(x, z);
         Upper.Piece p = upperOf(c);
         if (p == null || y > p.topY + 4) return null;
         return pieceDist(x, y, z) < 6 ? p.biome() : null;
+    }
+
+    /**
+     * How far across the ground a column lies from the den gates' works above the old floor: each upper landing (the
+     * den's ledge, to its rim), its rift ({@link #denRifts}, to its middle line) and its ramp (to its centre line). The
+     * Upper Caves' rifts, which lie as deep, pinch shut short of them ({@code UpperShapes.RIFT_KEEP}). Only the column's
+     * own cell's den gates: their works keep more than 60 blocks from its edges ({@link Plans#MARGIN}, less the line's
+     * ends past the landings).
+     */
+    public double denClearance(int x, int z) {
+        double px = x + 0.5, pz = z + 0.5, d = Double.MAX_VALUE;
+        double[] line = LINE.get();
+        for (Plans.Gate g : plans.denGates(plans.cellOf(px), plans.cellOf(pz))) {
+            d = Math.min(d, Math.hypot(px - g.ux, pz - g.uz) - g.landR);
+            if (denRifts) {
+                g.lineNearest(px, pz, line);
+                d = Math.min(d, line[0]);
+            }
+            Route.Link r = plans.ramp(g);
+            double dx = r.x2() - r.x1(), dz = r.z2() - r.z1(), len2 = dx * dx + dz * dz;
+            double t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((px - r.x1()) * dx + (pz - r.z1()) * dz) / len2));
+            d = Math.min(d, Math.hypot(px - r.x1() - dx * t, pz - r.z1() - dz * t));
+        }
+        return d;
+    }
+
+    /** Signed distance to the den rifts and their dens' ledges (the upper landings) at a block: no ramps. */
+    private double denLedgeOrRift(int x, int y, int z) {
+        Column c = column(x, z);
+        densOf(c);
+        double d = SOLID;
+        for (int i = 0; i < c.denN; i++) {
+            Plans.Gate g = c.dens[i];
+            double dxz = Math.hypot(x - g.ux, z - g.uz);
+            if (dxz < g.landR + 6) d = Math.min(d, landing(dxz, g.landR, g.uCy, g.landHalf, g.uFloor, x, y, z));
+            d = Math.min(d, riftAt(c, i, x, y, z));
+        }
+        return d;
     }
 
     /** The surface of the lake (or stream) of the upper set piece over a column. */
@@ -404,9 +649,10 @@ public final class Terrain {
     public Upper.Piece upperPiece(int x, int z) { return upperOf(column(x, z)); }
 
     /**
-     * Every den gate's upper landing, the top of its passage and its ramp up into the pack's caves ({@link
-     * Plans#denGates}): carved out of the pack's own terrain just above its old floor. Negative inside. Each is carved
-     * as the first gate always was, so where no other den gate is near, the first gate's carve is what it was.
+     * Every den gate's upper landing, the top of its passage (or its rift, {@link #denRifts}) and its ramp up into the
+     * pack's caves ({@link Plans#denGates}): carved out of the pack's own terrain just above its old floor. Negative
+     * inside. Each is carved as the first gate always was, so where no other den gate is near, the first gate's carve is
+     * what it was.
      */
     public double denGateCarve(int x, int y, int z) {
         if (y < shape.packFloor - 8 || y > shape.packFloor + 56) return SOLID;
@@ -418,7 +664,7 @@ public final class Terrain {
             Plans.Gate g = c.dens[i];
             double dxz = Math.hypot(x - g.ux, z - g.uz);
             if (dxz < g.landR + 6) d = Math.min(d, landing(dxz, g.landR, g.uCy, g.landHalf, g.uFloor, x, y, z));
-            d = Math.min(d, passage(g, x, y, z));
+            d = Math.min(d, denRifts ? riftAt(c, i, x, y, z) : passage(g, x, y, z));
         }
         if (c.rampN > 0) {
             // one wobble for every ramp here, the one the first gate's ramp always had
@@ -447,6 +693,9 @@ public final class Terrain {
         int li = shape.layerAt(y);
         if (li < 0) {
             int band = shape.bandAt(y);
+            // A den rift through band 1 is a Fern Rift, but for the band's bottom four rows: they keep the Deep Blue Rift
+            // under every column, whose biome carries the ways' and the dens' features (open_way, den_lair) to every chunk.
+            if (band == 1 && denRifts && y >= shape.bandBottom(1) + 4 && denPassages(column(x, z), x, y, z) < 6) return DeepBiome.SILVER_FERN_RIFT;
             li = band > 0 ? band - 1 : shape.layerCount - 1;
             return routeBiome(li);
         }

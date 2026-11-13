@@ -108,7 +108,8 @@
     [
       "minecraft:amethyst_geode",
       "explorationremix:frost_fern_grotto/giant_icicles",
-      "explorationremix:frost_fern_grotto/icicle_clusters"
+      "explorationremix:frost_fern_grotto/icicle_clusters",
+      "explorationremix:frost_fern_grotto/ice_columns"
     ],
     [
       "minecraft:monster_room",
@@ -117,7 +118,6 @@
     [],
     [],
     [
-      "minecraft:ore_dirt",
       "minecraft:ore_gravel",
       "minecraft:ore_granite_upper",
       "minecraft:ore_granite_lower",
@@ -152,7 +152,6 @@
       "explorationremix:frost_fern_grotto/moss_floor",
       "explorationremix:frost_fern_grotto/moss_ceiling",
       "explorationremix:frost_fern_grotto/frost",
-      "explorationremix:frost_fern_grotto/rime",
       "explorationremix:frost_fern_grotto/snow",
       "explorationremix:frost_fern_grotto/ice"
     ],
@@ -162,7 +161,8 @@
     [
       "explorationremix:frost_fern_grotto/ferns",
       "explorationremix:frost_fern_grotto/snowbells",
-      "explorationremix:frost_fern_grotto/frostberries"
+      "explorationremix:frost_fern_grotto/frostberries",
+      "explorationremix:frost_fern_grotto/floor_icicles"
     ],
     [
       "minecraft:freeze_top_layer"

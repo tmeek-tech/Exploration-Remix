@@ -51,12 +51,12 @@ public abstract class NoiseBasedAquiferMixin {
                     }
                     UpperShapes s = DeepWorld.shapes();
                     if (s != null) {
-                        // The noise shapes' streams, springs, pools and lakes: every block of their water flows as the
-                        // chunk finishes, so falls form where a stream steps down and nothing hangs over air.
+                        // The noise shapes' pools, streams and lakes lie still in rock that holds them; only a
+                        // spring's water flows as the chunk finishes, down the rift's wall.
                         int sf = s.fluid(ctx.blockX(), y, ctx.blockZ());
                         if (sf >= 0) {
-                            f = sf == UpperShapes.WATER ? Terrain.WATER : Terrain.AIR;
-                            flow = f == Terrain.WATER;
+                            f = sf == UpperShapes.AIR ? Terrain.AIR : Terrain.WATER;
+                            flow = sf == UpperShapes.SPRING;
                         }
                     }
                 }
@@ -78,8 +78,9 @@ public abstract class NoiseBasedAquiferMixin {
 
     /**
      * The upper caves are safe: wherever vanilla's aquifer would leave lava above the old floor, it leaves water. Where
-     * the Upper Caves grow from noise, the pack's water next to their open space flows into it as the chunk finishes,
-     * instead of standing there as a wall.
+     * the Upper Caves grow from noise, the pack's water beside their open space or over it stays rock instead, so the
+     * pack's lakes end at a wall of stone rather than standing as a wall of water (or hanging over a tunnel); so does
+     * the pack's water at the edge of the den gates' dry zone.
      */
     @Inject(method = "computeSubstance", at = @At("RETURN"), cancellable = true)
     private void er$noUpperLava(DensityFunction.FunctionContext ctx, double density, CallbackInfoReturnable<BlockState> cir) {
@@ -90,9 +91,21 @@ public abstract class NoiseBasedAquiferMixin {
         Terrain t = DeepWorld.terrain();
         if (t == null || !DeepWorld.installed() || this.minGridY != Math.floorDiv(t.shape.floorY, 12) - 1) return;
         if (ctx.blockY() < t.shape.packFloor) return;
-        if (lava) cir.setReturnValue(DeepMaterials.WATER);
         UpperShapes shapes = DeepWorld.shapes();
-        if (shapes != null && !this.shouldScheduleFluidUpdate && shapes.near(ctx.blockX(), ctx.blockY(), ctx.blockZ(), 4.0))
-            this.shouldScheduleFluidUpdate = true;
+        if (shapes != null && shapes.besideOpen(ctx.blockX(), ctx.blockY(), ctx.blockZ())) {
+            this.shouldScheduleFluidUpdate = false;
+            cir.setReturnValue(null);
+            return;
+        }
+        // The den gates keep the pack's caves dry close to their landings, ramps and rifts (the head of this class):
+        // the pack's water just outside that, or over it where the dry zone stops, is rock, so its lakes end at a wall
+        // of stone rather than a wall of water.
+        int y = ctx.blockY();
+        if (y <= t.shape.packFloor + 56 && t.denDryDist(ctx.blockX(), y, ctx.blockZ()) < Terrain.DEN_SHELL) {
+            this.shouldScheduleFluidUpdate = false;
+            cir.setReturnValue(null);
+            return;
+        }
+        if (lava) cir.setReturnValue(DeepMaterials.WATER);
     }
 }

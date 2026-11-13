@@ -1,0 +1,38 @@
+{
+  "type": "explorationremix:pillar",
+  "config": {
+    "body": {
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:packed_ice"
+            }
+          },
+          "weight": 5
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:blue_ice"
+            }
+          },
+          "weight": 1
+        }
+      ]
+    },
+    "radius": {
+      "type": "minecraft:uniform",
+      "value": {
+        "min_inclusive": 1.6,
+        "max_exclusive": 3.4
+      }
+    },
+    "min_room": 6,
+    "max_room": 26,
+    "spacing": 12
+  }
+}

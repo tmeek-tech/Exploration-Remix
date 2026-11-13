@@ -3,6 +3,7 @@ package com.explorationremix.world;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.config.ERConfig;
 import com.explorationremix.world.gen.SurfaceOracle;
+import com.explorationremix.world.terrain.HostRock;
 import com.explorationremix.world.terrain.Entrances;
 import com.explorationremix.world.terrain.PlantCaves;
 import com.explorationremix.world.terrain.Shape;
@@ -26,6 +27,7 @@ public final class DeepWorld {
     private static volatile PlantCaves plants;
     private static volatile UpperShapes shapes;
     private static volatile SurfaceOracle oracle;
+    private static volatile HostRock host;
     private static volatile boolean installed = false;
     private static final Set<BiomeSource> DEEP_SOURCES = Collections.newSetFromMap(new WeakHashMap<>());
     private static final Set<Object> DEEP_GENERATORS = Collections.newSetFromMap(new WeakHashMap<>());
@@ -60,6 +62,15 @@ public final class DeepWorld {
     @Nullable
     public static PlantCaves plants() { return installed ? plants : null; }
 
+    /**
+     * The host rock the caves near the surface are carved into, with the soil over it (see {@code DeepSurfaceRules.HostRule}),
+     * or null when switched off or before install.
+     */
+    @Nullable
+    public static HostRock host() { return installed ? host : null; }
+
+    public static void setHost(@Nullable HostRock h) { host = h; }
+
     /** What is over each column of the running world (the pack's ground and surface biome), or null before install. */
     @Nullable
     public static SurfaceOracle oracle() { return oracle; }
@@ -82,6 +93,8 @@ public final class DeepWorld {
     public static synchronized Terrain build(int packFloor, long seed) {
         TerrainSettings settings = ERConfig.INSTANCE.toSettings();
         Terrain t = new Terrain(settings, packFloor, seed);
+        // each den gate a deep rift down to the Blue Reaches through plain rock, or the old passage through band stone
+        t.denRifts = ERConfig.INSTANCE.upperDenRifts.get();
         terrain = t;
         Shape s = t.shape;
         ExplorationRemix.LOGGER.info("Deep world: pack floor {}, new floor {}, {} layers", s.packFloor, s.floorY, s.layerCount);
@@ -107,5 +120,6 @@ public final class DeepWorld {
         shapes = null;
         plants = null;
         oracle = null;
+        host = null;
     }
 }

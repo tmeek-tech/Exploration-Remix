@@ -28,7 +28,7 @@
     "tip": {
       "type": "minecraft:simple_state_provider",
       "state": {
-        "Name": "minecraft:dripstone_block"
+        "Name": "minecraft:calcite"
       }
     },
     "length": {
@@ -45,13 +45,6 @@
         "max_exclusive": 3.2
       }
     },
-    "floor_chance": 0.35,
-    "point": {
-      "Name": "minecraft:pointed_dripstone",
-      "Properties": {
-        "thickness": "tip",
-        "vertical_direction": "down"
-      }
-    }
+    "floor_chance": 0.35
   }
 }

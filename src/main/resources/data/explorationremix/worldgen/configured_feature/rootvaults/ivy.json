@@ -4,7 +4,7 @@
     "state": {
       "type": "minecraft:simple_state_provider",
       "state": {
-        "Name": "explorationremix:grotto_ivy"
+        "Name": "immersive_weathering:ivy"
       }
     },
     "faces": "walls_ceiling",
