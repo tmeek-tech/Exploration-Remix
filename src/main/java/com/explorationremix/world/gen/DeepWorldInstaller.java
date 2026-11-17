@@ -140,15 +140,19 @@ public final class DeepWorldInstaller {
         terrain.surfaceProbe = oracle;
         boolean upperOn = ERConfig.INSTANCE.replaceVanillaCaveBiomes.get();
         ERConfig cfg = ERConfig.INSTANCE;
+        boolean merging = false;
         if (upperOn && cfg.upperNoise.get()) {
             // The Upper Caves from noise: no planned entrances, no set pieces (the den gates stay).
             // (the rifts lie as deep as the den gates' works and keep clear of them)
-            UpperShapes shapes = new UpperShapes(seed, currentMin, oracle, terrain::denClearance, cfg.upperWarrens.get(), cfg.upperRifts.get(),
+            // where they meet the pack's own caves through thin rock, the two merge into one cave (asks the pack's density)
+            PackProbe probe = cfg.upperMerge.get() ? new PackProbe(packState, noise.getCellWidth(), noise.getCellHeight()) : null;
+            UpperShapes shapes = new UpperShapes(seed, currentMin, oracle, terrain::denClearance, probe, cfg.upperWarrens.get(), cfg.upperRifts.get(),
                     cfg.upperHalls.get(), cfg.upperSinkholes.get(), cfg.upperWormTunnels.get());
             terrain.upperPieces = false;
+            merging = shapes.merging();
             DeepWorld.setUpper(null, shapes, new PlantCaves(seed), oracle);
-            ExplorationRemix.LOGGER.info("Upper Caves from noise: warrens {}, rifts {}, halls {}, sinkholes {}, worm tunnels {}", shapes.warrens, shapes.rifts,
-                    shapes.halls, shapes.sinkholes, shapes.wormTunnels);
+            ExplorationRemix.LOGGER.info("Upper Caves from noise: warrens {}, rifts {}, halls {}, sinkholes {}, worm tunnels {}, merged with the pack's caves {}",
+                    shapes.warrens, shapes.rifts, shapes.halls, shapes.sinkholes, shapes.wormTunnels, shapes.merging());
         } else {
             DeepWorld.setUpper(upperOn ? new Entrances(seed, currentMin, oracle) : null, upperOn ? new PlantCaves(seed) : null, oracle);
         }
@@ -165,7 +169,7 @@ public final class DeepWorldInstaller {
         DensityFunction original = router.finalDensity().mapAll(new InterpolationGater(packFloor - 8));
         // The entrances' water sits in rock the pack's caves may not open (max), then the carve opens our caves (min).
         DensityFunction upper = DensityFunctions.min(DensityFunctions.max(original, UpperSeal.INSTANCE),
-                new UpperFine(DensityFunctions.interpolated(UpperCarve.INSTANCE)));
+                new UpperFine(DensityFunctions.interpolated(UpperCarve.INSTANCE), merging));
         DensityFunction deep = new DeepFineDensity(DensityFunctions.interpolated(DeepDensityFunction.INSTANCE));
         DensityFunction selector = DensityFunctions.yClampedGradient(packFloor - 1, packFloor, 0.0, 1.0);
         DensityFunction composed = DensityFunctions.rangeChoice(selector, 0.5, 2.0, upper, deep);

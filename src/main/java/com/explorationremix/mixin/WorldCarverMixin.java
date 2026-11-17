@@ -24,7 +24,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * water there (see {@link NoiseBasedAquiferMixin}), or air where the deep world keeps the caves dry, as round the first
  * gate. The carvers also leave the rock that holds an entrance's water (see {@link Entrances#seals}), so no tunnel
  * hangs a pool over its air. Where the Upper Caves grow from noise ({@link UpperShapes}), the cave carver's worm tunnels
- * stay out of them above the old floor (unless the config keeps them).
+ * stay out of them above the old floor (unless the config keeps them). Where the shapes merge with the pack's caves the
+ * canyons also keep two blocks of rock round the shapes' pools and streams ({@link UpperShapes#nearWater}).
  */
 @Mixin(WorldCarver.class)
 public abstract class WorldCarverMixin {
@@ -38,7 +39,8 @@ public abstract class WorldCarverMixin {
             // Where the Upper Caves grow from noise their looping tunnels replace vanilla's worm tunnels, which end blind
             // (the canyons stay), and no carver cuts a root, icicle or stalactite loose or opens the rock round a pool.
             if (!s.wormTunnels && (Object) this instanceof CaveWorldCarver) cir.setReturnValue(null);
-            else if (s.formation(pos.getX(), pos.getY(), pos.getZ()) != 0 || s.rim(pos.getX(), pos.getY(), pos.getZ())) cir.setReturnValue(null);
+            else if (s.formation(pos.getX(), pos.getY(), pos.getZ()) != 0 || s.rim(pos.getX(), pos.getY(), pos.getZ())
+                    || s.nearWater(pos.getX(), pos.getY(), pos.getZ())) cir.setReturnValue(null);
         }
     }
 
