@@ -7,6 +7,10 @@ import com.explorationremix.rune.effect.RuneFx;
 import com.explorationremix.creature.climb.ClimbMoveControl;
 import com.explorationremix.creature.climb.ClimbNavigation;
 import com.explorationremix.creature.climb.ClimbNodeEvaluator;
+import com.explorationremix.creature.body.LevelTerrain;
+import com.explorationremix.creature.body.MossbackBody;
+import com.explorationremix.creature.body.MossbackRig;
+import com.explorationremix.creature.body.TerrainPatch;
 import com.explorationremix.registry.ERSounds;
 import com.explorationremix.registry.ERTags;
 import net.minecraft.core.BlockPos;
@@ -53,8 +57,6 @@ import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix3f;
-import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import javax.annotation.Nullable;
@@ -167,7 +169,6 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
     @Nullable private BlockPos kinDen;       // a stray's old den: it and that den's family leave each other be
     private Vec3 forward = new Vec3(0, 0, 1);
     private long ignoreRivalsUntil;
-    private float stepDist;
     private boolean throatHit;
     /** The rear under way ends in a drop from its wall or ceiling, not a lunge. */
     private boolean rearToDrop;
@@ -195,9 +196,24 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
     /** Client: how far through its rear it is (0 to 1), for the tremble and the eyes' blaze, and ticks into it. */
     public float windup, windupO;
     private int windupTicks;
-    public final Quaternionf orient = new Quaternionf(), orientO = new Quaternionf();
+    // client: the way it heads and the way out of its rock, eased; the way it heads now (its head leads with it)
     private Vec3 clientForward = new Vec3(0, 0, 1);
     private Vec3 clientUp = new Vec3(0, 1, 0);
+    private Vec3 clientLead = new Vec3(0, 0, 1);
+    private boolean oriented;
+    /**
+     * Client: its body as it lies on the rock, its feet on the blocks under them (creature.body, 0.15.0). It is kept
+     * while it is drawn (and {@link #BODY_KEEP} ticks after) or while a player is near enough to hear its feet, and
+     * laid out afresh when it is wanted again.
+     */
+    @Nullable private MossbackBody body;
+    @Nullable private MossbackBody.Drive bodyDrive;
+    @Nullable private TerrainPatch bodyRock;
+    @Nullable private LevelTerrain bodyTerrain;
+    @Nullable private int[] bodyBounds;
+    private int drawnAt = Integer.MIN_VALUE / 2;
+    static final int BODY_KEEP = 60;
+    static final double BODY_HEAR = 20.0;
 
     public MossbackEntity(EntityType<? extends Monster> type, Level level) {
         super(type, level);
@@ -1352,16 +1368,8 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
     @Override protected float getSoundVolume() { return 1.6F; }
     @Override protected SoundEvent getHurtSound(DamageSource source) { return ERSounds.MOSSBACK_HURT.get(); }
     @Override protected SoundEvent getDeathSound() { return ERSounds.MOSSBACK_DEATH.get(); }
+    /** Its steps are its feet's own: each foot sounds as it lands (see {@link #footfall}), not the box's walk. */
     @Override protected void playStepSound(BlockPos pos, BlockState state) { }
-
-    private void stepSounds() {
-        double moved = position().distanceTo(new Vec3(xo, yo, zo));
-        stepDist += (float) moved;
-        if (stepDist > 1.4F && surface() != null) {
-            stepDist = 0;
-            playSound(ERSounds.MOSSBACK_STEP.get(), 0.7F, 0.85F + random.nextFloat() * 0.3F);
-        }
-    }
 
     // ------------------------------------------------------------------------------------------------ life
 
@@ -1524,7 +1532,6 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
         else if (isAlive()) {
             if (airTicks > 0) airDist += Math.sqrt(Mth.square(getX() - xo) + Mth.square(getY() - yo) + Mth.square(getZ() - zo));
             updateForward();
-            stepSounds();
         }
     }
 
@@ -1532,7 +1539,6 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
         glowO = glow; jawO = jaw; rearO = rear; frillO = frill; windupO = windup;
         windupTicks = state() == REAR ? windupTicks + 1 : 0;
         windup = windupTicks == 0 ? Math.max(0.0F, windup - 0.34F) : Math.min(1.0F, windupTicks / (float) REAR_TICKS);
-        orientO.set(orient);
         byte s = state();
         double moved = Math.sqrt(Mth.square(getX() - xo) + Mth.square(getY() - yo) + Mth.square(getZ() - zo));
         boolean lit = moved > 0.012 || s == ALERT || s == REAR || s == LUNGE || s == GRAB || s == DROP || isDeadOrDying();
@@ -1554,39 +1560,93 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
         float frillT = (s == ALERT || s == REAR || s == LUNGE || s == GRAB || s == CHASE || s == DROP) ? 1.0F : 0.0F;
         frill += (frillT - frill) * 0.25F;
 
-        // orientation: its belly to its rock, its head the way it goes
+        orientation();
+        // its body: while it is drawn, or near enough to a player to be heard
+        if (body != null && tickCount - drawnAt > BODY_KEEP && level().getNearestPlayer(this, BODY_HEAR) == null) body = null;
+        else if (body != null || level().getNearestPlayer(this, BODY_HEAR) != null) tickBody();
+    }
+
+    /** Client: its belly to its rock, its head the way it goes, both eased (outright the first time). */
+    private void orientation() {
         Direction d = surface();
         Vec3 upT = d == null ? new Vec3(0, 1, 0) : Vec3.atLowerCornerOf(d.getOpposite().getNormal());
+        Vector3f sf = entityData.get(DATA_FORWARD);
+        Vec3 want;
+        if (d == Direction.DOWN || d == null) {
+            want = Vec3.directionFromRotation(0, yBodyRot);
+            clientLead = Vec3.directionFromRotation(0, getYRot());
+        } else {
+            want = new Vec3(sf.x, sf.y, sf.z);
+            clientLead = want;
+        }
+        if (!oriented) {
+            oriented = true;
+            clientUp = upT;
+            clientForward = want;
+        }
         if (clientUp.dot(upT) < -0.99) clientUp = clientUp.add(clientForward.cross(clientUp).scale(0.3));   // roll over, keeping its heading
         clientUp = clientUp.lerp(upT, 0.35);
         if (clientUp.lengthSqr() < 1.0E-4) clientUp = upT;
         clientUp = clientUp.normalize();
-        Vector3f sf = entityData.get(DATA_FORWARD);
-        Vec3 want;
-        if (d == Direction.DOWN || d == null) want = Vec3.directionFromRotation(0, yBodyRot);
-        else want = new Vec3(sf.x, sf.y, sf.z);
         if (clientForward.dot(want) < -0.99) clientForward = clientForward.add(clientUp.cross(clientForward).scale(0.3));
         clientForward = clientForward.lerp(want, 0.3);
         Vec3 f = clientForward.subtract(clientUp.scale(clientForward.dot(clientUp)));
-        if (f.lengthSqr() < 1.0E-4) f = Vec3.directionFromRotation(0, yBodyRot).subtract(clientUp.scale(0.0));
+        if (f.lengthSqr() < 1.0E-4) f = Vec3.directionFromRotation(0, yBodyRot);
         f = f.subtract(clientUp.scale(f.dot(clientUp)));
         if (f.lengthSqr() < 1.0E-4) f = Math.abs(clientUp.y) < 0.9 ? new Vec3(0, 1, 0) : new Vec3(0, 0, 1);
-        f = f.normalize();
-        clientForward = f;
-        orient.set(basis(f, clientUp));
-        if (tickCount < 2) orientO.set(orient);
+        clientForward = f.normalize();
     }
 
-    /** The rotation that turns the model's back up along {@code up} and its head along {@code fwd}. */
-    public static Quaternionf basis(Vec3 fwd, Vec3 up) {
-        // JOML takes the columns: the model's x (right), y (back) and z (tail) in the world
-        Vec3 right = fwd.cross(up).normalize();
-        Vec3 uu = up.subtract(fwd.scale(up.dot(fwd))).normalize();
-        Matrix3f m = new Matrix3f(
-                (float) right.x, (float) right.y, (float) right.z,
-                (float) uu.x, (float) uu.y, (float) uu.z,
-                (float) -fwd.x, (float) -fwd.y, (float) -fwd.z);
-        return new Quaternionf().setFromNormalized(m);
+    /**
+     * Client: its body for drawing this frame, laid out on the spot if it has none (just come into sight, or never
+     * ticked yet). Drawing it keeps it.
+     */
+    public MossbackBody drawnBody() {
+        drawnAt = tickCount;
+        if (body == null) {
+            if (!oriented) orientation();
+            tickBody();
+        }
+        return body;
+    }
+
+    /** Client: moves its body on a tick (laying it out afresh when it is new, or was put somewhere new). */
+    private void tickBody() {
+        if (bodyDrive == null) {
+            bodyDrive = new MossbackBody.Drive();
+            bodyRock = new TerrainPatch();
+            bodyTerrain = new LevelTerrain(level());
+            bodyBounds = new int[6];
+        }
+        if (body == null) {
+            body = new MossbackBody(MossbackRig.shared().spec);
+            body.setFootfalls(this::footfall);
+        }
+        MossbackBody.Drive in = bodyDrive;
+        in.x = getX(); in.y = getY() + getBbHeight() / 2.0; in.z = getZ();
+        in.halfWidth = getBbWidth() / 2.0; in.halfHeight = getBbHeight() / 2.0;
+        in.up.set(clientUp.x, clientUp.y, clientUp.z);
+        in.forward.set(clientForward.x, clientForward.y, clientForward.z);
+        in.lead.set(clientLead.x, clientLead.y, clientLead.z);
+        byte s = state();
+        if (isDeadOrDying()) in.mode = MossbackBody.Mode.DEAD;
+        else if (isInWater()) in.mode = MossbackBody.Mode.WATER;
+        else if (surface() == null || s == LUNGE || s == DROP) in.mode = MossbackBody.Mode.AIR;
+        else in.mode = MossbackBody.Mode.GROUND;
+        in.rear = rear;
+        in.hurry = s == CHASE;
+        int[] b = bodyBounds;
+        body.bounds(in, b);
+        bodyRock.build(bodyTerrain, b[0], b[1], b[2], b[3], b[4], b[5]);
+        body.tick(bodyRock, in);
+    }
+
+    /** Client: a foot lands (Taran's pick: a soft step for each one), a little louder trotting, the hind feet a little deeper. */
+    private void footfall(MossbackBody.Foot foot, boolean trotting, double speed) {
+        if (isSilent()) return;
+        float volume = trotting ? 0.4F : 0.28F;
+        float pitch = (foot.leg.front ? 1.0F : 0.9F) * (0.9F + random.nextFloat() * 0.2F);
+        level().playLocalSound(foot.at.x, foot.at.y, foot.at.z, ERSounds.MOSSBACK_STEP.get(), getSoundSource(), volume, pitch, false);
     }
 
     public float glow(float pt) { return Mth.lerp(pt, glowO, glow); }
