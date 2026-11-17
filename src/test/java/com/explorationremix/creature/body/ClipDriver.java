@@ -7,7 +7,7 @@ import org.joml.Vector3d;
  * speed, climbing straight up a riser in its way and coming down off a step, clinging to walls and ceilings), and eases
  * its way out and its heading the way MossbackEntity's client does, for the body to follow.
  */
-final class ClipDriver {
+class ClipDriver {
     final BlockWorld world;
     /** The middle of its box (1.4 wide, 0.9 tall). */
     final Vector3d c = new Vector3d();

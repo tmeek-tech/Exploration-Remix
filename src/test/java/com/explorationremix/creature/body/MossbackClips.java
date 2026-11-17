@@ -43,6 +43,17 @@ class MossbackClips {
 
     static Seg idle(int ticks) { return (d, t) -> t < ticks - 1; }
 
+    /** Moves the game's way ({@link GameDriver}) along its path, then stands on there {@code after} ticks. */
+    static Seg follow(int after) {
+        int[] left = {after};
+        return (d, t) -> {
+            GameDriver g = (GameDriver) d;
+            g.tick();
+            if (g.arrived()) left[0]--;
+            return left[0] > 0 && t < 2000;
+        };
+    }
+
     static Seg set(Runnable r) { return (d, t) -> { r.run(); return false; }; }
 
     record Scene(String name, BlockWorld world, ClipDriver driver, List<Seg> script, Vector3d camOffset, int extraTicks, Vector3d eye) {
@@ -91,17 +102,19 @@ class MossbackClips {
                     set(() -> d.hurry = false), walk(1.0, 0.12), idle(30)), new Vector3d(-4.0, 2.6, -2.8), 0));
         }
         {   // steps, slabs and a drop
-            BlockWorld w = new BlockWorld().fill(-6, -1, -8, 6, -1, 18);
-            for (int x = -6; x <= 6; x++) {
-                w.slab(x, 0, 1);
-                w.fill(x, 0, 3, x, 0, 6);
-                w.slab(x, 1, 5);
-                w.slab(x, 1, 6);
-                w.fill(x, 0, 7, x, 1, 9);
-                w.fill(x, 0, 12, x, 0, 13);
-            }
+            BlockWorld w = stepsWorld();
             ClipDriver d = new ClipDriver(w, 0, 0, -4, 0, 1);
             list.add(new Scene("steps", w, d, List.of(walk(25, 0.1), idle(30)), new Vector3d(-3.6, 2.0, -1.2), 0));
+        }
+        {   // the same steps the way the game moves its box over them: its own path, steering and collision, eased on the client
+            BlockWorld w = stepsWorld();
+            GameDriver d = new GameDriver(w, 0, 0, -4, 0, 1, GameDriver.ROAM).pathTo(0, 0, 17);
+            list.add(new Scene("steps-game", w, d, List.of(follow(30)), new Vector3d(-3.6, 2.0, -1.2), 0));
+        }
+        {   // and hunting over them at a trot
+            BlockWorld w = stepsWorld();
+            GameDriver d = new GameDriver(w, 0, 0, -4, 0, 1, GameDriver.CHASE).pathTo(0, 0, 17);
+            list.add(new Scene("steps-chase", w, d, List.of(follow(30)), new Vector3d(-3.6, 2.0, -1.2), 0));
         }
         {   // up a wall and over its top
             BlockWorld w = new BlockWorld().fill(-8, -1, -6, 10, -1, 6).fill(4, 0, -6, 10, 2, 6);
@@ -113,6 +126,11 @@ class MossbackClips {
                     set(() -> { d.up.set(0, 1, 0); d.heading.set(1, 0, 0); d.c.y = 3.0 + ClipDriver.HH; }),
                     walk(3.0, 0.1), idle(30)), new Vector3d(-1.2, 1.8, -4.6), 0));
         }
+        {   // up a wall three blocks high and over its top, the game's way
+            BlockWorld w = new BlockWorld().fill(-8, -1, -6, 12, -1, 6).fill(4, 0, -6, 12, 2, 6);
+            GameDriver d = new GameDriver(w, -2, 0, 0, 1, 0, GameDriver.ROAM).pathTo(9, 3, 0);
+            list.add(new Scene("wall-game", w, d, List.of(follow(30)), new Vector3d(-1.2, 1.8, -4.6), 0));
+        }
         {   // up a wall onto a ceiling, and along it
             BlockWorld w = new BlockWorld().fill(-8, -1, -6, 8, -1, 6).fill(4, 0, -6, 8, 3, 6).fill(-8, 3, -6, 8, 3, 6);
             ClipDriver d = new ClipDriver(w, -2, 0, 0, 1, 0);
@@ -123,22 +141,30 @@ class MossbackClips {
                     set(() -> { d.c.y = 3.0 - ClipDriver.HH; d.up.set(0, -1, 0); d.heading.set(-1, 0, 0); }),
                     walk(3.5, 0.085), idle(40)), new Vector3d(-0.6, -0.4, -5.2), 0, new Vector3d(-1.5, 1.4, -5.5)));
         }
-        {   // head first down a step a block high, a while at its foot still clinging to it (as the game holds one against
-            // a short block in its way), then off across the floor
-            BlockWorld w = new BlockWorld().fill(-8, -1, -6, 8, -1, 8).fill(-8, 0, 2, 8, 0, 8);
+        {   // head first down a wall three blocks high, laid there fresh (come into sight on it), then off across the floor
+            BlockWorld w = new BlockWorld().fill(-8, -1, -6, 8, -1, 8).fill(-8, 0, 2, 8, 2, 8);
             ClipDriver d = new ClipDriver(w, 0, 0, 0, 0, 1);
             list.add(new Scene("down", w, d, List.of(
-                    set(() -> { d.c.set(0, 1.7, 2.0 - ClipDriver.HW); d.up.set(0, 0, -1); d.heading.set(0, -1, 0); d.clientUp.set(d.up);
+                    set(() -> { d.c.set(0, 2.0, 2.0 - ClipDriver.HW); d.up.set(0, 0, -1); d.heading.set(0, -1, 0); d.clientUp.set(d.up);
                         d.clientFwd.set(d.heading); d.mode = MossbackBody.Mode.GROUND; }),
                     (dd, t) -> { dd.move(0.085); return dd.c.y - ClipDriver.HH > 0.02; },
-                    idle(50),
                     set(() -> { d.up.set(0, 1, 0); d.heading.set(0, 0, -1); d.c.y = ClipDriver.HH; }),
-                    walk(4.0, 0.1), idle(30)), new Vector3d(-3.6, 1.4, -1.6), 0));
+                    idle(10), walk(4.0, 0.1), idle(30)), new Vector3d(-3.6, 1.4, -1.6), 0));
         }
         {   // over a wall a block high and a block thick (as round a pen): up onto it, across, down the far side
-            BlockWorld w = new BlockWorld().fill(-8, -1, -8, 8, -1, 12).fill(-8, 0, 2, 8, 0, 2);
+            BlockWorld w = overWorld();
             ClipDriver d = new ClipDriver(w, 0.3, 0, -2.5, 0, 1);
             list.add(new Scene("over", w, d, List.of(walk(10.0, 0.1), idle(40)), new Vector3d(-3.4, 1.6, 0.6), 0, new Vector3d(-5.2, 2.4, 1.4)));
+        }
+        {   // over it the game's way, walking and then hunting
+            BlockWorld w = overWorld();
+            GameDriver d = new GameDriver(w, 0.3, 0, -2.5, 0, 1, GameDriver.ROAM).pathTo(0.3, 0, 7.5);
+            list.add(new Scene("over-game", w, d, List.of(follow(40)), new Vector3d(-3.4, 1.6, 0.6), 0, new Vector3d(-5.2, 2.4, 1.4)));
+        }
+        {
+            BlockWorld w = overWorld();
+            GameDriver d = new GameDriver(w, 0.3, 0, -2.5, 0, 1, GameDriver.CHASE).pathTo(0.3, 0, 7.5);
+            list.add(new Scene("over-chase", w, d, List.of(follow(40)), new Vector3d(-3.4, 1.6, 0.6), 0, new Vector3d(-5.2, 2.4, 1.4)));
         }
         {   // along a cliff edge, the left feet reaching down its face
             BlockWorld w = new BlockWorld().fill(-8, -1, -8, 0, -1, 14).fill(-8, -4, -8, 0, -2, 14).fill(1, -5, -8, 8, -5, 14);
@@ -160,6 +186,25 @@ class MossbackClips {
             list.add(new Scene("rubble", w, d, List.of(walk(5, 0.1), arc(-40, 4, 0.1), walk(5, 0.1), idle(30)), new Vector3d(-3.4, 2.3, -2.0), 0));
         }
         return list;
+    }
+
+    /** Steps, slabs and a drop, across the way from z = 1 on: a slab, a block, a block and a slab, two blocks, down, a block, down. */
+    static BlockWorld stepsWorld() {
+        BlockWorld w = new BlockWorld().fill(-6, -1, -8, 6, -1, 18);
+        for (int x = -6; x <= 6; x++) {
+            w.slab(x, 0, 1);
+            w.fill(x, 0, 3, x, 0, 6);
+            w.slab(x, 1, 5);
+            w.slab(x, 1, 6);
+            w.fill(x, 0, 7, x, 1, 9);
+            w.fill(x, 0, 12, x, 0, 13);
+        }
+        return w;
+    }
+
+    /** A wall a block high and a block thick across the way at z = 2. */
+    static BlockWorld overWorld() {
+        return new BlockWorld().fill(-8, -1, -8, 8, -1, 12).fill(-8, 0, 2, 8, 0, 2);
     }
 
     // ------------------------------------------------------------------------------------------------ running
@@ -201,7 +246,7 @@ class MossbackClips {
                 Vector3d mid = new Vector3d();
                 body.joint(MossbackSpec.MIDDLE, pt, mid, new Vector3d());
                 if (cam == null) cam = new Vector3d(mid);
-                else cam.lerp(mid, 0.06);
+                else cam.lerp(mid, s.driver.hurry ? 0.2 : 0.06);
                 Vector3d eye = s.eye != null ? new Vector3d(s.eye) : new Vector3d(s.camOffset).mul(1.45).add(cam);
                 r.camera(eye, cam, 46);
                 r.clear(0x1b2028);
