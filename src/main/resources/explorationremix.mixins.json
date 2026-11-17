@@ -29,6 +29,7 @@
     "LevelChunkMixin",
     "WorldGenRegionMixin",
     "accessor.LivingEntityAccessor",
+    "accessor.SlimeMoveControlAccessor",
     "rune.ItemStackRuneMixin",
     "rune.FurnaceRuneMixin",
     "rune.ArrowPassByMixin",

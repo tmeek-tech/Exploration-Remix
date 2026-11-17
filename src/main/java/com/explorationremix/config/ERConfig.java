@@ -55,6 +55,10 @@ public final class ERConfig {
     public final ForgeConfigSpec.BooleanValue resetEnabled;
     public final ForgeConfigSpec.BooleanValue terrainSlabs;
     public final ForgeConfigSpec.IntValue resetChangesPerTick;
+    // 0.18.0: vanilla's hostile mobs in groups (creature.groups), read while the server runs.
+    public final ForgeConfigSpec.BooleanValue mobGroupsEnabled;
+    public final ForgeConfigSpec.IntValue mobGroupMin, mobGroupMax, mobGroupsKept, mobGroupsMost;
+    public final ForgeConfigSpec.DoubleValue mobEndermanChance, mobWoodsCanopy;
 
     public static final class LayerConfig {
         public final String id;
@@ -251,6 +255,23 @@ public final class ERConfig {
         resetEnabled = b.comment("Reset the Galleries' terrain once a cycle.").define("enabled", true);
         resetChangesPerTick = b.comment("Most blocks the reset puts back in one tick, over all players (halved while the server is falling behind).")
                 .defineInRange("changesPerTick", 2048, 16, 100_000);
+        b.pop();
+
+        b.comment("Vanilla's hostile mobs in groups of their own kind, each kind in its own home: zombies and skeletons together in woods and",
+                "savannas, spider packs and witch covens in dark oak forests, creepers and slimes in the green Upper Caves (lush caves, Rootvaults,",
+                "Silver Fern Rifts, the Frost Fern Grotto), husks in deserts, strays on snowy land, drowned in rivers and the sea; nowhere else",
+                "but a lone enderman now and then. Spawners, structures' own spawns (witch huts, monuments, outposts), patrols, phantoms, the",
+                "Nether and the End are untouched. Read while the server runs.").push("mobGroups");
+        mobGroupsEnabled = b.comment("Bring vanilla's hostile mobs out in groups. Off: vanilla's own spawning, as before.").define("enabled", true);
+        mobGroupMin = b.comment("Fewest in a group (a witch coven is always two).").defineInRange("groupMin", 3, 2, 8);
+        mobGroupMax = b.comment("Most in a group.").defineInRange("groupMax", 5, 2, 12);
+        mobGroupsKept = b.comment("Groups of each home kept round a player (within 96 blocks of it).").defineInRange("groupsKept", 2, 0, 8);
+        mobGroupsMost = b.comment("Most groups of each home round a player: the one past those kept comes only now and then.")
+                .defineInRange("groupsMost", 3, 1, 10);
+        mobEndermanChance = b.comment("Chance each second that a lone enderman comes out near a player with none within 128 blocks (only where",
+                "the biome has endermen, and only where it is dark enough).").defineInRange("endermanChance", 0.02, 0.0, 1.0);
+        mobWoodsCanopy = b.comment("Share of the ground round a spot in woods or savanna that trees must cover for zombies and skeletons to come",
+                "out there (0: anywhere in those biomes).").defineInRange("woodsCanopy", 0.08, 0.0, 1.0);
         b.pop();
 
         b.comment("Fixes where other mods meet. Changes apply to newly generated chunks.").push("compat");
