@@ -47,6 +47,12 @@ public final class MossbackBody {
     static final double TAIL_CLING = 0.3, TAIL_CLING_PULL = 0.35;
     /** A joint's way out eases to the rock's by this share a tick. */
     static final double UP_EASE = 0.45;
+    /**
+     * How far the trunk's way out may roll from its box's about the spine: passing a block it leans a little toward or
+     * away from it, never onto its side. (Climbing onto a wall or over an edge, where the spine runs steeply against its
+     * box's way out, the rock alone decides.)
+     */
+    static final double MAX_ROLL = Math.toRadians(20);
     /** A box that moved further than this in a tick was put somewhere new: the body is laid afresh. */
     static final double JUMP = 3.0;
 
@@ -68,6 +74,10 @@ public final class MossbackBody {
     static final double MAX_AIM_SPEED = 0.35;
     /** A foot lands at least this far out to its own side of the spine, on rock that does not face down at it. */
     static final double FOOT_SIDE = 0.14, FOOT_FACING = -0.25;
+    /** Where a foot looks for rock when there is none where it would stand: this far ahead of it or behind (blocks). */
+    static final double[] NEAR_BY = {0.3, -0.3, 0.55, -0.55};
+    /** How far a landing foot reaches for rock it finds missing where it comes down (blocks). */
+    static final double LAND_SEEK = 0.5;
     /** The hips and tail root ease toward straight behind the chest by this share a tick (standing, and moving). */
     static final double RELAX_STAND = 0.07, RELAX_MOVE = 0.012;
 
@@ -113,7 +123,8 @@ public final class MossbackBody {
 
     // scratch
     private final double[] f = new double[5];
-    private final Vector3d t0 = new Vector3d(), t1 = new Vector3d(), t2 = new Vector3d(), t3 = new Vector3d(), n0 = new Vector3d();
+    private final Vector3d t0 = new Vector3d(), t1 = new Vector3d(), t2 = new Vector3d(), t3 = new Vector3d(), t4 = new Vector3d(), n0 = new Vector3d(),
+            n1 = new Vector3d();
     private final Frame front = new Frame(), hind = new Frame();
 
     public MossbackBody(MossbackSpec spec) {
@@ -234,14 +245,14 @@ public final class MossbackBody {
         Vector3d dir = along(t1.set(in.forward), up[c]);
         if (dir.lengthSquared() < 1.0E-6) dir.set(pos[s]).sub(pos[c]);
         dir.normalize();
-        reach(rock, pos[c], pos[s], dir, spec.length(c, s), spec.ride[s] + 0.12 * lift, ground, up[s]);
+        reach(rock, pos[c], pos[s], dir, spec.length(c, s), spec.ride[s] + 0.12 * lift, ground);
         // neck: a share of the way the head leads
         steer(pos[c], pos[s], NECK_LEAD, up[s], t1);
-        reach(rock, pos[s], pos[nk], t1, spec.length(s, nk), spec.ride[nk] + 0.26 * lift, ground, up[nk]);
+        reach(rock, pos[s], pos[nk], t1, spec.length(s, nk), spec.ride[nk] + 0.26 * lift, ground);
         limitBend(pos[c], pos[s], pos[nk], spec.length(s, nk), BEND_SHOULDERS);
         // head
         steer(pos[s], pos[nk], HEAD_LEAD, up[nk], t1);
-        reach(rock, pos[nk], pos[h], t1, spec.length(nk, h), spec.ride[h] + 0.38 * lift, ground, up[h]);
+        reach(rock, pos[nk], pos[h], t1, spec.length(nk, h), spec.ride[h] + 0.38 * lift, ground);
         limitBend(pos[s], pos[nk], pos[h], spec.length(nk, h), BEND_NECK);
     }
 
@@ -259,10 +270,10 @@ public final class MossbackBody {
     }
 
     /** Sets {@code p} {@code len} from {@code from} along {@code dir}, laid on the rock (on the ground), {@code len} away. */
-    private void reach(TerrainPatch rock, Vector3d from, Vector3d p, Vector3d dir, double len, double height, boolean ground, Vector3d n) {
+    private void reach(TerrainPatch rock, Vector3d from, Vector3d p, Vector3d dir, double len, double height, boolean ground) {
         p.set(from).fma(len, dir);
         if (ground) {
-            adhere(rock, p, height, n);
+            adhere(rock, p, height, n1);
             p.sub(from);
             if (p.lengthSquared() < 1.0E-9) p.set(dir);
             p.normalize().mul(len).add(from);
@@ -273,14 +284,13 @@ public final class MossbackBody {
     private void rearJoints(TerrainPatch rock, boolean ground) {
         int s = spec.shoulders, c = spec.middle, hp = spec.hips, tb = spec.tailBase;
         double relax = standing > 4 ? RELAX_STAND : RELAX_MOVE;
-        drag(rock, pos[s], pos[c], pos[hp], spec.length(c, hp), spec.ride[hp], ground, up[hp], BEND_MIDDLE, relax);
-        drag(rock, pos[c], pos[hp], pos[tb], spec.length(hp, tb), spec.ride[tb], ground, up[tb], BEND_HIPS, relax);
+        drag(rock, pos[s], pos[c], pos[hp], spec.length(c, hp), spec.ride[hp], ground, BEND_MIDDLE, relax);
+        drag(rock, pos[c], pos[hp], pos[tb], spec.length(hp, tb), spec.ride[tb], ground, BEND_HIPS, relax);
         old[hp].set(pos[hp]);
         old[tb].set(pos[tb]);
     }
 
-    private void drag(TerrainPatch rock, Vector3d a, Vector3d b, Vector3d p, double len, double height, boolean ground, Vector3d n, double bend,
-                      double relax) {
+    private void drag(TerrainPatch rock, Vector3d a, Vector3d b, Vector3d p, double len, double height, boolean ground, double bend, double relax) {
         Vector3d dir = t1.set(p).sub(b);
         if (dir.lengthSquared() < 1.0E-9) dir.set(b).sub(a);
         dir.normalize();
@@ -293,7 +303,7 @@ public final class MossbackBody {
         }
         p.set(b).fma(len, dir);
         if (ground) {
-            adhere(rock, p, height, n);
+            adhere(rock, p, height, n1);
             p.sub(b);
             if (p.lengthSquared() < 1.0E-9) p.set(dir);
             p.normalize().mul(len).add(b);
@@ -390,7 +400,10 @@ public final class MossbackBody {
         for (int i = 0; i < joints; i++) {
             Vector3d want = t1;
             boolean felt = ground && rock.field(pos[i].x, pos[i].y, pos[i].z, REACH, SOFT, f) && f[0] < spec.ride[i] + HOLD + LET_GO;
-            if (felt) want.set(f[1], f[2], f[3]);
+            if (felt) {
+                want.set(f[1], f[2], f[3]);
+                if (i <= spec.tailBase) unroll(i, want, in.up);
+            }
             else if (i > spec.tailBase) want.set(up[i - 1]);
             else want.set(in.up);
             Vector3d u = up[i];
@@ -399,6 +412,32 @@ public final class MossbackBody {
             if (u.lengthSquared() < 1.0E-8) u.set(want);
             u.normalize();
         }
+    }
+
+    /** Turns a trunk joint's wanted way out back about its spine to within MAX_ROLL of its box's (see there). */
+    private void unroll(int i, Vector3d want, Vector3d boxUp) {
+        Vector3d fwd = t2.set(pos[Math.max(0, i - 1)]).sub(pos[Math.min(joints - 1, i + 1)]);
+        if (fwd.lengthSquared() < 1.0E-9) return;
+        fwd.normalize();
+        double fb = boxUp.dot(fwd);
+        if (Math.abs(fb) > 0.7) return;
+        // across the spine: the box's way out (b) and the rock's (w)
+        double bx = boxUp.x - fwd.x * fb, by = boxUp.y - fwd.y * fb, bz = boxUp.z - fwd.z * fb;
+        double bl = Math.sqrt(bx * bx + by * by + bz * bz);
+        double fw = want.dot(fwd);
+        double wx = want.x - fwd.x * fw, wy = want.y - fwd.y * fw, wz = want.z - fwd.z * fw;
+        double wl = Math.sqrt(wx * wx + wy * wy + wz * wz);
+        if (wl < 1.0E-6) return;
+        bx /= bl; by /= bl; bz /= bl;
+        double cos = (bx * wx + by * wy + bz * wz) / wl;
+        double cmax = Math.cos(MAX_ROLL);
+        if (cos >= cmax) return;
+        // the way it rolls, across the spine and square to the box's way out
+        double sx = wx / wl - bx * cos, sy = wy / wl - by * cos, sz = wz / wl - bz * cos;
+        double sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
+        if (sl < 1.0E-6) { sx = fwd.y * bz - fwd.z * by; sy = fwd.z * bx - fwd.x * bz; sz = fwd.x * by - fwd.y * bx; sl = 1.0; }
+        double smax = Math.sin(MAX_ROLL) / sl;
+        want.set(fwd).mul(fw).add((bx * cmax + sx * smax) * wl, (by * cmax + sy * smax) * wl, (bz * cmax + sz * smax) * wl);
     }
 
     // ------------------------------------------------------------------------------------------------ rock
@@ -669,8 +708,9 @@ public final class MossbackBody {
                 continue;
             }
             if (!ft.planted) {
-                // back on the rock after a fall, a lunge or a rear: down at once
-                begin(rock, ft, g, 3, stride, duty, 0.08);
+                // back on the rock after a fall, a lunge or a rear: down at once (if there is rock in reach; else it hangs)
+                if (target(rock, ft, g, ft.ideal, 0.0, t1, t2)) begin(rock, ft, g, 3, stride, duty, 0.08);
+                else dangle(ft, g, false);
                 continue;
             }
             // the gait lifts it: its turn in the stride came round this tick
@@ -732,10 +772,23 @@ public final class MossbackBody {
             aimAt.add(vx / v * ahead, vy / v * ahead, vz / v * ahead);
         }
         double lead = v * ticksLeft + ahead;
-        if (target(rock, ft, g, aimAt, lead, t1, t2)) {
+        double sx = vx * ticksLeft, sy = vy * ticksLeft, sz = vz * ticksLeft;
+        boolean found = target(rock, ft, g, aimAt, lead, t1, t2);
+        // nothing there: still where it was headed, if that is rock in reach; else under where it rests; else back
+        // where it lifted from (a gap all round: it puts its foot down again rather than step into the air)
+        if (!found && !fresh && ft.toRock && standsOn(rock, ft.to, ft.toN) && reachable(ft, g, ft.to, ft.toN, sx, sy, sz)) return;
+        if (!found) found = target(rock, ft, g, ft.ideal, 0.0, t1, t2);
+        if (!found && standsOn(rock, ft.from, ft.fromN) && reachable(ft, g, ft.from, ft.fromN, sx, sy, sz)) {
+            t1.set(ft.from);
+            t2.set(ft.fromN);
+            found = true;
+        }
+        if (found) {
+            // eased toward a new place on the same rock; another rock (a step's top for its riser, the floor for a slab) outright
+            boolean same = !fresh && ft.toRock && ft.toN.dot(t2) > 0.95 && ft.to.distanceSquared(t1) < 0.25 * 0.25;
             ft.toRock = true;
-            if (fresh) { ft.to.set(t1); ft.toN.set(t2); }
-            else { ft.to.lerp(t1, 0.5); ft.toN.lerp(t2, 0.5).normalize(); }
+            if (same) { ft.to.lerp(t1, 0.5); ft.toN.lerp(t2, 0.5).normalize(); }
+            else { ft.to.set(t1); ft.toN.set(t2); }
         } else {
             ft.toRock = false;
             if (fresh) { ft.to.set(aimAt); ft.toN.set(g.up); }
@@ -752,6 +805,13 @@ public final class MossbackBody {
         Foot.arc(ft.from, ft.fromN, ft.to, ft.toN, ft.lift, ft.t, g.up, ft.at, ft.nrm);
         if (ft.t >= 1.0) {
             ft.swinging = false;
+            if (!ft.toRock || !standsOn(rock, ft.to, ft.toN)) {
+                // no rock where it comes down (it has gone, or there was none as it aimed): the nearest it can stand on,
+                // if any is close, reached for as it lands
+                boolean found = target(rock, ft, g, ft.to, 0.0, t1, t2) || target(rock, ft, g, ft.ideal, 0.0, t1, t2);
+                ft.toRock = found && t1.distanceSquared(ft.to) < LAND_SEEK * LAND_SEEK;
+                if (ft.toRock) { ft.to.set(t1); ft.toN.set(t2); }
+            }
             if (ft.toRock) {
                 plant(ft, ft.to, ft.toN);
                 if (footfalls != null) footfalls.land(ft, trotting, speed);
@@ -789,6 +849,24 @@ public final class MossbackBody {
         ft.nrm.set(g.up);
     }
 
+    /** Whether a foot has rock in its reach under where it rests now (as a step that finds it missing looks for it). */
+    boolean rockInReach(TerrainPatch rock, Foot ft) {
+        return target(rock, ft, ft.leg.front ? front : hind, ft.ideal, 0.0, t1, t2);
+    }
+
+    /** Whether a sole at p (out of its rock along n) stands on rock. */
+    private static boolean standsOn(TerrainPatch rock, Vector3d p, Vector3d n) {
+        return rock.solid(p.x - n.x * 0.06, p.y - n.y * 0.06, p.z - n.z * 0.06);
+    }
+
+    /** Whether a sole at p (out of its rock along n) is within the leg's reach of its shoulder moved on by (dx, dy, dz). */
+    private boolean reachable(Foot ft, Frame g, Vector3d p, Vector3d n, double dx, double dy, double dz) {
+        shoulder(ft, g, t4);
+        double wx = p.x + n.x * ft.leg.sole - t4.x - dx, wy = p.y + n.y * ft.leg.sole - t4.y - dy, wz = p.z + n.z * ft.leg.sole - t4.z - dz;
+        double reach = (ft.leg.upper + ft.leg.lower) * 0.98;
+        return wx * wx + wy * wy + wz * wz <= reach * reach;
+    }
+
     private boolean overreached(Foot ft, Frame g) {
         shoulder(ft, g, t3);
         double wx = ft.at.x + ft.nrm.x * ft.leg.sole - t3.x, wy = ft.at.y + ft.nrm.y * ft.leg.sole - t3.y, wz = ft.at.z + ft.nrm.z * ft.leg.sole - t3.z;
@@ -800,8 +878,9 @@ public final class MossbackBody {
      * Rock for a foot near {@code near} (a point on the rock where it would stand): out, p, and the way out of the
      * rock, n. In order: down onto the rock from just above (drawn in from rock it would sit in: against a wall it
      * stands narrow), down onto a step or slab higher up, a wall or edge in the way of the reach from the shoulder, and
-     * the face under an edge (reaching down over it). Each must lie within the leg's reach of the shoulder (as it will
-     * be {@code lead} further on). False when none does: the foot hangs.
+     * the face under an edge (reaching down over it); then, should all of these miss (a gap under it, or short of a
+     * riser), the same two downward looks a little ahead of it and behind, and last the riser of a step just ahead. Each
+     * must lie within the leg's reach of the shoulder (as it will be {@code lead} further on). False when none does.
      */
     private boolean target(TerrainPatch rock, Foot ft, Frame g, Vector3d near, double lead, Vector3d p, Vector3d n) {
         MossbackSpec.Leg l = ft.leg;
@@ -830,7 +909,19 @@ public final class MossbackBody {
         if (cast(rock, sh.x, sh.y, sh.z, ex, ey, ez, sh, g, l, reach, p, n)) return true;
         // 4. the face under an edge: in toward the body from just under where it would stand
         double bx = near.x - u.x * 0.25, by = near.y - u.y * 0.25, bz = near.z - u.z * 0.25;
-        return cast(rock, bx, by, bz, bx - side.x * 0.5, by - side.y * 0.5, bz - side.z * 0.5, sh, g, l, reach, p, n);
+        if (cast(rock, bx, by, bz, bx - side.x * 0.5, by - side.y * 0.5, bz - side.z * 0.5, sh, g, l, reach, p, n)) return true;
+        // 5. a little ahead or behind: across a gap to its far side or back to its near one, up onto a step it fell short of
+        Vector3d w = g.fwd;
+        for (double d : NEAR_BY) {
+            double qx = near.x + w.x * d, qy = near.y + w.y * d, qz = near.z + w.z * d;
+            if (cast(rock, qx + u.x * 0.3, qy + u.y * 0.3, qz + u.z * 0.3, qx - u.x * 0.85, qy - u.y * 0.85, qz - u.z * 0.85, sh, g, l, reach, p, n))
+                return true;
+            if (cast(rock, qx + u.x * 1.1, qy + u.y * 1.1, qz + u.z * 1.1, qx + u.x * 0.25, qy + u.y * 0.25, qz + u.z * 0.25, sh, g, l, reach, p, n))
+                return true;
+        }
+        // 6. the riser of a step ahead, too high to stand on its top
+        double rx = near.x + u.x * 0.08, ry = near.y + u.y * 0.08, rz = near.z + u.z * 0.08;
+        return cast(rock, rx, ry, rz, rx + w.x * 0.5, ry + w.y * 0.5, rz + w.z * 0.5, sh, g, l, reach, p, n);
     }
 
     private boolean cast(TerrainPatch rock, double ax, double ay, double az, double bx, double by, double bz, Vector3d sh,

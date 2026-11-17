@@ -22,13 +22,17 @@ class MossbackBodyTest {
     static final class Run {
         final String name;
         int ticks, nan, inRock, slid, overBent, footTicks, shortFeet;
-        double worstLength;
-        final int[] steps = new int[4], landings = new int[4];
+        double worstLength, worstRoll;
+        /**
+         * Steps begun, landings heard, steps cut short by a fall (the box off the rock), steps that came down in the air
+         * with no rock in the leg's reach (the box perched on a block in rubble), and steps that came down in the air with rock in reach.
+         */
+        final int[] steps = new int[4], landings = new int[4], cut = new int[4], hung = new int[4], intoAir = new int[4];
         final List<String> notes = new ArrayList<>();
 
         Run(String name) { this.name = name; }
 
-        void note(String s) { if (notes.size() < 6) notes.add(s); }
+        void note(String s) { if (notes.size() < 12) notes.add(s); }
     }
 
     @BeforeAll
@@ -58,6 +62,7 @@ class MossbackBodyTest {
                 run.ticks++;
                 pose.compute(body, 0.5, in, 0, 0, 0, null, 0);
                 check(run, body, pose, rock, spec);
+                if (drive.mode == MossbackBody.Mode.GROUND) roll(run, body, drive);
                 for (int k = 0; k < 4; k++) {
                     MossbackBody.Foot f = body.feet[k];
                     // a foot that stays down stays where it is
@@ -66,6 +71,15 @@ class MossbackBodyTest {
                         run.note("foot " + k + " slid " + f.at.distance(was[k]) + " at tick " + run.ticks);
                     }
                     if (f.swinging && !wasSwinging[k]) run.steps[k]++;
+                    if (wasSwinging[k] && !f.swinging && !f.planted) {
+                        if (drive.mode != MossbackBody.Mode.GROUND) run.cut[k]++;
+                        else if (!body.rockInReach(rock, f)) run.hung[k]++;
+                        else {
+                            run.intoAir[k]++;
+                            run.note(String.format("foot %d stepped into the air at tick %d at (%.2f %.2f %.2f), box (%.2f %.2f %.2f)", k, run.ticks,
+                                    f.at.x, f.at.y, f.at.z, drive.x, drive.y, drive.z));
+                        }
+                    }
                     wasPlanted[k] = f.planted;
                     wasSwinging[k] = f.swinging;
                     was[k].set(f.at);
@@ -106,13 +120,38 @@ class MossbackBodyTest {
         }
     }
 
+    /** How far the trunk rolls about its spine from its box's way out, where the spine runs across that way (not up a wall). */
+    private static void roll(Run run, MossbackBody body, MossbackBody.Drive drive) {
+        Vector3d p = new Vector3d(), u = new Vector3d();
+        for (int i = 1; i <= MossbackSpec.TAIL_BASE; i++) {
+            body.joint(i, 1.0, p, u);
+            Vector3d fwd = new Vector3d(body.jointNow(i - 1)).sub(body.jointNow(i + 1)).normalize();
+            if (Math.abs(fwd.dot(drive.up)) > 0.7) continue;
+            Vector3d a = new Vector3d(u).fma(-u.dot(fwd), fwd), b = new Vector3d(drive.up).fma(-drive.up.dot(fwd), fwd);
+            if (a.lengthSquared() < 1.0E-6 || b.lengthSquared() < 1.0E-6) continue;
+            double deg = Math.toDegrees(a.normalize().angle(b.normalize()));
+            if (deg > run.worstRoll + 1.0E-9) {
+                run.worstRoll = deg;
+                if (deg > 45) run.note(String.format("joint %d rolled %.0f deg at tick %d", i, deg, run.ticks));
+            }
+        }
+    }
+
     private static String report() {
         StringBuilder b = new StringBuilder();
         for (Run r : RUNS) {
-            b.append(String.format("%-8s %4d ticks  steps %d/%d/%d/%d  short %d of %d  length %.1e  %s%n", r.name, r.ticks, r.steps[0], r.steps[1],
-                    r.steps[2], r.steps[3], r.shortFeet, r.footTicks, r.worstLength, r.notes));
+            b.append(String.format("%-8s %4d ticks  steps %d/%d/%d/%d  landed %d/%d/%d/%d  cut %d/%d/%d/%d  hung %d/%d/%d/%d  short %d of %d  length %.1e  %s%n",
+                    r.name, r.ticks, r.steps[0], r.steps[1], r.steps[2], r.steps[3], r.landings[0], r.landings[1], r.landings[2], r.landings[3],
+                    r.cut[0], r.cut[1], r.cut[2], r.cut[3], r.hung[0], r.hung[1], r.hung[2], r.hung[3], r.shortFeet, r.footTicks, r.worstLength, r.notes));
+            b.setLength(b.length() - System.lineSeparator().length());
+            b.append(String.format("  roll %.0f deg%n", r.worstRoll));
         }
         return b.toString();
+    }
+
+    @Test
+    void report_() {
+        System.out.print(report());
     }
 
     @Test
@@ -132,6 +171,12 @@ class MossbackBodyTest {
     }
 
     @Test
+    void theTrunkNeverRollsOntoItsSide() {
+        // over rubble it leans a little toward a block or away; on its side (its belly to a block) never
+        for (Run r : RUNS) assertTrue(r.worstRoll < 50, r.name + " rolled its trunk " + r.worstRoll + " degrees\n" + report());
+    }
+
+    @Test
     void aPlantedFootNeverSlides() {
         for (Run r : RUNS) assertEquals(0, r.slid, r.name + ": " + r.notes);
     }
@@ -141,10 +186,15 @@ class MossbackBodyTest {
         for (Run r : RUNS) {
             for (int k = 0; k < 4; k++) {
                 assertTrue(r.steps[k] >= 3, r.name + ": foot " + k + " stepped " + r.steps[k] + " times\n" + report());
-                // every step ends on rock in these scenes (none falls), and each landing sounds once
-                assertTrue(r.landings[k] >= r.steps[k] - 1 && r.landings[k] <= r.steps[k], r.name + ": foot " + k + " stepped "
-                        + r.steps[k] + " times and landed " + r.landings[k]);
+                // a step comes down on rock whenever there is rock in reach, and only a fall cuts one short (and one may be
+                // under way as a scene ends); each landing sounds once
+                assertEquals(0, r.intoAir[k], r.name + ": foot " + k + " stepped into the air with rock in reach\n" + r.notes);
+                assertTrue(r.landings[k] >= r.steps[k] - r.cut[k] - r.hung[k] - 1 && r.landings[k] <= r.steps[k], r.name + ": foot " + k
+                        + " stepped " + r.steps[k] + " times (" + r.cut[k] + " cut short by a fall, " + r.hung[k] + " finding no rock) and landed "
+                        + r.landings[k] + "\n" + r.notes);
             }
+            // only rubble (the box perched on a block, out of the legs' reach of the rock round it) leaves a foot hanging
+            if (!r.name.equals("rubble")) for (int k = 0; k < 4; k++) assertEquals(0, r.hung[k], r.name + ": foot " + k + " found no rock\n" + report());
         }
     }
 
