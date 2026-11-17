@@ -130,4 +130,6 @@ test {
     maxHeapSize = '2g'
     // A question to the cave plans about a noise layer (no plan) throws under the tests; the game gets an empty answer.
     systemProperty 'explorationremix.strictPlans', 'true'
+    // the Mossback's motion clips (MossbackClips, a slow test): where to write them, which ones, how many frames a second
+    ['mossback.clips', 'mossback.only', 'mossback.fps'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
 }

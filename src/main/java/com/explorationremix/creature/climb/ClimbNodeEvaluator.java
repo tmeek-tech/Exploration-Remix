@@ -23,7 +23,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * can be walked when those cells are open and the box touches rock on some side: below (floor), beside (wall) or
  * above (ceiling). Water can be swum at its top, never under it. Floors cost least, then walls, then ceilings, so it walks normally where it can
  * and climbs where it must. Moves go to the 18 face and edge neighbours; an edge move needs one of its two straight
- * halves open, so it rounds a ledge but never cuts through a corner of rock.
+ * halves open, so it rounds a ledge but never cuts through a corner of rock, and a level one is left out where rock
+ * stands at both corners it would sweep past.
  */
 public class ClimbNodeEvaluator extends NodeEvaluator {
     /** A node's kind; FLOOR to CEILING and WATER can be walked. */
@@ -109,6 +110,10 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
                 else if (s[1] == 0) { viaFirst = kind(x, from.y, from.z) != BLOCKED; viaSecond = kind(from.x, from.y, z) != BLOCKED; }
                 else { viaFirst = kind(x, from.y, from.z) != BLOCKED; viaSecond = kind(from.x, y, from.z) != BLOCKED; }
                 if (!viaFirst && !viaSecond) continue;
+                // across the floor, the box cuts past a corner cell on each side that neither node holds: with rock in
+                // both (two slab corners where slab lines meet, or a slab and a block) it wedged between them and
+                // quivered there, so it goes round by a straight half instead
+                if (s[1] == 0 && rockAtBothCorners(from, s[0], s[2])) continue;
             }
             Node n = getNode(x, y, z);
             if (n.closed) continue;
@@ -117,6 +122,27 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
             out[count++] = n;
         }
         return count;
+    }
+
+    /**
+     * Whether rock stands in both cells a level diagonal step from {@code from} (by {@code sx}, {@code sz}) sweeps past:
+     * the two corners of the cells the two boxes fill together that neither box fills.
+     */
+    private boolean rockAtBothCorners(Node from, int sx, int sz) {
+        int ax = sx > 0 ? from.x + entityWidth : from.x - 1, az = sz > 0 ? from.z : from.z + entityDepth - 1;
+        int bx = sx > 0 ? from.x : from.x + entityWidth - 1, bz = sz > 0 ? from.z + entityDepth : from.z - 1;
+        return rockIn(level, ax, from.y, az, entityHeight) && rockIn(level, bx, from.y, bz, entityHeight);
+    }
+
+    /** Rock in the {@code h} cells from (x, y, z) up that a box there would hit (a carpet at its foot it walks over). */
+    private static boolean rockIn(BlockGetter level, int x, int y, int z, int h) {
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int dy = 0; dy < h; dy++) {
+            p.set(x, y + dy, z);
+            VoxelShape shape = level.getBlockState(p).getCollisionShape(level, p);
+            if (!shape.isEmpty() && (dy > 0 || shape.max(net.minecraft.core.Direction.Axis.Y) > THIN)) return true;
+        }
+        return false;
     }
 
     private static boolean walkable(byte k) {
@@ -216,6 +242,43 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
             for (int dz = 0; dz < d; dz++)
                 if (face(level, p.set(x + dx, y + h, z + dz), net.minecraft.core.Direction.Axis.Y, false)) return CEILING;
         return OPEN;
+    }
+
+    /**
+     * How far a slab or snow layer in the bottom cells of the node with low corner (x, y, z) lifts a box standing there:
+     * the highest such top (half a block at most), or 0 when nothing does (a carpet lies under the box without lifting it).
+     */
+    public static double lift(BlockGetter level, int x, int y, int z, int w, int d) {
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        double lift = 0.0;
+        for (int dx = 0; dx < w; dx++)
+            for (int dz = 0; dz < d; dz++) {
+                p.set(x + dx, y, z + dz);
+                VoxelShape shape = level.getBlockState(p).getCollisionShape(level, p);
+                if (shape.isEmpty()) continue;
+                double top = shape.max(net.minecraft.core.Direction.Axis.Y);
+                if (top > THIN && top <= 0.5) lift = Math.max(lift, top);
+            }
+        return lift;
+    }
+
+    /**
+     * How high the rock under the floor node with low corner (x, y, z) holds a box standing there, when nothing in its
+     * own cells lifts it: the highest top of the shapes in the cells under it (1 on a block, 0.5 on a slab, less on a
+     * snow layer), or 0 when none of them has a real shape.
+     */
+    public static double support(BlockGetter level, int x, int y, int z, int w, int d) {
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        double top = 0.0;
+        for (int dx = 0; dx < w; dx++)
+            for (int dz = 0; dz < d; dz++) {
+                p.set(x + dx, y - 1, z + dz);
+                VoxelShape shape = level.getBlockState(p).getCollisionShape(level, p);
+                if (shape.isEmpty()) continue;
+                double t = shape.max(net.minecraft.core.Direction.Axis.Y);
+                if (t > THIN) top = Math.max(top, t);
+            }
+        return top;
     }
 
     /**

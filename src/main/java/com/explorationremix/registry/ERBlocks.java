@@ -5,6 +5,7 @@ import com.explorationremix.block.BandStoneBlock;
 import com.explorationremix.block.BoneScrapsBlock;
 import com.explorationremix.block.CavePlantBlock;
 import com.explorationremix.block.GlowBlock;
+import com.explorationremix.block.HangingFernBlock;
 import com.explorationremix.block.HangingPlantBlock;
 import com.explorationremix.block.HangingVinesBlock;
 import com.explorationremix.block.HangingVinesPlantBlock;
@@ -60,8 +61,12 @@ public final class ERBlocks {
     // ------------------------------------------------------------------------------------------- Ivory Root Cavern
     public static final RegistryObject<Block> LANTERN_FUNGUS = block("lantern_fungus",
             () -> new CavePlantBlock(plant(MapColor.SAND, SoundType.FUNGUS, 13), Block.box(2, 0, 2, 14, 14, 14)));
-    public static final RegistryObject<Block> LANTERN_ROOTS = block("lantern_roots",
-            () -> new HangingPlantBlock(plant(MapColor.COLOR_YELLOW, SoundType.HANGING_ROOTS, 8), Block.box(2, 0, 2, 14, 16, 14)));
+    /** Glowing roots hanging from the ceiling: a vine, tip and body, so a column of them joins up (0.14.3). */
+    public static final RegistryObject<Block> LANTERN_ROOTS = BLOCKS.register("lantern_roots",
+            () -> new HangingVinesBlock(plant(MapColor.COLOR_YELLOW, SoundType.HANGING_ROOTS, 8), ERBlocks.LANTERN_ROOTS_PLANT_REF));
+    public static final RegistryObject<Block> LANTERN_ROOTS_PLANT = BLOCKS.register("lantern_roots_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_YELLOW, SoundType.HANGING_ROOTS, 8), ERBlocks.LANTERN_ROOTS_REF));
+    static { item("lantern_roots", LANTERN_ROOTS); }
 
     // ------------------------------------------------------------------------------------------- Lantern Lake
     public static final RegistryObject<Block> WISTERIA = BLOCKS.register("wisteria",
@@ -110,10 +115,6 @@ public final class ERBlocks {
 
     // =========================================================================================== vegetation rework, part A
     // ------------------------------------------------------------------------------------------- Rootvaults
-    public static final RegistryObject<Block> AMBER_BULB_VINE = BLOCKS.register("amber_bulb_vine",
-            () -> new HangingVinesBlock(plant(MapColor.COLOR_ORANGE, SoundType.CAVE_VINES, 12), ERBlocks.AMBER_BULB_VINE_PLANT_REF));
-    public static final RegistryObject<Block> AMBER_BULB_VINE_PLANT = BLOCKS.register("amber_bulb_vine_plant",
-            () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_ORANGE, SoundType.CAVE_VINES, 6), ERBlocks.AMBER_BULB_VINE_REF));
     public static final RegistryObject<Block> WEEPING_IVY = BLOCKS.register("weeping_ivy",
             () -> new HangingVinesBlock(plant(MapColor.PLANT, SoundType.VINE, 0), ERBlocks.WEEPING_IVY_PLANT_REF));
     public static final RegistryObject<Block> WEEPING_IVY_PLANT = BLOCKS.register("weeping_ivy_plant",
@@ -121,8 +122,6 @@ public final class ERBlocks {
     /** Ivy over the walls and ceilings of the teal grottos and ravines: a sheet like glow lichen, giving no light. */
     public static final RegistryObject<Block> GROTTO_IVY = block("grotto_ivy",
             () -> new GlowLichenBlock(lichen(MapColor.COLOR_GREEN, SoundType.VINE, 0)));
-    public static final RegistryObject<Block> STARMOSS = block("starmoss",
-            () -> new CavePlantBlock(plant(MapColor.COLOR_GREEN, SoundType.MOSS_CARPET, 4).replaceable(), Block.box(0, 0, 0, 16, 1, 16)));
 
     // ------------------------------------------------------------------------------------------- Silver Fern Rift
     public static final RegistryObject<Block> SILVER_FROND = BLOCKS.register("silver_frond",
@@ -133,12 +132,12 @@ public final class ERBlocks {
             () -> new TallCavePlantBlock(plant(MapColor.METAL, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XZ),
                     Block.box(2, 0, 2, 14, 16, 14), Block.box(2, 0, 2, 14, 14, 14)));
     /**
-     * A silver fern hanging down the side of a block, its fronds falling a block and a half from near the top, into the
-     * block below (the outline stays in its own block). No item of its own: it is the silver fern's, placed on a wall,
-     * and drops it.
+     * A silver fern hanging down the side of a block, its fronds falling from near the top into the blocks below (the
+     * outline stays in its own block), in three sizes (HangingFernBlock). No item of its own: it is the silver fern's,
+     * placed on a wall (the small size), and drops it.
      */
     public static final RegistryObject<Block> SILVER_WALL_FERN = BLOCKS.register("silver_wall_fern",
-            () -> new ShelfFungusBlock(plant(MapColor.METAL, SoundType.GRASS, 0), Block.box(1, 0, 8, 15, 14, 16)));
+            () -> new HangingFernBlock(plant(MapColor.METAL, SoundType.GRASS, 0), Block.box(1, 0, 8, 15, 14, 16)));
 
     // ------------------------------------------------------------------------------------------- Ivory Root Cavern
     /** A pale bracket with glowing gold gills underneath; firm enough to stand on, like the orange shelf fungus. */
@@ -168,10 +167,6 @@ public final class ERBlocks {
     public static final RegistryObject<Block> ASURINE_CRUST = block("asurine_crust",
             () -> new GlowLichenBlock(lichen(MapColor.COLOR_LIGHT_BLUE, SoundType.AMETHYST_CLUSTER, 3)));
     /** The deep dark's only new plant: dark strands whose cold specks glow without giving light, so the dark stays dark. */
-    public static final RegistryObject<Block> DUSK_VINES = BLOCKS.register("dusk_vines",
-            () -> new HangingVinesBlock(plant(MapColor.COLOR_BLACK, SoundType.SCULK_VEIN, 0), ERBlocks.DUSK_VINES_PLANT_REF));
-    public static final RegistryObject<Block> DUSK_VINES_PLANT = BLOCKS.register("dusk_vines_plant",
-            () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_BLACK, SoundType.SCULK_VEIN, 0), ERBlocks.DUSK_VINES_REF));
 
     // =========================================================================================== vegetation rework, part B
     // No green in the Deep Gardens: lilac, cream, ochre, amber and rust.
@@ -275,9 +270,6 @@ public final class ERBlocks {
             () -> new HangingVinesBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.CAVE_VINES, 12), ERBlocks.FROSTBERRY_VINE_PLANT_REF));
     public static final RegistryObject<Block> FROSTBERRY_VINE_PLANT = BLOCKS.register("frostberry_vine_plant",
             () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.CAVE_VINES, 8), ERBlocks.FROSTBERRY_VINE_REF));
-    /** Pale crystals of rime over the walls: light only where it covers a face, like glow lichen. */
-    public static final RegistryObject<Block> RIME_LICHEN = block("rime_lichen",
-            () -> new GlowLichenBlock(lichen(MapColor.ICE, SoundType.GLOW_LICHEN, 6)));
     /** Frost feathers over the rock near the cold mouths. No light. */
     public static final RegistryObject<Block> HOARFROST = block("hoarfrost",
             () -> new GlowLichenBlock(lichen(MapColor.SNOW, SoundType.POWDER_SNOW, 0)));
@@ -307,16 +299,12 @@ public final class ERBlocks {
     private static final Supplier<Block> EMBER_VINES_REF = () -> EMBER_VINES.get();
     private static final Supplier<Block> EMBER_VINES_PLANT_REF = () -> EMBER_VINES_PLANT.get();
     // vegetation rework, part A
-    private static final Supplier<Block> AMBER_BULB_VINE_REF = () -> AMBER_BULB_VINE.get();
-    private static final Supplier<Block> AMBER_BULB_VINE_PLANT_REF = () -> AMBER_BULB_VINE_PLANT.get();
     private static final Supplier<Block> WEEPING_IVY_REF = () -> WEEPING_IVY.get();
     private static final Supplier<Block> WEEPING_IVY_PLANT_REF = () -> WEEPING_IVY_PLANT.get();
     private static final Supplier<Block> SILVER_FROND_REF = () -> SILVER_FROND.get();
     private static final Supplier<Block> SILVER_FROND_PLANT_REF = () -> SILVER_FROND_PLANT.get();
     private static final Supplier<Block> GOLD_THREADS_REF = () -> GOLD_THREADS.get();
     private static final Supplier<Block> GOLD_THREADS_PLANT_REF = () -> GOLD_THREADS_PLANT.get();
-    private static final Supplier<Block> DUSK_VINES_REF = () -> DUSK_VINES.get();
-    private static final Supplier<Block> DUSK_VINES_PLANT_REF = () -> DUSK_VINES_PLANT.get();
     // vegetation rework, part B
     private static final Supplier<Block> PALE_WISTERIA_REF = () -> PALE_WISTERIA.get();
     private static final Supplier<Block> PALE_WISTERIA_PLANT_REF = () -> PALE_WISTERIA_PLANT.get();
@@ -327,6 +315,9 @@ public final class ERBlocks {
     private static final Supplier<Block> FROSTBERRY_VINE_PLANT_REF = () -> FROSTBERRY_VINE_PLANT.get();
     private static final Supplier<Block> TRAILING_GRASS_REF = () -> TRAILING_GRASS.get();
     private static final Supplier<Block> TRAILING_GRASS_PLANT_REF = () -> TRAILING_GRASS_PLANT.get();
+    // 0.14.3: lantern roots
+    private static final Supplier<Block> LANTERN_ROOTS_REF = () -> LANTERN_ROOTS.get();
+    private static final Supplier<Block> LANTERN_ROOTS_PLANT_REF = () -> LANTERN_ROOTS_PLANT.get();
 
     // Only the vine tips have items, like vanilla's weeping vines.
     static {
@@ -334,11 +325,9 @@ public final class ERBlocks {
         item("blue_glow_vines", BLUE_GLOW_VINES);
         item("ember_vines", EMBER_VINES);
         // vegetation rework, part A
-        item("amber_bulb_vine", AMBER_BULB_VINE);
         item("weeping_ivy", WEEPING_IVY);
         item("silver_frond", SILVER_FROND);
         item("gold_threads", GOLD_THREADS);
-        item("dusk_vines", DUSK_VINES);
         // vegetation rework, part B
         item("pale_wisteria", PALE_WISTERIA);
         item("rose_tendrils", ROSE_TENDRILS);

@@ -712,21 +712,34 @@ public final class Network {
     /** The city reserve (section 11.1): its radius round the site, and its heights over the Blue Reaches' water table. */
     public static final double CITY_RESERVE = 128, CITY_RESERVE_LO = 8, CITY_RESERVE_HI = 80;
     /** How far inside its cell, and from both of the cell's landings, a city site must lie to be used. */
-    static final double CITY_INSIDE = 150, CITY_LANDING = 140;
+    static final double CITY_INSIDE = 172, CITY_LANDING = 152;
+    /**
+     * How much of the Blue Reaches must lie over the reserve for a city: the tunnels from a cell's portals pass over it
+     * (a 128-block layer, with 33 over it, left portals no way in where cities stood in most cells; the default has 97).
+     */
+    static final double CITY_HEADROOM = 60;
+    /**
+     * The ancient cities' structure set (data/minecraft/worldgen/structure_set/ancient_cities.json): random spread with
+     * vanilla's salt, but a start chunk every 6 chunks (vanilla: 24, separation 8), so nearly every Blue Reaches cell
+     * has several eligible sites and one city. Only planned cities start ({@link #citySite}).
+     */
+    public static final int CITY_SPACING = 6, CITY_SEPARATION = 1;
+    public static final long CITY_SALT = 20083232L;
 
     /**
-     * Where vanilla would start an ancient city (random spread 24/8, salt 20083232) in cell (cx, cz): the centre of the
-     * start chunk, {x, z}.
+     * Where the ancient cities' structure set may start a city ({@link #CITY_SPACING} / {@link #CITY_SEPARATION}, salt
+     * {@link #CITY_SALT}) in cell (cx, cz): the centre of each start chunk, {x, z}.
      */
     List<double[]> citySites(int cx, int cz) {
         List<double[]> out = new ArrayList<>();
         int bx0 = (int) Math.round(cx * cell), bz0 = (int) Math.round(cz * cell), size = (int) Math.round(cell);
         int c0x = Math.floorDiv(bx0, 16), c1x = Math.floorDiv(bx0 + size - 1, 16);
         int c0z = Math.floorDiv(bz0, 16), c1z = Math.floorDiv(bz0 + size - 1, 16);
-        for (int rx = Math.floorDiv(c0x, 24); rx <= Math.floorDiv(c1x, 24); rx++) {
-            for (int rz = Math.floorDiv(c0z, 24); rz <= Math.floorDiv(c1z, 24); rz++) {
-                Random r = new Random(rx * 341873128712L + rz * 132897987541L + seed + 20083232L);
-                int chx = rx * 24 + r.nextInt(16), chz = rz * 24 + r.nextInt(16);
+        int sp = CITY_SPACING, k = CITY_SPACING - CITY_SEPARATION;
+        for (int rx = Math.floorDiv(c0x, sp); rx <= Math.floorDiv(c1x, sp); rx++) {
+            for (int rz = Math.floorDiv(c0z, sp); rz <= Math.floorDiv(c1z, sp); rz++) {
+                Random r = new Random(rx * 341873128712L + rz * 132897987541L + seed + CITY_SALT);
+                int chx = rx * sp + r.nextInt(k), chz = rz * sp + r.nextInt(k);
                 double x = chx * 16 + 8, z = chz * 16 + 8;
                 if (x >= bx0 && x < bx0 + size && z >= bz0 && z < bz0 + size) out.add(new double[]{x, z});
             }
@@ -736,13 +749,15 @@ public final class Network {
 
     /**
      * The city sites of cell (cx, cz) that a city may use (section 11.1): at least {@link #CITY_INSIDE} inside the cell
-     * and {@link #CITY_LANDING} from both of the Blue Reaches' landings, so the reserve stays 22 blocks inside the cell
-     * and both landings 12 outside it. A pure function of the seed and the cell (the sites and the gates are pure), so
-     * the portals of the cell's edges read it too. Empty when the cells are too small for a city (under 400).
+     * and {@link #CITY_LANDING} from both of the Blue Reaches' landings, so the reserve stays 44 blocks inside the cell
+     * (no portal's vestibule or stub, which reach 30 into the cell and 12.5 round, ever meets it: {@link #inReserve})
+     * and both landings, rims and all, 10 outside it. A pure function of the seed and the cell (the sites and the gates are pure), so
+     * the portals of the cell's edges read it too. Empty when the cells are too small for a city (under 400) or the
+     * layer too low ({@link #CITY_HEADROOM}).
      */
     List<double[]> eligibleCities(int cx, int cz) {
         List<double[]> out = new ArrayList<>();
-        if (cell < 400) return out;
+        if (cell < 400 || shape.top(Terrain.BLUE) - (shape.waterY(Terrain.BLUE) + CITY_RESERVE_HI) < CITY_HEADROOM) return out;
         double x0 = cx * cell, z0 = cz * cell;
         Plans.Gate in = base.plans.gate(Terrain.BLUE + 1, cx, cz), down = base.plans.gate(Terrain.BLUE + 2, cx, cz);
         for (double[] s : citySites(cx, cz)) {
@@ -754,16 +769,26 @@ public final class Network {
     }
 
     /**
-     * True when a structure starting at (x, y, z) is a planned ancient city (section 11.1): a kept CITY chamber's centre
-     * is within 24 blocks of (x, z) and y is within 30 of its floor. Replaces 0.2.0's {@code clearOfRoute}.
+     * True when a structure starting at (x, y, z) from chunk (chunkX, chunkZ) is a planned ancient city (section 11.1):
+     * a kept CITY chamber's centre lies in that chunk and within 24 blocks of (x, z), and y is within 30 of its floor.
+     * The chunk keeps a neighbouring start chunk (6 chunks apart, or 2 across a region's edge) from starting a second
+     * city whose start piece reaches within 24 of the same centre. Replaces 0.2.0's {@code clearOfRoute}.
      */
-    public boolean citySite(int x, int y, int z) {
+    public boolean citySite(int chunkX, int chunkZ, int x, int y, int z) {
         // a city stands at least 150 inside its cell, so only the start's own cell can hold it
         for (Chamber c : net(Terrain.BLUE, cellOf(x), cellOf(z)).ch) {
             if (!c.keep || c.kind != Kind.CITY) continue;
+            if (Math.floorDiv((int) Math.floor(c.x), 16) != chunkX || Math.floorDiv((int) Math.floor(c.z), 16) != chunkZ) continue;
             if (Math.hypot(c.x - x, c.z - z) <= 24 && Math.abs(y - c.f0) <= 30) return true;
         }
         return false;
+    }
+
+    /** True when chunk (chunkX, chunkZ) is where vanilla's own spread (24 / 8, the same salt) may start a city. */
+    public static boolean vanillaCityChunk(long seed, int chunkX, int chunkZ) {
+        int rx = Math.floorDiv(chunkX, 24), rz = Math.floorDiv(chunkZ, 24);
+        Random r = new Random(rx * 341873128712L + rz * 132897987541L + seed + CITY_SALT);
+        return chunkX == rx * 24 + r.nextInt(16) && chunkZ == rz * 24 + r.nextInt(16);
     }
 
     // ================================================================================================ chamber shape
@@ -1866,6 +1891,14 @@ public final class Network {
 
     /** Half the opening in a stage's rim over its vines. */
     public static final double RIM_GAP = Math.toRadians(40);
+
+    /**
+     * How far over the floor at a stage's top its vines may hang from (ClimbVinesFeature, and the voxel harness). 16 until
+     * 0.14.3, when the cities' new sites moved a Blue Reaches portal's way onto a climb whose top opens into a deep dark
+     * cavern, with its roof 27 over the floor: the stage got no vines and the portal no way up. A vine reaches its stage's
+     * top from the first rock over it as before; this only lets it hang from a higher roof where there was none in reach.
+     */
+    public static final int VINE_HOLD = 48;
 
     // ---- shelf vines (section 10): ShelfVinesFeature and the voxel harness follow these rules
     /**

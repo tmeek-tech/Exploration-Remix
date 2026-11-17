@@ -1,6 +1,7 @@
 package com.explorationremix.world.feature;
 
 import com.explorationremix.block.BoneScrapsBlock;
+import com.explorationremix.creature.MossbackDen;
 import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.Plans;
@@ -20,7 +21,8 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
 
 /**
  * The Mossback lairs at the den gates, the ways down from the Upper Caves to the Blue Reaches: on each gate's upper
- * landing a den ({@code creature.MossbackDen}) on the floor ring round the passage's mouth, bones and scraps strewn over
+ * landing a den ({@link MossbackDen}) on the floor ring round the passage's mouth, with its family of Mossbacks set
+ * down on and round it (0.17.0, {@link MossbackDen#settleFamily}), bones and scraps strewn over
  * the floors within 30 blocks of it (the landing, the ramp up and any of the pack's caves in reach), and a few bone
  * blocks set into the landing floor. They are the only signs of a den; nothing marks the way to one further out.
  * <p>
@@ -68,6 +70,8 @@ public final class DenLairFeature extends Feature<NoneFeatureConfiguration> {
                         int[] den = lair.den((x, y, z) -> fits(level, x, y, z), (x, y, z) -> fitsAlone(level, x, y, z));
                         if (den != null) {
                             level.setBlock(pos.set(den[0], den[1], den[2]), ERBlocks.MOSSBACK_DEN.get().defaultBlockState(), 2);
+                            // its family with it, so they are home before anyone comes (0.17.0)
+                            MossbackDen.settleFamily(level, pos.immutable(), ctx.random());
                             any = true;
                         }
                     }

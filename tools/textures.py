@@ -105,7 +105,6 @@ PAINTERS.update(particles.PAINTERS)
 GLOW = {
     "block/white_glow_flower": {"#F6F0DE", "#F4CF6A"},
     "block/lantern_fungus": {"#FFE29A", "#FFF3CC", "#FFDD86", "#F1B84F"},
-    "block/lantern_roots": {"#F1B84F", "#FFE08A"},
     "block/lantern_pod": {"#F4A93A", "#FFD26E", "#FFF0C0"},
     "block/gold_flower": {"#FFF4C8", "#EBCB72"},
     "block/asurine_crystal": {"#A8D0FF", "#4486EE"},

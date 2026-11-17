@@ -3,7 +3,7 @@
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 10
+      "count": 24
     },
     {
       "type": "minecraft:in_square"
@@ -14,6 +14,31 @@
       "inset": 2,
       "above_water": false,
       "focus": "pieces"
+    },
+    {
+      "type": "minecraft:environment_scan",
+      "direction_of_search": "down",
+      "target_condition": {
+        "type": "minecraft:has_sturdy_face",
+        "direction": "up"
+      },
+      "allowed_search_condition": {
+        "type": "minecraft:matching_blocks",
+        "blocks": [
+          "minecraft:air",
+          "minecraft:cave_air"
+        ]
+      },
+      "max_steps": 32
+    },
+    {
+      "type": "minecraft:random_offset",
+      "xz_spread": 0,
+      "y_spread": 1
+    },
+    {
+      "type": "explorationremix:rift_band",
+      "band": "silver"
     },
     {
       "type": "minecraft:biome"

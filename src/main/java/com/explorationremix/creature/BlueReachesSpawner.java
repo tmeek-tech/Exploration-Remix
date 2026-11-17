@@ -24,17 +24,22 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import javax.annotation.Nullable;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 
 /**
- * Brings the Blue Reaches' creatures out near the players there: Skeins on the rock (floor, wall or ceiling) and swarms
- * of blue fireflies in the open air of the caves, by the counts and distances of {@link BlueSpawnRules}. Its own
+ * Brings the Blue Reaches' creatures out near the players there: swarms of blue fireflies in the open air of the
+ * caves, and now and then a Skein on the rock (floor, wall or ceiling) where the caves have none left (the Skeins are
+ * set down with the world, {@link SkeinHomes}), by the counts and distances of {@link BlueSpawnRules}. Its own
  * spawner run from the server tick, not the biomes' spawn lists, so the counts stay as they are meant and the pack's
  * other spawns are untouched.
  *
  * <p>Every {@link #EVERY} ticks it looks round each player in the Blue Reaches (one player a tick at most, staggered)
  * and tries a few spots for each kind still wanted there: a ring {@link BlueSpawnRules#NEAR} blocks and more away, a
- * spot out of every player's sight first, one in sight only when none is hidden. A Skein is set down lying still, its
- * body laid out behind it the way there is most room; a swarm comes out through {@link FireflySwarm#spawn}.
+ * spot out of every player's sight first, one in sight only when none is hidden (a Skein only ever out of sight). A
+ * Skein is set down lying still, its body laid out behind it the way there is most room, and stays as those set down
+ * with the world do; a swarm comes out through {@link FireflySwarm#spawn}.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID)
 public final class BlueReachesSpawner {
@@ -86,8 +91,15 @@ public final class BlueReachesSpawner {
         // the server's spawn-monsters and spawn-animals, as vanilla's spawns keep them: a Skein is a monster, and a
         // swarm is ambient life, which vanilla brings out only with the animals
         MinecraftServer server = level.getServer();
-        int skeins = countNear(level, SkeinEntity.class, p.position(), BlueSpawnRules.SKEIN_RADIUS);
-        if (BlueSpawnRules.wantSkein(skeins, peaceful, mobSpawning && server.isSpawningMonsters(), level.random.nextDouble())) spawnSkein(level, p, top, bottom);
+        int skeins = countNear(level, SkeinEntity.class, p.position(), BlueSpawnRules.REFILL_RADIUS);
+        UUID id = p.getUUID();
+        if (skeins == 0) REFILL_LOOKS++;
+        if (BlueSpawnRules.wantSkein(skeins, peaceful, mobSpawning && server.isSpawningMonsters(), SKEIN_DUE.contains(id), level.random.nextDouble())) {
+            if (!SKEIN_DUE.contains(id)) REFILL_ROLLS++;
+            // due until a spot out of every player's sight turns up (at this look or a later one)
+            if (spawnSkein(level, p, top, bottom)) { SKEIN_DUE.remove(id); REFILL_IN++; }
+            else SKEIN_DUE.add(id);
+        } else if (skeins > 0) SKEIN_DUE.remove(id);
         int swarms = countNear(level, FireflySwarm.class, p.position(), BlueSpawnRules.SWARM_RADIUS);
         if (BlueSpawnRules.wantSwarm(place, swarms, mobSpawning && server.isSpawningAnimals(), level.random.nextDouble())) spawnSwarm(level, p, top, bottom);
     }
@@ -101,15 +113,28 @@ public final class BlueReachesSpawner {
 
     // ------------------------------------------------------------------------------------------------ a Skein
 
-    private static void spawnSkein(ServerLevel level, ServerPlayer p, int top, int bottom) {
-        SkeinEntity.Placement seen = null;
+    /**
+     * The players a Skein is due to move in for: the refill's roll came up, but no spot out of every player's sight
+     * was found yet. Kept until one is found, or a Skein is near the player again.
+     */
+    private static final Set<UUID> SKEIN_DUE = new HashSet<>();
+
+    /**
+     * For /remix skein homes, since the game started: looks round a player with no Skein within the refill radius, the
+     * refill's rolls that came up, and the Skeins that moved in.
+     */
+    public static long REFILL_LOOKS, REFILL_ROLLS, REFILL_IN;
+
+    /** For /remix skein refill: a Skein is due for {@code p} now (it comes at the next look that finds a spot). */
+    public static void skeinDue(ServerPlayer p) { SKEIN_DUE.add(p.getUUID()); }
+
+    /** A Skein moves in out of every player's sight, or not this time (false). */
+    private static boolean spawnSkein(ServerLevel level, ServerPlayer p, int top, int bottom) {
         for (int i = 0; i < SKEIN_TRIES; i++) {
             SkeinEntity.Placement spot = skeinSpot(level, p, top, bottom);
-            if (spot == null) continue;
-            if (!seenByAnyone(level, spot.pos().add(0, 0.35, 0))) { setDown(level, spot); return; }
-            if (seen == null) seen = spot;
+            if (spot != null && !seenByAnyone(level, spot.pos().add(0, 0.35, 0))) { setDown(level, spot); return true; }
         }
-        if (seen != null) setDown(level, seen);
+        return false;
     }
 
     /** A spot on the ring round {@code p} where a Skein may come out, or null. */
@@ -138,6 +163,8 @@ public final class BlueReachesSpawner {
         if (s == null) return;
         s.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(spot.pos())), MobSpawnType.NATURAL, null, null);
         s.placeOn(spot.pos(), spot.rock(), SkeinEntity.openHeading(level, EREntities.SKEIN.get(), spot, level.random::nextDouble));
+        // it has moved in: it stays, as the Skeins set down with the world do
+        s.setPersistenceRequired();
         level.addFreshEntity(s);
     }
 

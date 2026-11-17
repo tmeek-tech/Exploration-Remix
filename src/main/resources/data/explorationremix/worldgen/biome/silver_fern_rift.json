@@ -106,15 +106,20 @@
     [],
     [
       "explorationremix:rootvaults/glow_lichen",
-      "explorationremix:silver_fern_rift/wall_ferns"
+      "explorationremix:silver_fern_rift/wall_ferns",
+      "explorationremix:silver_fern_rift/ivy",
+      "explorationremix:silver_fern_rift/blue_lichen",
+      "explorationremix:silver_fern_rift/asurine_buds"
     ],
     [
       "explorationremix:silver_fern_rift/waterfalls"
     ],
     [
       "explorationremix:silver_fern_rift/cave_vines",
+      "explorationremix:silver_fern_rift/green_plants",
       "explorationremix:silver_fern_rift/silver_ferns",
-      "explorationremix:silver_fern_rift/amber_bulb_vines",
+      "explorationremix:silver_fern_rift/glowbells",
+      "explorationremix:silver_fern_rift/mushrooms",
       "explorationremix:silver_fern_rift/fronds",
       "explorationremix:silver_fern_rift/tall_ferns"
     ],

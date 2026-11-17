@@ -22,7 +22,7 @@
         "provider": {
           "type": "minecraft:simple_state_provider",
           "state": {
-            "Name": "explorationremix:lantern_roots"
+            "Name": "explorationremix:lantern_roots_plant"
           }
         }
       },

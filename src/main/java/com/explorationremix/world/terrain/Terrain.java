@@ -818,8 +818,8 @@ public final class Terrain {
     }
 
     /**
-     * True when a structure starting at (x, y, z) is a planned ancient city: a CITY chamber's centre within 24 blocks
-     * of (x, z), y within 30 of its floor (section 11.1).
+     * True when a structure starting at (x, y, z) from chunk (chunkX, chunkZ) is a planned ancient city: a CITY
+     * chamber's centre in that chunk and within 24 blocks of (x, z), y within 30 of its floor (section 11.1).
      */
-    public boolean citySite(int x, int y, int z) { return network.citySite(x, y, z); }
+    public boolean citySite(int chunkX, int chunkZ, int x, int y, int z) { return network.citySite(chunkX, chunkZ, x, y, z); }
 }

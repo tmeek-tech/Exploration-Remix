@@ -61,14 +61,20 @@ class NoiseLayersTest {
      * merge landed on the reshape's fixes (0.8.0): a49a88c gives 94a4dea's line, and 1dd7375 and their merge give this
      * one. Over six seeds the merge plans layer 0 in cells (-2..1)^2 as 1dd7375 does (96 plans, every one of them
      * different on a49a88c) and builds its rows as 1dd7375 does in 852 chunks (669 of them different on a49a88c).
+     * Pinned again for the ancient cities (0.14.3, Taran, 2026-11-17: "make ancient cities generate in the deep dark"):
+     * the cities' structure set starts every 6 chunks where vanilla's starts every 24, a site lies 172 inside its cell and
+     * 152 from both landings, the rift takes the outer strand on the far side from the city and tries further out to miss
+     * it, and a city it still cuts moves to another site. Eleven of the twelve plans change (seed 2's cell 0,0 keeps its
+     * own); of the five chunks the third and fourth of seed 1 and the third of seed 8004 change. The Deep Gardens and the
+     * bands answer as before ({@link #UNCHANGED}).
      */
     static final String[] BLUE = {
-            "seed 1 plans: 623d934e4b5682fe da21b3f20dc3b453 b385c8b8f4d28295 b557d6ba42fe47bf"
-                    + " blocks: d7a8389b4d6c059e 6c97765a11a75ff3 e9bc5e6b3c60cbc2 2d39b7613d416fc2 eecfad9773024289",
-            "seed 2 plans: b08518cb2b38f204 265b0d0339c96250 8ca4de95cb42487b e6abde3fd779de77"
+            "seed 1 plans: 4f1616c455b3bddd fdc5a2a29a72e73c a50705f116826a0a 9bbfff1e07a231dc"
+                    + " blocks: d7a8389b4d6c059e 6c97765a11a75ff3 f01b378b509e1196 ecc4c0bb6be38d3f eecfad9773024289",
+            "seed 2 plans: 2571cae239f9b0a8 b4b00fae3a3a233a 84c1880fb287446f e6abde3fd779de77"
                     + " blocks: 871413a11c96a0b2 86c1690fea0001f1 55f8f1bba395da45 37afd4d970cda9fe a6930c0bdb192b36",
-            "seed 8004 plans: 6711279c6dfd8e75 36524a85c08d7cfa 9798f8eb4514d27a d7d5eb365d1345b4"
-                    + " blocks: ccfcc9e7ae39fcb5 96f095f23ac431a7 4e803ea46608272d 5af8fcf25ca80c07 8533a8c9f6e3d85b"};
+            "seed 8004 plans: 6a411bf8beb6e601 846d5418fe02a5d9 698302474e48987d 15075467ebe1c09c"
+                    + " blocks: ccfcc9e7ae39fcb5 96f095f23ac431a7 c1f625eeb8829011 5af8fcf25ca80c07 8533a8c9f6e3d85b"};
     static final long[] UNCHANGED_SEEDS = {1, 2, 8004};
 
     /** As {@link #UNCHANGED} and {@link #BLUE} say, and building them (band 3 too) plans no other layer. */

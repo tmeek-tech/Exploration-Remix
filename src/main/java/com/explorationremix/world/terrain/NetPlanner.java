@@ -393,18 +393,66 @@ final class NetPlanner {
         Chamber city;
 
         /**
-         * Blue Reaches: the ancient city's cavern, at vanilla's own start position, at the cell's first eligible site
-         * (section 11.1: 150 inside the cell, 140 from both landings; cells under 400 have none), right after the
-         * landings, portals and storeys. Its reserve (radius 128, W + 8 to W + 80) then keeps every later chamber,
-         * tunnel and climb out but its own door tunnels ({@link #reserveHit}).
+         * Blue Reaches: the ancient city's cavern, at a start position of the cities' structure set, at the cell's
+         * first eligible site that fits (section 11.1: 172 inside the cell, 152 from both landings; cells under 400 have
+         * none), right after the landings, portals and storeys. Its reserve (radius 128, W + 8 to W + 80) then keeps
+         * every later chamber, tunnel and climb out but its own door tunnels ({@link #reserveHit}). The rift takes the
+         * outer strand on the far side from it and tries harder to miss it; where it cannot, the city moves to another
+         * site ({@link #resiteCity}).
          */
         void city() {
             for (double[] cs : w.eligibleCities(cx, cz)) {
-                Chamber c = chamber(Kind.CITY, 790);
-                c.x = cs[0]; c.z = cs[1]; c.rx = 62; c.rz = 56; c.setRot(r(791, 0, 3.14)); c.warp = 0.12;
-                c.f0 = W + 20; c.h = 46; c.rise = 3; c.hunting = true; c.set = true;
+                Chamber c = cityHall(cs);
                 if (fits(c)) { add(c); city = c; return; }
             }
+        }
+
+        /**
+         * The city's hall made again at another eligible site when the rift has to cut through its reserve (the rift
+         * keeps the hall it dropped out of {@link #city}): the first site, in {@link Network#eligibleCities}' order, that
+         * fits, that the rift keeps clear of, and whose reserve nothing planned so far enters (rooms, tunnels, climbs).
+         */
+        void resiteCity(Route rt) {
+            Chamber dropped = city;
+            for (double[] cs : w.eligibleCities(cx, cz)) {
+                if (Math.abs(cs[0] - dropped.x) < 1e-9 && Math.abs(cs[1] - dropped.z) < 1e-9) continue;
+                Chamber c = cityHall(cs);
+                if (canyonHits(rt, c) || !fits(c) || !reserveEmpty(c)) continue;
+                add(c);
+                city = c;
+                return;
+            }
+        }
+
+        /** The city's hall at a site: vanilla's start position, the hall over the water table, its reserve round it. */
+        Chamber cityHall(double[] cs) {
+            Chamber c = chamber(Kind.CITY, 790);
+            c.x = cs[0]; c.z = cs[1]; c.rx = 62; c.rz = 56; c.setRot(r(791, 0, 3.14)); c.warp = 0.12;
+            c.f0 = W + 20; c.h = 46; c.rise = 3; c.hunting = true; c.set = true;
+            return c;
+        }
+
+        /**
+         * True when no room (but the deep dark's and the rift's), tunnel or climb planned so far enters the reserve a
+         * city hall would keep round it: within {@link Network#CITY_RESERVE} of its centre, between W + 8 and W + 80.
+         */
+        boolean reserveEmpty(Chamber city) {
+            double lo = W + Network.CITY_RESERVE_LO, hi = W + Network.CITY_RESERVE_HI, R = Network.CITY_RESERVE;
+            for (Chamber c : n.ch) {
+                if (!c.keep || c == city || c.dark >= 0 || c.kind == Kind.CANYON) continue;
+                if (c.yHi() < lo || c.yLo() > hi) continue;
+                if (Math.hypot(c.x - city.x, c.z - city.z) < R + c.R()) return false;
+            }
+            for (Way wy : n.ways)
+                for (int i = 0; i < wy.n; i++) {
+                    if (wy.f[i] + wy.hgt[i] < lo || wy.f[i] - wy.slab[i] > hi) continue;
+                    if (Math.hypot(wy.x[i] - city.x, wy.z[i] - city.z) < R + wy.w[i]) return false;
+                }
+            for (Shaft sh : n.shafts) {
+                if (sh.y1 < lo || sh.y0 > hi) continue;
+                if (Math.hypot(sh.x - city.x, sh.z - city.z) < R + sh.r + 2) return false;
+            }
+            return true;
         }
 
         /**
@@ -445,6 +493,8 @@ final class NetPlanner {
          * the rift in a few more cells but left drops of up to 44 beside the ways round those landings.
          */
         static final int RIFT_ROUNDS = 4;
+        /** What cutting through the city's reserve costs a try of the rift: more than another room (3), less than a den. */
+        static final int CITY_HIT = 5;
 
         void courtsFor(int L, int other, boolean entry, List<Integer> out) { courtsFor(L, other, entry, out, 990 + L, 1000 + L * 50L); }
 
@@ -583,7 +633,10 @@ final class NetPlanner {
             Strand ws = strands.get(S == 3 ? 1 : (u(86) < 0.5 ? 0 : 1));
             ws.walkOnly = true;
             if (li == Terrain.BLUE) {
-                Strand rs = strands.get(u(87) < 0.5 ? 0 : S - 1);
+                // the rift takes an outer strand: the one on the far side from the city's hall when there is one, so it
+                // keeps clear of the city's reserve more often (it drops the city where it cannot)
+                boolean low = city != null && city.keep ? lat(city) > 0 : u(87) < 0.5;
+                Strand rs = strands.get(low ? 0 : S - 1);
                 rs.canyon = true;
                 rs.walkOnly = true;
                 if (ws != rs) ws.walkOnly = false;
@@ -987,12 +1040,13 @@ final class NetPlanner {
             double sFloor = Math.max(walkF(a) - r(606, 8, 16), n.ch.get(n.entry).f0), eFloor = W + 3;
             Route best = null;
             int bestHits = Integer.MAX_VALUE;
+            boolean bestCity = false;
             double side = st.off >= 0 ? 1 : -1;
             for (int attempt = 0; attempt < 6 * RIFT_ROUNDS; attempt++) {
                 // six tries pushed one way, as 0.2.0 made them; then, only while every try so far cuts through a den
                 // gate's landing, six pushed the other way, and six more each way further out
                 int round = attempt / 6, k = attempt % 6;
-                if (round > 0 && k == 0 && bestHits < DEN_HIT) break;
+                if (round > 0 && k == 0 && bestHits < DEN_HIT && !bestCity) break;
                 double push = 25 * k + 25 * (round % 2) + 150 * (round / 2);
                 double sgn = round % 2 == 0 ? side : -side;
                 double[] hp = slotPoint(st, t0 + 0.02 * k), fp = slotPoint(st, t1 - 0.02 * k);
@@ -1002,15 +1056,22 @@ final class NetPlanner {
                 fp = clampP(fp, 100);
                 Route rt = w.canyon(li, cx, cz, Hashing.mix(h, 610 + attempt, 0, 0), hp[0], hp[1], fp[0], fp[1], sFloor, eFloor);
                 int hits = 0;
+                boolean cityHit = false;
                 for (Chamber c : n.ch)
-                    if (c.keep && c.kind != Kind.CANYON && canyonHits(rt, c))
-                        hits += c.kind == Kind.CITY ? 1 : (c.kind == Kind.ENTRY && c.id != n.entry ? DEN_HIT : 3);
-                if (hits < bestHits) { bestHits = hits; best = rt; }
+                    if (c.keep && c.kind != Kind.CANYON && canyonHits(rt, c)) {
+                        hits += c.kind == Kind.CITY ? CITY_HIT : (c.kind == Kind.ENTRY && c.id != n.entry ? DEN_HIT : 3);
+                        cityHit |= c.kind == Kind.CITY;
+                    }
+                if (hits < bestHits) { bestHits = hits; best = rt; bestCity = cityHit; }
                 if (hits == 0) break;
             }
             if (bestHits >= DEN_HIT) { n.riftsDropped++; return false; }
             Route rt = best;
-            if (bestHits > 0) for (Chamber c : n.ch) if (c.keep && c.kind == Kind.CITY && canyonHits(rt, c)) { c.keep = false; n.droppedChambers++; }
+            if (bestHits > 0 && city != null && city.keep && canyonHits(rt, city)) {
+                city.keep = false;
+                n.droppedChambers++;
+                resiteCity(rt);
+            }
             n.canyons.add(rt);
             // the geodes' tunnels become ways of the plan, so their floor and headroom are kept like every other way's
             for (Route.Link l : rt.links) {
@@ -1562,7 +1623,7 @@ final class NetPlanner {
         boolean canyonHits(Route r, Chamber c) {
             boolean isCity = c.kind == Kind.CITY;
             double reach = isCity ? Network.CITY_RESERVE : c.R() + 16;
-            for (double s = 0; s < r.length; s += 6) {
+            for (double s = 0; s < r.length; s += isCity ? 2 : 6) {
                 double[] p = r.pointAt(s);
                 if (Math.hypot(p[0] - c.x, p[1] - c.z) < r.at(r.riftHalf, s) + reach) return true;
             }

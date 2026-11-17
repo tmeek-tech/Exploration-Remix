@@ -82,7 +82,18 @@ class PaletteLooksTest {
         // (by biome, interior, public path), per band and for the upper caves, every part of the merge's answers is
         // 1dd7375's; they differ from a49a88c's only in layer 0's by-biome and public parts, and every other part, band
         // 3's (the band over the noise layers) among them, is the same on all three. None of the four reaches the
-        // Wasteland or the Galleries
+        // Wasteland or the Galleries. Pinned again for 0.14.3 (Taran, 2026-11-17): the ancient cities' new sites move the
+        // rift (it takes the strand on the far side from the city) and the Asurine Geodes with it, which changes the rock
+        // by biome at 1,336 of layer 0's 400,000 samples, all in the geodes, and through the public path at 985 of layer
+        // 0's 60,000; the interior, layer 1 and the bands answer as before. The upper caves change only in the Silver Fern
+        // Rift, whose ledges are deep moss two blocks deep: 64,172 of the 400,000 samples, every one of them now deep moss
+        // (32,308 were moss on the top block, 31,864 deepslate or asurine on the second). Pinned again for 0.14.5
+        // (Taran, 2026-11-17): the Silver Fern Rift is redone in depth bands (moss up top, deep moss through the silver
+        // middle, more asurine towards the floor), which changes 161,260 of its 400,000 samples (78,639 are now moss,
+        // 58,511 deepslate, 21,634 asurine, 2,476 cobbled deepslate); every other part of the upper caves, both layers
+        // and the bands answer as before. Pinned again for 0.14.6 (Taran, 2026-11-17: "Deep moss can just be moss"):
+        // the silver band's ledges are vanilla's moss, which changes the 5,913 samples that were deep moss and no other
+        // (put deep moss back at them and the hash is 0.14.5's)
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
@@ -129,11 +140,11 @@ class PaletteLooksTest {
             hUpper = hUpper * 31 + nz(p.oasis(x, y, z, above, below, wet, shell, r.nextBoolean()));
             hUpper = hUpper * 31 + nz(p.frostGrotto(x, y, z, above, below, wet));
         }
-        assertEquals("d4480c4b98b9e541", String.format("%016x", hBiome), "layers 0 and 1, by biome");
+        assertEquals("c729276029ca9b1d", String.format("%016x", hBiome), "layers 0 and 1, by biome");
         assertEquals("2604e01a1b4b2ee3", String.format("%016x", hInterior), "layers 0 and 1, interior");
-        assertEquals("625c6dfe796ad0fa", String.format("%016x", hPublicOld), "layers 0 and 1 through the public path, and the bands (den rifts off)");
-        assertEquals("1864a7d54800ec7a", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
-        assertEquals("99305fd532fd9d69", String.format("%016x", hUpper), "the upper caves");
+        assertEquals("630faa4b55423838", String.format("%016x", hPublicOld), "layers 0 and 1 through the public path, and the bands (den rifts off)");
+        assertEquals("1917e42223d853b8", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
+        assertEquals("b287cdd84507762d", String.format("%016x", hUpper), "the upper caves");
     }
 
     private static int nz(Rock q) { return q == null ? 0 : q.name().hashCode(); }

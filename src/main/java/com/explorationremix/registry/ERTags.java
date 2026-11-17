@@ -29,4 +29,10 @@ public final class ERTags {
      * tag). 0.9.0: a lava bomb's blast never breaks one, or it would come back as rock for good.
      */
     public static final TagKey<Block> RESET_AS_ROCK = TagKey.create(Registries.BLOCK, new ResourceLocation(ExplorationRemix.MOD_ID, "reset_as_rock"));
+
+    /**
+     * 0.14.3: blocks only a structure places (an ancient city's bricks, wool, wood, glass and redstone), never the caves'
+     * rock. No shelf vine hangs from, beside or onto one, so the deep dark's vines keep off the cities.
+     */
+    public static final TagKey<Block> BUILT = TagKey.create(Registries.BLOCK, new ResourceLocation(ExplorationRemix.MOD_ID, "built"));
 }

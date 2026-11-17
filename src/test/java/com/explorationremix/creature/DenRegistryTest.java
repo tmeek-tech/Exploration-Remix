@@ -27,6 +27,23 @@ class DenRegistryTest {
     }
 
     @Test
+    void theFamilySetDownWithTheDenIsTakenInAsBroughtOut() {
+        DenRegistry.Den d = new DenRegistry().open(DEN);
+        UUID guard = UUID.randomUUID(), r1 = UUID.randomUUID(), r2 = UUID.randomUUID();
+        assertTrue(d.adopt(java.util.List.of(guard, r1, r2), DEN));
+        assertEquals(DenRegistry.Role.GUARD, d.member(guard).role, "the first set down is the guard");
+        assertEquals(DenRegistry.Role.ROAMER, d.member(r1).role);
+        assertEquals(DenRegistry.Role.ROAMER, d.member(r2).role);
+        assertEquals(3, d.spawned, "all of them out already: the den brings out no more");
+        // only a den with no family takes one in this way
+        assertFalse(d.adopt(java.util.List.of(UUID.randomUUID()), DEN));
+        assertEquals(3, d.members.size());
+        DenRegistry.Den empty = new DenRegistry().open(FAR);
+        assertFalse(empty.adopt(java.util.List.of(), FAR), "none set down: the den brings its family out itself");
+        assertEquals(0, empty.spawned);
+    }
+
+    @Test
     void aDeadGuardCallsTheRoamersHomeAndTheFirstBackTakesOver() {
         DenRegistry.Den d = new DenRegistry().open(DEN);
         UUID guard = UUID.randomUUID(), r1 = UUID.randomUUID(), r2 = UUID.randomUUID();

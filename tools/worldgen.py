@@ -144,8 +144,8 @@ ROOTVAULTS_VANILLA = [
     ["minecraft:freeze_top_layer"],
 ]
 
-# The cold caves leave out vanilla's green glow lichen (0.4.0 looked too lush); rime lichen lights the frozen Root Vaults
-# instead. The grotto leaves out vanilla's dirt too (Taran, 0.14.0).
+# The cold caves leave out vanilla's green glow lichen (0.4.0 looked too lush); the frozen Root Vaults are lit by their
+# frostberries (rime lichen went in 0.14.3, Taran's ask). The grotto leaves out vanilla's dirt too (Taran, 0.14.0).
 VANILLA_LEFT_OUT = {"frozen_rootvaults": {"minecraft:glow_lichen"}, "frost_fern_grotto": {"minecraft:glow_lichen", "minecraft:ore_dirt"}}
 
 STEPS = ["raw_generation", "lakes", "local_modifications", "underground_structures", "surface_structures", "strongholds",
@@ -185,6 +185,11 @@ PALE_CEILING = {"type": "minecraft:block_predicate_filter", "predicate": {"type"
 def count(n): return {"type": "minecraft:count", "count": n}
 def rarity(n): return {"type": "minecraft:rarity_filter", "chance": n}
 def layer(name, inset=2, above_water=False): return {"type": f"{MOD}:layer_range", "layer": name, "inset": inset, "above_water": above_water}
+def band(b):
+    """Keeps a Fern Rift feature to one of the rift's bands by depth (0.14.5, RiftBandPlacement): "green" up top,
+    "silver" through the middle, "blue" by the floor, as often as its spot lies in the band. After the floor or ceiling
+    scan, so the band is the plant's."""
+    return {"type": f"{MOD}:rift_band", "band": b}
 def looks(*l, cold=None, min_chill=None, max_chill=None):
     """Keeps a feature to some entrance looks; cold to entrances under snowy ground or not; min_chill and max_chill to
     spots of a frozen Root Vault cluster at least or at most that far past the snowy zone round its openings
@@ -517,10 +522,30 @@ def build_features():
     feature("rootvaults/ivy", "underground_decoration", rv,
             attach(simple("immersive_weathering:ivy"), "walls_ceiling", 48, f"#{MOD}:cave_rock", radius=6, height=6),
             [count(24), SQUARE, layer(up), looks(1, 2), BIOME])
-    # Hanging ferns down the walls, where their fronds fall free (the picture's fronds draping the ledges).
+    # The rift redone by depth (0.14.5; Taran, 17 Nov: "Plants changing with depth is pretty"): green up top, the
+    # silver ferns through the middle (0.14.6: "Bring back the fluffier silver ferns"), light blue by the floor, each
+    # band's growth kept to it (band) and thinning into the next.
+    # Hanging ferns down the ledges' lips, where their fronds fall free (the picture's fronds draping the ledges): only
+    # from the sides of the moss two blocks deep over the ledges (Palette.upperShell; Taran, 0.14.3), each try round a
+    # spot on a floor. Three sizes (0.14.6), each as big as its room allows (HangingFernBlock.fit), so the small ones
+    # fill in where the bigger would crowd.
     feature("silver_fern_rift/wall_ferns", "underground_decoration", ["silver_fern_rift"],
-            attach(simple(f"{MOD}:silver_wall_fern"), "walls_hanging", 32, f"#{MOD}:cave_rock", radius=6, height=6),
-            [count(10), SQUARE, layer(up), BIOME])
+            attach(mix((simple(f"{MOD}:silver_wall_fern", size=0), 3), (simple(f"{MOD}:silver_wall_fern", size=1), 4),
+                       (simple(f"{MOD}:silver_wall_fern", size=2), 3)),
+                   "walls_hanging", 96, "minecraft:moss_block", radius=6, height=4),
+            [count(24), SQUARE, layer(up)] + floor() + [band("silver"), BIOME])
+    # Up top Immersive Weathering's ivy over the walls and vaults, as in the Root Vaults, round the moss of the vaults.
+    feature("silver_fern_rift/ivy", "underground_decoration", ["silver_fern_rift"],
+            attach(simple("immersive_weathering:ivy"), "walls_ceiling", 48, f"#{MOD}:cave_rock", radius=6, height=6),
+            [count(12), SQUARE, layer(up), band("green"), BIOME])
+    # Low down, specks of blue lichen and buds of asurine on its asurine, light blue from below, as in the Deep Blue
+    # Rift. Only on the asurine and never in solid patches: over the moss of the blend they read as lapis.
+    feature("silver_fern_rift/blue_lichen", "underground_decoration", ["silver_fern_rift"],
+            attach(simple(f"{MOD}:blue_lichen"), "walls", 40, f"#{MOD}:asurine_lining", radius=5, height=4),
+            [count(12), SQUARE, layer(up), band("blue"), BIOME])
+    feature("silver_fern_rift/asurine_buds", "underground_decoration", ["silver_fern_rift"],
+            attach(simple(f"{MOD}:asurine_bud"), "walls", 24, f"#{MOD}:asurine_lining", radius=6, height=4),
+            [count(8), SQUARE, layer(up), band("blue"), BIOME])
     feature("ivory_root_cavern/brackets", "underground_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:ivory_bracket"), "walls", 64, f"#{MOD}:cave_rock", radius=7, height=8),
             [count(3), SQUARE, layer(up), BIOME])
@@ -584,12 +609,12 @@ def build_features():
             attach(simple("minecraft:hanging_roots"), "ceiling", 32, ["minecraft:rooted_dirt", "minecraft:dirt", "minecraft:moss_block"], radius=6, height=4),
             [count(14), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
     feature("rootvaults/lantern_roots", "vegetal_decoration", rv,
-            hanging_column("explorationremix:lantern_roots", "explorationremix:lantern_roots", 0, 4),
+            hanging_column("explorationremix:lantern_roots_plant", "explorationremix:lantern_roots", 0, 4),
             [count(20), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
     feature("rootvaults/cave_vines", "vegetal_decoration", rv, berry_vines(1, 7, 0.25),
             [count(40), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("silver_fern_rift/cave_vines", "vegetal_decoration", ["silver_fern_rift"], berry_vines(1, 8, 0.5),
-            [count(16), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(24), SQUARE, layer(up)] + ceiling() + [band("green"), BIOME])
     feature("rootvaults/ferns", "vegetal_decoration", rv,
             patch({"type": "minecraft:weighted_state_provider", "entries": [
                 {"data": state("minecraft:fern"), "weight": 3}, {"data": state("minecraft:grass"), "weight": 2},
@@ -602,13 +627,29 @@ def build_features():
     feature("rootvaults/white_glow_flowers_sparse", "vegetal_decoration", rv,
             patch(simple("explorationremix:white_glow_flower"), state("explorationremix:white_glow_flower"), tries=12, xz=4, on=PLANT_FLOORS),
             [count(10), SQUARE, layer(up)] + floor() + [looks(0, 2), BIOME])
+    # The bands' floors: vanilla's ferns and grass on the moss up top, the silver ferns through the middle, and by the
+    # floor a few small groups of the Blue Reaches' glowbells and mushrooms foreshadowing them (0.14.6, Taran: "more
+    # rare and in small groups").
+    feature("silver_fern_rift/green_plants", "vegetal_decoration", ["silver_fern_rift"],
+            patch({"type": "minecraft:weighted_state_provider", "entries": [
+                {"data": state("minecraft:fern"), "weight": 3}, {"data": state("minecraft:grass"), "weight": 3},
+                {"data": state("minecraft:moss_carpet"), "weight": 2}, {"data": state("minecraft:large_fern"), "weight": 1}]},
+                state("minecraft:fern"), tries=32, xz=5, y=3, on=PLANT_FLOORS),
+            [count(40), SQUARE, layer(up)] + floor() + [band("green"), BIOME])
     feature("silver_fern_rift/silver_ferns", "vegetal_decoration", ["silver_fern_rift"],
-            patch(simple("explorationremix:silver_fern"), state("explorationremix:silver_fern"), tries=40, xz=5, y=4),
-            [count(40), SQUARE, layer(up)] + floor() + [BIOME])
+            patch(simple(f"{MOD}:silver_fern"), state(f"{MOD}:silver_fern"), tries=40, xz=5, y=4),
+            [count(40), SQUARE, layer(up)] + floor() + [band("silver"), BIOME])
+    feature("silver_fern_rift/glowbells", "vegetal_decoration", ["silver_fern_rift"],
+            patch(simple(f"{MOD}:glowbell"), state(f"{MOD}:glowbell"), tries=6, xz=2, y=1),
+            [count(4), SQUARE, layer(up)] + floor() + [band("blue"), BIOME])
+    feature("silver_fern_rift/mushrooms", "vegetal_decoration", ["silver_fern_rift"],
+            patch(simple(f"{MOD}:blue_glow_mushroom"), state(f"{MOD}:blue_glow_mushroom"), tries=5, xz=2, y=1),
+            [count(3), SQUARE, layer(up)] + floor() + [band("blue"), BIOME])
     feature("ivory_root_cavern/giant_lantern_fungi", "vegetal_decoration", ["ivory_root_cavern"],
             {"type": f"{MOD}:giant_fungus", "config": {
                 "stem": state("minecraft:mushroom_stem"), "cap": state("minecraft:mushroom_stem", down=False),
-                "glow": state("minecraft:shroomlight"), "roots": state(f"{MOD}:lantern_roots"),
+                "glow": state("minecraft:shroomlight"), "roots": state(f"{MOD}:lantern_roots_plant"),
+                "root_tip": state(f"{MOD}:lantern_roots"),
                 "height": uniform(2, 5), "radius": uniform(2, 3), "root_length": uniform(1, 4)}},
             [count(2), SQUARE, layer(up)] + floor() + [BIOME])
     feature("ivory_root_cavern/lantern_fungi", "vegetal_decoration", ["ivory_root_cavern"],
@@ -671,31 +712,19 @@ def build_features():
 
     # ---- vegetation rework, part A: vines in clusters, floor plants. The new vines hang in patches (hanging_patch), so
     # their light comes in pockets with dim gaps between them.
-    feature("rootvaults/amber_bulb_vines", "vegetal_decoration", rv,
-            hanging_patch(hanging_column(f"{MOD}:amber_bulb_vine_plant", f"{MOD}:amber_bulb_vine", 1, 6), tries=8, xz=4, y=2),
-            [count(5), SQUARE, layer(up)] + ceiling() + [looks(0, 1), BIOME])
     feature("rootvaults/weeping_ivy", "vegetal_decoration", rv,
             hanging_patch(hanging_column(f"{MOD}:weeping_ivy_plant", f"{MOD}:weeping_ivy", 2, 12), tries=10, xz=5, y=3),
             [count(18), SQUARE, layer(up)] + ceiling() + [BIOME])
-    feature("rootvaults/starmoss", "vegetal_decoration", rv,
-            patch(simple(f"{MOD}:starmoss"), state(f"{MOD}:starmoss"), tries=32, xz=5, y=2),
-            [count(10), SQUARE, layer(up)] + floor() + [looks(1), BIOME])
-    feature("rootvaults/starmoss_sparse", "vegetal_decoration", rv,
-            patch(simple(f"{MOD}:starmoss"), state(f"{MOD}:starmoss"), tries=16, xz=4, y=2),
-            [count(4), SQUARE, layer(up)] + floor() + [looks(0), BIOME])
     feature("rootvaults/azaleas", "vegetal_decoration", rv,
             patch(mix((simple("minecraft:azalea"), 3), (simple("minecraft:flowering_azalea"), 1)), state("minecraft:azalea"), tries=12, xz=5, y=2,
                   on=PLANT_FLOORS),
             [count(10), SQUARE, layer(up)] + floor() + [looks(2), BIOME])
-    feature("silver_fern_rift/amber_bulb_vines", "vegetal_decoration", ["silver_fern_rift"],
-            hanging_patch(hanging_column(f"{MOD}:amber_bulb_vine_plant", f"{MOD}:amber_bulb_vine", 1, 6), tries=8, xz=4, y=2),
-            [count(4), SQUARE, layer(up)] + ceiling() + [BIOME])
     feature("silver_fern_rift/fronds", "vegetal_decoration", ["silver_fern_rift"],
             hanging_patch(hanging_column(f"{MOD}:silver_frond_plant", f"{MOD}:silver_frond", 1, 5), tries=8, xz=5, y=3),
-            [count(14), SQUARE, layer(up)] + ceiling() + [BIOME])
+            [count(28), SQUARE, layer(up)] + ceiling() + [band("silver"), BIOME])
     feature("silver_fern_rift/tall_ferns", "vegetal_decoration", ["silver_fern_rift"],
             patch(simple(f"{MOD}:tall_silver_fern"), state(f"{MOD}:tall_silver_fern"), tries=24, xz=6, y=3),
-            [count(16), SQUARE, layer(up)] + floor() + [BIOME])
+            [count(16), SQUARE, layer(up)] + floor() + [band("silver"), BIOME])
     feature("ivory_root_cavern/gold_threads", "vegetal_decoration", ["ivory_root_cavern"],
             hanging_patch(hanging_column(f"{MOD}:gold_threads_plant", f"{MOD}:gold_threads", 2, 7), tries=3, xz=4, y=2),
             [count(1), SQUARE, layer(up)] + ceiling() + [BIOME])
@@ -874,9 +903,6 @@ def build_features():
     feature("frozen_rootvaults/hoarfrost", "underground_decoration", fz,
             attach(simple(f"{MOD}:hoarfrost"), "walls_ceiling", 96, frost_rock, radius=6, height=4, patch=True),
             [count(3), SQUARE, layer(up), snowy(THAW), BIOME])
-    feature("frozen_rootvaults/rime", "underground_decoration", fz,
-            attach(simple(f"{MOD}:rime_lichen"), "walls_ceiling", 24, frost_rock, radius=6, height=6),
-            [count(6), SQUARE, layer(up), BIOME])
     feature("frozen_rootvaults/snow", "underground_decoration", fz, patch(DEEP_SNOW, state("minecraft:snow", layers=1), tries=64, xz=7, y=3),
             [count(28), SQUARE, layer(up)] + floor() + [snowy(THAW * 2 // 3), BIOME])
     feature("frozen_rootvaults/frost_moss", "underground_decoration", fz,
@@ -1106,6 +1132,10 @@ def build_features():
     # blocks of it, once the ways are open. Band 1 is the Deep Blue Rift under every column, so this reaches every
     # chunk, and the feature works out from the plan which chunks hold a lair.
     feature("den_lair", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:den_lair", "config": {}}, [])
+    # The Blue Reaches' Skeins (SkeinsFeature, 0.17.0): set down as each chunk is made, last, so they lie on the rock
+    # the chunk ends up with and are there before anyone comes; every chunk, as for the den lairs, and the feature rolls
+    # which chunks are a Skein's home.
+    feature("skeins", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:skeins", "config": {}}, [])
     # The Galleries' lava glow (HallGlowFeature, after everything else): invisible light along the rock above the flood
     # band, one try in every few-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
     # rock near black. 0.5.1, "brightly lit" but not flat: lit from the lava and the floor up. Level 15 just over the
@@ -1157,9 +1187,6 @@ def build_features():
 DEEP_DARK_FEATURES = [
     ("deep_dark/sculk_vein", "minecraft:sculk_vein", [count(112), SQUARE, layer("blue_reaches"), BIOME]),
     ("deep_dark/sculk_patch", "minecraft:sculk_patch_deep_dark", [count(136), SQUARE, layer("blue_reaches"), BIOME]),
-    # vegetation rework, part A: the deep dark's only plant, a few dark strands whose specks glow without giving light
-    ("deep_dark/dusk_vines", hanging_column(f"{MOD}:dusk_vines_plant", f"{MOD}:dusk_vines", 1, 5),
-     [count(4), SQUARE, layer("blue_reaches")] + ceiling() + [BIOME]),
 ]
 
 # The Upper Caves rework's features added to other biomes by biome modifiers: (name, configured feature, placement,
@@ -1279,6 +1306,20 @@ BLOCK_TAGS = {
                        "minecraft:magma_block", f"{MOD}:ember_crust"]
                       + optional(["create:scoria", "create:scorchia", "terrain_slabs:basalt_slab", "terrain_slabs:smooth_basalt_slab",
                                   "terrain_slabs:terrain_blackstone_slab", "terrain_slabs:terrain_tuff_slab"]),
+    # 0.14.3: blocks only a structure places (the ancient cities' bricks, tiles, wool, wood, glass and redstone), never
+    # the caves' rock (ERTags.BUILT): no shelf vine hangs from, beside or onto one, so the deep dark's vines keep off the
+    # cities. Plain deepslate tiles are not here: they stand in for Create's asurine when Create is missing.
+    "built": ["minecraft:deepslate_bricks", "minecraft:cracked_deepslate_bricks", "minecraft:deepslate_brick_slab",
+              "minecraft:deepslate_brick_stairs", "minecraft:deepslate_brick_wall", "minecraft:cracked_deepslate_tiles",
+              "minecraft:deepslate_tile_slab", "minecraft:deepslate_tile_stairs", "minecraft:deepslate_tile_wall",
+              "minecraft:polished_deepslate", "minecraft:polished_deepslate_slab", "minecraft:polished_deepslate_stairs",
+              "minecraft:polished_deepslate_wall", "minecraft:chiseled_deepslate", "minecraft:reinforced_deepslate",
+              "#minecraft:wool", "#minecraft:wool_carpets", "#minecraft:candles", "minecraft:dark_oak_planks", "minecraft:dark_oak_log",
+              "minecraft:dark_oak_fence", "minecraft:dark_oak_trapdoor", "minecraft:glass", "minecraft:glass_pane", "minecraft:soul_sand",
+              "minecraft:soul_lantern", "minecraft:soul_fire", "minecraft:redstone_lamp", "minecraft:redstone_block",
+              "minecraft:redstone_wire", "minecraft:redstone_wall_torch", "minecraft:repeater", "minecraft:comparator",
+              "minecraft:lever", "minecraft:target", "minecraft:sticky_piston", "minecraft:piston_head", "minecraft:chest",
+              "minecraft:ladder", "minecraft:lectern", "minecraft:skeleton_skull", "minecraft:skeleton_wall_skull"],
     # 0.9.0: ceiling rock a big quake can shake loose (ERTags.QUAKE_DEBRIS), and the only rock a bomb's crater throws out.
     # Not obsidian or crying obsidian (they never fall), magma, slabs, ores or gilded blackstone (#reset_as_rock: an ore
     # that fell would come back as rock and be lost).

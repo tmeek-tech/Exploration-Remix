@@ -1,6 +1,7 @@
 package com.explorationremix.world.feature;
 
 import com.explorationremix.registry.ERBlocks;
+import com.explorationremix.registry.ERTags;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Network;
@@ -18,13 +19,18 @@ import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 
 /**
- * Shelf vines (section 10): the Deep Blue Rift and the deep dark are 0.2.0's caverns, cliffs and steps included, and a
- * drop of two blocks or more is one way without something to climb. So beside a lip (a standing place on rock with
- * open air from over its head down to two blocks under its feet) a vine hangs in the open column, from the rock over it
- * past the lip down to the floor or the water below, when the drop is 2 to 48 and that rock is at most 40 over the lip:
- * blue glow vines in the rift, dusk vines in the deep dark. Only the columns on the vine lines get one (every 10
- * blocks, {@link Network#shelfVineColumn}), so a lip has a vine at least every 10 blocks along it. The voxel harness's
- * {@code markShelfVines} models the same rule.
+ * Shelf vines (section 10): the Deep Blue Rift is 0.2.0's caverns, cliffs and steps included, and a drop of two blocks
+ * or more is one way without something to climb. So beside a lip (a standing place on rock with open air from over its
+ * head down to two blocks under its feet) a vine hangs in the open column, from the rock over it past the lip down to
+ * the floor or the water below, when the drop is 2 to 48 and that rock is at most 40 over the lip: blue glow vines.
+ * Only the columns on the vine lines get one (every 10 blocks, {@link Network#shelfVineColumn}), so a lip has a vine at
+ * least every 10 blocks along it. The deep dark's lips had them too (dusk vines, then blue glow vines in 0.14.3) until
+ * 0.14.4, when Taran asked for no vines in the deep dark: its lips get none, so its drops are one way. The rift's lips
+ * keep theirs as they were, the ones that hang down into the deep dark or from its rock included (Taran: the rift is the
+ * way into the deep dark, and stays as it is). The voxel harness's {@code markShelfVines} models the same rule. Since
+ * 0.14.3 no vine hangs from, beside or onto a block only a structure places ({@link ERTags#BUILT}: an ancient city's
+ * bricks, wool and wood), so the cities stand clear of them; the harness holds no structures, so its rule needs no such
+ * test.
  */
 public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
     private static final int[] DX = {1, -1, 0, 0}, DZ = {0, 0, 1, -1};
@@ -48,14 +54,12 @@ public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
             for (int y = hi; y >= lo; y--) {
                 if (y >= last) continue;
                 if (!air(level, p, qx, y + 1, qz) || !air(level, p, qx, y, qz) || !air(level, p, qx, y - 1, qz) || !air(level, p, qx, y - 2, qz)) continue;
-                DeepBiome biome = null;
-                for (int d = 0; d < 4 && biome == null; d++) {
+                boolean lip = false;
+                for (int d = 0; d < 4 && !lip; d++) {
                     int x = qx - DX[d], z = qz - DZ[d];
-                    if (!stand(level, p, x, y, z)) continue;
-                    DeepBiome b = t.biomeAt(x, y, z);
-                    if (b == DeepBiome.DEEP_BLUE_RIFT || b == DeepBiome.DEEP_DARK) biome = b;
+                    if (stand(level, p, x, y, z) && t.biomeAt(x, y, z) == DeepBiome.DEEP_BLUE_RIFT) lip = true;
                 }
-                if (biome == null) continue;
+                if (!lip) continue;
                 int fy = y - 2;
                 while (fy > lo - 2 && air(level, p, qx, fy - 1, qz)) fy--;
                 BlockState under = level.getBlockState(p.set(qx, fy - 1, qz));
@@ -63,13 +67,24 @@ public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
                 int hy = y + 2;
                 while (hy <= y + 1 + Network.SHELF_MAX_UP && air(level, p, qx, hy, qz)) hy++;
                 if (hy > y + 1 + Network.SHELF_MAX_UP || !level.getBlockState(p.set(qx, hy, qz)).isFaceSturdy(level, p, Direction.DOWN)) continue;
-                Block head = biome == DeepBiome.DEEP_DARK ? ERBlocks.DUSK_VINES.get() : ERBlocks.BLUE_GLOW_VINES.get();
-                Block body = biome == DeepBiome.DEEP_DARK ? ERBlocks.DUSK_VINES_PLANT.get() : ERBlocks.BLUE_GLOW_VINES_PLANT.get();
-                any |= ClimbVinesFeature.hang(level, qx, hy - 1, fy, qz, head, body);
+                if (touchesBuilt(level, p, qx, fy, hy, qz)) continue;
+                any |= ClimbVinesFeature.hang(level, qx, hy - 1, fy, qz, ERBlocks.BLUE_GLOW_VINES.get(), ERBlocks.BLUE_GLOW_VINES_PLANT.get());
                 last = fy;
             }
         }
         return any;
+    }
+
+    /**
+     * True when a vine in column (x, z) hanging from the block at {@code top} down to {@code fy} (the floor under it at
+     * fy - 1) would touch a built block: the one it hangs from, the floor, or one beside it on the way down.
+     */
+    private static boolean touchesBuilt(WorldGenLevel level, BlockPos.MutableBlockPos p, int x, int fy, int top, int z) {
+        if (level.getBlockState(p.set(x, top, z)).is(ERTags.BUILT) || level.getBlockState(p.set(x, fy - 1, z)).is(ERTags.BUILT)) return true;
+        for (int y = fy; y < top; y++)
+            for (int d = 0; d < 4; d++)
+                if (level.getBlockState(p.set(x + DX[d], y, z + DZ[d])).is(ERTags.BUILT)) return true;
+        return false;
     }
 
     private static boolean air(WorldGenLevel level, BlockPos.MutableBlockPos p, int x, int y, int z) {

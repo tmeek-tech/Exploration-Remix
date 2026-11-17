@@ -63,6 +63,15 @@ public final class UpperShapes {
      * and is shut by {@link #RIFT_KEEP}, past both reaches and a wall of rock between.
      */
     static final double RIFT_KEEP = 30, RIFT_EASE = 18;
+    /**
+     * The cracks run on in a web under all of the Upper Caves. A slow field cuts the web into separate rifts (Taran,
+     * 2026-11-17: "not quite as long so that they don't take up so much of the Upper Caves"): where the field, over
+     * {@link #RIFT_CUT_SCALE} blocks, falls under {@link #RIFT_CUT} the crack pinches shut, narrowing over
+     * {@link #RIFT_CUT_EASE} of the field as it does short of the den gates. Measured over 3,200 blocks square: the rifts
+     * keep about half the ground they had, in separate rifts, half of them under 150 blocks across and nine in ten under
+     * 470, where the web ran on across it all.
+     */
+    static final double RIFT_CUT_SCALE = 220, RIFT_CUT = -0.05, RIFT_CUT_EASE = 0.15;
     /** What a formation block is made of (see {@link #formation}). */
     public static final int ROOT = 1, ICICLE = 2, STALACTITE = 3, STALAGMITE = 4, DRIP = 5;
     /** The biome of a rift or hall (see {@link #piece}). */
@@ -106,7 +115,7 @@ public final class UpperShapes {
 
     private final Perlin[] wA = new Perlin[2], wB = new Perlin[2], wC = new Perlin[2], wD = new Perlin[2];
     private final Perlin mouthN, linkN, rootN, lookN, poolN, chillN;
-    private final Perlin rA, rB, rC, rD;
+    private final Perlin rA, rB, rC, rD, rE;
     private final Perlin hA, hB, hC, hD, hE, hS, hK;
     private final Perlin sA, sB;
     private final Perlin leanN, roughN;
@@ -148,6 +157,7 @@ public final class UpperShapes {
         rB = noise(s, 51);
         rC = noise(s, 52);
         rD = noise(s, 53);
+        rE = noise(s, 54);
         hA = noise(s, 60);
         hB = noise(s, 61);
         hC = noise(s, 62);
@@ -253,12 +263,14 @@ public final class UpperShapes {
         c.gF = fineGround(x, z);
         c.gC = coarseGround(x, z);
         c.low = lowGround(x, z);
-        c.wet = s.wet();
+        c.wet = sea(x, z);
         c.cold = s.cold();
-        c.forest = s.cover() == Overhead.Cover.FOREST;
-        c.plains = s.cover() == Overhead.Cover.PLAINS;
-        c.red = s.cover() == Overhead.Cover.BADLANDS;
-        c.desert = s.cover() == Overhead.Cover.DESERT || c.red;
+        // under the sea the warrens are plain caves: no Root Vaults, karst or hollows (Taran, 2026-11-17: "make ocean
+        // biomes not have root vaults")
+        c.forest = !c.wet && s.cover() == Overhead.Cover.FOREST;
+        c.plains = !c.wet && s.cover() == Overhead.Cover.PLAINS;
+        c.red = !c.wet && s.cover() == Overhead.Cover.BADLANDS;
+        c.desert = !c.wet && s.cover() == Overhead.Cover.DESERT || c.red;
         c.tropical = c.forest && s.trees().tropical();
         c.lean = clamp(1.2 * K2 * leanN.noise2(x / 600.0, z / 600.0), -1, 1);
         c.lo = 1e9;
@@ -288,6 +300,20 @@ public final class UpperShapes {
         int x0 = i * 4 + 2, z0 = j * 4 + 2;
         double a = overhead.at(x0, z0).y(), b = overhead.at(x0 + 4, z0).y(), c = overhead.at(x0, z0 + 4).y(), d = overhead.at(x0 + 4, z0 + 4).y();
         return lerp(fv, lerp(fu, a, b), lerp(fu, c, d));
+    }
+
+    /**
+     * True where the ground of (x, z)'s 4x4 column lies under the sea: an ocean, river or beach, or ground under the sea
+     * level with one of those within 16 blocks (the pack floods forests along its coasts; inland swamps keep theirs).
+     */
+    private boolean sea(int x, int z) {
+        Overhead.Surface s = overhead.at(x, z);
+        if (s.wet()) return true;
+        if (s.y() >= overhead.seaLevel()) return false;
+        for (int dx = -16; dx <= 16; dx += 8)
+            for (int dz = -16; dz <= 16; dz += 8)
+                if ((dx != 0 || dz != 0) && overhead.at(x + dx, z + dz).wet()) return true;
+        return false;
     }
 
     /** The lowest ground of the surface's 4x4 columns, straight between their middles: what a roof keeps under. */
@@ -444,7 +470,7 @@ public final class UpperShapes {
         if (k.key[i] != key) {
             int bx = (cx << 2) + 2, bz = (cz << 2) + 2;
             k.key[i] = key;
-            k.cap[i] = overhead.low(bx, bz) - (overhead.at(bx, bz).wet() ? 9 : 5);
+            k.cap[i] = overhead.low(bx, bz) - (sea(bx, bz) ? 9 : 5);
             k.lift[i] = k.rowCap[i] = k.rowLift[i] = k.cone[i] = k.coneLift[i] = Float.NaN;
         }
         return i;
@@ -462,7 +488,7 @@ public final class UpperShapes {
         v = k.cap[i];
         int bx = (cx << 2) + 2, bz = (cz << 2) + 2;
         Overhead.Surface s = overhead.at(bx, bz);
-        if (warrens && s.cover() == Overhead.Cover.FOREST && !s.wet()) {
+        if (warrens && s.cover() == Overhead.Cover.FOREST && !sea(bx, bz)) {
             double e = mouthRamp(bx, bz);
             if (e > 0) e *= gate(bx, bz, GATE_MOUTH);
             double top = s.y() + 4;
@@ -612,6 +638,11 @@ public final class UpperShapes {
         // wider where the region leans to rifts
         c.rScale = (0.8 + 0.25 * (K2 * rB.noise2(x / 70.0 + 3, z / 70.0 + 3) + 1)) * (1 - 0.25 * c.lean);
         if (c.rLine > RIFT_REACH * c.rScale + 3) return false;
+        // cut into separate rifts, each narrowing to shut where the field falls under the cut
+        double cut = smooth((K2 * rE.noise2(x / RIFT_CUT_SCALE + 31, z / RIFT_CUT_SCALE + 17) - RIFT_CUT) / RIFT_CUT_EASE);
+        if (cut < 0.15) return false;
+        c.rScale *= cut;
+        if (c.rLine > RIFT_REACH * c.rScale + 3) return false;
         // narrowing to shut short of the den gates' works, which lie as deep
         if (dens != null) {
             double keep = smooth((dens.clearance(c.x, c.z) - RIFT_KEEP) / RIFT_EASE);
@@ -705,8 +736,10 @@ public final class UpperShapes {
         if (cy < minFloor + 3 + 0.45 * H) return false;
         double floorRaw = cy - 0.45 * H;
         double ceil = Math.min(cy + 0.55 * H + 2 * K2 * hE.noise2(x / 18.0, z / 18.0) * Math.min(1, H / 8), c.low - 14);
-        // floors settle into terraces three blocks high
-        int hf = 3 * (int) Math.floor((floorRaw + 2.5 * (K2 * hD.noise2(x / 26.0, z / 26.0) + 1)) / 3.0);
+        // floors settle into terraces three blocks high; under cold ground (the Frost Fern Grotto) they lie smooth, at
+        // about the terraces' mean height (Taran, 2026-11-17: no steps like the Ivory Root Cavern's)
+        double fv = floorRaw + 2.5 * (K2 * hD.noise2(x / 26.0, z / 26.0) + 1);
+        int hf = c.cold ? (int) Math.floor(fv) - 1 : 3 * (int) Math.floor(fv / 3.0);
         if (ceil - hf < 2.0) return false;
         c.hFloor = hf;
         c.hCeil = ceil;
@@ -1110,7 +1143,9 @@ public final class UpperShapes {
         if (a == null) a = inArea(x + 4, y, z);
         if (a == null) a = inArea(x, y, z - 4);
         if (a == null) a = inArea(x, y, z + 4);
-        return a != null && y <= column(x, z).gF - 6 ? a : null;
+        if (a == null) return null;
+        Col c = column(x, z);
+        return y <= c.gF - 6 && !c.wet ? a : null;
     }
 
     private Entrances.Area inArea(int x, int y, int z) {

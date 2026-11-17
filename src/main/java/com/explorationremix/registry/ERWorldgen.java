@@ -26,10 +26,12 @@ import com.explorationremix.world.feature.MixStateProvider;
 import com.explorationremix.world.feature.MushroomShelfFeature;
 import com.explorationremix.world.feature.OpenSpanPlacement;
 import com.explorationremix.world.feature.OpenWayFeature;
+import com.explorationremix.world.feature.RiftBandPlacement;
 import com.explorationremix.world.feature.RootvaultsLookFilter;
 import com.explorationremix.world.feature.PlannedUpperFilter;
 import com.explorationremix.world.feature.RootvaultsOpeningsPlacement;
 import com.explorationremix.world.feature.ShelfVinesFeature;
+import com.explorationremix.world.feature.SkeinsFeature;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
 import com.explorationremix.world.feature.TerracePoolsFeature;
 import com.explorationremix.world.feature.UnderTreesPlacement;
@@ -76,6 +78,8 @@ public final class ERWorldgen {
     // the den gates' Mossback lairs: the den on each gate's upper landing, and the bones and scraps round it (0.6.0's dens
     // in the plant caves are gone)
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> DEN_LAIR = FEATURES.register("den_lair", () -> new DenLairFeature(NoneFeatureConfiguration.CODEC));
+    // the Blue Reaches' Skeins, set down as each chunk is made (0.17.0), so they are there before anyone comes
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> SKEINS = FEATURES.register("skeins", () -> new SkeinsFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
     // the Galleries' floor lava (fix round 2 after the 0.8.0 pack runs): the field's rule laid on its floors
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> FLOOR_LAVA = FEATURES.register("floor_lava", () -> new FloorLavaFeature(NoneFeatureConfiguration.CODEC));
@@ -95,5 +99,7 @@ public final class ERWorldgen {
     public static final RegistryObject<PlacementModifierType<OpenSpanPlacement>> OPEN_SPAN = PLACEMENT_TYPES.register("open_span", () -> () -> OpenSpanPlacement.CODEC);
     // 0.8.0 fix round: the Galleries' lava falls at spaced sites, not tries per chunk
     public static final RegistryObject<PlacementModifierType<FallSitesPlacement>> FALL_SITES = PLACEMENT_TYPES.register("fall_sites", () -> () -> FallSitesPlacement.CODEC);
+    // 0.14.5: the Fern Rift's plants kept to its bands by depth (green, silver, light blue)
+    public static final RegistryObject<PlacementModifierType<RiftBandPlacement>> RIFT_BAND = PLACEMENT_TYPES.register("rift_band", () -> () -> RiftBandPlacement.CODEC);
     public static final RegistryObject<HeightProviderType<LayerHeight>> LAYER_HEIGHT = HEIGHT_PROVIDERS.register("layer_height", () -> () -> LayerHeight.CODEC);
 }
