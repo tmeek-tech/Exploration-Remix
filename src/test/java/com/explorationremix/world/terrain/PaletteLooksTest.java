@@ -87,7 +87,11 @@ class PaletteLooksTest {
         // by biome at 1,336 of layer 0's 400,000 samples, all in the geodes, and through the public path at 985 of layer
         // 0's 60,000; the interior, layer 1 and the bands answer as before. The upper caves change only in the Silver Fern
         // Rift, whose ledges are deep moss two blocks deep: 64,172 of the 400,000 samples, every one of them now deep moss
-        // (32,308 were moss on the top block, 31,864 deepslate or asurine on the second)
+        // (32,308 were moss on the top block, 31,864 deepslate or asurine on the second). Pinned again for 0.14.5
+        // (Taran, 2026-11-17): the Silver Fern Rift is redone in depth bands (moss up top, deep moss through the silver
+        // middle, more asurine towards the floor), which changes 161,260 of its 400,000 samples (78,639 are now moss,
+        // 58,511 deepslate, 21,634 asurine, 2,476 cobbled deepslate); every other part of the upper caves, both layers
+        // and the bands answer as before
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
@@ -138,7 +142,7 @@ class PaletteLooksTest {
         assertEquals("2604e01a1b4b2ee3", String.format("%016x", hInterior), "layers 0 and 1, interior");
         assertEquals("630faa4b55423838", String.format("%016x", hPublicOld), "layers 0 and 1 through the public path, and the bands (den rifts off)");
         assertEquals("1917e42223d853b8", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
-        assertEquals("98216793f08dc629", String.format("%016x", hUpper), "the upper caves");
+        assertEquals("b3ee84aebdabaf30", String.format("%016x", hUpper), "the upper caves");
     }
 
     private static int nz(Rock q) { return q == null ? 0 : q.name().hashCode(); }

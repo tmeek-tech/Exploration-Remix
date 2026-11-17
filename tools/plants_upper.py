@@ -127,9 +127,10 @@ register(PAINTERS, "grotto_ivy_2", lambda: _grotto_ivy(2))
 
 # ------------------------------------------------------------------------------------------------ Silver Fern Rift
 # silver_fern_rift.jpg: pale fronds hanging from the ledges (#9A9D5E to #D3D6A3), tall ferns on the ledges, fronds
-# fanning out of cracks in the walls.
-FROND = ["#999E7F", "#ACAE6B", "#B7BB88", "#D3D6A3"]
-FROND_STALK = ["#7A7F55", "#5F6A3E"]
+# fanning out of cracks in the walls. 0.14.5: silver, the cool pale greens of the rift's silver band (plants_rift.py),
+# where the picture's khaki read warm.
+FROND = ["#8C9F92", "#A1B3A6", "#B6C7BA", "#D0DDD2"]
+FROND_STALK = ["#6D8275", "#57695D"]
 
 
 def _silver_frond(v, tip):

@@ -4,14 +4,14 @@
     "state": {
       "type": "minecraft:simple_state_provider",
       "state": {
-        "Name": "explorationremix:silver_wall_fern"
+        "Name": "immersive_weathering:ivy"
       }
     },
-    "faces": "walls_hanging",
-    "tries": 96,
+    "faces": "walls_ceiling",
+    "tries": 48,
     "radius": 6,
-    "height": 4,
-    "on": "explorationremix:deep_moss",
+    "height": 6,
+    "on": "#explorationremix:cave_rock",
     "in_water": false
   }
 }

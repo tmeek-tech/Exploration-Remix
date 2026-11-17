@@ -143,6 +143,15 @@ public final class ERBlocks {
      */
     public static final RegistryObject<Block> SILVER_WALL_FERN = BLOCKS.register("silver_wall_fern",
             () -> new ShelfFungusBlock(plant(MapColor.METAL, SoundType.GRASS, 0), Block.box(1, 0, 8, 15, 14, 16)));
+    /**
+     * The rift's silver band (0.14.5, the rift redone by depth): pale tufts over its floors, in place of the silver
+     * ferns, and pale moss draping over its ledges' lips and down its walls, a sheet like glow lichen giving no light.
+     */
+    public static final RegistryObject<Block> SILVER_GRASS = block("silver_grass",
+            () -> new CavePlantBlock(plant(MapColor.METAL, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XYZ),
+                    Block.box(2, 0, 2, 14, 13, 14)));
+    public static final RegistryObject<Block> SILVER_MOSS = block("silver_moss",
+            () -> new GlowLichenBlock(lichen(MapColor.METAL, SoundType.MOSS_CARPET, 0)));
 
     // ------------------------------------------------------------------------------------------- Ivory Root Cavern
     /** A pale bracket with glowing gold gills underneath; firm enough to stand on, like the orange shelf fungus. */

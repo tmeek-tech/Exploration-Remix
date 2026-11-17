@@ -111,6 +111,11 @@ BLOCKS = {
     "silver_wall_fern": ("Hanging Silver Fern", "hanging_fern", {"variants": 2, "drop": "silver_fern"}),
     # 0.14.3: the rift's ledges, a deep green moss two blocks deep at their lips; the hanging ferns grow from its sides
     "deep_moss": ("Deep Moss", "cube"),
+    # 0.14.5: the rift redone by depth (Taran, 17 Nov: "Plants changing with depth is pretty"), green up top, silver
+    # through the middle, light blue by the floor: the silver band's pale tufts, and its moss draping over the ledges'
+    # lips and down the walls (plants_rift.py), in place of the silver ferns
+    "silver_grass": ("Silver Grass", "cross", {"variants": 3}),
+    "silver_moss": ("Silver Moss", "lichen", {"variants": 2}),
     "ivory_bracket": ("Ivory Bracket", "shelf", {"variants": 2, "glow_under": True}),
     "gold_threads": ("Gold Threads", "vine", {"variants": 2}),
     "gold_threads_plant": ("Gold Threads", "vine_body:gold_threads", {"variants": 2}),
@@ -187,7 +192,7 @@ BLOCK_TAGS = {
     # Frost moss and deep moss are ground, as vanilla's moss is: ferns, flowers and saplings grow on them (Immersive
     # Weathering's frosty ferns only grow on #minecraft:dirt), and moss patches may spread over them.
     ("minecraft", "dirt"): ["frost_moss", "deep_moss"],
-    ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet", "deep_moss"],
+    ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet", "deep_moss", "silver_moss"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen"],
     # The Galleries' lava glow is open space to a growing tree (TreeFeature asks isAir() or this tag): a sapling grows

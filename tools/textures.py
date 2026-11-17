@@ -87,9 +87,11 @@ import minerals  # noqa: E402
 import creatures  # noqa: E402
 import fireflies  # noqa: E402  (0.7: the blue fireflies' glow, in a file of its own)
 import particles  # noqa: E402
+import plants_rift  # noqa: E402  (0.14.5: the Fern Rift's silver band)
 PAINTERS.update(plants.PAINTERS)
 PAINTERS.update(plants_upper.PAINTERS)
 PAINTERS.update(plants_fern.PAINTERS)
+PAINTERS.update(plants_rift.PAINTERS)
 PAINTERS.update(plants_frost.PAINTERS)
 PAINTERS.update(plants_ice.PAINTERS)
 PAINTERS.update(plants_entries.PAINTERS)
