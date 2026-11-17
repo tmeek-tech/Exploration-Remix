@@ -6,6 +6,7 @@ import com.explorationremix.mixin.accessor.DimensionTypeAccessor;
 import com.explorationremix.mixin.accessor.NoiseBasedChunkGeneratorAccessor;
 import com.explorationremix.mixin.accessor.NoiseGeneratorSettingsAccessor;
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.compat.TerrainSlabsCompat;
 import com.explorationremix.world.density.DeepDensityFunction;
 import com.explorationremix.world.density.DeepFineDensity;
 import com.explorationremix.world.density.UpperCarve;
@@ -61,6 +62,7 @@ public final class DeepWorldInstaller {
 
     /** Called by {@code MinecraftServerMixin} at the head of {@code loadLevel()}, before any level or chunk map exists. */
     public static void onLoadLevel(MinecraftServer server) {
+        TerrainSlabsCompat.onLoadLevel();
         if (!DeepWorld.enabled()) {
             ExplorationRemix.LOGGER.info("Deep world disabled by config");
             return;
