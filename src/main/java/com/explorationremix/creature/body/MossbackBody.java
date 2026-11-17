@@ -59,6 +59,10 @@ public final class MossbackBody {
      * box's way out, the rock alone decides.)
      */
     static final double MAX_ROLL = Math.toRadians(20);
+    /** A front joint reaching into a step whose top is no higher above it than this (blocks) goes up over the top. */
+    static final double OVER_STEP = 0.9;
+    /** At a step the trunk's way out leans no further than this from its box's (it pitches up or down the step). */
+    static final double STEP_TILT = Math.toRadians(45);
     /** A box that moved further than this in a tick was put somewhere new: the body is laid afresh. */
     static final double JUMP = 3.0;
 
@@ -102,6 +106,11 @@ public final class MossbackBody {
         public double rear;
         /** Breaks into a trot at any speed (it hunts). */
         public boolean hurry;
+        /**
+         * Its box is off its floor at a step ({@link Steps}): climbing a riser or coming down off one, the trunk keeps
+         * to its box (no riser it passes takes its belly) and leans no more than {@link #STEP_TILT} from its box's way up.
+         */
+        public boolean step;
     }
 
     /** Hears each foot as it lands. */
@@ -245,7 +254,8 @@ public final class MossbackBody {
         int c = spec.middle;
         Vector3d target = t0.set(in.x, in.y, in.z);
         Vector3d n = n0.set(in.up);
-        if (!(ground && project(rock, target, spec.ride[c], n))) {
+        // at a step it rides with its box, rising up the riser or coming down off it, not onto the riser's face
+        if (!(ground && !in.step && project(rock, target, spec.ride[c], n))) {
             double ext = Math.abs(in.up.x) * in.halfWidth + Math.abs(in.up.y) * in.halfHeight + Math.abs(in.up.z) * in.halfWidth;
             target.set(in.x, in.y, in.z).fma(spec.ride[c] - ext, in.up);
             n.set(in.up);
@@ -263,14 +273,16 @@ public final class MossbackBody {
         Vector3d dir = along(t1.set(in.forward), up[c]);
         if (dir.lengthSquared() < 1.0E-6) dir.set(pos[s]).sub(pos[c]);
         dir.normalize();
-        reach(rock, pos[c], pos[s], dir, spec.length(c, s), spec.ride[s], 0.12 * lift, ground, up[s]);
+        // on a floor, what reaches into a step a block or so high goes up over its top (not back out of its riser)
+        Vector3d over = in.up.y > 0.9 ? in.up : null;
+        reach(rock, pos[c], pos[s], dir, spec.length(c, s), spec.ride[s], 0.12 * lift, ground, up[s], over);
         // neck: a share of the way the head leads
         steer(pos[c], pos[s], NECK_LEAD, up[s], t1);
-        reach(rock, pos[s], pos[nk], t1, spec.length(s, nk), spec.ride[nk], 0.26 * lift, ground, up[nk]);
+        reach(rock, pos[s], pos[nk], t1, spec.length(s, nk), spec.ride[nk], 0.26 * lift, ground, up[nk], over);
         limitBend(pos[c], pos[s], pos[nk], spec.length(s, nk), BEND_SHOULDERS);
         // head
         steer(pos[s], pos[nk], HEAD_LEAD, up[nk], t1);
-        reach(rock, pos[nk], pos[h], t1, spec.length(nk, h), spec.ride[h], 0.38 * lift, ground, up[h]);
+        reach(rock, pos[nk], pos[h], t1, spec.length(nk, h), spec.ride[h], 0.38 * lift, ground, up[h], over);
         limitBend(pos[s], pos[nk], pos[h], spec.length(nk, h), BEND_NECK);
     }
 
@@ -290,11 +302,22 @@ public final class MossbackBody {
     /**
      * Sets {@code p} {@code len} from {@code from} along {@code dir}: on the ground laid {@code height} plus
      * {@code lift} out from the rock; off it (leaping, falling) raised by {@code lift} along its way out {@code up}, so a
-     * reared head stays up as it leaves the rock.
+     * reared head stays up as it leaves the rock. Reaching against rock whose top lies within {@link #OVER_STEP} along
+     * {@code over} (its box's way up, on a floor; else null), it goes up over that top rather than up its face.
      */
     private void reach(TerrainPatch rock, Vector3d from, Vector3d p, Vector3d dir, double len, double height, double lift, boolean ground,
-                       Vector3d up) {
+                       Vector3d up, Vector3d over) {
         p.set(from).fma(len, dir);
+        if (ground && over != null) {
+            // rock just ahead (where it would touch it) with a clear top a little above: up onto that top
+            double qx = p.x + dir.x * height, qy = p.y + dir.y * height, qz = p.z + dir.z * height;
+            if (rock.solid(qx, qy, qz))
+                for (double k = 0.1; k <= OVER_STEP + 1.0E-9; k += 0.1)
+                    if (!rock.solid(qx + over.x * k, qy + over.y * k, qz + over.z * k)) {
+                        p.set(qx, qy, qz).fma(k + 0.05, over);
+                        break;
+                    }
+        }
         if (ground) adhere(rock, p, height + lift, n1);
         else if (lift > 1.0E-4) p.fma(lift, up);
         else return;
@@ -444,7 +467,10 @@ public final class MossbackBody {
             boolean felt = ground && rock.field(pos[i].x, pos[i].y, pos[i].z, REACH, SOFT, f) && f[0] < spec.ride[i] + HOLD + LET_GO;
             if (felt) {
                 want.set(f[1], f[2], f[3]);
-                if (i <= spec.tailBase) unroll(i, want, in.up);
+                if (i <= spec.tailBase) {
+                    unroll(i, want, in.up);
+                    if (in.step) tilt(want, in.up, STEP_TILT);
+                }
             }
             else if (i > spec.tailBase) want.set(up[i - 1]);
             else want.set(in.up);
@@ -454,6 +480,17 @@ public final class MossbackBody {
             if (u.lengthSquared() < 1.0E-8) u.set(want);
             u.normalize();
         }
+    }
+
+    /** Turns {@code v} (a unit way out) toward {@code ref} until it leans at most {@code max} from it. */
+    static void tilt(Vector3d v, Vector3d ref, double max) {
+        double c = v.dot(ref);
+        if (c >= Math.cos(max)) return;
+        double px = v.x - ref.x * c, py = v.y - ref.y * c, pz = v.z - ref.z * c;
+        double pl = Math.sqrt(px * px + py * py + pz * pz);
+        if (pl < 1.0E-6) { v.set(ref); return; }
+        double cs = Math.cos(max), sn = Math.sin(max) / pl;
+        v.set(ref.x * cs + px * sn, ref.y * cs + py * sn, ref.z * cs + pz * sn);
     }
 
     /** Turns a trunk joint's wanted way out back about its spine to within MAX_ROLL of its box's (see there). */

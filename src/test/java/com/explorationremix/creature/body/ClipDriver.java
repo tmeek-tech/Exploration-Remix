@@ -4,8 +4,8 @@ import org.joml.Vector3d;
 
 /**
  * Moves a Mossback's box through a block world the way the game does (ClimbMoveControl: straight along its way at its
- * speed, stepping up a block at a time on a floor and falling off one, clinging to walls and ceilings), and eases its
- * way out and its heading the way MossbackEntity's client does, for the body to follow.
+ * speed, climbing straight up a riser in its way and coming down off a step, clinging to walls and ceilings), and eases
+ * its way out and its heading the way MossbackEntity's client does, for the body to follow.
  */
 final class ClipDriver {
     final BlockWorld world;
@@ -15,6 +15,8 @@ final class ClipDriver {
     final Vector3d clientUp = new Vector3d(0, 1, 0), clientFwd = new Vector3d(0, 0, 1);
     double vy;
     boolean hurry;
+    /** Off its floor at a step: climbing a riser, or coming down off one (MossbackBody.Drive#step). */
+    boolean step;
     double rear;
     MossbackBody.Mode mode = MossbackBody.Mode.GROUND;
     static final double HW = 0.7, HH = 0.45;
@@ -28,16 +30,59 @@ final class ClipDriver {
 
     boolean onFloor() { return up.y > 0.9; }
 
-    /** Moves along its heading by {@code step}; on a floor it steps up onto rock in its way (a block at most) or falls. */
+    /**
+     * Moves along its heading by {@code step}. On a floor it goes over a step the way the game moves it
+     * (ClimbMoveControl): blocked by rock, it climbs straight up at its climbing pace until it clears it; past an edge
+     * with a floor no more than a step under it, it comes down to it as steadily, still steering; off a higher drop it
+     * falls. At a step its body stays on its feet, as MossbackEntity's client has it (Steps).
+     */
     void move(double step) {
-        c.fma(step, heading);
-        if (onFloor()) settle();
+        this.step = false;
+        if (!onFloor()) { c.fma(step, heading); return; }
+        double under = c.y - HH - floorTop();
+        boolean gliding = under > 1.0E-6 && under <= Steps.DEEP + 1.0E-6 && vy == 0;
+        double across = gliding ? step * GLIDE : step;
+        double hx = heading.x * across, hz = heading.z * across;
+        if (blocked(hx, hz)) {
+            // up to the riser, then straight up it
+            double lo = 0, hi = 1;
+            for (int i = 0; i < 12; i++) {
+                double m = (lo + hi) / 2;
+                if (blocked(hx * m, hz * m)) hi = m; else lo = m;
+            }
+            c.x += hx * lo; c.z += hz * lo;
+            c.y += step * CLIMB;
+            vy = 0;
+            mode = MossbackBody.Mode.GROUND;
+            this.step = true;
+            return;
+        }
+        c.x += hx; c.z += hz;
+        under = c.y - HH - floorTop();
+        if (under <= 1.0E-6) { c.y -= under; vy = 0; mode = MossbackBody.Mode.GROUND; }
+        else if (under <= Steps.DEEP + 1.0E-6 && vy == 0) {
+            c.y -= Math.min(under, step * GLIDE);
+            mode = MossbackBody.Mode.GROUND;
+            this.step = c.y - HH - floorTop() > 1.0E-6;
+        } else settle();
     }
 
-    /** On a floor: stands on the highest rock under its box (a step up at once, a step down falling, touching nothing). */
+    /** The game climbs at this share of its pace, and comes down a step about this much across and down a tick. */
+    static final double CLIMB = 0.85, GLIDE = 0.6;
+
+    /** The highest top of rock under its box (at or below its bottom). */
+    double floorTop() {
+        return world.top(c.x - HW, c.z - HW, c.x + HW, c.z + HW, c.y - HH + 1.0E-6);
+    }
+
+    private boolean blocked(double dx, double dz) {
+        return Steps.any(world, c.x + dx - HW + 1.0E-6, c.y - HH + 1.0E-6, c.z + dz - HW + 1.0E-6,
+                c.x + dx + HW - 1.0E-6, c.y + HH, c.z + dz + HW - 1.0E-6);
+    }
+
+    /** Off a floor: falls onto the highest rock under its box, touching nothing on the way. */
     void settle() {
-        double top = world.top(c.x - HW, c.z - HW, c.x + HW, c.z + HW, c.y - HH + 1.0 + 1.0E-6);
-        double want = top + HH;
+        double want = floorTop() + HH;
         if (want >= c.y - 1.0E-6) { c.y = want; vy = 0; }
         else {
             vy = Math.min(vy + 0.08, 1.0);
@@ -74,5 +119,6 @@ final class ClipDriver {
         d.mode = mode;
         d.rear = rear;
         d.hurry = hurry;
+        d.step = step;
     }
 }

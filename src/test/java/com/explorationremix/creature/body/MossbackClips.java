@@ -101,7 +101,7 @@ class MossbackClips {
                 w.fill(x, 0, 12, x, 0, 13);
             }
             ClipDriver d = new ClipDriver(w, 0, 0, -4, 0, 1);
-            list.add(new Scene("steps", w, d, List.of(walk(19, 0.1), idle(30)), new Vector3d(-3.6, 2.0, -1.2), 0));
+            list.add(new Scene("steps", w, d, List.of(walk(25, 0.1), idle(30)), new Vector3d(-3.6, 2.0, -1.2), 0));
         }
         {   // up a wall and over its top
             BlockWorld w = new BlockWorld().fill(-8, -1, -6, 10, -1, 6).fill(4, 0, -6, 10, 2, 6);

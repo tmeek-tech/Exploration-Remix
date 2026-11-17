@@ -10,6 +10,7 @@ import com.explorationremix.creature.climb.ClimbNodeEvaluator;
 import com.explorationremix.creature.body.LevelTerrain;
 import com.explorationremix.creature.body.MossbackBody;
 import com.explorationremix.creature.body.MossbackRig;
+import com.explorationremix.creature.body.Steps;
 import com.explorationremix.creature.body.TerrainPatch;
 import com.explorationremix.registry.ERSounds;
 import com.explorationremix.registry.ERTags;
@@ -214,6 +215,13 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
     private int drawnAt = Integer.MIN_VALUE / 2;
     /** Client: ticks its box has touched no rock in a row; the body lets go of the rock after more than BODY_AIR_GRACE. */
     private int bodyAir;
+    /**
+     * Client: its box is off its floor at a step (see {@link Steps}): rising up a riser the game has it cling to like a
+     * wall, or coming down off one. Its body walks the step on its feet instead of rearing up against it.
+     */
+    private boolean atStep;
+    /** Client: a box touching nothing that drops more than this in a tick (blocks) is falling, not at a step. */
+    static final double STEP_FALL = 0.25;
     static final int BODY_AIR_GRACE = 2;
     static final int BODY_KEEP = 60;
     static final double BODY_HEAR = 20.0;
@@ -1572,10 +1580,11 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
     /** Client: its belly to its rock, its head the way it goes, both eased (outright the first time). */
     private void orientation() {
         Direction d = surface();
-        Vec3 upT = d == null ? new Vec3(0, 1, 0) : Vec3.atLowerCornerOf(d.getOpposite().getNormal());
+        atStep = stepAt(d);
+        Vec3 upT = d == null || atStep ? new Vec3(0, 1, 0) : Vec3.atLowerCornerOf(d.getOpposite().getNormal());
         Vector3f sf = entityData.get(DATA_FORWARD);
         Vec3 want;
-        if (d == Direction.DOWN || d == null) {
+        if (d == Direction.DOWN || d == null || atStep) {
             want = Vec3.directionFromRotation(0, yBodyRot);
             clientLead = Vec3.directionFromRotation(0, getYRot());
         } else {
@@ -1601,6 +1610,25 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
     }
 
     /**
+     * Client: whether its box, off its floor clinging to a wall or to nothing, is at a step rather than on a wall or in
+     * the air (a floor within reach under it, any wall beside it no higher than a step over that floor).
+     */
+    private boolean stepAt(@Nullable Direction d) {
+        if (d == Direction.DOWN || d == Direction.UP || isInWater()) return false;
+        // touching nothing and dropping fast, it is falling, not coming down a step
+        if (d == null && yo - getY() > STEP_FALL) return false;
+        if (bodyTerrain == null) bodyTerrain = new LevelTerrain(level());
+        int side = d == null ? Steps.NONE : switch (d) {
+            case WEST -> Steps.WEST;
+            case EAST -> Steps.EAST;
+            case NORTH -> Steps.NORTH;
+            default -> Steps.SOUTH;
+        };
+        AABB b = getBoundingBox();
+        return Steps.at(bodyTerrain, b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, side);
+    }
+
+    /**
      * Client: its body for drawing this frame, laid out on the spot if it has none (just come into sight, or never
      * ticked yet). Drawing it keeps it.
      */
@@ -1618,7 +1646,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
         if (bodyDrive == null) {
             bodyDrive = new MossbackBody.Drive();
             bodyRock = new TerrainPatch();
-            bodyTerrain = new LevelTerrain(level());
+            if (bodyTerrain == null) bodyTerrain = new LevelTerrain(level());
             bodyBounds = new int[6];
         }
         if (body == null) {
@@ -1632,9 +1660,9 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
         in.forward.set(clientForward.x, clientForward.y, clientForward.z);
         in.lead.set(clientLead.x, clientLead.y, clientLead.z);
         byte s = state();
-        // off the rock for a tick or two (cresting a wall's top, over a step) it keeps its footing; leaping, dropping or
-        // falling longer it lets go
-        bodyAir = surface() == null ? bodyAir + 1 : 0;
+        // off the rock for a tick or two (cresting a wall's top) it keeps its footing, and at a step for as long as it
+        // takes; leaping, dropping or falling longer it lets go
+        bodyAir = surface() == null && !atStep ? bodyAir + 1 : 0;
         if (isDeadOrDying()) in.mode = MossbackBody.Mode.DEAD;
         // swimming: afloat, or in water deeper than it wades (as the server swims it); a film of spring water is floor
         else if (isInWater() && (surface() == null || getFluidHeight(FluidTags.WATER) > getFluidJumpThreshold())) in.mode = MossbackBody.Mode.WATER;
@@ -1642,6 +1670,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
         else in.mode = MossbackBody.Mode.GROUND;
         in.rear = rear;
         in.hurry = s == CHASE;
+        in.step = atStep && in.mode == MossbackBody.Mode.GROUND;
         int[] b = bodyBounds;
         body.bounds(in, b);
         bodyRock.build(bodyTerrain, b[0], b[1], b[2], b[3], b[4], b[5]);
