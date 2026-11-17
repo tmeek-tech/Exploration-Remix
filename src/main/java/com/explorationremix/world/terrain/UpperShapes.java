@@ -34,8 +34,15 @@ package com.explorationremix.world.terrain;
  * open that rim ({@link #rim}). The pack's own water next to the shapes' open space turns to rock instead of standing
  * as a wall (see {@code NoiseBasedAquiferMixin}). Only the springs flow.
  *
- * <p>All of it is a pure function of the seed and the surface ({@link Overhead}): safe on any thread, the same on every
- * call. Everything a column needs that does not depend on y is computed once per column and cached per thread.
+ * <p>Where the shapes meet the pack's own caves ({@link Pack}, Tectonic's) through rock {@link #SEAM} blocks thick or
+ * less, one over the other, that rock falls away and the two open into one cave (Taran, 2026-11-17: "merge into one
+ * cave"); see {@link #seam}. Still water lies only where the pack's caves leave the rock round it whole
+ * ({@link #packHolds}), and the roots, icicles, stalactites and stalagmites only where they keep thick rock over (or
+ * under) them ({@link #anchored}), so nothing is left on a crust over the pack's caves.
+ *
+ * <p>All of it is a pure function of the seed, the surface ({@link Overhead}) and the pack's density: safe on any
+ * thread, the same on every call. Everything a column needs that does not depend on y is computed once per column and
+ * cached per thread, and so is what the merge asks at each height.
  */
 public final class UpperShapes {
     public static final int WARRENS = 0, RIFTS = 1, HALLS = 2, SINKHOLES = 3;
@@ -72,6 +79,23 @@ public final class UpperShapes {
      * 470, where the web ran on across it all.
      */
     static final double RIFT_CUT_SCALE = 220, RIFT_CUT = -0.05, RIFT_CUT_EASE = 0.15;
+    /**
+     * Rock this thick or thinner between the shapes' open space and the pack's caves, one over the other, falls away
+     * (see {@link #seam}): about 3 blocks (Taran, 2026-11-17).
+     */
+    public static final int SEAM = 3;
+    /** What {@link #seamKind} says of a block: no seam, our floor over the pack's cave, or the pack's floor over our ceiling. */
+    public static final int NO_SEAM = 0, OVER_PACK = 1, UNDER_PACK = 2;
+    /** The carve in a seam's rock once it falls away. */
+    private static final double SEAM_OPEN = -0.5;
+    /**
+     * Only rock the shapes' distance puts closer than this to their open space can be a seam (the distance runs a little
+     * short of the true one in places, so this leaves room over {@link #SEAM}).
+     */
+    private static final double SEAM_GATE = SEAM + 4;
+    /** What a block is to the merge: rock to both, open in a shape, open in the pack's caves, or what stops a seam. */
+    private static final int ROCK = 0, OURS = 1, PACK_OPEN = 2, STOP = 3;
+
     /** What a formation block is made of (see {@link #formation}). */
     public static final int ROOT = 1, ICICLE = 2, STALACTITE = 3, STALAGMITE = 4, DRIP = 5;
     /** The biome of a rift or hall (see {@link #piece}). */
@@ -103,11 +127,21 @@ public final class UpperShapes {
         double clearance(int x, int z);
     }
 
+    /**
+     * The pack's own final density at a block, as the world builds it (positive in rock, negative in its caves and in the
+     * open air), without anything of ours. Safe on any thread. See {@code PackProbe}.
+     */
+    public interface Pack {
+        double density(int x, int y, int z);
+    }
+
     public final long seed;
     public final int packFloor;
     public final Overhead overhead;
     /** The den gates the rifts keep clear of, or null for none (tests and tools). */
     private final Dens dens;
+    /** The pack's caves the shapes merge with, or null to leave them a plain overlay (tests, tools, and the config's choice). */
+    private final Pack pack;
     public final boolean warrens, rifts, halls, sinkholes;
     /** Vanilla's worm tunnels (the cave carver) above the old floor: off unless asked for (the canyons stay). */
     public final boolean wormTunnels;
@@ -128,12 +162,13 @@ public final class UpperShapes {
     private final ThreadLocal<double[]> grads = ThreadLocal.withInitial(() -> new double[2]);
     private final ThreadLocal<Cells> cells = ThreadLocal.withInitial(Cells::new);
 
-    public UpperShapes(long seed, int packFloor, Overhead overhead, Dens dens, boolean warrens, boolean rifts, boolean halls, boolean sinkholes,
-                       boolean wormTunnels) {
+    public UpperShapes(long seed, int packFloor, Overhead overhead, Dens dens, Pack pack, boolean warrens, boolean rifts, boolean halls,
+                       boolean sinkholes, boolean wormTunnels) {
         this.seed = seed;
         this.packFloor = packFloor;
         this.overhead = overhead;
         this.dens = dens;
+        this.pack = pack;
         this.warrens = warrens;
         this.rifts = rifts;
         this.halls = halls;
@@ -173,8 +208,16 @@ public final class UpperShapes {
 
     /** All four shapes, worm tunnels off (tests and tools); {@code dens} may be null. */
     public UpperShapes(long seed, int packFloor, Overhead overhead, Dens dens) {
-        this(seed, packFloor, overhead, dens, true, true, true, true, false);
+        this(seed, packFloor, overhead, dens, null, true, true, true, true, false);
     }
+
+    /** All four shapes, worm tunnels off, merged with the pack's caves (tests and tools); {@code dens} may be null. */
+    public UpperShapes(long seed, int packFloor, Overhead overhead, Dens dens, Pack pack) {
+        this(seed, packFloor, overhead, dens, pack, true, true, true, true, false);
+    }
+
+    /** True where the shapes merge with the pack's caves ({@link #SEAM}). */
+    public boolean merging() { return pack != null; }
 
     /** All four shapes, worm tunnels off, no den gates (tests and tools). */
     public UpperShapes(long seed, int packFloor, Overhead overhead) {
@@ -242,6 +285,14 @@ public final class UpperShapes {
         boolean waterDone, rimDone, rPoolDone, rPool;
         int waterN, rimLo, rimHi;
         final int[] waterY = new int[6];
+
+        // ---- the merge with the pack's caves (see seam), per height from sBase over sLen heights, set up on first use:
+        // what each height is (0 not known yet, else 1 + NO_SEAM, OVER_PACK or UNDER_PACK), the pack's density there and
+        // the shapes' carve before the merge (NaN not known yet)
+        boolean sReady;
+        int sBase, sLen;
+        byte[] sKind;
+        float[] sPack, sCarve;
     }
 
     /** The column's cached answers (package-private for the tests). */
@@ -290,6 +341,9 @@ public final class UpperShapes {
         c.sOn = sinkholes && sinkColumn(c);
         c.lo -= 6;
         c.hi += 6;
+        c.sReady = false;
+        c.sBase = (int) Math.floor(c.lo) - 2;
+        c.sLen = c.lo > c.hi ? 0 : (int) Math.ceil(c.hi) - c.sBase + 3;
     }
 
     /** The ground at block scale: the surface's 4x4 columns, straight between their middles. */
@@ -567,6 +621,8 @@ public final class UpperShapes {
             boolean ice = c.cold && chillAt(c, ceil) < 3;
             double len = ice ? clamp((pk - 0.62) * 14, 0, 6) : clamp((pk - 0.75) * 12, 0, 4);
             if (len <= 0.3 || !ice && depth > 26) continue;
+            // only from thick rock: none where the pack's caves come close over the ceiling
+            if (!anchored(c.x, c.z, (int) Math.floor(ceil) + 1, 1, c.gF)) continue;
             c.fKind = ice ? ICICLE : ROOT;
             c.fBottom = Math.max(ceil - 0.5 - len, floorTop + 2.0);
             c.fTop = ceil + 1.5;
@@ -610,7 +666,7 @@ public final class UpperShapes {
                 Col n = column(x + (k == 0 ? 1 : k == 1 ? -1 : 0), z + (k == 2 ? 1 : k == 3 ? -1 : 0));
                 ok = n.wOn[i] && n.wLine[i] < 0.85 * n.wHw[i] && floorLevel(n, i) >= fl;
             }
-            if (ok && holds(x, fl - 1, z, NO_Y)) c.wPool[i] = fl - 1;
+            if (ok && holds(x, fl - 1, z, NO_Y) && packHolds(x, fl - 1, z)) c.wPool[i] = fl - 1;
         }
     }
 
@@ -719,7 +775,7 @@ public final class UpperShapes {
     private boolean riftPool(Col c) {
         if (c.rPoolDone) return c.rPool;
         c.rPoolDone = true;
-        c.rPool = c.rOn && riftDist(c, c.x, c.rFloor, c.z) <= -0.5 && holds(c.x, c.rFloor - 1, c.z, NO_Y);
+        c.rPool = c.rOn && riftDist(c, c.x, c.rFloor, c.z) <= -0.5 && holds(c.x, c.rFloor - 1, c.z, NO_Y) && packHolds(c.x, c.rFloor - 1, c.z);
         return c.rPool;
     }
 
@@ -771,6 +827,12 @@ public final class UpperShapes {
                 }
             }
         }
+        // stalactites only under thick rock and stalagmites only on it: none where the pack's caves come close
+        if (!Double.isNaN(c.stalBottom) && !anchored(c.x, c.z, (int) Math.floor(c.hCeil) + 1, 1, c.gF)) {
+            c.stalBottom = Double.NaN;
+            c.miteTop = NO_Y;
+        }
+        if (c.miteTop != NO_Y && !anchored(c.x, c.z, hf - 1, -1, c.gF)) c.miteTop = NO_Y;
         c.lo = Math.min(c.lo, hf - 2);
         c.hi = Math.max(c.hi, ceil + 3);
         return true;
@@ -798,7 +860,7 @@ public final class UpperShapes {
             if (!n.hOn || n.hFloor < c.hFloor || n.hCeil - n.hFloor < 3) return false;
             if (n.rOn && riftDist(n, n.x, c.hFloor - 1, n.z) < 0.5) return false;
         }
-        c.hPool = holds(c.x, c.hFloor - 1, c.z, NO_Y);
+        c.hPool = holds(c.x, c.hFloor - 1, c.z, NO_Y) && packHolds(c.x, c.hFloor - 1, c.z);
         return c.hPool;
     }
 
@@ -879,15 +941,26 @@ public final class UpperShapes {
 
     // ================================================================================================ queries
 
-    /** Signed distance (in blocks, roughly) to the open space of every shape: negative inside, {@link #SOLID} far off. */
+    /**
+     * Signed distance (in blocks, roughly) to the open space of every shape: negative inside, {@link #SOLID} far off. The
+     * thin rock between a shape and the pack's caves counts as open ({@link #seam}).
+     */
     public double carve(int x, int y, int z) {
         Col c = column(x, z);
         if (y < c.lo || y > c.hi) return SOLID;
         return carve(c, x, y, z);
     }
 
-    /** As {@link #carve(int, int, int)} inside the column's range: the open space with its still water carved in. */
+    /** As {@link #carve(int, int, int)} inside the column's range, with the merge. */
     private double carve(Col c, int x, int y, int z) {
+        if (pack == null) return carve0(c, x, y, z);
+        double d = carve0At(c, y);
+        if (d >= 0 && d < SEAM_GATE && seam(c, y) != NO_SEAM) return SEAM_OPEN;
+        return d;
+    }
+
+    /** The open space with its still water carved in, before the merge with the pack's caves. */
+    private double carve0(Col c, int x, int y, int z) {
         double d = raw(c, x, y, z);
         if (d > -0.5 && water(c, y)) return -0.5;
         // a sinkhole's lake where its rock cannot hold it fills in, so its water never meets air at its own level; not
@@ -953,7 +1026,7 @@ public final class UpperShapes {
         if (riftPool(c)) addWater(c, c.rFloor - 1);
         if (c.sOn) {
             for (int y = c.sLake - 1; y <= c.sLake; y++)
-                if (lakeBlock(c, c.x, y, c.z, c.sLake) && holds(c.x, y, c.z, c.sLake)) addWater(c, y);
+                if (lakeBlock(c, c.x, y, c.z, c.sLake) && holds(c.x, y, c.z, c.sLake) && packHolds(c.x, y, c.z)) addWater(c, y);
         }
     }
 
@@ -990,6 +1063,24 @@ public final class UpperShapes {
             if (raw(nx, ny, nz) <= 0) return false;
         }
         return true;
+    }
+
+    /**
+     * True where the rock round the shapes' still water lies: within 2 blocks across of a block of it, from its height
+     * down to {@link #SEAM} + 1 under it (what {@link #packHolds} asks of the pack's caves). The canyons stay out of it too
+     * where the shapes merge with the pack's caves, so no pool keeps only a one-block rim beside a canyon.
+     */
+    public boolean nearWater(int x, int y, int z) {
+        if (pack == null) return false;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                Col n = column(x + dx, z + dz);
+                if (y < n.lo - SEAM - 2 || y > n.hi) continue;
+                waterLevels(n);
+                for (int i = 0; i < n.waterN; i++) if (y <= n.waterY[i] && y >= n.waterY[i] - SEAM - 1) return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1100,11 +1191,165 @@ public final class UpperShapes {
     }
 
     /**
-     * True where a block beside this one or the one under it is open in a shape: the pack's water here would pour into
-     * the shapes (or hang over them), so it stays rock instead.
+     * What a block is in the shapes alone, for the dev scans: {@link #AIR}, {@link #WATER} or {@link #SPRING} where a
+     * shape is open there, -1 where none is.
+     */
+    public int openKind(int x, int y, int z) {
+        Col c = column(x, z);
+        if (y < c.lo || y > c.hi) return -1;
+        if (water(c, y)) return WATER;
+        if (c.rOn && y == spring(c)) return SPRING;
+        return carve0(c, x, y, z) < 0 ? AIR : -1;
+    }
+
+    /**
+     * True where a block beside this one or the one under it is open in a shape (or in a seam that fell away): the pack's
+     * water here would pour into the shapes (or hang over them), so it stays rock instead. So does the pack's water up to
+     * {@link #SEAM} blocks over a seam under the pack's cave: the lake there keeps a floor at least as thick as that.
      */
     public boolean besideOpen(int x, int y, int z) {
-        return carve(x, y - 1, z) < 0 || carve(x + 1, y, z) < 0 || carve(x - 1, y, z) < 0 || carve(x, y, z + 1) < 0 || carve(x, y, z - 1) < 0;
+        if (carve(x, y - 1, z) < 0 || carve(x + 1, y, z) < 0 || carve(x - 1, y, z) < 0 || carve(x, y, z + 1) < 0 || carve(x, y, z - 1) < 0) return true;
+        if (pack == null) return false;
+        Col c = column(x, z);
+        if (y - 1 < c.lo || y - 1 > c.hi) return false;
+        for (int h = y - 1; h > y - 1 - SEAM; h--) {
+            if (cls(c, h) != PACK_OPEN) return false;
+            if (seam(c, h - 1) == UNDER_PACK) return true;
+        }
+        return false;
+    }
+
+    /**
+     * {@link #NO_SEAM}, or what the rock at a block falls away as: {@link #OVER_PACK}, a shape's floor over the pack's
+     * cave, or {@link #UNDER_PACK}, the pack's floor over a shape's ceiling (see {@link #seam}).
+     */
+    public int seamKind(int x, int y, int z) {
+        if (pack == null) return NO_SEAM;
+        Col c = column(x, z);
+        if (y < c.lo || y > c.hi || carve0At(c, y) < 0) return NO_SEAM;
+        return seam(c, y);
+    }
+
+    // ------------------------------------------------------------------------------------------------ the merge
+
+    /** Sets up a column's per-height answers for the merge. */
+    private static void seamReady(Col c) {
+        if (c.sReady) return;
+        c.sReady = true;
+        if (c.sLen <= 0) return;
+        if (c.sKind == null || c.sKind.length < c.sLen) {
+            int n = Math.max(c.sLen, 96);
+            c.sKind = new byte[n];
+            c.sPack = new float[n];
+            c.sCarve = new float[n];
+        }
+        java.util.Arrays.fill(c.sKind, 0, c.sLen, (byte) 0);
+        java.util.Arrays.fill(c.sPack, 0, c.sLen, Float.NaN);
+        java.util.Arrays.fill(c.sCarve, 0, c.sLen, Float.NaN);
+    }
+
+    /** {@link #carve0} at a height of a column, kept; {@link #SOLID} outside its range. */
+    private double carve0At(Col c, int y) {
+        if (y < c.lo || y > c.hi) return SOLID;
+        int i = y - c.sBase;
+        if (i < 0 || i >= c.sLen) return carve0(c, c.x, y, c.z);
+        seamReady(c);
+        float v = c.sCarve[i];
+        if (v != v) {
+            v = (float) carve0(c, c.x, y, c.z);
+            c.sCarve[i] = v;
+        }
+        return v;
+    }
+
+    /** The pack's density at a height of a column, kept. */
+    private double packAt(Col c, int y) {
+        int i = y - c.sBase;
+        if (i < 0 || i >= c.sLen) return pack.density(c.x, y, c.z);
+        seamReady(c);
+        float v = c.sPack[i];
+        if (v != v) {
+            v = (float) pack.density(c.x, y, c.z);
+            c.sPack[i] = v;
+        }
+        return v;
+    }
+
+    /**
+     * What a block is to the merge: {@link #OURS} open in a shape (or its water), {@link #PACK_OPEN} open in the pack's
+     * caves (not the open air over the ground, nor under the old floor), {@link #ROCK}, or {@link #STOP} for rock the merge
+     * may not open (what holds the shapes' water, their formations) and for the pack's open air near the ground.
+     */
+    private int cls(Col c, int y) {
+        if (carve0At(c, y) < 0) return OURS;
+        if (y < packFloor) return ROCK;
+        if (formation(c.x, y, c.z) != 0 || rim(c.x, y, c.z)) return STOP;
+        if (packAt(c, y) >= 0) return ROCK;
+        return y <= c.low - 6 ? PACK_OPEN : STOP;
+    }
+
+    /**
+     * Whether the rock at a height of a column falls away, and how: the run of rock it lies in, straight up and down, is
+     * at most {@link #SEAM} blocks thick, with a shape's open space at one end and the pack's cave at the other
+     * ({@link #OVER_PACK} with the shape over it, {@link #UNDER_PACK} with the pack's cave over it). Worked out once for the
+     * whole run.
+     */
+    private int seam(Col c, int y) {
+        int i = y - c.sBase;
+        if (i < 0 || i >= c.sLen) return NO_SEAM;
+        seamReady(c);
+        int k = c.sKind[i];
+        if (k != 0) return k - 1;
+        int r = NO_SEAM, top = y, bot = y;
+        if (cls(c, y) == ROCK) {
+            // up and then down while the rock goes on, until it is too thick (top - bot + 1 > SEAM)
+            int up = cls(c, top + 1);
+            while (up == ROCK && top - bot < SEAM) up = cls(c, ++top + 1);
+            int down = STOP;
+            if (top - bot < SEAM) {
+                down = cls(c, bot - 1);
+                while (down == ROCK && top - bot < SEAM) down = cls(c, --bot - 1);
+            }
+            boolean thin = top - bot < SEAM && up != ROCK && down != ROCK;
+            if (thin && up == OURS && down == PACK_OPEN) r = OVER_PACK;
+            else if (thin && up == PACK_OPEN && down == OURS) r = UNDER_PACK;
+        }
+        for (int h = Math.max(bot, c.sBase); h <= top && h - c.sBase < c.sLen; h++) c.sKind[h - c.sBase] = (byte) (r + 1);
+        return r;
+    }
+
+    /**
+     * True where the pack's caves leave the rock round still water whole: rock to the pack in every column within 2
+     * blocks across, from the water's height down to {@link #SEAM} + 1 under it. So no seam ever opens beside the water
+     * or under it, and the water never sits on a crust over the pack's caves.
+     */
+    private boolean packHolds(int x, int wy, int z) {
+        if (pack == null) return true;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                Col n = column(x + dx, z + dz);
+                for (int y = Math.max(wy - SEAM - 1, packFloor); y <= wy; y++) if (packAt(n, y) < 0) return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * True where a formation keeps thick rock over it ({@code dir} 1, from {@code from} up) or under it (-1, from
+     * {@code from} down): rock to the pack for {@link #SEAM} + 2 blocks in its own column and the four beside it, so no
+     * seam cuts it loose. Near the ground (within 2 of {@code ground}) the open air does not count.
+     */
+    private boolean anchored(int x, int z, int from, int dir, double ground) {
+        if (pack == null) return true;
+        for (int k = 0; k < 5; k++) {
+            int nx = x + (k == 1 ? 1 : k == 2 ? -1 : 0), nz = z + (k == 3 ? 1 : k == 4 ? -1 : 0);
+            for (int j = 0; j < SEAM + 2; j++) {
+                int y = from + dir * j;
+                if (y < packFloor || y > ground - 2) continue;
+                if (pack.density(nx, y, nz) < 0) return false;
+            }
+        }
+        return true;
     }
 
     /**

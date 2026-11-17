@@ -105,6 +105,7 @@ public final class RemixCommands {
                 .then(Commands.literal("layers").executes(RemixCommands::layers))
                 .then(Commands.literal("info").executes(RemixCommands::info))
                 .then(PlantCensus.command())
+                .then(SeamScan.command())
                 .then(LavaCommands.command())
                 .then(com.explorationremix.world.quake.Quakes.command())
                 .then(com.explorationremix.world.eruption.Eruptions.command())

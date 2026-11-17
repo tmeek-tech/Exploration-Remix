@@ -32,7 +32,8 @@ public final class ERConfig {
     public final ForgeConfigSpec.BooleanValue removeCreateStriations;
     public final ForgeConfigSpec.BooleanValue upperRegions;
     /** The Upper Caves grown from noise (0.13): the switch for all of it, one per shape, and vanilla's worm tunnels. */
-    public final ForgeConfigSpec.BooleanValue upperNoise, upperWarrens, upperRifts, upperHalls, upperSinkholes, upperWormTunnels, upperHostRock, upperDenRifts;
+    public final ForgeConfigSpec.BooleanValue upperNoise, upperWarrens, upperRifts, upperHalls, upperSinkholes, upperWormTunnels, upperHostRock, upperDenRifts,
+            upperMerge;
     public final LayerConfig[] layers = new LayerConfig[4];
     // The Basalt Galleries' lava cycle (world.lava.LavaFlood), read while the server runs.
     public final ForgeConfigSpec.BooleanValue lavaCycleEnabled;
@@ -147,6 +148,10 @@ public final class ERConfig {
                 .define("sinkholes", true);
         upperWormTunnels = b.comment("Keep vanilla's worm tunnels (the cave carver, whose tunnels end blind) above the old floor. Its canyons stay either way.")
                 .define("wormTunnels", false);
+        upperMerge = b.comment("Where the shapes meet the pack's own caves (Tectonic's) through rock 3 blocks thick or less, that rock falls away and",
+                        "the two open into one cave, and pools, roots and stalactites stay only where the pack's caves leave the rock round",
+                        "them whole. Off: the two stay a plain overlay, as before 0.18.5 (thin floors, pools on one-block crusts).")
+                .define("mergeWithPackCaves", true);
         upperHostRock = b.comment("Carve the caves near the surface into the ground's own rock: soil 5 to 8 blocks deep (rooted dirt at its base under",
                         "trees) and, in the stone above the deepslate, big blobs of limestone, veridium in the tropics, sandstone under deserts,",
                         "terracotta under badlands, or the stone the pack (WWOO) gives the biome over them. Also works with noiseShapes off.")
