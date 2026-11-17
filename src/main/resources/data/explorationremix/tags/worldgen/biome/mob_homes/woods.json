@@ -1,0 +1,14 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:is_forest",
+    "#minecraft:is_taiga",
+    "#minecraft:is_jungle",
+    "#minecraft:is_savanna",
+    "minecraft:swamp",
+    "minecraft:mangrove_swamp",
+    "minecraft:cherry_grove",
+    "minecraft:wooded_badlands",
+    "minecraft:windswept_forest"
+  ]
+}
