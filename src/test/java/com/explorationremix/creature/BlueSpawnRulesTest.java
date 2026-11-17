@@ -32,14 +32,18 @@ class BlueSpawnRulesTest {
     }
 
     @Test
-    void oneOrTwoSkeinsNeverThree() {
-        assertTrue(wantSkein(0, false, true, 0.99), "always one");
-        assertTrue(wantSkein(1, false, true, 0.0), "a second now and then");
-        assertFalse(wantSkein(1, false, true, 0.99));
-        assertFalse(wantSkein(2, false, true, 0.0));
+    void aSkeinMovesInSlowlyOnlyWhereNoneIsLeft() {
+        assertTrue(wantSkein(0, false, true, 0.0), "none left within the refill radius: now and then");
+        assertFalse(wantSkein(0, false, true, REFILL_CHANCE), "but not at every look");
+        assertFalse(wantSkein(1, false, true, 0.0), "one is still about: none comes");
         assertFalse(wantSkein(3, false, true, 0.0));
         assertFalse(wantSkein(0, true, true, 0.0), "never in Peaceful");
         assertFalse(wantSkein(0, false, false, 0.0), "doMobSpawning off");
+        // about one every two minutes of looks (every EVERY ticks) round a player whose caves have none
+        double minutes = BlueReachesSpawner.EVERY / REFILL_CHANCE / 20.0 / 60.0;
+        assertTrue(minutes > 1.0 && minutes < 4.0, minutes + " minutes");
+        // the refill counts further out than it brings one out, so the Skeins it brings stop it at once
+        assertTrue(REFILL_RADIUS > SKEIN_RADIUS && SKEIN_FAR < SKEIN_RADIUS);
     }
 
     @Test

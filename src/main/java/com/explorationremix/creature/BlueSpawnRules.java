@@ -5,8 +5,10 @@ package com.explorationremix.creature;
  * a world: which players it works round, how many Skeins and firefly swarms it keeps near each, how far off it brings
  * them out, and which places each may live in.
  *
- * <p>Round a player in the Blue Reaches (in Survival or Adventure) it keeps one or two Skeins within {@link
- * #SKEIN_RADIUS} blocks, never more than {@link #SKEIN_MAX} there, and three to five swarms within {@link
+ * <p>The Skeins are set down with the world ({@link SkeinHomes}) and stay; round a player in the Blue Reaches (in
+ * Survival or Adventure) the spawner only brings a new one out now and then where none is left within {@link
+ * #REFILL_RADIUS} blocks, never more than {@link #SKEIN_MAX} within {@link #SKEIN_RADIUS}. It keeps three to five
+ * swarms within {@link
  * #SWARM_RADIUS} (one or two in the Deep Dark, where the fireflies are few). Each comes out {@link #NEAR} blocks or
  * further from every player, and within the radius it is counted in (a sphere: height counts too), so it counts as
  * soon as it is out. The Asurine Geodes are a refuge: fireflies live there, Skeins never.
@@ -22,11 +24,17 @@ public final class BlueSpawnRules {
     /** The Blue Reaches' heights when the deep world cannot say (its first layer, between the first two bands). */
     public static final int TOP = -81, BOTTOM = -272;
 
-    /** Skeins: one is always wanted, a second now and then, never more than three in the radius. */
+    /** A new Skein comes out within this of the player it is for, and never where this many are within it already. */
     public static final double SKEIN_RADIUS = 48.0;
-    public static final int SKEIN_KEEP = 1, SKEIN_WANT = 2, SKEIN_MAX = 3;
-    /** The chance, at each look, that a second Skein comes out while there is only one. */
-    public static final double SKEIN_TOP_UP = 0.2;
+    public static final int SKEIN_MAX = 3;
+    /**
+     * The slow refill (0.17.0): with no Skein left within this of a player, the caves round them have lost theirs (or
+     * were made before Skeins were set down with the world), and one may come out. The Skeins set down with the world
+     * leave several within it almost everywhere, so a refill comes only where they are gone.
+     */
+    public static final double REFILL_RADIUS = 96.0;
+    /** The chance, at each look (every two seconds), that one comes out for such a player: about one every two minutes. */
+    public static final double REFILL_CHANCE = 1.0 / 60.0;
     /** Swarms within this radius; the counts are by the player's place. */
     public static final double SWARM_RADIUS = 40.0;
     public static final double SWARM_TOP_UP = 0.3;
@@ -65,14 +73,12 @@ public final class BlueSpawnRules {
     }
 
     /**
-     * Whether to bring out a Skein for a player with {@code nearby} within {@link #SKEIN_RADIUS}: always below one,
-     * now and then ({@code roll} under {@link #SKEIN_TOP_UP}) below two; never in Peaceful or without mob spawning
+     * Whether to bring out a Skein for a player with {@code nearby} within {@link #REFILL_RADIUS}: only when there is
+     * none, and then now and then ({@code roll} under {@link #REFILL_CHANCE}); never in Peaceful or without mob spawning
      * ({@code mobSpawning}: the doMobSpawning rule, and the server spawning monsters at all).
      */
     public static boolean wantSkein(int nearby, boolean peaceful, boolean mobSpawning, double roll) {
-        if (peaceful || !mobSpawning || nearby >= SKEIN_MAX) return false;
-        if (nearby < SKEIN_KEEP) return true;
-        return nearby < SKEIN_WANT && roll < SKEIN_TOP_UP;
+        return !peaceful && mobSpawning && nearby == 0 && roll < REFILL_CHANCE;
     }
 
     /** The fewest swarms kept round a player in this place (they are few in the Deep Dark). */

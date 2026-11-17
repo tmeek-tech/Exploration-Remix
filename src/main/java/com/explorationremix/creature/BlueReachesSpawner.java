@@ -26,15 +26,17 @@ import net.minecraftforge.fml.common.Mod;
 import javax.annotation.Nullable;
 
 /**
- * Brings the Blue Reaches' creatures out near the players there: Skeins on the rock (floor, wall or ceiling) and swarms
- * of blue fireflies in the open air of the caves, by the counts and distances of {@link BlueSpawnRules}. Its own
+ * Brings the Blue Reaches' creatures out near the players there: swarms of blue fireflies in the open air of the
+ * caves, and now and then a Skein on the rock (floor, wall or ceiling) where the caves have none left (the Skeins are
+ * set down with the world, {@link SkeinHomes}), by the counts and distances of {@link BlueSpawnRules}. Its own
  * spawner run from the server tick, not the biomes' spawn lists, so the counts stay as they are meant and the pack's
  * other spawns are untouched.
  *
  * <p>Every {@link #EVERY} ticks it looks round each player in the Blue Reaches (one player a tick at most, staggered)
  * and tries a few spots for each kind still wanted there: a ring {@link BlueSpawnRules#NEAR} blocks and more away, a
- * spot out of every player's sight first, one in sight only when none is hidden. A Skein is set down lying still, its
- * body laid out behind it the way there is most room; a swarm comes out through {@link FireflySwarm#spawn}.
+ * spot out of every player's sight first, one in sight only when none is hidden (a Skein only ever out of sight). A
+ * Skein is set down lying still, its body laid out behind it the way there is most room, and stays as those set down
+ * with the world do; a swarm comes out through {@link FireflySwarm#spawn}.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID)
 public final class BlueReachesSpawner {
@@ -86,7 +88,7 @@ public final class BlueReachesSpawner {
         // the server's spawn-monsters and spawn-animals, as vanilla's spawns keep them: a Skein is a monster, and a
         // swarm is ambient life, which vanilla brings out only with the animals
         MinecraftServer server = level.getServer();
-        int skeins = countNear(level, SkeinEntity.class, p.position(), BlueSpawnRules.SKEIN_RADIUS);
+        int skeins = countNear(level, SkeinEntity.class, p.position(), BlueSpawnRules.REFILL_RADIUS);
         if (BlueSpawnRules.wantSkein(skeins, peaceful, mobSpawning && server.isSpawningMonsters(), level.random.nextDouble())) spawnSkein(level, p, top, bottom);
         int swarms = countNear(level, FireflySwarm.class, p.position(), BlueSpawnRules.SWARM_RADIUS);
         if (BlueSpawnRules.wantSwarm(place, swarms, mobSpawning && server.isSpawningAnimals(), level.random.nextDouble())) spawnSwarm(level, p, top, bottom);
@@ -101,15 +103,12 @@ public final class BlueReachesSpawner {
 
     // ------------------------------------------------------------------------------------------------ a Skein
 
+    /** A Skein moves in out of every player's sight, or not this time. */
     private static void spawnSkein(ServerLevel level, ServerPlayer p, int top, int bottom) {
-        SkeinEntity.Placement seen = null;
         for (int i = 0; i < SKEIN_TRIES; i++) {
             SkeinEntity.Placement spot = skeinSpot(level, p, top, bottom);
-            if (spot == null) continue;
-            if (!seenByAnyone(level, spot.pos().add(0, 0.35, 0))) { setDown(level, spot); return; }
-            if (seen == null) seen = spot;
+            if (spot != null && !seenByAnyone(level, spot.pos().add(0, 0.35, 0))) { setDown(level, spot); return; }
         }
-        if (seen != null) setDown(level, seen);
     }
 
     /** A spot on the ring round {@code p} where a Skein may come out, or null. */
@@ -138,6 +137,8 @@ public final class BlueReachesSpawner {
         if (s == null) return;
         s.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(spot.pos())), MobSpawnType.NATURAL, null, null);
         s.placeOn(spot.pos(), spot.rock(), SkeinEntity.openHeading(level, EREntities.SKEIN.get(), spot, level.random::nextDouble));
+        // it has moved in: it stays, as the Skeins set down with the world do
+        s.setPersistenceRequired();
         level.addFreshEntity(s);
     }
 

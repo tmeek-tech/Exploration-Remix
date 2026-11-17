@@ -1,6 +1,7 @@
 package com.explorationremix.creature;
 
 import com.explorationremix.registry.EREntities;
+import com.explorationremix.world.feature.SkeinsFeature;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -34,6 +35,8 @@ import java.util.Locale;
  *     <li>{@code /remix skein state <name> [ticks]}: sets the nearest one's state (still, skitter, stalk, rear,
  *     lunge, bolt, eat, journey): a strike is at you, a bolt away from you, a stalk after the nearest landed swarm, a
  *     journey 40 to 90 blocks along the Deep Blue Rift's ledge path (it must be by it)</li>
+ *     <li>{@code /remix skein homes}: the Skeins set down with the world since the game started (home chunks made,
+ *     Skeins set down in them), and how many are in the loaded world now</li>
  *     <li>{@code /remix skein hungry}: makes the nearest one hungry now, so it goes for a landed swarm near it</li>
  *     <li>{@code /remix skein trace [ticks]}: logs how the nearest one's body moves each tick, to the server log</li>
  * </ul>
@@ -55,6 +58,7 @@ public final class SkeinCommands {
                         .executes(c -> state(c, StringArgumentType.getString(c, "name"), 400))
                         .then(Commands.argument("ticks", IntegerArgumentType.integer(1, 12000))
                                 .executes(c -> state(c, StringArgumentType.getString(c, "name"), IntegerArgumentType.getInteger(c, "ticks"))))))
+                .then(Commands.literal("homes").executes(SkeinCommands::homes))
                 .then(Commands.literal("hungry").executes(SkeinCommands::hungry))
                 .then(Commands.literal("trace").executes(c -> trace(c, 600))
                         .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 12000)).executes(c -> trace(c, IntegerArgumentType.getInteger(c, "ticks")))));
@@ -129,6 +133,23 @@ public final class SkeinCommands {
         List<SkeinEntity> all = c.getSource().getLevel().getEntitiesOfClass(SkeinEntity.class, new AABB(p, p).inflate(radius));
         all.sort(Comparator.comparingDouble(e -> e.distanceToSqr(p)));
         return all;
+    }
+
+    /**
+     * How the Skeins set down with the world are doing: the home chunks made since the game started and the Skeins set
+     * down in them (world.feature.SkeinsFeature), and the Skeins in the loaded world now, those kept for good among them.
+     */
+    private static int homes(CommandContext<CommandSourceStack> c) {
+        int loaded = 0, kept = 0;
+        for (var e : c.getSource().getLevel().getAllEntities()) {
+            if (!(e instanceof SkeinEntity s) || !s.isAlive()) continue;
+            loaded++;
+            if (s.isPersistenceRequired()) kept++;
+        }
+        long homes = SkeinsFeature.HOMES.get(), placed = SkeinsFeature.PLACED.get();
+        say(c, String.format(Locale.ROOT, "Home chunks made: %d, Skeins set down in them: %d (%.0f%%). Loaded now: %d, %d of them kept for good.",
+                homes, placed, homes == 0 ? 0.0 : 100.0 * placed / homes, loaded, kept));
+        return loaded;
     }
 
     private static int list(CommandContext<CommandSourceStack> c, int radius) {

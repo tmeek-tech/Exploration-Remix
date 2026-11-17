@@ -9,16 +9,24 @@ import com.explorationremix.world.terrain.Plans;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.MobSpawnType;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.ServerLevelAccessor;
+import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -27,6 +35,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -41,9 +52,11 @@ import java.util.UUID;
  * A Mossback's den: a patch of trampled moss and gnawed bone on the upper landing of a den gate, the way down from the
  * Upper Caves to the Blue Reaches. A den keeps a family of two or three: a guard that never leaves it, so the den is
  * always a fight, and roamers that go out far and come home with what they catch, which is how a player finds the
- * gate. The den brings its family out one at a time when a player comes within a few chunks (never in plain sight).
- * When the guard dies the roamers are called home and the first back takes its place; when the whole family is gone
- * the den lies empty for a few in-game days before a new family moves in. Breaking the den drops nothing.
+ * gate. The family is set down with the den as its chunk is made (0.17.0), so they are home before anyone comes, as the
+ * animals a world starts with are. When the guard dies the roamers are called home and the first back takes its
+ * place; a member lost while the rest live is replaced after a day, and when the whole family is gone the den lies
+ * empty for a few in-game days before a new family moves in. A den brings its owed lizards out one at a time while it
+ * is in the loaded world, never with a player close by or in sight of it. Breaking the den drops nothing.
  *
  * <p>Who belongs to which den is kept in the level's {@link DenRegistry}, not in the den, so deaths and check-ins
  * far from home count while the den's chunk is unloaded. A den that is not on a den gate's landing (the plain
@@ -62,8 +75,8 @@ public class MossbackDen extends BaseEntityBlock {
     static final long LOST_TICKS = 6000L;
     /** A den this near a den gate's upper landing centre (blocks across) and its floor (blocks up or down) is that gate's. */
     static final double GATE_REACH = 24.0, GATE_DEPTH = 10.0;
-    /** A player this far from the den brings its family out: near enough to meet them, never near enough to watch. */
-    static final double SPAWN_NEAR = 16.0, SPAWN_FAR = 96.0;
+    /** No lizard comes out of the den with a player this near it, or one this near with a clear view of the spot. */
+    static final double SPAWN_NEAR = 16.0, SPAWN_SEEN = 64.0;
     /** The most scraps of bone a den's meals leave round it, and how far from the den they lie. */
     public static final int MAX_SCRAPS = 24, SCRAPS_REACH = 8;
     private static final ResourceLocation SCRAPS = new ResourceLocation(ExplorationRemix.MOD_ID, "bone_scraps");
@@ -116,13 +129,63 @@ public class MossbackDen extends BaseEntityBlock {
      * miss most dens under snowy ground. The Frost Fern Grotto itself is chosen by the ground above it being cold
      * (the surface biome is one snow falls on), so the den asks that too: a family is frost where the grotto would be.
      */
-    static boolean coldDen(ServerLevel level, BlockPos pos) {
+    static boolean coldDen(ServerLevelAccessor level, BlockPos pos) {
         if (MossbackEntity.isColdPlace(level, pos)) return true;
         SurfaceOracle above = DeepWorld.oracle();
         return above != null && above.at(pos.getX(), pos.getZ()).cold();
     }
 
     // ------------------------------------------------------------------------------------------------ the family
+
+    /**
+     * The den's family, set down with the den while its chunk is made (DenLairFeature, 0.17.0), so they are home before
+     * anyone comes: the guard on the den's own two by two, the roamers on free floor round it, each in the den's chunk
+     * (the one being made). The den's tile keeps who they are until its first tick, when they go into the level's
+     * registry as the family it has brought out; one that found no room comes out of the den later, as a refill does.
+     */
+    public static void settleFamily(WorldGenLevel level, BlockPos den, RandomSource r) {
+        if (!(level.getBlockEntity(den) instanceof Tile tile)) return;
+        int size = familySize(den);
+        byte kind = coldDen(level, den) ? MossbackEntity.FROST : MossbackEntity.MOSS;       // one family, one kind
+        int cx = SectionPos.blockToSectionCoord(den.getX()), cz = SectionPos.blockToSectionCoord(den.getZ());
+        List<UUID> born = new ArrayList<>();
+        List<AABB> taken = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            MossbackEntity m = EREntities.MOSSBACK.get().create(level.getLevel());
+            if (m == null || !place(level, den, m, r, taken, cx, cz)) continue;
+            m.setDen(den);
+            m.finalizeSpawn(level, level.getCurrentDifficultyAt(den), MobSpawnType.STRUCTURE, null, null);
+            m.setVariant(kind);
+            m.learn(born.isEmpty() ? DenRegistry.Role.GUARD : DenRegistry.Role.ROAMER, false);
+            taken.add(m.getBoundingBox());
+            level.addFreshEntityWithPassengers(m);
+            born.add(m.getUUID());
+        }
+        tile.born(born);
+    }
+
+    /**
+     * Sets {@code m} on the den's own two by two if it is free, else on the nearest free floor round it, clear of the
+     * boxes in {@code taken} (a world being made knows none of its entities yet); inside chunk (cx, cz) when that is
+     * given (not {@link Integer#MIN_VALUE}).
+     */
+    private static boolean place(LevelReader level, BlockPos den, MossbackEntity m, RandomSource r, List<AABB> taken, int cx, int cz) {
+        for (int i = 0; i < 48; i++) {
+            int reach = 1 + i / 8;
+            BlockPos c = i == 0 ? den : den.offset(r.nextInt(2 * reach + 1) - reach, r.nextInt(5) - 2, r.nextInt(2 * reach + 1) - reach);
+            if (cx != Integer.MIN_VALUE && (SectionPos.blockToSectionCoord(c.getX()) != cx || SectionPos.blockToSectionCoord(c.getX() + 1) != cx
+                    || SectionPos.blockToSectionCoord(c.getZ()) != cz || SectionPos.blockToSectionCoord(c.getZ() + 1) != cz)) continue;
+            if (!level.hasChunksAt(c.getX() - 1, c.getZ() - 1, c.getX() + 2, c.getZ() + 2)) continue;
+            if (ClimbNodeEvaluator.classify(level, c.getX(), c.getY(), c.getZ(), 2, 1, 2) != ClimbNodeEvaluator.FLOOR) continue;
+            m.moveTo(c.getX() + 1.0, c.getY() + 0.1, c.getZ() + 1.0, r.nextFloat() * 360.0F, 0.0F);
+            if (!level.noCollision(m)) continue;
+            AABB box = m.getBoundingBox();
+            boolean clear = true;
+            for (AABB t : taken) if (t.intersects(box)) { clear = false; break; }
+            if (clear) return true;
+        }
+        return false;
+    }
 
     /** The lizard says it is still about: where it is, and what it should know (its role, a call home). */
     static void checkIn(MossbackEntity lizard) {
@@ -265,6 +328,8 @@ public class MossbackDen extends BaseEntityBlock {
         private boolean checked;
         /** A den saved by 0.6.0 (one lizard, kept in the den itself): taken into the registry on its first tick. */
         private boolean legacy;
+        /** The family set down with the den as its chunk was made (guard first): taken into the registry on its first tick. */
+        @Nullable private List<UUID> born;
         @Nullable private UUID legacyLizard;
         private long legacyLastSeen, legacyEmptyUntil;
 
@@ -281,6 +346,7 @@ public class MossbackDen extends BaseEntityBlock {
                     return;
                 }
                 if (legacy) adoptLegacy(level);
+                if (born != null) adoptBorn(level);
             }
             long now = level.getGameTime();
             if (Math.floorMod(now + worldPosition.hashCode(), (long) PASS) != 0) return;
@@ -305,8 +371,10 @@ public class MossbackDen extends BaseEntityBlock {
                 if (!watched(level, m.last)) continue;
                 m.missing += PASS;
                 changed = true;
-                // lost: most likely killed where the den could not hear of it, so the den lies empty as after a death
-                if (m.missing >= LOST_TICKS) rec.gone(m.id, now, DenRegistry.Loss.KILLED);
+                // lost: most likely killed where the den could not hear of it, so the den lies empty as after a death;
+                // in Peaceful it was only taken out of the level (Peaceful takes every monster), so it comes back at once
+                // once the world is out of Peaceful
+                if (m.missing >= LOST_TICKS) rec.gone(m.id, now, level.getDifficulty() == Difficulty.PEACEFUL ? DenRegistry.Loss.REMOVED : DenRegistry.Loss.KILLED);
             }
             return changed;
         }
@@ -320,18 +388,19 @@ public class MossbackDen extends BaseEntityBlock {
         }
 
         /**
-         * Brings out the next of the family, one a pass, while a player is near enough to meet it and none close
-         * enough to watch it appear (never in Peaceful). The first is the guard, the rest roamers.
+         * Brings out the next lizard the den is owed (a family the den has not yet had, a refill, a new family after the
+         * den lay empty), one a pass, while the den is in the loaded world and no player is close by or in sight of
+         * where it comes out (never in Peaceful). The first is the guard, the rest roamers.
          */
         private boolean bringOut(ServerLevel level, DenRegistry.Den rec, long now) {
             int size = familySize(worldPosition);
             if (rec.members.size() >= size || rec.spawned >= size) return false;
             if (now < rec.emptyUntil || now < rec.refillAt || level.getDifficulty() == Difficulty.PEACEFUL) return false;
             double cx = worldPosition.getX() + 1.0, cy = worldPosition.getY(), cz = worldPosition.getZ() + 1.0;
-            Player near = level.getNearestPlayer(cx, cy, cz, SPAWN_FAR, p -> !p.isSpectator());
-            if (near == null || near.distanceToSqr(cx, cy, cz) < SPAWN_NEAR * SPAWN_NEAR) return false;
+            if (level.getNearestPlayer(cx, cy, cz, SPAWN_NEAR, p -> !p.isSpectator()) != null) return false;
             MossbackEntity m = EREntities.MOSSBACK.get().create(level);
-            if (m == null || !place(level, m)) return false;
+            if (m == null || !place(level, worldPosition, m, level.random, List.of(), Integer.MIN_VALUE, Integer.MIN_VALUE)) return false;
+            if (seen(level, m.position().add(0, m.getBbHeight() / 2.0, 0))) return false;
             m.setDen(worldPosition);
             m.finalizeSpawn(level, level.getCurrentDifficultyAt(worldPosition), MobSpawnType.STRUCTURE, null, null);
             m.setVariant(coldDen(level, worldPosition) ? MossbackEntity.FROST : MossbackEntity.MOSS);   // one family, one kind
@@ -342,19 +411,28 @@ public class MossbackDen extends BaseEntityBlock {
             return true;
         }
 
-        /** On the den's own two by two if it is free, else on the nearest free floor round it. */
-        private boolean place(ServerLevel level, MossbackEntity m) {
-            RandomSource r = level.random;
-            for (int i = 0; i < 48; i++) {
-                int reach = 1 + i / 8;
-                BlockPos c = i == 0 ? worldPosition
-                        : worldPosition.offset(r.nextInt(2 * reach + 1) - reach, r.nextInt(5) - 2, r.nextInt(2 * reach + 1) - reach);
-                if (!level.hasChunksAt(c.getX() - 1, c.getZ() - 1, c.getX() + 2, c.getZ() + 2)) continue;
-                if (ClimbNodeEvaluator.classify(level, c.getX(), c.getY(), c.getZ(), 2, 1, 2) != ClimbNodeEvaluator.FLOOR) continue;
-                m.moveTo(c.getX() + 1.0, c.getY() + 0.1, c.getZ() + 1.0, r.nextFloat() * 360.0F, 0.0F);
-                if (level.noCollision(m)) return true;
+        /** Whether a player within {@link #SPAWN_SEEN} has a clear line from the eyes to {@code at}. */
+        private static boolean seen(ServerLevel level, Vec3 at) {
+            for (ServerPlayer p : level.players()) {
+                if (p.isSpectator() || p.position().distanceToSqr(at) > SPAWN_SEEN * SPAWN_SEEN) continue;
+                if (level.clip(new ClipContext(p.getEyePosition(), at, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, p)).getType() == HitResult.Type.MISS)
+                    return true;
             }
             return false;
+        }
+
+        /** Keeps the family set down with the den as its chunk was made, for its first tick (see {@link #settleFamily}). */
+        void born(List<UUID> ids) {
+            born = ids.isEmpty() ? null : List.copyOf(ids);
+            setChanged();
+        }
+
+        /** The family set down with the den: its first member the guard, the rest roamers, all of them out already. */
+        private void adoptBorn(ServerLevel level) {
+            DenRegistry reg = DenRegistry.get(level);
+            if (reg.open(worldPosition).adopt(born, worldPosition)) reg.setDirty();
+            born = null;
+            setChanged();
         }
 
         /** A den saved by 0.6.0 that does lie on a gate's landing: its lizard is the first of the family, its guard. */
@@ -377,7 +455,7 @@ public class MossbackDen extends BaseEntityBlock {
         public String describe(ServerLevel level, long now) {
             int size = familySize(worldPosition);
             DenRegistry.Den rec = DenRegistry.get(level).den(worldPosition);
-            if (!checked && rec == null) return "not woken yet (a family of " + size + ")";
+            if (!checked && rec == null) return "not woken yet (a family of " + size + (born != null ? ", " + born.size() + " set down with it" : "") + ")";
             if (rec == null || rec.members.isEmpty()) {
                 if (rec != null && now < rec.emptyUntil) return "empty for " + (rec.emptyUntil - now) / 20 + "s more (then a family of " + size + ")";
                 return "waiting for a player (a family of " + size + ")";
@@ -398,6 +476,12 @@ public class MossbackDen extends BaseEntityBlock {
         @Override
         protected void saveAdditional(CompoundTag tag) {
             super.saveAdditional(tag);
+            // the family set down with the den, until its first tick takes them into the level's registry
+            if (born != null) {
+                ListTag ids = new ListTag();
+                for (UUID id : born) ids.add(NbtUtils.createUUID(id));
+                tag.put("Born", ids);
+            }
             // the family is kept in the level's registry; only an old den not yet taken into it keeps its own
             if (legacy) {
                 if (legacyLizard != null) tag.putUUID("Lizard", legacyLizard);
@@ -414,6 +498,10 @@ public class MossbackDen extends BaseEntityBlock {
             legacyLizard = tag.hasUUID("Lizard") ? tag.getUUID("Lizard") : null;
             legacyLastSeen = tag.getLong("LastSeen");
             legacyEmptyUntil = tag.getLong("EmptyUntil");
+            ListTag ids = tag.getList("Born", Tag.TAG_INT_ARRAY);
+            List<UUID> b = new ArrayList<>();
+            for (Tag id : ids) b.add(NbtUtils.loadUUID(id));
+            born = b.isEmpty() ? null : List.copyOf(b);
         }
     }
 }
