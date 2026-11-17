@@ -977,8 +977,8 @@ class NetworkTest {
 
     /**
      * One or more cells of a layer built as the game builds them, the climbs' vines marked, the shelf vines of the
-     * Deep Blue Rift and the deep dark too (as ClimbVinesFeature and ShelfVinesFeature place them), and joined from the
-     * first cell's entry landing. An apron of 64 blocks round the cells (the deep dark
+     * Deep Blue Rift too (as ClimbVinesFeature and ShelfVinesFeature place them; none on the deep dark's since 0.14.4),
+     * and joined from the first cell's entry landing. An apron of 64 blocks round the cells (the deep dark
      * raster's) keeps the Blue Reaches' caverns that run across a seam joined as they are in the world.
      */
     static synchronized VoxelHarness built(long seed, int li, int cx, int cz, int wc, int hc) {
@@ -997,7 +997,8 @@ class NetworkTest {
         v = VoxelHarness.build(t, li, cx * cell - ap, cz * cell - ap, wc * cell + 2 * ap, hc * cell + 2 * ap);
         for (int i = ap > 0 ? -1 : 0; i < wc + (ap > 0 ? 1 : 0); i++) for (int k = ap > 0 ? -1 : 0; k < hc + (ap > 0 ? 1 : 0); k++)
             v.markShafts(w.net(li, cx + i, cz + k));
-        if (li == Terrain.BLUE) v.markShelfVines(DeepBiome.DEEP_BLUE_RIFT, DeepBiome.DEEP_DARK);
+        // the deep dark's lips hold no vines since 0.14.4: only the rift's lips get shelf vines
+        if (li == Terrain.BLUE) v.markShelfVines(DeepBiome.DEEP_BLUE_RIFT);
         Net n = w.net(li, cx, cz);
         Chamber e = n.ch.get(n.entry);
         v.connect(e.x, e.f0 + 1, e.z);
@@ -1121,7 +1122,8 @@ class NetworkTest {
         double share = in[0] / (double) in[1];
         System.out.printf("Blue Reaches 2 x 2 cells: main component %.2f%% of %d places%n", 100 * share, in[1]);
         List<String> fails = new ArrayList<>();
-        // measured 96.94% with the shelf vines as ShelfVinesFeature places them (89.78% with none); the design's bar is 93%
+        // measured 93.44% with the shelf vines as ShelfVinesFeature places them since 0.14.4, on the rift's lips only
+        // (97.48% with the deep dark's lips too, as in 0.14.3; 89.78% with none); the design's bar is 93%
         if (share < 0.93) fails.add("the main component holds " + fmt(100 * share) + "% of the standing places");
         for (int i = 0; i < 2; i++) for (int k = 0; k < 2; k++) {
             Net n = w.net(Terrain.BLUE, cx + i, cz + k);
