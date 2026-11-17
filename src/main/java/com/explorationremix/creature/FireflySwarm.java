@@ -85,8 +85,8 @@ public class FireflySwarm extends Entity {
     /**
      * A landed swarm takes off, startled, when a player comes within this many blocks of it (of its nearest
      * fireflies, about) and it can see them; within {@link #FLUSH_SNEAK} only, sneaking; {@link #FLUSH_SPRINT} further
-     * off, running. Nearer than {@link #FLUSH_HEARD} it goes whether it sees them or not. (0.16.0: about 6 blocks, 3
-     * sneaking; it was 3 for everyone.)
+     * off, running. Nearer than {@link #FLUSH_HEARD} it goes whether it sees them or not. (0.16.0, Taran's pick: about 6
+     * blocks, 3 sneaking; it was 3 for everyone.)
      */
     public static final double FLUSH = 6.0, FLUSH_SNEAK = 3.0, FLUSH_SPRINT = 2.0, FLUSH_HEARD = 2.0;
     /** It picks its patch to land on within this of its centre, and never where a player would startle it at once. */

@@ -9,7 +9,7 @@ import java.util.Random;
  * a spring pulls it back towards the swarm's centre, harder once it strays past the swarm's {@link #radius}, and a
  * slowly turning wander of its own keeps it from settling into a fixed orbit. Together they make a loose, looping cloud
  * that goes where the centre goes, carried along in the swarm's own air. A bigger swarm makes a wider cloud
- * ({@link #radius}), with as much room round each firefly as a small one has.
+ * ({@link #radius}), not a thicker one: seen from outside, its fireflies look as far apart as a small swarm's.
  *
  * <p>They keep clear of the bodies among them ({@link #addBody}: players and other creatures). A body moving through
  * the cloud pushes the air aside the way a post pushed through water does: on ahead of it, back round its sides and in
@@ -54,10 +54,13 @@ public final class Flock {
     static final double K_CENTRE = 0.003, K_FAR = 0.02;
     /**
      * A swarm of up to {@link #BASE_COUNT} fireflies keeps within {@link #BASE_RADIUS} of its centre; a bigger one's
-     * cloud is wider by the cube root of how many more it holds, as much room round each, up to {@link #MAX_RADIUS}.
+     * cloud is wider by the square root of how many more it holds, up to {@link #MAX_RADIUS}. Seen from outside, a cloud
+     * is as crowded as the fireflies lying one behind another across it, so a wider one spreads them thinner in depth
+     * to keep them as far apart on the eye as a small swarm's (by the cube root, as in 0.16.0, a big cloud looked
+     * thicker than the old ones).
      */
     static final int BASE_COUNT = 16;
-    static final double BASE_RADIUS = 1.8, MAX_RADIUS = 4.2;
+    static final double BASE_RADIUS = 1.8, MAX_RADIUS = 5.7;
     /** The wander: its push, and how far its heading turns each tick. */
     static final double W_WANDER = 0.006, WANDER_TURN = 0.35;
     static final double DAMPING = 0.965;
@@ -188,10 +191,10 @@ public final class Flock {
 
     /**
      * How far from its centre a swarm of {@code n} fireflies keeps: {@link #BASE_RADIUS} up to {@link #BASE_COUNT},
-     * then wider by the cube root of how many more, up to {@link #MAX_RADIUS}.
+     * then wider by the square root of how many more, up to {@link #MAX_RADIUS}.
      */
     public static double radius(int n) {
-        return Math.min(MAX_RADIUS, BASE_RADIUS * Math.cbrt(Math.max(1.0, n / (double) BASE_COUNT)));
+        return Math.min(MAX_RADIUS, BASE_RADIUS * Math.sqrt(Math.max(1.0, n / (double) BASE_COUNT)));
     }
 
     /** This flock's radius, by how many it has now. */

@@ -89,7 +89,7 @@ class PerchesTest {
         assertTrue(Perches.reach(160) > Perches.reach(45) && Perches.reach(45) > Perches.reach(16));
         assertTrue(Perches.reach(Flock.MAX) <= Perches.MAX_REACH);
         List<Perches.Spot> spots = floor(7, 4);
-        double[] mean = new double[2];
+        double[] mean = new double[2], apart = new double[2];
         int[] sizes = {24, 140};
         for (int k = 0; k < 2; k++) {
             int n = sizes[k];
@@ -99,11 +99,15 @@ class PerchesTest {
             for (int s : pick) {
                 assertTrue(distinct.add(s), n + ": two fireflies on one point");
                 mean[k] += Math.sqrt(spots.get(s).dist2(0.5, 64.25, 0.5)) / n;
+                double nearest = Double.MAX_VALUE;
+                for (int t : pick) if (t != s) nearest = Math.min(nearest, dist(spots.get(s), spots.get(t)));
+                apart[k] += nearest / n;
             }
         }
-        // about as thick: the patch's area grows with the swarm, so its mean distance by the square root
+        // as thick: the patch's area grows with the swarm, so its mean distance by the square root
         double ratio = mean[1] / mean[0], wanted = Math.sqrt(140.0 / 24.0);
         assertTrue(ratio > wanted * 0.7 && ratio < wanted * 1.3, "patch widths " + mean[0] + " and " + mean[1]);
+        assertTrue(apart[1] > apart[0] * 0.95, "no thicker: nearest neighbour " + apart[0] + " for 24, " + apart[1] + " for 140");
     }
 
     @Test

@@ -143,13 +143,13 @@ class FlockTest {
     }
 
     @Test
-    void aBiggerSwarmMakesAWiderCloudWithAsMuchRoomRoundEach() {
+    void aBiggerSwarmMakesAWiderCloudThatLooksNoThicker() {
         assertEquals(Flock.BASE_RADIUS, Flock.radius(1), 1.0E-12);
         assertEquals(Flock.BASE_RADIUS, Flock.radius(16), 1.0E-12);
-        assertEquals(Flock.BASE_RADIUS * 2.0, Flock.radius(128), 1.0E-9, "eight times as many, twice as wide");
+        assertEquals(Flock.BASE_RADIUS * 2.0, Flock.radius(64), 1.0E-9, "four times as many, twice as wide");
         assertTrue(Flock.radius(Flock.MAX) <= Flock.MAX_RADIUS);
         int[] sizes = {16, 140};
-        double[] spread = new double[2], room = new double[2];
+        double[] spread = new double[2], seen = new double[2];
         for (int k = 0; k < 2; k++) {
             Flock f = flock(17, sizes[k], 0, 64, 0);
             int samples = 0;
@@ -157,22 +157,23 @@ class FlockTest {
                 f.step(0, 64, 0, Flock.ANYWHERE);
                 if (t < 400 || t % 10 != 0) continue;
                 spread[k] += meanDist(f, 0, 64, 0);
-                // how far each firefly is from its nearest neighbour, on average
-                double nearest = 0;
+                // seen from the side, how far each firefly looks from its nearest neighbour: the middle of those
+                double[] apart = new double[f.size()];
                 for (int i = 0; i < f.size(); i++) {
                     double best = Double.MAX_VALUE;
                     for (int j = 0; j < f.size(); j++)
-                        if (j != i) best = Math.min(best, Math.sqrt(sq(f.x(i) - f.x(j)) + sq(f.y(i) - f.y(j)) + sq(f.z(i) - f.z(j))));
-                    nearest += best / f.size();
+                        if (j != i) best = Math.min(best, Math.sqrt(sq(f.x(i) - f.x(j)) + sq(f.y(i) - f.y(j))));
+                    apart[i] = best;
                 }
-                room[k] += nearest;
+                Arrays.sort(apart);
+                seen[k] += apart[apart.length / 2];
                 samples++;
             }
             spread[k] /= samples;
-            room[k] /= samples;
+            seen[k] /= samples;
         }
-        assertTrue(spread[1] > spread[0] * 1.6, "a wider cloud: " + spread[0] + " for 16, " + spread[1] + " for 140");
-        assertTrue(room[1] > room[0] * 0.75, "not crammed: nearest neighbour " + room[0] + " for 16, " + room[1] + " for 140");
+        assertTrue(spread[1] > spread[0] * 2.5, "a wider cloud: " + spread[0] + " for 16, " + spread[1] + " for 140");
+        assertTrue(seen[1] > seen[0] * 0.85, "no thicker to look at: " + seen[0] + " apart for 16, " + seen[1] + " for 140");
     }
 
     @Test
