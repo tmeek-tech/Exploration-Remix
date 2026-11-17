@@ -91,7 +91,9 @@ class PaletteLooksTest {
         // (Taran, 2026-11-17): the Silver Fern Rift is redone in depth bands (moss up top, deep moss through the silver
         // middle, more asurine towards the floor), which changes 161,260 of its 400,000 samples (78,639 are now moss,
         // 58,511 deepslate, 21,634 asurine, 2,476 cobbled deepslate); every other part of the upper caves, both layers
-        // and the bands answer as before
+        // and the bands answer as before. Pinned again for 0.14.6 (Taran, 2026-11-17: "Deep moss can just be moss"):
+        // the silver band's ledges are vanilla's moss, which changes the 5,913 samples that were deep moss and no other
+        // (put deep moss back at them and the hash is 0.14.5's)
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
@@ -142,7 +144,7 @@ class PaletteLooksTest {
         assertEquals("2604e01a1b4b2ee3", String.format("%016x", hInterior), "layers 0 and 1, interior");
         assertEquals("630faa4b55423838", String.format("%016x", hPublicOld), "layers 0 and 1 through the public path, and the bands (den rifts off)");
         assertEquals("1917e42223d853b8", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
-        assertEquals("b3ee84aebdabaf30", String.format("%016x", hUpper), "the upper caves");
+        assertEquals("b287cdd84507762d", String.format("%016x", hUpper), "the upper caves");
     }
 
     private static int nz(Rock q) { return q == null ? 0 : q.name().hashCode(); }

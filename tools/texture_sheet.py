@@ -45,7 +45,10 @@ SHEET = [
                               ("silver_wall_fern_front_2", "Hanging silver fern, front 2", 0),
                               ("silver_wall_fern_side", "Hanging silver fern, side", 0),
                               ("silver_wall_fern_side_2", "Hanging silver fern, side 2", 0),
-                              ("deep_moss", "Deep moss", 0)]),
+                              ("silver_wall_fern_medium", "Hanging silver fern, medium", 0),
+                              ("silver_wall_fern_medium_front", "Hanging silver fern, medium front", 0),
+                              ("silver_wall_fern_large", "Hanging silver fern, large", 0),
+                              ("silver_wall_fern_large_front", "Hanging silver fern, large front", 0)]),
     ]),
     ("Deep Gardens", [
         ("Lantern Lake", [("wisteria_plant", "Wisteria", 0), ("wisteria_plant_2", "Wisteria 2", 0), ("wisteria_plant_3", "Wisteria 3", 0),

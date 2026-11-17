@@ -9,6 +9,7 @@ import json, math, os, shutil
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import textures
+from plants_fern import HANGING_SIZES
 import worldgen
 import sounds
 import creatures
@@ -71,8 +72,9 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #               leaning planes, which run on from the lower half into the upper; option skirt names the textures of
 #               the low fronds round its foot (variants of their own: <skirt>, <skirt>_2 ...)
 #   hanging_fern  a fern hanging down the side of a block (textures <id> against the wall, <id>_front swung out from
-#               it, <id>_side square to it), turned to face away from the wall; it has no item, and drops the item
-#               named by option drop
+#               it, <id>_side square to it), turned to face away from the wall, in three sizes (property size: 0, 1
+#               and 2 drawn with <id>, <id>_medium and <id>_large and their _front and _side); it has no item, and
+#               drops the item named by option drop
 # Options: variants (how many textures: <id>, <id>_2, <id>_3; the game picks one per block from its position, so it
 # never changes), weights (one per variant), drop (hanging_fern, litter: the item it drops), chance (litter: how often
 # it drops it), glow_under (shelf: the whole underside glows), shader_glow (default True; False keeps the glow overlay
@@ -109,13 +111,6 @@ BLOCKS = {
     "silver_frond_plant": ("Silver Frond", "vine_body:silver_frond", {"variants": 2}),
     "tall_silver_fern": ("Tall Silver Fern", "tall_fern", {"variants": 2, "skirt": "silver_fern_fan"}),
     "silver_wall_fern": ("Hanging Silver Fern", "hanging_fern", {"variants": 2, "drop": "silver_fern"}),
-    # 0.14.3: the rift's ledges, a deep green moss two blocks deep at their lips; the hanging ferns grow from its sides
-    "deep_moss": ("Deep Moss", "cube"),
-    # 0.14.5: the rift redone by depth (Taran, 17 Nov: "Plants changing with depth is pretty"), green up top, silver
-    # through the middle, light blue by the floor: the silver band's pale tufts, and its moss draping over the ledges'
-    # lips and down the walls (plants_rift.py), in place of the silver ferns
-    "silver_grass": ("Silver Grass", "cross", {"variants": 3}),
-    "silver_moss": ("Silver Moss", "lichen", {"variants": 2}),
     "ivory_bracket": ("Ivory Bracket", "shelf", {"variants": 2, "glow_under": True}),
     "gold_threads": ("Gold Threads", "vine", {"variants": 2}),
     "gold_threads_plant": ("Gold Threads", "vine_body:gold_threads", {"variants": 2}),
@@ -175,7 +170,7 @@ BLOCKS = {
 NO_DROP = {"band_stone", "glow", "mossback_den"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
 # lifeless blocks of the Galleries, and the litter round the dens.
-NOT_PLANTS = NO_DROP | {"frost_moss", "deep_moss", "ember_crust", "cinder_chain", "bone_scraps"}
+NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"}
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
@@ -189,10 +184,10 @@ BLOCK_TAGS = {
                                  "frostberry_vine", "frostberry_vine_plant", "trailing_grass", "trailing_grass_plant",
                                  # 0.5: the Galleries' climbs
                                  "cinder_chain"],
-    # Frost moss and deep moss are ground, as vanilla's moss is: ferns, flowers and saplings grow on them (Immersive
-    # Weathering's frosty ferns only grow on #minecraft:dirt), and moss patches may spread over them.
-    ("minecraft", "dirt"): ["frost_moss", "deep_moss"],
-    ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet", "deep_moss", "silver_moss"],
+    # Frost moss is ground, as vanilla's moss is: ferns, flowers and saplings grow on it (Immersive Weathering's frosty
+    # ferns only grow on #minecraft:dirt), and moss patches may spread over it.
+    ("minecraft", "dirt"): ["frost_moss"],
+    ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen"],
     # The Galleries' lava glow is open space to a growing tree (TreeFeature asks isAir() or this tag): a sapling grows
@@ -251,9 +246,9 @@ FERN_LEAN = 45         # the small fern's outer planes lean this far out: a low,
 FERN_INNER_LEAN = 22.5  # and its inner ring this far, filling the clump between the outer planes and the upright middle
 TALL_FERN_LEAN = 22.5   # the tall fern's: a vase of fronds two blocks high
 TALL_FERN_SKIRT = 45    # with a skirt of low fronds round its foot, leaning this far
-HANGING_FERN_TOP = 14     # the hanging fern leaves the wall this high in its block
-HANGING_FERN_LENGTH = 24  # and its fronds fall this far: a block and a half, into the block below (kept clear in
-                          # the rift); its textures are 16 x 32 with the fronds in the top 24 rows
+HANGING_FERN_TOP = 14  # the hanging fern leaves the wall this high in its block; its sizes are plants_fern.HANGING_SIZES
+                       # (as HangingFernBlock's WIDTH and LENGTH), the fronds falling into the blocks below (kept clear)
+HANGING_FERN_LIFT = 18  # the bigger sizes are drawn this much higher and moved back down (see _hanging_fern)
 
 
 def _plane(frm, to, key, rotation=None, uv=(0, 0, 16, 16), faces=None):
@@ -297,29 +292,47 @@ def _tall_fern(half):
     return {"ambientocclusion": False, "textures": {"particle": "#fern"}, "elements": els}
 
 
-def _hanging_fern():
-    """The hanging fern facing north, on a wall to its south (z = 16): fronds falling HANGING_FERN_LENGTH from
-    HANGING_FERN_TOP, one plane against the rock (#hang), one swung out 22.5 degrees from the top (#front), and two side
-    planes square to the wall (#side, the rock on the texture's right edge) reaching 8 pixels out."""
-    top = HANGING_FERN_TOP
-    low = top - HANGING_FERN_LENGTH
-    v = HANGING_FERN_LENGTH // 2  # uv runs 0..16 down a 32-row texture: the top 24 rows
-    return {"ambientocclusion": False, "textures": {"particle": "#hang"}, "elements": [
-        _plane((0, low, 15.6), (16, top, 15.6), "#hang", uv=(0, 0, 16, v)),
-        _plane((0, low, 15.2), (16, top, 15.2), "#front", {"origin": [8, top, 15.2], "axis": "x", "angle": 22.5},
-               uv=(0, 0, 16, v)),
-        _plane((4, low, 8), (4, top, 16), "#side", uv=(8, 0, 16, v), faces=("west",)),
-        _plane((4, low, 8), (4, top, 16), "#side", uv=(16, 0, 8, v), faces=("east",)),
-        _plane((12, low, 8), (12, top, 16), "#side", uv=(8, 0, 16, v), faces=("west",)),
-        _plane((12, low, 8), (12, top, 16), "#side", uv=(16, 0, 8, v), faces=("east",)),
-    ]}
+def _hanging_fern(size):
+    """The hanging fern facing north, on a wall to its south (z = 16), at one of its sizes: fronds falling `length`
+    pixels from HANGING_FERN_TOP across `width` centred on the block, one plane against the rock (#hang), one swung out
+    22.5 degrees from the top (#front), and two side planes square to the wall (#side, the rock on the texture's right
+    edge) reaching `out` pixels out. The planes show the middle `width` columns and the top `length` rows of their
+    textures. A model's elements must lie between -16 and 32, so the bigger sizes are drawn HANGING_FERN_LIFT higher
+    and moved back down by the model's root transform (Forge's "transform")."""
+    z = HANGING_SIZES[size]
+    tw, th = z["tex"]
+    w, length, out = z["width"], z["length"], z["out"]
+    lift = 0 if HANGING_FERN_TOP - length >= -16 else HANGING_FERN_LIFT
+    top = HANGING_FERN_TOP + lift
+    low = top - length
+    x0, x1 = 8 - w / 2, 8 + w / 2
+    u0, u1 = (tw - w) / 2 * 16 / tw, (tw + w) / 2 * 16 / tw
+    v = round(length * 16 / th, 4)
+    us = (tw - out) * 16 / tw  # the side planes' textures: the right `out` columns
+    side_x = (8 - w / 4, 8 + w / 4)
+    els = [
+        _plane((x0, low, 15.6), (x1, top, 15.6), "#hang", uv=(u0, 0, u1, v)),
+        _plane((x0, low, 15.2), (x1, top, 15.2), "#front", {"origin": [8, top, 15.2], "axis": "x", "angle": 22.5},
+               uv=(u0, 0, u1, v)),
+    ]
+    for x in side_x:
+        els.append(_plane((x, low, 16 - out), (x, top, 16), "#side", uv=(us, 0, 16, v), faces=("west",)))
+        els.append(_plane((x, low, 16 - out), (x, top, 16), "#side", uv=(16, 0, us, v), faces=("east",)))
+    for el in els:
+        assert all(-16 <= c <= 32 for c in el["from"] + el["to"]), (size, el)
+    model = {"ambientocclusion": False, "textures": {"particle": "#hang"}, "elements": els}
+    if lift:
+        model["transform"] = {"translation": [0, -lift / 16, 0]}
+    return model
 
 
 TEMPLATES = {
     "fern": _fern(),
     "tall_fern_lower": _tall_fern("lower"),
     "tall_fern_upper": _tall_fern("upper"),
-    "hanging_fern": _hanging_fern(),
+    "hanging_fern": _hanging_fern(""),
+    "hanging_fern_medium": _hanging_fern("_medium"),
+    "hanging_fern_large": _hanging_fern("_large"),
     "cross_glow": {"ambientocclusion": False, "textures": {"particle": "#cross"},
                    "elements": _cross_planes("#cross", {}) + _cross_planes("#glow", EMISSIVE)},
     "carpet": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _flat("#texture", {})},
@@ -479,11 +492,17 @@ def block_assets():
                                    "half=upper": pick([{"model": ref(t)} for t in tops], weights)}}
             item = {"parent": "minecraft:item/generated", "textures": {"layer0": ref(tops[0])}}
         elif kind == "hanging_fern":
-            fronts, sides = variant_names(bid + "_front", len(texs)), variant_names(bid + "_side", len(texs))
-            for k, t in enumerate(texs):
-                models[t] = {"parent": f"{MOD}:block/template/hanging_fern", "render_type": "minecraft:cutout",
-                             "textures": {"hang": ref(t), "front": ref(fronts[k]), "side": ref(sides[k])}}
-            states = {"variants": {f"facing={f}": pick([dict({"model": ref(t)}, **turn) for t in texs], weights) for f, turn in FACE4.items()}}
+            # one look per variant at each size (HangingFernBlock.SIZE): <id>, <id>_medium, <id>_large
+            variants = {}
+            for k_size, size in enumerate(HANGING_SIZES):
+                hangs = variant_names(bid + size, len(texs))
+                fronts, sides = variant_names(bid + size + "_front", len(texs)), variant_names(bid + size + "_side", len(texs))
+                for k, t in enumerate(hangs):
+                    models[t] = {"parent": f"{MOD}:block/template/hanging_fern{size}", "render_type": "minecraft:cutout",
+                                 "textures": {"hang": ref(t), "front": ref(fronts[k]), "side": ref(sides[k])}}
+                for f, turn in FACE4.items():
+                    variants[f"facing={f},size={k_size}"] = pick([dict({"model": ref(t)}, **turn) for t in hangs], weights)
+            states = {"variants": variants}
             item = None
             drop = opts["drop"]
         elif kind == "wall_plant":

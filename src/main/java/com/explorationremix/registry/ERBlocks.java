@@ -5,6 +5,7 @@ import com.explorationremix.block.BandStoneBlock;
 import com.explorationremix.block.BoneScrapsBlock;
 import com.explorationremix.block.CavePlantBlock;
 import com.explorationremix.block.GlowBlock;
+import com.explorationremix.block.HangingFernBlock;
 import com.explorationremix.block.HangingPlantBlock;
 import com.explorationremix.block.HangingVinesBlock;
 import com.explorationremix.block.HangingVinesPlantBlock;
@@ -95,12 +96,6 @@ public final class ERBlocks {
     public static final RegistryObject<Block> SILVER_FERN = BLOCKS.register("silver_fern",
             () -> new CavePlantBlock(plant(MapColor.METAL, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XYZ),
                     Block.box(2, 0, 2, 14, 13, 14)));
-    /**
-     * The rift's ledges: a deep green moss, darker than vanilla's, two blocks deep at the ledges' lips. The rift's
-     * hanging ferns grow only from its sides (Taran, 0.14.3); ferns and flowers grow on it as on vanilla's moss.
-     */
-    public static final RegistryObject<Block> DEEP_MOSS = block("deep_moss", () -> new Block(
-            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_GREEN).strength(0.1F).sound(SoundType.MOSS).pushReaction(PushReaction.DESTROY)));
     /** Stands the fern on a floor, or hangs it on the side of a block (the silver wall fern), as a torch goes on a wall. */
     public static final RegistryObject<Item> SILVER_FERN_ITEM = ITEMS.register("silver_fern", () -> new StandingAndWallBlockItem(
             SILVER_FERN.get(), ERBlocks.SILVER_WALL_FERN.get(), new Item.Properties(), Direction.DOWN));
@@ -137,21 +132,12 @@ public final class ERBlocks {
             () -> new TallCavePlantBlock(plant(MapColor.METAL, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XZ),
                     Block.box(2, 0, 2, 14, 16, 14), Block.box(2, 0, 2, 14, 14, 14)));
     /**
-     * A silver fern hanging down the side of a block, its fronds falling a block and a half from near the top, into the
-     * block below (the outline stays in its own block). No item of its own: it is the silver fern's, placed on a wall,
-     * and drops it.
+     * A silver fern hanging down the side of a block, its fronds falling from near the top into the blocks below (the
+     * outline stays in its own block), in three sizes (HangingFernBlock). No item of its own: it is the silver fern's,
+     * placed on a wall (the small size), and drops it.
      */
     public static final RegistryObject<Block> SILVER_WALL_FERN = BLOCKS.register("silver_wall_fern",
-            () -> new ShelfFungusBlock(plant(MapColor.METAL, SoundType.GRASS, 0), Block.box(1, 0, 8, 15, 14, 16)));
-    /**
-     * The rift's silver band (0.14.5, the rift redone by depth): pale tufts over its floors, in place of the silver
-     * ferns, and pale moss draping over its ledges' lips and down its walls, a sheet like glow lichen giving no light.
-     */
-    public static final RegistryObject<Block> SILVER_GRASS = block("silver_grass",
-            () -> new CavePlantBlock(plant(MapColor.METAL, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XYZ),
-                    Block.box(2, 0, 2, 14, 13, 14)));
-    public static final RegistryObject<Block> SILVER_MOSS = block("silver_moss",
-            () -> new GlowLichenBlock(lichen(MapColor.METAL, SoundType.MOSS_CARPET, 0)));
+            () -> new HangingFernBlock(plant(MapColor.METAL, SoundType.GRASS, 0), Block.box(1, 0, 8, 15, 14, 16)));
 
     // ------------------------------------------------------------------------------------------- Ivory Root Cavern
     /** A pale bracket with glowing gold gills underneath; firm enough to stand on, like the orange shelf fungus. */

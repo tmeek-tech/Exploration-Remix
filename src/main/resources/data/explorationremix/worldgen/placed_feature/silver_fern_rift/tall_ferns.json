@@ -1,9 +1,9 @@
 {
-  "feature": "explorationremix:silver_fern_rift/silver_grass",
+  "feature": "explorationremix:silver_fern_rift/tall_ferns",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 60
+      "count": 16
     },
     {
       "type": "minecraft:in_square"

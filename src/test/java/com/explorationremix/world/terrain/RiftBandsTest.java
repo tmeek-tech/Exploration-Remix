@@ -57,19 +57,22 @@ class RiftBandsTest {
         Palette p = T.palette;
         int floor = T.shape.packFloor;
         Random r = new Random(4);
-        int[] asurine = new int[3], walls = new int[3];
+        int[] asurine = new int[3], walls = new int[3], mossy = new int[3];
         for (int k = 0; k < 60000; k++) {
             int x = r.nextInt(4000) - 2000, z = r.nextInt(4000) - 2000, y = floor + 2 + r.nextInt(TOP);
-            // a ledge's top block: vanilla's moss up top, deep moss through the middle, none by the floor
+            // a ledge's top block: vanilla's moss up top and through the middle (0.14.6: no deep moss), none by the floor
             Rock g = p.upperShell(DeepBiome.SILVER_FERN_RIFT, x, y, z, 1, 6, false);
             int band = p.riftBandAt(x, y, z);
-            if (band == Palette.RIFT_BLUE) assertTrue(g != Rock.MOSS && g != Rock.DEEP_MOSS, g + " on a blue ledge at " + x + " " + y + " " + z);
-            if (band == Palette.RIFT_SILVER) assertNotEquals(Rock.MOSS, g, "vanilla moss on a silver ledge at " + x + " " + y + " " + z);
-            if (band == Palette.RIFT_GREEN) assertNotEquals(Rock.DEEP_MOSS, g, "deep moss on a green ledge at " + x + " " + y + " " + z);
+            if (band == Palette.RIFT_BLUE) assertNotEquals(Rock.MOSS, g, "moss on a blue ledge at " + x + " " + y + " " + z);
+            if (g == Rock.MOSS) mossy[band]++;
             // a wall
             Rock w = p.upperShell(DeepBiome.SILVER_FERN_RIFT, x, y, z, 6, 6, false);
             walls[band]++;
             if (w == Rock.ASURINE) asurine[band]++;
+        }
+        for (int band : new int[]{Palette.RIFT_GREEN, Palette.RIFT_SILVER}) {
+            double share = mossy[band] / (double) walls[band];
+            assertTrue(share > 0.5, "moss over most ledges in band " + band + ": " + share);
         }
         double green = asurine[0] / (double) walls[0], silver = asurine[1] / (double) walls[1], blue = asurine[2] / (double) walls[2];
         assertTrue(green < silver && silver < blue, "the walls bluer with depth: asurine " + green + ", " + silver + ", " + blue);

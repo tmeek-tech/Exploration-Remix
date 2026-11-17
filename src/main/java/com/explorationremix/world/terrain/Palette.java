@@ -704,15 +704,15 @@ public final class Palette {
         boolean ceil = !floor && below <= 2;
         if (b == DeepBiome.SILVER_FERN_RIFT) {
             // Cliffs of deepslate and asurine, stepped with mossy ledges, copper in the walls, changing with depth
-            // (0.14.5): vanilla's moss over the ledges and the vaults in the green band, deep moss (Taran, 0.14.3) in
-            // the silver band, two blocks deep so its sides show at the lips, where the silver moss drapes, and bare
-            // rock in the blue band; the walls hold more asurine the deeper they go.
+            // (0.14.5): vanilla's moss over the ledges in the green and silver bands (0.14.6, Taran: "Deep moss can
+            // just be moss"), two blocks deep so its sides show at the lips, where the hanging ferns grow, and over
+            // the vaults in the green band; bare rock in the blue band; the walls hold more asurine the deeper they go.
             if (floor) {
                 if (wet) return n > 0 ? Rock.GRAVEL : Rock.COBBLED_DEEPSLATE;
                 // the ground's band at its surface, so a ledge's two blocks of moss are of one kind
                 int band = riftBandAt(x, y + above - 1, z);
                 if (band != RIFT_BLUE && above <= 2 && n > -0.3 && (top || patch(x, y + 1, z) > -0.3))
-                    return band == RIFT_GREEN ? Rock.MOSS : Rock.DEEP_MOSS;
+                    return Rock.MOSS;
                 if (top) return band == RIFT_BLUE && n < 0.1 ? Rock.ASURINE : Rock.COBBLED_DEEPSLATE;
                 return n < asurineShare(x, y, z) - 0.09 ? Rock.ASURINE : Rock.DEEPSLATE;
             }

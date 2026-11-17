@@ -2,8 +2,6 @@
   "replace": false,
   "values": [
     "explorationremix:frost_moss",
-    "explorationremix:frost_moss_carpet",
-    "explorationremix:deep_moss",
-    "explorationremix:silver_moss"
+    "explorationremix:frost_moss_carpet"
   ]
 }

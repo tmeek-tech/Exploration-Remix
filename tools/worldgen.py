@@ -522,14 +522,18 @@ def build_features():
     feature("rootvaults/ivy", "underground_decoration", rv,
             attach(simple("immersive_weathering:ivy"), "walls_ceiling", 48, f"#{MOD}:cave_rock", radius=6, height=6),
             [count(24), SQUARE, layer(up), looks(1, 2), BIOME])
-    # The rift redone by depth (0.14.5; Taran, 17 Nov: "Plants changing with depth is pretty"): green up top, silver
-    # through the middle, light blue by the floor, each band's growth kept to it (band) and thinning into the next.
-    # Silver moss drapes over the ledges' lips where the hanging ferns grew: from the sides of the deep moss, which
-    # lies over the silver band's ledges only (Palette.upperShell), each try round a spot on a floor. Only there: in
-    # patches down the bare walls every block showed the same fringe, a grid of drips.
-    feature("silver_fern_rift/silver_moss_lips", "underground_decoration", ["silver_fern_rift"],
-            attach(simple(f"{MOD}:silver_moss"), "walls_hanging", 96, f"{MOD}:deep_moss", radius=6, height=4),
-            [count(20), SQUARE, layer(up)] + floor() + [BIOME])
+    # The rift redone by depth (0.14.5; Taran, 17 Nov: "Plants changing with depth is pretty"): green up top, the
+    # silver ferns through the middle (0.14.6: "Bring back the fluffier silver ferns"), light blue by the floor, each
+    # band's growth kept to it (band) and thinning into the next.
+    # Hanging ferns down the ledges' lips, where their fronds fall free (the picture's fronds draping the ledges): only
+    # from the sides of the moss two blocks deep over the ledges (Palette.upperShell; Taran, 0.14.3), each try round a
+    # spot on a floor. Three sizes (0.14.6), each as big as its room allows (HangingFernBlock.fit), so the small ones
+    # fill in where the bigger would crowd.
+    feature("silver_fern_rift/wall_ferns", "underground_decoration", ["silver_fern_rift"],
+            attach(mix((simple(f"{MOD}:silver_wall_fern", size=0), 3), (simple(f"{MOD}:silver_wall_fern", size=1), 4),
+                       (simple(f"{MOD}:silver_wall_fern", size=2), 3)),
+                   "walls_hanging", 96, "minecraft:moss_block", radius=6, height=4),
+            [count(24), SQUARE, layer(up)] + floor() + [band("silver"), BIOME])
     # Up top Immersive Weathering's ivy over the walls and vaults, as in the Root Vaults, round the moss of the vaults.
     feature("silver_fern_rift/ivy", "underground_decoration", ["silver_fern_rift"],
             attach(simple("immersive_weathering:ivy"), "walls_ceiling", 48, f"#{MOD}:cave_rock", radius=6, height=6),
@@ -623,23 +627,24 @@ def build_features():
     feature("rootvaults/white_glow_flowers_sparse", "vegetal_decoration", rv,
             patch(simple("explorationremix:white_glow_flower"), state("explorationremix:white_glow_flower"), tries=12, xz=4, on=PLANT_FLOORS),
             [count(10), SQUARE, layer(up)] + floor() + [looks(0, 2), BIOME])
-    # The bands' floors: vanilla's ferns and grass on the moss up top, silver grass through the middle, the Blue
-    # Reaches' glowbells and mushrooms by the floor.
+    # The bands' floors: vanilla's ferns and grass on the moss up top, the silver ferns through the middle, and by the
+    # floor a few small groups of the Blue Reaches' glowbells and mushrooms foreshadowing them (0.14.6, Taran: "more
+    # rare and in small groups").
     feature("silver_fern_rift/green_plants", "vegetal_decoration", ["silver_fern_rift"],
             patch({"type": "minecraft:weighted_state_provider", "entries": [
                 {"data": state("minecraft:fern"), "weight": 3}, {"data": state("minecraft:grass"), "weight": 3},
                 {"data": state("minecraft:moss_carpet"), "weight": 2}, {"data": state("minecraft:large_fern"), "weight": 1}]},
                 state("minecraft:fern"), tries=32, xz=5, y=3, on=PLANT_FLOORS),
             [count(40), SQUARE, layer(up)] + floor() + [band("green"), BIOME])
-    feature("silver_fern_rift/silver_grass", "vegetal_decoration", ["silver_fern_rift"],
-            patch(simple(f"{MOD}:silver_grass"), state(f"{MOD}:silver_grass"), tries=40, xz=5, y=4),
-            [count(60), SQUARE, layer(up)] + floor() + [band("silver"), BIOME])
+    feature("silver_fern_rift/silver_ferns", "vegetal_decoration", ["silver_fern_rift"],
+            patch(simple(f"{MOD}:silver_fern"), state(f"{MOD}:silver_fern"), tries=40, xz=5, y=4),
+            [count(40), SQUARE, layer(up)] + floor() + [band("silver"), BIOME])
     feature("silver_fern_rift/glowbells", "vegetal_decoration", ["silver_fern_rift"],
-            patch(simple(f"{MOD}:glowbell"), state(f"{MOD}:glowbell"), tries=14, xz=4, y=2),
-            [count(36), SQUARE, layer(up)] + floor() + [band("blue"), BIOME])
+            patch(simple(f"{MOD}:glowbell"), state(f"{MOD}:glowbell"), tries=6, xz=2, y=1),
+            [count(4), SQUARE, layer(up)] + floor() + [band("blue"), BIOME])
     feature("silver_fern_rift/mushrooms", "vegetal_decoration", ["silver_fern_rift"],
-            patch(simple(f"{MOD}:blue_glow_mushroom"), state(f"{MOD}:blue_glow_mushroom"), tries=10, xz=3, y=2),
-            [count(24), SQUARE, layer(up)] + floor() + [band("blue"), BIOME])
+            patch(simple(f"{MOD}:blue_glow_mushroom"), state(f"{MOD}:blue_glow_mushroom"), tries=5, xz=2, y=1),
+            [count(3), SQUARE, layer(up)] + floor() + [band("blue"), BIOME])
     feature("ivory_root_cavern/giant_lantern_fungi", "vegetal_decoration", ["ivory_root_cavern"],
             {"type": f"{MOD}:giant_fungus", "config": {
                 "stem": state("minecraft:mushroom_stem"), "cap": state("minecraft:mushroom_stem", down=False),
@@ -717,6 +722,9 @@ def build_features():
     feature("silver_fern_rift/fronds", "vegetal_decoration", ["silver_fern_rift"],
             hanging_patch(hanging_column(f"{MOD}:silver_frond_plant", f"{MOD}:silver_frond", 1, 5), tries=8, xz=5, y=3),
             [count(28), SQUARE, layer(up)] + ceiling() + [band("silver"), BIOME])
+    feature("silver_fern_rift/tall_ferns", "vegetal_decoration", ["silver_fern_rift"],
+            patch(simple(f"{MOD}:tall_silver_fern"), state(f"{MOD}:tall_silver_fern"), tries=24, xz=6, y=3),
+            [count(16), SQUARE, layer(up)] + floor() + [band("silver"), BIOME])
     feature("ivory_root_cavern/gold_threads", "vegetal_decoration", ["ivory_root_cavern"],
             hanging_patch(hanging_column(f"{MOD}:gold_threads_plant", f"{MOD}:gold_threads", 2, 7), tries=3, xz=4, y=2),
             [count(1), SQUARE, layer(up)] + ceiling() + [BIOME])
@@ -1244,7 +1252,7 @@ BLOCK_TAGS = {
     # Natural rock that plants, crystals and springs may grow on or out of.
     "cave_rock": ["#minecraft:base_stone_overworld", "minecraft:cobbled_deepslate", "minecraft:calcite", "minecraft:dripstone_block",
                   "minecraft:smooth_basalt", "minecraft:basalt", "minecraft:blackstone", "minecraft:gilded_blackstone",
-                  "minecraft:obsidian", "minecraft:crying_obsidian", "minecraft:magma_block", "minecraft:moss_block", f"{MOD}:frost_moss", f"{MOD}:deep_moss",
+                  "minecraft:obsidian", "minecraft:crying_obsidian", "minecraft:magma_block", "minecraft:moss_block", f"{MOD}:frost_moss",
                   "minecraft:rooted_dirt",
                   "minecraft:dirt", "minecraft:clay", "minecraft:brown_mushroom_block", "#minecraft:coal_ores", "#minecraft:iron_ores",
                   "#minecraft:copper_ores", "#minecraft:gold_ores", "#minecraft:redstone_ores", "#minecraft:lapis_ores", "#minecraft:diamond_ores",
