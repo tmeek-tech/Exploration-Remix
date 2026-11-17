@@ -8,40 +8,41 @@ because vanilla's read as too lush in the cold.
 Same rules as tools/plants.py: 16 by 16, vanilla style, drawn with the shared helpers there. A painter registered
 with glow=[colours] gets an overlay of those pixels that glows in the dark.
 """
-import math, random
+import math
 from PIL import Image
-from plants import hexc, blank, register, put, put_wrap, stamp, bezier, ball
+from plants import blank, grid, register, put, stamp, bezier
 from plants_upper import variants
 
 PAINTERS = {}
 
 
 # ------------------------------------------------------------------------------------------------ Frost moss
-# Vanilla's moss in a cold cast: a cushion of small round tufts, each lit from the top left, packed edge to edge over a
-# dark ground, here in slate blue-teal instead of green, with a few grains of frost caught on the tufts. It tiles, and
-# the carpet uses it too (as vanilla's moss carpet uses the moss block's texture).
-FROST_MOSS = ["#2a4352", "#355363", "#426474", "#537a88", "#67909c", "#80a9b2"]   # deep shade .. lit tuft tops
-FROST_GRAINS = ["#9cc2cc", "#cfe6eb"]
+# Vanilla's moss block in light blue (Taran picked it from four options for 0.14.0; the slate blue-teal before read as
+# ugly): each pixel of vanilla's moss texture takes the light blue of its brightness band, darkest 0 to brightest 4,
+# so the tufts and their shading stay vanilla's. It tiles, and the carpet uses it too (as vanilla's moss carpet uses
+# the moss block's texture).
+FROST_MOSS = {"0": "#4e7699", "1": "#5f89ae", "2": "#749fc4", "3": "#8db7d8", "4": "#aacde8"}   # deep shade .. lit tuft tops
+FROST_MOSS_BANDS = [
+    "0300031002100114",
+    "3023124001203022",
+    "0032000210131004",
+    "0110432211013320",
+    "0014024020034221",
+    "1210222003200202",
+    "3100120022042010",
+    "0301003202432404",
+    "0101012322202242",
+    "0034120204310102",
+    "1342003220220042",
+    "1100222040200210",
+    "2113204302013202",
+    "1314023200320432",
+    "0210321121432322",
+    "2000422114221023",
+]
 
 
-def _frost_moss(seed):
-    rng = random.Random(seed)
-    img = blank()
-    px = img.load()
-    for y in range(16):
-        for x in range(16):
-            px[x, y] = hexc(FROST_MOSS[rng.choice((0, 1, 1, 2))])
-    # tufts: big ones first, small ones over them, so the small ones read as the tops of the cushion
-    for k in range(52):
-        r = 1.9 - 1.0 * k / 52 + rng.random() * 0.35
-        ball(px, rng.random() * 16, rng.random() * 16, r, FROST_MOSS[k % 2:], wrap=True)
-    for _ in range(7):
-        x, y = rng.randrange(16), rng.randrange(16)
-        put_wrap(px, x, y, FROST_GRAINS[1] if rng.random() < 0.45 else FROST_GRAINS[0])
-    return img
-
-
-register(PAINTERS, "frost_moss", lambda: _frost_moss(7151))
+register(PAINTERS, "frost_moss", lambda: grid(FROST_MOSS_BANDS, FROST_MOSS))
 
 
 # ------------------------------------------------------------------------------------------------ Frost aster

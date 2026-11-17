@@ -89,7 +89,7 @@ import java.util.Locale;
  *     <li>{@code /remix deadends [radius]}: the blind cave ends left above the old floor in the loaded chunks round you
  *     (DeadEnds), with the nearest</li>
  *     <li>{@code /remix shapes}: what the Upper Caves' noise shapes hold over your column and whether you stand in one</li>
- *     <li>{@code /remix shapes <kind> [n] [view]}: the n-th nearest place of a noise shape (warrens, chambers, mouth, frozen, rifts, sky,
+ *     <li>{@code /remix shapes <kind> [n] [view]}: the n-th nearest place of a noise shape (warrens, chambers, mouth, frozen, rifts,
  *     halls, sinkholes, hollows; see UpperShapes.find) round the command's position, with a wide view into it when
  *     there is one ("view" from the console: report that camera without moving anyone)</li>
  * </ul>
@@ -1136,7 +1136,7 @@ public final class RemixCommands {
     // ============================================================================================== noise shapes
 
     /** The kinds of place {@code /remix shapes} finds (UpperShapes.find). */
-    private static final String[] SHAPE_KINDS = {"warrens", "chambers", "mouth", "frozen", "rifts", "sky", "halls", "sinkholes", "hollows"};
+    private static final String[] SHAPE_KINDS = {"warrens", "chambers", "mouth", "frozen", "rifts", "halls", "sinkholes", "hollows"};
     /** How far round the command's position {@code /remix shapes} looks, and how far apart the places it counts lie. */
     private static final int SHAPE_RADIUS = 640, SHAPE_APART = 96;
 
@@ -1187,7 +1187,7 @@ public final class RemixCommands {
         }
         ServerLevel level = pl != null ? (ServerLevel) pl.level() : c.getSource().getLevel();
         final int want = switch (k) {
-            case "rifts", "sky" -> UpperShapes.RIFTS;
+            case "rifts" -> UpperShapes.RIFTS;
             case "halls" -> UpperShapes.HALLS;
             case "sinkholes", "hollows" -> UpperShapes.SINKHOLES;
             default -> UpperShapes.WARRENS;

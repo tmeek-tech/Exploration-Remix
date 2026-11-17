@@ -118,7 +118,11 @@ public final class Palette {
     public Rock shell(int x, int y, int z, int above, int below, boolean wet) {
         Shape s = t.shape;
         int li = s.layerAt(y);
-        if (li < 0) return s.bandAt(y) > 0 ? Rock.BAND_STONE : Rock.DEEPSLATE;
+        if (li < 0) {
+            int band = s.bandAt(y);
+            if (band == 1 && t.denRifts) return interior(Terrain.BLUE, x, y, z);
+            return band > 0 ? Rock.BAND_STONE : Rock.DEEPSLATE;
+        }
         DeepBiome b = t.biomeAt(x, y, z);
         if (Terrain.basaltLook(li)) return basaltShell(lookBiome(b, x, y, z), li, x, y, z, above, below, wet);
         return shell(b, li, x, y, z, above, below, wet);
@@ -673,7 +677,7 @@ public final class Palette {
 
     /**
      * The Ivory Root Cavern's rock round a lake (or a hall's lowest terrace) at {@code lake}: pale limestone and calcite,
-     * plain stone low on the walls, dripstone in the ceilings.
+     * plain stone low on the walls.
      */
     public Rock ivory(int x, int y, int z, int above, int below, boolean wet, double lake) {
         double n = patch(x, y, z);
@@ -688,7 +692,6 @@ public final class Palette {
         }
         double line = lake + 6 + 6 * wobN.noise2(x * 0.021, z * 0.021);
         if (y < line) return vein(x, y, z, 0.024) ? Rock.IRON_ORE : Rock.STONE;
-        if (ceil && n < -0.3) return Rock.DRIPSTONE;
         if (vein(x, y, z, 0.02)) return Rock.IRON_ORE;
         if (seam(x, y, z)) return Rock.CALCITE;
         return n > 0.24 ? Rock.CALCITE : Rock.LIMESTONE;
@@ -697,75 +700,26 @@ public final class Palette {
     // ============================================================================================== entrances
 
     /**
-     * Rock around the Root Vaults' chambers, by look (see {@link Entrances}): root halls are grey stone with limestone
-     * ledges, moss on top and rooted dirt in the ceiling where the roots come through. Under tropical trees (jungles and
-     * mangrove swamps) teal grottos are stone and veridium with mossy ledges, and ravines veridium cliffs with moss and
-     * pale limestone on the ledges; elsewhere the teal grottos take the root halls' rock, and the ravines are pale
-     * limestone cliffs with patches of grey andesite, seams of calcite and moss. Only the shell is dressed: floors,
-     * ceilings, and walls within {@code shell} 3 blocks of a chamber. Null keeps the pack's own stone (and its ores)
-     * deeper in.
-     *
-     * @param tropical the cluster lies under tropical trees: veridium
-     * @param shell    distance from the chamber's open space (its signed distance, positive in rock)
-     * @param wet      water rests on this run of rock
+     * The floors of the Root Vaults (see {@link Entrances} for the looks): moss in broad patches, gravel and bare rock
+     * between them, gravel under their pools. Their walls and ceilings are the ground they are carved into (Taran,
+     * 2026-11-12): the soil's rooted dirt over the top ones and the host rock round them ({@code HostRule}), so nothing
+     * here lines them.
      */
     public Rock rootvaults(int look, boolean tropical, int x, int y, int z, int above, int below, boolean wet, double shell) {
-        boolean top = above <= 1;
-        boolean floor = above <= 3;
-        boolean ceil = !floor && below <= 2;
-        if (!floor && !ceil && shell > 3) return null;
+        if (above > 1) return null;
         double n = patch(x, y, z);
-        if (!tropical && look == Entrances.TEAL) look = Entrances.HALL;
-        switch (look) {
-            case Entrances.TEAL:
-                if (floor) {
-                    if (wet) return n > 0.1 ? Rock.GRAVEL : Rock.STONE;
-                    if (top) return n > -0.05 ? Rock.MOSS : Rock.STONE;
-                    return n > 0.2 ? Rock.VERIDIUM : Rock.STONE;
-                }
-                return n > -0.02 ? Rock.VERIDIUM : Rock.STONE;
-            case Entrances.RAVINE:
-                // No plain stone on the faces: the pack's granite and diorite placed after this under birch and flower
-                // forests replace all the stone they reach, and turned whole cliffs brown. They match minecraft:stone
-                // only, so veridium, moss, limestone, calcite and andesite keep. Vanilla's granite, diorite, dirt and
-                // gravel blobs match andesite too, but the pack (WWOO) turns the first three off and keeps gravel off
-                // faces in the air; without it they would spot the andesite (about 5 % below y 60), as any cliff.
-                if (!tropical) {
-                    if (floor) {
-                        if (wet) return n > 0.0 ? Rock.LIMESTONE : Rock.GRAVEL;
-                        if (top) return n > -0.2 ? Rock.MOSS : Rock.LIMESTONE;
-                        return n > 0.12 ? Rock.ANDESITE : Rock.LIMESTONE;
-                    }
-                    if (n > 0.38) return Rock.MOSS;
-                    if (seam(x, y, z)) return Rock.CALCITE;
-                    return n > 0.12 ? Rock.ANDESITE : Rock.LIMESTONE;
-                }
-                if (floor) {
-                    if (wet) return n > 0.0 ? Rock.LIMESTONE : Rock.GRAVEL;
-                    if (top) return n > -0.2 ? Rock.MOSS : Rock.LIMESTONE;
-                    return n > -0.1 ? Rock.VERIDIUM : Rock.LIMESTONE;
-                }
-                if (n < -0.4) return Rock.LIMESTONE;
-                return n > 0.38 ? Rock.MOSS : Rock.VERIDIUM;
-            default:
-                if (floor) {
-                    if (wet) return n > 0.05 ? Rock.GRAVEL : Rock.STONE;
-                    if (top) return n > -0.1 ? Rock.MOSS : (n > -0.35 ? Rock.LIMESTONE : Rock.STONE);
-                    return n > 0.15 ? Rock.LIMESTONE : Rock.STONE;
-                }
-                if (ceil) return n > -0.05 ? Rock.ROOTED_DIRT : Rock.STONE;
-                return n > 0.22 ? Rock.LIMESTONE : Rock.STONE;
-        }
+        if (wet) return n > 0.05 ? Rock.GRAVEL : null;
+        if (look == Entrances.RAVINE) return n > -0.2 ? Rock.MOSS : (n > -0.4 ? Rock.GRAVEL : null);
+        return n > -0.1 ? Rock.MOSS : (n > -0.3 ? Rock.GRAVEL : null);
     }
 
     /**
      * The frozen Root Vaults under snowy forests, by how far a block lies beyond the snowy zone round the openings
      * ({@code chill}, see {@link Entrances#chill}). Near the openings: snow over the floors, drifted two and three deep
-     * in places, with patches of packed ice; snow and packed ice in the walls; packed ice in patches on the ceilings
-     * (blue ice in specks). Further in it thaws: the snow lies in patches on frost moss and limestone, and deep inside
-     * ({@link Entrances#THAW_REACH} and more) the halls are the root halls' grey stone and limestone with frost moss on
-     * the ledges and rooted dirt in the ceilings, snow only here and there. Pool beds stay gravel and stone (a feature
-     * lays ice on the still water). No veridium: no tropical trees grow on snowy ground.
+     * in places, with patches of packed ice; snow and packed ice on the walls; packed ice in patches on the ceilings
+     * (blue ice in specks). Further in it thaws: the snow lies in patches on frost moss, and deep inside
+     * ({@link Entrances#THAW_REACH} and more) only here and there. Pool beds are gravel (a feature lays ice on the still
+     * water). Everything else is the ground the vaults are carved into ({@code HostRule}).
      */
     public Rock frozenVaults(int look, double chill, int x, int y, int z, int above, int below, boolean wet, double shell) {
         boolean top = above <= 1;
@@ -776,31 +730,25 @@ public final class Palette {
         // 0 in the snowy zone, 1 deep inside
         double t = chill <= 0 ? 0 : Math.min(1, chill / Entrances.THAW_REACH);
         if (floor) {
-            if (wet) return n > 0.1 ? Rock.GRAVEL : Rock.STONE;
+            if (wet) return top && n > 0.1 ? Rock.GRAVEL : null;
             double snow = -0.45 + 1.05 * t;
             if (top) {
                 if (n > snow) return Rock.SNOW;
-                if (t == 0) return n > snow - 0.15 ? Rock.PACKED_ICE : Rock.STONE;
-                if (n > snow - 0.25 - 0.45 * t) return Rock.FROST_MOSS;
-                return n > -0.5 ? Rock.LIMESTONE : Rock.STONE;
+                if (t == 0) return n > snow - 0.15 ? Rock.PACKED_ICE : null;
+                return n > snow - 0.25 - 0.45 * t ? Rock.FROST_MOSS : null;
             }
-            if (t == 0 && n > 0) return Rock.SNOW; // drifts
-            return n > 0.2 ? Rock.LIMESTONE : Rock.STONE;
+            return t == 0 && n > 0 ? Rock.SNOW : null; // drifts
         }
-        if (ceil) {
-            if (n > 0.25 + 0.4 * t) return speck(x, y, z) < 0.07 ? Rock.BLUE_ICE : Rock.PACKED_ICE;
-            return look != Entrances.RAVINE && n < -0.25 + 0.2 * t ? Rock.ROOTED_DIRT : Rock.STONE;
-        }
+        if (ceil) return n > 0.25 + 0.4 * t ? (speck(x, y, z) < 0.07 ? Rock.BLUE_ICE : Rock.PACKED_ICE) : null;
         if (n > 0.42 + 0.3 * t) return Rock.PACKED_ICE;
-        if (t < 0.5 && n > 0.2 + 0.4 * t) return Rock.SNOW;
-        if (n < -0.35) return Rock.LIMESTONE;
-        return t >= 1 && n > 0.22 ? Rock.LIMESTONE : Rock.STONE;
+        return t < 0.5 && n > 0.2 + 0.4 * t ? Rock.SNOW : null;
     }
 
     /**
-     * A sinkhole: limestone over stone in bold patches on its walls, with a seam of calcite; dripstone and limestone
-     * under its lip; moss, grass, gravel and cobbles on its talus and shore; clay, sand and gravel under its pool. Under
-     * snowy plains, snow on the talus and the shore and packed ice in the walls.
+     * A sinkhole's floors: moss, grass, gravel and cobbles on its talus and shore, clay, sand and gravel under its pool;
+     * under snowy plains, snow on the talus and the shore and packed ice in patches on the walls. Its walls are the
+     * ground it is carved into ({@code HostRule}): the soil at the rim, then the rock under the plains (limestone in big
+     * blobs).
      */
     public Rock sinkhole(int x, int y, int z, int above, int below, boolean wet, double shell, boolean cold) {
         boolean top = above <= 1;
@@ -809,66 +757,41 @@ public final class Palette {
         if (!floor && !ceil && shell > 3) return null;
         double n = patch(x, y, z);
         if (floor) {
+            if (!top) return null;
             if (wet) return n > 0.15 ? Rock.CLAY : (n > -0.2 ? Rock.SAND : Rock.GRAVEL);
-            if (top) {
-                if (cold && n > -0.3) return Rock.SNOW;
-                if (n > 0.3) return Rock.MOSS;
-                if (n > 0.0) return Rock.GRASS;
-                if (n > -0.25) return Rock.GRAVEL;
-                return speck(x, y, z) < 0.5 ? Rock.MOSSY_COBBLESTONE : Rock.COBBLESTONE;
-            }
-            return n > 0.1 ? Rock.DIRT : Rock.LIMESTONE;
+            if (cold && n > -0.3) return Rock.SNOW;
+            if (n > 0.3) return Rock.MOSS;
+            if (n > 0.0) return Rock.GRASS;
+            if (n > -0.25) return Rock.GRAVEL;
+            return speck(x, y, z) < 0.5 ? Rock.MOSSY_COBBLESTONE : Rock.COBBLESTONE;
         }
-        if (ceil) return n < -0.3 ? Rock.DRIPSTONE : (n > 0.1 ? Rock.LIMESTONE : Rock.STONE);
-        if (cold && n > 0.45) return Rock.PACKED_ICE;
-        if (seam(x, y, z)) return Rock.CALCITE;
-        return n > -0.12 ? Rock.LIMESTONE : Rock.STONE;
+        return cold && !ceil && n > 0.45 ? Rock.PACKED_ICE : null;
     }
 
     /**
-     * An oasis hollow: sandstone walls with smooth sandstone and bands and patches of ochrum, sandstone ceilings, sand
-     * floors (sandstone wherever open space lies right under a floor, so no sand hangs over air), clay and sand round
-     * the spring. In the badlands (red): red sandstone, terracotta and ochrum, and red sand.
+     * An oasis hollow's floors: sand (bare rock wherever open space lies right under a floor, so no sand hangs over air),
+     * clay and sand round the spring; red sand in the badlands. Its walls and ceilings are the ground it is carved into
+     * ({@code HostRule}): sandstone in big blobs under deserts, terracotta under badlands.
      */
     public Rock oasis(int x, int y, int z, int above, int below, boolean wet, double shell, boolean red) {
-        boolean top = above <= 1;
-        boolean floor = above <= 3;
-        boolean ceil = !floor && below <= 2;
-        if (!floor && !ceil && shell > 3) return null;
+        if (above > 1 || below <= 1) return null;
         double n = patch(x, y, z);
-        Rock sandstone = red ? Rock.RED_SANDSTONE : Rock.SANDSTONE;
-        if (floor) {
-            if (below <= 1) return sandstone;
-            if (wet) return n > 0.0 ? Rock.CLAY : (red ? Rock.RED_SAND : Rock.SAND);
-            if (top) {
-                if (n < -0.4) return red ? Rock.SMOOTH_RED_SANDSTONE : Rock.SMOOTH_SANDSTONE;
-                return red ? Rock.RED_SAND : Rock.SAND;
-            }
-            return sandstone;
-        }
-        if (ceil) return red && n > 0.2 ? Rock.TERRACOTTA : sandstone;
-        if (seam(x, y, z) || n > 0.42) return Rock.OCHRUM;
-        if (red) return n < -0.2 ? Rock.ORANGE_TERRACOTTA : (n < 0.15 ? Rock.RED_SANDSTONE : Rock.TERRACOTTA);
-        return n < -0.3 ? Rock.SMOOTH_SANDSTONE : Rock.SANDSTONE;
+        if (wet) return n > 0.0 ? Rock.CLAY : (red ? Rock.RED_SAND : Rock.SAND);
+        return n < -0.4 ? null : (red ? Rock.RED_SAND : Rock.SAND);
     }
 
     /**
-     * The Frost Fern Grotto (the pack's caves under cold ground): floors of frost moss with pale limestone ledges, bare
-     * stone between them and snow in patches, gravel and clay under its water. The walls and ceilings keep the pack's
-     * rock: Immersive Weathering's icicle clusters ice them over in patches, as in its icy caves, and patches of
-     * deepslate come from a feature.
+     * The Frost Fern Grotto (the pack's caves under cold ground): floors of frost moss with snow and sheets of packed
+     * ice in patches, gravel and clay under its water. Everything under the floor's top, and the walls and ceilings,
+     * keep the pack's rock: Immersive Weathering's icicle clusters ice them over in patches, as in its icy caves.
      */
     public Rock frostGrotto(int x, int y, int z, int above, int below, boolean wet) {
-        boolean top = above <= 1;
-        boolean floor = above <= 2;
-        if (!floor) return null;
+        if (above > 2) return null;
         double n = patch(x, y, z);
         if (wet) return n > 0.1 ? Rock.GRAVEL : Rock.CLAY;
-        if (top) {
-            if (n > 0.55) return Rock.SNOW;
-            if (n > -0.3) return Rock.FROST_MOSS;
-            return n > -0.5 ? Rock.LIMESTONE : Rock.STONE;
-        }
-        return n > 0.0 ? Rock.DIRT : Rock.LIMESTONE;
+        if (above > 1) return null;
+        if (n > 0.55) return Rock.SNOW;
+        if (n > -0.3) return Rock.FROST_MOSS;
+        return n > -0.5 ? Rock.PACKED_ICE : null;
     }
 }

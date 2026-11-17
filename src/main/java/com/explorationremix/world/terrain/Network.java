@@ -1723,6 +1723,8 @@ public final class Network {
     }
 
     double passage(Plans.Gate g, int x, int y, int z) {
+        // a den gate is a rift down from the Upper Caves (Terrain.denRifts): its foot round the lower landing
+        if (g.band == 1 && base.denRifts) return base.denRift(g, x, y, z);
         double t = g.tAt(y);
         if (Double.isNaN(t)) return SOLID;
         double dx = x - g.px(t), dz = z - g.pz(t);

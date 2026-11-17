@@ -8,6 +8,11 @@ import com.explorationremix.world.terrain.RootKind;
 import com.explorationremix.world.terrain.UpperShapes;
 import net.minecraft.world.level.block.Blocks;
 import com.explorationremix.world.terrain.Hashing;
+import com.explorationremix.world.terrain.HostRock;
+import com.explorationremix.world.terrain.Perlin;
+import net.minecraft.core.BlockPos;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.util.Mth;
 import com.explorationremix.world.terrain.Rock;
 import com.explorationremix.world.terrain.Terrain;
 import com.mojang.serialization.MapCodec;
@@ -21,17 +26,97 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.SurfaceRules;
 
 /**
- * Surface rules for the deepened overworld, run before the pack's own: the deep layers' rock near open space (per
- * biome, see {@code Palette.shell}), deepslate where the pack's bedrock floor used to be, the set pieces' rock, the
- * shells of the Upper Caves' entrances (Root Vaults, frozen Root Vaults, sinkholes and oasis hollows) and the Frost Fern
- * Grotto's ice and moss. Everything else falls through to the pack's rules unchanged.
+ * Surface rules for the deepened overworld. Before the pack's own: the deep layers' rock near open space (per biome, see
+ * {@code Palette.shell}), deepslate where the pack's bedrock floor used to be, the set pieces' rock, the floors of the
+ * caves near the surface (Root Vaults, frozen Root Vaults, sinkholes and oasis hollows) and the Frost Fern Grotto's ice
+ * and moss. After the pack's own, so its grass, sand, snow and surface stone always win: the soil layer and the host
+ * rock the caves near the surface are carved into ({@link HostRule}).
  */
 public final class DeepSurfaceRules {
     private DeepSurfaceRules() {}
 
-    /** The pack's rules with the deep world's in front of them. */
+    /** The pack's rules with the deep world's in front of them and the soil and host rock behind. */
     public static SurfaceRules.RuleSource build(SurfaceRules.RuleSource original) {
-        return SurfaceRules.sequence(DeepRule.INSTANCE, original);
+        return SurfaceRules.sequence(DeepRule.INSTANCE, original, HostRule.INSTANCE);
+    }
+
+    /**
+     * The ground the caves near the surface are carved into (Taran, 2026-11-12), for rock the pack's rules leave as
+     * plain stone:
+     * <ul>
+     *     <li>A soil layer 5 to 8 blocks deep, a little deeper than the pack's dirt, wherever the ground is grass, podzol or
+     *     other soil (not under water). Under trees its bottom two blocks are rooted dirt, and the rooted dirt runs on
+     *     down to the ceiling of a cave lying up to four blocks under it, so the Root Vaults just under the soil have
+     *     roots for a roof; a cave cut into the soil has rooted dirt over it too.</li>
+     *     <li>Below the soil and above the deepslate, the host rock's blobs ({@link HostRock}): limestone, veridium in the
+     *     tropics, or the stone the pack gives the biome over them. None in the Frost Fern Grotto, which keeps the
+     *     pack's rock.</li>
+     * </ul>
+     */
+    public enum HostRule implements SurfaceRules.RuleSource {
+        INSTANCE;
+
+        static final KeyDispatchDataCodec<HostRule> CODEC = KeyDispatchDataCodec.of(MapCodec.unit(INSTANCE));
+        /** The soil's depth: about 6.5 blocks, wandering between these over 20 to 30 blocks. */
+        static final int SOIL_MIN = 5, SOIL_MAX = 8;
+        /** How far under the soil the rooted dirt runs down to a cave's ceiling. */
+        static final int ROOT_MAT = 4;
+        private static volatile Perlin soilN;
+        private static volatile long soilSeed;
+
+        @Override
+        public KeyDispatchDataCodec<? extends SurfaceRules.RuleSource> codec() { return CODEC; }
+
+        @Override
+        public SurfaceRules.SurfaceRule apply(SurfaceRules.Context ctx) {
+            SurfaceContextAccessor a = (SurfaceContextAccessor) (Object) ctx;
+            Terrain t = DeepWorld.terrain();
+            HostRock host = DeepWorld.host();
+            if (t == null || host == null) return (x, y, z) -> null;
+            int packFloor = t.shape.packFloor;
+            Perlin n = soil(t.seed);
+            SurfaceOracle oracle = DeepWorld.oracle();
+            Holder<Biome> frost = DeepBiomes.frostGrotto();
+            ChunkAccess chunk = a.er$chunk();
+            BlockState dirt = Blocks.DIRT.defaultBlockState(), rooted = Blocks.ROOTED_DIRT.defaultBlockState();
+            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+            // per column: its top block, whether that is soil, the soil's depth and whether trees root it
+            int[] col = {Integer.MIN_VALUE, Integer.MIN_VALUE, 0, 0, 0};
+            return (x, y, z) -> {
+                if (y <= packFloor + 5) return null;
+                if (col[0] != x || col[1] != z) {
+                    col[0] = x;
+                    col[1] = z;
+                    int top = chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, x, z);
+                    BlockState s = chunk.getBlockState(pos.set(x, top, z));
+                    boolean soil = s.is(BlockTags.DIRT) && !s.is(Blocks.MUD) && !s.is(Blocks.MUDDY_MANGROVE_ROOTS);
+                    col[2] = soil ? top : Integer.MIN_VALUE;
+                    col[3] = (int) Math.round(Mth.clamp(6.5 + 2.0 * n.noise2(x / 24.0, z / 24.0), SOIL_MIN, SOIL_MAX));
+                    col[4] = soil && oracle != null && oracle.at(x, z).trees().trees() ? 1 : 0;
+                }
+                if (col[2] != Integer.MIN_VALUE && a.er$waterHeight() == Integer.MIN_VALUE) {
+                    int d = col[2] - y, depth = col[3];
+                    boolean roots = col[4] != 0;
+                    if (d >= 1 && d < depth) return roots && (d >= depth - 2 || a.er$stoneDepthBelow() <= 2) ? rooted : dirt;
+                    if (roots && d >= depth && d + a.er$stoneDepthBelow() - 1 < depth + ROOT_MAT) return rooted;
+                }
+                if (y < HostRock.MIN_Y) return null;
+                Rock r = host.at(x, y, z);
+                if (r == null) return null;
+                if (frost != null && chunk.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z)) == frost) return null;
+                return DeepMaterials.state(r);
+            };
+        }
+
+        private static Perlin soil(long seed) {
+            Perlin p = soilN;
+            if (p == null || soilSeed != seed) {
+                p = new Perlin(Hashing.mix(seed, 0x536F696CL, 0, 0));
+                soilSeed = seed;
+                soilN = p;
+            }
+            return p;
+        }
     }
 
     public enum DeepRule implements SurfaceRules.RuleSource {
@@ -128,14 +213,14 @@ public final class DeepSurfaceRules {
 
         /**
          * A block of one of the noise shapes' formations: a root of the trees overhead (mangrove roots under mangroves),
-         * packed ice with specks of blue ice, or limestone and calcite with dripstone at the tip.
+         * packed ice with specks of blue ice, or limestone and calcite with calcite at the tip.
          */
         private static BlockState formation(UpperShapes sh, int f, long seed, int x, int y, int z) {
             long h = Hashing.mix(seed ^ 0x6F726D61L, x, y, z);
             return switch (f) {
                 case UpperShapes.ROOT -> rootLog(sh.trees(x, z));
                 case UpperShapes.ICICLE -> (h & 15) < 2 ? Blocks.BLUE_ICE.defaultBlockState() : Blocks.PACKED_ICE.defaultBlockState();
-                case UpperShapes.DRIP -> Blocks.DRIPSTONE_BLOCK.defaultBlockState();
+                case UpperShapes.DRIP -> DeepMaterials.state(Rock.CALCITE);
                 default -> DeepMaterials.state((h & 7) < 3 ? Rock.CALCITE : Rock.LIMESTONE);
             };
         }

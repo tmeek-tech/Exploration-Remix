@@ -1,9 +1,9 @@
 {
-  "feature": "explorationremix:ivory_root_cavern/grotto_ivy",
+  "feature": "explorationremix:rootvaults/ivy",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 9
+      "count": 24
     },
     {
       "type": "minecraft:in_square"
@@ -13,7 +13,14 @@
       "layer": "upper",
       "inset": 2,
       "above_water": false,
-      "focus": "pieces"
+      "focus": "grottos"
+    },
+    {
+      "type": "explorationremix:rootvaults_look",
+      "looks": [
+        1,
+        2
+      ]
     },
     {
       "type": "minecraft:biome"

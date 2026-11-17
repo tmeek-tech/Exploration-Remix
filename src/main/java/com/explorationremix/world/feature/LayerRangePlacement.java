@@ -107,13 +107,17 @@ public final class LayerRangePlacement extends PlacementModifier {
     }
 
     /**
-     * Where the Upper Caves grow from noise: {@code pieces} into the open space of a rift or hall over the column (none
-     * elsewhere), {@code grottos} mostly into the warrens or a sinkhole under it, {@code auto} into a rift or hall three
+     * Where the Upper Caves grow from noise: {@code pieces} into the open space of a rift (a den gate's deep rift too) or
+     * hall over the column (none elsewhere), {@code grottos} mostly into the warrens or a sinkhole under it, {@code auto} into a rift or hall three
      * times in four where there is one, else as {@code grottos}; otherwise anywhere from the old floor up 128 blocks.
      */
     private Stream<BlockPos> noisePositions(PlacementContext ctx, RandomSource random, UpperShapes sh, int x, int z, Shape s) {
         if (!focus.equals("grottos")) {
             int[] b = sh.pieceBand(x, z);
+            // the den gates' deep rifts are Fern Rifts too (Terrain.denRifts): a column over both takes either
+            Terrain t = DeepWorld.terrain();
+            int[] den = t != null ? t.denRiftBand(x, z) : null;
+            if (den != null && (b == null || random.nextBoolean())) b = den;
             if (b != null && (focus.equals("pieces") || random.nextFloat() < 0.75F)) {
                 // Start in the open: the floor and ceiling scans that follow find nothing from rock or water.
                 BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos(x, b[0], z);

@@ -24,7 +24,7 @@ import java.util.List;
  * Guarantees the ways are open, after every other feature has run. The terrain's density is interpolated in 4x8x4
  * cells, which can pinch a passage that twists through a 16-block band, and other mods' features can drop blocks
  * into it. This pass re-opens, block by block inside each chunk: every gate passage's core (in band 1 every den
- * gate's), every den gate's ramp up into the pack's caves, a walking corridor along every way of the network (section
+ * gate's, or the walking path along its rift's floor), every den gate's ramp up into the pack's caves, a walking corridor along every way of the network (section
  * 12.3), and the open core of every climb. Only blocks you would bump into are removed, so plants, vines and lichen on
  * the path stay; climbable blocks (the climbs' vines) and the rims round the climbs' mouths are never touched.
  */
@@ -47,7 +47,8 @@ public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
         // its gate's passage and landings, so it is tested on its own.
         for (int dcx = -1; dcx <= 1; dcx++) for (int dcz = -1; dcz <= 1; dcz++) {
             for (Plans.Gate g : plans.denGates(cellX + dcx, cellZ + dcz)) {
-                if (g.overlaps(minX, minZ, maxX, maxZ, 24)) any |= carvePassage(level, g, minX, minZ, maxX, maxZ, pos);
+                if (g.overlaps(minX, minZ, maxX, maxZ, 24))
+                    any |= t.denRifts ? carveRiftPath(level, g, minX, minZ, maxX, maxZ, pos) : carvePassage(level, g, minX, minZ, maxX, maxZ, pos);
                 Route.Link ramp = plans.ramp(g);
                 if (reaches(ramp, 4, minX, minZ, maxX, maxZ)) any |= carveLink(level, ramp, 1.4, minX, minZ, maxX, maxZ, pos);
             }
@@ -114,6 +115,24 @@ public final class OpenWayFeature extends Feature<NoneFeatureConfiguration> {
             double tt = i / (double) steps;
             double cx = g.px(tt), cy = g.py(tt), cz = g.pz(tt);
             double r = Math.max(2.2, g.radiusAt(tt) - 1.0);
+            if (cx + r < minX || cx - r > maxX || cz + r < minZ || cz - r > maxZ) continue;
+            any |= carveBall(level, cx, cy, cz, r, minX, minZ, maxX, maxZ, pos);
+        }
+        return any;
+    }
+
+    /**
+     * A den rift's walking path (0.14, Terrain.denRifts): a core 3.6 blocks across and as tall on the rift's floor along
+     * the passage's course, small enough to keep inside the crack, so the rift keeps its shape and the way down stays open.
+     */
+    private static boolean carveRiftPath(WorldGenLevel level, Plans.Gate g, int minX, int minZ, int maxX, int maxZ, BlockPos.MutableBlockPos pos) {
+        boolean any = false;
+        double len = Math.abs(g.y0 - g.y1) * 1.6 + 40;
+        int steps = (int) Math.ceil(len * 2);
+        double r = 1.8;
+        for (int i = 0; i <= steps; i++) {
+            double tt = i / (double) steps;
+            double cx = g.px(tt), cy = g.riftFloor(tt) + 1.9, cz = g.pz(tt);
             if (cx + r < minX || cx - r > maxX || cz + r < minZ || cz - r > maxZ) continue;
             any |= carveBall(level, cx, cy, cz, r, minX, minZ, maxX, maxZ, pos);
         }

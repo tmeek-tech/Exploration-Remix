@@ -16,8 +16,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Checks of the noise-made Upper Caves ({@link UpperShapes}) against the made-up world of {@link EntrancesTest}: the
  * same answers on every thread; the ground stays shut except at the ways in (mouths under forests, pits under plains
- * and deserts, rifts open to the sky); nothing opens under a river; nothing opens down by the den gates; pools and
- * lakes keep their water; the open space hangs together; every shape turns up, about as often as planned.
+ * and deserts); nothing opens under a river; the rifts lie deep, down by the old floor, and keep clear of the den gates
+ * there, where nothing else opens; pools and lakes keep their water; the open space hangs together; every shape turns
+ * up, about as often as planned.
  */
 class UpperShapesTest {
     private static final long[] SEEDS = {8675309L, 12345L};
@@ -63,14 +64,14 @@ class UpperShapesTest {
     }
 
     /**
-     * Within 3 blocks under the ground nothing opens except at a way in: a mouth under a forest, a pit under plains or a
-     * desert, or a rift where open dry land lies round it (a mouth or rift never under a river's own column).
+     * Within 3 blocks under the ground nothing opens except at a way in: a mouth under a forest or a pit under plains or a
+     * desert (a mouth never under a river's own column). The rifts lie deep and never open to the sky (since 0.14.1).
      */
     @Test
     void groundStaysShutExceptTheWaysIn() {
         for (long seed : SEEDS) {
             UpperShapes s = new UpperShapes(seed, PACK_FLOOR, WORLD);
-            int open = 0, mouths = 0, pits = 0, skies = 0;
+            int open = 0, mouths = 0, pits = 0;
             for (int x = -1200; x < 1200; x += 3) for (int z = -1200; z < 1200; z += 3) {
                 Overhead.Surface su = WORLD.at(x, z);
                 int g = su.y();
@@ -87,109 +88,138 @@ class UpperShapesTest {
                     assertTrue(c.forest && !su.wet(), "a mouth outside a dry forest" + at);
                     mouths++;
                 } else {
-                    assertTrue(c.rOn, "open under the ground" + at);
-                    boolean dry = false;
-                    for (int dx = -4; dx <= 4; dx += 4) for (int dz = -4; dz <= 4; dz += 4) {
-                        Overhead.Surface n = WORLD.at(x + dx, z + dz);
-                        dry |= n.ravineOk() && !n.wet();
-                    }
-                    assertTrue(dry, "a rift open to the sky away from open dry land" + at);
-                    skies++;
+                    fail("open under the ground" + at);
                 }
             }
-            System.out.printf("seed %d: %d columns open at the ground (every 3rd block): %d mouth, %d pit, %d sky%n", seed, open, mouths, pits, skies);
-            assertTrue(mouths > 0 && pits > 0 && skies > 0, "every way in turns up: " + mouths + " " + pits + " " + skies);
+            System.out.printf("seed %d: %d columns open at the ground (every 3rd block): %d mouth, %d pit%n", seed, open, mouths, pits);
+            assertTrue(mouths > 0 && pits > 0, "every way in turns up: " + mouths + " " + pits);
         }
     }
 
-    /** Under a river (the made-up world's wet strips) nothing but a rift's sky slot opens within 8 blocks of its bed. */
+    /** Under a river (the made-up world's wet strips) nothing opens within 8 blocks of its bed. */
     @Test
     void riversStayShut() {
         for (long seed : SEEDS) {
             UpperShapes s = new UpperShapes(seed, PACK_FLOOR, WORLD);
-            int sky = 0;
             for (int x = -1200; x < 1200; x += 2) for (int zr = -700; zr < 700; zr += 700) for (int z = zr; z < zr + 40; z += 2) {
                 int g = WORLD.at(x, z).y();
                 assertTrue(WORLD.at(x, z).wet());
-                for (int y = g - 8; y <= g; y++) {
-                    if (s.carve(x, y, z) >= 0) continue;
-                    UpperShapes.Col c = s.column(x, z);
-                    assertTrue(c.rOn && s.kindAt(x, y, z) == UpperShapes.RIFTS, "open under a river at " + x + " " + y + " " + z + ": " + s.describe(x, z));
-                    sky++;
-                    break;
-                }
-            }
-            System.out.printf("seed %d: %d river columns over a rift's sky slot (every 2nd block)%n", seed, sky);
-        }
-    }
-
-    /** Nothing opens below the shapes' floor, where the den gates' landings and ramps lie. */
-    @Test
-    void clearOfTheDenGates() {
-        for (long seed : SEEDS) {
-            UpperShapes s = new UpperShapes(seed, PACK_FLOOR, WORLD);
-            int top = PACK_FLOOR + UpperShapes.FLOOR_CLEARANCE - 2;
-            for (int x = -1200; x < 1200; x += 4) for (int z = -1200; z < 1200; z += 4) {
-                for (int y = PACK_FLOOR; y < top; y++) {
-                    assertTrue(s.carve(x, y, z) >= 0, "open at " + x + " " + y + " " + z);
-                    assertEquals(-1, s.fluid(x, y, z), "water or air claimed at " + x + " " + y + " " + z);
-                }
+                for (int y = g - 8; y <= g; y++)
+                    assertTrue(s.carve(x, y, z) >= 0, "open under a river at " + x + " " + y + " " + z + ": " + s.describe(x, z));
             }
         }
     }
 
     /**
-     * Still water stays put: next to a pool or a sinkhole's lake lies water or rock, not open air, nearly everywhere (a
-     * pool beside a rift may spill into it as a small fall). The rifts' streams and springs flow on purpose.
+     * Down by the old floor, where the den gates' landings, rifts and ramps lie, only the rifts open (below the other
+     * shapes' floor), and no block of their open space or water lies within {@link UpperShapes#RIFT_KEEP} across the
+     * ground of a den gate's works (the seed's own, {@link Terrain#denClearance}).
      */
     @Test
-    void poolsAndLakesHoldTheirWater() {
+    void clearOfTheDenGates() {
+        for (long seed : SEEDS) {
+            Terrain t = new Terrain(TerrainSettings.defaults(), PACK_FLOOR, seed);
+            UpperShapes s = new UpperShapes(seed, PACK_FLOOR, WORLD, t::denClearance), free = new UpperShapes(seed, PACK_FLOOR, WORLD);
+            int top = PACK_FLOOR + UpperShapes.FLOOR_CLEARANCE - 2, rift = 0, shut = 0;
+            double nearest = Double.MAX_VALUE;
+            for (int x = -1200; x < 1200; x += 4) for (int z = -1200; z < 1200; z += 4) {
+                UpperShapes.Col c = s.column(x, z);
+                double clear = t.denClearance(x, z);
+                // where the rifts' crack runs but a den gate's works are near, it is shut
+                if (!c.rOn && clear < UpperShapes.RIFT_KEEP && free.column(x, z).rOn) shut++;
+                boolean any = false;
+                for (int y = PACK_FLOOR; y < top; y++) {
+                    if (s.carve(x, y, z) >= 0 && s.fluid(x, y, z) == -1) continue;
+                    String at = " at " + x + " " + y + " " + z + ": " + s.describe(x, z);
+                    assertTrue(c.rOn, "a shape other than a rift open or holding water by the old floor" + at);
+                    assertTrue(clear >= UpperShapes.RIFT_KEEP, "a rift " + clear + " across from a den gate's works" + at);
+                    any = true;
+                }
+                if (any) {
+                    rift++;
+                    nearest = Math.min(nearest, clear);
+                }
+            }
+            System.out.printf("seed %d: %d rift columns by the old floor (every 4th block), the nearest %.1f across from a den gate's works; %d columns shut near one%n",
+                    seed, rift, nearest, shut);
+            assertTrue(rift > 0 && shut > 0, "rifts " + rift + ", shut near den gates " + shut);
+        }
+    }
+
+    /**
+     * The rifts lie at the bottom of the Upper Caves, close to the Blue Reaches (Taran, 2026-11-12): every rift's floor
+     * 4 to 22 blocks over the old floor, and its top under y 0 (64 over the old floor) and at least 8 under the lowest
+     * ground round it.
+     */
+    @Test
+    void riftsLieDeep() {
         for (long seed : SEEDS) {
             UpperShapes s = new UpperShapes(seed, PACK_FLOOR, WORLD);
-            int still = 0, spill = 0, pools = 0, lakes = 0;
+            int n = 0;
+            double floors = 0, tops = 0;
+            for (int x = -1024; x < 1024; x += 2) for (int z = -1024; z < 1024; z += 2) {
+                UpperShapes.Col c = s.column(x, z);
+                if (!c.rOn) continue;
+                String at = " at " + x + " " + z + ": " + s.describe(x, z);
+                assertTrue(c.rFloor >= PACK_FLOOR + UpperShapes.RIFT_FLOOR_MIN && c.rFloor <= PACK_FLOOR + 22, "rift floor" + at);
+                assertTrue(c.rTop <= PACK_FLOOR + 64 && c.rTop <= c.low - 8, "rift top" + at);
+                n++;
+                floors += c.rFloor;
+                tops += c.rTop;
+            }
+            System.out.printf("seed %d: %d rift columns (every 2nd block), floors at y %.1f and tops at y %.1f on average%n", seed, n, floors / n, tops / n);
+            assertTrue(n > 0, "no rifts");
+        }
+    }
+
+    /**
+     * Still water stays put: beside every block of a pool, a rift's stream or a sinkhole's lake, and under it, lies water
+     * or rock to every shape, never open air, and each such rock block is in the rim the pack's caves may not open. Only
+     * the springs flow.
+     */
+    @Test
+    void stillWaterHolds() {
+        int[][] around = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}};
+        for (long seed : SEEDS) {
+            UpperShapes s = new UpperShapes(seed, PACK_FLOOR, WORLD);
+            int still = 0, stream = 0, lakes = 0, spill = 0, unsealed = 0;
             String first = null;
             for (int x = -256; x < 256; x++) for (int z = -256; z < 256; z++) {
                 UpperShapes.Col c = s.column(x, z);
                 if (c.lo > c.hi) continue;
-                for (int y = (int) c.lo; y <= (int) c.hi; y++) {
-                    boolean pool = s.pool(s.column(x, z), y);
-                    c = s.column(x, z);
-                    boolean lake = c.sOn && y <= c.sLake && s.fluid(x, y, z) == UpperShapes.WATER;
-                    if (!pool && !lake) continue;
-                    if (s.carve(x, y, z) >= 0) continue;
-                    // a rift's stream or spring in the same column flows anyway
-                    if (c.rOn && s.kindAt(x, y, z) == UpperShapes.RIFTS) continue;
+                int lo = (int) c.lo, hi = (int) c.hi, rFloor = c.rOn ? c.rFloor : Integer.MIN_VALUE, sLake = c.sOn ? c.sLake : Integer.MIN_VALUE;
+                for (int y = lo; y <= hi; y++) {
+                    if (s.fluid(x, y, z) != UpperShapes.WATER) continue;
                     still++;
-                    if (pool) pools++;
-                    else lakes++;
-                    int[][] around = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}};
+                    if (y == rFloor - 1) stream++;
+                    else if (y >= sLake - 1 && y <= sLake) lakes++;
                     for (int[] d : around) {
                         int nx = x + d[0], ny = y + d[1], nz = z + d[2];
-                        if (s.carve(nx, ny, nz) < 0 && s.fluid(nx, ny, nz) != UpperShapes.WATER) {
-                            spill++;
-                            if (first == null) first = nx + " " + ny + " " + nz + " beside " + (pool ? "a pool" : "a lake") + " at " + x + " " + y + " " + z;
-                            break;
-                        }
+                        if (s.fluid(nx, ny, nz) == UpperShapes.WATER) continue;
+                        if (s.carve(nx, ny, nz) < 0) spill++;
+                        else if (!s.rim(nx, ny, nz)) unsealed++;
+                        else continue;
+                        if (first == null) first = nx + " " + ny + " " + nz + " beside water at " + x + " " + y + " " + z;
                     }
-                    c = s.column(x, z);
                 }
             }
-            System.out.printf("seed %d: %d still water blocks (%d pool, %d lake) in 512 x 512, %d beside open air (first: %s)%n", seed, still, pools, lakes,
-                    spill, first);
-            assertTrue(still > 0, "no pools or lakes");
-            assertTrue(spill <= 0.03 * still, spill + " of " + still + " still water blocks spill; first " + first);
+            System.out.printf("seed %d: %d still water blocks (%d stream, %d lake) in 512 x 512; %d beside open air, %d beside unsealed rock (first: %s)%n",
+                    seed, still, stream, lakes, spill, unsealed, first);
+            assertTrue(still > 0 && stream > 0, "no pools or streams");
+            assertEquals(0, spill, "water beside open air; first " + first);
+            assertEquals(0, unsealed, "water beside rock the pack's caves may open; first " + first);
         }
     }
 
     /**
-     * The open space hangs together: in a 192-block box, nearly all of it belongs to pieces that reach the box's sides
-     * or the sky. A closed pocket would be a dead end the pack's caves may or may not open.
+     * The open space hangs together: in a 192-block box from the old floor up, nearly all of it belongs to pieces that
+     * reach the box's sides or the sky. A closed pocket would be a dead end the pack's caves may or may not open.
      */
     @Test
     void openSpaceHangsTogether() {
         for (long seed : SEEDS) {
             UpperShapes s = new UpperShapes(seed, PACK_FLOOR, WORLD);
-            int n = 192, y0 = -10, h = 125, x0 = 40, z0 = -320;
+            int n = 192, y0 = PACK_FLOOR, h = 179, x0 = 40, z0 = -320;
             boolean[] open = new boolean[n * n * h];
             for (int i = 0; i < n; i++) for (int k = 0; k < n; k++) for (int j = 0; j < h; j++)
                 open[(i * n + k) * h + j] = s.carve(x0 + i, y0 + j, z0 + k) < 0;
@@ -306,16 +336,13 @@ class UpperShapesTest {
     void census() {
         for (long seed : SEEDS) {
             UpperShapes s = new UpperShapes(seed, PACK_FLOOR, WORLD);
-            int n = 0, warren = 0, rift = 0, sky = 0, hall = 0, pit = 0, hollow = 0, mouthCols = 0, springs = 0, roots = 0, icicles = 0, stal = 0;
+            int n = 0, warren = 0, rift = 0, hall = 0, pit = 0, hollow = 0, mouthCols = 0, springs = 0, roots = 0, icicles = 0, stal = 0;
             int r = 512, sr = 192;
             for (int x = -r; x < r; x += 2) for (int z = -r; z < r; z += 2) {
                 UpperShapes.Col c = s.column(x, z);
                 n++;
                 if (c.wOn[0] && c.wLine[0] < c.wHw[0] || c.wOn[1] && c.wLine[1] < c.wHw[1]) warren++;
-                if (c.rOn && c.rLine < 4) {
-                    rift++;
-                    if (c.rSky) sky++;
-                }
+                if (c.rOn && c.rLine < 4) rift++;
                 if (c.hOn) hall++;
                 if (c.sOn && c.sScore > 0.55) {
                     if (c.desert) hollow++;
@@ -331,16 +358,16 @@ class UpperShapesTest {
                 if (c.rOn && s.spring(c) != Integer.MIN_VALUE) springs++;
             }
             double km2 = (2.0 * r) * (2.0 * r) / 1e6, springKm2 = (2.0 * sr) * (2.0 * sr) / 1e6;
-            System.out.printf("seed %d over %.2f km2 (columns every 2 blocks, shares of columns): warren tunnels %.1f%%, rift %.1f%% (%.2f%% open to the sky), "
+            System.out.printf("seed %d over %.2f km2 (columns every 2 blocks, shares of columns): warren tunnels %.1f%%, rift %.1f%%, "
                             + "hall %.1f%%, sinkhole pits %.2f%%, desert hollows %.2f%%, mouths %.2f%%; roots %.2f%%, icicles %.2f%%, stalactites %.2f%% "
                             + "(of the halls %.1f%%); %d springs in the middle %.2f km2 (%.0f per km2)%n",
-                    seed, km2, 100.0 * warren / n, 100.0 * rift / n, 100.0 * sky / n, 100.0 * hall / n, 100.0 * pit / n, 100.0 * hollow / n,
+                    seed, km2, 100.0 * warren / n, 100.0 * rift / n, 100.0 * hall / n, 100.0 * pit / n, 100.0 * hollow / n,
                     100.0 * mouthCols / n, 100.0 * roots / n, 100.0 * icicles / n, 100.0 * stal / n, hall == 0 ? 0 : 100.0 * stal / hall, springs,
                     springKm2, springs / springKm2);
             assertTrue(warren > 0.10 * n, "warrens " + warren);
             assertTrue(rift > 0.01 * n, "rifts " + rift);
             assertTrue(hall > 0.01 * n, "halls " + hall);
-            assertTrue(pit > 0 && hollow > 0 && mouthCols > 0 && sky > 0, "pits " + pit + ", hollows " + hollow + ", mouths " + mouthCols + ", sky " + sky);
+            assertTrue(pit > 0 && hollow > 0 && mouthCols > 0, "pits " + pit + ", hollows " + hollow + ", mouths " + mouthCols);
             assertTrue(roots > 0 && icicles > 0 && stal > 0 && springs > 0, "roots " + roots + ", icicles " + icicles + ", stalactites " + stal
                     + ", springs " + springs);
         }
