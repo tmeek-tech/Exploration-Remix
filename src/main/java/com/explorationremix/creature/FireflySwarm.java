@@ -126,7 +126,9 @@ public class FireflySwarm extends Entity {
     /** After a pick that found nowhere to go, it hovers this long (ticks) before it tries again, not every tick. */
     static final int REPICK = 20;
     /** Bodies further than this beyond the swarm's radius are not looked at by its fireflies. */
-    static final double BODY_REACH = 4.0;
+    static final double BODY_REACH = 6.0;
+    /** A body moving further than this in a tick has teleported; one moving faster than {@link #FASTEST_BODY} counts as that fast (blocks a tick). */
+    static final double TELEPORT = 4.0, FASTEST_BODY = 0.6;
     /**
      * An ambient mob's despawn distances, kept here rather than read from its type's category (MISC, which vanilla
      * despawns nothing by): gone at once with no player within {@link #DESPAWN_FAR} blocks, and in time with none
@@ -947,7 +949,10 @@ public class FireflySwarm extends Entity {
         for (Entity e : level().getEntities(this, new AABB(c, c).inflate(r), FireflySwarm::isBody)) {
             AABB b = e.getBoundingBox();
             double mx = e.getX() - e.xo, my = e.getY() - e.yo, mz = e.getZ() - e.zo;
-            if (mx * mx + my * my + mz * mz > 1.0) mx = my = mz = 0.0;
+            // a jump of more than a few blocks is a teleport, not a move; anything quicker than a gallop pushes the air as one
+            double sp = Math.sqrt(mx * mx + my * my + mz * mz);
+            if (sp > TELEPORT) mx = my = mz = 0.0;
+            else if (sp > FASTEST_BODY) { double k = FASTEST_BODY / sp; mx *= k; my *= k; mz *= k; }
             f.addBody(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, mx, my, mz);
             if (f.bodies() >= Flock.MAX_BODIES) break;
         }

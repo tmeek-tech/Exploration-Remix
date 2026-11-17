@@ -66,7 +66,7 @@ class PerchesTest {
             for (int k : pick) {
                 assertTrue(distinct.add(k), "two fireflies on one point");
                 double d = Math.sqrt(spots.get(k).dist2(0.5, 64.25, 0.5));
-                assertTrue(d <= Perches.REACH, "out of reach: " + d);
+                assertTrue(d <= Perches.reach(n), "out of reach: " + d);
                 mean += d / n;
             }
             for (int i = 0; i < n; i++)
@@ -77,10 +77,33 @@ class PerchesTest {
             int usable = 0;
             for (Perches.Spot s : spots) {
                 double d = Math.sqrt(s.dist2(0.5, 64.25, 0.5));
-                if (d <= Perches.REACH) { all += d; usable++; }
+                if (d <= Perches.reach(n)) { all += d; usable++; }
             }
             assertTrue(mean < all / usable, "mean " + mean + " against " + all / usable);
         }
+    }
+
+    @Test
+    void aBigSwarmSettlesOverAWiderPatchAsThicklyAsASmallOne() {
+        assertEquals(Perches.REACH, Perches.reach(8), 1.0E-12, "a small swarm keeps the old patch");
+        assertTrue(Perches.reach(160) > Perches.reach(45) && Perches.reach(45) > Perches.reach(16));
+        assertTrue(Perches.reach(Flock.MAX) <= Perches.MAX_REACH);
+        List<Perches.Spot> spots = floor(7, 4);
+        double[] mean = new double[2];
+        int[] sizes = {24, 140};
+        for (int k = 0; k < 2; k++) {
+            int n = sizes[k];
+            int[] pick = Perches.pick(spots, 0.5, 64.25, 0.5, n, 4);
+            assertEquals(n, pick.length);
+            Set<Integer> distinct = new HashSet<>();
+            for (int s : pick) {
+                assertTrue(distinct.add(s), n + ": two fireflies on one point");
+                mean[k] += Math.sqrt(spots.get(s).dist2(0.5, 64.25, 0.5)) / n;
+            }
+        }
+        // about as thick: the patch's area grows with the swarm, so its mean distance by the square root
+        double ratio = mean[1] / mean[0], wanted = Math.sqrt(140.0 / 24.0);
+        assertTrue(ratio > wanted * 0.7 && ratio < wanted * 1.3, "patch widths " + mean[0] + " and " + mean[1]);
     }
 
     @Test
@@ -95,7 +118,7 @@ class PerchesTest {
     void pointsOutOfReachAreNeverChosen() {
         List<Perches.Spot> spots = floor(6, 1);
         int[] pick = Perches.pick(spots, 0.5, 64.25, 0.5, 32, 1);
-        for (int k : pick) assertTrue(Math.sqrt(spots.get(k).dist2(0.5, 64.25, 0.5)) <= Perches.REACH);
+        for (int k : pick) assertTrue(Math.sqrt(spots.get(k).dist2(0.5, 64.25, 0.5)) <= Perches.reach(32));
         // a lone ledge far off gives nothing
         List<Perches.Spot> far = new ArrayList<>();
         Perches.face(10, 64, 10, 0, -1, 0, 1, far);
