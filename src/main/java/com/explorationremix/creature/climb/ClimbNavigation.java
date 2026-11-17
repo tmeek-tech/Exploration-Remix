@@ -5,6 +5,7 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.pathfinder.Node;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.level.pathfinder.PathFinder;
 import net.minecraft.world.phys.Vec3;
@@ -61,7 +62,28 @@ public class ClimbNavigation extends net.minecraft.world.entity.ai.navigation.Pa
         if (this.isDone()) return;
         Vec3 next = this.path.getNextEntityPos(this.mob);
         Vec3 wanted = againstRock(this.path, next);
+        // a wall climbed from the floor: it walks to the wall's foot first, then up it (aimed straight at the node up the
+        // wall from a block or two out, it floated up to it through the air, and fell when that took too long); also
+        // while it tops a step or slab at the foot, when it touches nothing for a moment but its path has just left a
+        // floor
+        if (wanted.y > mob.getY() + 0.5 && mob instanceof ClimbMoveControl.Climber c && (c.onFloor() || leftFloor())) {
+            Vec3i n = this.path.getNextNodePos();
+            if (ClimbNodeEvaluator.classify(level, n.getX(), n.getY(), n.getZ(), 2, 1, 2) == ClimbNodeEvaluator.WALL
+                    && Mth.square(wanted.x - mob.getX()) + Mth.square(wanted.z - mob.getZ()) > FOOT * FOOT)
+                wanted = new Vec3(wanted.x, mob.getY(), wanted.z);
+        }
         this.mob.getMoveControl().setWantedPosition(wanted.x, wanted.y, wanted.z, this.speedModifier);
+    }
+
+    /** How near the foot of a wall (across) it walks before it climbs. */
+    private static final double FOOT = 0.05;
+
+    /** Whether the node the path passed last is a floor, so the next one starts a climb from the floor. */
+    private boolean leftFloor() {
+        int i = this.path.getNextNodeIndex();
+        if (i <= 0) return false;
+        Node p = this.path.getNode(i - 1);
+        return ClimbNodeEvaluator.classify(level, p.x, p.y, p.z, 2, 1, 2) == ClimbNodeEvaluator.FLOOR;
     }
 
     @Override
@@ -80,13 +102,26 @@ public class ClimbNavigation extends net.minecraft.world.entity.ai.navigation.Pa
         doStuckDetection(pos);
     }
 
-    /** The waypoint's box pressed against the rock its node clings to (walls and ceilings only). */
+    /**
+     * The waypoint's box pressed against the rock its node clings to (walls and ceilings), or standing where it will
+     * stand on a floor: on a slab in its cells, or down on a slab under them.
+     */
     private Vec3 againstRock(Path path, Vec3 at) {
         Vec3i n = path.getNextNodePos();
         byte k = ClimbNodeEvaluator.classify(level, n.getX(), n.getY(), n.getZ(), 2, 1, 2);
         double half = mob.getBbWidth() / 2.0;
         double gapSide = 1.0 - half;                     // between the box and the cells' edge on each side
         if (k == ClimbNodeEvaluator.CEILING) return new Vec3(at.x, n.getY() + 1.0 - mob.getBbHeight(), at.z);
+        if (k == ClimbNodeEvaluator.FLOOR) {
+            // a slab or snow layer in its cells lifts the box: it aims where it will stand, on top (aimed at the node's
+            // floor half a block lower, it climbs a hair up the slab's side and hangs there, clinging to it)
+            double lift = ClimbNodeEvaluator.lift(level, n.getX(), n.getY(), n.getZ(), 2, 2);
+            if (lift > 0.0) return new Vec3(at.x, at.y + lift, at.z);
+            // standing on slabs under its cells, the box is lower than the node: aimed at the node, it floated up
+            // through the air half a block over them, and often fell
+            double top = ClimbNodeEvaluator.support(level, n.getX(), n.getY(), n.getZ(), 2, 2);
+            return top > 0.0 && top < 1.0 ? new Vec3(at.x, at.y - 1.0 + top, at.z) : at;
+        }
         if (k != ClimbNodeEvaluator.WALL) return at;
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         double x = at.x, z = at.z;

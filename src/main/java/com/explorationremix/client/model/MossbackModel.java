@@ -1,50 +1,60 @@
 package com.explorationremix.client.model;
 
 import com.explorationremix.creature.MossbackEntity;
+import com.explorationremix.creature.body.MossbackBody;
+import com.explorationremix.creature.body.MossbackPose;
+import com.explorationremix.creature.body.MossbackRig;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.model.HierarchicalModel;
-import net.minecraft.client.model.geom.ModelPart;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.model.EntityModel;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
+import org.joml.Vector3d;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
+
+import javax.annotation.Nullable;
 
 /**
- * The Mossback's model, its shape from tools/creatures.py (geometry/mossback.json). Its animation is all procedural:
- * a sprawling walk with the legs in diagonal pairs, the spine bending from side to side in an S with the tail
- * following a beat behind, slow breathing at the throat, the head turning towards what it watches, and for the hunt
- * the frills fanning out, the throat swelling, the front rearing and the jaw gaping. While it holds its catch the
- * head and neck thrash; carrying one home, the jaw stays a little open round it.
+ * The Mossback as drawn (0.15.0): its shape from tools/creatures.py (geometry/mossback.json) laid on its body each
+ * frame (see creature.body). Its trunk and tail bend as one skin along its spine, its legs reach from their shoulders
+ * to the feet it has set on the rock, and its head turns to what it watches; the moment's touches (breathing, the
+ * hunt's flare and gape, the tremble before a strike, the thrash with a catch, the death roll) come from the lizard's
+ * own state. One pose is worked out per lizard per frame ({@link #setupAnim}) and drawn by the main pass and the
+ * glowing layers alike.
  */
-public class MossbackModel extends HierarchicalModel<MossbackEntity> {
-    private final ModelPart root, chest, hips, neck, head, jaw, throat, frillLeft, frillRight;
-    private final ModelPart[] tail = new ModelPart[5];
-    private final ModelPart flUpper, flLower, frUpper, frLower, hlUpper, hlLower, hrUpper, hrLower;
+public class MossbackModel extends EntityModel<MossbackEntity> {
+    private final MossbackPose pose;
+    private final MossbackPose.Inputs in = new MossbackPose.Inputs();
     private float partialTick;
+    @Nullable private Level level;
+    private final BlockPos.MutableBlockPos lightPos = new BlockPos.MutableBlockPos();
+    private final MossbackPose.Light light = this::lightAt;
+    // drawing
+    private final Matrix4f matrix = new Matrix4f();
+    private final Matrix3f normals = new Matrix3f();
+    private final Vector4f p4 = new Vector4f();
+    private final Vector3f n3 = new Vector3f();
+    private VertexConsumer out;
+    private int overlay;
+    private float red, green, blue, alpha;
+    /** On fire: lit through by its own flames (block light 15, as vanilla lights a burning mob). */
+    private boolean burning;
+    private final MossbackPose.Sink sink = this::vertex;
 
-    public MossbackModel(ModelPart root) {
-        this.root = root;
-        this.chest = root.getChild("chest");
-        this.hips = chest.getChild("hips");
-        this.neck = chest.getChild("neck");
-        this.head = neck.getChild("head");
-        this.jaw = head.getChild("jaw");
-        this.throat = jaw.getChild("throat");
-        this.frillLeft = head.getChild("frill_left");
-        this.frillRight = head.getChild("frill_right");
-        ModelPart t = hips.getChild("tail1");
-        tail[0] = t;
-        for (int i = 1; i < 5; i++) { t = t.getChild("tail" + (i + 1)); tail[i] = t; }
-        this.flUpper = chest.getChild("front_left_upper");
-        this.flLower = flUpper.getChild("front_left_lower");
-        this.frUpper = chest.getChild("front_right_upper");
-        this.frLower = frUpper.getChild("front_right_lower");
-        this.hlUpper = hips.getChild("hind_left_upper");
-        this.hlLower = hlUpper.getChild("hind_left_lower");
-        this.hrUpper = hips.getChild("hind_right_upper");
-        this.hrLower = hrUpper.getChild("hind_right_lower");
-    }
-
-    @Override
-    public ModelPart root() {
-        return root;
+    public MossbackModel() {
+        super(RenderType::entityCutoutNoCull);
+        this.pose = new MossbackPose(MossbackRig.shared());
     }
 
     @Override
@@ -54,102 +64,101 @@ public class MossbackModel extends HierarchicalModel<MossbackEntity> {
 
     @Override
     public void setupAnim(MossbackEntity e, float limbSwing, float amount, float age, float netHeadYaw, float headPitch) {
-        root.getAllParts().forEach(ModelPart::resetPose);
         float pt = partialTick;
-        float jawOpen = e.jaw(pt), rear = e.rear(pt), flare = e.frill(pt);
-        amount = Math.min(1.0F, amount * 1.6F);
+        MossbackBody body = e.drawnBody();
+        in.jaw = e.jaw(pt);
+        in.rear = e.rear(pt);
+        in.frill = e.frill(pt);
+        in.windup = e.windup(pt);
+        in.age = age;
+        // on a floor it turns its head to what it watches; on walls and ceilings it looks ahead
+        in.look = e.onFloor();
+        in.lookYaw = Mth.wrapDegrees(netHeadYaw) * Mth.DEG_TO_RAD;
+        in.lookPitch = headPitch * Mth.DEG_TO_RAD;
+        byte s = e.state();
+        in.thrash = s == MossbackEntity.GRAB;
+        in.eat = s == MossbackEntity.EAT;
+        // dying, it rolls onto its back
+        in.dying = e.deathTime > 0 ? Math.sqrt(Math.min(1.0, (e.deathTime + pt - 1.0) / 20.0 * 1.6)) : 0.0;
+        level = e.level();
+        burning = e.isOnFire();
+        // from where the lizard is drawn (as LevelRenderer places it), so every part lands where its body has it in the world
+        double ox = Mth.lerp(pt, e.xOld, e.getX()), oy = Mth.lerp(pt, e.yOld, e.getY()), oz = Mth.lerp(pt, e.zOld, e.getZ());
+        int fallback = LevelRenderer.getLightColor(level, e.blockPosition());
+        pose.compute(body, pt, in, ox, oy, oz, light, fallback);
+        level = null;
+    }
 
-        // --- walk: diagonal pairs (front left with hind right), the spine swinging the other way
-        float phase = limbSwing * 0.55F;
-        float a = Mth.sin(phase), b = Mth.cos(phase);
-        float swing = 0.75F * amount, lift = 0.45F * amount;
-        leg(flUpper, flLower, a, b, swing, lift, 1);
-        leg(hrUpper, hrLower, a, b, swing, lift, -1);
-        leg(frUpper, frLower, -a, -b, swing, lift, -1);
-        leg(hlUpper, hlLower, -a, -b, swing, lift, 1);
-        float bend = 0.16F * amount;
-        chest.yRot += a * bend;
-        hips.yRot -= a * bend * 1.6F;
-        neck.yRot -= a * bend * 0.8F;
-        // the tail follows a beat behind, and sways a little even at rest
-        for (int i = 0; i < tail.length; i++) {
-            float lag = phase - 0.7F * (i + 1);
-            tail[i].yRot += Mth.sin(lag) * (0.12F + 0.05F * i) * amount + Mth.sin(age * 0.05F - i * 0.6F) * 0.05F;
+    /** The light where a part of it is (the brightest open block beside it, should that part lie in rock). */
+    private int lightAt(double x, double y, double z) {
+        Level l = level;
+        if (l == null) return LightTexture.FULL_BRIGHT;
+        lightPos.set(Mth.floor(x), Mth.floor(y), Mth.floor(z));
+        BlockState state = l.getBlockState(lightPos);
+        if (!state.isSolidRender(l, lightPos)) return LevelRenderer.getLightColor(l, state, lightPos);
+        int best = 0, bestSum = -1;
+        int cx = lightPos.getX(), cy = lightPos.getY(), cz = lightPos.getZ();
+        for (Direction d : Direction.values()) {
+            lightPos.set(cx + d.getStepX(), cy + d.getStepY(), cz + d.getStepZ());
+            BlockState s = l.getBlockState(lightPos);
+            if (s.isSolidRender(l, lightPos)) continue;
+            int c = LevelRenderer.getLightColor(l, s, lightPos);
+            int sum = LightTexture.block(c) + LightTexture.sky(c);
+            if (sum > bestSum) { bestSum = sum; best = c; }
         }
+        return bestSum < 0 ? LevelRenderer.getLightColor(l, state, lightPos.set(cx, cy, cz)) : best;
+    }
 
-        // --- breathing
-        float breath = Mth.sin(age * 0.09F);
-        throat.yScale = 1.0F + 0.06F * breath;
-        chest.y += 0.15F * breath;
+    @Override
+    public void renderToBuffer(PoseStack poseStack, VertexConsumer consumer, int packedLight, int packedOverlay,
+                               float r, float g, float b, float a) {
+        draw(poseStack, consumer, packedOverlay, r, g, b, a, false);
+    }
 
-        // --- head: turns to what it watches (on walls and ceilings it just looks ahead)
-        if (e.onFloor()) {
-            float yaw = Mth.clamp(netHeadYaw, -60.0F, 60.0F) * Mth.DEG_TO_RAD;
-            float pitch = Mth.clamp(headPitch, -40.0F, 40.0F) * Mth.DEG_TO_RAD;
-            neck.yRot += yaw * 0.45F;
-            head.yRot += yaw * 0.55F;
-            neck.xRot += pitch * 0.4F;
-            head.xRot += pitch * 0.6F;
-        }
+    /** Draws it again lit through and through (its glowing layers: eyes and markings). */
+    public void renderBright(PoseStack poseStack, VertexConsumer consumer, float r, float g, float b, float a) {
+        draw(poseStack, consumer, OverlayTexture.NO_OVERLAY, r, g, b, a, true);
+    }
 
-        // --- the hunt: frills fan out, the throat swells, the front rears and the jaw gapes
-        frillLeft.yRot += flare * 1.0F;
-        frillRight.yRot -= flare * 1.0F;
-        frillLeft.zRot -= flare * 0.25F;
-        frillRight.zRot += flare * 0.25F;
-        throat.yScale += flare * 0.9F + rear * 0.4F;
-        throat.xScale = 1.0F + flare * 0.3F;
-        throat.zScale = 1.0F + flare * 0.2F;
-        chest.xRot -= rear * 0.35F;
-        hips.xRot += rear * 0.3F;
-        neck.xRot -= rear * 0.15F;
-        head.xRot += rear * 0.2F - jawOpen * 0.15F;
-        jaw.xRot += jawOpen * 0.85F;
-        flUpper.zRot -= rear * 0.5F;
-        frUpper.zRot += rear * 0.5F;
+    private void draw(PoseStack poseStack, VertexConsumer consumer, int packedOverlay, float r, float g, float b, float a, boolean bright) {
+        if (!pose.ready()) return;
+        poseStack.pushPose();
+        unflip(poseStack);
+        matrix.set(poseStack.last().pose());
+        normals.set(poseStack.last().normal());
+        poseStack.popPose();
+        out = consumer;
+        overlay = packedOverlay;
+        red = r; green = g; blue = b; alpha = a;
+        pose.emit(sink, LightTexture.FULL_BRIGHT, bright);
+        out = null;
+    }
 
-        // --- winding up a strike (0.12.0): a tremble that grows to the moment it strikes
-        float wind = e.windup(pt);
-        if (wind > 0.0F) {
-            float tr = wind * wind;
-            chest.zRot += 0.05F * tr * Mth.sin(age * 4.6F);
-            neck.yRot += 0.07F * tr * Mth.sin(age * 5.3F + 1.0F);
-            head.xRot += 0.06F * tr * Mth.sin(age * 6.1F + 2.0F);
-            jaw.xRot += 0.12F * wind;
-            frillLeft.zRot -= 0.12F * tr * Mth.sin(age * 7.0F);
-            frillRight.zRot += 0.12F * tr * Mth.sin(age * 7.0F);
-        }
+    private void vertex(float x, float y, float z, float u, float v, float nx, float ny, float nz, int light) {
+        matrix.transform(p4.set(x, y, z, 1.0F));
+        normals.transform(n3.set(nx, ny, nz));
+        int lit = burning ? (light & 0xFFFF0000) | 0xF0 : light;
+        out.vertex(p4.x(), p4.y(), p4.z(), red, green, blue, alpha, u, v, overlay, lit, n3.x(), n3.y(), n3.z());
+    }
 
-        // --- holding its catch, it thrashes
-        if (e.state() == MossbackEntity.GRAB) {
-            float thrash = Mth.sin(age * 1.1F);
-            neck.yRot += thrash * 0.45F;
-            head.yRot += thrash * 0.35F;
-            head.zRot += thrash * 0.25F;
-            chest.yRot -= thrash * 0.15F;
-        }
+    /**
+     * Undoes LivingEntityRenderer's flip of a model (a scale of -1, -1, 1 and a drop of 1.501): the pose is the world's
+     * again, from the lizard's place as drawn (MossbackRenderer turns nothing: the body lies in the world as it is).
+     */
+    private static void unflip(PoseStack poseStack) {
+        poseStack.translate(0.0F, 1.501F, 0.0F);
+        poseStack.scale(-1.0F, -1.0F, 1.0F);
     }
 
     /**
      * Moves the pose from the model's root to the gap between its jaws, as posed for this frame (for what it carries
-     * there: see MossbackRenderer). The lower jaw runs 10 pixels forward from its hinge; the gap lies about 7 along it,
-     * just above the lower jaw's top. The pose is still the model's: y down, the snout towards -z.
+     * there: see MossbackRenderer). The pose is then the jaw's own, as the model's parts have it: y down, the snout
+     * towards -z.
      */
-    public void translateToJaw(PoseStack pose) {
-        root.translateAndRotate(pose);
-        chest.translateAndRotate(pose);
-        neck.translateAndRotate(pose);
-        head.translateAndRotate(pose);
-        jaw.translateAndRotate(pose);
-        pose.translate(0.0F, -0.5F / 16.0F, -7.0F / 16.0F);
-    }
-
-    /** A sprawling leg: the upper leg sweeps forward and back about the shoulder and lifts while it swings forward. */
-    private static void leg(ModelPart upper, ModelPart lower, float a, float b, float swing, float lift, int side) {
-        upper.yRot += a * swing * side;                     // side: +1 for the left legs, -1 for the right
-        float up = Math.max(0.0F, b) * lift;
-        boolean left = upper.x > 0;                          // y grows downward: a left leg lifts with a negative turn
-        upper.zRot += left ? -up : up;
-        lower.zRot += left ? up * 0.8F : -up * 0.8F;
+    public void translateToJaw(PoseStack poseStack) {
+        unflip(poseStack);
+        Vector3d gap = pose.jawGap();
+        poseStack.translate(gap.x, gap.y, gap.z);
+        poseStack.mulPose(new Quaternionf().setFromNormalized(pose.jawTurn()));
     }
 }
