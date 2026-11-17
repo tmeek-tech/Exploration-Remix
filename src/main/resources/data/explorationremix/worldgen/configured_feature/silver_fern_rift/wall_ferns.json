@@ -8,10 +8,10 @@
       }
     },
     "faces": "walls_hanging",
-    "tries": 32,
+    "tries": 96,
     "radius": 6,
-    "height": 6,
-    "on": "#explorationremix:cave_rock",
+    "height": 4,
+    "on": "explorationremix:deep_moss",
     "in_water": false
   }
 }

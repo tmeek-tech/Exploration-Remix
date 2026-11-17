@@ -661,10 +661,12 @@ public final class Palette {
         boolean floor = above <= 3;
         boolean ceil = !floor && below <= 2;
         if (b == DeepBiome.SILVER_FERN_RIFT) {
-            // Blue cliffs of asurine and deepslate, stepped with mossy ledges, copper in the walls.
+            // Blue cliffs of asurine and deepslate, stepped with mossy ledges, copper in the walls. The ledges' moss is
+            // deep moss (Taran, 0.14.3), two blocks deep, so its sides show at the lips, where the hanging ferns grow.
             if (floor) {
                 if (wet) return n > 0 ? Rock.GRAVEL : Rock.COBBLED_DEEPSLATE;
-                if (top) return n > -0.3 ? Rock.MOSS : Rock.COBBLED_DEEPSLATE;
+                if (above <= 2 && n > -0.3 && (top || patch(x, y + 1, z) > -0.3)) return Rock.DEEP_MOSS;
+                if (top) return Rock.COBBLED_DEEPSLATE;
                 return n < -0.05 ? Rock.ASURINE : Rock.DEEPSLATE;
             }
             if (vein(x, y, z, 0.026)) return Rock.DEEPSLATE_COPPER_ORE;

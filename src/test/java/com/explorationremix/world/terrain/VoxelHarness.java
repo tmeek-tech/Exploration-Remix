@@ -155,8 +155,8 @@ final class VoxelHarness {
 
     /**
      * Marks the vines of a plan's climbs as {@code ClimbVinesFeature} places them (section 10): one column per stage
-     * ({@link Network#vineColumn}), hanging from the first rock over the floor the stage climbs to (searched up to 16
-     * blocks over it) down through open air to the stage's foot. Returns the number of stages that got vines.
+     * ({@link Network#vineColumn}), hanging from the first rock over the floor the stage climbs to (searched up to
+     * {@link Network#VINE_HOLD} blocks over it) down through open air to the stage's foot. Returns the number of stages that got vines.
      */
     int markShafts(Net n) {
         int made = 0;
@@ -164,8 +164,8 @@ final class VoxelHarness {
             int[] c = Network.vineColumn(s);
             int foot = Network.vineFoot(s), top = Network.vineTop(s);
             int hold = top + 1;
-            while (hold <= top + 16 && in(c[0], hold, c[1]) && mat(c[0], hold, c[1]) == AIR) hold++;
-            if (hold > top + 16 || !in(c[0], hold, c[1]) || !solid(c[0], hold, c[1])) continue;
+            while (hold <= top + Network.VINE_HOLD && in(c[0], hold, c[1]) && mat(c[0], hold, c[1]) == AIR) hold++;
+            if (hold > top + Network.VINE_HOLD || !in(c[0], hold, c[1]) || !solid(c[0], hold, c[1])) continue;
             int y = hold - 1;
             while (y >= foot && mat(c[0], y, c[1]) == AIR) setClimb(c[0], y--, c[1]);
             made++;

@@ -3,8 +3,7 @@
   "biomes": "minecraft:deep_dark",
   "features": [
     "explorationremix:deep_dark/sculk_vein",
-    "explorationremix:deep_dark/sculk_patch",
-    "explorationremix:deep_dark/dusk_vines"
+    "explorationremix:deep_dark/sculk_patch"
   ],
   "step": "underground_decoration"
 }

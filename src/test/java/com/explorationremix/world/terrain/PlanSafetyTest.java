@@ -74,7 +74,7 @@ class PlanSafetyTest {
                     t.looks.tube(x, y, z);
                     t.looks.hang(x, y, z);
                     t.looks.lavaKept(x, y, z);
-                    t.citySite(x, y, z);
+                    t.citySite(x >> 4, z >> 4, x, y, z);
                     samples++;
                     if (!inCell || f > 0 || !Terrain.planned(li)) continue;
                     open++;

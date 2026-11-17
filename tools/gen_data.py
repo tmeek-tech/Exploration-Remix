@@ -82,7 +82,9 @@ BLOCKS = {
     "band_stone": ("Band Stone", "cube"),
     "white_glow_flower": ("White Glow Flower", "cross"),
     "lantern_fungus": ("Lantern Fungus", "cross", {"variants": 2}),
-    "lantern_roots": ("Lantern Roots", "cross"),
+    # a vine since 0.14.3, so a hanging column of roots joins up (Taran: "lantern roots texture should connect")
+    "lantern_roots": ("Lantern Roots", "vine"),
+    "lantern_roots_plant": ("Lantern Roots", "vine_body:lantern_roots", {"variants": 2}),
     "wisteria": ("Wisteria", "vine"),
     "wisteria_plant": ("Wisteria", "vine_body:wisteria", {"variants": 3}),
     "lantern_pod": ("Lantern Pod", "cross"),
@@ -100,16 +102,15 @@ BLOCKS = {
     "ember_vines": ("Ember Vines", "vine"),
     "ember_vines_plant": ("Ember Vines", "vine_body:ember_vines", {"variants": 2}),
     # ---- vegetation rework, part A: Upper Caves and Blue Reaches
-    "amber_bulb_vine": ("Amber Bulb Vine", "vine", {"variants": 2}),
-    "amber_bulb_vine_plant": ("Amber Bulb Vine", "vine_body:amber_bulb_vine", {"variants": 3}),
     "weeping_ivy": ("Weeping Ivy", "vine", {"variants": 2}),
     "weeping_ivy_plant": ("Weeping Ivy", "vine_body:weeping_ivy", {"variants": 3}),
     "grotto_ivy": ("Grotto Ivy", "lichen", {"variants": 2}),
-    "starmoss": ("Starmoss", "carpet", {"variants": 2}),
     "silver_frond": ("Silver Frond", "vine", {"variants": 2}),
     "silver_frond_plant": ("Silver Frond", "vine_body:silver_frond", {"variants": 2}),
     "tall_silver_fern": ("Tall Silver Fern", "tall_fern", {"variants": 2, "skirt": "silver_fern_fan"}),
     "silver_wall_fern": ("Hanging Silver Fern", "hanging_fern", {"variants": 2, "drop": "silver_fern"}),
+    # 0.14.3: the rift's ledges, a deep green moss two blocks deep at their lips; the hanging ferns grow from its sides
+    "deep_moss": ("Deep Moss", "cube"),
     "ivory_bracket": ("Ivory Bracket", "shelf", {"variants": 2, "glow_under": True}),
     "gold_threads": ("Gold Threads", "vine", {"variants": 2}),
     "gold_threads_plant": ("Gold Threads", "vine_body:gold_threads", {"variants": 2}),
@@ -119,8 +120,6 @@ BLOCKS = {
     "blue_lichen": ("Blue Lichen", "lichen", {"variants": 3}),
     "asurine_bud": ("Asurine Bud", "crystal", {"variants": 2}),
     "asurine_crust": ("Asurine Crust", "lichen", {"variants": 2}),
-    "dusk_vines": ("Dusk Vines", "vine"),
-    "dusk_vines_plant": ("Dusk Vines", "vine_body:dusk_vines", {"variants": 2}),
     # ---- vegetation rework, part B: Deep Gardens (no green) and Basalt Galleries
     "pale_wisteria": ("Pale Wisteria", "vine"),
     "pale_wisteria_plant": ("Pale Wisteria", "vine_body:pale_wisteria", {"variants": 2}),
@@ -146,7 +145,6 @@ BLOCKS = {
     "snowbell": ("Snowbell", "cross", {"variants": 2}),
     "frostberry_vine": ("Frostberry Vine", "vine", {"variants": 2}),
     "frostberry_vine_plant": ("Frostberry Vine", "vine_body:frostberry_vine", {"variants": 3}),
-    "rime_lichen": ("Rime Lichen", "lichen", {"variants": 2}),
     "hoarfrost": ("Hoarfrost", "lichen", {"variants": 2}),
     # the sinkholes and the oasis hollows
     "trailing_grass": ("Trailing Grass", "vine", {"variants": 2}),
@@ -172,31 +170,31 @@ BLOCKS = {
 NO_DROP = {"band_stone", "glow", "mossback_den"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
 # lifeless blocks of the Galleries, and the litter round the dens.
-NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"}
+NOT_PLANTS = NO_DROP | {"frost_moss", "deep_moss", "ember_crust", "cinder_chain", "bone_scraps"}
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
     ("minecraft", "climbable"): ["wisteria", "wisteria_plant", "blue_glow_vines", "blue_glow_vines_plant", "ember_vines", "ember_vines_plant",
                                  # vegetation rework, part A: the new vines, and the ivy on the walls
-                                 "amber_bulb_vine", "amber_bulb_vine_plant", "weeping_ivy", "weeping_ivy_plant", "silver_frond",
-                                 "silver_frond_plant", "gold_threads", "gold_threads_plant", "dusk_vines", "dusk_vines_plant", "grotto_ivy",
+                                 "weeping_ivy", "weeping_ivy_plant", "silver_frond",
+                                 "silver_frond_plant", "gold_threads", "gold_threads_plant", "grotto_ivy",
                                  # vegetation rework, part B
                                  "pale_wisteria", "pale_wisteria_plant", "rose_tendrils", "rose_tendrils_plant",
                                  # Upper Caves rework
                                  "frostberry_vine", "frostberry_vine_plant", "trailing_grass", "trailing_grass_plant",
                                  # 0.5: the Galleries' climbs
                                  "cinder_chain"],
-    # Frost moss is ground, as vanilla's moss is: ferns, flowers and saplings grow on it (Immersive Weathering's frosty
-    # ferns only grow on #minecraft:dirt), and moss patches may spread over it.
-    ("minecraft", "dirt"): ["frost_moss"],
-    ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
+    # Frost moss and deep moss are ground, as vanilla's moss is: ferns, flowers and saplings grow on them (Immersive
+    # Weathering's frosty ferns only grow on #minecraft:dirt), and moss patches may spread over them.
+    ("minecraft", "dirt"): ["frost_moss", "deep_moss"],
+    ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet", "deep_moss"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain"],
-    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen", "rime_lichen"],
+    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen"],
     # The Galleries' lava glow is open space to a growing tree (TreeFeature asks isAir() or this tag): a sapling grows
     # through it, and its logs, leaves and roots take its place.
     ("minecraft", "replaceable_by_trees"): ["glow"],
     # A cinder chain hangs from the chain above it, so a climb's whole column holds.
-    (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "pale_wisteria", "pale_wisteria_plant", "cinder_chain"],
+    (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "lantern_roots_plant", "pale_wisteria", "pale_wisteria_plant", "cinder_chain"],
 }
 # Vanilla growth that /remix census counts as plants, with every block above but those in NOT_PLANTS (tag
 # explorationremix:plants).

@@ -1,8 +1,0 @@
-{
-  "parent": "explorationremix:block/template/carpet_glow",
-  "render_type": "minecraft:cutout",
-  "textures": {
-    "texture": "explorationremix:block/starmoss",
-    "glow": "explorationremix:block/starmoss_glow"
-  }
-}

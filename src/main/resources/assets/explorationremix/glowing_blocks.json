@@ -1,7 +1,5 @@
 {
   "blocks": [
-    "amber_bulb_vine",
-    "amber_bulb_vine_plant",
     "amber_shard",
     "asurine_bud",
     "asurine_crust",
@@ -12,8 +10,6 @@
     "blue_lichen",
     "cinder_bloom",
     "dune_lily",
-    "dusk_vines",
-    "dusk_vines_plant",
     "ember_anemone",
     "ember_vines",
     "ember_vines_plant",
@@ -27,14 +23,13 @@
     "lantern_fungus",
     "lantern_pod",
     "lantern_roots",
+    "lantern_roots_plant",
     "lantern_weed",
     "lavender_flower",
     "pagoda_fungus",
     "pool_pearls",
-    "rime_lichen",
     "smoulder_lichen",
     "snowbell",
-    "starmoss",
     "white_glow_flower"
   ]
 }

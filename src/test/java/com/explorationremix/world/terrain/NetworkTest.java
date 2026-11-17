@@ -420,9 +420,11 @@ class NetworkTest {
     }
 
     /**
-     * Section 11.1, over 3 seeds x 4 x 4 Blue cells: every eligible city site is at least 150 inside its cell and 140
-     * from both landings; for every placed city, no chamber but the city (and the deep dark caverns, where the city
-     * sits as in vanilla) and no tunnel or climb but the city's own enters its reserve (radius 128, W + 8 to W + 80),
+     * Section 11.1, over 3 seeds x 4 x 4 Blue cells: every eligible city site is at least {@link Network#CITY_INSIDE}
+     * (172) inside its cell and {@link Network#CITY_LANDING} (152) from both landings, and most cells hold a city
+     * (0.14.3: a start every 6 chunks, the rift on the far side, a city it cuts moved; 35 of 48, where 0.14.1 had 7; at
+     * least 30 asked) (Taran, 2026-11-17: "make ancient cities generate in the deep dark"); for every placed city, no
+     * chamber but the city (and the deep dark caverns, where the city sits as in vanilla) and no tunnel or climb but the city's own enters its reserve (radius 128, W + 8 to W + 80),
      * no portal vestibule or stub enters it, and the rift and its geodes stay 128 plus their half-width away.
      */
     @Test
@@ -442,9 +444,9 @@ class NetworkTest {
                 for (double[] s : w.eligibleCities(cx, cz)) {
                     eligible++;
                     double inside = Math.min(Math.min(s[0] - x0, x0 + w.cell - s[0]), Math.min(s[1] - z0, z0 + w.cell - s[1]));
-                    if (inside < 150) fails.add(tg + ": eligible site " + (int) s[0] + "," + (int) s[1] + " only " + (int) inside + " inside");
-                    if (Math.hypot(s[0] - in.lx, s[1] - in.lz) < 140 || Math.hypot(s[0] - down.ux, s[1] - down.uz) < 140)
-                        fails.add(tg + ": eligible site " + (int) s[0] + "," + (int) s[1] + " within 140 of a landing");
+                    if (inside < Network.CITY_INSIDE) fails.add(tg + ": eligible site " + (int) s[0] + "," + (int) s[1] + " only " + (int) inside + " inside");
+                    if (Math.hypot(s[0] - in.lx, s[1] - in.lz) < Network.CITY_LANDING || Math.hypot(s[0] - down.ux, s[1] - down.uz) < Network.CITY_LANDING)
+                        fails.add(tg + ": eligible site " + (int) s[0] + "," + (int) s[1] + " within " + (int) Network.CITY_LANDING + " of a landing");
                 }
                 Net n = w.net(li, cx, cz);
                 for (Chamber city : n.ch) {
@@ -495,7 +497,7 @@ class NetworkTest {
             }
         }
         System.out.printf("citySitesAreClear: %d sites, %d eligible, %d cities in %d cells%n", sites, eligible, cities, SEEDS.length * 16);
-        if (cities == 0) fails.add("no city placed in " + SEEDS.length * 16 + " cells");
+        if (cities < 30) fails.add("only " + cities + " cities placed in " + SEEDS.length * 16 + " cells (at least 30 asked)");
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails.subList(0, Math.min(40, fails.size()))));
     }
 
