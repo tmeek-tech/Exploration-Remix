@@ -670,5 +670,25 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.skein.windup"
+  },
+  "firefly.flutter": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/firefly/flutter1",
+        "volume": 0.8,
+        "attenuation_distance": 14
+      },
+      {
+        "name": "explorationremix:creature/firefly/flutter2",
+        "volume": 0.8,
+        "attenuation_distance": 14
+      },
+      {
+        "name": "explorationremix:creature/firefly/flutter3",
+        "volume": 0.8,
+        "attenuation_distance": 14
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.firefly.flutter"
   }
 }

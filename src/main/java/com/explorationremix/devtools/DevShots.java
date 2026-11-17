@@ -349,6 +349,14 @@ public final class DevShots {
                     case "inventory" -> mc.options.keyInventory;
                     case "cast" -> com.explorationremix.client.rune.RuneKeys.CAST;
                     case "runes" -> com.explorationremix.client.rune.RuneKeys.OPEN;
+                    // walking about (0.16.0, the fireflies: running through a flying swarm, creeping up on a landed one)
+                    case "forward" -> mc.options.keyUp;
+                    case "back" -> mc.options.keyDown;
+                    case "left" -> mc.options.keyLeft;
+                    case "right" -> mc.options.keyRight;
+                    case "sprint" -> mc.options.keySprint;
+                    case "sneak" -> mc.options.keyShift;
+                    case "jump" -> mc.options.keyJump;
                     default -> null;
                 };
                 if (key == null) return false;

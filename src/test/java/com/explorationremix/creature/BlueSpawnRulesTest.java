@@ -104,15 +104,28 @@ class BlueSpawnRulesTest {
     }
 
     @Test
-    void swarmsOfEightToTwentyFour() {
-        int lo = 100, hi = 0;
-        for (double r = 0; r < 1.0; r += 0.001) {
+    void swarmsOfThirtyToSixtyAndNowAndThenAHugeOne() {
+        int ordinary = 0, huge = 0, samples = 0;
+        int lo = Integer.MAX_VALUE, hi = 0, hugeLo = Integer.MAX_VALUE, hugeHi = 0;
+        int[] seen = new int[HUGE_MAX_COUNT + 1];
+        for (double r = 0; r < 1.0; r += 0.0001) {
             int n = swarmSize(r);
-            lo = Math.min(lo, n);
-            hi = Math.max(hi, n);
+            samples++;
+            seen[n]++;
+            if (n >= HUGE_MIN_COUNT) { huge++; hugeLo = Math.min(hugeLo, n); hugeHi = Math.max(hugeHi, n); }
+            else { ordinary++; lo = Math.min(lo, n); hi = Math.max(hi, n); }
         }
-        assertEquals(8, lo);
-        assertEquals(24, hi);
-        assertEquals(24, swarmSize(0.99999));
+        assertEquals(30, lo);
+        assertEquals(60, hi);
+        assertEquals(120, hugeLo);
+        assertEquals(160, hugeHi);
+        assertEquals(HUGE_SWARMS, huge / (double) samples, 0.002, "about one in eight is huge");
+        assertEquals(samples, ordinary + huge, "nothing between the two ranges");
+        for (int n = 61; n < 120; n++) assertEquals(0, seen[n], "no swarm of " + n);
+        // every size of a range about as likely as the next
+        for (int n = 31; n < 60; n++) assertEquals(seen[30], seen[n], seen[30] * 0.05 + 2, "size " + n);
+        assertEquals(60, swarmSize(0.99999));
+        assertEquals(120, swarmSize(0.0));
+        assertEquals(60, swarmSize(1.5), "a roll past 1 counts as 1");
     }
 }

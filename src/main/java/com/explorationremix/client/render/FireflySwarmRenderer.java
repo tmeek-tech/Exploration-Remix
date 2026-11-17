@@ -24,6 +24,7 @@ import org.joml.Quaternionf;
  * half of one glow texture. Flying they shine steadily; settled on the rock each one breathes on its own ({@link Pulse}),
  * its halo shrinking a little as it dims. Seen from across a cave the halo grows with the distance (the core does not),
  * so the swarm still reads as blue lights rather than shrinking to a few pale specks; close up it is as it always was.
+ * Startled, a firefly flares ({@link Flock#flare}): its halo swells and brightens for a moment, and its core with it.
  *
  * <p>They are drawn as eyes are (full-bright, added to what is behind them), the render type shader packs treat as
  * glowing: under Complementary with Oculus the fireflies glow like a spider's eyes rather than being lit like rock.
@@ -41,6 +42,8 @@ public class FireflySwarmRenderer extends EntityRenderer<FireflySwarm> {
      * would shrink to a pale speck.
      */
     static final double HALO_NEAR = 6.0, HALO_FAR = 20.0, HALO_GROWTH = 2.0;
+    /** At its fullest flare a halo is this much wider and this much brighter, and its core this much wider (shares). */
+    static final float FLARE_HALO = 0.6F, FLARE_LEVEL = 0.25F, FLARE_CORE = 0.35F;
     /** The texture's halves: the core on the left, the halo on the right (tools/fireflies.py paints them). */
     private static final float CORE_U0 = 0.0F, CORE_U1 = 0.5F, HALO_U0 = 0.5F, HALO_U1 = 1.0F;
     private static final int FULL_BRIGHT = 0xF000F0;
@@ -71,12 +74,14 @@ public class FireflySwarmRenderer extends EntityRenderer<FireflySwarm> {
                 float b = (float) Pulse.brightness(seed, f.id(i), ticks, f.settledness(i, partialTick));
                 double x = f.x(i, partialTick), y = f.y(i, partialTick), z = f.z(i, partialTick);
                 float grow = haloGrowth(Math.sqrt(entityRenderDispatcher.distanceToSqr(x, y, z)));
+                float flare = (float) f.flare(i, partialTick);
                 pose.pushPose();
                 pose.translate(x - ex, y - ey, z - ez);
                 pose.mulPose(facing);
                 pose.mulPose(Axis.YP.rotationDegrees(180.0F));
-                quad(vc, pose, HALO * grow * (HALO_DIM + (1.0F - HALO_DIM) * b), b * HALO_LEVEL, HALO_U0, HALO_U1);
-                quad(vc, pose, CORE, b, CORE_U0, CORE_U1);
+                float halo = HALO * grow * (HALO_DIM + (1.0F - HALO_DIM) * b) * (1.0F + FLARE_HALO * flare);
+                quad(vc, pose, halo, Math.min(1.0F, b * HALO_LEVEL * (1.0F + FLARE_LEVEL * flare)), HALO_U0, HALO_U1);
+                quad(vc, pose, CORE * (1.0F + FLARE_CORE * flare), b, CORE_U0, CORE_U1);
                 pose.popPose();
             }
         }
