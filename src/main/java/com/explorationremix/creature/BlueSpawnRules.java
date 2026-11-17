@@ -10,7 +10,7 @@ package com.explorationremix.creature;
  * #SWARM_RADIUS} (one or two in the Deep Dark, where the fireflies are few). Each comes out {@link #NEAR} blocks or
  * further from every player, and within the radius it is counted in (a sphere: height counts too), so it counts as
  * soon as it is out. The Asurine Geodes are a refuge: fireflies live there, Skeins never. A swarm is 30 to 60
- * fireflies, and now and then ({@link #HUGE_SWARMS}) a huge one of 120 to 160 (0.16.0, Taran's pick).
+ * fireflies, and now and then ({@link #HUGE_SWARMS}) a huge one of 120 to 160 (0.16.0).
  */
 public final class BlueSpawnRules {
     private BlueSpawnRules() {}
