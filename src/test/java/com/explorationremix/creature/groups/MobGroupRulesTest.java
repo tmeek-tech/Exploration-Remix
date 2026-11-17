@@ -161,10 +161,10 @@ class MobGroupRulesTest {
 
     @Test
     void aGroupNeverFallsOutAmongItself() {
-        assertTrue(spared(true, false), "a skeleton's arrow does not hurt a zombie of its group");
-        assertFalse(spared(true, true), "a creeper's blast hurts its own group too");
-        assertFalse(spared(false, false), "another group's arrow hurts as in vanilla");
-        assertFalse(spared(false, true));
+        assertTrue(spared(true, true, false), "a skeleton's arrow does not hurt a zombie of its group, or of the next group");
+        assertFalse(spared(true, true, true), "a creeper's blast hurts the groups round it too");
+        assertFalse(spared(true, false, false), "a grouped skeleton's arrow hurts a monster in no group as in vanilla");
+        assertFalse(spared(false, true, false), "and a monster in no group hurts a grouped one");
     }
 
     @Test

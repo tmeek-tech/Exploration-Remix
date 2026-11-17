@@ -175,7 +175,9 @@ public final class MobGroupCommands {
             left.append(' ').append(r.name().toLowerCase(Locale.ROOT)).append(' ').append(MobGroups.LEFT[r.ordinal()]);
         say(c, "Members gone:" + left + "; groups despawned with their leader " + MobGroups.despawnedTogether + " (members taken with it "
                 + MobGroups.discardedWith + "); deaths " + (MobGroups.DEATHS.isEmpty() ? "none" : MobGroups.DEATHS.toString())
-                + "; blows held back between members of one group " + MobGroups.spared);
+                + "; blows held back between grouped monsters " + MobGroups.spared);
+        say(c, "Other natural monster spawns (structures' own, other mods'): "
+                + (VanillaMonsterFilter.OTHERS.isEmpty() ? "none" : VanillaMonsterFilter.OTHERS.toString()));
         return 1;
     }
 }

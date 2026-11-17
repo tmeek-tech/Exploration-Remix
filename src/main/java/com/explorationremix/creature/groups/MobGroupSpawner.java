@@ -79,6 +79,9 @@ public final class MobGroupSpawner {
     static final long[] ANCHORS_BY_HOME = new long[Home.values().length];
     static final long[] SPAWNED_BY_KIND = new long[Kind.values().length];
 
+    /** Set while the spawner itself finishes its mobs, so their spawn is not taken for one of vanilla's. */
+    static boolean placing;
+
     static void resetCounts() {
         looks = anchors = wanted = spawned = failed = failedLeader = endermen = 0;
         Arrays.fill(ANCHORS_BY_HOME, 0);
@@ -297,8 +300,7 @@ public final class MobGroupSpawner {
             Mob m = placed.get(i);
             MobGroups.tag(m, id, kind, i);
             // each its own roll (vanilla's packs share one: a zombie pack is all babies or none)
-            ForgeEventFactory.onFinalizeSpawn(m, level, level.getCurrentDifficultyAt(m.blockPosition()), MobSpawnType.NATURAL, null, null);
-            level.addFreshEntityWithPassengers(m);
+            finish(level, m);
         }
         spawned++;
         SPAWNED_BY_KIND[kind.ordinal()]++;
@@ -431,9 +433,19 @@ public final class MobGroupSpawner {
         if (at == null || !MobHomes.endermen(level, at)) return;
         Mob m = tryAt(level, EntityType.ENDERMAN, at, p, List.of());
         if (m == null) return;
-        ForgeEventFactory.onFinalizeSpawn(m, level, level.getCurrentDifficultyAt(at), MobSpawnType.NATURAL, null, null);
-        level.addFreshEntityWithPassengers(m);
+        finish(level, m);
         endermen++;
+    }
+
+    /** Vanilla's finishing touches for a natural spawn (gear, babies, a chicken jockey), then into the world. */
+    private static void finish(ServerLevel level, Mob m) {
+        placing = true;
+        try {
+            ForgeEventFactory.onFinalizeSpawn(m, level, level.getCurrentDifficultyAt(m.blockPosition()), MobSpawnType.NATURAL, null, null);
+        } finally {
+            placing = false;
+        }
+        level.addFreshEntityWithPassengers(m);
     }
 
     // ------------------------------------------------------------------------------------------------ for the commands

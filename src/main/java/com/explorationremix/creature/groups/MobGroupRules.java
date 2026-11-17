@@ -200,12 +200,13 @@ public final class MobGroupRules {
     }
 
     /**
-     * Whether a blow is held back: a member's arrow, trident, potion or bite does not hurt the others of its own group,
-     * so a group never falls out among itself (a skeleton shooting at you past a zombie of its group). A creeper's
-     * blast still hurts everything round it.
+     * Whether a blow is held back: a grouped monster's arrow, trident, potion or bite does not hurt another grouped
+     * monster, of its own group or the next, so groups never fall out among themselves (a skeleton shooting at you past
+     * a zombie, when two groups close on you together). A creeper's blast still hurts everything round it, and a monster
+     * in no group fights as in vanilla.
      */
-    public static boolean spared(boolean sameGroup, boolean explosion) {
-        return sameGroup && !explosion;
+    public static boolean spared(boolean attackerGrouped, boolean victimGrouped, boolean explosion) {
+        return attackerGrouped && victimGrouped && !explosion;
     }
 
     /**

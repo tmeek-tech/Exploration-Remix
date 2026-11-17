@@ -193,6 +193,7 @@ public final class MobGroups {
         alerting = false;
         MobHomes.forget();
         MobGroupSpawner.resetCounts();
+        VanillaMonsterFilter.OTHERS.clear();
     }
 
     /** The leader of a member's group (itself when it leads), or null when it is in none. */
@@ -252,17 +253,12 @@ public final class MobGroups {
         return p.isAlive() && !p.isCreative() && !p.isSpectator() && p.level().getDifficulty() != Difficulty.PEACEFUL;
     }
 
-    static boolean sameGroup(Mob a, Mob b) {
-        Member ma = BY_MOB.get(a), mb = BY_MOB.get(b);
-        return ma != null && mb != null && ma.group == mb.group;
-    }
-
-    /** A member's blows do not hurt its own group (a creeper's blast still does): see {@link MobGroupRules#spared}. */
+    /** A grouped monster's blows do not hurt another grouped monster (a creeper's blast still does): see {@link MobGroupRules#spared}. */
     @SubscribeEvent
     public static void onAttack(LivingAttackEvent e) {
         if (!(e.getEntity() instanceof Mob victim) || victim.level().isClientSide() || !(e.getSource().getEntity() instanceof Mob attacker)
                 || attacker == victim) return;
-        if (MobGroupRules.spared(sameGroup(victim, attacker), e.getSource().is(DamageTypeTags.IS_EXPLOSION))) {
+        if (MobGroupRules.spared(isMember(attacker), isMember(victim), e.getSource().is(DamageTypeTags.IS_EXPLOSION))) {
             spared++;
             e.setCanceled(true);
         }
@@ -271,8 +267,8 @@ public final class MobGroups {
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onTarget(LivingChangeTargetEvent e) {
         if (!(e.getEntity() instanceof Mob mob) || mob.level().isClientSide()) return;
-        // a member never turns on one of its own group (a zombie hit by a stray blast, or called by another zombie)
-        if (e.getNewTarget() instanceof Mob other && sameGroup(mob, other)) {
+        // a grouped monster never turns on another (a zombie hit by a blast, or called by another zombie to the one that hit it)
+        if (e.getNewTarget() instanceof Mob other && isMember(mob) && isMember(other)) {
             e.setCanceled(true);
             return;
         }
