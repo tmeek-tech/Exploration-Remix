@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/lantern_roots_plant"
+      },
+      {
+        "model": "explorationremix:block/lantern_roots_plant_2"
+      }
+    ]
+  }
+}

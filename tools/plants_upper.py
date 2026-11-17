@@ -39,84 +39,9 @@ def variants(base, n):
 
 # ------------------------------------------------------------------------------------------------ Rootvaults
 
-# Amber bulb vine: rootvaults.jpg (bunches of amber bulbs on leafy vines), silver_fern_rift.jpg (strings of orange
-# bulbs), teal_grotto.jpg. The bulbs glow (overlay), the olive strands and leaves don't.
-AMBER = {"o": "#AB7017", "y": "#D38E2C", "m": "#DCA23F", "Y": "#ECBA5D", "W": "#FBD780"}
-AMBER_GLOW = ["#ECBA5D", "#FBD780"]
+# Olive strands and leaves (the amber bulb vine's until 0.14.3, which left them to the weeping ivy).
 OLIVE = {"dark": "#404514", "stem": "#50561C", "stem2": "#5B6625"}
 OLIVE_LEAVES = [("#404514", "#5B6625", "#78873A"), ("#50561C", "#69702C", "#9BAA55"), ("#404514", "#69702C", "#78873A")]
-AMBER_STRANDS = [(3, 1.0, 0.0), (8, 1.0, 2.1), (12, 1.0, 4.2)]
-# Round bulbs lit from inside, with a darker rim so that bulbs side by side stay apart (like vanilla's glow berries):
-# a big one 4 by 4, a small one 3 by 3, and a bead 2 by 2 for the strings of the rift.
-BULB_BIG = [".yy.",
-            "yWYo",
-            "yYYo",
-            ".oo."]
-BULB_SMALL = [".Y.",
-              "yWo",
-              ".o."]
-BEAD = ["WY",
-        "yo"]
-BULBS = {"big": BULB_BIG, "small": BULB_SMALL, "bead": BEAD}
-# Where the bulbs sit on each look, as (strand, row the bulb hangs from, size, offset of its left column from the
-# strand). Body tiles keep them on rows 2 to 13 so that no bulb is cut where two tiles join; a tip's longest strand
-# ends in a bunch.
-AMBER_BODY = {
-    1: [(0, 2, "big", -1), (2, 5, "big", -2), (1, 9, "small", -1), (0, 10, "small", 0)],
-    2: [(1, 2, "big", -2), (0, 7, "small", -1), (2, 9, "big", -1)],
-    3: [(1, 2, "bead", 1), (1, 5, "bead", -2), (1, 8, "bead", 1), (1, 11, "bead", -2),
-        (2, 3, "bead", -2), (2, 7, "bead", 1), (2, 11, "bead", -2), (0, 5, "bead", 1), (0, 10, "bead", -2)],
-}
-AMBER_TIP = {
-    1: {"ends": [9, 10, 7], "bunch": 1, "others": [(0, "small"), (2, "small")]},
-    2: {"ends": [12, 8, 10], "bunch": 2, "others": [(0, "big"), (1, "small")]},
-}
-# A bunch at the end of a strand: bulbs around and below the strand's last pixel, drawn top to bottom. It spans 7
-# columns and 7 rows (from the strand's last row), kept inside the tile.
-BUNCH = [(-3, 0, "big"), (0, 1, "big"), (-2, 3, "big"), (1, 4, "small")]
-
-
-def _bulb(px, x, y, size):
-    stamp(px, x, y, BULBS[size], AMBER)
-
-
-def _amber_vine(v, tip):
-    rng = random.Random(7100 + v * 13 + (500 if tip else 0))
-    img = blank()
-    px = img.load()
-    t = AMBER_TIP[v] if tip else None
-    ends = t["ends"] if tip else [16, 16, 16]
-    paths = [sway(*s) for s in AMBER_STRANDS]
-    leafy = 0.45 if v == 3 and not tip else 0.8
-    for i, xs in enumerate(paths):
-        for y in range(ends[i]):
-            put(px, xs[y], y, OLIVE["stem2"] if (y + i) % 3 else OLIVE["stem"])
-        for y in range((i + v) % 2, ends[i] - 1, 2):
-            if rng.random() > leafy:
-                continue
-            side = 1 if (y // 2 + i) % 2 else -1
-            ramp = OLIVE_LEAVES[rng.randrange(3)]
-            leaf(px, xs[y], y, side, LEAF if 2 <= y <= 12 else LEAF_ROW, ramp)
-    if tip:
-        b = t["bunch"]
-        e = ends[b] - 1
-        bx = min(max(paths[b][e], 3), 12)
-        for dx, dy, size in BUNCH:
-            _bulb(px, bx + dx, min(e, 9) + dy, size)
-        for i, size in t["others"]:
-            e = ends[i] - 1
-            _bulb(px, min(max(paths[i][e], 2), 13) - (1 if size == "small" else 2), min(e + 1, 16 - len(BULBS[size])), size)
-    else:
-        for i, y, size, dx in AMBER_BODY[v]:
-            _bulb(px, paths[i][y] + dx, y, size)
-    return img
-
-
-for _k in (1, 2, 3):
-    register(PAINTERS, variants("amber_bulb_vine_plant", 3)[_k - 1], (lambda k=_k: _amber_vine(k, False)), glow=AMBER_GLOW)
-for _k in (1, 2):
-    register(PAINTERS, variants("amber_bulb_vine", 2)[_k - 1], (lambda k=_k: _amber_vine(k, True)), glow=AMBER_GLOW)
-
 
 # Weeping ivy: rootvaults.jpg, veridium_ravine.jpg (ivy curtains), teal_grotto.jpg (leafy vines): a dense curtain of
 # drooping leaves on four strands; the tip thins out.
@@ -198,31 +123,6 @@ register(PAINTERS, "grotto_ivy", lambda: _grotto_ivy(1))
 register(PAINTERS, "grotto_ivy_2", lambda: _grotto_ivy(2))
 
 
-# Starmoss: teal_grotto.jpg, moss on the ledges with tiny pale star flowers glowing in it. A carpet that tiles.
-MOSS = ["#3E4E1E", "#4E5E22", "#66792C", "#7F9437"]
-STAR_GLOW = ["#F4CF6A", "#F6F0DE", "#FFF6CB"]
-
-
-def _starmoss(v):
-    rng = random.Random(7700 + v)
-    img = speckle_sheet(7700 + v, 0, 0.9, 1.7, MOSS, coverage=0.55 if v == 1 else 0.62)
-    px = img.load()
-    for _ in range(18):  # break the clumps up a little
-        x, y = rng.randrange(16), rng.randrange(16)
-        if px[x, y][3]:
-            px[x, y] = hexc(MOSS[0]) if rng.random() < 0.6 else (0, 0, 0, 0)
-    for _ in range(4 if v == 1 else 6):  # five-petalled stars: a cross with one petal split
-        x, y = rng.randrange(16), rng.randrange(16)
-        put_wrap(px, x, y, "#F4CF6A")
-        for dx, dy in ((1, 0), (-1, 0), (0, -1), (1, 1), (-1, 1)):
-            put_wrap(px, x + dx, y + dy, "#F6F0DE")
-    for _ in range(5):
-        put_wrap(px, rng.randrange(16), rng.randrange(16), "#FFF6CB")
-    return img
-
-
-register(PAINTERS, "starmoss", lambda: _starmoss(1), glow=STAR_GLOW)
-register(PAINTERS, "starmoss_2", lambda: _starmoss(2), glow=STAR_GLOW)
 
 
 # ------------------------------------------------------------------------------------------------ Silver Fern Rift
@@ -603,32 +503,3 @@ register(PAINTERS, "blue_glow_mushroom_3", lambda: grid([
 ], BLUE_MUSHROOM), glow=["#6AA6F6", "#A8D0FF"])
 
 
-# ------------------------------------------------------------------------------------------------ Deep dark
-# Dusk vines: near-black strands with a few cold specks that glow without giving light. No picture: the deep dark
-# stays dark, and these are its one new plant. The specks are a deep teal, which a shader glows cyan; a paler one
-# clipped to white points.
-DUSK_STRANDS = [(3, 1.0, 0.4), (9, 1.0, 3.0), (13, 1.0, 5.1)]
-DUSK_GLOW = ["#3FC2C0", "#2FA3A8"]
-
-
-def _dusk_vines(v, tip):
-    rng = random.Random(9500 + v + (30 if tip else 0))
-    img = blank()
-    px = img.load()
-    for i, s in enumerate(DUSK_STRANDS):
-        xs = sway(*s)
-        end = rng.randrange(8, 14) if tip else 16
-        for y in range(end):
-            put(px, xs[y], y, "#14262C" if (y + i) % 3 else "#0E1A1F")
-            if rng.random() < 0.25:
-                put(px, xs[y] + rng.choice((-1, 1)), y, "#1C3640")
-        for y in range(3 + (i * 4 + v) % 5, min(13, end), 6):
-            put(px, xs[y] + (1 if i % 2 else -1), y, "#3FC2C0")
-        if tip:
-            put(px, xs[min(15, end)], min(15, end), "#2FA3A8")
-    return img
-
-
-register(PAINTERS, "dusk_vines_plant", lambda: _dusk_vines(1, False), glow=DUSK_GLOW)
-register(PAINTERS, "dusk_vines_plant_2", lambda: _dusk_vines(2, False), glow=DUSK_GLOW)
-register(PAINTERS, "dusk_vines", lambda: _dusk_vines(1, True), glow=DUSK_GLOW)

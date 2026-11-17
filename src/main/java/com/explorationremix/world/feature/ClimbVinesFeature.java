@@ -20,16 +20,16 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
 /**
  * The vines of the deep layers' climbs (section 10). Every climb, and every stage of a staged climb, gets one column of
  * vines on the wall facing the way out at its top ({@link Network#vineColumn}): it hangs from the first rock over the
- * floor the stage climbs to (at most 16 blocks over it) down through the air to the stage's foot, so a climber steps
- * off its top onto that floor. The vine follows the climb's biome: wisteria by the Lantern Lake, ember vines in the
- * Ember Gardens (which have no climbing plant of their own), blue glow vines in the Blue Reaches and dusk vines in the
- * deep dark. The two bottom layers have no planned climbs (Terrain.planned) and hang nothing: nothing grows in the
+ * floor the stage climbs to (at most {@link Network#VINE_HOLD} blocks over it) down through the air to the stage's
+ * foot, so a climber steps off its top onto that floor. The vine follows the climb's biome: wisteria by the Lantern Lake,
+ * ember vines in the Ember Gardens (which have no climbing plant of their own), blue glow vines in the Blue Reaches and
+ * the deep dark (whose dusk vines went in 0.14.3). The two bottom layers have no planned climbs (Terrain.planned) and hang nothing: nothing grows in the
  * Basalt Galleries or in the Ash Hollows, and since 0.8.0 no made thing (the cinder chain) hangs there either, natural
  * rock only. The voxel harness's {@code markShafts} models exactly this column.
  */
 public final class ClimbVinesFeature extends Feature<NoneFeatureConfiguration> {
     /** How far over the floor at a stage's top its vines may hang from. */
-    static final int HOLD = 16;
+    static final int HOLD = Network.VINE_HOLD;
 
     public ClimbVinesFeature(Codec<NoneFeatureConfiguration> codec) { super(codec); }
 
@@ -64,8 +64,8 @@ public final class ClimbVinesFeature extends Feature<NoneFeatureConfiguration> {
         return switch (b) {
             case LANTERN_LAKE -> (h & 1) == 0 ? new Block[]{ERBlocks.WISTERIA.get(), ERBlocks.WISTERIA_PLANT.get()}
                     : new Block[]{ERBlocks.PALE_WISTERIA.get(), ERBlocks.PALE_WISTERIA_PLANT.get()};
-            case DEEP_BLUE_RIFT, ASURINE_GEODES -> new Block[]{ERBlocks.BLUE_GLOW_VINES.get(), ERBlocks.BLUE_GLOW_VINES_PLANT.get()};
-            case DEEP_DARK -> new Block[]{ERBlocks.DUSK_VINES.get(), ERBlocks.DUSK_VINES_PLANT.get()};
+            // the deep dark's climbs too since its dusk vines went (0.14.3, Taran's ask)
+            case DEEP_BLUE_RIFT, ASURINE_GEODES, DEEP_DARK -> new Block[]{ERBlocks.BLUE_GLOW_VINES.get(), ERBlocks.BLUE_GLOW_VINES_PLANT.get()};
             case BASALT_GALLERIES, OBSIDIAN_TUBES, CALDERA, CAUSEWAY, SCORIA_CANYONS, ASH_HOLLOWS -> null;
             default -> new Block[]{ERBlocks.EMBER_VINES.get(), ERBlocks.EMBER_VINES_PLANT.get()};
         };

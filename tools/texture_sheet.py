@@ -18,16 +18,13 @@ FONT_DIR = "/usr/share/fonts/truetype/dejavu"
 SHEET = [
     ("Upper Caves", [
         ("Rootvaults", [("white_glow_flower", "White glow flower", 6),
-                        ("amber_bulb_vine_plant", "Amber bulb vine", 6), ("amber_bulb_vine_plant_2", "Amber bulb vine 2", 6),
-                        ("amber_bulb_vine_plant_3", "Amber bulb vine 3", 6), ("amber_bulb_vine", "Amber bulb vine, tip", 12),
-                        ("amber_bulb_vine_2", "Amber bulb vine, tip 2", 12),
                         ("weeping_ivy_plant", "Weeping ivy", 0), ("weeping_ivy_plant_2", "Weeping ivy 2", 0),
                         ("weeping_ivy_plant_3", "Weeping ivy 3", 0), ("weeping_ivy", "Weeping ivy, tip", 0),
                         ("weeping_ivy_2", "Weeping ivy, tip 2", 0),
-                        ("grotto_ivy", "Grotto ivy", 0), ("grotto_ivy_2", "Grotto ivy 2", 0),
-                        ("starmoss", "Starmoss", 4), ("starmoss_2", "Starmoss 2", 4)]),
+                        ("grotto_ivy", "Grotto ivy", 0), ("grotto_ivy_2", "Grotto ivy 2", 0)]),
         ("Ivory Root Cavern", [("lantern_fungus", "Lantern fungus", 13), ("lantern_fungus_2", "Lantern fungus 2", 13),
-                               ("lantern_roots", "Lantern roots", 8),
+                               ("lantern_roots_plant", "Lantern roots", 8), ("lantern_roots_plant_2", "Lantern roots 2", 8),
+                               ("lantern_roots", "Lantern roots, tip", 8),
                                ("ivory_bracket", "Ivory bracket, top", 11), ("ivory_bracket_2", "Ivory bracket, top 2", 11),
                                ("ivory_bracket_under", "Ivory bracket, under", 11),
                                ("gold_threads_plant", "Gold threads", 5), ("gold_threads_plant_2", "Gold threads 2", 5),
@@ -47,7 +44,8 @@ SHEET = [
                               ("silver_wall_fern_front", "Hanging silver fern, front", 0),
                               ("silver_wall_fern_front_2", "Hanging silver fern, front 2", 0),
                               ("silver_wall_fern_side", "Hanging silver fern, side", 0),
-                              ("silver_wall_fern_side_2", "Hanging silver fern, side 2", 0)]),
+                              ("silver_wall_fern_side_2", "Hanging silver fern, side 2", 0),
+                              ("deep_moss", "Deep moss", 0)]),
     ]),
     ("Deep Gardens", [
         ("Lantern Lake", [("wisteria_plant", "Wisteria", 0), ("wisteria_plant_2", "Wisteria 2", 0), ("wisteria_plant_3", "Wisteria 3", 0),
@@ -95,12 +93,11 @@ SHEET = [
         ("Asurine Geodes and Deep Blue Rift", [("asurine_crystal", "Asurine crystal", 10), ("asurine_crystal_2", "Asurine crystal 2", 10),
                                                ("asurine_bud", "Asurine bud", 5), ("asurine_bud_2", "Asurine bud 2", 5),
                                                ("asurine_crust", "Asurine crust", 3), ("asurine_crust_2", "Asurine crust 2", 3)]),
-        ("Deep dark", [("dusk_vines_plant", "Dusk vines", 0), ("dusk_vines_plant_2", "Dusk vines 2", 0), ("dusk_vines", "Dusk vines, tip", 0)]),
     ]),
 ]
 
 # Vines: (tip, number of body variants). Tall plants: (id, number of variants).
-VINES = [("amber_bulb_vine", 3), ("weeping_ivy", 3), ("silver_frond", 2), ("gold_threads", 2), ("dusk_vines", 2), ("wisteria", 3),
+VINES = [("weeping_ivy", 3), ("silver_frond", 2), ("gold_threads", 2), ("lantern_roots", 2), ("wisteria", 3),
          ("pale_wisteria", 2), ("blue_glow_vines", 2), ("ember_vines", 2), ("rose_tendrils", 2)]
 TALL = [("tall_silver_fern", 2), ("pagoda_fungus", 2), ("lilac_plume", 2)]
 

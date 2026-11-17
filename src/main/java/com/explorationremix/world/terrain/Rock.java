@@ -64,7 +64,12 @@ public enum Rock {
     // ---- 0.5: the ember crust, a mod block: the glowing seams that light the lifeless Galleries where lava cannot
     // reach. (0.5.1: polished basalt and polished blackstone are gone, 0.8.0: Create's layered scoria and scorchia too;
     // the two bottom layers are natural stone.)
-    EMBER_CRUST(0xe0782e);
+    EMBER_CRUST(0xe0782e),
+    // ---- 0.14: the host rock round the caves near the surface keeps the pack's (WWOO's) stone: diorite under flower forests
+    DIORITE(0xbcbcbc),
+    // ---- 0.14.3: the Silver Fern Rift's ledges are deep moss, a mod block, and the rift's hanging ferns grow only from
+    // its sides (Taran)
+    DEEP_MOSS(0x486a45);
 
     public final int color;
 

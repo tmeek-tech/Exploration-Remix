@@ -6,6 +6,7 @@ import com.explorationremix.mixin.accessor.DimensionTypeAccessor;
 import com.explorationremix.mixin.accessor.NoiseBasedChunkGeneratorAccessor;
 import com.explorationremix.mixin.accessor.NoiseGeneratorSettingsAccessor;
 import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.compat.TerrainSlabsCompat;
 import com.explorationremix.world.density.DeepDensityFunction;
 import com.explorationremix.world.density.DeepFineDensity;
 import com.explorationremix.world.density.UpperCarve;
@@ -14,6 +15,7 @@ import com.explorationremix.world.density.UpperSeal;
 import com.explorationremix.world.density.InterpolationGater;
 import com.explorationremix.world.terrain.Entrances;
 import com.explorationremix.world.terrain.PlantCaves;
+import com.explorationremix.world.terrain.HostRock;
 import com.explorationremix.world.terrain.UpperShapes;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.Holder;
@@ -60,6 +62,7 @@ public final class DeepWorldInstaller {
 
     /** Called by {@code MinecraftServerMixin} at the head of {@code loadLevel()}, before any level or chunk map exists. */
     public static void onLoadLevel(MinecraftServer server) {
+        TerrainSlabsCompat.onLoadLevel();
         if (!DeepWorld.enabled()) {
             ExplorationRemix.LOGGER.info("Deep world disabled by config");
             return;
@@ -139,8 +142,9 @@ public final class DeepWorldInstaller {
         ERConfig cfg = ERConfig.INSTANCE;
         if (upperOn && cfg.upperNoise.get()) {
             // The Upper Caves from noise: no planned entrances, no set pieces (the den gates stay).
-            UpperShapes shapes = new UpperShapes(seed, currentMin, oracle, cfg.upperWarrens.get(), cfg.upperRifts.get(), cfg.upperHalls.get(),
-                    cfg.upperSinkholes.get(), cfg.upperWormTunnels.get());
+            // (the rifts lie as deep as the den gates' works and keep clear of them)
+            UpperShapes shapes = new UpperShapes(seed, currentMin, oracle, terrain::denClearance, cfg.upperWarrens.get(), cfg.upperRifts.get(),
+                    cfg.upperHalls.get(), cfg.upperSinkholes.get(), cfg.upperWormTunnels.get());
             terrain.upperPieces = false;
             DeepWorld.setUpper(null, shapes, new PlantCaves(seed), oracle);
             ExplorationRemix.LOGGER.info("Upper Caves from noise: warrens {}, rifts {}, halls {}, sinkholes {}, worm tunnels {}", shapes.warrens, shapes.rifts,
@@ -148,6 +152,7 @@ public final class DeepWorldInstaller {
         } else {
             DeepWorld.setUpper(upperOn ? new Entrances(seed, currentMin, oracle) : null, upperOn ? new PlantCaves(seed) : null, oracle);
         }
+        DeepWorld.setHost(upperOn && cfg.upperHostRock.get() ? new HostRock(seed, oracle) : null);
         if (upperOn) DeepBiomes.keepWithoutDeepDark(biomeSource);
         DeepMaterials.resolve();
         int floorY = terrain.shape.floorY;

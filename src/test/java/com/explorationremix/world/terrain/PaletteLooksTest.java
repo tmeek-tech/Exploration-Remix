@@ -82,7 +82,12 @@ class PaletteLooksTest {
         // (by biome, interior, public path), per band and for the upper caves, every part of the merge's answers is
         // 1dd7375's; they differ from a49a88c's only in layer 0's by-biome and public parts, and every other part, band
         // 3's (the band over the noise layers) among them, is the same on all three. None of the four reaches the
-        // Wasteland or the Galleries
+        // Wasteland or the Galleries. Pinned again for 0.14.3 (Taran, 2026-11-17): the ancient cities' new sites move the
+        // rift (it takes the strand on the far side from the city) and the Asurine Geodes with it, which changes the rock
+        // by biome at 1,336 of layer 0's 400,000 samples, all in the geodes, and through the public path at 985 of layer
+        // 0's 60,000; the interior, layer 1 and the bands answer as before. The upper caves change only in the Silver Fern
+        // Rift, whose ledges are deep moss two blocks deep: 64,172 of the 400,000 samples, every one of them now deep moss
+        // (32,308 were moss on the top block, 31,864 deepslate or asurine on the second)
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
@@ -105,9 +110,16 @@ class PaletteLooksTest {
                 hPublic = hPublic * 31 + p.shell(x, y, z, 1 + r.nextInt(8), 1 + r.nextInt(8), r.nextInt(4) == 0).name().hashCode();
             }
         }
+        // 0.14: band 1 is the Blue Reaches' deep rock where the den gates are rifts (Terrain.denRifts); with them off the
+        // answer is the last pin's
+        long hPublicOld = hPublic;
         for (int b = 1; b <= 3; b++) for (int k = 0; k < 2000; k++) {
             int y = s.bandBottom(b) + r.nextInt(Math.max(1, s.bandTop(b) - s.bandBottom(b) + 1));
-            hPublic = hPublic * 31 + p.shell(r.nextInt(2000), y, r.nextInt(2000), 3, 3, false).name().hashCode();
+            int x = r.nextInt(2000), z = r.nextInt(2000);
+            t.denRifts = false;
+            hPublicOld = hPublicOld * 31 + p.shell(x, y, z, 3, 3, false).name().hashCode();
+            t.denRifts = true;
+            hPublic = hPublic * 31 + p.shell(x, y, z, 3, 3, false).name().hashCode();
         }
         DeepBiome[] upper = {DeepBiome.SILVER_FERN_RIFT, DeepBiome.IVORY_ROOT_CAVERN};
         for (int k = 0; k < 400000; k++) {
@@ -122,10 +134,11 @@ class PaletteLooksTest {
             hUpper = hUpper * 31 + nz(p.oasis(x, y, z, above, below, wet, shell, r.nextBoolean()));
             hUpper = hUpper * 31 + nz(p.frostGrotto(x, y, z, above, below, wet));
         }
-        assertEquals("d4480c4b98b9e541", String.format("%016x", hBiome), "layers 0 and 1, by biome");
+        assertEquals("c729276029ca9b1d", String.format("%016x", hBiome), "layers 0 and 1, by biome");
         assertEquals("2604e01a1b4b2ee3", String.format("%016x", hInterior), "layers 0 and 1, interior");
-        assertEquals("625c6dfe796ad0fa", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
-        assertEquals("f1e881cc466dc49d", String.format("%016x", hUpper), "the upper caves");
+        assertEquals("630faa4b55423838", String.format("%016x", hPublicOld), "layers 0 and 1 through the public path, and the bands (den rifts off)");
+        assertEquals("1917e42223d853b8", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
+        assertEquals("98216793f08dc629", String.format("%016x", hUpper), "the upper caves");
     }
 
     private static int nz(Rock q) { return q == null ? 0 : q.name().hashCode(); }

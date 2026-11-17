@@ -32,7 +32,7 @@ public final class ERConfig {
     public final ForgeConfigSpec.BooleanValue removeCreateStriations;
     public final ForgeConfigSpec.BooleanValue upperRegions;
     /** The Upper Caves grown from noise (0.13): the switch for all of it, one per shape, and vanilla's worm tunnels. */
-    public final ForgeConfigSpec.BooleanValue upperNoise, upperWarrens, upperRifts, upperHalls, upperSinkholes, upperWormTunnels;
+    public final ForgeConfigSpec.BooleanValue upperNoise, upperWarrens, upperRifts, upperHalls, upperSinkholes, upperWormTunnels, upperHostRock, upperDenRifts;
     public final LayerConfig[] layers = new LayerConfig[4];
     // The Basalt Galleries' lava cycle (world.lava.LavaFlood), read while the server runs.
     public final ForgeConfigSpec.BooleanValue lavaCycleEnabled;
@@ -53,6 +53,7 @@ public final class ERConfig {
     public final ForgeConfigSpec.IntValue eruptionWakeSeconds, eruptionBombs, eruptionBombsNear, eruptionNearMinBlocks, eruptionNearMaxBlocks,
             eruptionVentNearBias, eruptionVentBurn, eruptionEjecta, eruptionRange, eruptionHeardRange;
     public final ForgeConfigSpec.BooleanValue resetEnabled;
+    public final ForgeConfigSpec.BooleanValue terrainSlabs;
     public final ForgeConfigSpec.IntValue resetChangesPerTick;
 
     public static final class LayerConfig {
@@ -130,11 +131,11 @@ public final class ERConfig {
                 "Root Cavern of 0.12 come back.").push("upperCaves");
         upperNoise = b.comment("Grow the Upper Caves from noise: the shapes below over the pack's own caves, no planned entrances or set pieces.")
                 .define("noiseShapes", true);
-        upperWarrens = b.comment("Root warrens: two rolling sheets of looping tunnels 5 to 45 blocks under the ground, with root chambers,",
-                        "hanging roots and pools; rooty mouths under forests (snowed in under cold ones).")
+        upperWarrens = b.comment("Root warrens: two rolling sheets of looping tunnels 5 to 45 blocks under the ground (the top one just under",
+                        "the soil), with root chambers, hanging roots and pools; rooty mouths under forests (snowed in under cold ones).")
                 .define("warrens", true);
-        upperRifts = b.comment("Rifts: tall cracks 15 to 90 blocks down with ledges, a stepped stream and springs, open to the sky in places",
-                        "(the Silver Fern Rift's look).")
+        upperRifts = b.comment("Rifts: cracks about 10 across and 35 tall, 15 to 55 blocks down, with ledges, a stepped stream and springs, open",
+                        "to the sky in places (the Silver Fern Rift's look).")
                 .define("rifts", true);
         upperHalls = b.comment("Halls: wide caverns about 60 to 85 blocks down with terraced pools and stalactites (the Ivory Root Cavern's look).")
                 .define("halls", true);
@@ -142,6 +143,14 @@ public final class ERConfig {
                 .define("sinkholes", true);
         upperWormTunnels = b.comment("Keep vanilla's worm tunnels (the cave carver, whose tunnels end blind) above the old floor. Its canyons stay either way.")
                 .define("wormTunnels", false);
+        upperHostRock = b.comment("Carve the caves near the surface into the ground's own rock: soil 5 to 8 blocks deep (rooted dirt at its base under",
+                        "trees) and, in the stone above the deepslate, big blobs of limestone, veridium in the tropics, sandstone under deserts,",
+                        "terracotta under badlands, or the stone the pack (WWOO) gives the biome over them. Also works with noiseShapes off.")
+                .define("hostRock", true);
+        upperDenRifts = b.comment("Each Mossback den gate is a deep rift: a ferny crack from the den's ledge on the old floor down into the Blue",
+                        "Reaches, with a walkable floor, and the band between the two layers is plain rock you can dig. Off: the den gates' old",
+                        "passages through an unbreakable band.")
+                .define("denRifts", true);
         b.pop();
 
         b.comment("The Basalt Galleries' lava cycle: one lava sea that rises 40 blocks over the layer's lava table and falls again on the",
@@ -242,6 +251,13 @@ public final class ERConfig {
         resetEnabled = b.comment("Reset the Galleries' terrain once a cycle.").define("enabled", true);
         resetChangesPerTick = b.comment("Most blocks the reset puts back in one tick, over all players (halved while the server is falling behind).")
                 .defineInRange("changesPerTick", 2048, 16, 100_000);
+        b.pop();
+
+        b.comment("Fixes where other mods meet. Changes apply to newly generated chunks.").push("compat");
+        terrainSlabs = b.comment("Keep Terrain Slabs' slabs made of the ground they lie on when a later feature changes that ground (as the",
+                        "smooth basalt flows of WWOO's stony peaks do), cover them with the snow features lay beside them (WWOO's snow",
+                        "patches skip slabs), and lay none inside powder snow. Does nothing without Terrain Slabs.")
+                .define("terrainSlabs", true);
         b.pop();
     }
 

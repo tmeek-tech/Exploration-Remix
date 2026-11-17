@@ -1,8 +1,0 @@
-{
-  "parent": "explorationremix:block/template/cross_glow",
-  "render_type": "minecraft:cutout",
-  "textures": {
-    "cross": "explorationremix:block/amber_bulb_vine_2",
-    "glow": "explorationremix:block/amber_bulb_vine_2_glow"
-  }
-}

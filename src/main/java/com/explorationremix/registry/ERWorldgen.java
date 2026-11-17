@@ -6,6 +6,8 @@ import com.explorationremix.world.feature.BrokenMachineFeature;
 import com.explorationremix.world.feature.CeilingRootsFeature;
 import com.explorationremix.world.feature.ClimbVinesFeature;
 import com.explorationremix.world.feature.ColumnClusterFeature;
+import com.explorationremix.world.feature.PillarFeature;
+import com.explorationremix.world.feature.PointedPatchFeature;
 import com.explorationremix.world.feature.DaylightShaftFeature;
 import com.explorationremix.world.feature.DenLairFeature;
 import com.explorationremix.world.feature.FallSitesPlacement;
@@ -56,6 +58,8 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> SHELF_VINES = FEATURES.register("shelf_vines", () -> new ShelfVinesFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<SurfaceAttachFeature.Config>> SURFACE_ATTACH = FEATURES.register("surface_attach", () -> new SurfaceAttachFeature(SurfaceAttachFeature.Config.CODEC));
     public static final RegistryObject<Feature<GiantSpikeFeature.Config>> GIANT_SPIKE = FEATURES.register("giant_spike", () -> new GiantSpikeFeature(GiantSpikeFeature.Config.CODEC));
+    public static final RegistryObject<Feature<PointedPatchFeature.Config>> POINTED_PATCH = FEATURES.register("pointed_patch", () -> new PointedPatchFeature(PointedPatchFeature.Config.CODEC));
+    public static final RegistryObject<Feature<PillarFeature.Config>> PILLAR = FEATURES.register("pillar", () -> new PillarFeature(PillarFeature.Config.CODEC));
     public static final RegistryObject<Feature<TerracePoolsFeature.Config>> TERRACE_POOLS = FEATURES.register("terrace_pools", () -> new TerracePoolsFeature(TerracePoolsFeature.Config.CODEC));
     public static final RegistryObject<Feature<ColumnClusterFeature.Config>> COLUMN_CLUSTER = FEATURES.register("column_cluster", () -> new ColumnClusterFeature(ColumnClusterFeature.Config.CODEC));
     public static final RegistryObject<Feature<FluidFallFeature.Config>> FLUID_FALL = FEATURES.register("fluid_fall", () -> new FluidFallFeature(FluidFallFeature.Config.CODEC));

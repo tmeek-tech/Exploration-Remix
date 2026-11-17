@@ -297,26 +297,38 @@ def lantern_fungus():
         "y": "#F1B84F", "Y": "#FFDD86", "o": "#B98A3E"})
 
 
-def lantern_roots():
-    """Thin roots hanging from the ceiling, glowing gold towards their tips."""
-    return grid([
-        ".r...r..r...r.r.",
-        ".r...r..r...r.r.",
-        ".o...r..o...o.o.",
-        "..o..o..o...o.o.",
-        "..y..o...o..y..o",
-        "..y...y..y..y..y",
-        "..Y...y..y...y.y",
-        ".y....Y..Y...y.Y",
-        ".y....y...y..Y.y",
-        ".Y....y...y..y..",
-        ".y...y....Y..y..",
-        ".y...Y....y..Y..",
-        "..Y..y....y.....",
-        "..y.......Y.....",
-        "..Y.............",
-        "................",
-    ], {"r": "#7E6240", "o": "#B98A3E", "y": "#F1B84F", "Y": "#FFE08A"})
+# Lantern roots hang from the Root Vaults' and the Ivory Root Cavern's ceilings as a vine of any length (since 0.14.3):
+# thin roots glowing gold along them, brightest at their tips. Each strand leaves a body tile's bottom row where it
+# enters the top one, so a hanging column reads as one bunch of roots (Taran, 2026-11-17: "lantern roots texture should
+# connect"); the tip ends the strands at different lengths, each in a bright bead.
+ROOT = {"r": "#7E6240", "o": "#B98A3E", "y": "#F1B84F", "Y": "#FFE08A"}
+ROOT_GLOW = ["#F1B84F", "#FFE08A"]
+ROOT_STRANDS = [(2, 1.0, 0.3), (6, 1.0, 2.6), (10, 1.0, 4.6), (13, 1.0, 1.4)]
+# Per look, the row each strand's beads start on and how far apart they hang; the tip's ends (last row) per strand.
+ROOT_BEADS = {1: [(1, 5), (4, 6), (2, 5), (6, 7)], 2: [(3, 6), (0, 5), (5, 7), (2, 6)]}
+ROOT_ENDS = [12, 8, 14, 10]
+
+
+def _lantern_roots(v, tip):
+    img = blank()
+    px = img.load()
+    for i, s in enumerate(ROOT_STRANDS):
+        xs = sway(*s)
+        end = ROOT_ENDS[i] if tip else 16
+        first, gap = ROOT_BEADS[1 if tip else v][i]
+        for y in range(end):
+            c = "o" if (y + i) % 4 else "r"
+            if (y - first) % gap == 0:
+                c = "Y"
+            elif (y - first) % gap in (1, gap - 1):
+                c = "y"
+            put(px, xs[y], y, ROOT[c])
+        if tip:
+            # the tip: a bright bead, a pixel wider, at the strand's end
+            put(px, xs[end - 1], end - 1, ROOT["y"])
+            put(px, xs[end - 1], min(15, end), ROOT["Y"])
+            put(px, xs[end - 1] + (1 if i % 2 else -1), min(15, end), ROOT["y"])
+    return img
 
 
 # ------------------------------------------------------------------------------------------------ Lantern Lake
@@ -652,7 +664,6 @@ def ember_vines():
 PAINTERS = {
     "block/white_glow_flower": white_glow_flower,
     "block/lantern_fungus": lantern_fungus,
-    "block/lantern_roots": lantern_roots,
     "block/wisteria": wisteria,
     "block/wisteria_plant": wisteria_plant,
     "block/lantern_pod": lantern_pod,
@@ -670,3 +681,6 @@ PAINTERS = {
     "block/ember_vines": ember_vines,
     "block/ember_vines_plant": ember_vines_plant,
 }
+register(PAINTERS, "lantern_roots", lambda: _lantern_roots(1, True), glow=ROOT_GLOW)
+register(PAINTERS, "lantern_roots_plant", lambda: _lantern_roots(1, False), glow=ROOT_GLOW)
+register(PAINTERS, "lantern_roots_plant_2", lambda: _lantern_roots(2, False), glow=ROOT_GLOW)

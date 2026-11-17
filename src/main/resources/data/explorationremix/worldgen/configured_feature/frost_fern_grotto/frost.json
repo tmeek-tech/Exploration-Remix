@@ -9,9 +9,10 @@
     },
     "faces": "walls_ceiling",
     "tries": 96,
-    "radius": 8,
-    "height": 8,
+    "radius": 6,
+    "height": 5,
     "on": "#explorationremix:frost_rock",
-    "in_water": false
+    "in_water": false,
+    "patch": true
   }
 }

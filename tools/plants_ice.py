@@ -10,7 +10,7 @@ on any other and the tip continues the body from its row 0. Leaves and berries t
 0, 1, 14 and 15 of a body tile. (The icicles are Immersive Weathering's since 0.4.1.) The sheets (rime lichen, hoarfrost) are drawn as seen flat on a face and tile with copies of themselves.
 """
 import random
-from plants import hexc, blank, register, put, put_wrap, stamp, sway, ball, speckle_sheet
+from plants import hexc, blank, register, put, put_wrap, stamp, sway
 from plants_upper import variants, leaf, LEAF, LEAF_ROW, LEAF_DROOP
 
 PAINTERS = {}
@@ -22,6 +22,10 @@ PAINTERS = {}
 # blue (under the shader they shine white at the heart and blue at the edge, as in the picture); their lower corners
 # are a dark blue that does not glow, which rounds them and keeps berries side by side apart.
 FROST_LEAVES = [("#3E6B34", "#557F3C", "#73984A"), ("#3E6B34", "#73984A", "#8FB25A"), ("#557F3C", "#73984A", "#8FB25A")]
+# 0.14.3 (Taran: "frostberry vines should have frost on them to match the frosty ferns"): rime on the leaves' upper
+# edges and tips, white and light blue like the frost on Immersive Weathering's frosty ferns (theirs leans cyan; this
+# keeps to light blue).
+RIME = ["#F2F8FB", "#D3E6F2", "#B4CEE0"]
 FROST_STEM = ["#4A4A1C", "#5E5B24"]
 BERRY = {"r": "#1D3F86", "d": "#2F6FE0", "m": "#4F92F2", "h": "#86BBF8"}
 BERRY_GLOW = ["#2F6FE0", "#4F92F2", "#86BBF8"]
@@ -58,6 +62,25 @@ def _berry_beside(px, xs, y, size, side):
     _berry(px, max(rows) + 1 if side > 0 else min(rows) - len(BERRIES[size][0]), y, size)
 
 
+def _rime(px, rng):
+    """Frost on the leaves: most leaf pixels with open air above them (on rows 1 to 15, so the joins between tiles
+    stay as they are), white where the leaf ends sideways too."""
+    leaves = {c for ramp in FROST_LEAVES for c in (hexc(x) for x in ramp)}
+    frost = []
+    for y in range(1, 16):
+        for x in range(16):
+            if px[x, y] not in leaves or px[x, y - 1][3]:
+                continue
+            open_side = (x == 0 or not px[x - 1, y][3]) or (x == 15 or not px[x + 1, y][3])
+            r = rng.random()
+            if open_side and r < 0.9:
+                frost.append((x, y, RIME[0] if r < 0.6 else RIME[1]))
+            elif r < 0.65:
+                frost.append((x, y, RIME[1] if r < 0.35 else RIME[2]))
+    for x, y, c in frost:
+        put(px, x, y, c)
+
+
 def _frostberry(v, tip):
     rng = random.Random(9600 + v * 11 + (300 if tip else 0))
     img = blank()
@@ -80,6 +103,7 @@ def _frostberry(v, tip):
             else:
                 shape = LEAF_ROW
             leaf(px, xs[y], y, side, shape, ramp)
+    _rime(px, rng)
     for i, xs in enumerate(paths):
         for y in range(ends[i]):
             put(px, xs[y], y, FROST_STEM[1] if (y + i) % 3 else FROST_STEM[0])
@@ -102,39 +126,6 @@ for _k in (1, 2, 3):
     register(PAINTERS, variants("frostberry_vine_plant", 3)[_k - 1], (lambda k=_k: _frostberry(k, False)), glow=BERRY_GLOW)
 for _k in (1, 2):
     register(PAINTERS, variants("frostberry_vine", 2)[_k - 1], (lambda k=_k: _frostberry(k, True)), glow=BERRY_GLOW)
-
-
-# Rime lichen: icy lichen on the grotto's walls, colder and greener than the blue lichen of the Deep Blue Rift: specks,
-# and small rosettes, a ring round a dark heart. The two lighter shades glow (cyan under the shader).
-RIME = ["#1E5F86", "#2F8DBA", "#55B8E0"]
-RIME_GLOW = ["#2F8DBA", "#55B8E0"]
-ROSETTES = [[".lm.",
-             "lddm",
-             "mddm",
-             ".mm."],
-            [".l.",
-             "ldm",
-             ".m."]]
-
-
-def _rime_stamp(px, rng, x, y):
-    """A speck, or now and then a rosette; nothing lands on a pixel already taken, so the specks spread out."""
-    if px[x % 16, y % 16][3]:
-        return
-    if rng.random() < 0.18:
-        shape = ROSETTES[0 if rng.random() < 0.5 else 1]
-        for dy, row in enumerate(shape):
-            for dx, ch in enumerate(row):
-                if ch != ".":
-                    put_wrap(px, x + dx, y + dy, RIME["dml".index(ch)])
-    else:
-        ball(px, x + rng.random(), y + rng.random(), 0.6 + rng.random() * 0.8, RIME, wrap=True)
-
-
-register(PAINTERS, "rime_lichen", lambda: speckle_sheet(9701, 0, 0, 0, RIME, coverage=0.35, stamp_fn=_rime_stamp),
-         glow=RIME_GLOW)
-register(PAINTERS, "rime_lichen_2", lambda: speckle_sheet(9706, 0, 0, 0, RIME, coverage=0.25, stamp_fn=_rime_stamp),
-         glow=RIME_GLOW)
 
 
 # Hoarfrost: white frost on the rock of frozen cave mouths: feathery bursts of needles, each lit on top and casting a

@@ -16,17 +16,19 @@ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfigur
  * the cap's rim. Only grows where the whole fungus fits in open air, and never over the way down.
  */
 public final class GiantFungusFeature extends Feature<GiantFungusFeature.Config> {
-    public record Config(BlockState stem, BlockState cap, BlockState glow, BlockState roots, IntProvider height, IntProvider radius,
-                         IntProvider rootLength) implements FeatureConfiguration {
+    /** {@code roots} hang from the rim, each run ending in {@code rootTip} (a vine's body and tip; the same block if left out). */
+    public record Config(BlockState stem, BlockState cap, BlockState glow, BlockState roots, BlockState rootTip, IntProvider height,
+                         IntProvider radius, IntProvider rootLength) implements FeatureConfiguration {
         public static final Codec<Config> CODEC = RecordCodecBuilder.create(i -> i.group(
                 BlockState.CODEC.fieldOf("stem").forGetter(Config::stem),
                 BlockState.CODEC.fieldOf("cap").forGetter(Config::cap),
                 BlockState.CODEC.fieldOf("glow").forGetter(Config::glow),
                 BlockState.CODEC.fieldOf("roots").forGetter(Config::roots),
+                BlockState.CODEC.optionalFieldOf("root_tip").forGetter(c -> java.util.Optional.of(c.rootTip())),
                 IntProvider.codec(1, 12).fieldOf("height").forGetter(Config::height),
                 IntProvider.codec(1, 5).fieldOf("radius").forGetter(Config::radius),
                 IntProvider.codec(0, 8).fieldOf("root_length").forGetter(Config::rootLength)
-        ).apply(i, Config::new));
+        ).apply(i, (stem, cap, glow, roots, tip, height, radius, len) -> new Config(stem, cap, glow, roots, tip.orElse(roots), height, radius, len)));
     }
 
     public GiantFungusFeature(Codec<Config> codec) { super(codec); }
@@ -60,12 +62,14 @@ public final class GiantFungusFeature extends Feature<GiantFungusFeature.Config>
         for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) {
             int d2 = dx * dx + dz * dz;
             if (d2 > r * r + 1 || d2 <= (r - 1) * (r - 1) + 1 || random.nextFloat() > 0.5F) continue;
-            int len = c.rootLength().sample(random);
+            int len = c.rootLength().sample(random), last = 0;
             for (int k = 1; k <= len; k++) {
                 p.setWithOffset(o, dx, h - k, dz);
                 if (!level.getBlockState(p).isAir() || !c.roots().canSurvive(level, p)) break;
                 level.setBlock(p, c.roots(), 2);
+                last = k;
             }
+            if (last > 0) level.setBlock(p.setWithOffset(o, dx, h - last, dz), c.rootTip(), 2);
         }
         return true;
     }

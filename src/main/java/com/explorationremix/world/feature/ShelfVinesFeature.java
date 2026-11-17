@@ -63,9 +63,8 @@ public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
                 int hy = y + 2;
                 while (hy <= y + 1 + Network.SHELF_MAX_UP && air(level, p, qx, hy, qz)) hy++;
                 if (hy > y + 1 + Network.SHELF_MAX_UP || !level.getBlockState(p.set(qx, hy, qz)).isFaceSturdy(level, p, Direction.DOWN)) continue;
-                Block head = biome == DeepBiome.DEEP_DARK ? ERBlocks.DUSK_VINES.get() : ERBlocks.BLUE_GLOW_VINES.get();
-                Block body = biome == DeepBiome.DEEP_DARK ? ERBlocks.DUSK_VINES_PLANT.get() : ERBlocks.BLUE_GLOW_VINES_PLANT.get();
-                any |= ClimbVinesFeature.hang(level, qx, hy - 1, fy, qz, head, body);
+                // blue glow vines in the deep dark too since its dusk vines went (0.14.3, Taran's ask)
+                any |= ClimbVinesFeature.hang(level, qx, hy - 1, fy, qz, ERBlocks.BLUE_GLOW_VINES.get(), ERBlocks.BLUE_GLOW_VINES_PLANT.get());
                 last = fy;
             }
         }
