@@ -1,0 +1,9 @@
+{
+  "parent": "explorationremix:block/template/hanging_fern_large",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "hang": "explorationremix:block/silver_wall_fern_large_2",
+    "front": "explorationremix:block/silver_wall_fern_large_front_2",
+    "side": "explorationremix:block/silver_wall_fern_large_side_2"
+  }
+}

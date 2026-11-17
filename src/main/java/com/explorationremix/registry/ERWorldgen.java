@@ -26,6 +26,7 @@ import com.explorationremix.world.feature.MixStateProvider;
 import com.explorationremix.world.feature.MushroomShelfFeature;
 import com.explorationremix.world.feature.OpenSpanPlacement;
 import com.explorationremix.world.feature.OpenWayFeature;
+import com.explorationremix.world.feature.RiftBandPlacement;
 import com.explorationremix.world.feature.RootvaultsLookFilter;
 import com.explorationremix.world.feature.PlannedUpperFilter;
 import com.explorationremix.world.feature.RootvaultsOpeningsPlacement;
@@ -95,5 +96,7 @@ public final class ERWorldgen {
     public static final RegistryObject<PlacementModifierType<OpenSpanPlacement>> OPEN_SPAN = PLACEMENT_TYPES.register("open_span", () -> () -> OpenSpanPlacement.CODEC);
     // 0.8.0 fix round: the Galleries' lava falls at spaced sites, not tries per chunk
     public static final RegistryObject<PlacementModifierType<FallSitesPlacement>> FALL_SITES = PLACEMENT_TYPES.register("fall_sites", () -> () -> FallSitesPlacement.CODEC);
+    // 0.14.5: the Fern Rift's plants kept to its bands by depth (green, silver, light blue)
+    public static final RegistryObject<PlacementModifierType<RiftBandPlacement>> RIFT_BAND = PLACEMENT_TYPES.register("rift_band", () -> () -> RiftBandPlacement.CODEC);
     public static final RegistryObject<HeightProviderType<LayerHeight>> LAYER_HEIGHT = HEIGHT_PROVIDERS.register("layer_height", () -> () -> LayerHeight.CODEC);
 }

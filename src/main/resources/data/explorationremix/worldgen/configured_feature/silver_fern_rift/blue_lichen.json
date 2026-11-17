@@ -1,0 +1,17 @@
+{
+  "type": "explorationremix:surface_attach",
+  "config": {
+    "state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "explorationremix:blue_lichen"
+      }
+    },
+    "faces": "walls",
+    "tries": 40,
+    "radius": 5,
+    "height": 4,
+    "on": "#explorationremix:asurine_lining",
+    "in_water": false
+  }
+}
