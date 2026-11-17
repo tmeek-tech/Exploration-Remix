@@ -46,7 +46,34 @@ public final class SeamScan {
         return Commands.literal("seams").executes(c -> scan(c, 4))
                 .then(Commands.argument("radius", IntegerArgumentType.integer(1, 24)).executes(c -> scan(c, IntegerArgumentType.getInteger(c, "radius"))))
                 .then(Commands.literal("count").then(Commands.argument("radius", IntegerArgumentType.integer(1, 64))
-                        .executes(c -> count(c, IntegerArgumentType.getInteger(c, "radius")))));
+                        .executes(c -> count(c, IntegerArgumentType.getInteger(c, "radius")))))
+                .then(Commands.literal("at").then(Commands.argument("x", IntegerArgumentType.integer()).then(Commands.argument("y", IntegerArgumentType.integer())
+                        .then(Commands.argument("z", IntegerArgumentType.integer()).executes(c -> at(c, IntegerArgumentType.getInteger(c, "x"),
+                                IntegerArgumentType.getInteger(c, "y"), IntegerArgumentType.getInteger(c, "z")))))));
+    }
+
+    /**
+     * {@code /remix seams at <x> <y> <z>}: the column at x z from 8 blocks over y to 8 under it, as the world has it and as
+     * the merge reads it ({@link UpperShapes#seamDebug}), with the shapes' summary of the column.
+     */
+    private static int at(CommandContext<CommandSourceStack> c, int x, int y, int z) {
+        UpperShapes shapes = DeepWorld.shapes();
+        if (shapes == null) {
+            c.getSource().sendFailure(Component.literal("The Upper Caves do not grow from noise in this world."));
+            return 0;
+        }
+        ServerLevel level = c.getSource().getLevel();
+        List<String> lines = shapes.seamDebug(x, z, y - 8, y + 8);
+        StringBuilder b = new StringBuilder(shapes.describe(x, z)).append('\n').append(lines.get(0));
+        for (int i = 1; i < lines.size(); i++) {
+            int h = y + 8 - (i - 1);
+            BlockState s = level.getChunkSource().getChunkNow(x >> 4, z >> 4) == null ? null : level.getBlockState(new BlockPos(x, h, z));
+            String name = s == null ? "?" : net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath();
+            b.append('\n').append(String.format(Locale.ROOT, "%-18s ", name)).append(lines.get(i));
+        }
+        String msg = b.toString();
+        c.getSource().sendSuccess(() -> Component.literal(msg), false);
+        return 1;
     }
 
     /** {@code /remix seams count <radius>}: how many chunks within radius chunks are loaded, for timing world generation. */
@@ -98,6 +125,8 @@ public final class SeamScan {
         List<int[]> seams = new ArrayList<>(), hanging = new ArrayList<>();
         long[][] pair = new long[6][6];
         List<List<int[]>> pairSpots = new ArrayList<>();
+        java.util.Map<String, Long> sideCount = new java.util.TreeMap<>();
+        java.util.Map<String, List<int[]>> sideSpots = new java.util.HashMap<>();
         for (int k = 0; k < 36; k++) pairSpots.add(new ArrayList<>());
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         int chunks = 0;
@@ -136,12 +165,24 @@ public final class SeamScan {
                                 pairSpots.get(ko * 6 + ku).add(new int[]{x, ya, z, len});
                             }
                             boolean airUnder = air(col[i - 1]);
+                            int side = Integer.MIN_VALUE;
                             if (oursOver && !oursUnder && airUnder) {
                                 seamDown[len]++;
                                 if (len <= 2) seams.add(new int[]{x, ya, z, len});
+                                side = yb;
                             } else if (oursUnder && !oursOver) {
                                 seamUp[len]++;
                                 if (len <= 2) seams.add(new int[]{x, ya, z, len});
+                                side = ya;
+                            }
+                            if (side != Integer.MIN_VALUE && len <= 3) {
+                                // how the merge reads the pack's side of the seam: its cave (so the merge should have
+                                // opened the rock), rock (a feature's opening, or the open air over the ground), or stop
+                                String mc = shapes.mergeClass(x, side, z);
+                                BlockState sb = side == yb ? col[i - 1] : col[j];
+                                String key = mc + (sb.is(net.minecraft.world.level.block.Blocks.CAVE_AIR) ? " (cave air)" : water(sb) ? " (water)" : "");
+                                sideCount.merge(key, 1L, Long::sum);
+                                sideSpots.computeIfAbsent(key, k -> new ArrayList<>()).add(new int[]{x, side, z, len});
                             }
                             if (len <= 2 && airUnder) {
                                 if (water(col[j])) waterOnCrust++;
@@ -185,12 +226,24 @@ public final class SeamScan {
         List<int[]> order = new ArrayList<>();
         for (int a = 0; a < 6; a++) for (int b = 0; b < 6; b++) if (pair[a][b] > 0) order.add(new int[]{a, b});
         order.sort((p, q) -> Long.compare(pair[q[0]][q[1]], pair[p[0]][p[1]]));
-        for (int[] o : order.subList(0, Math.min(12, order.size()))) {
+        List<int[]> shown = new ArrayList<>(order.subList(0, Math.min(12, order.size())));
+        for (int[] o : order) if (!shown.contains(o) && (o[0] < 3 || o[1] < 3)) shown.add(o);
+        for (int[] o : shown) {
             List<int[]> spots = pairSpots.get(o[0] * 6 + o[1]);
             spots.sort(java.util.Comparator.comparingDouble(a -> Math.hypot(a[0] - px, a[2] - pz)));
             StringBuilder b = new StringBuilder();
             for (int k = 0; k < Math.min(3, spots.size()); k++) b.append(k == 0 ? " e.g. " : ", ").append(spots.get(k)[0]).append(' ').append(spots.get(k)[1]).append(' ').append(spots.get(k)[2]);
             say(c, String.format(Locale.ROOT, "  %s over %s: %.2f%s", KIND[o[0]], KIND[o[1]], pair[o[0]][o[1]] * per, b));
+        }
+        if (!sideCount.isEmpty()) {
+            say(c, "Seams of 1-3 blocks, the pack's side as the merge reads it (per chunk):");
+            for (java.util.Map.Entry<String, Long> e : sideCount.entrySet()) {
+                List<int[]> spots = sideSpots.get(e.getKey());
+                spots.sort(java.util.Comparator.comparingDouble(a -> Math.hypot(a[0] - px, a[2] - pz)));
+                StringBuilder b = new StringBuilder();
+                for (int k = 0; k < Math.min(4, spots.size()); k++) b.append(k == 0 ? " e.g. " : ", ").append(spots.get(k)[0]).append(' ').append(spots.get(k)[1]).append(' ').append(spots.get(k)[2]);
+                say(c, String.format(Locale.ROOT, "  %s: %.2f%s", e.getKey(), e.getValue() * per, b));
+            }
         }
         listNearest(c, "seam", seams, px, pz);
         listNearest(c, "water over air", hanging, px, pz);

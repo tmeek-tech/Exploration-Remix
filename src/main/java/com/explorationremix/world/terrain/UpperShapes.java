@@ -1205,18 +1205,28 @@ public final class UpperShapes {
     /**
      * True where a block beside this one or the one under it is open in a shape (or in a seam that fell away): the pack's
      * water here would pour into the shapes (or hang over them), so it stays rock instead. So does the pack's water up to
-     * {@link #SEAM} blocks over a seam under the pack's cave: the lake there keeps a floor at least as thick as that.
+     * {@link #SEAM} + 1 blocks over a shape's ceiling or over a seam under the pack's cave: the lake there keeps a floor
+     * thicker than a seam.
      */
     public boolean besideOpen(int x, int y, int z) {
         if (carve(x, y - 1, z) < 0 || carve(x + 1, y, z) < 0 || carve(x - 1, y, z) < 0 || carve(x, y, z + 1) < 0 || carve(x, y, z - 1) < 0) return true;
         if (pack == null) return false;
         Col c = column(x, z);
         if (y - 1 < c.lo || y - 1 > c.hi) return false;
-        for (int h = y - 1; h > y - 1 - SEAM; h--) {
-            if (cls(c, h) != PACK_OPEN) return false;
+        for (int h = y - 1; h >= y - 1 - SEAM; h--) {
+            int k = cls(c, h);
+            if (k == OURS) return true;
+            if (k != PACK_OPEN) return false;
             if (seam(c, h - 1) == UNDER_PACK) return true;
         }
         return false;
+    }
+
+    /** What a block is to the merge, for the dev scans: ours, pack, rock or stop (see {@link #cls}); "-" without a merge. */
+    public String mergeClass(int x, int y, int z) {
+        if (pack == null) return "-";
+        int k = cls(column(x, z), y);
+        return k == OURS ? "ours" : k == PACK_OPEN ? "pack" : k == STOP ? "stop" : "rock";
     }
 
     /**
@@ -1517,6 +1527,33 @@ public final class UpperShapes {
         if (c.hOn && hallDist(c, x, y, z) < 0) return HALLS;
         if (c.sOn && sinkDist(c, x, y, z) < 0) return SINKHOLES;
         return -1;
+    }
+
+    /**
+     * How the merge reads a column from {@code y1} down to {@code y0}, one line a height, for the dev commands: what the
+     * block is to the merge (ours, pack, rock, stop), the shapes' carve before and after the merge, the pack's density
+     * and the seam the rock falls away as.
+     */
+    public java.util.List<String> seamDebug(int x, int z, int y0, int y1) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        Col c = column(x, z);
+        out.add(String.format(java.util.Locale.ROOT, "column %d %d: lo %.1f hi %.1f low %.1f ground %.1f", x, z, c.lo, c.hi, c.low, c.gF));
+        for (int y = y1; y >= y0; y--) {
+            if (y < c.lo || y > c.hi) {
+                out.add(y + " outside the shapes' range");
+                continue;
+            }
+            String k = "-";
+            if (pack != null) {
+                int cl = cls(c, y);
+                k = cl == OURS ? "ours" : cl == PACK_OPEN ? "pack" : cl == STOP ? "stop" : "rock";
+            }
+            int s = pack == null ? NO_SEAM : seamKind(x, y, z);
+            out.add(String.format(java.util.Locale.ROOT, "%d %s carve0 %.2f carve %.2f pack %s%s", y, k, carve0At(c, y), carve(c, x, y, z),
+                    pack == null ? "-" : String.format(java.util.Locale.ROOT, "%.3f", packAt(c, y)),
+                    s == OVER_PACK ? " seam over the pack's" : s == UNDER_PACK ? " seam under the pack's" : ""));
+        }
+        return out;
     }
 
     /** What the shapes hold over a column, for the dev commands. */
