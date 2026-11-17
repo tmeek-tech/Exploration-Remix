@@ -19,11 +19,12 @@ public final class SkeinHomes {
     private SkeinHomes() {}
 
     /**
-     * The share of chunks that are a Skein's home. About two in three of the Blue Reaches' chunks have a cave a try
-     * finds, so this gives about one Skein in every ten chunks, one every 50 blocks or so: about as many round a
-     * player as the old spawner kept there (one or two within 48 blocks).
+     * The share of chunks that are a Skein's home. A little over half of the Blue Reaches' chunks have a cave a try
+     * finds (54% in the test seed's first 600 chunks), so this gives about one Skein in every ten chunks, one every 50
+     * blocks or so: about as many round a player as the old spawner kept there, one or two within 48 blocks (Taran's
+     * pick, 17 Nov 2026).
      */
-    public static final double HOME_CHANCE = 0.15;
+    public static final double HOME_CHANCE = 0.18;
     /** Random spots tried in a home chunk before it is given up. */
     public static final int TRIES = 16;
     /** Tries keep this far inside the chunk, so a Skein's box and the rock it reads stay in reach of the chunk's generation. */

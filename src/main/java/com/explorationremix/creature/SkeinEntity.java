@@ -150,6 +150,15 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     static final int WAY_OUT_STEP = 4, WAY_OUT_REACH = 48, WAY_OUT_POINTS = 200;
     /** A meal of fireflies keeps it fed for one to three minutes; it chews this long. */
     static final int MEAL_MIN = 1200, MEAL_MAX = 3600, EAT_TICKS = 50;
+    /**
+     * Lying still with no player (of any kind) within this, it lies dormant (0.17.0): its ticks are skipped until one
+     * comes this near, or it is hurt. The Skeins set down with the world lie under every column, and each ticking costs
+     * the server about as much as two sheep; this is further than a Skein is drawn at the default entity distance (83
+     * blocks), so none is ever seen frozen, and as far as the caves round a player reach for the slow refill
+     * ({@link BlueSpawnRules#REFILL_RADIUS}). Players are looked for once a second.
+     */
+    public static final double WAKE_RANGE = 96.0;
+    static final int WAKE_LOOK = 20;
     /** How far and how long it may touch nothing (rounding an edge) before it falls (as the Mossback). */
     static final double AIR_REACH = 1.5;
     static final int AIR_GRACE = 40;
@@ -284,6 +293,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     private int detachTicks, airTicks;
     private double airDist, movedLast;
     private float stepDist;
+    private boolean dormant;                 // server: lying still with no player near, its ticks skipped (WAKE_RANGE)
 
     // client-side animation state (see SkeinRenderer)
     public float run, runO, legPhase, legPhaseO, sway, swayO, shudder, shudderO, rear, rearO, jaw, jawO, glow, glowO;
@@ -351,6 +361,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     }
 
     public byte state() { return entityData.get(DATA_STATE); }
+    /** Server: lying dormant, no player near ({@link #WAKE_RANGE}). */
+    public boolean dormant() { return dormant; }
     @Nullable public Direction surface() {
         byte b = entityData.get(DATA_SURFACE);
         return b < 0 ? null : Direction.from3DDataValue(b);
@@ -1634,6 +1646,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         if (isInWater()) b.append(", in water");
         if (airborne()) b.append(", falling");
         if (getMoveControl() instanceof ClimbMoveControl mc && mc.wedged() > 0) b.append(", wedged ").append(mc.wedged());
+        if (dormant) b.append(", dormant (no player within ").append((int) WAKE_RANGE).append(" blocks)");
         return b.toString();
     }
 
@@ -1670,6 +1683,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     @Override
     public void tick() {
+        if (!level().isClientSide && dormantNow()) return;
         super.tick();
         if (!level().isClientSide && isAlive()) {
             movedLast = Math.sqrt(Mth.square(getX() - xo) + Mth.square(getY() - yo) + Mth.square(getZ() - zo));
@@ -1681,6 +1695,25 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         followHead();
         if (level().isClientSide) clientTick();
         moveBody();
+    }
+
+    /**
+     * Server: whether it lies dormant this tick ({@link #WAKE_RANGE}): lying still on its rock, its body laid, unhurt,
+     * out of water, lava and fire, with no player near. It stays where it is, as a creature in a chunk no one is near
+     * does; the first look that finds a player near (or a hurt) wakes it as it was. Peaceful still takes it, from the
+     * level's own despawn pass.
+     */
+    private boolean dormantNow() {
+        if (state() != STILL || !trail.laid() || !isAlive() || hurtTime > 0 || isOnFire() || isInWater() || isInLava()
+                || surface() == null || isPassenger() || trace > 0) return dormant = false;
+        if ((tickCount + getId()) % WAKE_LOOK == 0) dormant = !playerWithin(WAKE_RANGE);
+        return dormant;
+    }
+
+    /** Whether any player (a spectator too: one flying round to look sees it move) is within {@code range}. */
+    private boolean playerWithin(double range) {
+        for (Player p : level().players()) if (p.distanceToSqr(this) < range * range) return true;
+        return false;
     }
 
     /**
