@@ -127,7 +127,9 @@ public final class TerrainPatch {
             int c = (cx * sy + y) * sz + cz;
             for (int b = cellStart[c], e = b + cellCount[c]; b < e; b++) {
                 int o = BOX * b;
-                if (px > boxes[o] && px < boxes[o + 3] && py > boxes[o + 1] && py < boxes[o + 4] && pz > boxes[o + 2] && pz < boxes[o + 5])
+                // a point on the face between two boxes belongs to one of them (the one it starts, as a block's own
+                // coordinates do), so a line of joints along a block edge is never taken for open air
+                if (px >= boxes[o] && px < boxes[o + 3] && py >= boxes[o + 1] && py < boxes[o + 4] && pz >= boxes[o + 2] && pz < boxes[o + 5])
                     return true;
             }
         }
@@ -257,7 +259,8 @@ public final class TerrainPatch {
                             double a = k == 0 ? ax : k == 1 ? ay : az, d = k == 0 ? dx : k == 1 ? dy : dz;
                             double lo = boxes[o + k], hi = boxes[o + 3 + k];
                             if (Math.abs(d) < 1.0E-12) {
-                                if (a <= lo || a >= hi) miss = true;
+                                // running along a face: in the box it starts (as solid() counts it), never between two
+                                if (a < lo || a >= hi) miss = true;
                                 continue;
                             }
                             double t0 = (lo - a) / d, t1 = (hi - a) / d;

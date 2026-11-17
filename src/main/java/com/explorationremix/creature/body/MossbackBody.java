@@ -45,6 +45,12 @@ public final class MossbackBody {
     static final double TAIL_DAMP = 0.55, TAIL_WEIGHT = 0.045, TAIL_STIFF_BASE = 0.45, TAIL_STIFF_TIP = 0.08;
     /** The tail lies on rock it touches: pulled the last bit onto it when within this of its underside. */
     static final double TAIL_CLING = 0.3, TAIL_CLING_PULL = 0.35;
+    /**
+     * Lying on rock it grips it: this share of its weight's pull along the rock is held (so it stays laid up a wall it
+     * came down). Off the rock, a part of it rising from the part before loses this share of its stiffness for each
+     * unit it rises (so past the top of a step it flops over onto it, never standing up in the air).
+     */
+    static final double TAIL_GRIP = 0.85, TAIL_LIFT_GIVE = 0.8;
     /** A joint's way out eases to the rock's by this share a tick. */
     static final double UP_EASE = 0.45;
     /**
@@ -109,6 +115,9 @@ public final class MossbackBody {
 
     // ------------------------------------------------------------------------------------------------ state
     final Vector3d[] pos, prev, old, up, upPrev;
+    /** Each tail joint: lying on rock last tick, and the way out of that rock. */
+    private final boolean[] touching;
+    private final Vector3d[] touchN;
     public final Foot[] feet = new Foot[4];
     private boolean laid;
     private final Vector3d lastCentre = new Vector3d();
@@ -131,6 +140,8 @@ public final class MossbackBody {
         this.spec = spec;
         this.joints = spec.arc.length;
         pos = vectors(joints); prev = vectors(joints); old = vectors(joints); up = vectors(joints); upPrev = vectors(joints);
+        touching = new boolean[joints];
+        touchN = vectors(joints);
         for (int i = 0; i < joints; i++) { up[i].set(0, 1, 0); upPrev[i].set(0, 1, 0); }
         for (int i = 0; i < 4; i++) feet[i] = new Foot(spec.legs[i]);
     }
@@ -320,14 +331,27 @@ public final class MossbackBody {
             double len = spec.length(i - 1, i);
             double k = (double) (i - first) / Math.max(1, joints - 1 - first);
             double r = spec.radius[i];
-            // momentum and weight
+            // momentum and weight (lying on rock, it grips: the pull along the rock is mostly held)
             double vx = (p.x - old[i].x) * TAIL_DAMP, vy = (p.y - old[i].y) * TAIL_DAMP, vz = (p.z - old[i].z) * TAIL_DAMP;
             old[i].set(p);
             t3.set(p);                                          // where it was
-            p.add(vx, vy - TAIL_WEIGHT * buoyant * (0.6 + 0.4 * k), vz);
-            // stiffness: a pull toward straight on from the segment before
+            double gx = 0, gy = -TAIL_WEIGHT * buoyant * (0.6 + 0.4 * k), gz = 0;
+            boolean held = touching[i] && mode == Mode.GROUND;
+            if (held) {
+                // its weight along the rock is held (what pulls it off the rock, as under a ceiling, acts in full)
+                Vector3d tn = touchN[i];
+                double gn = gy * tn.y;
+                if (gn <= 0) {
+                    double tx = -tn.x * gn, ty = gy - tn.y * gn, tz = -tn.z * gn;
+                    gx -= tx * TAIL_GRIP; gy -= ty * TAIL_GRIP; gz -= tz * TAIL_GRIP;
+                }
+            }
+            p.add(vx + gx, vy + gy, vz + gz);
+            // stiffness: a pull toward straight on from the segment before (off the rock and rising, less: it flops over)
             double stiff = TAIL_STIFF_BASE + (TAIL_STIFF_TIP - TAIL_STIFF_BASE) * k;
-            Vector3d straight = t1.set(q).sub(qq).normalize().mul(len).add(q);
+            Vector3d straight = t1.set(q).sub(qq).normalize();
+            if (!held && buoyant > 0 && straight.y > 0) stiff *= 1.0 - TAIL_LIFT_GIVE * straight.y;
+            straight.mul(len).add(q);
             p.lerp(straight, stiff);
             keepLength(q, p, len);
             limitBend(qq, q, p, len, BEND_TAIL);
@@ -340,13 +364,13 @@ public final class MossbackBody {
                 keepLength(q, p, len);
             }
             // on the rock: never into it, and lying on it when it touches
-            lie(rock, q, qq, p, len, r);
+            lie(rock, i, q, qq, p, len, r);
             // nor does the segment from the joint before run through rock: it swings out past it
             if (!rock.solid(q.x, q.y, q.z) && rock.clip(q.x, q.y, q.z, p.x, p.y, p.z, f) && f[4] < 0.5) {
                 double hx = q.x + (p.x - q.x) * f[0] + f[1] * r, hy = q.y + (p.y - q.y) * f[0] + f[2] * r, hz = q.z + (p.z - q.z) * f[0] + f[3] * r;
                 p.set(hx, hy, hz);
                 keepLength(q, p, len);
-                lie(rock, q, qq, p, len, r);
+                lie(rock, i, q, qq, p, len, r);
             }
         }
     }
@@ -354,11 +378,17 @@ public final class MossbackBody {
     /**
      * A tail joint against the rock: at least its thickness {@code r} out from it, and drawn the last bit onto it when
      * it touches (on the ground). It keeps its length from the joint before by swinging round that joint across the
-     * rock's face (sliding along the floor, say), never by sinking back into it.
+     * rock's face (sliding along the floor, say), never by sinking back into it. Notes whether it touches, and the way
+     * out of what it touches, for next tick's grip.
      */
-    private void lie(TerrainPatch rock, Vector3d q, Vector3d qq, Vector3d p, double len, double r) {
+    private void lie(TerrainPatch rock, int i, Vector3d q, Vector3d qq, Vector3d p, double len, double r) {
+        touching[i] = false;
         if (!rock.field(p.x, p.y, p.z, REACH, SOFT, f)) return;
         double d = f[0];
+        if (d < r + TAIL_CLING) {
+            touching[i] = true;
+            touchN[i].set(f[1], f[2], f[3]);
+        }
         double want = d;
         if (d < r) want = r;
         else if (d < r + TAIL_CLING && mode == Mode.GROUND) want = d - (d - r) * TAIL_CLING_PULL;

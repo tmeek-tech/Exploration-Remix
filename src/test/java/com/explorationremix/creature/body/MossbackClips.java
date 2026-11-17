@@ -123,6 +123,18 @@ class MossbackClips {
                     set(() -> { d.c.y = 3.0 - ClipDriver.HH; d.up.set(0, -1, 0); d.heading.set(-1, 0, 0); }),
                     walk(3.5, 0.085), idle(40)), new Vector3d(-0.6, -0.4, -5.2), 0, new Vector3d(-1.5, 1.4, -5.5)));
         }
+        {   // head first down a step a block high, a while at its foot still clinging to it (as the game holds one against
+            // a short block in its way), then off across the floor
+            BlockWorld w = new BlockWorld().fill(-8, -1, -6, 8, -1, 8).fill(-8, 0, 2, 8, 0, 8);
+            ClipDriver d = new ClipDriver(w, 0, 0, 0, 0, 1);
+            list.add(new Scene("down", w, d, List.of(
+                    set(() -> { d.c.set(0, 1.7, 2.0 - ClipDriver.HW); d.up.set(0, 0, -1); d.heading.set(0, -1, 0); d.clientUp.set(d.up);
+                        d.clientFwd.set(d.heading); d.mode = MossbackBody.Mode.GROUND; }),
+                    (dd, t) -> { dd.move(0.085); return dd.c.y - ClipDriver.HH > 0.02; },
+                    idle(50),
+                    set(() -> { d.up.set(0, 1, 0); d.heading.set(0, 0, -1); d.c.y = ClipDriver.HH; }),
+                    walk(4.0, 0.1), idle(30)), new Vector3d(-3.6, 1.4, -1.6), 0));
+        }
         {   // along a cliff edge, the left feet reaching down its face
             BlockWorld w = new BlockWorld().fill(-8, -1, -8, 0, -1, 14).fill(-8, -4, -8, 0, -2, 14).fill(1, -5, -8, 8, -5, 14);
             ClipDriver d = new ClipDriver(w, 0.15, 0, -4, 0, 1);
