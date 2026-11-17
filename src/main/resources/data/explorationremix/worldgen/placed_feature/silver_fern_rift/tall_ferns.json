@@ -37,6 +37,10 @@
       "y_spread": 1
     },
     {
+      "type": "explorationremix:rift_band",
+      "band": "silver"
+    },
+    {
       "type": "minecraft:biome"
     }
   ]

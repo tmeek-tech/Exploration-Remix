@@ -2,16 +2,51 @@
   "type": "explorationremix:surface_attach",
   "config": {
     "state": {
-      "type": "minecraft:simple_state_provider",
-      "state": {
-        "Name": "explorationremix:silver_wall_fern"
-      }
+      "type": "explorationremix:mix",
+      "entries": [
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:silver_wall_fern",
+              "Properties": {
+                "size": "0"
+              }
+            }
+          },
+          "weight": 3
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:silver_wall_fern",
+              "Properties": {
+                "size": "1"
+              }
+            }
+          },
+          "weight": 4
+        },
+        {
+          "data": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "explorationremix:silver_wall_fern",
+              "Properties": {
+                "size": "2"
+              }
+            }
+          },
+          "weight": 3
+        }
+      ]
     },
     "faces": "walls_hanging",
     "tries": 96,
     "radius": 6,
     "height": 4,
-    "on": "explorationremix:deep_moss",
+    "on": "minecraft:moss_block",
     "in_water": false
   }
 }

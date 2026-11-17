@@ -1,5 +1,6 @@
 package com.explorationremix.world.feature;
 
+import com.explorationremix.block.HangingFernBlock;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -25,9 +26,9 @@ import java.util.List;
 
 /**
  * Sticks blocks onto the faces of rock around the origin: crystals on any face, shelf fungi on walls, hanging ferns on
- * walls with room below them, sheets of lichen and ivy. A block with a {@code facing} property points away from the
- * face it grows on; a sheet (a MultifaceBlock) covers every allowed face it touches. Either is waterlogged when it grows
- * in water. Vanilla's multiface_growth only looks at the blocks next to its origin; this scatters its tries over a
+ * walls with room below them (as big as the room allows), sheets of lichen and ivy. A block with a {@code facing}
+ * property points away from the face it grows on; a sheet (a MultifaceBlock) covers every allowed face it touches.
+ * Either is waterlogged when it grows in water. Vanilla's multiface_growth only looks at the blocks next to its origin; this scatters its tries over a
  * radius by height box. With {@code patch} it instead covers every face in an ellipsoid of that box (a size of its own
  * each time, thinning out at the rim), so frost and the like lie in solid patches rather than splatters.
  */
@@ -102,6 +103,8 @@ public final class SurfaceAttachFeature extends Feature<SurfaceAttachFeature.Con
         else if (place.hasProperty(BlockStateProperties.HORIZONTAL_FACING)) {
             if (support.getAxis().isVertical()) return false;
             place = place.setValue(BlockStateProperties.HORIZONTAL_FACING, support.getOpposite());
+            // a hanging fern as big as its room allows, up to the size it was given
+            if (place.getBlock() instanceof HangingFernBlock && (place = HangingFernBlock.fit(level, pos, place)) == null) return false;
         }
         // Waterlogged when it grows in water; seagrass and the like are water themselves and grow only there.
         if (place.hasProperty(BlockStateProperties.WATERLOGGED)) place = place.setValue(BlockStateProperties.WATERLOGGED, water);

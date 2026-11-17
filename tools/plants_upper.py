@@ -10,6 +10,7 @@ leaflets instead run on into the tile below, drawn wrapped, and are the same in 
 """
 import math, random
 from PIL import Image
+from plants_fern import LIT as FERN_LIT, STALK as FERN_STALK
 from plants import (hexc, grid, blank, _line, register, put, stamp, sway, bezier, prisms, speckle_sheet,
                     put_wrap)
 
@@ -127,9 +128,10 @@ register(PAINTERS, "grotto_ivy_2", lambda: _grotto_ivy(2))
 
 # ------------------------------------------------------------------------------------------------ Silver Fern Rift
 # silver_fern_rift.jpg: pale fronds hanging from the ledges (#9A9D5E to #D3D6A3), tall ferns on the ledges, fronds
-# fanning out of cracks in the walls.
-FROND = ["#999E7F", "#ACAE6B", "#B7BB88", "#D3D6A3"]
-FROND_STALK = ["#7A7F55", "#5F6A3E"]
+# fanning out of cracks in the walls. 0.14.6 (Taran, 17 Nov): the silver ferns' green, "a more saturated green but
+# still paler than vanilla cave vines", where the picture's khaki read warm and 0.14.5's silver read grey.
+FROND = list(FERN_LIT)                          # from the stalk out to the leaflet's tip
+FROND_STALK = [FERN_STALK[1], FERN_STALK[0]]    # the stalk (and the leaflets behind), and every third stalk pixel
 
 
 def _silver_frond(v, tip):

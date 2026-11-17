@@ -63,6 +63,15 @@ public final class UpperShapes {
      * and is shut by {@link #RIFT_KEEP}, past both reaches and a wall of rock between.
      */
     static final double RIFT_KEEP = 30, RIFT_EASE = 18;
+    /**
+     * The cracks run on in a web under all of the Upper Caves. A slow field cuts the web into separate rifts (Taran,
+     * 2026-11-17: "not quite as long so that they don't take up so much of the Upper Caves"): where the field, over
+     * {@link #RIFT_CUT_SCALE} blocks, falls under {@link #RIFT_CUT} the crack pinches shut, narrowing over
+     * {@link #RIFT_CUT_EASE} of the field as it does short of the den gates. Measured over 3,200 blocks square: the rifts
+     * keep about half the ground they had, in separate rifts, half of them under 150 blocks across and nine in ten under
+     * 470, where the web ran on across it all.
+     */
+    static final double RIFT_CUT_SCALE = 220, RIFT_CUT = -0.05, RIFT_CUT_EASE = 0.15;
     /** What a formation block is made of (see {@link #formation}). */
     public static final int ROOT = 1, ICICLE = 2, STALACTITE = 3, STALAGMITE = 4, DRIP = 5;
     /** The biome of a rift or hall (see {@link #piece}). */
@@ -106,7 +115,7 @@ public final class UpperShapes {
 
     private final Perlin[] wA = new Perlin[2], wB = new Perlin[2], wC = new Perlin[2], wD = new Perlin[2];
     private final Perlin mouthN, linkN, rootN, lookN, poolN, chillN;
-    private final Perlin rA, rB, rC, rD;
+    private final Perlin rA, rB, rC, rD, rE;
     private final Perlin hA, hB, hC, hD, hE, hS, hK;
     private final Perlin sA, sB;
     private final Perlin leanN, roughN;
@@ -148,6 +157,7 @@ public final class UpperShapes {
         rB = noise(s, 51);
         rC = noise(s, 52);
         rD = noise(s, 53);
+        rE = noise(s, 54);
         hA = noise(s, 60);
         hB = noise(s, 61);
         hC = noise(s, 62);
@@ -627,6 +637,11 @@ public final class UpperShapes {
         c.rLine = Math.min(d1, d2 + 2);
         // wider where the region leans to rifts
         c.rScale = (0.8 + 0.25 * (K2 * rB.noise2(x / 70.0 + 3, z / 70.0 + 3) + 1)) * (1 - 0.25 * c.lean);
+        if (c.rLine > RIFT_REACH * c.rScale + 3) return false;
+        // cut into separate rifts, each narrowing to shut where the field falls under the cut
+        double cut = smooth((K2 * rE.noise2(x / RIFT_CUT_SCALE + 31, z / RIFT_CUT_SCALE + 17) - RIFT_CUT) / RIFT_CUT_EASE);
+        if (cut < 0.15) return false;
+        c.rScale *= cut;
         if (c.rLine > RIFT_REACH * c.rScale + 3) return false;
         // narrowing to shut short of the den gates' works, which lie as deep
         if (dens != null) {

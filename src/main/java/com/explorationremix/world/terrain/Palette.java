@@ -18,6 +18,8 @@ public final class Palette {
     private final Perlin tideN, joinN, tiltN, crackN;
     // 0.8.0: the clumps of magma where the Galleries' lava touches the rock
     private final Perlin heatN;
+    // 0.14.5: the wander of the Fern Rift's bands by depth
+    private final Perlin riftN;
     /** What the noise fields of the two bottom layers tell the dressing ({@link LookQueries}). */
     private final LookQueries looks;
 
@@ -41,6 +43,7 @@ public final class Palette {
         tiltN = new Perlin(Hashing.mix(s, 11, 0, 0));
         crackN = new Perlin(Hashing.mix(s, 12, 0, 0));
         heatN = new Perlin(Hashing.mix(s, 13, 0, 0));
+        riftN = new Perlin(Hashing.mix(s, 14, 0, 0));
     }
 
     private double speck(int x, int y, int z) { return Hashing.unit(Hashing.mix(seed, x, y, z)); }
@@ -649,6 +652,45 @@ public final class Palette {
         return Rock.SCORIA;
     }
 
+    // ============================================================================================== the Fern Rift's bands
+
+    /**
+     * The Fern Rift changes with depth (Taran, 17 Nov: "Plants changing with depth is pretty"): lush green up top,
+     * silver through the middle, light blue by the floor, where the Blue Reaches lie close under it. A block's band
+     * comes from its height over the pack's old floor, wobbled by a slow noise so the edges wander, and the bands melt
+     * into each other over a few blocks. The rifts lie from about 4 to 55 blocks over that floor (UpperShapes'
+     * RIFT_FLOOR and RIFT_HEIGHT), so most hold all three; the den gates' rifts, which go on down into the Blue
+     * Reaches, are blue all the way down. {@link #riftBand} gives the bands' shares, which the rift's plants keep to
+     * ({@code RiftBandPlacement}); the rock and the moss take the band a block lies in most ({@link #upperShell}).
+     */
+    public static final int RIFT_GREEN = 0, RIFT_SILVER = 1, RIFT_BLUE = 2;
+    /** Blue under this height over the old floor, green over {@link #RIFT_GREEN_FOOT}, each melting over RIFT_BLEND. */
+    public static final double RIFT_BLUE_TOP = 21, RIFT_GREEN_FOOT = 32, RIFT_BLEND = 3.5, RIFT_WOBBLE = 4;
+
+    /** A block's height over the pack's old floor as the bands see it, wobbled. */
+    public double riftDepth(int x, int y, int z) {
+        return y - t.shape.packFloor + RIFT_WOBBLE * riftN.noise3(x * 0.045, y * 0.07, z * 0.045);
+    }
+
+    /** How much a block lies in a band (RIFT_GREEN, RIFT_SILVER or RIFT_BLUE), 0 to 1; the three add up to 1. */
+    public double riftBand(int band, int x, int y, int z) {
+        double h = riftDepth(x, y, z);
+        double green = ramp((h - RIFT_GREEN_FOOT) / RIFT_BLEND), blue = ramp((RIFT_BLUE_TOP - h) / RIFT_BLEND);
+        return band == RIFT_GREEN ? green : band == RIFT_BLUE ? blue : Math.max(0, 1 - green - blue);
+    }
+
+    /** The band a block of rock lies in most, its edges dithered a block or so. */
+    public int riftBandAt(int x, int y, int z) {
+        double h = riftDepth(x, y, z) + 2.0 * (speck(x, y, z) - 0.5);
+        return h >= RIFT_GREEN_FOOT ? RIFT_GREEN : h < RIFT_BLUE_TOP ? RIFT_BLUE : RIFT_SILVER;
+    }
+
+    /** -1 to 1 onto 0 to 1, smoothly (0.5 at 0). */
+    private static double ramp(double u) {
+        double v = Math.max(0, Math.min(1, (u + 1) * 0.5));
+        return v * v * (3 - 2 * v);
+    }
+
     // ============================================================================================== upper caves
 
     /**
@@ -661,20 +703,31 @@ public final class Palette {
         boolean floor = above <= 3;
         boolean ceil = !floor && below <= 2;
         if (b == DeepBiome.SILVER_FERN_RIFT) {
-            // Blue cliffs of asurine and deepslate, stepped with mossy ledges, copper in the walls. The ledges' moss is
-            // deep moss (Taran, 0.14.3), two blocks deep, so its sides show at the lips, where the hanging ferns grow.
+            // Cliffs of deepslate and asurine, stepped with mossy ledges, copper in the walls, changing with depth
+            // (0.14.5): vanilla's moss over the ledges in the green and silver bands (0.14.6, Taran: "Deep moss can
+            // just be moss"), two blocks deep so its sides show at the lips, where the hanging ferns grow, and over
+            // the vaults in the green band; bare rock in the blue band; the walls hold more asurine the deeper they go.
             if (floor) {
                 if (wet) return n > 0 ? Rock.GRAVEL : Rock.COBBLED_DEEPSLATE;
-                if (above <= 2 && n > -0.3 && (top || patch(x, y + 1, z) > -0.3)) return Rock.DEEP_MOSS;
-                if (top) return Rock.COBBLED_DEEPSLATE;
-                return n < -0.05 ? Rock.ASURINE : Rock.DEEPSLATE;
+                // the ground's band at its surface, so a ledge's two blocks of moss are of one kind
+                int band = riftBandAt(x, y + above - 1, z);
+                if (band != RIFT_BLUE && above <= 2 && n > -0.3 && (top || patch(x, y + 1, z) > -0.3))
+                    return Rock.MOSS;
+                if (top) return band == RIFT_BLUE && n < 0.1 ? Rock.ASURINE : Rock.COBBLED_DEEPSLATE;
+                return n < asurineShare(x, y, z) - 0.09 ? Rock.ASURINE : Rock.DEEPSLATE;
             }
+            if (ceil && n > -0.15 && riftBandAt(x, y - below + 1, z) == RIFT_GREEN) return Rock.MOSS;
             if (vein(x, y, z, 0.026)) return Rock.DEEPSLATE_COPPER_ORE;
-            if (n < 0.04) return Rock.ASURINE;
+            if (n < asurineShare(x, y, z)) return Rock.ASURINE;
             return n > 0.38 ? Rock.COBBLED_DEEPSLATE : Rock.DEEPSLATE;
         }
         if (b == DeepBiome.IVORY_ROOT_CAVERN) return ivory(x, y, z, above, below, wet, t.upperLakeY(x, z));
         return null;
+    }
+
+    /** Where the patch noise under this lies, the Fern Rift's walls are asurine: a little up top, more with depth. */
+    private double asurineShare(int x, int y, int z) {
+        return -0.22 * riftBand(RIFT_GREEN, x, y, z) + 0.04 * riftBand(RIFT_SILVER, x, y, z) + 0.26 * riftBand(RIFT_BLUE, x, y, z);
     }
 
     /**

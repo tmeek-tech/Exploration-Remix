@@ -1,6 +1,6 @@
 {
   "variants": {
-    "facing=north": [
+    "facing=north,size=0": [
       {
         "model": "explorationremix:block/silver_wall_fern"
       },
@@ -8,7 +8,7 @@
         "model": "explorationremix:block/silver_wall_fern_2"
       }
     ],
-    "facing=east": [
+    "facing=east,size=0": [
       {
         "model": "explorationremix:block/silver_wall_fern",
         "y": 90
@@ -18,7 +18,7 @@
         "y": 90
       }
     ],
-    "facing=south": [
+    "facing=south,size=0": [
       {
         "model": "explorationremix:block/silver_wall_fern",
         "y": 180
@@ -28,13 +28,89 @@
         "y": 180
       }
     ],
-    "facing=west": [
+    "facing=west,size=0": [
       {
         "model": "explorationremix:block/silver_wall_fern",
         "y": 270
       },
       {
         "model": "explorationremix:block/silver_wall_fern_2",
+        "y": 270
+      }
+    ],
+    "facing=north,size=1": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium"
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium_2"
+      }
+    ],
+    "facing=east,size=1": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium_2",
+        "y": 90
+      }
+    ],
+    "facing=south,size=1": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium_2",
+        "y": 180
+      }
+    ],
+    "facing=west,size=1": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium_2",
+        "y": 270
+      }
+    ],
+    "facing=north,size=2": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_large"
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_large_2"
+      }
+    ],
+    "facing=east,size=2": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_large",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_large_2",
+        "y": 90
+      }
+    ],
+    "facing=south,size=2": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_large",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_large_2",
+        "y": 180
+      }
+    ],
+    "facing=west,size=2": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_large",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_large_2",
         "y": 270
       }
     ]
