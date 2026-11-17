@@ -1254,6 +1254,20 @@ BLOCK_TAGS = {
                        "minecraft:magma_block", f"{MOD}:ember_crust"]
                       + optional(["create:scoria", "create:scorchia", "terrain_slabs:basalt_slab", "terrain_slabs:smooth_basalt_slab",
                                   "terrain_slabs:terrain_blackstone_slab", "terrain_slabs:terrain_tuff_slab"]),
+    # 0.14.3: blocks only a structure places (the ancient cities' bricks, tiles, wool, wood, glass and redstone), never
+    # the caves' rock (ERTags.BUILT): no shelf vine hangs from, beside or onto one, so the deep dark's vines keep off the
+    # cities. Plain deepslate tiles are not here: they stand in for Create's asurine when Create is missing.
+    "built": ["minecraft:deepslate_bricks", "minecraft:cracked_deepslate_bricks", "minecraft:deepslate_brick_slab",
+              "minecraft:deepslate_brick_stairs", "minecraft:deepslate_brick_wall", "minecraft:cracked_deepslate_tiles",
+              "minecraft:deepslate_tile_slab", "minecraft:deepslate_tile_stairs", "minecraft:deepslate_tile_wall",
+              "minecraft:polished_deepslate", "minecraft:polished_deepslate_slab", "minecraft:polished_deepslate_stairs",
+              "minecraft:polished_deepslate_wall", "minecraft:chiseled_deepslate", "minecraft:reinforced_deepslate",
+              "#minecraft:wool", "#minecraft:wool_carpets", "#minecraft:candles", "minecraft:dark_oak_planks", "minecraft:dark_oak_log",
+              "minecraft:dark_oak_fence", "minecraft:dark_oak_trapdoor", "minecraft:glass", "minecraft:glass_pane", "minecraft:soul_sand",
+              "minecraft:soul_lantern", "minecraft:soul_fire", "minecraft:redstone_lamp", "minecraft:redstone_block",
+              "minecraft:redstone_wire", "minecraft:redstone_wall_torch", "minecraft:repeater", "minecraft:comparator",
+              "minecraft:lever", "minecraft:target", "minecraft:sticky_piston", "minecraft:piston_head", "minecraft:chest",
+              "minecraft:ladder", "minecraft:lectern", "minecraft:skeleton_skull", "minecraft:skeleton_wall_skull"],
     # 0.9.0: ceiling rock a big quake can shake loose (ERTags.QUAKE_DEBRIS), and the only rock a bomb's crater throws out.
     # Not obsidian or crying obsidian (they never fall), magma, slabs, ores or gilded blackstone (#reset_as_rock: an ore
     # that fell would come back as rock and be lost).

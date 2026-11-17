@@ -1,6 +1,7 @@
 package com.explorationremix.world.feature;
 
 import com.explorationremix.registry.ERBlocks;
+import com.explorationremix.registry.ERTags;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.DeepBiome;
 import com.explorationremix.world.terrain.Network;
@@ -22,9 +23,11 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
  * drop of two blocks or more is one way without something to climb. So beside a lip (a standing place on rock with
  * open air from over its head down to two blocks under its feet) a vine hangs in the open column, from the rock over it
  * past the lip down to the floor or the water below, when the drop is 2 to 48 and that rock is at most 40 over the lip:
- * blue glow vines in the rift, dusk vines in the deep dark. Only the columns on the vine lines get one (every 10
- * blocks, {@link Network#shelfVineColumn}), so a lip has a vine at least every 10 blocks along it. The voxel harness's
- * {@code markShelfVines} models the same rule.
+ * blue glow vines, in the deep dark too since its dusk vines went (0.14.3). Only the columns on the vine lines get one
+ * (every 10 blocks, {@link Network#shelfVineColumn}), so a lip has a vine at least every 10 blocks along it. The voxel
+ * harness's {@code markShelfVines} models the same rule. Since 0.14.3 no vine hangs from, beside or onto a block only a
+ * structure places ({@link ERTags#BUILT}: an ancient city's bricks, wool and wood), so the cities stand clear of them;
+ * the harness holds no structures, so its rule needs no such test.
  */
 public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
     private static final int[] DX = {1, -1, 0, 0}, DZ = {0, 0, 1, -1};
@@ -63,12 +66,25 @@ public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
                 int hy = y + 2;
                 while (hy <= y + 1 + Network.SHELF_MAX_UP && air(level, p, qx, hy, qz)) hy++;
                 if (hy > y + 1 + Network.SHELF_MAX_UP || !level.getBlockState(p.set(qx, hy, qz)).isFaceSturdy(level, p, Direction.DOWN)) continue;
+                if (touchesBuilt(level, p, qx, fy, hy, qz)) continue;
                 // blue glow vines in the deep dark too since its dusk vines went (0.14.3, Taran's ask)
                 any |= ClimbVinesFeature.hang(level, qx, hy - 1, fy, qz, ERBlocks.BLUE_GLOW_VINES.get(), ERBlocks.BLUE_GLOW_VINES_PLANT.get());
                 last = fy;
             }
         }
         return any;
+    }
+
+    /**
+     * True when a vine in column (x, z) hanging from the block at {@code top} down to {@code fy} (the floor under it at
+     * fy - 1) would touch a built block: the one it hangs from, the floor, or one beside it on the way down.
+     */
+    private static boolean touchesBuilt(WorldGenLevel level, BlockPos.MutableBlockPos p, int x, int fy, int top, int z) {
+        if (level.getBlockState(p.set(x, top, z)).is(ERTags.BUILT) || level.getBlockState(p.set(x, fy - 1, z)).is(ERTags.BUILT)) return true;
+        for (int y = fy; y < top; y++)
+            for (int d = 0; d < 4; d++)
+                if (level.getBlockState(p.set(x + DX[d], y, z + DZ[d])).is(ERTags.BUILT)) return true;
+        return false;
     }
 
     private static boolean air(WorldGenLevel level, BlockPos.MutableBlockPos p, int x, int y, int z) {
