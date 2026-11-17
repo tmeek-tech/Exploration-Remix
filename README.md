@@ -141,6 +141,31 @@ regenerated.
   enough glowing things to see by. While the camera is under the old world floor (y -64) the clouds are moved far
   above it, so no clouds (a shader pack's included) show past the edge of the drawn world in the deep caves.
 
+## Hostile mobs in groups
+
+Vanilla's hostile mobs come out in groups of their own kind, each kind in its own home, in place of vanilla's scattered
+spawns in the overworld:
+
+* **Woods and savannas** (forests, taigas, jungles, swamps, savannas, cherry groves, wooded badlands; under trees, not
+  in their open patches): zombies and skeletons together, a skeleton leading.
+* **Dark oak forests:** spider packs (a few cave spiders among them where the biome has them) and witch covens of two.
+* **The green Upper Caves** (lush caves, Rootvaults and frozen Rootvaults, Silver Fern Rifts, the Frost Fern Grotto):
+  creepers and slimes, in groups of their own kind.
+* **Deserts:** husks. **Snowy land:** strays. **Rivers and the sea:** drowned.
+* **Everywhere else** (plains, meadows, peaks, ordinary caves, the deep layers): nothing but a lone enderman now and
+  then, at most one near you and often none. Biomes with no monsters at all (mushroom fields, the deep dark, the
+  Basalt Galleries) stay empty.
+
+A group is 3 to 5 (a witch coven 2) and comes out 24 to 80 blocks from you, only where it is dark enough, as vanilla's
+monsters do; two groups of each home are kept round you and a third comes now and then. A group roams together (a
+member that strays more than 8 blocks from its leader walks back), fights together (when one turns on you, the others
+within 24 blocks come too) and despawns together. Grouped monsters never hurt or turn on one another (a skeleton's
+arrow does not hurt a zombie in its way), though a creeper's blast still hurts everything round it; a slime comes out
+no bigger than its spot has room for. Spawners, the structures' own spawns (witch huts, ocean monuments,
+pillager outposts), patrols, phantoms, village sieges, the Nether and the End are untouched. Sizes, counts, the
+enderman's chance and how wooded the woods must be are in `explorationremix-world.toml` (`[mobGroups]`, read while the
+server runs; `enabled = false` brings vanilla's own spawning back).
+
 ## Runes
 
 Runes are items set into a row on a sword, bow or crossbow. A row reads in speaking order, carrier first: `Spark, On
@@ -198,6 +223,10 @@ shimmer and a soft note in your own hands; then, for as long as it has that ener
 | `/remix lava freeze`, `/remix lava unfreeze` | holds the cycle where it is, or lets it run on |
 | `/remix lava length <minutes>` | the cycle's length from now on, keeping its place in the phase (0: back to the config's) |
 | `/remix deadends [radius]` | the blind cave ends left above the old floor in the loaded chunks round you, what lies round them, how many generation joined and why the rest were not, any lava in the caves there, and how many of the surface biome's ore placements generation let into the plant caves' and entrances' rock |
+| `/remix groups list [radius]` | the groups of hostile mobs round you: each one's leader, members and how far they keep |
+| `/remix groups here` | the group home of the ground, cave or water where you are, the groups of each home round you, and any monsters round you in no group |
+| `/remix groups spawn <kind>` | a group of `undead`, `spiders`, `witches`, `creepers`, `slimes`, `husks`, `strays` or `drowned` near you, at the first place of its home dark enough to take it |
+| `/remix groups stats` | what the group spawner has done since the server started |
 
 ## Building
 
