@@ -36,7 +36,11 @@ import java.util.Locale;
  *     lunge, bolt, eat, journey): a strike is at you, a bolt away from you, a stalk after the nearest landed swarm, a
  *     journey 40 to 90 blocks along the Deep Blue Rift's ledge path (it must be by it)</li>
  *     <li>{@code /remix skein homes}: the Skeins set down with the world since the game started (home chunks made,
- *     Skeins set down in them), and how many are in the loaded world now and how many of those lie dormant</li>
+ *     Skeins set down in them), how many are in the loaded world now and how many of those lie dormant, and how the
+ *     slow refill has gone (looks with none near, rolls that came up, Skeins moved in)</li>
+ *     <li>{@code /remix skein refill}: a Skein is due to move in for you now, as when the slow refill's roll comes up (it
+ *     comes at the next look that finds a spot out of sight, while none is within 96 blocks of you and you are in the
+ *     Blue Reaches in Survival or Adventure)</li>
  *     <li>{@code /remix skein hungry}: makes the nearest one hungry now, so it goes for a landed swarm near it</li>
  *     <li>{@code /remix skein trace [ticks]}: logs how the nearest one's body moves each tick, to the server log</li>
  *     <li>{@code /remix view skein [n]}: puts you a few blocks from the nearest one within 96 blocks, looking at it (for
@@ -61,6 +65,7 @@ public final class SkeinCommands {
                         .then(Commands.argument("ticks", IntegerArgumentType.integer(1, 12000))
                                 .executes(c -> state(c, StringArgumentType.getString(c, "name"), IntegerArgumentType.getInteger(c, "ticks"))))))
                 .then(Commands.literal("homes").executes(SkeinCommands::homes))
+                .then(Commands.literal("refill").executes(SkeinCommands::refill))
                 .then(Commands.literal("hungry").executes(SkeinCommands::hungry))
                 .then(Commands.literal("trace").executes(c -> trace(c, 600))
                         .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 12000)).executes(c -> trace(c, IntegerArgumentType.getInteger(c, "ticks")))));
@@ -132,7 +137,9 @@ public final class SkeinCommands {
 
     private static List<SkeinEntity> near(CommandContext<CommandSourceStack> c, double radius) {
         Vec3 p = c.getSource().getPosition();
-        List<SkeinEntity> all = c.getSource().getLevel().getEntitiesOfClass(SkeinEntity.class, new AABB(p, p).inflate(radius));
+        // the box's corners reach further than the radius: only those within it, as the spawner counts them
+        List<SkeinEntity> all = c.getSource().getLevel().getEntitiesOfClass(SkeinEntity.class, new AABB(p, p).inflate(radius),
+                e -> e.distanceToSqr(p) <= radius * radius);
         all.sort(Comparator.comparingDouble(e -> e.distanceToSqr(p)));
         return all;
     }
@@ -152,6 +159,8 @@ public final class SkeinCommands {
         long homes = SkeinsFeature.HOMES.get(), placed = SkeinsFeature.PLACED.get();
         say(c, String.format(Locale.ROOT, "Home chunks made: %d, Skeins set down in them: %d (%.0f%%). Loaded now: %d, %d of them kept for good, %d dormant (no player near).",
                 homes, placed, homes == 0 ? 0.0 : 100.0 * placed / homes, loaded, kept, dormant));
+        say(c, String.format(Locale.ROOT, "Slow refill: %d looks round a player with none within %d blocks, %d rolls came up, %d Skeins moved in.",
+                BlueReachesSpawner.REFILL_LOOKS, (int) BlueSpawnRules.REFILL_RADIUS, BlueReachesSpawner.REFILL_ROLLS, BlueReachesSpawner.REFILL_IN));
         return loaded;
     }
 
@@ -193,6 +202,17 @@ public final class SkeinCommands {
     private static Vec3 rotate(Vec3 v, Vec3 k, double a) {
         double cos = Math.cos(a), sin = Math.sin(a);
         return v.scale(cos).add(k.cross(v).scale(sin)).add(k.scale(k.dot(v) * (1 - cos)));
+    }
+
+    /** For testing the slow refill: a Skein is due for the player now (BlueReachesSpawner). */
+    private static int refill(CommandContext<CommandSourceStack> c) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        net.minecraft.server.level.ServerPlayer p = c.getSource().getPlayerOrException();
+        BlueReachesSpawner.skeinDue(p);
+        double r = BlueSpawnRules.REFILL_RADIUS;
+        int n = near(c, r).size();
+        say(c, "A Skein is due: it moves in out of sight at the next look that finds a spot"
+                + (n > 0 ? ", but none comes while one is within " + (int) r + " blocks of you (" + n + " are, so this is dropped at the next look)" : "") + ".");
+        return 1;
     }
 
     private static int list(CommandContext<CommandSourceStack> c, int radius) {

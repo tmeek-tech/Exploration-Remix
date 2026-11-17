@@ -33,12 +33,14 @@ class BlueSpawnRulesTest {
 
     @Test
     void aSkeinMovesInSlowlyOnlyWhereNoneIsLeft() {
-        assertTrue(wantSkein(0, false, true, 0.0), "none left within the refill radius: now and then");
-        assertFalse(wantSkein(0, false, true, REFILL_CHANCE), "but not at every look");
-        assertFalse(wantSkein(1, false, true, 0.0), "one is still about: none comes");
-        assertFalse(wantSkein(3, false, true, 0.0));
-        assertFalse(wantSkein(0, true, true, 0.0), "never in Peaceful");
-        assertFalse(wantSkein(0, false, false, 0.0), "doMobSpawning off");
+        assertTrue(wantSkein(0, false, true, false, 0.0), "none left within the refill radius: now and then");
+        assertFalse(wantSkein(0, false, true, false, REFILL_CHANCE), "but not at every look");
+        assertTrue(wantSkein(0, false, true, true, REFILL_CHANCE), "once due, at every look until a spot is found");
+        assertFalse(wantSkein(1, false, true, false, 0.0), "one is still about: none comes");
+        assertFalse(wantSkein(1, false, true, true, 0.0), "not even when one was due");
+        assertFalse(wantSkein(3, false, true, false, 0.0));
+        assertFalse(wantSkein(0, true, true, true, 0.0), "never in Peaceful");
+        assertFalse(wantSkein(0, false, false, true, 0.0), "doMobSpawning off");
         // about one every two minutes of looks (every EVERY ticks) round a player whose caves have none
         double minutes = BlueReachesSpawner.EVERY / REFILL_CHANCE / 20.0 / 60.0;
         assertTrue(minutes > 1.0 && minutes < 4.0, minutes + " minutes");

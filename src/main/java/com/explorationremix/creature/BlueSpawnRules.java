@@ -2,13 +2,13 @@ package com.explorationremix.creature;
 
 /**
  * The rules of the Blue Reaches' spawner ({@link BlueReachesSpawner}), as plain numbers so they can be tested without
- * a world: which players it works round, how many Skeins and firefly swarms it keeps near each, how far off it brings
- * them out, and which places each may live in.
+ * a world: which players it works round, when a Skein moves in near one, how many firefly swarms it keeps near each,
+ * how far off it brings them out, and which places each may live in.
  *
- * <p>The Skeins are set down with the world ({@link SkeinHomes}) and stay; round a player in the Blue Reaches (in
- * Survival or Adventure) the spawner only brings a new one out now and then where none is left within {@link
- * #REFILL_RADIUS} blocks, never more than {@link #SKEIN_MAX} within {@link #SKEIN_RADIUS}. It keeps three to five
- * swarms within {@link
+ * <p>The Skeins are set down with the world ({@link SkeinHomes}) and stay. Round a player in the Blue Reaches (in
+ * Survival or Adventure) the spawner brings a new one out only now and then, where none is left within {@link
+ * #REFILL_RADIUS} blocks (and never where {@link #SKEIN_MAX} are within {@link #SKEIN_RADIUS} already), and it
+ * keeps three to five swarms of fireflies round each such player, every one of them within {@link
  * #SWARM_RADIUS} (one or two in the Deep Dark, where the fireflies are few). Each comes out {@link #NEAR} blocks or
  * further from every player, and within the radius it is counted in (a sphere: height counts too), so it counts as
  * soon as it is out. The Asurine Geodes are a refuge: fireflies live there, Skeins never.
@@ -73,12 +73,14 @@ public final class BlueSpawnRules {
     }
 
     /**
-     * Whether to bring out a Skein for a player with {@code nearby} within {@link #REFILL_RADIUS}: only when there is
-     * none, and then now and then ({@code roll} under {@link #REFILL_CHANCE}); never in Peaceful or without mob spawning
+     * Whether to look for a spot to bring a Skein out for a player with {@code nearby} within {@link #REFILL_RADIUS}:
+     * only when there is none, and then now and then ({@code roll} under {@link #REFILL_CHANCE}), or at every look
+     * once one is {@code due} (the roll came up but no spot out of every player's sight was found yet: the time
+     * between them is the roll's, not how hard spots are to find there); never in Peaceful or without mob spawning
      * ({@code mobSpawning}: the doMobSpawning rule, and the server spawning monsters at all).
      */
-    public static boolean wantSkein(int nearby, boolean peaceful, boolean mobSpawning, double roll) {
-        return !peaceful && mobSpawning && nearby == 0 && roll < REFILL_CHANCE;
+    public static boolean wantSkein(int nearby, boolean peaceful, boolean mobSpawning, boolean due, double roll) {
+        return !peaceful && mobSpawning && nearby == 0 && (due || roll < REFILL_CHANCE);
     }
 
     /** The fewest swarms kept round a player in this place (they are few in the Deep Dark). */

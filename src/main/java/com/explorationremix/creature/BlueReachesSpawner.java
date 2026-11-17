@@ -24,6 +24,9 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import javax.annotation.Nullable;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Brings the Blue Reaches' creatures out near the players there: swarms of blue fireflies in the open air of the
@@ -89,7 +92,14 @@ public final class BlueReachesSpawner {
         // swarm is ambient life, which vanilla brings out only with the animals
         MinecraftServer server = level.getServer();
         int skeins = countNear(level, SkeinEntity.class, p.position(), BlueSpawnRules.REFILL_RADIUS);
-        if (BlueSpawnRules.wantSkein(skeins, peaceful, mobSpawning && server.isSpawningMonsters(), level.random.nextDouble())) spawnSkein(level, p, top, bottom);
+        UUID id = p.getUUID();
+        if (skeins == 0) REFILL_LOOKS++;
+        if (BlueSpawnRules.wantSkein(skeins, peaceful, mobSpawning && server.isSpawningMonsters(), SKEIN_DUE.contains(id), level.random.nextDouble())) {
+            if (!SKEIN_DUE.contains(id)) REFILL_ROLLS++;
+            // due until a spot out of every player's sight turns up (at this look or a later one)
+            if (spawnSkein(level, p, top, bottom)) { SKEIN_DUE.remove(id); REFILL_IN++; }
+            else SKEIN_DUE.add(id);
+        } else if (skeins > 0) SKEIN_DUE.remove(id);
         int swarms = countNear(level, FireflySwarm.class, p.position(), BlueSpawnRules.SWARM_RADIUS);
         if (BlueSpawnRules.wantSwarm(place, swarms, mobSpawning && server.isSpawningAnimals(), level.random.nextDouble())) spawnSwarm(level, p, top, bottom);
     }
@@ -103,12 +113,28 @@ public final class BlueReachesSpawner {
 
     // ------------------------------------------------------------------------------------------------ a Skein
 
-    /** A Skein moves in out of every player's sight, or not this time. */
-    private static void spawnSkein(ServerLevel level, ServerPlayer p, int top, int bottom) {
+    /**
+     * The players a Skein is due to move in for: the refill's roll came up, but no spot out of every player's sight
+     * was found yet. Kept until one is found, or a Skein is near the player again.
+     */
+    private static final Set<UUID> SKEIN_DUE = new HashSet<>();
+
+    /**
+     * For /remix skein homes, since the game started: looks round a player with no Skein within the refill radius, the
+     * refill's rolls that came up, and the Skeins that moved in.
+     */
+    public static long REFILL_LOOKS, REFILL_ROLLS, REFILL_IN;
+
+    /** For /remix skein refill: a Skein is due for {@code p} now (it comes at the next look that finds a spot). */
+    public static void skeinDue(ServerPlayer p) { SKEIN_DUE.add(p.getUUID()); }
+
+    /** A Skein moves in out of every player's sight, or not this time (false). */
+    private static boolean spawnSkein(ServerLevel level, ServerPlayer p, int top, int bottom) {
         for (int i = 0; i < SKEIN_TRIES; i++) {
             SkeinEntity.Placement spot = skeinSpot(level, p, top, bottom);
-            if (spot != null && !seenByAnyone(level, spot.pos().add(0, 0.35, 0))) { setDown(level, spot); return; }
+            if (spot != null && !seenByAnyone(level, spot.pos().add(0, 0.35, 0))) { setDown(level, spot); return true; }
         }
+        return false;
     }
 
     /** A spot on the ring round {@code p} where a Skein may come out, or null. */
