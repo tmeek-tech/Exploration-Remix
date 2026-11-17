@@ -51,6 +51,10 @@ public final class MossbackBody {
      * unit it rises (so past the top of a step it flops over onto it, never standing up in the air).
      */
     static final double TAIL_GRIP = 0.85, TAIL_LIFT_GIVE = 0.8;
+    /** It grips only rock whose way out is within this of level (a wall's face), not the top of an edge it hangs over. */
+    static final double TAIL_GRIP_WALL = 0.35;
+    /** Touching no rock, the share of its stiffness that holds it up against its weight (its stiffness across is whole). */
+    static final double TAIL_FREE_HOLD = 0.3;
     /** A joint's way out eases to the rock's by this share a tick. */
     static final double UP_EASE = 0.45;
     /**
@@ -61,6 +65,11 @@ public final class MossbackBody {
     static final double MAX_ROLL = Math.toRadians(20);
     /** A front joint reaching into a step whose top is no higher above it than this (blocks) goes up over the top. */
     static final double OVER_STEP = 0.9;
+    /**
+     * Going from lying on the rock to riding with its box at a step (or back), the middle carries on from where it was
+     * and eases over to its new place, keeping this share of the gap each tick (else it would jump, and whip the tail).
+     */
+    static final double MIDDLE_CARRY = 0.6;
     /** At a step the trunk's way out leans no further than this from its box's (it pitches up or down the step). */
     static final double STEP_TILT = Math.toRadians(45);
     /** A box that moved further than this in a tick was put somewhere new: the body is laid afresh. */
@@ -130,6 +139,10 @@ public final class MossbackBody {
     public final Foot[] feet = new Foot[4];
     private boolean laid;
     private final Vector3d lastCentre = new Vector3d();
+    /** How far its box moved this tick; and what is left of the middle's carry-over (see {@link #MIDDLE_CARRY}). */
+    private final Vector3d boxMove = new Vector3d(), carry = new Vector3d();
+    /** Whether the middle rode with its box at a step last tick. */
+    private boolean steppedPrev;
     private final Vector3d leadEased = new Vector3d(0, 0, 1);
     private double phase, phasePrev, speed, speedPrev, mix, mixPrev;
     private boolean trotting;
@@ -140,7 +153,7 @@ public final class MossbackBody {
     private Footfalls footfalls;
 
     // scratch
-    private final double[] f = new double[5];
+    private final double[] f = new double[5], f2 = new double[5];
     private final Vector3d t0 = new Vector3d(), t1 = new Vector3d(), t2 = new Vector3d(), t3 = new Vector3d(), t4 = new Vector3d(), n0 = new Vector3d(),
             n1 = new Vector3d();
     private final Frame front = new Frame(), hind = new Frame();
@@ -235,6 +248,7 @@ public final class MossbackBody {
             lastCentre.set(in.x, in.y, in.z);
             return;
         }
+        boxMove.set(in.x - lastCentre.x, in.y - lastCentre.y, in.z - lastCentre.z);
         lastCentre.set(in.x, in.y, in.z);
         leadEased.lerp(in.lead, 0.6);
         if (leadEased.lengthSquared() < 1.0E-6) leadEased.set(in.lead);
@@ -260,9 +274,17 @@ public final class MossbackBody {
             target.set(in.x, in.y, in.z).fma(spec.ride[c] - ext, in.up);
             n.set(in.up);
         }
-        double lag = t1.set(pos[c]).sub(target).dot(n) * SETTLE_MIDDLE;
+        // eased back to the rock after the box pops up or down (from where it would be without any carry-over)
+        double lag = t1.set(pos[c]).sub(carry).sub(target).dot(n) * SETTLE_MIDDLE;
         lag = Math.max(-0.6, Math.min(0.6, lag));
-        pos[c].set(target).fma(lag, n);
+        target.fma(lag, n);
+        carry.mul(MIDDLE_CARRY);
+        boolean stepped = ground && in.step;
+        if (stepped != steppedPrev) {
+            carry.set(pos[c]).add(boxMove).sub(target);
+            steppedPrev = stepped;
+        }
+        pos[c].set(target).add(carry);
     }
 
     /** Shoulders, neck and head reach ahead the way it heads, each laid on the rock it is over. */
@@ -318,7 +340,23 @@ public final class MossbackBody {
                         break;
                     }
         }
-        if (ground) adhere(rock, p, height + lift, n1);
+        if (ground) {
+            double sx = p.x, sy = p.y, sz = p.z;
+            adhere(rock, p, height + lift, n1);
+            // past the edge of a step down it is drawn down toward the floor it will step onto, never back round the
+            // edge (it would curl down the riser and tip the hips up behind it like a seesaw); the edge of a step up
+            // ahead of it still draws it on and up
+            if (over != null) {
+                double mx = p.x - sx, my = p.y - sy, mz = p.z - sz;
+                double down = mx * over.x + my * over.y + mz * over.z;
+                double back = (mx - over.x * down) * dir.x + (my - over.y * down) * dir.y + (mz - over.z * down) * dir.z;
+                boolean drawnBack = back < -1.0E-6 && mx * n1.x + my * n1.y + mz * n1.z < -1.0E-6;
+                if (drawnBack && floorUnder(rock, sx, sy, sz, over, height + lift)) {
+                    down = Math.min(0.0, down);
+                    p.set(sx + over.x * down, sy + over.y * down, sz + over.z * down);
+                }
+            }
+        }
         else if (lift > 1.0E-4) p.fma(lift, up);
         else return;
         p.sub(from);
@@ -371,7 +409,9 @@ public final class MossbackBody {
             old[i].set(p);
             t3.set(p);                                          // where it was
             double gx = 0, gy = -TAIL_WEIGHT * buoyant * (0.6 + 0.4 * k), gz = 0;
-            boolean held = touching[i] && mode == Mode.GROUND;
+            // it grips a wall it lies against (one it trails up as it goes down it); round an edge, or on a slope,
+            // its weight takes it on over the edge and down
+            boolean held = touching[i] && mode == Mode.GROUND && Math.abs(touchN[i].y) < TAIL_GRIP_WALL;
             if (held) {
                 // its weight along the rock is held (what pulls it off the rock, as under a ceiling, acts in full)
                 Vector3d tn = touchN[i];
@@ -387,7 +427,9 @@ public final class MossbackBody {
             Vector3d straight = t1.set(q).sub(qq).normalize();
             if (!held && buoyant > 0 && straight.y > 0) stiff *= 1.0 - TAIL_LIFT_GIVE * straight.y;
             straight.mul(len).add(q);
-            p.lerp(straight, stiff);
+            // touching nothing it holds itself up only a little: past the edge of a ledge it droops and hangs
+            double stiffUp = !touching[i] && buoyant > 0 ? stiff * TAIL_FREE_HOLD : stiff;
+            p.set(p.x + (straight.x - p.x) * stiff, p.y + (straight.y - p.y) * stiffUp, p.z + (straight.z - p.z) * stiff);
             keepLength(q, p, len);
             limitBend(qq, q, p, len, BEND_TAIL);
             // it never passes through rock on its way: it stops against it and slides along it
@@ -537,6 +579,15 @@ public final class MossbackBody {
         return true;
     }
 
+    /**
+     * Whether rock lies under (x, y, z) along {@code -up} within a step's depth below a joint riding {@code height} over
+     * its floor: past an edge, the floor it would step down onto (else it is the top of a wall, and it goes over it).
+     */
+    private boolean floorUnder(TerrainPatch rock, double x, double y, double z, Vector3d up, double height) {
+        double depth = Steps.DEEP + height;
+        return rock.clip(x, y, z, x - up.x * depth, y - up.y * depth, z - up.z * depth, f2) && f2[4] < 0.5;
+    }
+
     /** Moves p onto the surface {@code height} out from the rock (two steps along the way out); false if no rock in reach. */
     private boolean project(TerrainPatch rock, Vector3d p, double height, Vector3d n) {
         boolean any = false;
@@ -589,6 +640,8 @@ public final class MossbackBody {
     private void lay(TerrainPatch rock, Drive in) {
         laid = true;
         lastCentre.set(in.x, in.y, in.z);
+        carry.set(0, 0, 0);
+        steppedPrev = in.mode == Mode.GROUND && in.step;
         leadEased.set(in.lead);
         if (leadEased.lengthSquared() < 1.0E-6) leadEased.set(in.forward);
         leadEased.normalize();

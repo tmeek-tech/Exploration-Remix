@@ -135,6 +135,11 @@ class MossbackClips {
                     set(() -> { d.up.set(0, 1, 0); d.heading.set(0, 0, -1); d.c.y = ClipDriver.HH; }),
                     walk(4.0, 0.1), idle(30)), new Vector3d(-3.6, 1.4, -1.6), 0));
         }
+        {   // over a wall a block high and a block thick (as round a pen): up onto it, across, down the far side
+            BlockWorld w = new BlockWorld().fill(-8, -1, -8, 8, -1, 12).fill(-8, 0, 2, 8, 0, 2);
+            ClipDriver d = new ClipDriver(w, 0.3, 0, -2.5, 0, 1);
+            list.add(new Scene("over", w, d, List.of(walk(10.0, 0.1), idle(40)), new Vector3d(-3.4, 1.6, 0.6), 0, new Vector3d(-5.2, 2.4, 1.4)));
+        }
         {   // along a cliff edge, the left feet reaching down its face
             BlockWorld w = new BlockWorld().fill(-8, -1, -8, 0, -1, 14).fill(-8, -4, -8, 0, -2, 14).fill(1, -5, -8, 8, -5, 14);
             ClipDriver d = new ClipDriver(w, 0.15, 0, -4, 0, 1);

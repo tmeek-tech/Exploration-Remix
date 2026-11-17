@@ -11,8 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The Mossback's body over the clips' scenes (a floor, a turn, steps, a wall, a ceiling, a ledge, rubble), run without
- * drawing: what must always hold, whatever the rock.
+ * The Mossback's body over the clips' scenes (a floor, a turn, steps, a wall, a ceiling, a ledge, over a low wall,
+ * rubble), run without drawing: what must always hold, whatever the rock.
  */
 class MossbackBodyTest {
     private static MossbackRig rig;
