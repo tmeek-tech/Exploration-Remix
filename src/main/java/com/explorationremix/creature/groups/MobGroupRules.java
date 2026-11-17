@@ -58,10 +58,15 @@ public final class MobGroupRules {
     public static final int KEPT = 2, MOST = 3;
     /**
      * The chance, at each look (once a second), that a home with fewer than {@link #KEPT} groups round a player gets a
-     * new one, and that one with {@link #KEPT} gets its third. Only spots dark enough take it, so in the open at night
-     * about half the tries come to nothing.
+     * new one, and that one with {@link #KEPT} gets its third. Only spots dark enough take a group (in the open at
+     * night vanilla's light rule turns down about three leaders in four), so a look tries up to
+     * {@link #GROUP_TRIES} places of the home. Groups that idle more than 32 blocks from every player despawn after
+     * about a minute, as vanilla's monsters do, so a home round a player is short of a group now and then and fills
+     * again in some 15 seconds.
      */
-    public static final double FILL_CHANCE = 0.1, TOP_UP_CHANCE = 0.008;
+    public static final double FILL_CHANCE = 0.2, TOP_UP_CHANCE = 0.012;
+    /** Places of the wanted home tried at one look. */
+    public static final int GROUP_TRIES = 4;
     /** Endermen: at most this many round a player (in a sphere of {@link #DESPAWN}), and the chance at each look. */
     public static final int ENDERMEN_MOST = 1;
     public static final double ENDERMAN_CHANCE = 0.02;
@@ -143,6 +148,11 @@ public final class MobGroupRules {
         return lo + Math.min(hi - lo, (int) (Math.max(0.0, roll) * (hi - lo + 1)));
     }
 
+    /** Whether what is left of a group still counts as one round a player: a lone straggler does not. */
+    public static boolean stillAGroup(int members) {
+        return members >= 2;
+    }
+
     /** The fewest of a group that must find room to come out at all: all of a coven, else three (or all of a smaller one). */
     public static int fewest(Kind kind, int size) {
         return kind == Kind.WITCHES ? size : Math.min(size, 3);
@@ -187,6 +197,15 @@ public final class MobGroupRules {
     /** Whether a member walking back has caught up. */
     public static boolean caughtUp(double fromLeader) {
         return fromLeader <= CLOSE;
+    }
+
+    /**
+     * Whether a blow is held back: a member's arrow, trident, potion or bite does not hurt the others of its own group,
+     * so a group never falls out among itself (a skeleton shooting at you past a zombie of its group). A creeper's
+     * blast still hurts everything round it.
+     */
+    public static boolean spared(boolean sameGroup, boolean explosion) {
+        return sameGroup && !explosion;
     }
 
     /**

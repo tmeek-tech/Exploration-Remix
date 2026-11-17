@@ -98,20 +98,24 @@ public final class MobGroupCommands {
         Vec3 me = c.getSource().getPosition();
         BlockPos pos = BlockPos.containing(me);
         String biome = level.getBiome(pos).unwrapKey().map(k -> k.location().toString()).orElse("?");
-        BlockPos ground = new BlockPos(pos.getX(), level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, pos.getX(), pos.getZ()), pos.getZ());
-        String groundBiome = level.getBiome(ground).unwrapKey().map(k -> k.location().toString()).orElse("?");
-        Home surface = MobHomes.surfaceHome(level, ground, MobGroupSpawner.woodsCanopy());
-        say(c, String.format(Locale.ROOT, "Ground here (y %d, %s): %s; trees cover %.0f%% round it (woods need %.0f%%)", ground.getY(), groundBiome,
-                surface == null ? "no group's home" : surface.name().toLowerCase(Locale.ROOT), 100 * MobHomes.canopy(level, ground), 100 * MobGroupSpawner.woodsCanopy()));
-        if (pos.getY() < ground.getY() - 1 && !level.canSeeSky(pos)) {
+        int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, pos.getX(), pos.getZ());
+        BlockPos ground = MobGroupSpawner.surfaceGround(level, pos.getX(), pos.getZ());
+        if (ground == null) say(c, "Ground here: none to stand on (water, a trunk, or no ground under the column's top at y " + top + ")");
+        else {
+            String groundBiome = level.getBiome(ground).unwrapKey().map(k -> k.location().toString()).orElse("?");
+            Home surface = MobHomes.surfaceHome(level, ground, MobGroupSpawner.woodsCanopy());
+            say(c, String.format(Locale.ROOT, "Ground here (y %d, %s): %s; trees cover %.0f%% round it (woods need %.0f%%)", ground.getY(), groundBiome,
+                    surface == null ? "no group's home" : surface.name().toLowerCase(Locale.ROOT), 100 * MobHomes.canopy(level, ground), 100 * MobGroupSpawner.woodsCanopy()));
+        }
+        if (pos.getY() < top - 1 && !level.canSeeSky(pos)) {
             Home cave = MobHomes.caveHome(level, pos);
             say(c, "Cave here (" + biome + "): " + (cave == null ? "no group's home" : cave.name().toLowerCase(Locale.ROOT)));
         }
         if (level.getFluidState(pos).is(FluidTags.WATER)) {
             int depth = 0;
-            BlockPos top = new BlockPos(pos.getX(), level.getHeight(Heightmap.Types.MOTION_BLOCKING, pos.getX(), pos.getZ()) - 1, pos.getZ());
-            while (depth < MobGroupSpawner.WATER_SCAN && level.getFluidState(top.below(depth)).is(FluidTags.WATER)) depth++;
-            Home water = MobHomes.waterHome(level, top, depth);
+            BlockPos waterTop = new BlockPos(pos.getX(), level.getHeight(Heightmap.Types.MOTION_BLOCKING, pos.getX(), pos.getZ()) - 1, pos.getZ());
+            while (depth < MobGroupSpawner.WATER_SCAN && level.getFluidState(waterTop.below(depth)).is(FluidTags.WATER)) depth++;
+            Home water = MobHomes.waterHome(level, waterTop, depth);
             say(c, "Water here (" + depth + " deep): " + (water == null ? "no group's home" : water.name().toLowerCase(Locale.ROOT)));
         }
         int[] n = MobGroups.groupsRound(level, me);
@@ -160,11 +164,18 @@ public final class MobGroupCommands {
         for (Kind k : Kind.values()) kinds.append(' ').append(k.id()).append(' ').append(MobGroupSpawner.SPAWNED_BY_KIND[k.ordinal()]);
         say(c, "Looks " + MobGroupSpawner.looks + ", places in a home " + MobGroupSpawner.anchors + " (" + homes.toString().trim() + "), wanted "
                 + MobGroupSpawner.wanted + ", came out " + MobGroupSpawner.spawned + ", did not take " + MobGroupSpawner.failed
-                + ", endermen " + MobGroupSpawner.endermen);
+                + " (the leader's spot " + MobGroupSpawner.failedLeader + ", too few found room " + (MobGroupSpawner.failed - MobGroupSpawner.failedLeader)
+                + "), endermen " + MobGroupSpawner.endermen);
         say(c, "Groups by kind:" + kinds);
         int loaded = 0, members = 0;
         for (MobGroups.Group g : MobGroups.groups()) { loaded++; members += g.members.size(); }
         say(c, "Loaded now: " + loaded + " groups, " + members + " members");
+        StringBuilder left = new StringBuilder();
+        for (net.minecraft.world.entity.Entity.RemovalReason r : net.minecraft.world.entity.Entity.RemovalReason.values())
+            left.append(' ').append(r.name().toLowerCase(Locale.ROOT)).append(' ').append(MobGroups.LEFT[r.ordinal()]);
+        say(c, "Members gone:" + left + "; groups despawned with their leader " + MobGroups.despawnedTogether + " (members taken with it "
+                + MobGroups.discardedWith + "); deaths " + (MobGroups.DEATHS.isEmpty() ? "none" : MobGroups.DEATHS.toString())
+                + "; blows held back between members of one group " + MobGroups.spared);
         return 1;
     }
 }

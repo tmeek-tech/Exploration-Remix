@@ -6,8 +6,10 @@ import com.explorationremix.creature.groups.MobGroupRules.Kind;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
@@ -20,6 +22,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
+import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingChangeTargetEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.MobSpawnEvent;
@@ -100,6 +103,11 @@ public final class MobGroups {
     @Nullable private static Mob despawning;
     private static boolean alerting;
 
+    // what became of members since the server started, for /remix groups stats
+    static final long[] LEFT = new long[Entity.RemovalReason.values().length];
+    static long despawnedTogether, discardedWith, spared;
+    static final Map<String, Integer> DEATHS = new java.util.TreeMap<>();
+
     // ------------------------------------------------------------------------------------------------ membership
 
     /** Marks a new mob as a member of group {@code id} before it is added to the world. */
@@ -147,21 +155,37 @@ public final class MobGroups {
         if (mob == despawning) despawning = null;
         Member m = BY_MOB.remove(mob);
         if (m == null) return;
+        Entity.RemovalReason why = mob.getRemovalReason();
+        if (why != null) LEFT[why.ordinal()]++;
         Group g = m.group;
         g.members.remove(mob);
+        if (despawned) despawnedTogether++;
         // vanilla removed the leader for being far from every player: the members with it go with it (any that vanilla
         // itself would keep, such as one within 32 blocks of a player, stays)
         if (despawned)
             for (Mob f : List.copyOf(g.members)) {
                 if (!f.isAlive() || f.isPersistenceRequired() || f.requiresCustomPersistence() || f.distanceTo(mob) > MobGroupRules.KEEP) continue;
                 Player near = f.level().getNearestPlayer(f, -1.0);
-                if (near == null || (near.distanceTo(f) > MobGroupRules.KEEP && f.removeWhenFarAway(near.distanceToSqr(f)))) f.discard();
+                if (near == null || (near.distanceTo(f) > MobGroupRules.KEEP && f.removeWhenFarAway(near.distanceToSqr(f)))) {
+                    discardedWith++;
+                    f.discard();
+                }
             }
         if (g.members.isEmpty()) GROUPS.remove(g.id);
     }
 
     @SubscribeEvent
+    public static void onDeath(net.minecraftforge.event.entity.living.LivingDeathEvent e) {
+        if (!(e.getEntity() instanceof Mob mob) || mob.level().isClientSide() || !BY_MOB.containsKey(mob)) return;
+        Entity killer = e.getSource().getEntity();
+        DEATHS.merge(e.getSource().getMsgId() + (killer == null ? "" : " by " + EntityType.getKey(killer.getType()).getPath()), 1, Integer::sum);
+    }
+
+    @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent e) {
+        java.util.Arrays.fill(LEFT, 0);
+        despawnedTogether = discardedWith = spared = 0;
+        DEATHS.clear();
         GROUPS.clear();
         BY_MOB.clear();
         ALERTED.clear();
@@ -191,11 +215,15 @@ public final class MobGroups {
 
     static Collection<Group> groups() { return GROUPS.values(); }
 
-    /** How many groups of each home have their leader within {@link MobGroupRules#COUNT_RADIUS} of {@code at}. */
+    /**
+     * How many groups of each home have their leader within {@link MobGroupRules#COUNT_RADIUS} of {@code at} (a lone
+     * member left of one is no group).
+     */
     static int[] groupsRound(ServerLevel level, Vec3 at) {
         int[] n = new int[Home.values().length];
         double r2 = MobGroupRules.COUNT_RADIUS * MobGroupRules.COUNT_RADIUS;
         for (Group g : GROUPS.values()) {
+            if (!MobGroupRules.stillAGroup(g.members.size())) continue;
             Mob l = g.leader();
             if (l != null && l.level() == level && l.position().distanceToSqr(at) <= r2) n[g.kind.home.ordinal()]++;
         }
@@ -224,10 +252,31 @@ public final class MobGroups {
         return p.isAlive() && !p.isCreative() && !p.isSpectator() && p.level().getDifficulty() != Difficulty.PEACEFUL;
     }
 
+    static boolean sameGroup(Mob a, Mob b) {
+        Member ma = BY_MOB.get(a), mb = BY_MOB.get(b);
+        return ma != null && mb != null && ma.group == mb.group;
+    }
+
+    /** A member's blows do not hurt its own group (a creeper's blast still does): see {@link MobGroupRules#spared}. */
+    @SubscribeEvent
+    public static void onAttack(LivingAttackEvent e) {
+        if (!(e.getEntity() instanceof Mob victim) || victim.level().isClientSide() || !(e.getSource().getEntity() instanceof Mob attacker)
+                || attacker == victim) return;
+        if (MobGroupRules.spared(sameGroup(victim, attacker), e.getSource().is(DamageTypeTags.IS_EXPLOSION))) {
+            spared++;
+            e.setCanceled(true);
+        }
+    }
+
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onTarget(LivingChangeTargetEvent e) {
-        if (alerting || !(e.getEntity() instanceof Mob mob) || mob.level().isClientSide()) return;
-        if (!(e.getNewTarget() instanceof Player player) || !huntable(player)) return;
+        if (!(e.getEntity() instanceof Mob mob) || mob.level().isClientSide()) return;
+        // a member never turns on one of its own group (a zombie hit by a stray blast, or called by another zombie)
+        if (e.getNewTarget() instanceof Mob other && sameGroup(mob, other)) {
+            e.setCanceled(true);
+            return;
+        }
+        if (alerting || !(e.getNewTarget() instanceof Player player) || !huntable(player)) return;
         Member m = BY_MOB.get(mob);
         if (m == null) return;
         alerting = true;

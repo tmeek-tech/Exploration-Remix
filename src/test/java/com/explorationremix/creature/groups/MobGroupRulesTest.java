@@ -55,7 +55,7 @@ class MobGroupRulesTest {
     void twoGroupsKeptAThirdNowAndThen() {
         assertTrue(wantGroup(0, KEPT, MOST, 0.0));
         assertTrue(wantGroup(1, KEPT, MOST, FILL_CHANCE - 1e-9));
-        assertFalse(wantGroup(1, KEPT, MOST, FILL_CHANCE), "only one look in ten fills");
+        assertFalse(wantGroup(1, KEPT, MOST, FILL_CHANCE), "only some looks fill");
         assertTrue(wantGroup(KEPT, KEPT, MOST, TOP_UP_CHANCE - 1e-9), "the third comes now and then");
         assertFalse(wantGroup(KEPT, KEPT, MOST, TOP_UP_CHANCE));
         for (double roll = 0.0; roll < 1.0; roll += 0.01) {
@@ -65,6 +65,14 @@ class MobGroupRulesTest {
         assertTrue(TOP_UP_CHANCE < FILL_CHANCE, "a look whose roll misses the fill brings nothing (the spawner skips it)");
         assertEquals(2, KEPT);
         assertEquals(3, MOST);
+    }
+
+    @Test
+    void aStragglerIsNoGroup() {
+        assertFalse(stillAGroup(0));
+        assertFalse(stillAGroup(1), "the last of a group, left behind, does not hold off a new one");
+        assertTrue(stillAGroup(2), "a coven of two is a group");
+        assertTrue(stillAGroup(5));
     }
 
     @Test
@@ -149,6 +157,14 @@ class MobGroupRulesTest {
         assertTrue(CLOSE < LEASH, "a member walking back stops well inside the leash, so it does not start again at once");
         assertTrue(LEASH < ALERT, "the whole group hears a fight");
         assertTrue(SPREAD <= LEASH, "a new group comes out within its leash");
+    }
+
+    @Test
+    void aGroupNeverFallsOutAmongItself() {
+        assertTrue(spared(true, false), "a skeleton's arrow does not hurt a zombie of its group");
+        assertFalse(spared(true, true), "a creeper's blast hurts its own group too");
+        assertFalse(spared(false, false), "another group's arrow hurts as in vanilla");
+        assertFalse(spared(false, true));
     }
 
     @Test

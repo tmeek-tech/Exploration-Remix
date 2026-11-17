@@ -21,6 +21,7 @@ import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.NaturalSpawner;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
@@ -74,12 +75,12 @@ public final class MobGroupSpawner {
     record Anchor(BlockPos pos, Home home) {}
 
     // what it has done since the server started, for /remix groups stats
-    static long looks, anchors, wanted, spawned, failed, endermen;
+    static long looks, anchors, wanted, spawned, failed, failedLeader, endermen;
     static final long[] ANCHORS_BY_HOME = new long[Home.values().length];
     static final long[] SPAWNED_BY_KIND = new long[Kind.values().length];
 
     static void resetCounts() {
-        looks = anchors = wanted = spawned = failed = endermen = 0;
+        looks = anchors = wanted = spawned = failed = failedLeader = endermen = 0;
         Arrays.fill(ANCHORS_BY_HOME, 0);
         Arrays.fill(SPAWNED_BY_KIND, 0);
     }
@@ -130,7 +131,14 @@ public final class MobGroupSpawner {
             if (counts == null) counts = MobGroups.groupsRound(level, p.position());
             if (!MobGroupRules.wantGroup(counts[a.home.ordinal()], kept, most, roll)) continue;
             wanted++;
-            if (spawnGroup(level, a.pos, MobGroupRules.kindFor(a.home, r.nextDouble()), p) != null) counts[a.home.ordinal()]++;
+            Kind kind = MobGroupRules.kindFor(a.home, r.nextDouble());
+            Mob leader = spawnGroup(level, a.pos, kind, p);
+            // a spot too light or too cramped: other places of the same home round the player
+            for (int t = 1; leader == null && t < MobGroupRules.GROUP_TRIES; t++) {
+                Anchor b = anchor(level, p, look);
+                if (b != null && b.home == a.home) leader = spawnGroup(level, b.pos, kind, p);
+            }
+            if (leader != null) counts[a.home.ordinal()]++;
         }
         double roll = r.nextDouble(), chance = endermanChance();
         if (roll < chance && MobGroupRules.wantEnderman(endermenRound(level, p.position()), roll, chance)) spawnEnderman(level, p);
@@ -163,11 +171,32 @@ public final class MobGroupSpawner {
         // the canopy is looked at this far round, and the members come out within the spread
         int m = Math.max(MobHomes.CANOPY_STEP * (MobHomes.CANOPY_SIDE / 2), MobGroupRules.SPREAD);
         if (!level.hasChunksAt(x - m, z - m, x + m, z + m)) return null;
-        BlockPos ground = new BlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
-        BlockState below = level.getBlockState(ground.below());
-        // water is the water's own groups' place; the top of a trunk under its leaves is no ground
-        if (!below.getFluidState().isEmpty() || below.is(BlockTags.LOGS)) return null;
-        return ground;
+        return surfaceGround(level, x, z);
+    }
+
+    /** Trunks, branches and mushroom caps are looked down through this far for the ground under them. */
+    static final int TREE_SCAN = 32;
+
+    /**
+     * The ground of column {@code x z}: the first open block, with room over it, over the column's ground, under any
+     * trees and huge mushrooms (the heightmap stops at the first branch of a dark oak); null in a trunk, on water (the
+     * water's own groups' place) or in a column with no ground.
+     */
+    @Nullable
+    static BlockPos surfaceGround(ServerLevel level, int x, int z) {
+        BlockPos.MutableBlockPos q = new BlockPos.MutableBlockPos(x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z);
+        for (int i = 0; i < TREE_SCAN && q.getY() > level.getMinBuildHeight(); i++) {
+            BlockPos b = q.below();
+            BlockState below = level.getBlockState(b);
+            if (!below.getFluidState().isEmpty()) return null;
+            if (below.is(BlockTags.LOGS) || below.is(BlockTags.LEAVES) || below.is(Blocks.MUSHROOM_STEM) || below.is(Blocks.BROWN_MUSHROOM_BLOCK)
+                    || below.is(Blocks.RED_MUSHROOM_BLOCK) || below.getCollisionShape(level, b).isEmpty()) {
+                q.move(0, -1, 0);
+                continue;
+            }
+            return open(level, q) && open(level, q.above()) ? q.immutable() : null;
+        }
+        return null;
     }
 
     @Nullable
@@ -260,7 +289,7 @@ public final class MobGroupSpawner {
                     if (q != null) m = tryAt(level, type, q, forPlayer, placed);
                 }
             if (m != null) placed.add(m);
-            else if (i == 0) { failed++; return null; }
+            else if (i == 0) { failed++; failedLeader++; return null; }
         }
         if (placed.size() < MobGroupRules.fewest(kind, size)) { failed++; return null; }
         UUID id = UUID.randomUUID();
