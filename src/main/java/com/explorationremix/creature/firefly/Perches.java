@@ -7,13 +7,18 @@ import java.util.List;
  * patch instead of heaped on one spot. The client lists the faces near the anchor (floor, wall or ceiling, any that
  * face open air), {@link #face} turns each into a few points on it, and {@link #pick} chooses one point per firefly:
  * the one nearest the anchor first, then each next one as far from those already taken as it can be (up to
- * {@link #SPREAD}), while staying near the anchor, so the swarm settles as a loose patch a couple of blocks across.
+ * {@link #SPREAD}), while staying near the anchor, so the swarm settles as a loose patch a few blocks across: a bigger
+ * swarm spreads wider ({@link #reach}), not thicker.
  *
  * <p>Plain numbers, no game classes, so it can be tested on its own.
  */
 public final class Perches {
-    /** No firefly settles further than this from the anchor. */
-    public static final double REACH = 2.5;
+    /**
+     * No firefly settles further from the anchor than {@link #reach}: at least this, and at most {@link #MAX_REACH}.
+     */
+    public static final double REACH = 2.5, MAX_REACH = 6.0;
+    /** About how many fireflies a patch holds to a block face: a bigger swarm covers more of them, at this many. */
+    static final double DENSITY = 2.5;
     /** How far a firefly sits off its face, into the air (its glow then never sinks into the rock). */
     public static final double LIFT = 0.03;
     /** Once fireflies are this far apart, spreading them further counts for nothing: nearness to the anchor wins. */
@@ -26,6 +31,14 @@ public final class Perches {
     static final double INSET = 0.27, NUDGE = 0.08;
 
     private Perches() {}
+
+    /**
+     * How far from the anchor a swarm of {@code n} may settle: wide enough for a patch of about {@link #DENSITY} to a
+     * block face round it, from {@link #REACH} to {@link #MAX_REACH}.
+     */
+    public static double reach(int n) {
+        return Math.min(MAX_REACH, Math.max(REACH, 0.8 + Math.sqrt(Math.max(0, n) / (Math.PI * DENSITY))));
+    }
 
     /** A point a firefly can sit on, and the way its face looks (out of the rock, into the air). */
     public record Spot(double x, double y, double z, double nx, double ny, double nz) {
@@ -60,12 +73,13 @@ public final class Perches {
 
     /**
      * Chooses {@code n} of the candidates for n fireflies, spread out round the anchor (ax, ay, az); returns their
-     * indices in the order chosen. Candidates further than {@link #REACH} from the anchor are never chosen. With fewer
+     * indices in the order chosen. Candidates further than {@link #reach} of n from the anchor are never chosen. With fewer
      * usable candidates than fireflies the choice goes round again (two fireflies then share a point); with none it is
      * empty.
      */
     public static int[] pick(List<Spot> candidates, double ax, double ay, double az, int n, long seed) {
         int m = candidates.size();
+        double reach = reach(n);
         double[] anchor = new double[m];
         double[] nearest = new double[m];         // distance to the nearest point already taken
         boolean[] taken = new boolean[m];
@@ -73,7 +87,7 @@ public final class Perches {
         for (int i = 0; i < m; i++) {
             anchor[i] = Math.sqrt(candidates.get(i).dist2(ax, ay, az));
             nearest[i] = Double.MAX_VALUE;
-            if (anchor[i] <= REACH) usable++;
+            if (anchor[i] <= reach) usable++;
             else taken[i] = true;                 // out of reach: never offered
         }
         if (usable == 0 || n <= 0) return new int[0];

@@ -75,6 +75,10 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> SKEIN_HURT = register("skein.hurt");
     public static final RegistryObject<SoundEvent> SKEIN_DEATH = register("skein.death");
 
+    // The blue fireflies (creature.FireflySwarm, 0.16.0): the soft flutter of many small wings as a landed swarm is
+    // startled up off the rock. The mod's own recordings (tools/synth_creature_sounds.py).
+    public static final RegistryObject<SoundEvent> FIREFLY_FLUTTER = register("firefly.flutter");
+
     // The timed swings (0.12.0, client.combat.SwingClient and combat.swing.Swordplay; tools/synth_swing_sounds.py makes
     // them): a light swing's quick whoosh, the chain's chop (heavier), a strong attack's thrust, the rising hum as a held
     // swing turns strong, and the quiet shimmer and note of a rune sword's ready light (client.combat.RuneGlow).

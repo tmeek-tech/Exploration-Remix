@@ -3,6 +3,7 @@ package com.explorationremix.creature;
 import com.explorationremix.creature.firefly.Flock;
 import com.explorationremix.creature.firefly.Perches;
 import com.explorationremix.registry.EREntities;
+import com.explorationremix.registry.ERSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -12,11 +13,13 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
@@ -27,6 +30,7 @@ import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.entity.PartEntity;
 import org.joml.Vector3f;
 
 import javax.annotation.Nullable;
@@ -36,45 +40,68 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 /**
- * Blue fireflies: one entity is a whole swarm of {@link #MIN_COUNT} to {@link #MAX_COUNT} of them, so a cave full of
- * them costs a few entities, not hundreds. The Blue Reaches' small lights, and what the Skein hunts.
+ * Blue fireflies: one entity is a whole swarm of them (30 to 60, now and then a huge one of 120 to 160, see
+ * {@link BlueSpawnRules#swarmSize}; at most {@link #MAX_COUNT}), so a cave full of them costs a few entities, not
+ * thousands. The Blue Reaches' small lights, and what the Skein hunts.
  *
  * <p>The server moves only the swarm's centre. It drifts slowly through the open air of its cave, never more than
- * {@link #LEASH} blocks from where it came into the world nor into another biome, and keeps out of rock and water.
- * Now and then, after at least fifteen seconds in the air, it picks a patch of floor, wall or ceiling a few blocks off,
- * flies in and settles there for ten to forty seconds, then takes off again. It takes off at once when a player comes
- * within {@link #SHY} blocks or something strikes at it; a strike (a hit, an explosion, a hunter's jaws) also
- * scatters it, and it flees for a few seconds and keeps off the rock a while. {@link #bite} takes fireflies away (the
- * Skein eating); a swarm with none left is gone. Left alone for a couple of minutes, a swarm slowly grows back
- * towards the number it began with, a firefly a minute.
+ * {@link #LEASH} blocks from its home nor into another biome, and keeps out of rock and water. Now and then, after at
+ * least fifteen seconds in the air, it picks a patch of floor, wall or ceiling a few blocks off, out of the reach of
+ * every player, flies in and settles there for ten to forty seconds, then takes off again. A flying swarm lets players
+ * be: its fireflies part round anyone moving through them and keep a little room round one standing among them (the
+ * client's {@link Flock}). A landed swarm is wary: a player who comes within {@link #FLUSH} blocks of it in its sight
+ * ({@link #FLUSH_SNEAK} sneaking, {@link #FLUSH_SPRINT} further running) startles it up off the rock with a soft
+ * flutter of wings ({@link #flush}); it flies hard away from them until it is {@link #GOAL_MIN} to {@link #GOAL_MAX}
+ * blocks off, makes that its home, and lands again there a few seconds later, so it can be followed from rock to
+ * rock. A strike (a hit, an explosion, a hunter's jaws) scatters it, and it flees for a few seconds and keeps off the
+ * rock a while. {@link #bite} takes fireflies away (the Skein eating); a swarm with none left is gone. Left alone for a
+ * couple of minutes, a swarm slowly grows back towards the number it began with.
  *
  * <p>Each client simulates the fireflies themselves round the centre ({@link Flock}): a loose, looping flock in flight
- * that bursts apart when the swarm scatters and gathers again; landed, each firefly flies to a point of its own on
- * the real block faces round the landing anchor ({@link Perches}) and sits there, its light breathing slowly, out of
- * step with the rest ({@link com.explorationremix.creature.firefly.Pulse}). The server syncs what the flock needs:
- * flying or landed, the anchor and the side its rock is on, the count, a seed (so every client sees the same
- * fireflies) and each scatter with where it came from.
+ * that parts round the bodies moving among them, bursts apart when the swarm scatters and gathers again; landed, each
+ * firefly flies to a point of its own on the real block faces round the landing anchor ({@link Perches}) and sits
+ * there, its light breathing slowly, out of step with the rest ({@link com.explorationremix.creature.firefly.Pulse});
+ * startled, they go up in a wave from the side nearest the player. The server syncs what the flock needs: flying or
+ * landed, the anchor and the side its rock is on, the count, a seed (so every client sees the same fireflies), each
+ * scatter with where it came from, and each startled take-off with who startled it.
  *
  * <p>It is no mob: it has no health, never blocks anyone, is not pushed by water, pistons or other entities, sets off
- * no pressure plates, and an arrow flies through it. A swing at it only scatters it. It makes no sound. Being no mob,
- * its type is of the MISC category, not AMBIENT: it counts against no mob cap (an ambient one would crowd the bats out
- * of its own caves) and wants no attributes. All the same it goes away as ambient mobs do, once no player has been near
- * it a while ({@link #checkDespawn}, with distances of its own).
+ * no pressure plates, and an arrow flies through it. A swing at it only scatters it. Being no mob, its type is of the
+ * MISC category, not AMBIENT: it counts against no mob cap (an ambient one would crowd the bats out of its own caves)
+ * and wants no attributes. All the same it goes away as ambient mobs do, once no player has been near it a while
+ * ({@link #checkDespawn}, with distances of its own).
  */
 public class FireflySwarm extends Entity {
     // ------------------------------------------------------------------------------------------------ tuning
-    public static final int MIN_COUNT = 8, MAX_COUNT = 24;
-    /** It keeps within this many blocks of where it came into the world, sideways, and up or down. */
+    /** The most fireflies one swarm holds. */
+    public static final int MAX_COUNT = Flock.MAX;
+    /** It keeps within this many blocks of its home, sideways, and up or down. */
     static final double LEASH = 12.0, LEASH_UP = 6.0;
     /** The centre's drifting and fleeing speeds (blocks a tick), and how much of the way to its wanted motion it turns a tick. */
     static final double DRIFT = 0.05, FLEE = 0.14, STEER = 0.08;
-    /** A player this near (blocks): a landed swarm takes off and a flying one drifts away from them. */
-    public static final double SHY = 3.0;
-    /** It picks its patch to land on within this of its centre, and never this near a player. */
+    /**
+     * A landed swarm takes off, startled, when a player comes within this many blocks of it (of its nearest
+     * fireflies, about) and it can see them; within {@link #FLUSH_SNEAK} only, sneaking; {@link #FLUSH_SPRINT} further
+     * off, running. Nearer than {@link #FLUSH_HEARD} it goes whether it sees them or not. (0.16.0, Taran's pick: about
+     * 6 blocks, 3 sneaking; it was 3 for everyone.)
+     */
+    public static final double FLUSH = 6.0, FLUSH_SNEAK = 3.0, FLUSH_SPRINT = 2.0, FLUSH_HEARD = 2.0;
+    /** It picks its patch to land on within this of its centre, and never where a player would startle it at once. */
     static final int PERCH_REACH = 4;
-    static final double PERCH_SHY = 5.0;
+    static final double PERCH_SHY = FLUSH + 1.5;
+    /**
+     * Startled up, it flies at this speed away from whoever startled it, a hop at a time, until it is
+     * {@link #GOAL_MIN} to {@link #GOAL_MAX} blocks from them (or after {@link #FLUSH_FLIGHT} ticks, or when it finds no
+     * hop further off), then makes where it is its home and lands again {@link #RESETTLE_MIN} to {@link #RESETTLE_MAX}
+     * ticks later. (0.16.0, Taran's pick: it lands again a little way off.)
+     */
+    static final double FLUSH_SPEED = 0.2, GOAL_MIN = 10.0, GOAL_MAX = 20.0;
+    static final int FLUSH_FLIGHT = 200, RESETTLE_MIN = 60, RESETTLE_MAX = 160;
+    /** Settling again after a startled flight, it looks for a patch this often (a chance a tick). */
+    static final int RESETTLE_CHANCE = 15;
     /**
      * Landed this long (ticks: 10 to 40 s); in the air at least {@link #FLY_MIN} first (15 s), then a chance a tick
      * (another 20 s on average), so a swarm spends more of its time flying than sitting.
@@ -84,16 +111,22 @@ public class FireflySwarm extends Entity {
     static final int APPROACH_TICKS = 300;
     /** After a scare it flees this long, and keeps off the rock at least {@link #SCARE_REST} (to twice that). */
     static final int FLEE_TICKS = 60, SCARE_REST = 300;
-    /** Left alone (no bite, no strike) this long, it gains a firefly, and another each {@link #REGROW_EVERY}, up to its full count. */
-    static final int REGROW_AFTER = 2400, REGROW_EVERY = 1200;
+    /**
+     * Left alone (no bite, no strike) this long, it gains a firefly (one for each {@link #REGROW_SHARE} of its full
+     * count), and as many again each {@link #REGROW_EVERY}, up to its full count: a big swarm grows back as fast as a
+     * small one, for its size.
+     */
+    static final int REGROW_AFTER = 2400, REGROW_EVERY = 1200, REGROW_SHARE = 24;
     /** Half the box's height: the box sits round the centre. */
     static final double HALF = 0.3;
     /** Drawn while within this many blocks (times the view-distance scale): a light in the dark carries far. */
     static final double SEEN_FROM = 96.0;
-    /** Random points it tries for its next one, at each pick. */
-    static final int PICK_TRIES = 12;
+    /** Random points it tries for its next one, at each pick; startled, for each hop away. */
+    static final int PICK_TRIES = 12, FLEE_TRIES = 16;
     /** After a pick that found nowhere to go, it hovers this long (ticks) before it tries again, not every tick. */
     static final int REPICK = 20;
+    /** Bodies further than this beyond the swarm's radius are not looked at by its fireflies. */
+    static final double BODY_REACH = 4.0;
     /**
      * An ambient mob's despawn distances, kept here rather than read from its type's category (MISC, which vanilla
      * despawns nothing by): gone at once with no player within {@link #DESPAWN_FAR} blocks, and in time with none
@@ -111,11 +144,14 @@ public class FireflySwarm extends Entity {
     /** How many times it has been scattered, and where the last strike came from (the clients burst the flock on each). */
     private static final EntityDataAccessor<Integer> DATA_SCATTERS = SynchedEntityData.defineId(FireflySwarm.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Vector3f> DATA_STRIKE = SynchedEntityData.defineId(FireflySwarm.class, EntityDataSerializers.VECTOR3);
+    /** How many times it has been startled up off its patch, and where from (the clients lift the patch in a wave from there). */
+    private static final EntityDataAccessor<Integer> DATA_FLUSHES = SynchedEntityData.defineId(FireflySwarm.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Vector3f> DATA_FLUSH_FROM = SynchedEntityData.defineId(FireflySwarm.class, EntityDataSerializers.VECTOR3);
 
     // ------------------------------------------------------------------------------------------------ server
-    @Nullable private Vec3 home;              // where it came into the world: it keeps near it
+    @Nullable private Vec3 home;              // where it came into the world, or last settled after a fright: it keeps near it
     @Nullable private ResourceKey<Biome> homeBiome;
-    private int full = MIN_COUNT;             // the count it grows back to
+    private int full = 1;                     // the count it grows back to
     @Nullable private Vec3 target;            // the point it drifts towards
     private int retarget;                     // ticks until it picks a new one anyway
     private Vec3 drift = Vec3.ZERO;           // the centre's motion (blocks a tick)
@@ -124,10 +160,17 @@ public class FireflySwarm extends Entity {
     @Nullable private Direction perchRock;
     @Nullable private Vec3 landAt;
     private int approachTicks;                // how long it has been flying in to it
+    // startled up off its patch: who from (and where they were, should they go), how far from them it wants to be,
+    // how long it has flown; then whether it is looking to land again
+    @Nullable private UUID startler;
+    @Nullable private Vec3 startledFrom;
+    private double goal;
+    private int flushTicks;
+    private boolean resettling;
 
     // ------------------------------------------------------------------------------------------------ client
     @Nullable private Flock flock;
-    private int flockSeed, seenScatters;
+    private int flockSeed, seenScatters, seenFlushes;
     private boolean wasLanded, firstSight;
     @Nullable private BlockPos perchedAt;     // the anchor its fireflies were given points round (null while they fly)
     private int settleWait;
@@ -145,7 +188,7 @@ public class FireflySwarm extends Entity {
         if (!level.isClientSide) {
             // a swarm summoned without spawn() is a swarm all the same
             entityData.set(DATA_SEED, random.nextInt());
-            setCount(MIN_COUNT + random.nextInt(MAX_COUNT - MIN_COUNT + 1));
+            setCount(BlueSpawnRules.swarmSize(random.nextDouble()));
             full = count();
         }
     }
@@ -155,10 +198,12 @@ public class FireflySwarm extends Entity {
         entityData.define(DATA_LANDED, false);
         entityData.define(DATA_ANCHOR, BlockPos.ZERO);
         entityData.define(DATA_ROCK, (byte) Direction.DOWN.get3DDataValue());
-        entityData.define(DATA_COUNT, MIN_COUNT);
+        entityData.define(DATA_COUNT, BlueSpawnRules.SWARM_MIN_COUNT);
         entityData.define(DATA_SEED, 0);
         entityData.define(DATA_SCATTERS, 0);
         entityData.define(DATA_STRIKE, new Vector3f());
+        entityData.define(DATA_FLUSHES, 0);
+        entityData.define(DATA_FLUSH_FROM, new Vector3f());
     }
 
     /**
@@ -214,6 +259,7 @@ public class FireflySwarm extends Entity {
         entityData.set(DATA_STRIKE, new Vector3f((float) from.x, (float) from.y, (float) from.z));
         entityData.set(DATA_SCATTERS, entityData.get(DATA_SCATTERS) + 1);
         aloneTicks = 0;
+        endFlight(false);
         if (landed()) takeOff(from);
         else {
             abandonLanding();
@@ -222,6 +268,30 @@ public class FireflySwarm extends Entity {
         }
         fleeTicks = FLEE_TICKS;
         restTicks = Math.max(restTicks, SCARE_REST + random.nextInt(SCARE_REST + 1));
+    }
+
+    /**
+     * Player {@code p} startled the landed swarm: it goes up off the rock with a flutter (its fireflies in a wave from
+     * the side nearest them, on every client) and flies hard away from them until it is {@link #GOAL_MIN} to
+     * {@link #GOAL_MAX} blocks off, where it settles again a few seconds later. Nothing when it has not landed.
+     */
+    public void flush(Player p) {
+        if (level().isClientSide || isRemoved() || !landed()) return;
+        Vec3 from = p.getEyePosition();
+        entityData.set(DATA_FLUSH_FROM, new Vector3f((float) from.x, (float) from.y, (float) from.z));
+        entityData.set(DATA_FLUSHES, entityData.get(DATA_FLUSHES) + 1);
+        takeOff(from);
+        startler = p.getUUID();
+        startledFrom = p.position();
+        goal = GOAL_MIN + random.nextDouble() * (GOAL_MAX - GOAL_MIN);
+        flushTicks = 0;
+        resettling = false;
+        target = fleeHop(startledFrom);
+        retarget = target == null ? REPICK : 60;
+        // the flutter: louder and lower for a bigger swarm
+        float size = Math.min(1.0F, count() / 120.0F);
+        level().playSound(null, getX(), getY(), getZ(), ERSounds.FIREFLY_FLUTTER.get(), SoundSource.AMBIENT,
+                0.35F + 0.55F * size, 1.08F - 0.16F * size + (random.nextFloat() - 0.5F) * 0.1F);
     }
 
     // ------------------------------------------------------------------------------------------------ the rest of its state
@@ -234,8 +304,26 @@ public class FireflySwarm extends Entity {
     public int seed() { return entityData.get(DATA_SEED); }
     /** The count it grows back to. */
     public int fullCount() { return full; }
+    /** Whether it is flying off after a fright (startled up off its patch). */
+    public boolean startled() { return startledFrom != null; }
     private void setCount(int n) { entityData.set(DATA_COUNT, Mth.clamp(n, 0, MAX_COUNT)); }
     private void setCentre(Vec3 c) { setPos(c.x, c.y - HALF, c.z); }
+
+    /**
+     * How far a landed swarm of {@code n} reaches from its anchor, about, to the nearest of its fireflies on the side
+     * a player comes from: the patch they sit in ({@link Perches#pick} packs them about half a block apart).
+     */
+    static double patchExtent(int n) {
+        return Math.min(Perches.reach(n), 0.3 + Math.sqrt(Math.max(0, n) * 0.3 / Math.PI));
+    }
+
+    /**
+     * How near a player may come before a landed swarm takes off: {@link #FLUSH_SNEAK} sneaking, {@link #FLUSH} walking,
+     * {@link #FLUSH} and {@link #FLUSH_SPRINT} running.
+     */
+    static double flushRange(boolean sneaking, boolean sprinting) {
+        return sneaking ? FLUSH_SNEAK : sprinting ? FLUSH + FLUSH_SPRINT : FLUSH;
+    }
 
     // ------------------------------------------------------------------------------------------------ what it is not
 
@@ -248,7 +336,12 @@ public class FireflySwarm extends Entity {
     @Override public boolean isIgnoringBlockTriggers() { return true; }  // no pressure plates, no tripwires
     @Override public boolean fireImmune() { return true; }
     @Override public boolean canChangeDimensions() { return false; }
-    @Override public AABB getBoundingBoxForCulling() { return getBoundingBox().inflate(landed() ? 3.0 : 4.5); }
+
+    @Override
+    public AABB getBoundingBoxForCulling() {
+        int n = count();
+        return getBoundingBox().inflate(landed() ? Perches.reach(n) + 1.0 : Flock.radius(n) + 2.7);
+    }
 
     @Override
     public boolean shouldRenderAtSqrDistance(double d) {
@@ -302,7 +395,8 @@ public class FireflySwarm extends Entity {
 
     private void regrow() {
         aloneTicks++;
-        if (count() < full && aloneTicks >= REGROW_AFTER && (aloneTicks - REGROW_AFTER) % REGROW_EVERY == 0) setCount(count() + 1);
+        if (count() < full && aloneTicks >= REGROW_AFTER && (aloneTicks - REGROW_AFTER) % REGROW_EVERY == 0)
+            setCount(Math.min(full, count() + Math.max(1, full / REGROW_SHARE)));
     }
 
     private void flyTick() {
@@ -311,21 +405,18 @@ public class FireflySwarm extends Entity {
         if (fleeTicks > 0) fleeTicks--;
         if (retarget > 0) retarget--;
         Vec3 c = centre();
-        // a player close by: away from them, and no landing near them for now
-        if (tickCount % 5 == 0) {
-            Player p = nearPlayer(c, SHY + 1.0);
-            if (p != null) {
-                abandonLanding();
-                Vec3 away = pickTarget(p.getEyePosition());
-                if (away != null) { target = away; retarget = 60; }
-                fleeTicks = Math.max(fleeTicks, 10);         // briskly, not in a panic
-                restTicks = Math.max(restTicks, 100);
-            }
+        // flying in to land where a player has come within reach of the patch: not now
+        if (landAt != null && tickCount % 5 == 0 && nearPlayer(landAt, PERCH_SHY + patchExtent(count())) != null) {
+            abandonLanding();
+            target = null;
+            retarget = REPICK;
         }
-        if (landAt == null && restTicks == 0 && flightTicks > FLY_MIN && random.nextInt(LAND_CHANCE) == 0) planLanding();
+        if (startledFrom != null) fleeing(c);
+        else if (landAt == null && restTicks == 0 && (resettling ? random.nextInt(RESETTLE_CHANCE) == 0
+                : flightTicks > FLY_MIN && random.nextInt(LAND_CHANCE) == 0)) planLanding();
         if (landAt != null && ++approachTicks > APPROACH_TICKS) abandonLanding();   // it cannot get there: another time
         if (landAt != null) target = landAt;
-        else if (target == null ? retarget <= 0 : (retarget <= 0 || c.distanceToSqr(target) < 0.6 * 0.6)) {
+        else if (startledFrom == null && (target == null ? retarget <= 0 : (retarget <= 0 || c.distanceToSqr(target) < 0.6 * 0.6))) {
             // with no target it waits out retarget too: a pick that found nothing is tried again REPICK ticks on
             target = pickTarget(null);
             retarget = target == null ? REPICK : 100 + random.nextInt(140);
@@ -335,13 +426,14 @@ public class FireflySwarm extends Entity {
         if (target != null) {
             Vec3 to = target.subtract(c);
             double d = to.length();
-            double speed = fleeTicks > 0 ? FLEE : DRIFT;
+            double speed = startledFrom != null ? FLUSH_SPEED : fleeTicks > 0 ? FLEE : DRIFT;
             if (landAt != null) speed = Math.min(speed, 0.015 + d * 0.06);   // slowing in to its patch
             if (d > 1.0E-4) want = to.scale(Math.min(speed, d) / d);
         }
         // a slow rise and fall, so it never goes in dead straight lines
         want = want.add(0.0, Math.sin((tickCount + seed()) * 0.07) * 0.008, 0.0);
-        drift = drift.add(want.subtract(drift).scale(STEER));
+        // startled, it gets away quicker: it turns to its way faster
+        drift = drift.add(want.subtract(drift).scale(startledFrom != null ? STEER * 2.0 : STEER));
         Vec3 next = c.add(drift);
         BlockPos here = BlockPos.containing(c);
         if (open(level(), here) && !open(level(), BlockPos.containing(next))) {
@@ -357,14 +449,102 @@ public class FireflySwarm extends Entity {
         if (landAt != null && next.distanceToSqr(landAt) < 0.3 * 0.3) land();
     }
 
+    /**
+     * Startled up off its patch: away from whoever startled it, a hop at a time, until it is {@link #goal} blocks from
+     * them (or has flown {@link #FLUSH_FLIGHT} ticks, or finds no hop further off); then that is its home, and a few
+     * seconds on it lands again.
+     */
+    private void fleeing(Vec3 c) {
+        flushTicks++;
+        Player p = startler != null && level() instanceof ServerLevel l && l.getEntity(startler) instanceof Player pl && pl.isAlive() ? pl : null;
+        if (p != null && p.level() == level()) startledFrom = p.position();
+        boolean far = c.distanceTo(startledFrom) >= goal;
+        if (far || flushTicks > FLUSH_FLIGHT) { endFlight(true); return; }
+        if (target == null ? retarget <= 0 : (retarget <= 0 || c.distanceToSqr(target) < 1.0)) {
+            target = fleeHop(startledFrom);
+            retarget = target == null ? REPICK : 60;
+            if (target == null && flushTicks > 40) endFlight(true);   // nowhere further to go: it settles down here
+        }
+    }
+
+    /**
+     * The startled flight is over: with {@code settle}, where it is now becomes its home and it lands again a few
+     * seconds on (out of every player's reach); without, it just stops fleeing (a strike took over).
+     */
+    private void endFlight(boolean settle) {
+        if (startledFrom == null) return;
+        startler = null;
+        startledFrom = null;
+        flushTicks = 0;
+        target = null;
+        retarget = REPICK;
+        if (!settle) return;
+        home = centre();
+        flightTicks = 0;
+        restTicks = RESETTLE_MIN + random.nextInt(RESETTLE_MAX - RESETTLE_MIN + 1);
+        resettling = true;
+    }
+
+    /**
+     * A hop away from {@code threat}, startled: of {@link #FLEE_TRIES} points four to ten blocks off, mostly away from
+     * it, open, roomy and in sight (its leash does not hold it now), the one that takes it furthest from the threat;
+     * null when none takes it further than it is.
+     */
+    @Nullable
+    private Vec3 fleeHop(Vec3 threat) {
+        Vec3 c = centre();
+        Vec3 off = c.subtract(threat).multiply(1.0, 0.0, 1.0);
+        Vec3 away = off.lengthSqr() > 1.0E-4 ? off.normalize() : new Vec3(random.nextGaussian(), 0.0, random.nextGaussian()).normalize();
+        double now = c.distanceTo(threat);
+        Vec3 best = null;
+        double bestScore = now + 0.5;
+        for (int i = 0; i < FLEE_TRIES; i++) {
+            Vec3 dir = away.add(random.nextGaussian() * 0.55, random.nextGaussian() * 0.25 + 0.08, random.nextGaussian() * 0.55);
+            if (dir.lengthSqr() < 1.0E-6) continue;
+            Vec3 t = c.add(dir.normalize().scale(4.0 + random.nextDouble() * 6.0));
+            double score = t.distanceTo(threat);
+            if (score <= bestScore) continue;
+            BlockPos tp = BlockPos.containing(t);
+            if (!level().isLoaded(tp) || !roomy(level(), tp) || !inHomeBiome(tp) || !clear(c, t)) continue;
+            best = t;
+            bestScore = score;
+        }
+        return best;
+    }
+
     private void landedTick() {
         if (landTicks > 0) landTicks--;
-        if (tickCount % 4 == 0) {
-            Player p = nearPlayer(centre(), SHY);
-            if (p != null) { takeOff(p.getEyePosition()); return; }
+        if (tickCount % 2 == 0) {
+            Player p = startlingPlayer();
+            if (p != null) { flush(p); return; }
         }
         if (tickCount % 20 == 0 && !perchHolds(anchor(), anchorRock())) { takeOff(null); return; }
         if (landTicks <= 0) takeOff(null);
+    }
+
+    /**
+     * The nearest player (no spectator) who has come near enough to startle it from its patch: within their
+     * {@link #flushRange} of its nearest fireflies (about: {@link #patchExtent} from its anchor), and in its sight,
+     * unless they are within {@link #FLUSH_HEARD}. Null when there is none.
+     */
+    @Nullable
+    private Player startlingPlayer() {
+        Vec3 c = centre();
+        double extent = patchExtent(count());
+        double reach = extent + FLUSH + FLUSH_SPRINT;
+        Player best = null;
+        double bestD = Double.MAX_VALUE;
+        for (Player p : level().players()) {
+            if (!EntitySelector.NO_SPECTATORS.test(p) || !p.isAlive()) continue;
+            double d = Math.sqrt(p.getBoundingBox().distanceToSqr(c)) - extent;
+            if (d > reach - extent || d >= bestD) continue;
+            boolean sneaking = p.isShiftKeyDown() || p.isCrouching();
+            if (d >= flushRange(sneaking, p.isSprinting())) continue;
+            if (d >= FLUSH_HEARD && !clear(p.getEyePosition(), c)) continue;
+            best = p;
+            bestD = d;
+        }
+        return best;
     }
 
     /** The nearest player (not a spectator) whose body comes within {@code range} of the point, or null. */
@@ -382,6 +562,7 @@ public class FireflySwarm extends Entity {
         entityData.set(DATA_ROCK, (byte) perchRock.get3DDataValue());
         entityData.set(DATA_LANDED, true);
         landTicks = LAND_MIN + random.nextInt(LAND_MAX - LAND_MIN + 1);
+        resettling = false;
         abandonLanding();
     }
 
@@ -409,7 +590,7 @@ public class FireflySwarm extends Entity {
 
     /** Looks for a patch to land on near it; if one is found it flies in to it. */
     private void planLanding() {
-        Perch p = findPerch(16, PERCH_REACH);
+        Perch p = findPerch(16, PERCH_REACH, true);
         if (p == null) return;
         perch = p.pos;
         perchRock = p.rock;
@@ -419,7 +600,7 @@ public class FireflySwarm extends Entity {
 
     /**
      * For /remix fireflies land: settles at once on the best patch within a few blocks (searched block by block), for
-     * the longest stay. Returns false when there is no patch to land on.
+     * the longest stay, wherever the players are. Returns false when there is no patch to land on.
      */
     public boolean landNow() {
         return landNow(LAND_MAX);
@@ -427,8 +608,9 @@ public class FireflySwarm extends Entity {
 
     /** As {@link #landNow()}, staying {@code ticks} (for pictures, which take longer to settle than a stay lasts). */
     public boolean landNow(int ticks) {
+        endFlight(false);
         if (landed()) takeOff(null);
-        Perch p = findPerch(0, PERCH_REACH + 2);
+        Perch p = findPerch(0, PERCH_REACH + 2, false);
         if (p == null) return false;
         perch = p.pos;
         perchRock = p.rock;
@@ -447,14 +629,16 @@ public class FireflySwarm extends Entity {
 
     /**
      * A patch to land on within {@code reach} of the centre: an open block with a sturdy face of rock beside it, in
-     * the open air the swarm can see from where it is, away from players, with as many faces round it as can be found
-     * (a patch, not a lone ledge). {@code tries} random blocks are tried, or every block when it is 0.
+     * the open air the swarm can see from where it is, with as many faces round it as can be found (a patch, not a
+     * lone ledge); with {@code shy}, none where a player would startle it at once. {@code tries} random blocks are
+     * tried, or every block when it is 0.
      */
     @Nullable
-    private Perch findPerch(int tries, int reach) {
+    private Perch findPerch(int tries, int reach, boolean shy) {
         Level level = level();
         Vec3 c = centre();
         BlockPos at = BlockPos.containing(c);
+        double keepOff = PERCH_SHY + patchExtent(count());
         List<BlockPos> blocks = new ArrayList<>();
         if (tries > 0) {
             for (int i = 0; i < tries; i++)
@@ -470,7 +654,7 @@ public class FireflySwarm extends Entity {
             for (Direction d : Direction.values()) if (sturdy(level, p, d)) rock.add(d);
             if (rock.isEmpty()) continue;
             Vec3 pc = Vec3.atCenterOf(p);
-            if (!withinLeash(pc) || nearPlayer(pc, PERCH_SHY) != null) continue;
+            if (!withinLeash(pc) || (shy && nearPlayer(pc, keepOff) != null)) continue;
             double score = patch(level, p) - (tries == 0 ? 0.35 * Math.sqrt(p.distToCenterSqr(c)) : 0.0);
             if (score <= bestScore) continue;
             Direction d = rock.get(random.nextInt(rock.size()));      // floor, wall or ceiling, whichever it has
@@ -660,8 +844,10 @@ public class FireflySwarm extends Entity {
                     .append(" at ").append(anchor().toShortString()).append(", ").append(landTicks / 20).append("s more");
         } else {
             b.append(landAt != null ? "flying in to land at " + (perch == null ? "?" : perch.toShortString()) : "flying");
-            if (fleeTicks > 0) b.append(" (fleeing)");
-            else if (restTicks > 0) b.append(" (no landing for ").append(restTicks / 20).append("s)");
+            if (startledFrom != null) b.append(String.format(java.util.Locale.ROOT, " (startled: %.0f of %.0f blocks off)", centre().distanceTo(startledFrom), goal));
+            else if (fleeTicks > 0) b.append(" (fleeing)");
+            else if (restTicks > 0) b.append(resettling ? " (landing again in " : " (no landing for ").append(restTicks / 20).append("s)");
+            else if (resettling) b.append(" (looking to land again)");
         }
         b.append(", ").append(count()).append(" of ").append(full).append(" fireflies, seed ").append(seed());
         if (home != null) b.append(String.format(java.util.Locale.ROOT, ", %.0f blocks from home", Math.sqrt(centre().distanceToSqr(home))));
@@ -695,11 +881,21 @@ public class FireflySwarm extends Entity {
             f = flock = new Flock(seed());
             flockSeed = seed();
             seenScatters = entityData.get(DATA_SCATTERS);
+            seenFlushes = entityData.get(DATA_FLUSHES);
             for (int i = 0; i < Math.min(Flock.MAX, count()); i++) f.add(c.x, c.y, c.z);
             wasLanded = landed;
             firstSight = true;
             perchedAt = null;
             settleWait = 0;
+        }
+        // startled up: the patch lifts in a wave from the side nearest whoever startled it (before the calm take-off
+        // below, which then leaves those already lifting as they are)
+        int flushes = entityData.get(DATA_FLUSHES);
+        if (flushes != seenFlushes) {
+            seenFlushes = flushes;
+            Vector3f s = entityData.get(DATA_FLUSH_FROM);
+            f.flush(s.x, s.y, s.z);
+            perchedAt = null;
         }
         if (landed) {
             // newly landed (or landed somewhere else): each firefly is given its point; with no faces found (the
@@ -735,7 +931,31 @@ public class FireflySwarm extends Entity {
             // the points were chosen for a full flock in order, so the newcomer's is the next one nobody has
             if (perchedAt != null && i >= 0 && i < spotOrder.length) f.settleOn(i, spots.get(spotOrder[i]), 0);
         }
+        gatherBodies(f, c);
         f.step(c.x, c.y, c.z, (x, y, z) -> open(level(), BlockPos.containing(x, y, z)));
+    }
+
+    /**
+     * Tells the flock about the bodies near enough to matter this tick, so its fireflies keep clear of them: every
+     * player (no spectator) and creature within {@link #BODY_REACH} of the swarm's cloud, with how far each moved in the
+     * last tick (a teleport counts as standing still).
+     */
+    private void gatherBodies(Flock f, Vec3 c) {
+        f.clearBodies();
+        if (landed() && perchedAt != null && f.hurry() == 0.0) return;    // all sitting: nothing to dodge
+        double r = Flock.radius(f.size()) + BODY_REACH;
+        for (Entity e : level().getEntities(this, new AABB(c, c).inflate(r), FireflySwarm::isBody)) {
+            AABB b = e.getBoundingBox();
+            double mx = e.getX() - e.xo, my = e.getY() - e.yo, mz = e.getZ() - e.zo;
+            if (mx * mx + my * my + mz * mz > 1.0) mx = my = mz = 0.0;
+            f.addBody(b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ, mx, my, mz);
+            if (f.bodies() >= Flock.MAX_BODIES) break;
+        }
+    }
+
+    /** Whether the fireflies keep clear of this one: a player (not a spectator), a creature, or a piece of a big one's body. */
+    private static boolean isBody(Entity e) {
+        return e.isAlive() && !e.isSpectator() && (e instanceof LivingEntity || e instanceof PartEntity<?>);
     }
 
     /**
@@ -744,9 +964,11 @@ public class FireflySwarm extends Entity {
      */
     private boolean settle(Flock f, boolean atOnce) {
         BlockPos a = anchor();
-        spots = perchSpots(a);
+        // the points for the swarm as it is and a few more, so a firefly that grows back has one waiting
+        int n = Math.min(Flock.MAX, Math.max(f.size(), count()) + 16);
+        spots = perchSpots(a, Mth.ceil(Perches.reach(n)));
         Vec3 at = landingPoint(a, anchorRock());
-        spotOrder = Perches.pick(spots, at.x, at.y, at.z, Flock.MAX, seed());
+        spotOrder = Perches.pick(spots, at.x, at.y, at.z, n, seed());
         if (spotOrder.length == 0) return false;
         // each spot, in the order chosen, goes to the nearest firefly not yet given one
         boolean[] given = new boolean[f.size()];
@@ -767,13 +989,12 @@ public class FireflySwarm extends Entity {
     }
 
     /**
-     * The points the fireflies may sit on round the anchor: the faces of rock seen from the open blocks within two
-     * blocks of it that open air joins to it (so none sits behind a wall).
+     * The points the fireflies may sit on round the anchor: the faces of rock seen from the open blocks within
+     * {@code r} blocks of it that open air joins to it (so none sits behind a wall).
      */
-    private List<Perches.Spot> perchSpots(BlockPos anchor) {
+    private List<Perches.Spot> perchSpots(BlockPos anchor, int r) {
         Level level = level();
         List<Perches.Spot> out = new ArrayList<>();
-        int r = 2;
         Set<BlockPos> seen = new HashSet<>();
         ArrayDeque<BlockPos> todo = new ArrayDeque<>();
         if (!open(level, anchor)) return out;

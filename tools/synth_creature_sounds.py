@@ -2,12 +2,13 @@
 """Makes the creatures' sounds from scratch (no recordings). The Mossback: its call, heavy steps, the hiss when it
 sees you, the snap of its jaws, the growl while it shakes its catch, hurt and death. The Skein: the dry patter of its
 many feet, its clicking chitter, the rattling hiss of its plates as it rears, the crack of its mandibles, hurt and
-death. Built from tones and filtered noise with the helpers in synth_sounds.py, with a short cave echo.
+death. The blue fireflies (0.16.0): the soft flutter of a landed swarm startled up. Built from tones and filtered
+noise with the helpers in synth_sounds.py, with a short cave echo.
 Deterministic: the same script gives the same sounds.
 
 Needs numpy and ffmpeg with libvorbis. Writes src/main/resources/assets/explorationremix/sounds/creature/<name>/*.ogg
 (tools/sounds.py lists them in sounds.json). Run from anywhere: python3 tools/synth_creature_sounds.py [mossback]
-[skein] (both when none is named).
+[skein] [firefly] (all when none is named).
 """
 import os, sys
 import numpy as np
@@ -280,8 +281,50 @@ def skein_death(rng):
 SKEIN_MAKERS = {"patter": patter, "chitter": chitter, "rattle": rattle, "bite": mandibles, "hurt": skein_hurt,
                 "death": skein_death}
 
+# =============================================================================================== the blue fireflies
+# 0.16.0: a landed swarm startled up off the rock. Many small wings at once: each firefly a faint, airy whirr (soft
+# noise beaten at its own wing rate), the swarm's going up in a quick wave from the near side, so the whirrs come in
+# over a fraction of a second and thin out as they fly off. Soft and close: no hard edges, little high hiss, a small
+# cave echo.
+
+FIREFLY_COUNTS = {"flutter": 3}
+
+
+def flutter(rng):
+    """A soft rush of many tiny wings lifting off together and fading as the swarm flies away."""
+    dur = rng.uniform(1.3, 1.6)
+    n = secs(dur)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    wings = int(rng.integers(26, 34))
+    for k in range(wings):
+        # the wave: most go up in the first quarter second, a few stragglers after
+        at = min(dur - 0.5, rng.exponential(0.12) + rng.uniform(0.0, 0.08))
+        life = rng.uniform(0.35, 0.8)
+        i0 = int(at * SR)
+        m = min(n - i0, int((life + 0.05) * SR))
+        tt = np.arange(m) / SR
+        rate = rng.uniform(52, 96) * (1.0 - 0.12 * tt / life)          # its wing beat, slowing a touch as it goes
+        beat = np.sin(2 * np.pi * np.cumsum(rate) / SR + rng.uniform(0, 2 * np.pi))
+        beat = 0.35 + 0.65 * np.maximum(0.0, beat) ** 1.5               # each stroke a soft puff of air
+        fc = rng.uniform(900, 1900) * (1.0 - 0.18 * tt / life)          # the air it moves, falling as it flies off
+        air = S.filt(rng.standard_normal(m), S.bandpass(float(fc.mean()), 0.9))
+        env = np.minimum(1.0, tt / rng.uniform(0.015, 0.04)) * np.exp(-tt / (life * 0.45))
+        out[i0:i0 + m] += air * beat * env * rng.uniform(0.5, 1.0)
+    # the first push of air as the patch lifts: a soft low whoosh under the wings
+    whoosh = S.filt(rng.standard_normal(n), S.bandpass(rng.uniform(420, 600), 0.7))
+    whoosh *= np.minimum(1.0, t / 0.03) * np.exp(-t / 0.16) * 0.5
+    x = S.filt(out + whoosh, S.lowpass(4200, 2))
+    x = S.filt(x, S.highpass(160, 2))
+    x = S.fade_edges(x, 0.01)
+    return S.normalize_peak(cave(x, rng, 0.28, 0.18), -5.0)
+
+
+FIREFLY_MAKERS = {"flutter": flutter}
+
 # each creature's sounds (how many of each), their makers and the base of their seeds
-CREATURES = {"mossback": (COUNTS, MAKERS, 7700), "skein": (SKEIN_COUNTS, SKEIN_MAKERS, 9100)}
+CREATURES = {"mossback": (COUNTS, MAKERS, 7700), "skein": (SKEIN_COUNTS, SKEIN_MAKERS, 9100),
+             "firefly": (FIREFLY_COUNTS, FIREFLY_MAKERS, 9900)}
 
 
 def make(name):
