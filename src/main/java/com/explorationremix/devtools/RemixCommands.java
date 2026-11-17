@@ -88,6 +88,7 @@ import java.util.Locale;
  *     the nearest of each kind</li>
  *     <li>{@code /remix deadends [radius]}: the blind cave ends left above the old floor in the loaded chunks round you
  *     (DeadEnds), with the nearest</li>
+ *     <li>{@code /remix groups list|here|spawn <kind>|stats}: vanilla's hostile mobs in groups (MobGroupCommands)</li>
  *     <li>{@code /remix shapes}: what the Upper Caves' noise shapes hold over your column and whether you stand in one</li>
  *     <li>{@code /remix shapes <kind> [n] [view]}: the n-th nearest place of a noise shape (warrens, chambers, mouth, frozen, rifts,
  *     halls, sinkholes, hollows; see UpperShapes.find) round the command's position, with a wide view into it when
@@ -112,6 +113,8 @@ public final class RemixCommands {
                 .then(com.explorationremix.creature.MossbackCommands.command())
                 // the Skein
                 .then(com.explorationremix.creature.SkeinCommands.command())
+                // vanilla's hostile mobs in groups
+                .then(com.explorationremix.creature.groups.MobGroupCommands.command())
                 // runes: rune items, rows, energy and run depth for trying them out
                 .then(com.explorationremix.rune.RuneCommands.command())
                 .then(Commands.literal("entrances").executes(c -> entrances(c, 8))

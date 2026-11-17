@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:lush_caves",
+    "explorationremix:rootvaults",
+    "explorationremix:frozen_rootvaults",
+    "explorationremix:silver_fern_rift",
+    "explorationremix:frost_fern_grotto"
+  ]
+}
