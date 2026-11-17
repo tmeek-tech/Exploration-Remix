@@ -22,13 +22,16 @@ import java.util.Locale;
 /**
  * /remix fireflies: looking after the blue firefly swarms while testing (operators only).
  * <ul>
- *     <li>{@code /remix fireflies spawn [count]}: a swarm in the open air where you look (count 1 to 24; a random 8
- *     to 24 without one)</li>
+ *     <li>{@code /remix fireflies spawn [count]}: a swarm in the open air where you look (count 1 to 160; without
+ *     one, a size as the spawner picks them: 30 to 60, now and then 120 to 160)</li>
  *     <li>{@code /remix fireflies list [radius]}: the swarms round you, nearest first: where each is, flying or landed
  *     (and on what), how many fireflies it has of how many it grows back to</li>
  *     <li>{@code /remix fireflies land [seconds]}: the nearest swarm settles at once on the best patch of rock within a
- *     few blocks, for its longest stay (40 s, or the seconds given, or until you come within three blocks)</li>
+ *     few blocks, for its longest stay (40 s, or the seconds given, or until a player comes near enough to startle
+ *     it), wherever the players are</li>
  *     <li>{@code /remix fireflies scatter}: the nearest swarm scatters away from you, as if struck</li>
+ *     <li>{@code /remix fireflies startle}: the nearest landed swarm is startled up by you, as if you had walked up to
+ *     it: it lifts off in a wave from your side with a flutter, flies off and lands again a little way off</li>
  * </ul>
  */
 public final class FireflyCommands {
@@ -44,7 +47,8 @@ public final class FireflyCommands {
                 .then(Commands.literal("land").executes(c -> land(c, 0))
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 600))
                                 .executes(c -> land(c, IntegerArgumentType.getInteger(c, "seconds") * 20))))
-                .then(Commands.literal("scatter").executes(FireflyCommands::scatter));
+                .then(Commands.literal("scatter").executes(FireflyCommands::scatter))
+                .then(Commands.literal("startle").executes(FireflyCommands::startle));
     }
 
     private static void say(CommandContext<CommandSourceStack> c, String msg) {
@@ -61,7 +65,7 @@ public final class FireflyCommands {
         // a few blocks short of the rock you look at (out of shy range), or six blocks ahead into open air
         BlockHitResult hit = level.clip(new ClipContext(eye, eye.add(look.scale(24)), ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, null));
         Vec3 at = hit.getType() == HitResult.Type.MISS ? eye.add(look.scale(6)) : hit.getLocation().subtract(look.scale(Math.min(2.0, hit.getLocation().distanceTo(eye) * 0.5)));
-        int n = count > 0 ? count : FireflySwarm.MIN_COUNT + level.random.nextInt(FireflySwarm.MAX_COUNT - FireflySwarm.MIN_COUNT + 1);
+        int n = count > 0 ? count : BlueSpawnRules.swarmSize(level.random.nextDouble());
         FireflySwarm s = FireflySwarm.spawn(level, at, n);
         if (s == null) { c.getSource().sendFailure(Component.literal("No open air for a swarm near " + BlockPos.containing(at).toShortString())); return 0; }
         say(c, "Blue fireflies (" + s.count() + ") at " + BlockPos.containing(s.centre()).toShortString());
@@ -96,6 +100,19 @@ public final class FireflyCommands {
         if (s == null) return 0;
         if (!(ticks > 0 ? s.landNow(ticks) : s.landNow())) { c.getSource().sendFailure(Component.literal("No rock to land on near the swarm at " + BlockPos.containing(s.centre()).toShortString())); return 0; }
         say(c, "Landed: " + s.describe());
+        return 1;
+    }
+
+    private static int startle(CommandContext<CommandSourceStack> c) {
+        FireflySwarm s = nearest(c);
+        if (s == null) return 0;
+        if (!s.landed()) { c.getSource().sendFailure(Component.literal("The nearest swarm is flying: " + s.describe())); return 0; }
+        if (!(c.getSource().getEntity() instanceof net.minecraft.world.entity.player.Player p)) {
+            c.getSource().sendFailure(Component.literal("Only a player can startle a swarm."));
+            return 0;
+        }
+        s.flush(p);
+        say(c, "Startled: " + s.describe());
         return 1;
     }
 

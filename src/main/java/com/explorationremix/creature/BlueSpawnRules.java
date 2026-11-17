@@ -9,7 +9,8 @@ package com.explorationremix.creature;
  * #SKEIN_RADIUS} blocks, never more than {@link #SKEIN_MAX} there, and three to five swarms within {@link
  * #SWARM_RADIUS} (one or two in the Deep Dark, where the fireflies are few). Each comes out {@link #NEAR} blocks or
  * further from every player, and within the radius it is counted in (a sphere: height counts too), so it counts as
- * soon as it is out. The Asurine Geodes are a refuge: fireflies live there, Skeins never.
+ * soon as it is out. The Asurine Geodes are a refuge: fireflies live there, Skeins never. A swarm is 30 to 60
+ * fireflies, and now and then ({@link #HUGE_SWARMS}) a huge one of 120 to 160 (0.16.0, Taran's pick).
  */
 public final class BlueSpawnRules {
     private BlueSpawnRules() {}
@@ -34,8 +35,9 @@ public final class BlueSpawnRules {
     public static final double NEAR = 20.0, SKEIN_FAR = 46.0, SWARM_FAR = 38.0;
     /** A swarm in the Deep Dark comes out only at this share of the spots found there. */
     public static final double DEEP_DARK_SWARMS = 0.35;
-    /** A swarm is 8 to 24 fireflies. */
-    public static final int SWARM_MIN_COUNT = 8, SWARM_MAX_COUNT = 24;
+    /** A swarm is {@link #SWARM_MIN_COUNT} to {@link #SWARM_MAX_COUNT} fireflies, or this share of them a huge one of {@link #HUGE_MIN_COUNT} to {@link #HUGE_MAX_COUNT}. */
+    public static final int SWARM_MIN_COUNT = 30, SWARM_MAX_COUNT = 60, HUGE_MIN_COUNT = 120, HUGE_MAX_COUNT = 160;
+    public static final double HUGE_SWARMS = 0.125;
 
     public static Place place(String biomeId) {
         return switch (biomeId) {
@@ -119,8 +121,17 @@ public final class BlueSpawnRules {
         return NEAR + Math.max(0.0, Math.min(1.0, roll)) * (far - NEAR);
     }
 
-    /** How many fireflies a new swarm has. */
+    /**
+     * How many fireflies a new swarm has, by a uniform {@code roll}: under {@link #HUGE_SWARMS} a huge swarm, else an
+     * ordinary one, each size of its range as likely as the next.
+     */
     public static int swarmSize(double roll) {
-        return SWARM_MIN_COUNT + Math.min(SWARM_MAX_COUNT - SWARM_MIN_COUNT, (int) (roll * (SWARM_MAX_COUNT - SWARM_MIN_COUNT + 1)));
+        double r = Math.max(0.0, Math.min(1.0, roll));
+        if (r < HUGE_SWARMS) return between(r / HUGE_SWARMS, HUGE_MIN_COUNT, HUGE_MAX_COUNT);
+        return between((r - HUGE_SWARMS) / (1.0 - HUGE_SWARMS), SWARM_MIN_COUNT, SWARM_MAX_COUNT);
+    }
+
+    private static int between(double u, int lo, int hi) {
+        return lo + Math.min(hi - lo, (int) (u * (hi - lo + 1)));
     }
 }

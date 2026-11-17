@@ -1243,7 +1243,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     private void eatFrom(FireflySwarm s) {
         playSound(ERSounds.SKEIN_BITE.get(), 1.0F, 1.2F + random.nextFloat() * 0.2F);
-        int got = s.bite(2 + random.nextInt(4), this);
+        // a mouthful: a few more from a big swarm (0.16.0: swarms are 30 to 160), so a meal still shows in it
+        int got = s.bite(2 + random.nextInt(4) + s.count() / 16, this);
         prey = null;
         if (got <= 0) { afterStrike(s.centre()); return; }
         hunger = MEAL_MIN + random.nextInt(MEAL_MAX - MEAL_MIN + 1);
