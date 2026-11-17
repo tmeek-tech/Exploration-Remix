@@ -38,7 +38,8 @@ def B(mat, origin, size, inflate=0.0):
 
 
 def _leg(side, prefix, parent, pivot, upper, lower_h, splay):
-    """A sprawling lizard leg: the upper leg reaches sideways out of the body, the lower leg down to a broad foot."""
+    """A sprawling lizard leg: the upper leg reaches sideways out of the body (splay tips it down, or up when less
+    than 0), the lower leg down to a broad foot."""
     s = 1 if side > 0 else -1
     ux = 0 if s > 0 else -upper[0]
     return [
@@ -82,10 +83,12 @@ MOSSBACK_PARTS = [
     P("tail4", "tail3", (0, 0.5, 6), (0, 0, 0), [B("tail", (-1.5, -1, 0), (3, 3, 6))]),
     P("tail5", "tail4", (0, 0.5, 6), (0, 0, 0), [B("tail", (-1, -0.5, 0), (2, 2, 5))]),
 ]
-MOSSBACK_PARTS += _leg(1, "front_left", "chest", (6.5, 1.5, -5.5), (6, 3, 3), 6, 8)
-MOSSBACK_PARTS += _leg(-1, "front_right", "chest", (-6.5, 1.5, -5.5), (6, 3, 3), 6, 8)
-MOSSBACK_PARTS += _leg(1, "hind_left", "hips", (6, 1.5, 5.5), (6, 4, 4), 6, 6)
-MOSSBACK_PARTS += _leg(-1, "hind_right", "hips", (-6, 1.5, 5.5), (6, 4, 4), 6, 6)
+# legs a third longer than they were (0.15.0): the elbows and knees ride up beside the body, so the feet can reach the
+# rock under them well ahead and behind (the game reaches each foot to its rock; this rest pose is only a picture)
+MOSSBACK_PARTS += _leg(1, "front_left", "chest", (6.5, 1.5, -5.5), (8, 3, 3), 8, -15.5)
+MOSSBACK_PARTS += _leg(-1, "front_right", "chest", (-6.5, 1.5, -5.5), (8, 3, 3), 8, -15.5)
+MOSSBACK_PARTS += _leg(1, "hind_left", "hips", (6, 1.5, 5.5), (8, 4, 4), 8, -15.5)
+MOSSBACK_PARTS += _leg(-1, "hind_right", "hips", (-6, 1.5, 5.5), (8, 4, 4), 8, -15.5)
 MOSSBACK_PARTS += _fern("fern1", "chest", (3, -6, -5), 30, 6, 7)
 MOSSBACK_PARTS += _fern("fern2", "hips", (-2.5, -5.5, 4), -20, 5, 6)
 MOSSBACK_PARTS += _fern("fern3", "chest", (-3.5, -6, -2), 70, 4, 5, lean=20)

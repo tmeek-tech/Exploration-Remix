@@ -45,7 +45,9 @@ import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.CollisionGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.state.BlockState;
@@ -148,6 +150,15 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     static final int WAY_OUT_STEP = 4, WAY_OUT_REACH = 48, WAY_OUT_POINTS = 200;
     /** A meal of fireflies keeps it fed for one to three minutes; it chews this long. */
     static final int MEAL_MIN = 1200, MEAL_MAX = 3600, EAT_TICKS = 50;
+    /**
+     * Lying still with no player (of any kind) within this, it lies dormant (0.17.0): its ticks are skipped until one
+     * comes this near, or it is hurt. The Skeins set down with the world lie under every column, and each ticking costs
+     * the server about as much as two sheep; this is further than a Skein is drawn at the default entity distance (83
+     * blocks), so none is ever seen frozen, and as far as the caves round a player reach for the slow refill
+     * ({@link BlueSpawnRules#REFILL_RADIUS}). Players are looked for once a second.
+     */
+    public static final double WAKE_RANGE = 96.0;
+    static final int WAKE_LOOK = 20;
     /** How far and how long it may touch nothing (rounding an edge) before it falls (as the Mossback). */
     static final double AIR_REACH = 1.5;
     static final int AIR_GRACE = 40;
@@ -282,6 +293,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     private int detachTicks, airTicks;
     private double airDist, movedLast;
     private float stepDist;
+    private boolean dormant;                 // server: lying still with no player near, its ticks skipped (WAKE_RANGE)
 
     // client-side animation state (see SkeinRenderer)
     public float run, runO, legPhase, legPhaseO, sway, swayO, shudder, shudderO, rear, rearO, jaw, jawO, glow, glowO;
@@ -349,6 +361,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     }
 
     public byte state() { return entityData.get(DATA_STATE); }
+    /** Server: lying dormant, no player near ({@link #WAKE_RANGE}). */
+    public boolean dormant() { return dormant; }
     @Nullable public Direction surface() {
         byte b = entityData.get(DATA_SURFACE);
         return b < 0 ? null : Direction.from3DDataValue(b);
@@ -559,7 +573,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     }
 
     /** Whether there is rock against side {@code d} of {@code box} (for {@code who}'s collisions; null for anyone's). */
-    private static boolean rockBeside(Level level, @Nullable Entity who, AABB box, Direction d) {
+    private static boolean rockBeside(CollisionGetter level, @Nullable Entity who, AABB box, Direction d) {
         double e = 0.08, m = 0.06;
         AABB slab = switch (d) {
             case DOWN -> new AABB(box.minX + m, box.minY - e, box.minZ + m, box.maxX - m, box.minY, box.maxZ - m);
@@ -1243,7 +1257,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     private void eatFrom(FireflySwarm s) {
         playSound(ERSounds.SKEIN_BITE.get(), 1.0F, 1.2F + random.nextFloat() * 0.2F);
-        int got = s.bite(2 + random.nextInt(4), this);
+        // a mouthful: a few more from a big swarm (0.16.0: swarms are 30 to 160), so a meal still shows in it
+        int got = s.bite(2 + random.nextInt(4) + s.count() / 16, this);
         prey = null;
         if (got <= 0) { afterStrike(s.centre()); return; }
         hunger = MEAL_MIN + random.nextInt(MEAL_MAX - MEAL_MIN + 1);
@@ -1353,6 +1368,22 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
      * straight behind it, lying still (for the spawner and /remix skein spawn).
      */
     public void placeOn(Vec3 pos, Direction rock, Vec3 fwd) {
+        aim(pos, rock, fwd);
+        layTrail(rock);
+    }
+
+    /**
+     * Sets it down as {@link #placeOn} does while its chunk is being made (world.feature.SkeinsFeature), where the
+     * level is not to be read: its body is laid straight back from its head on its first tick, as for one loaded
+     * without a trail. It stays put when no one is near, as the animals a world starts with do.
+     */
+    public void setDownAtGeneration(Vec3 pos, Direction rock, Vec3 fwd) {
+        aim(pos, rock, fwd);
+        setPersistenceRequired();
+    }
+
+    /** At {@code pos} on {@code rock}, heading along {@code fwd} (flattened onto the rock), still: nothing of the level read. */
+    private void aim(Vec3 pos, Direction rock, Vec3 fwd) {
         moveTo(pos.x, pos.y, pos.z, getYRot(), 0.0F);
         setDeltaMovement(Vec3.ZERO);
         entityData.set(DATA_SURFACE, (byte) rock.get3DDataValue());
@@ -1365,7 +1396,6 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
             float yaw = (float) (Mth.atan2(forward.z, forward.x) * Mth.RAD_TO_DEG) - 90.0F;
             setYRot(yaw); yBodyRot = yaw; yHeadRot = yaw;
         }
-        layTrail(rock);
     }
 
     /** Its body laid straight behind its head along its rock. */
@@ -1433,7 +1463,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
      * node is none of these, or its box does not fit there.
      */
     @Nullable
-    public static Placement placement(Level level, EntityType<?> type, BlockPos n) {
+    public static Placement placement(LevelReader level, EntityType<?> type, BlockPos n) {
         byte k = ClimbNodeEvaluator.classify(level, n.getX(), n.getY(), n.getZ(), 2, 1, 2);
         float w = type.getWidth(), h = type.getHeight();
         Vec3 mid = new Vec3(n.getX() + 1.0, n.getY(), n.getZ() + 1.0);
@@ -1449,7 +1479,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     /** Against whichever wall beside the cell its box touches once moved over to it. */
     @Nullable
-    private static Placement wallPlacement(Level level, Vec3 mid, float w, float h) {
+    private static Placement wallPlacement(LevelReader level, Vec3 mid, float w, float h) {
         double gap = 1.0 - w / 2.0;
         for (Direction d : Direction.Plane.HORIZONTAL) {
             Vec3 at = mid.add(d.getStepX() * gap, 0, d.getStepZ() * gap);
@@ -1464,7 +1494,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
      * behind it for its body to lie on in the open (a body laid into a wall would stick out of it until it walked),
      * ties broken by {@code r}.
      */
-    public static Vec3 openHeading(Level level, EntityType<?> type, Placement p, DoubleSupplier r) {
+    public static Vec3 openHeading(LevelReader level, EntityType<?> type, Placement p, DoubleSupplier r) {
         Vec3 up = normal(p.rock());
         Vec3 a = Math.abs(up.y) > 0.9 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
         Vec3 b = up.cross(a);
@@ -1485,7 +1515,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
      * #openHeading} finds. Its body is laid straight back from its head, and stays so until it has walked its length:
      * the spawner wants {@link #BODY_ROOM} of it, not a body laid into a step or out over a drop.
      */
-    public static int openLength(Level level, EntityType<?> type, Placement p) {
+    public static int openLength(LevelReader level, EntityType<?> type, Placement p) {
         Vec3 feet = placedFeet(type, p);
         return openBehind(level, feet, openHeading(level, type, p, () -> 0.0), normal(p.rock()));
     }
@@ -1499,17 +1529,23 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     }
 
     /** How many half blocks back from {@code feet} (against {@code fwd}) there is open air over rock, up to its length. */
-    private static int openBehind(Level level, Vec3 feet, Vec3 fwd, Vec3 up) {
+    private static int openBehind(LevelReader level, Vec3 feet, Vec3 fwd, Vec3 up) {
         int open = 0;
         for (double d = 0.5; d <= BODY_LENGTH; d += 0.5) {
             Vec3 q = feet.subtract(fwd.scale(d));
             BlockPos air = BlockPos.containing(q.add(up.scale(0.3))), rock = BlockPos.containing(q.subtract(up.scale(0.3)));
-            if (!level.isLoaded(air) || !level.isLoaded(rock)) break;
+            if (!loaded(level, air) || !loaded(level, rock)) break;
             if (!level.getBlockState(air).getCollisionShape(level, air).isEmpty()) break;
             if (level.getBlockState(rock).getCollisionShape(level, rock).isEmpty()) break;
             open++;
         }
         return open;
+    }
+
+    /** A live level's loaded chunks; a world being made has the chunks in reach of the one being made. */
+    @SuppressWarnings("deprecation")
+    private static boolean loaded(LevelReader level, BlockPos p) {
+        return level instanceof Level l ? l.isLoaded(p) : level.hasChunkAt(p);
     }
 
     @Override public boolean canBeLeashed(Player player) { return false; }
@@ -1611,6 +1647,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         if (isInWater()) b.append(", in water");
         if (airborne()) b.append(", falling");
         if (getMoveControl() instanceof ClimbMoveControl mc && mc.wedged() > 0) b.append(", wedged ").append(mc.wedged());
+        if (dormant) b.append(", dormant (no player within ").append((int) WAKE_RANGE).append(" blocks)");
         return b.toString();
     }
 
@@ -1647,6 +1684,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     @Override
     public void tick() {
+        if (!level().isClientSide && dormantNow()) return;
         super.tick();
         if (!level().isClientSide && isAlive()) {
             movedLast = Math.sqrt(Mth.square(getX() - xo) + Mth.square(getY() - yo) + Mth.square(getZ() - zo));
@@ -1658,6 +1696,25 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         followHead();
         if (level().isClientSide) clientTick();
         moveBody();
+    }
+
+    /**
+     * Server: whether it lies dormant this tick ({@link #WAKE_RANGE}): lying still on its rock, its body laid, unhurt,
+     * out of water, lava and fire, with no player near. It stays where it is, as a creature in a chunk no one is near
+     * does; the first look that finds a player near (or a hurt) wakes it as it was. Peaceful still takes it, from the
+     * level's own despawn pass.
+     */
+    private boolean dormantNow() {
+        if (state() != STILL || !trail.laid() || !isAlive() || hurtTime > 0 || isOnFire() || isInWater() || isInLava()
+                || surface() == null || isPassenger() || trace > 0) return dormant = false;
+        if ((tickCount + getId()) % WAKE_LOOK == 0) dormant = !playerWithin(WAKE_RANGE);
+        return dormant;
+    }
+
+    /** Whether any player (a spectator too: one flying round to look sees it move) is within {@code range}. */
+    private boolean playerWithin(double range) {
+        for (Player p : level().players()) if (p.distanceToSqr(this) < range * range) return true;
+        return false;
     }
 
     /**

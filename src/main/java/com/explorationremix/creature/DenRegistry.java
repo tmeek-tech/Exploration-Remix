@@ -126,6 +126,17 @@ public final class DenRegistry extends SavedData {
             }
         }
 
+        /**
+         * Takes in the family set down with the den as its chunk was made (guard first, as they were set down), all of
+         * them counted as brought out. Only a den with no family yet takes one in this way; false when it took none.
+         */
+        boolean adopt(List<UUID> ids, BlockPos at) {
+            if (!members.isEmpty() || spawned > 0 || ids.isEmpty()) return false;
+            for (UUID id : ids) join(id, at, true);
+            spawned = ids.size();
+            return true;
+        }
+
         /** A roamer reached the den while its family was called home: it is the guard now. */
         boolean promote(UUID id) {
             Member m = member(id);

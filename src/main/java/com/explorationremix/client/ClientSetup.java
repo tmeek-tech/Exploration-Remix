@@ -43,7 +43,7 @@ public final class ClientSetup {
 
     @SubscribeEvent
     public static void layers(EntityRenderersEvent.RegisterLayerDefinitions event) {
-        event.registerLayerDefinition(MossbackRenderer.LAYER, () -> Geometry.load("mossback"));
+        // (the Mossback needs none: since 0.15.0 its shape is rigged to its body, see MossbackModel)
         // the Skein: its loose pieces (head, plates, tail), drawn along its trail
         event.registerLayerDefinition(SkeinRenderer.LAYER, () -> Geometry.load("skein"));
     }

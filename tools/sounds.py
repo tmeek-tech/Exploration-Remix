@@ -173,6 +173,17 @@ SWING_SUBTITLES = {
 CREATURE_EVENTS.update(SWING_EVENTS)
 CREATURE_SUBTITLES.update(SWING_SUBTITLES)
 
+# 0.16.0's blue fireflies: the soft flutter of a landed swarm startled up off the rock (tools/synth_creature_sounds.py
+# firefly). Quiet and close: heard across a cave room, not through the rock.
+FIREFLY_EVENTS = {
+    "firefly.flutter": creature("flutter", 3, 0.8, 14, who="firefly"),
+}
+FIREFLY_SUBTITLES = {
+    "firefly.flutter": "Fireflies flutter up",
+}
+CREATURE_EVENTS.update(FIREFLY_EVENTS)
+CREATURE_SUBTITLES.update(FIREFLY_SUBTITLES)
+
 
 def write_all(assets_dir, write):
     out = {}

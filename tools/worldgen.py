@@ -1132,6 +1132,10 @@ def build_features():
     # blocks of it, once the ways are open. Band 1 is the Deep Blue Rift under every column, so this reaches every
     # chunk, and the feature works out from the plan which chunks hold a lair.
     feature("den_lair", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:den_lair", "config": {}}, [])
+    # The Blue Reaches' Skeins (SkeinsFeature, 0.17.0): set down as each chunk is made, last, so they lie on the rock
+    # the chunk ends up with and are there before anyone comes; every chunk, as for the den lairs, and the feature rolls
+    # which chunks are a Skein's home.
+    feature("skeins", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:skeins", "config": {}}, [])
     # The Galleries' lava glow (HallGlowFeature, after everything else): invisible light along the rock above the flood
     # band, one try in every few-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
     # rock near black. 0.5.1, "brightly lit" but not flat: lit from the lava and the floor up. Level 15 just over the
@@ -1238,6 +1242,15 @@ NO_RAVINES = ["#minecraft:has_structure/" + s for s in (
     "village_plains", "village_desert", "village_savanna", "village_snowy", "village_taiga", "pillager_outpost", "woodland_mansion",
     "jungle_temple", "igloo", "trail_ruins", "swamp_hut")] + [
     {"id": "#forge:is_swamp", "required": False}, "#minecraft:is_river", "#minecraft:is_ocean", "#minecraft:is_beach"]
+# Where each kind of vanilla monster group lives (MobHomes, 0.18.0): woods and savannas (zombies and skeletons), dark
+# oak forests (spider packs and witch covens) and the green Upper Caves (creepers and slimes).
+MOB_HOMES = {
+    "woods": ["#minecraft:is_forest", "#minecraft:is_taiga", "#minecraft:is_jungle", "#minecraft:is_savanna", "minecraft:swamp",
+              "minecraft:mangrove_swamp", "minecraft:cherry_grove", "minecraft:wooded_badlands", "minecraft:windswept_forest"],
+    "dark_oak": ["minecraft:dark_forest"],
+    "green_caves": ["minecraft:lush_caves", f"{MOD}:rootvaults", f"{MOD}:frozen_rootvaults", f"{MOD}:silver_fern_rift",
+                    f"{MOD}:frost_fern_grotto"],
+}
 
 # ----------------------------------------------------------------------------------------------- block tags
 CREATE_STONES = ["create:limestone", "create:veridium", "create:asurine", "create:crimsite", "create:ochrum", "create:scoria", "create:scorchia"]
@@ -1441,6 +1454,10 @@ def write_all(data_dir, res_dir, write):
         tag(MOD, "worldgen/biome", "upper/" + kind, values)
     for rock, values in HOST_ROCKS.items():
         tag(MOD, "worldgen/biome", "upper/host/" + rock, values)
+    # Where each kind of vanilla monster group lives (MobHomes, 0.18.0). They were written by hand at first, so this
+    # script's next run took them away; they live here now with the rest.
+    for home, values in MOB_HOMES.items():
+        tag(MOD, "worldgen/biome", "mob_homes/" + home, values)
     for tname, values in BLOCK_TAGS.items():
         tag(MOD, "blocks", tname, values)
     return {f"biome.{MOD}.{k}": v for k, v in NAMES.items()}

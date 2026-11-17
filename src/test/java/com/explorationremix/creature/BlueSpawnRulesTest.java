@@ -32,14 +32,20 @@ class BlueSpawnRulesTest {
     }
 
     @Test
-    void oneOrTwoSkeinsNeverThree() {
-        assertTrue(wantSkein(0, false, true, 0.99), "always one");
-        assertTrue(wantSkein(1, false, true, 0.0), "a second now and then");
-        assertFalse(wantSkein(1, false, true, 0.99));
-        assertFalse(wantSkein(2, false, true, 0.0));
-        assertFalse(wantSkein(3, false, true, 0.0));
-        assertFalse(wantSkein(0, true, true, 0.0), "never in Peaceful");
-        assertFalse(wantSkein(0, false, false, 0.0), "doMobSpawning off");
+    void aSkeinMovesInSlowlyOnlyWhereNoneIsLeft() {
+        assertTrue(wantSkein(0, false, true, false, 0.0), "none left within the refill radius: now and then");
+        assertFalse(wantSkein(0, false, true, false, REFILL_CHANCE), "but not at every look");
+        assertTrue(wantSkein(0, false, true, true, REFILL_CHANCE), "once due, at every look until a spot is found");
+        assertFalse(wantSkein(1, false, true, false, 0.0), "one is still about: none comes");
+        assertFalse(wantSkein(1, false, true, true, 0.0), "not even when one was due");
+        assertFalse(wantSkein(3, false, true, false, 0.0));
+        assertFalse(wantSkein(0, true, true, true, 0.0), "never in Peaceful");
+        assertFalse(wantSkein(0, false, false, true, 0.0), "doMobSpawning off");
+        // about one every two minutes of looks (every EVERY ticks) round a player whose caves have none
+        double minutes = BlueReachesSpawner.EVERY / REFILL_CHANCE / 20.0 / 60.0;
+        assertTrue(minutes > 1.0 && minutes < 4.0, minutes + " minutes");
+        // the refill counts further out than it brings one out, so the Skeins it brings stop it at once
+        assertTrue(REFILL_RADIUS > SKEIN_RADIUS && SKEIN_FAR < SKEIN_RADIUS);
     }
 
     @Test
@@ -98,15 +104,28 @@ class BlueSpawnRulesTest {
     }
 
     @Test
-    void swarmsOfEightToTwentyFour() {
-        int lo = 100, hi = 0;
-        for (double r = 0; r < 1.0; r += 0.001) {
+    void swarmsOfThirtyToSixtyAndNowAndThenAHugeOne() {
+        int ordinary = 0, huge = 0, samples = 0;
+        int lo = Integer.MAX_VALUE, hi = 0, hugeLo = Integer.MAX_VALUE, hugeHi = 0;
+        int[] seen = new int[HUGE_MAX_COUNT + 1];
+        for (double r = 0; r < 1.0; r += 0.0001) {
             int n = swarmSize(r);
-            lo = Math.min(lo, n);
-            hi = Math.max(hi, n);
+            samples++;
+            seen[n]++;
+            if (n >= HUGE_MIN_COUNT) { huge++; hugeLo = Math.min(hugeLo, n); hugeHi = Math.max(hugeHi, n); }
+            else { ordinary++; lo = Math.min(lo, n); hi = Math.max(hi, n); }
         }
-        assertEquals(8, lo);
-        assertEquals(24, hi);
-        assertEquals(24, swarmSize(0.99999));
+        assertEquals(30, lo);
+        assertEquals(60, hi);
+        assertEquals(120, hugeLo);
+        assertEquals(160, hugeHi);
+        assertEquals(HUGE_SWARMS, huge / (double) samples, 0.002, "about one in eight is huge");
+        assertEquals(samples, ordinary + huge, "nothing between the two ranges");
+        for (int n = 61; n < 120; n++) assertEquals(0, seen[n], "no swarm of " + n);
+        // every size of a range about as likely as the next
+        for (int n = 31; n < 60; n++) assertEquals(seen[30], seen[n], seen[30] * 0.05 + 2, "size " + n);
+        assertEquals(60, swarmSize(0.99999));
+        assertEquals(120, swarmSize(0.0));
+        assertEquals(60, swarmSize(1.5), "a roll past 1 counts as 1");
     }
 }
