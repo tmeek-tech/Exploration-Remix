@@ -27,6 +27,7 @@
     "PortalShapeMixin",
     "BaseFireBlockMixin",
     "LevelChunkMixin",
+    "WorldGenRegionMixin",
     "accessor.LivingEntityAccessor",
     "rune.ItemStackRuneMixin",
     "rune.FurnaceRuneMixin",

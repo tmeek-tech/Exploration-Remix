@@ -53,6 +53,7 @@ public final class ERConfig {
     public final ForgeConfigSpec.IntValue eruptionWakeSeconds, eruptionBombs, eruptionBombsNear, eruptionNearMinBlocks, eruptionNearMaxBlocks,
             eruptionVentNearBias, eruptionVentBurn, eruptionEjecta, eruptionRange, eruptionHeardRange;
     public final ForgeConfigSpec.BooleanValue resetEnabled;
+    public final ForgeConfigSpec.BooleanValue terrainSlabs;
     public final ForgeConfigSpec.IntValue resetChangesPerTick;
 
     public static final class LayerConfig {
@@ -250,6 +251,13 @@ public final class ERConfig {
         resetEnabled = b.comment("Reset the Galleries' terrain once a cycle.").define("enabled", true);
         resetChangesPerTick = b.comment("Most blocks the reset puts back in one tick, over all players (halved while the server is falling behind).")
                 .defineInRange("changesPerTick", 2048, 16, 100_000);
+        b.pop();
+
+        b.comment("Fixes where other mods meet. Changes apply to newly generated chunks.").push("compat");
+        terrainSlabs = b.comment("Keep Terrain Slabs' slabs made of the ground they lie on when a later feature changes that ground (as the",
+                        "smooth basalt flows of WWOO's stony peaks do), cover them with the snow features lay beside them (WWOO's snow",
+                        "patches skip slabs), and lay none inside powder snow. Does nothing without Terrain Slabs.")
+                .define("terrainSlabs", true);
         b.pop();
     }
 
