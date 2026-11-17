@@ -147,7 +147,8 @@ public final class MobGroupCommands {
         Mob leader = MobGroupSpawner.spawnFor(p.serverLevel(), p, kind);
         if (leader == null) {
             c.getSource().sendFailure(Component.literal("No place of " + kind.home.name().toLowerCase(Locale.ROOT) + " near you took a group of "
-                    + kind.id() + " (" + MobGroupSpawner.COMMAND_TRIES + " tries): it must be dark enough, with room, 24 to 128 blocks off."));
+                    + kind.id() + " (" + MobGroupSpawner.COMMAND_TRIES + " tries): it must be dark enough, with room, 24 to 128 blocks off. Spots missed: "
+                    + MobGroupSpawner.misses(MobGroupSpawner.LAST_MISSES)));
             return 0;
         }
         MobGroups.Group g = MobGroups.groupOf(leader);
@@ -167,6 +168,7 @@ public final class MobGroupCommands {
                 + " (the leader's spot " + MobGroupSpawner.failedLeader + ", too few found room " + (MobGroupSpawner.failed - MobGroupSpawner.failedLeader)
                 + "), endermen " + MobGroupSpawner.endermen);
         say(c, "Groups by kind:" + kinds);
+        say(c, "Spots that did not take a mob: " + MobGroupSpawner.misses(MobGroupSpawner.MISSES));
         int loaded = 0, members = 0;
         for (MobGroups.Group g : MobGroups.groups()) { loaded++; members += g.members.size(); }
         say(c, "Loaded now: " + loaded + " groups, " + members + " members");

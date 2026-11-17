@@ -18,8 +18,10 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnPlacements;
 import net.minecraft.world.entity.monster.EnderMan;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.monster.Slime;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -74,10 +76,29 @@ public final class MobGroupSpawner {
     /** A place a group may come out, and its home. */
     record Anchor(BlockPos pos, Home home) {}
 
+    /** Why a spot did not take a mob. */
+    enum Miss {
+        /** Too near a player or the world's spawn, or too far from its player. */
+        DISTANCE("too near or far"),
+        /** Nothing to stand on, or the spot itself is no place for one (water for a walker, lava, fire). */
+        PLACE("no place to stand"),
+        /** Too little room for its body, or another of its group there. */
+        ROOM("no room"),
+        /** Lit by a torch, glowing plants or lava (vanilla's monsters come out only in block light 0). */
+        LIGHT("lit by blocks"),
+        /** The kind's own rules: daylight, its ground, a husk or stray out of the sky, other mods' say. */
+        RULES("the kind's own rules");
+
+        final String says;
+
+        Miss(String says) { this.says = says; }
+    }
+
     // what it has done since the server started, for /remix groups stats
     static long looks, anchors, wanted, spawned, failed, failedLeader, endermen;
     static final long[] ANCHORS_BY_HOME = new long[Home.values().length];
     static final long[] SPAWNED_BY_KIND = new long[Kind.values().length];
+    static final long[] MISSES = new long[Miss.values().length];
 
     /** Set while the spawner itself finishes its mobs, so their spawn is not taken for one of vanilla's. */
     static boolean placing;
@@ -86,6 +107,20 @@ public final class MobGroupSpawner {
         looks = anchors = wanted = spawned = failed = failedLeader = endermen = 0;
         Arrays.fill(ANCHORS_BY_HOME, 0);
         Arrays.fill(SPAWNED_BY_KIND, 0);
+        Arrays.fill(MISSES, 0);
+    }
+
+    /** The misses as words, such as "no room 12, lit by blocks 3", or "none". */
+    static String misses(long[] n) {
+        StringBuilder sb = new StringBuilder();
+        for (Miss m : Miss.values())
+            if (n[m.ordinal()] > 0) sb.append(sb.isEmpty() ? "" : ", ").append(m.says).append(' ').append(n[m.ordinal()]);
+        return sb.isEmpty() ? "none" : sb.toString();
+    }
+
+    private static <T> T miss(Miss m) {
+        MISSES[m.ordinal()]++;
+        return null;
     }
 
     // ------------------------------------------------------------------------------------------------ settings
@@ -383,20 +418,55 @@ public final class MobGroupSpawner {
      */
     @Nullable
     private static Mob tryAt(ServerLevel level, EntityType<? extends Mob> type, BlockPos pos, @Nullable ServerPlayer forPlayer, List<Mob> placed) {
-        if (!level.isNaturalSpawningAllowed(pos)) return null;
+        if (!level.isNaturalSpawningAllowed(pos)) return miss(Miss.DISTANCE);
         double x = pos.getX() + 0.5, y = pos.getY(), z = pos.getZ() + 0.5;
         Vec3 c = new Vec3(x, y, z);
         double nearest = nearestPlayer(level, c);
         double fromPlayer = forPlayer != null ? forPlayer.position().distanceTo(c) : nearest;
-        if (!MobGroupRules.spotOk(nearest, fromPlayer, Vec3.atCenterOf(level.getSharedSpawnPos()).distanceTo(c))) return null;
-        if (!NaturalSpawner.isSpawnPositionOk(SpawnPlacements.getPlacementType(type), level, pos, type)) return null;
-        AABB box = type.getAABB(x, y, z);
-        if (!level.noCollision(box)) return null;
-        for (Mob o : placed) if (o.getBoundingBox().intersects(box)) return null;
+        if (!MobGroupRules.spotOk(nearest, fromPlayer, Vec3.atCenterOf(level.getSharedSpawnPos()).distanceTo(c))) return miss(Miss.DISTANCE);
+        if (!NaturalSpawner.isSpawnPositionOk(SpawnPlacements.getPlacementType(type), level, pos, type)) return miss(Miss.PLACE);
+        AABB box = roomFor(type, x, y, z);
+        if (!level.noCollision(box)) return miss(Miss.ROOM);
+        for (Mob o : placed) if (o.getBoundingBox().intersects(box)) return miss(Miss.ROOM);
+        // the block-light part of vanilla's dark-enough test, which every kind here needs (it decides nothing new,
+        // it only tells a lit spot from the other rules)
+        int limit = level.dimensionType().monsterSpawnBlockLightLimit();
+        if (limit < 15 && level.getBrightness(LightLayer.BLOCK, pos) > limit) return miss(Miss.LIGHT);
         Mob m = type.create(level);
         if (m == null) return null;
         m.moveTo(x, y, z, level.random.nextFloat() * 360.0F, 0.0F);
-        return rulesAllow(level, m, type, pos) ? m : null;
+        return rulesAllow(level, m, type, pos) ? m : miss(Miss.RULES);
+    }
+
+    /** The smallest slime's share of the slime's full box (a slime of size 1 against vanilla's room for one of size 4). */
+    private static final float SMALLEST_SLIME = 0.255F;
+
+    /**
+     * The room a new mob needs: its kind's box, as vanilla's spawner has it, or for a slime the smallest one's (vanilla
+     * makes room for the biggest, a three-block cube the root-filled green caves rarely have; a slime here is made no
+     * bigger than its spot holds, see {@link #fitSlime}).
+     */
+    private static AABB roomFor(EntityType<?> type, double x, double y, double z) {
+        if (type != EntityType.SLIME) return type.getAABB(x, y, z);
+        double h = type.getWidth() * SMALLEST_SLIME / 2.0;
+        return new AABB(x - h, y, z - h, x + h, y + type.getHeight() * SMALLEST_SLIME, z + h);
+    }
+
+    /**
+     * A slime that came out bigger than its spot holds is first moved up to half a block (a middling slime fits where
+     * four open blocks meet, though not in the middle of one), else halved, until it fits or is the smallest.
+     */
+    private static void fitSlime(ServerLevel level, Slime slime) {
+        while (!level.noCollision(slime, slime.getBoundingBox())) {
+            for (double dx = -0.5; dx <= 0.5; dx += 0.5)
+                for (double dz = -0.5; dz <= 0.5; dz += 0.5)
+                    if ((dx != 0.0 || dz != 0.0) && level.noCollision(slime, slime.getBoundingBox().move(dx, 0.0, dz))) {
+                        slime.setPos(slime.getX() + dx, slime.getY(), slime.getZ() + dz);
+                        return;
+                    }
+            if (slime.getSize() <= 1) return;
+            slime.setSize(slime.getSize() / 2, true);
+        }
     }
 
     /** The kind's own spawn rules, through Forge's event so other mods still have their say. */
@@ -445,6 +515,7 @@ public final class MobGroupSpawner {
         } finally {
             placing = false;
         }
+        if (m instanceof Slime slime) fitSlime(level, slime);
         level.addFreshEntityWithPassengers(m);
     }
 
@@ -459,16 +530,24 @@ public final class MobGroupSpawner {
         };
     }
 
+    /** What the spots of the last {@link #spawnFor} missed by. */
+    static final long[] LAST_MISSES = new long[Miss.values().length];
+
     /** A group of {@code kind} near {@code p}, at the first place of its home that takes it, whatever the counts; the leader or null. */
     @Nullable
     static Mob spawnFor(ServerLevel level, ServerPlayer p, Kind kind) {
         Look look = lookFor(kind.home);
-        for (int t = 0; t < COMMAND_TRIES; t++) {
-            Anchor a = anchor(level, p, look);
-            if (a == null || a.home != kind.home) continue;
-            Mob leader = spawnGroup(level, a.pos, kind, p);
-            if (leader != null) return leader;
+        long[] before = MISSES.clone();
+        try {
+            for (int t = 0; t < COMMAND_TRIES; t++) {
+                Anchor a = anchor(level, p, look);
+                if (a == null || a.home != kind.home) continue;
+                Mob leader = spawnGroup(level, a.pos, kind, p);
+                if (leader != null) return leader;
+            }
+            return null;
+        } finally {
+            for (int i = 0; i < MISSES.length; i++) LAST_MISSES[i] = MISSES[i] - before[i];
         }
-        return null;
     }
 }

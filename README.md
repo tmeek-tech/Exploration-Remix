@@ -159,7 +159,9 @@ spawns in the overworld:
 A group is 3 to 5 (a witch coven 2) and comes out 24 to 80 blocks from you, only where it is dark enough, as vanilla's
 monsters do; two groups of each home are kept round you and a third comes now and then. A group roams together (a
 member that strays more than 8 blocks from its leader walks back), fights together (when one turns on you, the others
-within 24 blocks come too) and despawns together. Spawners, the structures' own spawns (witch huts, ocean monuments,
+within 24 blocks come too) and despawns together. Grouped monsters never hurt or turn on one another (a skeleton's
+arrow does not hurt a zombie in its way), though a creeper's blast still hurts everything round it; a slime comes out
+no bigger than its spot has room for. Spawners, the structures' own spawns (witch huts, ocean monuments,
 pillager outposts), patrols, phantoms, village sieges, the Nether and the End are untouched. Sizes, counts, the
 enderman's chance and how wooded the woods must be are in `explorationremix-world.toml` (`[mobGroups]`, read while the
 server runs; `enabled = false` brings vanilla's own spawning back).
