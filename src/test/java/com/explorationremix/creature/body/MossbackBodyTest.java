@@ -198,6 +198,62 @@ class MossbackBodyTest {
         }
     }
 
+    /** A body laid on a flat floor and stood a few ticks, its box at (0.5, ., 0.5) heading south. */
+    private static MossbackBody standing(BlockWorld world, TerrainPatch rock, MossbackBody.Drive drive, int[] bounds) {
+        MossbackBody body = new MossbackBody(rig.spec);
+        drive.x = 0.5; drive.y = 0.45; drive.z = 0.5;
+        for (int t = 0; t < 6; t++) tick(body, world, rock, drive, bounds);
+        return body;
+    }
+
+    private static void tick(MossbackBody body, BlockWorld world, TerrainPatch rock, MossbackBody.Drive drive, int[] bounds) {
+        body.bounds(drive, bounds);
+        rock.build(world, bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
+        body.tick(rock, drive);
+    }
+
+    @Test
+    void aDyingBodyIsCarriedWithItsBox() {
+        // killed, it is knocked back and falls off a ledge: the corpse goes with its box, just as it lay
+        BlockWorld world = new BlockWorld().fill(-8, -1, -8, 8, -1, 8).fill(-8, -4, 9, 8, -4, 20);
+        TerrainPatch rock = new TerrainPatch();
+        MossbackBody.Drive drive = new MossbackBody.Drive();
+        int[] bounds = new int[6];
+        MossbackBody body = standing(world, rock, drive, bounds);
+        Vector3d[] was = new Vector3d[body.joints];
+        for (int i = 0; i < body.joints; i++) was[i] = new Vector3d(body.jointNow(i)).sub(drive.x, drive.y, drive.z);
+        drive.mode = MossbackBody.Mode.DEAD;
+        for (int t = 0; t < 12; t++) {
+            drive.z += 0.35;
+            drive.y -= 0.02 * t;
+            tick(body, world, rock, drive, bounds);
+            for (int i = 0; i < body.joints; i++) {
+                Vector3d rel = new Vector3d(body.jointNow(i)).sub(drive.x, drive.y, drive.z);
+                assertTrue(rel.distance(was[i]) < 1.0E-9, "joint " + i + " left behind by " + rel.distance(was[i]) + " at tick " + t);
+            }
+        }
+    }
+
+    @Test
+    void aRearedHeadStaysUpAsItLeaps() {
+        // reared on the floor, then off the rock in one tick (a lunge): the head does not drop flat at once
+        BlockWorld world = new BlockWorld().fill(-8, -1, -8, 8, -1, 8);
+        TerrainPatch rock = new TerrainPatch();
+        MossbackBody.Drive drive = new MossbackBody.Drive();
+        int[] bounds = new int[6];
+        MossbackBody body = standing(world, rock, drive, bounds);
+        drive.rear = 1.0;
+        for (int t = 0; t < 10; t++) tick(body, world, rock, drive, bounds);
+        double reared = body.jointNow(MossbackSpec.HEAD).y - body.jointNow(MossbackSpec.MIDDLE).y;
+        drive.mode = MossbackBody.Mode.AIR;
+        drive.rear = 0.0;
+        drive.z += 0.3;
+        tick(body, world, rock, drive, bounds);
+        double leaping = body.jointNow(MossbackSpec.HEAD).y - body.jointNow(MossbackSpec.MIDDLE).y;
+        assertTrue(reared > 0.15, "the head was not reared: " + reared);
+        assertTrue(leaping > reared * 0.5, "the head dropped from " + reared + " to " + leaping + " above the middle in one tick");
+    }
+
     @Test
     void plantedFeetReachTheirRock() {
         // a leg may fall a little short for a moment over rubble; mostly every planted foot is reached

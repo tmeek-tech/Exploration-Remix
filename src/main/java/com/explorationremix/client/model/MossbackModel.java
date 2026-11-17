@@ -48,6 +48,8 @@ public class MossbackModel extends EntityModel<MossbackEntity> {
     private VertexConsumer out;
     private int overlay;
     private float red, green, blue, alpha;
+    /** On fire: lit through by its own flames (block light 15, as vanilla lights a burning mob). */
+    private boolean burning;
     private final MossbackPose.Sink sink = this::vertex;
 
     public MossbackModel() {
@@ -79,6 +81,7 @@ public class MossbackModel extends EntityModel<MossbackEntity> {
         // dying, it rolls onto its back
         in.dying = e.deathTime > 0 ? Math.sqrt(Math.min(1.0, (e.deathTime + pt - 1.0) / 20.0 * 1.6)) : 0.0;
         level = e.level();
+        burning = e.isOnFire();
         // from where the lizard is drawn (as LevelRenderer places it), so every part lands where its body has it in the world
         double ox = Mth.lerp(pt, e.xOld, e.getX()), oy = Mth.lerp(pt, e.yOld, e.getY()), oz = Mth.lerp(pt, e.zOld, e.getZ());
         int fallback = LevelRenderer.getLightColor(level, e.blockPosition());
@@ -134,7 +137,8 @@ public class MossbackModel extends EntityModel<MossbackEntity> {
     private void vertex(float x, float y, float z, float u, float v, float nx, float ny, float nz, int light) {
         matrix.transform(p4.set(x, y, z, 1.0F));
         normals.transform(n3.set(nx, ny, nz));
-        out.vertex(p4.x(), p4.y(), p4.z(), red, green, blue, alpha, u, v, overlay, light, n3.x(), n3.y(), n3.z());
+        int lit = burning ? (light & 0xFFFF0000) | 0xF0 : light;
+        out.vertex(p4.x(), p4.y(), p4.z(), red, green, blue, alpha, u, v, overlay, lit, n3.x(), n3.y(), n3.z());
     }
 
     /**

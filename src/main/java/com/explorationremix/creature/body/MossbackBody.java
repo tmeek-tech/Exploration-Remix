@@ -218,8 +218,15 @@ public final class MossbackBody {
             lay(rock, in);
             return;
         }
+        if (mode == Mode.DEAD) {
+            // dying, it is carried as it lies wherever its box goes (falling, knocked back, sliding)
+            double dx = in.x - lastCentre.x, dy = in.y - lastCentre.y, dz = in.z - lastCentre.z;
+            for (int i = 0; i < joints; i++) { pos[i].add(dx, dy, dz); old[i].add(dx, dy, dz); }
+            for (Foot ft : feet) ft.at.add(dx, dy, dz);
+            lastCentre.set(in.x, in.y, in.z);
+            return;
+        }
         lastCentre.set(in.x, in.y, in.z);
-        if (mode == Mode.DEAD) return;
         leadEased.lerp(in.lead, 0.6);
         if (leadEased.lengthSquared() < 1.0E-6) leadEased.set(in.lead);
         leadEased.normalize();
@@ -256,14 +263,14 @@ public final class MossbackBody {
         Vector3d dir = along(t1.set(in.forward), up[c]);
         if (dir.lengthSquared() < 1.0E-6) dir.set(pos[s]).sub(pos[c]);
         dir.normalize();
-        reach(rock, pos[c], pos[s], dir, spec.length(c, s), spec.ride[s] + 0.12 * lift, ground);
+        reach(rock, pos[c], pos[s], dir, spec.length(c, s), spec.ride[s], 0.12 * lift, ground, up[s]);
         // neck: a share of the way the head leads
         steer(pos[c], pos[s], NECK_LEAD, up[s], t1);
-        reach(rock, pos[s], pos[nk], t1, spec.length(s, nk), spec.ride[nk] + 0.26 * lift, ground);
+        reach(rock, pos[s], pos[nk], t1, spec.length(s, nk), spec.ride[nk], 0.26 * lift, ground, up[nk]);
         limitBend(pos[c], pos[s], pos[nk], spec.length(s, nk), BEND_SHOULDERS);
         // head
         steer(pos[s], pos[nk], HEAD_LEAD, up[nk], t1);
-        reach(rock, pos[nk], pos[h], t1, spec.length(nk, h), spec.ride[h] + 0.38 * lift, ground);
+        reach(rock, pos[nk], pos[h], t1, spec.length(nk, h), spec.ride[h], 0.38 * lift, ground, up[h]);
         limitBend(pos[s], pos[nk], pos[h], spec.length(nk, h), BEND_NECK);
     }
 
@@ -280,15 +287,20 @@ public final class MossbackBody {
         out.normalize();
     }
 
-    /** Sets {@code p} {@code len} from {@code from} along {@code dir}, laid on the rock (on the ground), {@code len} away. */
-    private void reach(TerrainPatch rock, Vector3d from, Vector3d p, Vector3d dir, double len, double height, boolean ground) {
+    /**
+     * Sets {@code p} {@code len} from {@code from} along {@code dir}: on the ground laid {@code height} plus
+     * {@code lift} out from the rock; off it (leaping, falling) raised by {@code lift} along its way out {@code up}, so a
+     * reared head stays up as it leaves the rock.
+     */
+    private void reach(TerrainPatch rock, Vector3d from, Vector3d p, Vector3d dir, double len, double height, double lift, boolean ground,
+                       Vector3d up) {
         p.set(from).fma(len, dir);
-        if (ground) {
-            adhere(rock, p, height, n1);
-            p.sub(from);
-            if (p.lengthSquared() < 1.0E-9) p.set(dir);
-            p.normalize().mul(len).add(from);
-        }
+        if (ground) adhere(rock, p, height + lift, n1);
+        else if (lift > 1.0E-4) p.fma(lift, up);
+        else return;
+        p.sub(from);
+        if (p.lengthSquared() < 1.0E-9) p.set(dir);
+        p.normalize().mul(len).add(from);
     }
 
     /** Hips and tail base, dragged after the middle the way they came, laid on the rock. */
@@ -738,8 +750,9 @@ public final class MossbackBody {
                 continue;
             }
             if (!ft.planted) {
-                // back on the rock after a fall, a lunge or a rear: down at once (if there is rock in reach; else it hangs)
-                if (target(rock, ft, g, ft.ideal, 0.0, t1, t2)) begin(rock, ft, g, 3, stride, duty, 0.08);
+                // back on the rock after a fall, a lunge or a rear: down at once, the front feet a tick before the hind
+                // (if there is rock in reach; else it hangs)
+                if (target(rock, ft, g, ft.ideal, 0.0, t1, t2)) begin(rock, ft, g, ft.leg.front ? 3 : 4, stride, duty, 0.08);
                 else dangle(ft, g, false);
                 continue;
             }

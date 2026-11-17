@@ -212,6 +212,9 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
     @Nullable private LevelTerrain bodyTerrain;
     @Nullable private int[] bodyBounds;
     private int drawnAt = Integer.MIN_VALUE / 2;
+    /** Client: ticks its box has touched no rock in a row; the body lets go of the rock after more than BODY_AIR_GRACE. */
+    private int bodyAir;
+    static final int BODY_AIR_GRACE = 2;
     static final int BODY_KEEP = 60;
     static final double BODY_HEAR = 20.0;
 
@@ -1629,9 +1632,13 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
         in.forward.set(clientForward.x, clientForward.y, clientForward.z);
         in.lead.set(clientLead.x, clientLead.y, clientLead.z);
         byte s = state();
+        // off the rock for a tick or two (cresting a wall's top, over a step) it keeps its footing; leaping, dropping or
+        // falling longer it lets go
+        bodyAir = surface() == null ? bodyAir + 1 : 0;
         if (isDeadOrDying()) in.mode = MossbackBody.Mode.DEAD;
-        else if (isInWater()) in.mode = MossbackBody.Mode.WATER;
-        else if (surface() == null || s == LUNGE || s == DROP) in.mode = MossbackBody.Mode.AIR;
+        // swimming: afloat, or in water deeper than it wades (as the server swims it); a film of spring water is floor
+        else if (isInWater() && (surface() == null || getFluidHeight(FluidTags.WATER) > getFluidJumpThreshold())) in.mode = MossbackBody.Mode.WATER;
+        else if (s == LUNGE || s == DROP || bodyAir > BODY_AIR_GRACE) in.mode = MossbackBody.Mode.AIR;
         else in.mode = MossbackBody.Mode.GROUND;
         in.rear = rear;
         in.hurry = s == CHASE;
