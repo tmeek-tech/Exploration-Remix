@@ -583,6 +583,24 @@ def creature_data():
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/skein_plate"}})
 
 
+# 0.18.0: the homes of vanilla's hostile mobs in groups (creature/groups/MobHomes.java) that no biome's spawn list can
+# tell: zombies with skeletons in the woods (where trees also cover the spot), spider packs and witch covens in dark oak
+# forests, creepers and slimes in the green Upper Caves. Deserts, snowy land, the water and the endermen are read from
+# each biome's own spawn list instead.
+MOB_HOMES = {
+    "woods": ["#minecraft:is_forest", "#minecraft:is_taiga", "#minecraft:is_jungle", "#minecraft:is_savanna", "minecraft:swamp",
+              "minecraft:mangrove_swamp", "minecraft:cherry_grove", "minecraft:wooded_badlands", "minecraft:windswept_forest"],
+    "dark_oak": ["minecraft:dark_forest"],
+    "green_caves": ["minecraft:lush_caves", f"{MOD}:rootvaults", f"{MOD}:frozen_rootvaults", f"{MOD}:silver_fern_rift",
+                    f"{MOD}:frost_fern_grotto"],
+}
+
+
+def mob_homes():
+    for name, values in MOB_HOMES.items():
+        tag(MOD, "worldgen/biome", "mob_homes/" + name, values)
+
+
 # Entities that are not creatures (creatures.py names those): 0.5.1's lava bomb, thrown by the Caldera's eruptions.
 ENTITY_NAMES = {"lava_bomb": "Lava Bomb"}
 
@@ -648,6 +666,7 @@ def main():
     names.update(runes.write_all(RES, write, tag))
     names.update({f"entity.{MOD}.{e}": n for e, n in ENTITY_NAMES.items()})
     creature_data()
+    mob_homes()
     particles()
     lang(names)
     for path, data in kept.items():
