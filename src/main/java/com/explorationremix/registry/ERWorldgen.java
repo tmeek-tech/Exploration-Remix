@@ -6,8 +6,6 @@ import com.explorationremix.world.feature.BrokenMachineFeature;
 import com.explorationremix.world.feature.CeilingRootsFeature;
 import com.explorationremix.world.feature.ClimbVinesFeature;
 import com.explorationremix.world.feature.ColumnClusterFeature;
-import com.explorationremix.world.feature.PillarFeature;
-import com.explorationremix.world.feature.PointedPatchFeature;
 import com.explorationremix.world.feature.DaylightShaftFeature;
 import com.explorationremix.world.feature.DenLairFeature;
 import com.explorationremix.world.feature.FallSitesPlacement;
@@ -26,11 +24,16 @@ import com.explorationremix.world.feature.MixStateProvider;
 import com.explorationremix.world.feature.MushroomShelfFeature;
 import com.explorationremix.world.feature.OpenSpanPlacement;
 import com.explorationremix.world.feature.OpenWayFeature;
-import com.explorationremix.world.feature.RiftBandPlacement;
-import com.explorationremix.world.feature.RootvaultsLookFilter;
+import com.explorationremix.world.feature.PillarFeature;
+import com.explorationremix.world.feature.PitTraitFilter;
 import com.explorationremix.world.feature.PlannedUpperFilter;
+import com.explorationremix.world.feature.PointedPatchFeature;
+import com.explorationremix.world.feature.RiftBandPlacement;
+import com.explorationremix.world.feature.RootHairsFeature;
+import com.explorationremix.world.feature.RootvaultsLookFilter;
 import com.explorationremix.world.feature.RootvaultsOpeningsPlacement;
 import com.explorationremix.world.feature.ShelfVinesFeature;
+import com.explorationremix.world.feature.SinkholeRimFeature;
 import com.explorationremix.world.feature.SkeinsFeature;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
 import com.explorationremix.world.feature.TerracePoolsFeature;
@@ -83,6 +86,10 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
     // the Galleries' floor lava (fix round 2 after the 0.8.0 pack runs): the field's rule laid on its floors
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> FLOOR_LAVA = FEATURES.register("floor_lava", () -> new FloorLavaFeature(NoneFeatureConfiguration.CODEC));
+    // 0.18.6: grass trails, roots and ivy over the lip of the plains' sinkholes, in the surface's biome
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> SINKHOLE_RIM = FEATURES.register("sinkhole_rim", () -> new SinkholeRimFeature(NoneFeatureConfiguration.CODEC));
+    // 0.18.6: hanging roots under the trees' roots through the Root Vaults (strands, pillars, stubs), the sunken ways' tops too
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> ROOT_HAIRS = FEATURES.register("root_hairs", () -> new RootHairsFeature(NoneFeatureConfiguration.CODEC));
     // the lava's pockets another mod's slab pass filled with water, given back in the Wasteland and the Galleries (fix round 3)
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> LAVA_POCKETS = FEATURES.register("lava_pockets", () -> new LavaPocketsFeature(NoneFeatureConfiguration.CODEC));
 
@@ -101,5 +108,7 @@ public final class ERWorldgen {
     public static final RegistryObject<PlacementModifierType<FallSitesPlacement>> FALL_SITES = PLACEMENT_TYPES.register("fall_sites", () -> () -> FallSitesPlacement.CODEC);
     // 0.14.5: the Fern Rift's plants kept to its bands by depth (green, silver, light blue)
     public static final RegistryObject<PlacementModifierType<RiftBandPlacement>> RIFT_BAND = PLACEMENT_TYPES.register("rift_band", () -> () -> RiftBandPlacement.CODEC);
+    // 0.18.6: features kept to the sinkholes whose trait (shelves, a spring, a bank, heavy ivy) lies in a range
+    public static final RegistryObject<PlacementModifierType<PitTraitFilter>> PIT_TRAIT = PLACEMENT_TYPES.register("pit_trait", () -> () -> PitTraitFilter.CODEC);
     public static final RegistryObject<HeightProviderType<LayerHeight>> LAYER_HEIGHT = HEIGHT_PROVIDERS.register("layer_height", () -> () -> LayerHeight.CODEC);
 }

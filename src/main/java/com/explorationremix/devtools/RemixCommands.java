@@ -1146,7 +1146,8 @@ public final class RemixCommands {
     // ============================================================================================== noise shapes
 
     /** The kinds of place {@code /remix shapes} finds (UpperShapes.find). */
-    private static final String[] SHAPE_KINDS = {"warrens", "chambers", "mouth", "frozen", "rifts", "halls", "sinkholes", "hollows"};
+    private static final String[] SHAPE_KINDS = {"warrens", "chambers", "mouth", "frozen", "rifts", "halls", "sinkholes", "hollows", "falls",
+            "slopes", "shelves", "roots", "pillars", "bulbs"};
     /** How far round the command's position {@code /remix shapes} looks, and how far apart the places it counts lie. */
     private static final int SHAPE_RADIUS = 640, SHAPE_APART = 96;
 
@@ -1199,7 +1200,7 @@ public final class RemixCommands {
         final int want = switch (k) {
             case "rifts" -> UpperShapes.RIFTS;
             case "halls" -> UpperShapes.HALLS;
-            case "sinkholes", "hollows" -> UpperShapes.SINKHOLES;
+            case "sinkholes", "hollows", "falls", "slopes", "shelves" -> UpperShapes.SINKHOLES;
             default -> UpperShapes.WARRENS;
         };
         BlockPos spot = new BlockPos(at[0], at[1], at[2]);
