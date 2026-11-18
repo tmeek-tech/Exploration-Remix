@@ -71,6 +71,7 @@ public final class SeamScan {
             String name = s == null ? "?" : net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath();
             b.append('\n').append(String.format(Locale.ROOT, "%-18s ", name)).append(lines.get(i));
         }
+        for (String l : shapes.lakeDebug(x, z)) if (!l.startsWith("no sinkhole")) b.append('\n').append(l);
         String msg = b.toString();
         c.getSource().sendSuccess(() -> Component.literal(msg), false);
         return 1;
