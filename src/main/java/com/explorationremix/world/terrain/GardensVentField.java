@@ -220,7 +220,7 @@ final class GardensVentField {
             }
         lap("stamp: talus");
         byte[] was = mat.clone();
-        looseAll = keepMain(mat, nx, nz);
+        looseAll = keepRuns(mat, nx, nz, !plan.patch);
         lap("stamp: keepMain");
         looseVent = 0;
         for (int b = 0; b < N; b++)
@@ -237,38 +237,90 @@ final class GardensVentField {
      * dress2._keep_main: solid bits not joined face to face to the window's largest piece of rock turn back to air.
      * Returns how many blocks.
      */
-    static int keepMain(byte[] mat, int nx, int nz) {
-        int N = mat.length;
-        int[] parent = new int[N];
-        for (int b = 0; b < N; b++) parent[b] = mat[b] != AIR && mat[b] != OIL ? b : -1;
-        for (int i = 0; i < nx; i++)
-            for (int j = 0; j < nz; j++) {
-                int base = (i * nz + j) * SY;
-                for (int y = 0; y < SY; y++) {
-                    int b = base + y;
-                    if (parent[b] < 0) continue;
-                    if (y > 0 && parent[b - 1] >= 0) union(parent, b, b - 1);
-                    if (j > 0 && parent[b - SY] >= 0) union(parent, b, b - SY);
-                    if (i > 0 && parent[b - nz * SY] >= 0) union(parent, b, b - nz * SY);
+    static int keepMain(byte[] mat, int nx, int nz) { return keepRuns(mat, nx, nz, false); }
+
+    /**
+     * Keep-main on each column's vertical runs of solid (not air or oil): runs in neighbouring columns that share a row
+     * are joined, which is the blocks' face-to-face joining. With {@code touching} false the largest piece stays (the
+     * preview's rule over its patch); with it true every piece that reaches the window's sides, top or bottom row stays
+     * (the game's rule over a tile's window: such a piece is taken to join the rock beyond). Returns blocks cleared.
+     */
+    static int keepRuns(byte[] mat, int nx, int nz, boolean touching) {
+        int nc = nx * nz;
+        int[] start = new int[nc + 1];
+        int cap = Math.max(16, nc * 4);
+        int[] y0 = new int[cap], y1 = new int[cap];
+        int r = 0;
+        for (int q = 0; q < nc; q++) {
+            start[q] = r;
+            int base = q * SY;
+            int y = 0;
+            while (y < SY) {
+                byte m = mat[base + y];
+                if (m == AIR || m == OIL) {
+                    y++;
+                    continue;
                 }
-            }
-        int[] size = new int[N];
-        int best = -1, bestSize = 0;
-        for (int b = 0; b < N; b++) {
-            if (parent[b] < 0) continue;
-            int r = find(parent, b);
-            if (++size[r] > bestSize) {
-                bestSize = size[r];
-                best = r;
+                int a = y;
+                while (y < SY && mat[base + y] != AIR && mat[base + y] != OIL) y++;
+                if (r == y0.length) {
+                    y0 = java.util.Arrays.copyOf(y0, r * 2);
+                    y1 = java.util.Arrays.copyOf(y1, r * 2);
+                }
+                y0[r] = a;
+                y1[r] = y - 1;
+                r++;
             }
         }
+        start[nc] = r;
+        int[] parent = new int[r];
+        for (int i = 0; i < r; i++) parent[i] = i;
+        for (int i = 0; i < nx; i++)
+            for (int j = 0; j < nz; j++) {
+                int q = i * nz + j;
+                if (j > 0) joinRuns(parent, y0, y1, start[q], start[q + 1], start[q - 1], start[q]);
+                if (i > 0) joinRuns(parent, y0, y1, start[q], start[q + 1], start[q - nz], start[q - nz + 1]);
+            }
+        boolean[] keep = new boolean[r];
+        if (touching) {
+            for (int i = 0; i < nx; i++)
+                for (int j = 0; j < nz; j++) {
+                    int q = i * nz + j;
+                    boolean side = i == 0 || j == 0 || i == nx - 1 || j == nz - 1;
+                    for (int k = start[q]; k < start[q + 1]; k++)
+                        if (side || y0[k] == 0 || y1[k] == SY - 1) keep[find(parent, k)] = true;
+                }
+        } else {
+            long[] size = new long[r];
+            int best = -1;
+            long bestSize = 0;
+            for (int k = 0; k < r; k++) size[find(parent, k)] += y1[k] - y0[k] + 1;
+            for (int k = 0; k < r; k++)
+                if (parent[k] == k && size[k] > bestSize) {
+                    bestSize = size[k];
+                    best = k;
+                }
+            if (best >= 0) keep[best] = true;
+        }
         int loose = 0;
-        for (int b = 0; b < N; b++)
-            if (parent[b] >= 0 && find(parent, b) != best) {
-                mat[b] = AIR;
-                loose++;
+        for (int q = 0; q < nc; q++)
+            for (int k = start[q]; k < start[q + 1]; k++) {
+                if (keep[find(parent, k)]) continue;
+                int base = q * SY;
+                for (int y = y0[k]; y <= y1[k]; y++) mat[base + y] = AIR;
+                loose += y1[k] - y0[k] + 1;
             }
         return loose;
+    }
+
+    /** Joins the runs [a0, a1) of one column with the runs [b0, b1) of its neighbour where they share a row. */
+    private static void joinRuns(int[] parent, int[] y0, int[] y1, int a0, int a1, int b0, int b1) {
+        int a = a0, b = b0;
+        while (a < a1 && b < b1) {
+            if (y0[a] <= y1[b] && y0[b] <= y1[a]) union(parent, a, b);
+            if (y1[a] < y1[b]) a++;
+            else b++;
+        }
     }
 
     static int find(int[] p, int b) {

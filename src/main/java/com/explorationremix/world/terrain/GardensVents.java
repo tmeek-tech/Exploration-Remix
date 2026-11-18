@@ -396,10 +396,21 @@ final class GardensVents {
 
     /** vents.door_box: whether (x, y, z) is in the keep-clear box in front of crack i of vent v (5.4). */
     boolean doorBox(Vent v, int i, int x, int y, int z, Geom g) {
+        return doorRows(v, i, y) && doorCol(v, i, x, z, g);
+    }
+
+    /** The door box's rows: from the sill up to the crack's top (and none for a shut crack). */
+    static boolean doorRows(Vent v, int i, int y) {
+        if (Float.isNaN(v.vc[i])) return false;
+        double ys = v.t[6], ch = v.t[20];
+        return y >= ys && y < ys + ch + 1;
+    }
+
+    /** The door box across: within 3 outside the wall at the sill's row, about as wide as the crack. */
+    boolean doorCol(Vent v, int i, int x, int z, Geom g) {
         float al = v.vc[i];
         if (Float.isNaN(al)) return false;
-        double ys = v.t[6], ch = v.t[20];
-        if (y < ys || y >= ys + ch + 1) return false;
+        double ys = v.t[6];
         geom(v, x, ys, z, ys, g);
         double rs = g.rout;
         if (g.rhoE < rs || g.rhoE > rs + 3.0) return false;
@@ -468,10 +479,11 @@ final class GardensVents {
                 for (int x = icx - rmax - 4; x < icx + rmax + 5; x++)
                     for (int z = icz - rmax - 4; z < icz + rmax + 5; z++) {
                         if (plan.patch && (x < plan.px0 + 1 || x >= plan.px0 + plan.psx - 1 || z < plan.pz0 + 1 || z >= plan.pz0 + plan.psz - 1)) continue;
+                        if (!w.has(x, z) || !doorCol(v, i, x, z, g)) continue;
                         boolean incol = false;
                         int base = ((x - w.x0) * w.nz + (z - w.z0)) * SY;
                         for (int y = ys; y <= (int) (ys + ch + 1); y++) {
-                            if (!doorBox(v, i, x, y, z, g)) continue;
+                            if (!doorRows(v, i, y)) continue;
                             incol = true;
                             tot++;
                             boolean ok = !solid[base + y] || talus[base + y];
@@ -545,6 +557,7 @@ final class GardensVents {
      */
     void stamp(Grid w, List<Vent> vents, int[][] doorOk, CeilBelow cl, int xa, int za, int xb, int zb) {
         Geom g = new Geom();
+        boolean[] dcol = new boolean[48];
         for (int x = xa; x < xb; x++)
             for (int z = za; z < zb; z++) {
                 List<Vent> list = tileList(vents, x, z);
@@ -569,6 +582,13 @@ final class GardensVents {
                         sv = v;
                     }
                 }
+                // each kept door's box across this column (its rows are tested per row below)
+                int nl = list.size();
+                if (dcol.length < nl * 3) dcol = new boolean[nl * 3];
+                for (int li = 0; li < nl; li++) {
+                    Vent v = list.get(li);
+                    for (int i = 0; i < 3; i++) dcol[li * 3 + i] = doorOk[v.idx][i] == 1 && doorCol(v, i, x, z, g);
+                }
                 int colfloor = -999;
                 if (sv != null) {
                     int ysv = (int) sv.t[6];
@@ -585,7 +605,8 @@ final class GardensVents {
                     Vent wallV = null, airV = null, aditV = null, flareV = null, plugV = null, doorV = null;
                     int wallCode = 0, airPart = 0;
                     boolean door = false;
-                    for (Vent v : list) {
+                    for (int li = 0; li < nl; li++) {
+                        Vent v = list.get(li);
                         int p = part(v, x, y, z, cl.at(v.k(), x, z), g);
                         if (p == VP_BODY || p == VP_HOOD || p == VP_RIM) {
                             if (wallV == null || v.idx < wallV.idx) {
@@ -604,7 +625,7 @@ final class GardensVents {
                             if (plugV == null || v.idx < plugV.idx) plugV = v;
                         }
                         for (int i = 0; i < 3; i++)
-                            if (doorOk[v.idx][i] == 1 && doorBox(v, i, x, y, z, g)) {
+                            if (dcol[li * 3 + i] && doorRows(v, i, y)) {
                                 door = true;
                                 doorV = v;
                             }
@@ -739,10 +760,10 @@ final class GardensVents {
                 if (doorOk[v.idx][i] != 1) continue;
                 for (int x = icx - r - 4; x < icx + r + 5; x++)
                     for (int z = icz - r - 4; z < icz + r + 5; z++) {
-                        if (!w.has(x, z)) continue;
+                        if (!w.has(x, z) || !doorCol(v, i, x, z, g)) continue;
                         int base = ((x - w.x0) * w.nz + (z - w.z0)) * SY;
                         for (int y = ys; y < Math.min(SY, (int) (ys + (double) v.t[20] + 1) + 1); y++)
-                            if (doorBox(v, i, x, y, z, g)) m[base + y] = true;
+                            if (doorRows(v, i, y)) m[base + y] = true;
                     }
             }
         }

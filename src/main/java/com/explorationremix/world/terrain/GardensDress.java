@@ -185,46 +185,7 @@ final class GardensDress {
 
     /** Nothing floats: the preview keeps the window's largest piece; the game keeps every piece that reaches its edge. */
     int keepMain() {
-        return plan.patch ? GardensVentField.keepMain(mat, nx, nz) : keepTouching(mat, nx, nz);
-    }
-
-    /**
-     * The game's keep-main over a tile's window: a piece of rock that reaches the window's edge (or its top or bottom
-     * rows) is taken to join the main rock; pieces wholly inside turn back to air. Returns how many blocks.
-     */
-    static int keepTouching(byte[] mat, int nx, int nz) {
-        int N = mat.length;
-        int[] parent = new int[N];
-        for (int b = 0; b < N; b++) parent[b] = mat[b] != AIR && mat[b] != OIL ? b : -1;
-        for (int i = 0; i < nx; i++)
-            for (int j = 0; j < nz; j++) {
-                int base = (i * nz + j) * SY;
-                for (int y = 0; y < SY; y++) {
-                    int b = base + y;
-                    if (parent[b] < 0) continue;
-                    if (y > 0 && parent[b - 1] >= 0) GardensVentField.union(parent, b, b - 1);
-                    if (j > 0 && parent[b - SY] >= 0) GardensVentField.union(parent, b, b - SY);
-                    if (i > 0 && parent[b - nz * SY] >= 0) GardensVentField.union(parent, b, b - nz * SY);
-                }
-            }
-        boolean[] edge = new boolean[N];
-        for (int i = 0; i < nx; i++)
-            for (int j = 0; j < nz; j++) {
-                int base = (i * nz + j) * SY;
-                boolean side = i == 0 || j == 0 || i == nx - 1 || j == nz - 1;
-                for (int y = 0; y < SY; y++) {
-                    int b = base + y;
-                    if (parent[b] < 0) continue;
-                    if (side || y == 0 || y == SY - 1) edge[GardensVentField.find(parent, b)] = true;
-                }
-            }
-        int loose = 0;
-        for (int b = 0; b < N; b++)
-            if (parent[b] >= 0 && !edge[GardensVentField.find(parent, b)]) {
-                mat[b] = AIR;
-                loose++;
-            }
-        return loose;
+        return GardensVentField.keepRuns(mat, nx, nz, !plan.patch);
     }
 
     int changedVent(byte[] before) {
@@ -364,13 +325,16 @@ final class GardensDress {
      */
     int scarp(int dmax, int dmaxT, boolean[] keep, int thick, int rounds) {
         int tot = 0, dm = Math.max(dmax, dmaxT);
-        boolean[] cut = new boolean[mat.length];
         int[] dirs = {sx, -sx, SY, -SY};
+        // a round only looks again at columns beside last round's cuts: elsewhere nothing it reads has changed
+        boolean[] dirty = new boolean[nx * nz], next = new boolean[nx * nz];
+        Arrays.fill(dirty, true);
+        IntList cut = new IntList();
         for (int r = 0; r < rounds; r++) {
-            Arrays.fill(cut, false);
-            int n = 0;
+            cut.n = 0;
             for (int i = 1; i < nx - 1; i++)
                 for (int j = 1; j < nz - 1; j++) {
+                    if (!dirty[i * nz + j]) continue;
                     int base = (i * nz + j) * SY;
                     for (int y = SEAL + thick + 1; y < SY - 6; y++) {
                         int b = base + y;
@@ -395,17 +359,44 @@ final class GardensDress {
                             int drop = y - (yy + 1);
                             if (drop >= 2 && drop <= lim) hit = true;
                         }
-                        if (hit) {
-                            cut[b - 1] = true;
-                            n++;
-                        }
+                        if (hit) cut.add(b - 1);
                     }
                 }
-            if (n == 0) break;
-            for (int b = 0; b < cut.length; b++) if (cut[b]) mat[b] = AIR;
-            tot += n;
+            if (cut.n == 0) break;
+            Arrays.fill(next, false);
+            for (int c = 0; c < cut.n; c++) {
+                int b = cut.a[c];
+                mat[b] = AIR;
+                markAround(next, b / SY, false);
+            }
+            tot += cut.n;
+            boolean[] t = dirty;
+            dirty = next;
+            next = t;
         }
         return tot;
+    }
+
+    /** Marks column q and its 4 (or 8, with {@code diag}) neighbours. */
+    void markAround(boolean[] m, int q, boolean diag) {
+        int i = q / nz, j = q % nz;
+        for (int di = -1; di <= 1; di++)
+            for (int dj = -1; dj <= 1; dj++) {
+                if (!diag && di != 0 && dj != 0) continue;
+                int ii = i + di, jj = j + dj;
+                if (ii >= 0 && jj >= 0 && ii < nx && jj < nz) m[ii * nz + jj] = true;
+            }
+    }
+
+    /** A growable list of ints. */
+    static final class IntList {
+        int[] a = new int[256];
+        int n;
+
+        void add(int v) {
+            if (n == a.length) a = Arrays.copyOf(a, n * 2);
+            a[n++] = v;
+        }
     }
 
     // ================================================================================================ tips and glow
@@ -848,11 +839,12 @@ final class GardensDress {
      * dress3._wells_pass: standing spots walled on all four sides at the feet with no way out by steps of at most 1
      * (diagonals needing both sides clear): pits a player could drop into and never leave.
      */
-    int wellsPass(boolean[] keep, boolean[] out) {
-        int n = 0;
+    int wellsPass(boolean[] keep, boolean[] dirty, IntList out) {
+        int n0 = out.n;
         int[] ddx = {1, -1, 0, 0, 1, 1, -1, -1}, ddz = {0, 0, 1, -1, 1, -1, 1, -1};
         for (int i = 2; i < nx - 2; i++)
             for (int j = 2; j < nz - 2; j++) {
+                if (!dirty[i * nz + j]) continue;
                 int base = (i * nz + j) * SY;
                 for (int y = SEAL + 2; y < SY - 4; y++) {
                     int b = base + y;
@@ -872,25 +864,31 @@ final class GardensDress {
                             ex = true;
                         }
                     }
-                    if (!ex) {
-                        out[b] = true;
-                        n++;
-                    }
+                    if (!ex) out.add(b);
                 }
             }
-        return n;
+        return out.n - n0;
     }
 
     /** dress3.fill_wells: fills dead pits with rubble, round by round. Returns blocks. */
     int fillWells(boolean[] keep, int rounds) {
-        boolean[] out = new boolean[mat.length];
+        boolean[] dirty = new boolean[nx * nz], next = new boolean[nx * nz];
+        Arrays.fill(dirty, true);
+        IntList out = new IntList();
         int tot = 0;
         for (int r = 0; r < rounds; r++) {
-            Arrays.fill(out, false);
-            int n = wellsPass(keep, out);
+            out.n = 0;
+            int n = wellsPass(keep, dirty, out);
             if (n == 0) break;
-            for (int b = 0; b < out.length; b++) if (out[b]) mat[b] = TALUS;
+            Arrays.fill(next, false);
+            for (int c = 0; c < out.n; c++) {
+                mat[out.a[c]] = TALUS;
+                markAround(next, out.a[c] / SY, true);
+            }
             tot += n;
+            boolean[] t = dirty;
+            dirty = next;
+            next = t;
         }
         return tot;
     }
