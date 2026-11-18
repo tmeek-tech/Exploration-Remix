@@ -77,9 +77,10 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #               drops the item named by option drop
 # Options: variants (how many textures: <id>, <id>_2, <id>_3; the game picks one per block from its position, so it
 # never changes), weights (one per variant), drop (hanging_fern, litter: the item it drops), chance (litter: how often
-# it drops it), glow_under (shelf: the whole underside glows), shader_glow (default True; False keeps the glow overlay
-# but leaves the block out of glowing_blocks.json, so under Complementary only the overlay shines and the rest is lit
-# like rock). A texture with an entry in textures.GLOW gets an emissive overlay.
+# it drops it), resting (cross: a GlowbellBlock, drawn with <look>_resting while it rests), glow_under (shelf: the
+# whole underside glows), shader_glow (default True; False keeps the glow overlay but leaves the block out of
+# glowing_blocks.json, so under Complementary only the overlay shines and the rest is lit like rock). A texture with an
+# entry in textures.GLOW gets an emissive overlay.
 BLOCKS = {
     "band_stone": ("Band Stone", "cube"),
     "white_glow_flower": ("White Glow Flower", "cross"),
@@ -115,7 +116,7 @@ BLOCKS = {
     "gold_threads": ("Gold Threads", "vine", {"variants": 2}),
     "gold_threads_plant": ("Gold Threads", "vine_body:gold_threads", {"variants": 2}),
     "sage_bush": ("Sage Bush", "cross", {"variants": 2}),
-    "glowbell": ("Glowbell", "cross", {"variants": 2}),
+    "glowbell": ("Glowbell", "cross", {"variants": 2, "resting": True}),
     "pagoda_fungus": ("Pagoda Fungus", "tall", {"variants": 2}),
     "blue_lichen": ("Blue Lichen", "lichen", {"variants": 3}),
     "asurine_bud": ("Asurine Bud", "crystal", {"variants": 2}),
@@ -432,6 +433,14 @@ def block_assets():
                 models[t] = plane_model(t, "minecraft:block/cross", "cross", "cross")
             if kind == "crystal":
                 states = {"variants": {f"facing={f}": pick([dict({"model": ref(t)}, **turn) for t in texs], weights) for f, turn in FACE6.items()}}
+            elif opts.get("resting"):
+                # GlowbellBlock: rung by a rune it rests a while, its glow sunk to an ember (<look>_resting). The lists
+                # are the same length and order, so a bell keeps its look as it dims.
+                rests = [t + "_resting" for t in texs]
+                for t in rests:
+                    models[t] = plane_model(t, "minecraft:block/cross", "cross", "cross")
+                states = {"variants": {"resting=false": pick([{"model": ref(t)} for t in texs], weights),
+                                       "resting=true": pick([{"model": ref(t)} for t in rests], weights)}}
             else:
                 states = {"variants": {"": pick([{"model": ref(t)} for t in texs], weights)}}
             if kind.startswith("vine_body:"):
@@ -501,7 +510,9 @@ def block_assets():
                     models[t] = {"parent": f"{MOD}:block/template/hanging_fern{size}", "render_type": "minecraft:cutout",
                                  "textures": {"hang": ref(t), "front": ref(fronts[k]), "side": ref(sides[k])}}
                 for f, turn in FACE4.items():
-                    variants[f"facing={f},size={k_size}"] = pick([dict({"model": ref(t)}, **turn) for t in hangs], weights)
+                    # unrolled (0.18.7, struck by a rune: its fronds let down the rock as a curtain), it looks the same
+                    for unrolled in ("false", "true"):
+                        variants[f"facing={f},size={k_size},unrolled={unrolled}"] = pick([dict({"model": ref(t)}, **turn) for t in hangs], weights)
             states = {"variants": variants}
             item = None
             drop = opts["drop"]

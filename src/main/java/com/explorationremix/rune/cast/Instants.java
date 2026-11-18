@@ -72,6 +72,7 @@ final class Instants {
         }
         RuneFx.burst(l, c, r, a.rune, a.element);
         if (a.element != Element.NONE) RuneHits.world(ctx, a.element, c, r);
+        RunePlants.area(ctx, c, r);
         blastSelf(ctx, c, r, heavy);
         return new Origin(c, o.dir(), o.hit(), o.wall());
     }
@@ -140,6 +141,7 @@ final class Instants {
         // the slash: a sweep of light along its arc
         RuneFx.cleave(l, from, flat, range, Math.acos(cosHalf), a.rune, a.element);
         if (a.element != Element.NONE) RuneHits.world(ctx, a.element, from.add(flat.scale(range * 0.5)), range * 0.5);
+        RunePlants.arc(ctx, from, flat, range, cosHalf);
         return new Origin(from.add(flat.scale(1.5)), flat, first != null ? first : o.hit());
     }
 

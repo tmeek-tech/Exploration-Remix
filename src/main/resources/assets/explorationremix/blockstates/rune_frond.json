@@ -1,0 +1,96 @@
+{
+  "variants": {
+    "bottom=false,facing=north,up=false": {
+      "model": "explorationremix:block/rune_frond"
+    },
+    "bottom=false,facing=north,up=true": {
+      "model": "explorationremix:block/rune_frond_top"
+    },
+    "bottom=true,facing=north,up=false": {
+      "model": "explorationremix:block/rune_frond_tip"
+    },
+    "bottom=true,facing=north,up=true": {
+      "model": "explorationremix:block/rune_frond_tip"
+    },
+    "bottom=false,facing=south,up=false": {
+      "model": "explorationremix:block/rune_frond",
+      "y": 180
+    },
+    "bottom=false,facing=south,up=true": {
+      "model": "explorationremix:block/rune_frond_top",
+      "y": 180
+    },
+    "bottom=true,facing=south,up=false": {
+      "model": "explorationremix:block/rune_frond_tip",
+      "y": 180
+    },
+    "bottom=true,facing=south,up=true": {
+      "model": "explorationremix:block/rune_frond_tip",
+      "y": 180
+    },
+    "bottom=false,facing=west,up=false": {
+      "model": "explorationremix:block/rune_frond",
+      "y": 270
+    },
+    "bottom=false,facing=west,up=true": {
+      "model": "explorationremix:block/rune_frond_top",
+      "y": 270
+    },
+    "bottom=true,facing=west,up=false": {
+      "model": "explorationremix:block/rune_frond_tip",
+      "y": 270
+    },
+    "bottom=true,facing=west,up=true": {
+      "model": "explorationremix:block/rune_frond_tip",
+      "y": 270
+    },
+    "bottom=false,facing=east,up=false": {
+      "model": "explorationremix:block/rune_frond",
+      "y": 90
+    },
+    "bottom=false,facing=east,up=true": {
+      "model": "explorationremix:block/rune_frond_top",
+      "y": 90
+    },
+    "bottom=true,facing=east,up=false": {
+      "model": "explorationremix:block/rune_frond_tip",
+      "y": 90
+    },
+    "bottom=true,facing=east,up=true": {
+      "model": "explorationremix:block/rune_frond_tip",
+      "y": 90
+    },
+    "bottom=false,facing=down,up=false": [
+      {
+        "model": "explorationremix:block/rune_frond_strand"
+      },
+      {
+        "model": "explorationremix:block/rune_frond_strand_2"
+      }
+    ],
+    "bottom=false,facing=down,up=true": [
+      {
+        "model": "explorationremix:block/rune_frond_strand"
+      },
+      {
+        "model": "explorationremix:block/rune_frond_strand_2"
+      }
+    ],
+    "bottom=true,facing=down,up=false": [
+      {
+        "model": "explorationremix:block/rune_frond_strand_tip"
+      },
+      {
+        "model": "explorationremix:block/rune_frond_strand_tip_2"
+      }
+    ],
+    "bottom=true,facing=down,up=true": [
+      {
+        "model": "explorationremix:block/rune_frond_strand_tip"
+      },
+      {
+        "model": "explorationremix:block/rune_frond_strand_tip_2"
+      }
+    ]
+  }
+}

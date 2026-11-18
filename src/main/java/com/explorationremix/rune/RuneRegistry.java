@@ -92,6 +92,14 @@ public final class RuneRegistry {
             BlockBehaviour.Properties.of().replaceable().noCollission().instabreak().noLootTable().lightLevel(s -> 14)
                     .sound(SoundType.AMETHYST_CLUSTER).pushReaction(PushReaction.DESTROY)));
 
+    /**
+     * A struck silver fern's fronds unrolled down a wall (RunePlants): climbable, walked through, a faint silver light so
+     * the way up reads in a dark rift; anything placed there replaces it, and it drops nothing.
+     */
+    public static final RegistryObject<Block> FROND = BLOCKS.register("rune_frond", () -> new com.explorationremix.rune.world.FrondBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.METAL).replaceable().noCollission().instabreak().noLootTable().lightLevel(s -> 3)
+                    .sound(SoundType.GRASS).pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, t) -> false)));
+
     // ------------------------------------------------------------------------------------------------ entities
 
     /** A flying rune (Spark, Shard, Orb, Glow). Never saved; sent every tick so it flies smoothly. */

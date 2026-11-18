@@ -1,6 +1,6 @@
 {
   "variants": {
-    "facing=north,size=0": [
+    "facing=north,size=0,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern"
       },
@@ -8,7 +8,15 @@
         "model": "explorationremix:block/silver_wall_fern_2"
       }
     ],
-    "facing=east,size=0": [
+    "facing=north,size=0,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern"
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_2"
+      }
+    ],
+    "facing=east,size=0,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern",
         "y": 90
@@ -18,7 +26,17 @@
         "y": 90
       }
     ],
-    "facing=south,size=0": [
+    "facing=east,size=0,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_2",
+        "y": 90
+      }
+    ],
+    "facing=south,size=0,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern",
         "y": 180
@@ -28,7 +46,17 @@
         "y": 180
       }
     ],
-    "facing=west,size=0": [
+    "facing=south,size=0,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_2",
+        "y": 180
+      }
+    ],
+    "facing=west,size=0,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern",
         "y": 270
@@ -38,7 +66,17 @@
         "y": 270
       }
     ],
-    "facing=north,size=1": [
+    "facing=west,size=0,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_2",
+        "y": 270
+      }
+    ],
+    "facing=north,size=1,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern_medium"
       },
@@ -46,7 +84,15 @@
         "model": "explorationremix:block/silver_wall_fern_medium_2"
       }
     ],
-    "facing=east,size=1": [
+    "facing=north,size=1,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium"
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium_2"
+      }
+    ],
+    "facing=east,size=1,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern_medium",
         "y": 90
@@ -56,7 +102,17 @@
         "y": 90
       }
     ],
-    "facing=south,size=1": [
+    "facing=east,size=1,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium_2",
+        "y": 90
+      }
+    ],
+    "facing=south,size=1,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern_medium",
         "y": 180
@@ -66,7 +122,17 @@
         "y": 180
       }
     ],
-    "facing=west,size=1": [
+    "facing=south,size=1,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium_2",
+        "y": 180
+      }
+    ],
+    "facing=west,size=1,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern_medium",
         "y": 270
@@ -76,7 +142,17 @@
         "y": 270
       }
     ],
-    "facing=north,size=2": [
+    "facing=west,size=1,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_medium_2",
+        "y": 270
+      }
+    ],
+    "facing=north,size=2,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern_large"
       },
@@ -84,7 +160,15 @@
         "model": "explorationremix:block/silver_wall_fern_large_2"
       }
     ],
-    "facing=east,size=2": [
+    "facing=north,size=2,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_large"
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_large_2"
+      }
+    ],
+    "facing=east,size=2,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern_large",
         "y": 90
@@ -94,7 +178,17 @@
         "y": 90
       }
     ],
-    "facing=south,size=2": [
+    "facing=east,size=2,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_large",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_large_2",
+        "y": 90
+      }
+    ],
+    "facing=south,size=2,unrolled=false": [
       {
         "model": "explorationremix:block/silver_wall_fern_large",
         "y": 180
@@ -104,7 +198,27 @@
         "y": 180
       }
     ],
-    "facing=west,size=2": [
+    "facing=south,size=2,unrolled=true": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_large",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_large_2",
+        "y": 180
+      }
+    ],
+    "facing=west,size=2,unrolled=false": [
+      {
+        "model": "explorationremix:block/silver_wall_fern_large",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/silver_wall_fern_large_2",
+        "y": 270
+      }
+    ],
+    "facing=west,size=2,unrolled=true": [
       {
         "model": "explorationremix:block/silver_wall_fern_large",
         "y": 270
