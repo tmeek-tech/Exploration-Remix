@@ -400,34 +400,79 @@ public final class GiantSkeinCommands {
         Vec3 pref = Math.abs(up.y) > 0.8 ? side.scale(0.7).add(up.scale(0.7)) : up.add(0.0, 0.3, 0.0);
         if (n % 4 == 1) pref = pref.normalize().add(run.scale(0.7));
         pref = pref.normalize();
-        // every way round it off its rock, nearest that first, each tried near and nearer; first with nothing at all in
-        // the way (the rift's hanging vines hide it), then past what only the eye sees through
+        // what the picture is of: points along its whole length, its front or its back
+        double[] arcs = switch (n % 4) {
+            case 1 -> new double[]{0.4, 1.6, 2.8, 4.0, 5.2};
+            case 3 -> new double[]{20.0, 22.0, 24.0, 26.0, 28.0};
+            default -> new double[]{0.5, 4.5, 8.5, 12.5, 16.5, 20.5, 24.5, 28.5};
+        };
+        List<Vec3> marks = new java.util.ArrayList<>();
+        for (double a : arcs) {
+            double[] m = new double[6];
+            g.body().sample(a, 1.0F, m, 0);
+            marks.add(new Vec3(m[0] + m[3] * 0.7, m[1] + m[4] * 0.7, m[2] + m[5] * 0.7));
+        }
+        // every way round it off its rock, each near and nearer: the camera in open air (no hanging vine across its
+        // lens), seeing as much of it as it can past the rift's vines, then as near the best way as it can
         List<Vec3> ways = new java.util.ArrayList<>();
-        int count = 160;
+        int count = 200;
         for (int i = 0; i < count; i++) {
             double y = 1.0 - 2.0 * (i + 0.5) / count, r = Math.sqrt(1.0 - y * y), a = i * 2.39996323;
             Vec3 d = new Vec3(Math.cos(a) * r, y, Math.sin(a) * r);
             if (d.dot(up) > 0.15 && d.y > -0.4) ways.add(d);
         }
+        Vec3 bestEye = null;
+        double bestScore = -1.0;
+        int bestSeen = 0;
+        for (Vec3 d : ways)
+            for (double k : new double[]{1.0, 0.8, 0.65}) {
+                Vec3 eye = target.add(d.scale(dist * k));
+                if (!openAir(level, eye)) continue;
+                int seen = 0;
+                for (Vec3 m : marks) {
+                    BlockHitResult hit = level.clip(new ClipContext(eye, m, ClipContext.Block.OUTLINE, ClipContext.Fluid.ANY, g));
+                    if (hit.getType() == HitResult.Type.MISS || hit.getLocation().distanceTo(m) < 1.0) seen++;
+                }
+                double score = seen * 4.0 + d.dot(pref) * 3.0 + k;
+                if (score > bestScore) { bestScore = score; bestEye = eye; bestSeen = seen; }
+            }
+        if (bestEye != null && bestSeen * 2 >= marks.size()) {
+            Vec3 to = target.subtract(bestEye);
+            float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
+            float pitch = (float) -Math.toDegrees(Math.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z)));
+            pl.teleportTo(level, bestEye.x, bestEye.y - pl.getEyeHeight(), bestEye.z, yaw, pitch);
+            say(c, String.format(Locale.ROOT, "Looking at the giant at %s from %.1f %.1f %.1f, %.0f blocks off, %d of %d points of it in clear sight (%s)",
+                    g.blockPosition().toShortString(), bestEye.x, bestEye.y, bestEye.z, bestEye.distanceTo(target), bestSeen, marks.size(), g.describe()));
+            return 1;
+        }
+        // none in open air sees half of it: the first way that sees its middle past what only the eye sees through
         final Vec3 best = pref;
         ways.sort(Comparator.comparingDouble(d -> -d.dot(best)));
-        for (ClipContext.Block clip : new ClipContext.Block[]{ClipContext.Block.OUTLINE, ClipContext.Block.VISUAL})
-            for (Vec3 d : ways)
-                for (double k : new double[]{1.0, 0.75, 0.55}) {
-                    Vec3 eye = target.add(d.scale(dist * k));
-                    BlockPos eb = BlockPos.containing(eye);
-                    if (!level.isLoaded(eb) || !level.getBlockState(eb).getCollisionShape(level, eb).isEmpty() || !level.getFluidState(eb).isEmpty()) continue;
-                    BlockHitResult hit = level.clip(new ClipContext(eye, target, clip, ClipContext.Fluid.ANY, g));
-                    if (hit.getType() != HitResult.Type.MISS && hit.getLocation().distanceTo(target) > 1.2) continue;
-                    Vec3 to = target.subtract(eye);
-                    float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
-                    float pitch = (float) -Math.toDegrees(Math.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z)));
-                    pl.teleportTo(level, eye.x, eye.y - pl.getEyeHeight(), eye.z, yaw, pitch);
-                    say(c, String.format(Locale.ROOT, "Looking at the giant at %s from %.1f %.1f %.1f, %.0f blocks off%s (%s)", g.blockPosition().toShortString(),
-                            eye.x, eye.y, eye.z, dist * k, clip == ClipContext.Block.VISUAL ? ", through vines" : "", g.describe()));
-                    return 1;
-                }
+        for (Vec3 d : ways)
+            for (double k : new double[]{1.0, 0.75, 0.55}) {
+                Vec3 eye = target.add(d.scale(dist * k));
+                BlockPos eb = BlockPos.containing(eye);
+                if (!level.isLoaded(eb) || !level.getBlockState(eb).getCollisionShape(level, eb).isEmpty() || !level.getFluidState(eb).isEmpty()) continue;
+                BlockHitResult hit = level.clip(new ClipContext(eye, target, ClipContext.Block.VISUAL, ClipContext.Fluid.ANY, g));
+                if (hit.getType() != HitResult.Type.MISS && hit.getLocation().distanceTo(target) > 1.2) continue;
+                Vec3 to = target.subtract(eye);
+                float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
+                float pitch = (float) -Math.toDegrees(Math.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z)));
+                pl.teleportTo(level, eye.x, eye.y - pl.getEyeHeight(), eye.z, yaw, pitch);
+                say(c, String.format(Locale.ROOT, "Looking at the giant at %s from %.1f %.1f %.1f, %.0f blocks off, through vines (%s)", g.blockPosition().toShortString(),
+                        eye.x, eye.y, eye.z, dist * k, g.describe()));
+                return 1;
+            }
         c.getSource().sendFailure(Component.literal("No clear view of the giant at " + g.blockPosition().toShortString()));
         return 0;
+    }
+
+    /** Whether a camera at {@code eye} is in open air: nothing (rock, water, a vine) in the blocks round it. */
+    private static boolean openAir(ServerLevel level, Vec3 eye) {
+        BlockPos c = BlockPos.containing(eye);
+        if (!level.isLoaded(c)) return false;
+        for (BlockPos p : BlockPos.betweenClosed(c.offset(-1, -1, -1), c.offset(1, 1, 1)))
+            if (!level.getBlockState(p).getShape(level, p).isEmpty() || !level.getFluidState(p).isEmpty()) return false;
+        return true;
     }
 }

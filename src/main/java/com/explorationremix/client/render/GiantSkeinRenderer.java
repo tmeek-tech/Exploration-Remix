@@ -139,11 +139,12 @@ public class GiantSkeinRenderer extends EntityRenderer<GiantSkeinEntity> {
             draw(e, pt, pose, buffers.getBuffer(RenderType.entityCutoutNoCull(TEXTURE)), overlay, 1.0F, false, flare, dead);
             float g = e.glow(pt) * (1.0F - dead);
             if (g > 0.02F) draw(e, pt, pose, buffers.getBuffer(RenderType.eyes(GLOW)), OverlayTexture.NO_OVERLAY, g, true, flare, dead);
-            // coiled to strike, and striking: its spine tips and eyes flare, drawn again over themselves (it adds up)
+            // coiled to strike, and striking: its spine tips and eyes flare, drawn again over themselves (it adds up, so
+            // only a little: brighter still and its light blue would wash out to white)
             int phase = e.strikePhase();
             float wind = phase == GiantStrike.COIL || phase == GiantStrike.OUT ? (float) GiantStrike.weight(phase, e.strikeProgress(pt)) : 0.0F;
             if (wind > 0.02F && dead <= 0.0F)
-                draw(e, pt, pose, buffers.getBuffer(RenderType.eyes(GLOW)), OverlayTexture.NO_OVERLAY, 0.7F * wind, true, flare, dead);
+                draw(e, pt, pose, buffers.getBuffer(RenderType.eyes(GLOW)), OverlayTexture.NO_OVERLAY, 0.3F * wind, true, flare, dead);
         }
         super.render(e, yaw, pt, pose, buffers, light);
     }

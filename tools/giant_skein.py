@@ -172,13 +172,15 @@ PALETTE = {
     "belly": ["#4b5a77", "#5d6d8c", "#7181a1", "#8796b4", "#9daac5"],
     "leg": ["#16213a", "#1f2d4c", "#2b3e63", "#3a527e", "#4d699a", "#6585b5"],
     "spine": ["#24365a", "#2f4670", "#3d5a89", "#4f71a3", "#6689bc", "#80a3d2", "#9fbde4", "#bdd3f1", "#d6e5f8"],
-    # the glow a clear light blue (it read white when paler): a little deeper than the rift's vines, never cyan
-    "glow": ["#4f8fff", "#78acff", "#a6caff"],
-    "glow_dim": ["#3f74d6", "#5b8fe8"],
-    "claw": ["#a9bfdf", "#d4e2f5"],
+    # the glow a clear light blue (it read white when paler, over pale texels): it adds to what is under it, so it
+    # stays this deep, over dark texels ("under_glow"), to keep from washing out to white or cyan where it is lit
+    "glow": ["#3f7ae6", "#5d95f5", "#86b3ff"],
+    "glow_dim": ["#3366c4", "#4c80dc"],
+    "under_glow": ["#16233f", "#1c2b4b"],
+    "claw": ["#7f9cc8", "#a3bce0"],
     "mandible": ["#111a30", "#1b2846", "#2b3d63", "#41598a", "#5b77a8"],
     "fang": ["#c6d6ee", "#edf3fc"],
-    "eye": ["#5d9bff", "#94c0ff", "#cfe2ff"],
+    "eye": ["#1c2b4b", "#6f9ff0", "#9cc2ff"],
     "pupil": "#08101e",
     "mouth": ["#0b1122", "#131c34", "#1d2a48"],
 }
@@ -252,12 +254,12 @@ def _spike(cv, box, pal, rng, tip, glow_rows=6, dim=False):
 
     def fn(face, i, j, fw, fh):
         if face == "top":                                   # its far end
-            return (C(g[-1]), "eyes", C(pal["rim"][2])) if tip else ramp(pal["spine"], 0.85)
+            return (C(g[-1]), "eyes", C(pal["under_glow"][1])) if tip else ramp(pal["spine"], 0.85)
         if face == "bottom":
             return ramp(pal["spine"], 0.2)
         if tip and j < glow_rows:
             k = len(g) - 1 if j == 0 else max(0, len(g) - 1 - j * len(g) // glow_rows)
-            return (C(g[k]), "eyes", C(pal["rim"][1]))
+            return (C(g[k]), "eyes", C(pal["under_glow"][0 if k == 0 else 1]))
         along = 1.0 - j / max(1, h - 1)                     # 1 at the far end, 0 at the root
         lit = 0.08 if face in ("north", "west") else -0.06
         base = 0.45 if tip else 0.15
@@ -312,7 +314,7 @@ def _feeler(cv, box, pal, rng, tip):
     def fn(face, i, j, fw, fh):
         k = cr._along(face, i, j, box["size"])
         if tip and k >= d - 3:
-            return (C(pal["glow"][2 if k == d - 1 else 1]), "eyes", C(pal["rim"][1]))
+            return (C(pal["glow"][2 if k == d - 1 else 1]), "eyes", C(pal["under_glow"][1]))
         return ramp(pal["leg"], 0.3 + (0.4 if k % 3 == 0 else 0.0) + 0.15 * rng.random())
 
     cr._texels(cv, box, fn)
