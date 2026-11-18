@@ -44,7 +44,15 @@ public record Fx(Kind kind, double x, double y, double z, float dx, float dy, fl
         /** Motes land in the player's gear: {@code size} how full it is now (0 to 1). */
         MOTE_IN,
         /** A hunter starts winding up a strike (0.12.0): a glint at its eyes, {@code d} the way it faces, {@code size} how big. */
-        WINDUP
+        WINDUP,
+        /** A rune rang a glowbell (0.18.7): its ring of light going out {@code size} blocks. */
+        BELL,
+        /** A glowbell's ring reached a creature: it lights up; {@code size} its width. */
+        PING,
+        /** A struck silver fern's fronds unroll a block further: {@code d} the way they grow (down or up). */
+        UNROLL,
+        /** A struck frostberry vine bursts in a puff of cold {@code size} blocks across, that falls {@code a} blocks to the floor. */
+        FROST_PUFF
     }
 
     public Vec3 pos() { return new Vec3(x, y, z); }

@@ -1,6 +1,8 @@
 package com.explorationremix.client;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.block.GlowbellBlock;
+import com.explorationremix.rune.world.FrondBlock;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -44,8 +46,16 @@ public final class ShaderGlow {
             if (key == null || !key.getNamespace().equals(ExplorationRemix.MOD_ID)) {
                 continue;
             }
+            // a struck fern's unrolled fronds give a little light to climb by, but are leaves, not a glow
+            if (block instanceof FrondBlock) {
+                continue;
+            }
             boolean overlay = overlays().contains(key);
             for (BlockState state : block.getStateDefinition().getPossibleStates()) {
+                // a glowbell resting after it rang is dark but for the ember of its overlay
+                if (state.hasProperty(GlowbellBlock.RESTING) && state.getValue(GlowbellBlock.RESTING)) {
+                    continue;
+                }
                 if ((overlay || state.getLightEmission() > 0) && !ids.containsKey(state)) {
                     ids.put(state, MODDED_LIGHT);
                     added++;

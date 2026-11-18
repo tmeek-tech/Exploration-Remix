@@ -302,7 +302,9 @@ public final class ArrowRides {
                     drop(r);
                     r.released = true;
                 } else {
-                    r.last = r.arrow.position();
+                    Vec3 now = r.arrow.position();
+                    RunePlants.path(r.ctx, r.last, now);
+                    r.last = now;
                     steer(r);
                     if (r.node.relay == RuneId.AFTER && r.hasPayload() && r.age > FlyingRune.AFTER_TICKS) {
                         Vec3 d = r.arrow.getDeltaMovement();
@@ -332,6 +334,8 @@ public final class ArrowRides {
      * payload.
      */
     private static void settle(Ride r) {
+        // the last stretch it flew, up to what it hit: the plants on it answer (RunePlants)
+        RunePlants.path(r.ctx, r.last, r.hitAt);
         for (Struck s : r.struck) {
             if (landed(s.body(), r.arrow)) RuneHits.strike(r.ctx, r.a, s.body(), s.box(), s.at(), s.dir(), 0.0F, 0.0F, r.arrow, null, s.foe());
         }

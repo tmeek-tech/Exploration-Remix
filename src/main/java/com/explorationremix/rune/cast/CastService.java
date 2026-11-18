@@ -311,6 +311,7 @@ public final class CastService {
             if (!c.carriers.isEmpty() || !c.stillSince.isEmpty()) dropStill(c, tick);
         }
         ArrowRides.tick();
+        RunePlants.tick(server);
     }
 
     /** How long a carrier may wait on ground that isn't running before it goes (five seconds). */
@@ -389,6 +390,7 @@ public final class CastService {
         CASTERS.clear();
         ArrowRides.clear();
         TempBlocks.clear();
+        RunePlants.clear();
         Statuses.clear();
         RuneMote.clearAll();
     }

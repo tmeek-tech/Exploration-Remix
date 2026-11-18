@@ -21,7 +21,8 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * A block a rune makes, that undoes itself: a Barrier's glass wall, Frost's ice on still water, a Glow mote's light.
+ * A block a rune makes, that undoes itself: a Barrier's glass wall, Frost's ice on still water, a Glow mote's light, a
+ * struck silver fern's unrolled fronds.
  * Placing one (by a rune, a command, a contraption putting it back, or a quake moving it) schedules its end, and the
  * scheduled tick is saved with the chunk, so it cleans itself up even if the chunk unloads first. It drops nothing,
  * pistons can't push it and Create can't carry it (tag {@code create:non_movable}).
@@ -33,7 +34,12 @@ public class TempBlock extends Block {
         /** About 10 s of walkable ice on still water; back to water. */
         ICE(200),
         /** A minute of light where a Glow mote stopped; back to air. */
-        LIGHT(1200);
+        LIGHT(1200),
+        /**
+         * A struck silver fern's unrolled fronds (FrondBlock): RunePlants rolls them back up after 30 s; this is only
+         * the latest they go if that is lost (the server stopped). Back to air.
+         */
+        FROND(1200);
 
         public final int life;
 
@@ -57,9 +63,15 @@ public class TempBlock extends Block {
         if (!level.isClientSide && !old.is(this)) level.scheduleTick(pos, this, kind.life);
     }
 
+    /**
+     * Its timer. A place keeps one timer at a time, so a block made where an earlier one stood not long before (a fern
+     * struck again, its fronds unrolling over the same rock) is handed the earlier one's: it waits out its own.
+     */
     @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
-        fade(level, pos);
+        long left = TempBlocks.until(level.dimension(), pos) - level.getGameTime();
+        if (left > 0) level.scheduleTick(pos, this, (int) Math.min(left, kind.life));
+        else fade(level, pos);
     }
 
     /** However it ends (its timer, mined, blown up, melted, washed away), it stops counting against whoever made it. */
@@ -85,6 +97,8 @@ public class TempBlock extends Block {
                 level.sendParticles(ParticleTypes.SPLASH, x, y + 0.4, z, 4, 0.3, 0.1, 0.3, 0.0);
             }
             case LIGHT -> level.sendParticles(ParticleTypes.WAX_OFF, x, y, z, 2, 0.1, 0.1, 0.1, 0.0);
+            case FROND -> level.sendParticles(new net.minecraft.core.particles.BlockParticleOption(ParticleTypes.BLOCK, state), x, y, z, 4,
+                    0.25, 0.4, 0.25, 0.0);
         }
     }
 
@@ -115,7 +129,7 @@ public class TempBlock extends Block {
 
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext ctx) {
-        return kind == Kind.LIGHT ? Shapes.empty() : Shapes.block();
+        return kind == Kind.LIGHT || kind == Kind.FROND ? Shapes.empty() : Shapes.block();
     }
 
     @Override

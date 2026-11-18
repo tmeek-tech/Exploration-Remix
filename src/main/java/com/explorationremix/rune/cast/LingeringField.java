@@ -63,6 +63,7 @@ final class LingeringField implements FieldLogic {
             c.carriers.add(f);
             RuneFx.field(ctx.level, at.add(0, 0.1, 0), radius, node.act.element, false);
             if (node.act.element != Element.NONE) RuneHits.world(ctx, node.act.element, at.add(0, 0.5, 0), radius);
+            RunePlants.area(ctx, at.add(0, 0.5, 0), radius);
         }
     }
 

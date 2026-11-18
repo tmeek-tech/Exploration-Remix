@@ -210,6 +210,8 @@ final class FlyingRune implements BoltLogic {
         for (int step = 0; step < 6; step++) {
             BlockHitResult bh = clip(ctx.level, from, to, b);
             Vec3 end = bh.getType() == HitResult.Type.MISS ? to : bh.getLocation();
+            // the plants it flies through (plants don't stop it): a glowbell rings, a fern unrolls (RunePlants)
+            RunePlants.path(ctx, from, end);
             Hit h = firstCreature(b, from, end);
             if (h != null) {
                 passed.add(h.body.getId());

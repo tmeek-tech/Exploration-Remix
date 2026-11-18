@@ -7,7 +7,8 @@ stone, so the glyph is the only thing that changes from one rune to the next, an
 10 by 10 grid so that it still reads at 16 by 16.
 
 This file also paints the textures the rune renderers tint (textures/entity/rune: white on transparent, a bright core
-and a soft alpha falloff), the three blocks runes make for a while (Barrier glass, Frost's ice, Glow's light), and
+and a soft alpha falloff), the blocks runes make for a while (Barrier glass, Frost's ice, Glow's light, a struck fern's
+unrolled fronds), and
 writes the rune data: the item tags by the layer a rune is first found in, the rune damage type (shields never block
 it), Create's tag that keeps contraptions from carrying the rune blocks off, and the English names.
 
@@ -95,8 +96,10 @@ DESC = {
     "fan": "Three copies of what follows, in a fan.",
 }
 
-# The blocks runes make for a while (RuneRegistry: TempBlock). They have no items and drop nothing.
-BLOCKS = {"rune_barrier": "Rune Barrier", "rune_ice": "Rune Ice", "rune_light": "Rune Light"}
+# The blocks runes make for a while (RuneRegistry: TempBlock). They have no items and drop nothing. rune_frond is a
+# struck silver fern's fronds, unrolled down the rock (0.18.7, RunePlants); its textures are the fern's, painted with
+# the other plants (plants_upper.py).
+BLOCKS = {"rune_barrier": "Rune Barrier", "rune_ice": "Rune Ice", "rune_light": "Rune Light", "rune_frond": "Unrolled Fronds"}
 ENTITIES = {"rune_bolt": "Rune Bolt", "rune_field": "Rune Field", "rune_mote": "Siphon Mote"}
 
 # Everything else the player reads: the tooltips' words, the rune screen, the key and what the casting code says.
@@ -773,11 +776,55 @@ def rune_light():
 BLOCK_TEXTURES = {"rune_barrier": rune_barrier, "rune_ice": rune_ice, "rune_light": rune_light}
 
 
+def _frond_sheet_model(look):
+    """Unrolled fronds against the rock, the rock to the south (FrondBlock's facing north): the fronds' sheet and,
+    just behind it, the darker back sheet (rune_frond<look>, rune_frond_back<look>), drawn both ways."""
+    front, back = f"{MOD}:block/rune_frond{look}", f"{MOD}:block/rune_frond_back{look}"
+
+    def plane(z, tex):
+        return {"from": [0, 0, z], "to": [16, 16, z], "shade": False,
+                "faces": {"north": {"uv": [0, 0, 16, 16], "texture": tex}, "south": {"uv": [16, 0, 0, 16], "texture": tex}}}
+    return {"parent": "minecraft:block/block", "render_type": "minecraft:cutout", "ambientocclusion": False,
+            "textures": {"particle": front, "front": front, "back": back},
+            "elements": [plane(15.6, "#back"), plane(14.8, "#front")]}
+
+
+def frond_models():
+    """rune_frond's models: the sheet against the rock (a column's middle, its lowest block and the top of a column
+    beside the fern's), and a strand hanging free, drawn as the hanging silver fronds are."""
+    models = {f"rune_frond{look}": _frond_sheet_model(look) for look in ("", "_tip", "_top")}
+    for name, tex in (("strand", "silver_frond_plant"), ("strand_2", "silver_frond_plant_2"), ("strand_tip", "silver_frond"),
+                      ("strand_tip_2", "silver_frond_2")):
+        models[f"rune_frond_{name}"] = {"parent": "minecraft:block/cross", "render_type": "minecraft:cutout",
+                                        "textures": {"cross": f"{MOD}:block/{tex}"}}
+    return models
+
+
+def frond_states():
+    """facing (away from the rock it lies on; down: hanging free) x bottom (a column's lowest block) x up (the top of a
+    column beside the fern's). The sheet's model lies against the rock to its south and is turned as the hanging fern's
+    is."""
+    turns = {"north": {}, "east": {"y": 90}, "south": {"y": 180}, "west": {"y": 270}}
+    variants = {}
+    for facing in ("north", "south", "west", "east", "down"):
+        for bottom in ("false", "true"):
+            for up in ("false", "true"):
+                if facing == "down":
+                    look = "strand_tip" if bottom == "true" else "strand"
+                    v = [{"model": f"{MOD}:block/rune_frond_{look}"}, {"model": f"{MOD}:block/rune_frond_{look}_2"}]
+                else:
+                    look = "_tip" if bottom == "true" else "_top" if up == "true" else ""
+                    v = dict({"model": f"{MOD}:block/rune_frond{look}"}, **turns[facing])
+                variants[f"bottom={bottom},facing={facing},up={up}"] = v
+    return {"variants": variants}
+
+
 def block_models():
-    """Barrier glass and ice are clear full blocks; Glow's light a tiny bright cube that light comes from."""
+    """Barrier glass and ice are clear full blocks; Glow's light a tiny bright cube that light comes from; a fern's
+    unrolled fronds (frond_models)."""
     six = ("down", "up", "north", "south", "west", "east")
     light = f"{MOD}:block/rune_light"
-    return {
+    return dict(frond_models(), **{
         "rune_barrier": {"parent": "minecraft:block/cube_all", "render_type": "minecraft:translucent",
                          "textures": {"all": f"{MOD}:block/rune_barrier"}},
         "rune_ice": {"parent": "minecraft:block/cube_all", "render_type": "minecraft:translucent",
@@ -787,7 +834,7 @@ def block_models():
                        "elements": [{"from": [6.5, 6.5, 6.5], "to": [9.5, 9.5, 9.5], "shade": False,
                                      "forge_data": {"block_light": 15},
                                      "faces": {f: {"uv": [6.5, 6.5, 9.5, 9.5], "texture": "#light"} for f in six}}]},
-    }
+    })
 
 
 # =============================================================================================== writing
@@ -829,13 +876,16 @@ def write_all(res, write, tag):
     os.makedirs(tex, exist_ok=True)
     for name, painter in ENTITY_TEXTURES.items():
         painter().save(os.path.join(tex, name + ".png"))
-    for bid, model in block_models().items():
-        path = os.path.join(assets, "textures", "block", bid + ".png")
+    for name, painter in BLOCK_TEXTURES.items():
+        path = os.path.join(assets, "textures", "block", name + ".png")
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        BLOCK_TEXTURES[bid]().save(path)
-        write(os.path.join(assets, "models", "block", bid + ".json"), model)
-        write(os.path.join(assets, "blockstates", bid + ".json"), {"variants": {"": {"model": f"{MOD}:block/{bid}"}}})
-        names[f"block.{MOD}.{bid}"] = BLOCKS[bid]
+        painter().save(path)
+    for name, model in block_models().items():
+        write(os.path.join(assets, "models", "block", name + ".json"), model)
+    for bid, name in BLOCKS.items():
+        states = frond_states() if bid == "rune_frond" else {"variants": {"": {"model": f"{MOD}:block/{bid}"}}}
+        write(os.path.join(assets, "blockstates", bid + ".json"), states)
+        names[f"block.{MOD}.{bid}"] = name
     names.update({f"entity.{MOD}.{e}": n for e, n in ENTITIES.items()})
     # the rune tags: every rune, and the runes first found in each layer (what the creatures there drop)
     tag(MOD, "items", "runes", [f"{MOD}:rune_{r}" for r in RUNES])

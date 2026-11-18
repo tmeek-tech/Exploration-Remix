@@ -1,11 +1,16 @@
 package com.explorationremix.block;
 
+import com.explorationremix.rune.world.FrondBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -15,9 +20,16 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * {@link #WIDTH} and as long as {@link #LENGTH}, centred on its block: the small one a block wide and a block and a half
  * long, the medium a block and a half by two, the large two blocks by nearly three. Its outline stays in its own block.
  * Placed by hand it is the small one; world generation picks the size and {@link #fit} shrinks it to the room it has.
+ *
+ * <p>Struck by a rune it unrolls (0.18.7, RunePlants): its fronds run down the rock below it to the floor as a curtain
+ * you can climb, and while they are down ({@code unrolled}) the fern itself is climbed too, so the curtain has no gap.
+ * RunePlants rolls it up again; if that is lost (the server stopped), a tick it set rolls it up on its own.
  */
 public class HangingFernBlock extends ShelfFungusBlock {
     public static final IntegerProperty SIZE = IntegerProperty.create("size", 0, 2);
+    public static final BooleanProperty UNROLLED = BooleanProperty.create("unrolled");
+    /** The latest a fern stays unrolled, if nothing rolls it up first (ticks). */
+    public static final int UNROLLED_AT_MOST = 1200;
     /** In pixels, by size: the fronds' width, centred on the block, and their length down from TOP. */
     public static final int[] WIDTH = {16, 24, 32}, LENGTH = {24, 34, 46};
     public static final int TOP = 14;
@@ -29,7 +41,28 @@ public class HangingFernBlock extends ShelfFungusBlock {
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         super.createBlockStateDefinition(builder);
-        builder.add(SIZE);
+        builder.add(SIZE, UNROLLED);
+    }
+
+    /** Unrolled, it is part of its curtain of fronds, and climbed like it. */
+    @Override
+    public boolean isLadder(BlockState state, LevelReader level, BlockPos pos, LivingEntity entity) { return state.getValue(UNROLLED); }
+
+    @Override
+    public void onPlace(BlockState state, net.minecraft.world.level.Level level, BlockPos pos, BlockState old, boolean moving) {
+        super.onPlace(state, level, pos, old, moving);
+        if (!level.isClientSide && state.getValue(UNROLLED) && !(old.is(this) && old.getValue(UNROLLED))) level.scheduleTick(pos, this, UNROLLED_AT_MOST);
+    }
+
+    @Override
+    public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+        if (!state.getValue(UNROLLED)) return;
+        // struck again since, its first timer still set: it waits while its fronds still hang from it
+        if (level.getBlockState(pos.below()).getBlock() instanceof FrondBlock || level.getBlockState(pos.above()).getBlock() instanceof FrondBlock) {
+            level.scheduleTick(pos, this, 100);
+            return;
+        }
+        level.setBlock(pos, state.setValue(UNROLLED, false), Block.UPDATE_ALL);
     }
 
     /**

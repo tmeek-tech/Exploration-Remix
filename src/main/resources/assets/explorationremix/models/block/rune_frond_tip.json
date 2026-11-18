@@ -1,0 +1,78 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "explorationremix:block/rune_frond_tip",
+    "front": "explorationremix:block/rune_frond_tip",
+    "back": "explorationremix:block/rune_frond_back_tip"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        15.6
+      ],
+      "to": [
+        16,
+        16,
+        15.6
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#back"
+        },
+        "south": {
+          "uv": [
+            16,
+            0,
+            0,
+            16
+          ],
+          "texture": "#back"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        14.8
+      ],
+      "to": [
+        16,
+        16,
+        14.8
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#front"
+        },
+        "south": {
+          "uv": [
+            16,
+            0,
+            0,
+            16
+          ],
+          "texture": "#front"
+        }
+      }
+    }
+  ]
+}
