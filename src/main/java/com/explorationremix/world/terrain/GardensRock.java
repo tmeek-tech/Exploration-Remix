@@ -52,25 +52,16 @@ final class GardensRock {
         solid = new boolean[n * SY];
         java.util.Arrays.fill(solid, true);
         int[] p1 = plan.perm(plan.seed + 900), p2 = plan.perm(plan.seed + 901);
+        float[] fl = new float[K], ce = new float[K], ro = new float[K];
         for (int i = 0; i < nx; i++)
             for (int j = 0; j < nz; j++) {
                 int wx = x0 + i, wz = z0 + j, base = (i * nz + j) * SY;
                 for (int k = 0; k < K; k++) {
-                    float f = st.floor(k, wx, wz), c = st.ceil(k, wx, wz);
-                    if (c - f < 1f) continue;
-                    double rough = st.rough(k, wx, wz);
-                    int ya = Math.max(4, (int) f - 3), yb = Math.min(SY - 4, (int) c + 6);
-                    for (int y = ya; y < yb; y++) {
-                        if (!solid[base + y]) continue;
-                        double r = rough * GardensNoise.n3(p1, wx / 10.0, y / 8.0, wz / 10.0);
-                        double r2 = 0.5 * rough * GardensNoise.n3(p2, wx / 4.5, y / 4.5, wz / 4.5);
-                        if (y > f + 0.2 * r2 && y < c + r + r2) solid[base + y] = false;
-                    }
+                    fl[k] = st.floor(k, wx, wz);
+                    ce[k] = st.ceil(k, wx, wz);
+                    ro[k] = st.rough(k, wx, wz);
                 }
-                for (int y = 0; y < SEAL; y++) solid[base + y] = true;
-                for (int y = SY - SEAL; y < SY; y++) solid[base + y] = true;
-                if (gates.near(wx, wz))
-                    for (int y = 0; y < SY; y++) if (gates.open(wx, y, wz)) solid[base + y] = false;
+                carveColumn(p1, p2, fl, ce, ro, wx, wz, gates, solid, base);
             }
         // rubble: kmax 12 everywhere, then 40 in the dome band and round the holes where storeys merge
         boolean[] keep = new boolean[n * SY];
@@ -102,6 +93,31 @@ final class GardensRock {
         talusRounds(solid, keep2, null, 40, 3, 80);
         talus = new boolean[n * SY];
         for (int b = 0; b < talus.length; b++) talus[b] = solid[b] && !before[b];
+    }
+
+    /**
+     * One column's carve (gen3.carve, layer.seal, the gate rooms) into {@code solid[base .. base + SY)}, which must come
+     * in all rock: each storey open from its floor to its ceiling with rough walls, the seal rows, the gates' rooms.
+     * {@code rough} is each storey's wall roughness (read only where the storey is at least a block high).
+     */
+    static void carveColumn(int[] p1, int[] p2, float[] floor, float[] ceil, float[] rough, int wx, int wz, Gates gates,
+                            boolean[] solid, int base) {
+        for (int k = 0; k < K; k++) {
+            float f = floor[k], c = ceil[k];
+            if (c - f < 1f) continue;
+            double rg = rough[k];
+            int ya = Math.max(4, (int) f - 3), yb = Math.min(SY - 4, (int) c + 6);
+            for (int y = ya; y < yb; y++) {
+                if (!solid[base + y]) continue;
+                double r = rg * GardensNoise.n3(p1, wx / 10.0, y / 8.0, wz / 10.0);
+                double r2 = 0.5 * rg * GardensNoise.n3(p2, wx / 4.5, y / 4.5, wz / 4.5);
+                if (y > f + 0.2 * r2 && y < c + r + r2) solid[base + y] = false;
+            }
+        }
+        for (int y = 0; y < SEAL; y++) solid[base + y] = true;
+        for (int y = SY - SEAL; y < SY; y++) solid[base + y] = true;
+        if (gates.near(wx, wz))
+            for (int y = 0; y < SY; y++) if (gates.open(wx, y, wz)) solid[base + y] = false;
     }
 
     /**

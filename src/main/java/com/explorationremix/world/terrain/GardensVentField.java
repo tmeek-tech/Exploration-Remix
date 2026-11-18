@@ -134,7 +134,7 @@ final class GardensVentField {
         for (Vent v : vents) {
             if (v.form() != 3) continue;
             v.t[37] = v.site.gStand;
-            double lv = 0.5 * Math.PI * (v.site.R - 3.0 + 3.8);
+            double lv = Double.isNaN(v.site.throatLevel) ? 0.5 * Math.PI * (v.site.R - 3.0 + 3.8) : v.site.throatLevel;
             v.tab = throatTable(gv.throatPerm(v.site), v.t[6], v.site.gStand, v.t[36], DS, lv, v.t[35], v.t[34]);
             v.t[39] = v.tab.length;
         }

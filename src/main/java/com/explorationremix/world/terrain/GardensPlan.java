@@ -116,12 +116,20 @@ final class GardensPlan {
         final float[] td = new float[K], tw = new float[K], m0 = new float[K], cv = new float[K], wn = new float[K];
         final float[] mb = new float[K], pil = new float[K], col = new float[K], hn = new float[K];
         float cap6;
+        /** Scratch for the noise's slope. */
+        final double[] tmp = new double[3];
         /** The nearest landing of each kind within reach (null if none), for the pulls. */
         GardensGates.Gate entry, exit;
     }
 
     /** Fills c for column (wx, wz); {@code mask} picks the storeys whose room noise is wanted (bit k). */
-    void column(int wx, int wz, Col c, int mask) {
+    void column(int wx, int wz, Col c, int mask) { column(wx, wz, c, mask, false); }
+
+    /**
+     * {@link #column(int, int, Col, int)}; {@code lean} leaves out what only the storeys' heights and the dressing read
+     * (heat, mounds, the hall and bed height noises, the wall noise, the top's cap), for the footprint's inputs.
+     */
+    void column(int wx, int wz, Col c, int mask, boolean lean) {
         double x = wx, z = wz;
         // shared warps
         double wa90 = n2(W, x / 90.0, z / 90.0), wb90 = n2(W, x / 90.0 + 41.0, z / 90.0 - 17.0);
@@ -134,9 +142,11 @@ final class GardensPlan {
         // frame
         float hl = (float) fbm2(P610, x / 95.0, z / 95.0, 2);
         c.hl = hl;
-        c.hot = hl + 0.5f * (float) n2(P611, x / 17.0, z / 17.0);
-        float ma = (float) fbm2(P602, x / 80.0, z / 80.0, 2), mb2 = (float) n2(P603, x / 26.0, z / 26.0);
-        c.mound = (float) Math.pow(rampF(ma + 0.45f * mb2, -0.05, 0.55), (double) 1.4f);
+        if (!lean) {
+            c.hot = hl + 0.5f * (float) n2(P611, x / 17.0, z / 17.0);
+            float ma = (float) fbm2(P602, x / 80.0, z / 80.0, 2), mb2 = (float) n2(P603, x / 26.0, z / 26.0);
+            c.mound = (float) Math.pow(rampF(ma + 0.45f * mb2, -0.05, 0.55), (double) 1.4f);
+        }
         double lx = x + 20.0 * wB1, lz = z + 20.0 * wB2;
         float fl = (float) fbm2(P1201, lx / 150.0, lz / 150.0, 2), fh = (float) fbm2(P1202, lx / 165.0, lz / 165.0, 2);
         float lb = clipF(100f + 14f * fl + 18f * (hl - 0.13f), 76f, 132f);
@@ -181,19 +191,19 @@ final class GardensPlan {
         double tx = x + 12.0 * wa90, tz = z + 12.0 * wb90;
         for (int k = 0; k < K; k++) {
             if ((mask >> k & 1) == 0) continue;
-            float td1 = (float) zld(PT1[k], TUN_SCALE, tx, tz);
-            float td2 = (float) zld(PT2[k], TUN_SCALE * 92.0 / 70.0, tx, tz);
+            float td1 = (float) (patch ? zld(PT1[k], TUN_SCALE, tx, tz) : zldA(PT1[k], TUN_SCALE, tx, tz, c.tmp));
+            float td2 = (float) (patch ? zld(PT2[k], TUN_SCALE * 92.0 / 70.0, tx, tz) : zldA(PT2[k], TUN_SCALE * 92.0 / 70.0, tx, tz, c.tmp));
             c.td[k] = Math.min(td1, td2 + 0.5f);
             c.tw[k] = 2.4f * (1f + 0.35f * (float) n2(PTW[k], x / 24.0, z / 24.0));
             if (hallsHere(k, c.wh[k])) {
                 float m = (float) fbm2(PM0[k], (x + 16.0 * wa90) / 56.0, (z + 16.0 * wb90) / 56.0, 3);
                 c.m0[k] = m - 0.14f + 0.18f * c.big - 0.6f * (1f - c.wh[k]);
-                c.cv[k] = 1f + 0.25f * (float) fbm2(PCV[k], x / 20.0, z / 20.0, 2);
+                if (!lean) c.cv[k] = 1f + 0.25f * (float) fbm2(PCV[k], x / 20.0, z / 20.0, 2);
             } else {
                 c.m0[k] = -9f;
                 c.cv[k] = 1f;
             }
-            c.wn[k] = 0.12f * (float) n2(PWN[k], x / 11.0, z / 11.0);
+            if (!lean) c.wn[k] = 0.12f * (float) n2(PWN[k], x / 11.0, z / 11.0);
             if (bedsHere(k, c.wb[k])) {
                 float m = (float) fbm2(PMB[k], (x + 18.0 * wa110) / 85.0, (z + 18.0 * wb110) / 85.0, 3);
                 float mbk = m + 0.10f - 0.6f * (1f - c.wb[k]);
@@ -207,7 +217,7 @@ final class GardensPlan {
                 c.mb[k] = mbk;
                 c.pil[k] = (float) fbm2(PPIL[k], x / 10.0, z / 10.0, 2);
                 c.col[k] = (k == 3 || k == 5) ? rampF((float) fbm2(PCOL[k], x / 120.0, z / 120.0, 2), 0.22, 0.55) : 0f;
-                c.hn[k] = 4.6f + 5.9f * rampF((float) fbm2(PHN[k], x / 50.0, z / 50.0, 2), -0.35, 0.45);
+                if (!lean) c.hn[k] = 4.6f + 5.9f * rampF((float) fbm2(PHN[k], x / 50.0, z / 50.0, 2), -0.35, 0.45);
             } else {
                 c.mb[k] = -9f;
                 c.pil[k] = 1f;
@@ -215,7 +225,7 @@ final class GardensPlan {
                 c.hn[k] = 4.6f;
             }
         }
-        c.cap6 = 233f + 1.5f * (float) n2(P3958, x / 9.0, z / 9.0);
+        if (!lean) c.cap6 = 233f + 1.5f * (float) n2(P3958, x / 9.0, z / 9.0);
     }
 
     /** Whether storey k works out halls at a column with this hall weight. */
@@ -233,6 +243,14 @@ final class GardensPlan {
         return Math.abs(v) / Math.max(g, 0.3 / scale);
     }
 
+    /** zld with the noise's own slope in place of central differences (the game's form: the same zero lines, cheaper). */
+    static double zldA(int[] p, double scale, double wx, double wz, double[] tmp) {
+        GardensNoise.n2d(p, wx / scale, wz / scale, tmp);
+        double gx = tmp[1] / scale, gz = tmp[2] / scale;
+        double g = Math.sqrt(gx * gx + gz * gz);
+        return Math.abs(tmp[0]) / Math.max(g, 0.3 / scale);
+    }
+
     /** The frame alone at a column (cheap enough for the sites' few points): every storey's base floor and weights. */
     Col frameAt(int wx, int wz) {
         Col c = new Col();
@@ -247,7 +265,15 @@ final class GardensPlan {
         long key() { return cellKey(k, i, kk); }
     }
 
-    static long cellKey(int k, int i, int kk) { return ((long) k << 56) ^ ((long) (i & 0xFFFFFFF) << 28) ^ (kk & 0xFFFFFFFL); }
+    /** A cell's key: its storey and indices packed, then mixed (a bijection) so hash tables spread them evenly. */
+    static long cellKey(int k, int i, int kk) { return mix64(((long) k << 56) ^ ((long) (i & 0xFFFFFFF) << 28) ^ (kk & 0xFFFFFFFL)); }
+
+    /** splitmix64's finaliser: a bijection on longs that scatters every bit over the whole word. */
+    static long mix64(long z) {
+        z = (z ^ (z >>> 30)) * 0xbf58476d1ce4e5b9L;
+        z = (z ^ (z >>> 27)) * 0x94d049bb133111ebL;
+        return z ^ (z >>> 31);
+    }
 
     private final Map<Long, Object> vhallCand = new ConcurrentHashMap<>();
     private static final Object NONE = new Object();

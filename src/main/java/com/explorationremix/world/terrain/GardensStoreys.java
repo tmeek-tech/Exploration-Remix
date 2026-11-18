@@ -40,6 +40,18 @@ final class GardensStoreys {
     final List<List<GardensPlan.Dome>> domes = new ArrayList<>();
     /** What the gate plumbing did on each storey here (for the checks). */
     final List<GateWays> gateWays = new ArrayList<>();
+    /** A list of world columns instead of a window (the game's lookups at a few columns), or null. */
+    final int[] xs, zs;
+
+    /**
+     * The game's distance fields of the halls' and beds' footprints, worked out once per tile from a margin round it
+     * (so they never depend on the window asking): capped and blurred as a window's own would be, far enough in.
+     */
+    interface Edt {
+        float hall(int k, int x, int z);
+
+        float sheet(int k, int x, int z);
+    }
 
     /**
      * @param use     which vent halls lift their storey (null: every kept one, the first pass)
@@ -48,12 +60,73 @@ final class GardensStoreys {
      */
     GardensStoreys(GardensPlan plan, int x0, int z0, int nx, int nz, Predicate<GardensPlan.VHall> use, float edtCap,
                    boolean openOnly) {
+        this(plan, x0, z0, nx, nz, null, null, use, edtCap, openOnly, null);
+    }
+
+    /** The game's window: the distance fields come from {@code edt}, so the window needs no margin for them. */
+    GardensStoreys(GardensPlan plan, int x0, int z0, int nx, int nz, Predicate<GardensPlan.VHall> use, Edt edt) {
+        this(plan, x0, z0, nx, nz, null, null, use, 40f, false, edt);
+    }
+
+    /** The game's lookups at a list of columns (any order, any spread), with the distance fields from {@code edt}. */
+    GardensStoreys(GardensPlan plan, int[] xs, int[] zs, Predicate<GardensPlan.VHall> use, Edt edt) {
+        this(plan, minOf(xs), minOf(zs), xs.length, 1, xs, zs, use, 40f, false, edt);
+    }
+
+    private static int minOf(int[] a) {
+        int m = Integer.MAX_VALUE;
+        for (int v : a) m = Math.min(m, v);
+        return m;
+    }
+
+    private static int maxOf(int[] a) {
+        int m = Integer.MIN_VALUE;
+        for (int v : a) m = Math.max(m, v);
+        return m;
+    }
+
+    /** Column q's world x and z. */
+    int X(int q) { return xs != null ? xs[q] : x0 + q / nz; }
+
+    int Z(int q) { return zs != null ? zs[q] : z0 + q % nz; }
+
+    /** Runs {@code body} on every column in the box xa..xb, za..zb (inclusive) that this window or list holds. */
+    private void forBox(int xa, int xb, int za, int zb, java.util.function.IntConsumer body) {
+        if (xs == null) {
+            int ia = Math.max(0, xa - x0), ib = Math.min(nx - 1, xb - x0);
+            int ja = Math.max(0, za - z0), jb = Math.min(nz - 1, zb - z0);
+            for (int i = ia; i <= ib; i++)
+                for (int j = ja; j <= jb; j++) body.accept(i * nz + j);
+            return;
+        }
+        for (int q = 0; q < n; q++) {
+            int x = xs[q], z = zs[q];
+            if (x >= xa && x <= xb && z >= za && z <= zb) body.accept(q);
+        }
+    }
+
+    private java.util.Map<Long, Integer> colIndex;
+
+    /** The list's index of a world column, or -1. */
+    private int listIndex(int x, int z) {
+        if (colIndex == null) {
+            colIndex = new java.util.HashMap<>();
+            for (int q = 0; q < n; q++) colIndex.putIfAbsent(((long) xs[q] << 32) | (zs[q] & 0xFFFFFFFFL), q);
+        }
+        Integer q = colIndex.get(((long) x << 32) | (z & 0xFFFFFFFFL));
+        return q == null ? -1 : q;
+    }
+
+    private GardensStoreys(GardensPlan plan, int x0, int z0, int nx, int nz, int[] xs, int[] zs,
+                           Predicate<GardensPlan.VHall> use, float edtCap, boolean openOnly, Edt edtSrc) {
         this.plan = plan;
         this.x0 = x0;
         this.z0 = z0;
         this.nx = nx;
         this.nz = nz;
         this.n = nx * nz;
+        this.xs = xs;
+        this.zs = zs;
         hot = new float[n];
         mound = new float[n];
         lb = new float[n];
@@ -70,10 +143,9 @@ final class GardensStoreys {
         }
         GardensPlan.Col c = new GardensPlan.Col();
         int all = (1 << K) - 1;
-        for (int i = 0; i < nx; i++)
-            for (int j = 0; j < nz; j++) {
-                int q = i * nz + j;
-                plan.column(x0 + i, z0 + j, c, all);
+        for (int q = 0; q < n; q++) {
+            plan.column(X(q), Z(q), c, all);
+            {
                 hot[q] = c.hot;
                 mound[q] = c.mound;
                 lb[q] = c.lb;
@@ -95,7 +167,8 @@ final class GardensStoreys {
                     hn[k][q] = c.hn[k];
                 }
             }
-        double minX = x0, minZ = z0, maxX = x0 + nx - 1, maxZ = z0 + nz - 1;
+        }
+        double minX = x0, minZ = z0, maxX = xs != null ? maxOf(xs) : x0 + nx - 1, maxZ = zs != null ? maxOf(zs) : z0 + nz - 1;
         for (int k = 0; k < K; k++) {
             float[] fk = f[k];
             // tunnels, shared by every style
@@ -116,19 +189,16 @@ final class GardensStoreys {
             for (GardensPlan.VHall v : vh) {
                 double rv = RV0 + 6 * v.u();
                 float rvF = (float) rv, uF = (float) v.u(), cupH = (float) (22 + 16 * v.u());
-                int ia = Math.max(0, (int) Math.floor(v.x() - rv - 1) - x0), ib = Math.min(nx - 1, (int) Math.ceil(v.x() + rv + 1) - x0);
-                int ja = Math.max(0, (int) Math.floor(v.z() - rv - 1) - z0), jb = Math.min(nz - 1, (int) Math.ceil(v.z() + rv + 1) - z0);
-                for (int i = ia; i <= ib; i++)
-                    for (int j = ja; j <= jb; j++) {
-                        int q = i * nz + j;
-                        float dd = plan.dist(x0 + i, z0 + j, v.x(), v.z()) / rvF;
-                        float b = rampF(1f - dd, 0, 1);
-                        if (b > bumpK[q]) bumpK[q] = b;
-                        float ub = uF * b;
-                        if (ub > ucap[q]) ucap[q] = ub;
-                        float cu = dd < 1f ? cupH * (float) Math.sqrt(clipF(1f - dd * dd, 0f, 1f)) : 0f;
-                        if (cu > cup[q]) cup[q] = cu;
-                    }
+                forBox((int) Math.floor(v.x() - rv - 1), (int) Math.ceil(v.x() + rv + 1),
+                        (int) Math.floor(v.z() - rv - 1), (int) Math.ceil(v.z() + rv + 1), q -> {
+                            float dd = plan.dist(X(q), Z(q), v.x(), v.z()) / rvF;
+                            float b = rampF(1f - dd, 0, 1);
+                            if (b > bumpK[q]) bumpK[q] = b;
+                            float ub = uF * b;
+                            if (ub > ucap[q]) ucap[q] = ub;
+                            float cu = dd < 1f ? cupH * (float) Math.sqrt(clipF(1f - dd * dd, 0f, 1f)) : 0f;
+                            if (cu > cup[q]) cup[q] = cu;
+                        });
             }
             boolean anyHall = false;
             for (int q = 0; q < n; q++) {
@@ -139,9 +209,15 @@ final class GardensStoreys {
             }
             bump[k] = bumpK;
             if (anyHall && !openOnly) {
-                boolean[] fh = new boolean[n];
-                for (int q = 0; q < n; q++) fh[q] = hallK[q] || tunK[q];
-                float[] edt = GardensMath.gaussian(GardensMath.edt(fh, nx, nz, edtCap), nx, nz, 1.5);
+                float[] edt;
+                if (edtSrc != null) {
+                    edt = new float[n];
+                    for (int q = 0; q < n; q++) if (hallK[q]) edt[q] = edtSrc.hall(k, X(q), Z(q));
+                } else {
+                    boolean[] fh = new boolean[n];
+                    for (int q = 0; q < n; q++) fh[q] = hallK[q] || tunK[q];
+                    edt = GardensMath.gaussian(GardensMath.edt(fh, nx, nz, edtCap), nx, nz, 1.5);
+                }
                 for (int q = 0; q < n; q++) {
                     if (!hallK[q]) continue;
                     float e = edt[q];
@@ -159,45 +235,40 @@ final class GardensStoreys {
             domes.add(ds);
             for (GardensPlan.Dome d : ds) {
                 double r = d.r();
-                int ia = Math.max(0, (int) Math.floor(d.x() - r * 1.2) - x0), ib = Math.min(nx - 1, (int) Math.floor(d.x() + r * 1.2) + 1 - x0);
-                int ja = Math.max(0, (int) Math.floor(d.z() - r * 1.2) - z0), jb = Math.min(nz - 1, (int) Math.floor(d.z() + r * 1.2) + 1 - z0);
                 double tt = Math.max(0, Math.min(1, (r - 12) / 4)), hfr = (0.95 + 0.15 * tt * tt * (3 - 2 * tt)) * r;
                 float rF = (float) r, hcF = (float) d.hc();
-                for (int i = ia; i <= ib; i++)
-                    for (int j = ja; j <= jb; j++) {
-                        int q = i * nz + j;
-                        float dd = plan.dist(x0 + i, z0 + j, d.x(), d.z()) / rF * (1f + wn[k][q]);
-                        float hl;
-                        if (dd < 1f) {
-                            float s = (float) Math.sqrt(clipF(1f - dd * dd, 0f, 1f));
-                            hl = d.deep() ? hcF * s : (float) Math.min(hfr * (double) s, DOME_CAP);
-                        } else hl = 0f;
-                        if (hl > dhK[q]) dhK[q] = hl;
-                        float o = clipF(1f - dd / 0.65f, 0f, 1f);
-                        if (o > ocK[q]) ocK[q] = o;
-                    }
+                float[] wnK = wn[k];
+                forBox((int) Math.floor(d.x() - r * 1.2), (int) Math.floor(d.x() + r * 1.2) + 1,
+                        (int) Math.floor(d.z() - r * 1.2), (int) Math.floor(d.z() + r * 1.2) + 1, q -> {
+                            float dd = plan.dist(X(q), Z(q), d.x(), d.z()) / rF * (1f + wnK[q]);
+                            float hl;
+                            if (dd < 1f) {
+                                float s = (float) Math.sqrt(clipF(1f - dd * dd, 0f, 1f));
+                                hl = d.deep() ? hcF * s : (float) Math.min(hfr * (double) s, DOME_CAP);
+                            } else hl = 0f;
+                            if (hl > dhK[q]) dhK[q] = hl;
+                            float o = clipF(1f - dd / 0.65f, 0f, 1f);
+                            if (o > ocK[q]) ocK[q] = o;
+                        });
             }
             if (k == 0 && plan.domes[0]) {
                 // the lower gate's own dome, ringed by rock past 24-28
                 for (GardensGates.Gate g : plan.gates.near(minX + (maxX - minX) / 2, minZ + (maxZ - minZ) / 2,
                         Math.hypot(maxX - minX, maxZ - minZ) / 2 + 48)) {
                     if (g.entry()) continue;
-                    int ia = Math.max(0, (int) Math.floor(g.x() - 46) - x0), ib = Math.min(nx - 1, (int) Math.ceil(g.x() + 46) - x0);
-                    int ja = Math.max(0, (int) Math.floor(g.z() - 46) - z0), jb = Math.min(nz - 1, (int) Math.ceil(g.z() + 46) - z0);
                     float gdH = (float) (0.9 * GATE_R);
-                    for (int i = ia; i <= ib; i++)
-                        for (int j = ja; j <= jb; j++) {
-                            int q = i * nz + j;
-                            int wx = x0 + i, wz = z0 + j;
-                            float ringX = pull(wx, wz, g.x(), g.z(), 30.0, 44.0) - pull(wx, wz, g.x(), g.z(), GATE_R, GATE_R + 4.0);
-                            if (ringX > 0.5f) {
-                                dhK[q] = 0f;
-                                continue;
-                            }
-                            float dd = plan.dist(wx, wz, g.x(), g.z()) / (float) GATE_R;
-                            float gd = dd < 1f ? gdH * (float) Math.sqrt(clipF(1f - dd * dd, 0f, 1f)) : 0f;
-                            if (gd > dhK[q]) dhK[q] = gd;
-                        }
+                    forBox((int) Math.floor(g.x() - 46), (int) Math.ceil(g.x() + 46), (int) Math.floor(g.z() - 46),
+                            (int) Math.ceil(g.z() + 46), q -> {
+                                int wx = X(q), wz = Z(q);
+                                float ringX = pull(wx, wz, g.x(), g.z(), 30.0, 44.0) - pull(wx, wz, g.x(), g.z(), GATE_R, GATE_R + 4.0);
+                                if (ringX > 0.5f) {
+                                    dhK[q] = 0f;
+                                    return;
+                                }
+                                float dd = plan.dist(wx, wz, g.x(), g.z()) / (float) GATE_R;
+                                float gd = dd < 1f ? gdH * (float) Math.sqrt(clipF(1f - dd * dd, 0f, 1f)) : 0f;
+                                if (gd > dhK[q]) dhK[q] = gd;
+                            });
                 }
             }
             for (int q = 0; q < n; q++) if (dhK[q] > 0f) dhK[q] = Math.max(dhK[q], 3.2f);
@@ -211,7 +282,11 @@ final class GardensStoreys {
                 anySheet |= sheetK[q];
             }
             if (anySheet && !openOnly) {
-                float[] edtb = GardensMath.gaussian(GardensMath.edt(sheetK, nx, nz, 40f), nx, nz, 1.2);
+                float[] edtb;
+                if (edtSrc != null) {
+                    edtb = new float[n];
+                    for (int q = 0; q < n; q++) if (sheetK[q]) edtb[q] = edtSrc.sheet(k, X(q), Z(q));
+                } else edtb = GardensMath.gaussian(GardensMath.edt(sheetK, nx, nz, 40f), nx, nz, 1.2);
                 for (int q = 0; q < n; q++) {
                     if (!sheetK[q]) continue;
                     float h = Math.min(hn[k][q], 1.5f + 1.3f * edtb[q]);
@@ -238,16 +313,33 @@ final class GardensStoreys {
                         if (gw == null) continue;
                         boolean touched = false;
                         for (long cell : gw.plugged) {
-                            int i = (int) (cell >> 32) - x0, j = (int) cell - z0;
-                            if (i < 0 || j < 0 || i >= nx || j >= nz) continue;
-                            int q = i * nz + j;
+                            int q;
+                            if (xs != null) {
+                                q = listIndex((int) (cell >> 32), (int) cell);
+                                if (q < 0) continue;
+                            } else {
+                                int i = (int) (cell >> 32) - x0, j = (int) cell - z0;
+                                if (i < 0 || j < 0 || i >= nx || j >= nz) continue;
+                                q = i * nz + j;
+                            }
                             hallK[q] = false;
                             tunK[q] = false;
                             sheetK[q] = false;
                             dhK[q] = 0f;
                             touched = true;
                         }
-                        if (touched || gw.inside(x0, z0, nx, nz)) gateWays.add(gw);
+                        if (xs != null && touched) {
+                            // a list of columns can hold the same column twice
+                            for (int q = 0; q < n; q++) {
+                                int qq = listIndex(xs[q], zs[q]);
+                                if (qq == q) continue;
+                                hallK[q] = hallK[qq];
+                                tunK[q] = tunK[qq];
+                                sheetK[q] = sheetK[qq];
+                                dhK[q] = dhK[qq];
+                            }
+                        }
+                        if (touched || (xs == null && gw.inside(x0, z0, nx, nz))) gateWays.add(gw);
                     }
                 }
             }

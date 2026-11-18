@@ -106,7 +106,7 @@ final class GardensVents {
             double R = v.R, H = v.H;
             boolean live = v.live, deep = form == 3;
             int ys = v.ys;
-            int band = deep ? 0 : bands.bandAt(clipX((int) Math.floor(v.x)) + ox, ys, clipZ((int) Math.floor(v.z)) + oz);
+            int band = deep ? 0 : (v.band >= 0 ? v.band : bands.bandAt(clipX((int) Math.floor(v.x)) + ox, ys, clipZ((int) Math.floor(v.z)) + oz));
             int colour = deep ? LIME : (band == 0 ? MAGENTA : (band == 1 ? VIOLET : LIGHTBLUE));
             double leanS = deep ? 0.0 : (form == 1 ? 0.05 : 0.02) * u(k24, 1);
             double leanA = 2 * Math.PI * u(k24, 0);
@@ -508,6 +508,62 @@ final class GardensVents {
                 else if (good >= share * tot && colsOk >= 0.9 * cols) res[vi][i] = 1;
                 else res[vi][i] = 0;
             }
+        }
+        return res;
+    }
+
+    /** A block of rock as the carve leaves it, before the rubble settles (the game's door test reads a few columns). */
+    interface Solid {
+        boolean at(int x, int y, int z);
+    }
+
+    /**
+     * The game's door test for one vent: one round against every other vent's walls, on the carve before the rubble
+     * settles (rubble counted open, as the preview's test took it). Per crack -1 none, 0 drop, 1 keep.
+     */
+    int[] doorTestOne(Vent v, List<Vent> vents, Solid solid, CeilBelow cl, double share) {
+        int[] res = {-1, -1, -1};
+        Geom g = new Geom(), g2 = new Geom();
+        int ys = (int) v.t[6];
+        double ch = v.t[20];
+        int rmax = (int) (v.t[32] + 6.0);
+        int icx = (int) Math.floor(v.cx) + ox, icz = (int) Math.floor(v.cz) + oz;
+        List<Vent> others = near(vents, v, rmax + 8);
+        for (int i = 0; i < 3; i++) {
+            if (Float.isNaN(v.vc[i])) continue;
+            int tot = 0, good = 0, cols = 0, colsOk = 0;
+            for (int x = icx - rmax - 4; x < icx + rmax + 5; x++)
+                for (int z = icz - rmax - 4; z < icz + rmax + 5; z++) {
+                    if (!doorCol(v, i, x, z, g)) continue;
+                    int tx = Math.floorDiv(x - ox, TILE), tz = Math.floorDiv(z - oz, TILE);
+                    boolean incol = false;
+                    for (int y = ys; y <= (int) (ys + ch + 1); y++) {
+                        if (!doorRows(v, i, y)) continue;
+                        incol = true;
+                        tot++;
+                        boolean ok = !solid.at(x, y, z);
+                        if (ok)
+                            for (Vent o : others) {
+                                if (!onTile(o, tx, tz)) continue;
+                                if (isWall(part(o, x, y, z, cl.at(o.k(), x, z), g2))) {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                        if (ok) good++;
+                    }
+                    if (incol) {
+                        cols++;
+                        int fy = -999;
+                        for (int y = ys + 1; y > Math.max(0, ys + 1 - 14); y--)
+                            if (solid.at(x, y, z)) {
+                                fy = y;
+                                break;
+                            }
+                        if (fy >= ys - 12 && fy <= ys) colsOk++;
+                    }
+                }
+            res[i] = tot == 0 || cols == 0 ? 0 : (good >= share * tot && colsOk >= 0.9 * cols ? 1 : 0);
         }
         return res;
     }

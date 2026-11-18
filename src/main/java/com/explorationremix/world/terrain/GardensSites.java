@@ -57,6 +57,10 @@ final class GardensSites {
      */
     static final class Site {
         int form, k, family, j, ns, i, kk, ys, yLo, hand, gStand;
+        /** The game's band under the site, worked out with its decision (-1: the table asks the window). */
+        int band = -1;
+        /** A deep vent's level run into the Wasteland (the game's exit search), or NaN for the preview's stand-in. */
+        double throatLevel = Double.NaN;
         double x, z, R, Rf, H, key, a0;
         long key24;
         boolean live, twin, deepFailed;
@@ -83,6 +87,8 @@ final class GardensSites {
             s.yLo = yLo;
             s.hand = hand;
             s.gStand = gStand;
+            s.band = band;
+            s.throatLevel = throatLevel;
             s.x = x;
             s.z = z;
             s.R = R;
@@ -511,10 +517,18 @@ final class GardensSites {
      * caller pads it by what the final rule reads), in the canonical order.
      */
     List<Site> candidates(double minX, double minZ, double maxX, double maxZ) {
+        return candidates(minX, minZ, maxX, maxZ, -1);
+    }
+
+    /** As above, on storey {@code only} alone (or every storey when it is negative). */
+    List<Site> candidates(double minX, double minZ, double maxX, double maxZ, int only) {
         List<Site> cands = new ArrayList<>();
-        for (int k = 0; k < GardensPlan.K; k++)
-            for (GardensPlan.Dome d : st.domes(k, minX, minZ, maxX, maxZ)) cands.addAll(beehives(k, d));
         for (int k = 0; k < GardensPlan.K; k++) {
+            if (only >= 0 && k != only) continue;
+            for (GardensPlan.Dome d : st.domes(k, minX, minZ, maxX, maxZ)) cands.addAll(beehives(k, d));
+        }
+        for (int k = 0; k < GardensPlan.K; k++) {
+            if (only >= 0 && k != only) continue;
             for (GardensPlan.VHall vh : st.vhalls(k, minX, minZ, maxX, maxZ)) cands.addAll(stacks(vh));
             if (plan.patch && !plan.halls[k]) continue;
             double sx0 = 13.0 * k, sz0 = -19.0 * k;
@@ -524,6 +538,7 @@ final class GardensSites {
         }
         for (int k = 0; k < GardensPlan.K; k++) {
             if (plan.patch && !plan.beds[k]) continue;
+            if (only >= 0 && k != only) continue;
             double sx0 = 17.0 * k, sz0 = -31.0 * k;
             for (int i = (int) Math.floor((minX - sx0) / STUMP_G) - 1; i <= (int) Math.floor((maxX - sx0) / STUMP_G) + 1; i++)
                 for (int kk = (int) Math.floor((minZ - sz0) / STUMP_G) - 1; kk <= (int) Math.floor((maxZ - sz0) / STUMP_G) + 1; kk++)
@@ -580,7 +595,13 @@ final class GardensSites {
     }
 
     /** vents.deep_vents: a live beehive with the round profile on each deep site (a plain one where the gap is short). */
-    Site deepVent(GardensPlan.DeepSite d) {
+    Site deepVent(GardensPlan.DeepSite d) { return deepVent(d, false); }
+
+    /**
+     * As above; with {@code noThroat} (the game's, for a deep site whose throat finds no way into the Wasteland) it is
+     * the plain live vent a short gap makes.
+     */
+    Site deepVent(GardensPlan.DeepSite d, boolean noThroat) {
         double key = hv(5, 6, 0, 0, d.i(), d.kk());
         long key24 = (long) (key * (1 << 24));
         Site v = new Site();
@@ -606,7 +627,7 @@ final class GardensSites {
         v.gStand = d.gStand();
         v.deep = d;
         v.order = new long[]{3, 0, 0, d.i(), d.kk(), 0};
-        if (v.H < 22) {
+        if (v.H < 22 || noThroat) {
             v.form = 2;
             v.family = 4;
             v.deepFailed = true;

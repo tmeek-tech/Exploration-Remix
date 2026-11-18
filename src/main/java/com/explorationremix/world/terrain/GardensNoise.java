@@ -108,6 +108,66 @@ public final class GardensNoise {
         return m1 + w * (m2 - m1);
     }
 
+    /** fade's derivative. */
+    private static double dfade(double t) { return 30.0 * t * t * (t * (t - 2.0) + 1.0); }
+
+    /** Component c (0 x, 1 y, 2 z) of the gradient vector grad picks for hash h. */
+    private static double gradC(int h, int c) {
+        h &= 15;
+        int ua = h < 8 ? 0 : 1, va = h < 4 ? 1 : (h == 12 || h == 14 ? 0 : 2);
+        return (ua == c ? ((h & 1) == 0 ? 1.0 : -1.0) : 0.0) + (va == c ? ((h & 2) == 0 ? 1.0 : -1.0) : 0.0);
+    }
+
+    /**
+     * {@link #n3} and its slope along x and z: out[0] the value (worked out exactly as n3 does), out[1] d/dx, out[2]
+     * d/dz. One evaluation in place of the four extra a central difference takes.
+     */
+    static void n3dxz(int[] p, double x, double y, double z, double[] out) {
+        double fx = Math.floor(x), fy = Math.floor(y), fz = Math.floor(z);
+        int X = ((int) (long) fx) & 255, Y = ((int) (long) fy) & 255, Z = ((int) (long) fz) & 255;
+        x -= fx;
+        y -= fy;
+        z -= fz;
+        double u = fade(x), v = fade(y), w = fade(z), du = dfade(x), dw = dfade(z);
+        int A = p[X] + Y, AA = p[A] + Z, AB = p[A + 1] + Z;
+        int B = p[X + 1] + Y, BA = p[B] + Z, BB = p[B + 1] + Z;
+        int h1 = p[AA], h2 = p[BA], h3 = p[AB], h4 = p[BB], h5 = p[AA + 1], h6 = p[BA + 1], h7 = p[AB + 1], h8 = p[BB + 1];
+        double g1 = grad(h1, x, y, z), g2 = grad(h2, x - 1, y, z);
+        double g3 = grad(h3, x, y - 1, z), g4 = grad(h4, x - 1, y - 1, z);
+        double g5 = grad(h5, x, y, z - 1), g6 = grad(h6, x - 1, y, z - 1);
+        double g7 = grad(h7, x, y - 1, z - 1), g8 = grad(h8, x - 1, y - 1, z - 1);
+        double l1 = g1 + u * (g2 - g1), l2 = g3 + u * (g4 - g3);
+        double l3 = g5 + u * (g6 - g5), l4 = g7 + u * (g8 - g7);
+        double m1 = l1 + v * (l2 - l1), m2 = l3 + v * (l4 - l3);
+        out[0] = m1 + w * (m2 - m1);
+        // d/dx
+        double a1 = gradC(h1, 0) + u * (gradC(h2, 0) - gradC(h1, 0)) + du * (g2 - g1);
+        double a2 = gradC(h3, 0) + u * (gradC(h4, 0) - gradC(h3, 0)) + du * (g4 - g3);
+        double a3 = gradC(h5, 0) + u * (gradC(h6, 0) - gradC(h5, 0)) + du * (g6 - g5);
+        double a4 = gradC(h7, 0) + u * (gradC(h8, 0) - gradC(h7, 0)) + du * (g8 - g7);
+        double b1 = a1 + v * (a2 - a1), b2 = a3 + v * (a4 - a3);
+        out[1] = b1 + w * (b2 - b1);
+        // d/dz
+        double c1 = gradC(h1, 2) + u * (gradC(h2, 2) - gradC(h1, 2));
+        double c2 = gradC(h3, 2) + u * (gradC(h4, 2) - gradC(h3, 2));
+        double c3 = gradC(h5, 2) + u * (gradC(h6, 2) - gradC(h5, 2));
+        double c4 = gradC(h7, 2) + u * (gradC(h8, 2) - gradC(h7, 2));
+        double e1 = c1 + v * (c2 - c1), e2 = c3 + v * (c4 - c3);
+        out[2] = e1 + w * (e2 - e1) + dw * (m2 - m1);
+    }
+
+    /**
+     * {@link #n2} and its slope along x and z (in n2's own units): out[0] the value, exactly as n2 gives it, out[1]
+     * d/dx, out[2] d/dz.
+     */
+    static void n2d(int[] p, double x, double z, double[] out) {
+        n3dxz(p, C35 * x - S35 * z, 0.4183, S35 * x + C35 * z, out);
+        double dX = out[1], dZ = out[2];
+        out[0] = out[0] * 1.25;
+        out[1] = 1.25 * (dX * C35 + dZ * S35);
+        out[2] = 1.25 * (-dX * S35 + dZ * C35);
+    }
+
     private static final double C35 = 0.8191520442889918, S35 = 0.573576436351046;
 
     /** A slice of the 3D noise away from the lattice planes, turned 35 degrees (noise.n2). */
