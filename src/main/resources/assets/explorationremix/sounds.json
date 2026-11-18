@@ -690,5 +690,136 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.firefly.flutter"
+  },
+  "giant_skein.step": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/patter1",
+        "volume": 0.9,
+        "attenuation_distance": 24,
+        "pitch": 0.5
+      },
+      {
+        "name": "explorationremix:creature/skein/patter2",
+        "volume": 0.9,
+        "attenuation_distance": 24,
+        "pitch": 0.5
+      },
+      {
+        "name": "explorationremix:creature/skein/patter3",
+        "volume": 0.9,
+        "attenuation_distance": 24,
+        "pitch": 0.5
+      },
+      {
+        "name": "explorationremix:creature/skein/patter4",
+        "volume": 0.9,
+        "attenuation_distance": 24,
+        "pitch": 0.5
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.giant_skein.step"
+  },
+  "giant_skein.chitter": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/chitter1",
+        "volume": 1.0,
+        "attenuation_distance": 40,
+        "pitch": 0.5
+      },
+      {
+        "name": "explorationremix:creature/skein/chitter2",
+        "volume": 1.0,
+        "attenuation_distance": 40,
+        "pitch": 0.5
+      },
+      {
+        "name": "explorationremix:creature/skein/chitter3",
+        "volume": 1.0,
+        "attenuation_distance": 40,
+        "pitch": 0.5
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.giant_skein.chitter"
+  },
+  "giant_skein.notice": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/rattle1",
+        "volume": 1.0,
+        "attenuation_distance": 48,
+        "pitch": 0.42
+      },
+      {
+        "name": "explorationremix:creature/skein/rattle2",
+        "volume": 1.0,
+        "attenuation_distance": 48,
+        "pitch": 0.42
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.giant_skein.notice"
+  },
+  "giant_skein.windup": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/windup1",
+        "volume": 1.0,
+        "attenuation_distance": 48,
+        "pitch": 0.55
+      },
+      {
+        "name": "explorationremix:creature/skein/windup2",
+        "volume": 1.0,
+        "attenuation_distance": 48,
+        "pitch": 0.55
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.giant_skein.windup"
+  },
+  "giant_skein.bite": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/bite1",
+        "volume": 1.0,
+        "attenuation_distance": 28,
+        "pitch": 0.55
+      },
+      {
+        "name": "explorationremix:creature/skein/bite2",
+        "volume": 1.0,
+        "attenuation_distance": 28,
+        "pitch": 0.55
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.giant_skein.bite"
+  },
+  "giant_skein.hurt": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/hurt1",
+        "volume": 1.0,
+        "attenuation_distance": 32,
+        "pitch": 0.55
+      },
+      {
+        "name": "explorationremix:creature/skein/hurt2",
+        "volume": 1.0,
+        "attenuation_distance": 32,
+        "pitch": 0.55
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.giant_skein.hurt"
+  },
+  "giant_skein.death": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/skein/death1",
+        "volume": 1.0,
+        "attenuation_distance": 64,
+        "pitch": 0.45
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.giant_skein.death"
   }
 }

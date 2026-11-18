@@ -2,6 +2,7 @@ package com.explorationremix.registry;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.creature.FireflySwarm;
+import com.explorationremix.creature.GiantSkeinEntity;
 import com.explorationremix.creature.MossbackDen;
 import com.explorationremix.creature.MossbackEntity;
 import com.explorationremix.creature.SkeinEntity;
@@ -49,6 +50,19 @@ public final class EREntities {
     /** What a Skein leaves: a plate of its shell, kept for crafting later. */
     public static final RegistryObject<Item> SKEIN_PLATE = ERBlocks.ITEMS.register("skein_plate", () -> new Item(new Item.Properties()));
 
+    // The giant Skein of the Deep Blue Rift (0.18.8): one to a rift, on its walls. Its head's box 2.4 wide and 1.2 tall
+    // (3 x 2 x 3 cells to its climbing pathfinder; the 30-block body is its sections, along its trail); sent every
+    // tick, and tracked from sixteen chunks off (as far as the server lets), so its line of lights shows across the rift.
+    public static final RegistryObject<EntityType<GiantSkeinEntity>> GIANT_SKEIN = ENTITIES.register("giant_skein",
+            () -> EntityType.Builder.of(GiantSkeinEntity::new, MobCategory.MONSTER).sized(2.4F, 1.2F).clientTrackingRange(16).updateInterval(1)
+                    .build("giant_skein"));
+
+    public static final RegistryObject<Item> GIANT_SKEIN_SPAWN_EGG = ERBlocks.ITEMS.register("giant_skein_spawn_egg",
+            () -> new ForgeSpawnEggItem(GIANT_SKEIN, 0x7fa4d8, 0xdce9ff, new Item.Properties()));
+
+    /** What the giant Skein leaves: its long spines (and Skein plates), kept for crafting later. */
+    public static final RegistryObject<Item> GIANT_SKEIN_SPINE = ERBlocks.ITEMS.register("giant_skein_spine", () -> new Item(new Item.Properties()));
+
     @SuppressWarnings("DataFlowIssue")
     public static final RegistryObject<BlockEntityType<MossbackDen.Tile>> DEN_TILE = BLOCK_ENTITIES.register("mossback_den",
             () -> BlockEntityType.Builder.of(MossbackDen.Tile::new, ERBlocks.MOSSBACK_DEN.get()).build(null));
@@ -72,5 +86,6 @@ public final class EREntities {
         e.put(MOSSBACK.get(), MossbackEntity.attributes().build());
         // the Skein
         e.put(SKEIN.get(), SkeinEntity.attributes().build());
+        e.put(GIANT_SKEIN.get(), GiantSkeinEntity.attributes().build());
     }
 }
