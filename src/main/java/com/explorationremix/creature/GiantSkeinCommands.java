@@ -45,8 +45,8 @@ import java.util.Locale;
  *     <li>{@code /remix giant state <name> [ticks]}: sets the nearest one's state (rest, crawl, alert, hunt, rear,
  *     retreat): a hunt or strike is at you</li>
  *     <li>{@code /remix giant trace [ticks]}: logs how the nearest one's body moves each tick, to the server log</li>
- *     <li>{@code /remix giant path}: puts you on its rift's ledge path where it passes nearest the nearest giant,
- *     facing it (for testing its hunt)</li>
+ *     <li>{@code /remix giant path}: puts you on its rift's ledge path where the nearest giant sees you, about 16
+ *     blocks off (else where the path passes nearest it), facing it (for testing its hunt)</li>
  *     <li>{@code /remix giant strike}: it rears and strikes at a chicken hung in the air out from its head (it bites
  *     it if its strike lands there; /remix giant list counts its bites)</li>
  *     <li>{@code /remix giant hold <rear|lunge|recover> <0-1>}: holds the nearest one that far through that phase of a
@@ -286,22 +286,28 @@ public final class GiantSkeinCommands {
         Vec3 at = g.bodyCentre();
         double s0 = r.walkArcNear(at.x, at.y, at.z, 400.0, 400.0);
         if (Double.isNaN(s0)) { c.getSource().sendFailure(Component.literal("Its rift's ledge path is nowhere near it.")); return 0; }
-        // the point of the path nearest it, along the stretch round where it passes
-        double best = s0, bestD = Double.MAX_VALUE;
-        for (double ds = -80.0; ds <= 80.0; ds += 2.0) {
+        // a point of the path along the stretch round where it passes that it can see from where it lies, about 16
+        // blocks off (it notices you there, and has a little way to crawl); else the point nearest it
+        Vec3 eyes = g.eyes();
+        double best = s0, bestD = Double.MAX_VALUE, near = s0, nearD = Double.MAX_VALUE;
+        for (double ds = -80.0; ds <= 80.0; ds += 1.0) {
             double s = Math.max(0.0, Math.min(r.walkLength, s0 + ds));
             double[] q = r.pathAt(s);
-            double d = Math.pow(q[0] - at.x, 2) + Math.pow(Route.feetAt(q[2]) + 1.0 - at.y, 2) + Math.pow(q[1] - at.z, 2);
-            if (d < bestD) { bestD = d; best = s; }
+            Vec3 eye = new Vec3(q[0], Route.feetAt(q[2]) + pl.getEyeHeight(), q[1]);
+            double d = eye.distanceTo(eyes);
+            if (d < nearD) { nearD = d; near = s; }
+            if (d >= 10.0 && d <= 40.0 && Math.abs(d - 16.0) < bestD && g.sees(eye)) { bestD = Math.abs(d - 16.0); best = s; }
         }
-        double[] q = r.pathAt(best);
+        boolean seen = bestD < Double.MAX_VALUE;
+        double[] q = r.pathAt(seen ? best : near);
         Vec3 feet = new Vec3(q[0], Route.feetAt(q[2]), q[1]);
         Vec3 to = at.subtract(feet.add(0.0, pl.getEyeHeight(), 0.0));
         float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
         float pitch = (float) -Math.toDegrees(Math.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z)));
         pl.teleportTo(c.getSource().getLevel(), feet.x, feet.y, feet.z, yaw, pitch);
-        say(c, String.format(Locale.ROOT, "On the ledge path at %.1f %.1f %.1f, %.0f blocks from the giant at %s (%s)", feet.x, feet.y, feet.z,
-                Math.sqrt(bestD), g.blockPosition().toShortString(), g.describe()));
+        say(c, String.format(Locale.ROOT, "On the ledge path at %.1f %.1f %.1f, %.0f blocks from the giant at %s, %s (%s)", feet.x, feet.y, feet.z,
+                feet.add(0.0, pl.getEyeHeight(), 0.0).distanceTo(eyes), g.blockPosition().toShortString(),
+                seen ? "in its sight" : "out of its sight (no point of the path near it is in sight)", g.describe()));
         return 1;
     }
 
@@ -389,31 +395,39 @@ public final class GiantSkeinCommands {
             case 3 -> 12.0;
             default -> 22.0;
         } + 4.0 * (n / 4);
-        // out from its back (out over the rift, for one on a wall), turned a little ahead for its head
-        Vec3 main = n % 4 == 1 ? up.scale(0.75).add(run.scale(0.65)).normalize() : up;
-        for (double lift : new double[]{0.25, 0.1, 0.45, -0.1, 0.7})
-            for (int k = 0; k < 9; k++) {
-                double a = Math.toRadians(20 * ((k + 1) / 2) * (k % 2 == 0 ? 1 : -1));
-                Vec3 d = rotate(main, side, a).add(new Vec3(0, lift, 0)).normalize();
-                Vec3 eye = target.add(d.scale(dist));
-                BlockPos eb = BlockPos.containing(eye);
-                if (!level.isLoaded(eb) || !level.getBlockState(eb).getCollisionShape(level, eb).isEmpty()) continue;
-                BlockHitResult hit = level.clip(new ClipContext(eye, target, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, g));
-                if (hit.getType() != HitResult.Type.MISS && hit.getLocation().distanceTo(target) > 1.2) continue;
-                Vec3 to = target.subtract(eye);
-                float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
-                float pitch = (float) -Math.toDegrees(Math.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z)));
-                pl.teleportTo(level, eye.x, eye.y - pl.getEyeHeight(), eye.z, yaw, pitch);
-                say(c, String.format(Locale.ROOT, "Looking at the giant at %s from %.1f %.1f %.1f (%s)", g.blockPosition().toShortString(), eye.x, eye.y, eye.z, g.describe()));
-                return 1;
-            }
+        // best seen from out over the rift and a little above it, for one on a wall; for one on a floor or a ledge, from
+        // its side and above (not straight down on it); its head from a little ahead of it
+        Vec3 pref = Math.abs(up.y) > 0.8 ? side.scale(0.7).add(up.scale(0.7)) : up.add(0.0, 0.3, 0.0);
+        if (n % 4 == 1) pref = pref.normalize().add(run.scale(0.7));
+        pref = pref.normalize();
+        // every way round it off its rock, nearest that first, each tried near and nearer; first with nothing at all in
+        // the way (the rift's hanging vines hide it), then past what only the eye sees through
+        List<Vec3> ways = new java.util.ArrayList<>();
+        int count = 160;
+        for (int i = 0; i < count; i++) {
+            double y = 1.0 - 2.0 * (i + 0.5) / count, r = Math.sqrt(1.0 - y * y), a = i * 2.39996323;
+            Vec3 d = new Vec3(Math.cos(a) * r, y, Math.sin(a) * r);
+            if (d.dot(up) > 0.15 && d.y > -0.4) ways.add(d);
+        }
+        final Vec3 best = pref;
+        ways.sort(Comparator.comparingDouble(d -> -d.dot(best)));
+        for (ClipContext.Block clip : new ClipContext.Block[]{ClipContext.Block.OUTLINE, ClipContext.Block.VISUAL})
+            for (Vec3 d : ways)
+                for (double k : new double[]{1.0, 0.75, 0.55}) {
+                    Vec3 eye = target.add(d.scale(dist * k));
+                    BlockPos eb = BlockPos.containing(eye);
+                    if (!level.isLoaded(eb) || !level.getBlockState(eb).getCollisionShape(level, eb).isEmpty() || !level.getFluidState(eb).isEmpty()) continue;
+                    BlockHitResult hit = level.clip(new ClipContext(eye, target, clip, ClipContext.Fluid.ANY, g));
+                    if (hit.getType() != HitResult.Type.MISS && hit.getLocation().distanceTo(target) > 1.2) continue;
+                    Vec3 to = target.subtract(eye);
+                    float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
+                    float pitch = (float) -Math.toDegrees(Math.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z)));
+                    pl.teleportTo(level, eye.x, eye.y - pl.getEyeHeight(), eye.z, yaw, pitch);
+                    say(c, String.format(Locale.ROOT, "Looking at the giant at %s from %.1f %.1f %.1f, %.0f blocks off%s (%s)", g.blockPosition().toShortString(),
+                            eye.x, eye.y, eye.z, dist * k, clip == ClipContext.Block.VISUAL ? ", through vines" : "", g.describe()));
+                    return 1;
+                }
         c.getSource().sendFailure(Component.literal("No clear view of the giant at " + g.blockPosition().toShortString()));
         return 0;
-    }
-
-    /** Rotates v about the unit axis k by angle a (Rodrigues). */
-    private static Vec3 rotate(Vec3 v, Vec3 k, double a) {
-        double cos = Math.cos(a), sin = Math.sin(a);
-        return v.scale(cos).add(k.cross(v).scale(sin)).add(k.scale(k.dot(v) * (1 - cos)));
     }
 }

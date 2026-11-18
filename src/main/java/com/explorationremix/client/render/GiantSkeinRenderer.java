@@ -150,7 +150,7 @@ public class GiantSkeinRenderer extends EntityRenderer<GiantSkeinEntity> {
 
     /** How far its spines and tail fan are raised and spread: none at rest or crawling, half hunting, all rearing. */
     private static float flare(GiantSkeinEntity e, float pt) {
-        return Mth.clamp((e.glow(pt) - 0.7F) / 0.3F, 0.0F, 1.0F);
+        return Mth.clamp((e.glow(pt) - 0.8F) / 0.2F, 0.0F, 1.0F);
     }
 
     /** 0 alive, rising to 1 as its legs curl and its lights go out. */
@@ -275,7 +275,7 @@ public class GiantSkeinRenderer extends EntityRenderer<GiantSkeinEntity> {
             pose.last().normal().set(normals[i]);
             int light = glow ? 0xF000F0 : lights[i];
             // the glow: a slow wave of light running down its length
-            float l = glow ? level * (0.8F + 0.2F * Mth.sin(age * 0.07F - i * 0.5F)) : level;
+            float l = glow ? level * (0.85F + 0.15F * Mth.sin(age * 0.07F - i * 0.5F)) : level;
             if (i == 0) {
                 poseHead(e, pt, flare, dead);
                 head.render(pose, vc, light, overlay, l, l, l, 1.0F);

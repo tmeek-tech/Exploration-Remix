@@ -1132,6 +1132,9 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         return !t.isInvisible() && clearTo(eyes(), t);
     }
 
+    /** Whether it sees the point {@code p} from its eyes (for /remix giant path). */
+    public boolean sees(Vec3 p) { return clear(eyes(), p); }
+
     private boolean clearTo(Vec3 from, Entity t) {
         return clear(from, t.getEyePosition()) || clear(from, t.getBoundingBox().getCenter());
     }
@@ -1706,11 +1709,12 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         jaw += (jawT - jaw) * 0.35F;
         if (s == REAR) shudder = Math.max(shudder, 0.2F + 0.6F * (float) strikeProgress(0.0F));
         else shudder *= 0.8F;
+        // its tips glow steadily enough to show it across the rift, brighter as it hunts and brightest as it strikes
         float glowT = isDeadOrDying() ? 0.0F : switch (s) {
             case REAR, LUNGE -> 1.0F;
-            case ALERT, HUNT, RECOVER, SEARCH -> 0.85F;
-            case CRAWL, RETREAT -> 0.7F;
-            default -> 0.55F;
+            case ALERT, HUNT, RECOVER, SEARCH -> 0.9F;
+            case CRAWL, RETREAT -> 0.8F;
+            default -> 0.75F;
         };
         glow += (glowT - glow) * (glowT > glow ? 0.15F : 0.03F);
         feelers(moving, s == HUNT || s == ALERT || s == SEARCH);

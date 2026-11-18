@@ -166,18 +166,19 @@ for _p in ("plate_large", "plate_mid", "plate_small", "tail"):
 
 PALETTE = {
     # pale ice blue over steel blue: light blue throughout (hue about 215), never the cyan Taran dislikes
-    "shell": ["#152039", "#1c2b4b", "#25395f", "#304976", "#3d5c8f", "#4c70a8", "#5f86bf", "#769dd2", "#90b4e1", "#acc9ee", "#c7dcf6"],
+    "shell": ["#152039", "#1c2b4b", "#25395f", "#304976", "#3d5c8f", "#4a70b0", "#5a86c9", "#6f9ce0", "#88b3ee", "#a5c8f7", "#c3dcfc"],
     "rim": ["#a7c3ea", "#c6daf5", "#e3edfb"],
     "dark": ["#0a1020", "#101a30", "#17243f"],
     "belly": ["#4b5a77", "#5d6d8c", "#7181a1", "#8796b4", "#9daac5"],
     "leg": ["#16213a", "#1f2d4c", "#2b3e63", "#3a527e", "#4d699a", "#6585b5"],
     "spine": ["#24365a", "#2f4670", "#3d5a89", "#4f71a3", "#6689bc", "#80a3d2", "#9fbde4", "#bdd3f1", "#d6e5f8"],
-    "glow": ["#9fc2ff", "#c4daff", "#e9f2ff"],
-    "glow_dim": ["#6f93cf", "#8eaee3"],
+    # the glow a clear light blue (it read white when paler): a little deeper than the rift's vines, never cyan
+    "glow": ["#4f8fff", "#78acff", "#a6caff"],
+    "glow_dim": ["#3f74d6", "#5b8fe8"],
     "claw": ["#a9bfdf", "#d4e2f5"],
     "mandible": ["#111a30", "#1b2846", "#2b3d63", "#41598a", "#5b77a8"],
     "fang": ["#c6d6ee", "#edf3fc"],
-    "eye": ["#8fb8ff", "#c8ddff", "#f2f7ff"],
+    "eye": ["#5d9bff", "#94c0ff", "#cfe2ff"],
     "pupil": "#08101e",
     "mouth": ["#0b1122", "#131c34", "#1d2a48"],
 }
@@ -218,14 +219,14 @@ def _shell(cv, box, pal, rng, front_rim=False, crown=False):
             mid = 1.0 - abs((i + 0.5) / w - 0.5) * 2.0
             if j == 0 or (front_rim and (j == d - 1 or i in (0, w - 1))):
                 return C(pal["rim"][1 if r < 0.7 else (0 if r < 0.9 else 2)])
-            t = (0.5 if crown else 0.3) + 0.45 * mid + 0.22 * (nn - 0.5) - (0.12 if r < 0.07 else 0.0)
+            t = (0.58 if crown else 0.38) + 0.45 * mid + 0.22 * (nn - 0.5) - (0.12 if r < 0.07 else 0.0)
             if j % 6 == 3: t -= 0.06                                   # faint growth ridges across the plate
             if j == 1 and r < 0.5: t += 0.1                             # a glint just inside the back rim
             return ramp(pal["shell"], t)
         if face in ("west", "east") or (front_rim and face == "north"):
             if j == 0:
                 return C(pal["rim"][0])
-            return ramp(pal["shell"], (0.32 if crown else 0.22) + 0.15 * nn - 0.07 * j)
+            return ramp(pal["shell"], (0.38 if crown else 0.28) + 0.15 * nn - 0.07 * j)
         if face == "south":
             return ramp(pal["shell"], 0.35 - 0.06 * j + 0.08 * r)
         if face == "north":
@@ -243,7 +244,7 @@ def _belly(cv, box, pal, rng):
     cr._texels(cv, box, fn)
 
 
-def _spike(cv, box, pal, rng, tip, glow_rows=4, dim=False):
+def _spike(cv, box, pal, rng, tip, glow_rows=6, dim=False):
     """A spike's segment, pointing up its box: steel blue at its root paling towards its end; the tip's last few
     texels glow (the barbs' and thorns' a little dimmer), its very end brightest."""
     w, h, d = box["size"]
@@ -324,8 +325,8 @@ def paint_box(cv, box, pal, rng):
     elif mat == "shield": _shell(cv, box, pal, rng, front_rim=True, crown=True)
     elif mat == "belly": _belly(cv, box, pal, rng)
     elif mat in ("spine", "spine_tip"): _spike(cv, box, pal, rng, mat == "spine_tip")
-    elif mat in ("thorn", "thorn_tip"): _spike(cv, box, pal, rng, mat == "thorn_tip", glow_rows=3)
-    elif mat in ("barb", "barb_tip"): _spike(cv, box, pal, rng, mat == "barb_tip", glow_rows=2, dim=True)
+    elif mat in ("thorn", "thorn_tip"): _spike(cv, box, pal, rng, mat == "thorn_tip", glow_rows=4)
+    elif mat in ("barb", "barb_tip"): _spike(cv, box, pal, rng, mat == "barb_tip", glow_rows=3, dim=True)
     elif mat in ("leg", "shin"): _leg(cv, box, pal, rng, mat == "shin")
     elif mat == "skull": _skull(cv, box, pal, rng)
     elif mat == "eye": _eye(cv, box, pal, rng)
