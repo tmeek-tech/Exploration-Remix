@@ -26,7 +26,9 @@ public final class CastContext {
     public final int gearId;
     public final CastReading cast;
     public final Siphon siphon;
-    private final Set<Long> struck = new HashSet<>(), pulsed = new HashSet<>();
+    private final Set<Long> struck = new HashSet<>(), pulsed = new HashSet<>(), plants = new HashSet<>();
+    /** How many plants of each kind (RunePlants) this cast has set off. */
+    private final int[] plantCounts = new int[4];
     private long dingTick = -1;
 
     public CastContext(ServerPlayer owner, Host host, float gearPower, int gearId, CastReading cast, int paid) {
@@ -49,6 +51,17 @@ public final class CastContext {
     public boolean firstPulse(Act a, Entity e, long gameTime) {
         long key = ((long) (a.slot + 1) << 48) ^ ((gameTime / 10) << 24) ^ (e.getId() & 0xFFFFFFL);
         return pulsed.add(key);
+    }
+
+    /**
+     * For the plants a cast touches (RunePlants): true the first time it touches the plant at {@code pos}, while fewer
+     * than {@code cap} of that kind ({@code kind}, 0 to 3) have been set off, so a Fan's copies through one fern unroll
+     * it once and a blast in a patch of glowbells rings a few, not all.
+     */
+    public boolean firstPlant(long pos, int kind, int cap) {
+        if (plantCounts[kind] >= cap || !plants.add(pos)) return false;
+        plantCounts[kind]++;
+        return true;
     }
 
     /** The caster hears a soft ding when a rune lands (once a tick), a brighter one for a reaction. */

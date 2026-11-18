@@ -153,8 +153,8 @@ public final class ERBlocks {
 
     // ------------------------------------------------------------------------------------------- Blue Reaches
     public static final RegistryObject<Block> GLOWBELL = block("glowbell",
-            () -> new CavePlantBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.SPORE_BLOSSOM, 9).offsetType(BlockBehaviour.OffsetType.XZ),
-                    Block.box(3, 0, 3, 13, 14, 13)));
+            () -> new com.explorationremix.block.GlowbellBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.SPORE_BLOSSOM, 9)
+                    .offsetType(BlockBehaviour.OffsetType.XZ), Block.box(3, 0, 3, 13, 14, 13)));
     public static final RegistryObject<Block> PAGODA_FUNGUS = tallBlock("pagoda_fungus",
             () -> new TallCavePlantBlock(plant(MapColor.COLOR_BLUE, SoundType.FUNGUS, 7), Block.box(3, 0, 3, 13, 16, 13), Block.box(2, 0, 2, 14, 12, 14)));
     /** Blue specks over the rift's walls: light only where it covers a face, like glow lichen. */
