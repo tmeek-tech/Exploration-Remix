@@ -212,8 +212,8 @@ public final class DeepSurfaceRules {
         private static int clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
         /**
-         * A block of one of the noise shapes' formations: a root of the trees overhead (mangrove roots under mangroves),
-         * packed ice with specks of blue ice, or limestone and calcite with calcite at the tip.
+         * A block of one of the noise shapes' formations: a root of the trees overhead in their own wood (mangrove roots
+         * under mangroves), packed ice with specks of blue ice, or limestone and calcite with calcite at the tip.
          */
         private static BlockState formation(UpperShapes sh, int f, long seed, int x, int y, int z) {
             long h = Hashing.mix(seed ^ 0x6F726D61L, x, y, z);
@@ -225,15 +225,16 @@ public final class DeepSurfaceRules {
             };
         }
 
+        /** The wood of the trees overhead, bark on every side (0.18.6: logs showed their cut rings at the tips). */
         private static BlockState rootLog(RootKind kind) {
             return switch (kind) {
-                case BIRCH -> Blocks.BIRCH_LOG.defaultBlockState();
-                case SPRUCE -> Blocks.SPRUCE_LOG.defaultBlockState();
-                case JUNGLE -> Blocks.JUNGLE_LOG.defaultBlockState();
-                case DARK_OAK -> Blocks.DARK_OAK_LOG.defaultBlockState();
+                case BIRCH -> Blocks.BIRCH_WOOD.defaultBlockState();
+                case SPRUCE -> Blocks.SPRUCE_WOOD.defaultBlockState();
+                case JUNGLE -> Blocks.JUNGLE_WOOD.defaultBlockState();
+                case DARK_OAK -> Blocks.DARK_OAK_WOOD.defaultBlockState();
                 case MANGROVE -> Blocks.MANGROVE_ROOTS.defaultBlockState();
-                case CHERRY -> Blocks.CHERRY_LOG.defaultBlockState();
-                default -> Blocks.OAK_LOG.defaultBlockState();
+                case CHERRY -> Blocks.CHERRY_WOOD.defaultBlockState();
+                default -> Blocks.OAK_WOOD.defaultBlockState();
             };
         }
     }

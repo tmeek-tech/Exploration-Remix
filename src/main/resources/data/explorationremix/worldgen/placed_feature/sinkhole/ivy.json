@@ -1,0 +1,34 @@
+{
+  "feature": "explorationremix:sinkhole/ivy",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 14
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "explorationremix:pit_trait",
+      "trait": "ivy",
+      "max": 0.5
+    },
+    {
+      "type": "explorationremix:layer_range",
+      "layer": "upper",
+      "inset": 2,
+      "above_water": false,
+      "focus": "grottos"
+    },
+    {
+      "type": "explorationremix:rootvaults_look",
+      "looks": [
+        3
+      ],
+      "cold": false
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

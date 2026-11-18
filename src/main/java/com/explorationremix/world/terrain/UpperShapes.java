@@ -117,6 +117,18 @@ public final class UpperShapes {
     static final int FLOOR_CLEARANCE = 56;
     /** The sinkholes' field's scale: about 45 pits a square kilometre over plains and deserts, one every 150 blocks or so. */
     static final double PIT_SCALE = 72;
+    /**
+     * The roots of the trees overhead through the Root Vaults (0.18.6): strands of their wood wind over the warrens'
+     * ceilings and walls ({@link #strand}) as thick as they come down to {@link #STRAND_FULL} under the ground, thinning
+     * out to none at {@link #STRAND_DEPTH}; and in the wider rooms a few come down to the floor as twisted pillars
+     * ({@link #pillarDist}), at most one a sheet in each {@link #PILLAR_CELL}-block cell.
+     */
+    static final double STRAND_FULL = 14, STRAND_DEPTH = 30;
+    static final int PILLAR_CELL = 20;
+    /** How far across a pillar's roots may spread from its middle. */
+    private static final double PILLAR_REACH = 5;
+    /** How many spots of its cell a pillar tries: the wider rooms are few, so most spots miss them. */
+    private static final int PILLAR_TRIES = 16;
     private static final int NO_Y = Integer.MIN_VALUE;
 
     /**
@@ -148,7 +160,7 @@ public final class UpperShapes {
     private final int minFloor;
 
     private final Perlin[] wA = new Perlin[2], wB = new Perlin[2], wC = new Perlin[2], wD = new Perlin[2];
-    private final Perlin mouthN, linkN, rootN, lookN, poolN, chillN;
+    private final Perlin mouthN, linkN, rootN, lookN, poolN, chillN, strandN, strandM, roofN, holeN;
     private final Perlin rA, rB, rC, rD, rE;
     private final Perlin hA, hB, hC, hD, hE, hS, hK;
     private final Perlin sA, sB;
@@ -160,6 +172,8 @@ public final class UpperShapes {
         return a;
     });
     private final ThreadLocal<double[]> grads = ThreadLocal.withInitial(() -> new double[2]);
+    /** Per thread, a wall's normal for the roots (strand). */
+    private final ThreadLocal<double[]> normals = ThreadLocal.withInitial(() -> new double[3]);
     private final ThreadLocal<Cells> cells = ThreadLocal.withInitial(Cells::new);
 
     public UpperShapes(long seed, int packFloor, Overhead overhead, Dens dens, Pack pack, boolean warrens, boolean rifts, boolean halls,
@@ -188,6 +202,10 @@ public final class UpperShapes {
         lookN = noise(s, 43);
         poolN = noise(s, 44);
         chillN = noise(s, 45);
+        strandN = noise(s, 46);
+        strandM = noise(s, 47);
+        roofN = noise(s, 48);
+        holeN = noise(s, 49);
         rA = noise(s, 50);
         rB = noise(s, 51);
         rC = noise(s, 52);
@@ -244,6 +262,8 @@ public final class UpperShapes {
         // ---- warrens, two sheets
         final boolean[] wOn = new boolean[2];
         final double[] wYc = new double[2], wHh = new double[2], wHw = new double[2], wLine = new double[2], wRoom = new double[2];
+        /** Across the ground, the way out from the middle line of sheet i's nearest tunnel (a unit vector; see strand). */
+        final double[] wNx = new double[2], wNz = new double[2];
         /** Sheet 1 before the cap (the sinkholes' lake level). */
         double yc1Raw, hh1;
         /** The top sheet's roof cap: the column's cap, lifted where a mouth opens. */
@@ -256,6 +276,13 @@ public final class UpperShapes {
         /** The column's hanging root or icicle: kind, sheet, and its span [fBottom, fTop] (block centres). */
         int fKind;
         double fBottom, fTop;
+        /** How thickly root strands run over the column's warren walls, 0 (none) to 1 (see {@link #strand}). */
+        double strandK;
+        /** Per sheet: 0 not known yet, 1 the pack's caves keep clear of its walls here (strands may run there), 2 not. */
+        final byte[] strandSafe = new byte[2];
+        /** The twisted root pillar within reach of the column, per sheet, or null; worked out on first use. */
+        boolean pilDone;
+        final Pillar[] pil = new Pillar[2];
         boolean poolDone;
         /** The y of a pool block sunk under a warren floor, per sheet, or NO_Y. */
         final int[] wPool = new int[2];
@@ -280,6 +307,10 @@ public final class UpperShapes {
         boolean sOn;
         double sScore, sThick;
         int sLake;
+        /** The pit's middle: the peak of the pit field's slow part, on the 4-block lattice (its lake and spring). */
+        int sCx, sCz;
+        boolean sSpringDone;
+        int sSpringY;
 
         // ---- still water (see waterLevels): the heights the column holds water at, and where its rim may lie
         boolean waterDone, rimDone, rPoolDone, rPool;
@@ -327,8 +358,13 @@ public final class UpperShapes {
         c.lo = 1e9;
         c.hi = -1e9;
         c.fKind = 0;
+        c.strandK = 0;
+        c.strandSafe[0] = c.strandSafe[1] = 0;
+        c.pilDone = false;
+        c.pil[0] = c.pil[1] = null;
         c.poolDone = false;
         c.springDone = false;
+        c.sSpringDone = false;
         c.hPoolDone = false;
         c.waterDone = false;
         c.rimDone = false;
@@ -419,10 +455,17 @@ public final class UpperShapes {
         double wz = 8 * K2 * D.noise2(x / 45.0 + 30, z / 45.0 + 30, g);
         double wzx = 8 * K2 * g[0] / 45.0, wzz = 8 * K2 * g[1] / 45.0;
         double f1 = wB[i].noise2((x + wx) / 70.0 + 3, (z + wz) / 70.0 + 3, g);
-        double l1 = Math.abs(f1) / Math.max(Math.hypot(g[0] * (1 + wxx) + g[1] * wzx, g[0] * wxz + g[1] * (1 + wzz)) / 70.0, 0.53 / 70.0);
+        double g1x = (g[0] * (1 + wxx) + g[1] * wzx) / 70.0, g1z = (g[0] * wxz + g[1] * (1 + wzz)) / 70.0;
+        double l1 = Math.abs(f1) / Math.max(Math.hypot(g1x, g1z), 0.53 / 70.0);
         double f2 = wC[i].noise2((x - wz) / 85.0 + 9, (z + wx) / 85.0 + 9, g);
-        double l2 = Math.abs(f2) / Math.max(Math.hypot(g[0] * (1 - wzx) + g[1] * wxx, -g[0] * wzz + g[1] * (1 + wxz)) / 85.0, 0.53 / 85.0);
+        double g2x = (g[0] * (1 - wzx) + g[1] * wxx) / 85.0, g2z = (-g[0] * wzz + g[1] * (1 + wxz)) / 85.0;
+        double l2 = Math.abs(f2) / Math.max(Math.hypot(g2x, g2z), 0.53 / 85.0);
         c.wLine[i] = Math.min(l1, l2);
+        // the way out from the line: up the slope of |f| (0.18.6, for the roots, which stand straight out of the walls)
+        double nx = l1 <= l2 ? Math.signum(f1) * g1x : Math.signum(f2) * g2x, nz = l1 <= l2 ? Math.signum(f1) * g1z : Math.signum(f2) * g2z;
+        double nn = Math.hypot(nx, nz);
+        c.wNx[i] = nn > 1e-12 ? nx / nn : 1;
+        c.wNz[i] = nn > 1e-12 ? nz / nn : 0;
         c.wYc[i] = sheetY(i, c.gC, x, z);
         double room = clamp(K2 * D.noise2(x / 28.0 + 70, z / 28.0 + 70) * 1.6 - 0.35, 0, 1);
         c.wRoom[i] = room;
@@ -472,11 +515,30 @@ public final class UpperShapes {
                 c.hi = Math.max(c.hi, c.wYc[i] + c.wHh[i] + 2);
             }
         }
-        if (c.forest && warrens) formation(c);
+        if (c.forest && warrens) {
+            formation(c);
+            if (c.wOn[0] || c.wOn[1]) c.strandK = clamp((K2 * strandM.noise2(x / 56.0, z / 56.0) + 0.45) / 0.6, 0, 1);
+        }
     }
 
     /** How far a mouth lets the top sheet climb from its own depth toward the ground, in blocks. */
     static final double MOUTH_RISE = 20;
+    /** How much soil a roofed mouth's tunnel keeps over it, between its openings (see {@link #roofed}). */
+    static final double ROOFED_DEPTH = 3.5;
+
+    /**
+     * 0..1: how far the mouths at a spot are short roofed ones rather than long sunken ways (0.18.6, Taran: "a mix by
+     * place"), by a slow field, so a forest's ways in are mostly the one or the other and the next forest's may differ.
+     */
+    double roofed(int x, int z) { return smooth((-0.05 - K2 * roofN.noise2(x / 260.0, z / 260.0)) / 0.08); }
+
+    /**
+     * 0..1: the patches where a roofed mouth opens, some 30 blocks across: the caps climb out of the roof at their slope,
+     * so only the middle opens to the sky, typically some 5 by 7 blocks and up to about 10 by 15, and the way falls
+     * back under a roof of soil on either side (smaller patches left only skylights in the pack, whose real ground lies a
+     * block or two over the estimate).
+     */
+    private double holes(int x, int z) { return smooth((K2 * holeN.noise2(x / 40.0 + 5, z / 40.0 + 5) - 0.05) / 0.15); }
 
     /** 0..1: how far the top sheet climbs toward the ground at a column (a slow field, whatever the ground). */
     private double mouthRamp(int x, int z) {
@@ -546,6 +608,14 @@ public final class UpperShapes {
             double e = mouthRamp(bx, bz);
             if (e > 0) e *= gate(bx, bz, GATE_MOUTH);
             double top = s.y() + 4;
+            // the ways in mixed by place (Taran, 18 Nov): where a slow field is low a mouth's tunnel keeps a roof of soil
+            // ROOFED_DEPTH thick under the forest floor, opening only in patches (the caps' slope rounds each into a
+            // short mouth, its roof dipping under the trees on either side); elsewhere it opens all along, a long
+            // sunken way
+            if (e > 0) {
+                double roofed = roofed(bx, bz);
+                if (roofed > 0) top = lerp(roofed * (1 - holes(bx, bz)), top, s.y() - ROOFED_DEPTH);
+            }
             if (e > 0 && top > v) v = (float) lerp(e, v, top);
         }
         k.lift[i] = v;
@@ -629,6 +699,294 @@ public final class UpperShapes {
             c.hi = Math.max(c.hi, c.fTop + 1);
             return;
         }
+    }
+
+    // ------------------------------------------------------------------------------------------------ roots
+
+    /**
+     * True where a block belongs to a root strand over sheet i's ceiling or walls (0.18.6). The strands lie where the
+     * zero surface of a 3D field cuts the tunnel's shell, so each runs along the rock wherever it goes, winding over a
+     * ceiling and down a wall to the floor's edge, and now and then dives into the rock and comes out further on. The
+     * field changes slower up and down than across, so its zero surfaces stand up and on the walls the strands mostly
+     * run down. How thick they are is the column's ({@link Col#strandK}): up to two blocks across, standing out of the
+     * rock by up to two along their middle, where the strands are thick, and thin as a block where they are thin. They
+     * run on a little into the rock, dressed as wood there too, so they never end flat on a wall. None across a floor,
+     * in the snowy zone's ice, under {@link #STRAND_DEPTH}, inside the other sheet's tunnels, or where the pack's caves
+     * come near the walls (they would cut it loose).
+     */
+    private boolean strand(Col c, int i, int x, int y, int z) {
+        if (c.strandK <= 0 || !c.wOn[i]) return false;
+        double[] n = normals.get();
+        // each block of a strand out of the wall rests face to face on the next one in toward the wall (along the wall's
+        // normal's largest part), and so on to the wall itself, so none hangs on by an edge where the wall slopes; each
+        // is judged in its own column, as it is when asked about itself
+        Col at = c;
+        int bx = x, by = y, bz = z;
+        for (int step = 0; ; step++) {
+            double e = strandBlock(at, i, bx, by, bz, step == 0, n);
+            if (e != e) return false;
+            if (e >= 0) return true;
+            if (step == 3) return false;
+            double ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
+            if (ay >= ax && ay >= az) by += n[1] > 0 ? 1 : -1;
+            else {
+                if (ax >= az) bx += n[0] > 0 ? 1 : -1;
+                else bz += n[2] > 0 ? 1 : -1;
+                at = bx == c.x && bz == c.z ? c : side(bx, bz);
+            }
+        }
+    }
+
+    /**
+     * For {@link #strand}: how far a block lies out of sheet i's wall at its column (negative in the open), with the
+     * wall's outward normal there in {@code n}, where the block is a part of a strand; NaN where it is none. Past the
+     * first block asked about, a block in the wall will do (the strand rests on it).
+     */
+    private double strandBlock(Col c, int i, int x, int y, int z, boolean first, double[] n) {
+        if (!c.wOn[i]) return first || othersOpen(c, x, y, z) || c.wOn[1 - i] && warrenDist(c, 1 - i, x, y, z) < 0 ? Double.NaN : 1;
+        double yy = y + 0.5, hh = c.wHh[i], hw = c.wHw[i], floorTop = c.wYc[i] - 0.6 * hh;
+        double dy = (yy - c.wYc[i]) / hh, dxz = c.wLine[i] / hw;
+        double e = (Math.sqrt(dy * dy + dxz * dxz) - 1) * Math.min(hh, hw);
+        // the walls' roughening (as warrenDist roughens them) moves them by under 0.6
+        if (first && (e < -2.6 || e > 1.3)) return Double.NaN;
+        if (e > -3 && e < 3) e += 0.5 * K3 * roughN.noise3(x / 6.0, y / 6.0, z / 6.0);
+        if (!first && e >= 0)
+            return othersOpen(c, x, y, z) || c.wOn[1 - i] && warrenDist(c, 1 - i, x, y, z) < 0 ? Double.NaN : e;
+        double depth = c.gF - yy;
+        if (c.strandK <= 0 || depth < 1.5 || depth > STRAND_DEPTH) return Double.NaN;
+        // on the walls and ceilings only: not under the floor, nor where the floor is nearer than the wall, nor over the
+        // middle of a floor (a narrow tunnel's floor lies close to its arch)
+        if (e < -2.0 || e > 0.7 || floorTop - yy > e || yy < floorTop - 1 || e < 0 && yy - floorTop < 1.5 && dxz < 0.75) return Double.NaN;
+        // the strand is worked out at the point of the wall under the block, straight in along the tunnel's normal, so
+        // it is the same all the way out from the wall
+        double nl = dxz / hw, ny = dy / hh, nn = Math.hypot(nl, ny);
+        if (nn < 1e-6) return Double.NaN;
+        n[0] = nl / nn * c.wNx[i];
+        n[1] = ny / nn;
+        n[2] = nl / nn * c.wNz[i];
+        double wx = x + 0.5 - e * n[0], wy = yy - e * n[1], wz = z + 0.5 - e * n[2];
+        double k = c.strandK * (depth <= STRAND_FULL ? 1 : (STRAND_DEPTH - depth) / (STRAND_DEPTH - STRAND_FULL));
+        // the strands fade out and in again along their length, so they end and fork rather than net the whole vault
+        double t = (0.06 + 0.12 * k) * clamp(0.5 + 1.6 * K3 * strandM.noise3(wx / 22.0 + 31, wy / 22.0, wz / 22.0 + 31), 0, 1);
+        if (t <= 0.01) return Double.NaN;
+        double g = Math.abs(K3 * strandN.noise3(wx / 10.0, wy / 17.0, wz / 10.0));
+        if (g >= t) return Double.NaN;
+        double f = g / t, out = (0.5 + 1.5 * k) * Math.sqrt(1 - f * f);
+        if (e < -out) return Double.NaN;
+        if (c.cold && chillAt(c, yy) < 3 || othersOpen(c, x, y, z) || c.wOn[1 - i] && warrenDist(c, 1 - i, x, y, z) < -0.3) return Double.NaN;
+        return strandSafe(c, i) ? e : Double.NaN;
+    }
+
+    private static final int SIDE_SLOTS = 16;
+    /** Per thread, the columns beside the ones asked about, for the roots (side), apart from the main cache. */
+    private final ThreadLocal<Col[]> sides = ThreadLocal.withInitial(() -> {
+        Col[] a = new Col[SIDE_SLOTS];
+        for (int k = 0; k < a.length; k++) a[k] = new Col();
+        return a;
+    });
+
+    /**
+     * A column worked out on its own copy, kept a while per thread outside the main cache (so it never pushes out a
+     * column an asker holds): the next column in toward a wall, for a root strand ({@link #strand}).
+     */
+    private Col side(int x, int z) {
+        Col c = sides.get()[((x & 3) << 2) | (z & 3)];
+        if (c.valid && c.x == x && c.z == z) return c;
+        c.x = x;
+        c.z = z;
+        c.valid = true;
+        fill(c);
+        return c;
+    }
+
+    /**
+     * Whether the pack's caves keep clear of sheet i's walls at a column (asked once): rock to the pack from under the
+     * floor to {@link #SEAM} + 1 over the roof, in the column and two blocks out each way, so no strand there is left
+     * hanging in the pack's open space, nor kept as a stub in it.
+     */
+    private boolean strandSafe(Col c, int i) {
+        if (pack == null) return true;
+        if (c.strandSafe[i] == 0) {
+            byte s = 1;
+            int lo = (int) Math.floor(c.wYc[i] - 0.6 * c.wHh[i]) - 1;
+            int hi = Math.min((int) Math.ceil(c.wYc[i] + c.wHh[i]) + SEAM + 1, (int) Math.floor(c.gF) - 2);
+            for (int k = 0; k < 5 && s == 1; k++) {
+                int nx = c.x + (k == 1 ? 2 : k == 2 ? -2 : 0), nz = c.z + (k == 3 ? 2 : k == 4 ? -2 : 0);
+                for (int y = lo; y <= hi; y += 2)
+                    if (pack.density(nx, y, nz) < 0) {
+                        s = 2;
+                        break;
+                    }
+            }
+            c.strandSafe[i] = s;
+        }
+        return c.strandSafe[i] == 1;
+    }
+
+    /**
+     * A twisted root pillar, where a root of the trees overhead comes down to a vault's floor: its middle, the floor and
+     * roof of its room there, the girth of its core, how many strands twist round the core, and their twist.
+     */
+    static final class Pillar {
+        final int sheet, strands;
+        final double x, z, floor, ceil, girth, phase, turn;
+
+        Pillar(int sheet, double x, double z, double floor, double ceil, double girth, double phase, double turn, int strands) {
+            this.sheet = sheet;
+            this.x = x;
+            this.z = z;
+            this.floor = floor;
+            this.ceil = ceil;
+            this.girth = girth;
+            this.phase = phase;
+            this.turn = turn;
+            this.strands = strands;
+        }
+    }
+
+    private static final Pillar NO_PILLAR = new Pillar(-1, 0, 0, 0, 0, 0, 0, 0, 0);
+    private static final int PILLAR_SLOTS = 64;
+    /** Per thread, the pillars of the cells asked about lately, by cell and sheet. */
+    private final ThreadLocal<long[]> pillarKeys = ThreadLocal.withInitial(() -> {
+        long[] a = new long[PILLAR_SLOTS];
+        java.util.Arrays.fill(a, Long.MIN_VALUE);
+        return a;
+    });
+    private final ThreadLocal<Pillar[]> pillarVals = ThreadLocal.withInitial(() -> new Pillar[PILLAR_SLOTS]);
+
+    /** A cell's pillar on sheet i, or null. */
+    Pillar pillarOf(int cx, int cz, int i) {
+        long key = ((long) cx << 33) ^ ((cz & 0xFFFFFFFFL) << 1) ^ i;
+        int slot = ((cx * 7 + cz * 3) * 2 + i) & (PILLAR_SLOTS - 1);
+        long[] keys = pillarKeys.get();
+        Pillar[] vals = pillarVals.get();
+        if (keys[slot] != key) {
+            Pillar p = makePillar(cx, cz, i);
+            keys[slot] = key;
+            vals[slot] = p == null ? NO_PILLAR : p;
+        }
+        Pillar p = vals[slot];
+        return p == NO_PILLAR ? null : p;
+    }
+
+    /**
+     * Where a cell's pillar on sheet i stands, if it has one: a spot of the cell (kept off its edges) in one of the
+     * forest warrens' wider rooms, off the room's middle so its way stays open and clear of its walls, under at most
+     * {@link #STRAND_DEPTH} - 4 of ground, its room at least six blocks high; not over a pool, in a mouth or a link, in
+     * the snowy zone, near another shape's open space or the other sheet's, or where the pack's caves come near it.
+     * Reads the column on its own copy, never the cache.
+     */
+    private Pillar makePillar(int cx, int cz, int i) {
+        long h = Hashing.mix(seed ^ 0x52007A1CL, cx, cz, i);
+        for (int t = 0; t < PILLAR_TRIES; t++) {
+            Pillar p = pillarTry(Hashing.mix(h, 8, t, 0), cx, cz, i);
+            if (p != null) return p;
+        }
+        return null;
+    }
+
+    /** One try for a cell's pillar (see {@link #makePillar}). */
+    private Pillar pillarTry(long h, int cx, int cz, int i) {
+        int px = cx * PILLAR_CELL + 4 + (int) (Hashing.unit(Hashing.mix(h, 1, 0, 0)) * (PILLAR_CELL - 8));
+        int pz = cz * PILLAR_CELL + 4 + (int) (Hashing.unit(Hashing.mix(h, 2, 0, 0)) * (PILLAR_CELL - 8));
+        Col m = scratch(px, pz);
+        if (!m.forest || !m.wOn[i] || m.mouth > 0.02 || m.link > 0.2) return null;
+        // off the middle line toward one wall, leaving a way past it on the other side
+        double lat = m.wLine[i], hw = m.wHw[i], q = lat / hw;
+        if (hw < 3.5 || lat < 1 || lat > hw - 0.5) return null;
+        double ceil = m.wYc[i] + m.wHh[i] * Math.sqrt(1 - q * q), floor = m.wYc[i] - 0.6 * m.wHh[i];
+        if (ceil - floor < 5.5 || m.gF - ceil < 3 || m.gF - ceil > STRAND_DEPTH - 4) return null;
+        if (m.cold && chillAt(m, ceil) < 3) return null;
+        // no pool round its foot (warrenPools sinks them where this field is high)
+        for (int k = 0; k < 9; k++) {
+            double ax = px + (k == 0 ? 0 : 4 * Math.cos(k * Math.PI / 4)), az = pz + (k == 0 ? 0 : 4 * Math.sin(k * Math.PI / 4));
+            if (K2 * poolN.noise2(ax / 9.0, az / 9.0) >= 0.25) return null;
+        }
+        for (int y = (int) Math.floor(floor); y <= ceil; y += 2) {
+            if (m.rOn && riftDist(m, px, y, pz) < 3 || m.hOn && hallDist(m, px, y, pz) < 3 || m.sOn && sinkDist(m, px, y, pz) < 3) return null;
+            if (m.wOn[1 - i] && warrenDist(m, 1 - i, px, y, pz) < 2) return null;
+        }
+        // the way past it: open from four to seven blocks out on the far side from its wall, at its feet and halfway up
+        // (read off the columns there, which a bend or a crossing tunnel may narrow)
+        int low = (int) Math.floor(floor + 1), mid = (int) Math.floor((floor + ceil) / 2);
+        for (int r = 4; r <= 7; r++) {
+            int bx = (int) Math.floor(px + 0.5 - r * m.wNx[i]), bz = (int) Math.floor(pz + 0.5 - r * m.wNz[i]);
+            Col b = scratch(bx, bz);
+            if (!b.wOn[i] || warrenDist(b, i, bx, low, bz) > -0.5 || warrenDist(b, i, bx, mid, bz) > -0.5) return null;
+        }
+        if (pack != null)
+            for (int k = 0; k < 5; k++) {
+                int nx = px + (k == 1 ? 3 : k == 2 ? -3 : 0), nz = pz + (k == 3 ? 3 : k == 4 ? -3 : 0);
+                for (int y = (int) Math.floor(floor) - 2; y <= Math.min(ceil + SEAM + 1, m.gF - 2); y += 2)
+                    if (pack.density(nx, y, nz) < 0) return null;
+            }
+        double girth = 0.75 + 0.35 * Hashing.unit(Hashing.mix(h, 3, 0, 0));
+        double phase = 2 * Math.PI * Hashing.unit(Hashing.mix(h, 4, 0, 0));
+        double turn = (Hashing.unit(Hashing.mix(h, 5, 0, 0)) < 0.5 ? 1 : -1) * 2 * Math.PI / (10 + 6 * Hashing.unit(Hashing.mix(h, 6, 0, 0)));
+        int strands = Hashing.unit(Hashing.mix(h, 7, 0, 0)) < 0.6 ? 3 : 2;
+        return new Pillar(i, px + 0.5, pz + 0.5, floor, ceil, girth, phase, turn, strands);
+    }
+
+    /** Finds the pillar within reach of a column on each sheet, once. */
+    private void pillarsReady(Col c) {
+        if (c.pilDone) return;
+        c.pilDone = true;
+        if (!c.forest || !warrens) return;
+        int r = (int) Math.ceil(PILLAR_REACH);
+        for (int i = 0; i < 2; i++) {
+            if (!c.wOn[i]) continue;
+            double best = PILLAR_REACH * PILLAR_REACH;
+            for (int cx = Math.floorDiv(c.x - r, PILLAR_CELL); cx <= Math.floorDiv(c.x + r, PILLAR_CELL); cx++)
+                for (int cz = Math.floorDiv(c.z - r, PILLAR_CELL); cz <= Math.floorDiv(c.z + r, PILLAR_CELL); cz++) {
+                    Pillar p = pillarOf(cx, cz, i);
+                    if (p == null) continue;
+                    double dx = c.x + 0.5 - p.x, dz = c.z + 0.5 - p.z;
+                    if (dx * dx + dz * dz < best) {
+                        best = dx * dx + dz * dz;
+                        c.pil[i] = p;
+                    }
+                }
+        }
+    }
+
+    /**
+     * How far a block lies from sheet i's twisted root pillar near its column (negative inside), or {@link #SOLID}
+     * where none reaches: from 1.5 blocks into the floor of the pillar's room to 3 over its roof.
+     */
+    private double pillarAt(Col c, int i, int x, int y, int z) {
+        pillarsReady(c);
+        Pillar p = c.pil[i];
+        if (p == null) return SOLID;
+        double yy = y + 0.5;
+        if (yy < p.floor - 1.5 || yy > p.ceil + 3) return SOLID;
+        return pillarDist(p, x, yy, z);
+    }
+
+    /**
+     * Across, how far a block lies from a pillar at height yy (negative inside): a core swaying a little as it climbs,
+     * with two or three strands twisting round it; core and strands thicken and the strands spread out near the floor
+     * and the roof, so the pillar stands on root feet and fans out over the roof.
+     */
+    static double pillarDist(Pillar p, int x, double yy, int z) {
+        double t = Math.max(yy - p.floor, 0), fb = Math.exp(-t / 1.8), ft = Math.exp(-Math.max(p.ceil - yy, 0) / 1.8);
+        // the twist eases off down at the feet, which spread out wide (so each layer of a foot rests on the one under it)
+        double ang = p.phase + p.turn * (t - 1.8 * (1 - fb));
+        double px = x + 0.5 - p.x - 0.45 * Math.cos(0.5 * ang), pz = z + 0.5 - p.z - 0.45 * Math.sin(0.5 * ang);
+        double d = Math.sqrt(px * px + pz * pz) - p.girth * (1 + 0.8 * fb + 0.5 * ft);
+        double orbit = 1.25 + 1.8 * fb + 0.6 * ft, rs = 0.72 * (1 + 0.5 * fb + 0.3 * ft);
+        for (int k = 0; k < p.strands; k++) {
+            double a = ang + 2 * Math.PI * k / p.strands;
+            double sx = px - orbit * Math.cos(a), sz = pz - orbit * Math.sin(a);
+            d = Math.min(d, Math.sqrt(sx * sx + sz * sz) - rs);
+        }
+        return d;
+    }
+
+    /** True where a block is a root (strand or pillar) of sheet i, within its tunnels or up to 1.2 into their rock. */
+    private boolean rootAt(Col c, int i, int x, int y, int z) {
+        if (!c.wOn[i]) return false;
+        if (strand(c, i, x, y, z)) return true;
+        return c.forest && pillarAt(c, i, x, y, z) < 0 && warrenDist(c, i, x, y, z) <= 1.2;
     }
 
     /** Signed distance to sheet i's tunnels (negative inside), without its pool, roots or anything else. */
@@ -876,10 +1234,13 @@ public final class UpperShapes {
         // pits sit beside a tunnel of the lower sheet, which their chamber opens onto
         double score = pk - 0.30 * smooth((c.wLine[1] - 6) / 16.0) - 0.6 * (1 - gate);
         if (score < 0.24) return false;
-        int lake = lakeLevel(c.x, c.z);
+        long peak = pitPeak(c.x, c.z);
+        int lake = lakeLevel(peak);
         if (lake == NO_Y || lake > c.gF - 14) return false;
         c.sScore = score;
         c.sLake = lake;
+        c.sCx = (int) (peak >> 32) * 4;
+        c.sCz = (int) peak * 4;
         c.sThick = 5 + 2.5 * K2 * sB.noise2(x / 30.0, z / 30.0);
         c.lo = Math.min(c.lo, lake - 2);
         c.hi = Math.max(c.hi, c.gF + 3);
@@ -887,10 +1248,10 @@ public final class UpperShapes {
     }
 
     /**
-     * The surface of a sinkhole's lake: one level for the whole pit, from its middle (the peak of the pit field's slow
-     * part, found by climbing it on a 4-block lattice): a block under the lower sheet's floor there.
+     * The middle of the pit a column belongs to: the peak of the pit field's slow part, found by climbing it on a
+     * 4-block lattice from the column, as {i, j} cells (i in the high half).
      */
-    private int lakeLevel(int x, int z) {
+    private long pitPeak(int x, int z) {
         int i = Math.floorDiv(x, 4), j = Math.floorDiv(z, 4);
         double best = sA.noise2(i * 4 / PIT_SCALE, j * 4 / PIT_SCALE);
         for (int step = 0; step < 48; step++) {
@@ -904,7 +1265,15 @@ public final class UpperShapes {
             i = bi;
             j = bj;
         }
-        int cx = i * 4, cz = j * 4;
+        return ((long) i << 32) | (j & 0xffffffffL);
+    }
+
+    /**
+     * The surface of a sinkhole's lake: one level for the whole pit, from its middle ({@link #pitPeak}): a block under
+     * the lower sheet's floor there.
+     */
+    private int lakeLevel(long peak) {
+        int cx = (int) (peak >> 32) * 4, cz = (int) peak * 4;
         double gC = coarseGround(cx, cz);
         double yc = sheetY(1, gC, cx, cz);
         double room = clamp(K2 * wD[1].noise2(cx / 28.0 + 70, cz / 28.0 + 70) * 1.6 - 0.35, 0, 1);
@@ -914,29 +1283,228 @@ public final class UpperShapes {
         return lake < minFloor + 2 ? NO_Y : lake;
     }
 
+    /** How far apart the shelves up a sinkhole's shaft lie, in blocks (0.18.6). */
+    static final int LEDGE_STEP = 6;
+    /** How far a shelf juts out at its top, in the pit field's units: about two blocks on a pit of middling size. */
+    static final double LEDGE_OUT = 0.035;
+
+    /**
+     * Shelves up a sinkhole's shaft (0.18.6), as how much more of the pit field a block needs to lie open: every
+     * {@link #LEDGE_STEP} blocks from a little over the chamber's roof to under the soil, flat on top and tapering under
+     * over three blocks (a corbel, whose underside the grass and roots hang from), in patches round the wall where a
+     * field is high, so they come and go round the pit rather than ringing it. Plants grow on their tops.
+     */
+    private double ledge(Col c, int x, double yy, int z) {
+        double base = c.sLake + 1 + c.sThick + 5;
+        if (yy < base - 3 || yy > c.gF - 7) return 0;
+        double amount = clamp((pitTrait(c, TRAIT_SHELVES) - 0.3) / 0.4, 0, 1);
+        if (amount <= 0) return 0;
+        int k = (int) Math.ceil((yy - base) / LEDGE_STEP);
+        double d = base + k * LEDGE_STEP - yy;
+        if (d >= 3) return 0;
+        double patch = smooth((K2 * sB.noise2(x / 9.0 + 17 * k, z / 9.0 - 11 * k) + 0.15) / 0.5);
+        return LEDGE_OUT * amount * (1 - d / 3) * patch;
+    }
+
+    /**
+     * What sets one sinkhole apart from the next (0.18.6, Taran: a feature in every pit would make them cookie-cutter):
+     * each trait is a number from 0 to 1 drawn for the whole pit from its middle. {@link #TRAIT_SHELVES}: none in about
+     * three pits in ten, few to many in the rest; {@link #TRAIT_FALL}: a spring in about one pit in six (the trait in
+     * {@link #FALL_SHARE} of them, about half of which have a wall that can take one);
+     * {@link #TRAIT_SLOPE}: a slope of fallen rock into the lake in a little under half (its side from
+     * {@link #TRAIT_SLOPE_SIDE}); {@link #TRAIT_IVY}: walls hung thick with ivy in about half; {@link #TRAIT_RIM}: how
+     * thickly grass and roots hang over the rim (the features read these two).
+     */
+    public static final int TRAIT_SHELVES = 0, TRAIT_FALL = 1, TRAIT_SLOPE = 2, TRAIT_SLOPE_SIDE = 3, TRAIT_IVY = 4, TRAIT_RIM = 5;
+    /** The share of pits that look for a spring ({@link #TRAIT_FALL} at most this); about half find a wall for one. */
+    public static final double FALL_SHARE = 0.3;
+
+    private double pitTrait(Col c, int trait) {
+        return Hashing.unit(Hashing.mix(seed ^ 0x51D7EA17L, c.sCx, c.sCz, trait));
+    }
+
+    /**
+     * The ground over a green sinkhole at a column (0.18.6), for the dressing of its rim: a plains pit not snowed in, not
+     * a desert's hollow. {@link Integer#MIN_VALUE} elsewhere; a look at the pit field first, so most columns cost two
+     * noise samples and no column of their own.
+     */
+    public int sinkholeRim(int x, int z) {
+        if (!sinkholes || K2 * (sA.noise2(x / PIT_SCALE, z / PIT_SCALE) + 0.18 * sB.noise2(x / 14.0, z / 14.0)) < 0.3) return Integer.MIN_VALUE;
+        Col c = column(x, z);
+        return c.sOn && !c.desert && !c.cold ? (int) Math.floor(c.gF) : Integer.MIN_VALUE;
+    }
+
+    /**
+     * The ground over a forest's warrens at a column, where the trees' roots run through them (0.18.6: strands, pillars
+     * and hanging stubs, all within {@link #STRAND_DEPTH} of it); {@link Integer#MIN_VALUE} elsewhere.
+     */
+    public int rootGround(int x, int z) {
+        Col c = column(x, z);
+        return c.forest && warrens && (c.wOn[0] || c.wOn[1]) ? (int) Math.floor(c.gF) : Integer.MIN_VALUE;
+    }
+
+    /** True where a sinkhole's pit itself (not its chamber) is open at a block (0.18.6). */
+    public boolean pitOpen(int x, int y, int z) {
+        Col c = column(x, z);
+        return c.sOn && inPit(c, x, y, z);
+    }
+
+    /** A trait of the sinkhole at a column (see {@link #TRAIT_SHELVES}), or -1 where no pit is. */
+    public double pitTrait(int x, int z, int trait) {
+        Col c = column(x, z);
+        return c.sOn ? pitTrait(c, trait) : -1;
+    }
+
+    /**
+     * How far a pit's floor rises at a column over its lake's bed (0.18.6): in a pit with a bank
+     * ({@link #TRAIT_SLOPE}), a fan of fallen rock leaning on one side of the shaft, rising from the middle of the lake to
+     * a few blocks over its shore at the wall, lumpy, and keeping three blocks of headroom under the chamber's roof (so
+     * it never shuts the way from the pit to the tunnels). Never below the bed, which would open rock under the lake.
+     */
+    private double pitRise(Col c, int x, int z) {
+        if (pitTrait(c, TRAIT_SLOPE) > 0.45) return 0;
+        double a = 2 * Math.PI * pitTrait(c, TRAIT_SLOPE_SIDE);
+        double ux = Math.cos(a), uz = Math.sin(a);
+        double dx = x + 0.5 - c.sCx, dz = z + 0.5 - c.sCz;
+        double along = dx * ux + dz * uz, across = Math.abs(-dx * uz + dz * ux);
+        double f = clamp((along + 2) / 15.0, 0, 1), g = clamp(1 - across / 11.0, 0, 1);
+        if (f <= 0 || g <= 0) return 0;
+        double top = c.sThick - 2;
+        if (top <= 0) return 0;
+        double rise = top * Math.pow(f, 1.4) * Math.sqrt(g);
+        if (rise >= 0.5) rise += 0.8 * K2 * sB.noise2(x / 5.0 + 50, z / 5.0 + 50);
+        return clamp(rise, 0, top);
+    }
+
     /** Signed distance to the pit and the chamber at its foot (negative inside). */
     private double sinkDist(Col c, int x, int y, int z) {
         double yy = y + 0.5;
         int lake = c.sLake;
-        if (yy < lake - 1.5) return lake - 1 - yy;
+        // the lake's bed, or the fallen rock over it
+        double bed = lake - 1.5 + pitRise(c, x, z);
+        if (yy < bed) return bed + 0.5 - yy;
         double depth = c.gF - yy;
         double under = clamp((depth - 3) / 12.0, 0, 1);
-        double thresh = 0.62 - 0.12 * under - 0.04 * K3 * sA.noise3(x / 9.0, y / 9.0, z / 9.0);
-        double pit = Math.max((thresh - c.sScore) / 0.05, Math.max(lake - 1 - yy, yy - (c.gF + 3)));
+        double thresh = 0.62 - 0.12 * under - 0.04 * K3 * sA.noise3(x / 9.0, y / 9.0, z / 9.0) + ledge(c, x, yy, z);
+        double pit = Math.max((thresh - c.sScore) / 0.05, Math.max(bed + 0.5 - yy, yy - (c.gF + 3)));
         double near = c.sScore + 0.25 * K3 * sB.noise3(x / 25.0 + 5, y / 15.0, z / 25.0 + 5);
         double top = lake + 1 + c.sThick + 0.8 * K3 * roughN.noise3(x / 8.0 + 20, y / 6.0, z / 8.0 + 20);
-        double cave = Math.max((0.30 - near) / 0.05, Math.max(lake + 1 - yy, yy - top));
+        double cave = Math.max((0.30 - near) / 0.05, Math.max(Math.max(lake + 1, bed + 0.5) - yy, yy - top));
         return Math.min(pit, cave);
     }
 
-    /** The pit itself (not its chamber), open from the lake's bed up through the ground. */
+    /** The pit itself (not its chamber), open from the lake's bed (or the fallen rock over it) up through the ground. */
     private boolean inPit(Col c, int x, int y, int z) {
         double yy = y + 0.5;
-        if (yy < c.sLake - 1.5) return false;
+        if (yy < c.sLake - 1.5 + pitRise(c, x, z)) return false;
         double depth = c.gF - yy;
         double under = clamp((depth - 3) / 12.0, 0, 1);
-        double thresh = 0.62 - 0.12 * under - 0.04 * K3 * sA.noise3(x / 9.0, y / 9.0, z / 9.0);
+        double thresh = 0.62 - 0.12 * under - 0.04 * K3 * sA.noise3(x / 9.0, y / 9.0, z / 9.0) + ledge(c, x, yy, z);
         return c.sScore > thresh;
+    }
+
+    /** The springs found so far, per thread, by pit: a direct-mapped cache of pits' keys and their springs {x, y, z}. */
+    private static final int SPRING_SLOTS = 64;
+    private final ThreadLocal<long[]> springKeys = ThreadLocal.withInitial(() -> {
+        long[] a = new long[SPRING_SLOTS];
+        java.util.Arrays.fill(a, Long.MIN_VALUE);
+        return a;
+    });
+    private final ThreadLocal<int[]> springAt = ThreadLocal.withInitial(() -> new int[3 * SPRING_SLOTS]);
+
+    /**
+     * A sinkhole's spring (0.18.6): about one pit in six has one ({@link #TRAIT_FALL}), high on the wall of the shaft,
+     * whose water pours down into the lake (a waterfall; with the rifts' springs the only water of the shapes that
+     * flows, {@link #SPRING}). The height of the spring at a column, or NO_Y where none is.
+     */
+    int sinkSpring(Col c) {
+        if (c.sSpringDone) return c.sSpringY;
+        c.sSpringDone = true;
+        c.sSpringY = NO_Y;
+        if (!c.sOn) return NO_Y;
+        long key = ((long) c.sCx << 32) ^ (c.sCz & 0xffffffffL);
+        int slot = (int) ((key * 0x9E3779B97F4A7C15L) >>> 58);
+        long[] keys = springKeys.get();
+        int[] at = springAt.get();
+        if (keys[slot] != key) {
+            int[] s = findSpring(c.sCx, c.sCz);
+            keys[slot] = key;
+            at[3 * slot] = s == null ? 0 : s[0];
+            at[3 * slot + 1] = s == null ? NO_Y : s[1];
+            at[3 * slot + 2] = s == null ? 0 : s[2];
+        }
+        if (at[3 * slot + 1] != NO_Y && at[3 * slot] == c.x && at[3 * slot + 2] == c.z) c.sSpringY = at[3 * slot + 1];
+        return c.sSpringY;
+    }
+
+    /**
+     * Where the pit round (cx, cz) keeps its spring, or null: about one pit in six has one. Its side and height come
+     * from the pit's middle, the height somewhere up the shaft between the chamber's roof and the soil; the spring is the
+     * first block of the wall out along that side, kept only where the rock closes over it, under it and on every side
+     * but the pit's (the pack's caves too), so its water runs only into the pit. Up to six sides and heights are tried.
+     * Reads the columns on its own copies, never the cache (they lie far apart, and would push out the asker's).
+     */
+    int[] findSpring(int cx, int cz) {
+        Col m = scratch(cx, cz);
+        // nothing pours into a desert's hollow (Taran, 18 Nov: no sandfalls, no springs; its pool lies hidden)
+        if (!m.sOn || m.desert || pitTrait(m, TRAIT_FALL) > FALL_SHARE) return null;
+        long h = Hashing.mix(seed ^ 0x5B1C5EL, cx, cz, 3);
+        double lo = m.sLake + 1 + m.sThick + 4, hi = m.gF - 9;
+        if (hi - lo < 3) return null;
+        for (int t = 0; t < 6; t++) {
+            int ys = (int) Math.floor(lo + Hashing.unit(Hashing.mix(h, 1, t, 0)) * (hi - lo));
+            double a = 2 * Math.PI * (Hashing.unit(Hashing.mix(h, 2, 0, 0)) + t / 3.0 + (t >= 3 ? 1 / 6.0 : 0));
+            int[] s = springAlong(cx, cz, ys, Math.cos(a), Math.sin(a));
+            if (s != null) return s;
+        }
+        return null;
+    }
+
+    /** The first block of the pit's wall out from (cx, cz) along (ux, uz) at height ys, if a spring may open there. */
+    private int[] springAlong(int cx, int cz, int ys, double ux, double uz) {
+        boolean open = false;
+        int px = Integer.MIN_VALUE, pz = 0;
+        for (double r = 0; r < 64; r += 0.5) {
+            int x = (int) Math.floor(cx + 0.5 + r * ux), z = (int) Math.floor(cz + 0.5 + r * uz);
+            if (x == px && z == pz) continue;
+            px = x;
+            pz = z;
+            Col n = scratch(x, z);
+            if (n.sOn && sinkDist(n, x, ys, z) < 0 && raw(n, x, ys, z, false) > 0) {
+                open = true;
+                continue;
+            }
+            if (!open) continue;
+            // the wall: of this pit (so its column finds this spring again), rock to every shape, over and under the
+            // spring too, under the soil
+            if (!n.sOn || n.sCx != cx || n.sCz != cz || ys > n.gF - 8 || raw(n, x, ys, z, false) <= 0) return null;
+            for (int dy = -1; dy <= 1; dy += 2)
+                if (sinkDist(n, x, ys + dy, z) < 0.3 || raw(n, x, ys + dy, z, false) <= 0) return null;
+            // every side either the pit's open space (at least one) or rock
+            int pits = 0;
+            for (int k = 0; k < 4; k++) {
+                int nx = x + (k == 0 ? 1 : k == 1 ? -1 : 0), nz = z + (k == 2 ? 1 : k == 3 ? -1 : 0);
+                Col b = scratch(nx, nz);
+                if (raw(b, nx, ys, nz, false) <= 0) return null;
+                if (b.sOn && sinkDist(b, nx, ys, nz) < 0) pits++;
+            }
+            if (pits == 0) return null;
+            if (pack != null)
+                for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++)
+                    for (int y = ys - SEAM - 1; y <= ys + 1; y++) if (pack.density(x + dx, y, z + dz) < 0) return null;
+            return new int[]{x, ys, z};
+        }
+        return null;
+    }
+
+    /** A column worked out on its own, outside the per-thread cache. */
+    private Col scratch(int x, int z) {
+        Col c = new Col();
+        c.x = x;
+        c.z = z;
+        c.valid = true;
+        fill(c);
+        return c;
     }
 
     // ================================================================================================ queries
@@ -962,7 +1530,10 @@ public final class UpperShapes {
     /** The open space with its still water carved in, before the merge with the pack's caves. */
     private double carve0(Col c, int x, int y, int z) {
         double d = raw(c, x, y, z);
-        if (d > -0.5 && water(c, y)) return -0.5;
+        // still water is open, whether it is sunk into rock (a pool, a stream) or lies in open space (a sinkhole's lake:
+        // until 0.18.6 the water was carved only where the rock was nearly shut, so the fill below took the middle of
+        // every lake and only its edges kept their water)
+        if (water(c, y)) return Math.min(d, -0.5);
         // a sinkhole's lake where its rock cannot hold it fills in, so its water never meets air at its own level; not
         // where another shape is open (a rift through the pit), which would leave the fill hanging in that open space
         if (d < 0.5 && c.sOn && lakeBlock(c, x, y, z, c.sLake) && othersShut(c, x, y, z)) return 0.5;
@@ -996,9 +1567,23 @@ public final class UpperShapes {
         if (sink && c.sOn) {
             double s = sinkDist(c, x, y, z);
             if (s < d) { d = s; owner = SINKHOLES; }
+            if (d > -0.5 && y == sinkSpring(c)) { d = -0.5; owner = SINKHOLES; }
         }
+        // a root pillar shuts its own blocks, and keeps the open space round it near enough to the rock that the
+        // interpolation between noise cells (UpperFine) works its edges out block by block
+        if (d < 0 && owner == WARRENS && c.forest && warrens && !othersOpen(c, x, y, z))
+            for (int i = 0; i < 2; i++) {
+                if (!c.wOn[i]) continue;
+                double p = pillarAt(c, i, x, y, z);
+                if (p < 4) d = Math.max(d, -p);
+            }
         if (d < 0 && formationOf(c, owner, x, y, z) != 0) return 0.5;
         return d;
+    }
+
+    /** True where a rift, hall or sinkhole is open at a block. */
+    private boolean othersOpen(Col c, int x, int y, int z) {
+        return c.rOn && riftDist(c, x, y, z) < 0 || c.hOn && hallDist(c, x, y, z) < 0 || c.sOn && sinkDist(c, x, y, z) < 0;
     }
 
     /** {@link #raw} at any block, {@link #SOLID} outside its column's range. */
@@ -1131,6 +1716,9 @@ public final class UpperShapes {
             if (c.sOn && sinkDist(c, x, y, z) < 0) return 0;
             return c.fKind;
         }
+        // the trees' roots through a forest's warrens: strands over the walls, and the twisted pillars
+        if (owner == WARRENS && c.forest && warrens && (rootAt(c, 0, x, y, z) || rootAt(c, 1, x, y, z)))
+            return othersOpen(c, x, y, z) ? 0 : ROOT;
         if (owner == HALLS) {
             if (!Double.isNaN(c.stalBottom) && yy >= c.stalBottom && yy <= c.hCeil + 2.5) {
                 if (c.rOn && riftDist(c, x, y, z) < 0) return 0;
@@ -1151,7 +1739,8 @@ public final class UpperShapes {
     public int formation(int x, int y, int z) {
         Col c = column(x, z);
         if (y < c.lo || y > c.hi) return 0;
-        if (c.fKind == 0 && Double.isNaN(c.stalBottom) && c.miteTop == NO_Y) return 0;
+        boolean roots = c.forest && warrens && (c.wOn[0] || c.wOn[1]);
+        if (c.fKind == 0 && Double.isNaN(c.stalBottom) && c.miteTop == NO_Y && !roots) return 0;
         double d = SOLID;
         int owner = -1;
         for (int i = 0; i < 2; i++) {
@@ -1168,6 +1757,8 @@ public final class UpperShapes {
         if (d >= 0) {
             if (c.fKind != 0 && yy >= c.fBottom && yy <= c.fTop) owner = WARRENS;
             else if (c.hOn && !Double.isNaN(c.stalBottom) && yy >= c.stalBottom && yy <= c.hCeil + 2.5) owner = HALLS;
+            // so do the roots, a little way (rootAt)
+            else if (roots && d <= 1.5) owner = WARRENS;
             else return 0;
         }
         return formationOf(c, owner, x, y, z);
@@ -1187,6 +1778,7 @@ public final class UpperShapes {
         if (y < c.lo || y > c.hi) return -1;
         if (water(c, y)) return WATER;
         if (c.rOn && y == spring(c)) return SPRING;
+        if (c.sOn && y == sinkSpring(c)) return SPRING;
         return carve(c, x, y, z) < 0 ? AIR : -1;
     }
 
@@ -1199,6 +1791,7 @@ public final class UpperShapes {
         if (y < c.lo || y > c.hi) return -1;
         if (water(c, y)) return WATER;
         if (c.rOn && y == spring(c)) return SPRING;
+        if (c.sOn && y == sinkSpring(c)) return SPRING;
         return carve0(c, x, y, z) < 0 ? AIR : -1;
     }
 
@@ -1530,6 +2123,53 @@ public final class UpperShapes {
     }
 
     /**
+     * Why a sinkhole's lake holds its water at a column or not, for the dev commands (0.18.6): for its two lake blocks,
+     * whether the pit is open there, the first neighbour that lets the water out (open to some shape and not the same
+     * lake) and the first block of the pack's caves near it ({@link #packHolds}).
+     */
+    public java.util.List<String> lakeDebug(int x, int z) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        Col c = column(x, z);
+        if (!c.sOn) {
+            out.add("no sinkhole at " + x + " " + z);
+            return out;
+        }
+        int lake = c.sLake;
+        for (int y = lake; y >= lake - 1; y--) {
+            StringBuilder b = new StringBuilder(String.format(java.util.Locale.ROOT, "lake %d at y %d: ", lake, y));
+            if (!lakeBlock(c, x, y, z, lake)) {
+                out.add(b.append("not open in the pit").toString());
+                continue;
+            }
+            b.append(water(c, y) ? "water; " : "no water; ");
+            String why = null;
+            for (int k = 0; k < 5 && why == null; k++) {
+                int nx = x + (k == 0 ? 1 : k == 1 ? -1 : 0), nz = z + (k == 2 ? 1 : k == 3 ? -1 : 0), ny = k == 4 ? y - 1 : y;
+                Col n = column(nx, nz);
+                boolean same = lakeBlock(n, nx, ny, nz, lake), shut = othersShut(n, nx, ny, nz);
+                if (same && shut) continue;
+                double r = raw(nx, ny, nz);
+                if (r <= 0) why = String.format(java.util.Locale.ROOT, "open at %d %d %d (raw %.2f; %s; same lake %b, others shut %b)", nx, ny, nz, r,
+                        n.sOn ? "pit of lake " + n.sLake + " middle " + n.sCx + " " + n.sCz : "no pit", same, shut);
+            }
+            b.append(why == null ? "held all round" : why);
+            if (pack != null) {
+                String pw = null;
+                for (int dx = -2; dx <= 2 && pw == null; dx++) for (int dz = -2; dz <= 2 && pw == null; dz++) {
+                    Col n = column(x + dx, z + dz);
+                    for (int h = Math.max(y - SEAM - 1, packFloor); h <= y && pw == null; h++) {
+                        double v = packAt(n, h);
+                        if (v < 0) pw = String.format(java.util.Locale.ROOT, "pack open at %d %d %d (%.3f)", x + dx, h, z + dz, v);
+                    }
+                }
+                b.append("; ").append(pw == null ? "pack rock all round" : pw);
+            }
+            out.add(b.toString());
+        }
+        return out;
+    }
+
+    /**
      * How the merge reads a column from {@code y1} down to {@code y0}, one line a height, for the dev commands: what the
      * block is to the merge (ours, pack, rock, stop), the shapes' carve before and after the merge, the pack's density
      * and the seam the rock falls away as.
@@ -1564,11 +2204,22 @@ public final class UpperShapes {
         for (int i = 0; i < 2; i++)
             if (c.wOn[i]) b.append(String.format(java.util.Locale.ROOT, "; warren %d y %.1f half %.1fx%.1f line %.1f room %.2f", i, c.wYc[i], c.wHw[i],
                     c.wHh[i], c.wLine[i], c.wRoom[i]));
-        if (c.mouth > 0) b.append(String.format(java.util.Locale.ROOT, "; mouth %.2f", c.mouth));
+        if (c.mouth > 0) b.append(String.format(java.util.Locale.ROOT, "; mouth %.2f (roofed %.2f)", c.mouth, roofed(x, z)));
         if (c.link > 0) b.append(String.format(java.util.Locale.ROOT, "; link %.2f", c.link));
         if (c.rOn) b.append(String.format(java.util.Locale.ROOT, "; rift floor %d top %.1f line %.1f scale %.2f", c.rFloor, c.rTop, c.rLine, c.rScale));
         if (c.hOn) b.append(String.format(java.util.Locale.ROOT, "; hall floor %d ceiling %.1f", c.hFloor, c.hCeil));
-        if (c.sOn) b.append(String.format(java.util.Locale.ROOT, "; sinkhole lake %d score %.2f", c.sLake, c.sScore));
+        if (c.sOn) {
+            b.append(String.format(java.util.Locale.ROOT, "; sinkhole lake %d score %.2f middle %d %d shelves %.2f fall %.2f slope %.2f ivy %.2f",
+                    c.sLake, c.sScore, c.sCx, c.sCz, pitTrait(c, TRAIT_SHELVES), pitTrait(c, TRAIT_FALL), pitTrait(c, TRAIT_SLOPE),
+                    pitTrait(c, TRAIT_IVY)));
+            int sp = sinkSpring(c);
+            if (sp != NO_Y) b.append("; its spring at y ").append(sp);
+        }
+        if (c.strandK > 0) b.append(String.format(java.util.Locale.ROOT, "; root strands %.2f", c.strandK));
+        pillarsReady(c);
+        for (int i = 0; i < 2; i++)
+            if (c.pil[i] != null) b.append(String.format(java.util.Locale.ROOT, "; root pillar (sheet %d) at %d %d, floor %.1f roof %.1f",
+                    i, (int) Math.floor(c.pil[i].x), (int) Math.floor(c.pil[i].z), c.pil[i].floor, c.pil[i].ceil));
         return b.toString();
     }
 
@@ -1581,6 +2232,23 @@ public final class UpperShapes {
      */
     public java.util.List<int[]> find(String kind, int x0, int z0, int radius, int max, int apart) {
         java.util.List<int[]> out = new java.util.ArrayList<>();
+        if (kind.equals("pillars")) {
+            // by their cells, which is quicker than asking every fourth column
+            int c0 = Math.floorDiv(x0, PILLAR_CELL), d0 = Math.floorDiv(z0, PILLAR_CELL);
+            for (int ring = 0; ring * PILLAR_CELL <= radius && out.size() < max; ring++)
+                for (int i = -ring; i <= ring; i++) for (int j = -ring; j <= ring; j++) {
+                    if (Math.max(Math.abs(i), Math.abs(j)) != ring) continue;
+                    for (int k = 0; k < 2 && out.size() < max; k++) {
+                        Pillar p = pillarOf(c0 + i, d0 + j, k);
+                        if (p == null) continue;
+                        int[] at = {(int) Math.floor(p.x), (int) Math.floor(p.floor + 0.5), (int) Math.floor(p.z)};
+                        boolean far = true;
+                        for (int[] o : out) far &= Math.hypot(o[0] - at[0], o[2] - at[2]) >= apart;
+                        if (far) out.add(at);
+                    }
+                }
+            return out;
+        }
         for (int ring = 0; ring * 4 <= radius && out.size() < max; ring++) {
             for (int i = -ring; i <= ring; i++) for (int j = -ring; j <= ring; j++) {
                 if (Math.max(Math.abs(i), Math.abs(j)) != ring || out.size() >= max) continue;
@@ -1596,6 +2264,12 @@ public final class UpperShapes {
     }
 
     private int[] spotIn(String kind, int x, int z) {
+        // the pits first by their field alone, which is cheap: a column's own answers take its roof caps
+        boolean pit = switch (kind) {
+            case "sinkholes", "hollows", "falls", "slopes", "shelves" -> true;
+            default -> false;
+        };
+        if (pit && K2 * (sA.noise2(x / PIT_SCALE, z / PIT_SCALE) + 0.18 * sB.noise2(x / 14.0, z / 14.0)) < 0.3) return null;
         Col c = column(x, z);
         int lo, hi, want;
         switch (kind) {
@@ -1607,6 +2281,21 @@ public final class UpperShapes {
                 lo = floorLevel(c, i);
                 hi = (int) Math.ceil(c.wYc[i] + c.wHh[i]);
                 want = WARRENS;
+            }
+            case "roots" -> {
+                // thick root strands over the top sheet, near enough to the ground for the strands to run full
+                if (c.strandK < 0.8 || !c.wOn[0] || c.wLine[0] > 0.5 * c.wHw[0] || c.gF - c.wYc[0] > STRAND_FULL) return null;
+                lo = floorLevel(c, 0);
+                hi = (int) Math.ceil(c.wYc[0] + c.wHh[0]);
+                want = WARRENS;
+            }
+            case "pillars" -> {
+                // the middle of a root pillar: the spot is its foot, inside it
+                pillarsReady(c);
+                for (Pillar p : c.pil)
+                    if (p != null && Math.abs(p.x - 0.5 - x) <= 2 && Math.abs(p.z - 0.5 - z) <= 2)
+                        return new int[]{(int) Math.floor(p.x), (int) Math.floor(p.floor + 0.5), (int) Math.floor(p.z)};
+                return null;
             }
             case "rifts" -> {
                 if (!c.rOn || c.rLine > 2) return null;
@@ -1620,8 +2309,12 @@ public final class UpperShapes {
                 hi = (int) Math.ceil(c.hCeil);
                 want = HALLS;
             }
-            case "sinkholes", "hollows" -> {
-                if (!c.sOn || c.sScore < 0.55 || kind.equals("hollows") != c.desert) return null;
+            case "sinkholes", "hollows", "falls", "slopes", "shelves" -> {
+                if (!c.sOn || c.sScore < 0.55) return null;
+                if ((kind.equals("sinkholes") || kind.equals("hollows")) && kind.equals("hollows") != c.desert) return null;
+                // pits with a waterfall, a slope of fallen rock, or many shelves (0.18.6), of either kind
+                if (kind.equals("falls") && (pitTrait(c, TRAIT_FALL) > FALL_SHARE || sinkSpring(c) == NO_Y)
+                        || kind.equals("slopes") && pitTrait(c, TRAIT_SLOPE) > 0.45 || kind.equals("shelves") && pitTrait(c, TRAIT_SHELVES) < 0.6) return null;
                 lo = c.sLake + 1;
                 hi = (int) Math.ceil(c.gF);
                 want = SINKHOLES;
