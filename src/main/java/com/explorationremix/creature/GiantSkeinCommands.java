@@ -47,6 +47,9 @@ import java.util.Locale;
  *     <li>{@code /remix giant trace [ticks]}: logs how the nearest one's body moves each tick, to the server log</li>
  *     <li>{@code /remix giant path}: puts you on its rift's ledge path where the nearest giant sees you, about 16
  *     blocks off (else where the path passes nearest it), facing it (for testing its hunt)</li>
+ *     <li>{@code /remix giant stand [blocks]}: puts you on a glass block in the air out from the nearest giant's head,
+ *     that many blocks off its rock (6 by default, in reach of its strike), facing it (for testing its notice and
+ *     strike at a player)</li>
  *     <li>{@code /remix giant strike}: it rears and strikes at a chicken hung in the air out from its head (it bites
  *     it if its strike lands there; /remix giant list counts its bites)</li>
  *     <li>{@code /remix giant hold <rear|lunge|recover> <0-1>}: holds the nearest one that far through that phase of a
@@ -77,6 +80,8 @@ public final class GiantSkeinCommands {
                         .then(Commands.argument("ticks", IntegerArgumentType.integer(1, 12000))
                                 .executes(c -> state(c, StringArgumentType.getString(c, "name"), IntegerArgumentType.getInteger(c, "ticks"))))))
                 .then(Commands.literal("path").executes(GiantSkeinCommands::path))
+                .then(Commands.literal("stand").executes(c -> stand(c, 6))
+                        .then(Commands.argument("blocks", IntegerArgumentType.integer(3, 24)).executes(c -> stand(c, IntegerArgumentType.getInteger(c, "blocks")))))
                 .then(Commands.literal("strike").executes(GiantSkeinCommands::strike))
                 .then(Commands.literal("hold")
                         .then(Commands.literal("off").executes(GiantSkeinCommands::letGo))
@@ -308,6 +313,34 @@ public final class GiantSkeinCommands {
         say(c, String.format(Locale.ROOT, "On the ledge path at %.1f %.1f %.1f, %.0f blocks from the giant at %s, %s (%s)", feet.x, feet.y, feet.z,
                 feet.add(0.0, pl.getEyeHeight(), 0.0).distanceTo(eyes), g.blockPosition().toShortString(),
                 seen ? "in its sight" : "out of its sight (no point of the path near it is in sight)", g.describe()));
+        return 1;
+    }
+
+    private static int stand(CommandContext<CommandSourceStack> c, int blocks) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer pl = c.getSource().getPlayerOrException();
+        List<GiantSkeinEntity> all = near(c, 128);
+        if (all.isEmpty()) { c.getSource().sendFailure(Component.literal("No giant Skein within 128 blocks.")); return 0; }
+        GiantSkeinEntity g = all.get(0);
+        ServerLevel level = c.getSource().getLevel();
+        Vec3 up = g.up(), look = g.lookDir();
+        // out from its rock before its head; for one on a floor, ahead of it
+        Vec3 at = Math.abs(up.y) > 0.8 ? g.mouth().add(look.scale(blocks)) : g.mouth().add(up.scale(blocks)).add(look.scale(1.0));
+        BlockPos feet = BlockPos.containing(at.x, at.y - 0.5, at.z);
+        for (BlockPos p : new BlockPos[]{feet, feet.above()})
+            if (!level.getBlockState(p).getCollisionShape(level, p).isEmpty()) {
+                c.getSource().sendFailure(Component.literal("Rock where you would stand, at " + p.toShortString()));
+                return 0;
+            }
+        BlockPos below = feet.below();
+        if (level.getBlockState(below).getCollisionShape(level, below).isEmpty())
+            level.setBlockAndUpdate(below, net.minecraft.world.level.block.Blocks.GLASS.defaultBlockState());
+        Vec3 stand = Vec3.atBottomCenterOf(feet);
+        Vec3 to = g.eyes().subtract(stand.add(0.0, pl.getEyeHeight(), 0.0));
+        float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
+        float pitch = (float) -Math.toDegrees(Math.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z)));
+        pl.teleportTo(level, stand.x, stand.y, stand.z, yaw, pitch);
+        say(c, String.format(Locale.ROOT, "On glass at %s, %d blocks out from the giant's head, %s (%s)", feet.toShortString(), blocks,
+                g.sees(stand.add(0.0, pl.getEyeHeight(), 0.0)) ? "in its sight" : "out of its sight", g.describe()));
         return 1;
     }
 
