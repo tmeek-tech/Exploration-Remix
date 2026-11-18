@@ -416,9 +416,9 @@ class UpperShapesTest {
 
     /**
      * The trees' roots through a forest's warrens (0.18.6): strands over a share of the walls and ceilings, never across
-     * the middle of a floor away from a pillar, never loose of the rock (each root's blocks hang together with rock that
-     * is no root); and pillars down to the floors of some of the wider rooms, solid from floor to roof down their middle,
-     * with the room open round them.
+     * the middle of a floor away from a pillar or a bulb (whose roots hang into its pool), never loose of the rock (each
+     * root's blocks hang together with rock that is no root); and pillars down to the floors of some of the wider rooms,
+     * solid from floor to roof down their middle, with the room open round them.
      */
     @Test
     void rootsHoldToTheRock() {
@@ -445,7 +445,8 @@ class UpperShapesTest {
                         break;
                     }
                 // a way past it on the side away from its wall: three or more open blocks across, a block over the floor
-                // and halfway up
+                // and halfway up (where, over a walker's head, a thin root hanging from the roof is no wall: only rock
+                // and the pillar's own roots count)
                 UpperShapes.Col m = s.column(px, pz);
                 double ux = -m.wNx[p.sheet], uz = -m.wNz[p.sheet];
                 for (int y : new int[]{fl + 1, mid}) {
@@ -453,7 +454,8 @@ class UpperShapesTest {
                     boolean left = false;
                     for (double r = 0; r < 14; r += 0.5) {
                         int bx = (int) Math.floor(p.x + r * ux), bz = (int) Math.floor(p.z + r * uz);
-                        boolean open = s.carve(bx, y, bz) < 0;
+                        boolean open = s.carve(bx, y, bz) < 0 || y == mid && s.formation(bx, y, bz) == UpperShapes.ROOT
+                                && UpperShapes.pillarDist(p, bx, y + 0.5, bz) > 1;
                         if (!left) {
                             left = open;
                             if (!open) continue;
@@ -493,7 +495,7 @@ class UpperShapesTest {
                         if (!root) continue;
                         roots++;
                         if (byOpen) visible++;
-                        if (y == fl && c.wLine[i] < 0.4 * c.wHw[i] && !nearPillar(s, x, z)) {
+                        if (y == fl && c.wLine[i] < 0.4 * c.wHw[i] && !nearPillar(s, x, z) && !nearBulb(s, x, z)) {
                             floorMiddle++;
                             if (firstFloor == null) firstFloor = x + " " + y + " " + z;
                         }
@@ -505,7 +507,7 @@ class UpperShapesTest {
                             if (loose <= 4) {
                                 boolean stub = c.fKind == UpperShapes.ROOT && y + 0.5 >= c.fBottom && y + 0.5 <= c.fTop;
                                 firstLoose = (firstLoose == null ? "" : firstLoose + "; and ") + x + " " + y + " " + z + " (" + (stub ? "a stub"
-                                        : nearPillar(s, x, z) ? "near a pillar" : "a strand") + "; " + s.describe(x, z) + ")";
+                                        : nearPillar(s, x, z) ? "near a pillar" : nearBulb(s, x, z) ? "in a bulb" : "a strand") + "; " + s.describe(x, z) + ")";
                             }
                         }
                     }
@@ -534,6 +536,18 @@ class UpperShapesTest {
                 for (int i = 0; i < 2; i++) {
                     UpperShapes.Pillar p = s.pillarOf(cx, cz, i);
                     if (p != null && Math.hypot(x + 0.5 - p.x, z + 0.5 - p.z) < 6) return true;
+                }
+        return false;
+    }
+
+    /** Whether a bulb (whose roots hang down into its pool, 0.18.9) reaches a column. */
+    private static boolean nearBulb(UpperShapes s, int x, int z) {
+        int cell = UpperShapes.BULB_CELL;
+        for (int cx = Math.floorDiv(x - 12, cell); cx <= Math.floorDiv(x + 12, cell); cx++)
+            for (int cz = Math.floorDiv(z - 12, cell); cz <= Math.floorDiv(z + 12, cell); cz++)
+                for (int i = 0; i < 2; i++) {
+                    UpperShapes.Bulb b = s.bulbOf(cx, cz, i);
+                    if (b != null && Math.hypot(x + 0.5 - b.x, z + 0.5 - b.z) < b.r + 1) return true;
                 }
         return false;
     }
@@ -627,6 +641,93 @@ class UpperShapesTest {
             assertTrue(roofs > 0.03 && roofs < 0.5 * ways, "the roofed mouths open in " + open[1] + " of " + cols[1]);
             assertTrue(median >= 15 && mouths >= 10, "the roofed mouths' openings: " + holes.size() + ", the middle one " + median + " columns, "
                     + mouths + " of 20+");
+        }
+    }
+
+    /**
+     * The Root Vaults' bulbs (0.18.9): they turn up along the forests' tunnels about as often as planned, in a mix of
+     * sizes; each is a domed chamber well over its tunnel, open from its floor to near its roof down the middle, with a
+     * pool sunk in its floor's middle that keeps its water, and where its roof lies within the trees' roots' reach, roots
+     * hanging into that water. Every root block of a bulb hangs together with rock that is no root.
+     */
+    @Test
+    void bulbsHoldPoolsAndRoots() {
+        for (long seed : SEEDS) {
+            UpperShapes s = new UpperShapes(seed, PACK_FLOOR, WORLD);
+            int cells = 2048 / UpperShapes.BULB_CELL;
+            List<UpperShapes.Bulb> bulbs = new ArrayList<>();
+            int forestCells = 0;
+            for (int cx = -cells / 2; cx < cells / 2; cx++) for (int cz = -cells / 2; cz < cells / 2; cz++) {
+                int mx = cx * UpperShapes.BULB_CELL + UpperShapes.BULB_CELL / 2, mz = cz * UpperShapes.BULB_CELL + UpperShapes.BULB_CELL / 2;
+                if (WORLD.at(mx, mz).cover() == Overhead.Cover.FOREST && !WORLD.at(mx, mz).wet()) forestCells++;
+                for (int i = 0; i < 2; i++) {
+                    UpperShapes.Bulb b = s.bulbOf(cx, cz, i);
+                    if (b != null) bulbs.add(b);
+                }
+            }
+            double forestKm2 = forestCells * (double) UpperShapes.BULB_CELL * UpperShapes.BULB_CELL / 1e6;
+            int small = 0, large = 0, shut = 0, low = 0, dry = 0, unwatered = 0, rooted = 0, dipping = 0, loose = 0, checked = 0;
+            String firstShut = null, firstDry = null, firstDip = null, firstLoose = null;
+            java.util.Set<Long> seen = new java.util.HashSet<>();
+            for (UpperShapes.Bulb b : bulbs) {
+                if (2 * b.r < 12.5) small++;
+                if (2 * b.r >= 14) large++;
+                // every other bulb looked at block by block (it takes a while)
+                if (checked++ % 2 == 1) continue;
+                int bx = (int) Math.floor(b.x), bz = (int) Math.floor(b.z);
+                String at = " at " + bx + " " + b.fl + " " + bz + ": " + s.describe(bx, bz);
+                UpperShapes.Col c = s.column(bx, bz);
+                // open over the pool from the floor up to near the roof (where no root hangs), the roof well over the tunnel's
+                double roof = b.yc + b.v;
+                boolean open = true;
+                for (int y = b.fl; y < roof - 2.5 && open; y++)
+                    if (s.carve(bx, y, bz) >= 0 && s.formation(bx, y, bz) != UpperShapes.ROOT) open = false;
+                if (!open && shut++ == 0) firstShut = at;
+                if (roof < c.wYc[b.sheet] + c.wHh[b.sheet] + 1.5) low++;
+                // the pool: water a block under the floor round the middle, unless dry
+                int water = 0;
+                for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++)
+                    if (s.fluid(bx + dx, b.fl - 1, bz + dz) == UpperShapes.WATER) water++;
+                if (water == 0) {
+                    if (unwatered++ == 0) firstDry = at;
+                    if (s.describe(bx, bz).contains("(dry)")) dry++;
+                    continue;
+                }
+                if (b.roots() == 0) continue;
+                rooted++;
+                // a root dips in: root wood at the water's height with water beside it
+                boolean dips = false;
+                int r = (int) Math.ceil(b.pool * 1.25) + 1;
+                for (int x = bx - r; x <= bx + r && !dips; x++) for (int z = bz - r; z <= bz + r && !dips; z++) {
+                    if (s.formation(x, b.fl - 1, z) != UpperShapes.ROOT) continue;
+                    for (int d = 0; d < 4 && !dips; d++)
+                        dips = s.fluid(x + (d == 0 ? 1 : d == 1 ? -1 : 0), b.fl - 1, z + (d == 2 ? 1 : d == 3 ? -1 : 0)) == UpperShapes.WATER;
+                }
+                if (dips) dipping++;
+                else if (firstDip == null) firstDip = at;
+                // every root block in the bulb hangs together with rock that is no root
+                int rr = (int) Math.ceil(b.r) + 2;
+                for (int x = bx - rr; x <= bx + rr; x++) for (int z = bz - rr; z <= bz + rr; z++)
+                    for (int y = b.fl - 3; y <= roof + 4; y++) {
+                        if (s.formation(x, y, z) != UpperShapes.ROOT) continue;
+                        long key = ((long) x << 40) ^ ((long) (y & 0xFFFF) << 24) ^ (z & 0xFFFFFF);
+                        if (seen.contains(key)) continue;
+                        if (!anchored(s, x, y, z, seen) && loose++ == 0) firstLoose = x + " " + y + " " + z + " in the bulb" + at;
+                    }
+            }
+            int n = bulbs.size(), looked = (n + 1) / 2;
+            System.out.printf("seed %d: %d bulbs over %.2f km2 of forest (%.0f per km2); %d under 12.5 across, %d 14 or more; of %d looked at: %d not open "
+                            + "down the middle (first %s), %d roofs low over the tunnel, %d with no water in the middle (%d dry; first %s), %d of %d rooted "
+                            + "with a root dipping in (first not %s), %d loose roots (first %s)%n",
+                    seed, n, forestKm2, n / forestKm2, small, large, looked, shut, firstShut, low, unwatered, dry, firstDry, dipping, rooted, firstDip, loose, firstLoose);
+            assertTrue(n / forestKm2 > 250 && n / forestKm2 < 900, n + " bulbs over " + forestKm2 + " km2");
+            assertTrue(small > 0.3 * n && large > 0.15 * n, "sizes: " + small + " small, " + large + " large of " + n);
+            assertEquals(0, shut, "bulbs shut down the middle; first" + firstShut);
+            assertTrue(low < 0.05 * looked, low + " roofs low over their tunnels");
+            assertEquals(0, unwatered, "bulbs without a pool; first" + firstDry);
+            assertTrue(rooted > 0.8 * looked, "only " + rooted + " of " + looked + " bulbs rooted");
+            assertEquals(rooted, dipping, "rooted bulbs with no root dipping into the pool; first" + firstDip);
+            assertEquals(0, loose, "bulb roots loose of the rock; first at " + firstLoose);
         }
     }
 

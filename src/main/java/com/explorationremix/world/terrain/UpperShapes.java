@@ -129,6 +129,23 @@ public final class UpperShapes {
     private static final double PILLAR_REACH = 5;
     /** How many spots of its cell a pillar tries: the wider rooms are few, so most spots miss them. */
     private static final int PILLAR_TRIES = 16;
+    /** How wide a room a pillar stands in, at least (half across; 0.18.9: 0.6 more, as the vaults widened by as much). */
+    private static final double PILLAR_ROOM = 4.1;
+    /**
+     * The bulbs (0.18.9, Taran: "some bulbs with small pools in the middle"; a mix of sizes, now and then; roots dipping
+     * into the pools): round domed chambers where a Root Vault tunnel swells out, at most one a sheet in each
+     * {@link #BULB_CELL}-block cell (about one every 130 to 250 blocks along the tunnels), each kept inside its cell by
+     * its radius so no two run together. A cell's tries start {@link #BULB_EDGE} or more inside it.
+     */
+    static final int BULB_CELL = 40;
+    private static final int BULB_EDGE = 7;
+    private static final int BULB_TRIES = 8;
+    /** How far out a bulb's middle stays flat (a share of its radius): its pool lies within it. */
+    private static final double BULB_FLAT = 0.65;
+    /** How far a bulb's walls bulge in or out (times the noise), so no two are the same round. */
+    private static final double BULB_LUMP = 1.0;
+    /** The deepest a bulb's roof may lie under the ground and still have the trees' roots hang from it. */
+    static final double BULB_ROOT_DEPTH = STRAND_DEPTH + 4;
     private static final int NO_Y = Integer.MIN_VALUE;
 
     /**
@@ -164,7 +181,7 @@ public final class UpperShapes {
     private final Perlin rA, rB, rC, rD, rE;
     private final Perlin hA, hB, hC, hD, hE, hS, hK;
     private final Perlin sA, sB;
-    private final Perlin leanN, roughN;
+    private final Perlin leanN, roughN, bulbN;
 
     private final ThreadLocal<Col[]> cols = ThreadLocal.withInitial(() -> {
         Col[] a = new Col[1024];
@@ -222,6 +239,7 @@ public final class UpperShapes {
         sB = noise(s, 71);
         leanN = noise(s, 80);
         roughN = noise(s, 81);
+        bulbN = noise(s, 82);
     }
 
     /** All four shapes, worm tunnels off (tests and tools); {@code dens} may be null. */
@@ -266,8 +284,8 @@ public final class UpperShapes {
         final double[] wNx = new double[2], wNz = new double[2];
         /** Sheet 1 before the cap (the sinkholes' lake level). */
         double yc1Raw, hh1;
-        /** The top sheet's roof cap: the column's cap, lifted where a mouth opens. */
-        double cap0;
+        /** The top sheet's roof cap: the column's cap, lifted where a mouth opens; and the lower sheet's (never lifted). */
+        double cap0, cap1;
         /**
          * 0..1: how far a mouth lifts the top sheet's roof cap toward 4 over the ground (1 where it opens fully); how far
          * the top sheet dips to the lower one (a link).
@@ -286,6 +304,10 @@ public final class UpperShapes {
         boolean poolDone;
         /** The y of a pool block sunk under a warren floor, per sheet, or NO_Y. */
         final int[] wPool = new int[2];
+        /** 0..1: how far the ground round the column is forest (the Root Vaults widen there, 0.18.9). */
+        double forestW;
+        /** The bulb whose reach takes in the column, per sheet, or null (only in the cache's columns, see fill). */
+        final Bulb[] bulb = new Bulb[2];
 
         // ---- rifts
         boolean rOn;
@@ -334,11 +356,16 @@ public final class UpperShapes {
         c.x = x;
         c.z = z;
         c.valid = true;
-        fill(c);
+        fill(c, true);
         return c;
     }
 
-    private void fill(Col c) {
+    /**
+     * Works a column out. With {@code bulbs} it also finds the bulbs whose reach takes it in (the cache's columns and the
+     * roots' side columns); the bulbs themselves are worked out on columns of their own without ({@link #scratch}), so
+     * finding one never asks for another.
+     */
+    private void fill(Col c, boolean bulbs) {
         int x = c.x, z = c.z;
         Overhead.Surface s = overhead.at(x, z);
         c.s = s;
@@ -355,6 +382,7 @@ public final class UpperShapes {
         c.desert = !c.wet && s.cover() == Overhead.Cover.DESERT || c.red;
         c.tropical = c.forest && s.trees().tropical();
         c.lean = clamp(1.2 * K2 * leanN.noise2(x / 600.0, z / 600.0), -1, 1);
+        c.forestW = forestShare(x, z);
         c.lo = 1e9;
         c.hi = -1e9;
         c.fKind = 0;
@@ -362,6 +390,7 @@ public final class UpperShapes {
         c.strandSafe[0] = c.strandSafe[1] = 0;
         c.pilDone = false;
         c.pil[0] = c.pil[1] = null;
+        c.bulb[0] = c.bulb[1] = null;
         c.poolDone = false;
         c.springDone = false;
         c.sSpringDone = false;
@@ -375,6 +404,8 @@ public final class UpperShapes {
         c.rOn = rifts && riftColumn(c);
         c.hOn = halls && hallColumn(c);
         c.sOn = sinkholes && sinkColumn(c);
+        // (any column: a bulb's edge may reach past its forest)
+        if (bulbs && warrens) bulbsFor(c);
         c.lo -= 6;
         c.hi += 6;
         c.sReady = false;
@@ -426,6 +457,23 @@ public final class UpperShapes {
         return lerp(fv, lerp(fu, a, b), lerp(fu, c, d));
     }
 
+    /**
+     * 0..1: how far the ground round a column is dry forest, straight between the 16-block lattice's corners (as the
+     * sheets follow the ground), so the Root Vaults widen and narrow again over a few blocks where a forest ends.
+     */
+    private double forestShare(int x, int z) {
+        double u = (x + 0.5 - 8) / 16.0, v = (z + 0.5 - 8) / 16.0;
+        int i = (int) Math.floor(u), j = (int) Math.floor(v);
+        double fu = u - i, fv = v - j;
+        int x0 = i * 16 + 8, z0 = j * 16 + 8;
+        return lerp(fv, lerp(fu, forestAt(x0, z0), forestAt(x0 + 16, z0)), lerp(fu, forestAt(x0, z0 + 16), forestAt(x0 + 16, z0 + 16)));
+    }
+
+    private double forestAt(int x, int z) {
+        Overhead.Surface s = overhead.at(x, z);
+        return !s.wet() && s.cover() == Overhead.Cover.FOREST ? 1 : 0;
+    }
+
     private static final int GATE_MOUTH = 0, GATE_PIT = 1;
 
     /** How much of the ground round a column (its 3 x 3 surface columns) suits a kind of opening, eased to 0..1. */
@@ -469,7 +517,10 @@ public final class UpperShapes {
         c.wYc[i] = sheetY(i, c.gC, x, z);
         double room = clamp(K2 * D.noise2(x / 28.0 + 70, z / 28.0 + 70) * 1.6 - 0.35, 0, 1);
         c.wRoom[i] = room;
-        c.wHw[i] = Math.max(1.4, 2.0 + 0.8 * K2 * wC[i].noise2(x / 20.0, z / 20.0) + 5.0 * room);
+        // a third wider under forests (0.18.9, Taran: "the root vaults feel like they should be a little wider"); the
+        // karst and hollows under plains and deserts keep their width
+        double fw = c.forestW;
+        c.wHw[i] = Math.max(1.4 + 0.4 * fw, 2.0 + 0.6 * fw + (0.8 + 0.1 * fw) * K2 * wC[i].noise2(x / 20.0, z / 20.0) + 5.0 * room);
         c.wHh[i] = Math.max(2.1, 2.6 + 0.6 * K2 * wA[i].noise2(x / 16.0 + 5, z / 16.0 + 5) + 2.5 * room);
     }
 
@@ -487,6 +538,7 @@ public final class UpperShapes {
         int x = c.x, z = c.z;
         // the roof caps (see roofCaps): under the lowest ground near, and lifted to the ground over a mouth
         double cap = roofCaps(c);
+        c.cap1 = cap;
         // mouths: where a slow field is high the top sheet climbs toward the ground; under a forest the lifted cap lets
         // it open there as a sunken way in, elsewhere it runs just under the cap
         double m = mouthRamp(x, z);
@@ -743,7 +795,7 @@ public final class UpperShapes {
      * first block asked about, a block in the wall will do (the strand rests on it).
      */
     private double strandBlock(Col c, int i, int x, int y, int z, boolean first, double[] n) {
-        if (!c.wOn[i]) return first || othersOpen(c, x, y, z) || c.wOn[1 - i] && warrenDist(c, 1 - i, x, y, z) < 0 ? Double.NaN : 1;
+        if (!c.wOn[i]) return first || othersOpen(c, x, y, z) || vaultOpen(c, 1 - i, x, y, z) || bulbOpen(c, x, y, z, 0) ? Double.NaN : 1;
         double yy = y + 0.5, hh = c.wHh[i], hw = c.wHw[i], floorTop = c.wYc[i] - 0.6 * hh;
         double dy = (yy - c.wYc[i]) / hh, dxz = c.wLine[i] / hw;
         double e = (Math.sqrt(dy * dy + dxz * dxz) - 1) * Math.min(hh, hw);
@@ -751,7 +803,7 @@ public final class UpperShapes {
         if (first && (e < -2.6 || e > 1.3)) return Double.NaN;
         if (e > -3 && e < 3) e += 0.5 * K3 * roughN.noise3(x / 6.0, y / 6.0, z / 6.0);
         if (!first && e >= 0)
-            return othersOpen(c, x, y, z) || c.wOn[1 - i] && warrenDist(c, 1 - i, x, y, z) < 0 ? Double.NaN : e;
+            return othersOpen(c, x, y, z) || vaultOpen(c, 1 - i, x, y, z) || bulbOpen(c, x, y, z, 0) ? Double.NaN : e;
         double depth = c.gF - yy;
         if (c.strandK <= 0 || depth < 1.5 || depth > STRAND_DEPTH) return Double.NaN;
         // on the walls and ceilings only: not under the floor, nor where the floor is nearer than the wall, nor over the
@@ -773,7 +825,10 @@ public final class UpperShapes {
         if (g >= t) return Double.NaN;
         double f = g / t, out = (0.5 + 1.5 * k) * Math.sqrt(1 - f * f);
         if (e < -out) return Double.NaN;
-        if (c.cold && chillAt(c, yy) < 3 || othersOpen(c, x, y, z) || c.wOn[1 - i] && warrenDist(c, 1 - i, x, y, z) < -0.3) return Double.NaN;
+        if (c.cold && chillAt(c, yy) < 3 || othersOpen(c, x, y, z)) return Double.NaN;
+        if ((c.wOn[1 - i] || c.bulb[1 - i] != null) && vaultDist(c, 1 - i, x, y, z) < -0.3) return Double.NaN;
+        // none in or at the edge of a bulb's open space (0.18.9): its dome takes away the wall a strand would lie on
+        if ((c.bulb[0] != null || c.bulb[1] != null) && bulbOpen(c, x, y, z, 0.6)) return Double.NaN;
         return strandSafe(c, i) ? e : Double.NaN;
     }
 
@@ -795,7 +850,7 @@ public final class UpperShapes {
         c.x = x;
         c.z = z;
         c.valid = true;
-        fill(c);
+        fill(c, true);
         return c;
     }
 
@@ -893,10 +948,12 @@ public final class UpperShapes {
         if (!m.forest || !m.wOn[i] || m.mouth > 0.02 || m.link > 0.2) return null;
         // off the middle line toward one wall, leaving a way past it on the other side
         double lat = m.wLine[i], hw = m.wHw[i], q = lat / hw;
-        if (hw < 3.5 || lat < 1 || lat > hw - 0.5) return null;
+        if (hw < PILLAR_ROOM || lat < 1 || lat > hw - 0.5) return null;
         double ceil = m.wYc[i] + m.wHh[i] * Math.sqrt(1 - q * q), floor = m.wYc[i] - 0.6 * m.wHh[i];
         if (ceil - floor < 5.5 || m.gF - ceil < 3 || m.gF - ceil > STRAND_DEPTH - 4) return null;
         if (m.cold && chillAt(m, ceil) < 3) return null;
+        // nor in or by a bulb, whose dome would leave its top hanging
+        if (bulbNear(px + 0.5, pz + 0.5, i, PILLAR_REACH + 2)) return null;
         // no pool round its foot (warrenPools sinks them where this field is high)
         for (int k = 0; k < 9; k++) {
             double ax = px + (k == 0 ? 0 : 4 * Math.cos(k * Math.PI / 4)), az = pz + (k == 0 ? 0 : 4 * Math.sin(k * Math.PI / 4));
@@ -982,23 +1039,407 @@ public final class UpperShapes {
         return d;
     }
 
-    /** True where a block is a root (strand or pillar) of sheet i, within its tunnels or up to 1.2 into their rock. */
+    /**
+     * True where a block is a root of sheet i: a strand or pillar, within its tunnels or up to 1.2 into their rock, or
+     * one of its bulb's roots, from up in the dome's rock down into its pool's bed.
+     */
     private boolean rootAt(Col c, int i, int x, int y, int z) {
+        if (c.bulb[i] != null && bulbRootDist(c.bulb[i], x, y, z) < 0) return true;
         if (!c.wOn[i]) return false;
         if (strand(c, i, x, y, z)) return true;
         return c.forest && pillarAt(c, i, x, y, z) < 0 && warrenDist(c, i, x, y, z) <= 1.2;
     }
 
-    /** Signed distance to sheet i's tunnels (negative inside), without its pool, roots or anything else. */
+    // ------------------------------------------------------------------------------------------------ bulbs
+
+    /**
+     * A bulb (0.18.9): a round domed chamber where a Root Vault tunnel swells out, with a small pool sunk in the middle of
+     * its floor and the trees' roots hanging from the dome into the water. Its middle on the tunnel's middle line, its
+     * floor there (flat over its middle, see {@link #bulbFloor}) and the lowest open block over it, its radius across, the
+     * middle and half height of the ellipsoid its dome is (the floor cuts it a little under the middle, so the walls
+     * bulge out a little over the floor before they curve in), and its pool's radius and whether the pool's middle is two
+     * blocks deep. Per root: its middle across, radius, lowest and highest block centres, the roof over it and its sway.
+     */
+    static final class Bulb {
+        final int sheet, fl;
+        final double x, z, floor, r, yc, v, pool;
+        final boolean deep;
+        final double[] rx, rz, rr, rLo, rHi, rCeil, rAmp, rPh, rFq;
+        /** Whether the rock round the pool holds it: 0 not known yet, 1 yes, 2 no (it stays dry). Per thread, as the bulbs are. */
+        byte holds;
+
+        Bulb(int sheet, double x, double z, double floor, double r, double yc, double v, double pool, boolean deep, double[][] roots) {
+            this.sheet = sheet;
+            this.x = x;
+            this.z = z;
+            this.floor = floor;
+            this.fl = (int) Math.floor(floor - 0.5) + 1;
+            this.r = r;
+            this.yc = yc;
+            this.v = v;
+            this.pool = pool;
+            this.deep = deep;
+            int n = roots.length;
+            rx = new double[n];
+            rz = new double[n];
+            rr = new double[n];
+            rLo = new double[n];
+            rHi = new double[n];
+            rCeil = new double[n];
+            rAmp = new double[n];
+            rPh = new double[n];
+            rFq = new double[n];
+            for (int k = 0; k < n; k++) {
+                double[] t = roots[k];
+                rx[k] = t[0];
+                rz[k] = t[1];
+                rr[k] = t[2];
+                rLo[k] = t[3];
+                rHi[k] = t[4];
+                rCeil[k] = t[5];
+                rAmp[k] = t[6];
+                rPh[k] = t[7];
+                rFq[k] = t[8];
+            }
+        }
+
+        /** How far across from its middle the bulb's open space can reach, its walls' lumps and roughening and all. */
+        double reach() { return r + BULB_LUMP * K3 + 1.2; }
+
+        /** The highest block its dome or roots can reach. */
+        double top() { return yc + v + BULB_LUMP * K3 + 3.5; }
+
+        /** The pool's depth at a column: 0 off it, 1, or 2 in a deep pool's middle. */
+        int poolDepth(double wobble, int x, int z) {
+            double rh = Math.hypot(x + 0.5 - this.x, z + 0.5 - this.z), p = pool * wobble;
+            return rh >= p ? 0 : deep && rh < 0.55 * p ? 2 : 1;
+        }
+
+        int roots() { return rx.length; }
+    }
+
+    /** The largest a bulb may be across (half), and how far out its open space may reach then. */
+    private static final double BULB_MAX_R = 9.5, BULB_MAX_REACH = BULB_MAX_R + BULB_LUMP * K3 + 1.2;
+    private static final Bulb NO_BULB = new Bulb(-1, 0, 0, 0, 1, 0, 1, 0, false, new double[0][]);
+    private static final int BULB_SLOTS = 64;
+    /** Per thread, the bulbs of the cells asked about lately, by cell and sheet. */
+    private final ThreadLocal<long[]> bulbKeys = ThreadLocal.withInitial(() -> {
+        long[] a = new long[BULB_SLOTS];
+        java.util.Arrays.fill(a, Long.MIN_VALUE);
+        return a;
+    });
+    private final ThreadLocal<Bulb[]> bulbVals = ThreadLocal.withInitial(() -> new Bulb[BULB_SLOTS]);
+
+    /** A cell's bulb on sheet i, or null. */
+    Bulb bulbOf(int cx, int cz, int i) {
+        long key = ((long) cx << 33) ^ ((cz & 0xFFFFFFFFL) << 1) ^ i;
+        int slot = ((cx * 5 + cz * 3) * 2 + i) & (BULB_SLOTS - 1);
+        long[] keys = bulbKeys.get();
+        Bulb[] vals = bulbVals.get();
+        if (keys[slot] != key) {
+            Bulb b = makeBulb(cx, cz, i);
+            keys[slot] = key;
+            vals[slot] = b == null ? NO_BULB : b;
+        }
+        Bulb b = vals[slot];
+        return b == NO_BULB ? null : b;
+    }
+
+    /** The bulbs whose reach takes in a column, the nearest per sheet, and the heights they open over it. */
+    private void bulbsFor(Col c) {
+        int reach = (int) Math.ceil(BULB_MAX_REACH);
+        for (int i = 0; i < 2; i++) {
+            double best = Double.MAX_VALUE;
+            for (int cx = Math.floorDiv(c.x - reach, BULB_CELL); cx <= Math.floorDiv(c.x + reach, BULB_CELL); cx++)
+                for (int cz = Math.floorDiv(c.z - reach, BULB_CELL); cz <= Math.floorDiv(c.z + reach, BULB_CELL); cz++) {
+                    Bulb b = bulbOf(cx, cz, i);
+                    if (b == null) continue;
+                    double d = Math.hypot(c.x + 0.5 - b.x, c.z + 0.5 - b.z);
+                    if (d < b.reach() && d - b.r < best) {
+                        best = d - b.r;
+                        c.bulb[i] = b;
+                    }
+                }
+            Bulb b = c.bulb[i];
+            if (b != null) {
+                c.lo = Math.min(c.lo, b.fl - 5);
+                c.hi = Math.max(c.hi, b.top());
+            }
+        }
+    }
+
+    /** True where a bulb of sheet i lies within {@code margin} of a spot across (its edge to the spot). */
+    private boolean bulbNear(double x, double z, int i, double margin) {
+        int reach = (int) Math.ceil(BULB_MAX_R + margin);
+        for (int cx = Math.floorDiv((int) Math.floor(x) - reach, BULB_CELL); cx <= Math.floorDiv((int) Math.floor(x) + reach, BULB_CELL); cx++)
+            for (int cz = Math.floorDiv((int) Math.floor(z) - reach, BULB_CELL); cz <= Math.floorDiv((int) Math.floor(z) + reach, BULB_CELL); cz++) {
+                Bulb b = bulbOf(cx, cz, i);
+                if (b != null && Math.hypot(x - b.x, z - b.z) < b.r + margin) return true;
+            }
+        return false;
+    }
+
+    /**
+     * Where a cell's bulb on sheet i lies, if it has one: a spot of the cell pulled onto the middle line of the nearest
+     * forest tunnel, along one of its plain stretches (no room, mouth or link), with room for the dome under the roof cap
+     * and clear of the other sheet, the other shapes, the snowy zone and, in the pack, of its caves round the pool and over
+     * the dome. Reads columns on their own copies, never the cache, so it never asks for another bulb.
+     */
+    private Bulb makeBulb(int cx, int cz, int i) {
+        if (!warrens) return null;
+        // none in a cell with no forest in it (asked on a 16-block grid, which is quick)
+        boolean forest = false;
+        for (int k = 0; k < 9 && !forest; k++) forest = forestAt(cx * BULB_CELL + 4 + (k % 3) * 16, cz * BULB_CELL + 4 + (k / 3) * 16) > 0;
+        if (!forest) return null;
+        long h = Hashing.mix(seed ^ 0xB0B5C0DEL, cx, cz, i);
+        for (int t = 0; t < BULB_TRIES; t++) {
+            Bulb b = bulbTry(Hashing.mix(h, 9, t, 0), cx, cz, i);
+            if (b != null) return b;
+        }
+        return null;
+    }
+
+    /** One try for a cell's bulb (see {@link #makeBulb}). */
+    private Bulb bulbTry(long h, int cx, int cz, int i) {
+        double px = cx * BULB_CELL + BULB_EDGE + Hashing.unit(Hashing.mix(h, 1, 0, 0)) * (BULB_CELL - 2 * BULB_EDGE);
+        double pz = cz * BULB_CELL + BULB_EDGE + Hashing.unit(Hashing.mix(h, 2, 0, 0)) * (BULB_CELL - 2 * BULB_EDGE);
+        // onto the nearest middle line, by the distance to it and the way out from it (a few steps, as it bends)
+        Col m;
+        for (int step = 0; ; step++) {
+            m = scratch((int) Math.floor(px), (int) Math.floor(pz));
+            double l = m.wLine[i];
+            if (l < 0.75) break;
+            if (step == 4 || l > 18) return null;
+            px -= l * m.wNx[i];
+            pz -= l * m.wNz[i];
+        }
+        int bx = (int) Math.floor(px), bz = (int) Math.floor(pz);
+        double mx = bx + 0.5, mz = bz + 0.5;
+        if (!m.forest || m.wet || !m.wOn[i] || m.mouth > 0.02 || m.link > 0.2 || m.wRoom[i] > 0.3) return null;
+        // kept inside the cell by its radius, so the next cell's never runs into it
+        double edge = Math.min(Math.min(mx - cx * BULB_CELL, (cx + 1) * BULB_CELL - mx), Math.min(mz - cz * BULB_CELL, (cz + 1) * BULB_CELL - mz));
+        double floor = m.wYc[i] - 0.6 * m.wHh[i];
+        int fl = (int) Math.floor(floor - 0.5) + 1;
+        if (fl - 6 < minFloor) return null;
+        // a mix of sizes, more small than large (Taran, 18 Nov: "a mix of sizes, now and then"), and always well wider
+        // than the tunnel
+        double r = Math.max(5.5 + 4 * Math.pow(Hashing.unit(Hashing.mix(h, 3, 0, 0)), 1.3), Math.min(m.wHw[i] + 2.5, BULB_MAX_R));
+        r = Math.min(r, edge - BULB_LUMP * K3 - 0.6);
+        if (r < 5) return null;
+        // the dome: nearly as high as it is wide over the floor, lower where the roof cap leaves less room
+        double want = (3 + 0.8 * r) * (0.9 + 0.2 * Hashing.unit(Hashing.mix(h, 4, 0, 0)));
+        double margin = BULB_LUMP * K3 + 0.7;
+        double cap = i == 0 ? m.cap0 : m.cap1;
+        double hgt = Math.min(want, cap - margin - floor);
+        if (hgt < Math.max(5.2, 0.6 * want) || floor + hgt < m.wYc[i] + m.wHh[i] + 1.5) return null;
+        double a = 0.28 * hgt, v = hgt - a, yc = floor + a, apex = floor + hgt;
+        if (m.cold && chillAt(m, apex) < 3) return null;
+        // clear of the other sheet (more so over the dome, where the roots run up into the rock), of the other shapes
+        // and of the ground's caps all round
+        if (!bulbClear(m, i, mx, apex + 0.5, mz, 6) || !bulbClear(m, i, mx, floor - 2.5, mz, 3)) return null;
+        for (int k = 0; k < 8; k++) {
+            double ang = k * Math.PI / 4 + 0.3;
+            double ox = Math.cos(ang), oz = Math.sin(ang);
+            Col n = scratch((int) Math.floor(mx + r * ox), (int) Math.floor(mz + r * oz));
+            if (n.wet || n.mouth > 0.05 || yc + margin > (i == 0 ? n.cap0 : n.cap1)) return null;
+            if (!bulbClear(n, i, mx + r * ox, floor + 0.5, mz + r * oz, 3) || !bulbClear(n, i, mx + r * ox, yc, mz + r * oz, 3)) return null;
+            Col q = scratch((int) Math.floor(mx + 0.55 * r * ox), (int) Math.floor(mz + 0.55 * r * oz));
+            double y = yc + 0.835 * v;
+            if (q.wet || y + margin > (i == 0 ? q.cap0 : q.cap1) || !bulbClear(q, i, mx + 0.55 * r * ox, y, mz + 0.55 * r * oz, 3)) return null;
+        }
+        // the pool, its middle two blocks deep in some, with nothing opening under its rock (a hall's chimney would drain it)
+        double pool = (1.3 + 0.2 * r) * (0.85 + 0.3 * Hashing.unit(Hashing.mix(h, 5, 0, 0)));
+        boolean deep = pool >= 2.4 && Hashing.unit(Hashing.mix(h, 6, 0, 0)) < 0.6;
+        // (every column round it: a hall's chimney is only as wide as a tunnel, and a hall's distance runs up and down)
+        int pr = (int) Math.ceil(pool * 1.2 + 1.5);
+        for (int x = bx - pr; x <= bx + pr; x++)
+            for (int z = bz - pr; z <= bz + pr; z++)
+                if (Math.hypot(x - bx, z - bz) <= pr && !bulbClear(scratch(x, z), i, x + 0.5, fl - 3, z + 0.5, 3)) return null;
+        if (pack != null) {
+            // the pack's caves kept off the pool's rock and the dome's top, where the roots hold
+            for (int k = 0; k < 9; k++) {
+                double ang = k * Math.PI / 4, rr = k == 8 ? 0 : pool + 1.5;
+                int x = (int) Math.floor(mx + rr * Math.cos(ang)), z = (int) Math.floor(mz + rr * Math.sin(ang));
+                if (pack.density(x, fl - 2, z) < 0 || pack.density(x, fl - 5, z) < 0) return null;
+            }
+            for (int k = 0; k < 5; k++) {
+                int x = (int) Math.floor(mx + (k == 1 ? 0.6 : k == 2 ? -0.6 : 0) * pool), z = (int) Math.floor(mz + (k == 3 ? 0.6 : k == 4 ? -0.6 : 0) * pool);
+                for (int y = (int) Math.floor(apex) + 1; y <= apex + 5; y += 2) if (pack.density(x, y, z) < 0) return null;
+            }
+        }
+        double[][] roots = m.gF - apex <= BULB_ROOT_DEPTH ? bulbRoots(Hashing.mix(h, 7, 0, 0), mx, mz, fl, yc, v, r, pool, deep) : new double[0][];
+        return new Bulb(i, mx, mz, floor, r, yc, v, pool, deep, roots);
+    }
+
+    /** True where the other sheet keeps {@code gap} from a spot of a bulb's on sheet i, and the other shapes 4. */
+    private boolean bulbClear(Col n, int i, double x, double y, double z, double gap) {
+        int bx = (int) Math.floor(x), by = (int) Math.floor(y), bz = (int) Math.floor(z);
+        if (n.wOn[1 - i] && warrenDist(n, 1 - i, bx, by, bz) < gap) return false;
+        return !(n.rOn && riftDist(n, bx, by, bz) < 4 || n.hOn && hallDist(n, bx, by, bz) < 4 || n.sOn && sinkDist(n, bx, by, bz) < 4);
+    }
+
+    /**
+     * A bulb's roots (Taran, 18 Nov: roots dipping into the pools), varied from bulb to bulb: a thick taproot into the
+     * pool's middle with a few thin roots hanging short of the floor round it; or a curtain of thin roots into the water;
+     * or a single thin root into it and one or two short ones. Each hangs from the dome, spreading out into its rock, and
+     * sways a little as it comes down; one that dips in runs on into the pool's bed. Each is {x, z, radius, lowest and
+     * highest block centre, the roof over it, sway, its phase, its rate}.
+     */
+    private static double[][] bulbRoots(long h, double mx, double mz, int fl, double yc, double v, double r, double pool, boolean deep) {
+        java.util.List<double[]> out = new java.util.ArrayList<>();
+        double style = Hashing.unit(Hashing.mix(h, 1, 0, 0)), a0 = 2 * Math.PI * Hashing.unit(Hashing.mix(h, 2, 0, 0));
+        int most = pool < 2.6 ? 2 : pool < 3.1 ? 3 : 4;
+        int dips, hangs;
+        boolean tap = style < 0.35 && pool >= 2.3;
+        if (tap) {
+            dips = 1;
+            hangs = (int) (3 * Hashing.unit(Hashing.mix(h, 3, 0, 0)));
+        } else if (style < 0.8) {
+            dips = 2 + (int) ((most - 1) * Hashing.unit(Hashing.mix(h, 3, 0, 0)));
+            hangs = Hashing.unit(Hashing.mix(h, 4, 0, 0)) < 0.4 ? 1 : 0;
+        } else {
+            dips = 1;
+            hangs = 1 + (Hashing.unit(Hashing.mix(h, 4, 0, 0)) < 0.5 ? 1 : 0);
+        }
+        for (int k = 0; k < dips + hangs; k++) {
+            long hk = Hashing.mix(h, 10 + k, 0, 0);
+            boolean dip = k < dips, thick = tap && k == 0;
+            double ang = a0 + 2 * Math.PI * (k < dips ? k / (double) dips : (k - dips + 0.5) / Math.max(1, hangs))
+                    + 0.6 * (Hashing.unit(Hashing.mix(hk, 1, 0, 0)) - 0.5);
+            double rho = thick ? 0.25 * pool * Hashing.unit(Hashing.mix(hk, 2, 0, 0))
+                    : dip ? (dips == 1 ? 0.15 : 0.35) * pool + 0.25 * pool * Hashing.unit(Hashing.mix(hk, 2, 0, 0))
+                    : (0.8 + 0.4 * Hashing.unit(Hashing.mix(hk, 2, 0, 0))) * pool;
+            // a thin root hangs from a block's middle, so it is mostly one block across and kinks over where it sways
+            double x = mx + rho * Math.cos(ang), z = mz + rho * Math.sin(ang);
+            if (!thick) {
+                x = Math.floor(x) + 0.5;
+                z = Math.floor(z) + 0.5;
+            }
+            double q = Math.min(Math.hypot(x - mx, z - mz) / r, 0.95), ceil = yc + v * Math.sqrt(1 - q * q);
+            double amp = thick ? 0.25 : 0.3 + 0.25 * Hashing.unit(Hashing.mix(hk, 3, 0, 0));
+            double rad = thick ? 0.95 + 0.2 * Hashing.unit(Hashing.mix(hk, 4, 0, 0)) : 0.74;
+            // into the water and on into its bed (a deep pool's middle a block lower), or ending 1 to 3 blocks over the floor
+            double lo = dip ? (deep && rho + amp < 0.45 * pool ? fl - 3 : fl - 2) + 0.5 : fl + 1 + (int) (3 * Hashing.unit(Hashing.mix(hk, 5, 0, 0))) + 0.5;
+            if (ceil - lo < 3) continue;
+            out.add(new double[]{x, z, rad, lo, ceil + 2.5, ceil, amp, 2 * Math.PI * Hashing.unit(Hashing.mix(hk, 6, 0, 0)),
+                    2 * Math.PI / (9 + 6 * Hashing.unit(Hashing.mix(hk, 7, 0, 0)))});
+        }
+        return out.toArray(new double[0][]);
+    }
+
+    /**
+     * How far a block lies from a bulb's roots (negative inside): across from each root's swaying middle, less its
+     * radius, which grows as it nears the dome and spreads into it; under a root's tip or over its top, by the height
+     * too.
+     */
+    static double bulbRootDist(Bulb b, int x, int y, int z) {
+        double yy = y + 0.5, best = SOLID;
+        for (int k = 0; k < b.rx.length; k++) {
+            double dv = Math.max(b.rLo[k] - 0.5 - yy, yy - b.rHi[k] - 0.5);
+            if (dv > 4) continue;
+            double t = clamp(yy, b.rLo[k], b.rHi[k]);
+            double ph = b.rPh[k] + b.rFq[k] * t;
+            double ax = b.rx[k] + b.rAmp[k] * Math.cos(ph), az = b.rz[k] + b.rAmp[k] * Math.sin(ph);
+            double spread = b.rr[k] > 1 ? 0.6 : 0.8;
+            double rad = b.rr[k] * (1 + spread * Math.exp(-Math.max(b.rCeil[k] - t, 0) / 1.6));
+            double d = Math.max(Math.hypot(x + 0.5 - ax, z + 0.5 - az) - rad, dv);
+            if (d < best) best = d;
+        }
+        return best;
+    }
+
+    /** A bulb's dome without its floor: the ellipsoid, its walls lumpy and roughened like the tunnels' ({@code rough}). */
+    private double bulbShell(Bulb b, int x, int y, int z, double rough) {
+        double dx = (x + 0.5 - b.x) / b.r, dz = (z + 0.5 - b.z) / b.r, dy = (y + 0.5 - b.yc) / b.v;
+        double d = (Math.sqrt(dx * dx + dy * dy + dz * dz) - 1) * Math.min(b.r, b.v);
+        if (d < 4 && d > -4)
+            d += (rough == rough ? rough : 0.5 * K3 * roughN.noise3(x / 6.0, y / 6.0, z / 6.0)) + BULB_LUMP * K3 * bulbN.noise3(x / 8.0, y / 8.0, z / 8.0);
+        return d;
+    }
+
+    /**
+     * The floor of a bulb's sheet at a column: flat at the bulb's own over its middle ({@link #BULB_FLAT} of its radius,
+     * where the pool lies), easing out to the tunnels' own by its edge, so it meets them without a step.
+     */
+    private static double bulbFloor(Col c, int i, Bulb b, int x, int z) {
+        double rh = Math.hypot(x + 0.5 - b.x, z + 0.5 - b.z) / b.r;
+        return lerp(smooth((rh - BULB_FLAT) / (0.95 - BULB_FLAT)), b.floor, c.wYc[i] - 0.6 * c.wHh[i]);
+    }
+
+    /** True where a bulb of the column's is open at a block, or within {@code margin} of its open space. */
+    private boolean bulbOpen(Col c, int x, int y, int z, double margin) {
+        for (int i = 0; i < 2; i++) {
+            Bulb b = c.bulb[i];
+            if (b == null) continue;
+            if (Math.max(bulbShell(b, x, y, z, Double.NaN), bulbFloor(c, i, b, x, z) - (y + 0.5)) < margin) return true;
+        }
+        return false;
+    }
+
+    /** The wobble of a bulb's pool's edge at a column. */
+    private double poolWobble(int x, int z) { return 1 + 0.18 * K2 * bulbN.noise2(x / 3.5 + 40, z / 3.5 + 40); }
+
+    /**
+     * Whether the rock round a bulb's pool holds all of it ({@link #holds}, and the pack's caves kept off it): worked
+     * out once, so a pool is whole or dry, never half there.
+     */
+    private boolean bulbPoolHolds(Bulb b) {
+        if (b.holds == 0) {
+            byte ok = 1;
+            int r = (int) Math.ceil(b.pool * 1.25) + 1;
+            int x0 = (int) Math.floor(b.x), z0 = (int) Math.floor(b.z);
+            for (int x = x0 - r; x <= x0 + r && ok == 1; x++)
+                for (int z = z0 - r; z <= z0 + r && ok == 1; z++) {
+                    int depth = b.poolDepth(poolWobble(x, z), x, z);
+                    for (int k = 1; k <= depth; k++) {
+                        int y = b.fl - k;
+                        if (bulbRootDist(b, x, y, z) < 0) continue;
+                        if (!holds(x, y, z, NO_Y) || !packHolds(x, y, z)) {
+                            ok = 2;
+                            break;
+                        }
+                    }
+                }
+            b.holds = ok;
+        }
+        return b.holds == 1;
+    }
+
+    /** Signed distance to sheet i's tunnels (negative inside), without its pool, roots, bulb or anything else. */
     private double warrenDist(Col c, int i, int x, int y, int z) {
+        return Math.max(tunnelShell(c, i, x, y, z, Double.NaN), (c.wYc[i] - 0.6 * c.wHh[i]) - (y + 0.5));
+    }
+
+    /**
+     * Sheet i's tunnels without their floor: the ellipse round the middle line, roughened by {@code rough} (NaN: worked
+     * out here) near its wall.
+     */
+    private double tunnelShell(Col c, int i, int x, int y, int z, double rough) {
         double yy = y + 0.5;
         double hh = c.wHh[i], hw = c.wHw[i];
         double dy = (yy - c.wYc[i]) / hh, dxz = c.wLine[i] / hw;
-        double dFloor = (c.wYc[i] - 0.6 * hh) - yy;
-        if (dxz > 3 || dy > 3 || dy < -3) return Math.max((Math.max(dxz, Math.abs(dy)) - 1) * Math.min(hh, hw), dFloor);
+        if (dxz > 3 || dy > 3 || dy < -3) return (Math.max(dxz, Math.abs(dy)) - 1) * Math.min(hh, hw);
         double dEll = (Math.sqrt(dy * dy + dxz * dxz) - 1) * Math.min(hh, hw);
-        if (dEll < 3 && dEll > -3) dEll += 0.5 * K3 * roughN.noise3(x / 6.0, y / 6.0, z / 6.0);
-        return Math.max(dEll, dFloor);
+        if (dEll < 3 && dEll > -3) dEll += rough == rough ? rough : 0.5 * K3 * roughN.noise3(x / 6.0, y / 6.0, z / 6.0);
+        return dEll;
+    }
+
+    /**
+     * Signed distance to sheet i's open space (negative inside): its tunnels and, where one reaches the column, its bulb,
+     * whose floor takes over the tunnels' round it (see {@link #bulbFloor}).
+     */
+    private double vaultDist(Col c, int i, int x, int y, int z) {
+        Bulb b = c.bulb[i];
+        if (b == null) return c.wOn[i] ? warrenDist(c, i, x, y, z) : SOLID;
+        double rough = 0.5 * K3 * roughN.noise3(x / 6.0, y / 6.0, z / 6.0);
+        double shell = bulbShell(b, x, y, z, rough);
+        if (c.wOn[i]) shell = Math.min(shell, tunnelShell(c, i, x, y, z, rough));
+        return Math.max(shell, bulbFloor(c, i, b, x, z) - (y + 0.5));
+    }
+
+    /** True where sheet i (tunnels or bulb) is open at a block. */
+    private boolean vaultOpen(Col c, int i, int x, int y, int z) {
+        return (c.wOn[i] || c.bulb[i] != null) && vaultDist(c, i, x, y, z) < 0;
     }
 
     /** The lowest open block of sheet i's floor at a column. */
@@ -1014,7 +1455,7 @@ public final class UpperShapes {
         c.poolDone = true;
         for (int i = 0; i < 2; i++) {
             c.wPool[i] = NO_Y;
-            if (!c.wOn[i] || c.wRoom[i] < 0.55 || c.wLine[i] > 0.7 * c.wHw[i]) continue;
+            if (!c.wOn[i] || c.bulb[i] != null || c.wRoom[i] < 0.55 || c.wLine[i] > 0.7 * c.wHw[i]) continue;
             if (K2 * poolN.noise2(c.x / 9.0, c.z / 9.0) < 0.30) continue;
             int fl = floorLevel(c, i);
             if (fl > c.gF - 6) continue;
@@ -1340,7 +1781,7 @@ public final class UpperShapes {
      */
     public int rootGround(int x, int z) {
         Col c = column(x, z);
-        return c.forest && warrens && (c.wOn[0] || c.wOn[1]) ? (int) Math.floor(c.gF) : Integer.MIN_VALUE;
+        return c.forest && warrens && (c.wOn[0] || c.wOn[1] || c.bulb[0] != null || c.bulb[1] != null) ? (int) Math.floor(c.gF) : Integer.MIN_VALUE;
     }
 
     /** True where a sinkhole's pit itself (not its chamber) is open at a block (0.18.6). */
@@ -1503,7 +1944,7 @@ public final class UpperShapes {
         c.x = x;
         c.z = z;
         c.valid = true;
-        fill(c);
+        fill(c, false);
         return c;
     }
 
@@ -1551,8 +1992,8 @@ public final class UpperShapes {
         double d = SOLID;
         int owner = -1;
         for (int i = 0; i < 2; i++) {
-            if (!c.wOn[i]) continue;
-            double w = warrenDist(c, i, x, y, z);
+            if (!c.wOn[i] && c.bulb[i] == null) continue;
+            double w = vaultDist(c, i, x, y, z);
             if (w < d) { d = w; owner = WARRENS; }
         }
         if (c.rOn) {
@@ -1569,13 +2010,18 @@ public final class UpperShapes {
             if (s < d) { d = s; owner = SINKHOLES; }
             if (d > -0.5 && y == sinkSpring(c)) { d = -0.5; owner = SINKHOLES; }
         }
-        // a root pillar shuts its own blocks, and keeps the open space round it near enough to the rock that the
-        // interpolation between noise cells (UpperFine) works its edges out block by block
+        // a root pillar or a bulb's root shuts its own blocks, and keeps the open space round it near enough to the rock
+        // that the interpolation between noise cells (UpperFine) works its edges out block by block
         if (d < 0 && owner == WARRENS && c.forest && warrens && !othersOpen(c, x, y, z))
             for (int i = 0; i < 2; i++) {
-                if (!c.wOn[i]) continue;
-                double p = pillarAt(c, i, x, y, z);
-                if (p < 4) d = Math.max(d, -p);
+                if (c.wOn[i]) {
+                    double p = pillarAt(c, i, x, y, z);
+                    if (p < 4) d = Math.max(d, -p);
+                }
+                if (c.bulb[i] != null) {
+                    double p = bulbRootDist(c.bulb[i], x, y, z);
+                    if (p < 4) d = Math.max(d, -p);
+                }
             }
         if (d < 0 && formationOf(c, owner, x, y, z) != 0) return 0.5;
         return d;
@@ -1606,6 +2052,15 @@ public final class UpperShapes {
         if (c.wOn[0] || c.wOn[1]) {
             warrenPools(c);
             for (int i = 0; i < 2; i++) if (c.wPool[i] != NO_Y) addWater(c, c.wPool[i]);
+        }
+        // a bulb's pool: one block sunk under its flat middle, two in a deep pool's middle, all of it or none (not where a
+        // root dips in: the root's wood stands in the water there)
+        for (int i = 0; i < 2; i++) {
+            Bulb b = c.bulb[i];
+            if (b == null) continue;
+            int depth = b.poolDepth(poolWobble(c.x, c.z), c.x, c.z);
+            if (depth == 0 || !bulbPoolHolds(b)) continue;
+            for (int k = 1; k <= depth; k++) if (bulbRootDist(b, c.x, b.fl - k, c.z) >= 0) addWater(c, b.fl - k);
         }
         if (c.hOn && hallPool(c)) addWater(c, c.hFloor - 1);
         if (riftPool(c)) addWater(c, c.rFloor - 1);
@@ -1714,7 +2169,8 @@ public final class UpperShapes {
             if (c.rOn && riftDist(c, x, y, z) < 0) return 0;
             if (c.hOn && hallDist(c, x, y, z) < 0) return 0;
             if (c.sOn && sinkDist(c, x, y, z) < 0) return 0;
-            return c.fKind;
+            // a bulb opening over the tunnel's ceiling would leave it hanging from nothing (a bulb's own roots may run there)
+            if (c.bulb[0] == null && c.bulb[1] == null || !bulbOpen(c, x, (int) Math.floor(c.fTop), z, 1)) return c.fKind;
         }
         // the trees' roots through a forest's warrens: strands over the walls, and the twisted pillars
         if (owner == WARRENS && c.forest && warrens && (rootAt(c, 0, x, y, z) || rootAt(c, 1, x, y, z)))
@@ -1739,13 +2195,13 @@ public final class UpperShapes {
     public int formation(int x, int y, int z) {
         Col c = column(x, z);
         if (y < c.lo || y > c.hi) return 0;
-        boolean roots = c.forest && warrens && (c.wOn[0] || c.wOn[1]);
+        boolean roots = c.forest && warrens && (c.wOn[0] || c.wOn[1] || c.bulb[0] != null || c.bulb[1] != null);
         if (c.fKind == 0 && Double.isNaN(c.stalBottom) && c.miteTop == NO_Y && !roots) return 0;
         double d = SOLID;
         int owner = -1;
         for (int i = 0; i < 2; i++) {
-            if (!c.wOn[i]) continue;
-            double w = warrenDist(c, i, x, y, z);
+            if (!c.wOn[i] && c.bulb[i] == null) continue;
+            double w = vaultDist(c, i, x, y, z);
             if (w < d) { d = w; owner = WARRENS; }
         }
         if (c.hOn) {
@@ -1757,8 +2213,9 @@ public final class UpperShapes {
         if (d >= 0) {
             if (c.fKind != 0 && yy >= c.fBottom && yy <= c.fTop) owner = WARRENS;
             else if (c.hOn && !Double.isNaN(c.stalBottom) && yy >= c.stalBottom && yy <= c.hCeil + 2.5) owner = HALLS;
-            // so do the roots, a little way (rootAt)
-            else if (roots && d <= 1.5) owner = WARRENS;
+            // so do the roots, a little way (rootAt), and a bulb's roots up into its dome's rock and down into its pool's bed
+            else if (roots && (d <= 1.5 || c.bulb[0] != null && bulbRootDist(c.bulb[0], x, y, z) < 0
+                    || c.bulb[1] != null && bulbRootDist(c.bulb[1], x, y, z) < 0)) owner = WARRENS;
             else return 0;
         }
         return formationOf(c, owner, x, y, z);
@@ -2001,7 +2458,7 @@ public final class UpperShapes {
         if (y < c.lo - 6 || y > c.hi + 6 || y > c.gF - 6) return null;
         if (c.sOn && sinkDist(c, x, y, z) < 5) return c.desert ? Entrances.Area.OASIS_HOLLOW : Entrances.Area.SINKHOLE;
         boolean near = false;
-        for (int i = 0; i < 2 && !near; i++) near = c.wOn[i] && warrenDist(c, i, x, y, z) < 5;
+        for (int i = 0; i < 2 && !near; i++) near = (c.wOn[i] || c.bulb[i] != null) && vaultDist(c, i, x, y, z) < 5;
         if (!near) return null;
         if (c.forest) return c.cold ? Entrances.Area.FROZEN_ROOTVAULTS : Entrances.Area.ROOTVAULTS;
         if (c.plains) return Entrances.Area.SINKHOLE;
@@ -2080,6 +2537,11 @@ public final class UpperShapes {
         double lo = 1e9, hi = -1e9;
         boolean open = false;
         for (int i = 0; i < 2; i++) {
+            Bulb b = c.bulb[i];
+            if (b != null && Math.hypot(x + 0.5 - b.x, z + 0.5 - b.z) < b.reach()) {
+                lo = Math.min(lo, b.fl - 1);
+                hi = Math.max(hi, b.yc + b.v + BULB_LUMP * K3 + 1);
+            }
             if (!c.wOn[i] || c.wLine[i] > c.wHw[i]) continue;
             lo = Math.min(lo, c.wYc[i] - 0.6 * c.wHh[i] - 1);
             hi = Math.max(hi, c.wYc[i] + c.wHh[i] + 1);
@@ -2115,7 +2577,7 @@ public final class UpperShapes {
     public int kindAt(int x, int y, int z) {
         Col c = column(x, z);
         if (y < c.lo || y > c.hi) return -1;
-        for (int i = 0; i < 2; i++) if (c.wOn[i] && warrenDist(c, i, x, y, z) < 0) return WARRENS;
+        for (int i = 0; i < 2; i++) if (vaultOpen(c, i, x, y, z)) return WARRENS;
         if (c.rOn && riftDist(c, x, y, z) < 0) return RIFTS;
         if (c.hOn && hallDist(c, x, y, z) < 0) return HALLS;
         if (c.sOn && sinkDist(c, x, y, z) < 0) return SINKHOLES;
@@ -2220,18 +2682,41 @@ public final class UpperShapes {
         for (int i = 0; i < 2; i++)
             if (c.pil[i] != null) b.append(String.format(java.util.Locale.ROOT, "; root pillar (sheet %d) at %d %d, floor %.1f roof %.1f",
                     i, (int) Math.floor(c.pil[i].x), (int) Math.floor(c.pil[i].z), c.pil[i].floor, c.pil[i].ceil));
+        for (int i = 0; i < 2; i++) {
+            Bulb u = c.bulb[i];
+            if (u != null) b.append(String.format(java.util.Locale.ROOT, "; bulb (sheet %d) at %d %d, floor %d, %.1f across, roof %.1f, pool %.1f%s%s, %d roots",
+                    i, (int) Math.floor(u.x), (int) Math.floor(u.z), u.fl, 2 * u.r, u.yc + u.v, 2 * u.pool, u.deep ? " (deep)" : "",
+                    bulbPoolHolds(u) ? "" : " (dry)", u.roots()));
+        }
         return b.toString();
     }
 
     /**
      * Places to look at each shape, nearest first, for the dev commands: open blocks of a kind ({@code mouth},
      * {@code chambers} and {@code frozen} for the warrens' mouths, their root chambers and a cold forest's warrens as
-     * well), searched on a 4-block grid in rings
+     * well; {@code pillars} and {@code bulbs} by their cells, a bulb's spot over its pool's middle), searched on a
+     * 4-block grid in rings
      * round (x, z) out to {@code radius}, each at least {@code apart} from the others. Each is {x, y, z} with y the
      * lowest open block of that kind in its column.
      */
     public java.util.List<int[]> find(String kind, int x0, int z0, int radius, int max, int apart) {
         java.util.List<int[]> out = new java.util.ArrayList<>();
+        if (kind.equals("bulbs")) {
+            int c0 = Math.floorDiv(x0, BULB_CELL), d0 = Math.floorDiv(z0, BULB_CELL);
+            for (int ring = 0; ring * BULB_CELL <= radius && out.size() < max; ring++)
+                for (int i = -ring; i <= ring; i++) for (int j = -ring; j <= ring; j++) {
+                    if (Math.max(Math.abs(i), Math.abs(j)) != ring) continue;
+                    for (int k = 0; k < 2 && out.size() < max; k++) {
+                        Bulb b = bulbOf(c0 + i, d0 + j, k);
+                        if (b == null) continue;
+                        int[] at = {(int) Math.floor(b.x), b.fl, (int) Math.floor(b.z)};
+                        boolean far = true;
+                        for (int[] o : out) far &= Math.hypot(o[0] - at[0], o[2] - at[2]) >= apart;
+                        if (far) out.add(at);
+                    }
+                }
+            return out;
+        }
         if (kind.equals("pillars")) {
             // by their cells, which is quicker than asking every fourth column
             int c0 = Math.floorDiv(x0, PILLAR_CELL), d0 = Math.floorDiv(z0, PILLAR_CELL);

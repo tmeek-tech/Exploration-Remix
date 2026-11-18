@@ -1142,7 +1142,7 @@ public final class RemixCommands {
 
     /** The kinds of place {@code /remix shapes} finds (UpperShapes.find). */
     private static final String[] SHAPE_KINDS = {"warrens", "chambers", "mouth", "frozen", "rifts", "halls", "sinkholes", "hollows", "falls",
-            "slopes", "shelves", "roots", "pillars"};
+            "slopes", "shelves", "roots", "pillars", "bulbs"};
     /** How far round the command's position {@code /remix shapes} looks, and how far apart the places it counts lie. */
     private static final int SHAPE_RADIUS = 640, SHAPE_APART = 96;
 
