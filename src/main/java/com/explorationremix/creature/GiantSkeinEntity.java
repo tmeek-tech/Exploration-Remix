@@ -39,6 +39,7 @@ import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Monster;
@@ -70,7 +71,7 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * The giant Skein of the Deep Blue Rift (0.18.8, Taran's 2026-11-18 ask, from his nine card answers): a Skein four
+ * The giant Skein of the Deep Blue Rift (0.18.8, Taran's 2026-11-18 ask, from their nine card answers): a Skein four
  * times as long, about thirty blocks from its horned head to the fan of spikes at its tail, its shell a pale ice blue,
  * spiky all over, the tips of its spikes and its eyes glowing a soft light blue. One lives in each rift ({@link
  * GiantSkeins}), on its walls. It never leaves its rift, never goes into the Asurine Geodes, and once killed it is gone
@@ -116,6 +117,8 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     /** It rests this long between crawls (ticks), and goes this far in a crawl's leg, one to three legs a crawl. */
     static final int REST_MIN = 600, REST_MAX = 2400, SHORT_REST = 200;
     static final double LEG_MIN = 10.0, LEG_MAX = 22.0;
+    /** Where no leg along its rift has a way, it crawls this far over the rock round it instead. */
+    static final double NEAR_MIN = 6.0, NEAR_MAX = 14.0;
     /** Now and then a crawl takes it across the ledge path's height on its wall, or over a bridge to the far wall. */
     static final double CROSS_PATH = 0.3, CROSS_RIFT = 0.12;
     /** Below this share of its health it draws off, for this long. */
@@ -131,15 +134,42 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
      */
     public static final double WAKE_RANGE = 128.0;
     static final int WAKE_LOOK = 20;
-    /** How far and how long it may touch nothing (rounding an edge) before it falls. */
+    /** How far and how long it may have no rock in reach (rounding an edge) before it falls. */
     static final double AIR_REACH = 2.5;
     static final int AIR_GRACE = 40;
-    /** How far below its box it feels for the floor under its head, and the easing of the point under its head. */
-    static final double FLOOR_REACH = 1.6, FOOT_EASE = 0.4, FOOT_JUMP = 2.6;
+    /**
+     * Rock this near a side of its box (blocks) still holds it on a wall or ceiling (0.19.3): on rough rock its box often
+     * clears the rock it climbs by a few tenths, and it let go and fell. The point under its head is set on the rock
+     * itself, and lying still it is drawn back against the rock, at most {@link #CLING_PULL} a tick.
+     */
+    static final double CLING_REACH = 1.2, CLING_PULL = 0.12;
+    /** Its pose turns to a new rock once it has gripped that for this many ticks running (see DATA_POSE). */
+    static final int POSE_HOLD = 10;
+    /**
+     * How far below its box it feels for the floor under its head, and the easing of the point under its head: a jump
+     * in it is eased by FOOT_EASE a tick (one over FOOT_JUMP is not: its body is laid afresh). The way its back faces
+     * turns FOOT_TURN of the way to a new rock's a tick, and the point under its head goes round its box's edge with it
+     * (0.19.3: it jumped from the middle of one side of its box to the next, a block and a half, as it turned from one
+     * wall to the next).
+     */
+    static final double FLOOR_REACH = 1.6, FOOT_EASE = 0.4, FOOT_JUMP = 2.6, FOOT_TURN = 0.2;
     /** A heavy scrape of feet every this many blocks it crawls. */
     static final double STEP_EVERY = 3.0;
-    /** How much of the way to its new heading its head turns each tick (it turns slowly, as a big thing does). */
-    static final double HEAD_TURN = 0.3, TURN_RATE = 0.25;
+    /**
+     * Its moves are eased (0.19.3, it jerked from one step to the next): each tick's step goes this share of the way
+     * from how it moved last tick to the step it wants (ClimbMoveControl). Crawling about, it slows over the last
+     * {@link #SLOW_FROM} blocks of a leg, down to {@link #SLOWEST} of its speed, rather than stopping dead.
+     */
+    static final double MOVE_EASE = 0.25, SLOW_FROM = 3.0, SLOWEST = 0.35;
+    /** The next node of its way this far off (it slid or was carried off its way): it asks the way afresh. */
+    static final double STRAYED = 6.0;
+    /**
+     * How much of the way to its new heading its head turns each tick (it turns slowly, as a big thing does): the
+     * client's head to the server's heading, and the server's heading to its quarry. Crawling, its heading comes round
+     * to the way it goes over about {@link #TURN_BLOCKS} of crawl (0.19.3: turned by the tick, it swung from side to
+     * side as its way stepped from block to block).
+     */
+    static final double HEAD_TURN = 0.3, TURN_RATE = 0.25, TURN_BLOCKS = 0.8;
 
     // ------------------------------------------------------------------------------------------------ the body
     /** Its plates (the last one the tail's), each this far back along its body from the point under its head. */
@@ -192,6 +222,12 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     private static final EntityDataAccessor<Byte> DATA_STATE = SynchedEntityData.defineId(GiantSkeinEntity.class, EntityDataSerializers.BYTE);
     /** The side its rock is on (a Direction's 3D value), or -1 while it falls or swims. */
     private static final EntityDataAccessor<Byte> DATA_SURFACE = SynchedEntityData.defineId(GiantSkeinEntity.class, EntityDataSerializers.BYTE);
+    /**
+     * The rock its pose is set by (0.19.3): the rock it grips, once it has gripped that for {@link #POSE_HOLD} ticks
+     * running (at once after a fall, or when the rock it showed is out of reach); -1 while it falls or swims. On rough
+     * rock its grip goes from face to face every block or two, and its head and body turned with it, jerkily.
+     */
+    private static final EntityDataAccessor<Byte> DATA_POSE = SynchedEntityData.defineId(GiantSkeinEntity.class, EntityDataSerializers.BYTE);
     /** The way its head points along its rock. */
     private static final EntityDataAccessor<Vector3f> DATA_FORWARD = SynchedEntityData.defineId(GiantSkeinEntity.class, EntityDataSerializers.VECTOR3);
     /** What its strike is at (where it means its jaws to close). */
@@ -204,6 +240,10 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     @Nullable private Vec3 foot;
     private Vec3 footUp = new Vec3(0, 1, 0), footLag = Vec3.ZERO;
     private double airRun, airDist, movedLast;
+    private double clingGap;                 // server: how far its box is off the wall or ceiling it clings to
+    @Nullable private Direction grip = Direction.DOWN;      // server: the rock it grips (see grip())
+    @Nullable private Direction poseNext = Direction.DOWN;  // server: the grip its pose may turn to, and for how long it has held
+    private int poseWait;
     private int airTicks;
     private Vec3 forward = new Vec3(0, 0, 1);
     private int stateTicks, stateLength;
@@ -215,10 +255,13 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     private boolean bit;                     // LUNGE: it has bitten in this strike
     @Nullable private double[] jawsWere;     // LUNGE: its jaws a tick ago (a fast strike is checked along its sweep)
     private long retreatUntil;
+    private long askedAt = -1000L;           // when it last asked its way afresh (askAgain)
+    private String noWay = "";               // why goTo last found no way (for /remix giant roam)
     private int bites;                       // for /remix giant: how many times it has bitten since it was loaded
     private float stepDist;
     private boolean dormant;
     private int trace;
+    final GiantRoamTest roamTest = new GiantRoamTest();
     // the rift it lives in (its cell in the Blue Reaches' plan), and that rift once looked up
     private boolean hasRift;
     private int riftX, riftZ;
@@ -242,7 +285,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         for (int i = 0; i < SECTION_AT.length; i++) sections[i] = new Section(this, i, SECTION_W[i], SECTION_H[i]);
         sections[JAWS] = new Section(this, JAWS, JAWS_W, JAWS_H);
         if (IDS != null) setId(IDS.getAndAdd(sections.length + 1) + 1);
-        this.moveControl = new ClimbMoveControl(this);
+        this.moveControl = new ClimbMoveControl(this, MOVE_EASE, true);
         this.xpReward = 120;
         setMaxUpStep(1.0F);
         stateLength = 200 + random.nextInt(600);
@@ -273,6 +316,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         super.defineSynchedData();
         entityData.define(DATA_STATE, REST);
         entityData.define(DATA_SURFACE, (byte) Direction.DOWN.get3DDataValue());
+        entityData.define(DATA_POSE, (byte) Direction.DOWN.get3DDataValue());
         entityData.define(DATA_FORWARD, new Vector3f(0, 0, 1));
         entityData.define(DATA_AIM, new Vector3f());
         entityData.define(DATA_HELD, -1.0F);
@@ -300,13 +344,20 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         byte b = entityData.get(DATA_SURFACE);
         return b < 0 ? null : Direction.from3DDataValue(b);
     }
+    /** The rock its pose is set by: the rock it has gripped for a moment now; null while it falls or swims. */
+    @Nullable public Direction poseRock() {
+        byte b = entityData.get(DATA_POSE);
+        return b < 0 ? null : Direction.from3DDataValue(b);
+    }
+    /** Server: the rock it grips (its surface, or the one it had while it rounds an edge); null while it falls or swims. */
+    @Nullable Direction grip() { return grip; }
     public GiantBody body() { return body; }
     public Section[] sections() { return sections; }
 
     @Override public boolean onFloor() { return surface() == Direction.DOWN; }
     @Override public boolean canSteer() { return true; }
     @Override public boolean airborne() { return airDist > AIR_REACH || airTicks > AIR_GRACE; }
-    @Override public boolean holdStill() { return clingsOffFloor(); }
+    @Override public boolean holdStill() { return gripsOffFloor(); }
     @Override public boolean onClimbable() { return false; }
     @Override public boolean isPushable() { return false; }
     /** Its body trails thirty blocks behind its box: keep drawing it while any of it is on screen. */
@@ -449,7 +500,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
 
     // ------------------------------------------------------------------------------------------------ geometry
 
-    public Vec3 up() { return normal(surface()); }
+    public Vec3 up() { return normal(poseRock()); }
 
     static Vec3 normal(@Nullable Direction rock) {
         return rock == null ? new Vec3(0, 1, 0) : Vec3.atLowerCornerOf(rock.getOpposite().getNormal());
@@ -462,19 +513,39 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         return position().add(0, h, 0).subtract(up.scale(ext));
     }
 
-    private Vec3 footOn(@Nullable Direction rock) {
+    /**
+     * The point on its rock under its head, its back facing {@code up}: the middle of the side of its box against
+     * {@code rock} (eased round the box's edge while {@code up} turns from one rock to the next), set down on the rock
+     * itself when its box is held off it by a little (a few tenths over rough rock, or over the floor under it).
+     */
+    private Vec3 footOn(@Nullable Direction rock, Vec3 up) {
+        AABB b = getBoundingBox();
+        double w = getBbWidth() / 2.0, h = getBbHeight() / 2.0;
+        Vec3 c = b.getCenter(), f = c.subtract(up.x * w, up.y * h, up.z * w);
+        if (rock == null) return f;
+        double gap;
         if (rock == Direction.DOWN) {
-            AABB b = getBoundingBox();
-            double cx = (b.minX + b.maxX) / 2.0, cz = (b.minZ + b.maxZ) / 2.0;
-            double y = floorUnder(level(), cx, b.minY + b.getYsize() / 2.0, b.minY - FLOOR_REACH, cz);
-            return new Vec3(cx, Double.isNaN(y) ? b.minY : y, cz);
-        }
-        return feet(normal(rock));
+            double y = floorUnder(level(), c.x, c.y, b.minY - FLOOR_REACH, c.z);
+            gap = Double.isNaN(y) ? 0.0 : Math.max(0.0, b.minY - y);
+        } else gap = touching(b, rock) ? 0.0 : gapOr0(rockGap(level(), this, b, rock, CLING_REACH));
+        Vec3 n = normal(rock);
+        double along = Math.max(0.0, up.dot(n));
+        return f.subtract(n.scale(gap * along * along));
     }
 
-    /** The point under its head this tick (as the Skein's: a jump in it is eased over a few ticks). */
+    /**
+     * The point under its head this tick (as the Skein's: a jump in it is eased over a few ticks), and the way its back
+     * faces there, turning to a new rock over a few ticks.
+     */
     private Vec3 foot(@Nullable Direction rock) {
-        Vec3 want = footOn(rock), upT = normal(rock);
+        Vec3 n = normal(rock);
+        if (foot == null) footUp = n;
+        else {
+            if (footUp.dot(n) < -0.99) footUp = footUp.add(forward.cross(footUp).scale(0.3));
+            Vec3 u = footUp.lerp(n, FOOT_TURN);
+            footUp = u.lengthSqr() < 1.0E-4 ? n : u.normalize();
+        }
+        Vec3 want = footOn(rock, footUp);
         if (foot == null) {
             footLag = Vec3.ZERO;
         } else {
@@ -482,11 +553,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
             if (rock == Direction.DOWN) moved = new Vec3(moved.x, 0.0, moved.z);
             footLag = foot.add(moved).subtract(want).scale(1.0 - FOOT_EASE);
             if (footLag.lengthSqr() < 1.0E-8 || footLag.lengthSqr() > FOOT_JUMP * FOOT_JUMP) footLag = Vec3.ZERO;
-            if (footUp.dot(upT) < -0.99) footUp = footUp.add(forward.cross(footUp).scale(0.3));
-            upT = footUp.lerp(upT, FOOT_EASE);
-            if (upT.lengthSqr() < 1.0E-4) upT = normal(rock);
         }
-        footUp = upT.normalize();
         foot = outOfRock(level(), want.add(footLag), footUp);
         return foot;
     }
@@ -535,9 +602,9 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     public Vec3 mouth() { return feet(up()).add(forward.scale(HEAD_REACH)).add(up().scale(0.5)); }
     public Vec3 eyes() { return feet(up()).add(forward.scale(1.0)).add(up().scale(1.1)); }
 
-    private boolean clingsOffFloor() {
-        Direction d = surface();
-        return d != null && d != Direction.DOWN;
+    /** Whether it grips a wall or ceiling (rounding an edge of one too). */
+    private boolean gripsOffFloor() {
+        return grip != null && grip != Direction.DOWN;
     }
 
     // ------------------------------------------------------------------------------------------------ surface
@@ -547,7 +614,18 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     }
 
     static boolean rockBeside(CollisionGetter level, @Nullable Entity who, AABB box, Direction d) {
-        double e = 0.08, m = 0.06;
+        return rockBeside(level, who, box, d, 0.08);
+    }
+
+    /** How far off side {@code d} of the box the nearest rock is (to a tenth), or NaN when none is within {@code max}. */
+    static double rockGap(CollisionGetter level, @Nullable Entity who, AABB box, Direction d, double max) {
+        for (double t = 0.08; t <= max + 1.0E-9; t += 0.1) if (rockBeside(level, who, box, d, t)) return t;
+        return Double.NaN;
+    }
+
+    /** Rock within {@code e} of side {@code d} of the box (its edges trimmed a little, so a corner alone does not count). */
+    static boolean rockBeside(CollisionGetter level, @Nullable Entity who, AABB box, Direction d, double e) {
+        double m = 0.06;
         AABB slab = switch (d) {
             case DOWN -> new AABB(box.minX + m, box.minY - e, box.minZ + m, box.maxX - m, box.minY, box.maxZ - m);
             case UP -> new AABB(box.minX + m, box.maxY, box.minZ + m, box.maxX - m, box.maxY + e, box.maxZ - m);
@@ -559,23 +637,56 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         return !level.noCollision(who, slab);
     }
 
+    /**
+     * The side its rock is on this tick: the floor while it stands on one; else the wall or ceiling it grips while its
+     * box touches that, else any its box touches (a wall it moves towards first, then the ceiling); else the floor while
+     * it has just stepped off one with floor close under it; else the wall or ceiling it gripped while that is still in
+     * reach ({@link #CLING_REACH}), else the nearest rock in reach; nothing only with no rock in reach at all. Through
+     * a moment with nothing in reach (rounding an edge) it grips the rock it had, gravity still off; it falls once that
+     * lasts ({@link #airborne}). Down again after a fall, it asks the way afresh: the way it was on is behind it (it
+     * flew straight back up at the next node of it, dozens of blocks overhead, and fell again).
+     */
     private void updateSurface() {
         AABB box = getBoundingBox();
-        Direction cur = surface();
-        Direction next;
+        Direction had = grip;
+        Direction next = null;
         if (onGround() || touching(box, Direction.DOWN)) next = Direction.DOWN;
-        else if (isInWater()) next = null;
-        else if (cur == Direction.DOWN && floorBelow(box)) next = Direction.DOWN;
-        else if (cur != null && cur != Direction.DOWN && touching(box, cur)) next = cur;
-        else next = anyRock(box, getDeltaMovement());
+        else if (!isInWater()) {
+            if (had != null && had != Direction.DOWN && touching(box, had)) next = had;
+            if (next == null) next = touchedSide(level(), this, box, getDeltaMovement());
+            if (next == null && had == Direction.DOWN && floorBelow(box)) next = Direction.DOWN;
+            if (next == null && had != null && had != Direction.DOWN && rockBeside(level(), this, box, had, CLING_REACH)) next = had;
+            // falling past rock in reach, it catches hold of it
+            if (next == null) next = nearestSide(level(), this, box);
+        }
+        clingGap = next == null || next == Direction.DOWN || touching(box, next) ? 0.0 : gapOr0(rockGap(level(), this, box, next, CLING_REACH));
         entityData.set(DATA_SURFACE, (byte) (next == null ? -1 : next.get3DDataValue()));
+        boolean fell = airborne();
         if (next == null && !isInWater()) airTicks++;
         else {
             airTicks = 0;
             airDist = 0.0;
         }
-        setNoGravity(next != null && next != Direction.DOWN);
-        if (next != null && next != Direction.DOWN) resetFallDistance();
+        grip = next != null ? next : isInWater() || airborne() ? null : had;
+        setNoGravity(gripsOffFloor());
+        if (gripsOffFloor()) resetFallDistance();
+        updatePose(box);
+        if (fell && !airborne() && !getNavigation().isDone()) askAgain();
+    }
+
+    /**
+     * Its pose turns to the rock it grips once it has gripped that for {@link #POSE_HOLD} ticks running; at once when
+     * it falls, after a fall, or when the rock it showed is out of reach.
+     */
+    private void updatePose(AABB box) {
+        Direction pose = poseRock();
+        if (grip != poseNext) {
+            poseNext = grip;
+            poseWait = 0;
+        }
+        if (grip == pose) return;
+        if (pose == null || grip == null || ++poseWait >= POSE_HOLD || !inReach(box, pose))
+            entityData.set(DATA_POSE, (byte) (grip == null ? -1 : grip.get3DDataValue()));
     }
 
     private boolean floorBelow(AABB box) {
@@ -583,14 +694,40 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         return !Double.isNaN(floorUnder(level(), cx, box.minY + box.getYsize() / 2.0, box.minY - FLOOR_REACH, cz));
     }
 
+    private static double gapOr0(double gap) { return Double.isNaN(gap) ? 0.0 : gap; }
+
+    /**
+     * The wall or ceiling to cling to: one its box touches (a wall it moves towards first, then the ceiling), else the
+     * nearest within {@link #CLING_REACH} (a wall before the ceiling at the same reach); null with none in reach.
+     */
     @Nullable
-    private Direction anyRock(AABB box, Vec3 m) {
+    static Direction clingTo(CollisionGetter level, @Nullable Entity who, AABB box, Vec3 m) {
+        Direction d = touchedSide(level, who, box, m);
+        return d != null ? d : nearestSide(level, who, box);
+    }
+
+    /** A wall its box touches (the one it moves towards most), else the ceiling if it touches that; else null. */
+    @Nullable
+    static Direction touchedSide(CollisionGetter level, @Nullable Entity who, AABB box, Vec3 m) {
         Direction best = null;
         for (Direction d : Direction.Plane.HORIZONTAL) {
-            if (!touching(box, d)) continue;
+            if (!rockBeside(level, who, box, d)) continue;
             if (best == null || m.dot(Vec3.atLowerCornerOf(d.getNormal())) > m.dot(Vec3.atLowerCornerOf(best.getNormal()))) best = d;
         }
-        return best != null ? best : touching(box, Direction.UP) ? Direction.UP : null;
+        if (best != null) return best;
+        return rockBeside(level, who, box, Direction.UP) ? Direction.UP : null;
+    }
+
+    /** The wall or ceiling nearest its box within {@link #CLING_REACH} (a wall before the ceiling at the same reach). */
+    @Nullable
+    static Direction nearestSide(CollisionGetter level, @Nullable Entity who, AABB box) {
+        Direction best = null;
+        double bestGap = Double.MAX_VALUE;
+        for (Direction d : new Direction[]{Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST, Direction.UP}) {
+            double gap = rockGap(level, who, box, d, CLING_REACH);
+            if (!Double.isNaN(gap) && gap < bestGap - 1.0E-6) { bestGap = gap; best = d; }
+        }
+        return best;
     }
 
     /**
@@ -612,7 +749,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         } else if (along.lengthSqr() > 1.0E-4) want = along.normalize();
         if (want != null) {
             if (forward.dot(want) < -0.99) forward = forward.add(up.cross(forward).scale(0.3));
-            forward = forward.lerp(want, face != null ? TURN_RATE * 0.5 : TURN_RATE);
+            forward = forward.lerp(want, face != null ? TURN_RATE * 0.5 : 1.0 - Math.exp(-along.length() / TURN_BLOCKS));
         }
         Vec3 f = forward.subtract(up.scale(forward.dot(up)));
         forward = f.lengthSqr() > 1.0E-3 ? f.normalize() : Vec3.directionFromRotation(0, getYRot());
@@ -627,12 +764,26 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
             entityData.set(DATA_FORWARD, new Vector3f((float) forward.x, (float) forward.y, (float) forward.z));
     }
 
+    /**
+     * On a wall or ceiling it presses against the rock its box touches. Lying still, it is drawn back against its rock
+     * when its box has come off it by a little (at most {@link #CLING_PULL} a tick). Crawling, its way keeps it on the
+     * rock (each waypoint is pressed against it), and it presses only against rock it touches, and not while its way
+     * leads off that rock (0.19.3: drawn back to its rock as it crawled, it was dragged against its way, and on rough
+     * corners flipped from face to face and caught on edges).
+     */
     @Override
     public void travel(Vec3 input) {
-        Direction d = surface();
+        Direction d = grip;
         if (d != null && d != Direction.DOWN && !level().isClientSide) {
             Vec3 n = Vec3.atLowerCornerOf(d.getNormal());
-            setDeltaMovement(getDeltaMovement().add(n.scale(0.04)));
+            double push;
+            if (getNavigation().isDone()) push = clingGap > 0.1 ? Math.min(CLING_PULL, clingGap) : 0.04;
+            else {
+                MoveControl mc = getMoveControl();
+                boolean leaving = (mc.getWantedX() - getX()) * n.x + (mc.getWantedY() - getY()) * n.y + (mc.getWantedZ() - getZ()) * n.z < -0.3;
+                push = !leaving && touching(getBoundingBox(), d) ? 0.04 : 0.0;
+            }
+            if (push > 0.0) setDeltaMovement(getDeltaMovement().add(n.scale(push)));
         }
         super.travel(input);
     }
@@ -707,6 +858,9 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     @Override
     protected void customServerAiStep() {
         updateSurface();
+        Path way = getNavigation().getPath();
+        if (!airborne() && way != null && !way.isDone() && way.getNextEntityPos(this).distanceToSqr(position()) > STRAYED * STRAYED)
+            askAgain();
         // held for a picture of its strike (/remix giant hold): it does nothing else
         if (entityData.get(DATA_HELD) >= 0.0F) { stopDead(); return; }
         if (isInWater() && getFluidHeight(FluidTags.WATER) > getFluidJumpThreshold()) getJumpControl().jump();
@@ -744,7 +898,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     private void rest() {
         stopDead();
         if (tickCount % 10 == 0 && notice()) return;
-        if (stateTicks >= stateLength) {
+        if (stateTicks >= stateLength || (roamTest.on() && stateTicks >= 20)) {
             legsLeft = 1 + random.nextInt(3);
             toState(CRAWL, 0);
             nextLeg();
@@ -758,7 +912,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
             if (!nextLeg()) settle(restLength());
             return;
         }
-        nav.setSpeedModifier(ROAM_SPEED);
+        nav.setSpeedModifier(ROAM_SPEED * arriving(nav));
         steps();
     }
 
@@ -771,21 +925,46 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
             if (goTo(w, 4, ROAM_SPEED)) return true;
         }
         if (legsLeft-- <= 0) return false;
+        StringBuilder why = roamTest.on() ? new StringBuilder() : null;
         for (int i = 0; i < 6; i++) {
             Vec3 g = roamGoal();
-            if (g != null && goTo(g, 3, ROAM_SPEED)) return true;
+            if (g != null && goTo(g, 3, ROAM_SPEED)) {
+                if (roamTest.on()) roamTest.leg(true);
+                return true;
+            }
+            if (why != null) why.append(i == 0 ? "" : "; ").append(noWay);
         }
+        // no way along its rift from here (its wall broken, or the rift's end near): a short crawl over the rock round
+        // it instead, so it never lies in one place crawl after crawl
+        for (int i = 0; i < 4; i++) {
+            if (goTo(nearGoal(NEAR_MIN, NEAR_MAX), 4, ROAM_SPEED)) {
+                if (roamTest.on()) roamTest.nearLeg(why == null ? "" : why.toString());
+                return true;
+            }
+            if (why != null) why.append(i == 0 ? "; near: " : "; ").append(noWay);
+        }
+        if (roamTest.on()) roamTest.leg(false, why == null ? "" : why.toString());
         return false;
+    }
+
+    /** A spot on the rock round it, {@code min} to {@code max} blocks off, ahead of it or off to either side. */
+    private Vec3 nearGoal(double min, double max) {
+        Vec3 heading = SkeinEntity.rotate(forward, up(), (random.nextDouble() - 0.5) * Math.PI * 1.4);
+        return bodyCentre().add(heading.scale(min + random.nextDouble() * (max - min)));
     }
 
     /** Sets out for a node near {@code p} (within {@code r}) at {@code speed}; false when there is no way there. */
     private boolean goTo(Vec3 p, int r, double speed) {
         BlockPos n = nodeNear(p, r);
-        if (n == null) return false;
+        if (n == null) { noWay = "no node near " + BlockPos.containing(p).toShortString(); return false; }
         Path path = getNavigation().createPath(n.offset(1, 0, 1), 0);
-        if (path == null || path.getNodeCount() < 2 || leavesRift(path)) return false;
+        if (path == null || path.getNodeCount() < 2) { noWay = "no path"; return false; }
+        if (leavesRift(path)) { noWay = "leaves its rift"; return false; }
         Node end = path.getEndNode();
-        if (end == null || Mth.square(end.x + 1.5 - getX()) + Mth.square(end.y - getY()) + Mth.square(end.z + 1.5 - getZ()) < 4.0) return false;
+        if (end == null || Mth.square(end.x + 1.5 - getX()) + Mth.square(end.y - getY()) + Mth.square(end.z + 1.5 - getZ()) < 4.0) {
+            noWay = "ends too near";
+            return false;
+        }
         getNavigation().moveTo(path, speed);
         return true;
     }
@@ -800,10 +979,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     private Vec3 roamGoal() {
         Route r = rift();
         double[] loc = r == null ? null : r.locate(getX(), getZ());
-        if (r == null || loc == null) {
-            Vec3 heading = SkeinEntity.rotate(forward, up(), (random.nextDouble() - 0.5) * Math.PI * 1.4);
-            return bodyCentre().add(heading.scale(LEG_MIN + random.nextDouble() * (LEG_MAX - LEG_MIN)));
-        }
+        if (r == null || loc == null) return nearGoal(LEG_MIN, LEG_MAX);
         double s0 = loc[1], side = loc[2] >= 0 ? 1.0 : -1.0;
         if (random.nextDouble() < CROSS_RIFT && overBridge(r, s0, side)) return waypoints.poll();
         double len = LEG_MIN + random.nextDouble() * (LEG_MAX - LEG_MIN);
@@ -820,7 +996,9 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         }
         // mostly the upper walls: well above the stream, under the rim
         y = Mth.clamp(y, bed + Math.max(8.0, depth * 0.3), top - 5.0);
-        return wallAt(r, s1, side, y);
+        Vec3 w = wallAt(r, s1, side, y);
+        if (w == null && roamTest.on()) noWay = GiantRoamTest.noWall(level(), r, s1, side, y);
+        return w;
     }
 
     /**
@@ -1110,7 +1288,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
             }
             return;
         }
-        nav.setSpeedModifier(RETREAT_SPEED);
+        nav.setSpeedModifier(RETREAT_SPEED * arriving(nav));
         steps();
     }
 
@@ -1155,10 +1333,32 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     private void stopDead() {
         getNavigation().stop();
         getMoveControl().strafe(0.0F, 0.0F);
-        if (surface() != null) {
+        if (grip != null) {
             Vec3 dm = getDeltaMovement();
-            setDeltaMovement(0.0, clingsOffFloor() ? 0.0 : Math.min(0.0, dm.y), 0.0);
+            setDeltaMovement(0.0, gripsOffFloor() ? 0.0 : Math.min(0.0, dm.y), 0.0);
         }
+    }
+
+    /** Its way is behind it (it fell off it, or slid far off it): it asks the way to the same place afresh, or stops. */
+    private void askAgain() {
+        PathNavigation nav = getNavigation();
+        BlockPos to = nav.getTargetPos();
+        nav.stop();
+        long now = level().getGameTime();
+        if (to == null || now - askedAt < 20) return;
+        askedAt = now;
+        Path p = nav.createPath(to, 0);
+        if (p != null && p.getNodeCount() >= 2 && !leavesRift(p)) nav.moveTo(p, ROAM_SPEED);
+    }
+
+    /** The share of its speed it keeps as it comes up to the end of its way: all of it until {@link #SLOW_FROM} out. */
+    private double arriving(PathNavigation nav) {
+        Path p = nav.getPath();
+        Node end = p == null ? null : p.getEndNode();
+        if (end == null || p.getNodeCount() - p.getNextNodeIndex() > 6) return 1.0;
+        // it is done with its way a block or so short of the end node's middle
+        double d = Math.sqrt(Mth.square(end.x + 1.5 - getX()) + Mth.square(end.y - getY()) + Mth.square(end.z + 1.5 - getZ())) - 1.0;
+        return Mth.clamp(SLOWEST + (1.0 - SLOWEST) * d / SLOW_FROM, SLOWEST, 1.0);
     }
 
     /** The heavy scrape of its feet as it crawls. */
@@ -1568,6 +1768,32 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     public void trace(int ticks) { trace = Math.max(0, ticks); }
 
     /**
+     * For /remix giant roam: crawls leg after leg for {@code ticks} with no rests, counting how well it holds on (see
+     * {@link GiantRoamTest}); 0 ends a check under way. The reply says how it has gone so far.
+     */
+    public String roam(int ticks) {
+        if (ticks <= 0) {
+            String r = roamTest.report();
+            roamTest.left = 0;
+            ExplorationRemix.LOGGER.info("[giant roam] " + r);
+            return r;
+        }
+        roamTest.start(ticks);
+        if (state() == REST) toState(REST, 0);
+        return "Roaming for " + ticks + " ticks; the totals go to the server log at the end";
+    }
+
+    double movedLastTick() { return movedLast; }
+    /** For /remix giant roam: whether its box touches rock on any side (or stands, or swims). */
+    boolean boxOnRock() {
+        if (onGround() || isInWater()) return true;
+        AABB box = getBoundingBox();
+        for (Direction d : Direction.values()) if (touching(box, d)) return true;
+        return false;
+    }
+    @Nullable Vec3 footPoint() { return foot; }
+
+    /**
      * For /remix giant hold (pictures of its strike): holds it {@code k} (0 to 1) through the strike's phase {@code s}
      * (REAR, LUNGE or RECOVER), striking at {@code aim}, until let go ({@link #letGo}). False for another state.
      */
@@ -1606,6 +1832,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
             movedLast = Math.sqrt(Mth.square(getX() - xo) + Mth.square(getY() - yo) + Mth.square(getZ() - zo));
             if (airTicks > 0) airDist += movedLast;
             updateForward();
+            if (roamTest.on()) roamTest.tick(this);
         }
         if (level().isClientSide) updateClientRock();
         followHead();
@@ -1616,7 +1843,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     /** Server: whether it lies dormant this tick: resting on its rock, its body laid, unhurt, with no player near. */
     private boolean dormantNow() {
         if (state() != REST || !body.laid() || !isAlive() || hurtTime > 0 || isOnFire() || isInWater() || isInLava()
-                || surface() == null || isPassenger() || trace > 0) return dormant = false;
+                || surface() == null || isPassenger() || trace > 0 || roamTest.on()) return dormant = false;
         if ((tickCount + getId()) % WAKE_LOOK == 0) {
             boolean near = false;
             for (Player p : level().players()) if (p.distanceToSqr(this) < WAKE_RANGE * WAKE_RANGE) { near = true; break; }
@@ -1628,7 +1855,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     /** The head's new place goes on the trail (laid afresh behind it on the rock where it lands after a fall). */
     private void followHead() {
         boolean client = level().isClientSide;
-        Direction rock = client ? clientRock : surface();
+        Direction rock = client ? clientRock : poseRock();
         Vec3 up = normal(rock);
         if (!body.laid()) {
             foot = null;
@@ -1669,20 +1896,27 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
 
     // ------------------------------------------------------------------------------------------------ client
 
-    /** The rock it clings to as the client sees it (as the Skein's: the client's box lags the server's). */
+    /**
+     * The rock it clings to as the client sees it (as the Skein's: the client's box lags the server's), with the
+     * server's reach: the side the server poses it on while that is in reach of the client's box, else the one it had.
+     */
     private void updateClientRock() {
         AABB box = getBoundingBox();
-        Direction synced = surface();
+        Direction synced = poseRock();
         if (synced == null) {
-            clientRock = !isInWater() && clientRock != null && touching(box, clientRock) ? clientRock : null;
+            clientRock = !isInWater() && clientRock != null && inReach(box, clientRock) ? clientRock : null;
             return;
         }
-        if (touching(box, synced)) { clientRock = synced; return; }
-        if (synced == Direction.DOWN && floorBelow(box)) { clientRock = synced; return; }
-        if (clientRock != null && touching(box, clientRock)) return;
+        if (inReach(box, synced)) { clientRock = synced; return; }
+        if (clientRock != null && inReach(box, clientRock)) return;
         if (touching(box, Direction.DOWN)) { clientRock = Direction.DOWN; return; }
-        Direction any = anyRock(box, getDeltaMovement());
+        Direction any = clingTo(level(), this, box, getDeltaMovement());
         clientRock = any != null ? any : synced;
+    }
+
+    /** Whether side {@code d} still holds the box: the floor under it (or close under it), a wall or ceiling in reach. */
+    private boolean inReach(AABB box, Direction d) {
+        return d == Direction.DOWN ? touching(box, d) || floorBelow(box) : rockBeside(level(), this, box, d, CLING_REACH);
     }
 
     private void clientTick() {

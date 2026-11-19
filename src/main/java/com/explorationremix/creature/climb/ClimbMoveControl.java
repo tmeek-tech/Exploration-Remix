@@ -4,6 +4,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -11,7 +12,7 @@ import net.minecraft.world.phys.Vec3;
  * movement speed attribute is read as blocks per tick at a speed modifier of 1; climbing and swimming are a little
  * slower. On a floor gravity keeps its pull; elsewhere the creature's own surface tracking turns gravity off, and
  * once it touches nothing at all it falls. A creature that barely moves for a few ticks when sent somewhere steps
- * clear of whatever holds it.
+ * clear of whatever holds it. A heavy one can be eased from one step to the next ({@link #ClimbMoveControl(Mob, double, boolean)}).
  */
 public class ClimbMoveControl extends MoveControl {
     public interface Climber {
@@ -29,19 +30,45 @@ public class ClimbMoveControl extends MoveControl {
     static final int WEDGED_TICKS = 6;
 
     private final Climber climber;
+    /** The share of the way from how it moved last tick to the step it wants that it goes each tick (1: all of it). */
+    private final double ease;
+    /** Whether a step blocked along some ways goes on at full speed along the others (see the constructor). */
+    private final boolean slide;
     private double lastX, lastY, lastZ, lastStep;
+    private double wasX, wasY, wasZ;
+    private boolean placed;
     private int wedged;
 
     /** Ticks in a row it has barely moved while sent somewhere (for the dev listing). */
     public int wedged() { return wedged; }
 
     public <T extends Mob & Climber> ClimbMoveControl(T mob) {
+        this(mob, 1.0, false);
+    }
+
+    /**
+     * For a big, heavy climber (the giant Skein, 0.19.3). With {@code ease} under 1 each tick's step goes only that
+     * share of the way from how it moved last tick to the step it wants, so it comes up to speed, slows and turns over a
+     * few ticks (a heavy thing does not jerk from one heading to the next); floors keep gravity's pull, and falls and the
+     * step out of a wedge are not eased. With {@code slide}, a step that rock blocks along one or two of the three ways
+     * goes on at full speed along the others, towards its waypoint: a wide box a little out of line with its way, its
+     * corner caught on rock beside its way, crept sideways at a sliver of its speed (most of its step spent pushing
+     * into the rock) and was wedged again and again before it came clear.
+     */
+    public <T extends Mob & Climber> ClimbMoveControl(T mob, double ease, boolean slide) {
         super(mob);
         this.climber = mob;
+        this.ease = Mth.clamp(ease, 0.05, 1.0);
+        this.slide = slide;
     }
 
     @Override
     public void tick() {
+        // how it moved since last tick, for easing (more than a block is a jump: a teleport, say)
+        double mx = mob.getX() - wasX, my = mob.getY() - wasY, mz = mob.getZ() - wasZ;
+        if (!placed || mx * mx + my * my + mz * mz > 1.0) mx = my = mz = 0.0;
+        wasX = mob.getX(); wasY = mob.getY(); wasZ = mob.getZ();
+        placed = true;
         if (this.operation != Operation.MOVE_TO || !climber.canSteer()) {
             mob.setSpeed(0.0F);
             mob.setZza(0.0F);
@@ -85,17 +112,38 @@ public class ClimbMoveControl extends MoveControl {
             turn(dx, dz);
             return;
         }
-        if (settle) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
         // rounding the top of what it climbs: while the way across is still blocked by the edge, it climbs straight up
         // first (aiming straight at the waypoint would leave it hanging just under the edge)
-        if (dy > -0.1 && v.horizontalDistanceSqr() > 1.0E-6
-                && !mob.level().noCollision(mob, mob.getBoundingBox().move(v.x, 0.0, v.z).deflate(1.0E-4)))
-            v = new Vec3(v.x * 0.1, speed, v.z * 0.1);
-        else if (floor) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
+        boolean roundTop = dy > -0.1 && v.horizontalDistanceSqr() > 1.0E-6
+                && !mob.level().noCollision(mob, mob.getBoundingBox().move(v.x, 0.0, v.z).deflate(1.0E-4));
+        if (slide) {
+            // blocked along some ways: on along the others, at full speed, while they still have a way to go
+            AABB box = mob.getBoundingBox().deflate(1.0E-4);
+            boolean bx = Math.abs(v.x) > 1.0E-6 && !mob.level().noCollision(mob, box.move(v.x, 0.0, 0.0));
+            boolean by = Math.abs(v.y) > 1.0E-6 && !(floor || settle) && !mob.level().noCollision(mob, box.move(0.0, v.y, 0.0));
+            boolean bz = Math.abs(v.z) > 1.0E-6 && !mob.level().noCollision(mob, box.move(0.0, 0.0, v.z));
+            if (bx || by || bz) {
+                double fx = bx ? 0.0 : dx, fy = by || floor || settle ? 0.0 : dy, fz = bz ? 0.0 : dz;
+                double free = Math.sqrt(fx * fx + fy * fy + fz * fz);
+                if (free > 0.05) {
+                    double s = Math.min(speed, free);
+                    v = new Vec3(fx / free * s, fy / free * s, fz / free * s);
+                    roundTop = false;
+                }
+            }
+        }
+        if (roundTop) v = new Vec3(v.x * 0.1, speed, v.z * 0.1);
+        else if (floor || settle) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
+        // on a floor (or settling in water) gravity has its rise and fall
+        boolean ownY = roundTop || !(floor || settle);
         if (wedged >= WEDGED_TICKS) {
             Vec3 out = wayOut(v, step);
             if (out != null) v = out;
             wedged = WEDGED_TICKS / 2;
+        } else if (ease < 1.0) {
+            // (the wedge check still weighs how it moves against the whole step it wants: caught on an edge it barely
+            // moves at all, while easing into a step it moves at least a share of it)
+            v = new Vec3(Mth.lerp(ease, mx, v.x), ownY ? Mth.lerp(ease, my, v.y) : v.y, Mth.lerp(ease, mz, v.z));
         }
         mob.setDeltaMovement(v);
         turn(dx, dz);
