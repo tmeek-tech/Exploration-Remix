@@ -1324,8 +1324,8 @@ class GalleriesFieldTest {
      * at most three times the Blue Reaches' (spec 9.3: about 0.8-1.4 times 0.5.0's planned Galleries), in three cases.
      * Until 0.19.1 the yardstick was the Deep Gardens' planned rows; the vent field that replaced them makes its blocks
      * per 128-block tile (its warm rows are lookups, a cold first chunk pays for the tiles round it), so the Blue
-     * Reaches, the one planned layer left, took over: 1.39 warm, 0.55 for cold first chunks and 1.10 for regions in
-     * turns when they did.
+     * Reaches, the one planned layer left, took over: 1.39 to 1.49 warm, 0.49 to 0.55 for cold first chunks and 1.07
+     * to 1.10 for regions in turns (19 Nov, two runs).
      * <ul>
      * <li>warm: 16 fixed chunks with their plans and openings made first, best of three rounds each, taken in turns (LR2
      * fix round: 5.5 times the Gardens' while the low ground's stairs searched each column's square of 25 x 25 columns

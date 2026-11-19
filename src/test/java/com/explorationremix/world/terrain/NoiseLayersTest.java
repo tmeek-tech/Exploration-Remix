@@ -143,11 +143,14 @@ class NoiseLayersTest {
      * empty, and asking for a noise layer's plan throws. So does every query of the network itself for a noise layer,
      * so a caller that goes round Terrain fails as loudly. (400 columns, 16 areas of 256 x 256 anywhere in 4000 x 4000,
      * {@link Spread}.) The Deep Gardens are a noise layer too since 0.19.1 (the vent field): their plan queries are
-     * checked with the others', their rows by GardensFieldTest (the field is slow to fill 16 fresh areas).
+     * checked with the others', their rows by GardensFieldTest (the field is slow to fill 16 fresh areas). For the same
+     * reason the deep vents' throats that come out in the Wasteland's top rows are off here: each needs the vent field's
+     * decisions round its site, and GardensFieldTest follows one into the Wasteland.
      */
     @Test
     void noiseLayersPlanNothing() {
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, 4242);
+        t.gardens.exits = null;
         Shape s = t.shape;
         int lo = s.floorY + 1, hi = s.top(Terrain.WASTELAND);
         Random r = new Random(5);
