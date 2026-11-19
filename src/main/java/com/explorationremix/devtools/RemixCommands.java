@@ -359,9 +359,11 @@ public final class RemixCommands {
         ServerLevel level = pl.server.getLevel(Level.OVERWORLD);
         if (level == null) return 0;
         double px = pl.getX(), pz = pl.getZ();
-        say(c, "Looking for the nearest deep vent with a throat within " + (int) DEEP_VENT_REACH + " blocks (a few seconds a deep site the first time)...");
+        say(c, "Looking for the nearest deep vent with a throat within " + (int) DEEP_VENT_REACH
+                + " blocks (the first search round a place can take a minute)...");
         java.util.concurrent.CompletableFuture.supplyAsync(() -> t.gardens.throatsNear(px, pz, DEEP_VENT_REACH, 1))
                 .whenComplete((found, err) -> pl.server.execute(() -> {
+                    if (pl.hasDisconnected()) return;
                     if (err != null || found == null || found.isEmpty()) {
                         c.getSource().sendFailure(Component.literal(err != null ? "The search failed: " + err.getMessage()
                                 : "No deep vent with a throat within " + (int) DEEP_VENT_REACH + " blocks."));
