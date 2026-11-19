@@ -14,8 +14,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +25,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * The deep cave networks' promises (design: network-final.md, section 14). The graph tests plan cell-layers and check
  * the plans; the voxel tests (tag "voxel") build cells block by block exactly as the game does and walk them. Only the
- * Blue Reaches and the Deep Gardens have plans ({@link Terrain#planned}): the Wasteland and the Basalt Galleries are
- * noise fields, tested with their fields.
+ * Blue Reaches have plans ({@link Terrain#planned}): the Deep Gardens (the vent field since 0.19.1), the Wasteland and
+ * the Basalt Galleries are noise fields, tested with their fields.
  */
 class NetworkTest {
     static final long[] SEEDS = {8675309L, 12345L, -42L};
@@ -413,9 +411,6 @@ class NetworkTest {
         }
         assertEquals(24, edges);
         if (drops > cells) fails.add(drops + " portal vestibules dropped in " + cells + " cell-layers (at most one each on average)");
-        // the other planned layers never drop one
-        for (long seed : SEEDS) for (int[] cell : CELLS) for (int l = 1; l < t.shape.layerCount && Terrain.planned(l); l++)
-            dropped(terrain(seed), terrain(seed).network.net(l, cell[0], cell[1]), tag(seed, l, cell[0], cell[1]), fails);
         assertTrue(fails.isEmpty(), String.join("\n", fails));
     }
 
@@ -972,7 +967,7 @@ class NetworkTest {
     }
 
     // ================================================================================================ voxel tests
-    /** Built cell-layers that more than one test reads (the Deep Gardens and Blue Reaches tests). */
+    /** Built cell-layers that more than one test reads (the Blue Reaches tests). */
     private static final Map<String, VoxelHarness> BUILT = new HashMap<>();
 
     /**
@@ -982,7 +977,7 @@ class NetworkTest {
      * raster's) keeps the Blue Reaches' caverns that run across a seam joined as they are in the world.
      */
     static synchronized VoxelHarness built(long seed, int li, int cx, int cz, int wc, int hc) {
-        // all but the neighbour pairs: the Blue 2 x 2 cells are read by two tests, the others by several
+        // all but the neighbour pairs: the Blue 2 x 2 cells are read by two tests
         return built(seed, li, cx, cz, wc, hc, !(wc == 2 && hc == 1));
     }
 
@@ -1006,7 +1001,7 @@ class NetworkTest {
         return v;
     }
 
-    /** The cells of the Deep Gardens' voxel tests. */
+    /** More cells for the den gate test (the Deep Gardens' voxel cells until the vent field, 0.19.1). */
     static final long[] VOX_SEEDS = {8675309L, 2000023L};
     static final int[][] VOX_CELLS = {{0, -3}, {-1, 1}};
 
@@ -1023,90 +1018,6 @@ class NetworkTest {
         }
         return false;
     }
-
-    /** Every non-pocket chamber reached, the exit landing reached, every walk way walkable along its line. */
-    static void reachAll(VoxelHarness v, Terrain t, Net n, String tg, List<String> fails) {
-        for (Chamber c : n.ch) {
-            if (!c.keep || c.kind == Kind.CANYON || c.kind == Kind.POCKET) continue;
-            if (v.reach(c) == null) fails.add(tg + ": " + c.kind + "#" + c.id + " at " + (int) c.x + " " + (int) c.f0 + " " + (int) c.z + " not reached");
-        }
-        for (Edge e : n.edges) {
-            if (e.kind != EK.WALK || e.w1 == null) continue;
-            Way wy = e.w1;
-            for (int i = 0; i < wy.n; i += 2) {
-                if (v.nearestPlace(wy.x[i], wy.f[i] + 1, wy.z[i], 2, 3, true) != null || gateMouth(t, n, wy.x[i], wy.z[i])) continue;
-                fails.add(tg + ": way #" + wy.id + " (" + n.ch.get(e.a).kind + " to " + n.ch.get(e.b).kind + ") cannot be walked at " + (int) wy.x[i] + " " + (int) wy.f[i] + " " + (int) wy.z[i]);
-                break;
-            }
-        }
-    }
-
-    static void oneCave(int li, double minShare) { oneCave(li, minShare, new long[0][]); }
-
-    /**
-     * One cave over the voxel tests' cells of layer li and over {@code extra} cells of it ({seed, cx, cz}; built, checked
-     * and let go): the main component holds at least {@code minShare} of the standing places, and every room and way
-     * is reached ({@link #reachAll}).
-     */
-    static void oneCave(int li, double minShare, long[][] extra) {
-        List<String> fails = new ArrayList<>();
-        List<long[]> cells = new ArrayList<>();
-        for (int s = 0; s < VOX_SEEDS.length; s++) cells.add(new long[]{VOX_SEEDS[s], VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
-        for (long[] c : extra) cells.add(new long[]{c[0], c[1], c[2], 0});
-        for (long[] c : cells) {
-            long seed = c[0];
-            int cx = (int) c[1], cz = (int) c[2];
-            Terrain t = terrain(seed);
-            Net n = t.network.net(li, cx, cz);
-            VoxelHarness v = built(seed, li, cx, cz, 1, 1, c[3] == 1);
-            String tg = tag(seed, li, cx, cz);
-            System.out.printf("%s: main component %.2f%% of %d places, %d components%n", tg, 100 * v.mainShare(), v.places(), v.components());
-            if (v.mainShare() < minShare) fails.add(tg + ": the main component holds " + fmt(100 * v.mainShare()) + "% of the standing places");
-            reachAll(v, t, n, tg, fails);
-        }
-        assertTrue(fails.isEmpty(), String.join("\n", fails));
-    }
-
-    /**
-     * The perched lakes and the wells' pools hold their water in the blocks the game makes (TerrainTest's check reads the
-     * exact density, before the 4 x 8 x 4 interpolation): no water block over the water table has air beside or under it.
-     */
-    @Test
-    @Tag("voxel")
-    void perchedPoolsHoldInTheBlocks() {
-        List<String> fails = new ArrayList<>();
-        int pools = 0;
-        long water = 0;
-        int[][] sides = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}};
-        for (int s = 0; s < VOX_SEEDS.length; s++) {
-            Terrain t = terrain(VOX_SEEDS[s]);
-            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
-            VoxelHarness v = built(VOX_SEEDS[s], Terrain.GARDENS, cx, cz, 1, 1);
-            double W = t.shape.waterY(Terrain.GARDENS);
-            for (Chamber c : t.network.net(Terrain.GARDENS, cx, cz).ch) {
-                if (!c.keep || !Network.pool(c) || c.lakeY <= W + 0.5) continue;
-                pools++;
-                int R = (int) Math.ceil(c.R()) + 2;
-                for (int x = (int) c.x - R; x <= c.x + R; x++) for (int z = (int) c.z - R; z <= c.z + R; z++)
-                    for (int y = (int) Math.floor(W) + 1; y <= c.lakeY + 1; y++) {
-                        if (!v.in(x, y, z) || v.mat(x, y, z) != VoxelHarness.WATER) continue;
-                        water++;
-                        for (int[] d : sides) {
-                            int nx = x + d[0], ny = y + d[1], nz = z + d[2];
-                            if (v.in(nx, ny, nz) && v.mat(nx, ny, nz) == VoxelHarness.AIR && fails.size() < 20)
-                                fails.add(tag(VOX_SEEDS[s], Terrain.GARDENS, cx, cz) + ": " + c.kind + "#" + c.id + " drains from " + x + " " + y + " " + z + " into " + nx + " " + ny + " " + nz);
-                        }
-                    }
-            }
-        }
-        System.out.println("perchedPoolsHoldInTheBlocks: " + pools + " pools, " + water + " water blocks");
-        assertTrue(pools >= 4 && water > 1000, "too few pools to check");
-        assertTrue(fails.isEmpty(), String.join("\n", fails));
-    }
-
-    @Test
-    @Tag("voxel")
-    void gardensAreOneCave() { oneCave(Terrain.GARDENS, 0.980); }
 
     /** The share of the standing places in the main component, every node and every portal of 2 x 2 cells reached. */
     @Test
@@ -1315,9 +1226,9 @@ class NetworkTest {
      * Section 10: no fall from a standing place in a tunnel, a climb, a ledge passage or an ordinary room lands more
      * than 15 lower; a staged climb ends a fall on the floor of the stage it fell down. Falls into water or onto vines
      * are safe. Falls in the rift, the deep dark, the helices and the ancient city are reported, not failed: 0.2.0's
-     * cliffs and the high ledges are meant to be dangerous. Over the voxel tests' cells of the Deep Gardens and 2 x 2
-     * cells of the Blue Reaches (the layers under them are noise fields, tested with their fields), and two Blue cells
-     * of the merge of main's den gates (0.8.0): seed 8004 cell 0,0 had falls of 32 to 36 blocks from a walking tunnel
+     * cliffs and the high ledges are meant to be dangerous. Over 2 x 2 cells of the Blue Reaches (the layers under them
+     * are noise fields, tested with their fields: the Deep Gardens' voxel cells went with their plans when the vent field
+     * came in, 0.19.1), and two Blue cells of the merge of main's den gates (0.8.0): seed 8004 cell 0,0 had falls of 32 to 36 blocks from a walking tunnel
      * whose slab lay 3 blocks over its own cavern's roof, seed 575400745 cell 1,-2 falls of 27 and 28 from one 4 blocks
      * over a cavern's roof ({@link Network#DARK_ROOF}). In those two a fall from a gate's passage is reported, not
      * failed: a landing's spoke can pass a few blocks under its own gate's passage, as it did in main (0.6.1; seed 8004
@@ -1329,7 +1240,6 @@ class NetworkTest {
     void noLethalFalls() {
         List<String> fails = new ArrayList<>();
         List<Object[]> runs = new ArrayList<>();
-        for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], Terrain.GARDENS, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
         runs.add(new Object[]{8004L, Terrain.BLUE, 0, 0, 1});
         runs.add(new Object[]{575400745L, Terrain.BLUE, 1, -2, 1});
@@ -1400,44 +1310,9 @@ class NetworkTest {
         return b.length() == 0 ? "rock?" : b.toString().trim();
     }
 
-    /** Rooms keep most of their planned interior open after interpolation. */
-    @Test
-    @Tag("voxel")
-    void roomsStayOpen() {
-        List<String> fails = new ArrayList<>();
-        Map<Kind, List<Double>> share = new EnumMap<>(Kind.class);
-        for (int li = Terrain.GARDENS; Terrain.planned(li); li++) for (int s = 0; s < VOX_SEEDS.length; s++) {
-            long seed = VOX_SEEDS[s];
-            int cx = VOX_CELLS[s][0], cz = VOX_CELLS[s][1];
-            Terrain t = terrain(seed);
-            Network w = t.network;
-            Net n = w.net(li, cx, cz);
-            VoxelHarness v = built(seed, li, cx, cz, 1, 1);
-            for (Chamber c : n.ch) {
-                if (!c.keep || c.helix() || c.landing() || c.kind == Kind.LAKE) continue;
-                long[] o = v.openShare(w, c);
-                if (o[1] < 50) continue;
-                share.computeIfAbsent(c.kind, k -> new ArrayList<>()).add(o[0] / (double) o[1]);
-            }
-        }
-        for (Map.Entry<Kind, List<Double>> e : share.entrySet()) {
-            List<Double> l = e.getValue();
-            Collections.sort(l);
-            double p10 = l.get((int) (0.1 * l.size()));
-            double min = switch (e.getKey()) {
-                case POCKET -> 0.50;
-                default -> 0.70;
-            };
-            System.out.printf("roomsStayOpen: %s n %d open share p10 %.2f%n", e.getKey(), l.size(), p10);
-            if (p10 < min) fails.add(e.getKey() + ": open share p10 " + fmt(p10) + " (n " + l.size() + "), under " + min);
-        }
-        assertTrue(fails.isEmpty(), String.join("\n", fails));
-    }
-
     /**
      * Sight lines, a report with no bar (long views are welcome: they make the caverns look vast). From the eyes of
-     * walkable places in every 4th column of the Deep Gardens' voxel cells and of the Blue Reaches' 2 x 2 cells (whose
-     * rays run on into the apron), rays at pitches -40 to +40 and 24 yaws are marched to the first rock. It prints the
+     * walkable places in every 4th column of the Blue Reaches' 2 x 2 cells (whose rays run on into the apron), rays at pitches -40 to +40 and 24 yaws are marched to the first rock. It prints the
      * share of the rays in 40-block bands up to 160 and over 160 (past that the shader shows the sky), the places with
      * a view over 160 (a ray that leaves the box after running 160 blocks counts) and with one of 80 or more, and the
      * longest rays.
@@ -1446,7 +1321,6 @@ class NetworkTest {
     @Tag("voxel")
     void sightLines() {
         List<Object[]> runs = new ArrayList<>();
-        for (int s = 0; s < VOX_SEEDS.length; s++) runs.add(new Object[]{VOX_SEEDS[s], Terrain.GARDENS, VOX_CELLS[s][0], VOX_CELLS[s][1], 1});
         runs.add(new Object[]{SEEDS[0], Terrain.BLUE, 0, -3, 2});
         for (Object[] run : runs) {
             long seed = (Long) run[0];

@@ -306,12 +306,29 @@ final class GardensStoreys {
                 if (openOnly) {
                     // the caller works the plumbing out on this window itself
                 } else {
+                    // as far as a lifeline can run: to the corner of the plumbing's 84-block window (the plugs stay
+                    // within GW_PLUG_OUT), so a single column and a window round it answer alike
                     for (GardensGates.Gate g : plan.gates.near(minX + (maxX - minX) / 2, minZ + (maxZ - minZ) / 2,
-                            Math.hypot(maxX - minX, maxZ - minZ) / 2 + 40)) {
+                            Math.hypot(maxX - minX, maxZ - minZ) / 2 + LIFE_REACH)) {
                         if (g.entry() != (k == K - 1)) continue;
                         GateWays gw = plan.gateWays(g, k, use);
                         if (gw == null) continue;
                         boolean touched = false;
+                        if (gw.lifeline != null) {
+                            // a tunnel joins a gate's room that no way leaves to the caves outside its ring
+                            double[] l = gw.lifeline;
+                            int pad = (int) Math.ceil(LIFE_W) + 1;
+                            int[] hit = {0};
+                            forBox((int) Math.floor(Math.min(l[0], l[2])) - pad, (int) Math.ceil(Math.max(l[0], l[2])) + pad,
+                                    (int) Math.floor(Math.min(l[1], l[3])) - pad, (int) Math.ceil(Math.max(l[1], l[3])) + pad, q -> {
+                                        double d = lifeDist(l, X(q), Z(q));
+                                        if (d >= LIFE_W) return;
+                                        tunK[q] = true;
+                                        htun[q] = Math.max(htun[q], 4f + 1.4f * (float) (1.0 - d / LIFE_W));
+                                        hit[0]++;
+                                    });
+                            touched = hit[0] > 0;
+                        }
                         for (long cell : gw.plugged) {
                             int q;
                             if (xs != null) {
@@ -335,6 +352,7 @@ final class GardensStoreys {
                                 if (qq == q) continue;
                                 hallK[q] = hallK[qq];
                                 tunK[q] = tunK[qq];
+                                htun[q] = htun[qq];
                                 sheetK[q] = sheetK[qq];
                                 dhK[q] = dhK[qq];
                             }
@@ -417,19 +435,29 @@ final class GardensStoreys {
 
     // ================================================================================================ gate plumbing
 
-    /** gen3.gate_ways' result for one gate on one storey: the crossings, the kept ones, the plugged columns. */
+    /**
+     * gen3.gate_ways' result for one gate on one storey: the crossings, the kept ones, the plugged columns; and, where no
+     * way crosses the ring at all, the lifeline that joins the gate to the caves outside it.
+     */
     static final class GateWays {
         final GardensGates.Gate gate;
         final int k;
         final double[] crossings, kept;
         final long[] plugged;
+        /** A straight tunnel from the gate's own floor to the nearest open floor that leaves the ring ({x0, z0, x1, z1}), or null. */
+        final double[] lifeline;
 
         GateWays(GardensGates.Gate gate, int k, double[] crossings, double[] kept, long[] plugged) {
+            this(gate, k, crossings, kept, plugged, null);
+        }
+
+        GateWays(GardensGates.Gate gate, int k, double[] crossings, double[] kept, long[] plugged, double[] lifeline) {
             this.gate = gate;
             this.k = k;
             this.crossings = crossings;
             this.kept = kept;
             this.plugged = plugged;
+            this.lifeline = lifeline;
         }
 
         boolean inside(int x0, int z0, int nx, int nz) {
@@ -472,12 +500,13 @@ final class GardensStoreys {
         for (int q = 0; q < n; q++) if (rr[q] < 6f && lab[q] > 0) cnt[lab[q]]++;
         int core = 0;
         for (int l = 1; l <= nl; l++) if (cnt[l] > cnt[core]) core = l;
-        if (core == 0) return new GateWays(g, k, new double[0], new double[0], new long[0]);
+        if (core == 0) return new GateWays(g, k, new double[0], new double[0], new long[0], lifeline(open, lab, 0, rr, x0, z0, nx, nz, g));
         boolean[] band = new boolean[n];
         for (int q = 0; q < n; q++) band[q] = lab[q] == core && rr[q] >= GW_R - 1.0 && rr[q] <= GW_R + 0.5;
         int[] bl = label8(band, nx, nz);
         int nb = 0;
         for (int v : bl) nb = Math.max(nb, v);
+        if (nb == 0) return new GateWays(g, k, new double[0], new double[0], new long[0], lifeline(open, lab, core, rr, x0, z0, nx, nz, g));
         double[] cr = new double[nb];
         float[] lo = new float[nb], hi = new float[nb];
         for (int b = 1; b <= nb; b++) {
@@ -543,6 +572,62 @@ final class GardensStoreys {
         for (int i = 0; i < pl.length; i++) pl[i] = plug.get(i);
         double[] kept = {cr[bsub[0]], cr[bsub[1]], cr[bsub[2]]};
         return new GateWays(g, k, cr, kept, pl);
+    }
+
+    /** The lifeline's half width: as wide as a storey's tunnels. */
+    static final double LIFE_W = 2.6;
+    /** How far from its gate a lifeline's columns can lie: the plumbing window's corner (42 * sqrt 2), its width, a column. */
+    static final double LIFE_REACH = 64;
+
+    /**
+     * The game's lifeline for a gate whose room no way leaves (0.19.1; the previews' gates all had ways, so they never
+     * take one): the footprint inside the ring is the gate's core ({@code lab == core} of the in-ring labels, or the
+     * gate's own column when nothing is open by it), and the target is the nearest open column outside the core whose
+     * own patch of the window's footprint runs out past the ring, so the tunnel ends in caves that go on. Null when
+     * nothing open leaves the ring anywhere in the window.
+     */
+    static double[] lifeline(boolean[] open, int[] lab, int core, float[] rr, int x0, int z0, int nx, int nz, GardensGates.Gate g) {
+        int n = nx * nz;
+        int[] all = label8(open, nx, nz);
+        int na = 0;
+        for (int v : all) na = Math.max(na, v);
+        float[] reach = new float[na + 1];
+        for (int q = 0; q < n; q++) if (all[q] > 0) reach[all[q]] = Math.max(reach[all[q]], rr[q]);
+        // the core's columns (or the gate's own)
+        List<Integer> src = new ArrayList<>();
+        if (core > 0) {
+            for (int q = 0; q < n; q++) if (lab[q] == core) src.add(q);
+        } else {
+            int i = (int) Math.floor(g.x()) - x0, j = (int) Math.floor(g.z()) - z0;
+            if (i >= 0 && j >= 0 && i < nx && j < nz) src.add(i * nz + j);
+        }
+        if (src.isEmpty()) return null;
+        java.util.Set<Integer> coreAll = new java.util.HashSet<>();
+        for (int q : src) if (all[q] > 0) coreAll.add(all[q]);
+        double best = Double.MAX_VALUE;
+        int bs = -1, bt = -1;
+        for (int t = 0; t < n; t++) {
+            if (all[t] == 0 || coreAll.contains(all[t]) || reach[all[t]] < GW_R + 2.0) continue;
+            int ti = t / nz, tj = t % nz;
+            for (int q : src) {
+                int di = q / nz - ti, dj = q % nz - tj;
+                double d = (double) di * di + (double) dj * dj;
+                if (d < best || (d == best && (q < bs || (q == bs && t < bt)))) {
+                    best = d;
+                    bs = q;
+                    bt = t;
+                }
+            }
+        }
+        if (bt < 0) return null;
+        return new double[]{x0 + bs / nz + 0.5, z0 + bs % nz + 0.5, x0 + bt / nz + 0.5, z0 + bt % nz + 0.5};
+    }
+
+    /** Distance from a column's centre to a lifeline's segment. */
+    static double lifeDist(double[] l, int x, int z) {
+        double px = x + 0.5, pz = z + 0.5, dx = l[2] - l[0], dz = l[3] - l[1], len2 = dx * dx + dz * dz;
+        double t = len2 > 0 ? Math.max(0, Math.min(1, ((px - l[0]) * dx + (pz - l[1]) * dz) / len2)) : 0;
+        return Math.hypot(px - l[0] - t * dx, pz - l[1] - t * dz);
     }
 
     /** scipy.ndimage.label with the full 3x3 structure: labels 1.. in the order their first cell comes in a raster scan. */

@@ -1614,6 +1614,7 @@ public final class Network {
     }
 
     double rough(int li, int x, int y, int z) {
+        requirePlanned(li);
         double a, s;
         switch (li) {
             case Terrain.GARDENS -> { a = 2.6; s = 12; }

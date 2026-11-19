@@ -1680,24 +1680,27 @@ class WastelandFieldTest {
 
     /**
      * The cost of the Wasteland's rows (corners every 4 x 8 x 4, interpolation and the per-block pass, one thread) per
-     * row at most twice the Deep Gardens' in the same JVM, their plans made first (0.55-1.36). Best of three rounds each,
-     * taken in turns, so a busy machine slows both.
+     * row at most twice the Blue Reaches' in the same JVM, their plans made first (1.52 when the Blue Reaches took over).
+     * Until 0.19.1 the yardstick was the Deep Gardens' planned rows (0.55-1.36); the vent field that replaced them makes
+     * its blocks per 128-block tile, so its warm rows are lookups (49 us a row against the Wasteland's 310) and measure
+     * nothing, and the Blue Reaches, the one planned layer left, took over. Best of three rounds each, taken in turns, so
+     * a busy machine slows both.
      */
     @Test
     void costWithinBudget() {
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, 1);
         Shape s = t.shape;
-        int wLo = s.bottom(Terrain.WASTELAND), wHi = s.top(Terrain.WASTELAND), gLo = s.bottom(Terrain.GARDENS), gHi = s.top(Terrain.GARDENS);
-        timeRows(t, gLo, gHi);   // plans the Gardens' cells and warms up both
+        int wLo = s.bottom(Terrain.WASTELAND), wHi = s.top(Terrain.WASTELAND), bLo = s.bottom(Terrain.BLUE), bHi = s.top(Terrain.BLUE);
+        timeRows(t, bLo, bHi);   // plans the Blue Reaches' cells and warms up both
         timeRows(t, wLo, wHi);
-        double bestW = Double.MAX_VALUE, bestG = Double.MAX_VALUE;
+        double bestW = Double.MAX_VALUE, bestB = Double.MAX_VALUE;
         for (int round = 0; round < 3; round++) {
             bestW = Math.min(bestW, timeRows(t, wLo, wHi) / (wHi - wLo + 1));
-            bestG = Math.min(bestG, timeRows(t, gLo, gHi) / (gHi - gLo + 1));
+            bestB = Math.min(bestB, timeRows(t, bLo, bHi) / (bHi - bLo + 1));
         }
-        double ratio = bestW / bestG;
-        System.out.printf(java.util.Locale.ROOT, "WastelandFieldTest cost per row: Wasteland %.1f us, Gardens %.1f us, ratio %.2f%n", bestW / 1e3, bestG / 1e3, ratio);
-        assertTrue(ratio <= 2.0, "the Wasteland's rows cost " + ratio + " times the Gardens'");
+        double ratio = bestW / bestB;
+        System.out.printf(java.util.Locale.ROOT, "WastelandFieldTest cost per row: Wasteland %.1f us, Blue Reaches %.1f us, ratio %.2f%n", bestW / 1e3, bestB / 1e3, ratio);
+        assertTrue(ratio <= 2.0, "the Wasteland's rows cost " + ratio + " times the Blue Reaches'");
     }
 
     /** Nanoseconds to make rows lo..hi of 16 chunks as the game does (one thread). */

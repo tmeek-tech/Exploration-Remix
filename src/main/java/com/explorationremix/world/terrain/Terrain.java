@@ -428,7 +428,10 @@ public final class Terrain {
             public boolean keep(int wx, int y, int wz) {
                 int yy = y + bottom, cx = plans.cellOf(wx), cz = plans.cellOf(wz);
                 Plans.Gate en = plans.gate(2, cx, cz), ex = plans.gate(3, cx, cz);
-                return inLanding(en.lx, en.lz, en.lCy, en, wx, yy, wz) || inLanding(ex.ux, ex.uz, ex.uCy, ex, wx, yy, wz);
+                if (inLanding(en.lx, en.lz, en.lCy, en, wx, yy, wz) || inLanding(ex.ux, ex.uz, ex.uCy, ex, wx, yy, wz)) return true;
+                // the passages too, with two blocks round them: no rubble, spire or dripstone narrows a way in or out
+                if (yy > en.y1 - 5 && passage(en, wx, yy, wz) < 2) return true;
+                return yy < ex.y0 + 5 && passage(ex, wx, yy, wz) < 2;
             }
 
             private boolean inLanding(double lx, double lz, double cy, Plans.Gate g, int wx, int yy, int wz) {
@@ -792,7 +795,7 @@ public final class Terrain {
     public int fluidAt(int x, int y, int z) {
         int li = shape.layerAt(y);
         if (li < 0) return AIR;
-        // the Deep Gardens are dry: no water table (their seep pools are placed with the blocks, DeepMaterials)
+        // the Deep Gardens are dry: no water table (their seep pools are crude oil, placed with the blocks: GardensBlocks)
         if (li == GARDENS && gardens != null) return AIR;
         if (li == WASTELAND) return wasteland.fluid(x, y, z);
         if (li == GALLERIES) return galleries.fluid(x, y, z);

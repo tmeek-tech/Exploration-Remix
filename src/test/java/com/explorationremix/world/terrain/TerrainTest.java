@@ -61,6 +61,8 @@ class TerrainTest {
                 for (int i = 0; i <= 200; i++) {
                     double tt = i / 200.0;
                     int x = (int) Math.floor(g.px(tt)), y = (int) Math.floor(g.py(tt)), z = (int) Math.floor(g.pz(tt));
+                    // the Deep Gardens' ends of gates 2 and 3 are the vent field's blocks (GardensFieldTest)
+                    if (t.shape.layerAt(y) == Terrain.GARDENS) continue;
                     double d = y >= t.shape.packFloor ? Math.min(t.rawDensity(x, y, z), t.denGateCarve(x, y, z)) : t.rawDensity(x, y, z);
                     assertTrue(d < 0, "gate " + b + " blocked at t=" + tt + " (" + x + " " + y + " " + z + ") seed " + seed + " d=" + d);
                     if (y < t.shape.packFloor) assertEquals(Terrain.AIR, t.fluidAt(x, y, z), "gate " + b + " flooded at " + x + " " + y + " " + z);
@@ -463,7 +465,8 @@ class TerrainTest {
      * full depth inside the shorter Blue Reaches, and the Basalt Galleries keep their tall caverns. The rift is looked for
      * in three cells: where 0.2.0's rift would cut a den gate's landing (0.6.1) it is laid on another line, and there it
      * can stand a little less deep (136 in cell 0,0 of the first seed). The noise layers' open blocks take their own
-     * biomes: the Wasteland's one of its two, the Galleries' one of their five.
+     * biomes: the Wasteland's one of its two, the Galleries' one of their five. (The Deep Gardens' vent field, whose
+     * halls stand a storey tall in three bands since 0.19.1, is GardensFieldTest's.)
      */
     @Test
     void spacesFollowTheirBiomes() {
@@ -475,6 +478,7 @@ class TerrainTest {
                         DeepBiome.SCORIA_CANYONS, DeepBiome.OBSIDIAN_TUBES));
         java.util.List<String> strays = new java.util.ArrayList<>();
         for (int li = 0; li < t.shape.layerCount; li++) {
+            if (li == Terrain.GARDENS) continue;
             java.util.Set<DeepBiome> mine = own.get(li);
             int[][] cells = li == Terrain.BLUE ? new int[][]{{0, 0}, {-1, 0}, {0, -1}} : new int[][]{{0, 0}};
             for (int[] c : cells)
@@ -491,7 +495,6 @@ class TerrainTest {
         }
         assertTrue(strays.isEmpty(), "open blocks of the noise layers in another biome: " + strays);
         assertTrue(tallest[Terrain.BLUE] > 140, "the Deep Blue Rift is only " + tallest[Terrain.BLUE] + " blocks deep");
-        assertTrue(tallest[Terrain.GARDENS] > 60, "the Deep Gardens' tallest hall is only " + tallest[Terrain.GARDENS] + " blocks");
         // the Basalt Galleries' caverns: tall from the lava up
         assertTrue(tallest[Terrain.GALLERIES] >= 60, "the Basalt Galleries' tallest open space is only " + tallest[Terrain.GALLERIES] + " blocks");
     }

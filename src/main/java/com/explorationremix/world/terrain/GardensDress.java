@@ -117,9 +117,11 @@ final class GardensDress {
         boolean[] doors = gv.doorMask(w, vents, doorOk);
         boolean[] porch = gv.porchMask(w, vents, doorOk, 6.0, 5);
         for (int b = 0; b < N; b++) porch[b] |= doors[b];
-        // no spire or mushroom stem within 2 of a vent's wall, so none is a step onto a vent
+        // no spire or mushroom stem within 2 of a vent's wall, so none is a step onto a vent; and none in a gate's
+        // landing or passage (the game's gates: the ways in and out stay clear, 0.19.1)
         boolean[] keepSp = nearWall();
-        for (int b = 0; b < N; b++) keepSp[b] |= porch[b];
+        boolean[] gk = gateKeep();
+        for (int b = 0; b < N; b++) keepSp[b] |= porch[b] || gk[b];
         lap("doors+porch+nearWall");
         short[] down = new short[N], up = new short[N];
         columnDist(down, up);
@@ -147,7 +149,9 @@ final class GardensDress {
         counts.put("vent glow", gc[2]);
         counts.put("throat vein", gc[3]);
         columnDist(down, up);
-        drip(down, up, porch, ps[5], ps[6]);
+        boolean[] dripKeep = porch.clone();
+        for (int b = 0; b < N; b++) dripKeep[b] |= gk[b];
+        drip(down, up, dripKeep, ps[5], ps[6]);
         lap("colDist+drip");
         float[] heat = heat();
         lap("heat");

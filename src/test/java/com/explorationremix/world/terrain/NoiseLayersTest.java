@@ -20,22 +20,19 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class NoiseLayersTest {
     /**
-     * The Deep Gardens and the bands of a2c3d73, before the noise layers: per seed, the plan hashes of layer 1 over
-     * cells (-1..0)^2 ({@link NetworkTest#planHash}) and a hash of every block of rows -544..-65 but the Blue Reaches'
-     * own (rock after the per-block pass, fluid, biome) of five chunks, as the game builds them (corners every 4 x 8 x 4,
-     * interpolated). Until the Blue Reaches lost their view breaker one line pinned both layers; these are a2c3d73's
-     * hashes of the same plans and rows, split from it. They held through main's den gates (0.8.0): the gates past each
-     * cell's first carve their shafts through band 1, but in none of these five chunks, and nothing of the gates reaches
-     * the Deep Gardens (the same line on 0.6.1, on the reshape before the merge and on the merge). They held again when
-     * the merge landed on the reshape's fixes (0.8.0): the same line on a49a88c, on 1dd7375 and on their merge.
+     * The Deep Gardens and the bands: per seed, a hash of every block of rows -544..-65 but the Blue Reaches' own (rock
+     * after the per-block pass, fluid, biome) of five chunks, as the game builds them (corners every 4 x 8 x 4,
+     * interpolated). Until 0.19.1 these were a2c3d73's planned Deep Gardens, with the plan hashes of layer 1, and they
+     * held through every change since the noise layers came in. Pinned again for the vent field (round 2 of the Deep
+     * Gardens' rework, Taran's picks of 2026-11-18), which nothing plans: the layer's blocks are the field's, dry, in its
+     * three bands. In these five chunks the bands' rows are all rock, the same in every chunk (no throat passes under
+     * them), and band 2, whose biome is its layer's route biome, takes the Seep Beds where it took the Lantern Lake. The
+     * Blue Reaches' lines held ({@link #BLUE}).
      */
-    static final String[] UNCHANGED = {
-            "seed 1 plans: f1ccde63e4c18e32 acd1f91d5f20af65 e8c65f191f619aa0 cbefaff340029a5c"
-                    + " blocks: 36c34b204acb8011 36c34b204acb8011 5a5245a770b05e5b df147f8c7a2e80f3 36c34b204acb8011",
-            "seed 2 plans: dce30161b23a0635 7a8895741a10c7e0 497eb3d2807232ab ae0b4f86342fdec8"
-                    + " blocks: 36c34b204acb8011 36c34b204acb8011 14f9f144ab61c8d1 cc7bce0c3ac1647e 36c34b204acb8011",
-            "seed 8004 plans: 6323b980a808815f cbad450c68a146b0 99745dccf59c17c0 4f4d78c95599c495"
-                    + " blocks: 36c34b204acb8011 abed7044411556b8 b7681aecb1b07e24 1be36e9e472c26f 36c34b204acb8011"};
+    static final String[] GARDENS_AND_BANDS = {
+            "seed 1 blocks: a648845998be0ea0 4eaeb8586fb04ec1 fa34541fd9607ed0 13b70d57cb954376 16a530db345b8158",
+            "seed 2 blocks: 26864fd9d3b8e2be f580312b29cb47d df3957fbe08f18aa c43466d6cc1e370c e04bd825a718d3cf",
+            "seed 8004 blocks: 62e44feb41c4f952 68e7b94b007b0f34 5955b1a397859760 a03e3d37fc8e75b6 baa12956765b85a9"};
     /**
      * The Blue Reaches the same way: layer 0's plan hashes and its own rows (-272..-81 by default). Pinned again when
      * the view breaker went (Taran, 2026-11-02: long views are welcome, they make the caves look epic, and the breaker's
@@ -66,7 +63,7 @@ class NoiseLayersTest {
      * 152 from both landings, the rift takes the outer strand on the far side from the city and tries further out to miss
      * it, and a city it still cuts moves to another site. Eleven of the twelve plans change (seed 2's cell 0,0 keeps its
      * own); of the five chunks the third and fourth of seed 1 and the third of seed 8004 change. The Deep Gardens and the
-     * bands answer as before ({@link #UNCHANGED}).
+     * bands answered as before (the planned Deep Gardens' line, until 0.19.1; {@link #GARDENS_AND_BANDS}).
      */
     static final String[] BLUE = {
             "seed 1 plans: 4f1616c455b3bddd fdc5a2a29a72e73c a50705f116826a0a 9bbfff1e07a231dc"
@@ -77,7 +74,10 @@ class NoiseLayersTest {
                     + " blocks: ccfcc9e7ae39fcb5 96f095f23ac431a7 c1f625eeb8829011 5af8fcf25ca80c07 8533a8c9f6e3d85b"};
     static final long[] UNCHANGED_SEEDS = {1, 2, 8004};
 
-    /** As {@link #UNCHANGED} and {@link #BLUE} say, and building them (band 3 too) plans no other layer. */
+    /**
+     * As {@link #GARDENS_AND_BANDS} and {@link #BLUE} say, and building them (band 3 too) plans no other layer: only the
+     * Blue Reaches are planned since the Deep Gardens became the vent field (0.19.1).
+     */
     @Test
     void blueAndGardensUnchanged() {
         java.util.Set<Integer> planned = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -90,21 +90,20 @@ class NoiseLayersTest {
             NetPlanner.failHook = was;
         }
         for (int i = 0; i < got.length; i++) {
-            assertEquals(UNCHANGED[i], got[i][1], "seed " + UNCHANGED_SEEDS[i] + ": the Deep Gardens and the bands");
+            assertEquals(GARDENS_AND_BANDS[i], got[i][1], "seed " + UNCHANGED_SEEDS[i] + ": the Deep Gardens and the bands");
             assertEquals(BLUE[i], got[i][0], "seed " + UNCHANGED_SEEDS[i] + ": the Blue Reaches");
         }
-        assertEquals(java.util.Set.of(Terrain.BLUE, Terrain.GARDENS), planned, "the layers planned");
+        assertEquals(java.util.Set.of(Terrain.BLUE), planned, "the layers planned");
     }
 
-    /** One seed's lines: {its line of {@link #BLUE}, its line of {@link #UNCHANGED}}. */
+    /** One seed's lines: {its line of {@link #BLUE}, its line of {@link #GARDENS_AND_BANDS}}. */
     static String[] identity(long seed) {
         int[][] chunks = {{0, 0}, {37, -12}, {-20, 15}, {5, 30}, {-41, -38}};
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
-        StringBuilder[] sb = {new StringBuilder("seed " + seed + " plans:"), new StringBuilder("seed " + seed + " plans:")};
-        for (int li = 0; li < 2; li++) for (int cx = -1; cx <= 0; cx++) for (int cz = -1; cz <= 0; cz++)
-            sb[li].append(' ').append(Long.toHexString(NetworkTest.planHash(t.network(li, cx, cz))));
+        StringBuilder[] sb = {new StringBuilder("seed " + seed + " plans:"), new StringBuilder("seed " + seed + " blocks:")};
+        for (int cx = -1; cx <= 0; cx++) for (int cz = -1; cz <= 0; cz++)
+            sb[0].append(' ').append(Long.toHexString(NetworkTest.planHash(t.network(Terrain.BLUE, cx, cz))));
         sb[0].append(" blocks:");
-        sb[1].append(" blocks:");
         int ylo = -544, yhi = -65, blo = t.shape.bottom(Terrain.BLUE), bhi = t.shape.top(Terrain.BLUE);
         for (int[] c : chunks) {
             long hb = 17, hr = 17;
@@ -143,7 +142,8 @@ class NoiseLayersTest {
      * features and the dev commands make of their rows is answered with no plan made at all, the plan queries come back
      * empty, and asking for a noise layer's plan throws. So does every query of the network itself for a noise layer,
      * so a caller that goes round Terrain fails as loudly. (400 columns, 16 areas of 256 x 256 anywhere in 4000 x 4000,
-     * {@link Spread}.)
+     * {@link Spread}.) The Deep Gardens are a noise layer too since 0.19.1 (the vent field): their plan queries are
+     * checked with the others', their rows by GardensFieldTest (the field is slow to fill 16 fresh areas).
      */
     @Test
     void noiseLayersPlanNothing() {
@@ -165,7 +165,7 @@ class NoiseLayersTest {
                         + (q.tubeRib(x, y, z) ? 1 : 0) + q.cone(x, z) + (q.lavaKept(x, y, z) ? 1 : 0);
                 sink += t.palette.shell(x, y, z, 1, 8, false).ordinal();
             }
-            for (int li = Terrain.WASTELAND; li < s.layerCount; li++) {
+            for (int li = Terrain.GARDENS; li < s.layerCount; li++) {
                 assertEquals(0, t.wayLinesAt(li, x, z, 8).n, "ways in noise layer " + li);
                 assertEquals(0, t.carvedLinesAt(li, x, z, 8).n, "carved ways in noise layer " + li);
                 assertTrue(t.shaftsIn(x - 8, z - 8, x + 8, z + 8, li).isEmpty(), "climbs in noise layer " + li);
@@ -185,7 +185,7 @@ class NoiseLayersTest {
         boolean was = Network.strict;
         Network.strict = true;
         try {
-            for (int li = Terrain.WASTELAND; li < s.layerCount; li++) {
+            for (int li = Terrain.GARDENS; li < s.layerCount; li++) {
                 final int L = li, y = s.waterY(li) + 20;
                 final DeepBiome b = Terrain.routeBiome(li);
                 assertThrows(IllegalArgumentException.class, () -> t.network(L, 0, 0), "a plan of noise layer " + li);
@@ -216,7 +216,7 @@ class NoiseLayersTest {
         boolean was = Network.strict;
         Network.strict = false;
         try {
-            for (int li = Terrain.WASTELAND; li < s.layerCount; li++) {
+            for (int li = Terrain.GARDENS; li < s.layerCount; li++) {
                 int y = s.waterY(li) + 20;
                 assertNull(t.network(li, 0, 0), "a plan of noise layer " + li);
                 assertNull(w.network(li, 3, -2), "a plan of noise layer " + li);
