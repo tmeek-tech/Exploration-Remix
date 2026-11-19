@@ -36,8 +36,9 @@ DARK = 0.3  # the mock's rock brightness
 # The look rules' targets for the rocks' mean colours.
 TARGETS = {"black_dripstone": (50, 47, 58), "pale_stem": (212, 204, 222)}
 # The mock's rows: (label, textures); a neon block's row is its four colours.
-PLAIN = ["black_dripstone", "pale_stem", "seep_crust", "glow_mat_bottom"]
-NEON_ROWS = [("glow_mat", "_top"), ("glow_mat", "_side"), ("glow_cap", ""), ("vent_crown", ""), ("den_fissure", ""),
+PLAIN = ["black_dripstone", "pale_stem", "seep_crust"]
+NEON_ROWS = [("glow_mat", "_top"), ("glow_mat", "_side"), ("thin_glow_mat", "_top"), ("thin_glow_mat", "_side"),
+             ("glow_cap", "_top"), ("glow_cap", "_side"), ("glow_cap", "_bottom"), ("vent_crown", ""), ("den_fissure", ""),
              ("vent_glow", ""), ("throat_vein", ""), ("vent_beads", "_top"), ("vent_beads", "_side")]
 # The mock's pointed dripstone, as columns of blocks from the top: (label, [(direction, thickness), ...]), with black
 # dripstone above a stalactite and below a stalagmite.

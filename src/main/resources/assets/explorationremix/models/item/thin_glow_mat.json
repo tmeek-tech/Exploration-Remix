@@ -1,0 +1,23 @@
+{
+  "parent": "explorationremix:block/thin_glow_mat_magenta",
+  "overrides": [
+    {
+      "predicate": {
+        "explorationremix:neon": 0.1667
+      },
+      "model": "explorationremix:block/thin_glow_mat_violet"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.5
+      },
+      "model": "explorationremix:block/thin_glow_mat_lime"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.8333
+      },
+      "model": "explorationremix:block/thin_glow_mat_light_blue"
+    }
+  ]
+}

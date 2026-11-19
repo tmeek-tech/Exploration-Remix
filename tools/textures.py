@@ -160,7 +160,6 @@ VENT_PIT, VENT_GRAIN = hexc("#18161F"), hexc("#625E71")
 NEAR_BLACK = [hexc(c) for c in ("#121117", "#18161E", "#1E1C25", "#24222C", "#2B2834")]  # under the neon
 NEAR_BLACK_PIT = hexc("#0C0B10")
 DRIP_RAMP = [hexc(c) for c in ("#1F1D26", "#27252E", "#2F2C37", "#373441", "#403D4B", "#4A4756")]
-MAT_ROCK = [hexc(c) for c in ("#34343E", "#3F3F4A", "#4A4A56", "#565663", "#636370")]  # deepslate-dark, under a mat
 STEM_RAMP = [hexc(c) for c in ("#BAB2C7", "#C5BDD2", "#CFC7DA", "#D8D1E3", "#E2DCEC", "#ECE7F4")]
 FINE = ((8, 0.5), (4, 0.25))  # noise octaves (cells, weight): mostly the fine one
 
@@ -270,92 +269,28 @@ def pale_stem():
     return img
 
 
-def glow_mat_bottom():
-    """The deepslate-dark rock under a glow mat (its bottom face, and the rock of its sides): cool dark grey, its grain
-    drawn out sideways like deepslate's, with a few dark flakes along it."""
-    rng = random.Random(2840)
-    n1, n2 = wrap_noise(rng, 16, 4), wrap_noise(rng, 16, 8)
-    # the fine octave read from rows two apart, so the grain changes faster down than across
-    field = {(x, y): 0.3 * n1[y][x] + 0.5 * n2[(2 * y) % 16][x] + 0.2 * rng.random() for y in range(16) for x in range(16)}
-    img = Image.new("RGBA", (16, 16))
-    px = img.load()
-    for k, group in enumerate(_by_shares(field, [0.2] * 5)):
-        for x, y in group:
-            _put(px, x, y, MAT_ROCK[k])
-    for _ in range(6):
-        x, y = rng.randrange(16), rng.randrange(16)
-        for k in range(rng.randrange(2, 5)):
-            _put(px, x + k, y, MAT_ROCK[0])
-    return img
+# The glow mat's and the glow cap's patterns (round 3, Taran 2026-11-19: "The colors are good. I don't like how the glow
+# mat and glow cap textures look"): each painted by its own module from four looks drawn for Taran to pick from; these
+# name the looks the game uses. The glow mat is a film drawn over vanilla deepslate (gen_data option rock), with a
+# thinner film for a patch's outer ring (the thin glow mat); the glow cap has a top, a side and a bottom face.
+GLOW_MAT_LOOK = "A"  # glow_mat_looks: A Colonies, B Threads, C Nylium, D Spores
+GLOW_CAP_LOOK = "A"  # glow_cap_looks: A dark skin with bold spots, B mottled skin and gills, C lit scales, D dark pores
 
 
-def glow_mat_top(neon):
-    """A glow mat from above: a living film over the floor, mostly neon, in small colonies with hot hearts (hot, neon
-    and mid glow), fading through dim and deep film that the world lights to bare rock in the gaps between them."""
-    s = neon_shades(neon)
-    img = glow_mat_bottom()
-    px = img.load()
-    groups = _by_shares(_field(random.Random(2841), grain=0.15), (0.14, 0.12, 0.2, 0.26, 0.21, 0.07))
-    for group, shade in zip(groups[1:], ("deep", "dim", "mid", "neon", "hot")):
-        for x, y in group:
-            _put(px, x, y, s[shade])
-    return img
+def _mat_face(face):
+    """A painter of a glow mat face (glow_mat_looks.FACES) in a neon colour."""
+    def paint(neon):
+        import glow_mat_looks  # here, not at the top: it reads this module's palette as it loads
+        return glow_mat_looks.film(GLOW_MAT_LOOK, face, neon)
+    return paint
 
 
-def glow_mat_side(neon):
-    """A glow mat's side: the rock under it with the film's fringe over the top edge, hanging one to four pixels in
-    drips that glow at the top and darken to their ends, like vanilla nylium's side."""
-    s = neon_shades(neon)
-    rng = random.Random(2842)
-    img = glow_mat_bottom()
-    px = img.load()
-    for x in range(16):
-        depth = rng.choice((1, 2, 2, 2, 3, 3, 4))
-        for y in range(depth + 1):
-            if y == 0:
-                shade = "hot" if rng.random() < 0.15 else rng.choice(("neon", "neon", "mid"))
-            elif y < depth - 1:
-                shade = rng.choice(("mid", "mid", "neon", "dim"))
-            elif y == depth - 1:
-                shade = rng.choice(("mid", "dim"))
-            else:
-                shade = "deep"
-            _put(px, x, y, s[shade])
-    return img
-
-
-def glow_cap(neon):
-    """A glow cap, a giant mushroom's cap: neon all over, mottled with a glowing mid shade, with pale spots like
-    vanilla's mushroom caps (hot, in neon rims) and darker specks and short gill-like streaks that do not glow."""
-    s = neon_shades(neon)
-    rng = random.Random(2851)
-    img = Image.new("RGBA", (16, 16))
-    px = img.load()
-    low, high = _by_shares(_field(rng, grain=0.3), (0.35, 0.65))
-    for x, y in low:
-        _put(px, x, y, s["mid"])
-    for x, y in high:
-        _put(px, x, y, s["neon"])
-    for _ in range(5):  # gill streaks: two or three pixels down, edging sideways
-        x, y, dx = rng.randrange(16), rng.randrange(16), rng.choice((-1, 1))
-        for k in range(rng.randrange(2, 4)):
-            _put(px, x + dx * (k // 2), y + k, s["dim"])
-    for _ in range(12):
-        _put(px, rng.randrange(16), rng.randrange(16), s["dim"])
-    spots = []
-    for _ in range(4000):
-        p = (rng.randrange(16), rng.randrange(16))
-        if all(_wrapped(*p, *q) > 6 for q in spots):
-            spots.append(p)
-            if len(spots) == 3:
-                break
-    for k, (x, y) in enumerate(spots):
-        size = 3 if k == 0 else 2
-        for dy in range(size):
-            for dx in range(size):
-                corner = size == 3 and dx != 1 and dy != 1
-                _put(px, x + dx, y + dy, s["neon"] if corner else s["hot"])
-    return img
+def _cap_face(face):
+    """A painter of a glow cap face (top, side or bottom) in a neon colour."""
+    def paint(neon):
+        import glow_cap_looks
+        return glow_cap_looks.texture(GLOW_CAP_LOOK, face, neon)
+    return paint
 
 
 def _wrapped(ax, ay, bx, by):
@@ -723,16 +658,19 @@ def pointed_black_dripstone(thickness, direction):
     return img if direction == "down" else img.transpose(Image.FLIP_TOP_BOTTOM)
 
 
-for _name, _fn in (("black_dripstone", black_dripstone), ("pale_stem", pale_stem), ("glow_mat_bottom", glow_mat_bottom),
-                   ("seep_crust", seep_crust)):
+for _name, _fn in (("black_dripstone", black_dripstone), ("pale_stem", pale_stem), ("seep_crust", seep_crust)):
     PAINTERS["block/" + _name] = _fn
 GLOW["block/seep_crust"] = {_hex(c) for c in SEEP_FILM[1:]}
 # The neon blocks, a texture per colour: <block>_<colour>, or <block>_<colour>_<face> for a block whose faces differ
-# (the glow mat's _top and _side, over glow_mat_bottom; the vent beads' _top, also drawn on its bottom, and _side).
-NEON_PAINTERS = {"glow_mat": {"top": glow_mat_top, "side": glow_mat_side}, "glow_cap": glow_cap, "vent_crown": vent_crown,
+# (the glow mats' films _top and _side over deepslate; the glow cap's _top, _side and _bottom; the vent beads' _top, also
+# drawn on its bottom, and _side).
+NEON_PAINTERS = {"glow_mat": {"top": _mat_face("top"), "side": _mat_face("side")},
+                 "thin_glow_mat": {"top": _mat_face("edge_top"), "side": _mat_face("edge_side")},
+                 "glow_cap": {"top": _cap_face("top"), "side": _cap_face("side"), "bottom": _cap_face("bottom")},
+                 "vent_crown": vent_crown,
                  "den_fissure": den_fissure, "vent_glow": vent_glow, "throat_vein": throat_vein,
                  "vent_beads": {"top": vent_beads_top, "side": vent_beads_side}}
-VENT_FIELD = ["block/black_dripstone", "block/pale_stem", "block/glow_mat_bottom", "block/seep_crust"]  # every texture of the vent field, for cool_problems and tools/vent_sheet.py
+VENT_FIELD = ["block/black_dripstone", "block/pale_stem", "block/seep_crust"]  # every texture of the vent field, for cool_problems and tools/vent_sheet.py
 for _direction in ("down", "up"):
     for _thickness in POINTED_DRIP_THICKNESS:
         _tex = f"block/pointed_black_dripstone_{_direction}_{_thickness}"

@@ -79,11 +79,13 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #               texture needs an entry in textures.GLOW). Option neon: the block has the property neon (block.Neon),
 #               a model per colour with textures <id>_<colour>; its item shows the colour in its BlockStateTag (the
 #               item property explorationremix:neon picks the model) and it drops itself in its colour. Option faces
-#               "bottom_top": textures <id>_<colour>_top and <id>_<colour>_side, both glowing, and <id>_bottom, which
-#               does not. Option rock (a name in ROCKS): the block is that vanilla rock, drawn as vanilla draws it,
-#               with our texture over it as a cutout overlay (clear where the rock shows) and the overlay's glow over
-#               that; the texture <id>_<colour> covers every face, or option overlays maps the face groups it covers
-#               (top, side, bottom) to suffixes of their textures, <id>_<colour><suffix>, and leaves the others bare
+#               "top_side_bottom": textures <id>_<colour>_top, _side and _bottom, each with its glow. Option rock (a
+#               name in ROCKS): the block is that vanilla rock, drawn as vanilla draws it, with our texture over it as
+#               a cutout overlay (clear where the rock shows) and the overlay's glow over that; the texture
+#               <id>_<colour> covers every face, or option overlays maps the face groups it covers (top, side, bottom)
+#               to suffixes of their textures, <id>_<colour><suffix>, and leaves the others bare. Option turns: each
+#               colour takes one of eight models by the block's position, turned about y by 0, 90, 180 or 270
+#               degrees, plain or mirrored (every face's texture flipped), so a floor of them shows no stripes
 #   pointed     vanilla's pointed dripstone in our textures (a PointedDripstoneBlock): a model per thickness (tip_merge,
 #               tip, frustum, middle, base) and direction (down hanging, up standing) on vanilla's own model, two
 #               crossed planes, with texture <id>_<down|up>_<thickness>; its item is held like vanilla's, with texture
@@ -188,8 +190,13 @@ BLOCKS = {
     "black_dripstone": ("Black Dripstone", "cube"),
     "pointed_black_dripstone": ("Pointed Black Dripstone", "pointed"),
     "pale_stem": ("Pale Stem", "cube"),
-    "glow_mat": ("Glow Mat", "glow_cube", {"neon": True, "faces": "bottom_top"}),
-    "glow_cap": ("Glow Cap", "glow_cube", {"neon": True}),
+    # round 3: the glow mat is a film over vanilla deepslate (tools/glow_mat_looks.py), the thin glow mat the sparser
+    # film of a patch's outer ring; the glow cap has a top, a rim and an underside (tools/glow_cap_looks.py)
+    "glow_mat": ("Glow Mat", "glow_cube", {"neon": True, "rock": "deepslate", "overlays": {"top": "_top", "side": "_side"},
+                                          "turns": True}),
+    "thin_glow_mat": ("Thin Glow Mat", "glow_cube", {"neon": True, "rock": "deepslate",
+                                                    "overlays": {"top": "_top", "side": "_side"}, "turns": True}),
+    "glow_cap": ("Glow Cap", "glow_cube", {"neon": True, "faces": "top_side_bottom"}),
     "vent_crown": ("Vent Crown", "glow_cube", {"neon": True, "rock": "blackstone"}),
     "den_fissure": ("Den Fissure", "glow_cube", {"neon": True, "rock": "blackstone"}),
     "vent_glow": ("Vent Glow", "glow_cube", {"neon": True, "rock": "blackstone"}),
@@ -202,7 +209,7 @@ BLOCKS = {
 }
 NO_DROP = {"band_stone", "glow", "mossback_den"}
 # The vent field's blocks: rock, never growth to /remix census (the whole blocks count as floor and ceiling).
-VENT_FIELD_BLOCKS = {"black_dripstone", "pointed_black_dripstone", "pale_stem", "glow_mat", "glow_cap", "vent_crown",
+VENT_FIELD_BLOCKS = {"black_dripstone", "pointed_black_dripstone", "pale_stem", "glow_mat", "thin_glow_mat", "glow_cap", "vent_crown",
                      "den_fissure", "vent_glow", "throat_vein", "vent_beads", "seep_crust"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
 # lifeless blocks of the Galleries, the litter round the dens, and the vent field's whole blocks.
@@ -226,7 +233,7 @@ BLOCK_TAGS = {
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain",
                                         # the Deep Gardens: the vent field's dripstone, and the neon blocks grown on its rock
-                                        "black_dripstone", "pointed_black_dripstone", "glow_mat", "vent_crown", "den_fissure",
+                                        "black_dripstone", "pointed_black_dripstone", "glow_mat", "thin_glow_mat", "vent_crown", "den_fissure",
                                         "vent_glow", "throat_vein", "vent_beads", "seep_crust"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen",
                                     # Deep Gardens round 2: the giant mushrooms
@@ -435,15 +442,33 @@ TEMPLATES = {
     # the vent field's glowing whole blocks (kind glow_cube): the block, then its overlay over the same faces
     "cube_glow": {"parent": "minecraft:block/block", "textures": {"particle": "#all"},
                   "elements": _cube({f: "#all" for f in FACES}, {}) + _cube({f: "#glow" for f in FACES}, CUBE_GLOW)},
-    # and the glow mat's, vanilla's cube_bottom_top with the overlays of its top and sides (its bottom does not glow)
-    "cube_bottom_top_glow": {"parent": "minecraft:block/block", "textures": {"particle": "#side"},
-                             "elements": _cube(dict({"down": "#bottom", "up": "#top"}, **{f: "#side" for f in SIDES}), {})
-                             + _cube(dict({"up": "#top_glow"}, **{f: "#side_glow" for f in SIDES}), CUBE_GLOW)},
+    # and the glow cap's: a top, a side and a bottom, each with its overlay
+    "cube_top_side_bottom_glow": {"parent": "minecraft:block/block", "textures": {"particle": "#side"},
+                                  "elements": _cube(dict({"down": "#bottom", "up": "#top"}, **{f: "#side" for f in SIDES}), {})
+                                  + _cube(dict({"down": "#bottom_glow", "up": "#top_glow"}, **{f: "#side_glow" for f in SIDES}),
+                                          CUBE_GLOW)},
 }
 # and the blocks drawn over a vanilla rock (option rock): a template for each set of face groups their overlays cover
 for _entry in BLOCKS.values():
     if len(_entry) > 2 and "rock" in _entry[2]:
         TEMPLATES[rock_template(overlays(_entry[2]))] = _rock_overlay(overlays(_entry[2]))
+
+
+def mirrored(template):
+    """A template with every face's texture flipped left to right (option turns' mirrored models)."""
+    out = json.loads(json.dumps(template))
+    for el in out["elements"]:
+        for face in el["faces"].values():
+            u1, v1, u2, v2 = face.get("uv", [0, 0, 16, 16])
+            face["uv"] = [u2, v1, u1, v2]
+    return out
+
+
+for _entry in BLOCKS.values():
+    if len(_entry) > 2 and _entry[2].get("turns"):
+        _name = rock_template(overlays(_entry[2])) if "rock" in _entry[2] else "cube_glow"
+        TEMPLATES[_name + "_mirrored"] = mirrored(TEMPLATES[_name])
+TURNS = [(mirror, y) for mirror in (False, True) for y in (0, 90, 180, 270)]  # option turns' eight models
 
 
 def shelf_model(tex, under, glow_under=False):
@@ -641,7 +666,6 @@ def block_assets():
             item = {"parent": ref(bid)}
         elif kind == "glow_cube":
             colours = textures.NEONS if opts.get("neon") else [None]
-            bottom_top = opts.get("faces") == "bottom_top"
             for c in colours:
                 m = bid if c is None else f"{bid}_{c}"
                 if "rock" in opts:
@@ -651,16 +675,24 @@ def block_assets():
                     for group, suffix in overlays(opts).items():
                         t[group], t[group + "_glow"] = ref(m + suffix), ref(m + suffix + "_glow")
                     template = rock_template(overlays(opts))
-                elif bottom_top:
-                    t = {"bottom": ref(bid + "_bottom"), "top": ref(m + "_top"), "side": ref(m + "_side"),
-                         "top_glow": ref(m + "_top_glow"), "side_glow": ref(m + "_side_glow")}
-                    template = "cube_bottom_top_glow"
+                elif opts.get("faces") == "top_side_bottom":
+                    t = {g: ref(f"{m}_{g}") for g in ("top", "side", "bottom")}
+                    t.update({g + "_glow": ref(f"{m}_{g}_glow") for g in ("top", "side", "bottom")})
+                    template = "cube_top_side_bottom_glow"
                 else:
                     t = {"all": ref(m), "glow": ref(m + "_glow")}
                     template = "cube_glow"
                 models[m] = {"parent": f"{MOD}:block/template/{template}", "render_type": "minecraft:cutout", "textures": t}
+                if opts.get("turns"):
+                    models[m + "_mirrored"] = {"parent": f"{MOD}:block/template/{template}_mirrored",
+                                               "render_type": "minecraft:cutout", "textures": t}
             if opts.get("neon"):
-                states = {"variants": {f"neon={c}": {"model": ref(f"{bid}_{c}")} for c in colours}}
+                if opts.get("turns"):
+                    states = {"variants": {f"neon={c}": [dict({"model": ref(f"{bid}_{c}" + ("_mirrored" if mirror else ""))},
+                                                              **({"y": y} if y else {})) for mirror, y in TURNS]
+                                           for c in colours}}
+                else:
+                    states = {"variants": {f"neon={c}": {"model": ref(f"{bid}_{c}")} for c in colours}}
                 # The item property explorationremix:neon (client.ClientSetup) is the colour's place in block.Neon over
                 # the last place, 0 to 1; a colour's model takes over from halfway below its value. The game uses the
                 # last override that matches, so they go in order.

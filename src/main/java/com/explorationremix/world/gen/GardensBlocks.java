@@ -67,7 +67,7 @@ public final class GardensBlocks {
         neon(C_TVEIN, ERBlocks.THROAT_VEIN.get());
         neon(C_TIP, ERBlocks.VENT_BEADS.get());
         neon(C_STREAK, ERBlocks.VENT_BEADS.get());
-        neon(C_MATE, ERBlocks.GLOW_MAT.get());
+        neon(C_MATE, ERBlocks.THIN_GLOW_MAT.get());
         Block b = ForgeRegistries.BLOCKS.getValue(new ResourceLocation("mcremix", "crude_oil"));
         oil = b instanceof LiquidBlock ? b.defaultBlockState() : null;
         if (oil == null) ExplorationRemix.LOGGER.info("mcremix's crude oil is not installed: the Deep Gardens' seep pools stay dry");

@@ -378,8 +378,13 @@ public final class ERBlocks {
                     .pushReaction(PushReaction.DESTROY).isRedstoneConductor((s, l, p) -> false)));
     /** The giant mushrooms' stem, pale lavender-white. No light. */
     public static final RegistryObject<Block> PALE_STEM = block("pale_stem", () -> new Block(mushroomBlock().mapColor(MapColor.WOOL)));
-    /** A glowing living film over the rock of the cave floors, like nylium. */
-    public static final RegistryObject<Block> GLOW_MAT = block("glow_mat", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 9)));
+    /**
+     * A glowing living film over the deepslate of the cave floors, like nylium: vanilla's deepslate with the film drawn
+     * over it (round 3), so a patch fades into the floor round it. It breaks and sounds like deepslate.
+     */
+    public static final RegistryObject<Block> GLOW_MAT = block("glow_mat", () -> new NeonBlock(onDeepslate().mapColor(ERBlocks::neonMap).lightLevel(s -> 9)));
+    /** The glow mat's sparser film, on the outer ring of a patch where it thins out into the bare floor (round 3). */
+    public static final RegistryObject<Block> THIN_GLOW_MAT = block("thin_glow_mat", () -> new NeonBlock(onDeepslate().mapColor(ERBlocks::neonMap).lightLevel(s -> 6)));
     /** The giant mushrooms' cap, neon all over with darker specks. */
     public static final RegistryObject<Block> GLOW_CAP = block("glow_cap", () -> new NeonBlock(mushroomBlock().mapColor(ERBlocks::neonMap).lightLevel(s -> 13)));
     /** The bright mineral rim of a live vent's mouth: crystalline neon crust on blackstone, the brightest of the set. */
@@ -414,6 +419,12 @@ public final class ERBlocks {
     /** The vent field's rock, like deepslate a little harder: it takes a pickaxe (any) to get it back. */
     private static BlockBehaviour.Properties ventRock() {
         return BlockBehaviour.Properties.of().instrument(NoteBlockInstrument.BASEDRUM).requiresCorrectToolForDrops().strength(3.5F, 6.0F)
+                .sound(SoundType.DEEPSLATE);
+    }
+
+    /** A film drawn over vanilla's deepslate (the glow mats): it breaks and sounds like deepslate. */
+    private static BlockBehaviour.Properties onDeepslate() {
+        return BlockBehaviour.Properties.of().instrument(NoteBlockInstrument.BASEDRUM).requiresCorrectToolForDrops().strength(3.0F, 6.0F)
                 .sound(SoundType.DEEPSLATE);
     }
 

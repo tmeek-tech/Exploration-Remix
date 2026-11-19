@@ -1,11 +1,12 @@
 {
-  "parent": "explorationremix:block/template/cube_bottom_top_glow",
+  "parent": "explorationremix:block/template/rock_top_side_glow",
   "render_type": "minecraft:cutout",
   "textures": {
-    "bottom": "explorationremix:block/glow_mat_bottom",
+    "rock_end": "minecraft:block/deepslate_top",
+    "rock_side": "minecraft:block/deepslate",
     "top": "explorationremix:block/glow_mat_light_blue_top",
-    "side": "explorationremix:block/glow_mat_light_blue_side",
     "top_glow": "explorationremix:block/glow_mat_light_blue_top_glow",
+    "side": "explorationremix:block/glow_mat_light_blue_side",
     "side_glow": "explorationremix:block/glow_mat_light_blue_side_glow"
   }
 }
