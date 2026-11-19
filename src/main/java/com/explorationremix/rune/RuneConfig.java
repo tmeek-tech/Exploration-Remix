@@ -19,7 +19,7 @@ public final class RuneConfig {
 
     public final ForgeConfigSpec.BooleanValue runesHurtPlayers;
     public final ForgeConfigSpec.IntValue maxParts, maxActions, idleTicks;
-    public final ForgeConfigSpec.IntValue maxCarriers, releasesPerTick, maxBarrierBlocks, maxGlowBlocks, maxIceBlocks;
+    public final ForgeConfigSpec.IntValue maxCarriers, releasesPerTick, maxBarrierBlocks, maxGlowBlocks, maxIceBlocks, maxFrondBlocks;
     public final ForgeConfigSpec.IntValue combatSeconds, swapTicks, maxMotes;
     public final ForgeConfigSpec.DoubleValue energyPerDamage, energyMaxPerHit, energyFloor, fadeDelaySeconds, fadePerSecond, refillPerSecond;
     public final ForgeConfigSpec.DoubleValue runeDamage;
@@ -42,6 +42,8 @@ public final class RuneConfig {
         maxMotes = b.comment("Siphon motes one player can have out at once; past it, new ones join the nearest, or one lying out of reach fades.")
                 .defineInRange("maxMotes", 64, 1, 512);
         maxIceBlocks = b.comment("Rune ice blocks one player can have on the water; the oldest melts first.").defineInRange("maxIceBlocks", 48, 0, 512);
+        maxFrondBlocks = b.comment("Blocks of unrolled silver fern fronds one player's runes can have hanging; past it, the oldest roll up.")
+                .defineInRange("maxFrondBlocks", 256, 0, 1024);
         b.pop();
         b.push("gear");
         combatSeconds = b.comment("Seconds after you were last hurt before you can rearrange runes.").defineInRange("combatSeconds", 5, 0, 60);

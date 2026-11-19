@@ -160,7 +160,7 @@ public final class RuneFxClient implements RuneFx.ClientSide {
         if (l == null) return;
         Vec3 at = fx.pos();
         double far = switch (fx.kind()) {
-            case BURST, STAGGER -> 72.0;
+            case BURST, STAGGER, BELL -> 72.0;
             case MOTE_IN -> 16.0;
             default -> 48.0;
         };
@@ -193,6 +193,91 @@ public final class RuneFxClient implements RuneFx.ClientSide {
             case SLAM -> slam(l, r, at, d, s, dist);
             case MOTE_IN -> moteIn(r, at, s, dist);
             case WINDUP -> windup(at, d, s);
+            case BELL -> bell(r, at, s);
+            case PING -> ping(r, at, s);
+            case UNROLL -> unroll(r, at, d);
+            case FROST_PUFF -> frostPuff(l, r, at, s, fx.a());
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------------ plants (0.18.7)
+
+    /** The glowbells' light blues: their glow's heart, its body and its deep edge. */
+    private static final int BELL_CORE = 0xDCEBFF, BELL_RING = 0xA9D3FF, BELL_BODY = 0x8EC2FF, BELL_DEEP = 0x4486EE;
+
+    /**
+     * A rung glowbell: a flash at its mouth, then its ring going out through the cave {@code reach} blocks, level and
+     * upright (so it reads as a sphere of sound), at about the pace it reaches creatures, and motes rising off the bell.
+     */
+    private static void bell(RandomSource r, Vec3 c, float reach) {
+        GlowParticle.flash(c).colour(WHITE).fadeTo(BELL_BODY).size(0.2F, 0.8F).life(6).spawn();
+        GlowParticle.flash(c).colour(BELL_CORE).fadeTo(BELL_DEEP).size(0.5F, 2.0F).alpha(0.55F).life(16).spawn();
+        int life = Math.max(6, Math.round(reach / 1.25F));
+        // the ring reads light blue as it goes out (only the bell's own flash is white)
+        GlowParticle.ring(c, new Vec3(0, 1, 0)).colour(BELL_RING).fadeTo(BELL_DEEP).size(0.3F, reach).alpha(0.6F).life(life).ease(1.15F).spawn();
+        GlowParticle.ring(c, new Vec3(0, 1, 0)).colour(BELL_CORE).fadeTo(BELL_DEEP).size(0.2F, reach * 0.55F).alpha(0.4F).life(life + 8).ease(1.8F).spawn();
+        GlowParticle.ring(c, new Vec3(1, 0, 0)).colour(BELL_RING).fadeTo(BELL_DEEP).size(0.3F, reach * 0.9F).alpha(0.3F).life(life).ease(1.15F).spawn();
+        GlowParticle.ring(c, new Vec3(0, 0, 1)).colour(BELL_RING).fadeTo(BELL_DEEP).size(0.3F, reach * 0.9F).alpha(0.3F).life(life).ease(1.15F).spawn();
+        for (int i = 0; i < count(10); i++) {
+            Vec3 o = sphere(r).scale(0.18);
+            GlowParticle.dot(c.add(o)).vel(new Vec3(o.x * 0.08, 0.02 + r.nextDouble() * 0.035, o.z * 0.08)).colour(mix(BELL_CORE, WHITE, r.nextFloat() * 0.5F))
+                    .fadeTo(BELL_DEEP).size(0.045F, 0.0F).life(30 + r.nextInt(25)).drag(0.97F).spawn();
+        }
+    }
+
+    /** The ring reached a creature {@code width} wide round {@code c}: it lights up, with a small ring round its middle. */
+    private static void ping(RandomSource r, Vec3 c, float width) {
+        float w = Math.max(0.4F, width);
+        GlowParticle.flash(c).colour(0xEEF6FF).fadeTo(BELL_BODY).size(0.15F, 0.5F + 0.6F * w).alpha(0.75F).life(8).spawn();
+        GlowParticle.ring(c, new Vec3(0, 1, 0)).colour(BELL_CORE).fadeTo(BELL_BODY).size(0.6F * w, 0.6F * w + 0.9F).alpha(0.6F).life(10).spawn();
+        for (int i = 0; i < count(4); i++) {
+            Vec3 o = flat(sphere(r)).scale(0.5 * w + 0.2);
+            GlowParticle.dot(c.add(o)).vel(new Vec3(0, 0.03, 0)).colour(WHITE).fadeTo(BELL_BODY).size(0.07F, 0.0F).life(9 + r.nextInt(5)).star().spawn();
+        }
+    }
+
+    /** A struck fern's fronds grow a block further at {@code at}: bits of silver leaf fall from the growing tip, and a glint. */
+    private static void unroll(RandomSource r, Vec3 at, Vec3 dir) {
+        for (int i = 0; i < count(4); i++) {
+            Vec3 o = new Vec3((r.nextDouble() - 0.5) * 0.7, (r.nextDouble() - 0.5) * 0.6, (r.nextDouble() - 0.5) * 0.7);
+            GlowParticle.dot(at.add(o)).vel(sphere(r).scale(0.02).add(dir.scale(0.03))).colour(0xEEF3F8).fadeTo(0x8FA3B7).size(0.035F, 0.02F)
+                    .life(18 + r.nextInt(12)).gravity(0.18F).drag(0.9F).spawn();
+        }
+        GlowParticle.dot(at.add(dir.scale(0.4))).colour(WHITE).fadeTo(0xCFDDEB).size(0.12F, 0.0F).alpha(0.8F).life(6).star().spawn();
+    }
+
+    /** A frostberry vine bursts at {@code c}: a puff of cold out to {@code reach}, snow, and glints of frost sinking slowly down. */
+    private static void frostPuff(ClientLevel l, RandomSource r, Vec3 c, float reach, float fall) {
+        int core = 0xF2FAFF, body = 0xBFE4FF, deep = 0x7FB6EC;
+        GlowParticle.flash(c).colour(core).fadeTo(body).size(0.3F, 1.3F).life(6).spawn();
+        GlowParticle.ring(c, new Vec3(0, 1, 0)).colour(core).fadeTo(body).size(0.3F, reach).alpha(0.6F).life(12).spawn();
+        for (int i = 0; i < count(26); i++) {
+            GlowParticle.dot(c).vel(sphere(r).scale(0.1 + r.nextDouble() * 0.14)).colour(mix(body, WHITE, r.nextFloat() * 0.6F)).fadeTo(deep)
+                    .size(0.06F, 0.0F).life(20 + r.nextInt(12)).gravity(0.04F).drag(0.86F).spawn();
+        }
+        for (int i = 0; i < count(14); i++) vanilla(l, ParticleTypes.SNOWFLAKE, c.add(sphere(r).scale(0.3)), sphere(r).scale(0.1));
+        BlockParticleOption ice = new BlockParticleOption(ParticleTypes.BLOCK, Blocks.ICE.defaultBlockState());
+        for (int i = 0; i < count(6); i++) vanilla(l, ice, c.add(sphere(r).scale(0.3)), sphere(r).scale(0.12));
+        // the cold sinks: slow glints drifting down below it
+        for (int i = 0; i < count(12); i++) {
+            Vec3 o = flat(sphere(r)).scale(r.nextDouble() * reach * 0.6);
+            GlowParticle.dot(c.add(o).add(0, -0.3, 0)).vel(new Vec3(0, -0.035 - r.nextDouble() * 0.03, 0)).colour(core).fadeTo(body)
+                    .size(0.04F, 0.01F).life(40 + r.nextInt(30)).drag(0.99F).physics().star().spawn();
+        }
+        if (fall < 0.8F) return;
+        // and falls: a shower of frost all the way down to the floor or the pool under the vine, settling there in a
+        // spreading ring
+        for (int i = 0; i < count(Math.min(48, Math.round(fall * 5.0F))); i++) {
+            Vec3 o = flat(sphere(r)).scale(r.nextDouble() * reach * 0.4);
+            GlowParticle.dot(c.add(o).add(0, -r.nextDouble() * fall, 0)).vel(new Vec3(0, -0.07 - r.nextDouble() * 0.05, 0))
+                    .colour(mix(body, WHITE, r.nextFloat() * 0.5F)).fadeTo(deep).size(0.05F, 0.02F).life(18 + r.nextInt(18)).drag(0.99F)
+                    .physics().spawn();
+        }
+        Vec3 g = c.add(0, -fall + 0.06, 0);
+        GlowParticle.ring(g, new Vec3(0, 1, 0)).colour(core).fadeTo(body).size(0.3F, reach).ease(1.6F).alpha(0.55F).life(26).spawn();
+        for (int i = 0; i < count(10); i++) {
+            Vec3 o = flat(sphere(r)).scale(r.nextDouble() * reach * 0.8);
+            vanilla(l, ParticleTypes.SNOWFLAKE, g.add(o).add(0, 0.1, 0), flat(o).normalize().scale(0.02));
         }
     }
 

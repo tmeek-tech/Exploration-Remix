@@ -1,11 +1,19 @@
 {
   "variants": {
-    "": [
+    "resting=false": [
       {
         "model": "explorationremix:block/glowbell"
       },
       {
         "model": "explorationremix:block/glowbell_2"
+      }
+    ],
+    "resting=true": [
+      {
+        "model": "explorationremix:block/glowbell_resting"
+      },
+      {
+        "model": "explorationremix:block/glowbell_2_resting"
       }
     ]
   }

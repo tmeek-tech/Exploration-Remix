@@ -10,7 +10,7 @@ leaflets instead run on into the tile below, drawn wrapped, and are the same in 
 """
 import math, random
 from PIL import Image
-from plants_fern import LIT as FERN_LIT, STALK as FERN_STALK
+from plants_fern import LIT as FERN_LIT, STALK as FERN_STALK, BACK_LIT as FERN_BACK_LIT, BACK_STALK
 from plants import (hexc, grid, blank, _line, register, put, stamp, sway, bezier, prisms, speckle_sheet,
                     put_wrap)
 
@@ -171,6 +171,70 @@ def _silver_frond(v, tip):
 for _k in (1, 2):
     register(PAINTERS, variants("silver_frond_plant", 2)[_k - 1], (lambda k=_k: _silver_frond(k, False)))
     register(PAINTERS, variants("silver_frond", 2)[_k - 1], (lambda k=_k: _silver_frond(k, True)))
+
+
+# The fronds of an unrolled fern, per block: (stalk column, top row, length, longest leaflet). Two to a block, half a
+# block apart and half a block lower, so they lie like shingles, each one's wide top beside the narrow end of the one
+# above; the back sheet's sit between them.
+FROND_SHINGLES = [(4, 0, 14, 4), (12, 8, 14, 4)]
+FROND_SHINGLES_BACK = [(0, 4, 12, 3), (8, 12, 12, 3)]
+
+
+def _frond_sheet(tip, back, top=False):
+    """A struck silver fern's fronds unrolled down the rock (0.18.7, the rune_frond block: RunePlants): the hanging
+    fern's fronds let down flat against the wall, each drawn as the hanging fern draws its own (plants_fern.py): a
+    stalk with a leaflet off every pixel on alternating sides, each leaving at 45 degrees towards the tip, longest at
+    the top and shortening to it, so the rock shows between them. They overlap like shingles (FROND_SHINGLES); the
+    back sheet, drawn just behind and darker, fills in between, so the curtain reads thick. Body tiles run on into
+    their neighbours on every side (drawn wrapped), so a curtain of any width and length joins up; a column's lowest
+    block (tip) draws the ends of the fronds from the block above, and its own fronds shortened to end inside it; the
+    highest block of a column beside the fern's (top) only the fronds that start in it, the first a little way down,
+    so the column's top edge is ragged."""
+    img = blank()
+    px = img.load()
+    stalk, lit = (BACK_STALK, FERN_BACK_LIT) if back else (FROND_STALK[0], FROND)
+    fronds = FROND_SHINGLES_BACK if back else FROND_SHINGLES
+    drawn = []
+    for x0, y0, length, widest in fronds:
+        if top:
+            # nothing from above: the first frond starts a little way down
+            drawn.append((x0, y0 + 2, length - 2, widest) if y0 < 4 else (x0, y0, length, widest))
+            continue
+        if not tip:
+            drawn.append((x0, y0, length, widest))
+            continue
+        # the end of the one from the block above, and this block's own, ending inside it
+        drawn.append((x0, y0 - 16, length, widest))
+        drawn.append((x0, y0, min(length, 15 - y0), widest if 15 - y0 >= length else max(2, widest * (15 - y0) // length)))
+
+    def at(x, y, c):
+        if tip or top:
+            # what runs on below a top block is drawn by the block below it, as for any block
+            put(px, x % 16, y, c)
+        else:
+            px[x % 16, y % 16] = hexc(c)
+    for x0, y0, length, widest in drawn:
+        if length < 3:
+            continue
+        for i in range(length):
+            y = y0 + i
+            at(x0, y, stalk if back or i % 3 != 2 else FROND_STALK[1])
+            n = max(1, int(round(widest * (1.0 - i / length) + 0.3)))
+            side = -1 if i % 2 == 0 else 1
+            for k in range(1, n + 1):
+                at(x0 + side * k, y + k, lit[0] if k == 1 else lit[3] if k == n else lit[1] if k == 2 else lit[2])
+        at(x0, y0 + length, lit[3])
+    return img
+
+
+# The unrolled fronds (rune_frond: tools/runes.py writes its models): the sheet against the rock, the darker one just
+# behind it, and each one's tip and top.
+register(PAINTERS, "rune_frond", lambda: _frond_sheet(False, False))
+register(PAINTERS, "rune_frond_tip", lambda: _frond_sheet(True, False))
+register(PAINTERS, "rune_frond_back", lambda: _frond_sheet(False, True))
+register(PAINTERS, "rune_frond_back_tip", lambda: _frond_sheet(True, True))
+register(PAINTERS, "rune_frond_top", lambda: _frond_sheet(False, False, True))
+register(PAINTERS, "rune_frond_back_top", lambda: _frond_sheet(False, True, True))
 
 # The silver ferns (small, tall and hanging) are in plants_fern.py.
 
@@ -348,7 +412,13 @@ GLOWBELLS = {
 }
 
 
-def _glowbell(v):
+# Rung by a rune (0.18.7, GlowbellBlock), a glowbell rests a while, its glow sunk to an ember: the blooms a shade or
+# two darker down the same ramp, and only their hearts still glowing, dimly.
+BLOOM_RESTING_COLOURS = {"A": "#1C3478", "a": "#21418F", "b": BELL[0], "c": "#2C5AC4", "W": BELL[2]}
+BELL_RESTING_GLOW = [BELL[2]]
+
+
+def _glowbell(v, resting=False):
     img = blank()
     px = img.load()
     for bloom, (bx, by), foot, bend in GLOWBELLS[v]:
@@ -359,12 +429,14 @@ def _glowbell(v):
     for x, y, c in ((5, 15, 0), (5, 14, 1), (4, 13, 2), (10, 15, 0), (10, 14, 1), (11, 13, 2)):
         put(px, x - (v - 1), y, BELL_STEM[c])
     for bloom, (bx, by), _, _ in GLOWBELLS[v]:
-        stamp(px, bx, by, bloom, BLOOM_COLOURS)
+        stamp(px, bx, by, bloom, BLOOM_RESTING_COLOURS if resting else BLOOM_COLOURS)
     return img
 
 
 register(PAINTERS, "glowbell", lambda: _glowbell(1), glow=BELL_GLOW)
 register(PAINTERS, "glowbell_2", lambda: _glowbell(2), glow=BELL_GLOW)
+register(PAINTERS, "glowbell_resting", lambda: _glowbell(1, True), glow=BELL_RESTING_GLOW)
+register(PAINTERS, "glowbell_2_resting", lambda: _glowbell(2, True), glow=BELL_RESTING_GLOW)
 
 PAGODA = {"top": ["#2A4A9E", "#3A62C4", "#4A7EE0"], "under": "#1A2550", "gill": "#22397A", "rim": "#6AA6F6",
           "stem": ["#4A5F96", "#6F86C0"]}

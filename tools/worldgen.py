@@ -219,6 +219,13 @@ def looks(*l, cold=None, min_chill=None, max_chill=None):
     if min_chill is not None: f["min_chill"] = float(min_chill)
     if max_chill is not None: f["max_chill"] = float(max_chill)
     return f
+def pit_trait(trait, lo=None, hi=None):
+    """Keeps a feature to the sinkholes whose trait (shelves, fall, slope or ivy, drawn once per pit) lies between lo and
+    hi (0.18.6, PitTraitFilter), so a pit has all of it or none."""
+    f = {"type": f"{MOD}:pit_trait", "trait": trait}
+    if lo is not None: f["min"] = float(lo)
+    if hi is not None: f["max"] = float(hi)
+    return f
 # Entrances.THAW_REACH: a frozen Root Vault has thawed this far past the snowy zone.
 THAW = 8
 # The entrances' looks (Entrances.java): root halls, teal grottos, ravines, sinkholes, oasis hollows.
@@ -628,6 +635,9 @@ def build_features():
     feature("rootvaults/hanging_roots", "vegetal_decoration", rv + ["frozen_rootvaults"],
             attach(simple("minecraft:hanging_roots"), "ceiling", 32, ["minecraft:rooted_dirt", "minecraft:dirt", "minecraft:moss_block"], radius=6, height=4),
             [count(14), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
+    # Root hairs under the trees' roots through the vaults (0.18.6: the strands, pillars and stubs of the noise shapes),
+    # over the chunk's own columns from the ground down, so the sunken ways' tops in the surface's biome get them too.
+    feature("rootvaults/root_hairs", "vegetal_decoration", rv + ["frozen_rootvaults"], {"type": f"{MOD}:root_hairs", "config": {}}, [])
     feature("rootvaults/lantern_roots", "vegetal_decoration", rv,
             hanging_column("explorationremix:lantern_roots_plant", "explorationremix:lantern_roots", 0, 4),
             [count(20), SQUARE, layer(up)] + ceiling() + [looks(0), BIOME])
@@ -931,6 +941,11 @@ def build_features():
     feature("frozen_rootvaults/ice", "underground_decoration", fz, ice_sheet(2, 5), [count(10), SQUARE, layer(up)] + water_top + [BIOME])
     feature("sinkhole/moss", "underground_decoration", sk, "minecraft:moss_patch",
             [count(6), SQUARE, layer(up)] + floor() + [looks(SINKHOLE, cold=False), BIOME])
+    # 0.18.6: about half the sinkholes are hung thick with Immersive Weathering's ivy down their walls and the rest keep
+    # bare rock, so no two pits look alike (Taran: the same thing in every pit would make them cookie-cutter).
+    feature("sinkhole/ivy", "underground_decoration", sk,
+            attach(simple("immersive_weathering:ivy"), "walls", 64, f"#{MOD}:cave_rock", radius=7, height=7),
+            [count(14), SQUARE, pit_trait("ivy", hi=0.5), layer(up), looks(SINKHOLE, cold=False), BIOME])
     feature("sinkhole/hoarfrost", "underground_decoration", sk,
             attach(simple(f"{MOD}:hoarfrost"), "walls_ceiling", 96, frost_rock, radius=6, height=4, patch=True),
             [count(2), SQUARE, layer(up), looks(SINKHOLE, cold=True), BIOME])
@@ -1224,6 +1239,9 @@ UPPER_MODIFIER_FEATURES = [
     ("upper/join_dead_ends", {"type": f"{MOD}:join_dead_ends", "config": {}}, [], "#minecraft:is_overworld", "raw_generation"),
     ("upper/surface_hoarfrost", attach(simple(f"{MOD}:hoarfrost"), "walls_ceiling", 96, f"#{MOD}:surface_frost_rock", radius=6, height=4, patch=True),
      [count(1), SQUARE, {"type": "minecraft:heightmap", "heightmap": "WORLD_SURFACE_WG"}, BIOME], "#immersive_weathering:icy", "top_layer_modification"),
+    # 0.18.6: grass trails and roots over the lip of the plains' sinkholes, and ivy spilling over it in the pits hung with
+    # ivy (SinkholeRimFeature): the top of the shaft lies in the surface's biome, out of the sinkhole biome's reach.
+    ("upper/sinkhole_rim", {"type": f"{MOD}:sinkhole_rim", "config": {}}, [], f"#{MOD}:upper/plains", "top_layer_modification"),
 ]
 
 # ----------------------------------------------------------------------------------------------- Rootvaults tags

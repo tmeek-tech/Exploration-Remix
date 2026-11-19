@@ -275,6 +275,53 @@ public final class RuneFx {
         send(l, Fx.Kind.MOTE_IN, at, Vec3.ZERO, 0xFFFFFF, Element.NONE, full, 0.0F, -1, 16.0);
     }
 
+    // ------------------------------------------------------------------------------------------------ plants (0.18.7)
+
+    /** The glowbells' light blue, the colour of their ring. */
+    public static final int BELL_BLUE = 0x8EC2FF;
+    /** A frostberry's cold: a pale light blue. */
+    public static final int FROST_BLUE = 0xBFE4FF;
+
+    /** A rune rang the glowbell at {@code c}: a ring of light going out {@code reach} blocks, and its bell, heard far. */
+    public static void bell(ServerLevel l, Vec3 c, double reach) {
+        send(l, Fx.Kind.BELL, c, Vec3.ZERO, BELL_BLUE, Element.NONE, (float) reach, 0.0F, -1, FAR);
+        play(l, c, SoundEvents.NOTE_BLOCK_BELL.get(), 1.6F, 1.25F);
+        play(l, c, SoundEvents.AMETHYST_BLOCK_RESONATE, 1.4F, 1.5F);
+        play(l, c, SoundEvents.BELL_RESONATE, 0.5F, 1.9F);
+    }
+
+    /** A glowbell's ring reached the creature round {@code c}, {@code width} wide: it lights up. */
+    public static void ping(ServerLevel l, Vec3 c, float width) {
+        send(l, Fx.Kind.PING, c, Vec3.ZERO, BELL_BLUE, Element.NONE, width, 0.0F, -1, FAR);
+    }
+
+    /** A struck fern's fronds grow a block further at {@code at}, going {@code dir}; {@code step} counts the blocks. */
+    public static void unroll(ServerLevel l, Vec3 at, Vec3 dir, int step) {
+        send(l, Fx.Kind.UNROLL, at, dir, 0xDDE7F0, Element.NONE, 1.0F, 0.0F, -1, NEAR);
+        if (step % 2 == 0) play(l, at, step == 0 ? SoundEvents.BIG_DRIPLEAF_TILT_DOWN : SoundEvents.AZALEA_LEAVES_PLACE, 0.7F,
+                Math.min(1.9F, 0.9F + 0.06F * step));
+    }
+
+    /** The fronds roll back up: a rustle. */
+    public static void rollUp(ServerLevel l, Vec3 at) {
+        play(l, at, SoundEvents.BIG_DRIPLEAF_TILT_UP, 0.6F, 1.3F);
+        play(l, at, SoundEvents.AZALEA_LEAVES_BREAK, 0.5F, 1.1F);
+    }
+
+    /** The fronds shiver: they roll up in a moment. */
+    public static void shiver(ServerLevel l, Vec3 at) {
+        play(l, at, SoundEvents.AZALEA_LEAVES_STEP, 0.8F, 0.7F);
+        play(l, at, SoundEvents.BIG_DRIPLEAF_TILT_UP, 0.4F, 0.8F);
+    }
+
+    /** A struck frostberry vine bursts at {@code c}: a puff of cold {@code reach} blocks round, falling {@code fall} blocks to the floor. */
+    public static void frostPuff(ServerLevel l, Vec3 c, double reach, double fall) {
+        send(l, Fx.Kind.FROST_PUFF, c, Vec3.ZERO, FROST_BLUE, Element.FROST, (float) reach, (float) fall, -1, NEAR);
+        play(l, c, SoundEvents.POWDER_SNOW_BREAK, 1.0F, 1.2F);
+        play(l, c, SoundEvents.AMETHYST_CLUSTER_BREAK, 0.6F, 1.7F);
+        play(l, c, SoundEvents.CAVE_VINES_PICK_BERRIES, 0.8F, 1.3F);
+    }
+
     // ------------------------------------------------------------------------------------------------ sounds
 
     /** The element's own layer of a sound. */

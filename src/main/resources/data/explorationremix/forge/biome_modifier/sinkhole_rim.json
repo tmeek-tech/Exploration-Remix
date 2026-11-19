@@ -1,0 +1,6 @@
+{
+  "type": "forge:add_features",
+  "biomes": "#explorationremix:upper/plains",
+  "features": "explorationremix:upper/sinkhole_rim",
+  "step": "top_layer_modification"
+}
