@@ -23,7 +23,8 @@ later milestones, built on these caves.
 
 **New worlds only.** The overworld is extended to y -784 when a world is created (to y -832 before 0.19.6, when the
 Deep Gardens grew shorter). Existing chunks are not regenerated, so a world made with an older version keeps its old
-layout where it was explored, and one made before 0.19.6 loses its rows below y -784.
+layout where it was explored, and one made before 0.19.6 loses its rows below y -784. One made before 0.19.7 keeps
+its old crude oil where it was explored, so pools there may not meet the new ones at the edge of explored ground.
 
 ## Installing
 
@@ -60,7 +61,8 @@ layout where it was explored, and one made before 0.19.6 loses its rows below y 
   plants; the **hunting ground** is the most overgrown part of a layer (nothing hunts yet); everything else is the
   layer's main biome.
 * **Deep Gardens** (0.19): a dry vent field shaped by noise, 192 blocks deep, in three bands. The **Seep Beds** on
-  top are low flats with knee-deep pools of crude oil (with mcremix) and seep glow; the **Chimney Halls** below are
+  top are low flats with flat, knee-deep pools of crude oil (with mcremix) sunk into the low ground, stepping down
+  slopes behind dry rock edges, and seep glow along them; the **Chimney Halls** below are
   dark halls under black dripstone, reaching the bottom in places; the **Vent Domes** at the bottom are cave-like
   domes round hollow blackstone vents, crowned and streaked with glowing vent beads. About a third of the rock is
   black dripstone, with pointed black dripstone under its cones; neon glow mats and glow caps light the floors. A few
