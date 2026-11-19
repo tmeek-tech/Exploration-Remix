@@ -1,0 +1,23 @@
+{
+  "parent": "explorationremix:block/glow_cap_magenta",
+  "overrides": [
+    {
+      "predicate": {
+        "explorationremix:neon": 0.1667
+      },
+      "model": "explorationremix:block/glow_cap_violet"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.5
+      },
+      "model": "explorationremix:block/glow_cap_lime"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.8333
+      },
+      "model": "explorationremix:block/glow_cap_light_blue"
+    }
+  ]
+}

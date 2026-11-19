@@ -1,0 +1,84 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "#side"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        16,
+        16
+      ],
+      "faces": {
+        "down": {
+          "texture": "#bottom",
+          "cullface": "down"
+        },
+        "up": {
+          "texture": "#top",
+          "cullface": "up"
+        },
+        "north": {
+          "texture": "#side",
+          "cullface": "north"
+        },
+        "east": {
+          "texture": "#side",
+          "cullface": "east"
+        },
+        "south": {
+          "texture": "#side",
+          "cullface": "south"
+        },
+        "west": {
+          "texture": "#side",
+          "cullface": "west"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        16,
+        16
+      ],
+      "faces": {
+        "up": {
+          "texture": "#top_glow",
+          "cullface": "up"
+        },
+        "north": {
+          "texture": "#side_glow",
+          "cullface": "north"
+        },
+        "east": {
+          "texture": "#side_glow",
+          "cullface": "east"
+        },
+        "south": {
+          "texture": "#side_glow",
+          "cullface": "south"
+        },
+        "west": {
+          "texture": "#side_glow",
+          "cullface": "west"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      },
+      "shade": false
+    }
+  ]
+}

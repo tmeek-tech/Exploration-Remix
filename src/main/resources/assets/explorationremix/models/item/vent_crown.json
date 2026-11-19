@@ -1,0 +1,23 @@
+{
+  "parent": "explorationremix:block/vent_crown_magenta",
+  "overrides": [
+    {
+      "predicate": {
+        "explorationremix:neon": 0.1667
+      },
+      "model": "explorationremix:block/vent_crown_violet"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.5
+      },
+      "model": "explorationremix:block/vent_crown_lime"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.8333
+      },
+      "model": "explorationremix:block/vent_crown_light_blue"
+    }
+  ]
+}

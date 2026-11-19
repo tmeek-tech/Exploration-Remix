@@ -1,23 +1,46 @@
 package com.explorationremix.client;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.block.Neon;
+import com.explorationremix.block.NeonBlock;
 import com.explorationremix.client.model.Geometry;
 import com.explorationremix.client.render.FireflySwarmRenderer;
 import com.explorationremix.client.render.LavaBombRenderer;
 import com.explorationremix.client.render.MossbackRenderer;
 import com.explorationremix.client.render.SkeinRenderer;
+import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.registry.EREntities;
 import com.explorationremix.registry.ERParticles;
+import net.minecraft.client.renderer.item.ItemProperties;
+import net.minecraft.client.renderer.item.ItemPropertyFunction;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterParticleProvidersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.registries.RegistryObject;
 
 /** Client-only setup on the mod bus. */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class ClientSetup {
     private ClientSetup() {}
+
+    @SubscribeEvent
+    public static void setup(FMLClientSetupEvent event) {
+        // A neon block's item shows the colour it places (NeonBlock.neon: its BlockStateTag's) through its model's
+        // overrides on explorationremix:neon (tools/gen_data.py): 0 magenta, 1/3 violet, 2/3 lime, 1 light blue.
+        event.enqueueWork(() -> {
+            ResourceLocation neon = new ResourceLocation(ExplorationRemix.MOD_ID, "neon");
+            ItemPropertyFunction colour = (stack, level, entity, seed) -> NeonBlock.neon(stack).ordinal() / (float) (Neon.values().length - 1);
+            for (RegistryObject<Item> item : ERBlocks.ITEMS.getEntries()) {
+                if (item.get() instanceof BlockItem b && b.getBlock() instanceof NeonBlock) ItemProperties.register(b, neon, colour);
+            }
+        });
+    }
 
     @SubscribeEvent
     public static void particles(RegisterParticleProvidersEvent event) {

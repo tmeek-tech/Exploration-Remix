@@ -22,7 +22,13 @@ ENTRANCE_BIOMES = {"rootvaults", "frozen_rootvaults", "sinkhole", "oasis_hollow"
 # Since 0.5 the old bottom layer is the Wasteland (its look: basalt columns, ash ferns and cinder blooms) over a band and
 # the Basalt Galleries, which are lifeless: the new biomes are appended so the older ones keep their feature order.
 DEEP = ["lantern_lake", "ember_gardens", "rust_springs", "deep_blue_rift", "asurine_geodes", "basalt_galleries", "obsidian_tubes",
-        "wasteland", "ash_hollows", "caldera", "causeway", "scoria_canyons"]
+        "wasteland", "ash_hollows", "caldera", "causeway", "scoria_canyons",
+        # Deep Gardens round 2, appended likewise: the vent field's three bands, top to bottom (the older Deep Gardens
+        # biomes stay, for worlds that hold them)
+        "seep_beds", "chimney_halls", "vent_domes"]
+# The vent field's biomes take no features: its own pass dresses its rock as it is made (GardensDress). The network's
+# passes that every other deep biome lists (climb_vines, open_way) reach their chunks anyway, through band 1's biomes.
+VENT_FIELD = ["seep_beds", "chimney_halls", "vent_domes"]
 GALLERIES = ["basalt_galleries", "obsidian_tubes", "caldera", "causeway", "scoria_canyons"]
 OURS = UPPER + DEEP
 NAMES = {
@@ -33,6 +39,7 @@ NAMES = {
     "basalt_galleries": "Basalt Galleries", "obsidian_tubes": "Obsidian Tubes",
     "wasteland": "Wasteland", "ash_hollows": "Ash Hollows",
     "caldera": "Caldera", "causeway": "Causeway", "scoria_canyons": "Scoria Canyons",
+    "seep_beds": "Seep Beds", "chimney_halls": "Chimney Halls", "vent_domes": "Vent Domes",
 }
 LAYER = {"rootvaults": "upper", "silver_fern_rift": "upper", "ivory_root_cavern": "upper",
          "frozen_rootvaults": "upper", "sinkhole": "upper", "oasis_hollow": "upper", "frost_fern_grotto": "upper",
@@ -40,7 +47,8 @@ LAYER = {"rootvaults": "upper", "silver_fern_rift": "upper", "ivory_root_cavern"
          "deep_blue_rift": "blue_reaches", "asurine_geodes": "blue_reaches",
          "basalt_galleries": "basalt_galleries", "obsidian_tubes": "basalt_galleries",
          "wasteland": "wasteland", "ash_hollows": "wasteland",
-         "caldera": "basalt_galleries", "causeway": "basalt_galleries", "scoria_canyons": "basalt_galleries"}
+         "caldera": "basalt_galleries", "causeway": "basalt_galleries", "scoria_canyons": "basalt_galleries",
+         "seep_beds": "deep_gardens", "chimney_halls": "deep_gardens", "vent_domes": "deep_gardens"}
 
 # Fog is the colour of the distance, water and water fog tint the water, grass and foliage tint ferns and leaves.
 #                       fog        water      water fog  grass      foliage
@@ -68,6 +76,11 @@ LOOKS = {
     "caldera":           ("#8a4630", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     "causeway":          ("#72544a", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     "scoria_canyons":    ("#80463a", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    # The vent field is black rock lit by its neon: cool, dark distances (blue over the seeps, violet over the live
+    # domes), blue water, nothing warm and no teal (Taran's look rules, textures.py).
+    "seep_beds":         ("#24345a", "#2b3f8f", "#0a1230", "#6a7a9a", "#5a6a8a"),
+    "chimney_halls":     ("#221c40", "#33307a", "#0c0a26", "#6e6a9a", "#5e5a8a"),
+    "vent_domes":        ("#2e1f4a", "#40308f", "#140c30", "#7a6aa0", "#6a5a90"),
 }
 
 # Ambient particles drifting in the air: (particle, probability). Steam over hot pools, embers over lava, pollen in
@@ -89,6 +102,10 @@ PARTICLES = {
     "caldera": ("minecraft:white_ash", 0.03),
     "causeway": ("minecraft:white_ash", 0.012),
     "scoria_canyons": ("minecraft:white_ash", 0.015),
+    # the vent field: a few dark blue spores, fewest in the calm halls
+    "seep_beds": ("minecraft:warped_spore", 0.004),
+    "chimney_halls": ("minecraft:warped_spore", 0.002),
+    "vent_domes": ("minecraft:warped_spore", 0.006),
 }
 
 # Ambient sound: (loop, additions, additions chance per tick). Our sound events are registered by the mod (ERSounds).
@@ -112,9 +129,12 @@ SOUNDS = {
     "caldera": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
     "causeway": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
     "scoria_canyons": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
+    "seep_beds": (f"{MOD}:ambient.gardens.loop", f"{MOD}:ambient.gardens.additions", 0.012),
+    "chimney_halls": (f"{MOD}:ambient.gardens.loop", f"{MOD}:ambient.gardens.additions", 0.008),
+    "vent_domes": (f"{MOD}:ambient.springs.loop", f"{MOD}:ambient.gardens.additions", 0.012),
 }
 
-HOT = {"ember_gardens", "rust_springs", "wasteland", "ash_hollows"} | set(GALLERIES)
+HOT = {"ember_gardens", "rust_springs", "wasteland", "ash_hollows", "vent_domes"} | set(GALLERIES)
 DRY = {"wasteland", "ash_hollows"} | set(GALLERIES)
 # The Upper Caves rework's biomes: snow-cold, or desert-hot; rain and snow fall into the open entrances' pits and
 # skylights (the pack's own biome holds the ground over them).
@@ -1125,9 +1145,10 @@ def build_features():
             [{"type": f"{MOD}:under_trees", "chance": 0.7}, BIOME])
     # The network's climbs get their vines, and the Blue Reaches' lips their shelf vines (section 10 of the network
     # design), once everything else has grown; then the ways are opened (open_way never removes a climbable block).
-    feature("climb_vines", "top_layer_modification", DEEP, {"type": f"{MOD}:climb_vines", "config": {}}, [])
+    network = [b for b in DEEP if b not in VENT_FIELD]
+    feature("climb_vines", "top_layer_modification", network, {"type": f"{MOD}:climb_vines", "config": {}}, [])
     feature("shelf_vines", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:shelf_vines", "config": {}}, [])
-    feature("open_way", "top_layer_modification", DEEP, {"type": f"{MOD}:open_way", "config": {}}, [])
+    feature("open_way", "top_layer_modification", network, {"type": f"{MOD}:open_way", "config": {}}, [])
     # The Mossback lairs on the den gates' upper landings (DenLairFeature): each den, and the bones and scraps within 30
     # blocks of it, once the ways are open. Band 1 is the Deep Blue Rift under every column, so this reaches every
     # chunk, and the feature works out from the plan which chunks hold a lair.

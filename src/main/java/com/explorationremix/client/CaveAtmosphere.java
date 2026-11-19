@@ -57,7 +57,8 @@ public final class CaveAtmosphere {
             FROZEN_ROOTVAULTS = key("frozen_rootvaults"), SINKHOLE = key("sinkhole"), OASIS_HOLLOW = key("oasis_hollow"),
             FROST_FERN_GROTTO = key("frost_fern_grotto"),
             WASTELAND = key("wasteland"), ASH_HOLLOWS = key("ash_hollows"),
-            CALDERA = key("caldera"), CAUSEWAY = key("causeway"), SCORIA_CANYONS = key("scoria_canyons");
+            CALDERA = key("caldera"), CAUSEWAY = key("causeway"), SCORIA_CANYONS = key("scoria_canyons"),
+            SEEP_BEDS = key("seep_beds"), CHIMNEY_HALLS = key("chimney_halls"), VENT_DOMES = key("vent_domes");
 
     /** The colour light from glowing blocks takes in a biome, and how strongly: {r, g, b, strength}. */
     private static final Map<ResourceKey<Biome>, float[]> LIGHT_TINT = new HashMap<>();
@@ -85,7 +86,12 @@ public final class CaveAtmosphere {
         FOG_REACH.put(SINKHOLE, 1.4F);
         FOG_REACH.put(OASIS_HOLLOW, 1.3F);
         FOG_REACH.put(FROST_FERN_GROTTO, 1.2F);
-        // Cold blue in the Blue Reaches, red near the heat. The Deep Gardens and the upper caves keep vanilla's warm light.
+        // Deep Gardens round 2, the vent field's bands: dark cool fog, the clearest in the chimneys' still air
+        FOG_REACH.put(SEEP_BEDS, 1.1F);
+        FOG_REACH.put(CHIMNEY_HALLS, 1.2F);
+        FOG_REACH.put(VENT_DOMES, 1.0F);
+        // Cold blue in the Blue Reaches, red near the heat. The first Deep Gardens biomes and the upper caves keep vanilla's
+        // warm light.
         LIGHT_TINT.put(DEEP_BLUE_RIFT, new float[]{0.42F, 0.62F, 1.0F, 0.85F});
         LIGHT_TINT.put(ASURINE_GEODES, new float[]{0.45F, 0.66F, 1.0F, 0.85F});
         LIGHT_TINT.put(net.minecraft.world.level.biome.Biomes.DEEP_DARK, new float[]{0.45F, 0.72F, 1.0F, 0.6F});
@@ -98,6 +104,11 @@ public final class CaveAtmosphere {
         LIGHT_TINT.put(SCORIA_CANYONS, new float[]{1.0F, 0.5F, 0.28F, 0.5F});
         // A cool light under the Frost Fern Grotto's ice.
         LIGHT_TINT.put(FROST_FERN_GROTTO, new float[]{0.62F, 0.8F, 1.0F, 0.4F});
+        // Nothing warm in the vent field (Deep Gardens round 2): its light leans to its band's neon, light blue over the
+        // seeps, violet in the chimneys, a magenta violet in the domes.
+        LIGHT_TINT.put(SEEP_BEDS, new float[]{0.56F, 0.72F, 1.0F, 0.5F});
+        LIGHT_TINT.put(CHIMNEY_HALLS, new float[]{0.7F, 0.52F, 1.0F, 0.5F});
+        LIGHT_TINT.put(VENT_DOMES, new float[]{0.86F, 0.5F, 1.0F, 0.5F});
     }
 
     private static ResourceKey<Biome> key(String id) {

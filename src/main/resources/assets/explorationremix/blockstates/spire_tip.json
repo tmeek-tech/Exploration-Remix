@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "neon=magenta": {
+      "model": "explorationremix:block/spire_tip_magenta"
+    },
+    "neon=violet": {
+      "model": "explorationremix:block/spire_tip_violet"
+    },
+    "neon=lime": {
+      "model": "explorationremix:block/spire_tip_lime"
+    },
+    "neon=light_blue": {
+      "model": "explorationremix:block/spire_tip_light_blue"
+    }
+  }
+}

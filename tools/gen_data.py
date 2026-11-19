@@ -75,6 +75,12 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #               it, <id>_side square to it), turned to face away from the wall, in three sizes (property size: 0, 1
 #               and 2 drawn with <id>, <id>_medium and <id>_large and their _front and _side); it has no item, and
 #               drops the item named by option drop
+#   glow_cube   a full block drawn twice, its texture and over it the texture's glow overlay at full block light (the
+#               texture needs an entry in textures.GLOW). Option neon: the block has the property neon (block.Neon),
+#               a model per colour with textures <id>_<colour>; its item shows the colour in its BlockStateTag (the
+#               item property explorationremix:neon picks the model) and it drops itself in its colour. Option faces
+#               "bottom_top": textures <id>_<colour>_top and <id>_<colour>_side, both glowing, and <id>_bottom, which
+#               does not
 # Options: variants (how many textures: <id>, <id>_2, <id>_3; the game picks one per block from its position, so it
 # never changes), weights (one per variant), drop (hanging_fern, litter: the item it drops), chance (litter: how often
 # it drops it), glow_under (shelf: the whole underside glows), shader_glow (default True; False keeps the glow overlay
@@ -166,11 +172,29 @@ BLOCKS = {
     # The bones and scraps round a den (DenLairFeature): ribs and vertebrae, a skull fragment, feathers and fur, and the
     # lizards' own shed scales and hide. A bone now and then.
     "bone_scraps": ("Bone Scraps", "litter", {"variants": 4, "drop": "minecraft:bone", "chance": 0.4}),
+    # Deep Gardens round 2, the vent field (textures.py's vent field section has Taran's look rules): the near-black
+    # porous rock of the dead vents and spires, its dripstone, the live vents' wall rock, and the giant mushrooms' pale
+    # stem; then the glowing blocks, each in the four neon colours (block.Neon), and the seeps' dim light blue crust.
+    "vent_rock": ("Vent Rock", "cube"),
+    "black_dripstone": ("Black Dripstone", "cube"),
+    "live_vent_rock": ("Live Vent Rock", "cube"),
+    "pale_stem": ("Pale Stem", "cube"),
+    "glow_mat": ("Glow Mat", "glow_cube", {"neon": True, "faces": "bottom_top"}),
+    "glow_cap": ("Glow Cap", "glow_cube", {"neon": True}),
+    "vent_crown": ("Vent Crown", "glow_cube", {"neon": True}),
+    "den_fissure": ("Den Fissure", "glow_cube", {"neon": True}),
+    "vent_glow": ("Vent Glow", "glow_cube", {"neon": True}),
+    "throat_vein": ("Throat Vein", "glow_cube", {"neon": True}),
+    "spire_tip": ("Spire Tip", "glow_cube", {"neon": True}),
+    "seep_crust": ("Seep Crust", "glow_cube"),
 }
 NO_DROP = {"band_stone", "glow", "mossback_den"}
+# The vent field's blocks: whole blocks, which /remix census counts as floor and ceiling, never as growth.
+VENT_FIELD_BLOCKS = {"vent_rock", "black_dripstone", "live_vent_rock", "pale_stem", "glow_mat", "glow_cap", "vent_crown",
+                     "den_fissure", "vent_glow", "throat_vein", "spire_tip", "seep_crust"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
-# lifeless blocks of the Galleries, and the litter round the dens.
-NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"}
+# lifeless blocks of the Galleries, the litter round the dens, and the vent field's whole blocks.
+NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"} | VENT_FIELD_BLOCKS
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
@@ -188,8 +212,13 @@ BLOCK_TAGS = {
     # ferns only grow on #minecraft:dirt), and moss patches may spread over it.
     ("minecraft", "dirt"): ["frost_moss"],
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
-    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain"],
-    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen"],
+    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain",
+                                        # Deep Gardens round 2: the vent field's rock, and the neon blocks grown on it
+                                        "vent_rock", "black_dripstone", "live_vent_rock", "glow_mat", "vent_crown", "den_fissure",
+                                        "vent_glow", "throat_vein", "spire_tip", "seep_crust"],
+    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen",
+                                    # Deep Gardens round 2: the giant mushrooms
+                                    "pale_stem", "glow_cap"],
     # The Galleries' lava glow is open space to a growing tree (TreeFeature asks isAir() or this tag): a sapling grows
     # through it, and its logs, leaves and roots take its place.
     ("minecraft", "replaceable_by_trees"): ["glow"],
@@ -238,6 +267,18 @@ def _sheet(key, extra):
     """Vanilla glow lichen's plane, just off the face of the block to the north."""
     return [dict({"from": [0, 0, 0.1], "to": [16, 16, 0.1],
                   "faces": {"north": {"uv": [16, 0, 0, 16], "texture": key}, "south": {"uv": [0, 0, 16, 16], "texture": key}}}, **extra)]
+
+
+def _cube(keys, extra):
+    """A whole block's cube, like vanilla's block/cube: keys maps each face drawn to its texture, each face culled
+    against the block beside it."""
+    return [dict({"from": [0, 0, 0], "to": [16, 16, 16],
+                  "faces": {f: {"texture": k, "cullface": f} for f, k in keys.items()}}, **extra)]
+
+
+# A glowing whole block's overlay: unshaded, so its glow is as bright on every face, at full block light.
+CUBE_GLOW = dict(EMISSIVE, shade=False)
+SIDES = ("north", "east", "south", "west")
 
 
 # The silver ferns (Taran, 1 Nov: fluffier, like the picture, and hanging on walls). Model planes can only turn
@@ -339,6 +380,13 @@ TEMPLATES = {
     "carpet_glow": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _flat("#texture", {}) + _flat("#glow", EMISSIVE)},
     "lichen": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _sheet("#texture", {})},
     "lichen_glow": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _sheet("#texture", {}) + _sheet("#glow", EMISSIVE)},
+    # the vent field's glowing whole blocks (kind glow_cube): the block, then its overlay over the same faces
+    "cube_glow": {"parent": "minecraft:block/block", "textures": {"particle": "#all"},
+                  "elements": _cube({f: "#all" for f in FACES}, {}) + _cube({f: "#glow" for f in FACES}, CUBE_GLOW)},
+    # and the glow mat's, vanilla's cube_bottom_top with the overlays of its top and sides (its bottom does not glow)
+    "cube_bottom_top_glow": {"parent": "minecraft:block/block", "textures": {"particle": "#side"},
+                             "elements": _cube(dict({"down": "#bottom", "up": "#top"}, **{f: "#side" for f in SIDES}), {})
+                             + _cube(dict({"up": "#top_glow"}, **{f: "#side_glow" for f in SIDES}), CUBE_GLOW)},
 }
 
 
@@ -391,8 +439,11 @@ def plane_model(tex, plain_parent, template, key):
     return {"parent": plain_parent, "render_type": "minecraft:cutout", "textures": t}
 
 
-def loot(bid, drop, kind, chance=None):
+def loot(bid, drop, kind, chance=None, neon=False):
     entry = {"type": "minecraft:item", "name": drop if ":" in drop else f"{MOD}:{drop}"}
+    if neon:
+        # the item keeps the block's colour (its BlockStateTag), and places the block in it again
+        entry["functions"] = [{"function": "minecraft:copy_state", "block": f"{MOD}:{bid}", "properties": ["neon"]}]
     if kind in ("tall", "tall_fern"):
         # both halves break together; only the lower half's table drops the plant
         entry["conditions"] = [{"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"half": "lower"}}]
@@ -522,6 +573,30 @@ def block_assets():
                 models[t] = shelf_model(ref(t), ref(bid + "_under"), opts.get("glow_under", False))
             states = {"variants": {f"facing={f}": pick([dict({"model": ref(t)}, **turn) for t in texs], weights) for f, turn in FACE4.items()}}
             item = {"parent": ref(bid)}
+        elif kind == "glow_cube":
+            colours = textures.NEONS if opts.get("neon") else [None]
+            bottom_top = opts.get("faces") == "bottom_top"
+            for c in colours:
+                m = bid if c is None else f"{bid}_{c}"
+                if bottom_top:
+                    t = {"bottom": ref(bid + "_bottom"), "top": ref(m + "_top"), "side": ref(m + "_side"),
+                         "top_glow": ref(m + "_top_glow"), "side_glow": ref(m + "_side_glow")}
+                else:
+                    t = {"all": ref(m), "glow": ref(m + "_glow")}
+                models[m] = {"parent": f"{MOD}:block/template/" + ("cube_bottom_top_glow" if bottom_top else "cube_glow"),
+                             "render_type": "minecraft:cutout", "textures": t}
+            if opts.get("neon"):
+                states = {"variants": {f"neon={c}": {"model": ref(f"{bid}_{c}")} for c in colours}}
+                # The item property explorationremix:neon (client.ClientSetup) is the colour's place in block.Neon over
+                # the last place, 0 to 1; a colour's model takes over from halfway below its value. The game uses the
+                # last override that matches, so they go in order.
+                last = len(colours) - 1
+                item = {"parent": ref(f"{bid}_{colours[0]}"),
+                        "overrides": [{"predicate": {f"{MOD}:neon": round((k - 0.5) / last, 4)}, "model": ref(f"{bid}_{c}")}
+                                      for k, c in enumerate(colours) if k]}
+            else:
+                states = {"variants": {"": {"model": ref(bid)}}}
+                item = {"parent": ref(bid)}
         else:
             raise ValueError(f"{bid}: unknown kind {kind}")
         if opts.get("glow_under"):
@@ -529,7 +604,8 @@ def block_assets():
         for mname, m in models.items():
             for key, tex in m["textures"].items():
                 painted = "block/" + tex.split("block/", 1)[1]
-                if key == "glow":
+                if key.endswith("glow"):  # an overlay: #glow, or a face's (#top_glow, #side_glow)
+                    assert painted[:-len("_glow")] in textures.GLOW, f"{bid}: no glow overlay is painted for {tex}"
                     used_glow.add(painted[:-len("_glow")])
                     if opts.get("shader_glow", True):
                         glowing.add(bid)
@@ -540,7 +616,7 @@ def block_assets():
         if item is not None:
             write(os.path.join(ASSETS, "models", "item", bid + ".json"), item)
         if bid not in NO_DROP:
-            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind, opts.get("chance")))
+            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind, opts.get("chance"), opts.get("neon", False)))
     unused = set(textures.GLOW) - used_glow
     assert not unused, f"glow overlays no model draws: {sorted(unused)}"
     write(os.path.join(ASSETS, "glowing_blocks.json"), {"blocks": sorted(glowing)})

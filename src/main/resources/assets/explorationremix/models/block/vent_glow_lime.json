@@ -1,0 +1,8 @@
+{
+  "parent": "explorationremix:block/template/cube_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "all": "explorationremix:block/vent_glow_lime",
+    "glow": "explorationremix:block/vent_glow_lime_glow"
+  }
+}

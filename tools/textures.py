@@ -2,7 +2,7 @@
 
 Each painter is deterministic, so the textures only change when this file does.
 """
-import os, random
+import math, os, random
 from PIL import Image
 
 
@@ -118,6 +118,493 @@ GLOW = {
 GLOW.update(plants.GLOW)
 
 
+# =============================================================================================== Deep Gardens round 2
+# The vent field's blocks (ERBlocks, the Deep Gardens from y -289 to -528). Taran's look rules, which every texture here
+# keeps (cool_problems checks each one as it is written): the neon colours are only light blue, violet, magenta and
+# lime, lime only near the ways down, and each glowing block comes in all four (its blockstate property neon); nothing
+# warm (no orange, yellow, red, brown or warm-white tint), no cyan or teal, no froglights, no green moss. The cave walls
+# stay vanilla deepslate and tuff; the dead vents, spires and dripstone are a new near-black porous rock, so the neon
+# glow stands out on black. A glowing block's texture is its rock (or its cap) with the neon drawn in; the neon's bright
+# shades are lifted into the glow overlay, drawn again at full brightness, while the rock and the dark shades are lit by
+# the world. A block's four colours share one pattern (one seed), so they read as one block in four colours. Small
+# features over the whole tile, never one big shape, so a wall of them does not show the tile's repeat.
+
+NEONS = ["magenta", "violet", "lime", "light_blue"]  # block.Neon's order
+NEON_RGB = {"magenta": (255, 70, 205), "violet": (168, 96, 255), "lime": (176, 255, 70), "light_blue": (125, 175, 255)}
+GLOWING = ("mid", "neon", "hot")  # the shades the glow overlay lifts
+
+
+def neon_shades(neon):
+    """A neon colour's shades, dark to light: deep and dim are lit by the world like the rock, mid, neon and hot glow.
+    The darker shades scale the colour and the hot one mixes it halfway to white, so every shade keeps the neon's hue."""
+    r, g, b = NEON_RGB[neon]
+
+    def scale(k): return (round(r * k), round(g * k), round(b * k))
+
+    return {"deep": scale(0.24), "dim": scale(0.44), "mid": scale(0.72), "neon": (r, g, b),
+            "hot": tuple(round(v + (255 - v) * 0.5) for v in (r, g, b))}
+
+
+def _hex(c): return "#%02X%02X%02X" % tuple(c[:3])
+
+
+# The rocks' ramps, dark to light: all cool, a little blue-violet.
+VENT_RAMP = [hexc(c) for c in ("#26232E", "#2E2B37", "#35323F", "#3C3947", "#444150", "#4D4A5A")]
+VENT_PIT, VENT_GRAIN = hexc("#18161F"), hexc("#625E71")
+NEAR_BLACK = [hexc(c) for c in ("#121117", "#18161E", "#1E1C25", "#24222C", "#2B2834")]  # under the neon
+NEAR_BLACK_PIT = hexc("#0C0B10")
+DRIP_RAMP = [hexc(c) for c in ("#1F1D26", "#27252E", "#2F2C37", "#373441", "#403D4B", "#4A4756")]
+LIVE_RAMP = [hexc(c) for c in ("#322A3E", "#3C3349", "#453C53", "#4E445D", "#584D68", "#635774")]
+LIVE_PIT, LIVE_FLECKS = hexc("#241E2D"), [hexc(c) for c in ("#7C6A96", "#9280B0")]
+MAT_ROCK = [hexc(c) for c in ("#34343E", "#3F3F4A", "#4A4A56", "#565663", "#636370")]  # deepslate-dark, under a mat
+STEM_RAMP = [hexc(c) for c in ("#BAB2C7", "#C5BDD2", "#CFC7DA", "#D8D1E3", "#E2DCEC", "#ECE7F4")]
+FINE = ((8, 0.5), (4, 0.25))  # noise octaves (cells, weight): mostly the fine one
+
+
+def _put(px, x, y, c):
+    """Colours pixel (x, y), wrapping round the tile's edges; c is RGB."""
+    px[x % 16, y % 16] = tuple(c[:3]) + (255,)
+
+
+def _field(rng, octaves=FINE, grain=0.25):
+    """Tileable noise over the tile, a value per pixel: octaves of wrap_noise and a little grain of its own."""
+    fields = [(wrap_noise(rng, 16, c), w) for c, w in octaves]
+    return {(x, y): sum(f[y][x] * w for f, w in fields) + grain * rng.random() for y in range(16) for x in range(16)}
+
+
+def _by_shares(field, shares):
+    """The tile's pixels ranked by a field, lowest first, cut into groups of the given shares (the last takes the
+    rest): patches of exact sizes, the last group at the patches' hearts."""
+    order = sorted(field, key=field.get)
+    out, i = [], 0
+    for k, s in enumerate(shares):
+        n = len(order) - i if k == len(shares) - 1 else round(s * len(order))
+        out.append(order[i:i + n])
+        i += n
+    return out
+
+
+def _rock(rng, ramp, pits=0, pit=None, lip=True, grains=0, grain=None):
+    """Unlayered rock: the ramp spread evenly over a fine tileable noise, then pits (one or two dark pixels, the far
+    wall's lip lit below right of most) and single pale grains. Everything wraps, so the tile repeats seamlessly."""
+    img = Image.new("RGBA", (16, 16))
+    px = img.load()
+    for k, group in enumerate(_by_shares(_field(rng), [1 / len(ramp)] * len(ramp))):
+        for x, y in group:
+            _put(px, x, y, ramp[k])
+    holes = set()
+    for _ in range(pits):
+        x, y = rng.randrange(16), rng.randrange(16)
+        cells = [(x, y)] + ([((x + 1) % 16, y)] if rng.random() < 0.35 else [])
+        holes.update(cells)
+        for cx, cy in cells:
+            _put(px, cx, cy, pit)
+        lx, ly = (cells[-1][0] + 1) % 16, (y + 1) % 16
+        if lip and rng.random() < 0.7 and (lx, ly) not in holes:
+            _put(px, lx, ly, ramp[-1])
+    for _ in range(grains):
+        x, y = rng.randrange(16), rng.randrange(16)
+        if (x, y) not in holes:
+            _put(px, x, y, grain)
+    return img
+
+
+def vent_rock():
+    """The near-black porous rock of the dead vents, spires and dripstone: cool grey-violet, unlayered, pitted (small
+    dark pits, a lit lip below right of most) with a few pale grains. A little lighter than band stone and never
+    layered like it."""
+    return _rock(random.Random(2801), VENT_RAMP, pits=14, pit=VENT_PIT, grains=7, grain=VENT_GRAIN)
+
+
+def black_dripstone():
+    """Vent rock grown as dripstone: the vertical banding of vanilla's dripstone block, near-black and cool. Columns
+    take a band's shade (bands one to three pixels wide); each column breaks into drips, runs of two to six rows a shade
+    lighter or darker (a drip's head lighter, its tail darker), wrapping from the bottom row to the top so the cones'
+    blocks stack."""
+    rng = random.Random(2811)
+    bands = []
+    while len(bands) < 16:
+        bands += [rng.choice((1, 2, 2, 3, 3, 4))] * rng.choice((1, 2, 2, 3))
+    img = Image.new("RGBA", (16, 16))
+    px = img.load()
+    top = len(DRIP_RAMP) - 1
+    for x in range(16):
+        y, filled = rng.randrange(16), 0
+        while filled < 16:
+            run = rng.randrange(2, 7)
+            shade = bands[x] + rng.choice((-1, 0, 0, 1))
+            for k in range(min(run, 16 - filled)):
+                s = shade + (1 if k == 0 and run > 2 else 0) - (1 if k == run - 1 and run > 3 else 0)
+                _put(px, x, y + filled + k, DRIP_RAMP[max(0, min(top, s))])
+            filled += run
+    return img
+
+
+def live_vent_rock():
+    """The wall rock of the live vents: near-black with a violet cast, smoother than vent rock (a few pits, no lips),
+    with faint mineral flecks: pale violet specks and short glints. Nothing glows."""
+    rng = random.Random(2821)
+    img = _rock(rng, LIVE_RAMP, pits=5, pit=LIVE_PIT, lip=False)
+    px = img.load()
+    for _ in range(9):
+        _put(px, rng.randrange(16), rng.randrange(16), LIVE_FLECKS[0])
+    for _ in range(4):  # a glint: a bright fleck with a fainter one below right
+        x, y = rng.randrange(16), rng.randrange(16)
+        _put(px, x, y, LIVE_FLECKS[1])
+        _put(px, x + 1, y + 1, LIVE_FLECKS[0])
+    return img
+
+
+def pale_stem():
+    """The giant mushrooms' stem: pale lavender-white with fibrous vertical streaks, like vanilla's mushroom stem but
+    cool. Each column is a fibre of its own shade in long runs, with a few thin darker seams and paler strands."""
+    rng = random.Random(2831)
+    img = Image.new("RGBA", (16, 16))
+    px = img.load()
+    top = len(STEM_RAMP) - 1
+    base = [rng.choice((2, 2, 3, 3, 3, 4)) for _ in range(16)]
+    for x in range(16):
+        y, filled = rng.randrange(16), 0
+        while filled < 16:
+            run = rng.randrange(4, 11)
+            s = max(0, min(top, base[x] + rng.choice((-1, 0, 0, 1))))
+            for k in range(min(run, 16 - filled)):
+                _put(px, x, y + filled + k, STEM_RAMP[s])
+            filled += run
+    for shade, n, (lo, hi) in ((0, 5, (3, 9)), (top, 4, (2, 6))):  # dark seams between fibres, pale strands
+        for _ in range(n):
+            x, y = rng.randrange(16), rng.randrange(16)
+            for k in range(rng.randrange(lo, hi)):
+                _put(px, x, y + k, STEM_RAMP[shade])
+    return img
+
+
+def glow_mat_bottom():
+    """The deepslate-dark rock under a glow mat (its bottom face, and the rock of its sides): cool dark grey, its grain
+    drawn out sideways like deepslate's, with a few dark flakes along it."""
+    rng = random.Random(2840)
+    n1, n2 = wrap_noise(rng, 16, 4), wrap_noise(rng, 16, 8)
+    # the fine octave read from rows two apart, so the grain changes faster down than across
+    field = {(x, y): 0.3 * n1[y][x] + 0.5 * n2[(2 * y) % 16][x] + 0.2 * rng.random() for y in range(16) for x in range(16)}
+    img = Image.new("RGBA", (16, 16))
+    px = img.load()
+    for k, group in enumerate(_by_shares(field, [0.2] * 5)):
+        for x, y in group:
+            _put(px, x, y, MAT_ROCK[k])
+    for _ in range(6):
+        x, y = rng.randrange(16), rng.randrange(16)
+        for k in range(rng.randrange(2, 5)):
+            _put(px, x + k, y, MAT_ROCK[0])
+    return img
+
+
+def glow_mat_top(neon):
+    """A glow mat from above: a living film over the floor, mostly neon, in small colonies with hot hearts (hot, neon
+    and mid glow), fading through dim and deep film that the world lights to bare rock in the gaps between them."""
+    s = neon_shades(neon)
+    img = glow_mat_bottom()
+    px = img.load()
+    groups = _by_shares(_field(random.Random(2841), grain=0.15), (0.14, 0.12, 0.2, 0.26, 0.21, 0.07))
+    for group, shade in zip(groups[1:], ("deep", "dim", "mid", "neon", "hot")):
+        for x, y in group:
+            _put(px, x, y, s[shade])
+    return img
+
+
+def glow_mat_side(neon):
+    """A glow mat's side: the rock under it with the film's fringe over the top edge, hanging one to four pixels in
+    drips that glow at the top and darken to their ends, like vanilla nylium's side."""
+    s = neon_shades(neon)
+    rng = random.Random(2842)
+    img = glow_mat_bottom()
+    px = img.load()
+    for x in range(16):
+        depth = rng.choice((1, 2, 2, 2, 3, 3, 4))
+        for y in range(depth + 1):
+            if y == 0:
+                shade = "hot" if rng.random() < 0.15 else rng.choice(("neon", "neon", "mid"))
+            elif y < depth - 1:
+                shade = rng.choice(("mid", "mid", "neon", "dim"))
+            elif y == depth - 1:
+                shade = rng.choice(("mid", "dim"))
+            else:
+                shade = "deep"
+            _put(px, x, y, s[shade])
+    return img
+
+
+def glow_cap(neon):
+    """A glow cap, a giant mushroom's cap: neon all over, mottled with a glowing mid shade, with pale spots like
+    vanilla's mushroom caps (hot, in neon rims) and darker specks and short gill-like streaks that do not glow."""
+    s = neon_shades(neon)
+    rng = random.Random(2851)
+    img = Image.new("RGBA", (16, 16))
+    px = img.load()
+    low, high = _by_shares(_field(rng, grain=0.3), (0.35, 0.65))
+    for x, y in low:
+        _put(px, x, y, s["mid"])
+    for x, y in high:
+        _put(px, x, y, s["neon"])
+    for _ in range(5):  # gill streaks: two or three pixels down, edging sideways
+        x, y, dx = rng.randrange(16), rng.randrange(16), rng.choice((-1, 1))
+        for k in range(rng.randrange(2, 4)):
+            _put(px, x + dx * (k // 2), y + k, s["dim"])
+    for _ in range(12):
+        _put(px, rng.randrange(16), rng.randrange(16), s["dim"])
+    spots = []
+    for _ in range(4000):
+        p = (rng.randrange(16), rng.randrange(16))
+        if all(_wrapped(*p, *q) > 6 for q in spots):
+            spots.append(p)
+            if len(spots) == 3:
+                break
+    for k, (x, y) in enumerate(spots):
+        size = 3 if k == 0 else 2
+        for dy in range(size):
+            for dx in range(size):
+                corner = size == 3 and dx != 1 and dy != 1
+                _put(px, x + dx, y + dy, s["neon"] if corner else s["hot"])
+    return img
+
+
+def _wrapped(ax, ay, bx, by):
+    dx, dy = abs(ax - bx), abs(ay - by)
+    return math.hypot(min(dx, 16 - dx), min(dy, 16 - dy))
+
+
+def _seeds(rng, n, spacing):
+    """n points scattered over the tile at least `spacing` apart round its edges (fewer if they do not fit)."""
+    out = []
+    for _ in range(4000):
+        p = (rng.random() * 16, rng.random() * 16)
+        if all(_wrapped(*p, *q) >= spacing for q in out):
+            out.append(p)
+            if len(out) == n:
+                break
+    return out
+
+
+def _cells(seeds, x, y):
+    """(distance, seed) to the seeds from the middle of pixel (x, y), nearest first."""
+    c = (x + 0.5, y + 0.5)
+    return sorted((_wrapped(*c, *q), k) for k, q in enumerate(seeds))
+
+
+def vent_crown(neon):
+    """A vent crown, the bright mineral rim of a live vent's mouth: a crust of neon crystals over near-black rock, the
+    brightest block of the set. Each crystal face is a cell of a tileable Voronoi pattern, lit by how it faces the
+    light (from the top left): brightest at its top left, a step darker at its lower right, a hot glint at its top
+    left corner; thin seams of dark rock between the faces, and one face of bare rock."""
+    s = neon_shades(neon)
+    rng = random.Random(2861)
+    img = _rock(rng, NEAR_BLACK, pits=3, pit=NEAR_BLACK_PIT, lip=False)
+    px = img.load()
+    seeds = _seeds(rng, 12, 3.4)
+    lit = [2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3]  # 1 dim, 2 mid, 3 neon (the face's body), 0 bare rock
+    lit = [0] + lit[:len(seeds) - 1]
+    rng.shuffle(lit)
+    ladder = ["dim", "mid", "neon", "hot"]
+    corner = {}
+    for y in range(16):
+        for x in range(16):
+            (d1, k1), (d2, _) = _cells(seeds, x, y)[:2]
+            if d2 - d1 < 0.6 or lit[k1] == 0:
+                continue  # a seam, or bare rock
+            sx, sy = seeds[k1]
+            ox, oy = (x + 0.5 - sx + 8) % 16 - 8, (y + 0.5 - sy + 8) % 16 - 8
+            step = lit[k1] - 1 + (1 if ox + oy < -1.0 else (-1 if ox + oy > 1.5 else 0))
+            _put(px, x, y, s[ladder[max(0, min(3, step))]])
+            if k1 not in corner or ox + oy < corner[k1][0]:
+                corner[k1] = (ox + oy, x, y)
+    for _, x, y in corner.values():
+        _put(px, x, y, s["hot"])
+    return img
+
+
+def den_fissure(neon):
+    """A den fissure, the floor of a live den: near-black vent rock split by glowing cracks. The cracks run along the
+    edges of a tileable Voronoi pattern, its pixels pushed about by a tileable noise first so the cracks wander instead
+    of running straight, about two in three of them open, so they meet in an irregular network that wraps round the
+    tile: neon along their middles, mid at their edges, hot where three plates part; their lips take a deep tint of the
+    glow, lit by the world."""
+    s = neon_shades(neon)
+    rng = random.Random(2873)
+    img = _rock(rng, NEAR_BLACK, pits=9, pit=NEAR_BLACK_PIT)
+    px = img.load()
+    seeds = _seeds(rng, 7, 4.2)
+    warp_x, warp_y = wrap_noise(rng, 16, 4), wrap_noise(rng, 16, 4)
+    open_ = {(a, b): rng.random() < 0.7 for a in range(len(seeds)) for b in range(len(seeds)) if a < b}
+    lips = []
+    for y in range(16):
+        for x in range(16):
+            # _cells measures from the pixel's middle; the warp moves that point up to 1.6 pixels each way
+            wx, wy = x + 3.2 * (warp_x[y][x] - 0.5), y + 3.2 * (warp_y[y][x] - 0.5)
+            (d1, k1), (d2, k2), (d3, _) = _cells(seeds, wx, wy)[:3]
+            if not open_[min(k1, k2), max(k1, k2)]:
+                continue
+            gap = d2 - d1
+            if gap < 0.5:
+                _put(px, x, y, s["hot"] if d3 - d1 < 1.1 else s["neon"])
+            elif gap < 0.95:
+                _put(px, x, y, s["mid"])
+            elif gap < 1.7:
+                lips.append((x, y))
+    for x, y in lips:
+        if rng.random() < 0.5:
+            _put(px, x, y, s["deep"])
+    return img
+
+
+def vent_glow(neon):
+    """Vent glow, lining the inside of a live vent: a patchy glowing mineral crust over near-black rock, small patches
+    over about two fifths of the tile, grainy within (mid and neon, hot sparkles) and rimmed with dim crust that the
+    world lights."""
+    s = neon_shades(neon)
+    rng = random.Random(2881)
+    img = _rock(rng, NEAR_BLACK, pits=6, pit=NEAR_BLACK_PIT)
+    px = img.load()
+    bare, rim, crust = _by_shares(_field(rng, grain=0.12), (0.5, 0.1, 0.4))
+    for x, y in rim:
+        _put(px, x, y, s["dim"])
+    for x, y in crust:
+        r = rng.random()
+        _put(px, x, y, s["hot"] if r < 0.1 else (s["neon"] if r < 0.5 else s["mid"]))
+    return img
+
+
+def throat_vein(neon):
+    """A throat vein, lining the throats that lead down: dark vent rock with thin glowing veins. A vein follows a
+    contour of a tileable noise, so it winds and wraps round the tile, a pixel wide; a second, broader noise thins it to
+    mid and breaks it off in places, and a few hot beads sit along it. Its lips take a deep tint of the glow."""
+    s = neon_shades(neon)
+    rng = random.Random(2891)
+    img = _rock(rng, VENT_RAMP, pits=8, pit=VENT_PIT, grains=3, grain=VENT_GRAIN)
+    px = img.load()
+    n = _field(rng, ((4, 0.6), (2, 0.3), (8, 0.1)), grain=0.0)
+    fade = _field(rng, ((2, 0.7), (4, 0.3)), grain=0.0)
+    level = sorted(n.values())[128]
+    vein = {}
+    for (x, y), v in n.items():
+        right, down = n[((x + 1) % 16, y)], n[(x, (y + 1) % 16)]
+        if (v < level) != (right < level) or (v < level) != (down < level):
+            f = fade[(x, y)]
+            if f > 0.28:
+                vein[(x, y)] = "neon" if f > 0.48 else "mid"
+    beads = [p for p, shade in sorted(vein.items()) if shade == "neon"]
+    for _ in range(3):
+        if beads:
+            vein[rng.choice(beads)] = "hot"
+    for (x, y) in vein:
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if (nx % 16, ny % 16) not in vein and rng.random() < 0.25:
+                _put(px, nx, ny, s["deep"])
+    for (x, y), shade in vein.items():
+        _put(px, x, y, s[shade])
+    return img
+
+
+def spire_tip(neon):
+    """A spire tip, the glowing top of a small live spire: rounded neon mineral knobs on dark rock, each lit from the
+    top left (a hot highlight, neon, mid, then a dim and a deep shadow side that the world lights) with a dark shadow on
+    the rock below right of it. The knobs wrap round the tile's edges."""
+    s = neon_shades(neon)
+    rng = random.Random(2901)
+    img = _rock(rng, NEAR_BLACK, pits=6, pit=NEAR_BLACK_PIT)
+    px = img.load()
+    knobs = []
+    for _ in range(4000):
+        p = (rng.randrange(16) + 0.5, rng.randrange(16) + 0.5, rng.choice((1.5, 2.0, 2.0, 2.5)))
+        if all(_wrapped(p[0], p[1], q[0], q[1]) >= p[2] + q[2] + 0.6 for q in knobs):
+            knobs.append(p)
+            if len(knobs) == 7:
+                break
+    ramp = [_hex(s[k]) for k in ("deep", "dim", "mid", "neon", "hot")]
+    for cx, cy, r in knobs:
+        for y in range(int(cy - r) - 2, int(cy + r) + 3):
+            for x in range(int(cx - r) - 2, int(cx + r) + 3):
+                if math.hypot(x + 0.5 - cx - 0.8, y + 0.5 - cy - 0.8) <= r + 0.05:
+                    _put(px, x, y, NEAR_BLACK_PIT)
+    for cx, cy, r in knobs:
+        plants.ball(px, cx, cy, r, ramp, wrap=True)
+        _put(px, int(cx - 0.4 * r), int(cy - 0.4 * r), s["hot"])  # the highlight
+    return img
+
+
+SEEP_FILM = [tuple(round(v * k) for v in NEON_RGB["light_blue"]) for k in (0.22, 0.34, 0.5)]  # film, faint glow, glow
+
+
+def seep_crust():
+    """Seep crust, on the dry rock at the edge of the crude oil seeps: near-black pitted rock under a faint light blue
+    film in thin broken patches, whose glowing pixels are the light blue at a third and at a half of its brightness,
+    so it reads clearly dimmer than the neon blocks. Light blue only."""
+    rng = random.Random(2911)
+    img = _rock(rng, NEAR_BLACK, pits=8, pit=NEAR_BLACK_PIT)
+    px = img.load()
+    _, edge, faint, bright = _by_shares(_field(rng, grain=0.35), (0.62, 0.15, 0.14, 0.09))
+    for group, c in zip((edge, faint, bright), SEEP_FILM):
+        for x, y in group:
+            _put(px, x, y, c)
+    return img
+
+
+for _name, _fn in (("vent_rock", vent_rock), ("black_dripstone", black_dripstone), ("live_vent_rock", live_vent_rock),
+                   ("pale_stem", pale_stem), ("glow_mat_bottom", glow_mat_bottom), ("seep_crust", seep_crust)):
+    PAINTERS["block/" + _name] = _fn
+GLOW["block/seep_crust"] = {_hex(c) for c in SEEP_FILM[1:]}
+# The neon blocks, a texture per colour: <block>_<colour> (the glow mat's _top and _side, over glow_mat_bottom).
+NEON_PAINTERS = {"glow_mat": {"top": glow_mat_top, "side": glow_mat_side}, "glow_cap": glow_cap, "vent_crown": vent_crown,
+                 "den_fissure": den_fissure, "vent_glow": vent_glow, "throat_vein": throat_vein, "spire_tip": spire_tip}
+VENT_FIELD = ["block/vent_rock", "block/black_dripstone", "block/live_vent_rock", "block/pale_stem", "block/glow_mat_bottom",
+              "block/seep_crust"]  # every texture of the vent field, for cool_problems and tools/vent_sheet.py
+for _block, _fns in NEON_PAINTERS.items():
+    for _neon in NEONS:
+        for _face, _fn in (_fns.items() if isinstance(_fns, dict) else [(None, _fns)]):
+            _tex = f"block/{_block}_{_neon}" + (f"_{_face}" if _face else "")
+            PAINTERS[_tex] = (lambda fn=_fn, neon=_neon: fn(neon))
+            GLOW[_tex] = {_hex(neon_shades(_neon)[k]) for k in GLOWING}
+            VENT_FIELD.append(_tex)
+
+
+def hue_sat(c):
+    """HSV hue in degrees (None for a grey: channels within 6 of each other) and saturation of an RGB colour."""
+    r, g, b = c[:3]
+    hi, lo = max(r, g, b), min(r, g, b)
+    if hi - lo <= 6:
+        return None, 0.0
+    d = hi - lo
+    if hi == r:
+        h = 60 * ((g - b) / d) % 360
+    elif hi == g:
+        h = 60 * ((b - r) / d) + 120
+    else:
+        h = 60 * ((r - g) / d) + 240
+    return h, d / hi
+
+
+# Taran's colour rules as hue bands: blue through violet to magenta anywhere, lime's yellow-green only in the lime
+# textures; any other tint (red, orange, yellow, brown, green, cyan or teal, a warm white) breaks them. Only greys
+# (channels within 6) carry no hue.
+COOL_HUES = (205.0, 335.0)
+LIME_HUES = (75.0, 100.0)
+
+
+def cool_problems(name, img):
+    """The pixels of a vent field texture that break the colour rules, as (x, y, colour, hue)."""
+    lime_ok = "_lime" in name
+    out = []
+    px = img.load()
+    for y in range(img.size[1]):
+        for x in range(img.size[0]):
+            c = px[x, y]
+            if c[3] == 0:
+                continue
+            h, _ = hue_sat(c)
+            if h is None or COOL_HUES[0] <= h <= COOL_HUES[1] or (lime_ok and LIME_HUES[0] <= h <= LIME_HUES[1]):
+                continue
+            out.append((x, y, c[:3], round(h)))
+    return out
+
+
 def glow_layer(img, colours):
     """Only the pixels of these colours (hex), everything else transparent."""
     keep = {plants.hexc(c) for c in colours}
@@ -135,6 +622,9 @@ def write_all(textures_dir):
         path = os.path.join(textures_dir, name + ".png")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         img = painter()
+        if name in VENT_FIELD:
+            bad = cool_problems(name, img)
+            assert not bad, f"{name}: colours outside the vent field's rules (x, y, colour, hue): {bad[:6]}"
         img.save(path)
         if name in GLOW:
             overlay = glow_layer(img, GLOW[name])

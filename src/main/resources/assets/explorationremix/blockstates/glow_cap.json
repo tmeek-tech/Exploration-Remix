@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "neon=magenta": {
+      "model": "explorationremix:block/glow_cap_magenta"
+    },
+    "neon=violet": {
+      "model": "explorationremix:block/glow_cap_violet"
+    },
+    "neon=lime": {
+      "model": "explorationremix:block/glow_cap_lime"
+    },
+    "neon=light_blue": {
+      "model": "explorationremix:block/glow_cap_light_blue"
+    }
+  }
+}
