@@ -10,10 +10,40 @@ import static com.explorationremix.world.terrain.GardensNoise.hash2;
 /**
  * Where the Deep Gardens' big hollow vents stand (the previews' vents.sites and deep_vents): clusters of two levels
  * per band, from cell noise on each storey's own fields. Beehives ring the bigger domes at the bottom, stacks stand in
- * the vent halls and out in the other halls in the middle, stumps sit on the seep beds at the top; the deep vents stand
- * on the deep sites. Between clusters the lower key wins; every vent needs a crack that opens onto floor.
+ * the vent halls and out in the other halls in the middle; the deep vents stand on the deep sites. No vent stands in
+ * the Seep Beds (Taran, 2026-11-19: "No vents should be in the seeps"): their stumps are off ({@link #STUMPS}) and a
+ * member whose storey is bed-dominant under it is refused. Between clusters the lower key wins; every vent needs a
+ * crack that opens onto floor.
  */
 final class GardensSites {
+    /**
+     * The vents' size against the first build's (Taran, 2026-11-19, "Make vents bigger"): every radius (body, fit
+     * radius, flare) times GIRTH, every wanted height times TALL (the rooms still cap it), the walls times the root of
+     * the girth. Cracks, dens, porches and adits keep the player's sizes. Another choice is these two numbers.
+     */
+    static final double GIRTH = 1.5, TALL = 1.25;
+    /**
+     * A member too big for its room (its ring, floor range, plug, gate or bed test fails) is fitted again a step
+     * slimmer, down to the first build's girth in GIRTH_STEPS steps (geometric: 1.5, 1.22, 1): the halls round the
+     * vent halls and the domes' rooms hold that many more. 1 keeps every vent at GIRTH or none.
+     */
+    static final int GIRTH_STEPS = 3;
+
+    /** The girth of step s (0 the full GIRTH). */
+    static double girthStep(int s) { return GIRTH_STEPS <= 1 ? GIRTH : Math.pow(GIRTH, 1.0 - s / (double) (GIRTH_STEPS - 1)); }
+
+    /** The floor range a member's 17 samples may span (9 before the vents' feet blended into the ground). */
+    static final double RNG = 12;
+    /** Whether the Seep Beds' stumps stand (off: Taran, 2026-11-19, "No vents should be in the seeps"). */
+    static final boolean STUMPS = false;
+    /**
+     * How near a deep site's axis no other vent stands: 36 when a deep vent's foot reached about 19 and its
+     * neighbours' about 14, so GIRTH times it.
+     */
+    static final double DEEP_CLEAR = 36 * GIRTH;
+    /** The dominant style of the Seep Beds ({@link GardensStoreys#dominant}). */
+    static final int BEDS = 2;
+
     /** The storey fields the sites read, by world column (one pass of {@link GardensStoreys}). */
     interface Fields {
         float floor(int k, int x, int z);
@@ -42,6 +72,9 @@ final class GardensSites {
 
         float hot(int x, int z);
 
+        /** Storey k's dominant style at a column (0 domes, 1 halls, 2 beds: the band it gives its rows). */
+        int dom(int k, int x, int z);
+
         /** The vent halls that lift storey k in this pass, whose cluster could reach the box. */
         List<GardensPlan.VHall> vhalls(int k, double minX, double minZ, double maxX, double maxZ);
 
@@ -64,6 +97,10 @@ final class GardensSites {
         /** A deep vent's outlet from its level run (the game's exit search): where it leaves and how long, else NaN. */
         double outletDep = Double.NaN, outletLen = Double.NaN;
         double x, z, R, Rf, H, key, a0;
+        /** The vent's girth against the first build's (GIRTH, or a step slimmer where its room was short). */
+        double girth = 1;
+        /** The ceiling's row over the vent's centre (its storey's), or NaN (a deep vent). */
+        double ceilRow = Double.NaN;
         long key24;
         boolean live, twin, deepFailed;
         /** Up to three crack angles, NaN where a crack is shut. */
@@ -100,6 +137,8 @@ final class GardensSites {
             s.H = H;
             s.key = key;
             s.a0 = a0;
+            s.girth = girth;
+            s.ceilRow = ceilRow;
             s.key24 = key24;
             s.live = live;
             s.twin = twin;
@@ -142,8 +181,8 @@ final class GardensSites {
 
     // ================================================================================================ the fit test
 
-    /** fit's result: ys, y_lo, H. */
-    record Fit(int ys, int yLo, double H) {}
+    /** fit's result: ys, y_lo, H, and the storey's ceiling over the centre. */
+    record Fit(int ys, int yLo, double H, float ceil) {}
 
     /** The world column of a position, clipped into the patch in the preview's rules. */
     int ix(double x) { return (plan.patch ? Math.max(0, Math.min(plan.psx - 1, (int) Math.floor(x))) : (int) Math.floor(x)) + ox; }
@@ -160,13 +199,21 @@ final class GardensSites {
 
     float h(int k, int x, int z) { return st.ceil(k, x, z) - st.floor(k, x, z); }
 
+    /**
+     * How near a gate a vent may stand: the gate's landing and passage (30), then the vent's fit radius and the reach
+     * of its apron ({@link GardensVents#apronReach}), so no foot or apron fills a way in or out. (46 from the centre
+     * when the fit radius was at most 13 and no apron was counted.)
+     */
+    static final double GATE_CLEAR = 30;
+
     /** vents.fit: the 2D fit test (5.2), or null with the reason counted under {@code tag}. */
     Fit fit(int k, double cx, double cz, double Hw, double Rf, double rng, double minH, double clear, int ringbad, String[] reason) {
         if (plan.patch && !(Rf + 4 <= cx && cx < plan.psx - Rf - 4 && Rf + 4 <= cz && cz < plan.psz - Rf - 4)) {
             reason[0] = "edge";
             return null;
         }
-        if (plan.gateDist(cx + ox, cz + oz) < 46) {
+        double gate = plan.gateDist(cx + ox, cz + oz);
+        if (gate < GATE_CLEAR + Rf) {
             reason[0] = "gate";
             return null;
         }
@@ -187,6 +234,10 @@ final class GardensSites {
             return null;
         }
         int ys = (int) Math.floor(fmax) + 1, yLo = (int) Math.floor(fmin);
+        if (gate < GATE_CLEAR + Rf + GardensVents.apronReach(ys, yLo)) {
+            reason[0] = "gate";
+            return null;
+        }
         int bad = 0;
         for (int a = 0; a < 8; a++) {
             double ang = a * Math.PI / 4;
@@ -195,6 +246,18 @@ final class GardensSites {
         }
         if (bad > ringbad) {
             reason[0] = "ring";
+            return null;
+        }
+        // no vent in the Seep Beds: the storey is bed-dominant at none of the floor samples or the ring
+        boolean beds = false;
+        for (double[] p : pts) beds |= st.dom(k, ix(p[0]), iz(p[1])) == BEDS;
+        for (int a = 0; a < 8 && !beds; a++) {
+            double ang = a * Math.PI / 4;
+            double x = cx + (Rf + 3) * Math.cos(ang), z = cz + (Rf + 3) * Math.sin(ang);
+            beds = inside(x, z) && st.dom(k, cx(x), cz(z)) == BEDS;
+        }
+        if (beds) {
+            reason[0] = "seep";
             return null;
         }
         float fk = st.floor(k, ix, iz), hk = h(k, ix, iz);
@@ -218,7 +281,12 @@ final class GardensSites {
             return null;
         }
         reason[0] = "ok";
-        return new Fit(ys, yLo, H);
+        return new Fit(ys, yLo, H, fk + hk);
+    }
+
+    /** Whether a fit failed for the member's size (a slimmer one might pass): its ring, range, plug, gate or beds. */
+    static boolean tooBig(String reason) {
+        return reason.equals("ring") || reason.equals("range") || reason.equals("plug") || reason.equals("gate") || reason.equals("seep");
     }
 
     /** vents.cracks_ok: which crack angles open onto the storey's floor (2, 4 and 6 out from the fit radius). */
@@ -235,8 +303,8 @@ final class GardensSites {
         return ok;
     }
 
-    /** vents.crack_angles: the angles of a vent's cracks and its a0. */
-    static double[] crackAngles(int form, long key24, double R, double[] a0out) {
+    /** vents.crack_angles: the angles of a vent's cracks and its a0 (for a vent of radius R and girth g). */
+    static double[] crackAngles(int form, long key24, double R, double g, double[] a0out) {
         double u3 = uSlot(key24, 3), a0 = 2 * Math.PI * uSlot(key24, 8);
         a0out[0] = a0;
         if (form == 3) {
@@ -245,24 +313,33 @@ final class GardensSites {
             return out;
         }
         int n = form == 0 ? 1 + (int) (1.999 * u3) : (form == 1 ? 1 + (int) (2.999 * u3) : 2 + (int) (1.999 * u3));
-        if (form == 1 && (1.05 + 0.2 * uSlot(key24, 17)) * R - 2.0 < 4.0) n = Math.min(n, 2);
+        // a stack whose den is under 4 across at the foot has room for two cracks at most
+        if (form == 1 && (1.05 + 0.2 * uSlot(key24, 17)) * R - stackWall(true, g) < 4.0) n = Math.min(n, 2);
         double[] out = new double[n];
         for (int c = 0; c < n; c++) out[c] = a0 + 2 * Math.PI * c / n + 0.5 * (uSlot(key24, 20 + c) - 0.5);
         return out;
     }
 
-    /** _member_geom: (rin at the foot, lump amplitude) for the satellite spacing. */
-    static double[] memberGeom(int form, double R) {
-        if (form == 0) return new double[]{R - 1.4, 0.1 * R + 0.2};
-        if (form == 1) return new double[]{1.15 * R - 2.0, 0.1 * R + 0.3};
-        double w = Math.max(1.6, Math.min(2.6, 0.3 * R));
-        return new double[]{R - w, 0.1 * R + 0.3};
+    /** The walls thicken as the root of the girth (a wall of the first build's times that). */
+    static double wallScale(double g) { return Math.sqrt(g); }
+
+    /** A stack's wall (live or dead) at girth g. */
+    static double stackWall(boolean live, double g) { return wallScale(g) * (live ? 2.0 : 2.5); }
+
+    /** A beehive's wall (and a plain deep vent's) at girth g: 0.3 of the radius before the girth, within 1.6..2.6. */
+    static double beehiveWall(double R, double g) { return wallScale(g) * Math.max(1.6, Math.min(2.6, 0.3 * R / g)); }
+
+    /** _member_geom: (rin at the foot, lump amplitude) for the satellite spacing, at girth g. */
+    static double[] memberGeom(int form, double R, double g) {
+        if (form == 0) return new double[]{R - 1.4 * wallScale(g), 0.1 * R + 0.2};
+        if (form == 1) return new double[]{1.15 * R - stackWall(true, g), 0.1 * R + 0.3};
+        return new double[]{R - beehiveWall(R, g), 0.1 * R + 0.3};
     }
 
     // ================================================================================================ clusters
 
     interface FitArgs {
-        /** Rf, Hw, rng, minH, clear (live), clear (dead), ringbad. */
+        /** Rf (the first build's), Hw, rng, minH, clear (live), clear (dead), ringbad, for member j of radius R (the first build's). */
         double[] at(int j, double sx, double sz, double R);
     }
 
@@ -270,21 +347,26 @@ final class GardensSites {
         boolean at(int ix, int iz, double y);
     }
 
-    /** vents.place_cluster: a cluster's members, each fitted; satellites are spaced round the anchor. */
+    /**
+     * vents.place_cluster: a cluster's members, each fitted; satellites are spaced round the anchor. Rs and the fit
+     * radii are the first build's: each member is fitted at GIRTH times them, then a step slimmer while it is too big
+     * for its room ({@link #GIRTH_STEPS}).
+     */
     List<Site> placeCluster(int form, int k, double siteX, double siteZ, int n, double[] Rs, double[] centre, FitArgs fa,
                             Live lf, int i, int kk, int ns, long group, long sub) {
         List<Site> placed = new ArrayList<>();
         double ax = siteX, az = siteZ;
+        // the anchor's radius and girth for the spacing: its own once it stands, else the full girth's
+        double R0 = GIRTH * Rs[0], g0 = GIRTH;
         String[] reason = new String[1];
         for (int j = 0; j < n; j++) {
-            double R = Rs[j];
+            double R = GIRTH * Rs[j];
             boolean twin = false;
             double sx, sz;
             if (j == 0) {
                 sx = siteX;
                 sz = siteZ;
             } else {
-                double R0 = Rs[0];
                 twin = hv(ns, 20, k, j, i, kk) < 0.25;
                 boolean ok = false;
                 sx = sz = 0;
@@ -295,14 +377,14 @@ final class GardensSites {
                         beta = thc + 2.4 * (hv(ns, 21, k, j + 8 * t, i, kk) - 0.5);
                     } else beta = 2 * Math.PI * hv(ns, 21, k, j + 8 * t, i, kk);
                     double ud = hv(ns, 22, k, j, i, kk), ue = hv(ns, 23, k, j, i, kk);
-                    double[] g0 = memberGeom(form, R0), gj = memberGeom(form, R);
-                    double gap0 = g0[0] + gj[0] + g0[1] + gj[1] + 2;
+                    double[] ga = memberGeom(form, R0, g0), gj = memberGeom(form, R, GIRTH);
+                    double gap0 = ga[0] + gj[0] + ga[1] + gj[1] + 2;
                     double d = twin ? gap0 : Math.max((0.85 + 0.15 * ud) * (R0 + R) + 2 * ue, gap0);
                     sx = ax + d * Math.cos(beta);
                     sz = az + d * Math.sin(beta);
                     boolean clash = false;
                     for (Site q : placed) {
-                        double[] gq = memberGeom(form, q.R);
+                        double[] gq = memberGeom(form, q.R, q.girth);
                         if (Math.hypot(sx - q.x, sz - q.z) < gq[0] + gj[0] + gq[1] + gj[1] + 2) clash = true;
                     }
                     if (!clash) {
@@ -315,14 +397,22 @@ final class GardensSites {
                     continue;
                 }
             }
-            double[] a = fa.at(j, sx, sz, R);
-            double Rf = a[0], Hw = a[1], rng = a[2], minH = a[3], clearL = a[4], clearD = a[5];
+            double[] a = fa.at(j, sx, sz, Rs[j]);
+            double Rf1 = a[0], Hw = a[1], rng = a[2], minH = a[3], clearL = a[4], clearD = a[5];
             int ringbad = (int) a[6];
             int cix = ix(sx), ciz = iz(sz);
             boolean live = lf.at(cix, ciz, st.floor(k, cix, ciz));
-            Fit res = fit(k, sx, sz, Hw, Rf, rng, minH, live ? clearL : clearD, ringbad + (j > 0 ? 1 : 0), reason);
+            Fit res = null;
+            double g = GIRTH;
+            int step = 0;
+            for (; step < GIRTH_STEPS; step++) {
+                g = girthStep(step);
+                res = fit(k, sx, sz, Hw, g * Rf1, rng, minH, live ? clearL : clearD, ringbad + (j > 0 ? 1 : 0), reason);
+                if (res != null || !tooBig(reason[0])) break;
+            }
             count(form + (j > 0 ? "s" : "a") + "-" + reason[0]);
             if (res == null) continue;
+            count("girth-" + step);
             live = lf.at(cix, ciz, res.ys);
             double key = hv(5, ns, k, j, i, kk);
             Site s = new Site();
@@ -330,8 +420,10 @@ final class GardensSites {
             s.k = k;
             s.x = sx;
             s.z = sz;
-            s.R = R;
-            s.Rf = Rf;
+            s.R = g * Rs[j];
+            s.Rf = g * Rf1;
+            s.girth = g;
+            s.ceilRow = res.ceil();
             s.H = res.H;
             s.ys = res.ys;
             s.yLo = res.yLo;
@@ -346,6 +438,10 @@ final class GardensSites {
             s.j = j;
             s.order = new long[]{group, k, sub, i, kk, j};
             placed.add(s);
+            if (j == 0) {
+                R0 = s.R;
+                g0 = g;
+            }
         }
         return placed;
     }
@@ -365,13 +461,14 @@ final class GardensSites {
         int n = Math.min(3, 1 + (int) (hv(4, 1, k, 0, i, kk) * (1.0 + r / 14.0)));
         double a = 2 * Math.PI * hv(4, 2, k, 0, i, kk);
         double off = (0.15 + 0.30 * hv(4, 3, k, 0, i, kk)) * r;
+        // the first build's radius (its clamp of 9 is GIRTH times it with the girth)
         double R0 = Math.max(5.0, Math.min(9.0, 0.30 * r));
         double[] Rs = new double[n];
         Rs[0] = R0;
         for (int j = 1; j < n; j++) Rs[j] = 0.65 * R0;
         FitArgs fa = (j, sx, sz, R) -> {
             float hcol = st.domeH(k, ix(sx), iz(sz));
-            return new double[]{1.45 * R, 0.75f * hcol, 9, j == 0 ? 10 : 8, 6, 5, 1};
+            return new double[]{1.45 * R, TALL * (0.75f * hcol), RNG, j == 0 ? 10 : 8, 6, 5, 1};
         };
         return placeCluster(2, k, cx + off * Math.cos(a), cz + off * Math.sin(a), n, Rs, new double[]{cx, cz}, fa,
                 (ix, iz, y) -> liveAt(ix, iz, y, 0, 0f), i, kk, 4, 0, 0);
@@ -387,10 +484,25 @@ final class GardensSites {
         double[] Hws = new double[n];
         Hws[0] = 14 + 18 * Math.pow(hv(1, 7, k, 0, i, kk), 1.6);
         for (int j = 1; j < n; j++) Hws[j] = Math.max(10.0, Hws[0] * (0.55 + 0.3 * hv(1, 7, k, j, i, kk)));
+        return stackCluster(k, c[0] + off * Math.cos(a), c[1] + off * Math.sin(a), Hws, c, j -> j == 0 ? 12 : 10,
+                (ix, iz, y) -> liveAt(ix, iz, y, 0, (float) VH_BONUS * st.bump(k, ix, iz)), i, kk, 1, 1, 0);
+    }
+
+    interface MinH {
+        double of(int j);
+    }
+
+    /**
+     * A cluster of stacks (form 1) from their wanted heights before TALL: each a radius of 2.8 + 0.12 of that height
+     * and a fit radius over its foot's flare (both the first build's, the girth is placeCluster's); the height times TALL.
+     */
+    List<Site> stackCluster(int k, double siteX, double siteZ, double[] Hws, double[] centre, MinH minH, Live lf, int i,
+                            int kk, int ns, long group, long sub) {
+        int n = Hws.length;
         double[] Rs = new double[n];
         for (int j = 0; j < n; j++) Rs[j] = 2.8 + 0.12 * Hws[j];
-        FitArgs fa = (j, sx, sz, R) -> new double[]{1.15 * R + 1.5 + 0.08 * Hws[j], Hws[j], 9, j == 0 ? 12 : 10, 6, 5, 1};
-        return placeCluster(1, k, c[0] + off * Math.cos(a), c[1] + off * Math.sin(a), n, Rs, c, fa, (ix, iz, y) -> liveAt(ix, iz, y, 0, (float) VH_BONUS * st.bump(k, ix, iz)), i, kk, 1, 1, 0);
+        FitArgs fa = (j, sx, sz, R) -> new double[]{1.15 * R + 1.5 + 0.08 * Hws[j], TALL * Hws[j], RNG, minH.of(j), 6, 5, 1};
+        return placeCluster(1, k, siteX, siteZ, n, Rs, centre, fa, lf, i, kk, ns, group, sub);
     }
 
     /**
@@ -433,13 +545,9 @@ final class GardensSites {
         }
         if (st.wh(k, cx(cx), cz(cz)) < 0.5f) return List.of();
         int n = 1 + (int) (2.0 * hv(2, 4, k, 0, i, kk));
-        double[] Hws = new double[n], Rs = new double[n];
-        for (int j = 0; j < n; j++) {
-            Hws[j] = 10 + 8 * hv(2, 7, k, j, i, kk);
-            Rs[j] = 2.8 + 0.12 * Hws[j];
-        }
-        FitArgs fa = (j, sx, sz, R) -> new double[]{1.15 * R + 1.5 + 0.08 * Hws[j], Hws[j], 9, 10, 6, 5, 1};
-        return placeCluster(1, k, cx, cz, n, Rs, null, fa, (ix, iz, y) -> liveAt(ix, iz, y, 0, 0f), i, kk, 2, 1, 1);
+        double[] Hws = new double[n];
+        for (int j = 0; j < n; j++) Hws[j] = 10 + 8 * hv(2, 7, k, j, i, kk);
+        return stackCluster(k, cx, cz, Hws, null, j -> 10, (ix, iz, y) -> liveAt(ix, iz, y, 0, 0f), i, kk, 2, 1, 1);
     }
 
     /** A stump cell's cluster (top band): slid to the bed noise's peak on the seep beds. */
@@ -471,7 +579,7 @@ final class GardensSites {
         for (int j = 0; j < n; j++) Rs[j] = 3.4 + 1.4 * hv(3, 9, k, j, i, kk);
         FitArgs fa = (j, sx, sz, R) -> {
             float hb = h(k, ix(sx), iz(sz));
-            return new double[]{1.3 * R, hb < 16f ? 9.0 : 16.0, 6, 4, 2.5, 2.5, 2};
+            return new double[]{1.3 * R, TALL * (hb < 16f ? 9.0 : 16.0), 6, 4, 2.5, 2.5, 2};
         };
         return placeCluster(0, k, cx, cz, n, Rs, null, fa, (ix, iz, y) -> liveAt(ix, iz, y, TOP_OFF, 0f), i, kk, 3, 2, 0);
     }
@@ -494,13 +602,13 @@ final class GardensSites {
                 continue;
             }
             boolean near = false;
-            for (GardensPlan.DeepSite d : deeps) if (Math.hypot(v.x - (d.x() - ox), v.z - (d.z() - oz)) < 36) near = true;
+            for (GardensPlan.DeepSite d : deeps) if (Math.hypot(v.x - (d.x() - ox), v.z - (d.z() - oz)) < DEEP_CLEAR) near = true;
             if (near) {
-                count("deep36");
+                count("deepclear");
                 continue;
             }
             double[] a0 = new double[1];
-            double[] angs = crackAngles(v.form, v.key24, v.R, a0);
+            double[] angs = crackAngles(v.form, v.key24, v.R, v.girth, a0);
             boolean[] ok = cracksOk(v.k, v.x, v.z, v.Rf, angs, angs.length);
             boolean any = false;
             for (boolean o : ok) any |= o;
@@ -540,7 +648,7 @@ final class GardensSites {
                 for (int kk = (int) Math.floor((minZ - sz0) / OUT_G) - 1; kk <= (int) Math.floor((maxZ - sz0) / OUT_G) + 1; kk++)
                     cands.addAll(outliers(k, i, kk));
         }
-        for (int k = 0; k < GardensPlan.K; k++) {
+        for (int k = 0; k < GardensPlan.K && STUMPS; k++) {
             if (plan.patch && !plan.beds[k]) continue;
             if (only >= 0 && k != only) continue;
             double sx0 = 17.0 * k, sz0 = -31.0 * k;
@@ -583,6 +691,8 @@ final class GardensSites {
 
             public float hot(int x, int z) { return s.hot[q(x, z)]; }
 
+            public int dom(int k, int x, int z) { return s.dominant(k, q(x, z)); }
+
             public List<GardensPlan.VHall> vhalls(int k, double minX, double minZ, double maxX, double maxZ) {
                 List<GardensPlan.VHall> out = new ArrayList<>();
                 for (GardensPlan.VHall v : s.vhalls.get(k))
@@ -601,10 +711,13 @@ final class GardensSites {
     /** vents.deep_vents: a live beehive with the round profile on each deep site (a plain one where the gap is short). */
     Site deepVent(GardensPlan.DeepSite d) { return deepVent(d, false); }
 
-    /** The deep vent's height over its site's floor: at least 22 for a deep vent with a throat, else a plain live vent. */
+    /**
+     * The deep vent's height over its site's floor (30 times TALL at most, 6 under its dome's top): at least 22 for a
+     * deep vent with a throat, else a plain live vent.
+     */
     static double deepH(GardensPlan.DeepSite d) {
         int ys = (int) Math.floor(d.fmax()) + 1;
-        return Math.min(30.0, d.hd() - 6 - (ys - d.f0()));
+        return Math.min(30.0 * TALL, d.hd() - 6 - (ys - d.f0()));
     }
 
     /**
@@ -621,8 +734,10 @@ final class GardensSites {
         double key = hv(5, 6, 0, 0, d.i(), d.kk());
         long key24 = (long) (key * (1 << 24));
         Site v = new Site();
-        v.R = d.R();
-        v.Rf = d.Rf();
+        // the site's own test (its flatness over Rf) is the plan's, at the first build's size
+        v.R = GIRTH * d.R();
+        v.Rf = GIRTH * d.Rf();
+        v.girth = GIRTH;
         v.ys = (int) Math.floor(d.fmax()) + 1;
         v.yLo = (int) Math.floor(d.fmin());
         v.H = deepH(d);

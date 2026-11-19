@@ -27,12 +27,15 @@ class NoiseLayersTest {
      * Gardens' rework, Taran's picks of 2026-11-18), which nothing plans: the layer's blocks are the field's, dry, in its
      * three bands. In these five chunks the bands' rows are all rock, the same in every chunk (no throat passes under
      * them), and band 2, whose biome is its layer's route biome, takes the Seep Beds where it took the Lantern Lake. The
-     * Blue Reaches' lines held ({@link #BLUE}).
+     * Blue Reaches' lines held ({@link #BLUE}). Pinned again when the vents grew half again and grew into the ground
+     * (round 3: GardensSites.GIRTH and TALL, the roots and aprons, no vents in the Seep Beds): of the five chunks only the
+     * first of seeds 2 and 8004 change, seed 2's where a vent's walls, apron and rubble now fill 825 blocks of the
+     * Chimney Halls' air (948 blocks change), seed 8004's where 71 blocks of the halls' air by a vent turn to rubble.
      */
     static final String[] GARDENS_AND_BANDS = {
             "seed 1 blocks: a648845998be0ea0 4eaeb8586fb04ec1 fa34541fd9607ed0 13b70d57cb954376 16a530db345b8158",
-            "seed 2 blocks: 26864fd9d3b8e2be f580312b29cb47d df3957fbe08f18aa c43466d6cc1e370c e04bd825a718d3cf",
-            "seed 8004 blocks: 62e44feb41c4f952 68e7b94b007b0f34 5955b1a397859760 a03e3d37fc8e75b6 baa12956765b85a9"};
+            "seed 2 blocks: 3dc04d4458b9fa25 f580312b29cb47d df3957fbe08f18aa c43466d6cc1e370c e04bd825a718d3cf",
+            "seed 8004 blocks: 1cc7086e4ce36ab0 68e7b94b007b0f34 5955b1a397859760 a03e3d37fc8e75b6 baa12956765b85a9"};
     /**
      * The Blue Reaches the same way: layer 0's plan hashes and its own rows (-272..-81 by default). Pinned again when
      * the view breaker went (Taran, 2026-11-02: long views are welcome, they make the caves look epic, and the breaker's

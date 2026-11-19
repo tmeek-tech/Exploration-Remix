@@ -16,18 +16,22 @@ import java.util.concurrent.Future;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * The Deep Gardens' vent field (round 2, 0.19.1) as the game builds it: the throats' exit search gives the preview's two
- * exits, the layer is dry and stands in its three bands, the per-block pass is the field's answer, each deep vent's
- * throat winds down through band 3 and comes out in a Wasteland tunnel, the gates open into the caves, and every answer
- * is the same on any thread. The
+ * The Deep Gardens' vent field (round 2, 0.19.1) as the game builds it: the throats' exit search on the preview's patch
+ * (the preview's two exits at its vents' size), the layer is dry and stands in its three bands, the per-block pass is
+ * the field's answer, each deep vent's throat winds down through band 3 and comes out in a Wasteland tunnel, the gates
+ * open into the caves, no vent stands in the Seep Beds, a tile is the same from any window, and every answer is the
+ * same on any thread. The
  * field's blocks were checked against the preview block for block over its patch while it was ported (the preview's
  * data is not kept in the repository); these are the game's own promises.
  */
 class GardensFieldTest {
     static final long SEED = 8675309L;
-    /** A 200 x 200 area round the seed's first standing deep vent from the origin, at (-247.7, 61.4). */
-    static final int AX = -340, AZ = -40, AS = 200;
-    static final double VX = -247.7, VZ = 61.4;
+    /**
+     * A 200 x 200 area round the seed's first standing deep vent from the origin, at (-387.0, -254.8) since the vents
+     * grew half again (GardensSites.GIRTH): the one at (-247.7, 61.4) found no exit for its wider throat and stands plain.
+     */
+    static final int AX = -487, AZ = -355, AS = 200;
+    static final double VX = -387.0, VZ = -254.8;
     private static Terrain shared;
 
     static synchronized Terrain terrain() {
@@ -55,8 +59,12 @@ class GardensFieldTest {
 
     /**
      * The preview's patch (448 x 448 from 4096, -2560 at seed 8675309, round 1's gates) and its two deep vents, searched
-     * against the game's own Wasteland: the first comes out off its last turn at row -41 (Y -569), the second by a
-     * 36-block S at row -50 (Y -578), exactly as the preview's exit search found them.
+     * against the game's own Wasteland. At the preview's size (GardensSites.GIRTH 1) the first came out off its last
+     * turn at row -41 (Y -569) and the second by a 36-block S at row -50 (Y -578), exactly as the preview's exit search
+     * found them. Pinned again since the vents grew half again, their rings with them (Rh 16.1 and 16.0, from 11.5 and
+     * 11.4): the first's wider ring meets tunnels from row -36 down but on no floor its level run can walk, and at row
+     * -47 its descent breaks into one, so it finds no exit (in the game it would stand plain); the second still comes
+     * out at row -50, by a 21-block outlet off a level run of 58.
      */
     @Test
     void thePreviewsThroatsComeOutWhereThePreviewPutThem() {
@@ -82,16 +90,16 @@ class GardensFieldTest {
             GardensVents.Vent vt = gv.table(List.of(v), (x, y, z) -> 0).get(0);
             got.add(String.format(Locale.ROOT, "%.1f %.1f: %s", d.x() - x0, d.z() - z0, ex.find(d, vt)));
         }
-        assertEquals(List.of("212.0 106.2: Exit[g=-41, levelLen=30.5, outletDep=NaN, outletLen=NaN]",
-                "223.6 195.6: Exit[g=-50, levelLen=22.0, outletDep=239.25, outletLen=35.75]"), got);
+        assertEquals(List.of("212.0 106.2: null",
+                "223.6 195.6: Exit[g=-50, levelLen=58.0, outletDep=249.0, outletLen=21.0]"), got);
     }
 
     /**
      * Over the area (every 5th column, every row): the layer is dry (no water table, Taran's pick; the seep pools are
      * the blocks' crude oil), the per-block pass is the field's answer whatever the interpolation and the corners are
      * rock (so no corner opens a block the field shut), the open blocks' biomes lie in their bands' order (Vent Domes at
-     * the bottom, Chimney Halls, Seep Beds on top), about a tenth of the layer is open (9.98% when pinned) and its halls
-     * stand a storey tall (32 at most when pinned).
+     * the bottom, Chimney Halls, Seep Beds on top), about a tenth of the layer is open (11.71% when pinned) and its halls
+     * stand a storey tall (35 at most when pinned).
      */
     @Test
     void theLayerIsDryAndStandsInItsBands() {
@@ -138,7 +146,7 @@ class GardensFieldTest {
     }
 
     /**
-     * The deep vent of the area (its throat down to row -41, an outlet of 20.75 off its last turn): the throat opens at
+     * The deep vent of the area (its throat down to row -40, an outlet of 28.25 off its last turn): the throat opens at
      * least one block in every row from the layer's floor down to its exit, the band 3 rows it opens are open in the
      * game's per-block pass, and at its exit it meets a Wasteland tunnel: a throat block at the exit's rows has an open
      * Wasteland block beside or under it that the throat did not carve.
@@ -275,6 +283,82 @@ class GardensFieldTest {
             }
         }
         return far;
+    }
+
+    /**
+     * No vent stands in the Seep Beds (Taran, 2026-11-19: "No vents should be in the seeps"): over every column and row
+     * of the area no block of a vent's walls, root or glow (vent rock, live vent rock, crown, fissure, vent glow, throat
+     * vein) lies where the band is the Seep Beds, and no standing vent's rim spire does (its blocks are spire codes, so
+     * each vent's own shape is asked). The area holds both, and the beds.
+     */
+    @Test
+    void noVentStandsInTheSeepBeds() {
+        GardensField g = terrain().gardens;
+        List<String> fails = new ArrayList<>();
+        long vent = 0, beds = 0;
+        for (int x = AX; x < AX + AS; x++)
+            for (int z = AZ; z < AZ + AS; z++)
+                for (int y = 0; y < GardensPlan.SY; y++) {
+                    int c = g.packed(x, y, z) & 31;
+                    boolean b = g.band(x, y, z) == 2;
+                    if (b) beds++;
+                    if (c < GardensField.C_VDEAD || c > GardensField.C_TVEIN) continue;
+                    vent++;
+                    if (b && fails.size() < 20) fails.add("vent block (code " + c + ") in the Seep Beds at " + x + " " + y + " " + z);
+                }
+        List<GardensSites.Site> sites = g.ventsNear(AX, AZ, AX + AS, AZ + AS);
+        int rims = 0;
+        GardensVents.Geom geo = new GardensVents.Geom();
+        for (GardensVents.Vent v : g.gv.table(sites, (x, y, z) -> 0)) {
+            if (v.site.band == 2 && fails.size() < 20) fails.add("a vent of the Seep Beds at " + v.cx + " " + v.cz);
+            int r = (int) v.t[47] + 1, icx = (int) Math.floor(v.cx), icz = (int) Math.floor(v.cz);
+            for (int j = 0; j < (int) v.t[28]; j++)
+                for (int y = (int) Math.floor(v.rim[j][2]); y < v.rim[j][2] + v.rim[j][1]; y++)
+                    for (int x = icx - r; x <= icx + r; x++)
+                        for (int z = icz - r; z <= icz + r; z++) {
+                            if (x < AX || x >= AX + AS || z < AZ || z >= AZ + AS) continue;
+                            if (g.gv.part(v, x, y, z, -999f, geo) != GardensVents.VP_RIM) continue;
+                            rims++;
+                            if (g.band(x, y, z) == 2 && fails.size() < 20) fails.add("a rim spire in the Seep Beds at " + x + " " + y + " " + z);
+                        }
+        }
+        System.out.printf(Locale.ROOT, "noVentStandsInTheSeepBeds: %d vent blocks, %d rim spire blocks of %d vents, %d blocks of the Seep Beds%n", vent, rims, sites.size(), beds);
+        assertTrue(vent > 0 && beds > 0, "the area has no vent or no Seep Beds");
+        assertTrue(fails.isEmpty(), String.join("\n", fails));
+    }
+
+    /**
+     * A block tile's blocks never depend on the window they are made in, so tiles agree at their seams: the tile by the
+     * deep vent (whose foot crosses the tile's seam at z -256) made over the game's window (40 round it) and over one
+     * reaching 64 columns farther on its low sides (the vents, the rubble, the settling and the dressing all see more
+     * round it) agree block for block, with its floors and bands. All but the oil and the seeps along it: the pools
+     * spill at the window's edges (GardensStoreys.pools), so a dip the window cuts holds a different level; those
+     * blocks are counted, not compared (8021 here, 8056 before the vents grew).
+     */
+    @Test
+    void aTileIsTheSameFromAnyWindow() {
+        GardensField g = terrain().gardens;
+        int TB = GardensField.TB, BM = GardensField.BM, cx0 = Math.floorDiv((int) Math.floor(VX), TB) * TB, cz0 = Math.floorDiv((int) Math.floor(VZ), TB) * TB;
+        GardensField.Tile a = g.makeTile(cx0, cz0, cx0 - BM, cz0 - BM, TB + 2 * BM, TB + 2 * BM);
+        GardensField.Tile b = g.makeTile(cx0, cz0, cx0 - BM - 64, cz0 - BM - 64, TB + 2 * BM + 64, TB + 2 * BM + 64);
+        int differ = 0, oil = 0;
+        String first = null;
+        for (int i = 0; i < TB; i++)
+            for (int j = 0; j < TB; j++)
+                for (int y = 0; y < GardensPlan.SY; y++) {
+                    int q = (i * TB + j) * GardensPlan.SY + y, ca = a.blocks[q] & 31, cb = b.blocks[q] & 31;
+                    if (a.blocks[q] == b.blocks[q]) continue;
+                    if (ca == GardensField.C_OIL || cb == GardensField.C_OIL || ca == GardensField.C_SEEP || cb == GardensField.C_SEEP) {
+                        oil++;
+                        continue;
+                    }
+                    if (differ++ == 0) first = (cx0 + i) + " " + y + " " + (cz0 + j) + ": " + (a.blocks[q] & 0xFF) + " against " + (b.blocks[q] & 0xFF);
+                }
+        System.out.printf(Locale.ROOT, "aTileIsTheSameFromAnyWindow: tile %d,%d, %d and %d vents in the windows, %d and %d ms, %d oil or seep blocks differ%n",
+                cx0, cz0, a.vents, b.vents, a.ms, b.ms, oil);
+        assertEquals(0, differ, "blocks that differ between the windows, first at " + first);
+        assertArrayEquals(a.floors, b.floors, "the floors");
+        assertArrayEquals(a.dom, b.dom, "the bands");
     }
 
     /**

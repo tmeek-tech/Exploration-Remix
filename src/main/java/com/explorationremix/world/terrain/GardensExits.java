@@ -199,7 +199,8 @@ final class GardensExits implements GardensField.Exits {
     private Hit contacts(Slab w, Site s, double[][] tab) {
         Hit h = new Hit();
         double rh = tab[0][1];
-        int r = (int) (rh + 13 + GardensVents.DRIFT_MAX + 1);
+        // the marks reach the lumpy ring (1.35 rh), the drift and the tube's half width with its 3 of slack (6.85)
+        int r = (int) Math.max(rh + 13 + GardensVents.DRIFT_MAX + 1, 1.35 * rh + GardensVents.DRIFT_MAX + 6.85 + 2);
         int bx0 = (int) Math.floor(s.cx) - r, bz0 = (int) Math.floor(s.cz) - r;
         int nx = 2 * r + 1, nz = 2 * r + 1;
         long[] mask = new long[nx * nz];
@@ -433,7 +434,8 @@ final class GardensExits implements GardensField.Exits {
      * box of the slab (and the solid band over it) with the candidate carved in.
      */
     private int[] validate(Slab w, Site s, double[][] tab, double[][] cur, int g) {
-        double pad = s.Rh + 12 + GardensVents.DRIFT_MAX + 1;
+        // as the contacts' box: the lumpy ring, the drift and the marks' reach past the centre line
+        double pad = Math.max(s.Rh + 12 + GardensVents.DRIFT_MAX + 1, 1.35 * s.Rh + GardensVents.DRIFT_MAX + 6.85 + 2);
         double mnx = s.cx - pad, mxx = s.cx + pad, mnz = s.cz - pad, mxz = s.cz + pad;
         boolean outlet = cur != null && cur.length > 1;
         if (outlet)
