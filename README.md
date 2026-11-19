@@ -23,7 +23,7 @@ later milestones, built on these caves.
 
 **New worlds only.** The overworld is extended to y -784 when a world is created (to y -832 before 0.19.6, when the
 Deep Gardens grew shorter). Existing chunks are not regenerated, so a world made with an older version keeps its old
-layout where it was explored.
+layout where it was explored, and one made before 0.19.6 loses its rows below y -784.
 
 ## Installing
 
