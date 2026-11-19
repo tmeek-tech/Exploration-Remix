@@ -391,10 +391,10 @@ public final class ERBlocks {
     /** Blackstone with thin glowing veins, lining the throats that lead down (mostly lime). */
     public static final RegistryObject<Block> THROAT_VEIN = block("throat_vein", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 7)));
     /**
-     * Glow nodules (the spire tip until round 3): rounded neon mineral knobs on blackstone, with beads trailing down its
+     * Vent beads (the spire tip until round 3): rounded neon mineral knobs on blackstone, with beads trailing down its
      * sides. They cap the small live spires, mix with the crown over a live vent's top and run down its walls in streaks.
      */
-    public static final RegistryObject<Block> GLOW_NODULES = block("glow_nodules", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 11)));
+    public static final RegistryObject<Block> VENT_BEADS = block("vent_beads", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 11)));
     /** A faint crust on the dry rock at the edge of the crude oil seeps: a dim light blue film, light blue only. */
     public static final RegistryObject<Block> SEEP_CRUST = block("seep_crust", () -> new Block(ventRock().mapColor(MapColor.COLOR_BLACK).lightLevel(s -> 5)));
 

@@ -7,11 +7,11 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "explorationremix:glow_nodules",
+          "name": "explorationremix:vent_beads",
           "functions": [
             {
               "function": "minecraft:copy_state",
-              "block": "explorationremix:glow_nodules",
+              "block": "explorationremix:vent_beads",
               "properties": [
                 "neon"
               ]

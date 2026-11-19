@@ -13,7 +13,7 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 
 /**
  * A glowing block of the Deep Gardens' vent field in one of its four neon colours ({@link Neon}, the blockstate property
- * {@code neon}): the glow mat, glow cap, vent crown, den fissure, vent glow, throat vein and glow nodules. Each colour
+ * {@code neon}): the glow mat, glow cap, vent crown, den fissure, vent glow, throat vein and vent beads. Each colour
  * has a model of its own (tools/gen_data.py): the rock (or the cap) lit by the world, and the glowing pixels drawn over
  * it a second time at full brightness, so the dark rock stays shaded while the neon glows. The light level is the
  * block's own, the same in every colour.

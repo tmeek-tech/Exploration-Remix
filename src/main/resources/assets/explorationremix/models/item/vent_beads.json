@@ -1,23 +1,23 @@
 {
-  "parent": "explorationremix:block/glow_nodules_magenta",
+  "parent": "explorationremix:block/vent_beads_magenta",
   "overrides": [
     {
       "predicate": {
         "explorationremix:neon": 0.1667
       },
-      "model": "explorationremix:block/glow_nodules_violet"
+      "model": "explorationremix:block/vent_beads_violet"
     },
     {
       "predicate": {
         "explorationremix:neon": 0.5
       },
-      "model": "explorationremix:block/glow_nodules_lime"
+      "model": "explorationremix:block/vent_beads_lime"
     },
     {
       "predicate": {
         "explorationremix:neon": 0.8333
       },
-      "model": "explorationremix:block/glow_nodules_light_blue"
+      "model": "explorationremix:block/vent_beads_light_blue"
     }
   ]
 }

@@ -65,8 +65,8 @@ public final class GardensBlocks {
         neon(C_FISSURE, ERBlocks.DEN_FISSURE.get());
         neon(C_VGLOW, ERBlocks.VENT_GLOW.get());
         neon(C_TVEIN, ERBlocks.THROAT_VEIN.get());
-        neon(C_TIP, ERBlocks.GLOW_NODULES.get());
-        neon(C_STREAK, ERBlocks.GLOW_NODULES.get());
+        neon(C_TIP, ERBlocks.VENT_BEADS.get());
+        neon(C_STREAK, ERBlocks.VENT_BEADS.get());
         neon(C_MATE, ERBlocks.GLOW_MAT.get());
         Block b = ForgeRegistries.BLOCKS.getValue(new ResourceLocation("mcremix", "crude_oil"));
         oil = b instanceof LiquidBlock ? b.defaultBlockState() : null;

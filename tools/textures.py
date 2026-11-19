@@ -495,8 +495,8 @@ def throat_vein(neon):
     return img
 
 
-def glow_nodules_top(neon):
-    """Glow nodules' top (and bottom), the glowing top of a small live spire (the spire tip until round 3): rounded
+def vent_beads_top(neon):
+    """Vent beads' top (and bottom), the glowing top of a small live spire (the spire tip until round 3): rounded
     neon mineral knobs on the blackstone (an overlay), each lit from the top left (a hot highlight, neon, mid, then a
     dim and a deep shadow side that the world lights) with a dark shadow on the rock below right of it. The knobs wrap
     round the tile's edges."""
@@ -523,11 +523,11 @@ def glow_nodules_top(neon):
     return img
 
 
-NODULE_TRAIL = (2.0, 1.5, 1.0, 1.0, 0.5)  # the beads of a trail on glow nodules' side, as radii from its head down
+BEAD_TRAIL = (2.0, 1.5, 1.0, 1.0, 0.5)  # the beads of a trail on vent beads' side, as radii from its head down
 
 
-def glow_nodules_side(neon):
-    """Glow nodules' sides: the knobs' neon mineral running down the blackstone in two beaded trails (an overlay), as
+def vent_beads_side(neon):
+    """Vent beads' sides: the knobs' neon mineral running down the blackstone in two beaded trails (an overlay), as
     it also runs down a live vent's walls from the crown (round 3, Taran: "Have the spire tips run down the sides of
     vents too"). A trail is a string of beads lit like the knobs (a hot highlight at the top left, a dark shadow below
     right on the rock): a round bead at its head, then smaller and smaller down to a drop, joined by a thread of the deep
@@ -550,9 +550,9 @@ def glow_nodules_side(neon):
             return x0 + amp * math.sin(2 * math.pi * y / 16 + phase)  # the trail's column at row y; it wraps every 16
 
         y = head + 8 * k + rng.random() * 2 - 1
-        gaps = [rng.random() + 0.3 for _ in NODULE_TRAIL]
-        free = 16 - sum(2 * r for r in NODULE_TRAIL)  # the rows between the beads, shared out so the trail fills 16
-        for r, gap in zip(NODULE_TRAIL, (g / sum(gaps) * free for g in gaps)):
+        gaps = [rng.random() + 0.3 for _ in BEAD_TRAIL]
+        free = 16 - sum(2 * r for r in BEAD_TRAIL)  # the rows between the beads, shared out so the trail fills 16
+        for r, gap in zip(BEAD_TRAIL, (g / sum(gaps) * free for g in gaps)):
             beads.append((at(y + r), y + r, r))
             for t in range(int(round(2 * r + gap))):
                 thread.append((at(y + t), y + t))
@@ -728,10 +728,10 @@ for _name, _fn in (("black_dripstone", black_dripstone), ("pale_stem", pale_stem
     PAINTERS["block/" + _name] = _fn
 GLOW["block/seep_crust"] = {_hex(c) for c in SEEP_FILM[1:]}
 # The neon blocks, a texture per colour: <block>_<colour>, or <block>_<colour>_<face> for a block whose faces differ
-# (the glow mat's _top and _side, over glow_mat_bottom; the glow nodules' _top, also drawn on its bottom, and _side).
+# (the glow mat's _top and _side, over glow_mat_bottom; the vent beads' _top, also drawn on its bottom, and _side).
 NEON_PAINTERS = {"glow_mat": {"top": glow_mat_top, "side": glow_mat_side}, "glow_cap": glow_cap, "vent_crown": vent_crown,
                  "den_fissure": den_fissure, "vent_glow": vent_glow, "throat_vein": throat_vein,
-                 "glow_nodules": {"top": glow_nodules_top, "side": glow_nodules_side}}
+                 "vent_beads": {"top": vent_beads_top, "side": vent_beads_side}}
 VENT_FIELD = ["block/black_dripstone", "block/pale_stem", "block/glow_mat_bottom", "block/seep_crust"]  # every texture of the vent field, for cool_problems and tools/vent_sheet.py
 for _direction in ("down", "up"):
     for _thickness in POINTED_DRIP_THICKNESS:

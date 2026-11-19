@@ -7,7 +7,7 @@ Writes two pictures, into build/ unless told otherwise:
                        rock (gen_data's option rock) is shown over that rock, a pointed dripstone over the check
   dg_blocks_mock.png   a wall of each block, a face tiled three by three as in a dark cave: the texture (over its rock)
                        at 30 % of its brightness and the overlay over it at full brightness; each neon block in its four
-                       colours, the glow mat's and the glow nodules' top and side; then pointed black dripstone, lit, as a
+                       colours, the glow mat's and the vent beads' top and side; then pointed black dripstone, lit, as a
                        stalactite, a stalagmite and a pair whose tips have merged, under or on black dripstone
 and prints the colour check: every pixel of every texture and overlay against the rules (textures.cool_problems, and
 no grey leaning warm), the hues it found, and the rocks' mean colours against their targets.
@@ -38,7 +38,7 @@ TARGETS = {"black_dripstone": (50, 47, 58), "pale_stem": (212, 204, 222)}
 # The mock's rows: (label, textures); a neon block's row is its four colours.
 PLAIN = ["black_dripstone", "pale_stem", "seep_crust", "glow_mat_bottom"]
 NEON_ROWS = [("glow_mat", "_top"), ("glow_mat", "_side"), ("glow_cap", ""), ("vent_crown", ""), ("den_fissure", ""),
-             ("vent_glow", ""), ("throat_vein", ""), ("glow_nodules", "_top"), ("glow_nodules", "_side")]
+             ("vent_glow", ""), ("throat_vein", ""), ("vent_beads", "_top"), ("vent_beads", "_side")]
 # The mock's pointed dripstone, as columns of blocks from the top: (label, [(direction, thickness), ...]), with black
 # dripstone above a stalactite and below a stalagmite.
 POINTED = "pointed_black_dripstone"

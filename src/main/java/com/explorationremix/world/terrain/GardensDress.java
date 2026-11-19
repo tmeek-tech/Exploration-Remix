@@ -32,9 +32,9 @@ final class GardensDress {
     static final byte SEEP = 19;
     /**
      * Round 3 (Taran's playtest notes, 2026-11-19): black dripstone over the cave's surfaces (SKIN), pointed black
-     * dripstone hanging (PDOWN) and standing (PUP), spire tips running down a live vent's sides (STREAK: the tip's
-     * block, lighter on the life round it), blackstone dithered into the rock round a vent's foot (VBASE) and the glow
-     * mat's thinner edge (MATE).
+     * dripstone hanging (PDOWN) and standing (PUP), vent beads running down a live vent's sides in rivulets (STREAK:
+     * the tips' block, lighter on the life round it), blackstone dithered into the rock round a vent's foot (VBASE) and
+     * the glow mat's thinner edge (MATE).
      */
     static final byte SKIN = 20, PDOWN = 21, PUP = 22, STREAK = 23, VBASE = 24, MATE = 25;
 
@@ -43,9 +43,15 @@ final class GardensDress {
             MIN_ROOM = {9.0, 9.0, 6.0}, CLEAR_TOP = {0.0, 0.0, 2.0}, DRIP_THR = {0.30, 0.24, 0.20},
             MAT_LO = {0.0096, 0.012, 0.0168}, MUSH_LO = {0.021, 0.030, 0.048}, CAP_R = {5.2, 4.2, 3.0},
             STEM_MAX = {16.0, 12.0, 8.0}, T1 = {-0.0416, -0.2656, -0.3367}, T2 = {0.2761, 0.1935, 0.1333},
-            SKIN_THR = {0.16, 0.13, 0.14};
+            SKIN_THR = {0.11, 0.16, 0.165};
     static final int[] TIPC = {MAGENTA, VIOLET, LIGHTBLUE};
     static final double THR_OUT = 0.62, P = 1.55, LIVE_LO = 0.30, FLANGE = 0.06, DRIP_K = 0.010, DRIP_P = 1.35;
+    /**
+     * The rivulets of vent beads down a live vent's sides: one per RIV_GAP blocks round the wall, RIV_MIN to RIV_MAX;
+     * how far (blocks) one wanders either way; the dithered fringe (blocks) beyond its edge.
+     */
+    static final double RIV_GAP = 8.0, RIV_WANDER = 1.8, RIV_EDGE = 0.8;
+    static final int RIV_MIN = 4, RIV_MAX = 10;
     /** Round 3's cones: the hot ground's extra bar (round 2: 0.3), and the most of its room's height a cone may fill. */
     static final double DRIP_HOT = 0.15, DRIP_ROOM = 0.45;
     /**
@@ -53,11 +59,8 @@ final class GardensDress {
      * edge mat takes the blocks within MAT_EDGE under the dither.
      */
     static final double MAT_P0 = 0.55, MAT_P1 = 1.45, MAT_EDGE = 0.16;
-    /**
-     * The dripstone skin's bar over hot ground (deep down, by live vents) and where the mats' light reaches, the
-     * dither's spread, and the margin over the bar that turns the rock behind a face too.
-     */
-    static final double SKIN_HOT = 0.22, SKIN_LIT = 0.30, SKIN_DITHER = 0.10, SKIN_DEEP = 0.06;
+    /** The dripstone skin's dither spread, and the margin over the bar that turns the rock behind a face too. */
+    static final double SKIN_DITHER = 0.10, SKIN_DEEP = 0.06;
     static final int BODY = 1, DRIP_GAP = 4, REACH_XZ = 9, REACH_Y = 5, STEM_MIN = 5;
     /** The seep glow's runs: noise length along the shore, and the bar (about 2 shore blocks in 5 glow). */
     static final double SEEP_L = 6.0, SEEP_KEEP = 0.10;
@@ -152,7 +155,7 @@ final class GardensDress {
         columnDist(down, up);
         int[][] ps = new int[12][];
         for (int i = 0; i < 12; i++) ps[i] = plan.perm(plan.seed + 1000 + i);
-        // round 3's fields: streaks (0-2), the mats' clumps (3), the skin (4-6), the vents' feet (7)
+        // round 3's fields: rivulets (0-1; 2 spare), the mats' clumps (3), the skin (4-6), the vents' feet (7)
         int[][] pr = new int[8][];
         for (int i = 0; i < 8; i++) pr[i] = plan.perm(plan.seed + 5101 + i);
         ventColours(ps[8]);
@@ -171,15 +174,15 @@ final class GardensDress {
         for (int b = 0; b < N; b++) if (mat[b] == AIR && vpart[b] == VP_SKIRT) vpart[b] = 0;
         tips();
         lap("tips");
-        int[] gc = glow(pr[0], pr[1], pr[2]);
+        int[] gc = glow(pr[0], pr[1]);
         lap("glow");
         counts.put("crown", gc[0]);
         counts.put("fissure", gc[1]);
         counts.put("vent glow", gc[2]);
         counts.put("throat vein", gc[3]);
         counts.put("tip on a vent's top", gc[4]);
-        counts.put("streak", gc[5]);
-        counts.put("streak faces", gc[6]);
+        counts.put("rivulet", gc[5]);
+        counts.put("rivulet faces", gc[6]);
         columnDist(down, up);
         boolean[] dripKeep = porch.clone();
         for (int b = 0; b < N; b++) dripKeep[b] |= gk[b];
@@ -210,7 +213,7 @@ final class GardensDress {
         // walkable changes but the short stalagmites, which stand clear of every way through)
         boolean[] sk = gateKeep();
         for (int b = 0; b < N; b++) sk[b] |= porch[b];
-        counts.put("dripstone skin", skin(heat, sk, pr[4], pr[5], pr[6], ps[5], ps[6]));
+        counts.put("dripstone skin", skin(sk, pr[4], pr[5], pr[6], ps[5], ps[6]));
         lap("skin");
         columnDist(down, up);
         int[] pc = pointed(down, keepSp);
@@ -231,7 +234,7 @@ final class GardensDress {
         counts.put("pointed", by[PDOWN] + by[PUP]);
         counts.put("cap", by[CAP]);
         counts.put("crown blocks", by[CROWN]);
-        counts.put("streak blocks", by[STREAK]);
+        counts.put("rivulet blocks", by[STREAK]);
         java.util.function.Consumer<GardensDress> pr0 = PROBE;
         if (pr0 != null) pr0.accept(this);
     }
@@ -528,14 +531,16 @@ final class GardensDress {
      * dress3._glow, round 3: live vents glow in their colour. A vent's top is a dither of CROWN and spire TIP (Taran,
      * 2026-11-19: "The spire tip and vent crown look good together so dither them on the top of vents"): crown-led
      * where the rim's angular noise is high (where round 2's crowns stood), tips taking over on its shoulders, a few
-     * blocks left bare. Below the top, tips run down the outer walls in streaks (STREAK; "Have the spire tips run down
-     * the sides of vents too"), about 6 to 10 round a vent, each wandering a little and fading out over 3 to 12 rows.
-     * FISSURE veins in the den floor, VGLOW flecks on the den's and flue's inner faces; deep vents also get TVEIN along
-     * their throat's walls (in the layer only: below its floor the throat stays dark). Dead vents give no light.
-     * Returns the counts: crowns, fissures, flecks, throat veins, tips on tops, streak blocks, and the outer faces in
-     * the 12 rows under the tops (where streaks may run).
+     * blocks left bare. Below the top, tips run down the outer walls in rivulets (STREAK; "Have the spire tips run down
+     * the sides of vents too", card pick: "Rivulets down to the ground"): about one per RIV_GAP blocks round the wall
+     * (RIV_MIN to RIV_MAX), each from under the top down to where the vent's wall meets the ground, wandering a block
+     * or two either way as it runs down, two blocks wide where it leaves the top, then one or two, swelling into beads
+     * here and there, its edges dithered. FISSURE veins in the den floor, VGLOW flecks on the den's and flue's inner
+     * faces; deep vents also get TVEIN along their throat's walls (in the layer only: below its floor the throat stays
+     * dark). Dead vents give no light. Returns the counts: crowns, fissures, flecks, throat veins, tips on tops,
+     * rivulet blocks, and the outer faces under the tops (where rivulets may run).
      */
-    int[] glow(int[] pst, int[] pstL, int[] pstM) {
+    int[] glow(int[] pst, int[] pstL) {
         int[] cnt = new int[7];
         Geom g = new Geom();
         int[] six = {sx, -sx, 1, -1, SY, -SY};
@@ -551,13 +556,26 @@ final class GardensDress {
             double top = ys + (double) v.t[26];
             int r = (int) v.t[33] + 1;
             double u12 = u(v.k24, 12), u13 = u(v.k24, 13);
-            // the streaks' place in their fields, per vent; about one streak per 3.5 blocks of radius round the wall
+            // the rivulets: evenly spread round the wall with a jitter, each wandering as it runs down (its angle per
+            // row, from the meander field read down its own line) and swelling into beads (the width field)
             double o1 = 200.0 * Hashing.unit(Hashing.mix(hsSide, v.k24, 1, 0));
             double o2 = 200.0 * Hashing.unit(Hashing.mix(hsSide, v.k24, 2, 0));
-            double rs = R / 3.5, rl = R / 6.0;
             boolean deep = (int) v.t[1] == 3;
             int icx = ic(v.cx) + gv.ox, icz = ic(v.cz) + gv.oz;
             int ya = Math.max(1, Math.min(ys - 2, (int) v.t[7])), yb = Math.min(SY - 1, (int) (ys + H + 4));
+            int nr = Math.max(RIV_MIN, Math.min(RIV_MAX, (int) Math.round(2.0 * Math.PI * R / RIV_GAP)));
+            double turn = 2.0 * Math.PI * Hashing.unit(Hashing.mix(hsSide, v.k24, 3, 0));
+            double[][] rivA = new double[nr][yb - ya], rivW = new double[nr][yb - ya];
+            for (int k = 0; k < nr; k++) {
+                double a0 = turn + 2.0 * Math.PI * (k + 0.35 * (Hashing.unit(Hashing.mix(hsSide, v.k24, 4, k)) - 0.5)) / nr;
+                for (int y = ya; y < yb; y++) {
+                    double dn = top - y;      // rows under the top
+                    double wr = Math.max(3.0, R + 1.5);  // about the outer wall's radius, for blocks to radians
+                    rivA[k][y - ya] = a0 + (RIV_WANDER / wr) * n2(pst, dn / 7.0 + 11.0 * k + o1, o2 + 5.0 * k);
+                    rivW[k][y - ya] = 0.5 + 0.45 * (1.0 - ramp(dn, 1.0, 6.0))
+                            + 0.4 * ramp(n2(pstL, dn / 2.6 + 7.0 * k + o2, o1 - 3.0 * k), 0.25, 0.6);
+                }
+            }
             for (int x = Math.max(xlo, icx - r); x < Math.min(xhi, icx + r + 1); x++)
                 for (int z = Math.max(zlo, icz - r); z < Math.min(zhi, icz + r + 1); z++) {
                     int base = ((x - x0) * nz + (z - z0)) * SY;
@@ -607,7 +625,7 @@ final class GardensDress {
                             cnt[2]++;
                             continue;
                         }
-                        // streaks down the outer walls, from under the top
+                        // rivulets down the outer walls, from under the top to the ground
                         if (!outer || y >= top - 1.0) continue;
                         boolean face = false;
                         for (int d : five) {
@@ -618,15 +636,13 @@ final class GardensDress {
                             }
                         }
                         if (!face) continue;
-                        if (y >= top - 13.0) cnt[6]++;
-                        // a streak narrows and thins out as it runs down, to a dotted line at its end
-                        double len = 3.0 + 9.0 * ramp(n2(pstL, rl * Math.cos(g.th) + o2, rl * Math.sin(g.th) + o1), -0.35, 0.35);
-                        double fr = (top - 1.0 - y) / len;
-                        if (fr >= 1.0) continue;
-                        double th = g.th + (1.5 / R) * n2(pstM, y / 5.0 + o1, o2);
-                        double st = ramp(n2(pst, rs * Math.cos(th) + o1, rs * Math.sin(th) + o2), -0.15 + 0.3 * fr, 0.15 + 0.15 * fr);
-                        double dens = st * (1.0 - 0.6 * ramp(fr, 0.3, 1.0));
-                        if (dens > 0.0 && Hashing.unit(Hashing.mix(hsSide, x, y, z)) < dens) {
+                        cnt[6]++;
+                        // the nearest rivulet, by the blocks along the wall from its line (half-width rivW)
+                        double best = 9.0;
+                        for (int k = 0; k < nr; k++)
+                            best = Math.min(best, Math.abs(wrap(g.th - rivA[k][y - ya])) * Math.max(1.0, g.rhoE) - rivW[k][y - ya]);
+                        boolean on = best < 0.0 || (best < RIV_EDGE && Hashing.unit(Hashing.mix(hsSide, x, y, z)) < 0.4 * (1.0 - best / RIV_EDGE));
+                        if (on) {
                             mat[b] = STREAK;
                             colour[b] = col;
                             cnt[5]++;
@@ -971,12 +987,12 @@ final class GardensDress {
      * ceiling, the walls, and the floor"): a rock block with an open face becomes SKIN where its patch score beats its
      * band's bar. Ceilings lean on the cones' field, so a skin rings each cluster of cones, the way dripstone spreads
      * round a cave's dripstone clusters; walls read a field stretched up and down, so it runs in streaks like
-     * flowstone; floors lean on the cones' field too, under the clusters. The bar rises over hot ground (deep down and
-     * by the live vents: less in the Vent Domes) and where the glow mats' light reaches, so a mat keeps bare rock round
-     * it. A per-block hash dithers the edge, and where a face is well over its bar the rock behind turns too (two deep).
-     * Never on a vent's own blocks or its skirt, in porches or gates. Returns blocks.
+     * flowstone; floors lean on the cones' field too, under the clusters. Each band's bar is set so that about a third
+     * of its cave surfaces turn (card pick, 2026-11-19: "About a third everywhere", the hot Vent Domes too). A per-block
+     * hash dithers the edge, and where a face is well over its bar the rock behind turns too (two deep). Never on a
+     * vent's own blocks or its skirt, in porches or gates. Returns blocks.
      */
-    int skin(float[] heat, boolean[] keep, int[] pa, int[] pb, int[] pw, int[] pd, int[] pd2) {
+    int skin(boolean[] keep, int[] pa, int[] pb, int[] pw, int[] pd, int[] pd2) {
         long hs = plan.seed + 5201;
         double[] sCol = new double[nx * nz];
         for (int i = 0; i < nx; i++) for (int j = 0; j < nz; j++) sCol[i * nz + j] = dripField(pd, pd2, x0 + i, z0 + j);
@@ -997,9 +1013,7 @@ final class GardensDress {
                     if (above) sc = Math.max(sc, pt + 0.4 * Math.max(0.0, sq - 0.18));
                     if (side) sc = Math.max(sc, 0.55 * pt + 0.45 * n3(pw, wx / 4.0, y / 15.0, wz / 4.0));
                     int bd = f.dom[storeyAt(q, y + 1)][q];
-                    double bar = SKIN_THR[bd] + SKIN_HOT * ramp(f.hot[q] + f.grow[y], LIVE_LO - 0.15, LIVE_LO + 0.1)
-                            + SKIN_LIT * ramp(heat[b] / MAT_LO[bd], 0.25, 0.9);
-                    double m = sc - bar + SKIN_DITHER * (Hashing.unit(Hashing.mix(hs, wx, y, wz)) - 0.5);
+                    double m = sc - SKIN_THR[bd] + SKIN_DITHER * (Hashing.unit(Hashing.mix(hs, wx, y, wz)) - 0.5);
                     if (m <= 0.0) continue;
                     mat[b] = SKIN;
                     strong[b] = m > SKIN_DEEP;

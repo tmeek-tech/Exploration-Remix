@@ -196,14 +196,14 @@ BLOCKS = {
     "throat_vein": ("Throat Vein", "glow_cube", {"neon": True, "rock": "blackstone"}),
     # knobs on its top (and bottom), beads trailing down its sides: it also runs down the vents' walls from the crown
     # (the spire tip until round 3)
-    "glow_nodules": ("Glow Nodules", "glow_cube", {"neon": True, "rock": "blackstone",
-                                                   "overlays": {"top": "_top", "side": "_side", "bottom": "_top"}}),
+    "vent_beads": ("Vent Beads", "glow_cube", {"neon": True, "rock": "blackstone",
+                                               "overlays": {"top": "_top", "side": "_side", "bottom": "_top"}}),
     "seep_crust": ("Seep Crust", "glow_cube"),
 }
 NO_DROP = {"band_stone", "glow", "mossback_den"}
 # The vent field's blocks: rock, never growth to /remix census (the whole blocks count as floor and ceiling).
 VENT_FIELD_BLOCKS = {"black_dripstone", "pointed_black_dripstone", "pale_stem", "glow_mat", "glow_cap", "vent_crown",
-                     "den_fissure", "vent_glow", "throat_vein", "glow_nodules", "seep_crust"}
+                     "den_fissure", "vent_glow", "throat_vein", "vent_beads", "seep_crust"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
 # lifeless blocks of the Galleries, the litter round the dens, and the vent field's whole blocks.
 NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"} | VENT_FIELD_BLOCKS
@@ -227,7 +227,7 @@ BLOCK_TAGS = {
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain",
                                         # the Deep Gardens: the vent field's dripstone, and the neon blocks grown on its rock
                                         "black_dripstone", "pointed_black_dripstone", "glow_mat", "vent_crown", "den_fissure",
-                                        "vent_glow", "throat_vein", "glow_nodules", "seep_crust"],
+                                        "vent_glow", "throat_vein", "vent_beads", "seep_crust"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen",
                                     # Deep Gardens round 2: the giant mushrooms
                                     "pale_stem", "glow_cap"],
