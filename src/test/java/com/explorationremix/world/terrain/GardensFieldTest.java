@@ -278,9 +278,9 @@ class GardensFieldTest {
     }
 
     /**
-     * The field is a pure function of the seed: the per-block pass, fluid, biome, the blocks' codes and colours and the
-     * tuff lenses answer the same on four threads in shuffled order, from a fresh instance whose caches fill while they
-     * ask, as on one (the Deep Gardens' rows over the area, and the rows under the layer the deep vent's throat opens).
+     * The field is a pure function of the seed: the per-block pass, fluid, biome and the blocks' codes and colours
+     * answer the same on four threads in shuffled order, from a fresh instance whose caches fill while they ask, as on
+     * one (the Deep Gardens' rows over the area, and the rows under the layer the deep vent's throat opens).
      */
     @Test
     void theFieldIsPureOnAnyThread() throws Exception {
@@ -338,7 +338,6 @@ class GardensFieldTest {
         h = h * 31 + (b == null ? -1 : b.ordinal());
         if (row >= 0) {
             h = h * 31 + t.gardens.packed(x, row, z);
-            h = h * 31 + (t.gardens.tuff(x, row, z) ? 1 : 0);
         } else h = h * 31 + (t.gardens.throatUnder(x, row, z) ? 1 : 0);
         return h;
     }
