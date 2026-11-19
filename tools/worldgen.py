@@ -1172,6 +1172,10 @@ def build_features():
     # the chunk ends up with and are there before anyone comes; every chunk, as for the den lairs, and the feature rolls
     # which chunks are a Skein's home.
     feature("skeins", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:skeins", "config": {}}, [])
+    # The Blue Reaches' firefly swarms (FirefliesFeature, 0.19.2): set down as each chunk is made, after the Skeins, so
+    # they rest on the rock and by the water and glowbells the chunk ends up with; every chunk, and the feature rolls
+    # which of its spots are a swarm's home.
+    feature("fireflies", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:fireflies", "config": {}}, [])
     # The Galleries' lava glow (HallGlowFeature, after everything else): invisible light along the rock above the flood
     # band, one try in every few-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
     # rock near black. 0.5.1, "brightly lit" but not flat: lit from the lava and the floor up. Level 15 just over the
