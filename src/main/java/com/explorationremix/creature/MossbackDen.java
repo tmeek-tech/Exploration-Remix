@@ -50,9 +50,9 @@ import java.util.UUID;
 
 /**
  * A Mossback's den: a patch of trampled moss and gnawed bone on the upper landing of a den gate, the way down from the
- * Upper Caves to the Blue Reaches. A den keeps a family of two or three: a guard that never leaves it, so the den is
- * always a fight, and roamers that go out far and come home with what they catch, which is how a player finds the
- * gate. The family is set down with the den as its chunk is made (0.17.0), so they are home before anyone comes, as the
+ * Upper Caves to the Blue Reaches. A den keeps a family of four to six (two or three before 0.19.2): a guard that never
+ * leaves it, so the den is always a fight, and roamers that go out far and come home with what they catch, which is how
+ * a player finds the gate. The family is set down with the den as its chunk is made (0.17.0), so they are home before anyone comes, as the
  * animals a world starts with are. When the guard dies the roamers are called home and the first back takes its
  * place; a member lost while the rest live is replaced after a day, and when the whole family is gone the den lies
  * empty for a few in-game days before a new family moves in. A den brings its owed lizards out one at a time while it

@@ -35,6 +35,7 @@ import com.explorationremix.world.feature.RootvaultsOpeningsPlacement;
 import com.explorationremix.world.feature.ShelfVinesFeature;
 import com.explorationremix.world.feature.SinkholeRimFeature;
 import com.explorationremix.world.feature.SkeinsFeature;
+import com.explorationremix.world.feature.FirefliesFeature;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
 import com.explorationremix.world.feature.TerracePoolsFeature;
 import com.explorationremix.world.feature.UnderTreesPlacement;
@@ -83,6 +84,8 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> DEN_LAIR = FEATURES.register("den_lair", () -> new DenLairFeature(NoneFeatureConfiguration.CODEC));
     // the Blue Reaches' Skeins, set down as each chunk is made (0.17.0), so they are there before anyone comes
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> SKEINS = FEATURES.register("skeins", () -> new SkeinsFeature(NoneFeatureConfiguration.CODEC));
+    // the Blue Reaches' firefly swarms, set down as each chunk is made (0.19.2), resting on their rock until someone comes
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> FIREFLIES = FEATURES.register("fireflies", () -> new FirefliesFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
     // the Galleries' floor lava (fix round 2 after the 0.8.0 pack runs): the field's rule laid on its floors
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> FLOOR_LAVA = FEATURES.register("floor_lava", () -> new FloorLavaFeature(NoneFeatureConfiguration.CODEC));

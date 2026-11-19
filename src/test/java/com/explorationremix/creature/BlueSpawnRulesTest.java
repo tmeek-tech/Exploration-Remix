@@ -49,16 +49,27 @@ class BlueSpawnRulesTest {
     }
 
     @Test
-    void threeToFiveSwarmsAndAFewInTheDeepDark() {
-        assertTrue(wantSwarm(Place.RIFT, 2, true, 0.99));
-        assertTrue(wantSwarm(Place.RIFT, 3, true, 0.0));
-        assertFalse(wantSwarm(Place.RIFT, 3, true, 0.99));
-        assertFalse(wantSwarm(Place.RIFT, 5, true, 0.0));
-        assertTrue(wantSwarm(Place.GEODES, 0, true, 0.99));
-        assertTrue(wantSwarm(Place.DEEP_DARK, 0, true, 0.99));
-        assertFalse(wantSwarm(Place.DEEP_DARK, 2, true, 0.0));
-        assertFalse(wantSwarm(Place.RIFT, 0, false, 0.0), "doMobSpawning off");
+    void aSwarmComesBackSlowlyOnlyWhereTheCavesAreShortOfThem() {
+        // twice the old spawner's three to five round a player in the rift and the geodes, one or two in the Deep Dark
+        assertEquals(6, swarmsKept(Place.RIFT));
+        assertEquals(10, swarmsMax(Place.RIFT));
+        assertEquals(6, swarmsKept(Place.GEODES));
+        assertEquals(2, swarmsKept(Place.DEEP_DARK));
+        assertEquals(4, swarmsMax(Place.DEEP_DARK));
         assertEquals(0, swarmsMax(Place.OTHER));
+        assertTrue(wantSwarm(Place.RIFT, 5, true, false, 0.0), "short of swarms: now and then");
+        assertFalse(wantSwarm(Place.RIFT, 5, true, false, SWARM_REFILL_CHANCE), "but not at every look");
+        assertTrue(wantSwarm(Place.RIFT, 0, true, true, 0.99), "once due, at every look until a hidden spot is found");
+        assertFalse(wantSwarm(Place.RIFT, 6, true, false, 0.0), "the caves have theirs: none comes");
+        assertFalse(wantSwarm(Place.RIFT, 6, true, true, 0.0), "not even when one was due");
+        assertTrue(wantSwarm(Place.GEODES, 0, true, false, 0.0));
+        assertTrue(wantSwarm(Place.DEEP_DARK, 1, true, false, 0.0));
+        assertFalse(wantSwarm(Place.DEEP_DARK, 2, true, false, 0.0), "few in the Deep Dark");
+        assertFalse(wantSwarm(Place.OTHER, 0, true, true, 0.0));
+        assertFalse(wantSwarm(Place.RIFT, 0, false, true, 0.0), "doMobSpawning off");
+        // about one a minute of looks (every EVERY ticks) round a player whose caves are short of them
+        double minutes = BlueReachesSpawner.EVERY / SWARM_REFILL_CHANCE / 20.0 / 60.0;
+        assertTrue(minutes >= 0.5 && minutes <= 2.0, minutes + " minutes");
     }
 
     @Test
