@@ -180,15 +180,13 @@ BLOCKS = {
     # The bones and scraps round a den (DenLairFeature): ribs and vertebrae, a skull fragment, feathers and fur, and the
     # lizards' own shed scales and hide. A bone now and then.
     "bone_scraps": ("Bone Scraps", "litter", {"variants": 4, "drop": "minecraft:bone", "chance": 0.4}),
-    # Deep Gardens round 2, the vent field (textures.py's vent field section has Taran's look rules): the near-black
-    # porous rock of the dead vents and spires, its dripstone, the live vents' wall rock, and the giant mushrooms' pale
-    # stem; then the glowing blocks, each in the four neon colours (block.Neon), and the seeps' dim light blue crust.
-    # Round 3: the vents and spires are vanilla blackstone, so the neon blocks on them are drawn over it (option rock),
-    # and the black dripstone has its pointed dripstone, vanilla's recoloured (block.PointedBlackDripstoneBlock).
-    "vent_rock": ("Vent Rock", "cube"),
+    # Deep Gardens, the vent field (textures.py's vent field section has Taran's look rules): black dripstone and the
+    # giant mushrooms' pale stem; then the glowing blocks, each in the four neon colours (block.Neon), and the seeps'
+    # dim light blue crust. Round 3: the vents and spires are vanilla blackstone (vent rock and live vent rock left the
+    # game, ERRemaps), so the neon blocks on them are drawn over it (option rock), and the black dripstone has its
+    # pointed dripstone, vanilla's recoloured (block.PointedBlackDripstoneBlock).
     "black_dripstone": ("Black Dripstone", "cube"),
     "pointed_black_dripstone": ("Pointed Black Dripstone", "pointed"),
-    "live_vent_rock": ("Live Vent Rock", "cube"),
     "pale_stem": ("Pale Stem", "cube"),
     "glow_mat": ("Glow Mat", "glow_cube", {"neon": True, "faces": "bottom_top"}),
     "glow_cap": ("Glow Cap", "glow_cube", {"neon": True}),
@@ -197,14 +195,15 @@ BLOCKS = {
     "vent_glow": ("Vent Glow", "glow_cube", {"neon": True, "rock": "blackstone"}),
     "throat_vein": ("Throat Vein", "glow_cube", {"neon": True, "rock": "blackstone"}),
     # knobs on its top (and bottom), beads trailing down its sides: it also runs down the vents' walls from the crown
-    "spire_tip": ("Spire Tip", "glow_cube", {"neon": True, "rock": "blackstone",
-                                             "overlays": {"top": "_top", "side": "_side", "bottom": "_top"}}),
+    # (the spire tip until round 3)
+    "glow_nodules": ("Glow Nodules", "glow_cube", {"neon": True, "rock": "blackstone",
+                                                   "overlays": {"top": "_top", "side": "_side", "bottom": "_top"}}),
     "seep_crust": ("Seep Crust", "glow_cube"),
 }
 NO_DROP = {"band_stone", "glow", "mossback_den"}
 # The vent field's blocks: rock, never growth to /remix census (the whole blocks count as floor and ceiling).
-VENT_FIELD_BLOCKS = {"vent_rock", "black_dripstone", "pointed_black_dripstone", "live_vent_rock", "pale_stem", "glow_mat",
-                     "glow_cap", "vent_crown", "den_fissure", "vent_glow", "throat_vein", "spire_tip", "seep_crust"}
+VENT_FIELD_BLOCKS = {"black_dripstone", "pointed_black_dripstone", "pale_stem", "glow_mat", "glow_cap", "vent_crown",
+                     "den_fissure", "vent_glow", "throat_vein", "glow_nodules", "seep_crust"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
 # lifeless blocks of the Galleries, the litter round the dens, and the vent field's whole blocks.
 NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"} | VENT_FIELD_BLOCKS
@@ -226,9 +225,9 @@ BLOCK_TAGS = {
     ("minecraft", "dirt"): ["frost_moss"],
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain",
-                                        # Deep Gardens round 2: the vent field's rock, and the neon blocks grown on it
-                                        "vent_rock", "black_dripstone", "pointed_black_dripstone", "live_vent_rock", "glow_mat",
-                                        "vent_crown", "den_fissure", "vent_glow", "throat_vein", "spire_tip", "seep_crust"],
+                                        # the Deep Gardens: the vent field's dripstone, and the neon blocks grown on its rock
+                                        "black_dripstone", "pointed_black_dripstone", "glow_mat", "vent_crown", "den_fissure",
+                                        "vent_glow", "throat_vein", "glow_nodules", "seep_crust"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen",
                                     # Deep Gardens round 2: the giant mushrooms
                                     "pale_stem", "glow_cap"],

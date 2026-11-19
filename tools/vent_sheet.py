@@ -7,7 +7,7 @@ Writes two pictures, into build/ unless told otherwise:
                        rock (gen_data's option rock) is shown over that rock, a pointed dripstone over the check
   dg_blocks_mock.png   a wall of each block, a face tiled three by three as in a dark cave: the texture (over its rock)
                        at 30 % of its brightness and the overlay over it at full brightness; each neon block in its four
-                       colours, the glow mat's and the spire tip's top and side; then pointed black dripstone, lit, as a
+                       colours, the glow mat's and the glow nodules' top and side; then pointed black dripstone, lit, as a
                        stalactite, a stalagmite and a pair whose tips have merged, under or on black dripstone
 and prints the colour check: every pixel of every texture and overlay against the rules (textures.cool_problems, and
 no grey leaning warm), the hues it found, and the rocks' mean colours against their targets.
@@ -34,11 +34,11 @@ CLIENT_JAR = os.path.join(os.environ.get("GRADLE_USER_HOME", os.path.expanduser(
 BG, INK, DIM_INK = (34, 33, 40), (232, 230, 238), (150, 148, 160)
 DARK = 0.3  # the mock's rock brightness
 # The look rules' targets for the rocks' mean colours.
-TARGETS = {"vent_rock": (55, 52, 63), "black_dripstone": (50, 47, 58), "live_vent_rock": (78, 68, 92), "pale_stem": (212, 204, 222)}
+TARGETS = {"black_dripstone": (50, 47, 58), "pale_stem": (212, 204, 222)}
 # The mock's rows: (label, textures); a neon block's row is its four colours.
-PLAIN = ["vent_rock", "black_dripstone", "live_vent_rock", "pale_stem", "seep_crust", "glow_mat_bottom"]
+PLAIN = ["black_dripstone", "pale_stem", "seep_crust", "glow_mat_bottom"]
 NEON_ROWS = [("glow_mat", "_top"), ("glow_mat", "_side"), ("glow_cap", ""), ("vent_crown", ""), ("den_fissure", ""),
-             ("vent_glow", ""), ("throat_vein", ""), ("spire_tip", "_top"), ("spire_tip", "_side")]
+             ("vent_glow", ""), ("throat_vein", ""), ("glow_nodules", "_top"), ("glow_nodules", "_side")]
 # The mock's pointed dripstone, as columns of blocks from the top: (label, [(direction, thickness), ...]), with black
 # dripstone above a stalactite and below a stalagmite.
 POINTED = "pointed_black_dripstone"

@@ -7,11 +7,11 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "explorationremix:spire_tip",
+          "name": "explorationremix:glow_nodules",
           "functions": [
             {
               "function": "minecraft:copy_state",
-              "block": "explorationremix:spire_tip",
+              "block": "explorationremix:glow_nodules",
               "properties": [
                 "neon"
               ]

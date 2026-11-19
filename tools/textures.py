@@ -153,14 +153,13 @@ def neon_shades(neon):
 def _hex(c): return "#%02X%02X%02X" % tuple(c[:3])
 
 
-# The rocks' ramps, dark to light: all cool, a little blue-violet.
+# The rocks' ramps, dark to light: all cool, a little blue-violet. VENT_RAMP is the retired vent rock's, kept because the
+# neon painters still draw (and then clear) it to keep their patterns.
 VENT_RAMP = [hexc(c) for c in ("#26232E", "#2E2B37", "#35323F", "#3C3947", "#444150", "#4D4A5A")]
 VENT_PIT, VENT_GRAIN = hexc("#18161F"), hexc("#625E71")
 NEAR_BLACK = [hexc(c) for c in ("#121117", "#18161E", "#1E1C25", "#24222C", "#2B2834")]  # under the neon
 NEAR_BLACK_PIT = hexc("#0C0B10")
 DRIP_RAMP = [hexc(c) for c in ("#1F1D26", "#27252E", "#2F2C37", "#373441", "#403D4B", "#4A4756")]
-LIVE_RAMP = [hexc(c) for c in ("#322A3E", "#3C3349", "#453C53", "#4E445D", "#584D68", "#635774")]
-LIVE_PIT, LIVE_FLECKS = hexc("#241E2D"), [hexc(c) for c in ("#7C6A96", "#9280B0")]
 MAT_ROCK = [hexc(c) for c in ("#34343E", "#3F3F4A", "#4A4A56", "#565663", "#636370")]  # deepslate-dark, under a mat
 STEM_RAMP = [hexc(c) for c in ("#BAB2C7", "#C5BDD2", "#CFC7DA", "#D8D1E3", "#E2DCEC", "#ECE7F4")]
 FINE = ((8, 0.5), (4, 0.25))  # noise octaves (cells, weight): mostly the fine one
@@ -223,15 +222,8 @@ def _rock(rng, ramp, pits=0, pit=None, lip=True, grains=0, grain=None):
     return img
 
 
-def vent_rock():
-    """The near-black porous rock of the dead vents, spires and dripstone: cool grey-violet, unlayered, pitted (small
-    dark pits, a lit lip below right of most) with a few pale grains. A little lighter than band stone and never
-    layered like it."""
-    return _rock(random.Random(2801), VENT_RAMP, pits=14, pit=VENT_PIT, grains=7, grain=VENT_GRAIN)
-
-
 def black_dripstone():
-    """Vent rock grown as dripstone: the vertical banding of vanilla's dripstone block, near-black and cool. Columns
+    """Black dripstone: the vertical banding of vanilla's dripstone block, near-black and cool. Columns
     take a band's shade (bands one to three pixels wide); each column breaks into drips, runs of two to six rows a shade
     lighter or darker (a drip's head lighter, its tail darker), wrapping from the bottom row to the top so the cones'
     blocks stack."""
@@ -251,21 +243,6 @@ def black_dripstone():
                 s = shade + (1 if k == 0 and run > 2 else 0) - (1 if k == run - 1 and run > 3 else 0)
                 _put(px, x, y + filled + k, DRIP_RAMP[max(0, min(top, s))])
             filled += run
-    return img
-
-
-def live_vent_rock():
-    """The wall rock of the live vents: near-black with a violet cast, smoother than vent rock (a few pits, no lips),
-    with faint mineral flecks: pale violet specks and short glints. Nothing glows."""
-    rng = random.Random(2821)
-    img = _rock(rng, LIVE_RAMP, pits=5, pit=LIVE_PIT, lip=False)
-    px = img.load()
-    for _ in range(9):
-        _put(px, rng.randrange(16), rng.randrange(16), LIVE_FLECKS[0])
-    for _ in range(4):  # a glint: a bright fleck with a fainter one below right
-        x, y = rng.randrange(16), rng.randrange(16)
-        _put(px, x, y, LIVE_FLECKS[1])
-        _put(px, x + 1, y + 1, LIVE_FLECKS[0])
     return img
 
 
@@ -518,10 +495,11 @@ def throat_vein(neon):
     return img
 
 
-def spire_tip_top(neon):
-    """A spire tip's top (and bottom), the glowing top of a small live spire: rounded neon mineral knobs on the
-    blackstone (an overlay), each lit from the top left (a hot highlight, neon, mid, then a dim and a deep shadow side
-    that the world lights) with a dark shadow on the rock below right of it. The knobs wrap round the tile's edges."""
+def glow_nodules_top(neon):
+    """Glow nodules' top (and bottom), the glowing top of a small live spire (the spire tip until round 3): rounded
+    neon mineral knobs on the blackstone (an overlay), each lit from the top left (a hot highlight, neon, mid, then a
+    dim and a deep shadow side that the world lights) with a dark shadow on the rock below right of it. The knobs wrap
+    round the tile's edges."""
     s = neon_shades(neon)
     rng = random.Random(2901)
     img = _old_rock(rng, NEAR_BLACK, pits=6, pit=NEAR_BLACK_PIT)
@@ -545,11 +523,11 @@ def spire_tip_top(neon):
     return img
 
 
-SPIRE_TRAIL = (2.0, 1.5, 1.0, 1.0, 0.5)  # the beads of a trail on a spire tip's side, as radii from its head down
+NODULE_TRAIL = (2.0, 1.5, 1.0, 1.0, 0.5)  # the beads of a trail on glow nodules' side, as radii from its head down
 
 
-def spire_tip_side(neon):
-    """A spire tip's sides: the knobs' neon mineral running down the blackstone in two beaded trails (an overlay), as
+def glow_nodules_side(neon):
+    """Glow nodules' sides: the knobs' neon mineral running down the blackstone in two beaded trails (an overlay), as
     it also runs down a live vent's walls from the crown (round 3, Taran: "Have the spire tips run down the sides of
     vents too"). A trail is a string of beads lit like the knobs (a hot highlight at the top left, a dark shadow below
     right on the rock): a round bead at its head, then smaller and smaller down to a drop, joined by a thread of the deep
@@ -572,9 +550,9 @@ def spire_tip_side(neon):
             return x0 + amp * math.sin(2 * math.pi * y / 16 + phase)  # the trail's column at row y; it wraps every 16
 
         y = head + 8 * k + rng.random() * 2 - 1
-        gaps = [rng.random() + 0.3 for _ in SPIRE_TRAIL]
-        free = 16 - sum(2 * r for r in SPIRE_TRAIL)  # the rows between the beads, shared out so the trail fills 16
-        for r, gap in zip(SPIRE_TRAIL, (g / sum(gaps) * free for g in gaps)):
+        gaps = [rng.random() + 0.3 for _ in NODULE_TRAIL]
+        free = 16 - sum(2 * r for r in NODULE_TRAIL)  # the rows between the beads, shared out so the trail fills 16
+        for r, gap in zip(NODULE_TRAIL, (g / sum(gaps) * free for g in gaps)):
             beads.append((at(y + r), y + r, r))
             for t in range(int(round(2 * r + gap))):
                 thread.append((at(y + t), y + t))
@@ -745,17 +723,16 @@ def pointed_black_dripstone(thickness, direction):
     return img if direction == "down" else img.transpose(Image.FLIP_TOP_BOTTOM)
 
 
-for _name, _fn in (("vent_rock", vent_rock), ("black_dripstone", black_dripstone), ("live_vent_rock", live_vent_rock),
-                   ("pale_stem", pale_stem), ("glow_mat_bottom", glow_mat_bottom), ("seep_crust", seep_crust)):
+for _name, _fn in (("black_dripstone", black_dripstone), ("pale_stem", pale_stem), ("glow_mat_bottom", glow_mat_bottom),
+                   ("seep_crust", seep_crust)):
     PAINTERS["block/" + _name] = _fn
 GLOW["block/seep_crust"] = {_hex(c) for c in SEEP_FILM[1:]}
 # The neon blocks, a texture per colour: <block>_<colour>, or <block>_<colour>_<face> for a block whose faces differ
-# (the glow mat's _top and _side, over glow_mat_bottom; the spire tip's _top, also drawn on its bottom, and _side).
+# (the glow mat's _top and _side, over glow_mat_bottom; the glow nodules' _top, also drawn on its bottom, and _side).
 NEON_PAINTERS = {"glow_mat": {"top": glow_mat_top, "side": glow_mat_side}, "glow_cap": glow_cap, "vent_crown": vent_crown,
                  "den_fissure": den_fissure, "vent_glow": vent_glow, "throat_vein": throat_vein,
-                 "spire_tip": {"top": spire_tip_top, "side": spire_tip_side}}
-VENT_FIELD = ["block/vent_rock", "block/black_dripstone", "block/live_vent_rock", "block/pale_stem", "block/glow_mat_bottom",
-              "block/seep_crust"]  # every texture of the vent field, for cool_problems and tools/vent_sheet.py
+                 "glow_nodules": {"top": glow_nodules_top, "side": glow_nodules_side}}
+VENT_FIELD = ["block/black_dripstone", "block/pale_stem", "block/glow_mat_bottom", "block/seep_crust"]  # every texture of the vent field, for cool_problems and tools/vent_sheet.py
 for _direction in ("down", "up"):
     for _thickness in POINTED_DRIP_THICKNESS:
         _tex = f"block/pointed_black_dripstone_{_direction}_{_thickness}"

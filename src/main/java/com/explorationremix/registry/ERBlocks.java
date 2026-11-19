@@ -360,10 +360,13 @@ public final class ERBlocks {
     // glow stands out on black. The neon blocks come in the four neon colours (Neon: magenta, violet, lime, light blue;
     // lime only near the ways down) and draw their glowing pixels at full brightness over rock lit by the world; those on
     // the vents draw their neon over vanilla's blackstone. Nothing here is warm, cyan or teal.
-    /** The near-black porous rock of the dead vents and the spires until round 3. Like deepslate, a little harder. */
-    public static final RegistryObject<Block> VENT_ROCK = block("vent_rock", () -> new Block(ventRock().mapColor(MapColor.COLOR_BLACK)));
-    /** Vent rock grown as hanging dripstone cones, banded like vanilla's dripstone block. */
-    public static final RegistryObject<Block> BLACK_DRIPSTONE = block("black_dripstone", () -> new Block(ventRock().mapColor(MapColor.COLOR_BLACK)));
+    /**
+     * Vanilla's dripstone block in near-black: the vent field's hanging cones and the skin over much of its cave walls,
+     * floors and ceilings (round 3), banded like vanilla's. It breaks and sounds like vanilla's dripstone block.
+     */
+    public static final RegistryObject<Block> BLACK_DRIPSTONE = block("black_dripstone", () -> new Block(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).instrument(NoteBlockInstrument.BASEDRUM).requiresCorrectToolForDrops()
+                    .sound(SoundType.DRIPSTONE_BLOCK).strength(1.5F, 1.0F)));
     /**
      * Vanilla's pointed dripstone in black dripstone (round 3): stalactites and stalagmites that stack, fall and hurt as
      * vanilla's do but never grow or drip, the vent field being dry (PointedBlackDripstoneBlock). Vanilla's properties
@@ -373,8 +376,6 @@ public final class ERBlocks {
             BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).forceSolidOn().instrument(NoteBlockInstrument.BASEDRUM).noOcclusion()
                     .sound(SoundType.POINTED_DRIPSTONE).strength(1.5F, 3.0F).dynamicShape().offsetType(BlockBehaviour.OffsetType.XZ)
                     .pushReaction(PushReaction.DESTROY).isRedstoneConductor((s, l, p) -> false)));
-    /** The wall rock of the live (hot) vents: near-black with a violet cast and faint mineral flecks. No light. */
-    public static final RegistryObject<Block> LIVE_VENT_ROCK = block("live_vent_rock", () -> new Block(ventRock().mapColor(MapColor.COLOR_GRAY)));
     /** The giant mushrooms' stem, pale lavender-white. No light. */
     public static final RegistryObject<Block> PALE_STEM = block("pale_stem", () -> new Block(mushroomBlock().mapColor(MapColor.WOOL)));
     /** A glowing living film over the rock of the cave floors, like nylium. */
@@ -382,16 +383,18 @@ public final class ERBlocks {
     /** The giant mushrooms' cap, neon all over with darker specks. */
     public static final RegistryObject<Block> GLOW_CAP = block("glow_cap", () -> new NeonBlock(mushroomBlock().mapColor(ERBlocks::neonMap).lightLevel(s -> 13)));
     /** The bright mineral rim of a live vent's mouth: crystalline neon crust on blackstone, the brightest of the set. */
-    public static final RegistryObject<Block> VENT_CROWN = block("vent_crown", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 15)));
+    public static final RegistryObject<Block> VENT_CROWN = block("vent_crown", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 15)));
     /** Blackstone split by glowing cracks: the floor of a live den. */
-    public static final RegistryObject<Block> DEN_FISSURE = block("den_fissure", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 10)));
+    public static final RegistryObject<Block> DEN_FISSURE = block("den_fissure", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 10)));
     /** A patchy glowing mineral crust on blackstone, lining the inside of a live vent. */
-    public static final RegistryObject<Block> VENT_GLOW = block("vent_glow", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 10)));
+    public static final RegistryObject<Block> VENT_GLOW = block("vent_glow", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 10)));
     /** Blackstone with thin glowing veins, lining the throats that lead down (mostly lime). */
-    public static final RegistryObject<Block> THROAT_VEIN = block("throat_vein", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 7)));
-    /** The glowing top of a small live spire, rounded neon mineral knobs on blackstone, with beads trailing down its sides:
-     *  it also runs down a live vent's walls from the crown (round 3). */
-    public static final RegistryObject<Block> SPIRE_TIP = block("spire_tip", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 11)));
+    public static final RegistryObject<Block> THROAT_VEIN = block("throat_vein", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 7)));
+    /**
+     * Glow nodules (the spire tip until round 3): rounded neon mineral knobs on blackstone, with beads trailing down its
+     * sides. They cap the small live spires, mix with the crown over a live vent's top and run down its walls in streaks.
+     */
+    public static final RegistryObject<Block> GLOW_NODULES = block("glow_nodules", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 11)));
     /** A faint crust on the dry rock at the edge of the crude oil seeps: a dim light blue film, light blue only. */
     public static final RegistryObject<Block> SEEP_CRUST = block("seep_crust", () -> new Block(ventRock().mapColor(MapColor.COLOR_BLACK).lightLevel(s -> 5)));
 
@@ -412,6 +415,12 @@ public final class ERBlocks {
     private static BlockBehaviour.Properties ventRock() {
         return BlockBehaviour.Properties.of().instrument(NoteBlockInstrument.BASEDRUM).requiresCorrectToolForDrops().strength(3.5F, 6.0F)
                 .sound(SoundType.DEEPSLATE);
+    }
+
+    /** A neon block drawn over vanilla's blackstone (on the vents and spires): it breaks and sounds like blackstone. */
+    private static BlockBehaviour.Properties onBlackstone() {
+        return BlockBehaviour.Properties.of().instrument(NoteBlockInstrument.BASEDRUM).requiresCorrectToolForDrops().strength(1.5F, 6.0F)
+                .sound(SoundType.STONE);
     }
 
     /** A block of a giant mushroom, like vanilla's mushroom blocks: soft, cut fastest with an axe, and it burns. */

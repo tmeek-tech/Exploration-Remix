@@ -1,23 +1,23 @@
 {
-  "parent": "explorationremix:block/spire_tip_magenta",
+  "parent": "explorationremix:block/glow_nodules_magenta",
   "overrides": [
     {
       "predicate": {
         "explorationremix:neon": 0.1667
       },
-      "model": "explorationremix:block/spire_tip_violet"
+      "model": "explorationremix:block/glow_nodules_violet"
     },
     {
       "predicate": {
         "explorationremix:neon": 0.5
       },
-      "model": "explorationremix:block/spire_tip_lime"
+      "model": "explorationremix:block/glow_nodules_lime"
     },
     {
       "predicate": {
         "explorationremix:neon": 0.8333
       },
-      "model": "explorationremix:block/spire_tip_light_blue"
+      "model": "explorationremix:block/glow_nodules_light_blue"
     }
   ]
 }
