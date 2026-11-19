@@ -26,18 +26,21 @@ class TerrainTest {
     @Test
     void layersSitWhereTheSpecSays() {
         Shape s = terrain(1).shape;
-        assertEquals(-832, s.floorY);
+        assertEquals(-784, s.floorY);
         // Blue Reaches, Deep Gardens, Wasteland, Basalt Galleries (Taran swapped the two middle layers on 2026-10-28
         // and split the bottom one into the Wasteland and the Galleries on 2026-11-01, keeping bedrock at -832). In
         // 0.5.1 the Wasteland opens into the Galleries with no band between them: the band's 16 rows are the Wasteland's.
-        int[][] expected = {{-81, -272}, {-289, -528}, {-545, -688}, {-689, -832}};
+        // Since round 3 of the Deep Gardens (Taran, 2026-11-19: "Reduce the layer height") they are 192 rows (240 before)
+        // and the 48 rows came off the bottom of the world (Taran's answer on the card): every layer under them keeps its
+        // height and lies 48 higher, bedrock at -784 (-832 before).
+        int[][] expected = {{-81, -272}, {-289, -480}, {-497, -640}, {-641, -784}};
         assertEquals(4, s.layerCount);
         assertEquals("blue_reaches", s.id(0));
         assertEquals("deep_gardens", s.id(1));
         assertEquals("wasteland", s.id(2));
         assertEquals("basalt_galleries", s.id(3));
-        assertEquals(-678, s.waterY(Terrain.WASTELAND), "the Wasteland's lava table (10 over its bottom)");
-        assertEquals(-822, s.waterY(Terrain.GALLERIES), "the Galleries' lava table (its top block at -823, as before 0.5)");
+        assertEquals(-630, s.waterY(Terrain.WASTELAND), "the Wasteland's lava table (10 over its bottom)");
+        assertEquals(-774, s.waterY(Terrain.GALLERIES), "the Galleries' lava table (10 over the floor, its top block at -775; -823 before round 3)");
         for (int i = 0; i < 4; i++) {
             assertEquals(expected[i][0], s.top(i), "top of layer " + i);
             assertEquals(expected[i][1], s.bottom(i), "bottom of layer " + i);

@@ -28,8 +28,11 @@ import javax.annotation.Nullable;
 final class Vents {
     private Vents() {}
 
-    /** The highest row a scan starts from: under the Galleries' top (y -689), whose open rows end at -693. */
-    static final int TOP_CAP = -690;
+    /**
+     * The highest row a scan starts from: this many rows under the Galleries' top ({@link LavaFlood.Band#top()}, y -641
+     * since round 3 of the Deep Gardens raised the world's floor by 48, -689 before), whose open rows end 4 under it.
+     */
+    static final int TOP_UNDER = 1;
     /** The crater floor must lie this many rows over the lava table, and at most {@link #TOP_HI}. */
     static final int TOP_LO = 30, TOP_HI = 70;
     /** A scan starts this many rows over the stack's height. */
@@ -54,7 +57,7 @@ final class Vents {
     @Nullable
     static Read read(ServerLevel level, LavaFlood.Band band, Net.Vent v) {
         int w = band.tableY();
-        int from = Math.min(w + (int) Math.ceil(v.height) + OVER, TOP_CAP);
+        int from = Math.min(w + (int) Math.ceil(v.height) + OVER, band.top() - TOP_UNDER);
         int x = Mth.floor(v.x), z = Mth.floor(v.z);
         int[] axis = scan(level, x, z, from, w + TOP_LO);
         if (axis == null || axis[0] > w + TOP_HI) return null;

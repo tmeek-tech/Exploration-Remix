@@ -20,19 +20,22 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class NoiseLayersTest {
     /**
-     * The Deep Gardens and the bands: per seed, a hash of every block of rows -544..-65 but the Blue Reaches' own (rock
-     * after the per-block pass, fluid, biome) of five chunks, as the game builds them (corners every 4 x 8 x 4,
-     * interpolated). Until 0.19.1 these were a2c3d73's planned Deep Gardens, with the plan hashes of layer 1, and they
-     * held through every change since the noise layers came in. Pinned again for the vent field (round 2 of the Deep
-     * Gardens' rework, Taran's picks of 2026-11-18), which nothing plans: the layer's blocks are the field's, dry, in its
-     * three bands. In these five chunks the bands' rows are all rock, the same in every chunk (no throat passes under
-     * them), and band 2, whose biome is its layer's route biome, takes the Seep Beds where it took the Lantern Lake. The
-     * Blue Reaches' lines held ({@link #BLUE}).
+     * The Deep Gardens and the bands: per seed, a hash of every block from band 3's bottom to band 1's top (-496..-65
+     * since round 3 of the Deep Gardens; -544..-65 before) but the Blue Reaches' own (rock after the per-block pass,
+     * fluid, biome) of five chunks, as the game builds them (corners every 4 x 8 x 4, interpolated). Until 0.19.1 these
+     * were a2c3d73's planned Deep Gardens, with the plan hashes of layer 1, and they held through every change since the
+     * noise layers came in. Pinned again for the vent field (round 2 of the Deep Gardens' rework, Taran's picks of
+     * 2026-11-18), which nothing plans: the layer's blocks are the field's, dry, in its three bands. In these five chunks
+     * the bands' rows were all rock, the same in every chunk (no throat passes under them), and band 2, whose biome is
+     * its layer's route biome, takes the Seep Beds where it took the Lantern Lake. Pinned again for round 3 (Taran,
+     * 2026-11-19): the layer is 192 rows in six storeys, the Chimney Halls come down to the bottom storey and the Vent
+     * Domes are half again as big and cut to a cave's shape by noise, so every chunk's line moved (its rows now start at
+     * band 3's bottom 48 higher, with the layer's bottom). The Blue Reaches' lines held ({@link #BLUE}).
      */
     static final String[] GARDENS_AND_BANDS = {
-            "seed 1 blocks: a648845998be0ea0 4eaeb8586fb04ec1 fa34541fd9607ed0 13b70d57cb954376 16a530db345b8158",
-            "seed 2 blocks: 26864fd9d3b8e2be f580312b29cb47d df3957fbe08f18aa c43466d6cc1e370c e04bd825a718d3cf",
-            "seed 8004 blocks: 62e44feb41c4f952 68e7b94b007b0f34 5955b1a397859760 a03e3d37fc8e75b6 baa12956765b85a9"};
+            "seed 1 blocks: 9145c9ff5dd5096c 1bb0da9c13a2ba8f 3210dd3d43cad4b6 36658af02a6586a2 ea88f4a98bd50df2",
+            "seed 2 blocks: 1e9d54ad4cc7636d 1482b2ec338262cb 9a12e51f4e7237a4 28106c88131106c4 23bdcd6e554967df",
+            "seed 8004 blocks: 289f81a9a5d023a1 b273a1a7d3dbb0b4 1159c07f75c1288d af4544606632091b 3078cdfe642992c7"};
     /**
      * The Blue Reaches the same way: layer 0's plan hashes and its own rows (-272..-81 by default). Pinned again when
      * the view breaker went (Taran, 2026-11-02: long views are welcome, they make the caves look epic, and the breaker's
@@ -104,7 +107,7 @@ class NoiseLayersTest {
         for (int cx = -1; cx <= 0; cx++) for (int cz = -1; cz <= 0; cz++)
             sb[0].append(' ').append(Long.toHexString(NetworkTest.planHash(t.network(Terrain.BLUE, cx, cz))));
         sb[0].append(" blocks:");
-        int ylo = -544, yhi = -65, blo = t.shape.bottom(Terrain.BLUE), bhi = t.shape.top(Terrain.BLUE);
+        int ylo = t.shape.bandBottom(3), yhi = t.shape.bandTop(1), blo = t.shape.bottom(Terrain.BLUE), bhi = t.shape.top(Terrain.BLUE);
         for (int[] c : chunks) {
             long hb = 17, hr = 17;
             int bx = c[0] * 16, bz = c[1] * 16;
@@ -255,8 +258,9 @@ class NoiseLayersTest {
         Join j = t.join;
         assertNotNull(j);
         assertTrue(j.on, "the default layout has the join");
-        assertEquals(-704, j.lo);
-        assertEquals(-673, j.hi);
+        // 48 rows higher than before round 3 of the Deep Gardens (-704 and -673), with the world's floor
+        assertEquals(-656, j.lo);
+        assertEquals(-625, j.hi);
         Random r = new Random(9);
         Spread spread = new Spread(r, 6000, 512, 1000);
         int bottomFlips = 0, topFlips = 0, sealed = 0, open = 0, craterOpen = 0, craterNotAir = 0;

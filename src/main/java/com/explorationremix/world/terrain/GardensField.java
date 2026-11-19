@@ -748,7 +748,7 @@ public final class GardensField {
 
     /** The game's field for a world: its plan from the world's seed, the gates where {@link Plans} puts them. */
     static GardensField game(long worldSeed, Plans plans, Shape shape, GardensRock.Gates gates, GardensExits.Waste waste) {
-        // the block tiles hold SY rows: a layer of any other height would read past them (the world config fixes it at 240)
+        // the block tiles hold SY rows: a layer of any other height would read past them (the world config fixes it at SY)
         if (shape.height(Terrain.GARDENS) != SY)
             throw new IllegalArgumentException("The Deep Gardens' vent field is built for " + SY + " rows, not " + shape.height(Terrain.GARDENS));
         GardensPlan plan = new GardensPlan(GardensPlan.foldSeed(worldSeed), GardensGates.of(plans, shape));
@@ -832,7 +832,7 @@ public final class GardensField {
 
     // ================================================================================================ under the layer
 
-    /** The rows under the layer a throat can open: from the Wasteland slab's bottom (row -72, Y -600) to row -1. */
+    /** The rows under the layer a throat can open: from the Wasteland slab's bottom (row -72, Y -552) to row -1. */
     static final int UNDER_LO = -72;
     /** How far from its site's centre a throat can reach under the layer: its ring with drift, and an outlet. */
     static final double UNDER_REACH = 84;

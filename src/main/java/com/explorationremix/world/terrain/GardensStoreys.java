@@ -7,8 +7,8 @@ import java.util.function.Predicate;
 import static com.explorationremix.world.terrain.GardensMath.clipF;
 import static com.explorationremix.world.terrain.GardensMath.pull;
 import static com.explorationremix.world.terrain.GardensMath.rampF;
+import static com.explorationremix.world.terrain.GardensPlan.CEIL_MAX;
 import static com.explorationremix.world.terrain.GardensPlan.CUP_GAP;
-import static com.explorationremix.world.terrain.GardensPlan.DOME_CAP;
 import static com.explorationremix.world.terrain.GardensPlan.GATE_R;
 import static com.explorationremix.world.terrain.GardensPlan.HALL_CAP;
 import static com.explorationremix.world.terrain.GardensPlan.K;
@@ -131,7 +131,7 @@ final class GardensStoreys {
         mound = new float[n];
         lb = new float[n];
         float[] big = new float[n], cap6 = new float[n];
-        float[][] td = new float[K][n], tw = new float[K][n], cv = new float[K][n], wn = new float[K][n], pil = new float[K][n],
+        float[][] td = new float[K][n], tw = new float[K][n], cv = new float[K][n], pil = new float[K][n],
                 col = new float[K][n], hn = new float[K][n];
         for (int k = 0; k < K; k++) {
             f[k] = new float[n];
@@ -160,7 +160,6 @@ final class GardensStoreys {
                     tw[k][q] = c.tw[k];
                     m0[k][q] = c.m0[k];
                     cv[k][q] = c.cv[k];
-                    wn[k][q] = c.wn[k];
                     mb[k][q] = c.mb[k];
                     pil[k][q] = c.pil[k];
                     col[k][q] = c.col[k];
@@ -229,49 +228,41 @@ final class GardensStoreys {
                     heaveH[q] = 4f * mound[q] * clipF((h - 9f) / 10f, 0f, 1f) * (1f - bumpK[q]);
                 }
             }
-            // domes
+            // domes, cut to a cave's shape by the storey's noise (GardensPlan.domeAt), worked out where they reach
             float[] dhK = new float[n], ocK = new float[n];
             List<GardensPlan.Dome> ds = plan.domesNear(k, minX, minZ, maxX, maxZ, 0);
             domes.add(ds);
+            DomeCols dc = new DomeCols(k);
             for (GardensPlan.Dome d : ds) {
-                double r = d.r();
-                double tt = Math.max(0, Math.min(1, (r - 12) / 4)), hfr = (0.95 + 0.15 * tt * tt * (3 - 2 * tt)) * r;
-                float rF = (float) r, hcF = (float) d.hc();
-                float[] wnK = wn[k];
-                forBox((int) Math.floor(d.x() - r * 1.2), (int) Math.floor(d.x() + r * 1.2) + 1,
-                        (int) Math.floor(d.z() - r * 1.2), (int) Math.floor(d.z() + r * 1.2) + 1, q -> {
-                            float dd = plan.dist(X(q), Z(q), d.x(), d.z()) / rF * (1f + wnK[q]);
-                            float hl;
-                            if (dd < 1f) {
-                                float s = (float) Math.sqrt(clipF(1f - dd * dd, 0f, 1f));
-                                hl = d.deep() ? hcF * s : (float) Math.min(hfr * (double) s, DOME_CAP);
-                            } else hl = 0f;
-                            if (hl > dhK[q]) dhK[q] = hl;
-                            float o = clipF(1f - dd / 0.65f, 0f, 1f);
-                            if (o > ocK[q]) ocK[q] = o;
+                double b = GardensPlan.domeReach(d.r());
+                float[] o1 = new float[1];
+                forBox((int) Math.floor(d.x() - b), (int) Math.floor(d.x() + b) + 1,
+                        (int) Math.floor(d.z() - b), (int) Math.floor(d.z() + b) + 1, q -> {
+                            int o = dc.at(q);
+                            float h = GardensPlan.domeAt(d, X(q), Z(q), dc.noise, o, dc.cap[q], o1);
+                            if (o1[0] > ocK[q]) ocK[q] = o1[0];
+                            if (h > 0f) dhK[q] = dhK[q] > 0f ? (float) GardensPlan.smax(dhK[q], h, GardensPlan.KS) : h;
                         });
             }
             if (k == 0 && plan.domes[0]) {
-                // the lower gate's own dome, ringed by rock past 24-28
+                // the lower gate's own dome, ringed by rock from GATE_R + 2 out past the plumbing's ring (GW_R)
                 for (GardensGates.Gate g : plan.gates.near(minX + (maxX - minX) / 2, minZ + (maxZ - minZ) / 2,
-                        Math.hypot(maxX - minX, maxZ - minZ) / 2 + 48)) {
+                        Math.hypot(maxX - minX, maxZ - minZ) / 2 + GATE_BOX + 2)) {
                     if (g.entry()) continue;
-                    float gdH = (float) (0.9 * GATE_R);
-                    forBox((int) Math.floor(g.x() - 46), (int) Math.ceil(g.x() + 46), (int) Math.floor(g.z() - 46),
-                            (int) Math.ceil(g.z() + 46), q -> {
+                    forBox((int) Math.floor(g.x() - GATE_BOX), (int) Math.ceil(g.x() + GATE_BOX), (int) Math.floor(g.z() - GATE_BOX),
+                            (int) Math.ceil(g.z() + GATE_BOX), q -> {
                                 int wx = X(q), wz = Z(q);
-                                float ringX = pull(wx, wz, g.x(), g.z(), 30.0, 44.0) - pull(wx, wz, g.x(), g.z(), GATE_R, GATE_R + 4.0);
+                                float ringX = pull(wx, wz, g.x(), g.z(), RING_A, RING_B) - pull(wx, wz, g.x(), g.z(), GATE_R, GATE_R + 4.0);
                                 if (ringX > 0.5f) {
                                     dhK[q] = 0f;
                                     return;
                                 }
-                                float dd = plan.dist(wx, wz, g.x(), g.z()) / (float) GATE_R;
-                                float gd = dd < 1f ? gdH * (float) Math.sqrt(clipF(1f - dd * dd, 0f, 1f)) : 0f;
-                                if (gd > dhK[q]) dhK[q] = gd;
+                                int o = dc.at(q);
+                                float gd = GardensPlan.gateDomeAt(g, wx, wz, dc.noise, o);
+                                if (gd > 0f) dhK[q] = dhK[q] > 0f ? (float) GardensPlan.smax(dhK[q], gd, GardensPlan.KS) : gd;
                             });
                 }
             }
-            for (int q = 0; q < n; q++) if (dhK[q] > 0f) dhK[q] = Math.max(dhK[q], 3.2f);
             oc[k] = ocK;
             // beds
             boolean[] sheetK = new boolean[n];
@@ -373,7 +364,7 @@ final class GardensStoreys {
                 float flo = Math.max(fk[q] + wh[k][q] * heaveH[q] + heaveB, SEAL + 1f);
                 float cei = fk[q] + hk + heaveB;
                 if (k == K - 1) cei = smin(cei, cap6[q], 2f);
-                cei = footK[q] ? Math.min(cei, 235f) : flo - 5f;
+                cei = footK[q] ? Math.min(cei, CEIL_MAX) : flo - 5f;
                 fl[q] = flo;
                 ce[q] = cei;
             }
@@ -395,12 +386,45 @@ final class GardensStoreys {
         return m - k * (float) Math.log((float) Math.exp(-(a - m) / k) + (float) Math.exp(-(b - m) / k));
     }
 
+    /**
+     * The ring of rock round the lower gate's dome: from GATE_R + 2 out to where {@code pull(RING_A, RING_B)} falls to a
+     * half (39), past the plumbing's ring ({@link #GW_R} and its plugs); the dome loop's box round the gate.
+     */
+    static final double RING_A = 32, RING_B = 46, GATE_BOX = 48;
+
+    /** A storey's dome noise over this window's columns, worked out on first use (only where a dome reaches), and its caps. */
+    private final class DomeCols {
+        final int k;
+        float[] noise, cap;
+        private boolean[] done;
+
+        DomeCols(int k) { this.k = k; }
+
+        /** Column q's offset into {@link #noise}, its noise and cap worked out on first use. */
+        int at(int q) {
+            if (noise == null) {
+                noise = new float[n * GardensPlan.DN];
+                cap = new float[n];
+                done = new boolean[n];
+            }
+            if (!done[q]) {
+                plan.domeNoise(k, X(q), Z(q), noise, q * GardensPlan.DN);
+                cap[q] = GardensPlan.domeCap(f[k][q], k < K - 1 ? f[k + 1][q] : CEIL_MAX);
+                done[q] = true;
+            }
+            return q * GardensPlan.DN;
+        }
+    }
+
     int idx(int wx, int wz) { return (wx - x0) * nz + (wz - z0); }
 
     boolean contains(int wx, int wz) { return wx >= x0 && wz >= z0 && wx < x0 + nx && wz < z0 + nz; }
 
+    /** The walls' roughness of the domes (round 3: 2.6, was 1.3, so the carve's noise makes ledges and overhangs). */
+    static final float ROUGH_DOMES = 2.6f;
+
     /** The roughness each storey's walls take: each column its own style's. */
-    float rough(int k, int q) { return 2.4f * wh[k][q] + 1.3f * wd[k][q] + 1.1f * wb[k][q]; }
+    float rough(int k, int q) { return 2.4f * wh[k][q] + ROUGH_DOMES * wd[k][q] + 1.1f * wb[k][q]; }
 
     /** The storey's band at a column: 0 domes (bottom), 1 halls (middle), 2 beds (top); ties to the lower. */
     int dominant(int k, int q) {

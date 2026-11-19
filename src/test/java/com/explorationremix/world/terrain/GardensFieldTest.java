@@ -25,7 +25,10 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class GardensFieldTest {
     static final long SEED = 8675309L;
-    /** A 200 x 200 area round the seed's first standing deep vent from the origin, at (-247.7, 61.4). */
+    /**
+     * A 200 x 200 area round the seed's first standing deep vent from the origin, at (-247.7, 61.4) (still the first in
+     * round 3: {@code throatsNear(0, 0, 1500, 1)}, as /remix tp deepvent finds it).
+     */
     static final int AX = -340, AZ = -40, AS = 200;
     static final double VX = -247.7, VZ = 61.4;
     private static Terrain shared;
@@ -36,35 +39,37 @@ class GardensFieldTest {
     }
 
     /**
-     * The vent field's block tiles hold 240 rows, so a Deep Gardens layer of any other height is refused when the terrain
-     * is made (0.19.4; before, a taller layer read past the tiles and crashed generation). The world config fixes it at
-     * 240 ({@code ConfigKeysTest.theDeepGardensHeightIsFixed}).
+     * The vent field's block tiles hold 192 rows (round 3; 240 before), so a Deep Gardens layer of any other height, the
+     * old 240 among them, is refused when the terrain is made (0.19.4; before, a taller layer read past the tiles and
+     * crashed generation). The world config fixes it at 192 ({@code ConfigKeysTest.theDeepGardensHeightIsFixed}).
      */
     @Test
     void aGardensLayerOfAnotherHeightIsRefused() {
         TerrainSettings d = TerrainSettings.defaults();
-        for (int h : new int[]{224, 256, 512}) {
+        for (int h : new int[]{176, 208, 240, 512}) {
             List<LayerSettings> ls = new ArrayList<>(d.layers());
             LayerSettings g = ls.get(Terrain.GARDENS);
             ls.set(Terrain.GARDENS, new LayerSettings(g.id(), h, g.fluidDepth(), g.lava(), g.heightMin(), g.heightMax(), g.widthMin(), g.widthMax()));
             TerrainSettings s = new TerrainSettings(d.bandThickness(), d.gateSpacing(), d.passageRadius(), d.landingRadius(), List.copyOf(ls));
             assertThrows(IllegalArgumentException.class, () -> new Terrain(s, -64, SEED), "a Deep Gardens layer of " + h + " rows");
         }
-        assertEquals(240, terrain().shape.height(Terrain.GARDENS));
+        assertEquals(192, terrain().shape.height(Terrain.GARDENS));
     }
 
     /**
-     * The preview's patch (448 x 448 from 4096, -2560 at seed 8675309, round 1's gates) and its two deep vents, searched
-     * against the game's own Wasteland: the first comes out off its last turn at row -41 (Y -569), the second by a
-     * 36-block S at row -50 (Y -578), exactly as the preview's exit search found them.
+     * The preview's patch (448 x 448 from 4096, -2560 at seed 8675309, round 1's gates, their floors at rows SY - 18 and
+     * 18) and its two deep vents, searched against the game's own Wasteland: the first comes out off its last turn at
+     * row -41 (Y -521 since round 3; -569 before), the second by a 36-block S at row -50 (Y -530), exactly as the
+     * preview's exit search found them. The domes stand on the lower four storeys, as in the preview; round 3's storeys
+     * and bigger domes leave both exits as they were.
      */
     @Test
     void thePreviewsThroatsComeOutWhereThePreviewPutThem() {
         int x0 = 4096, z0 = -2560, s = 448;
         GardensPlan plan = new GardensPlan(GardensPlan.foldSeed(SEED), GardensGates.fixed(List.of(
-                new GardensGates.Gate(x0 + 96.0, z0 + 112.0, 222.0, true, null),
+                new GardensGates.Gate(x0 + 96.0, z0 + 112.0, GardensPlan.SY - 18.0, true, null),
                 new GardensGates.Gate(x0 + 336.0, z0 + 332.0, 18.0, false, null))), true, x0, z0, s, s,
-                GardensPlan.HALLS, GardensPlan.BEDS, new boolean[]{true, true, true, true, false, false, false});
+                GardensPlan.HALLS, GardensPlan.BEDS, new boolean[]{true, true, true, true, false, false});
         GardensStoreys a = new GardensStoreys(plan, x0, z0, s, s, null, 1e4f, false);
         List<GardensPlan.DeepSite> deeps = plan.deepSitesNear(x0, z0, x0 + s, z0 + s, 0);
         GardensSites sa = new GardensSites(plan, GardensSites.of(a));
@@ -90,8 +95,9 @@ class GardensFieldTest {
      * Over the area (every 5th column, every row): the layer is dry (no water table, Taran's pick; the seep pools are
      * the blocks' crude oil), the per-block pass is the field's answer whatever the interpolation and the corners are
      * rock (so no corner opens a block the field shut), the open blocks' biomes lie in their bands' order (Vent Domes at
-     * the bottom, Chimney Halls, Seep Beds on top), about a tenth of the layer is open (9.98% when pinned) and its halls
-     * stand a storey tall (32 at most when pinned).
+     * the bottom, Chimney Halls, Seep Beds on top), about a seventh of the layer is open (14.66% when pinned; 9.98% in
+     * round 2's 240 rows with its smaller domes) and its rooms stand about a storey tall (37 at most when pinned, 32 in
+     * round 2).
      */
     @Test
     void theLayerIsDryAndStandsInItsBands() {

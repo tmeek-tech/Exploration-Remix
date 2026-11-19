@@ -22,12 +22,24 @@ public final class Palette {
     private final Perlin riftN;
     /** What the noise fields of the two bottom layers tell the dressing ({@link LookQueries}). */
     private final LookQueries looks;
+    /**
+     * Under the Deep Gardens (band 3, the Wasteland and the Galleries) the noise and the hashes read rows counted from the
+     * world's floor as if it lay at LOW_FLOOR (-832, where it lay until round 3 of the Deep Gardens raised it by 48), so
+     * those layers keep their looks wherever the stack puts them, as they keep their shapes
+     * ({@link WastelandField#ROUGH_BOT}); over them, the world's own rows.
+     */
+    static final int LOW_FLOOR = -832;
+    /** The highest row {@link #ny} moves (band 3's top) and what it adds to a row there. */
+    private final int lowTop, lowDy;
 
     Palette(Terrain t, long seed) { this(t, seed, LookQueries.NONE); }
 
     Palette(Terrain t, long seed, LookQueries looks) {
         this.t = t;
         this.looks = looks;
+        Shape sh = t.shape;
+        lowTop = sh.layerCount > Terrain.WASTELAND ? sh.bandTop(Terrain.WASTELAND + 1) : Integer.MIN_VALUE;
+        lowDy = LOW_FLOOR - sh.floorY;
         this.seed = seed ^ 0x3C6EF372FE94F82BL;
         long s = this.seed;
         interiorN = new Perlin(Hashing.mix(s, 1, 0, 0));
@@ -46,10 +58,13 @@ public final class Palette {
         riftN = new Perlin(Hashing.mix(s, 14, 0, 0));
     }
 
-    private double speck(int x, int y, int z) { return Hashing.unit(Hashing.mix(seed, x, y, z)); }
+    /** The row the noise and the hashes read for a block in row y ({@link #LOW_FLOOR}). */
+    private int ny(int y) { return y <= lowTop ? y + lowDy : y; }
+
+    private double speck(int x, int y, int z) { return Hashing.unit(Hashing.mix(seed, x, ny(y), z)); }
 
     /** Bold blobs, a few to a few dozen blocks across. */
-    private double patch(int x, int y, int z) { return patchN.noise3(x * 0.036, y * 0.05, z * 0.036); }
+    private double patch(int x, int y, int z) { return patchN.noise3(x * 0.036, ny(y) * 0.05, z * 0.036); }
 
     /**
      * The patch noise on one level, the same all along a column: what sets the shares of a column's stones, so a
@@ -59,14 +74,16 @@ public final class Palette {
 
     /** Thin, branching veins that come and go. */
     private boolean vein(int x, int y, int z, double width) {
-        if (veinMask.noise3(x * 0.02, y * 0.03, z * 0.02) < 0.05) return false;
-        return Math.abs(veinN.noise3(x * 0.07, y * 0.09, z * 0.07)) < width;
+        int yn = ny(y);
+        if (veinMask.noise3(x * 0.02, yn * 0.03, z * 0.02) < 0.05) return false;
+        return Math.abs(veinN.noise3(x * 0.07, yn * 0.09, z * 0.07)) < width;
     }
 
     /** Wavy seams one or two blocks thick, mostly flat-lying, that pinch out after a few dozen blocks. */
     private boolean seam(int x, int y, int z) {
-        if (seamMask.noise3(x * 0.015, y * 0.02, z * 0.015) < 0.12) return false;
-        return Math.abs(seamN.noise3(x * 0.012, y * 0.075, z * 0.012)) < 0.022;
+        int yn = ny(y);
+        if (seamMask.noise3(x * 0.015, yn * 0.02, z * 0.015) < 0.12) return false;
+        return Math.abs(seamN.noise3(x * 0.012, yn * 0.075, z * 0.012)) < 0.022;
     }
 
     /**
@@ -76,15 +93,16 @@ public final class Palette {
      * at -0.12 about one in eighteen).
      */
     private boolean emberSeam(int x, int y, int z, double reach) {
-        if (seamMask.noise3(x * 0.015, y * 0.02, z * 0.015) < reach) return false;
-        return Math.abs(seamN.noise3(x * 0.012, y * 0.075, z * 0.012)) < 0.03;
+        int yn = ny(y);
+        if (seamMask.noise3(x * 0.015, yn * 0.02, z * 0.015) < reach) return false;
+        return Math.abs(seamN.noise3(x * 0.012, yn * 0.075, z * 0.012)) < 0.03;
     }
 
     // ============================================================================================== deep rock
 
     /** Rock more than a few blocks from any open space. */
     public Rock interior(int li, int x, int y, int z) {
-        double n = interiorN.noise3(x * 0.024, y * 0.034, z * 0.024);
+        double n = interiorN.noise3(x * 0.024, ny(y) * 0.034, z * 0.024);
         switch (li) {
             case Terrain.GARDENS:
                 // Blackstone and deepslate, with pale limestone and a little ochrum in bold patches.
@@ -243,7 +261,7 @@ public final class Palette {
     static final int JOIN_BLEND = 7;
 
     /** A hash in [0, 1) per block, apart from {@link #speck}'s. */
-    private double jitter(int x, int y, int z) { return Hashing.unit(Hashing.mix(seed ^ 0x2545F4914F6CDD1DL, x, y, z)); }
+    private double jitter(int x, int y, int z) { return Hashing.unit(Hashing.mix(seed ^ 0x2545F4914F6CDD1DL, x, ny(y), z)); }
 
     /**
      * The layer whose look a block of layer {@code li} takes: its own, but in the {@link #JOIN_BLEND} rows either side
@@ -259,7 +277,7 @@ public final class Palette {
         if (s.bottom(was) != join + 1) return li;
         int d = y - join;
         if (d > JOIN_BLEND || d <= -JOIN_BLEND) return li;
-        double v = d - 0.5 + 4.5 * joinN.noise3(x * 0.04, y * 0.06, z * 0.04) + 2.0 * (jitter(x, y, z) - 0.5);
+        double v = d - 0.5 + 4.5 * joinN.noise3(x * 0.04, ny(y) * 0.06, z * 0.04) + 2.0 * (jitter(x, y, z) - 0.5);
         return v > 0 ? was : gal;
     }
 
@@ -270,7 +288,7 @@ public final class Palette {
      */
     private DeepBiome lookBiome(DeepBiome b, int x, int y, int z) {
         if (b == DeepBiome.OBSIDIAN_TUBES) return b;
-        long h = Hashing.mix(seed ^ 0x1B873593CC9E2D51L, x, y, z);
+        long h = Hashing.mix(seed ^ 0x1B873593CC9E2D51L, x, ny(y), z);
         int dx = (int) Long.remainderUnsigned(h, 7) - 3, dz = (int) Long.remainderUnsigned(h >>> 24, 7) - 3;
         if (dx == 0 && dz == 0) return b;
         DeepBiome o = t.biomeAt(x + dx, y, z + dz);
@@ -331,15 +349,16 @@ public final class Palette {
     private boolean lavaAt(int x, int y, int z) { return !t.rockAt(x, y, z) && t.fluidAt(x, y, z) == Terrain.LAVA; }
 
     /** The clumps of magma on the rock the lava touches: about one such block in eight, in clumps of a few blocks. */
-    private boolean heat(int x, int y, int z) { return heatN.noise3(x * 0.11, y * 0.16, z * 0.11) > HEAT; }
+    private boolean heat(int x, int y, int z) { return heatN.noise3(x * 0.11, ny(y) * 0.16, z * 0.11) > HEAT; }
 
     /** The cut that makes {@link #heat} true on about 12 % of blocks. */
     private static final double HEAT = 0.33;
 
     /** Thin cracks, rarer than {@link #vein}'s: about one block in a hundred where they run. */
     private boolean crack(int x, int y, int z, double width) {
-        if (veinMask.noise3(x * 0.02, y * 0.03, z * 0.02) < 0.28) return false;
-        return Math.abs(veinN.noise3(x * 0.07, y * 0.09, z * 0.07)) < width;
+        int yn = ny(y);
+        if (veinMask.noise3(x * 0.02, yn * 0.03, z * 0.02) < 0.28) return false;
+        return Math.abs(veinN.noise3(x * 0.07, yn * 0.09, z * 0.07)) < width;
     }
 
     /**
@@ -347,7 +366,7 @@ public final class Palette {
      * a slow noise allows, so a few columns of a cliff show lit cracks between them rather than seams across them.
      */
     private boolean glowingJoint(int x, int y, int z) {
-        if (crackN.noise3(x * 0.05, y * 0.035, z * 0.05) < 0.5) return false;
+        if (crackN.noise3(x * 0.05, ny(y) * 0.035, z * 0.05) < 0.5) return false;
         return looks.columnEdge(x, z) < 0.35;
     }
 
@@ -614,7 +633,7 @@ public final class Palette {
         if (g >= 1.8) return g < 3.2 || n <= 0.2 ? Rock.BASALT : Rock.SMOOTH_BASALT;
         if (floor && wet) return n > 0.25 ? Rock.BLACKSTONE : Rock.OBSIDIAN;
         if (looks.tubeRib(x, y, z)) return obsidian(x, y, z, 0.03);
-        double m = wobN.noise3(x * 0.06, y * 0.085, z * 0.06);
+        double m = wobN.noise3(x * 0.06, ny(y) * 0.085, z * 0.06);
         if (floor) {
             if (m > 0.12) return Rock.TUFF;
             if (m > -0.04 && top) return Rock.SMOOTH_BASALT;
@@ -640,9 +659,10 @@ public final class Palette {
      * scorchia, Create's scorched scoria, banded with blackstone.
      */
     private Rock scoriaBand(int x, int y, int z, boolean scorched) {
-        double v = (y + 5.0 * bandN.noise3(x * 0.012, y * 0.02, z * 0.012) + 14.0 * tiltN.noise2(x * 0.006, z * 0.006)) / 9.0;
+        int yn = ny(y);
+        double v = (yn + 5.0 * bandN.noise3(x * 0.012, yn * 0.02, z * 0.012) + 14.0 * tiltN.noise2(x * 0.006, z * 0.006)) / 9.0;
         double f = v - Math.floor(v);
-        double w = 0.1 * bandN.noise3(x * 0.03 + 50.5, y * 0.05, z * 0.03 + 50.5);
+        double w = 0.1 * bandN.noise3(x * 0.03 + 50.5, yn * 0.05, z * 0.03 + 50.5);
         if (scorched) {
             if (f < 0.5 + w) return Rock.SCORCHIA;
             return f < 0.82 ? Rock.BLACKSTONE : Rock.SCORCHIA;

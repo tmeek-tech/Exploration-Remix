@@ -37,8 +37,11 @@ class GalleriesFieldTest {
     /** Seed and lowest corner of the measured boxes (spec 9.1). */
     static final long[][] BOXES = {{8675309, -512, -512}, {-42, -5000, 6000}};
     static final int SIZE = 1536, MARGIN = 212;
-    /** The rows a box holds: the Galleries' and the join's up to the Wasteland's lava table (its lava, the openings). */
-    static final int YLO = -832, YHI = -678;
+    /**
+     * The rows a box holds: the Galleries' and the join's up to the Wasteland's lava table (its lava, the openings);
+     * -832..-678 before round 3 of the Deep Gardens raised the world's floor by 48.
+     */
+    static final int YLO = -784, YHI = -630;
     static final Set<DeepBiome> GALLERIES = EnumSet.of(DeepBiome.BASALT_GALLERIES, DeepBiome.CALDERA, DeepBiome.CAUSEWAY,
             DeepBiome.SCORIA_CANYONS, DeepBiome.OBSIDIAN_TUBES);
 
@@ -1155,13 +1158,17 @@ class GalleriesFieldTest {
      * ends and terraces in the join's rows (WastelandField.GUARD_GAP). Pinned again in the fix round after the 0.8.0
      * pack run (it was 657f03d778b8355c and b2257d4eece3e4b8): a ramp's cell where the ground stands at or over the
      * deck's row, at its foot, keeps the deck block by block over the ground ({@link GalleriesField#deck}), so the foot
-     * ends on no riser of 2 rows at the cells' joints. A change to the Galleries' shapes shows here: pin again only on
+     * ends on no riser of 2 rows at the cells' joints. Pinned again for round 3 of the Deep Gardens (it was
+     * 99d103d778b8355c and 91a37d4eece3e4b8), which raised the world's floor by 48 with the Galleries and the join on it:
+     * the same shapes 48 rows higher. On the same draws, in rows counted from the floor, every value probed here (the
+     * densities to the bit, fluids, biomes, the looks' queries) and every opening with its ramp is the last pin's; only
+     * the cones' tops, which are world rows, moved. A change to the Galleries' shapes shows here: pin again only on
      * purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("99d103d778b8355c", digest(8675309), "seed 8675309");
-        assertEquals("91a37d4eece3e4b8", digest(12345), "seed 12345");
+        assertEquals("254b83d778b8355c", digest(8675309), "seed 8675309");
+        assertEquals("b6c5fd4eece3e4b8", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) { return digest(new Terrain(TerrainSettings.defaults(), -64, seed), seed); }
