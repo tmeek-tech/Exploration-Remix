@@ -409,6 +409,27 @@ public final class Route {
         return new double[]{dx / l, dz / l};
     }
 
+    // ---- for the creatures that live in the rift (0.18.8: the giant Skein keeps to its own rift's walls)
+    /** Whether this is a rift (the Blue Reaches' Deep Blue Rift), not a corridor. */
+    public boolean isRift() { return rift; }
+    /** The rift's top (the rim's height) at arc length s along the centre line. */
+    public double riftTopAt(double s) { return at(riftTop, s); }
+    /** The rift's half width at its top at arc length s along the centre line. */
+    public double riftHalfAt(double s) { return at(riftHalf, s); }
+    /** The centre line's unit direction (x, z) at arc length s; its left, the positive side of {@link #locate}, is (-z, x). */
+    public double[] directionAt(double s) { return dirAt(s); }
+    /** Which side the ledge path keeps to at arc length s along the centre line: towards 1 or -1 (0 where it crosses). */
+    public double pathSideAt(double s) { return sideAt == null ? 0.0 : at(sideAt, s); }
+
+    /**
+     * Where (x, z) lies by the centre line: {distance from it, arc length along it, signed sideways distance (positive
+     * on its left, see {@link #directionAt})}; null when the route is out of reach of the point.
+     */
+    public double[] locate(double x, double z) {
+        double[] o = new double[6];
+        return nearest(x, z, o) ? new double[]{o[0], o[1], o[2]} : null;
+    }
+
     /**
      * Nearest point on the route's centre line to (x, z), written into {@code out}: [distance, arc length, signed
      * sideways distance, fractional point index]. Returns false when the route is out of reach of the point.

@@ -766,6 +766,9 @@ def write_all(assets, write):
     names[f"item.{MOD}.mossback_hide"] = "Mossback Hide"
     # the Skein: one look, one glow texture, its pieces drawn along its trail (write_skein)
     names.update(write_skein(assets, write))
+    # 0.18.8: the giant Skein of the Deep Blue Rift, drawn the same way at four times the length (giant_skein.py)
+    import giant_skein
+    names.update(giant_skein.write(assets, write))
     return names
 
 

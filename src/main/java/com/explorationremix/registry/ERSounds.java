@@ -91,6 +91,17 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> MOSSBACK_WINDUP = register("mossback.windup");
     public static final RegistryObject<SoundEvent> SKEIN_WINDUP = register("skein.windup");
 
+    // The giant Skein of the Deep Blue Rift (0.18.8, creature.GiantSkeinEntity): the Skein's own sounds slowed and
+    // deepened (tools/sounds.py), carrying across the rift: its slow heavy tread, its chitter at rest, the deep click
+    // as it notices someone, the rattle of its rear (the strike's wind-up), its bite, hurt and death.
+    public static final RegistryObject<SoundEvent> GIANT_SKEIN_STEP = register("giant_skein.step");
+    public static final RegistryObject<SoundEvent> GIANT_SKEIN_CHITTER = register("giant_skein.chitter");
+    public static final RegistryObject<SoundEvent> GIANT_SKEIN_NOTICE = register("giant_skein.notice");
+    public static final RegistryObject<SoundEvent> GIANT_SKEIN_WINDUP = register("giant_skein.windup");
+    public static final RegistryObject<SoundEvent> GIANT_SKEIN_BITE = register("giant_skein.bite");
+    public static final RegistryObject<SoundEvent> GIANT_SKEIN_HURT = register("giant_skein.hurt");
+    public static final RegistryObject<SoundEvent> GIANT_SKEIN_DEATH = register("giant_skein.death");
+
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ExplorationRemix.MOD_ID, name)));
     }

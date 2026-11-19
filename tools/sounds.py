@@ -185,6 +185,34 @@ CREATURE_EVENTS.update(FIREFLY_EVENTS)
 CREATURE_SUBTITLES.update(FIREFLY_SUBTITLES)
 
 
+# 0.18.8's giant Skein of the Deep Blue Rift: the Skein's own recordings played slower and deeper, and heard from
+# across the rift (a rift is 60 to 80 blocks wide), so you hear it on the far wall before you find its lights.
+def giant(name, count, volume=1.0, attenuation=None, pitch=0.55):
+    out = []
+    for e in creature(name, count, volume, attenuation, who="skein"):
+        e["pitch"] = pitch
+        out.append(e)
+    return out
+
+
+GIANT_EVENTS = {
+    "giant_skein.step": giant("patter", 4, 0.9, 24, 0.5),
+    "giant_skein.chitter": giant("chitter", 3, 1.0, 40, 0.5),
+    "giant_skein.notice": giant("rattle", 2, 1.0, 48, 0.42),
+    "giant_skein.windup": giant("windup", 2, 1.0, 48, 0.55),
+    "giant_skein.bite": giant("bite", 2, 1.0, 28, 0.55),
+    "giant_skein.hurt": giant("hurt", 2, 1.0, 32, 0.55),
+    "giant_skein.death": giant("death", 1, 1.0, 64, 0.45),
+}
+GIANT_SUBTITLES = {
+    "giant_skein.step": "Heavy legs scrape", "giant_skein.chitter": "Something huge clicks",
+    "giant_skein.notice": "Giant Skein turns", "giant_skein.windup": "Giant Skein rears",
+    "giant_skein.bite": "Huge mandibles snap", "giant_skein.hurt": "Giant Skein hurts", "giant_skein.death": "Giant Skein dies",
+}
+CREATURE_EVENTS.update(GIANT_EVENTS)
+CREATURE_SUBTITLES.update(GIANT_SUBTITLES)
+
+
 def write_all(assets_dir, write):
     out = {}
     lang = {}

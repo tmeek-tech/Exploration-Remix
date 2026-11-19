@@ -5,6 +5,7 @@ import com.explorationremix.block.Neon;
 import com.explorationremix.block.NeonBlock;
 import com.explorationremix.client.model.Geometry;
 import com.explorationremix.client.render.FireflySwarmRenderer;
+import com.explorationremix.client.render.GiantSkeinRenderer;
 import com.explorationremix.client.render.LavaBombRenderer;
 import com.explorationremix.client.render.MossbackRenderer;
 import com.explorationremix.client.render.SkeinRenderer;
@@ -69,6 +70,8 @@ public final class ClientSetup {
         // (the Mossback needs none: since 0.15.0 its shape is rigged to its body, see MossbackModel)
         // the Skein: its loose pieces (head, plates, tail), drawn along its trail
         event.registerLayerDefinition(SkeinRenderer.LAYER, () -> Geometry.load("skein"));
+        // 0.18.8: the giant Skein of the Deep Blue Rift, drawn the same way
+        event.registerLayerDefinition(GiantSkeinRenderer.LAYER, () -> Geometry.load("giant_skein"));
     }
 
     @SubscribeEvent
@@ -78,6 +81,8 @@ public final class ClientSetup {
         event.registerEntityRenderer(EREntities.FIREFLY_SWARM.get(), FireflySwarmRenderer::new);
         // the Skein
         event.registerEntityRenderer(EREntities.SKEIN.get(), SkeinRenderer::new);
+        // 0.18.8: the giant Skein
+        event.registerEntityRenderer(EREntities.GIANT_SKEIN.get(), GiantSkeinRenderer::new);
         // 0.9.0: the eruptions' lava bombs, a spinning glowing block of magma in a halo
         event.registerEntityRenderer(EREntities.LAVA_BOMB.get(), LavaBombRenderer::new);
     }

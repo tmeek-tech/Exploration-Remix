@@ -273,6 +273,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     @Nullable private Path pendingPath;      // PIVOT: the way the coming burst runs
     private double burstMoved;               // BURST: how far it has gone in this one
     @Nullable private Vec3 threat;           // BOLT: what it gets away from
+    @Nullable private Vec3 dread;            // frozen at the sight of a giant Skein: where the giant is (it bolts from it)
+    private int dreadTicks;
     @Nullable private FireflySwarm prey;     // STALK, and a strike into a swarm
     private long stalkSince;                 // STALK: when it set out after this swarm (its outings after it do not reset it)
     @Nullable private FireflySwarm shunned;  // a swarm it gave up on, left be while it sits where it was then
@@ -703,6 +705,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         byte s = state();
         if (anchor != null && (level().getGameTime() - lastStrike > ENCOUNTER_TICKS
                 || s != REAR && s != LUNGE && s != BOLT && position().distanceTo(anchor) > STRIKE_LEASH)) anchor = null;
+        if (fearsGiant(s)) return;
         switch (state()) {
             case STILL -> still();
             case SKITTER, BOLT -> outing();
@@ -713,6 +716,56 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
             case EAT -> eat();
             default -> settle();
         }
+    }
+
+    // --- the giant Skein (0.18.8): small Skeins get out of its way (Taran's pick)
+
+    /**
+     * A giant Skein coming near (within GiantSkeinEntity.SCATTERS of any part of its body, or right by one lying
+     * still): it freezes where it is for a moment, then bolts away from the giant. Looked for once a second; never in a
+     * strike, nor while it is already bolting. True while it is frozen (this tick is spent).
+     */
+    private boolean fearsGiant(byte s) {
+        if (dreadTicks > 0) {
+            stopDead();
+            if (--dreadTicks == 0 && dread != null) {
+                Vec3 from = dread;
+                dread = null;
+                boltFrom(from, BOLT_MIN + random.nextDouble() * (BOLT_MAX - BOLT_MIN));
+            }
+            return true;
+        }
+        if (s == REAR || s == LUNGE || s == BOLT || (tickCount + getId()) % 20 != 0) return false;
+        Vec3 g = giantNear();
+        if (g == null) return false;
+        dread = g;
+        dreadTicks = DREAD_MIN + random.nextInt(DREAD_MAX - DREAD_MIN + 1);
+        stopDead();
+        return true;
+    }
+
+    /** How long it freezes at the sight of a giant before it bolts (ticks); how near one lying still it may be. */
+    static final int DREAD_MIN = 10, DREAD_MAX = 25;
+    static final double DREAD_RESTING = 6.0;
+
+    /** The nearest part of a giant Skein's body near enough to scare it (its middle), or null. */
+    @Nullable
+    private Vec3 giantNear() {
+        Vec3 c = bodyCentre();
+        Vec3 best = null;
+        double bestD = Double.MAX_VALUE;
+        double reach = GiantSkeinEntity.SCATTERS + GiantSkeinEntity.BODY_LENGTH;
+        for (GiantSkeinEntity g : level().getEntitiesOfClass(GiantSkeinEntity.class, getBoundingBox().inflate(reach))) {
+            if (!g.isAlive()) continue;
+            double r = g.state() == GiantSkeinEntity.REST ? DREAD_RESTING : GiantSkeinEntity.SCATTERS;
+            double d = g.getBoundingBox().distanceToSqr(c);
+            if (d < r * r && d < bestD) { bestD = d; best = g.getBoundingBox().getCenter(); }
+            for (GiantSkeinEntity.Section sec : g.sections()) {
+                d = sec.getBoundingBox().distanceToSqr(c);
+                if (d < r * r && d < bestD) { bestD = d; best = sec.getBoundingBox().getCenter(); }
+            }
+        }
+        return best;
     }
 
     // --- lying still, and going out
@@ -1640,6 +1693,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
                 .append(Stagger.reeling(this) ? ", reeling" : "")
                 .append(", hunger ").append(hunger / 20).append('s');
         if (prey != null) b.append(", after a swarm of ").append(prey.count());
+        if (dreadTicks > 0) b.append(", frozen at the sight of a giant");
         if (journeyTo != null) b.append(String.format(Locale.ROOT, ", going along the rift to %.0f %.0f %.0f (%.0f blocks along it to go, %ds on the way)",
                 journeyTo.x, journeyTo.y, journeyTo.z, Math.abs(journeyEnd - journeyAt), (level().getGameTime() - journeyFrom) / 20));
         if (anchor != null) b.append(String.format(Locale.ROOT, ", struck from %.0f %.0f %.0f", anchor.x, anchor.y, anchor.z));

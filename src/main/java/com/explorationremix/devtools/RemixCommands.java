@@ -84,6 +84,8 @@ import java.util.Locale;
  *     <li>{@code /remix fireflies ...}: spawning, listing, landing and scattering blue firefly swarms (FireflyCommands)</li>
  *     <li>{@code /remix mossback ...}: spawning, listing and steering Mossbacks, and finding their dens (MossbackCommands)</li>
  *     <li>{@code /remix skein ...}: spawning, listing and steering Skeins (SkeinCommands)</li>
+ *     <li>{@code /remix giant ...}: setting down, listing and steering the giant Skeins of the Deep Blue Rifts, and
+ *     each rift's record of its giant (GiantSkeinCommands)</li>
  *     <li>{@code /remix entrances [cells]}: the entrance sites in the cells round you, why the other cells have none, and
  *     the nearest of each kind</li>
  *     <li>{@code /remix deadends [radius]}: the blind cave ends left above the old floor in the loaded chunks round you
@@ -114,6 +116,8 @@ public final class RemixCommands {
                 .then(com.explorationremix.creature.MossbackCommands.command())
                 // the Skein
                 .then(com.explorationremix.creature.SkeinCommands.command())
+                // the giant Skein of the Deep Blue Rift (0.18.8)
+                .then(com.explorationremix.creature.GiantSkeinCommands.command())
                 // vanilla's hostile mobs in groups
                 .then(com.explorationremix.creature.groups.MobGroupCommands.command())
                 // runes: rune items, rows, energy and run depth for trying them out
@@ -704,6 +708,7 @@ public final class RemixCommands {
         if (name.equalsIgnoreCase("rootvaults_mouth")) return viewMouth(c, pl, level, n == 1);
         if (name.equalsIgnoreCase("mossback")) return com.explorationremix.creature.MossbackCommands.look(c, pl, Math.max(0, n));
         if (name.equalsIgnoreCase("skein")) return com.explorationremix.creature.SkeinCommands.look(c, pl, Math.max(0, n));
+        if (name.equalsIgnoreCase("giant")) return com.explorationremix.creature.GiantSkeinCommands.look(c, pl, Math.max(0, n));
         String ent = entrance(name);
         Entrances e = DeepWorld.entrances();
         if (ent != null) {

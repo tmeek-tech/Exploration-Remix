@@ -87,6 +87,7 @@ import minerals  # noqa: E402
 import creatures  # noqa: E402
 import fireflies  # noqa: E402  (0.7: the blue fireflies' glow, in a file of its own)
 import particles  # noqa: E402
+import giant_skein  # noqa: E402  (0.18.8: the giant Skein's drop, its spine)
 PAINTERS.update(plants.PAINTERS)
 PAINTERS.update(plants_upper.PAINTERS)
 PAINTERS.update(plants_fern.PAINTERS)
@@ -98,6 +99,7 @@ PAINTERS.update(minerals.PAINTERS)
 PAINTERS.update(creatures.PAINTERS)
 PAINTERS.update(fireflies.PAINTERS)
 PAINTERS.update(particles.PAINTERS)
+PAINTERS.update(giant_skein.PAINTERS)
 
 # Emissive overlays: texture -> the colours lifted into <texture>_glow.png, which the models draw a second time at full
 # block light (gen_data.py), so those pixels glow even where the plant gives little or no light. The plant files add
