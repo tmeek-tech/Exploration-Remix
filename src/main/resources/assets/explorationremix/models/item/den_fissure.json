@@ -1,0 +1,23 @@
+{
+  "parent": "explorationremix:block/den_fissure_magenta",
+  "overrides": [
+    {
+      "predicate": {
+        "explorationremix:neon": 0.1667
+      },
+      "model": "explorationremix:block/den_fissure_violet"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.5
+      },
+      "model": "explorationremix:block/den_fissure_lime"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.8333
+      },
+      "model": "explorationremix:block/den_fissure_light_blue"
+    }
+  ]
+}

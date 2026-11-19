@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "neon=magenta": {
+      "model": "explorationremix:block/den_fissure_magenta"
+    },
+    "neon=violet": {
+      "model": "explorationremix:block/den_fissure_violet"
+    },
+    "neon=lime": {
+      "model": "explorationremix:block/den_fissure_lime"
+    },
+    "neon=light_blue": {
+      "model": "explorationremix:block/den_fissure_light_blue"
+    }
+  }
+}

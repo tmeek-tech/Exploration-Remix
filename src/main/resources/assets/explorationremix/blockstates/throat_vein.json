@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "neon=magenta": {
+      "model": "explorationremix:block/throat_vein_magenta"
+    },
+    "neon=violet": {
+      "model": "explorationremix:block/throat_vein_violet"
+    },
+    "neon=lime": {
+      "model": "explorationremix:block/throat_vein_lime"
+    },
+    "neon=light_blue": {
+      "model": "explorationremix:block/throat_vein_light_blue"
+    }
+  }
+}

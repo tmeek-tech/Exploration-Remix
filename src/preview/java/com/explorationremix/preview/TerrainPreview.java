@@ -77,6 +77,9 @@ public final class TerrainPreview {
             case CALDERA -> 0xF0562A;
             case CAUSEWAY -> 0x8E93A8;
             case SCORIA_CANYONS -> 0xB8603E;
+            case SEEP_BEDS -> 0x7DAFFF;
+            case CHIMNEY_HALLS -> 0x6A4AB0;
+            case VENT_DOMES -> 0xD84AB8;
         };
     }
 

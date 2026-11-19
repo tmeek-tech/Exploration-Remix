@@ -1,0 +1,8 @@
+{
+  "parent": "explorationremix:block/template/cube_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "all": "explorationremix:block/spire_tip_lime",
+    "glow": "explorationremix:block/spire_tip_lime_glow"
+  }
+}

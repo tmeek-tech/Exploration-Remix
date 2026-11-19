@@ -1,0 +1,23 @@
+{
+  "parent": "explorationremix:block/throat_vein_magenta",
+  "overrides": [
+    {
+      "predicate": {
+        "explorationremix:neon": 0.1667
+      },
+      "model": "explorationremix:block/throat_vein_violet"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.5
+      },
+      "model": "explorationremix:block/throat_vein_lime"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.8333
+      },
+      "model": "explorationremix:block/throat_vein_light_blue"
+    }
+  ]
+}
