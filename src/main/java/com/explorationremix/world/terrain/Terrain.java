@@ -453,7 +453,7 @@ public final class Terrain {
      * (Y -600..-545), as {@link #rockAt} makes them (Minecraft's corners and interpolation, then the Wasteland's fine
      * pass) but with no throat carved. One view per search; it keeps the corners it reads.
      */
-    private GardensExits.Waste.View wasteView() {
+    GardensExits.Waste.View wasteView() {
         int yLo = shape.bottom(GARDENS) - GardensExits.E_OFF, n = GardensExits.SLAB;
         int c0 = Math.floorDiv(yLo, 8) * 8, c1 = Math.floorDiv(yLo + n - 1, 8) * 8 + 8, nc = (c1 - c0) / 8 + 1;
         java.util.Map<Long, double[]> corners = new java.util.HashMap<>();

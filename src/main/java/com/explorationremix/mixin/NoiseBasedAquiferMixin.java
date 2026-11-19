@@ -2,6 +2,7 @@ package com.explorationremix.mixin;
 
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.gen.DeepMaterials;
+import com.explorationremix.world.gen.GardensBlocks;
 import com.explorationremix.world.terrain.Entrances;
 import com.explorationremix.world.terrain.UpperShapes;
 import com.explorationremix.world.terrain.Terrain;
@@ -68,6 +69,11 @@ public abstract class NoiseBasedAquiferMixin {
             return;
         }
         this.shouldScheduleFluidUpdate = false;
+        // the Deep Gardens' vent field decides every block of its layer itself (its oil pools never tick)
+        if (t.gardens != null && t.shape.layerAt(y) == Terrain.GARDENS) {
+            cir.setReturnValue(GardensBlocks.state(t, ctx.blockX(), y, ctx.blockZ()));
+            return;
+        }
         if (density > 0.0) {
             cir.setReturnValue(DeepMaterials.solid(t, ctx.blockX(), y, ctx.blockZ(), density));
             return;

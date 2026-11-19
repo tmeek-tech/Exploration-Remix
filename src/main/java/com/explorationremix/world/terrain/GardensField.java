@@ -754,6 +754,23 @@ public final class GardensField {
         return f;
     }
 
+    /** The vent field's block codes (GardensVents, GardensDress), for the game's block states (world.gen.GardensBlocks). */
+    public static final int C_AIR = 0, C_ROCK = 1, C_TALUS = 2, C_DEAD = 3, C_LIVE = 4, C_THROAT = 5, C_MAT = 6, C_STEM = 7,
+            C_CAP = 8, C_OIL = 9, C_SEALROCK = 10, C_DRIP = 11, C_VDEAD = 12, C_VLIVE = 13, C_CROWN = 14, C_FISSURE = 15,
+            C_VGLOW = 16, C_TVEIN = 17, C_TIP = 18, C_SEEP = 19;
+
+    private volatile int[] ptuff;
+
+    /**
+     * Whether a wall block of plain rock is tuff rather than deepslate (Taran's pick, 2026-11-18: "Cave walls in
+     * deepslate and tuff"): soft-edged lenses about 40 blocks across and 15 high, about a fifth of the rock.
+     */
+    public boolean tuff(int x, int y, int z) {
+        int[] p = ptuff;
+        if (p == null) ptuff = p = plan.perm(plan.seed + 4243);
+        return GardensNoise.n3(p, x / 21.0, y / 8.5, z / 21.0) > 0.28;
+    }
+
     /** Whether a block of the layer (row 0 = its bottom) is open: air, or the crude oil of a seep pool. */
     public boolean open(int x, int y, int z) {
         int c = packed(x, y, z) & 31;

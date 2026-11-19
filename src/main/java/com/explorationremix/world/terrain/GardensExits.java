@@ -166,8 +166,10 @@ final class GardensExits implements GardensField.Exits {
     // ================================================================================================ the search
 
     @Override
-    public GardensField.Exit find(GardensPlan.DeepSite d, GardensVents.Vent v) {
-        Site s = Site.of(gv, v);
+    public GardensField.Exit find(GardensPlan.DeepSite d, GardensVents.Vent v) { return search(Site.of(gv, v)); }
+
+    /** exits.search: the highest exit row that passes, with its level run and outlet, or null. */
+    GardensField.Exit search(Site s) {
         Slab w = new Slab();
         double turn = 2 * Math.PI * s.Rh;
         for (int g = G_HI; g >= G_LO; g--) {
