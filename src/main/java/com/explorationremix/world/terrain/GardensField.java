@@ -748,6 +748,9 @@ public final class GardensField {
 
     /** The game's field for a world: its plan from the world's seed, the gates where {@link Plans} puts them. */
     static GardensField game(long worldSeed, Plans plans, Shape shape, GardensRock.Gates gates, GardensExits.Waste waste) {
+        // the block tiles hold SY rows: a layer of any other height would read past them (the world config fixes it at 240)
+        if (shape.height(Terrain.GARDENS) != SY)
+            throw new IllegalArgumentException("The Deep Gardens' vent field is built for " + SY + " rows, not " + shape.height(Terrain.GARDENS));
         GardensPlan plan = new GardensPlan(GardensPlan.foldSeed(worldSeed), GardensGates.of(plans, shape));
         GardensField f = new GardensField(plan, gates);
         if (waste != null) f.exits = new GardensExits(f.gv, waste);

@@ -36,6 +36,24 @@ class GardensFieldTest {
     }
 
     /**
+     * The vent field's block tiles hold 240 rows, so a Deep Gardens layer of any other height is refused when the terrain
+     * is made (0.19.4; before, a taller layer read past the tiles and crashed generation). The world config fixes it at
+     * 240 ({@code ConfigKeysTest.theDeepGardensHeightIsFixed}).
+     */
+    @Test
+    void aGardensLayerOfAnotherHeightIsRefused() {
+        TerrainSettings d = TerrainSettings.defaults();
+        for (int h : new int[]{224, 256, 512}) {
+            List<LayerSettings> ls = new ArrayList<>(d.layers());
+            LayerSettings g = ls.get(Terrain.GARDENS);
+            ls.set(Terrain.GARDENS, new LayerSettings(g.id(), h, g.fluidDepth(), g.lava(), g.heightMin(), g.heightMax(), g.widthMin(), g.widthMax()));
+            TerrainSettings s = new TerrainSettings(d.bandThickness(), d.gateSpacing(), d.passageRadius(), d.landingRadius(), List.copyOf(ls));
+            assertThrows(IllegalArgumentException.class, () -> new Terrain(s, -64, SEED), "a Deep Gardens layer of " + h + " rows");
+        }
+        assertEquals(240, terrain().shape.height(Terrain.GARDENS));
+    }
+
+    /**
      * The preview's patch (448 x 448 from 4096, -2560 at seed 8675309, round 1's gates) and its two deep vents, searched
      * against the game's own Wasteland: the first comes out off its last turn at row -41 (Y -569), the second by a
      * 36-block S at row -50 (Y -578), exactly as the preview's exit search found them.

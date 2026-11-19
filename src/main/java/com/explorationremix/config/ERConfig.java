@@ -76,7 +76,9 @@ public final class ERConfig {
             // The ranges are what each layer's cave planner can build in (see the layers below). A value outside its range
             // is put back to the default by Forge, which also keeps an older file's 288 for the Basalt Galleries (their
             // height before 0.5) from moving the world's floor down to -976.
-            height = b.comment("Height of the layer in blocks (rounded down to a multiple of 16).")
+            height = b.comment(minHeight == maxHeight
+                            ? "Height of the layer in blocks: always " + minHeight + ", the height its caves are built for (another value is put back)."
+                            : "Height of the layer in blocks (rounded down to a multiple of 16).")
                     .defineInRange("height", d.height(), minHeight, maxHeight);
             fluidDepth = b.comment("The " + (d.lava() ? "lava" : "water") + " table sits this many blocks above the layer's floor.")
                     .defineInRange("fluidDepth", d.fluidDepth(), 6, maxFluidDepth);
@@ -120,7 +122,10 @@ public final class ERConfig {
         removeCreateStriations = b.comment("Remove Create's striped stone layers from the overworld; the layers use Create's stones as patches instead.")
                 .define("removeCreateStriations", true);
         layers[0] = new LayerConfig(b, d.layers().get(0), "rift depth", "geode width", true, 64, 512, 64);
-        layers[1] = new LayerConfig(b, d.layers().get(1), "hall and cavern height", "lake and terrace width", false, 64, 512, 64);
+        // The Deep Gardens' vent field (0.19.1) is built for exactly 240 rows: its block tiles hold 240 rows and its storeys
+        // and depth bands are laid out on them, so a taller layer read past the tiles and crashed generation. The height is
+        // fixed; Forge puts any other value back to 240.
+        layers[1] = new LayerConfig(b, d.layers().get(1), "hall height", "hall width", false, 240, 240, 64);
         // The Wasteland's sheets of tunnels adapt to its height: 64 gives 2, 128 gives 5, 160 gives 6. Its openings into
         // the Galleries fall from 4 over its lava table to 4 under its floor, so a deep table makes them deep pits: 16 at
         // most (10 is what was measured).
