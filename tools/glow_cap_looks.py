@@ -13,7 +13,7 @@ and spread evenly over the whole tile (best-candidate sampling, never one big sh
 repeat grid. A cap's rim stacks its side face two or three blocks high, so side faces have no top or bottom band:
 their features run up and down.
 
-  A  dark cap skin with bold glowing spots on every face
+  A  a soft cap skin with bold glowing spots on every face (Taran's pick, with a lighter skin than first drawn)
   B  mottled neon skin, a ribbed rim, dark gills edged with thin neon lines beneath
   C  overlapping lit scales: each scale's free edge glows, shingled down the rim, small scales beneath
   D  bright neon skin with dark pores, a bolete's pore surface beneath
@@ -54,8 +54,17 @@ class Face:
         return self.share(GLOWS)
 
 
+# Look A's skin shade between dim and mid (Taran, 2026-11-19: "make the dark spots brighter so that there's not as much
+# contrast"): the neon at this share of its brightness, lit by the world like dim, never glowing.
+SOFT = 0.58
+
+
 def colour(shade, neon):
-    return tuple(PIT) if shade == "pit" else T.neon_shades(neon)[shade]
+    if shade == "pit":
+        return tuple(PIT)
+    if shade == "soft":
+        return tuple(round(v * SOFT) for v in T.NEON_RGB[neon])
+    return T.neon_shades(neon)[shade]
 
 
 def paint(face, neon):
@@ -176,7 +185,7 @@ def ring(cells):
 
 # ------------------------------------------------------------------------------------- A: dark skin, bold glowing spots
 
-def glow_spot(face, cx, cy, w, halo="dim"):
+def glow_spot(face, cx, cy, w, halo="soft"):
     """A bold glowing spot w pixels wide, round, glowing from a hot heart a little up and left of its middle through
     neon to a mid rim; a halo of `halo` round it on the skin, solid four ways and dithered on the diagonals, so the glow
     fades into the dark skin. Returns the spot's pixels."""
@@ -200,21 +209,22 @@ def glow_spot(face, cx, cy, w, halo="dim"):
 
 
 def dark_skin(rng, streaks=False):
-    """The dark cap skin: deep, flecked with dim (a fine field's highest quarter, its contours dithered by grain) and a
-    few near-black pits; on the rim the flecks run in short streaks up and down."""
-    face = Face("deep")
+    """The cap skin: soft, mottled with dim (a fine field's lowest quarter, its contours dithered by grain) and a few
+    deep pits; on the rim the mottles run in short streaks up and down. Taran asked for less contrast than the first
+    draft's deep skin with dim flecks and near-black pits (2026-11-19), so the skin is two steps lighter."""
+    face = Face("soft")
     if streaks:
         f = grain(rng, blend((noise(rng, 8, 2), 0.6), (noise(rng, 16, 4), 0.4)), 0.25)
     else:
         f = grain(rng, blend((noise(rng, 8), 0.6), (noise(rng, 4), 0.4)), 0.3)
-    hi = quantile(f, 0.76)
+    lo = quantile(f, 0.24)
     for p in PIXELS:
-        if f[p] >= hi:
+        if f[p] <= lo:
             face[p] = "dim"
     for _ in range(6):
         p = (rng.randrange(16), rng.randrange(16))
-        if face[p] == "deep":
-            face[p] = "pit"
+        if face[p] == "dim":
+            face[p] = "deep"
     return face
 
 
