@@ -134,7 +134,8 @@ final class GardensVentField {
         for (Vent v : vents) {
             if (v.form() != 3) continue;
             v.t[37] = v.site.gStand;
-            double lv = Double.isNaN(v.site.throatLevel) ? 0.5 * Math.PI * (v.site.R - 3.0 + 3.8) : v.site.throatLevel;
+            // the preview's stand-in level run: a quarter turn of the ring
+            double lv = Double.isNaN(v.site.throatLevel) ? 0.5 * Math.PI * v.t[36] : v.site.throatLevel;
             v.tab = throatTable(gv.throatPerm(v.site), v.t[6], v.site.gStand, v.t[36], DS, lv, v.t[35], v.t[34]);
             v.t[39] = v.tab.length;
         }
@@ -231,7 +232,8 @@ final class GardensVentField {
             }
     }
 
-    static boolean isWallPart(byte p) { return p == VP_BODY || p == VP_HOOD || p == VP_RIM; }
+    /** A vent's walls in the stamped grid, and its root under them (spires and the moat keep off both). */
+    static boolean isWallPart(byte p) { return p == VP_BODY || p == VP_HOOD || p == VP_RIM || p == VP_ROOT; }
 
     /**
      * dress2._keep_main: solid bits not joined face to face to the window's largest piece of rock turn back to air.

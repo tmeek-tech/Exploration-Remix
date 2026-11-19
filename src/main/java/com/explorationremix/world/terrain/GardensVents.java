@@ -7,12 +7,18 @@ import static com.explorationremix.world.terrain.GardensNoise.n2;
 import static com.explorationremix.world.terrain.GardensNoise.n3;
 import static com.explorationremix.world.terrain.GardensNoise.ramp;
 import static com.explorationremix.world.terrain.GardensPlan.SY;
+import static com.explorationremix.world.terrain.GardensSites.TALL;
 
 /**
  * The Deep Gardens' big hollow vents (the previews' vents.py from the table on): each vent's row of numbers, its shape
  * as a closed form round a leaning axis (profile, elliptic section, lumps, flare, flanges, cracks with walkable sills),
  * so any block can be asked which part of which vent it is; the door test, the stamp, rubble round broken vents, the
  * keep-clear masks and the vent weights the dressing reads; the deep vents' throat tables.
+ *
+ * <p>Each vent meets the ground under it with no ledge or kink (Taran, 2026-11-19: "blend more seamlessly into the
+ * ground under them"): a root of vent rock under its sill, spreading downward in noise lobes ({@link #VP_ROOT}), and
+ * an apron of plain rock round its foot that carries the flare's slope on and eases out onto the floor, climbing at
+ * most 1 in 2 to the sill in front of each open crack ({@link #VP_SKIRT}).
  */
 final class GardensVents {
     static final int NV = 48;
@@ -23,9 +29,38 @@ final class GardensVents {
     static final byte AIR = 0, ROCK = 1, TALUS = 2, DEAD = 3, LIVE = 4, THROAT = 5, MAT = 6, STEM = 7, CAP = 8, OIL = 9,
             SEALROCK = 10, DRIP = 11, VDEAD = 12, VLIVE = 13, CROWN = 14, FISSURE = 15, VGLOW = 16, TVEIN = 17, TIP = 18;
     static final int MAGENTA = 0, VIOLET = 1, LIME = 2, LIGHTBLUE = 3;
-    // vent parts
+    /**
+     * Vent parts. In the stamped grid the apron round a vent's foot is VP_SKIRT on ROCK (VP_SKIRT on TALUS is the
+     * rubble a broken vent sheds), the root under its sill VP_ROOT on its vent rock, and its walls and flares VP_BODY.
+     */
     static final byte VP_BODY = 1, VP_SKIRT = 2, VP_DEN = 3, VP_FLUE = 4, VP_CRACK = 5, VP_DOOR = 6, VP_ADIT = 7,
-            VP_TUBE = 8, VP_HOOD = 9, VP_RIM = 10, VP_FLARE = 11, VP_PLUG = 12;
+            VP_TUBE = 8, VP_HOOD = 9, VP_RIM = 10, VP_FLARE = 11, VP_ROOT = 12;
+
+    /**
+     * The foot's fill. The apron and the porches reach down at most APRON_DEPTH under the sill (the door test's floor
+     * rule) and no deeper than 3 under the vent's lowest floor sample (as the skirt did). The apron's slope at the foot
+     * is the flare's there (its mean amplitude over its decay), at most SLOPE_MAX; the root spreads ROOT_K over that
+     * slope a row down, so it stays under the apron.
+     */
+    static final int APRON_DEPTH = 12;
+    static final double SLOPE_MAX = 3.0, ROOT_K = 0.75;
+    /** The least slope a flare's foot has: sf is at least 1.4 F, over a mean amplitude of 0.6 F. */
+    static final double SLOPE_MIN = 1.4 / 0.6;
+
+    /** How far under its sill a vent's apron and porches reach (the rows of drop they fill). */
+    static int apronDepth(int ys, int yLo) { return Math.min(APRON_DEPTH, ys - yLo + 3); }
+
+    /**
+     * How far past the foot an apron reaches over a drop of {@code dy} (where its top rounds down onto the ground):
+     * dy e^(-d / L) falls under a half at d = L ln(2 dy), with L at most 1.25 dy over the slope.
+     */
+    static double apronLen(double dy, double slope) { return dy <= 0 ? 0 : 1.25 * dy / slope * Math.log(Math.max(1.0, 2 * dy)); }
+
+    /** How far past its fit radius a vent standing at ys over floor samples down to yLo can fill: apron or porch. */
+    static double apronReach(int ys, int yLo) {
+        int depth = apronDepth(ys, yLo);
+        return Math.max(apronLen(depth, SLOPE_MIN), 2.0 * depth) + 1;
+    }
 
     /** One vent's table row (vents.table) and what goes with it. */
     static final class Vent {
@@ -59,7 +94,7 @@ final class GardensVents {
     final GardensPlan plan;
     /** The origin the table's centres are measured from (the sites' own): the patch's corner in the preview's rules, else 0. */
     final int ox, oz;
-    final int[] plump, pflare, pglow, pfl, ptube, pcrk, pvn;
+    final int[] plump, pflare, pglow, pfl, ptube, pcrk, pvn, proot, papron;
 
     GardensVents(GardensPlan plan) {
         this.plan = plan;
@@ -73,6 +108,9 @@ final class GardensVents {
         ptube = plan.perm(s + 4);
         pcrk = plan.perm(s + 5);
         pvn = plan.perm(s + 6);
+        // (s + 7 is the plan's own 3958)
+        proot = plan.perm(s + 9);
+        papron = plan.perm(s + 10);
     }
 
     static double u(long k24, int m) { return GardensSites.uSlot(k24, m); }
@@ -118,11 +156,12 @@ final class GardensVents {
             else if (form == 2) { p0 = 0.45 + 0.45 * u(k24, 17); p1 = 0.30 + 0.25 * u(k24, 18); }
             else { p0 = 0.6; p1 = 0.42; }
             double bulge = deep ? 0.0 : 0.12 * R * (2 * u(k24, 19) - 1);
-            double F, wall;
-            if (form == 0) { F = 0.3 * R; wall = 1.4; }
-            else if (form == 1) { F = 1.5 + 0.08 * H; wall = live ? 2.0 : 2.5; }
-            else if (form == 2) { F = 0.45 * R; wall = Math.max(1.6, Math.min(2.6, 0.3 * R)); }
-            else { F = 0.5 * R; wall = 3.0; }
+            // the radii came with the site's girth (a stack's flare from its height before TALL), the walls its root
+            double g = v.girth, F, wall;
+            if (form == 0) { F = 0.3 * R; wall = 1.4 * GardensSites.wallScale(g); }
+            else if (form == 1) { F = g * (1.5 + 0.08 * H / TALL); wall = GardensSites.stackWall(live, g); }
+            else if (form == 2) { F = 0.45 * R; wall = GardensSites.beehiveWall(R, g); }
+            else { F = 0.5 * R; wall = 3.0 * GardensSites.wallScale(g); }
             double sf = Math.max(form == 0 ? 2.0 : (deep ? 4.5 : 4.0), 1.4 * F);
             double cw, ch;
             if (deep) { cw = 1.8; ch = 5.5; }
@@ -133,7 +172,8 @@ final class GardensVents {
             double Htop = broken ? H * (1 - (0.1 + 0.3 * u(k24, 16))) : H;
             double hd = form == 0 ? Math.min(H - 2, 6 + 2 * u(k24, 10)) : Math.min(H - 3, 6 + 2 * u(k24, 10));
             if (broken) Htop = Math.max(Htop, hd + 2);
-            int P = 5 + (int) (5 * u(k24, 4));
+            // the flanges' spacing and first row grow with the height (TALL), on whole rows
+            int P = (int) (TALL * (5 + (int) (5 * u(k24, 4))));
             int nflMax;
             double Fl;
             if (form == 1) { nflMax = 4; Fl = 1.5 + 1.5 * u(k24, 6); }
@@ -143,7 +183,7 @@ final class GardensVents {
             List<Double> rows = new ArrayList<>();
             double yPrev = -99;
             for (int j = 0; j < nflMax; j++) {
-                double yj = ys + Math.max(6, 0.3 * H) + (int) (3 * u(k24, 5)) + j * P + Math.rint(2 * (2 * u(k24, 40 + j) - 1));
+                double yj = ys + Math.floor(Math.max(6 * TALL, 0.3 * H)) + (int) (3 * TALL * u(k24, 5)) + j * P + Math.rint(2 * (2 * u(k24, 40 + j) - 1));
                 if (yj > ys + Htop - 3 || yj - yPrev < 3) continue;
                 rows.add(yj);
                 yPrev = yj;
@@ -151,11 +191,15 @@ final class GardensVents {
             int nfl = Math.min(4, rows.size());
             for (int j = 0; j < nfl; j++) w.fly[j] = (float) (double) rows.get(j);
             double aTop = form == 0 ? 1.5 : (broken ? 2.0 : 1.2);
-            int nrim = (form == 1 && H >= 16 && !broken) ? Math.min(3, (int) (u(k24, 9) * (1 + H / 14))) : 0;
+            // the rim spires come with the height (TALL): from as tall a stack, as many, as high, but never up into the
+            // ceiling over the vent's centre
+            int nrim = (form == 1 && H >= 16 * TALL && !broken) ? Math.min(3, (int) (u(k24, 9) * (1 + H / (14 * TALL)))) : 0;
             double topMin = ys + Htop - aTop;
             for (int j = 0; j < nrim; j++) {
+                double hj = TALL * (4 + 4 * u(k24, 52 + j));
+                if (!Double.isNaN(v.ceilRow)) hj = Math.min(hj, v.ceilRow - 1 - (topMin - 2));
                 w.rim[j][0] = (float) (2 * Math.PI * u(k24, 48 + j));
-                w.rim[j][1] = (float) (4 + 4 * u(k24, 52 + j));
+                w.rim[j][1] = (float) hj;
                 w.rim[j][2] = (float) (topMin - 2);
             }
             int ncr = 0;
@@ -170,10 +214,21 @@ final class GardensVents {
             }
             double A = form == 0 ? 0.1 * R + 0.2 : 0.1 * R + 0.3;
             double profMax = form == 1 ? p0 : 1.0;
+            // the foot's radius at most (lumps, bulge and flare at their largest), and the walls' (flanges, hood, belt)
+            double hoodMax = deep ? 8.0 : 0.0;
             double rsMax = R * profMax + Math.abs(bulge) + A + F + 0.5;
-            double routMax = R * profMax + Math.abs(bulge) + A + F + Fl + (deep ? 8.0 : 0.0) + 3.0;
-            double bound = Math.max(Math.max(routMax + 2, rsMax + 2 * (ys - v.yLo) + 4), rsMax + 7);
-            if (deep) bound = Math.max(bound, Rh + 7.0 / 2 + 14);
+            double routMax = R * profMax + Math.abs(bulge) + A + F + Fl + hoodMax + 3.0;
+            // the apron's slope at the foot: the flare's there, F (0.6 of it on the mean) falling off over sf rows
+            double slope = Math.min(SLOPE_MAX, sf / (0.6 * F));
+            int depth = apronDepth(ys, v.yLo);
+            // the bound holds every block the vent writes: its walls; its root, out ROOT_K / slope a row down to 3 under
+            // yLo; its apron, out to apronLen of its deepest drop; its porches, 2 out a row down (they face cracks, which
+            // keep off a deep vent's hood); a deep vent's throat (the lumpy ring, the drift and the tube's half width)
+            double bound = Math.max(routMax + 2, rsMax + 7);
+            bound = Math.max(bound, rsMax + hoodMax + ROOT_K / slope * (ys - v.yLo + 3) + 2);
+            bound = Math.max(bound, rsMax + hoodMax + apronLen(depth, slope) + 2);
+            bound = Math.max(bound, rsMax + 2.0 * depth + 2);
+            if (deep) bound = Math.max(bound, 1.35 * Rh + DRIFT_MAX + 4.45 + 2);
             float[] t = w.t;
             t[0] = w.idx;
             t[1] = form;
@@ -206,13 +261,14 @@ final class GardensVents {
             t[28] = nrim;
             t[29] = colour;
             t[30] = (float) v.key;
-            t[31] = 0;
+            t[31] = (float) slope;
             t[32] = (float) (R * profMax + F);
             t[33] = (float) bound;
             t[34] = (float) hand;
             t[35] = (float) phiP;
             t[36] = (float) Rh;
             t[37] = 0;
+            t[38] = depth;
             t[40] = v.family;
             t[41] = (float) e;
             t[42] = (float) phiE;
@@ -220,7 +276,7 @@ final class GardensVents {
             t[44] = (float) p1;
             t[45] = (float) bulge;
             t[46] = (float) (8 + 10 * u(k24, 34));
-            t[47] = 0;
+            t[47] = (float) routMax;
             w.k24 = k24;
             // the preview measured from its float32 table; the game keeps the site's own doubles
             w.cx = plan.patch ? t[4] : v.x;
@@ -310,9 +366,19 @@ final class GardensVents {
     }
 
     /**
-     * vents.vent_part: which part of vent v block (x, y, z) is, ignoring other vents and the skirt: 0 none, a VP_ code,
-     * {@link #VP_FLARE} for the flare (wall for this vent only), {@link #VP_PLUG} for the plug under the den (fills only
-     * air or rubble). {@code ceilLo} is the ceiling of the storey under the vent's (-999 where there is none).
+     * The root's spread past the foot at a row under the sill: ROOT_K over the apron's slope a row down, in noise lobes
+     * round the axis that wander with the row (0.2 to 1 of it).
+     */
+    double rootSpread(Vent v, double th, double y) {
+        double s1 = 100.0 * u(v.k24, 14), s2 = 100.0 * u(v.k24, 15);
+        double lobe = 0.6 + 0.4 * n3(proot, 1.3 * Math.cos(th) + s2, y / 5.0, 1.3 * Math.sin(th) + s1);
+        return ROOT_K / v.t[31] * (v.t[6] - y) * Math.max(0.2, Math.min(1.0, lobe));
+    }
+
+    /**
+     * vents.vent_part: which part of vent v block (x, y, z) is, ignoring other vents and the apron: 0 none, a VP_ code,
+     * {@link #VP_FLARE} for the flare (wall for this vent only), {@link #VP_ROOT} for the root under the sill (fills only
+     * air, rubble or oil). {@code ceilLo} is the ceiling of the storey under the vent's (-999 where there is none).
      */
     int part(Vent v, int x, int y, int z, float ceilLo, Geom g) {
         float[] T = v.t;
@@ -321,6 +387,15 @@ final class GardensVents {
         boolean live = T[16] > 0.5f;
         double yp = y - ys;
         if (yp < -40 || yp > H + 14) return 0;
+        if (yp < 0 && y < Math.max(T[7] - 3.0, ceilLo + 2.0)) return 0;
+        {
+            // nothing of the vent lies past its walls' widest (t47), or under the sill past the root's widest: rhoE is
+            // at least sqrt(e) of the distance from the axis
+            double ypc = Math.max(yp, 0.0);
+            double dx = (x - ox) + 0.5 - (v.cx + T[14] * ypc), dz = (z - oz) + 0.5 - (v.cz + T[15] * ypc);
+            double reach = T[47] + (yp < 0 ? ROOT_K / T[31] * -yp : 0.0);
+            if ((dx * dx + dz * dz) * T[41] >= reach * reach) return 0;
+        }
         geom(v, x, y, z, y, g);
         long k24 = v.k24;
         int nrim = (int) T[28];
@@ -342,11 +417,11 @@ final class GardensVents {
             if (Math.abs(wrap(g.th - T[35])) * Math.max(g.rho, 1.0) < 2.3 && g.rho >= g.rin - 1.0 && g.rho <= T[36])
                 return VP_ADIT;
         }
-        if (g.rhoE >= g.rout) return 0;
         if (yp < 0) {
-            if (y >= Math.max(T[7] - 3.0, ceilLo + 2.0)) return VP_PLUG;
-            return 0;
+            // the root: down to 3 under the lowest floor sample (and 2 over the ceiling of the storey under), spreading
+            return g.rhoE < g.rout + rootSpread(v, g.th, y) ? VP_ROOT : 0;
         }
+        if (g.rhoE >= g.rout) return 0;
         if (y >= top(v, g.th)) return 0;
         double wallCore = g.bl + (g.rout - g.bl - g.flare);
         boolean isFlare = g.rhoE >= wallCore;
@@ -606,10 +681,51 @@ final class GardensVents {
         return (px - cx) * (px - cx) + (pz - cz) * (pz - cz) <= b * b;
     }
 
+    /** The ground under a vent's sill in a column: the first row of rock (not air, oil or rubble) at or under ys - 1. */
+    static int groundUnder(byte[] mat, int base, int ys) {
+        for (int y = Math.min(ys - 1, SY - 1); y > 0; y--) {
+            byte m = mat[base + y];
+            if (m != AIR && m != OIL && m != TALUS) return y;
+        }
+        return -999;
+    }
+
+    /**
+     * The top of vent v's apron over column (x, z), whose ground under the sill is row {@code t0} (a fill rises from
+     * it to the row this rounds to, never past the sill's row ys - 1), or -1e9 where it fills nothing. Out from the
+     * foot (d past rout at the sill) it carries the flare's slope on and eases out onto the ground, t0 + dy e^(-d / L)
+     * over a drop of dy, with L the drop over the slope, 0.75 to 1.25 of it round the vent by noise. In front of a kept
+     * crack (its porch) it climbs at most 1 in 2 to the sill: there it is at least ys - 1 - d / 2, eased in over 3
+     * across the porch's sides.
+     */
+    double apronTop(Vent v, int x, int z, int t0, int[][] doorOk, Geom g) {
+        float[] T = v.t;
+        int ys = (int) T[6];
+        double dy = ys - 1 - t0;
+        if (dy <= 0 || dy > T[38]) return -1e9;
+        geom(v, x, ys, z, ys, g);
+        double d = g.rhoE - g.rout;
+        if (d < 0) return ys - 1;
+        double s1 = 100.0 * u(v.k24, 14), s2 = 100.0 * u(v.k24, 15);
+        double a = Math.max(0.0, Math.min(1.0, 0.5 + 0.5 * n2(papron, 1.1 * Math.cos(g.th) - s2, 1.1 * Math.sin(g.th) + s1)));
+        double L = dy / T[31] * (0.75 + 0.5 * a);
+        double s = t0 + dy * Math.exp(-d / L);
+        double c = 0;
+        for (int i = 0; i < 3; i++) {
+            if (doorOk[v.idx][i] != 1) continue;
+            double hw = T[19] + 1.35 + 1.0, across = Math.abs(wrap(g.th - v.vc[i])) * g.rhoE;
+            c = Math.max(c, 1.0 - ramp(across, hw, hw + 3.0));
+        }
+        double climb = ys - 1 - 0.5 * d;
+        if (c > 0 && climb > s) s += c * (climb - s);
+        return s;
+    }
+
     /**
      * vents._stamp: every vent listed for a column's tile is asked for its part at each row; walls beat other vents'
-     * air, door boxes stay clear, air carves only air or rubble (the adit and tubes carve anything), then skirts and
-     * flares fill what is left open. Deep tubes are carved last. {@code doorOk[v][i]} is 1 for a kept door.
+     * air, door boxes stay clear, air carves only air or rubble (the adit and tubes carve anything), then flares, roots
+     * and aprons fill what is left open (the highest apron over the column wins). Deep tubes are carved last.
+     * {@code doorOk[v][i]} is 1 for a kept door.
      */
     void stamp(Grid w, List<Vent> vents, int[][] doorOk, CeilBelow cl, int xa, int za, int xb, int zb) {
         Geom g = new Geom();
@@ -621,6 +737,7 @@ final class GardensVents {
                 int base = ((x - w.x0) * w.nz + (z - w.z0)) * SY;
                 int ylo = SY, yhi = 0;
                 for (Vent v : list) {
+                    // the root reaches 3 under yLo, an apron fills from its ground (apronDepth under ys - 1, so the same)
                     ylo = Math.min(ylo, (int) v.t[7] - 4);
                     yhi = Math.max(yhi, (int) ((double) (v.t[6] + v.t[8]) + 14.0));
                 }
@@ -628,16 +745,17 @@ final class GardensVents {
                 yhi = Math.min(yhi, SY - 1);
                 double S = -1e9;
                 Vent sv = null;
+                int colfloor = -999;
                 for (Vent v : list) {
-                    double ys = v.t[6];
-                    geom(v, x, ys, z, ys, g);
-                    double s = ys - 1.0 - 0.5 * (g.rhoE - g.rout);
-                    if (g.rhoE < g.rout) s = ys - 1.0;
-                    if (s >= v.t[7] - 3 && s > S) {
+                    int t0 = groundUnder(w.mat, base, (int) v.t[6]);
+                    double s = apronTop(v, x, z, t0, doorOk, g);
+                    if (s > S) {
                         S = s;
                         sv = v;
+                        colfloor = t0;
                     }
                 }
+                int stop = sv == null ? -999 : Math.min((int) sv.t[6] - 1, (int) Math.floor(S + 0.5));
                 // each kept door's box across this column (its rows are tested per row below)
                 int nl = list.size();
                 if (dcol.length < nl * 3) dcol = new boolean[nl * 3];
@@ -645,20 +763,9 @@ final class GardensVents {
                     Vent v = list.get(li);
                     for (int i = 0; i < 3; i++) dcol[li * 3 + i] = doorOk[v.idx][i] == 1 && doorCol(v, i, x, z, g);
                 }
-                int colfloor = -999;
-                if (sv != null) {
-                    int ysv = (int) sv.t[6];
-                    for (int y = ysv; y > 0; y--) {
-                        byte m = w.mat[base + y];
-                        if (m != AIR && m != OIL && m != TALUS) {
-                            colfloor = y;
-                            break;
-                        }
-                    }
-                }
                 for (int y = ylo; y < yhi; y++) {
                     byte m0 = w.mat[base + y];
-                    Vent wallV = null, airV = null, aditV = null, flareV = null, plugV = null, doorV = null;
+                    Vent wallV = null, airV = null, aditV = null, flareV = null, rootV = null, doorV = null;
                     int wallCode = 0, airPart = 0;
                     boolean door = false;
                     for (int li = 0; li < nl; li++) {
@@ -677,8 +784,8 @@ final class GardensVents {
                         } else if (p == VP_ADIT) aditV = v;
                         else if (p == VP_FLARE) {
                             if (flareV == null || v.idx < flareV.idx) flareV = v;
-                        } else if (p == VP_PLUG) {
-                            if (plugV == null || v.idx < plugV.idx) plugV = v;
+                        } else if (p == VP_ROOT) {
+                            if (rootV == null || v.idx < rootV.idx) rootV = v;
                         }
                         for (int i = 0; i < 3; i++)
                             if (dcol[li * 3 + i] && doorRows(v, i, y)) {
@@ -723,12 +830,12 @@ final class GardensVents {
                         out = flareV.live() ? VLIVE : VDEAD;
                         op = VP_BODY;
                         ov = flareV;
-                    } else if (plugV != null && (m0 == AIR || m0 == TALUS || m0 == OIL)) {
-                        out = plugV.live() ? VLIVE : VDEAD;
-                        op = VP_BODY;
-                        ov = plugV;
-                    } else if (sv != null && y <= Math.floor(S) && y >= sv.t[7] - 3 && y <= sv.t[6] - 1
-                            && colfloor >= sv.t[6] - 12 && (m0 == AIR || m0 == OIL)) {
+                    } else if (rootV != null && (m0 == AIR || m0 == TALUS || m0 == OIL)) {
+                        out = rootV.live() ? VLIVE : VDEAD;
+                        op = VP_ROOT;
+                        ov = rootV;
+                    } else if (sv != null && y > colfloor && y <= stop && (m0 == AIR || m0 == OIL)) {
+                        // the apron rises from the ground, over what fills under it (rubble stays rubble)
                         byte under = w.mat[base + y - 1];
                         if (under != AIR && under != OIL) {
                             out = ROCK;
@@ -746,7 +853,7 @@ final class GardensVents {
                     if (v.form() != 3 || v.tab == null || v.tab.length == 0) continue;
                     double cx = v.cx, cz = v.cz, Rh = v.t[36];
                     double dxx = (x - ox) + 0.5 - cx, dzz = (z - oz) + 0.5 - cz;
-                    if (Math.abs(Math.sqrt(dxx * dxx + dzz * dzz) - Rh) > PAD) continue;
+                    if (Math.abs(Math.sqrt(dxx * dxx + dzz * dzz) - Rh) > pad(Rh)) continue;
                     for (int y = 0; y < Math.min((int) v.t[6] + 12, SY); y++) {
                         if (tubeAir(v, x, y, z) >= 0) {
                             w.mat[base + y] = AIR;
@@ -893,8 +1000,11 @@ final class GardensVents {
 
     /** The throat's wander (Taran, 2026-11-18, "Make them wander"): the axis drift's wobble and slow bend, its cap. */
     static final double DRIFT = 4.0, DRIFT_L = 36.0, BEND = 6.0, BEND_L = 90.0, DRIFT_MAX = 9.0;
-    /** A column farther than this from the ring (|rho - Rh|) never holds throat. */
-    static final double PAD = 21.0;
+    /**
+     * A column farther than this from the ring (|rho - Rh|) never holds throat: the lumpy ring (0.70 to 1.35 of Rh), the
+     * drift (DRIFT_MAX) and the tube's half width with its roughness (4.45), 21 at least (as it was for every Rh).
+     */
+    static double pad(double Rh) { return Math.max(21.0, 0.35 * Rh + DRIFT_MAX + 4.45 + 0.5); }
 
     /**
      * vents.throat_table: rows of (floor row, radius, width, height, axis drift x, axis drift z) per DS of the helix
@@ -956,7 +1066,7 @@ final class GardensVents {
         double px = (x - ox) + 0.5, pz = (z - oz) + 0.5;
         double dx = px - cx, dz = pz - cz;
         double rho = Math.sqrt(dx * dx + dz * dz);
-        if (Math.abs(rho - Rh) > PAD) return -1;
+        if (Math.abs(rho - Rh) > pad(Rh)) return -1;
         double psi = Math.atan2(dz, dx);
         double dd = d * (psi - phiP);
         while (dd < 0) dd += 2 * Math.PI;

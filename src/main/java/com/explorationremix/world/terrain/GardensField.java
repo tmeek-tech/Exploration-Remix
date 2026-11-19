@@ -32,8 +32,28 @@ public final class GardensField {
     static final int T0 = 64, TE = 128, EM = 46, TS = 128, TB = 128, BM = 40;
     /** The distance fields are kept to 1/1024 of a block (as chars: they never pass 40). */
     static final float EDT_Q = 1024f;
-    /** How far round a box the clusters whose members could land in it are looked for. */
-    static final double CAND_PAD = 60;
+    /**
+     * The margins the decisions read round a tile, from the vents' sizes (GardensSites.GIRTH and TALL). The largest
+     * bound t33 comes to about 59 at most, a deep vent's (at R 17.25 a foot of 28.4, its hood's 8, an apron of 20.4
+     * off a drop of 12, and 2); a plain deep vent's to 56 and an ordinary vent's to 49.4 (a beehive of R 13.5, its
+     * porches over a drop of 12). Over the 1024 x 1024 round the origin at seed 8675309 the largest are 52.4 (a deep
+     * vent), 49.5 (a plain one) and 47.0 (a beehive), where they were 36.6 at most before the vents grew. So:
+     * <ul>
+     * <li>VENT_REACH, round a block window for the standing vents: every vent whose bound could reach it, so at
+     * least the largest bound (it was 48 for bounds up to about 37); the dressing's vent weights reach Rf + 7 +
+     * 1.35 t46 (56 at most), under the window's margin and this;
+     * <li>CAND_PAD, round a site tile for the clusters: the rule between clusters reads every rival within
+     * 1.15 (Rv + Rq) + 4 of a vent (35 for two of R 13.5), and a member lies up to about 24 from its cluster's
+     * anchor, which lies up to 0.45 r from its dome's centre (a dome is found when its disc of 1.2 r reaches the
+     * box) or 3 from its vent hall's, so at least 35 + 24 + 3 and some (it was 60 when that came to about 45);
+     * <li>DOOR_PAD, round a site tile for the door tests: a vent's door boxes reach t32 + 10 from its centre (36 for a
+     * deep vent) and another vent's walls its routMax (t47, at most 42), so at least 78, and the vents the test lists
+     * are those whose bound comes within t32 + 16 (101 at most); under the 128 of the site tiles round it;
+     * <li>DEEP_PAD, round a box for the deep sites whose clearing (GardensSites.DEEP_CLEAR, 54) could reach it.
+     * </ul>
+     * Too small a margin makes tiles disagree at their seams; GardensFieldTest builds a tile from two windows.
+     */
+    static final double VENT_REACH = 64, CAND_PAD = 80, DOOR_PAD = 112, DEEP_PAD = GardensSites.DEEP_CLEAR + 4;
 
     final GardensPlan plan;
     final GardensVents gv;
@@ -504,6 +524,8 @@ public final class GardensField {
 
             public float hot(int x, int z) { return m.col(x, z).hot; }
 
+            public int dom(int k, int x, int z) { return m.col(x, z).dom[k]; }
+
             public List<GardensPlan.VHall> vhalls(int k, double minX, double minZ, double maxX, double maxZ) {
                 List<GardensPlan.VHall> out = new ArrayList<>();
                 for (GardensPlan.VHall v : p.vhalls(k, minX, minZ, maxX, maxZ, 0))
@@ -530,7 +552,7 @@ public final class GardensField {
         GardensSites sa = new GardensSites(plan, fields(m));
         double x0 = v.x() - 32, z0 = v.z() - 32, x1 = v.x() + 32, z1 = v.z() + 32;
         List<GardensSites.Site> cands = sa.candidates(x0 - CAND_PAD, z0 - CAND_PAD, x1 + CAND_PAD, z1 + CAND_PAD, v.k());
-        List<GardensPlan.DeepSite> deeps = plan.deepSitesNear(x0 - 40, z0 - 40, x1 + 40, z1 + 40, 0);
+        List<GardensPlan.DeepSite> deeps = plan.deepSitesNear(x0 - DEEP_PAD, z0 - DEEP_PAD, x1 + DEEP_PAD, z1 + DEEP_PAD, 0);
         boolean h = !sa.resolve(cands, deeps, s -> s.family == 1 && s.k == v.k() && s.i == v.i() && s.kk == v.kk()).isEmpty();
         stat(S_HELD, ts);
         Boolean prev = held.putIfAbsent(v.key(), h);
@@ -558,7 +580,7 @@ public final class GardensField {
         Memo m = new Memo(passB);
         GardensSites sb = new GardensSites(plan, fields(m));
         List<GardensSites.Site> cands = sb.candidates(x0 - CAND_PAD, z0 - CAND_PAD, x1 + CAND_PAD, z1 + CAND_PAD, -1);
-        List<GardensPlan.DeepSite> deeps = plan.deepSitesNear(x0 - 40, z0 - 40, x1 + 40, z1 + 40, 0);
+        List<GardensPlan.DeepSite> deeps = plan.deepSitesNear(x0 - DEEP_PAD, z0 - DEEP_PAD, x1 + DEEP_PAD, z1 + DEEP_PAD, 0);
         List<GardensSites.Site> out = sb.resolve(cands, deeps, s -> s.x >= x0 && s.x < x1 && s.z >= z0 && s.z < z1);
         for (GardensPlan.DeepSite d : deeps) {
             if (d.x() < x0 || d.x() >= x1 || d.z() < z0 || d.z() >= z1) continue;
@@ -596,7 +618,7 @@ public final class GardensField {
         for (int a = -1; a <= 1; a++)
             for (int b = -1; b <= 1; b++)
                 for (GardensSites.Site s : sites(sx + a, sz + b))
-                    if (s.x >= x0 - 90 && s.x < x0 + TS + 90 && s.z >= z0 - 90 && s.z < z0 + TS + 90) all.add(s);
+                    if (s.x >= x0 - DOOR_PAD && s.x < x0 + TS + DOOR_PAD && s.z >= z0 - DOOR_PAD && s.z < z0 + TS + DOOR_PAD) all.add(s);
         all.sort(GardensSites.Site::compareTo);
         List<GardensVents.Vent> vt = gv.table(all, (x, y, z) -> 0);
         Memo m = new Memo(passB);
@@ -618,12 +640,13 @@ public final class GardensField {
     /** Every standing vent whose bound could reach the box, in the canonical order. */
     List<GardensSites.Site> ventsNear(double minX, double minZ, double maxX, double maxZ) {
         List<GardensSites.Site> out = new ArrayList<>();
-        int s0 = Math.floorDiv((int) Math.floor(minX - 48), TS), s1 = Math.floorDiv((int) Math.floor(maxX + 48), TS);
-        int t0 = Math.floorDiv((int) Math.floor(minZ - 48), TS), t1 = Math.floorDiv((int) Math.floor(maxZ + 48), TS);
+        double r = VENT_REACH;
+        int s0 = Math.floorDiv((int) Math.floor(minX - r), TS), s1 = Math.floorDiv((int) Math.floor(maxX + r), TS);
+        int t0 = Math.floorDiv((int) Math.floor(minZ - r), TS), t1 = Math.floorDiv((int) Math.floor(maxZ + r), TS);
         for (int a = s0; a <= s1; a++)
             for (int b = t0; b <= t1; b++)
                 for (GardensSites.Site s : decided(a, b))
-                    if (s.x >= minX - 48 && s.x < maxX + 48 && s.z >= minZ - 48 && s.z < maxZ + 48) out.add(s);
+                    if (s.x >= minX - r && s.x < maxX + r && s.z >= minZ - r && s.z < maxZ + r) out.add(s);
         out.sort(GardensSites.Site::compareTo);
         return out;
     }
@@ -673,15 +696,26 @@ public final class GardensField {
     public int band(int x, int y, int z) { return tileAt(x, z).bandAt(x, y, z); }
 
     private Tile makeTile(int bx, int bz) {
+        int cx0 = bx * TB, cz0 = bz * TB;
+        return makeTile(cx0, cz0, cx0 - BM, cz0 - BM, TB + 2 * BM, TB + 2 * BM);
+    }
+
+    /**
+     * The block tile at (cx0, cz0) made over the window of nx by nz columns at (x0, z0), which must hold the tile with
+     * a margin of at least BM round it (the game's window is just that; the checks make others to see that the tile's
+     * blocks never depend on the window).
+     */
+    Tile makeTile(int cx0, int cz0, int x0, int z0, int nx, int nz) {
+        if (cx0 - x0 < BM || cz0 - z0 < BM || x0 + nx - (cx0 + TB) < BM || z0 + nz - (cz0 + TB) < BM)
+            throw new IllegalArgumentException("a block window without its margin");
         // the vent decisions first, outside the limit on heavy work (they make the lighter tiles they need)
-        int cx0 = bx * TB, cz0 = bz * TB, x0 = cx0 - BM, z0 = cz0 - BM, n = TB + 2 * BM;
-        List<GardensSites.Site> sites = ventsNear(x0, z0, x0 + n, z0 + n);
+        List<GardensSites.Site> sites = ventsNear(x0, z0, x0 + nx, z0 + nz);
         heavy.acquireUninterruptibly();
         try {
             long t0 = System.nanoTime();
             Tile tile = new Tile(cx0, cz0);
-            GardensStoreys st = new GardensStoreys(plan, x0, z0, n, n, passB.use, passB);
-            GardensRock rock = new GardensRock(plan, storeysOf(st), gates, x0, z0, n, n);
+            GardensStoreys st = new GardensStoreys(plan, x0, z0, nx, nz, passB.use, passB);
+            GardensRock rock = new GardensRock(plan, storeysOf(st), gates, x0, z0, nx, nz);
             GardensVents.CeilBelow cl = (k, x, z) -> {
                 if (k == 0) return -999f;
                 int q = st.idx(x, z);
@@ -693,18 +727,18 @@ public final class GardensField {
                 for (int k = 0; k < K; k++) if (st.floor[k][q] <= y + 1) kk = k;
                 return st.dominant(kk, q);
             };
-            GardensVentField vf = new GardensVentField(plan, gv, bands, cl, gates, x0, z0, n, n, rock.solid, rock.talus);
+            GardensVentField vf = new GardensVentField(plan, gv, bands, cl, gates, x0, z0, nx, nz, rock.solid, rock.talus);
             List<GardensSites.Site> copies = new ArrayList<>(sites.size());
             for (GardensSites.Site s : sites) copies.add(s.copy());
             vf.stampRound(copies);
             GardensDress.Fields fd = new GardensDress.Fields();
-            int n2 = n * n;
+            int n2 = nx * nz;
             fd.hot = st.hot;
             fd.mound = st.mound;
             float[][] wk = new float[K][n2];
             int[][] nearV = new int[K][n2];
             for (int[] row : nearV) java.util.Arrays.fill(row, -1);
-            gv.ventWeights(vf.vents, x0, z0, n, n, wk, nearV, new boolean[n2]);
+            gv.ventWeights(vf.vents, x0, z0, nx, nz, wk, nearV, new boolean[n2]);
             float[][] pools = st.pools();
             for (int k = 0; k < K; k++) {
                 fd.floor[k] = st.floor[k];
@@ -725,11 +759,11 @@ public final class GardensField {
             GardensDress dr = new GardensDress(plan, gv, vf.grid, vf.vents, vf.doorOk, fd, gates);
             dr.run();
             byte[] mat = vf.grid.mat, col = dr.colour;
+            int di = cx0 - x0, dj = cz0 - z0;
             for (int i = 0; i < TB; i++)
                 for (int j = 0; j < TB; j++) {
-                    int src = ((i + BM) * n + (j + BM)) * SY, dst = (i * TB + j) * SY;
+                    int q = (i + di) * nz + (j + dj), src = q * SY, dst = (i * TB + j) * SY;
                     for (int y = 0; y < SY; y++) tile.blocks[dst + y] = (byte) (mat[src + y] | col[src + y] << 5);
-                    int q = (i + BM) * n + (j + BM);
                     for (int k = 0; k < K; k++) {
                         tile.floors[k * TB * TB + i * TB + j] = st.floor[k][q];
                         tile.dom[k * TB * TB + i * TB + j] = (byte) st.dominant(k, q);
