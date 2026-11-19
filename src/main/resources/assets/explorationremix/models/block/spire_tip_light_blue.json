@@ -1,8 +1,14 @@
 {
-  "parent": "explorationremix:block/template/cube_glow",
+  "parent": "explorationremix:block/template/rock_top_side_bottom_glow",
   "render_type": "minecraft:cutout",
   "textures": {
-    "all": "explorationremix:block/spire_tip_light_blue",
-    "glow": "explorationremix:block/spire_tip_light_blue_glow"
+    "rock_end": "minecraft:block/blackstone_top",
+    "rock_side": "minecraft:block/blackstone",
+    "top": "explorationremix:block/spire_tip_light_blue_top",
+    "top_glow": "explorationremix:block/spire_tip_light_blue_top_glow",
+    "side": "explorationremix:block/spire_tip_light_blue_side",
+    "side_glow": "explorationremix:block/spire_tip_light_blue_side_glow",
+    "bottom": "explorationremix:block/spire_tip_light_blue_top",
+    "bottom_glow": "explorationremix:block/spire_tip_light_blue_top_glow"
   }
 }

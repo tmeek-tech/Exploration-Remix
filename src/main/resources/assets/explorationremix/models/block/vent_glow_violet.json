@@ -1,8 +1,14 @@
 {
-  "parent": "explorationremix:block/template/cube_glow",
+  "parent": "explorationremix:block/template/rock_top_side_bottom_glow",
   "render_type": "minecraft:cutout",
   "textures": {
-    "all": "explorationremix:block/vent_glow_violet",
-    "glow": "explorationremix:block/vent_glow_violet_glow"
+    "rock_end": "minecraft:block/blackstone_top",
+    "rock_side": "minecraft:block/blackstone",
+    "top": "explorationremix:block/vent_glow_violet",
+    "top_glow": "explorationremix:block/vent_glow_violet_glow",
+    "side": "explorationremix:block/vent_glow_violet",
+    "side_glow": "explorationremix:block/vent_glow_violet_glow",
+    "bottom": "explorationremix:block/vent_glow_violet",
+    "bottom_glow": "explorationremix:block/vent_glow_violet_glow"
   }
 }
