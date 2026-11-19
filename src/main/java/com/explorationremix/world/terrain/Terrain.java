@@ -38,10 +38,11 @@ public final class Terrain {
 
     /**
      * Layers whose caves come from the network's plans, with ways, climbs and gates the features keep clear (Walkway,
-     * OpenWayFeature, ClimbVinesFeature): the Blue Reaches and the Deep Gardens. Since 0.5.1 the Wasteland and the
-     * Galleries are noise fields with no planned ways, so nothing guards a way there (players can always dig).
+     * OpenWayFeature, ClimbVinesFeature): the Blue Reaches. Since 0.5.1 the Wasteland and the Galleries are noise fields
+     * with no planned ways, so nothing guards a way there (players can always dig); since round 2 of the Deep Gardens
+     * (0.18.10) so are the Deep Gardens ({@link GardensField}).
      */
-    public static boolean planned(int li) { return li < WASTELAND; }
+    public static boolean planned(int li) { return li < GARDENS; }
 
     /** How far the layer's lava rises over its table at the height of its cycle: only the Galleries' does. */
     public static int surge(int li) { return li == GALLERIES ? FLOOD_RISE : 0; }
@@ -79,6 +80,11 @@ public final class Terrain {
     public final WastelandField wasteland;
     /** The rows where the Wasteland and the Galleries meet, both fields combined; null without either of them. */
     public final Join join;
+    /**
+     * The Deep Gardens (layer 1) as the round 2 vent field (0.18.10): every block of the layer, and the deep vents'
+     * throats down through band 3 into the Wasteland's top tunnels. Null when the layout has no Deep Gardens.
+     */
+    public final GardensField gardens;
     /** Asked before an upper set piece is placed, so none is carved under an ocean or river. Null in tests. */
     public volatile Upper.SurfaceProbe surfaceProbe;
     /**
@@ -139,6 +145,7 @@ public final class Terrain {
         this.looks = LookQueries.of(galleries, wasteland);
         this.palette = new Palette(this, seed, looks);
         this.network = new Network(this);
+        this.gardens = shape.layerCount > GARDENS ? GardensField.game(seed, plans, shape, gardensGates(), wasteland != null ? this::wasteView : null) : null;
     }
 
     // ================================================================================================ columns
@@ -374,6 +381,102 @@ public final class Terrain {
         return step * (k + smooth((frac - 0.6) / 0.4));
     }
 
+    // ================================================================================================ the Deep Gardens' ties
+
+    /** Each gate's passage across, as a padded box (min x, min z, max x, max z): the Deep Gardens' quick test. */
+    private final java.util.Map<Plans.Gate, double[]> passBoxes = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private double[] passBox(Plans.Gate g) {
+        return passBoxes.computeIfAbsent(g, k -> {
+            double a = Double.MAX_VALUE, b = Double.MAX_VALUE, c = -Double.MAX_VALUE, d = -Double.MAX_VALUE;
+            for (int i = 0; i <= 32; i++) {
+                double t = i / 32.0, px = k.px(t), pz = k.pz(t);
+                a = Math.min(a, px);
+                b = Math.min(b, pz);
+                c = Math.max(c, px);
+                d = Math.max(d, pz);
+            }
+            double pad = k.radius * 1.4 + 10;
+            return new double[]{a - pad, b - pad, c + pad, d + pad};
+        });
+    }
+
+    /**
+     * The Deep Gardens' gate rooms, which the vent field carves into its storeys ({@link GardensRock}): band 2's lower
+     * landing and the foot of its passage on the top storey, band 3's upper landing and the head of its passage on the
+     * bottom storey, in the shapes the bands and the other layers give them ({@link #landing}, {@link #passage}), for
+     * the column's own cell. Rows are the layer's (0 = its bottom row).
+     */
+    private GardensRock.Gates gardensGates() {
+        int bottom = shape.bottom(GARDENS);
+        return new GardensRock.Gates() {
+            @Override
+            public boolean open(int wx, int y, int wz) {
+                int yy = y + bottom, cx = plans.cellOf(wx), cz = plans.cellOf(wz);
+                Plans.Gate en = plans.gate(2, cx, cz), ex = plans.gate(3, cx, cz);
+                double de = Math.hypot(wx - en.lx, wz - en.lz);
+                if (de < en.landR + 4 && yy > en.lFloor - 2 && yy < en.lCy + en.landHalf + 4
+                        && landing(de, en.landR, en.lCy, en.landHalf, en.lFloor, wx, yy, wz) < 0) return true;
+                double dx = Math.hypot(wx - ex.ux, wz - ex.uz);
+                if (dx < ex.landR + 4 && yy > ex.uFloor - 2 && yy < ex.uCy + ex.landHalf + 4
+                        && landing(dx, ex.landR, ex.uCy, ex.landHalf, ex.uFloor, wx, yy, wz) < 0) return true;
+                if (yy > en.y1 - 3 && passage(en, wx, yy, wz) < 0) return true;
+                return yy < ex.y0 + 3 && passage(ex, wx, yy, wz) < 0;
+            }
+
+            @Override
+            public boolean keep(int wx, int y, int wz) {
+                int yy = y + bottom, cx = plans.cellOf(wx), cz = plans.cellOf(wz);
+                Plans.Gate en = plans.gate(2, cx, cz), ex = plans.gate(3, cx, cz);
+                return inLanding(en.lx, en.lz, en.lCy, en, wx, yy, wz) || inLanding(ex.ux, ex.uz, ex.uCy, ex, wx, yy, wz);
+            }
+
+            private boolean inLanding(double lx, double lz, double cy, Plans.Gate g, int wx, int yy, int wz) {
+                double dx = wx - lx, dz = wz - lz, dy = (yy - cy) / (g.landHalf + 2), r = g.landR + 2;
+                return (dx * dx + dz * dz) / (r * r) + dy * dy < 1;
+            }
+
+            @Override
+            public boolean near(int wx, int wz) {
+                int cx = plans.cellOf(wx), cz = plans.cellOf(wz);
+                Plans.Gate en = plans.gate(2, cx, cz), ex = plans.gate(3, cx, cz);
+                if (Math.abs(wx - en.lx) < en.landR + 12 && Math.abs(wz - en.lz) < en.landR + 12) return true;
+                if (Math.abs(wx - ex.ux) < ex.landR + 12 && Math.abs(wz - ex.uz) < ex.landR + 12) return true;
+                double[] a = passBox(en), b = passBox(ex);
+                return (wx >= a[0] && wz >= a[1] && wx <= a[2] && wz <= a[3]) || (wx >= b[0] && wz >= b[1] && wx <= b[2] && wz <= b[3]);
+            }
+        };
+    }
+
+    /**
+     * The Wasteland's own blocks for the throats' exit search ({@link GardensExits}): its slab under the Deep Gardens
+     * (Y -600..-545), as {@link #rockAt} makes them (Minecraft's corners and interpolation, then the Wasteland's fine
+     * pass) but with no throat carved. One view per search; it keeps the corners it reads.
+     */
+    private GardensExits.Waste.View wasteView() {
+        int yLo = shape.bottom(GARDENS) - GardensExits.E_OFF, n = GardensExits.SLAB;
+        int c0 = Math.floorDiv(yLo, 8) * 8, c1 = Math.floorDiv(yLo + n - 1, 8) * 8 + 8, nc = (c1 - c0) / 8 + 1;
+        java.util.Map<Long, double[]> corners = new java.util.HashMap<>();
+        java.util.function.BiFunction<Integer, Integer, double[]> corner = (cx, cz) -> corners.computeIfAbsent(((long) cx << 32) | (cz & 0xFFFFFFFFL), k -> {
+            double[] d = new double[nc];
+            for (int i = 0; i < nc; i++) d[i] = density(cx, c0 + 8 * i, cz);
+            return d;
+        });
+        return (x, z, out) -> {
+            int x0 = Math.floorDiv(x, 4) * 4, z0 = Math.floorDiv(z, 4) * 4;
+            double fx = (x - x0) / 4.0, fz = (z - z0) / 4.0;
+            double[] a = corner.apply(x0, z0), b = corner.apply(x0 + 4, z0), c = corner.apply(x0, z0 + 4), d = corner.apply(x0 + 4, z0 + 4);
+            for (int e = 0; e < n; e++) {
+                int y = yLo + e, y0 = Math.floorDiv(y, 8) * 8, k = (y0 - c0) / 8;
+                double fy = (y - y0) / 8.0;
+                double x00 = lerp(fy, a[k], a[k + 1]), x10 = lerp(fy, b[k], b[k + 1]);
+                double x01 = lerp(fy, c[k], c[k + 1]), x11 = lerp(fy, d[k], d[k + 1]);
+                double coarse = lerp(fz, lerp(fx, x00, x10), lerp(fx, x01, x11));
+                out[e] = (byte) (wasteland.fine(x, y, z, coarse) > 0 ? 1 : (wasteland.fluid(x, y, z) == LAVA ? 2 : 0));
+            }
+        };
+    }
+
     // ================================================================================================ density
 
     /** Minecraft-scaled density at a block: positive is rock. */
@@ -400,6 +503,8 @@ public final class Terrain {
             if (band == 1) return denPassages(c, x, y, z);
             return passage(plans.gate(band, c.cellX, c.cellZ), x, y, z);
         }
+        // the Deep Gardens' blocks all come from the vent field, block by block (fine); rock here keeps band 3 sealed
+        if (li == GARDENS && gardens != null) return SOLID;
         if (join != null && join.inBand(y)) return join.density(x, y, z);
         if (li == WASTELAND) return wasteland.density(x, y, z);
         if (li == GALLERIES) return galleries.density(x, y, z);
@@ -456,10 +561,17 @@ public final class Terrain {
                 double d = denPassages(column(x, z), x, y, z);
                 return d <= 0 ? Math.min(coarse, Math.max(-1, d / 8.0)) : Math.max(coarse, Math.min(1, d / 8.0));
             }
+            // a deep vent's throat winds down through band 3 (the band under the Deep Gardens) to its exit
+            if (gardens != null && shape.bandAt(y) == GARDENS + 2 && gardens.throatUnder(x, y - shape.bottom(GARDENS), z)) return -1;
             return coarse;
         }
+        if (li == GARDENS && gardens != null) return gardens.open(x, y - shape.bottom(GARDENS), z) ? -1 : 1;
         if (join != null && join.inBand(y)) return join.fine(x, y, z, coarse);
-        if (li == WASTELAND) return wasteland.fine(x, y, z, coarse);
+        if (li == WASTELAND) {
+            // the throats come out in the Wasteland's top tunnels: their last turn or outlet is carved into its rock
+            double d = wasteland.fine(x, y, z, coarse);
+            return d > 0 && gardens != null && gardens.throatUnder(x, y - shape.bottom(GARDENS), z) ? -1 : d;
+        }
         if (li == GALLERIES) return galleries.fine(x, y, z, coarse);
         double d = network.fine(li, x, y, z, coarse);
         // a den rift that crosses over the Blue Reaches' caves keeps its floor, so the way down never has a hole no one
@@ -680,6 +792,8 @@ public final class Terrain {
     public int fluidAt(int x, int y, int z) {
         int li = shape.layerAt(y);
         if (li < 0) return AIR;
+        // the Deep Gardens are dry: no water table (their seep pools are placed with the blocks, DeepMaterials)
+        if (li == GARDENS && gardens != null) return AIR;
         if (li == WASTELAND) return wasteland.fluid(x, y, z);
         if (li == GALLERIES) return galleries.fluid(x, y, z);
         return network.fluidAt(li, x, y, z);
@@ -699,15 +813,21 @@ public final class Terrain {
             li = band > 0 ? band - 1 : shape.layerCount - 1;
             return routeBiome(li);
         }
+        if (li == GARDENS && gardens != null) return gardensBiome(gardens.bandOf(x, y - shape.bottom(GARDENS), z));
         if (li == WASTELAND) return wasteland.biome(x, y, z);
         if (li == GALLERIES) return galleries.biome(x, y, z);
         return network.biomeAt(li, x, y, z);
     }
 
+    /** The Deep Gardens' biome for a band of the vent field: 0 Vent Domes (bottom), 1 Chimney Halls, 2 Seep Beds (top). */
+    public static DeepBiome gardensBiome(int band) {
+        return band == 0 ? DeepBiome.VENT_DOMES : (band == 1 ? DeepBiome.CHIMNEY_HALLS : DeepBiome.SEEP_BEDS);
+    }
+
     /** A layer's main biome (0.2.0's route biome): the bands take their layer's, and the network falls back on it. */
     public static DeepBiome routeBiome(int li) {
         return switch (li) {
-            case GARDENS -> DeepBiome.LANTERN_LAKE;
+            case GARDENS -> DeepBiome.SEEP_BEDS;
             case BLUE -> DeepBiome.DEEP_BLUE_RIFT;
             case WASTELAND -> DeepBiome.WASTELAND;
             default -> DeepBiome.BASALT_GALLERIES;
@@ -799,6 +919,7 @@ public final class Terrain {
         java.util.List<String> out = new java.util.ArrayList<>();
         if (li == WASTELAND) out.addAll(wasteland.describe(x, y, z));
         else if (li == GALLERIES) out.addAll(galleries.describe(x, y, z));
+        else if (li == GARDENS && gardens != null) out.addAll(gardens.describe(x, y - shape.bottom(GARDENS), z));
         else out.addAll(network.describe(li, x, y, z));
         if (join != null && join.inBand(y)) out.add(join.describe(x, y, z));
         return out;
@@ -814,6 +935,10 @@ public final class Terrain {
         if (li < 0 || li >= shape.layerCount) return java.util.List.of();
         if (li == WASTELAND) return wasteland.places(b, x, z);
         if (li == GALLERIES) return galleries.places(b, x, z);
+        if (li == GARDENS && gardens != null) {
+            int band = b == DeepBiome.VENT_DOMES ? 0 : (b == DeepBiome.CHIMNEY_HALLS ? 1 : (b == DeepBiome.SEEP_BEDS ? 2 : -1));
+            return band < 0 ? java.util.List.of() : gardens.places(band, b.id, x, z, shape.bottom(GARDENS), WastelandField.PLACE_REACH, WastelandField.PLACE_MAX);
+        }
         return network.places(b, x, z);
     }
 

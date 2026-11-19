@@ -61,6 +61,8 @@ final class GardensSites {
         int band = -1;
         /** A deep vent's level run into the Wasteland (the game's exit search), or NaN for the preview's stand-in. */
         double throatLevel = Double.NaN;
+        /** A deep vent's outlet from its level run (the game's exit search): where it leaves and how long, else NaN. */
+        double outletDep = Double.NaN, outletLen = Double.NaN;
         double x, z, R, Rf, H, key, a0;
         long key24;
         boolean live, twin, deepFailed;
@@ -89,6 +91,8 @@ final class GardensSites {
             s.gStand = gStand;
             s.band = band;
             s.throatLevel = throatLevel;
+            s.outletDep = outletDep;
+            s.outletLen = outletLen;
             s.x = x;
             s.z = z;
             s.R = R;

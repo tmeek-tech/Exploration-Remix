@@ -78,8 +78,11 @@ public final class GardensField {
         Exit find(GardensPlan.DeepSite d, GardensVents.Vent v);
     }
 
-    /** An exit: the row the throat levels out at and its level run's length (blocks along the helix). */
-    record Exit(int g, double levelLen) {}
+    /**
+     * An exit: the row the throat levels out at, its level run's length (blocks along the helix), and where an outlet
+     * leaves the level run and how long it runs (NaN for an exit off the ring itself).
+     */
+    record Exit(int g, double levelLen, double outletDep, double outletLen) {}
 
     GardensField(GardensPlan plan, GardensRock.Gates gates) {
         this.plan = plan;
@@ -567,6 +570,8 @@ public final class GardensField {
                 else {
                     v.gStand = e.g();
                     v.throatLevel = e.levelLen();
+                    v.outletDep = e.outletDep();
+                    v.outletLen = e.outletLen();
                 }
             }
             out.add(v);
@@ -737,6 +742,145 @@ public final class GardensField {
         } finally {
             heavy.release();
         }
+    }
+
+    // ================================================================================================ the game's queries
+
+    /** The game's field for a world: its plan from the world's seed, the gates where {@link Plans} puts them. */
+    static GardensField game(long worldSeed, Plans plans, Shape shape, GardensRock.Gates gates, GardensExits.Waste waste) {
+        GardensPlan plan = new GardensPlan(GardensPlan.foldSeed(worldSeed), GardensGates.of(plans, shape));
+        GardensField f = new GardensField(plan, gates);
+        if (waste != null) f.exits = new GardensExits(f.gv, waste);
+        return f;
+    }
+
+    /** Whether a block of the layer (row 0 = its bottom) is open: air, or the crude oil of a seep pool. */
+    public boolean open(int x, int y, int z) {
+        int c = packed(x, y, z) & 31;
+        return c == GardensVents.AIR || c == GardensVents.OIL;
+    }
+
+    /**
+     * The band at a block of the layer, from its column's storeys alone (cheap: the biomes are asked for before the
+     * blocks are made): 0 Vent Domes (bottom), 1 Chimney Halls (middle), 2 Seep Beds (top).
+     */
+    public int bandOf(int x, int y, int z) { return passB.col(x, z).bandAt(y); }
+
+    /** For /remix info: the band, the block's code and colour, and the standing vents near. */
+    public List<String> describe(int x, int y, int z) {
+        List<String> out = new ArrayList<>();
+        int p = packed(x, y, z);
+        PCol c = passB.col(x, z);
+        StringBuilder fl = new StringBuilder();
+        for (int k = 0; k < K; k++) if (c.foot(k)) fl.append(fl.length() > 0 ? ", " : "").append(k).append(String.format(java.util.Locale.ROOT, ": %.1f..%.1f", c.floor[k], c.ceil[k]));
+        out.add(String.format(java.util.Locale.ROOT, "Deep Gardens row %d: band %d, code %d colour %d; storeys %s", y, bandOf(x, y, z), p & 31, p >> 5, fl));
+        for (GardensSites.Site s : ventsNear(x - 40, z - 40, x + 40, z + 40)) {
+            double d = Math.hypot(s.x + gv.ox - x, s.z + gv.oz - z);
+            if (d > 40) continue;
+            out.add(String.format(java.util.Locale.ROOT, "vent form %d at (%.0f, %.0f), %.0f away, top row %d, %s%s", s.form, s.x + gv.ox, s.z + gv.oz, d, s.ys,
+                    s.live ? "live" : "dead", s.form == 3 ? String.format(java.util.Locale.ROOT, ", throat to row %d%s", s.gStand, Double.isNaN(s.outletDep) ? "" : " by an outlet") : ""));
+        }
+        out.add(statLine());
+        return out;
+    }
+
+    /**
+     * Places of a band near (x, z), nearest first, for /remix tp biome and /remix view: storey floors on a grid, each
+     * with a spot to stand on ({@code bottom} is the layer's bottom row as a world y).
+     */
+    public List<Network.Place> places(int band, String what, double x, double z, int bottom, double reach, int max) {
+        List<Network.Place> out = new ArrayList<>();
+        int step = 8, R = (int) Math.ceil(reach / step);
+        for (int r = 0; r <= R && out.size() < max; r++)
+            for (int i = -r; i <= r && out.size() < max; i++)
+                for (int j = -r; j <= r && out.size() < max; j++) {
+                    if (Math.max(Math.abs(i), Math.abs(j)) != r) continue;
+                    int px = (int) Math.floor(x) + i * step, pz = (int) Math.floor(z) + j * step;
+                    PCol c = passB.col(px, pz);
+                    for (int k = 0; k < K; k++) {
+                        if (!c.foot(k) || c.ceil[k] - c.floor[k] < 5f) continue;
+                        int feet = (int) Math.floor(c.floor[k]) + 1;
+                        if (c.bandAt(feet) != band) continue;
+                        Network.Place p = new Network.Place(px + 0.5, pz + 0.5, 8, false, what + " storey " + k);
+                        p.stands.add(new double[]{px + 0.5, bottom + feet, pz + 0.5});
+                        out.add(p);
+                        break;
+                    }
+                }
+        return out;
+    }
+
+    // ================================================================================================ under the layer
+
+    /** The rows under the layer a throat can open: from the Wasteland slab's bottom (row -72, Y -600) to row -1. */
+    static final int UNDER_LO = -72;
+    /** How far from its site's centre a throat can reach under the layer: its ring with drift, and an outlet. */
+    static final double UNDER_REACH = 84;
+
+    /** A chunk's throat blocks under the layer: per column two words of row bits (row - UNDER_LO). */
+    private static final class Under {
+        int cx, cz;
+        boolean valid, any;
+        final long[] bits = new long[512];
+    }
+
+    private final ThreadLocal<Under> under = ThreadLocal.withInitial(Under::new);
+
+    /**
+     * Whether a deep vent's throat opens a block under the layer (rows -72..-1: band 3, and the Wasteland's top, where
+     * it winds down to its exit and comes out in a tunnel). Worked out per chunk, once per thread.
+     */
+    public boolean throatUnder(int x, int y, int z) {
+        if (y < UNDER_LO || y > -1) return false;
+        Under u = under.get();
+        int cx = x >> 4, cz = z >> 4;
+        if (!u.valid || u.cx != cx || u.cz != cz) fillUnder(u, cx, cz);
+        if (!u.any) return false;
+        int e = y - UNDER_LO, q = ((((x & 15) << 4) | (z & 15)) << 1) + (e >> 6);
+        return (u.bits[q] >>> (e & 63) & 1) != 0;
+    }
+
+    /** The standing deep vent of a deep site, with its exit, or null (no throat, or the vent did not stand). */
+    GardensSites.Site deepVentOf(GardensPlan.DeepSite d) {
+        for (GardensSites.Site s : decided(Math.floorDiv((int) Math.floor(d.x()), TS), Math.floorDiv((int) Math.floor(d.z()), TS)))
+            if (s.form == 3 && s.deep != null && s.deep.i() == d.i() && s.deep.kk() == d.kk()) return s;
+        return null;
+    }
+
+    private void fillUnder(Under u, int cx, int cz) {
+        u.valid = false;
+        u.any = false;
+        java.util.Arrays.fill(u.bits, 0L);
+        int x0 = cx << 4, z0 = cz << 4;
+        double[] h0 = new double[1];
+        for (GardensPlan.DeepSite d : plan.deepSitesNear(x0, z0, x0 + 15, z0 + 15, UNDER_REACH)) {
+            GardensSites.Site s = deepVentOf(d);
+            if (s == null || Double.isNaN(s.throatLevel)) continue;
+            GardensVents.Vent v = gv.table(List.of(s), (x, y, z) -> 0).get(0);
+            double[][] tab = GardensVents.throatTable(gv.throatPerm(s), v.t[6], s.gStand, v.t[36], GardensVents.DS, s.throatLevel, v.t[35], v.t[34]);
+            double[][] cur = Double.isNaN(s.outletDep) ? null
+                    : GardensExits.outletCurve(GardensExits.Site.of(gv, v), tab, s.outletDep, s.outletLen);
+            for (int i = 0; i < 16; i++)
+                for (int j = 0; j < 16; j++) {
+                    int x = x0 + i, z = z0 + j, q = (i << 4 | j) << 1;
+                    for (int y = UNDER_LO; y <= -1; y++)
+                        if (gv.tubeHit(tab, v.cx, v.cz, v.t[35], v.t[34], v.t[36], x, y, z) >= 0) {
+                            int e = y - UNDER_LO;
+                            u.bits[q + (e >> 6)] |= 1L << (e & 63);
+                            u.any = true;
+                        }
+                    if (cur != null && GardensExits.outletColumn(cur, gv.ptube, x - gv.ox, z - gv.oz, x, z, h0) >= 0)
+                        for (int y = s.gStand; y <= Math.min(-1, s.gStand + 10); y++)
+                            if (GardensExits.outletRow(gv.ptube, h0[0], s.gStand, x, y, z)) {
+                                int e = y - UNDER_LO;
+                                u.bits[q + (e >> 6)] |= 1L << (e & 63);
+                                u.any = true;
+                            }
+                }
+        }
+        u.cx = cx;
+        u.cz = cz;
+        u.valid = true;
     }
 
     static GardensRock.Storeys storeysOf(GardensStoreys b) {
