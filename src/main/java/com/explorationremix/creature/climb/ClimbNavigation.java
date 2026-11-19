@@ -134,18 +134,12 @@ public class ClimbNavigation extends net.minecraft.world.entity.ai.navigation.Pa
         }
         if (k != ClimbNodeEvaluator.WALL) return at;
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-        // the lowest row of the node's cells with rock beside it: the box is pressed against that rock. A node more than
-        // a cell tall (the giant Skein's, 0.19.3) may have rock beside its upper row only; the box, shorter than its
-        // cells, then rides at the top of them to reach it (at the bottom it touched nothing there, and fell)
-        for (int dy = 0; dy < ch; dy++) {
-            int y = n.getY() + dy;
-            boolean w = solidColumn(p, n.getX() - 1, y, n.getZ(), 0, 1), e = !w && solidColumn(p, n.getX() + cw, y, n.getZ(), 0, 1);
-            boolean no = solidColumn(p, n.getX(), y, n.getZ() - 1, 1, 0), so = !no && solidColumn(p, n.getX(), y, n.getZ() + cw, 1, 0);
-            if (!w && !e && !no && !so) continue;
-            double x = at.x + (w ? -gapSide : e ? gapSide : 0.0), z = at.z + (no ? -gapSide : so ? gapSide : 0.0);
-            return new Vec3(x, dy == 0 ? at.y : n.getY() + ch - mob.getBbHeight(), z);
-        }
-        return at;
+        double x = at.x, z = at.z;
+        if (solidColumn(p, n.getX() - 1, n.getY(), n.getZ(), 0, 1)) x -= gapSide;
+        else if (solidColumn(p, n.getX() + cw, n.getY(), n.getZ(), 0, 1)) x += gapSide;
+        if (solidColumn(p, n.getX(), n.getY(), n.getZ() - 1, 1, 0)) z -= gapSide;
+        else if (solidColumn(p, n.getX(), n.getY(), n.getZ() + cw, 1, 0)) z += gapSide;
+        return new Vec3(x, at.y, z);
     }
 
     private boolean solidColumn(BlockPos.MutableBlockPos p, int x, int y, int z, int stepX, int stepZ) {

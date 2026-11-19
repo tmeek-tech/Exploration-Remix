@@ -45,8 +45,6 @@ import java.util.Locale;
  *     <li>{@code /remix giant state <name> [ticks]}: sets the nearest one's state (rest, crawl, alert, hunt, rear,
  *     retreat): a hunt or strike is at you</li>
  *     <li>{@code /remix giant trace [ticks]}: logs how the nearest one's body moves each tick, to the server log</li>
- *     <li>{@code /remix giant roam [ticks]}: the nearest one crawls leg after leg with no rests, and its falls, the
- *     sides it clings to and how smoothly it goes are counted, each fall and the totals logged (0 ends it now)</li>
  *     <li>{@code /remix giant path}: puts you on its rift's ledge path where the nearest giant sees you, about 16
  *     blocks off (else where the path passes nearest it), facing it (for testing its hunt)</li>
  *     <li>{@code /remix giant stand [blocks]}: puts you on a glass block in the air out from the nearest giant's head,
@@ -92,17 +90,7 @@ public final class GiantSkeinCommands {
                                 .then(Commands.argument("progress", FloatArgumentType.floatArg(0.0F, 1.0F))
                                         .executes(c -> hold(c, StringArgumentType.getString(c, "phase"), FloatArgumentType.getFloat(c, "progress"))))))
                 .then(Commands.literal("trace").executes(c -> trace(c, 600))
-                        .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 12000)).executes(c -> trace(c, IntegerArgumentType.getInteger(c, "ticks")))))
-                .then(Commands.literal("roam").executes(c -> roam(c, 6000))
-                        .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 72000)).executes(c -> roam(c, IntegerArgumentType.getInteger(c, "ticks")))));
-    }
-
-    /** /remix giant roam [ticks]: the nearest one crawls leg after leg with no rests, counting its falls (0 ends it). */
-    private static int roam(CommandContext<CommandSourceStack> c, int ticks) {
-        List<GiantSkeinEntity> all = near(c, 160);
-        if (all.isEmpty()) { c.getSource().sendFailure(Component.literal("No giant Skein within 160 blocks.")); return 0; }
-        say(c, all.get(0).roam(ticks));
-        return 1;
+                        .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 12000)).executes(c -> trace(c, IntegerArgumentType.getInteger(c, "ticks")))));
     }
 
     private static void say(CommandContext<CommandSourceStack> c, String msg) {
