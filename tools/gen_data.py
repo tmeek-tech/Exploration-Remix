@@ -589,7 +589,7 @@ def biome_modifiers():
 
 
 def creature_data():
-    """The creatures' drops: the Mossback's (and what it hunts) and the Skein's."""
+    """The creatures' drops: the Mossback's (and what it hunts), the Skein's and the giant Skein's."""
     write(os.path.join(DATA, "loot_tables", "entities", "mossback.json"), {
         "type": "minecraft:entity",
         "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:mossback_hide", "functions": [
@@ -614,6 +614,20 @@ def creature_data():
                   runes.drop_pool(0.35, 0.05, [("blue_reaches", 20), ("deep_gardens", 7)])]})
     write(os.path.join(ASSETS, "models", "item", "skein_plate.json"),
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/skein_plate"}})
+    # 0.18.8: the giant Skein of the Deep Blue Rift, one to a rift and gone for good once killed, so it pays well: a
+    # handful of its long spines and big plates, and when a player kills it a rune of the Blue Reaches for certain and
+    # sometimes one of the Deep Gardens' too
+    write(os.path.join(DATA, "loot_tables", "entities", "giant_skein.json"), {
+        "type": "minecraft:entity",
+        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:giant_skein_spine", "functions": [
+            {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 3, "max": 5}},
+            {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 2}}]}]},
+                  {"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:skein_plate", "functions": [
+                      {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 4, "max": 7}}]}]},
+                  runes.drop_pool(1.0, 0.0, [("blue_reaches", None)]),
+                  runes.drop_pool(0.4, 0.1, [("deep_gardens", None)])]})
+    write(os.path.join(ASSETS, "models", "item", "giant_skein_spine.json"),
+          {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/giant_skein_spine"}})
 
 
 # Entities that are not creatures (creatures.py names those): 0.5.1's lava bomb, thrown by the Caldera's eruptions.

@@ -101,7 +101,9 @@ public final class RuneHits {
     }
 
     /** The cave hunters (and anything big) are held for half as long. */
-    public static boolean hunter(LivingEntity e) { return e instanceof MossbackEntity || e instanceof SkeinEntity || Statuses.hunter(e); }
+    public static boolean hunter(LivingEntity e) {
+        return e instanceof MossbackEntity || e instanceof SkeinEntity || e instanceof com.explorationremix.creature.GiantSkeinEntity || Statuses.hunter(e);
+    }
 
     // ------------------------------------------------------------------------------------------------ damage
 
