@@ -2,6 +2,8 @@ package com.explorationremix.creature;
 
 import com.explorationremix.world.terrain.Hashing;
 
+import java.util.function.BooleanSupplier;
+
 /**
  * Where the Blue Reaches' Skeins live from the start (0.17.0): the rules of the world-gen feature that sets them down
  * as each chunk is made ({@code world.feature.SkeinsFeature}), as plain numbers so they can be tested without a world.
@@ -14,6 +16,11 @@ import com.explorationremix.world.terrain.Hashing;
  * and since 0.19.8 never in the Deep Dark, Taran's ask), where its body has room to lie straight back from its head:
  * the first spot that will do of {@link #TRIES} random ones in the chunk, each looked for up and down from its height
  * as the spawner does. A chunk with no cave in reach of its tries has none, so the Skeins live where the caves are big.
+ *
+ * <p>The Deep Dark's rock still ends a chunk's tries, as it did when Skeins lived there ({@link #take}): a home whose
+ * first spot that would do lies in the Deep Dark is left empty rather than trying on until one turns up in the rift. So
+ * the rift keeps the very Skeins it had, where they were, and the Blue Reaches as a whole have far fewer (Taran's
+ * pick, 19 Nov 2026: "As many as now"; about 85% of their cave floor is Deep Dark).
  */
 public final class SkeinHomes {
     private SkeinHomes() {}
@@ -42,6 +49,23 @@ public final class SkeinHomes {
     /** The seed of the chunk's own random tries, so a world made again from its seed puts each Skein back where it was. */
     public static long chunkSeed(long seed, int chunkX, int chunkZ) {
         return Hashing.mix(seed ^ SALT, chunkX, chunkZ, 1);
+    }
+
+    /** What one of a home chunk's tries comes to. */
+    public enum Take { SET_DOWN, TRY_AGAIN, NONE }
+
+    /**
+     * A try that found rock in the Blue Reaches, in {@code place}: set the Skein down in the rift; end the chunk's tries,
+     * with no Skein, in the Deep Dark (the first spot that would do lay there before 0.19.8, so the tries after it never
+     * ran then either); try again anywhere else, or where the body has no {@code room} (asked only in those two, as
+     * before: it is the slow part).
+     */
+    public static Take take(BlueSpawnRules.Place place, BooleanSupplier room) {
+        return switch (place) {
+            case RIFT -> room.getAsBoolean() ? Take.SET_DOWN : Take.TRY_AGAIN;
+            case DEEP_DARK -> room.getAsBoolean() ? Take.NONE : Take.TRY_AGAIN;
+            case GEODES, OTHER -> Take.TRY_AGAIN;
+        };
     }
 
     /** The height of the scan's {@code k}th step out from {@code y0}, down and up by turns: y0, y0 - 1, y0 + 1, y0 - 2, ... */

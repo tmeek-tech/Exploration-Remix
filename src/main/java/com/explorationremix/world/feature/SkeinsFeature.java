@@ -25,8 +25,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * The Blue Reaches' Skeins, set down as each chunk is made (0.17.0), so they are there before anyone comes and stay
  * when everyone leaves, as the animals a world starts with do: a chunk that is a Skein's home ({@link SkeinHomes}) gets
  * its Skein on the rock of one of its caves, in the Deep Blue Rift, never in the Asurine Geodes nor (since 0.19.8) in
- * the Deep Dark, with room for its body to lie straight back from its head. Vanilla's own world-gen spawning only sets
- * animals on the ground under the sky, so the caves' creatures need this.
+ * the Deep Dark, with room for its body to lie straight back from its head; a home whose first spot lies in the Deep
+ * Dark is left empty, so the rift keeps the Skeins it had ({@link SkeinHomes#take}). Vanilla's own world-gen spawning
+ * only sets animals on the ground under the sky, so the caves' creatures need this.
  *
  * <p>Runs last in every chunk (band 1 is the Deep Blue Rift under every column, which carries it everywhere, as it
  * does the den lairs), once the chunk's plants, vines and ways are in. A Skein made here is kept in the new chunk and
@@ -55,8 +56,10 @@ public final class SkeinsFeature extends Feature<NoneFeatureConfiguration> {
             int x = cp.getMinBlockX() + SkeinHomes.EDGE + r.nextInt(span);
             int z = cp.getMinBlockZ() + SkeinHomes.EDGE + r.nextInt(span);
             int y0 = bottom + 1 + r.nextInt(Math.max(1, top - bottom - 1));
-            SkeinEntity.Placement spot = spot(level, type, x, y0, z, top, bottom);
-            if (spot != null && setDown(level, type, spot, r)) {
+            Found f = spot(level, type, x, y0, z, top, bottom);
+            // the Deep Dark's rock ends the tries with no Skein, so the rift keeps the very Skeins it had (Taran's pick)
+            if (f.take() == SkeinHomes.Take.NONE) return false;
+            if (f.take() == SkeinHomes.Take.SET_DOWN && setDown(level, type, f.spot(), r)) {
                 PLACED.incrementAndGet();
                 return true;
             }
@@ -64,24 +67,26 @@ public final class SkeinsFeature extends Feature<NoneFeatureConfiguration> {
         return false;
     }
 
+    /** The rock a try found and what it comes to ({@link SkeinHomes#take}). */
+    private record Found(@Nullable SkeinEntity.Placement spot, SkeinHomes.Take take) {}
+
+    private static final Found NOTHING = new Found(null, SkeinHomes.Take.TRY_AGAIN);
+
     /**
      * The rock nearest {@code y0} up and down column (x, z) that a Skein can be set down on, as the spawner looks: the
-     * first found, kept only if it lies in the Blue Reaches, in a place Skeins live, with room for the body.
+     * first found, which must lie in the Blue Reaches, and what it comes to there ({@link SkeinHomes#take}).
      */
-    @Nullable
-    private static SkeinEntity.Placement spot(WorldGenLevel level, EntityType<SkeinEntity> type, int x, int y0, int z, int top, int bottom) {
+    private static Found spot(WorldGenLevel level, EntityType<SkeinEntity> type, int x, int y0, int z, int top, int bottom) {
         for (int k = 0; k <= 2 * SkeinHomes.SCAN; k++) {
             int y = SkeinHomes.scanY(y0, k);
             if (y < bottom || y > top) continue;
             SkeinEntity.Placement p = SkeinEntity.placement(level, type, new BlockPos(x, y, z));
             if (p == null) continue;
-            if (!BlueSpawnRules.inBand(p.pos().y, top, bottom)) return null;
+            if (!BlueSpawnRules.inBand(p.pos().y, top, bottom)) return NOTHING;
             String biome = level.getBiome(BlockPos.containing(p.pos())).unwrapKey().map(key -> key.location().toString()).orElse("");
-            if (!BlueSpawnRules.skeinsLive(BlueSpawnRules.place(biome))) return null;
-            if (SkeinEntity.openLength(level, type, p) < SkeinEntity.BODY_ROOM) return null;
-            return p;
+            return new Found(p, SkeinHomes.take(BlueSpawnRules.place(biome), () -> SkeinEntity.openLength(level, type, p) >= SkeinEntity.BODY_ROOM));
         }
-        return null;
+        return NOTHING;
     }
 
     private static boolean setDown(WorldGenLevel level, EntityType<SkeinEntity> type, SkeinEntity.Placement spot, RandomSource r) {
