@@ -62,17 +62,21 @@ final class GardensDress {
     /** The dripstone skin's dither spread, and the margin over the bar that turns the rock behind a face too. */
     static final double SKIN_DITHER = 0.10, SKIN_DEEP = 0.06;
     static final int BODY = 1, DRIP_GAP = 4, REACH_XZ = 9, REACH_Y = 5, STEM_MIN = 5;
-    /** The seep glow's runs: noise length along the shore, and the bar (about 2 shore blocks in 5 glow). */
-    static final double SEEP_L = 6.0, SEEP_KEEP = 0.10;
+    /**
+     * The seep glow's runs: noise length along the shore, and the bar (0.10 before the sunken pools, about 2 shore blocks
+     * in 5; their dry edges give about six times the shore, so 0.55 keeps the glow's amount: 1310 blocks against 1213
+     * over the 16 tiles at x and z -512..-1).
+     */
+    static final double SEEP_L = 6.0, SEEP_KEEP = 0.55;
     /** How far (columns) the dressing's neighbour steps reach: the scarp's 16 rounds, the wells' 10, the heat's box. */
     static final int REACH = 24;
 
     /** The 2D fields the dressing reads over the window, per storey k and column q = i * nz + j. */
     static final class Fields {
-        final float[][] floor = new float[K][], wd = new float[K][], mst = new float[K][], vw = new float[K][],
-                pools = new float[K][];
+        final float[][] floor = new float[K][], wd = new float[K][], mst = new float[K][], vw = new float[K][];
         final int[][] dom = new int[K][], vnear = new int[K][];
-        final boolean[][] foot = new boolean[K][];
+        /** The storeys' footprint, and where oil may lie (GardensStoreys.oilFoot). */
+        final boolean[][] foot = new boolean[K][], oil = new boolean[K][];
         float[] hot, mound;
         /** Heat by depth, per row (gen3.g_rows). */
         final float[] grow = new float[SY];
@@ -206,6 +210,7 @@ final class GardensDress {
         lap("wells");
         counts.put("loose final", keepMain());
         lap("keepMain3");
+        counts.put("oil left open, back to rock", oilHeld());
         counts.put("loose vent blocks final", changedVent(before));
         counts.put("seep glow", seep(ps[11]));
         lap("seep");
@@ -1155,19 +1160,85 @@ final class GardensDress {
 
     // ================================================================================================ oil, wells, seep
 
-    /** dress3._oil3: oil fills each storey's dips up to its pool level (a thin pool on rock). Returns blocks. */
+    /** Pools under this many columns stay dry rock. */
+    static final int OIL_MIN = 4;
+
+    /**
+     * The crude oil (2026-11-19: sunken flat pools; Taran's "Knee-deep, one block"): on the oil's ground
+     * (GardensStoreys.oilFoot) the floor's top block becomes oil where its four sides are rock at that row and stand at
+     * the same floor (air over them) or as a wall at least two high. So every pool lies one block deep and flat, held
+     * by the rock round it, and every way out is one block up: where the floor steps, the block on each side of the step
+     * stays dry rock. Never under a mat, a crust or a vent part, never with anything standing on it. Pools under OIL_MIN
+     * columns go. Every column reads only its neighbours and the oil's ground, so pools match across tile seams.
+     * Returns blocks.
+     */
     int oil() {
-        int n = 0;
+        IntList cand = new IntList();
         for (int k = 0; k < K; k++)
-            for (int q = 0; q < nx * nz; q++) {
-                if (!f.foot[k][q]) continue;
-                float fl = f.floor[k][q], lvl = f.pools[k][q];
-                if (lvl - fl < 0.6) continue;
-                int fi = (int) Math.floor(fl), top = (int) Math.floor(lvl), base = q * SY;
-                for (int y = Math.max(fi - 2, SEAL + 1); y < Math.min(top, SY - SEAL); y++) {
+            for (int i = 1; i < nx - 1; i++)
+                for (int j = 1; j < nz - 1; j++) {
+                    int q = i * nz + j;
+                    if (!f.foot[k][q] || !f.oil[k][q]) continue;
+                    int fi = (int) Math.floor(f.floor[k][q]), base = q * SY, r = -1;
+                    // the floor's top block: under the first air over rock near the storey's floor
+                    for (int y = Math.max(fi - 2, SEAL + 2); y <= Math.min(fi + 2, SY - SEAL - 3); y++)
+                        if (mat[base + y] == AIR && !open(mat[base + y - 1])) { r = y - 1; break; }
+                    if (r < 0) continue;
+                    int b = base + r;
+                    if ((mat[b] != ROCK && mat[b] != TALUS) || open(mat[b - 1]) || mat[b + 1] != AIR || mat[b + 2] != AIR) continue;
+                    if (vpart[b] != 0 || vpart[b + 1] != 0 || vid[b] != 0) continue;
+                    boolean ok = true;
+                    for (int e : new int[]{b + sx, b - sx, b + SY, b - SY}) {
+                        // rock at the oil's row with rock under it (no lip over a drop: one the loose-rock pass would
+                        // clear once the oil cut it off); over it air (the same floor) or a wall two high (no 1-block step)
+                        if (open(mat[e]) || open(mat[e - 1]) || (!open(mat[e + 1]) && open(mat[e + 2]))) { ok = false; break; }
+                    }
+                    if (ok) cand.add(b);
+                }
+        int[] c = Arrays.copyOf(cand.a, cand.n);
+        Arrays.sort(c);
+        // pools: neighbours at the same row (two sides at different rows never both pass the test)
+        boolean[] seen = new boolean[c.length];
+        int[] queue = new int[c.length];
+        int n = 0;
+        for (int s0 = 0; s0 < c.length; s0++) {
+            if (seen[s0]) continue;
+            int qh = 0, qt = 0;
+            queue[qt++] = s0;
+            seen[s0] = true;
+            boolean edge = false;
+            while (qh < qt) {
+                int s = queue[qh++], b = c[s], q = b / SY, i = q / nz, j = q - i * nz;
+                if (i <= 1 || j <= 1 || i >= nx - 2 || j >= nz - 2) edge = true;
+                for (int e : new int[]{b + sx, b - sx, b + SY, b - SY}) {
+                    int x = Arrays.binarySearch(c, e);
+                    if (x >= 0 && !seen[x]) {
+                        seen[x] = true;
+                        queue[qt++] = x;
+                    }
+                }
+            }
+            if (qt < OIL_MIN && !edge) continue;
+            for (int u = 0; u < qt; u++) mat[c[queue[u]]] = OIL;
+            n += qt;
+        }
+        return n;
+    }
+
+    /**
+     * After the last loose-rock pass: oil with open air beside or under it (rock the pass cleared) turns back to rock, so
+     * no pool spills or steps. Returns blocks.
+     */
+    int oilHeld() {
+        int n = 0;
+        for (int i = 1; i < nx - 1; i++)
+            for (int j = 1; j < nz - 1; j++) {
+                int base = (i * nz + j) * SY;
+                for (int y = SEAL + 1; y < SY - SEAL; y++) {
                     int b = base + y;
-                    if (mat[b] == AIR && mat[b - 1] != AIR && vpart[b] == 0) {
-                        mat[b] = OIL;
+                    if (mat[b] != OIL) continue;
+                    if (mat[b - 1] == AIR || mat[b - 1] == OIL || mat[b + sx] == AIR || mat[b - sx] == AIR || mat[b + SY] == AIR || mat[b - SY] == AIR) {
+                        mat[b] = ROCK;
                         n++;
                     }
                 }
@@ -1235,8 +1306,9 @@ final class GardensDress {
 
     /**
      * dress3._seep3 (Taran's pick, 2026-11-18): a faint light-blue glow along the oil seeps in the top band. The dry
-     * floor block under every walkable shore spot (air beside oil, 8 ways, at the oil's row) becomes SEEP where a slow
-     * noise is high, so the glow runs in broken lines along the oil's edge; never on a vent part. Returns blocks.
+     * floor block under every walkable shore spot (a floor block beside oil, 8 ways, at the oil's row: the pools are
+     * sunk into the floor) becomes SEEP where a slow noise is high, so the glow runs in broken lines along the oil's
+     * edge; never on a vent part. Returns blocks.
      */
     int seep(int[] p) {
         int n = 0;
@@ -1251,7 +1323,7 @@ final class GardensDress {
                     if (fb != ROCK && fb != TALUS) continue;
                     boolean near = false;
                     for (int dx = -1; dx <= 1; dx++)
-                        for (int dz = -1; dz <= 1; dz++) if (mat[b + dx * sx + dz * SY] == OIL) near = true;
+                        for (int dz = -1; dz <= 1; dz++) if (mat[b - 1 + dx * sx + dz * SY] == OIL) near = true;
                     if (!near) continue;
                     if (f.dom[storeyAt(q, y)][q] != 2) continue;   // the band of the crust block itself (row y - 1)
                     mat[b - 1] = SEEP;

@@ -739,7 +739,7 @@ public final class GardensField {
             int[][] nearV = new int[K][n2];
             for (int[] row : nearV) java.util.Arrays.fill(row, -1);
             gv.ventWeights(vf.vents, x0, z0, nx, nz, wk, nearV, new boolean[n2]);
-            float[][] pools = st.pools();
+            boolean[][] oilFoot = st.oilFoot();
             for (int k = 0; k < K; k++) {
                 fd.floor[k] = st.floor[k];
                 fd.wd[k] = st.wd[k];
@@ -753,7 +753,7 @@ public final class GardensField {
                 fd.dom[k] = dom;
                 fd.vw[k] = wk[k];
                 fd.vnear[k] = nearV[k];
-                fd.pools[k] = pools[k];
+                fd.oil[k] = oilFoot[k];
                 fd.foot[k] = st.foot[k];
             }
             GardensDress dr = new GardensDress(plan, gv, vf.grid, vf.vents, vf.doorOk, fd, gates);

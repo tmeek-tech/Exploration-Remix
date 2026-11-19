@@ -436,25 +436,63 @@ final class GardensStoreys {
         return best;
     }
 
-    /** gen3.carve's oil levels: each dip's spill level, at most its style's depth over the floor; edges drain. */
-    float[][] pools() {
-        float[][] out = new float[K][];
+    /**
+     * The oil's ground (2026-11-19, replacing gen3.carve's levels, whose surfaces followed the slope a band's depth over
+     * the floor and drained at the window's edge, so pools stepped down slopes and changed at tile seams): how far over
+     * the lowest standing floor within OIL_R a column may stand and still hold oil, per band, moved by a slow noise so
+     * some low ground stays dry. The reaches give 0.19.6's oil blocks in each band (seed 8675309, the 16 tiles at x and
+     * z -512..-1: 4631, 32071 and 44894 against 4724, 32173 and 44577).
+     */
+    static final int OIL_R = 24;
+    static final float OIL_DOMES = 0.45f, OIL_HALLS = 1.45f, OIL_BEDS = 3.0f, OIL_AMP = 0.8f;
+    static final double OIL_L = 90.0;
+
+    /**
+     * Where oil may lie, per storey: standing columns (headroom over 3) whose floor is at most the band's reach over the
+     * lowest standing floor within OIL_R (a square round the column), the reach moved by a slow noise. A column reads
+     * only ground within OIL_R, so the answer never depends on the window (its margin covers OIL_R). The dressing sinks
+     * the pools into the rock and keeps each one flat ({@link GardensDress#oil}).
+     */
+    boolean[][] oilFoot() {
+        if (xs != null) throw new IllegalStateException("the oil's ground needs a window");
+        int[] pn = plan.perm(plan.seed + 7771);
+        float[] reachN = new float[n];
+        for (int q = 0; q < n; q++) reachN[q] = OIL_AMP * (float) GardensNoise.fbm2(pn, X(q) / OIL_L, Z(q) / OIL_L, 2);
+        float[] a = new float[n], t = new float[n], low = new float[n];
+        int[] dq = new int[Math.max(nx, nz)];
+        boolean[][] out = new boolean[K][];
         for (int k = 0; k < K; k++) {
-            float[] fl = new float[n];
             boolean[] ft = new boolean[n];
             for (int q = 0; q < n; q++) {
-                fl[q] = (float) Math.floor(floor[k][q]);
                 ft[q] = foot[k][q] && ceil[k][q] - floor[k][q] > 3f;
+                a[q] = ft[q] ? floor[k][q] : Float.POSITIVE_INFINITY;
             }
-            float[] spill = GardensMath.poolLevels(fl, ft, nx, nz, 99f);
-            float[] p = new float[n];
+            // the lowest standing floor within OIL_R: along z, then along x
+            for (int i = 0; i < nx; i++) minRun(a, i * nz, 1, nz, OIL_R, t, dq);
+            for (int j = 0; j < nz; j++) minRun(t, j, nz, nx, OIL_R, low, dq);
+            boolean[] o = new boolean[n];
             for (int q = 0; q < n; q++) {
-                float depth = 1.2f * wd[k][q] + 1.6f * wh[k][q] + 2.5f * wb[k][q];
-                p[q] = Math.min(spill[q], floor[k][q] + depth);
+                if (!ft[q]) continue;
+                float reach = OIL_DOMES * wd[k][q] + OIL_HALLS * wh[k][q] + OIL_BEDS * wb[k][q] + reachN[q];
+                o[q] = floor[k][q] <= low[q] + reach;
             }
-            out[k] = p;
+            out[k] = o;
         }
         return out;
+    }
+
+    /** out at off + j * stride = the least of a over j - r .. j + r (clipped to 0 .. len - 1): a sliding minimum. */
+    static void minRun(float[] a, int off, int stride, int len, int r, float[] out, int[] dq) {
+        int h = 0, t = 0, next = 0;
+        for (int j = 0; j < len; j++) {
+            for (; next < len && next <= j + r; next++) {
+                float v = a[off + next * stride];
+                while (t > h && a[off + dq[t - 1] * stride] >= v) t--;
+                dq[t++] = next;
+            }
+            while (dq[h] < j - r) h++;
+            out[off + j * stride] = a[off + dq[h] * stride];
+        }
     }
 
     // ================================================================================================ gate plumbing

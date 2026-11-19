@@ -332,14 +332,48 @@ class GardensFieldTest {
     }
 
     /**
+     * The crude oil lies in flat, sunken pools (2026-11-19): over the area every oil block has rock or oil on its four
+     * sides and rock under it, and no oil over it, so no pool's surface steps and none spills; every pool has a way out
+     * one block up (a side whose block has air over it, or oil leading to one). At least 1000 oil blocks lie in the area
+     * for the check to mean anything, some in each band.
+     */
+    @Test
+    void theOilLiesFlatAndHeld() {
+        GardensField g = terrain().gardens;
+        List<String> fails = new ArrayList<>();
+        int[] byBand = new int[3];
+        int oil = 0, shore = 0;
+        for (int x = AX + 1; x < AX + AS - 1; x++)
+            for (int z = AZ + 1; z < AZ + AS - 1; z++)
+                for (int y = 1; y < GardensPlan.SY - 2; y++) {
+                    if ((g.packed(x, y, z) & 31) != GardensField.C_OIL) continue;
+                    oil++;
+                    byBand[g.band(x, y, z)]++;
+                    String at = x + " " + y + " " + z;
+                    int under = g.packed(x, y - 1, z) & 31, over = g.packed(x, y + 1, z) & 31;
+                    if ((under == GardensField.C_AIR || under == GardensField.C_OIL) && fails.size() < 20) fails.add("no rock under the oil at " + at);
+                    if (over != GardensField.C_AIR && fails.size() < 20) fails.add("oil not open over it (code " + over + ") at " + at);
+                    int[][] side = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+                    for (int[] d : side) {
+                        int c = g.packed(x + d[0], y, z + d[1]) & 31, up = g.packed(x + d[0], y + 1, z + d[1]) & 31;
+                        if (c == GardensField.C_AIR && fails.size() < 20) fails.add("oil open at its side at " + at);
+                        if (c != GardensField.C_AIR && c != GardensField.C_OIL && up == GardensField.C_AIR) shore++;
+                    }
+                }
+        System.out.printf(Locale.ROOT, "theOilLiesFlatAndHeld: %d oil blocks (domes %d, halls %d, beds %d), %d shore sides one block up%n",
+                oil, byBand[0], byBand[1], byBand[2], shore);
+        assertTrue(fails.isEmpty(), String.join("\n", fails));
+        assertTrue(oil >= 1000 && byBand[0] > 0 && byBand[1] > 0 && byBand[2] > 0, "too little oil to check: " + oil);
+        assertTrue(shore > oil / 4, "too few ways out of the pools: " + shore + " for " + oil + " oil blocks");
+    }
+
+    /**
      * A block tile's blocks never depend on the window they are made in, so tiles agree at their seams: the tile by the
      * deep vent (whose foot crosses the tile's seam at z -256) made over the game's window (40 round it) and over one
      * reaching 64 columns farther on its low sides (the vents, the rubble, the settling and the dressing all see more
-     * round it) agree block for block, with its floors and bands. All but the oil and the seeps along it: the pools
-     * spill at the window's edges (GardensStoreys.pools), so a dip the window cuts holds a different level. The
-     * dressing that rests on the oil follows it, in the oil's columns and beside them: a hanging point keeps its rows
-     * of air over the pool, and the skin spreads from rock the seep glow takes. Those blocks are counted, not compared
-     * (782 of oil or seep and 16 of dressing on them when pinned).
+     * round it) agree block for block, with its floors and bands, the oil and the seep glow along it included (since
+     * the sunken pools, 2026-11-19: a pool reads only ground within GardensStoreys.OIL_R of it; before them the pools
+     * spilled at the window's edges, and 782 blocks of oil or seep and 16 of dressing on them differed).
      */
     @Test
     void aTileIsTheSameFromAnyWindow() {
@@ -383,6 +417,8 @@ class GardensFieldTest {
         System.out.printf(Locale.ROOT, "aTileIsTheSameFromAnyWindow: tile %d,%d, %d and %d vents in the windows, %d and %d ms, %d oil or seep blocks differ, %d dressing blocks on them%n",
                 cx0, cz0, a.vents, b.vents, a.ms, b.ms, oil, onOil);
         assertEquals(0, differ, "blocks that differ between the windows, first at " + first);
+        assertEquals(0, oil, "oil or seep blocks that differ between the windows");
+        assertEquals(0, onOil, "dressing blocks beside differing oil");
         assertArrayEquals(a.floors, b.floors, "the floors");
         assertArrayEquals(a.dom, b.dom, "the bands");
     }
