@@ -601,6 +601,18 @@ final class GardensSites {
     /** vents.deep_vents: a live beehive with the round profile on each deep site (a plain one where the gap is short). */
     Site deepVent(GardensPlan.DeepSite d) { return deepVent(d, false); }
 
+    /** The deep vent's height over its site's floor: at least 22 for a deep vent with a throat, else a plain live vent. */
+    static double deepH(GardensPlan.DeepSite d) {
+        int ys = (int) Math.floor(d.fmax()) + 1;
+        return Math.min(30.0, d.hd() - 6 - (ys - d.f0()));
+    }
+
+    /**
+     * Whether a deep site can have a throat at all (its gap is tall enough), from the site alone. Only about 1 in 25
+     * fails this (seeds 1, 2, 8004 and 8675309); the exit search and the vent's standing decide the rest.
+     */
+    static boolean mayThroat(GardensPlan.DeepSite d) { return deepH(d) >= 22; }
+
     /**
      * As above; with {@code noThroat} (the game's, for a deep site whose throat finds no way into the Wasteland) it is
      * the plain live vent a short gap makes.
@@ -613,7 +625,7 @@ final class GardensSites {
         v.Rf = d.Rf();
         v.ys = (int) Math.floor(d.fmax()) + 1;
         v.yLo = (int) Math.floor(d.fmin());
-        v.H = Math.min(30.0, d.hd() - 6 - (v.ys - d.f0()));
+        v.H = deepH(d);
         v.form = 3;
         v.k = 0;
         v.x = d.x() - ox;

@@ -857,6 +857,34 @@ public final class GardensField {
         return (u.bits[q] >>> (e & 63) & 1) != 0;
     }
 
+    /**
+     * A standing deep vent with a throat: its centre, the row of its floor, the row its throat comes out at, and the
+     * middle of the throat's mouth on the vent's floor (where the helix starts, on the ring round the vent's axis).
+     */
+    public record Throat(double x, double z, int floorRow, int exitRow, double mouthX, double mouthZ) {}
+
+    /**
+     * The standing deep vents whose throats wind down into the Wasteland, nearest first, of the deep sites within
+     * {@code reach} of (x, z), at most {@code max} (for /remix tp deepvent: a site whose decisions are not made yet costs
+     * seconds, so call it off the server thread).
+     */
+    public List<Throat> throatsNear(double x, double z, double reach, int max) {
+        List<GardensPlan.DeepSite> ds = new ArrayList<>(plan.deepSitesNear(x - reach, z - reach, x + reach, z + reach, 0));
+        ds.sort(java.util.Comparator.comparingDouble(d -> Math.hypot(d.x() - x, d.z() - z)));
+        List<Throat> out = new ArrayList<>();
+        for (GardensPlan.DeepSite d : ds) {
+            if (out.size() >= max || Math.hypot(d.x() - x, d.z() - z) > reach) break;
+            if (exits == null || !GardensSites.mayThroat(d)) continue;
+            GardensSites.Site s = deepVentOf(d);
+            if (s == null || Double.isNaN(s.throatLevel)) continue;
+            // the helix starts level at the vent's floor, on the ring of radius Rh at angle phiP (no drift there yet)
+            GardensVents.Vent v = gv.table(List.of(s), (qx, qy, qz) -> 0).get(0);
+            double phi = v.t[35], rh = v.t[36];
+            out.add(new Throat(s.x + gv.ox, s.z + gv.oz, s.ys, s.gStand, v.cx + rh * Math.cos(phi) + gv.ox, v.cz + rh * Math.sin(phi) + gv.oz));
+        }
+        return out;
+    }
+
     /** The standing deep vent of a deep site, with its exit, or null (no throat, or the vent did not stand). */
     GardensSites.Site deepVentOf(GardensPlan.DeepSite d) {
         for (GardensSites.Site s : decided(Math.floorDiv((int) Math.floor(d.x()), TS), Math.floorDiv((int) Math.floor(d.z()), TS)))
@@ -870,7 +898,11 @@ public final class GardensField {
         java.util.Arrays.fill(u.bits, 0L);
         int x0 = cx << 4, z0 = cz << 4;
         double[] h0 = new double[1];
-        for (GardensPlan.DeepSite d : plan.deepSitesNear(x0, z0, x0 + 15, z0 + 15, UNDER_REACH)) {
+        // no exit search, no throat (every deep site is then a plain live vent)
+        List<GardensPlan.DeepSite> near = exits == null ? List.of() : plan.deepSitesNear(x0, z0, x0 + 15, z0 + 15, UNDER_REACH);
+        for (GardensPlan.DeepSite d : near) {
+            // a site whose gap is too short for a deep vent never has a throat: no need for the decisions round it
+            if (!GardensSites.mayThroat(d)) continue;
             GardensSites.Site s = deepVentOf(d);
             if (s == null || Double.isNaN(s.throatLevel)) continue;
             GardensVents.Vent v = gv.table(List.of(s), (x, y, z) -> 0).get(0);

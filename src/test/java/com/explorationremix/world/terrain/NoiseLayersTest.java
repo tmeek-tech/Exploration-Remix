@@ -291,12 +291,15 @@ class NoiseLayersTest {
     /**
      * The fields are pure functions of the seed: density, the per-block pass, fluid, biome and the look queries answer
      * the same on four threads in shuffled order as on one, and as a fresh instance does (their caches are per thread
-     * and checked by position, so far apart queries that share a cache slot do not mix).
+     * and checked by position, so far apart queries that share a cache slot do not mix). The deep vents' throats that
+     * come out in the Wasteland's top rows are off here (0.19.1): each needs the vent field's decisions round its site,
+     * seconds of work a site over these 3000 x 3000 blocks, and GardensFieldTest asks them on four threads.
      */
     @Test
     void fieldsArePureOnAnyThread() throws Exception {
         long seed = 12345L;
         Terrain one = new Terrain(TerrainSettings.defaults(), -64, seed);
+        one.gardens.exits = null;
         Shape s = one.shape;
         Random r = new Random(11);
         int n = 20000;
@@ -310,6 +313,7 @@ class NoiseLayersTest {
         long[] alone = new long[n];
         for (int k = 0; k < n; k++) alone[k] = probe(one, pts[k]);
         Terrain fresh = new Terrain(TerrainSettings.defaults(), -64, seed);
+        fresh.gardens.exits = null;
         List<Integer> order = new ArrayList<>();
         for (int k = 0; k < n; k++) order.add(k);
         Collections.shuffle(order, new Random(13));
