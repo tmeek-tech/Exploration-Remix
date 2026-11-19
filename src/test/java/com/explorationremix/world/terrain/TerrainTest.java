@@ -341,7 +341,8 @@ class TerrainTest {
     }
 
     /**
-     * Each layer's fluid lies flat at its table. Above it only perched water: the Lantern Lake's perched lakes, each flat
+     * Each layer's fluid lies flat at its table (the Deep Gardens, the dry vent field since 0.19.1, have none: every
+     * sample there is air). Above it only perched water: the Lantern Lake's perched lakes (until 0.19.1), each flat
      * at its own level, and the pools of the Basalt Galleries' Obsidian Tubes. Under it the table's fluid but in a gate's
      * passage, and in the Wasteland, where the Galleries open into it, air ({@link Join#AIR_BETA}), and within {@link
      * WastelandField#crDry} of a hole the Galleries open with a ramp (its crater may go under the table): its lava pools
@@ -357,6 +358,11 @@ class TerrainTest {
             int x = r.nextInt(1200) - 600, z = r.nextInt(1200) - 600;
             int y = t.shape.bottom(li) + r.nextInt(t.shape.height(li));
             int f = t.fluidAt(x, y, z);
+            if (li == Terrain.GARDENS) {
+                // the Deep Gardens are the dry vent field since 0.19.1: no water over or under their old table
+                assertEquals(Terrain.AIR, f, "fluid in the dry Deep Gardens at " + x + " " + y + " " + z);
+                continue;
+            }
             if (y >= t.shape.waterY(li)) {
                 if (f != Terrain.AIR) assertTrue(f == Terrain.WATER && (li == Terrain.GALLERIES || inPerchedLake(t, li, x, y, z)), "fluid above the table at " + x + " " + y + " " + z);
             } else if (li == Terrain.WASTELAND) {
@@ -379,33 +385,8 @@ class TerrainTest {
         return false;
     }
 
-    /** No perched lake drains: every water block in its top layers is walled by rock or more water (planned layers). */
-    @Test
-    void perchedLakesHoldTheirWater() {
-        int lakes = 0;
-        for (long seed : SEEDS) {
-            Terrain t = terrain(seed);
-            for (int[] c : CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
-                for (Net.Chamber hl : t.network.net(li, c[0], c[1]).ch) {
-                    // the perched lakes and the pools at the wells' feet
-                    if (!hl.keep || !Network.pool(hl) || hl.lakeY <= t.shape.waterY(li) + 0.5) continue;
-                    lakes++;
-                    int top = (int) Math.ceil(hl.lakeY) - 1, reach = (int) Math.ceil(hl.R()) + 1;
-                    int cx = (int) Math.floor(hl.x), cz = (int) Math.floor(hl.z);
-                    for (int y = top; y >= top - 3; y--) for (int x = cx - reach; x <= cx + reach; x++) for (int z = cz - reach; z <= cz + reach; z++) {
-                        if (t.rawDensity(x, y, z) >= 0 || t.fluidAt(x, y, z) != Terrain.WATER) continue;
-                        int[][] sides = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}};
-                        for (int[] n : sides) {
-                            int nx = x + n[0], ny = y + n[1], nz = z + n[2];
-                            assertFalse(t.rawDensity(nx, ny, nz) < 0 && t.fluidAt(nx, ny, nz) == Terrain.AIR,
-                                    "lake at " + cx + " " + cz + " drains from " + x + " " + y + " " + z + " into " + nx + " " + ny + " " + nz + " seed " + seed);
-                        }
-                    }
-                }
-            }
-        }
-        assertTrue(lakes > 0, "no perched lakes to check");
-    }
+    // perchedLakesHoldTheirWater went with the Deep Gardens' plans (0.19.1): the perched lakes and the wells' pools were
+    // theirs (the Lantern Lake's), and the Blue Reaches, the one planned layer left, plan none; the vent field is dry.
 
     /**
      * Each 600-block cell draws its own plans, so a seam would show as sharp rock walls lined up along the cell

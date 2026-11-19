@@ -130,7 +130,7 @@ class WastelandFieldTest {
             if (s == null) {
                 long seed = MORE_BOXES[i][0];
                 int cx = (int) MORE_BOXES[i][1], cz = (int) MORE_BOXES[i][2];
-                Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+                Terrain t = terrain(TerrainSettings.defaults(), seed);
                 int top = t.shape.top(Terrain.WASTELAND), bot = t.shape.bottom(Terrain.WASTELAND), x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
                 NoiseVox v = NoiseVox.build(t, x0, z0, SIZE, SIZE, bot - 24, top + 1).graph();
                 s = measure(t, v, seed, x0, z0, false);
@@ -174,7 +174,7 @@ class WastelandFieldTest {
      * square is decorated, so the inner square's edges have their neighbours' features too.
      */
     static Stats[] measureBoth(long seed, int cx, int cz) {
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+        Terrain t = terrain(TerrainSettings.defaults(), seed);
         int li = Terrain.WASTELAND, top = t.shape.top(li), bot = t.shape.bottom(li);
         int x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
         NoiseVox v = NoiseVox.build(t, x0, z0, SIZE, SIZE, bot - 24, top + 1).graph();
@@ -197,7 +197,7 @@ class WastelandFieldTest {
 
     /** A box with the decorations laid on it as {@link #measureBoth} lays them, and nothing else measured. */
     static DecorBox decorate(long seed, int cx, int cz) {
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+        Terrain t = terrain(TerrainSettings.defaults(), seed);
         int li = Terrain.WASTELAND, top = t.shape.top(li), bot = t.shape.bottom(li);
         int x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
         NoiseVox v = NoiseVox.build(t, x0, z0, SIZE, SIZE, bot - 24, top + 1).graph();
@@ -266,7 +266,7 @@ class WastelandFieldTest {
         for (int b = 0; b < OPENING_BOXES; b++) {
             long seed = rnd.nextLong() % 100000000L;
             int cx = (rnd.nextInt(200) - 100) * 512 + 256, cz = (rnd.nextInt(200) - 100) * 512 + 256;
-            Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+            Terrain t = terrain(TerrainSettings.defaults(), seed);
             int bot = t.shape.bottom(Terrain.WASTELAND), x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
             NoiseVox v = NoiseVox.build(t, x0, z0, SIZE, SIZE, bot - 16, bot + 16);
             int[] op = countOpenings(v, bot, x0, z0, new boolean[SIZE * SIZE], new StringBuilder());
@@ -304,7 +304,7 @@ class WastelandFieldTest {
     }
 
     static Stats measure(long seed, int cx, int cz) {
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+        Terrain t = terrain(TerrainSettings.defaults(), seed);
         int top = t.shape.top(Terrain.WASTELAND), bot = t.shape.bottom(Terrain.WASTELAND);
         int x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
         return measure(t, NoiseVox.build(t, x0, z0, SIZE, SIZE, bot - 24, top + 1).graph(), seed, x0, z0, true);
@@ -901,7 +901,7 @@ class WastelandFieldTest {
     void noFloatingRock() {
         for (Stats s : allStats()) assertEquals(0, s.floating, "floating rock, seed " + s.seed + ":" + s.floatAt);
         for (long[] b : FLOAT_BOXES) {
-            Terrain t = new Terrain(TerrainSettings.defaults(), -64, b[0]);
+            Terrain t = terrain(TerrainSettings.defaults(), b[0]);
             int top = t.shape.top(Terrain.WASTELAND), bot = t.shape.bottom(Terrain.WASTELAND);
             NoiseVox v = NoiseVox.build(t, (int) b[1] - FLOAT_SIZE / 2, (int) b[2] - FLOAT_SIZE / 2, FLOAT_SIZE, FLOAT_SIZE, bot - 24, top + 1);
             List<int[]> fl = v.floating(8);
@@ -1072,7 +1072,7 @@ class WastelandFieldTest {
      */
     @Test
     void runsAreShort() {
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 1);
+        Terrain t = terrain(TerrainSettings.defaults(), 1);
         WastelandField f = t.wasteland;
         // the sites below are the field's: the distance to the nearest cell boundary agrees with WastelandField.cells
         Random r = new Random(3);
@@ -1134,7 +1134,7 @@ class WastelandFieldTest {
      */
     @Test
     void runsAreShortDoorToDoor() {
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 1);
+        Terrain t = terrain(TerrainSettings.defaults(), 1);
         WastelandField f = t.wasteland;
         WastelandField.Col scratch = new WastelandField.Col();
         List<Double> runs = new ArrayList<>();
@@ -1311,7 +1311,7 @@ class WastelandFieldTest {
      */
     @Test
     void fluidRule() {
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 2);
+        Terrain t = terrain(TerrainSettings.defaults(), 2);
         int li = Terrain.WASTELAND, bot = t.shape.bottom(li), W = t.shape.waterY(li);
         Random r = new Random(17);
         Spread spread = new Spread(r, 20000, 512, 5000);
@@ -1349,7 +1349,7 @@ class WastelandFieldTest {
      */
     @Test
     void noBandStoneAtTheJoin() {
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 8004);
+        Terrain t = terrain(TerrainSettings.defaults(), 8004);
         Shape s = t.shape;
         assertEquals(-832, s.bottom(Terrain.GALLERIES));
         assertEquals(-545, s.top(Terrain.WASTELAND));
@@ -1382,7 +1382,7 @@ class WastelandFieldTest {
         List<Double> discs = new ArrayList<>(), natural = new ArrayList<>();
         int worst = 0;
         for (long seed = 1; seed <= 4; seed++) {
-            Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+            Terrain t = terrain(TerrainSettings.defaults(), seed);
             for (int cx = -1; cx <= 1; cx++) for (int cz = -1; cz <= 1; cz++) {
                 double[] l = landing(t, cx, cz, 70);
                 int w = (int) l[0];
@@ -1546,17 +1546,17 @@ class WastelandFieldTest {
      */
     @Test
     void configuredHeights() {
-        assertEquals(5, new Terrain(TerrainSettings.defaults(), -64, 1).wasteland.sheets);
+        assertEquals(5, terrain(TerrainSettings.defaults(), 1).wasteland.sheets);
         int[] heights = {64, 96, 160}, sheets = {2, 3, 6};
         List<String> bad = new ArrayList<>();
         double[] steps = new double[5];
         for (int h = 0; h < heights.length; h++) {
-            Terrain t = new Terrain(withWastelandHeight(heights[h]), -64, 1);
+            Terrain t = terrain(withWastelandHeight(heights[h]), 1);
             assertEquals(sheets[h], t.wasteland.sheets, "sheets at height " + heights[h]);
             landsGently(t, "height " + heights[h], bad, steps);
         }
-        for (int band : new int[]{8, 64}) landsGently(new Terrain(withBand(band), -64, 1), "band " + band, bad, steps);
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 1);
+        for (int band : new int[]{8, 64}) landsGently(terrain(withBand(band), 1), "band " + band, bad, steps);
+        Terrain t = terrain(TerrainSettings.defaults(), 1);
         for (int cx = -1; cx <= 1; cx++) for (int cz = -1; cz <= 1; cz++) {
             double[] sl = pullSlope(t, cx, cz);
             for (int i = 0; i < 4; i++) steps[i] += sl[i];
@@ -1634,7 +1634,7 @@ class WastelandFieldTest {
     @Test
     void pureAndThreadSafe() throws Exception {
         long seed = 8004;
-        WastelandField one = new Terrain(TerrainSettings.defaults(), -64, seed).wasteland;
+        WastelandField one = terrain(TerrainSettings.defaults(), seed).wasteland;
         int n = 100_000;
         Random r = new Random(29);
         int[][] pts = new int[n][];
@@ -1645,7 +1645,7 @@ class WastelandFieldTest {
         }
         long[] alone = new long[n];
         for (int k = 0; k < n; k++) alone[k] = probe(one, pts[k]);
-        WastelandField fresh = new Terrain(TerrainSettings.defaults(), -64, seed).wasteland;
+        WastelandField fresh = terrain(TerrainSettings.defaults(), seed).wasteland;
         List<Integer> order = new ArrayList<>();
         for (int k = 0; k < n; k++) order.add(k);
         Collections.shuffle(order, new Random(31));
@@ -1676,6 +1676,18 @@ class WastelandFieldTest {
         h = h * 31 + Double.doubleToLongBits(f.openCore(x, y, z));
         h = h * 31 + (f.lavaKept(x, y, z) ? 1 : 0);
         return h;
+    }
+
+    /**
+     * A terrain for the Wasteland's own checks. The deep vents' throats that come out in its top rows are off (0.19.1):
+     * each needs the Deep Gardens' vent decisions round its site, seconds of work a site, which boxes at random over
+     * thousands of blocks would pay again and again. GardensFieldTest follows a throat into the Wasteland, and
+     * costWithinBudget keeps them on.
+     */
+    static Terrain terrain(TerrainSettings settings, long seed) {
+        Terrain t = new Terrain(settings, -64, seed);
+        if (t.gardens != null) t.gardens.exits = null;
+        return t;
     }
 
     /**
@@ -1730,7 +1742,7 @@ class WastelandFieldTest {
      */
     @Test
     void lavaKeptAtOpenings() {
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 1);
+        Terrain t = terrain(TerrainSettings.defaults(), 1);
         WastelandField f = t.wasteland;
         int rims = 0, bad = 0, n = 1334, tile = 166;
         for (int a = 0; a < n; a += tile) for (int b = 0; b < n; b += tile) for (int i = a; i < Math.min(n, a + tile); i++) for (int k = b; k < Math.min(n, b + tile); k++) {
@@ -1754,7 +1766,7 @@ class WastelandFieldTest {
      */
     @Test
     void lavaPoolsLieOffTheLine() {
-        WastelandField f = new Terrain(TerrainSettings.defaults(), -64, 2).wasteland;
+        WastelandField f = terrain(TerrainSettings.defaults(), 2).wasteland;
         Spread spread = new Spread(new Random(41), 8000, 512, 3000);
         int pool = 0, off = 0, wall = 0;
         for (int n = 0; n < 300_000; n++) {
@@ -1774,7 +1786,7 @@ class WastelandFieldTest {
     /** The Ash Hollows are patches: 4 to 12 % of the columns (7.3), and a column's neighbour 4 blocks off mostly agrees. */
     @Test
     void ashHollowsAreAPatch() {
-        Terrain t = new Terrain(TerrainSettings.defaults(), -64, 2);
+        Terrain t = terrain(TerrainSettings.defaults(), 2);
         WastelandField f = t.wasteland;
         Random r = new Random(37);
         int ash = 0, same = 0, n = 100_000;
@@ -1797,7 +1809,7 @@ class WastelandFieldTest {
     void gateThreeLandsOnMoreCells() {
         List<String> bad = new ArrayList<>();
         for (long seed = 5; seed <= 12; seed++) {
-            Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
+            Terrain t = terrain(TerrainSettings.defaults(), seed);
             for (int cx = -2; cx <= 2; cx++) for (int cz = -2; cz <= 2; cz++) {
                 int w = landingWalk(t, cx, cz, 70);
                 if (w < 0 || w > 100) bad.add(seed + ":" + cx + ":" + cz + " walk " + w);
