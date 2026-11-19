@@ -259,7 +259,7 @@ final class GardensVents {
             t[26] = (float) Htop;
             t[27] = (float) hd;
             t[28] = nrim;
-            t[29] = colour;
+            t[29] = colour;        // round 2's band colour; the blocks use GardensDress.ventColours (the mats')
             t[30] = (float) v.key;
             t[31] = (float) slope;
             t[32] = (float) (R * profMax + F);

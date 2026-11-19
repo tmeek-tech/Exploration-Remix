@@ -97,7 +97,11 @@ class PaletteLooksTest {
         // (put deep moss back at them and the hash is 0.14.5's). Pinned again for 0.19.1 (the Deep Gardens' vent field):
         // the public path no longer samples layer 1, whose blocks are the vent field's and whose biomes are its bands,
         // and keeps the same draws, so only the two public-path answers move; by biome, the interior and the upper caves
-        // answer as before.
+        // answer as before. Pinned again for round 3 of the Deep Gardens (Taran, 2026-11-19: "Reduce the layer height"):
+        // layer 1's samples are drawn over its 192 rows from -480 (240 rows from -528 before) on the same draws, so only
+        // the by-biome and interior answers move. Split per layer, layer 0's parts of them are as before
+        // (418a4f091e1880f8 by biome, 562253bbeee39b4d interior) and layer 1's moved; the public path, the bands (band
+        // stone all through, band 3 now 48 higher) and the upper caves answer as before.
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
@@ -153,8 +157,8 @@ class PaletteLooksTest {
         // all five at once, so a re-pin sees every part that moved
         final long fBiome = hBiome, fInterior = hInterior, fPublicOld = hPublicOld, fPublic = hPublic, fUpper = hUpper;
         assertAll(
-                () -> assertEquals("c729276029ca9b1d", String.format("%016x", fBiome), "layers 0 and 1, by biome"),
-                () -> assertEquals("2604e01a1b4b2ee3", String.format("%016x", fInterior), "layers 0 and 1, interior"),
+                () -> assertEquals("e97aebf3ae273cec", String.format("%016x", fBiome), "layers 0 and 1, by biome"),
+                () -> assertEquals("a79cc526d8233378", String.format("%016x", fInterior), "layers 0 and 1, interior"),
                 () -> assertEquals("87788ebdd351272a", String.format("%016x", fPublicOld), "layer 0 through the public path, and the bands (den rifts off)"),
                 () -> assertEquals("3d80c894a1e742aa", String.format("%016x", fPublic), "layer 0 through the public path, and the bands"),
                 () -> assertEquals("b287cdd84507762d", String.format("%016x", fUpper), "the upper caves"));

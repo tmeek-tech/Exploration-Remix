@@ -453,7 +453,7 @@ public final class Terrain {
 
     /**
      * The Wasteland's own blocks for the throats' exit search ({@link GardensExits}): its slab under the Deep Gardens
-     * (Y -600..-545), as {@link #rockAt} makes them (Minecraft's corners and interpolation, then the Wasteland's fine
+     * (Y -552..-497), as {@link #rockAt} makes them (Minecraft's corners and interpolation, then the Wasteland's fine
      * pass) but with no throat carved. One view per search; it keeps the corners it reads.
      */
     GardensExits.Waste.View wasteView() {

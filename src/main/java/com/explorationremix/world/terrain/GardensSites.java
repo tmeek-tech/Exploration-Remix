@@ -261,7 +261,7 @@ final class GardensSites {
             return null;
         }
         float fk = st.floor(k, ix, iz), hk = h(k, ix, iz);
-        float top = k < GardensPlan.K - 1 ? st.floor(k + 1, ix, iz) : 235f;
+        float top = k < GardensPlan.K - 1 ? st.floor(k + 1, ix, iz) : GardensPlan.CEIL_MAX;
         if (top - (fk + hk) < 4f) {
             reason[0] = "merge";
             return null;

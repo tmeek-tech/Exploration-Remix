@@ -715,7 +715,7 @@ final class NetPlanner {
             }
         }
 
-        /** The well needs height (section 2.6): only when the Deep Gardens are at least 180 tall (the default is 240). */
+        /** The well needs height (section 2.6): only when the Deep Gardens are at least 180 tall (they are 192). */
         boolean helixRoom() { return T - B + 1 >= 180; }
 
         Strand walkStrand() {

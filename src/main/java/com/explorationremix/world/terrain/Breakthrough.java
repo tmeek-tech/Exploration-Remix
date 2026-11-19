@@ -43,7 +43,7 @@ public final class Breakthrough implements GalleriesField.Join {
     public double openingSite(double x, double z) { return sheets.openingSite(beta(x, z), x, z); }
 
     /**
-     * A bound on the highest open row of the Galleries' space under an opening, their top + 6 (-683 by default), inside
+     * A bound on the highest open row of the Galleries' space under an opening, their top + 6 (-635 by default), inside
      * the join's rows. Their space stops at T - 4 (a disc's at T - 5); a crater's open space over it is the Wasteland's.
      */
     @Override

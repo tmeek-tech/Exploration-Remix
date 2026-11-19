@@ -16,8 +16,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * thread, finds every lattice cell it needs already found.
  */
 class WayGuardWarmTest {
-    /** The rows asked: a vent's floor and the way guard's four rows either side (inside the Galleries). */
-    static final int Y = -775, ROWS = 4, MARGIN = 3;
+    /**
+     * The rows asked: a vent's floor and the way guard's four rows either side (inside the Galleries; -775 before round 3
+     * of the Deep Gardens raised the world's floor by 48).
+     */
+    static final int Y = -727, ROWS = 4, MARGIN = 3;
 
     @Test
     void aWorkerAskingAtTheCornersLeavesNothingForTheBlasts() throws Exception {

@@ -354,7 +354,7 @@ public final class ERBlocks {
                     .sound(SoundType.BONE_BLOCK).pushReaction(PushReaction.DESTROY)));
 
     // =========================================================================================== Deep Gardens round 2
-    // The vent field, the Deep Gardens' caves from y -289 to -528 (world.terrain.GardensVentField). Taran's pick for its
+    // The vent field, the Deep Gardens' caves from y -289 to -480 (world.terrain.GardensVentField). Taran's pick for its
     // rock (deepslate caves, black vents): the cave walls are vanilla deepslate, the vents and spires vanilla blackstone
     // since round 3 (they were vent rock and live vent rock before), and the dripstone is black dripstone, so the neon
     // glow stands out on black. The neon blocks come in the four neon colours (Neon: magenta, violet, lime, light blue;

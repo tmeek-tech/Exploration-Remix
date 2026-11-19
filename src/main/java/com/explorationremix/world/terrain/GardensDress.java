@@ -43,7 +43,7 @@ final class GardensDress {
             MIN_ROOM = {9.0, 9.0, 6.0}, CLEAR_TOP = {0.0, 0.0, 2.0}, DRIP_THR = {0.30, 0.24, 0.20},
             MAT_LO = {0.0096, 0.012, 0.0168}, MUSH_LO = {0.021, 0.030, 0.048}, CAP_R = {5.2, 4.2, 3.0},
             STEM_MAX = {16.0, 12.0, 8.0}, T1 = {-0.0416, -0.2656, -0.3367}, T2 = {0.2761, 0.1935, 0.1333},
-            SKIN_THR = {0.11, 0.16, 0.165};
+            SKIN_THR = {0.11, 0.16, 0.15};
     static final int[] TIPC = {MAGENTA, VIOLET, LIGHTBLUE};
     static final double THR_OUT = 0.62, P = 1.55, LIVE_LO = 0.30, FLANGE = 0.06, DRIP_K = 0.010, DRIP_P = 1.35;
     /**
@@ -988,7 +988,8 @@ final class GardensDress {
      * band's bar. Ceilings lean on the cones' field, so a skin rings each cluster of cones, the way dripstone spreads
      * round a cave's dripstone clusters; walls read a field stretched up and down, so it runs in streaks like
      * flowstone; floors lean on the cones' field too, under the clusters. Each band's bar is set so that about a third
-     * of its cave surfaces turn (card pick, 2026-11-19: "About a third everywhere", the hot Vent Domes too). A per-block
+     * of its cave surfaces turn (card pick, 2026-11-19: "About a third everywhere", the hot Vent Domes too; with the
+     * dripstone's cones, 33.5 %, 33.3 % and 33.1 % of the surfaces over 256 x 256 at seed 8675309). A per-block
      * hash dithers the edge, and where a face is well over its bar the rock behind turns too (two deep). Never on a
      * vent's own blocks or its skirt, in porches or gates. Returns blocks.
      */

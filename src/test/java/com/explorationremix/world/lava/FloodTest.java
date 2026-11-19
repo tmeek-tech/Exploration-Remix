@@ -519,14 +519,15 @@ class FloodTest {
         assertEquals(RISE, Terrain.surge(g));
         assertEquals(0, Terrain.surge(Terrain.WASTELAND));
         int table = s.waterY(g);
-        assertEquals(-822, table);
+        // 48 higher than before round 3 of the Deep Gardens (-822), with the world's floor
+        assertEquals(-774, table);
         for (int y = table; y < table + RISE; y++) assertEquals(g, s.layerAt(y), "band y " + y);
-        // the lava's top block at full height, -783, is far under the Galleries' roof: it never reaches the Wasteland
+        // the lava's top block at full height, -735, is far under the Galleries' roof: it never reaches the Wasteland
         assertTrue(table + RISE - 1 < s.top(g) - 64);
         assertTrue(table + RISE - 1 < s.bottom(Terrain.WASTELAND));
         // players count as near the Galleries a little way up into the Wasteland (its two lowest sheets), as in 0.5.0
         int near = s.top(g) + LavaFlood.NEAR;
-        assertEquals(-641, near);
+        assertEquals(-593, near);
         assertEquals(Terrain.WASTELAND, s.layerAt(near));
         assertTrue(near > s.top(g));
     }

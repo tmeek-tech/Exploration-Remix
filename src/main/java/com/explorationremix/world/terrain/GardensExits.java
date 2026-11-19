@@ -14,8 +14,8 @@ import static com.explorationremix.world.terrain.GardensVents.n1;
  * under the rule it settled on, "ring or outlet, risk 9"), searched against the Wasteland as the game makes it, so a
  * throat always meets a real tunnel. It reads only the seed and the site, so every chunk sees the same answer.
  *
- * <p>For each exit row g from Y -549 down to Y -589 (layer rows -21..-61), the throat's table is built down to g with
- * a level run of a whole turn, and g is taken when:
+ * <p>For each exit row g from Y -501 down to Y -541 (layer rows -21..-61; Y -549..-589 before round 3 raised the
+ * layer's bottom by 48), the throat's table is built down to g with a level run of a whole turn, and g is taken when:
  * <ol>
  *   <li>no throat air on the way down (before the level run) touches the Wasteland's air;</li>
  *   <li>the level run's first touch lies on a run of at least 3 one-block samples of its outer side where the
@@ -32,7 +32,7 @@ import static com.explorationremix.world.terrain.GardensVents.n1;
  * less {@link GardensVents#ox}); rows are the layer's (0 = its bottom row), slab index e = row + {@link #E_OFF}.
  */
 final class GardensExits implements GardensField.Exits {
-    /** The Wasteland slab searched: layer rows -72..-17 (Y -600..-545); slab index e = row + E_OFF. */
+    /** The Wasteland slab searched: layer rows -72..-17 (Y -552..-497); slab index e = row + E_OFF. */
     static final int E_OFF = 72, SLAB = 56, SLAB_TOP = -17;
     /** The exit rows tried (layer rows, top down) and the floor samples a run needs. */
     static final int G_HI = -21, G_LO = -61, NEED = 3;

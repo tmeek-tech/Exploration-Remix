@@ -899,13 +899,17 @@ class NetworkTest {
 
     /**
      * The network follows the config (section 2.6): graph tests 1, 2, 6 and 9 with 480 and 720 block cells and with
-     * every layer 128 tall.
+     * every layer 128 tall but the Deep Gardens, whose vent field is built for its one height (GardensField.game refuses
+     * any other since 0.19.4; nothing plans that layer, so its height never reached the network).
      */
     @Test
     void configVariants() {
         List<LayerSettings> d = TerrainSettings.defaults().layers();
         List<LayerSettings> short128 = new ArrayList<>();
-        for (LayerSettings l : d) short128.add(new LayerSettings(l.id(), 128, l.fluidDepth(), l.lava(), l.heightMin(), l.heightMax(), l.widthMin(), l.widthMax()));
+        for (int i = 0; i < d.size(); i++) {
+            LayerSettings l = d.get(i);
+            short128.add(i == Terrain.GARDENS ? l : new LayerSettings(l.id(), 128, l.fluidDepth(), l.lava(), l.heightMin(), l.heightMax(), l.widthMin(), l.widthMax()));
+        }
         TerrainSettings[] variants = {
                 new TerrainSettings(16, 480, 4.5, 14.0, d),
                 new TerrainSettings(16, 720, 4.5, 14.0, d),

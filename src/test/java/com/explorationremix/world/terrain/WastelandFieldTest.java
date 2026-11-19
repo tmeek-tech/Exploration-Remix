@@ -1351,8 +1351,8 @@ class WastelandFieldTest {
     void noBandStoneAtTheJoin() {
         Terrain t = terrain(TerrainSettings.defaults(), 8004);
         Shape s = t.shape;
-        assertEquals(-832, s.bottom(Terrain.GALLERIES));
-        assertEquals(-545, s.top(Terrain.WASTELAND));
+        assertEquals(-784, s.bottom(Terrain.GALLERIES));
+        assertEquals(-497, s.top(Terrain.WASTELAND));
         for (int y = s.bottom(Terrain.GALLERIES); y <= s.top(Terrain.WASTELAND); y++) assertTrue(s.layerAt(y) >= 0, "row " + y + " is in no layer");
         Random r = new Random(23);
         Spread spread = new Spread(r, 8000, 512, 2000);
