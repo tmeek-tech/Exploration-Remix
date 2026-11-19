@@ -11,6 +11,7 @@ import com.explorationremix.block.HangingVinesBlock;
 import com.explorationremix.block.HangingVinesPlantBlock;
 import com.explorationremix.block.Neon;
 import com.explorationremix.block.NeonBlock;
+import com.explorationremix.block.PointedBlackDripstoneBlock;
 import com.explorationremix.block.PoolPlantBlock;
 import com.explorationremix.block.ShelfFungusBlock;
 import com.explorationremix.block.SubmergedPlantBlock;
@@ -354,14 +355,24 @@ public final class ERBlocks {
 
     // =========================================================================================== Deep Gardens round 2
     // The vent field, the Deep Gardens' caves from y -289 to -528 (world.terrain.GardensVentField). Taran's pick for its
-    // rock (deepslate caves, black vent rock): the cave walls stay vanilla deepslate and tuff, and the vents, spires and
-    // dripstone are a new near-black porous rock, so the neon glow stands out on black. The neon blocks come in the four
-    // neon colours (Neon: magenta, violet, lime, light blue; lime only near the ways down) and draw their glowing pixels
-    // at full brightness over rock lit by the world. Nothing here is warm, cyan or teal.
-    /** The near-black porous rock of the dead vents and the spires. Like deepslate, a little harder. */
+    // rock (deepslate caves, black vents): the cave walls are vanilla deepslate, the vents and spires vanilla blackstone
+    // since round 3 (they were vent rock and live vent rock before), and the dripstone is black dripstone, so the neon
+    // glow stands out on black. The neon blocks come in the four neon colours (Neon: magenta, violet, lime, light blue;
+    // lime only near the ways down) and draw their glowing pixels at full brightness over rock lit by the world; those on
+    // the vents draw their neon over vanilla's blackstone. Nothing here is warm, cyan or teal.
+    /** The near-black porous rock of the dead vents and the spires until round 3. Like deepslate, a little harder. */
     public static final RegistryObject<Block> VENT_ROCK = block("vent_rock", () -> new Block(ventRock().mapColor(MapColor.COLOR_BLACK)));
     /** Vent rock grown as hanging dripstone cones, banded like vanilla's dripstone block. */
     public static final RegistryObject<Block> BLACK_DRIPSTONE = block("black_dripstone", () -> new Block(ventRock().mapColor(MapColor.COLOR_BLACK)));
+    /**
+     * Vanilla's pointed dripstone in black dripstone (round 3): stalactites and stalagmites that stack, fall and hurt as
+     * vanilla's do but never grow or drip, the vent field being dry (PointedBlackDripstoneBlock). Vanilla's properties
+     * but its map colour and its random ticks.
+     */
+    public static final RegistryObject<Block> POINTED_BLACK_DRIPSTONE = block("pointed_black_dripstone", () -> new PointedBlackDripstoneBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).forceSolidOn().instrument(NoteBlockInstrument.BASEDRUM).noOcclusion()
+                    .sound(SoundType.POINTED_DRIPSTONE).strength(1.5F, 3.0F).dynamicShape().offsetType(BlockBehaviour.OffsetType.XZ)
+                    .pushReaction(PushReaction.DESTROY).isRedstoneConductor((s, l, p) -> false)));
     /** The wall rock of the live (hot) vents: near-black with a violet cast and faint mineral flecks. No light. */
     public static final RegistryObject<Block> LIVE_VENT_ROCK = block("live_vent_rock", () -> new Block(ventRock().mapColor(MapColor.COLOR_GRAY)));
     /** The giant mushrooms' stem, pale lavender-white. No light. */
@@ -370,15 +381,16 @@ public final class ERBlocks {
     public static final RegistryObject<Block> GLOW_MAT = block("glow_mat", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 9)));
     /** The giant mushrooms' cap, neon all over with darker specks. */
     public static final RegistryObject<Block> GLOW_CAP = block("glow_cap", () -> new NeonBlock(mushroomBlock().mapColor(ERBlocks::neonMap).lightLevel(s -> 13)));
-    /** The bright mineral rim of a live vent's mouth: crystalline neon crust on near-black rock, the brightest of the set. */
+    /** The bright mineral rim of a live vent's mouth: crystalline neon crust on blackstone, the brightest of the set. */
     public static final RegistryObject<Block> VENT_CROWN = block("vent_crown", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 15)));
-    /** Near-black vent rock split by glowing cracks: the floor of a live den. */
+    /** Blackstone split by glowing cracks: the floor of a live den. */
     public static final RegistryObject<Block> DEN_FISSURE = block("den_fissure", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 10)));
-    /** A patchy glowing mineral crust lining the inside of a live vent. */
+    /** A patchy glowing mineral crust on blackstone, lining the inside of a live vent. */
     public static final RegistryObject<Block> VENT_GLOW = block("vent_glow", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 10)));
-    /** Dark rock with thin glowing veins, lining the throats that lead down (mostly lime). */
+    /** Blackstone with thin glowing veins, lining the throats that lead down (mostly lime). */
     public static final RegistryObject<Block> THROAT_VEIN = block("throat_vein", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 7)));
-    /** The glowing top of a small live spire: rounded neon mineral knobs on dark rock. */
+    /** The glowing top of a small live spire, rounded neon mineral knobs on blackstone, with beads trailing down its sides:
+     *  it also runs down a live vent's walls from the crown (round 3). */
     public static final RegistryObject<Block> SPIRE_TIP = block("spire_tip", () -> new NeonBlock(ventRock().mapColor(ERBlocks::neonMap).lightLevel(s -> 11)));
     /** A faint crust on the dry rock at the edge of the crude oil seeps: a dim light blue film, light blue only. */
     public static final RegistryObject<Block> SEEP_CRUST = block("seep_crust", () -> new Block(ventRock().mapColor(MapColor.COLOR_BLACK).lightLevel(s -> 5)));

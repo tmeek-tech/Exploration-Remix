@@ -1,8 +1,14 @@
 {
-  "parent": "explorationremix:block/template/cube_glow",
+  "parent": "explorationremix:block/template/rock_top_side_bottom_glow",
   "render_type": "minecraft:cutout",
   "textures": {
-    "all": "explorationremix:block/throat_vein_magenta",
-    "glow": "explorationremix:block/throat_vein_magenta_glow"
+    "rock_end": "minecraft:block/blackstone_top",
+    "rock_side": "minecraft:block/blackstone",
+    "top": "explorationremix:block/throat_vein_magenta",
+    "top_glow": "explorationremix:block/throat_vein_magenta_glow",
+    "side": "explorationremix:block/throat_vein_magenta",
+    "side_glow": "explorationremix:block/throat_vein_magenta_glow",
+    "bottom": "explorationremix:block/throat_vein_magenta",
+    "bottom_glow": "explorationremix:block/throat_vein_magenta_glow"
   }
 }

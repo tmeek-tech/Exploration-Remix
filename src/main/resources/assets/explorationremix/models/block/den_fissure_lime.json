@@ -1,8 +1,14 @@
 {
-  "parent": "explorationremix:block/template/cube_glow",
+  "parent": "explorationremix:block/template/rock_top_side_bottom_glow",
   "render_type": "minecraft:cutout",
   "textures": {
-    "all": "explorationremix:block/den_fissure_lime",
-    "glow": "explorationremix:block/den_fissure_lime_glow"
+    "rock_end": "minecraft:block/blackstone_top",
+    "rock_side": "minecraft:block/blackstone",
+    "top": "explorationremix:block/den_fissure_lime",
+    "top_glow": "explorationremix:block/den_fissure_lime_glow",
+    "side": "explorationremix:block/den_fissure_lime",
+    "side_glow": "explorationremix:block/den_fissure_lime_glow",
+    "bottom": "explorationremix:block/den_fissure_lime",
+    "bottom_glow": "explorationremix:block/den_fissure_lime_glow"
   }
 }
