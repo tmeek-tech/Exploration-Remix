@@ -36,8 +36,9 @@ import java.util.Locale;
  *     lunge, bolt, eat, journey): a strike is at you, a bolt away from you, a stalk after the nearest landed swarm, a
  *     journey 40 to 90 blocks along the Deep Blue Rift's ledge path (it must be by it)</li>
  *     <li>{@code /remix skein homes}: the Skeins set down with the world since the game started (home chunks made,
- *     Skeins set down in them), how many are in the loaded world now and how many of those lie dormant, and how the
- *     slow refill has gone (looks with none near, rolls that came up, Skeins moved in)</li>
+ *     Skeins set down in them), how many are in the loaded world now, how many of those lie dormant and where they lie
+ *     (by place: rift, geodes, deep dark, other), how many left the Deep Dark unseen (0.19.8), and how the slow refill
+ *     has gone (looks with none near, rolls that came up, Skeins moved in)</li>
  *     <li>{@code /remix skein refill}: a Skein is due to move in for you now, as when the slow refill's roll comes up (it
  *     comes at the next look that finds a spot out of sight, while none is within 96 blocks of you and you are in the
  *     Blue Reaches in Survival or Adventure)</li>
@@ -149,16 +150,23 @@ public final class SkeinCommands {
      * down in them (world.feature.SkeinsFeature), and the Skeins in the loaded world now, those kept for good among them.
      */
     private static int homes(CommandContext<CommandSourceStack> c) {
+        ServerLevel level = c.getSource().getLevel();
         int loaded = 0, kept = 0, dormant = 0;
-        for (var e : c.getSource().getLevel().getAllEntities()) {
+        int[] at = new int[BlueSpawnRules.Place.values().length];
+        for (var e : level.getAllEntities()) {
             if (!(e instanceof SkeinEntity s) || !s.isAlive()) continue;
             loaded++;
             if (s.isPersistenceRequired()) kept++;
             if (s.dormant()) dormant++;
+            at[BlueReachesSpawner.placeAt(level, s.blockPosition()).ordinal()]++;
         }
         long homes = SkeinsFeature.HOMES.get(), placed = SkeinsFeature.PLACED.get();
         say(c, String.format(Locale.ROOT, "Home chunks made: %d, Skeins set down in them: %d (%.0f%%). Loaded now: %d, %d of them kept for good, %d dormant (no player near).",
                 homes, placed, homes == 0 ? 0.0 : 100.0 * placed / homes, loaded, kept, dormant));
+        StringBuilder b = new StringBuilder("Where they lie:");
+        for (BlueSpawnRules.Place p : BlueSpawnRules.Place.values())
+            b.append(' ').append(p.name().toLowerCase(Locale.ROOT)).append(' ').append(at[p.ordinal()]);
+        say(c, b.append(". Left the Deep Dark unseen since the game started: ").append(SkeinEntity.LEFT_DEEP_DARK).append('.').toString());
         say(c, String.format(Locale.ROOT, "Slow refill: %d looks round a player with none within %d blocks, %d rolls came up, %d Skeins moved in.",
                 BlueReachesSpawner.REFILL_LOOKS, (int) BlueSpawnRules.REFILL_RADIUS, BlueReachesSpawner.REFILL_ROLLS, BlueReachesSpawner.REFILL_IN));
         return loaded;

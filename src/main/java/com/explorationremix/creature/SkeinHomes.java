@@ -10,10 +10,10 @@ import com.explorationremix.world.terrain.Hashing;
  * where the caves round a player have none left ({@link BlueSpawnRules#wantSkein}).
  *
  * <p>A chunk is a Skein's home by a roll of the seed and its position ({@link #HOME_CHANCE}). Its Skein lies on the
- * rock of a cave in the chunk, inside the Blue Reaches, in the Deep Blue Rift or the Deep Dark (never in the Asurine
- * Geodes, the refuge), where its body has room to lie straight back from its head: the first spot that will do of
- * {@link #TRIES} random ones in the chunk, each looked for up and down from its height as the spawner does. A chunk
- * with no cave in reach of its tries has none, so the Skeins live where the caves are big.
+ * rock of a cave in the chunk, inside the Blue Reaches, in the Deep Blue Rift (never in the Asurine Geodes, the refuge,
+ * and since 0.19.8 never in the Deep Dark, Taran's ask), where its body has room to lie straight back from its head:
+ * the first spot that will do of {@link #TRIES} random ones in the chunk, each looked for up and down from its height
+ * as the spawner does. A chunk with no cave in reach of its tries has none, so the Skeins live where the caves are big.
  */
 public final class SkeinHomes {
     private SkeinHomes() {}

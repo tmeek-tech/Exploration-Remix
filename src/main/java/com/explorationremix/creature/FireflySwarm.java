@@ -25,6 +25,7 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.AABB;
@@ -455,11 +456,31 @@ public class FireflySwarm extends Entity {
      * Server: whether it rests this tick: kept, landed, and no player within {@link #REST_RANGE} at the last look. It
      * stays as it is, as a swarm in a chunk no one is near does; the first look that finds a player near wakes it, and
      * it goes on as it was (sitting out the rest of its stay, or startled up by whoever came near).
+     *
+     * <p>A kept swarm whose home is in the Deep Dark goes instead, at a look with no player near enough to see it
+     * ({@link #SEEN_FROM}): the swarms an older version set down there, in a world made before 0.19.8, leave the Deep
+     * Dark dark while nobody is looking (Taran's ask). True then too: this tick is over.
      */
     private boolean restingNow() {
         if (!kept || isRemoved()) return resting = false;
-        if ((tickCount + getId()) % REST_LOOK == 0) alone = !playerWithin(REST_RANGE);
+        if ((tickCount + getId()) % REST_LOOK == 0) {
+            alone = !playerWithin(REST_RANGE);
+            if (alone && !playerWithin(SEEN_FROM) && livesInDeepDark()) {
+                LEFT_DEEP_DARK++;
+                discard();
+                return true;
+            }
+        }
         return resting = alone && landed() && count() > 0;
+    }
+
+    /** For /remix fireflies homes, since the game started: swarms that left the Deep Dark unseen ({@link #restingNow}). */
+    public static long LEFT_DEEP_DARK;
+
+    /** Whether its home is in the Deep Dark (0.19.8: no swarm lives there; it never strays from its home's biome). */
+    public boolean livesInDeepDark() {
+        BlockPos p = BlockPos.containing(home != null ? home : centre());
+        return level().isLoaded(p) && level().getBiome(p).is(Biomes.DEEP_DARK);
     }
 
     private boolean playerWithin(double range) {

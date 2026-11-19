@@ -24,9 +24,9 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * The Blue Reaches' Skeins, set down as each chunk is made (0.17.0), so they are there before anyone comes and stay
  * when everyone leaves, as the animals a world starts with do: a chunk that is a Skein's home ({@link SkeinHomes}) gets
- * its Skein on the rock of one of its caves, in the Deep Blue Rift or the Deep Dark, never in the Asurine Geodes, with
- * room for its body to lie straight back from its head. Vanilla's own world-gen spawning only sets animals on the
- * ground under the sky, so the caves' creatures need this.
+ * its Skein on the rock of one of its caves, in the Deep Blue Rift, never in the Asurine Geodes nor (since 0.19.8) in
+ * the Deep Dark, with room for its body to lie straight back from its head. Vanilla's own world-gen spawning only sets
+ * animals on the ground under the sky, so the caves' creatures need this.
  *
  * <p>Runs last in every chunk (band 1 is the Deep Blue Rift under every column, which carries it everywhere, as it
  * does the den lairs), once the chunk's plants, vines and ways are in. A Skein made here is kept in the new chunk and
