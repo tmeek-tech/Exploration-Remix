@@ -15,7 +15,6 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -29,17 +28,16 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Brings the Blue Reaches' creatures out near the players there: swarms of blue fireflies in the open air of the
- * caves, and now and then a Skein on the rock (floor, wall or ceiling) where the caves have none left (the Skeins are
- * set down with the world, {@link SkeinHomes}), by the counts and distances of {@link BlueSpawnRules}. Its own
- * spawner run from the server tick, not the biomes' spawn lists, so the counts stay as they are meant and the pack's
- * other spawns are untouched.
+ * Brings the Blue Reaches' creatures back near the players there, where the caves have lost theirs: now and then a
+ * Skein on the rock (floor, wall or ceiling) where none is left, and a swarm of blue fireflies in the open air where
+ * the caves are short of theirs (both are set down with the world, {@link SkeinHomes} and {@link FireflyHomes}), by
+ * the counts and distances of {@link BlueSpawnRules}. Its own spawner run from the server tick, not the biomes' spawn
+ * lists, so the counts stay as they are meant and the pack's other spawns are untouched.
  *
  * <p>Every {@link #EVERY} ticks it looks round each player in the Blue Reaches (one player a tick at most, staggered)
- * and tries a few spots for each kind still wanted there: a ring {@link BlueSpawnRules#NEAR} blocks and more away, a
- * spot out of every player's sight first, one in sight only when none is hidden (a Skein only ever out of sight). A
- * Skein is set down lying still, its body laid out behind it the way there is most room, and stays as those set down
- * with the world do; a swarm comes out through {@link FireflySwarm#spawn}.
+ * and tries a few spots for each kind due there: a ring {@link BlueSpawnRules#NEAR} blocks and more away, only out of
+ * every player's sight. A Skein is set down lying still, its body laid out behind it the way there is most room; a
+ * swarm comes out through {@link FireflySwarm#spawn}. Both stay, as those set down with the world do.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID)
 public final class BlueReachesSpawner {
@@ -53,8 +51,6 @@ public final class BlueReachesSpawner {
     static final int SKEIN_SCAN = 10;
     /** A spot is tried this far above or below the player at most. */
     static final double HEIGHT_SPREAD = 14.0;
-    /** A swarm comes out in open air this many blocks round, with rock no further below than this. */
-    static final int SWARM_CLEAR = 1, SWARM_FLOOR = 10;
     /** Players further than this from a spot are not asked whether they see it. */
     static final double SIGHT = 64.0;
 
@@ -101,7 +97,14 @@ public final class BlueReachesSpawner {
             else SKEIN_DUE.add(id);
         } else if (skeins > 0) SKEIN_DUE.remove(id);
         int swarms = countNear(level, FireflySwarm.class, p.position(), BlueSpawnRules.SWARM_RADIUS);
-        if (BlueSpawnRules.wantSwarm(place, swarms, mobSpawning && server.isSpawningAnimals(), level.random.nextDouble())) spawnSwarm(level, p, top, bottom);
+        boolean short_ = swarms < BlueSpawnRules.swarmsKept(place);
+        if (short_) SWARM_LOOKS++;
+        if (BlueSpawnRules.wantSwarm(place, swarms, mobSpawning && server.isSpawningAnimals(), SWARM_DUE.contains(id), level.random.nextDouble())) {
+            if (!SWARM_DUE.contains(id)) SWARM_ROLLS++;
+            // due until a spot out of every player's sight turns up, as for a Skein
+            if (spawnSwarm(level, p, top, bottom)) { SWARM_DUE.remove(id); SWARM_IN++; }
+            else SWARM_DUE.add(id);
+        } else if (!short_) SWARM_DUE.remove(id);
     }
 
     private static int countNear(ServerLevel level, Class<? extends net.minecraft.world.entity.Entity> kind, Vec3 at, double r) {
@@ -170,15 +173,23 @@ public final class BlueReachesSpawner {
 
     // ------------------------------------------------------------------------------------------------ a swarm
 
-    private static void spawnSwarm(ServerLevel level, ServerPlayer p, int top, int bottom) {
-        Vec3 seen = null;
+    /** The players a swarm is due to come out for (the roll came up, no hidden spot found yet), as for a Skein. */
+    private static final Set<UUID> SWARM_DUE = new HashSet<>();
+
+    /**
+     * For /remix fireflies homes, since the game started: looks round a player with fewer swarms near than the caves
+     * keep, the rolls that came up, and the swarms that came out.
+     */
+    public static long SWARM_LOOKS, SWARM_ROLLS, SWARM_IN;
+
+    /** A swarm comes out out of every player's sight, kept for good, or not this time (false). */
+    private static boolean spawnSwarm(ServerLevel level, ServerPlayer p, int top, int bottom) {
         for (int i = 0; i < SWARM_TRIES; i++) {
             Vec3 spot = swarmSpot(level, p, top, bottom);
-            if (spot == null) continue;
-            if (!seenByAnyone(level, spot)) { FireflySwarm.spawn(level, spot, BlueSpawnRules.swarmSize(level.random.nextDouble())); return; }
-            if (seen == null) seen = spot;
+            if (spot != null && !seenByAnyone(level, spot))
+                return FireflySwarm.spawn(level, spot, BlueSpawnRules.swarmSize(level.random.nextDouble()), true) != null;
         }
-        if (seen != null) FireflySwarm.spawn(level, seen, BlueSpawnRules.swarmSize(level.random.nextDouble()));
+        return false;
     }
 
     /** A point of open cave air on the ring round {@code p}, with rock not far under it, where a swarm may come out. */
@@ -187,30 +198,11 @@ public final class BlueReachesSpawner {
         Vec3 c = ringPoint(level, p, BlueSpawnRules.SWARM_FAR, top, bottom);
         BlockPos at = BlockPos.containing(c);
         if (!level.hasChunksAt(at.getX() - 2, at.getZ() - 2, at.getX() + 2, at.getZ() + 2)) return null;
-        if (!clear(level, at) || !rockBelow(level, at)) return null;
+        if (!FireflySwarm.roomAt(level, at)) return null;
         Vec3 mid = Vec3.atCenterOf(at);
         // it is counted where its box stands, half a box under its centre
         double fromPlayer = mid.subtract(0.0, FireflySwarm.HALF, 0.0).distanceTo(p.position());
         return BlueSpawnRules.swarmSpot(placeAt(level, at), mid.y, top, bottom, nearestPlayer(level, mid), fromPlayer, level.random.nextDouble()) ? mid : null;
-    }
-
-    /** Nothing solid and no water or lava in the blocks round {@code at}. */
-    private static boolean clear(ServerLevel level, BlockPos at) {
-        for (BlockPos q : BlockPos.betweenClosed(at.offset(-SWARM_CLEAR, -SWARM_CLEAR, -SWARM_CLEAR), at.offset(SWARM_CLEAR, SWARM_CLEAR, SWARM_CLEAR))) {
-            BlockState s = level.getBlockState(q);
-            if (!s.getCollisionShape(level, q).isEmpty() || !s.getFluidState().isEmpty()) return false;
-        }
-        return true;
-    }
-
-    /** Rock within {@link #SWARM_FLOOR} under {@code at}: it is in a cave, not out over a drop. */
-    private static boolean rockBelow(ServerLevel level, BlockPos at) {
-        BlockPos.MutableBlockPos q = at.mutable();
-        for (int i = 0; i < SWARM_FLOOR; i++) {
-            q.move(0, -1, 0);
-            if (!level.getBlockState(q).getCollisionShape(level, q).isEmpty()) return true;
-        }
-        return false;
     }
 
     // ------------------------------------------------------------------------------------------------ shared
