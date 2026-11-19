@@ -149,9 +149,17 @@ public final class DenRegistry extends SavedData {
 
     private final Map<Long, Den> dens = new HashMap<>();
 
-    /** Two or three to a family, by the den's position (so a den always keeps the same size of family). */
+    /** The fewest and most lizards to a family. */
+    public static final int FAMILY_MIN = 4, FAMILY_MAX = 6;
+
+    /**
+     * Four to six to a family, five on average, by the den's position (so a den always keeps the same size of family).
+     * Two or three until 0.19.2, when Taran asked for about twice the Mossbacks and picked bigger den families for them;
+     * a den in an older world brings out the rest of its bigger family as it would a refill.
+     */
     public static int familySize(BlockPos pos) {
-        return 2 + (int) ((Hashing.mix(0x46616D696C79L, pos.getX(), pos.getY(), pos.getZ()) >>> 21) & 1L);
+        long h = Hashing.mix(0x46616D696C79L, pos.getX(), pos.getY(), pos.getZ()) >>> 21;
+        return FAMILY_MIN + (int) Long.remainderUnsigned(h, FAMILY_MAX - FAMILY_MIN + 1);
     }
 
     public static DenRegistry get(ServerLevel level) {

@@ -71,8 +71,15 @@ import java.util.UUID;
  * <p>It is no mob: it has no health, never blocks anyone, is not pushed by water, pistons or other entities, sets off
  * no pressure plates, and an arrow flies through it. A swing at it only scatters it. Being no mob, its type is of the
  * MISC category, not AMBIENT: it counts against no mob cap (an ambient one would crowd the bats out of its own caves)
- * and wants no attributes. All the same it goes away as ambient mobs do, once no player has been near it a while
- * ({@link #checkDespawn}, with distances of its own).
+ * and wants no attributes.
+ *
+ * <p>The swarms set down with the world (world.feature.FirefliesFeature, {@link FireflyHomes}, 0.19.2) and those the
+ * spawner brings out where the caves round a player have lost theirs are {@link #kept()}: they stay for good, as the
+ * Skeins do, keeping the cave they came into. With no player within {@link #REST_RANGE} blocks a kept swarm settles on
+ * its rock and rests there, its fireflies pulsing on the faces, until someone comes near again (Taran's pick, 19 Nov
+ * 2026: far caves glimmer, and a world full of swarms costs the server and the clients next to nothing). Any other swarm
+ * (one summoned by a command, or brought out by an older version) goes away as ambient mobs do, once no player has been
+ * near it a while ({@link #checkDespawn}, with distances of its own).
  */
 public class FireflySwarm extends Entity {
     // ------------------------------------------------------------------------------------------------ tuning
@@ -106,7 +113,8 @@ public class FireflySwarm extends Entity {
      * Landed this long (ticks: 10 to 40 s); in the air at least {@link #FLY_MIN} first (15 s), then a chance a tick
      * (another 20 s on average), so a swarm spends more of its time flying than sitting.
      */
-    static final int LAND_MIN = 200, LAND_MAX = 800, FLY_MIN = 300, LAND_CHANCE = 400;
+    public static final int LAND_MIN = 200, LAND_MAX = 800;
+    static final int FLY_MIN = 300, LAND_CHANCE = 400;
     /** Flying in to its patch takes no longer than this, or it gives the patch up. */
     static final int APPROACH_TICKS = 300;
     /** After a scare it flees this long, and keeps off the rock at least {@link #SCARE_REST} (to twice that). */
@@ -135,6 +143,15 @@ public class FireflySwarm extends Entity {
      * within {@link #DESPAWN_NEAR}.
      */
     static final double DESPAWN_FAR = 128.0, DESPAWN_NEAR = 32.0;
+    /**
+     * A kept swarm with no player (of any kind: a spectator flying round to look sees it) within this rests (0.19.2): in
+     * the air it settles on the nearest patch of rock it can find, and landed it sits there, its server ticks skipped,
+     * until a player comes this near. Players are looked for every {@link #REST_LOOK} ticks.
+     */
+    public static final double REST_RANGE = 48.0;
+    static final int REST_LOOK = 20;
+    /** Settling down to rest, it looks for a patch to land on this often (ticks). */
+    static final int REST_SETTLE = 10;
 
     // ------------------------------------------------------------------------------------------------ synced
     private static final EntityDataAccessor<Boolean> DATA_LANDED = SynchedEntityData.defineId(FireflySwarm.class, EntityDataSerializers.BOOLEAN);
@@ -169,6 +186,10 @@ public class FireflySwarm extends Entity {
     private double goal;
     private int flushTicks;
     private boolean resettling;
+    // it lives here for good (set down with the world, or a refill): no despawning, and it rests while nobody is near
+    private boolean kept;
+    // no player within REST_RANGE at the last look; resting: landed and alone, its ticks skipped
+    private boolean alone, resting;
 
     // ------------------------------------------------------------------------------------------------ client
     @Nullable private Flock flock;
@@ -215,6 +236,12 @@ public class FireflySwarm extends Entity {
      */
     @Nullable
     public static FireflySwarm spawn(ServerLevel level, Vec3 at, int count) {
+        return spawn(level, at, count, false);
+    }
+
+    /** As {@link #spawn(ServerLevel, Vec3, int)}; {@code kept}, it stays for good ({@link #kept()}). */
+    @Nullable
+    public static FireflySwarm spawn(ServerLevel level, Vec3 at, int count, boolean kept) {
         if (count <= 0) return null;
         Vec3 c = at;
         BlockPos p = BlockPos.containing(at);
@@ -229,7 +256,28 @@ public class FireflySwarm extends Entity {
         s.home = c;
         s.setCount(count);
         s.full = s.count();
+        s.kept = kept;
         return level.addFreshEntity(s) ? s : null;
+    }
+
+    /**
+     * Sets it down while its chunk is being made (world.feature.FirefliesFeature), where the level is not to be read:
+     * {@code count} fireflies resting on the patch of rock at {@code anchor} (its face on the {@code rock} side), drawn
+     * from {@code seed}, landed {@code landTicks} more once a player comes near, its home the open air at {@code home}.
+     * It stays for good ({@link #kept()}).
+     */
+    public void setDownAtGeneration(Vec3 home, BlockPos anchor, Direction rock, int count, int seed, int landTicks) {
+        Vec3 c = landingPoint(anchor, rock);
+        moveTo(c.x, c.y - HALF, c.z, 0.0F, 0.0F);
+        this.home = home;
+        setCount(count);
+        full = count();
+        entityData.set(DATA_SEED, seed);
+        entityData.set(DATA_ANCHOR, anchor.immutable());
+        entityData.set(DATA_ROCK, (byte) rock.get3DDataValue());
+        entityData.set(DATA_LANDED, true);
+        this.landTicks = Math.max(1, landTicks);
+        kept = true;
     }
 
     // ------------------------------------------------------------------------------------------------ the contract
@@ -308,6 +356,12 @@ public class FireflySwarm extends Entity {
     public int fullCount() { return full; }
     /** Whether it is flying off after a fright (startled up off its patch). */
     public boolean startled() { return startledFrom != null; }
+    /** Whether it lives here for good: set down with the world, or brought out where the caves had lost theirs. */
+    public boolean kept() { return kept; }
+    /** Server: resting on its rock with no player near ({@link #REST_RANGE}), its ticks skipped. */
+    public boolean resting() { return resting; }
+    /** The open air it keeps near (null before its first tick when summoned without one). */
+    @Nullable public Vec3 home() { return home; }
     private void setCount(int n) { entityData.set(DATA_COUNT, Mth.clamp(n, 0, MAX_COUNT)); }
     private void setCentre(Vec3 c) { setPos(c.x, c.y - HALF, c.z); }
 
@@ -368,6 +422,7 @@ public class FireflySwarm extends Entity {
      */
     @Override
     public void checkDespawn() {
+        if (kept) return;
         Player p = level().getNearestPlayer(this, -1.0);
         if (p == null) return;
         double d = p.distanceToSqr(this);
@@ -383,6 +438,7 @@ public class FireflySwarm extends Entity {
 
     @Override
     public void tick() {
+        if (!level().isClientSide && restingNow()) return;
         super.tick();
         if (level().isClientSide) {
             clientTick();
@@ -393,6 +449,23 @@ public class FireflySwarm extends Entity {
         regrow();
         if (landed()) landedTick();
         else flyTick();
+    }
+
+    /**
+     * Server: whether it rests this tick: kept, landed, and no player within {@link #REST_RANGE} at the last look. It
+     * stays as it is, as a swarm in a chunk no one is near does; the first look that finds a player near wakes it, and
+     * it goes on as it was (sitting out the rest of its stay, or startled up by whoever came near).
+     */
+    private boolean restingNow() {
+        if (!kept || isRemoved()) return resting = false;
+        if ((tickCount + getId()) % REST_LOOK == 0) alone = !playerWithin(REST_RANGE);
+        return resting = alone && landed() && count() > 0;
+    }
+
+    private boolean playerWithin(double range) {
+        Vec3 c = centre();
+        for (Player p : level().players()) if (p.distanceToSqr(c) < range * range) return true;
+        return false;
     }
 
     private void regrow() {
@@ -413,9 +486,12 @@ public class FireflySwarm extends Entity {
             target = null;
             retarget = REPICK;
         }
+        // nobody near: a kept swarm settles on its rock to rest (restingNow), as soon as it finds a patch
+        boolean settleDown = kept && alone;
         if (startledFrom != null) fleeing(c);
-        else if (landAt == null && restTicks == 0 && (resettling ? random.nextInt(RESETTLE_CHANCE) == 0
-                : flightTicks > FLY_MIN && random.nextInt(LAND_CHANCE) == 0)) planLanding();
+        else if (landAt == null && (settleDown ? (tickCount + getId()) % REST_SETTLE == 0
+                : restTicks == 0 && (resettling ? random.nextInt(RESETTLE_CHANCE) == 0 : flightTicks > FLY_MIN && random.nextInt(LAND_CHANCE) == 0)))
+            planLanding();
         if (landAt != null && ++approachTicks > APPROACH_TICKS) abandonLanding();   // it cannot get there: another time
         if (landAt != null) target = landAt;
         else if (startledFrom == null && (target == null ? retarget <= 0 : (retarget <= 0 || c.distanceToSqr(target) < 0.6 * 0.6))) {
@@ -623,7 +699,7 @@ public class FireflySwarm extends Entity {
     }
 
     /** Where the centre sits on a patch: in the open block, a little off its rock's face. */
-    private static Vec3 landingPoint(BlockPos pos, Direction rock) {
+    public static Vec3 landingPoint(BlockPos pos, Direction rock) {
         return Vec3.atCenterOf(pos).add(Vec3.atLowerCornerOf(rock.getNormal()).scale(0.25));
     }
 
@@ -668,7 +744,7 @@ public class FireflySwarm extends Entity {
     }
 
     /** How many rock faces the open blocks round p show (up to 12): a patch worth settling on. */
-    private static int patch(Level level, BlockPos p) {
+    public static int patch(BlockGetter level, BlockPos p) {
         int faces = 0;
         BlockPos.MutableBlockPos q = new BlockPos.MutableBlockPos();
         for (int dx = -1; dx <= 1; dx++)
@@ -785,9 +861,35 @@ public class FireflySwarm extends Entity {
     }
 
     /** Whether the block beside the open block p in direction d shows p a face a firefly can sit on. */
-    private static boolean sturdy(BlockGetter level, BlockPos p, Direction d) {
+    public static boolean sturdy(BlockGetter level, BlockPos p, Direction d) {
         BlockPos q = p.relative(d);
         return level.getBlockState(q).isFaceSturdy(level, q, d.getOpposite());
+    }
+
+    /**
+     * Room for the spawner to bring a swarm out at {@code at}: open air with no water or lava for {@link #ROOM_CLEAR}
+     * blocks round it ({@link #openRound}), and rock no further than {@link #ROOM_FLOOR} under it, so it is in a cave and
+     * not out over a drop. (A swarm set down with the world needs only the open air: it rests on rock in reach, or the
+     * spot is no home.)
+     */
+    public static boolean roomAt(BlockGetter level, BlockPos at) {
+        if (!openRound(level, at)) return false;
+        BlockPos.MutableBlockPos q = at.mutable();
+        for (int i = 0; i < ROOM_FLOOR; i++) {
+            q.move(0, -1, 0);
+            if (!level.getBlockState(q).getCollisionShape(level, q).isEmpty()) return true;
+        }
+        return false;
+    }
+
+    /** {@link #roomAt}: open this many blocks round, rock within this under. */
+    public static final int ROOM_CLEAR = 1, ROOM_FLOOR = 10;
+
+    /** Open air with no water or lava for {@link #ROOM_CLEAR} blocks round {@code at} (the first half of {@link #roomAt}). */
+    public static boolean openRound(BlockGetter level, BlockPos at) {
+        for (BlockPos q : BlockPos.betweenClosed(at.offset(-ROOM_CLEAR, -ROOM_CLEAR, -ROOM_CLEAR), at.offset(ROOM_CLEAR, ROOM_CLEAR, ROOM_CLEAR)))
+            if (!open(level, q)) return false;
+        return true;
     }
 
     @Nullable
@@ -819,6 +921,7 @@ public class FireflySwarm extends Entity {
         tag.putInt("LandTicks", landTicks);
         tag.putInt("Rest", restTicks);
         tag.putInt("Alone", aloneTicks);
+        if (kept) tag.putBoolean("Kept", true);
     }
 
     @Override
@@ -835,6 +938,7 @@ public class FireflySwarm extends Entity {
         if (landed() && landTicks <= 0) landTicks = LAND_MIN;
         restTicks = tag.getInt("Rest");
         aloneTicks = tag.getInt("Alone");
+        kept = tag.getBoolean("Kept");
     }
 
     /** For /remix fireflies list: what it is doing. */
@@ -852,6 +956,7 @@ public class FireflySwarm extends Entity {
             else if (resettling) b.append(" (looking to land again)");
         }
         b.append(", ").append(count()).append(" of ").append(full).append(" fireflies, seed ").append(seed());
+        if (kept) b.append(resting ? ", kept, resting (no player within " + (int) REST_RANGE + ")" : ", kept");
         if (home != null) b.append(String.format(java.util.Locale.ROOT, ", %.0f blocks from home", Math.sqrt(centre().distanceToSqr(home))));
         return b.toString();
     }

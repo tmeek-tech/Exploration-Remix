@@ -152,16 +152,22 @@ class DenRegistryTest {
     }
 
     @Test
-    void familySizeIsTwoOrThreeAndFixed() {
-        int twos = 0, threes = 0;
-        for (int i = 0; i < 200; i++) {
+    void familySizeIsFourToSixAndFixed() {
+        // Taran's 0.19.2 pick: about twice the Mossbacks, as bigger den families (two or three before, 2.5 on average)
+        int[] seen = new int[7];
+        int total = 0, dens = 600;
+        for (int i = 0; i < dens; i++) {
             BlockPos p = new BlockPos(i * 37 - 4000, -64 + (i % 5), i * -53 + 900);
             int n = DenRegistry.familySize(p);
             assertEquals(n, DenRegistry.familySize(new BlockPos(p.getX(), p.getY(), p.getZ())));
-            if (n == 2) twos++;
-            else if (n == 3) threes++;
-            else fail("a family of " + n);
+            if (n < DenRegistry.FAMILY_MIN || n > DenRegistry.FAMILY_MAX) fail("a family of " + n);
+            seen[n]++;
+            total += n;
         }
-        assertTrue(twos > 40 && threes > 40, twos + " twos, " + threes + " threes");
+        assertEquals(4, DenRegistry.FAMILY_MIN);
+        assertEquals(6, DenRegistry.FAMILY_MAX);
+        for (int n = 4; n <= 6; n++) assertTrue(seen[n] > dens / 5, seen[4] + " fours, " + seen[5] + " fives, " + seen[6] + " sixes");
+        double mean = (double) total / dens;
+        assertTrue(mean > 4.8 && mean < 5.2, "mean family " + mean + ", about twice the old 2.5");
     }
 }
