@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 import static com.explorationremix.creature.SkeinHomes.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -50,6 +51,23 @@ class SkeinHomesTest {
         for (int k = 0; k <= 2 * SCAN; k++) seen.add(scanY(-150, k));
         assertEquals(2 * SCAN + 1, seen.size());
         for (int y = -150 - SCAN; y <= -150 + SCAN; y++) assertTrue(seen.contains(y), "height " + y);
+    }
+
+    @Test
+    void theDeepDarksRockEndsTheTriesSoTheRiftKeepsItsSkeins() {
+        BooleanSupplier room = () -> true, cramped = () -> false;
+        assertEquals(Take.SET_DOWN, take(BlueSpawnRules.Place.RIFT, room));
+        assertEquals(Take.TRY_AGAIN, take(BlueSpawnRules.Place.RIFT, cramped));
+        // where a Skein lay before 0.19.8 the chunk now keeps none, rather than trying on into the rift
+        assertEquals(Take.NONE, take(BlueSpawnRules.Place.DEEP_DARK, room));
+        assertEquals(Take.TRY_AGAIN, take(BlueSpawnRules.Place.DEEP_DARK, cramped));
+        // the refuge and anywhere else were passed over as before, without the slow look at the body's room
+        BooleanSupplier never = () -> { throw new AssertionError("room asked outside the rift and the Deep Dark"); };
+        assertEquals(Take.TRY_AGAIN, take(BlueSpawnRules.Place.GEODES, never));
+        assertEquals(Take.TRY_AGAIN, take(BlueSpawnRules.Place.OTHER, never));
+        // a home sets its Skein down only where Skeins live
+        for (BlueSpawnRules.Place p : BlueSpawnRules.Place.values())
+            assertEquals(BlueSpawnRules.skeinsLive(p), take(p, room) == Take.SET_DOWN, p.name());
     }
 
     @Test

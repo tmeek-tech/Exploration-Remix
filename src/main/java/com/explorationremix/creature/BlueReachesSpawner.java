@@ -202,7 +202,7 @@ public final class BlueReachesSpawner {
         Vec3 mid = Vec3.atCenterOf(at);
         // it is counted where its box stands, half a box under its centre
         double fromPlayer = mid.subtract(0.0, FireflySwarm.HALF, 0.0).distanceTo(p.position());
-        return BlueSpawnRules.swarmSpot(placeAt(level, at), mid.y, top, bottom, nearestPlayer(level, mid), fromPlayer, level.random.nextDouble()) ? mid : null;
+        return BlueSpawnRules.swarmSpot(placeAt(level, at), mid.y, top, bottom, nearestPlayer(level, mid), fromPlayer) ? mid : null;
     }
 
     // ------------------------------------------------------------------------------------------------ shared
