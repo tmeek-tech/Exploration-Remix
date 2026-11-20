@@ -9,13 +9,13 @@ import java.util.Set;
 import static com.explorationremix.creature.FireflyHomes.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Where the swarms live from the start: by water and glowbells most, few in the Deep Dark, fixed by the seed. */
+/** Where the swarms live from the start: by water and glowbells most, none in the Deep Dark, fixed by the seed. */
 class FireflyHomesTest {
     private static final long SEED = 8675309L;
 
     @Test
     void drawnToWaterAndGlowbells() {
-        for (Place p : new Place[]{Place.RIFT, Place.GEODES, Place.DEEP_DARK}) {
+        for (Place p : new Place[]{Place.RIFT, Place.GEODES}) {
             double bare = chance(p, false), drawn = chance(p, true);
             assertTrue(bare > 0.0, p + " has swarms over bare rock too (fewer, but not none)");
             assertEquals(DRAW, drawn / bare, 1e-9, p + ": by water or glowbells is the likelier home");
@@ -23,10 +23,18 @@ class FireflyHomesTest {
             assertTrue(drawn <= maxChance());
         }
         assertEquals(0.0, chance(Place.OTHER, true), "no swarm outside the Blue Reaches' places");
-        assertTrue(chance(Place.DEEP_DARK, false) < chance(Place.RIFT, false) / 2.0, "few in the Deep Dark");
-        assertTrue(chance(Place.DEEP_DARK, false) < chance(Place.GEODES, false) && chance(Place.GEODES, false) < chance(Place.RIFT, false),
+        assertTrue(chance(Place.GEODES, false) < chance(Place.RIFT, false),
                 "the geodes' wide halls give many tries room, so each comes up less often than the rift's");
         assertEquals(1.0, chance(Place.RIFT, true), 0.02, "by the rift's water nearly every try with room is a home");
+    }
+
+    @Test
+    void noneInTheDeepDark() {
+        // 0.19.8, Taran's ask: not over bare rock, not by water or glowbells
+        assertEquals(0.0, chance(Place.DEEP_DARK, false));
+        assertEquals(0.0, chance(Place.DEEP_DARK, true));
+        for (Place p : Place.values())
+            assertEquals(BlueSpawnRules.swarmsLive(p), chance(p, false) > 0.0, p + ": a home only where swarms live");
     }
 
     @Test

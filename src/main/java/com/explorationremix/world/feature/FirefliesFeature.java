@@ -10,12 +10,14 @@ import com.explorationremix.world.terrain.Terrain;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.feature.Feature;
@@ -27,6 +29,7 @@ import net.minecraft.world.phys.Vec3;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -130,14 +133,16 @@ public final class FirefliesFeature extends Feature<NoneFeatureConfiguration> {
 
     /**
      * The patch of rock a home's swarm rests on, as a swarm picks one ({@link FireflySwarm#patch}): of the open blocks
-     * within {@link FireflyHomes#PERCH_REACH} of the home (inside the chunk, and {@link FireflyHomes#PERCH_APART} from
-     * where the chunk's other swarms rest) with a face of rock beside them, the one showing the most faces round it,
-     * nearer ones first, in sight of the home; its rock whichever face it has.
+     * within {@link FireflyHomes#PERCH_REACH} of the home (inside the chunk, in the home's own biome, and
+     * {@link FireflyHomes#PERCH_APART} from where the chunk's other swarms rest) with a face of rock beside them, the
+     * one showing the most faces round it, nearer ones first, in sight of the home; its rock whichever face it has.
+     * Keeping to the home's biome (0.19.8) stops a rift swarm by the Deep Dark resting over the edge in it.
      */
     @Nullable
     private static Perch perch(WorldGenLevel level, BlockPos at, RandomSource r, int minX, int minZ, List<BlockPos> rests) {
         int reach = FireflyHomes.PERCH_REACH;
         Vec3 c = Vec3.atCenterOf(at);
+        Optional<ResourceKey<Biome>> home = level.getBiome(at).unwrapKey();
         Perch best = null;
         double bestScore = 2.5;
         List<Direction> rock = new ArrayList<>(6);
@@ -150,6 +155,7 @@ public final class FirefliesFeature extends Feature<NoneFeatureConfiguration> {
             double score = FireflySwarm.patch(level, p) - 0.35 * Math.sqrt(p.distToCenterSqr(c));
             if (score <= bestScore) continue;
             Direction d = rock.get(r.nextInt(rock.size()));
+            if (home.isPresent() && !level.getBiome(p).is(home.get())) continue;
             Vec3 land = FireflySwarm.landingPoint(p, d);
             if (level.clip(new ClipContext(c, land, ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, null)).getType() != HitResult.Type.MISS) continue;
             best = new Perch(p.immutable(), d);

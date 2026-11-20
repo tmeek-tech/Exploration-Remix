@@ -41,7 +41,8 @@ import java.util.Locale;
  *     <li>{@code /remix fireflies startle}: the nearest landed swarm is startled up by you, as if you had walked up to
  *     it: it lifts off in a wave from your side with a flutter, flies off and lands again a little way off</li>
  *     <li>{@code /remix fireflies homes}: the swarms set down with the world since the game started (0.19.2), those in
- *     the loaded world now (kept for good, landed, resting with no player near), and the spawner's refill</li>
+ *     the loaded world now (kept for good, landed, resting with no player near, homes by place), how many left the
+ *     Deep Dark unseen (0.19.8), and the spawner's refill</li>
  *     <li>{@code /remix fireflies density [radius] [samples]}: how many swarms a player would have round them: at
  *     random spots a player could stand on in the Blue Reaches round you (in loaded chunks, with their neighbours'
  *     entities loaded), the swarms within the spawner's radius of each, by place, against what the caves keep</li>
@@ -102,7 +103,7 @@ public final class FireflyCommands {
         for (BlueSpawnRules.Place p : BlueSpawnRules.Place.values())
             if (at[p.ordinal()] > 0) b.append(String.format(Locale.ROOT, " %s %d (%.0f%% by water or glowbells)", p.name().toLowerCase(Locale.ROOT),
                     at[p.ordinal()], 100.0 * drawnAt[p.ordinal()] / at[p.ordinal()]));
-        say(c, b.toString());
+        say(c, b.append(". Left the Deep Dark unseen since the game started: ").append(FireflySwarm.LEFT_DEEP_DARK).append('.').toString());
         say(c, String.format(Locale.ROOT, "Refill: %d looks round a player with fewer swarms near than the caves keep, %d rolls came up, %d swarms came out.",
                 BlueReachesSpawner.SWARM_LOOKS, BlueReachesSpawner.SWARM_ROLLS, BlueReachesSpawner.SWARM_IN));
         return loaded;

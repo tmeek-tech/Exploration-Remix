@@ -50,12 +50,13 @@ class BlueSpawnRulesTest {
 
     @Test
     void aSwarmComesBackSlowlyOnlyWhereTheCavesAreShortOfThem() {
-        // twice the old spawner's three to five round a player in the rift and the geodes, one or two in the Deep Dark
+        // twice the old spawner's three to five round a player in the rift and the geodes, none in the Deep Dark (0.19.8)
         assertEquals(6, swarmsKept(Place.RIFT));
         assertEquals(10, swarmsMax(Place.RIFT));
         assertEquals(6, swarmsKept(Place.GEODES));
-        assertEquals(2, swarmsKept(Place.DEEP_DARK));
-        assertEquals(4, swarmsMax(Place.DEEP_DARK));
+        assertEquals(10, swarmsMax(Place.GEODES));
+        assertEquals(0, swarmsKept(Place.DEEP_DARK));
+        assertEquals(0, swarmsMax(Place.DEEP_DARK));
         assertEquals(0, swarmsMax(Place.OTHER));
         assertTrue(wantSwarm(Place.RIFT, 5, true, false, 0.0), "short of swarms: now and then");
         assertFalse(wantSwarm(Place.RIFT, 5, true, false, SWARM_REFILL_CHANCE), "but not at every look");
@@ -63,8 +64,8 @@ class BlueSpawnRulesTest {
         assertFalse(wantSwarm(Place.RIFT, 6, true, false, 0.0), "the caves have theirs: none comes");
         assertFalse(wantSwarm(Place.RIFT, 6, true, true, 0.0), "not even when one was due");
         assertTrue(wantSwarm(Place.GEODES, 0, true, false, 0.0));
-        assertTrue(wantSwarm(Place.DEEP_DARK, 1, true, false, 0.0));
-        assertFalse(wantSwarm(Place.DEEP_DARK, 2, true, false, 0.0), "few in the Deep Dark");
+        assertFalse(wantSwarm(Place.DEEP_DARK, 0, true, false, 0.0), "none kept round a player in the Deep Dark");
+        assertFalse(wantSwarm(Place.DEEP_DARK, 0, true, true, 0.0), "not even when one was due");
         assertFalse(wantSwarm(Place.OTHER, 0, true, true, 0.0));
         assertFalse(wantSwarm(Place.RIFT, 0, false, true, 0.0), "doMobSpawning off");
         // about one a minute of looks (every EVERY ticks) round a player whose caves are short of them
@@ -76,10 +77,25 @@ class BlueSpawnRulesTest {
     void theRefugeHasFirefliesButNoSkeins() {
         assertFalse(skeinsLive(Place.GEODES));
         assertTrue(skeinsLive(Place.RIFT));
-        assertTrue(skeinsLive(Place.DEEP_DARK));
         assertTrue(swarmsLive(Place.GEODES));
+        assertTrue(swarmsLive(Place.RIFT));
         assertFalse(skeinSpot(Place.GEODES, -150, TOP, BOTTOM, 30, 30, 0));
-        assertTrue(swarmSpot(Place.GEODES, -150, TOP, BOTTOM, 30, 30, 0.9));
+        assertTrue(swarmSpot(Place.GEODES, -150, TOP, BOTTOM, 30, 30));
+    }
+
+    @Test
+    void theDeepDarkHasNeither() {
+        // 0.19.8, Taran's ask: no Skein and no swarm comes out in the Deep Dark, wherever the player is
+        assertFalse(skeinsLive(Place.DEEP_DARK));
+        assertFalse(swarmsLive(Place.DEEP_DARK));
+        assertFalse(skeinSpot(Place.DEEP_DARK, -150, TOP, BOTTOM, 30, 30, 0));
+        assertFalse(swarmSpot(Place.DEEP_DARK, -150, TOP, BOTTOM, 30, 30));
+        // a player standing in it still has the rift's Skeins looked after round them (they come out on the rift's rock)
+        assertTrue(playerCounts(false, false, Place.DEEP_DARK, -200, TOP, BOTTOM));
+        assertTrue(skeinSpot(Place.RIFT, -200, TOP, BOTTOM, 30, 30, 0));
+        // and nothing lives outside the Blue Reaches' own places
+        assertFalse(skeinsLive(Place.OTHER));
+        assertFalse(swarmsLive(Place.OTHER));
     }
 
     @Test
@@ -88,9 +104,9 @@ class BlueSpawnRulesTest {
         assertFalse(skeinSpot(Place.RIFT, -150, TOP, BOTTOM, 19.9, 19.9, 0), "too near a player");
         assertFalse(skeinSpot(Place.RIFT, -150, TOP, BOTTOM, 25, 25, 3), "three there already");
         assertFalse(skeinSpot(Place.RIFT, -300, TOP, BOTTOM, 25, 25, 0), "below the Blue Reaches");
-        assertFalse(swarmSpot(Place.RIFT, -150, TOP, BOTTOM, 10, 10, 0.0));
-        assertTrue(swarmSpot(Place.DEEP_DARK, -150, TOP, BOTTOM, 25, 25, 0.1));
-        assertFalse(swarmSpot(Place.DEEP_DARK, -150, TOP, BOTTOM, 25, 25, 0.9), "few in the Deep Dark");
+        assertFalse(swarmSpot(Place.RIFT, -150, TOP, BOTTOM, 10, 10), "too near a player");
+        assertTrue(swarmSpot(Place.RIFT, -150, TOP, BOTTOM, 25, 25));
+        assertFalse(swarmSpot(Place.RIFT, -300, TOP, BOTTOM, 25, 25), "below the Blue Reaches");
     }
 
     @Test
@@ -111,7 +127,7 @@ class BlueSpawnRulesTest {
         for (double d = NEAR; d <= skeinWorst; d += 0.25)
             assertEquals(d <= SKEIN_RADIUS, skeinSpot(Place.RIFT, -150, TOP, BOTTOM, NEAR, d, 0), "a Skein " + d + " away");
         for (double d = NEAR; d <= swarmWorst; d += 0.25)
-            assertEquals(d <= SWARM_RADIUS, swarmSpot(Place.RIFT, -150, TOP, BOTTOM, NEAR, d, 0.0), "a swarm " + d + " away");
+            assertEquals(d <= SWARM_RADIUS, swarmSpot(Place.RIFT, -150, TOP, BOTTOM, NEAR, d), "a swarm " + d + " away");
     }
 
     @Test
