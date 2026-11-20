@@ -8,7 +8,7 @@ Deterministic: the same script gives the same sounds.
 
 Needs numpy and ffmpeg with libvorbis. Writes src/main/resources/assets/explorationremix/sounds/creature/<name>/*.ogg
 (tools/sounds.py lists them in sounds.json). Run from anywhere: python3 tools/synth_creature_sounds.py [mossback]
-[skein] [firefly] (all when none is named).
+[skein] [firefly] [stilt_mantis] (all when none is named).
 """
 import os, sys
 import numpy as np
@@ -322,9 +322,124 @@ def flutter(rng):
 
 FIREFLY_MAKERS = {"flutter": flutter}
 
+# =============================================================================================== the stilt mantis
+# 0.20.0: the Deep Gardens' gentle grazer. Light and dry, nothing throaty or harsh: the tap of a thin chitin foot on
+# rock, a soft glassy chirr while it grazes (a stridulation: smooth pulses on a high, pure carrier), the papery rattle
+# of its wings flared in its startle display, a thin squeak hurt, and a chirr that slows and fades as it dies. A small
+# cave echo, as in the Gardens' wide groves.
+
+MANTIS_COUNTS = {"tap": 4, "chirr": 3, "rattle": 2, "hurt": 2, "death": 1}
+
+
+def pulses(rng, n, times, width, carrier, amp_lo=0.6):
+    """Smooth pulses (raised cosines a few milliseconds wide) on a pure carrier, one at each time (seconds)."""
+    out = np.zeros(n)
+    t = np.arange(n) / SR
+    w = int(width * SR)
+    win = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(w) / max(1, w - 1))
+    gate = np.zeros(n)
+    for at in times:
+        i = int(at * SR)
+        S.add_clipped(gate, win * rng.uniform(amp_lo, 1.0), i)
+    out = gate * np.sin(2 * np.pi * np.cumsum(carrier) / SR)
+    return out
+
+
+def mantis_tap(rng):
+    """A thin chitin foot set on rock: a small dry tick and a soft hollow knock under it."""
+    n = secs(0.16)
+    t = np.arange(n) / SR
+    tick_ = tick(rng, rng.uniform(2600, 3800), 1.8, 0.003) * 0.9
+    tick_ = np.concatenate([tick_, np.zeros(max(0, n - len(tick_)))])[:n]
+    knock = S.tone(rng.uniform(560, 820) * np.ones(n), np.exp(-t / rng.uniform(0.012, 0.02)), ((1, 1.0), (2.4, 0.3)))
+    x = tick_ + 0.45 * knock
+    x = S.filt(x, S.highpass(220, 2))
+    return S.normalize_peak(cave(x, rng, 0.2, 0.12), -7.0)
+
+
+def mantis_chirr(rng):
+    """Its voice while it grazes: two or three soft phrases of quick, glassy pulses, each phrase rising a little."""
+    phrases = int(rng.integers(2, 4))
+    dur, times, spans = 0.0, [], []
+    for _ in range(phrases):
+        length = rng.uniform(0.14, 0.3)
+        rate = rng.uniform(38, 58)
+        at = 0.0
+        while at < length:
+            times.append(dur + at)
+            at += (1.0 / rate) * rng.uniform(0.9, 1.1)
+        spans.append((dur, dur + length))
+        dur += length + rng.uniform(0.07, 0.16)
+    n = secs(dur + 0.12)
+    t = np.arange(n) / SR
+    f0 = rng.uniform(3300, 4200)
+    rise = np.zeros(n)
+    for a, b in spans:                                          # each phrase bends up a few percent as it goes
+        m = (t >= a) & (t < b)
+        rise[m] = (t[m] - a) / (b - a)
+    carrier = f0 * (1.0 + 0.06 * rise)
+    x = pulses(rng, n, times, 0.009, carrier)
+    x += 0.25 * pulses(rng, n, [a + 0.002 for a in times], 0.006, carrier * 1.5, 0.3)   # a faint glassy overtone
+    x = S.filt(x, S.lowpass(6500, 2))
+    return S.normalize_peak(cave(x, rng, 0.3, 0.2), -6.0)
+
+
+def mantis_rattle(rng):
+    """Its startle display: wings snapped open and shivered, a dry papery rattle that swells and stops."""
+    dur = rng.uniform(0.45, 0.6)
+    n = secs(dur + 0.05)
+    t = np.arange(n) / SR
+    beat = rng.uniform(26, 34)
+    flutter = 0.3 + 0.7 * np.maximum(0, np.sin(2 * np.pi * beat * t + rng.uniform(0, 6.28))) ** 2
+    paper = noise(rng, n, S.bandpass(rng.uniform(1900, 2600), 0.7))
+    paper = paper / (np.std(paper) + 1e-12)
+    snap = noise(rng, n, S.bandpass(3200, 1.2)) * np.exp(-t / 0.012) * 1.6          # the wings snapping open
+    env = np.minimum(1, t / 0.03) * (0.6 + 0.4 * np.minimum(1, t / dur)) * np.clip((dur - t) / 0.05, 0, 1)
+    x = paper * flutter * env * 0.5 + snap
+    x = S.filt(x, S.lowpass(5200, 2))
+    return S.normalize_peak(cave(x, rng, 0.25, 0.15), -3.0)
+
+
+def mantis_hurt(rng):
+    """A thin squeak that drops away, with the click of a joint."""
+    dur = rng.uniform(0.18, 0.26)
+    n = secs(dur + 0.05)
+    t = np.arange(n) / SR
+    f = np.linspace(rng.uniform(2300, 2700), rng.uniform(1300, 1600), n) * (1 + 0.025 * np.sin(2 * np.pi * 38 * t))
+    sq = S.tone(f, np.minimum(1, t / 0.008) * np.exp(-t / (dur * 0.5)), ((1, 1.0), (2, 0.25), (3, 0.08)))
+    cl = tick(rng, 3000, 1.6, 0.004)
+    x = sq.copy()
+    S.add_clipped(x, cl * 0.7, 0)
+    return S.normalize_peak(cave(x, rng, 0.25, 0.15), -3.0)
+
+
+def mantis_death(rng):
+    """Its chirr slows into separate pulses and fades, its feet tapping a few last times."""
+    dur = 1.6
+    n = secs(dur)
+    t = np.arange(n) / SR
+    times, at = [], 0.0
+    while at < dur - 0.3:
+        times.append(at)
+        at += 1.0 / (55.0 * (1 - at / dur) ** 2 + 6.0)
+    carrier = 3600 - 1400 * t / dur
+    x = pulses(rng, n, times, 0.012, carrier) * np.exp(-t / 0.6)
+    taps = [rng.uniform(0.5, 0.7)]
+    while taps[-1] < dur - 0.2:
+        taps.append(taps[-1] + rng.uniform(0.12, 0.3))
+    for a in taps:
+        S.add_clipped(x, mantis_tap(rng)[:secs(0.12)] * 0.25 * np.exp(-a / 1.2), int(a * SR))
+    x *= np.clip((dur - t) / 0.2, 0, 1)
+    return S.normalize_peak(cave(x, rng, 0.3, 0.2), -4.0)
+
+
+MANTIS_MAKERS = {"tap": mantis_tap, "chirr": mantis_chirr, "rattle": mantis_rattle, "hurt": mantis_hurt,
+                 "death": mantis_death}
+
 # each creature's sounds (how many of each), their makers and the base of their seeds
 CREATURES = {"mossback": (COUNTS, MAKERS, 7700), "skein": (SKEIN_COUNTS, SKEIN_MAKERS, 9100),
-             "firefly": (FIREFLY_COUNTS, FIREFLY_MAKERS, 9900)}
+             "firefly": (FIREFLY_COUNTS, FIREFLY_MAKERS, 9900),
+             "stilt_mantis": (MANTIS_COUNTS, MANTIS_MAKERS, 10300)}
 
 
 def make(name):

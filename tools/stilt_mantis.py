@@ -77,8 +77,8 @@ PARTS = [
         B("crown", (-3, -2, -2.5), (6, 2, 3)),
         B("face", (-2, 0, -2.2), (4, 2, 3)),
         B("mouth", (-1, 2, -1.8), (2, 2, 2)),
-        B("eye", (2.2, -3, -3), (2, 3, 3)),
-        B("eye", (-4.2, -3, -3), (2, 3, 3)),
+        B("eye", (2.0, -3.4, -3.2), (3, 3, 3)),
+        B("eye", (-5.0, -3.4, -3.2), (3, 3, 3)),
     ]),
     limb("antenna_left", ANTENNA, 1),
     limb("antenna_right", ANTENNA, 1),
@@ -176,11 +176,11 @@ def texel(part, mat, face, i, j, fw, fh, nz, rng, size):
         if look == "body": return "mid" if (top and nz > 0.6) else ("dim" if nz > 0.35 else "deep")
         return "neon" if (top and nz > 0.7) else dark(look, nz)
     if mat == "eye":
-        # big dark eyes, a pseudopupil and one hot glint at the top front
-        if face == "north" and i == fw // 2 and j == fh - 2: return "deep"
-        if (face in ("north", "top")) and i == 0 and j == 0: return "hot"
-        if face == "top" and nz > 0.55: return "mid" if look == "body" else "dim"
-        return "dim" if nz > 0.3 else "deep"
+        # big pale compound eyes glowing brightest of all, a dark pseudopupil looking out of each face
+        if bottom: return "dim" if look == "body" else "shell2"
+        if face in ("north", "east", "west") and i == fw // 2 and j == fh // 2: return "deep"
+        if top: return "hot"
+        return "hot" if nz > 0.45 else "neon"
     if mat == "mouth":
         return "deep" if (bottom or nz < 0.4) else ("dim" if look != "body" else "mid")
     if mat == "spines":

@@ -132,4 +132,6 @@ test {
     systemProperty 'explorationremix.strictPlans', 'true'
     // the Mossback's motion clips (MossbackClips, a slow test): where to write them, which ones, how many frames a second
     ['mossback.clips', 'mossback.only', 'mossback.fps'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
+    // and the stilt mantis's (MantisClips, 0.20.0), in one of its four colours
+    ['mantis.clips', 'mantis.only', 'mantis.fps', 'mantis.colour', 'mantis.zoom', 'mantis.cells'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
 }

@@ -76,6 +76,9 @@ class MantisClips {
         }
     }
 
+    /** How far the camera stands back, against each scene's offset. */
+    static final double ZOOM = Double.parseDouble(System.getProperty("mantis.zoom", "1.7"));
+
     interface Seg { boolean tick(Driver d, int t); }
 
     static Seg walk(double dist, double speed) {
@@ -103,9 +106,13 @@ class MantisClips {
 
     static Seg set(java.util.function.Consumer<Driver> r) { return (d, t) -> { r.accept(d); return false; }; }
 
-    record Scene(String name, BlockWorld world, Driver driver, List<Seg> script, Vector3d camOffset, int dieAt) {
+    record Scene(String name, BlockWorld world, Driver driver, List<Seg> script, Vector3d camOffset, int dieAt, Vector3d aim) {
         Scene(String name, BlockWorld world, Driver driver, List<Seg> script, Vector3d camOffset) {
-            this(name, world, driver, script, camOffset, -1);
+            this(name, world, driver, script, camOffset, -1, new Vector3d(0, -0.3, 0));
+        }
+
+        Scene(String name, BlockWorld world, Driver driver, List<Seg> script, Vector3d camOffset, int dieAt) {
+            this(name, world, driver, script, camOffset, dieAt, new Vector3d(0, -0.3, 0));
         }
     }
 
@@ -131,6 +138,26 @@ class MantisClips {
 
     static List<Scene> scenes() {
         List<Scene> list = new ArrayList<>();
+        {   // standing still, turned three quarters to the camera (a portrait)
+            BlockWorld w = new BlockWorld().fill(-8, -1, -8, 8, -1, 8);
+            Driver d = new Driver(w, 0, 0, 0, 30);
+            list.add(new Scene("still", w, d, List.of(idle(40)), new Vector3d(3.4, 1.0, 2.6)));
+        }
+        {   // standing still, the camera going round it
+            BlockWorld w = new BlockWorld().fill(-8, -1, -8, 8, -1, 8);
+            Driver d = new Driver(w, 0, 0, 0, 0);
+            list.add(new Scene("orbit", w, d, List.of(idle(120)), new Vector3d(0, 0.9, 3.6), -1, new Vector3d(0, 0.2, 0)));
+        }
+        {   // and close round its head
+            BlockWorld w = new BlockWorld().fill(-8, -1, -8, 8, -1, 8);
+            Driver d = new Driver(w, 0, 0, 0, 0);
+            list.add(new Scene("orbit-head", w, d, List.of(idle(120)), new Vector3d(0, 0.15, 1.15), -1, new Vector3d(0, 0.8, 0.75)));
+        }
+        {   // close by its head, from its side
+            BlockWorld w = new BlockWorld().fill(-8, -1, -8, 8, -1, 8);
+            Driver d = new Driver(w, 0, 0, 0, 90);
+            list.add(new Scene("head", w, d, List.of(idle(40)), new Vector3d(0.2, 0.3, -1.6), -1, new Vector3d(-1.0, 1.0, 0)));
+        }
         {   // walking on a flat floor: straight, a turn, a stop, a turn on the spot, on again
             BlockWorld w = new BlockWorld().fill(-14, -1, -14, 14, -1, 14);
             Driver d = new Driver(w, -3, 0, -6, 0);
@@ -242,8 +269,13 @@ class MantisClips {
                 body.frame(pt, mid, f, u);
                 if (cam == null) cam = new Vector3d(mid);
                 else cam.lerp(mid, s.driver.hurry ? 0.16 : 0.06);
-                Vector3d eye = new Vector3d(s.camOffset).add(cam);
-                Vector3d look = new Vector3d(cam).add(0, -0.4, 0);
+                Vector3d off = new Vector3d(s.camOffset).mul(ZOOM);
+                if (s.name.startsWith("orbit")) {
+                    double a = Math.toRadians(ticks + pt) * 3.0;
+                    off.set(off.x * Math.cos(a) - off.z * Math.sin(a), off.y, off.x * Math.sin(a) + off.z * Math.cos(a));
+                }
+                Vector3d eye = off.add(cam).add(s.aim);
+                Vector3d look = new Vector3d(cam).add(s.aim);
                 r.camera(eye, look, 50);
                 r.clear(0x15131c);
                 MossbackClips.drawWorld(r, s.world, cam);

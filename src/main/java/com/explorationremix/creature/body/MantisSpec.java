@@ -75,12 +75,12 @@ public final class MantisSpec {
         ride = 30.0 * k;
         proForward = 3.6 * k;
         proUp = 1.0 * k;
-        proPitch = Math.toRadians(55);
+        proPitch = Math.toRadians(58);
         abdomenBack = 3.8 * k;
         shoulderAlong = prothorax * 0.84;
         shoulderSide = 1.6 * k;
-        walkStride = 2.4 * scale;
-        trotStride = 3.6 * scale;
+        walkStride = 1.9 * scale;
+        trotStride = 3.2 * scale;
         walkLift = 0.42 * scale;
         trotLift = 0.34 * scale;
     }

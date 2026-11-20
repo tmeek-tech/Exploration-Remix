@@ -230,7 +230,7 @@ public final class MantisBody {
             s.shoulder[i].set(s.proRoot).fma(spec.shoulderAlong, s.proDir).fma(side * spec.shoulderSide, s.l).fma(-1.0 * k, s.proUp);
             s.antRoot[i].set(s.head).fma(side * 1.2 * k, s.hx).fma(-2.0 * k, s.hy).fma(-2.2 * k, s.hz);
             // out, up and ahead; swept back when it runs
-            s.antRest[i].set(s.hx).mul(side * 0.5).fma(-0.8, s.hy).fma(-0.42 + 0.7 * runShare, s.hz).normalize();
+            s.antRest[i].set(s.hx).mul(side * 0.38).fma(-0.55, s.hy).fma(-0.78 + 0.9 * runShare, s.hz).normalize();
             s.hinge[i].set(s.p).fma(2.0 * k, s.u).fma(-1.6 * k, s.f).fma(side * 0.25 * k, s.l);
         }
         s.abRoot.set(s.p).fma(-spec.abdomenBack, s.f).fma(0.2 * k, s.u);
