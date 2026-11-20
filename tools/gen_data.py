@@ -621,9 +621,9 @@ def loot(bid, drop, kind, chance=None, neon=False, shears=False):
              "conditions": [{"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"mushrooms": str(n)}}]}
             for n in (2, 3))
     if kind in ("tall", "tall_fern"):
-        # both halves break together and either drops the plant once, as vanilla's tall grass does (0.20.2: the upper
-        # half dropped nothing before, the game breaking it with its own state): a half drops it while the other half
-        # still stands by it
+        # both halves break together and the plant drops once, from whichever half was broken, as vanilla's tall grass
+        # does (0.20.2; so the breaking tool counts for either half): a half drops it while the other half still
+        # stands by it
         pools = []
         for half, other, dy in (("lower", "upper", 1), ("upper", "lower", -1)):
             pools.append({"rolls": 1, "bonus_rolls": 0, "entries": [entry], "conditions": [
