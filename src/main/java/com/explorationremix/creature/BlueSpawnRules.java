@@ -9,12 +9,16 @@ package com.explorationremix.creature;
  * and stay. Round a player in the Blue Reaches (in Survival or Adventure) the spawner brings a new Skein out only now
  * and then, where none is left within {@link #REFILL_RADIUS} blocks (and never where {@link #SKEIN_MAX} are within
  * {@link #SKEIN_RADIUS} already), and a new swarm now and then where fewer than {@link #swarmsKept} are left within
- * {@link #SWARM_RADIUS} (six in the Deep Blue Rift and the Asurine Geodes, two in the Deep Dark, where the fireflies are
- * few): a swarm a Skein ate comes back slowly, out of sight, and the caves of a world made before 0.19.2 fill in. Each
- * comes out {@link #NEAR} blocks or further from every player, out of every player's sight, and within the radius it is
- * counted in (a sphere: height counts too), so it counts as soon as it is out. The Asurine Geodes are a refuge:
- * fireflies live there, Skeins never. A swarm is 30 to 60 fireflies, and now and then ({@link #HUGE_SWARMS}) a huge one
- * of 120 to 160 (0.16.0, Taran's pick).
+ * {@link #SWARM_RADIUS} (six in the Deep Blue Rift and the Asurine Geodes): a swarm a Skein ate comes back slowly, out
+ * of sight, and the caves of a world made before 0.19.2 fill in. Each comes out {@link #NEAR} blocks or further from
+ * every player, out of every player's sight, and within the radius it is counted in (a sphere: height counts too), so
+ * it counts as soon as it is out. The Asurine Geodes are a refuge: fireflies live there, Skeins never. A swarm is 30 to
+ * 60 fireflies, and now and then ({@link #HUGE_SWARMS}) a huge one of 120 to 160 (0.16.0, Taran's pick).
+ *
+ * <p>The Deep Dark is neither's (0.19.8, Taran's ask: "keep the skein and the blue fireflies from spawning in the Deep
+ * Dark"): it is left to the Warden, dark and still. No Skein or swarm is set down there with the world or brought out
+ * there, and a player standing in it is kept no swarms round them; the spawner still looks round them for the rift's
+ * Skeins, which come out only on the rift's own rock.
  */
 public final class BlueSpawnRules {
     private BlueSpawnRules() {}
@@ -47,8 +51,6 @@ public final class BlueSpawnRules {
     public static final double SWARM_REFILL_CHANCE = 1.0 / 30.0;
     /** Things come out at least this far from every player, and no further than these from the one they are for. */
     public static final double NEAR = 20.0, SKEIN_FAR = 46.0, SWARM_FAR = 38.0;
-    /** A swarm in the Deep Dark comes out only at this share of the spots found there. */
-    public static final double DEEP_DARK_SWARMS = 0.35;
     /** A swarm is {@link #SWARM_MIN_COUNT} to {@link #SWARM_MAX_COUNT} fireflies, or this share of them a huge one of {@link #HUGE_MIN_COUNT} to {@link #HUGE_MAX_COUNT}. */
     public static final int SWARM_MIN_COUNT = 30, SWARM_MAX_COUNT = 60, HUGE_MIN_COUNT = 120, HUGE_MAX_COUNT = 160;
     public static final double HUGE_SWARMS = 0.125;
@@ -71,13 +73,14 @@ public final class BlueSpawnRules {
         return !spectator && !creative && place != Place.OTHER && inBand(y, top, bottom);
     }
 
-    /** The refuge is never a Skein's. */
+    /** Skeins live in the Deep Blue Rift only: the refuge is never a Skein's, and since 0.19.8 nor is the Deep Dark. */
     public static boolean skeinsLive(Place p) {
-        return p == Place.RIFT || p == Place.DEEP_DARK;
+        return p == Place.RIFT;
     }
 
+    /** Swarms live in the rift and the refuge (its geodes glimmer with them), never in the Deep Dark (0.19.8). */
     public static boolean swarmsLive(Place p) {
-        return p != Place.OTHER;
+        return p == Place.RIFT || p == Place.GEODES;
     }
 
     /**
@@ -93,16 +96,16 @@ public final class BlueSpawnRules {
 
     /**
      * The swarms round a player in this place (within {@link #SWARM_RADIUS}) the world is made with, about: six to ten
-     * in the rift and the geodes, two to four in the Deep Dark (0.19.2, Taran's pick: twice as many as the old spawner
-     * kept there). The spawner brings one out where fewer than the first are left; the second is the most it ever
+     * in the rift and the geodes (0.19.2, Taran's pick: twice as many as the old spawner kept there), none in the Deep
+     * Dark (0.19.8). The spawner brings one out where fewer than the first are left; the second is the most it ever
      * brings one out among.
      */
     public static int swarmsKept(Place p) {
-        return p == Place.DEEP_DARK ? 2 : p == Place.OTHER ? 0 : 6;
+        return swarmsLive(p) ? 6 : 0;
     }
 
     public static int swarmsMax(Place p) {
-        return p == Place.DEEP_DARK ? 4 : p == Place.OTHER ? 0 : 10;
+        return swarmsLive(p) ? 10 : 0;
     }
 
     /**
@@ -129,11 +132,10 @@ public final class BlueSpawnRules {
     /**
      * Whether a swarm may come out at a spot: a place swarms live in, in the Blue Reaches, at least {@link #NEAR} from
      * every player, and within {@link #SWARM_RADIUS} of the player it is for ({@code fromPlayer}, up and down too, as for
-     * a Skein); {@code roll} thins them out in the Deep Dark.
+     * a Skein).
      */
-    public static boolean swarmSpot(Place p, double y, int top, int bottom, double nearestPlayer, double fromPlayer, double roll) {
-        if (!swarmsLive(p) || !inBand(y, top, bottom) || nearestPlayer < NEAR || fromPlayer > SWARM_RADIUS) return false;
-        return p != Place.DEEP_DARK || roll < DEEP_DARK_SWARMS;
+    public static boolean swarmSpot(Place p, double y, int top, int bottom, double nearestPlayer, double fromPlayer) {
+        return swarmsLive(p) && inBand(y, top, bottom) && nearestPlayer >= NEAR && fromPlayer <= SWARM_RADIUS;
     }
 
     /** How far from its player a spot is tried: {@link #NEAR} to {@code far}, by a uniform {@code roll}. */
