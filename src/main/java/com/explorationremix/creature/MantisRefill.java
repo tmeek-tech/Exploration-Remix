@@ -73,8 +73,8 @@ public final class MantisRefill {
                     Vec3 home = new Vec3(h.x() + 0.5, h.y(), h.z() + 0.5);
                     double d = nearestPlayer(level, home);
                     if (d < NEAR_MIN || d > NEAR_MAX) continue;
-                    BlockPos hp = BlockPos.containing(home);
-                    if (!level.isPositionEntityTicking(hp)) continue;
+                    // the whole herd's reach must be loaded, or members away in unloaded ground go uncounted and the herd overfills
+                    if (!herdLoaded(level, h)) continue;
                     if (members(level, h) >= h.size()) continue;
                     LOOKS++;
                     if (!force && level.random.nextInt(ROLL) != 0) continue;
@@ -92,6 +92,15 @@ public final class MantisRefill {
         for (StiltMantisEntity m : level.getEntitiesOfClass(StiltMantisEntity.class, box))
             if (m.isAlive() && m.herd() == h.id()) n++;
         return n;
+    }
+
+    /** Whether the ground within {@link #HERD_REACH} of the home ticks entities (a player's loaded ground is square, so its corners tell). */
+    private static boolean herdLoaded(ServerLevel level, MantisHerds.Home h) {
+        int r = (int) HERD_REACH;
+        for (int dx = -r; dx <= r; dx += 2 * r)
+            for (int dz = -r; dz <= r; dz += 2 * r)
+                if (!level.isPositionEntityTicking(new BlockPos(h.x() + dx, h.y(), h.z() + dz))) return false;
+        return level.isPositionEntityTicking(new BlockPos(h.x(), h.y(), h.z()));
     }
 
     private static double nearestPlayer(ServerLevel level, Vec3 at) {

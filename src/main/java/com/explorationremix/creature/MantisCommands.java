@@ -9,10 +9,12 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import net.minecraft.Util;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.MobSpawnType;
@@ -23,6 +25,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * /remix mantis: looking after the Deep Gardens' stilt mantis herds while testing (operators only).
@@ -126,6 +131,34 @@ public final class MantisCommands {
         return out;
     }
 
+    /** Whether every cell within radius of p is planned already (then the homes are found at once). */
+    private static boolean planned(Terrain t, Vec3 p, int radius) {
+        int r = (int) Math.ceil(radius / (double) MantisHerds.CELL);
+        int pcx = MantisHerds.cell((int) Math.floor(p.x)), pcz = MantisHerds.cell((int) Math.floor(p.z));
+        for (int cx = pcx - r; cx <= pcx + r; cx++)
+            for (int cz = pcz - r; cz <= pcz + r; cz++)
+                if (MantisHerds.cached(t, cx, cz) == null) return false;
+        return true;
+    }
+
+    /**
+     * Finds the herd homes with {@code find} and hands them to {@code then} on the server thread: at once when the
+     * cells are planned already, else off the server thread first (a fresh tile of the vent field takes seconds to
+     * make, and a command that waited for it would hold the whole game).
+     */
+    private static void whenFound(CommandSourceStack src, boolean ready, Supplier<List<Found>> find, Consumer<List<Found>> then) {
+        if (ready) {
+            then.accept(find.get());
+            return;
+        }
+        MinecraftServer server = src.getServer();
+        src.sendSuccess(() -> Component.literal("Working out the herds round you (a little while where the vent field is fresh)..."), false);
+        CompletableFuture.supplyAsync(find, Util.backgroundExecutor()).whenComplete((found, err) -> server.execute(() -> {
+            if (err != null) src.sendFailure(Component.literal("Could not work out the herds: " + err.getMessage()));
+            else then.accept(found);
+        }));
+    }
+
     private static int homes(CommandContext<CommandSourceStack> c, int radius) {
         CommandSourceStack src = c.getSource();
         Terrain t = DeepWorld.installed() ? DeepWorld.terrain() : null;
@@ -133,21 +166,23 @@ public final class MantisCommands {
             src.sendFailure(Component.literal("The deep world is not in this level"));
             return 0;
         }
-        List<Found> found = nearHomes(t, src.getPosition(), radius);
-        int[] colours = new int[4];
-        for (Found f : found) colours[f.home.colour().ordinal()]++;
-        StringBuilder b = new StringBuilder(String.format(Locale.ROOT, "%d herd home(s) within %d blocks (magenta %d, violet %d, lime %d, light blue %d)",
-                found.size(), radius, colours[0], colours[1], colours[2], colours[3]));
-        for (Found f : found.subList(0, Math.min(found.size(), 12))) {
-            MantisHerds.Home h = f.home;
-            int members = MantisRefill.members(src.getLevel(), h);
-            b.append(String.format(Locale.ROOT, "\n %d %d %d (%d off): %s, %d of %d near home, grove of %d mats", h.x(), h.y(), h.z(), (int) f.dist,
-                    h.colour().getSerializedName(), members, h.size(), h.mats()));
-        }
-        b.append(String.format(Locale.ROOT, "\nSet down with the world since the game started: %d herds met, %d mantises. Refill: %d looks at short herds, %d rolls, %d moved in.",
-                StiltMantisesFeature.HERDS.get(), StiltMantisesFeature.PLACED.get(), MantisRefill.LOOKS, MantisRefill.ROLLS, MantisRefill.MOVED_IN));
-        src.sendSuccess(() -> Component.literal(b.toString()), false);
-        return found.size();
+        Vec3 p = src.getPosition();
+        whenFound(src, planned(t, p, radius), () -> nearHomes(t, p, radius), found -> {
+            int[] colours = new int[4];
+            for (Found f : found) colours[f.home.colour().ordinal()]++;
+            StringBuilder b = new StringBuilder(String.format(Locale.ROOT, "%d herd home(s) within %d blocks (magenta %d, violet %d, lime %d, light blue %d)",
+                    found.size(), radius, colours[0], colours[1], colours[2], colours[3]));
+            for (Found f : found.subList(0, Math.min(found.size(), 12))) {
+                MantisHerds.Home h = f.home;
+                int members = MantisRefill.members(src.getLevel(), h);
+                b.append(String.format(Locale.ROOT, "\n %d %d %d (%d off): %s, %d of %d near home, grove of %d mats", h.x(), h.y(), h.z(), (int) f.dist,
+                        h.colour().getSerializedName(), members, h.size(), h.mats()));
+            }
+            b.append(String.format(Locale.ROOT, "\nSet down with the world since the game started: %d herds met, %d mantises. Refill: %d looks at short herds, %d rolls, %d moved in.",
+                    StiltMantisesFeature.HERDS.get(), StiltMantisesFeature.PLACED.get(), MantisRefill.LOOKS, MantisRefill.ROLLS, MantisRefill.MOVED_IN));
+            src.sendSuccess(() -> Component.literal(b.toString()), false);
+        });
+        return 1;
     }
 
     private static int tp(CommandContext<CommandSourceStack> c, int n, int distance, String colour) {
@@ -157,15 +192,39 @@ public final class MantisCommands {
             src.sendFailure(Component.literal("Needs a player in a level with the deep world"));
             return 0;
         }
-        List<Found> found = nearHomes(t, src.getPosition(), colour == null ? 512 : 1024);
-        if (colour != null) found.removeIf(f -> !f.home.colour().getSerializedName().equals(colour.toLowerCase(Locale.ROOT)));
-        if (found.size() < n) {
-            src.sendFailure(Component.literal("Only " + found.size() + " such herd home(s) near"));
-            return 0;
-        }
-        MantisHerds.Home h = found.get(n - 1).home;
+        String want = colour == null ? null : colour.toLowerCase(Locale.ROOT);
+        Vec3 p = src.getPosition();
+        // nearest first, looking further only as needed (each cell planned for the first time takes a while)
+        int[] radii = {96, 192, 384};
+        java.util.function.IntFunction<List<Found>> within = r -> {
+            List<Found> found = nearHomes(t, p, r);
+            if (want != null) found.removeIf(f -> !f.home.colour().getSerializedName().equals(want));
+            return found;
+        };
+        Supplier<List<Found>> find = () -> {
+            List<Found> found = List.of();
+            for (int r : radii) {
+                found = within.apply(r);
+                if (found.size() >= n) break;
+            }
+            return found;
+        };
+        // at once only when the nearest ring is planned and holds enough (else the search would plan further on this thread)
+        boolean ready = planned(t, p, radii[0]) && within.apply(radii[0]).size() >= n;
         ServerLevel level = src.getLevel();
-        // stand off where there is floor, facing the home (the first way round with floor, from the seed's own turn)
+        whenFound(src, ready, find, found -> {
+            if (found.size() < n) {
+                src.sendFailure(Component.literal("Only " + found.size() + " such herd home(s) within " + radii[radii.length - 1] + " blocks"));
+                return;
+            }
+            if (player.hasDisconnected() || player.level() != level) return;
+            standOff(src, player, level, found.get(n - 1).home, distance);
+        });
+        return 1;
+    }
+
+    /** Puts the player a little way off the home, where there is floor, facing it (the first way round with floor, from the seed's own turn). */
+    private static void standOff(CommandSourceStack src, ServerPlayer player, ServerLevel level, MantisHerds.Home h, int distance) {
         double a0 = (h.id() & 0xFF) / 256.0 * Math.PI * 2.0;
         for (int k = 0; k < 24; k++) {
             double a = a0 + k * Math.PI * 2.0 / 24.0;
@@ -179,11 +238,10 @@ public final class MantisCommands {
             player.teleportTo(level, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, yaw, pitch);
             src.sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "At the %s herd's home %d %d %d (size %d), from %s",
                     h.colour().getSerializedName(), h.x(), h.y(), h.z(), h.size(), at.toShortString())), true);
-            return 1;
+            return;
         }
         player.teleportTo(level, h.x() + 0.5, h.y(), h.z() + 0.5, player.getYRot(), player.getXRot());
         src.sendSuccess(() -> Component.literal("At the herd's home " + h.x() + " " + h.y() + " " + h.z()), true);
-        return 1;
     }
 
     private static int scare(CommandContext<CommandSourceStack> c) {

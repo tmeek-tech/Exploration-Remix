@@ -74,6 +74,15 @@ public final class MantisHerds {
         return h;
     }
 
+    /** The herd homes of cell (cx, cz) if the cell is planned already, else null (nothing is planned). */
+    @Nullable
+    public static List<Home> cached(Terrain t, int cx, int cz) {
+        long key = ((long) cx << 32) ^ (cz & 0xFFFFFFFFL);
+        synchronized (CACHE) {
+            return cacheSeed == t.seed ? CACHE.get(key) : null;
+        }
+    }
+
     private static final java.util.Set<Long> PENDING = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     /**
@@ -82,13 +91,9 @@ public final class MantisHerds {
      */
     @Nullable
     public static List<Home> homesIfPlanned(Terrain t, int cx, int cz) {
+        List<Home> h = cached(t, cx, cz);
+        if (h != null) return h;
         long key = ((long) cx << 32) ^ (cz & 0xFFFFFFFFL);
-        synchronized (CACHE) {
-            if (cacheSeed == t.seed) {
-                List<Home> h = CACHE.get(key);
-                if (h != null) return h;
-            }
-        }
         if (PENDING.add(key)) {
             net.minecraft.Util.backgroundExecutor().execute(() -> {
                 try { homes(t, cx, cz); } finally { PENDING.remove(key); }
