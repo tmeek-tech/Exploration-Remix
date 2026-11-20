@@ -29,7 +29,8 @@ public final class SkeinHomes {
      * The share of chunks that are a Skein's home. A little over half of the Blue Reaches' chunks have a cave a try
      * finds (54% in the test seed's first 600 chunks), so this gives about one Skein in every ten chunks, one every 50
      * blocks or so: about as many round a player as the old spawner kept there, one or two within 48 blocks (Taran's
-     * pick, 17 Nov 2026).
+     * pick, 17 Nov 2026). Since 0.19.8 only the homes whose first spot lies in the rift keep theirs ({@link #take}):
+     * round the test seed's spawn, 8 of the 56 Skeins its 101 home chunks had.
      */
     public static final double HOME_CHANCE = 0.18;
     /** Random spots tried in a home chunk before it is given up. */

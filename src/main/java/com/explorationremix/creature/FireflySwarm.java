@@ -727,10 +727,10 @@ public class FireflySwarm extends Entity {
     private record Perch(BlockPos pos, Direction rock) {}
 
     /**
-     * A patch to land on within {@code reach} of the centre: an open block with a sturdy face of rock beside it, in
-     * the open air the swarm can see from where it is, with as many faces round it as can be found (a patch, not a
-     * lone ledge); with {@code shy}, none where a player would startle it at once. {@code tries} random blocks are
-     * tried, or every block when it is 0.
+     * A patch to land on within {@code reach} of the centre: an open block of its home biome with a sturdy face of rock
+     * beside it, in the open air the swarm can see from where it is, with as many faces round it as can be found (a
+     * patch, not a lone ledge); with {@code shy}, none where a player would startle it at once. {@code tries} random
+     * blocks are tried, or every block when it is 0.
      */
     @Nullable
     private Perch findPerch(int tries, int reach, boolean shy) {
@@ -756,6 +756,8 @@ public class FireflySwarm extends Entity {
             if (!withinLeash(pc) || (shy && nearPlayer(pc, keepOff) != null)) continue;
             double score = patch(level, p) - (tries == 0 ? 0.35 * Math.sqrt(p.distToCenterSqr(c)) : 0.0);
             if (score <= bestScore) continue;
+            // its own biome's rock, as it flies only in its own biome's air: a rift swarm never settles over the Deep Dark's edge
+            if (!inHomeBiome(p)) continue;
             Direction d = rock.get(random.nextInt(rock.size()));      // floor, wall or ceiling, whichever it has
             if (!clear(c, landingPoint(p, d))) continue;
             best = new Perch(p, d);
