@@ -16,8 +16,11 @@ pose of its own. Two kinds of part:
 Lengths along a limb are the bone's own (the IK uses them: MantisSpec reads them from here).
 
 Textures are painted face by face in vanilla's box layout (creatures.faces) in the neon's five shades (textures.
-neon_shades: deep and dim lit by the world, mid, neon and hot glowing), with a _glow overlay of the glowing pixels
-drawn again at full brightness, as the glow mats are.
+neon_shades: deep and dim lit by the world, mid, neon and hot glowing), with a _glow overlay of the glowing pixels.
+The game draws the overlay as eyes are (so shader packs light it), which adds its light to the texture's: so under a
+glowing pixel the texture keeps only a dark tint of it (UNDER), and the two together come out the pixel's own neon,
+as on the glow mats. Painted at full colour underneath too, the neon came out washed pale (violet as pale pink) in
+the game.
 """
 import json
 import math
@@ -110,6 +113,10 @@ for arm in ARMS:
 
 
 # ================================================================================================ painting
+# How much of a glowing pixel's colour the texture keeps under it (the overlay, added on top, brings the rest).
+UNDER = 0.12
+
+
 class Canvas:
     """The texture and its glow overlay (the glowing pixels again, drawn at full brightness)."""
 
@@ -119,15 +126,20 @@ class Canvas:
         self.px, self.gx = self.img.load(), self.glow.load()
 
     def put(self, x, y, shade, s):
-        """Colours texel (x, y) in one of the neon's shades (None: see-through)."""
+        """Colours texel (x, y) in one of the neon's shades (None: see-through). A glowing shade goes on the overlay,
+        and the texture under it keeps only a dark tint of it (the overlay adds its light to the texture's)."""
         if not (0 <= x < TEX_W and 0 <= y < TEX_H): return
         if shade is None:
             self.px[x, y] = (0, 0, 0, 0)
             self.gx[x, y] = (0, 0, 0, 0)
             return
         c = tuple(s[shade][:3]) + (255,)
-        self.px[x, y] = c
-        self.gx[x, y] = c if shade in T.GLOWING else (0, 0, 0, 0)
+        if shade in T.GLOWING:
+            self.px[x, y] = tuple(round(v * UNDER) for v in c[:3]) + (255,)
+            self.gx[x, y] = c
+        else:
+            self.px[x, y] = c
+            self.gx[x, y] = (0, 0, 0, 0)
 
 
 def shades(neon):
@@ -292,8 +304,12 @@ if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else "."
     os.makedirs(out, exist_ok=True)
     cr.pack(PARTS, TEX_W, TEX_H)
-    for neon in T.NEONS:
-        cv = paint(neon)
-        big = cv.img.resize((TEX_W * 4, TEX_H * 4), Image.NEAREST)
+    from PIL import ImageChops
+    for i, neon in enumerate(T.NEONS):
+        cv = paint(neon, 6101 + 13 * i)
+        # as the game shows it lit: the texture with the overlay's light added
+        lit = ImageChops.add(cv.img, cv.glow)
+        lit.putalpha(cv.img.getchannel("A"))
+        big = lit.resize((TEX_W * 4, TEX_H * 4), Image.NEAREST)
         bg = Image.new("RGBA", big.size, (24, 22, 30, 255))
         Image.alpha_composite(bg, big).save(os.path.join(out, f"tex_{neon}.png"))

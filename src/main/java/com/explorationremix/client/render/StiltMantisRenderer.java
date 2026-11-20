@@ -17,7 +17,9 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * Draws the stilt mantis as its body stands on the rock (0.20.0: see MantisModel and creature.body): its colour's
  * texture, then its neon drawn again over it as eyes are (so it glows as the glow mats round it do, and shader packs
- * light it), flaring brighter in its startle display and going out as it dies.
+ * light it), flaring brighter in its startle display and going out as it dies. Eyes add their light to what is under
+ * them, so the texture keeps only a dark tint under its glowing pixels (tools/stilt_mantis.py) and the two together
+ * come out the neon's own colour.
  */
 public class StiltMantisRenderer extends MobRenderer<StiltMantisEntity, MantisModel> {
     private static final ResourceLocation[] TEXTURES = textures("");

@@ -18,7 +18,9 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -40,7 +42,7 @@ import java.util.function.Supplier;
  *     where, colour, size, how many of the herd are near home now; and the herds set down with the world since the game
  *     started, and the refill's counts</li>
  *     <li>{@code /remix mantis tp [n] [distance]}: to the nth nearest herd home (from 1), standing a little way off
- *     (14 blocks, or the distance given), facing it</li>
+ *     (14 blocks, or the distance given), facing it from a spot with a clear view where there is one</li>
  *     <li>{@code /remix mantis tpcolour <colour> [distance]}: the same, to the nearest herd of that colour</li>
  *     <li>{@code /remix mantis scare}: the mantises within 24 blocks startle from you, as if you had run at them</li>
  *     <li>{@code /remix mantis refill}: every short herd round you gets one mantis back now (unseen spots only)</li>
@@ -223,25 +225,39 @@ public final class MantisCommands {
         return 1;
     }
 
-    /** Puts the player a little way off the home, where there is floor, facing it (the first way round with floor, from the seed's own turn). */
+    /**
+     * Puts the player a little way off the home, where there is floor, facing it: the first way round (from the seed's
+     * own turn) with a clear view of the home, else the first with floor.
+     */
     private static void standOff(CommandSourceStack src, ServerPlayer player, ServerLevel level, MantisHerds.Home h, int distance) {
         double a0 = (h.id() & 0xFF) / 256.0 * Math.PI * 2.0;
+        Vec3 target = new Vec3(h.x() + 0.5, h.y() + 1.5, h.z() + 0.5);
+        BlockPos spot = null;
         for (int k = 0; k < 24; k++) {
             double a = a0 + k * Math.PI * 2.0 / 24.0;
             int x = h.x() + (int) Math.round(Math.cos(a) * distance), z = h.z() + (int) Math.round(Math.sin(a) * distance);
             level.getChunk(x >> 4, z >> 4);
             BlockPos at = StiltMantisEntity.stand(level, x, h.y(), z, 6);
             if (at == null) continue;
-            double dx = h.x() - at.getX(), dz = h.z() - at.getZ(), dy = h.y() + 1.5 - (at.getY() + 1.62);
-            float yaw = (float) (Math.atan2(-dx, dz) * 180.0 / Math.PI);
-            float pitch = (float) (-Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)) * 180.0 / Math.PI);
-            player.teleportTo(level, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, yaw, pitch);
-            src.sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "At the %s herd's home %d %d %d (size %d), from %s",
-                    h.colour().getSerializedName(), h.x(), h.y(), h.z(), h.size(), at.toShortString())), true);
+            if (spot == null) spot = at;
+            Vec3 eye = new Vec3(at.getX() + 0.5, at.getY() + 1.62, at.getZ() + 0.5);
+            if (level.clip(new ClipContext(eye, target, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, player)).getType() == HitResult.Type.MISS) {
+                spot = at;
+                break;
+            }
+        }
+        if (spot == null) {
+            player.teleportTo(level, h.x() + 0.5, h.y(), h.z() + 0.5, player.getYRot(), player.getXRot());
+            src.sendSuccess(() -> Component.literal("At the herd's home " + h.x() + " " + h.y() + " " + h.z()), true);
             return;
         }
-        player.teleportTo(level, h.x() + 0.5, h.y(), h.z() + 0.5, player.getYRot(), player.getXRot());
-        src.sendSuccess(() -> Component.literal("At the herd's home " + h.x() + " " + h.y() + " " + h.z()), true);
+        BlockPos at = spot;
+        double dx = h.x() - at.getX(), dz = h.z() - at.getZ(), dy = h.y() + 1.5 - (at.getY() + 1.62);
+        float yaw = (float) (Math.atan2(-dx, dz) * 180.0 / Math.PI);
+        float pitch = (float) (-Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)) * 180.0 / Math.PI);
+        player.teleportTo(level, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, yaw, pitch);
+        src.sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "At the %s herd's home %d %d %d (size %d), from %s",
+                h.colour().getSerializedName(), h.x(), h.y(), h.z(), h.size(), at.toShortString())), true);
     }
 
     private static int scare(CommandContext<CommandSourceStack> c) {
