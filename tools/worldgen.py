@@ -61,7 +61,8 @@ LOOKS = {
     "frozen_rootvaults": ("#c4d6e8", "#3d57d6", "#0a1440", "#8fb3c4", "#7a9fb3"),
     "sinkhole":          ("#c0d8ef", "#3f76e4", "#0a2a52", "#91bd59", "#77ab2f"),
     "oasis_hollow":      ("#dccaa0", "#32c4c8", "#0a3d3f", "#8ab54a", "#6fa83a"),
-    "frost_fern_grotto": ("#a9c8e0", "#2fb3c8", "#0e4d5c", "#86aebd", "#6f98a8"),
+    # 0.20.1 (Taran: light blue, never cyan): the grotto's water a pale light blue to match its ice, not turquoise.
+    "frost_fern_grotto": ("#a9c8e0", "#7ab4f0", "#163f70", "#86aebd", "#6f98a8"),
     "lantern_lake":      ("#5f7fb2", "#3bd0c4", "#12655f", "#a89a6a", "#988a5a"),
     "ember_gardens":     ("#b5562f", "#4cbcc9", "#163f4d", "#a8904c", "#98803c"),
     "rust_springs":      ("#a9482a", "#c9662b", "#5a2a10", "#a08a50", "#907a40"),
@@ -87,7 +88,7 @@ LOOKS = {
 # the daylight shafts and drips under ceilings are spawned by the client (CaveAtmosphere), not here.
 PARTICLES = {
     "frozen_rootvaults": ("minecraft:snowflake", 0.005),
-    "frost_fern_grotto": ("minecraft:snowflake", 0.002),
+    "frost_fern_grotto": ("minecraft:snowflake", 0.003),
     "lantern_lake": ("minecraft:mycelium", 0.012),
     "ember_gardens": ("minecraft:mycelium", 0.012),
     "rust_springs": ("minecraft:mycelium", 0.008),
@@ -210,6 +211,11 @@ def band(b):
     "silver" through the middle, "blue" by the floor, as often as its spot lies in the band. After the floor or ceiling
     scan, so the band is the plant's."""
     return {"type": f"{MOD}:rift_band", "band": b}
+def grotto_ice(top, deep):
+    """Keeps a Frost Fern Grotto feature as often as top says near the grotto's top and deep says deep down, in between
+    by how icy the grotto is at its spot (0.20.1, GrottoIceFilter, Palette.grottoIce: icier the deeper). After the floor
+    or ceiling scan, so it judges the spot the feature grows from."""
+    return {"type": f"{MOD}:grotto_ice", "top": float(top), "deep": float(deep)}
 def looks(*l, cold=None, min_chill=None, max_chill=None):
     """Keeps a feature to some entrance looks; cold to entrances under snowy ground or not; min_chill and max_chill to
     spots of a frozen Root Vault cluster at least or at most that far past the snowy zone round its openings
@@ -829,10 +835,12 @@ def build_features():
             [scaled(28, BASALT_PLANTS * BASALT_FLOOR), SQUARE] + basalt_floor)
 
     # ---- Upper Caves rework: the frozen Root Vaults (a cold cluster is frozen throughout: snowed in round its openings,
-    # thawing further in, with plants only deep inside), the sinkholes (cold ones snowed in), the oasis hollows and the
-    # Frost Fern Grotto. The entrances' features aim at their chambers (the grottos focus); the grotto's at the whole of
-    # the pack's caves under the column, since the plant caves follow the ground (the caves focus). The cold caves grow
-    # Immersive Weathering's frosty ferns, frost and icicles (Taran's ask for 0.4.1) and the mod's blue frost moss.
+    # thawing further in, with plants only deep inside; since 0.20.1 snowed in all through, the plants in small frost moss
+    # patches deep inside), the sinkholes (cold ones snowed in), the oasis hollows and the Frost Fern Grotto (since 0.20.1
+    # sparse, and icier the deeper it lies: Palette.grottoIce). The entrances' features aim at their chambers (the grottos
+    # focus); the grotto's at the whole of the pack's caves under the column, since the plant caves follow the ground (the
+    # caves focus). The cold caves grow Immersive Weathering's frosty ferns, frost and icicles (Taran's ask for 0.4.1) and
+    # the mod's blue frost moss.
     fz, sk, oa, fg = ["frozen_rootvaults"], ["sinkhole"], ["oasis_hollow"], ["frost_fern_grotto"]
     def caves(): return layer(up) | {"focus": "caves"}
     frost_rock = f"#{MOD}:frost_rock"
@@ -887,15 +895,26 @@ def build_features():
         reach = ICICLE_REACH - 1
         return {"type": f"{MOD}:biome_around", "biomes": f"#{IW}:icy", "radius": radius, "above": reach, "below": reach}
     frostberries = hanging_patch(hanging_column(f"{MOD}:frostberry_vine_plant", f"{MOD}:frostberry_vine", 1, 7), tries=8, xz=4, y=2)
-    # Immersive Weathering's frosty ferns (they grow only on dirt, frost moss included) with the asters and snowbells.
-    frost_plants = mix((simple(f"{IW}:frosty_fern"), 6), (simple(f"{MOD}:frost_aster"), 2), (simple(f"{MOD}:snowbell"), 1))
+    # 0.20.1 (Taran: "small patches of frost moss with ferns and flowers growing on them"): the cold caves' plants grow
+    # only in small patches of frost moss, 3 to 7 blocks across and crowded with Immersive Weathering's frosty ferns and
+    # grass (they grow only on dirt, frost moss included), the asters, and the snowbells, whose glow lights each patch.
     fern_survives = state(f"{IW}:frosty_fern")
+    patch_plants = {"type": "minecraft:simple_block", "config": {"to_place": mix(
+        (simple(f"{IW}:frosty_fern"), 5), (simple(f"{IW}:frosty_grass"), 2), (simple(f"{MOD}:frost_aster"), 3), (simple(f"{MOD}:snowbell"), 3))}}
     def frost_moss_patch(surface, vegetation, chance, xz):
+        """A patch of frost moss over the floor (or ceiling) round a spot, over rock, soil, snow and packed ice alike
+        (explorationremix:frost_moss_ground), with plants on this share of it."""
         return {"type": "minecraft:vegetation_patch", "config": {
-            "replaceable": "#minecraft:moss_replaceable", "ground_state": simple(FROST_MOSS),
+            "replaceable": f"#{MOD}:frost_moss_ground", "ground_state": simple(FROST_MOSS),
             "vegetation_feature": {"feature": vegetation, "placement": []},
             "surface": surface, "depth": 1 if surface == "floor" else uniform(1, 2), "extra_bottom_block_chance": 0.0, "vertical_range": 5,
-            "vegetation_chance": chance, "xz_radius": xz, "extra_edge_column_chance": 0.3}}
+            "vegetation_chance": chance, "xz_radius": xz, "extra_edge_column_chance": 0.5}}
+    # Snow lies on the floors but not on the moss patches, which are placed first.
+    NOT_ON_MOSS = {"type": "minecraft:not", "predicate": {"type": "minecraft:matching_blocks", "offset": [0, -1, 0], "blocks": [FROST_MOSS]}}
+    def snow_patch(provider, tries, xz, y):
+        p = patch(provider, state("minecraft:snow", layers=1), tries=tries, xz=xz, y=y)
+        p["config"]["feature"]["placement"][0]["predicate"]["predicates"].append(NOT_ON_MOSS)
+        return p
     def lily_pads(n, cold_filter):
         return ([count(n), SQUARE, layer(up)] + on_water + cold_filter + [BIOME])
     # The frozen Root Vaults' parts, by distance past the snowy zone round the openings (Entrances.chill).
@@ -905,22 +924,27 @@ def build_features():
 
     # Ice first: giant icicles from the frozen ceilings by the openings, and Immersive Weathering's icicle clusters,
     # before anything grows on the rock. The grotto's ice is its icy caves' (Taran: one sheet of ice over the ceiling
-    # looked odd).
+    # looked odd), more of it the deeper (0.20.1: grotto_ice). Since 0.20.1 the frozen Root Vaults' icicle clusters hang
+    # all through them, not only near the openings (Taran: "There still should be ice in the cold Root Vaults too").
     feature("frozen_rootvaults/giant_icicles", "local_modifications", fz, giant_icicle,
             [PLANNED, count(3), SQUARE, layer(up)] + ceiling(offset=0) + [snowy(2), BIOME])
     feature("frozen_rootvaults/icicle_clusters", "local_modifications", fz, icicle_cluster((1, 4), (2, 5), (1, 2), (0.3, 0.6)),
-            [count(10), SQUARE, layer(up)] + ceiling() + [snowy(3), BIOME, icy_around(6)])
+            [count(12), SQUARE, layer(up)] + ceiling() + [BIOME, icy_around(6)])
     feature("frost_fern_grotto/giant_icicles", "local_modifications", fg, giant_icicle,
-            [count(2), SQUARE, caves()] + ceiling(offset=0) + [BIOME])
+            [count(4), SQUARE, caves()] + ceiling(offset=0) + [grotto_ice(0.5, 1), BIOME])
     feature("frost_fern_grotto/icicle_clusters", "local_modifications", fg, icicle_cluster((2, 6), (3, 6), (1, 3), (0.3, 0.7)),
-            [count(20), SQUARE, caves()] + ceiling() + [BIOME, icy_around(7)])
+            [count(28), SQUARE, caves()] + ceiling() + [grotto_ice(0.45, 1), BIOME, icy_around(7)])
     # Columns of packed and blue ice from ceiling to floor, like dripstone caves' columns (Taran, 0.14.0): only where
     # the room is 6 to 26 tall over a solid dry floor and no other column stands within 12 blocks (PillarFeature), so
-    # most of the 48 tries a chunk find no spot and those that do stand about one to a chunk.
+    # most of the 48 tries a chunk find no spot and those that do stand about one to a chunk. Deeper down (0.20.1) more
+    # of them, as close as 9 blocks apart.
+    ice_column = mix((simple("minecraft:packed_ice"), 5), (simple("minecraft:blue_ice"), 1))
     feature("frost_fern_grotto/ice_columns", "local_modifications", fg,
-            {"type": f"{MOD}:pillar", "config": {"body": mix((simple("minecraft:packed_ice"), 5), (simple("minecraft:blue_ice"), 1)),
-                                                 "radius": funiform(1.6, 3.4), "min_room": 6, "max_room": 26, "spacing": 12}},
+            {"type": f"{MOD}:pillar", "config": {"body": ice_column, "radius": funiform(1.6, 3.4), "min_room": 6, "max_room": 26, "spacing": 12}},
             [count(48), SQUARE, caves()] + ceiling(offset=0) + [BIOME])
+    feature("frost_fern_grotto/deep_ice_columns", "local_modifications", fg,
+            {"type": f"{MOD}:pillar", "config": {"body": ice_column, "radius": funiform(1.4, 3.0), "min_room": 5, "max_room": 26, "spacing": 9}},
+            [count(40), SQUARE, caves()] + ceiling(offset=0) + [grotto_ice(0, 1), BIOME])
     # Deep inside a frozen cluster, terraced pools like the root halls', rimmed with limestone and frost moss (a feature
     # below freezes their water over).
     feature("frozen_rootvaults/pools", "local_modifications", fz,
@@ -929,16 +953,17 @@ def build_features():
 
     # Frost on the rock, snow on the floors, ice over the still water. Hoarfrost near the surface (the frozen Root Vaults
     # and the cold sinkholes) and Immersive Weathering's frost in the grotto, each in a few round patches, every face
-    # inside one covered, instead of a splatter (Taran, 0.14.0); frost moss where the frozen Root Vaults thaw.
+    # inside one covered, instead of a splatter (Taran, 0.14.0). Since 0.20.1 the frozen Root Vaults are snowed in all
+    # through (Taran: "Make the Rootvaults more snowy"), their hoarfrost and frozen pools too, and deep inside, where they
+    # thaw, their plants grow in small frost moss patches like the grotto's (placed before the snow, which keeps off them).
     feature("frozen_rootvaults/hoarfrost", "underground_decoration", fz,
             attach(simple(f"{MOD}:hoarfrost"), "walls_ceiling", 96, frost_rock, radius=6, height=4, patch=True),
-            [count(3), SQUARE, layer(up), snowy(THAW), BIOME])
-    feature("frozen_rootvaults/snow", "underground_decoration", fz, patch(DEEP_SNOW, state("minecraft:snow", layers=1), tries=64, xz=7, y=3),
-            [count(28), SQUARE, layer(up)] + floor() + [snowy(THAW * 2 // 3), BIOME])
-    feature("frozen_rootvaults/frost_moss", "underground_decoration", fz,
-            frost_moss_patch("floor", {"type": "minecraft:simple_block", "config": {"to_place": simple(FROST_CARPET)}}, 0.25, uniform(3, 6)),
-            [count(14), SQUARE, layer(up)] + floor() + [thawed(THAW // 3), BIOME])
-    feature("frozen_rootvaults/ice", "underground_decoration", fz, ice_sheet(2, 5), [count(10), SQUARE, layer(up)] + water_top + [BIOME])
+            [count(4), SQUARE, layer(up), BIOME])
+    feature("frozen_rootvaults/moss_patches", "underground_decoration", fz, frost_moss_patch("floor", patch_plants, 0.6, uniform(2, 3)),
+            [count(8), SQUARE, layer(up)] + floor() + [thawed(), BIOME])
+    feature("frozen_rootvaults/snow", "underground_decoration", fz, snow_patch(DEEP_SNOW, tries=64, xz=7, y=3),
+            [count(32), SQUARE, layer(up)] + floor() + [BIOME])
+    feature("frozen_rootvaults/ice", "underground_decoration", fz, ice_sheet(3, 6), [count(12), SQUARE, layer(up)] + water_top + [BIOME])
     feature("sinkhole/moss", "underground_decoration", sk, "minecraft:moss_patch",
             [count(6), SQUARE, layer(up)] + floor() + [looks(SINKHOLE, cold=False), BIOME])
     # 0.18.6: about half the sinkholes are hung thick with Immersive Weathering's ivy down their walls and the rest keep
@@ -953,11 +978,14 @@ def build_features():
             [count(16), SQUARE, layer(up)] + floor() + [looks(SINKHOLE, cold=True), BIOME])
     feature("sinkhole/ice", "underground_decoration", sk, ice_sheet(2, 4),
             [count(8), SQUARE, layer(up)] + water_top + [looks(SINKHOLE, cold=True), BIOME])
-    # The Frost Fern Grotto (frost_fern_grotto.png, the picture Taran gave): frost moss floors with frosty ferns, frost
-    # moss ceilings hung with frostberries, frost over the rock, icy-cave ice on the ceilings and over the pools' edges
-    # (no rime lichen since 0.14.0, Taran's ask); and the picture's dark speckled deepslate in patches on the walls (placed
-    # through the grotto's caves and the rock round them, so a patch shows where it cuts a wall), from the old floor up
-    # to under the highest grotto.
+    # The Frost Fern Grotto (frost_fern_grotto.png, the picture Taran gave), since 0.20.1 sparser and icier the deeper
+    # it lies (Taran: "less plant life ... small patches of frost moss with ferns and flowers ... without the blue
+    # glowberry vines ... the deeper caves more icy"): small frost moss patches crowded with frosty ferns, asters and
+    # glowing snowbells, fewer of them deeper; frost over the rock near the top; snow on the floors; icy-cave ice on the
+    # ceilings, over the pools' edges near the top and over whole pools deep down; ice crusting the deep walls, glowing
+    # in veins (no rime lichen since 0.14.0, no frostberries since 0.20.1); and the picture's dark speckled deepslate in
+    # patches on the walls (placed through the grotto's caves and the rock round them, so a patch shows where it cuts a
+    # wall), from the old floor up to under the highest grotto.
     for name, block, size, n in (("deepslate_patches", "minecraft:deepslate", 40, 6), ("cobbled_patches", "minecraft:cobbled_deepslate", 24, 3)):
         feature(f"frost_fern_grotto/{name}", "underground_ores", fg,
                 {"type": "minecraft:ore", "config": {
@@ -965,30 +993,35 @@ def build_features():
                                  "state": {"Name": block}}],
                     "size": size, "discard_chance_on_air_exposure": 0.0}},
                 [count(n), SQUARE, caves(), BIOME])
-    feature("frost_fern_grotto/moss_floor", "underground_decoration", fg,
-            frost_moss_patch("floor", {"type": "minecraft:simple_block", "config": {"to_place": mix(
-                (simple(f"{IW}:frosty_fern"), 5), (simple(FROST_CARPET), 5), (simple(f"{MOD}:frost_aster"), 1),
-                (simple(f"{MOD}:snowbell"), 1))}}, 0.3, uniform(4, 7)),
-            [count(48), SQUARE, caves()] + floor() + [BIOME])
-    feature("frost_fern_grotto/moss_ceiling", "underground_decoration", fg,
-            frost_moss_patch("ceiling", hanging_column(f"{MOD}:frostberry_vine_plant", f"{MOD}:frostberry_vine", 0, 4), 0.08, uniform(4, 7)),
-            [count(24), SQUARE, caves()] + ceiling() + [BIOME])
+    # The moss patches: about one every 15 to 20 blocks of floor near the top, a third as many deep down.
+    feature("frost_fern_grotto/moss_patches", "underground_decoration", fg, frost_moss_patch("floor", patch_plants, 0.65, uniform(2, 3)),
+            [count(20), SQUARE, caves()] + floor() + [grotto_ice(1, 0.3), BIOME])
     feature("frost_fern_grotto/frost", "underground_decoration", fg,
             attach(simple(f"{IW}:frost"), "walls_ceiling", 96, frost_rock, radius=6, height=5, patch=True),
-            [count(4), SQUARE, caves(), BIOME])
-    feature("frost_fern_grotto/snow", "underground_decoration", fg, patch(SNOW, state("minecraft:snow", layers=1), tries=16, xz=4, y=2),
-            [count(10), SQUARE, caves()] + floor() + [BIOME])
-    # Ice shelves along the water's edges; the middle stays open (the picture's stream).
-    feature("frost_fern_grotto/ice", "underground_decoration", fg, ice_rim(3, 6), [count(16), SQUARE, caves()] + water_top + [BIOME])
+            [count(6), SQUARE, caves(), grotto_ice(1, 0.3), BIOME])
+    # Ice over the deep walls and the undersides of ledges and ceilings, in patches, glowing light blue in veins the
+    # deeper it lies (IceCrustFeature, Palette.glowingIce): none near the top.
+    feature("frost_fern_grotto/ice_crust", "underground_decoration", fg,
+            {"type": f"{MOD}:ice_crust", "config": {"radius": 6, "height": 5, "on": f"#{MOD}:ice_crust_rock"}},
+            [count(30), SQUARE, caves(), grotto_ice(0, 1), BIOME])
+    feature("frost_fern_grotto/snow", "underground_decoration", fg, snow_patch(SNOW, tries=20, xz=5, y=2),
+            [count(14), SQUARE, caves()] + floor() + [BIOME])
+    # Ice shelves along the water's edges near the top, the middle left open (the picture's stream); deep down the
+    # pools freeze over.
+    feature("frost_fern_grotto/ice", "underground_decoration", fg, ice_rim(3, 6),
+            [count(16), SQUARE, caves()] + water_top + [grotto_ice(1, 0.25), BIOME])
+    feature("frost_fern_grotto/frozen_pools", "underground_decoration", fg, ice_sheet(3, 7),
+            [count(14), SQUARE, caves()] + water_top + [grotto_ice(0, 1), BIOME])
 
-    # Plants: frosty ferns, asters and snowbells deep inside the frozen Root Vaults, frostberries a little nearer the
-    # openings; grass and flowers in the sinkholes' daylight, palms and lilies round the oases' pools, the grotto's ferns
-    # and frostberries.
-    feature("frozen_rootvaults/plants", "vegetal_decoration", fz,
-            patch(frost_plants, fern_survives, tries=24, xz=5, y=2, on=FROST_FLOORS),
-            [count(12), SQUARE, layer(up)] + floor() + [thawed(), BIOME])
+    # Plants: frostberries deep inside the frozen Root Vaults (since 0.20.1 there alone: Taran picked keeping them there,
+    # where runes still burst them, and none in the grotto; the vaults' other plants grow on their moss patches); grass
+    # and flowers in the sinkholes' daylight, palms and lilies round the oases' pools. A vault opens into the grotto
+    # under it in places, its ceiling cells over the grotto's hall: no frostberries where the grotto is in sight within
+    # 20 blocks (OutOfSightFilter; the first test pictures showed them hanging over the grotto), which leaves about two
+    # in three where vault and grotto mingle (as many tries as before).
+    NO_GROTTO_IN_SIGHT = {"type": f"{MOD}:out_of_sight", "biomes": f"#{MOD}:frost_fern_grotto", "reach": 20}
     feature("frozen_rootvaults/frostberries", "vegetal_decoration", fz, frostberries,
-            [count(5), SQUARE, layer(up)] + ceiling() + [thawed(THAW * 2 // 3), BIOME])
+            [count(5), SQUARE, layer(up)] + ceiling() + [thawed(), BIOME, NO_GROTTO_IN_SIGHT])
     feature("sinkhole/trailing_grass", "vegetal_decoration", sk,
             hanging_patch(hanging_column(f"{MOD}:trailing_grass_plant", f"{MOD}:trailing_grass", 1, 7), tries=10, xz=5, y=3),
             [count(24), SQUARE, layer(up)] + ceiling() + [looks(SINKHOLE, cold=False), BIOME])
@@ -1037,19 +1070,12 @@ def build_features():
     feature("oasis_hollow/pool_pearls", "vegetal_decoration", oa,
             attach(simple(f"{MOD}:pool_pearls"), "floor", 24, f"#{MOD}:grotto_bed", radius=5, height=2, in_water=True),
             [count(12), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, BIOME])
-    # Fewer ferns than 0.4.0's 40 patches: the grotto looked too lush.
-    feature("frost_fern_grotto/ferns", "vegetal_decoration", fg,
-            patch(frost_plants, fern_survives, tries=32, xz=6, y=3, on=FROST_FLOORS),
-            [count(16), SQUARE, caves()] + floor() + [BIOME])
-    feature("frost_fern_grotto/snowbells", "vegetal_decoration", fg,
-            patch(simple(f"{MOD}:snowbell"), state(f"{MOD}:snowbell"), tries=12, xz=4, y=2, on=FROST_FLOORS),
-            [count(8), SQUARE, caves()] + floor() + [BIOME])
-    feature("frost_fern_grotto/frostberries", "vegetal_decoration", fg, frostberries, [count(24), SQUARE, caves()] + ceiling() + [BIOME])
     # Immersive Weathering's icicles standing on the floors, one to three tall, in small clusters, so the grotto looks
-    # cold underfoot too (Taran, 0.14.0).
+    # cold underfoot too (Taran, 0.14.0); more of them deeper (0.20.1). (The grotto's ferns and flowers grow on its moss
+    # patches since 0.20.1, and its frostberries are gone.)
     feature("frost_fern_grotto/floor_icicles", "vegetal_decoration", fg,
             {"type": f"{MOD}:pointed_patch", "config": {"state": simple(f"{IW}:icicle"), "tries": 14, "radius": 5, "height": uniform(1, 3), "up": True}},
-            [count(6), SQUARE, caves()] + floor() + [BIOME])
+            [count(10), SQUARE, caves()] + floor() + [grotto_ice(0.4, 1), BIOME])
 
     # ---- 0.5: the Basalt Galleries and the Ash Hollows. The Galleries are lifeless: no plant, lichen, vine, moss or
     # creature in any of their biomes (their climbs hang cinder chains, ClimbVinesFeature), and brightly lit by rock and
@@ -1327,7 +1353,14 @@ BLOCK_TAGS = {
     # The Deep Gardens' pale ceilings, which grow cream stalactites.
     "pale_rock": ["minecraft:calcite"] + optional(["create:limestone"]),
     # Upper Caves rework: rock that frost and rime grow on, ice and snow included.
-    "frost_rock": [f"#{MOD}:cave_rock", "minecraft:packed_ice", "minecraft:ice", "minecraft:blue_ice", "minecraft:snow_block"],
+    "frost_rock": [f"#{MOD}:cave_rock", "minecraft:packed_ice", "minecraft:ice", "minecraft:blue_ice", "minecraft:snow_block", f"{MOD}:glow_ice"],
+    # 0.20.1: what the cold caves' frost moss patches grow over: moss's ground (rock and soil), and the snow and packed
+    # ice of their floors, so a patch has no holes where the floor turns to snow or ice.
+    "frost_moss_ground": ["#minecraft:moss_replaceable", "minecraft:snow_block", "minecraft:packed_ice", "minecraft:gravel",
+                          "minecraft:calcite", "minecraft:cobbled_deepslate"] + optional(["create:limestone"]),
+    # 0.20.1: the rock the deep grotto's ice crusts over (IceCrustFeature): the pack's stone and the grotto's deepslate
+    # patches, not its ores, which show through the ice.
+    "ice_crust_rock": ["#minecraft:base_stone_overworld", "minecraft:cobbled_deepslate", "minecraft:dripstone_block", "minecraft:calcite"],
     # 0.4.1: the surface rock, soil and ice of the snowy biomes, where the surface hoarfrost patches grow. Not snow
     # blocks: white frost on white snow did not show (half the patches on the jagged peaks were on snow).
     "surface_frost_rock": ["#minecraft:base_stone_overworld", "#minecraft:dirt", "minecraft:packed_ice", "minecraft:ice",
@@ -1482,6 +1515,8 @@ def write_all(data_dir, res_dir, write):
     tag(MOD, "worldgen/biome", "is_deep", [f"{MOD}:{b}" for b in DEEP])
     # Immersive Weathering's icicles melt by day outside its icy biomes, deep underground too: the cold caves are icy.
     tag("immersive_weathering", "worldgen/biome", "icy", [f"{MOD}:frozen_rootvaults", f"{MOD}:frost_fern_grotto"])
+    # 0.20.1: the Frost Fern Grotto, which the frozen Root Vaults' frostberries keep out of sight of (out_of_sight).
+    tag(MOD, "worldgen/biome", "frost_fern_grotto", [f"{MOD}:frost_fern_grotto"])
     tag(MOD, "worldgen/biome", "is_upper", [f"{MOD}:{b}" for b in UPPER])
     tag("minecraft", "worldgen/biome", "is_overworld", [f"{MOD}:{b}" for b in UPPER])
     # Not the Galleries' biomes: other mods add their cave creatures and plants to biomes through these two tags, and

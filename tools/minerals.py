@@ -1,5 +1,5 @@
 """Textures of the lifeless Basalt Galleries (0.5): the ember crust, glowing rock that lights their halls, and the cinder
-chain that their climbs hang in place of vines.
+chain that their climbs hang in place of vines. And (0.20.1) the glow ice of the deep Frost Fern Grotto.
 
 Same rules as tools/plants.py: 16 by 16, vanilla style (a short ramp of shades, hard pixels), drawn with its helpers,
 the colours those of the basalt pictures (plants_deep.CHAR and EMBER). Nothing here is alive. textures.py merges this
@@ -95,3 +95,45 @@ def _cinder_chain():
 
 
 register(PAINTERS, "cinder_chain", _cinder_chain, glow=[EMBER[2], EMBER[3]])
+
+
+# Glow ice (0.20.1): the deep Frost Fern Grotto's ice, lit light blue from inside, in veins through its ice crusts.
+# Like the ember crust it gives light, so under Complementary it glows over its whole face (client/ShaderGlow), and
+# without the shader it is drawn at full brightness (emissive rendering): so its texture is glowing facets of ice,
+# brightest at their hearts, with deeper blue cracks between them. Light blue, never cyan (Taran).
+ICE_FACET = ["#86BDF4", "#97C8F8", "#A9D3FB", "#BBDDFD", "#CDE7FF"]
+ICE_CRACK = ["#5C95DC", "#6FA6E8"]
+ICE_HEART = "#EEF7FF"
+
+
+def _glow_ice():
+    rng = random.Random(2011)
+    seeds = []
+    while len(seeds) < 6:  # facet centres at least 4.5 apart round the tile's edges
+        p = (rng.random() * 16, rng.random() * 16)
+        if all(_wrapped(*p, *q) >= 4.5 for q in seeds):
+            seeds.append(p)
+    # each facet's shade leans one way across it, like light through a face of a crystal
+    lean = [(rng.uniform(-1, 1), rng.uniform(-1, 1)) for _ in seeds]
+    hearts = set(rng.sample(range(len(seeds)), 3))
+    img = blank()
+    px = img.load()
+    for y in range(16):
+        for x in range(16):
+            c = (x + 0.5, y + 0.5)
+            d = sorted((_wrapped(*c, *s), k) for k, s in enumerate(seeds))
+            (d1, k1), (d2, _), (d3, _) = d[0], d[1], d[2]
+            if d2 - d1 < 0.6:
+                # a crack: deepest where a third facet is near too
+                put(px, x, y, ICE_CRACK[0] if d3 - d1 < 1.5 else ICE_CRACK[1])
+                continue
+            sx, sy = seeds[k1]
+            dx, dy = (c[0] - sx + 8) % 16 - 8, (c[1] - sy + 8) % 16 - 8
+            t = 0.5 + 0.09 * (lean[k1][0] * dx + lean[k1][1] * dy) + min(0.3, (d2 - d1) / 9) + (rng.random() - 0.5) * 0.16
+            put(px, x, y, ICE_FACET[max(0, min(len(ICE_FACET) - 1, int(t * len(ICE_FACET))))])
+            if k1 in hearts and d1 < 0.9:
+                put(px, x, y, ICE_HEART)
+    return img
+
+
+register(PAINTERS, "glow_ice", _glow_ice)

@@ -102,11 +102,17 @@ class PaletteLooksTest {
         // the by-biome and interior answers move. Split per layer, layer 0's parts of them are as before
         // (418a4f091e1880f8 by biome, 562253bbeee39b4d interior) and layer 1's moved; the public path, the bands (band
         // stone all through, band 3 now 48 higher) and the upper caves answer as before.
+        // Split for 0.20.1 (Taran, 2026-11-20: the Frost Fern Grotto sparser and icier with depth, the frozen Root
+        // Vaults snowier and still icy): the cold caves' rock (frozen Root Vaults and grotto) has a hash of its own,
+        // and the rest of the upper caves answer exactly as before (the split hash over the same draws from 0.19.3's
+        // classes is d903f5c9057642af; the combined one was 0.14.6's b287cdd84507762d). The frozen Root Vaults' chill
+        // now ranges over -4 to 28, the same draw scaled, so their deep insides are sampled too, and the grotto's ice
+        // and glow are taken from x and z, so no draw is added.
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
         Random r = new Random(SEED);
-        long hBiome = 17, hInterior = 17, hPublic = 17, hUpper = 17;
+        long hBiome = 17, hInterior = 17, hPublic = 17, hUpper = 17, hCold = 17;
         DeepBiome[][] byLayer = {{DeepBiome.DEEP_BLUE_RIFT, DeepBiome.DEEP_DARK, DeepBiome.ASURINE_GEODES},
                 {DeepBiome.LANTERN_LAKE, DeepBiome.EMBER_GARDENS, DeepBiome.RUST_SPRINGS}};
         for (int li = 0; li < 2; li++) {
@@ -149,19 +155,20 @@ class PaletteLooksTest {
             double shell = r.nextDouble() * 8;
             for (DeepBiome b : upper) hUpper = hUpper * 31 + nz(p.upperShell(b, x, y, z, above, below, wet));
             hUpper = hUpper * 31 + nz(p.rootvaults(r.nextInt(3), r.nextBoolean(), x, y, z, above, below, wet, shell));
-            hUpper = hUpper * 31 + nz(p.frozenVaults(r.nextInt(3), r.nextDouble(), x, y, z, above, below, wet, shell));
+            hCold = hCold * 31 + nz(p.frozenVaults(r.nextInt(3), r.nextDouble() * 32 - 4, x, y, z, above, below, wet, shell));
             hUpper = hUpper * 31 + nz(p.sinkhole(x, y, z, above, below, wet, shell, r.nextBoolean()));
             hUpper = hUpper * 31 + nz(p.oasis(x, y, z, above, below, wet, shell, r.nextBoolean()));
-            hUpper = hUpper * 31 + nz(p.frostGrotto(x, y, z, above, below, wet));
+            hCold = hCold * 31 + nz(p.frostGrotto(x, y, z, above, below, wet, Math.floorMod(x, 11) / 10.0, Math.floorMod(z, 9) / 8.0));
         }
-        // all five at once, so a re-pin sees every part that moved
-        final long fBiome = hBiome, fInterior = hInterior, fPublicOld = hPublicOld, fPublic = hPublic, fUpper = hUpper;
+        // all six at once, so a re-pin sees every part that moved
+        final long fBiome = hBiome, fInterior = hInterior, fPublicOld = hPublicOld, fPublic = hPublic, fUpper = hUpper, fCold = hCold;
         assertAll(
                 () -> assertEquals("e97aebf3ae273cec", String.format("%016x", fBiome), "layers 0 and 1, by biome"),
                 () -> assertEquals("a79cc526d8233378", String.format("%016x", fInterior), "layers 0 and 1, interior"),
                 () -> assertEquals("87788ebdd351272a", String.format("%016x", fPublicOld), "layer 0 through the public path, and the bands (den rifts off)"),
                 () -> assertEquals("3d80c894a1e742aa", String.format("%016x", fPublic), "layer 0 through the public path, and the bands"),
-                () -> assertEquals("b287cdd84507762d", String.format("%016x", fUpper), "the upper caves"));
+                () -> assertEquals("d903f5c9057642af", String.format("%016x", fUpper), "the upper caves but the cold ones"),
+                () -> assertEquals("99c78b663b1de110", String.format("%016x", fCold), "the frozen Root Vaults and the Frost Fern Grotto"));
     }
 
     private static int nz(Rock q) { return q == null ? 0 : q.name().hashCode(); }

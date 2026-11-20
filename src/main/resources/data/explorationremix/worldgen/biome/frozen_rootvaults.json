@@ -150,8 +150,8 @@
     ],
     [
       "explorationremix:frozen_rootvaults/hoarfrost",
+      "explorationremix:frozen_rootvaults/moss_patches",
       "explorationremix:frozen_rootvaults/snow",
-      "explorationremix:frozen_rootvaults/frost_moss",
       "explorationremix:frozen_rootvaults/ice"
     ],
     [
@@ -161,7 +161,6 @@
     [
       "explorationremix:rootvaults/hanging_roots",
       "explorationremix:rootvaults/root_hairs",
-      "explorationremix:frozen_rootvaults/plants",
       "explorationremix:frozen_rootvaults/frostberries"
     ],
     [

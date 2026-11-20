@@ -1,9 +1,9 @@
 {
-  "feature": "explorationremix:frost_fern_grotto/snowbells",
+  "feature": "explorationremix:frost_fern_grotto/deep_ice_columns",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 8
+      "count": 40
     },
     {
       "type": "minecraft:in_square"
@@ -17,10 +17,10 @@
     },
     {
       "type": "minecraft:environment_scan",
-      "direction_of_search": "down",
+      "direction_of_search": "up",
       "target_condition": {
         "type": "minecraft:has_sturdy_face",
-        "direction": "up"
+        "direction": "down"
       },
       "allowed_search_condition": {
         "type": "minecraft:matching_blocks",
@@ -32,9 +32,9 @@
       "max_steps": 32
     },
     {
-      "type": "minecraft:random_offset",
-      "xz_spread": 0,
-      "y_spread": 1
+      "type": "explorationremix:grotto_ice",
+      "top": 0.0,
+      "deep": 1.0
     },
     {
       "type": "minecraft:biome"
