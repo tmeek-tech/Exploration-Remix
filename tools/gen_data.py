@@ -157,6 +157,9 @@ BLOCKS = {
     # Wasteland's bare refuges). The ember crust gives light, so under Complementary its whole face glows (ShaderGlow);
     # the chain gives none, and its embers only glint (an overlay kept out of glowing_blocks.json).
     "ember_crust": ("Ember Crust", "cube"),
+    # 0.20.1: the deep Frost Fern Grotto's glowing ice, in veins through its ice crusts (world.terrain.Palette.glowingIce).
+    # Like packed ice it drops itself only to silk touch.
+    "glow_ice": ("Glow Ice", "cube", {"silk": True}),
     "cinder_chain": ("Cinder Chain", "cross", {"shader_glow": False}),
     # The Galleries' lava glow: invisible light in the air along the halls' rock (HallGlowFeature). Nothing is drawn and
     # there is no item.
@@ -171,7 +174,7 @@ BLOCKS = {
 NO_DROP = {"band_stone", "glow", "mossback_den"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
 # lifeless blocks of the Galleries, and the litter round the dens.
-NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"}
+NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps", "glow_ice"}
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
@@ -189,7 +192,10 @@ BLOCK_TAGS = {
     # ferns only grow on #minecraft:dirt), and moss patches may spread over it.
     ("minecraft", "dirt"): ["frost_moss"],
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
-    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain"],
+    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain",
+                                        "glow_ice"],
+    # Glow ice is ice: no snow settles on it (it would hide the glow), as on vanilla's ice and packed ice.
+    ("minecraft", "snow_layer_cannot_survive_on"): ["glow_ice"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen"],
     # The Galleries' lava glow is open space to a growing tree (TreeFeature asks isAir() or this tag): a sapling grows
     # through it, and its logs, leaves and roots take its place.
@@ -392,8 +398,12 @@ def plane_model(tex, plain_parent, template, key):
     return {"parent": plain_parent, "render_type": "minecraft:cutout", "textures": t}
 
 
-def loot(bid, drop, kind, chance=None):
+def loot(bid, drop, kind, chance=None, silk=False):
     entry = {"type": "minecraft:item", "name": drop if ":" in drop else f"{MOD}:{drop}"}
+    if silk:
+        # only to a silk touch tool, like vanilla's packed ice
+        entry["conditions"] = [{"condition": "minecraft:match_tool", "predicate": {
+            "enchantments": [{"enchantment": "minecraft:silk_touch", "levels": {"min": 1}}]}}]
     if kind in ("tall", "tall_fern"):
         # both halves break together; only the lower half's table drops the plant
         entry["conditions"] = [{"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"half": "lower"}}]
@@ -551,7 +561,7 @@ def block_assets():
         if item is not None:
             write(os.path.join(ASSETS, "models", "item", bid + ".json"), item)
         if bid not in NO_DROP:
-            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind, opts.get("chance")))
+            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind, opts.get("chance"), opts.get("silk", False)))
     unused = set(textures.GLOW) - used_glow
     assert not unused, f"glow overlays no model draws: {sorted(unused)}"
     write(os.path.join(ASSETS, "glowing_blocks.json"), {"blocks": sorted(glowing)})

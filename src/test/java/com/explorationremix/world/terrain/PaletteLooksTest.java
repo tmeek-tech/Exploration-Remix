@@ -93,12 +93,17 @@ class PaletteLooksTest {
         // 58,511 deepslate, 21,634 asurine, 2,476 cobbled deepslate); every other part of the upper caves, both layers
         // and the bands answer as before. Pinned again for 0.14.6 (Taran, 2026-11-17: "Deep moss can just be moss"):
         // the silver band's ledges are vanilla's moss, which changes the 5,913 samples that were deep moss and no other
-        // (put deep moss back at them and the hash is 0.14.5's)
+        // (put deep moss back at them and the hash is 0.14.5's). Split for 0.20.1 (Taran, 2026-11-20: the Frost Fern
+        // Grotto sparser and icier with depth, the frozen Root Vaults snowier and still icy): the cold caves' rock
+        // (frozen Root Vaults and grotto) has a hash of its own, and the rest of the upper caves answer exactly as before
+        // (the split hash over the same draws from 0.19.3's classes is d903f5c9057642af; the combined one was 0.14.6's
+        // b287cdd84507762d). The frozen Root Vaults' chill now ranges over -4 to 28, the same draw scaled, so their deep
+        // insides are sampled too, and the grotto's ice and glow are taken from x and z, so no draw is added.
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
         Random r = new Random(SEED);
-        long hBiome = 17, hInterior = 17, hPublic = 17, hUpper = 17;
+        long hBiome = 17, hInterior = 17, hPublic = 17, hUpper = 17, hCold = 17;
         DeepBiome[][] byLayer = {{DeepBiome.DEEP_BLUE_RIFT, DeepBiome.DEEP_DARK, DeepBiome.ASURINE_GEODES},
                 {DeepBiome.LANTERN_LAKE, DeepBiome.EMBER_GARDENS, DeepBiome.RUST_SPRINGS}};
         for (int li = 0; li < 2; li++) {
@@ -135,16 +140,17 @@ class PaletteLooksTest {
             double shell = r.nextDouble() * 8;
             for (DeepBiome b : upper) hUpper = hUpper * 31 + nz(p.upperShell(b, x, y, z, above, below, wet));
             hUpper = hUpper * 31 + nz(p.rootvaults(r.nextInt(3), r.nextBoolean(), x, y, z, above, below, wet, shell));
-            hUpper = hUpper * 31 + nz(p.frozenVaults(r.nextInt(3), r.nextDouble(), x, y, z, above, below, wet, shell));
+            hCold = hCold * 31 + nz(p.frozenVaults(r.nextInt(3), r.nextDouble() * 32 - 4, x, y, z, above, below, wet, shell));
             hUpper = hUpper * 31 + nz(p.sinkhole(x, y, z, above, below, wet, shell, r.nextBoolean()));
             hUpper = hUpper * 31 + nz(p.oasis(x, y, z, above, below, wet, shell, r.nextBoolean()));
-            hUpper = hUpper * 31 + nz(p.frostGrotto(x, y, z, above, below, wet));
+            hCold = hCold * 31 + nz(p.frostGrotto(x, y, z, above, below, wet, Math.floorMod(x, 11) / 10.0, Math.floorMod(z, 9) / 8.0));
         }
         assertEquals("c729276029ca9b1d", String.format("%016x", hBiome), "layers 0 and 1, by biome");
         assertEquals("2604e01a1b4b2ee3", String.format("%016x", hInterior), "layers 0 and 1, interior");
         assertEquals("630faa4b55423838", String.format("%016x", hPublicOld), "layers 0 and 1 through the public path, and the bands (den rifts off)");
         assertEquals("1917e42223d853b8", String.format("%016x", hPublic), "layers 0 and 1 through the public path, and the bands");
-        assertEquals("b287cdd84507762d", String.format("%016x", hUpper), "the upper caves");
+        assertEquals("d903f5c9057642af", String.format("%016x", hUpper), "the upper caves but the cold ones");
+        assertEquals("99c78b663b1de110", String.format("%016x", hCold), "the frozen Root Vaults and the Frost Fern Grotto");
     }
 
     private static int nz(Rock q) { return q == null ? 0 : q.name().hashCode(); }

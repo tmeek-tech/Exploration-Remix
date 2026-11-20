@@ -273,6 +273,15 @@ public final class ERBlocks {
     /** Frost feathers over the rock near the cold mouths. No light. */
     public static final RegistryObject<Block> HOARFROST = block("hoarfrost",
             () -> new GlowLichenBlock(lichen(MapColor.SNOW, SoundType.POWDER_SNOW, 0)));
+    /**
+     * Ice lit light blue from inside, in veins through the deep Frost Fern Grotto's ice (0.20.1, Taran: the deeper caves
+     * icier, and lit by glowing ice now the frostberries are gone from the grotto). Like packed ice it never melts, is
+     * slippery and drops itself only to silk touch; its light (10) stays under what melts plain ice (over 10 where the ice
+     * is, which is at most 9 beside it) and snow. Drawn at full brightness without the shader, like magma.
+     */
+    public static final RegistryObject<Block> GLOW_ICE = block("glow_ice", () -> new Block(
+            BlockBehaviour.Properties.of().mapColor(MapColor.ICE).friction(0.98F).strength(0.5F).sound(SoundType.GLASS)
+                    .lightLevel(s -> 10).emissiveRendering((s, l, p) -> true).isValidSpawn((s, l, p, e) -> false)));
 
     // ------------------------------------------------------------------------------------------- Sinkholes and oasis hollows
     /** Grass hanging over a sinkhole's rim from the turf above. */

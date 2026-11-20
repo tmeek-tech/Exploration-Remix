@@ -1,9 +1,9 @@
 {
-  "feature": "explorationremix:frost_fern_grotto/moss_floor",
+  "feature": "explorationremix:frost_fern_grotto/moss_patches",
   "placement": [
     {
       "type": "minecraft:count",
-      "count": 48
+      "count": 20
     },
     {
       "type": "minecraft:in_square"
@@ -35,6 +35,11 @@
       "type": "minecraft:random_offset",
       "xz_spread": 0,
       "y_spread": 1
+    },
+    {
+      "type": "explorationremix:grotto_ice",
+      "top": 1.0,
+      "deep": 0.3
     },
     {
       "type": "minecraft:biome"
