@@ -159,6 +159,7 @@ public final class DeepWorldInstaller {
         DeepWorld.setHost(upperOn && cfg.upperHostRock.get() ? new HostRock(seed, oracle) : null);
         if (upperOn) DeepBiomes.keepWithoutDeepDark(biomeSource);
         DeepMaterials.resolve();
+        GardensBlocks.resolve();
         int floorY = terrain.shape.floorY;
         int packFloor = terrain.shape.packFloor;
         int extra = currentMin - floorY;

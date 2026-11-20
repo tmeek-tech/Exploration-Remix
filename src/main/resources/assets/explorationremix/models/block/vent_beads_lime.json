@@ -1,0 +1,14 @@
+{
+  "parent": "explorationremix:block/template/rock_top_side_bottom_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "rock_end": "minecraft:block/blackstone_top",
+    "rock_side": "minecraft:block/blackstone",
+    "top": "explorationremix:block/vent_beads_lime",
+    "top_glow": "explorationremix:block/vent_beads_lime_glow",
+    "side": "explorationremix:block/vent_beads_lime",
+    "side_glow": "explorationremix:block/vent_beads_lime_glow",
+    "bottom": "explorationremix:block/vent_beads_lime",
+    "bottom_glow": "explorationremix:block/vent_beads_lime_glow"
+  }
+}

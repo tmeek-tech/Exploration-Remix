@@ -9,6 +9,9 @@ import com.explorationremix.block.HangingFernBlock;
 import com.explorationremix.block.HangingPlantBlock;
 import com.explorationremix.block.HangingVinesBlock;
 import com.explorationremix.block.HangingVinesPlantBlock;
+import com.explorationremix.block.Neon;
+import com.explorationremix.block.NeonBlock;
+import com.explorationremix.block.PointedBlackDripstoneBlock;
 import com.explorationremix.block.PoolPlantBlock;
 import com.explorationremix.block.ShelfFungusBlock;
 import com.explorationremix.block.SubmergedPlantBlock;
@@ -28,6 +31,8 @@ import net.minecraft.world.level.block.CarpetBlock;
 import net.minecraft.world.level.block.GlowLichenBlock;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -357,11 +362,89 @@ public final class ERBlocks {
             BlockBehaviour.Properties.of().mapColor(MapColor.SAND).replaceable().noCollission().noOcclusion().strength(0.1F)
                     .sound(SoundType.BONE_BLOCK).pushReaction(PushReaction.DESTROY)));
 
+    // =========================================================================================== Deep Gardens round 2
+    // The vent field, the Deep Gardens' caves from y -289 to -480 (world.terrain.GardensVentField). Taran's pick for its
+    // rock (deepslate caves, black vents): the cave walls are vanilla deepslate, the vents and spires vanilla blackstone
+    // since round 3 (they were vent rock and live vent rock before), and the dripstone is black dripstone, so the neon
+    // glow stands out on black. The neon blocks come in the four neon colours (Neon: magenta, violet, lime, light blue;
+    // lime only near the ways down) and draw their glowing pixels at full brightness over rock lit by the world; those on
+    // the vents draw their neon over vanilla's blackstone. Nothing here is warm, cyan or teal.
+    /**
+     * Vanilla's dripstone block in near-black: the vent field's hanging cones and the skin over much of its cave walls,
+     * floors and ceilings (round 3), banded like vanilla's. It breaks and sounds like vanilla's dripstone block.
+     */
+    public static final RegistryObject<Block> BLACK_DRIPSTONE = block("black_dripstone", () -> new Block(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).instrument(NoteBlockInstrument.BASEDRUM).requiresCorrectToolForDrops()
+                    .sound(SoundType.DRIPSTONE_BLOCK).strength(1.5F, 1.0F)));
+    /**
+     * Vanilla's pointed dripstone in black dripstone (round 3): stalactites and stalagmites that stack, fall and hurt as
+     * vanilla's do but never grow or drip, the vent field being dry (PointedBlackDripstoneBlock). Vanilla's properties
+     * but its map colour and its random ticks.
+     */
+    public static final RegistryObject<Block> POINTED_BLACK_DRIPSTONE = block("pointed_black_dripstone", () -> new PointedBlackDripstoneBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).forceSolidOn().instrument(NoteBlockInstrument.BASEDRUM).noOcclusion()
+                    .sound(SoundType.POINTED_DRIPSTONE).strength(1.5F, 3.0F).dynamicShape().offsetType(BlockBehaviour.OffsetType.XZ)
+                    .pushReaction(PushReaction.DESTROY).isRedstoneConductor((s, l, p) -> false)));
+    /** The giant mushrooms' stem, pale lavender-white. No light. */
+    public static final RegistryObject<Block> PALE_STEM = block("pale_stem", () -> new Block(mushroomBlock().mapColor(MapColor.WOOL)));
+    /**
+     * A glowing living film over the deepslate of the cave floors, like nylium: vanilla's deepslate with the film drawn
+     * over it (round 3), so a patch fades into the floor round it. It breaks and sounds like deepslate.
+     */
+    public static final RegistryObject<Block> GLOW_MAT = block("glow_mat", () -> new NeonBlock(onDeepslate().mapColor(ERBlocks::neonMap).lightLevel(s -> 9)));
+    /** The glow mat's sparser film, on the outer ring of a patch where it thins out into the bare floor (round 3). */
+    public static final RegistryObject<Block> THIN_GLOW_MAT = block("thin_glow_mat", () -> new NeonBlock(onDeepslate().mapColor(ERBlocks::neonMap).lightLevel(s -> 6)));
+    /** The giant mushrooms' cap, neon all over with darker specks. */
+    public static final RegistryObject<Block> GLOW_CAP = block("glow_cap", () -> new NeonBlock(mushroomBlock().mapColor(ERBlocks::neonMap).lightLevel(s -> 13)));
+    /** The bright mineral rim of a live vent's mouth: crystalline neon crust on blackstone, the brightest of the set. */
+    public static final RegistryObject<Block> VENT_CROWN = block("vent_crown", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 15)));
+    /**
+     * Vent beads (the spire tip until round 3): rounded neon mineral knobs on blackstone, on every face (0.19.4's
+     * knobs, back in round 4). They cap the small live spires, mix with the crown over a live vent's top and run down its
+     * walls in streaks, outside and inside (round 4: they took the places of den fissure, vent glow and throat vein).
+     */
+    public static final RegistryObject<Block> VENT_BEADS = block("vent_beads", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 11)));
+    /** A faint crust on the dry rock at the edge of the crude oil seeps: a dim light blue film, light blue only. */
+    public static final RegistryObject<Block> SEEP_CRUST = block("seep_crust", () -> new Block(ventRock().mapColor(MapColor.COLOR_BLACK).lightLevel(s -> 5)));
+
     public static final RegistryObject<CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup." + ExplorationRemix.MOD_ID))
             .icon(() -> new ItemStack(LANTERN_FUNGUS.get()))
-            .displayItems((params, out) -> ITEMS.getEntries().forEach(i -> out.accept(i.get())))
+            // a neon block's item once in each colour (it places the colour its BlockStateTag names)
+            .displayItems((params, out) -> ITEMS.getEntries().forEach(i -> {
+                if (i.get() instanceof BlockItem b && b.getBlock() instanceof NeonBlock) {
+                    for (Neon n : Neon.values()) out.accept(NeonBlock.stack(b, n));
+                } else {
+                    out.accept(i.get());
+                }
+            }))
             .build());
+
+    /** The vent field's rock, like deepslate a little harder: it takes a pickaxe (any) to get it back. */
+    private static BlockBehaviour.Properties ventRock() {
+        return BlockBehaviour.Properties.of().instrument(NoteBlockInstrument.BASEDRUM).requiresCorrectToolForDrops().strength(3.5F, 6.0F)
+                .sound(SoundType.DEEPSLATE);
+    }
+
+    /** A film drawn over vanilla's deepslate (the glow mats): it breaks and sounds like deepslate. */
+    private static BlockBehaviour.Properties onDeepslate() {
+        return BlockBehaviour.Properties.of().instrument(NoteBlockInstrument.BASEDRUM).requiresCorrectToolForDrops().strength(3.0F, 6.0F)
+                .sound(SoundType.DEEPSLATE);
+    }
+
+    /** A neon block drawn over vanilla's blackstone (on the vents and spires): it breaks and sounds like blackstone. */
+    private static BlockBehaviour.Properties onBlackstone() {
+        return BlockBehaviour.Properties.of().instrument(NoteBlockInstrument.BASEDRUM).requiresCorrectToolForDrops().strength(1.5F, 6.0F)
+                .sound(SoundType.STONE);
+    }
+
+    /** A block of a giant mushroom, like vanilla's mushroom blocks: soft, cut fastest with an axe, and it burns. */
+    private static BlockBehaviour.Properties mushroomBlock() {
+        return BlockBehaviour.Properties.of().instrument(NoteBlockInstrument.BASS).strength(0.2F).sound(SoundType.WOOD).ignitedByLava();
+    }
+
+    /** A neon block shows its colour on maps. */
+    private static MapColor neonMap(BlockState state) { return state.getValue(NeonBlock.NEON).mapColor; }
 
     /** A small plant you walk through and break with a punch. */
     private static BlockBehaviour.Properties plant(MapColor color, SoundType sound, int light) {

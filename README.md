@@ -21,13 +21,16 @@ later milestones, built on these caves.
 | Create | optional: its stones (asurine, crimsite, ochrum, veridium, limestone, scoria, scorchia) build the layers; vanilla stones stand in without it |
 | mcremix | optional: rusted machine parts in the Rust Springs; Create and vanilla parts stand in without it |
 
-**New worlds only.** The overworld is extended to y -832 when a world is created. Existing chunks are not
-regenerated.
+**New worlds only.** The overworld is extended to y -784 when a world is created (to y -832 before 0.19.6, when the
+Deep Gardens grew shorter). Existing chunks are not regenerated, so a world made with an older version keeps its old
+layout where it was explored, and one made before 0.19.6 loses its rows below y -784. One made before 0.19.7 keeps
+its old crude oil where it was explored, so pools there may not meet the new ones at the edge of explored ground. In
+one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and items) turn into vent beads.
 
 ## Installing
 
 1. Put `explorationremix-<version>.jar` in the `mods` folder of the client and the server.
-2. Create a new world. The server log says `Deep world installed: overworld now spans y -832 to 319`.
+2. Create a new world. The server log says `Deep world installed: overworld now spans y -784 to 319`.
 3. Settings are in `config/explorationremix-world.toml` (world shape, read when a server starts) and
    `config/explorationremix-client.toml` (fog and particles, per player).
 4. If the server log ever shows `[Exploration Remix] The cave plan of layer ... threw`, the world kept generating: that
@@ -42,13 +45,13 @@ regenerated.
 | Band 1 | -65 to -80 | | | |
 | Blue Reaches | -81 to -272 | Asurine Geodes | Deep Blue Rift | deep dark |
 | Band 2 | -273 to -288 | | | |
-| Deep Gardens | -289 to -528 | Rust Springs | Lantern Lake | Ember Gardens |
-| Band 3 | -529 to -544 | | | |
-| Wasteland | -545 to -672 | Ash Hollows | Wasteland | the whole layer (nothing hunts yet) |
-| Band 4 | -673 to -688 | | | |
-| Basalt Galleries | -689 to -832 | Obsidian Tubes | Basalt Galleries; also the Caldera, the Causeway and the Scoria Canyons | none: nothing lives there |
+| Deep Gardens | -289 to -480 | Chimney Halls | Seep Beds | Vent Domes |
+| Band 3 | -481 to -496 | | | |
+| Wasteland | -497 to -640 | Ash Hollows | Wasteland | the whole layer (nothing hunts yet) |
+| Basalt Galleries | -641 to -784 | Obsidian Tubes | Basalt Galleries; also the Caldera, the Causeway and the Scoria Canyons | none: nothing lives there |
 
-* **Bands** are 16 blocks of unbreakable band stone. Each has one **gate** per 600 by 600 block cell: a twisting
+* **Bands** are 16 blocks of unbreakable band stone (none lies between the Wasteland and the Basalt Galleries: the
+  Wasteland's caves open into the Galleries' ceiling). Each has one **gate** per 600 by 600 block cell: a twisting
   passage between two landing chambers. The first gate's upper landing sits on the pack's old floor, with a ramp up
   into its caves.
 * Each layer is a **cave network**, planned per cell: chambers joined by tunnels, with loops, side branches and dead
@@ -58,9 +61,14 @@ regenerated.
   stages, with vines up one wall, so no fall is longer than 15 blocks. **Refuges** are bare, calm rooms with no
   plants; the **hunting ground** is the most overgrown part of a layer (nothing hunts yet); everything else is the
   layer's main biome.
-* **Deep Gardens:** about 200 chambers per cell, most 15 to 30 blocks across and 8 to 20 tall, joined by tunnels 4 to
-  6 wide. Its set pieces: the Lantern Lake halls, the Ember Gardens' terraced district, the Rust Springs and a spiral
-  well.
+* **Deep Gardens** (0.19): a dry vent field shaped by noise, 192 blocks deep, in three bands. The **Seep Beds** on
+  top are low flats with flat, knee-deep pools of crude oil (with mcremix) sunk into the low ground, stepping down
+  slopes behind dry rock edges, and seep glow along them; the **Chimney Halls** below are
+  dark halls under black dripstone, reaching the bottom in places; the **Vent Domes** at the bottom are cave-like
+  domes round hollow blackstone vents, crowned and streaked with glowing vent beads, each vent's chamber sunk a few
+  blocks into the cave floor as a bowl with beads running down its inside walls. About a third of the rock is black
+  dripstone, with pointed black dripstone under its cones; neon glow mats, thinning out in a scattered edge, and glow
+  caps light the floors. A few deep vents' throats wind down into the Wasteland's top tunnels.
 * **Wasteland** (0.5): the old Basalt Galleries' look in a tighter network made for close encounters. Winding tunnels
   about 5 wide and 6 to 8 tall bend every 14 blocks or so and run at most 36 blocks from door to door between caves 15
   to 30 across, small fork rooms where three ways meet, a few short galleries and a great hall with an arch, on four

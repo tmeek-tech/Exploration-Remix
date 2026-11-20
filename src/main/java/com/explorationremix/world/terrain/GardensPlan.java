@@ -1,0 +1,738 @@
+package com.explorationremix.world.terrain;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static com.explorationremix.world.terrain.GardensMath.clipF;
+import static com.explorationremix.world.terrain.GardensMath.pull;
+import static com.explorationremix.world.terrain.GardensMath.rampF;
+import static com.explorationremix.world.terrain.GardensNoise.clip;
+import static com.explorationremix.world.terrain.GardensNoise.fbm2;
+import static com.explorationremix.world.terrain.GardensNoise.hash2;
+import static com.explorationremix.world.terrain.GardensNoise.hv;
+import static com.explorationremix.world.terrain.GardensNoise.n2;
+import static com.explorationremix.world.terrain.GardensNoise.ramp;
+
+/**
+ * The Deep Gardens' plan (round 2, built 2026-11-18 from the offline previews in project files
+ * {@code deep-gardens/shape-options-r2}; round 3, 2026-11-19, from Taran's playtest notes): six storeys of floors from
+ * one noise frame, each a blend of three styles by where its floor sits against two heat-lifted borders: Vent Domes
+ * under the low border (the bottom band), Chimney Halls between, Seep Beds over the high border (the top band). This
+ * class holds what is a pure function of a column (the frame, the styles' noise, the domes' shape) and of a cell (the
+ * vent halls, domes and deep sites); {@link GardensStoreys} turns them into each storey's floor and ceiling over a
+ * window.
+ *
+ * <p>Rows are the layer's own: row 0 is the layer's bottom block, row {@code SY - 1} its top. Columns are world x and z.
+ *
+ * <p>Round 3 (Taran: "Reduce the layer height. The middle biomes could come down to the bottom. Make vent domes bigger
+ * and have them shaped less like perfect domes and more like caves"): the layer is 192 rows (it was 240) in six storeys
+ * (it was seven), the Chimney Halls reach the bottom storey beside the Vent Domes, and the domes are half again as big,
+ * cut to a cave's shape by noise ({@link #domeAt}). Storeys 0 and 1 keep their floors and noise: the way down lands at
+ * row 18 and the deep sites need 36 rows between them. Taran confirmed the 192 (2026-11-19); other heights, should one
+ * be wanted later: 208 rows would be {@code BASES = {18, 62, 104, 140, 168, 192}} (K 6), 176 rows
+ * {@code {18, 62, 98, 130, 160}} (K 5, the arrays below cut to five); the rest follows {@link #SY} or is noted where it
+ * is set. K stays at most 8 (tier 0 and the single columns pack storeys into bits).
+ */
+final class GardensPlan {
+    static final int K = 6, SY = 192, SEAL = 4;
+    /** Each storey's base floor: the top one near SY - 16, under the way in, which lands at row SY - 17.6. */
+    static final float[] BASES = {18f, 62f, 100f, 134f, 156f, 176f};
+    static final float[] SIG = {1f, 1f, 1f, 1f, 0.5f, 0.5f}, TAU = {0f, 0f, 0f, 0.5f, 1f, 1f}, UND = {4f, 4f, 4f, 4f, 3f, 3f};
+    /**
+     * A vent hall's radius base, the tallest hall (32: the hall storeys are 34 to 38 apart), the soft cap of an ordinary
+     * dome's height, the rock a hall's cup and a dome keep under the storey above.
+     */
+    static final double RV0 = 20, HALL_CAP = 32, DOME_CAP = 34, CUP_GAP = 8;
+    /** The highest ceiling any storey reaches, the top storey's soft cap (round 2's 235 and 233 at 240 rows). */
+    static final float CEIL_MAX = SY - 5, CAP_TOP = SY - 7;
+    /** The lower gate's dome radius (24 until round 3, scaled with the domes); the tunnels' scale. */
+    static final double GATE_R = 30, TUN_SCALE = 70;
+    /**
+     * Which storeys each style is worked out on in full, as the preview did over its patch (a style is worked out where
+     * any column of the patch had its weight): there its rooms may stand a little past where its weight fades, at the
+     * noise's peaks. On the other storeys a style only stands where its weight is above zero (halls on the bottom
+     * storey too since round 3).
+     */
+    static final boolean[] HALLS = {false, true, true, true, true, false};
+    static final boolean[] BEDS = {false, false, false, true, true, true};
+    static final boolean[] DOMES = {true, true, true, true, true, true};
+    /**
+     * The storeys whose beds rise into colonnades where their noise says (the bed storeys with a storey over them; round
+     * 2 had storeys 3 and 5 of seven).
+     */
+    static final boolean[] COLONNADES = {false, false, false, true, true, false};
+    /**
+     * The two borders (round 3, Taran: "The middle biomes could come down to the bottom"): a storey whose floor lies under
+     * the low border, {@code LB0 + LB_SWING * noise + heat} clipped to {@code LB_LO..LB_HI}, is Vent Domes; one over the
+     * high border, at least {@code HB_GAP} over it and about {@code HB0}, is Seep Beds; the Chimney Halls lie between.
+     * With the low border about 48 and swinging 30 the halls reach the bottom storey beside the domes in places (round 2:
+     * 100, 14 and 76..132; the high border 166, 44 and 148..190). The stacked reading, halls down to storey 1 only, is
+     * LB0 66, LB_SWING 14, LB_LO 46.
+     */
+    static final float LB0 = 48f, LB_SWING = 30f, LB_LO = 0f, LB_HI = 96f, HB0 = 140f, HB_GAP = 40f, HB_LO = 110f, HB_HI = 164f;
+
+    /** This plan's style activity per storey (the game's: {@link #HALLS}, {@link #BEDS}, {@link #DOMES}). */
+    final boolean[] halls, beds, domes;
+
+    final int seed;
+    final GardensGates gates;
+    /** The offline preview's patch rules (sites and slides only inside the patch), for comparing with its arrays. */
+    final boolean patch;
+    final int px0, pz0, psx, psz;
+
+    private final Map<Integer, int[]> perms = new ConcurrentHashMap<>();
+    final int[] W, WB, P610, P611, P602, P603, P1201, P1202, P601, P730, P600, P3958;
+    final int[][] PUND = new int[K][], PR = new int[K - 1][], PM0 = new int[K][], PCV = new int[K][], PDD = new int[K][], PWN = new int[K][];
+    final int[][] PMB = new int[K][], PPIL = new int[K][], PHN = new int[K][], PCOL = new int[K][], PT1 = new int[K][], PT2 = new int[K][], PTW = new int[K][];
+    /** The domes' shape (round 3): each storey's warp, vault and pocket noise (the outline's is {@link #PWN}). */
+    final int[][] PDW = new int[K][], PVT = new int[K][], PPK = new int[K][];
+
+    GardensPlan(int seed, GardensGates gates) {
+        this(seed, gates, false, 0, 0, 0, 0, HALLS, BEDS, DOMES);
+    }
+
+    GardensPlan(int seed, GardensGates gates, boolean patch, int px0, int pz0, int psx, int psz, boolean[] halls,
+                boolean[] beds, boolean[] domes) {
+        this.seed = seed;
+        this.halls = halls.clone();
+        this.beds = beds.clone();
+        this.domes = domes.clone();
+        this.gates = gates;
+        this.patch = patch;
+        this.px0 = px0;
+        this.pz0 = pz0;
+        this.psx = psx;
+        this.psz = psz;
+        W = perm(seed + 699);
+        WB = perm(seed + 1299);
+        P610 = perm(seed + 610);
+        P611 = perm(seed + 611);
+        P602 = perm(seed + 602);
+        P603 = perm(seed + 603);
+        P1201 = perm(seed + 1201);
+        P1202 = perm(seed + 1202);
+        P601 = perm(seed + 601);
+        P730 = perm(seed + 730);
+        P600 = perm(seed + 600);
+        P3958 = perm(seed + 3958);
+        for (int k = 0; k < K; k++) {
+            PUND[k] = perm(seed + 620 + k);
+            if (k < K - 1) PR[k] = perm(seed + 610 + k);
+            PM0[k] = perm(seed + 630 + k);
+            PCV[k] = perm(seed + 680 + k);
+            PDD[k] = perm(seed + 1130 + k);
+            PWN[k] = perm(seed + 1140 + k);
+            PMB[k] = perm(seed + 740 + k);
+            PPIL[k] = perm(seed + 750 + k);
+            PHN[k] = perm(seed + 760 + k);
+            PCOL[k] = perm(seed + 780 + k);
+            PT1[k] = perm(seed + 1400 + k);
+            PT2[k] = perm(seed + 1450 + k);
+            PTW[k] = perm(seed + 1500 + k);
+            PDW[k] = perm(seed + 1160 + k);
+            PVT[k] = perm(seed + 1170 + k);
+            PPK[k] = perm(seed + 1180 + k);
+        }
+    }
+
+    int[] perm(int s) { return perms.computeIfAbsent(s, GardensNoise::perm); }
+
+    /** The game's seed folded to the previews' 31 bits (8675309 stays 8675309). */
+    static int foldSeed(long worldSeed) { return (int) (worldSeed ^ (worldSeed >>> 32)) & 0x7FFFFFFF; }
+
+    // ============================================================================================ one column
+
+    /**
+     * Everything about one column that is a pure function of its position: the frame (each storey's base floor and the
+     * two borders), the heat, the mound field, each storey's style weights and the noise its rooms are cut from (the
+     * domes' own noise is {@link #domeNoise}, worked out only where a dome reaches).
+     */
+    static final class Col {
+        float hl, hot, mound, lb, hb, big;
+        final float[] f = new float[K], wd = new float[K], wh = new float[K], wb = new float[K];
+        final float[] td = new float[K], tw = new float[K], m0 = new float[K], cv = new float[K];
+        final float[] mb = new float[K], pil = new float[K], col = new float[K], hn = new float[K];
+        float cap6;
+        /** Scratch for the noise's slope. */
+        final double[] tmp = new double[3];
+        /** The nearest landing of each kind within reach (null if none), for the pulls. */
+        GardensGates.Gate entry, exit;
+    }
+
+    /** Fills c for column (wx, wz); {@code mask} picks the storeys whose room noise is wanted (bit k). */
+    void column(int wx, int wz, Col c, int mask) { column(wx, wz, c, mask, false); }
+
+    /**
+     * {@link #column(int, int, Col, int)}; {@code lean} leaves out what only the storeys' heights and the dressing read
+     * (heat, mounds, the hall and bed height noises, the top's cap), for the footprint's inputs.
+     */
+    void column(int wx, int wz, Col c, int mask, boolean lean) {
+        double x = wx, z = wz;
+        // shared warps
+        double wa90 = n2(W, x / 90.0, z / 90.0), wb90 = n2(W, x / 90.0 + 41.0, z / 90.0 - 17.0);
+        double wa110 = 0, wb110 = 0;
+        if (mask != 0) {
+            wa110 = n2(W, x / 110.0, z / 110.0);
+            wb110 = n2(W, x / 110.0 + 41.0, z / 110.0 - 17.0);
+        }
+        double wB1 = n2(WB, x / 120.0, z / 120.0), wB2 = n2(WB, x / 120.0 + 41.0, z / 120.0 - 17.0);
+        // frame
+        float hl = (float) fbm2(P610, x / 95.0, z / 95.0, 2);
+        c.hl = hl;
+        if (!lean) {
+            c.hot = hl + 0.5f * (float) n2(P611, x / 17.0, z / 17.0);
+            float ma = (float) fbm2(P602, x / 80.0, z / 80.0, 2), mb2 = (float) n2(P603, x / 26.0, z / 26.0);
+            c.mound = (float) Math.pow(rampF(ma + 0.45f * mb2, -0.05, 0.55), (double) 1.4f);
+        }
+        double lx = x + 20.0 * wB1, lz = z + 20.0 * wB2;
+        float fl = (float) fbm2(P1201, lx / 150.0, lz / 150.0, 2), fh = (float) fbm2(P1202, lx / 165.0, lz / 165.0, 2);
+        float lb = clipF(LB0 + LB_SWING * fl + 18f * (hl - 0.13f), LB_LO, LB_HI);
+        float hb = clipF(Math.max(lb + HB_GAP, HB0 + 12f * fh + 12f * (hl - 0.13f)), HB_LO, HB_HI);
+        c.lb = lb;
+        c.hb = hb;
+        float stack = 14f * (float) fbm2(P601, x / 280.0, z / 280.0, 2);
+        float T = 16f * (float) fbm2(P730, x / 260.0, z / 260.0, 2);
+        float[] f0 = new float[K], R = new float[K - 1];
+        for (int k = 0; k < K; k++) f0[k] = BASES[k] + SIG[k] * stack + TAU[k] * T + UND[k] * (float) fbm2(PUND[k], x / 60.0, z / 60.0, 2);
+        for (int k = 0; k < K - 1; k++) R[k] = rampF((float) fbm2(PR[k], x / (k < 3 ? 220.0 : 170.0), z / (k < 3 ? 220.0 : 170.0), 2), 0.0, k < 3 ? 0.4 : 0.45);
+        List<GardensGates.Gate> gs = gates.near(x, z, 90);
+        c.entry = null;
+        c.exit = null;
+        double de = 1e9, dx = 1e9;
+        for (GardensGates.Gate g : gs) {
+            double d = Math.hypot(g.x() - x, g.z() - z);
+            if (g.entry() && d < de) { de = d; c.entry = g; }
+            if (!g.entry() && d < dx) { dx = d; c.exit = g; }
+        }
+        for (int k = 0; k < K; k++) {
+            float up = k < K - 1 ? 0.5f * (f0[k + 1] - f0[k]) * R[k] : 0f;
+            float dn = k > 0 ? 0.5f * (f0[k] - f0[k - 1]) * R[k - 1] : 0f;
+            float f = f0[k] + up - dn;
+            if (k == K - 1 && c.entry != null) {
+                float pe = pull(x, z, c.entry.x(), c.entry.z(), 20.0, 70.0);
+                f = f + ((float) c.entry.floor() - f) * pe;
+            }
+            if (k == 0 && c.exit != null) {
+                float px = pull(x, z, c.exit.x(), c.exit.z(), 22.0, 80.0);
+                f = f + ((float) c.exit.floor() - f) * px;
+            }
+            c.f[k] = f;
+            float wd = 1f - rampF(f - lb, -5, 5), wb = rampF(f - hb, -5, 5);
+            c.wd[k] = wd;
+            c.wb[k] = wb;
+            c.wh[k] = clipF(1f - wd - wb, 0f, 1f);
+        }
+        boolean anyHall = false;
+        for (int k = 0; k < K; k++) if ((mask >> k & 1) != 0 && hallsHere(k, c.wh[k])) anyHall = true;
+        c.big = anyHall ? rampF((float) fbm2(P600, x / 210.0, z / 210.0, 2), -0.3, 0.6) : 0f;
+        double tx = x + 12.0 * wa90, tz = z + 12.0 * wb90;
+        for (int k = 0; k < K; k++) {
+            if ((mask >> k & 1) == 0) continue;
+            float td1 = (float) (patch ? zld(PT1[k], TUN_SCALE, tx, tz) : zldA(PT1[k], TUN_SCALE, tx, tz, c.tmp));
+            float td2 = (float) (patch ? zld(PT2[k], TUN_SCALE * 92.0 / 70.0, tx, tz) : zldA(PT2[k], TUN_SCALE * 92.0 / 70.0, tx, tz, c.tmp));
+            c.td[k] = Math.min(td1, td2 + 0.5f);
+            c.tw[k] = 2.4f * (1f + 0.35f * (float) n2(PTW[k], x / 24.0, z / 24.0));
+            if (hallsHere(k, c.wh[k])) {
+                float m = (float) fbm2(PM0[k], (x + 16.0 * wa90) / 56.0, (z + 16.0 * wb90) / 56.0, 3);
+                c.m0[k] = m - 0.14f + 0.18f * c.big - 0.6f * (1f - c.wh[k]);
+                if (!lean) c.cv[k] = 1f + 0.25f * (float) fbm2(PCV[k], x / 20.0, z / 20.0, 2);
+            } else {
+                c.m0[k] = -9f;
+                c.cv[k] = 1f;
+            }
+            if (bedsHere(k, c.wb[k])) {
+                float m = (float) fbm2(PMB[k], (x + 18.0 * wa110) / 85.0, (z + 18.0 * wb110) / 85.0, 3);
+                float mbk = m + 0.10f - 0.6f * (1f - c.wb[k]);
+                // the top storey's beds fade where its floor rises over its base, under the top's cap
+                if (k == K - 1 && c.entry != null) {
+                    float inner6 = pull(x, z, c.entry.x(), c.entry.z(), 10.0, 21.0);
+                    float ring6 = pull(x, z, c.entry.x(), c.entry.z(), 30.0, 44.0) - inner6;
+                    mbk = mbk - 0.6f * rampF(c.f[k] - BASES[K - 1], 0, 6) + 0.3f * inner6 - 0.6f * ring6;
+                } else if (k == K - 1) {
+                    mbk = mbk - 0.6f * rampF(c.f[k] - BASES[K - 1], 0, 6);
+                }
+                c.mb[k] = mbk;
+                c.pil[k] = (float) fbm2(PPIL[k], x / 10.0, z / 10.0, 2);
+                c.col[k] = COLONNADES[k] ? rampF((float) fbm2(PCOL[k], x / 120.0, z / 120.0, 2), 0.22, 0.55) : 0f;
+                if (!lean) c.hn[k] = 4.6f + 5.9f * rampF((float) fbm2(PHN[k], x / 50.0, z / 50.0, 2), -0.35, 0.45);
+            } else {
+                c.mb[k] = -9f;
+                c.pil[k] = 1f;
+                c.col[k] = 0f;
+                c.hn[k] = 4.6f;
+            }
+        }
+        if (!lean) c.cap6 = CAP_TOP + 1.5f * (float) n2(P3958, x / 9.0, z / 9.0);
+    }
+
+    /**
+     * Whether storey k works out halls at a column with this hall weight: on the bottom storey too since round 3, where
+     * the low border dips under it (before, those columns read as halls but carved only tunnels).
+     */
+    boolean hallsHere(int k, float wh) { return halls[k] || wh > 0f; }
+
+    boolean bedsHere(int k, float wb) { return beds[k] || (k > 0 && wb > 0f); }
+
+    /** fields.zero_line_dist at a (warped) column: distance to the zero line of a 2D noise, first order. */
+    static double zld(int[] p, double scale, double wx, double wz) {
+        double e = 0.75;
+        double v = n2(p, wx / scale, wz / scale);
+        double gx = (n2(p, (wx + e) / scale, wz / scale) - n2(p, (wx - e) / scale, wz / scale)) / (2 * e);
+        double gz = (n2(p, wx / scale, (wz + e) / scale) - n2(p, wx / scale, (wz - e) / scale)) / (2 * e);
+        double g = Math.sqrt(gx * gx + gz * gz);
+        return Math.abs(v) / Math.max(g, 0.3 / scale);
+    }
+
+    /** zld with the noise's own slope in place of central differences (the game's form: the same zero lines, cheaper). */
+    static double zldA(int[] p, double scale, double wx, double wz, double[] tmp) {
+        GardensNoise.n2d(p, wx / scale, wz / scale, tmp);
+        double gx = tmp[1] / scale, gz = tmp[2] / scale;
+        double g = Math.sqrt(gx * gx + gz * gz);
+        return Math.abs(tmp[0]) / Math.max(g, 0.3 / scale);
+    }
+
+    /** The frame alone at a column (cheap enough for the sites' few points): every storey's base floor and weights. */
+    Col frameAt(int wx, int wz) {
+        Col c = new Col();
+        column(wx, wz, c, 0);
+        return c;
+    }
+
+    // ============================================================================================ cells
+
+    /** A vent hall: a hall lifted round a spot of the room noise on hot ground, where a stack of vents may stand. */
+    record VHall(int k, double x, double z, double h0, double u, int i, int kk) {
+        long key() { return cellKey(k, i, kk); }
+    }
+
+    /** A cell's key: its storey and indices packed, then mixed (a bijection) so hash tables spread them evenly. */
+    static long cellKey(int k, int i, int kk) { return mix64(((long) k << 56) ^ ((long) (i & 0xFFFFFFF) << 28) ^ (kk & 0xFFFFFFFL)); }
+
+    /** splitmix64's finaliser: a bijection on longs that scatters every bit over the whole word. */
+    static long mix64(long z) {
+        z = (z ^ (z >>> 30)) * 0xbf58476d1ce4e5b9L;
+        z = (z ^ (z >>> 27)) * 0x94d049bb133111ebL;
+        return z ^ (z >>> 31);
+    }
+
+    private final Map<Long, Object> vhallCand = new ConcurrentHashMap<>();
+    private static final Object NONE = new Object();
+
+    /** Cells of the vent halls on storey k: size and offset. */
+    static final double VH_G = 64.0;
+
+    static double vhSx0(int k) { return 29.0 * k; }
+
+    static double vhSz0(int k) { return -41.0 * k; }
+
+    /** The vent hall candidate of a cell (gen3.build2d), or null: slid to the room noise's peak, on hot ground, away from the gates. */
+    VHall vhallCandidate(int k, int i, int kk) {
+        long key = cellKey(k, i, kk);
+        Object o = vhallCand.get(key);
+        if (o == null) {
+            VHall v = computeVHall(k, i, kk);
+            o = v == null ? NONE : v;
+            vhallCand.putIfAbsent(key, o);
+        }
+        return o == NONE ? null : (VHall) o;
+    }
+
+    private VHall computeVHall(int k, int i, int kk) {
+        double h0 = hv(seed, 1, 0, k, 0, i, kk);
+        double u1 = hv(seed, 1, 1, k, 0, i, kk), u2 = hv(seed, 1, 2, k, 0, i, kk), u = hv(seed, 1, 3, k, 0, i, kk);
+        double G = VH_G, sx0 = vhSx0(k), sz0 = vhSz0(k);
+        double cx0 = sx0 + (i + 0.15 + 0.7 * u1) * G, cz0 = sz0 + (kk + 0.15 + 0.7 * u2) * G;
+        Col c = new Col();
+        column(clampX(floorI(cx0)), clampZ(floorI(cz0)), c, 0);
+        if (h0 > 0.8 * (double) rampF(c.hl, -0.15, 0.25)) return null;
+        float best = -9f;
+        double cx = cx0, cz = cz0;
+        int bit = 1 << k;
+        for (int a = -4; a <= 4; a++)
+            for (int b = -4; b <= 4; b++) {
+                double x = cx0 + 5 * a, z = cz0 + 5 * b;
+                if (patch && !inPatch(x, z)) continue;
+                column(floorI(x), floorI(z), c, bit);
+                if (c.m0[k] > best) {
+                    best = c.m0[k];
+                    cx = x;
+                    cz = z;
+                }
+            }
+        column(clampX(floorI(cx)), clampZ(floorI(cz)), c, 0);
+        if (best < -0.05f || c.wh[k] < 0.5f || !hallsHere(k, c.wh[k])) return null;
+        if (gateDist(cx, cz) < 60) return null;
+        return new VHall(k, cx, cz, h0, u, i, kk);
+    }
+
+    /** gen3: a candidate is kept unless another within 30 has a lower h0. */
+    boolean vhallKept(VHall v) {
+        for (int di = -1; di <= 1; di++)
+            for (int dk = -1; dk <= 1; dk++) {
+                if (di == 0 && dk == 0) continue;
+                VHall q = vhallCandidate(v.k, v.i + di, v.kk + dk);
+                if (q != null && Math.hypot(v.x - q.x, v.z - q.z) < 30 && q.h0 < v.h0) return false;
+            }
+        return true;
+    }
+
+    /**
+     * Every kept vent hall of storey k whose cell could put it within {@code pad} of the box (on the bottom storey too
+     * since round 3: a candidate needs hall weight 0.5 at its spot, so they stand where the halls come down).
+     */
+    List<VHall> vhallsNear(int k, double minX, double minZ, double maxX, double maxZ, double pad) {
+        List<VHall> out = new ArrayList<>();
+        double G = VH_G, sx0 = vhSx0(k), sz0 = vhSz0(k);
+        int i0 = (int) Math.floor((minX - pad - sx0) / G) - 1, i1 = (int) Math.floor((maxX + pad - sx0) / G) + 1;
+        int k0 = (int) Math.floor((minZ - pad - sz0) / G) - 1, k1 = (int) Math.floor((maxZ + pad - sz0) / G) + 1;
+        for (int i = i0; i <= i1; i++)
+            for (int kk = k0; kk <= k1; kk++) {
+                VHall v = vhallCandidate(k, i, kk);
+                if (v == null) continue;
+                if (v.x < minX - pad || v.x > maxX + pad || v.z < minZ - pad || v.z > maxZ + pad) continue;
+                if (vhallKept(v)) out.add(v);
+            }
+        return out;
+    }
+
+    /**
+     * A dome site (gen3.build2d's cells of 38, round 1's hashes), or a deep site's dome on storey 0: its centre, radius
+     * and height at the centre before the noise and the caps ({@link #domeAt}).
+     */
+    record Dome(int k, double x, double z, double r, int i, int kk, double hc, boolean deep) {}
+
+    private final Map<Long, Object> domeCells = new ConcurrentHashMap<>();
+    static final double DOME_G = 38.0;
+    /**
+     * The domes' radii (round 3, Taran: "Make vent domes bigger"): a Pareto tail from R_MIN (median about 17) cut at
+     * R_MAX, half again round 2's 7.5..27 (median 11). The deep sites' domes: RD_MIN plus up to RD_SPAN (round 2: 24..27).
+     */
+    static final double R_MIN = 11, R_MAX = 40, RD_MIN = 30, RD_SPAN = 6;
+
+    static double dmSx0(int k) { return 37.0 * k; }
+
+    static double dmSz0(int k) { return -23.0 * k; }
+
+    Dome domeSite(int k, int i, int kk) {
+        long key = cellKey(k, i, kk);
+        Object o = domeCells.get(key);
+        if (o == null) {
+            Dome d = computeDome(k, i, kk);
+            o = d == null ? NONE : d;
+            domeCells.putIfAbsent(key, o);
+        }
+        return o == NONE ? null : (Dome) o;
+    }
+
+    private Dome computeDome(int k, int i, int kk) {
+        double G = DOME_G, sx0 = dmSx0(k), sz0 = dmSz0(k);
+        long s = seed + 1150L + k * 131L;
+        double h0 = hash2(s, i * 7919L, kk * 104729L);
+        double cxw = sx0 + (i + 0.5) * G, czw = sz0 + (kk + 0.5) * G;
+        double dens = 0.55 + 0.35 * n2(PDD[k], cxw / 160.0, czw / 160.0);
+        if (h0 > dens) return null;
+        double u1 = hash2(s + 1, i * 7919L, kk * 104729L), u2 = hash2(s + 2, i * 7919L, kk * 104729L), u3 = hash2(s + 3, i * 7919L, kk * 104729L);
+        double cx = sx0 + (i + 0.15 + 0.7 * u1) * G, cz = sz0 + (kk + 0.15 + 0.7 * u2) * G;
+        double r = Math.min(R_MAX, R_MIN * Math.pow(1.0 - u3 * 0.999, -1.0 / 1.7));
+        if (!domes[k]) return null;
+        Col c = frameAt(clampX(floorI(cx)), clampZ(floorI(cz)));
+        if (c.wd[k] < 0.5f) return null;
+        if (patch && !(cx - px0 >= -r && cx - px0 < psx + r && cz - pz0 >= -r && cz - pz0 < psz + r)) return null;
+        // the big ones a little wider than tall: as tall as wide up to r 14, 0.85 of it from r 24
+        double tt = Math.max(0, Math.min(1, (r - 14) / 10)), hf = 1.0 - 0.15 * tt * tt * (3 - 2 * tt);
+        return new Dome(k, cx, cz, r, i, kk, hf * r, false);
+    }
+
+    /**
+     * Every dome of storey k whose shape could reach the box (deep sites' domes included on storey 0): its cell's reach
+     * and its own are {@link #domeReach}, as the storeys' dome loop takes it, so a window and a single column see the
+     * same domes.
+     */
+    List<Dome> domesNear(int k, double minX, double minZ, double maxX, double maxZ, double pad) {
+        List<Dome> out = new ArrayList<>();
+        double G = DOME_G, sx0 = dmSx0(k), sz0 = dmSz0(k), reach = pad + domeReach(R_MAX);
+        int i0 = (int) Math.floor((minX - reach - sx0) / G) - 1, i1 = (int) Math.floor((maxX + reach - sx0) / G) + 1;
+        int k0 = (int) Math.floor((minZ - reach - sz0) / G) - 1, k1 = (int) Math.floor((maxZ + reach - sz0) / G) + 1;
+        for (int i = i0; i <= i1; i++)
+            for (int kk = k0; kk <= k1; kk++) {
+                Dome d = domeSite(k, i, kk);
+                if (d == null) continue;
+                double rr = domeReach(d.r) + pad;
+                if (d.x + rr < minX || d.x - rr > maxX || d.z + rr < minZ || d.z - rr > maxZ) continue;
+                out.add(d);
+            }
+        if (k == 0 && domes[0]) {
+            for (DeepSite d : deepSitesNear(minX, minZ, maxX, maxZ, pad + domeReach(RD_MIN + RD_SPAN))) {
+                double rr = domeReach(d.rd) + pad;
+                if (d.x + rr < minX || d.x - rr > maxX || d.z + rr < minZ || d.z - rr > maxZ) continue;
+                out.add(new Dome(0, d.x, d.z, d.rd, d.i, d.kk, d.hd, true));
+            }
+        }
+        return out;
+    }
+
+    // ============================================================================================ the domes' shape
+
+    /**
+     * The domes' shape (round 3, Taran: "have them shaped less like perfect domes and more like caves"): each dome's
+     * distance is measured from its column moved by the storey's warp (WARP_K of the radius, at most WARP_MAX, on noise
+     * of scale WARP_S: one warp per storey, so overlapping domes bend together), against a radius swelling and shrinking
+     * by OUTLINE on noise of scale OUTLINE_S; its vault falls as (1 - d^2.2)^0.6, rough by VAULT on noise of scale VAULT_S,
+     * and meets its cap ({@link #domeCap}: DOME_CAP, and CUP_GAP under the storey over it), which the same noise lowers by
+     * up to CAP_DIP of it, in a soft minimum of width KC, so a big or capped dome has no flat top. Bays and crawls open
+     * round its rim where the pocket field is up (up to POCKET_H high, out to POCKET_OUT of the radius). Overlapping
+     * domes meet in a soft maximum of width KS (saddles, not creases). A deep site's dome and the lower gate's keep a
+     * round core out to CORE_LO of the radius (the deep vent and the landing stand there), the noise coming in by
+     * CORE_HI.
+     */
+    static final double WARP_K = 0.25, WARP_MAX = 10, WARP_S = 22, OUTLINE = 0.22, OUTLINE_S = 16, VAULT = 0.25, VAULT_S = 12,
+            POCKET_H = 10.5, POCKET_OUT = 1.35, POCKET_S = 13, POCKET_LO = 0.2, POCKET_HI = 0.5, DOME_LOW = 6, KC = 4, KS = 4,
+            CORE_LO = 0.55, CORE_HI = 0.85, CAP_DIP = 0.3;
+    /** The most a warp, outline or vault noise is taken at (the noise itself stays under about 1.26). */
+    static final double NMAX = 1.3;
+    /** The dome noise's slots per column ({@link #domeNoise}): the warp's x and z, the outline, the vault, the pockets. */
+    static final int DN = 5;
+
+    /** A dome's warp amplitude (blocks). */
+    static double warpAmp(double r) { return Math.min(WARP_K * r, WARP_MAX); }
+
+    /**
+     * How far from its centre a dome of radius r can open any column (its outline at its widest, its pockets' reach, its
+     * warp): the one bound {@link #domesNear} and the storeys' dome loop share.
+     */
+    static double domeReach(double r) { return POCKET_OUT * r * (1 + OUTLINE * NMAX) + warpAmp(r) * NMAX * Math.sqrt(2) + 2; }
+
+    /** The domes' noise of storey k at one column, into {@code out[o .. o + DN)} (a pure function of the column). */
+    void domeNoise(int k, int wx, int wz, float[] out, int o) {
+        double x = wx, z = wz;
+        out[o] = (float) clip(n2(PDW[k], x / WARP_S, z / WARP_S), -NMAX, NMAX);
+        out[o + 1] = (float) clip(n2(PDW[k], x / WARP_S + 41.0, z / WARP_S - 17.0), -NMAX, NMAX);
+        out[o + 2] = (float) clip(n2(PWN[k], x / OUTLINE_S, z / OUTLINE_S), -NMAX, NMAX);
+        out[o + 3] = (float) clip(n2(PVT[k], x / VAULT_S, z / VAULT_S), -NMAX, NMAX);
+        out[o + 4] = (float) ramp(fbm2(PPK[k], x / POCKET_S, z / POCKET_S, 2), POCKET_LO, POCKET_HI);
+    }
+
+    /** The vault's fall from the centre (1) to the rim (0, at d = 1). */
+    static double vault(double d) { return d >= 1 ? 0 : Math.pow(1 - Math.pow(d, 2.2), 0.6); }
+
+    /** A soft minimum of width k (log-sum-exp; at most k ln 2 under the smaller). */
+    static double smin(double a, double b, double k) {
+        double m = Math.min(a, b);
+        return m - k * Math.log(Math.exp(-(a - m) / k) + Math.exp(-(b - m) / k));
+    }
+
+    /** A soft maximum of width k: equal heights meet k ln 2 higher, unequal ones in a smooth saddle. */
+    static double smax(double a, double b, double k) { return -smin(-a, -b, k); }
+
+    /**
+     * An ordinary dome's cap at a column of storey k: DOME_CAP, and CUP_GAP of rock under the storey over it, but never
+     * under DOME_LOW. Where the two floors close in on each other (under MERGE_GAP apart) they become one room, so the cap
+     * climbs back to DOME_CAP as the gap shuts and the dome opens into the storey over it, as round 2's did, instead of
+     * running on as a long, low crawl under a floor that has merged with its own.
+     */
+    static float domeCap(float floorK, float floorAbove) {
+        double gap = floorAbove - floorK, merged = DOME_CAP - (DOME_CAP - DOME_LOW) * gap / MERGE_GAP;
+        // the two rules meet in a soft maximum, so where the floors part the ceiling dips in a rounded rib, not a crease
+        return (float) Math.min(DOME_CAP, Math.max(smax(gap - CUP_GAP, merged, KC), DOME_LOW));
+    }
+
+    /** The gap between two floors under which a dome's cap climbs back to DOME_CAP ({@link #domeCap}). */
+    static final double MERGE_GAP = 16;
+
+    /**
+     * Dome d's height over its storey's floor at column (wx, wz), with {@code noise} the column's {@link #domeNoise} at
+     * {@code o} and {@code cap} its {@link #domeCap} (an ordinary dome's); 0 where it does not reach. {@code oc[0]} gets
+     * its centre weight there (1 at the centre, 0 from 0.65 of the radius out, on the warped distance), which draws the
+     * spires.
+     */
+    static float domeAt(Dome d, int wx, int wz, float[] noise, int o, float cap, float[] oc) {
+        double r = d.r(), dx0 = wx - d.x(), dz0 = wz - d.z();
+        // a deep site's dome keeps a round core (the deep vent stands in it); the noise comes in towards its rim
+        double b = d.deep() ? ramp(Math.sqrt(dx0 * dx0 + dz0 * dz0) / r, CORE_LO, CORE_HI) : 1.0;
+        double a = warpAmp(r) * b;
+        double dx = dx0 + a * noise[o], dz = dz0 + a * noise[o + 1];
+        double dd = Math.sqrt(dx * dx + dz * dz) / (r * (1 + b * OUTLINE * noise[o + 2]));
+        oc[0] = (float) clip(1 - dd / 0.65, 0, 1);
+        double h = 0;
+        if (dd < 1) {
+            if (d.deep()) h = d.hc() * vault(dd);
+            else {
+                // the vault's noise rides on the cap too, mostly under it, so a capped dome's ceiling has no plateau
+                double n = noise[o + 3];
+                h = smin(d.hc() * vault(dd) * (1 + VAULT * n), cap * (1 - CAP_DIP * (1 - n) / 2), KC);
+            }
+        }
+        double p = noise[o + 4] * (1 - ramp(dd, 1.0, POCKET_OUT));
+        if (p > 0) h = Math.max(h, Math.min(POCKET_H * p, d.deep() ? d.hc() : cap));
+        return (float) Math.max(h, 0);
+    }
+
+    /** The lower gate's dome (GATE_H tall over its radius GATE_R), whose rim only shrinks: a ring of rock lies past it. */
+    static final double GATE_H = 0.9 * GATE_R;
+
+    /** The lower gate's dome's height at a column (its round core, then the outline and the vault's noise). */
+    static float gateDomeAt(GardensGates.Gate g, int wx, int wz, float[] noise, int o) {
+        double dx = wx - g.x(), dz = wz - g.z(), d0 = Math.sqrt(dx * dx + dz * dz);
+        double b = ramp(d0 / GATE_R, CORE_LO, CORE_HI);
+        double dd = d0 / (GATE_R * (1 + b * OUTLINE * Math.min(noise[o + 2], 0)));
+        if (dd >= 1) return 0f;
+        return (float) (GATE_H * vault(dd) * (1 + b * VAULT * noise[o + 3]));
+    }
+
+    /** A deep site (gen3.deep_sites): low, flat storey-0 floor with a tall gap over it, far from the gates. */
+    record DeepSite(double x, double z, double h0, double R, double Rf, double rd, double f0, double fmax, double fmin,
+                    double gap, double hd, int i, int kk, int hand, double a0, int gStand) {}
+
+    private final Map<Long, Object> deepCells = new ConcurrentHashMap<>();
+    static final double DEEP_G = 150.0;
+
+    DeepSite deepCandidate(int i, int kk) {
+        long key = cellKey(0, i, kk);
+        Object o = deepCells.get(key);
+        if (o == null) {
+            DeepSite d = computeDeep(i, kk);
+            o = d == null ? NONE : d;
+            deepCells.putIfAbsent(key, o);
+        }
+        return o == NONE ? null : (DeepSite) o;
+    }
+
+    private DeepSite computeDeep(int i, int kk) {
+        double Gd = DEEP_G;
+        double h0 = hash2(seed + 3700L, i, kk);
+        double u1 = hash2(seed + 3701L, i, kk), u2 = hash2(seed + 3702L, i, kk);
+        double cx = (i + 0.2 + 0.6 * u1) * Gd, cz = (kk + 0.2 + 0.6 * u2) * Gd;
+        if (patch && !(cx - px0 >= 40 && cx - px0 < psx - 40 && cz - pz0 >= 40 && cz - pz0 < psz - 40)) return null;
+        if (h0 >= 0.7) return null;
+        double R = 10 + 1.5 * hash2(seed + 3706L, i, kk), Rf = 1.45 * R;
+        double[][] pts = sitePoints(cx, cz, Rf);
+        double fmax = -1e9, fmin = 1e9;
+        for (double[] p : pts) {
+            Col c = frameAt(clampX(floorI(p[0])), clampZ(floorI(p[1])));
+            fmax = Math.max(fmax, c.f[0]);
+            fmin = Math.min(fmin, c.f[0]);
+        }
+        Col cc = frameAt(clampX(floorI(cx)), clampZ(floorI(cz)));
+        double gap = (double) (cc.f[1] - cc.f[0]);
+        double dX = 1e9, dE = 1e9;
+        for (GardensGates.Gate g : gates.near(cx, cz, 120)) {
+            double d = Math.hypot(cx - g.x(), cz - g.z());
+            if (g.entry()) dE = Math.min(dE, d);
+            else dX = Math.min(dX, d);
+        }
+        if (cc.f[0] <= 40 && fmax - fmin <= 7 && gap >= 36 && dX >= 80 && dE >= 60) {
+            double rd = RD_MIN + RD_SPAN * hash2(seed + 3703L, i, kk);
+            return new DeepSite(cx, cz, h0, R, Rf, rd, cc.f[0], fmax, fmin, gap, Math.min(Math.min(1.3 * rd, 40.0), gap - 8.0), i, kk,
+                    hash2(seed + 3704L, i, kk) < 0.5 ? 1 : -1, 2 * Math.PI * hash2(seed + 3705L, i, kk),
+                    -22 - (int) (8 * hash2(seed + 3707L, i, kk)));
+        }
+        return null;
+    }
+
+    /** gen3.deep_sites' keep: no other within 80 with a lower h0. */
+    boolean deepKept(DeepSite s) {
+        for (int di = -1; di <= 1; di++)
+            for (int dk = -1; dk <= 1; dk++) {
+                if (di == 0 && dk == 0) continue;
+                DeepSite q = deepCandidate(s.i + di, s.kk + dk);
+                if (q != null && Math.hypot(s.x - q.x, s.z - q.z) < 80 && q.h0 < s.h0) return false;
+            }
+        return true;
+    }
+
+    List<DeepSite> deepSitesNear(double minX, double minZ, double maxX, double maxZ, double pad) {
+        List<DeepSite> out = new ArrayList<>();
+        int i0 = (int) Math.floor((minX - pad) / DEEP_G) - 1, i1 = (int) Math.floor((maxX + pad) / DEEP_G) + 1;
+        int k0 = (int) Math.floor((minZ - pad) / DEEP_G) - 1, k1 = (int) Math.floor((maxZ + pad) / DEEP_G) + 1;
+        for (int i = i0; i <= i1; i++)
+            for (int kk = k0; kk <= k1; kk++) {
+                DeepSite d = deepCandidate(i, kk);
+                if (d == null) continue;
+                if (d.x < minX - pad || d.x > maxX + pad || d.z < minZ - pad || d.z > maxZ + pad) continue;
+                if (deepKept(d)) out.add(d);
+            }
+        return out;
+    }
+
+    /** The 17 points of a site's floor test: the centre, 8 at half the radius, 8 just past it (rotated a sixteenth). */
+    static double[][] sitePoints(double cx, double cz, double Rf) {
+        double[][] p = new double[17][];
+        p[0] = new double[]{cx, cz};
+        for (int a = 0; a < 8; a++) {
+            double ang = a * Math.PI / 4;
+            p[1 + a] = new double[]{cx + Rf / 2 * Math.cos(ang), cz + Rf / 2 * Math.sin(ang)};
+        }
+        for (int a = 0; a < 8; a++) {
+            double ang = a * Math.PI / 4 + Math.PI / 8;
+            p[9 + a] = new double[]{cx + (Rf + 2) * Math.cos(ang), cz + (Rf + 2) * Math.sin(ang)};
+        }
+        return p;
+    }
+
+    // ============================================================================================ gate plumbing
+
+    private record GateKey(double x, double z, boolean entry, int k, boolean second) {}
+
+    private final Map<GateKey, GardensStoreys.GateWays> gateWays = new ConcurrentHashMap<>();
+
+    /** The plumbing round a gate on its storey (k 0 for the way down, 6 for the way in), per pass; cached. */
+    GardensStoreys.GateWays gateWays(GardensGates.Gate g, int k, java.util.function.Predicate<VHall> use) {
+        GateKey key = new GateKey(g.x(), g.z(), g.entry(), k, use != null);
+        GardensStoreys.GateWays gw = gateWays.get(key);
+        if (gw == null) {
+            gw = GardensStoreys.gateWays(this, g, k, use);
+            GardensStoreys.GateWays prev = gateWays.putIfAbsent(key, gw);
+            if (prev != null) gw = prev;
+        }
+        return gw;
+    }
+
+    // ============================================================================================ helpers
+
+    /**
+     * A column's offset from a point along one axis in float32, as numpy takes {@code Xg - cx}: both relative to the
+     * patch's corner in the preview's rules, else to the point's own block (so the result never depends on a window).
+     */
+    float rel(int w, double c, boolean isX) {
+        double o = patch ? (isX ? px0 : pz0) : Math.floor(c);
+        return (float) (w - o) - (float) (c - o);
+    }
+
+    /** numpy's float32 {@code hypot(Xg - cx, Zg - cz)} at column (wx, wz). */
+    float dist(int wx, int wz, double cx, double cz) {
+        float dx = rel(wx, cx, true), dz = rel(wz, cz, false);
+        return (float) Math.sqrt((double) dx * dx + (double) dz * dz);
+    }
+
+    double gateDist(double x, double z) {
+        double d = 1e9;
+        for (GardensGates.Gate g : gates.near(x, z, 200)) d = Math.min(d, Math.hypot(x - g.x(), z - g.z()));
+        return d;
+    }
+
+    static int floorI(double v) { return (int) Math.floor(v); }
+
+    boolean inPatch(double x, double z) { return x >= px0 && x < px0 + psx && z >= pz0 && z < pz0 + psz; }
+
+    /** In the patch rules, a column clipped into the patch; otherwise as it is. */
+    int clampX(int x) { return patch ? Math.max(px0, Math.min(px0 + psx - 1, x)) : x; }
+
+    int clampZ(int z) { return patch ? Math.max(pz0, Math.min(pz0 + psz - 1, z)) : z; }
+
+    /**
+     * Where the heat by depth turns: row 20 at the bottom, the middle row, and 86% of the height (gen3.g_of's 20, 120 and
+     * 206 at 240 rows; 20, 96 and 165 at 192), so the live and dead vents split by depth as they did.
+     */
+    static final double HEAT_LO = 20, HEAT_MID = SY * 0.5, HEAT_HI = Math.round(SY * 0.86);
+
+    /** Heat by depth (gen3.g_of): +0.34 at row HEAT_LO, +0.04 at HEAT_MID, -0.34 at HEAT_HI, flat beyond. */
+    static double gOf(double y) {
+        // as numpy's interp takes it: slope * (y - x_j) + y_j, the end values outside
+        if (y < HEAT_LO) return 0.34;
+        if (y < HEAT_MID) return (0.04 - 0.34) / (HEAT_MID - HEAT_LO) * (y - HEAT_LO) + 0.34;
+        if (y < HEAT_HI) return (-0.34 - 0.04) / (HEAT_HI - HEAT_MID) * (y - HEAT_MID) + 0.04;
+        return -0.34;
+    }
+}

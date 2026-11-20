@@ -12,8 +12,9 @@ import com.explorationremix.world.terrain.Hashing;
  * out, out of sight, only where the caves round a player have lost theirs ({@link BlueSpawnRules#wantSwarm}).
  *
  * <p>Twice as many as the old spawner kept round a player (Taran's pick, 19 Nov 2026): six to ten within
- * {@link BlueSpawnRules#SWARM_RADIUS} blocks of a player in the Deep Blue Rift or the Asurine Geodes, two to four in the
- * Deep Dark ({@link BlueSpawnRules#swarmsKept}, {@link BlueSpawnRules#swarmsMax}). They are drawn to water and
+ * {@link BlueSpawnRules#SWARM_RADIUS} blocks of a player in the Deep Blue Rift or the Asurine Geodes
+ * ({@link BlueSpawnRules#swarmsKept}, {@link BlueSpawnRules#swarmsMax}); none in the Deep Dark, which is left dark
+ * (0.19.8, Taran's ask; it had two to four round a player before). They are drawn to water and
  * glowbells (Taran's pick): open cave air with water or a glowbell near it ({@link #DRAW_REACH}) is {@link #DRAW}
  * times as likely to be a swarm's home as open air over bare rock, so most of the rift's swarms hang over its streams,
  * pools and glowbells and the bare halls get fewer, but not none.
@@ -28,8 +29,9 @@ import com.explorationremix.world.terrain.Hashing;
  *
  * <p>The numbers were set in the test pack (seed 8675309, the 625 chunks round spawn, 19 Nov 2026): 0.8 swarms a chunk;
  * at random spots a player could stand on, within 40 blocks, 7 on average in the rift (half the spots 4 or more, a tenth
- * 17 or more: its narrow ways have few, its big halls by the streams many), 9 in the geodes, 3.4 in the Deep Dark (a
- * tenth 1 or none, a tenth 6 or more); 53% of the rift's swarms by water or glowbells.
+ * 17 or more: its narrow ways have few, its big halls by the streams many), 9 in the geodes; 53% of the rift's swarms
+ * by water or glowbells. (The Deep Dark then had 3.4. Its tries make no home since 0.19.8; every try still draws what
+ * it drew, so the rift's and the geodes' swarms stay where they were, but for the few a Deep Dark home had kept away.)
  */
 public final class FireflyHomes {
     private FireflyHomes() {}
@@ -59,19 +61,21 @@ public final class FireflyHomes {
     /**
      * The chance that a try over bare rock is a home, by place, each set in the test pack so a player there has about
      * the counts of {@link BlueSpawnRules#swarmsKept} to {@link BlueSpawnRules#swarmsMax} round them: the geodes' wide
-     * dry halls give many tries room, so theirs is lower than the rift's; the Deep Dark's swarms are few.
+     * dry halls give many tries room, so theirs is lower than the rift's. The Deep Dark has none.
      */
-    public static final double RIFT_BARE = 0.045, GEODES_BARE = 0.012, DEEP_DARK_BARE = 0.0012;
+    public static final double RIFT_BARE = 0.045, GEODES_BARE = 0.012;
 
     private static final long SALT = 0x46697265666C7921L;      // "Firefly!"
 
-    /** The chance that a try at a spot in {@code p} is a swarm's home; {@code drawn}, with water or glowbells by it. */
+    /**
+     * The chance that a try at a spot in {@code p} is a swarm's home; {@code drawn}, with water or glowbells by it. None
+     * where swarms do not live ({@link BlueSpawnRules#swarmsLive}: the Deep Dark, and outside the Blue Reaches).
+     */
     public static double chance(Place p, boolean drawn) {
         double bare = switch (p) {
             case RIFT -> RIFT_BARE;
             case GEODES -> GEODES_BARE;
-            case DEEP_DARK -> DEEP_DARK_BARE;
-            case OTHER -> 0.0;
+            case DEEP_DARK, OTHER -> 0.0;
         };
         return Math.min(1.0, drawn ? bare * DRAW : bare);
     }

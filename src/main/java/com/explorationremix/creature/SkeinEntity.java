@@ -50,6 +50,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.Node;
 import net.minecraft.world.level.pathfinder.Path;
@@ -279,7 +280,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     private long stalkSince;                 // STALK: when it set out after this swarm (its outings after it do not reset it)
     @Nullable private FireflySwarm shunned;  // a swarm it gave up on, left be while it sits where it was then
     @Nullable private BlockPos shunnedAt;
-    private boolean refugeTried;             // in the refuge: it has set out for the way out (again only once a rest ends)
+    private boolean outTried;                // where it keeps out of: it has set out for the way out (again only once a rest ends)
     @Nullable private Vec3 journeyTo;        // JOURNEY: where it is going
     @Nullable private Route journeyRift;     // JOURNEY: the rift whose ledge path it follows there
     private double journeyAt, journeyEnd;    // JOURNEY: how far along the path it has got, and where it is going
@@ -773,7 +774,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     private void still() {
         stopDead();
         if (tickCount % 2 == 0 && strikeAtPlayer()) return;
-        if (tickCount % 20 == 0 && (lookForSwarm() || leaveRefuge())) return;
+        if (tickCount % 20 == 0 && (lookForSwarm() || leaveKeptOut())) return;
         if (!gait.outing() && gait.tick(0.0, rnd) && gait.outing()) {
             // its rest is over: out it goes, snapping to its first heading; by the rift, now and then far along it
             if (level().getGameTime() >= nextJourney && random.nextDouble() < JOURNEY_CHANCE && startJourney()) return;
@@ -785,7 +786,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     /**
      * Sets out along the Deep Blue Rift's ledge path, when it is by one: {@link #JOURNEY_NEAR} to {@link #JOURNEY_FAR}
      * blocks along it, the way there is room for (either way when both have), short of its ends and of unloaded
-     * chunks. False when it is by no rift, or there is too little way to go.
+     * chunks, and never to where the Deep Dark opens onto the path (0.19.8). False when it is by no rift, or there is
+     * too little way to go.
      */
     private boolean startJourney() {
         Terrain t = DeepWorld.installed() ? DeepWorld.terrain() : null;
@@ -805,8 +807,8 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         double ahead = rift.walkLength - JOURNEY_END_GAP - at, back = at - JOURNEY_END_GAP;
         int way = ahead >= want && back >= want ? (random.nextBoolean() ? 1 : -1) : ahead >= back ? 1 : -1;
         double go = Math.min(want, way > 0 ? ahead : back);
-        // never on into chunks that are not loaded
-        while (go >= JOURNEY_LEAST && !loadedAt(rift.pathAt(at + way * go))) go -= 8.0;
+        // never on into chunks that are not loaded, nor to a stretch of the path where the Deep Dark opens onto it
+        while (go >= JOURNEY_LEAST && (!loadedAt(rift.pathAt(at + way * go)) || darkOnPath(rift, at + way * go))) go -= JOURNEY_END_STEP;
         if (go < JOURNEY_LEAST) return false;
         journeyRift = rift;
         journeyAt = at;
@@ -820,6 +822,15 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         toState(JOURNEY, 0);
         beginPivot();
         return true;
+    }
+
+    /** A journey's end is drawn back along the path this far at a time, off unloaded chunks and the Deep Dark. */
+    static final double JOURNEY_END_STEP = 4.0;
+
+    /** Whether the rift's ledge path {@code s} blocks along it lies in the Deep Dark there (where a cavern opens onto it). */
+    private boolean darkOnPath(Route r, double s) {
+        BlockPos p = BlockPos.containing(pathPoint(r, s).add(0, 0.35, 0));
+        return level().isLoaded(p) && level().getBiome(p).is(Biomes.DEEP_DARK);
     }
 
     /** Where it stands on the rift's ledge path {@code s} blocks along it: {x, feet y, z} (see {@link Route#feetAt}). */
@@ -876,14 +887,14 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     }
 
     /**
-     * It finds itself in the refuge (set down there, say): it goes out at once, never to come back (its roaming there
-     * heads for the nearest way out, see beginPivot). Should that outing end with it still inside, it tries again only
-     * when its rest is over, not every second.
+     * It finds itself in a place it keeps out of ({@link #keepsOut}: set down there, say, or carried in by a lunge): it
+     * goes out at once, never to come back (its roaming there heads for the nearest way out, see beginPivot). Should
+     * that outing end with it still inside, it tries again only when its rest is over, not every second.
      */
-    private boolean leaveRefuge() {
-        if (!isRefuge(blockPosition())) { refugeTried = false; return false; }
-        if (refugeTried) return false;
-        refugeTried = true;
+    private boolean leaveKeptOut() {
+        if (!keepsOut(blockPosition())) { outTried = false; return false; }
+        if (outTried) return false;
+        outTried = true;
         startOuting(SKITTER, SkeinGait.Mood.ROAM, SkeinGait.OUTING_MAX);
         return true;
     }
@@ -906,14 +917,15 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     /**
      * A snap: it stops dead and picks the way of its coming burst; it turns its head that way over the pivot's ticks.
-     * Roaming in the refuge, it first tries for the nearest way out. Stalking, it asks the way only once: the swarm is
-     * where every snap leads, so a second try would only search the same way again. On a journey it tries straight on
-     * along the rift's path first, then shorter, then swerving ({@link #JOURNEY_TRIES}).
+     * Roaming where it keeps out of (the refuge, the Deep Dark), it first tries for the nearest way out. Stalking, it
+     * asks the way only once: the swarm is where every snap leads, so a second try would only search the same way
+     * again. On a journey it tries straight on along the rift's path first, then shorter, then swerving
+     * ({@link #JOURNEY_TRIES}).
      */
     private void beginPivot() {
         stopDead();
         pendingPath = null;
-        Vec3 out = gait.mood() == SkeinGait.Mood.ROAM && isRefuge(blockPosition()) ? wayOutOfRefuge() : null;
+        Vec3 out = gait.mood() == SkeinGait.Mood.ROAM && keepsOut(blockPosition()) ? wayOut() : null;
         int tries = gait.mood() == SkeinGait.Mood.STALK ? 1 : PATH_TRIES;
         boolean journey = gait.mood() == SkeinGait.Mood.JOURNEY;
         double side = random.nextBoolean() ? 1.0 : -1.0;
@@ -965,9 +977,9 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     /**
      * The way the coming burst runs: roaming, a spot about the burst's length along its heading snapped by the gait's
      * turn; bolting, the same away from what it flees; stalking, towards the swarm; with {@code toward} (the way out
-     * of the refuge), towards that whatever the snap; on a journey, to the spot on the rift's ledge path a run on (of
-     * up to {@link #JOURNEY_LEG} blocks, times {@code part}), turned {@code off} aside round it. Null when there is no
-     * way there (rock, unloaded chunks, or a way through the refuge).
+     * of where it keeps out of), towards that whatever the snap; on a journey, to the spot on the rift's ledge path a
+     * run on (of up to {@link #JOURNEY_LEG} blocks, times {@code part}), turned {@code off} aside round it. Null when
+     * there is no way there (rock, unloaded chunks, or a way through the refuge or the Deep Dark).
      */
     @Nullable
     private Path burstPath(@Nullable Vec3 toward, double part, double off) {
@@ -993,7 +1005,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         }
         if (goal == null) return null;
         Path p = getNavigation().createPath(goal.offset(1, 0, 1), 0);
-        if (p == null || p.getNodeCount() < 2 || crossesRefuge(p)) return null;
+        if (p == null || p.getNodeCount() < 2 || crossesKeptOut(p)) return null;
         Node end = p.getEndNode();
         if (end == null || Mth.square(end.x + 1.0 - getX()) + Mth.square(end.y - getY()) + Mth.square(end.z + 1.0 - getZ()) < 2.25) return null;
         return p;
@@ -1020,13 +1032,13 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     /**
      * The walkable node (floor, wall or ceiling, not water) whose box would sit nearest {@code p}, within {@code r}
-     * blocks; never reading an unloaded chunk, never in the refuge unless it is in there itself (set down by an egg or a
-     * command: the nearest open spot outside may lie behind the geodes' rock, and roaming the refuge it finds the way
-     * out through its tunnel, never to come back).
+     * blocks; never reading an unloaded chunk, never where it keeps out of (the refuge, the Deep Dark) unless it is in
+     * there itself (set down by an egg or a command: the nearest open spot outside may lie behind the geodes' rock, and
+     * roaming the refuge it finds the way out through its tunnel, never to come back).
      */
     @Nullable
     private BlockPos nodeNear(Vec3 p, int r) {
-        boolean inRefuge = isRefuge(blockPosition());
+        boolean inside = keepsOutNow(blockPosition());
         int bx = Mth.floor(p.x - 1.0), by = Mth.floor(p.y - 0.35), bz = Mth.floor(p.z - 1.0);
         BlockPos best = null;
         double bestD = Double.MAX_VALUE;
@@ -1041,7 +1053,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
                     byte k = ClimbNodeEvaluator.classify(level(), x, y, z, 2, 1, 2);
                     if (k < ClimbNodeEvaluator.FLOOR || k == ClimbNodeEvaluator.WATER) continue;
                     BlockPos n = new BlockPos(x, y, z);
-                    if (!inRefuge && isRefuge(n.offset(1, 0, 1))) continue;
+                    if (!inside && keepsOutNow(n.offset(1, 0, 1))) continue;
                     bestD = d;
                     best = n;
                 }
@@ -1050,31 +1062,60 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
     }
 
     /**
-     * Whether a path runs into the refuge. For one that finds itself in there any path will do: it heads for the way
-     * out first and roams the refuge when that is shut, until it is out.
+     * Whether a path runs into a place it keeps out of. For one that finds itself in there any path will do: it heads
+     * for the way out first and roams there when that is shut, until it is out.
      */
-    private boolean crossesRefuge(Path p) {
-        if (isRefuge(blockPosition())) return false;
+    private boolean crossesKeptOut(Path p) {
+        if (keepsOutNow(blockPosition())) return false;
         for (int i = 0; i < p.getNodeCount(); i++) {
             Node n = p.getNode(i);
-            if (isRefuge(new BlockPos(n.x + 1, n.y, n.z + 1))) return true;
+            if (keepsOutNow(new BlockPos(n.x + 1, n.y, n.z + 1))) return true;
         }
         return false;
     }
 
-    /** The Asurine Geodes are the Blue Reaches' refuge: no hunter goes there. */
+    /** The Asurine Geodes are the Blue Reaches' refuge: no hunter goes there, and no one is struck there. */
     public boolean isRefuge(BlockPos p) {
         return level().isLoaded(p) && level().getBiome(p).is(REFUGE);
     }
 
     /**
-     * The nearest open spot outside the refuge (the middle of a block with nothing solid in it), looked for on shells
-     * round it {@link #WAY_OUT_STEP} blocks apart out to {@link #WAY_OUT_REACH}, points spread evenly over each (a
-     * Fibonacci sphere), the one nearest its own level on the nearest shell that has any; never reading an unloaded
-     * chunk. Null when there is none so near.
+     * Where it never goes: the refuge, and since 0.19.8 the Deep Dark (Taran's ask: the Skeins keep out of it, which is
+     * left to the Warden, dark and still). It sets no path into either and turns back at their edge, as at a wall (but
+     * for the rift's ledge path on a journey, {@link #keepsOutNow}); one that finds itself inside (after a lunge, or set
+     * down by an egg or a command) crawls out ({@link #leaveKeptOut}). A player in the Deep Dark is still struck at from
+     * its edge: it is no refuge.
+     */
+    public boolean keepsOut(BlockPos p) {
+        if (!level().isLoaded(p)) return false;
+        var b = level().getBiome(p);
+        return b.is(REFUGE) || b.is(Biomes.DEEP_DARK);
+    }
+
+    /**
+     * Where its ways are kept out of just now: {@link #keepsOut}, but on a journey only the refuge. The rift's ledge
+     * path runs past the Deep Dark's caverns where they open onto it (about an eighth of it, in stretches of a few
+     * blocks to a few dozen), and a journey keeps on along the path through them; it ends outside them
+     * ({@link #startJourney}), and one that gives up inside crawls out as its rest ends.
+     */
+    private boolean keepsOutNow(BlockPos p) {
+        return gait.mood() == SkeinGait.Mood.JOURNEY ? isRefuge(p) : keepsOut(p);
+    }
+
+    /** Whether it is in the Deep Dark (0.19.8): one left there by an older version leaves while nobody is near. */
+    public boolean inDeepDark() {
+        BlockPos p = blockPosition();
+        return level().isLoaded(p) && level().getBiome(p).is(Biomes.DEEP_DARK);
+    }
+
+    /**
+     * The nearest open spot outside the places it keeps out of (the middle of a block with nothing solid in it), looked
+     * for on shells round it {@link #WAY_OUT_STEP} blocks apart out to {@link #WAY_OUT_REACH}, points spread evenly over
+     * each (a Fibonacci sphere), the one nearest its own level on the nearest shell that has any; never reading an
+     * unloaded chunk. Null when there is none so near.
      */
     @Nullable
-    private Vec3 wayOutOfRefuge() {
+    private Vec3 wayOut() {
         Vec3 c = bodyCentre();
         double golden = Math.PI * (3.0 - Math.sqrt(5.0));
         for (int r = WAY_OUT_STEP; r <= WAY_OUT_REACH; r += WAY_OUT_STEP) {
@@ -1085,7 +1126,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
                 double y = 1.0 - 2.0 * (i + 0.5) / n, flat = Math.sqrt(1.0 - y * y), a = i * golden;
                 if (Math.abs(y) >= bestRise) continue;
                 BlockPos p = BlockPos.containing(c.x + Math.cos(a) * flat * r, c.y + y * r, c.z + Math.sin(a) * flat * r);
-                if (!level().isLoaded(p) || isRefuge(p) || !level().getBlockState(p).getCollisionShape(level(), p).isEmpty()) continue;
+                if (!level().isLoaded(p) || keepsOut(p) || !level().getBlockState(p).getCollisionShape(level(), p).isEmpty()) continue;
                 bestRise = Math.abs(y);
                 best = Vec3.atCenterOf(p);
             }
@@ -1239,7 +1280,7 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
 
     private boolean stalkable(@Nullable FireflySwarm s) {
         return s != null && s.isAlive() && !s.isRemoved() && s.level() == level() && s.landed() && s.count() > 0
-                && s.centre().distanceToSqr(bodyCentre()) < Mth.square(SWARM_SENSE + 6.0) && !isRefuge(BlockPos.containing(s.centre()));
+                && s.centre().distanceToSqr(bodyCentre()) < Mth.square(SWARM_SENSE + 6.0) && !keepsOut(BlockPos.containing(s.centre()));
     }
 
     /** Hungry, it goes for the nearest swarm that has landed within {@link #SWARM_SENSE} blocks. */
@@ -1757,13 +1798,27 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
      * out of water, lava and fire, with no player near. It stays where it is, as a creature in a chunk no one is near
      * does; the first look that finds a player near (or a hurt) wakes it as it was. Peaceful still takes it, from the
      * level's own despawn pass.
+     *
+     * <p>One lying in the Deep Dark goes instead, unseen (0.19.8: the Skeins an older version set down there, in a world
+     * made before it, leave the Deep Dark to the Warden while nobody is near; it is further than a Skein is drawn). A
+     * named one stays, as named creatures do.
      */
     private boolean dormantNow() {
         if (state() != STILL || !trail.laid() || !isAlive() || hurtTime > 0 || isOnFire() || isInWater() || isInLava()
                 || surface() == null || isPassenger() || trace > 0) return dormant = false;
-        if ((tickCount + getId()) % WAKE_LOOK == 0) dormant = !playerWithin(WAKE_RANGE);
+        if ((tickCount + getId()) % WAKE_LOOK == 0) {
+            dormant = !playerWithin(WAKE_RANGE);
+            if (dormant && !hasCustomName() && inDeepDark()) {
+                LEFT_DEEP_DARK++;
+                discard();
+                return true;
+            }
+        }
         return dormant;
     }
+
+    /** For /remix skein homes, since the game started: Skeins that left the Deep Dark unseen ({@link #dormantNow}). */
+    public static long LEFT_DEEP_DARK;
 
     /** Whether any player (a spectator too: one flying round to look sees it move) is within {@code range}. */
     private boolean playerWithin(double range) {

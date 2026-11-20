@@ -37,8 +37,11 @@ class GalleriesFieldTest {
     /** Seed and lowest corner of the measured boxes (spec 9.1). */
     static final long[][] BOXES = {{8675309, -512, -512}, {-42, -5000, 6000}};
     static final int SIZE = 1536, MARGIN = 212;
-    /** The rows a box holds: the Galleries' and the join's up to the Wasteland's lava table (its lava, the openings). */
-    static final int YLO = -832, YHI = -678;
+    /**
+     * The rows a box holds: the Galleries' and the join's up to the Wasteland's lava table (its lava, the openings);
+     * -832..-678 before round 3 of the Deep Gardens raised the world's floor by 48.
+     */
+    static final int YLO = -784, YHI = -630;
     static final Set<DeepBiome> GALLERIES = EnumSet.of(DeepBiome.BASALT_GALLERIES, DeepBiome.CALDERA, DeepBiome.CAUSEWAY,
             DeepBiome.SCORIA_CANYONS, DeepBiome.OBSIDIAN_TUBES);
 
@@ -1155,13 +1158,17 @@ class GalleriesFieldTest {
      * ends and terraces in the join's rows (WastelandField.GUARD_GAP). Pinned again in the fix round after the 0.8.0
      * pack run (it was 657f03d778b8355c and b2257d4eece3e4b8): a ramp's cell where the ground stands at or over the
      * deck's row, at its foot, keeps the deck block by block over the ground ({@link GalleriesField#deck}), so the foot
-     * ends on no riser of 2 rows at the cells' joints. A change to the Galleries' shapes shows here: pin again only on
+     * ends on no riser of 2 rows at the cells' joints. Pinned again for round 3 of the Deep Gardens (it was
+     * 99d103d778b8355c and 91a37d4eece3e4b8), which raised the world's floor by 48 with the Galleries and the join on it:
+     * the same shapes 48 rows higher. On the same draws, in rows counted from the floor, every value probed here (the
+     * densities to the bit, fluids, biomes, the looks' queries) and every opening with its ramp is the last pin's; only
+     * the cones' tops, which are world rows, moved. A change to the Galleries' shapes shows here: pin again only on
      * purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("99d103d778b8355c", digest(8675309), "seed 8675309");
-        assertEquals("91a37d4eece3e4b8", digest(12345), "seed 12345");
+        assertEquals("254b83d778b8355c", digest(8675309), "seed 8675309");
+        assertEquals("b6c5fd4eece3e4b8", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) { return digest(new Terrain(TerrainSettings.defaults(), -64, seed), seed); }
@@ -1321,15 +1328,19 @@ class GalleriesFieldTest {
 
     /**
      * The cost of the Galleries' rows (corners every 4 x 8 x 4, interpolation and the per-block pass, one thread) per row,
-     * at most three times the Deep Gardens' (spec 9.3: about 0.8-1.4 times 0.5.0's planned Galleries), in three cases:
+     * at most three times the Blue Reaches' (spec 9.3: about 0.8-1.4 times 0.5.0's planned Galleries), in three cases.
+     * Until 0.19.1 the yardstick was the Deep Gardens' planned rows; the vent field that replaced them makes its blocks
+     * per 128-block tile (its warm rows are lookups, a cold first chunk pays for the tiles round it), so the Blue
+     * Reaches, the one planned layer left, took over: 1.39 to 1.49 warm, 0.49 to 0.55 for cold first chunks and 1.07
+     * to 1.10 for regions in turns (19 Nov, two runs).
      * <ul>
      * <li>warm: 16 fixed chunks with their plans and openings made first, best of three rounds each, taken in turns (LR2
      * fix round: 5.5 times the Gardens' while the low ground's stairs searched each column's square of 25 x 25 columns
      * again whenever the per-column cache let it go, through a cache of the columns' floors that held 16 columns across;
      * GalleriesField keeps both for 128 x 128 columns);</li>
      * <li>a cold first chunk: at each of three places, the first chunk of a fresh field (the Galleries' openings and the
-     * Gardens' plans all unmade), against the Gardens' rows of another fresh field's first chunk there (fix round 2b: the
-     * openings' per-thread caches made that 801 ms against 39 for the merge base);</li>
+     * yardstick's plans all unmade), against the yardstick's rows of another fresh field's first chunk there (fix round
+     * 2b, against the Deep Gardens: the openings' per-thread caches made that 801 ms against 39 for the merge base);</li>
      * <li>two regions 5,000 blocks apart in turns (two players on one worldgen thread): 30 chunks in each, on one fresh
      * field each (fix round 2b: 84 ms a chunk, 17 times the Gardens' per row, when the two regions' lattice cells shared
      * the per-thread caches' slots).</li>
@@ -1341,7 +1352,8 @@ class GalleriesFieldTest {
     void costWithinBudget() {
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, 8675310);
         Shape s = t.shape;
-        int gLo = s.bottom(Terrain.GALLERIES), gHi = s.top(Terrain.GALLERIES), dLo = s.bottom(Terrain.GARDENS), dHi = s.top(Terrain.GARDENS);
+        // the yardstick: the Blue Reaches' rows (d for the Deep Gardens' until 0.19.1)
+        int gLo = s.bottom(Terrain.GALLERIES), gHi = s.top(Terrain.GALLERIES), dLo = s.bottom(Terrain.BLUE), dHi = s.top(Terrain.BLUE);
         double rowsG = gHi - gLo + 1, rowsD = dHi - dLo + 1;
         WastelandFieldTest.timeRows(t, dLo, dHi);
         WastelandFieldTest.timeRows(t, gLo, gHi);
@@ -1375,12 +1387,12 @@ class GalleriesFieldTest {
             altD += chunkCpu(td, cx, cz, dLo, dHi);
         }
         double alt = (altG / rowsG) / (altD / rowsD);
-        System.out.printf(java.util.Locale.ROOT, "GalleriesFieldTest cost per row: Galleries %.1f us, Gardens %.1f us, ratio %.2f; cold first chunks %.0f ms against %.0f, ratio %.2f;"
+        System.out.printf(java.util.Locale.ROOT, "GalleriesFieldTest cost per row: Galleries %.1f us, Blue Reaches %.1f us, ratio %.2f; cold first chunks %.0f ms against %.0f, ratio %.2f;"
                         + " regions 5000 apart in turns %.1f ms a chunk against %.1f, ratio %.2f%n",
                 bestG / 1e3, bestD / 1e3, ratio, coldG / 3e6, coldD / 3e6, cold, altG / 60e6, altD / 60e6, alt);
-        assertTrue(ratio <= 3.0, "the Galleries' rows cost " + ratio + " times the Gardens'");
-        assertTrue(cold <= 3.0, "a cold first chunk of the Galleries' rows costs " + cold + " times the Gardens' per row");
-        assertTrue(alt <= 3.0, "the Galleries' rows of two regions in turns cost " + alt + " times the Gardens' per row");
+        assertTrue(ratio <= 3.0, "the Galleries' rows cost " + ratio + " times the Blue Reaches'");
+        assertTrue(cold <= 3.0, "a cold first chunk of the Galleries' rows costs " + cold + " times the Blue Reaches' per row");
+        assertTrue(alt <= 3.0, "the Galleries' rows of two regions in turns cost " + alt + " times the Blue Reaches' per row");
     }
 
     /** The thread's CPU time (ns) for one chunk (cx, cz) of rows lo..hi as the game makes it (corners every 4 x 8 x 4, interpolation, the per-block pass). */

@@ -7,6 +7,13 @@
     "explorationremix:amber_shard",
     "explorationremix:ember_crust",
     "explorationremix:cinder_chain",
-    "explorationremix:glow_ice"
+    "explorationremix:glow_ice",
+    "explorationremix:black_dripstone",
+    "explorationremix:pointed_black_dripstone",
+    "explorationremix:glow_mat",
+    "explorationremix:thin_glow_mat",
+    "explorationremix:vent_crown",
+    "explorationremix:vent_beads",
+    "explorationremix:seep_crust"
   ]
 }

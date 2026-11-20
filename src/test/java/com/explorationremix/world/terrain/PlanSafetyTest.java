@@ -28,8 +28,10 @@ class PlanSafetyTest {
      * fault is recorded, the neighbours plan as ever, and every query of the terrain over the cell and its eight
      * neighbours answers, in every layer (density, fine density, fluid, biome, the materials' and features' queries, the
      * walking lines, climbs, vents, and the dev tools' places and descriptions). In the cell, every block of a planned
-     * layer sampled away from the landings and the gates is rock. The noise layers (the Wasteland, the Galleries) have no
-     * plan to fail, no walking lines and no climbs.
+     * layer sampled away from the landings and the gates is rock. The noise layers (the Deep Gardens, the Wasteland, the
+     * Galleries) have no plan to fail, no walking lines and no climbs; the Deep Gardens' rows are sampled within 60 blocks
+     * of the cell's centre only (the vent field takes a while to fill a fresh area, and has its own test,
+     * GardensFieldTest).
      */
     @Test
     void aCellWhosePlansAllThrowIsRock() {
@@ -65,6 +67,7 @@ class PlanSafetyTest {
             for (int li = 0; li < layers; li++) {
                 int lines = t.wayLinesAt(li, x, z, 24).n + t.carvedLinesAt(li, x, z, 24).n;
                 if (!Terrain.planned(li) && lines != 0) fails.add("walking lines in noise layer " + li + " at " + x + " " + z);
+                if (li == Terrain.GARDENS && Math.hypot(x - cell / 2.0, z - cell / 2.0) > 60) continue;
                 for (int y = t.shape.bottom(li); y <= t.shape.top(li); y += 7) {
                     double d = t.density(x, y, z), f = t.fine(x, y, z, d);
                     t.fluidAt(x, y, z);
@@ -120,17 +123,16 @@ class PlanSafetyTest {
     /**
      * Attempt 0 of every planned layer's plan in cell 0,0 throws, and attempt 1 is kept: its layout moves (another plan
      * hash), and what the cell shares with its neighbours stays where it was: the portal vestibules (place, floor, size,
-     * look), their stubs across the seams, and the landings. In the Deep Gardens no block within {@link #SEAM_SAME} of
-     * the cell's edges changes either (the cell's own tunnels start at the vestibules' inner doors). Two things may
-     * change at a seam, as they may in any plan: a vestibule that no tunnel of the salted plan reaches goes with its stub,
-     * and the stub ends blind at the seam (its blocks are not compared); and the Blue Reaches' deep dark, faded by the
-     * rift's geodes and closed where the plan did not join it, both the cell's own layout, may move a few blocks at the
-     * seams there (its blocks are not compared).
+     * look), their stubs across the seams, and the landings. Two things may change at a seam, as they may in any plan: a
+     * vestibule that no tunnel of the salted plan reaches goes with its stub, and the stub ends blind at the seam; and the
+     * Blue Reaches' deep dark, faded by the rift's geodes and closed where the plan did not join it, both the cell's own
+     * layout, may move a few blocks at the seams there. (Until 0.19.1 the Deep Gardens were planned too, and no block of
+     * theirs within 16 of the cell's edges changed; they are the vent field now, with no plan.)
      */
     @Test
     void aPlanThatThrowsIsMadeAgainWithWhatItSharesInPlace() {
         Terrain plain = new Terrain(TerrainSettings.defaults(), -64, SALT_SEED);
-        int layers = Terrain.WASTELAND;   // the planned layers
+        int layers = Terrain.GARDENS;   // the planned layers: the Blue Reaches
         Net[] a = new Net[layers], b = new Net[layers];
         for (int li = 0; li < layers; li++) a[li] = plain.network.net(li, 0, 0);
         NetPlanner.failHook = (seed, li, cx, cz, attempt) -> seed == SALT_SEED && cx == 0 && cz == 0 && attempt == 0;
@@ -166,31 +168,8 @@ class PlanSafetyTest {
                 if (p.kind != q.kind || p.x != q.x || p.z != q.z || p.f0 != q.f0 || p.rx != q.rx || p.h != q.h) fails.add(tg + ": the " + p.kind + " landing moved");
             }
         }
-        int cell = (int) plain.network.cell;
-        long samples = 0;
-        for (int li = Terrain.GARDENS; li < layers; li++) {
-            for (int d = 0; d < SEAM_SAME; d += 3) for (int s = 0; s < cell; s += 4) {
-                int[][] cols = {{d, s}, {cell - 1 - d, s}, {s, d}, {s, cell - 1 - d}};
-                for (int[] c : cols) for (int y = plain.shape.bottom(li); y <= plain.shape.top(li); y += 2) {
-                    if (byDropped(dropped, li, c[0], c[1])) continue;
-                    samples++;
-                    boolean rockA = plain.fine(c[0], y, c[1], plain.density(c[0], y, c[1])) > 0, rockB = salted.fine(c[0], y, c[1], salted.density(c[0], y, c[1])) > 0;
-                    int fa = rockA ? -1 : plain.fluidAt(c[0], y, c[1]), fb = rockB ? -1 : salted.fluidAt(c[0], y, c[1]);
-                    if ((rockA != rockB || fa != fb) && fails.size() < 40) fails.add("layer " + li + ": the block at " + c[0] + " " + y + " " + c[1] + ", " + d + " in from the edge, changed");
-                }
-            }
-        }
-        System.out.printf("aPlanThatThrowsIsMadeAgainWithWhatItSharesInPlace: %d blocks by the seams compared; %d vestibules dropped by one of the plans%n", samples, dropped.size());
+        System.out.printf("aPlanThatThrowsIsMadeAgainWithWhatItSharesInPlace: %d vestibules dropped by one of the plans%n", dropped.size());
         assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
-    }
-
-    /** How far in from a cell's edges a salted plan leaves every block as it was (blocks; see above). */
-    static final int SEAM_SAME = 16;
-
-    /** Within 16 blocks of the footprint of a vestibule one of the two plans dropped ({li, x, z, reach}). */
-    static boolean byDropped(List<double[]> dropped, int li, int x, int z) {
-        for (double[] v : dropped) if (v[0] == li && Math.hypot(x - v[1], z - v[2]) < v[3] + 16) return true;
-        return false;
     }
 
     /** Seeds and cells the sweep plans: no other test plans them. */
@@ -198,9 +177,9 @@ class PlanSafetyTest {
     static final int[][] SWEEP_CELLS = {{1, 2}, {-4, 0}, {6, -3}};
 
     /**
-     * No plan of the planned layers (the Blue Reaches and the Deep Gardens) throws, over 60 cells each that no other test
-     * plans: every one is made at the first attempt. (The Wasteland and the Basalt Galleries, whose plans threw, are
-     * noise fields now and have no plan.)
+     * No plan of the planned layers (the Blue Reaches) throws, over 60 cells that no other test plans: every one is
+     * made at the first attempt. (The Wasteland and the Basalt Galleries, whose plans threw, are noise fields now and
+     * have no plan; so is the Deep Gardens' vent field since 0.19.1.)
      */
     @Test
     void sweepFindsNoFault() {

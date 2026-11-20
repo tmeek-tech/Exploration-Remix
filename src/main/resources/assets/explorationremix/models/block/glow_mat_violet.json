@@ -1,0 +1,12 @@
+{
+  "parent": "explorationremix:block/template/rock_top_side_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "rock_end": "minecraft:block/deepslate_top",
+    "rock_side": "minecraft:block/deepslate",
+    "top": "explorationremix:block/glow_mat_violet_top",
+    "top_glow": "explorationremix:block/glow_mat_violet_top_glow",
+    "side": "explorationremix:block/glow_mat_violet_side",
+    "side_glow": "explorationremix:block/glow_mat_violet_side_glow"
+  }
+}
