@@ -595,6 +595,8 @@ public class StiltMantisEntity extends PathfinderMob {
      */
     @Nullable
     public static BlockPos stand(BlockGetter level, int x, int y, int z, int reach) {
+        // never a column in a chunk that is not loaded (asking would make the server load or make it on the spot)
+        if (level instanceof net.minecraft.world.level.LevelReader r && !r.hasChunkAt(new BlockPos(x, y, z))) return null;
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         for (int k = 0; k <= 2 * reach; k++) {
             int yy = y + ((k & 1) == 0 ? k / 2 : -(k + 1) / 2);

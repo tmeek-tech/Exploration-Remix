@@ -22,6 +22,8 @@ class MantisClips {
         final BlockWorld world;
         final Vector3d at = new Vector3d();
         double yaw, headYaw, headPitch, vy;
+        /** How fast it goes now (blocks a tick): eased toward each segment's speed as the game's ground friction does. */
+        double speed;
         boolean hurry, graze, display, watch, airborne;
         double crouch, alert;
         Vector3d lookAt;
@@ -81,15 +83,25 @@ class MantisClips {
 
     interface Seg { boolean tick(Driver d, int t); }
 
+    /** The game's mobs reach a new speed as ground friction lets them: 0.45 of the way each tick (0.546 kept). */
+    static final double EASE = 0.454;
+
     static Seg walk(double dist, double speed) {
         double[] left = {dist};
-        return (d, t) -> { double s = Math.min(speed, left[0]); d.move(s); left[0] -= s; return left[0] > 1.0E-9; };
+        return (d, t) -> {
+            d.speed += (speed - d.speed) * EASE;
+            double s = Math.min(d.speed, left[0]);
+            d.move(s);
+            left[0] -= s;
+            return left[0] > 1.0E-9;
+        };
     }
 
     static Seg arc(double deg, double radius, double speed) {
         double[] left = {Math.toRadians(Math.abs(deg)) * radius};
         return (d, t) -> {
-            double s = Math.min(speed, left[0]);
+            d.speed += (speed - d.speed) * EASE;
+            double s = Math.min(d.speed, left[0]);
             d.turn(Math.signum(deg) * Math.toDegrees(s / radius));
             d.move(s);
             left[0] -= s;
@@ -102,7 +114,13 @@ class MantisClips {
         return (d, t) -> { double a = Math.min(rate, left[0]); d.turn(Math.signum(deg) * a); left[0] -= a; return left[0] > 1.0E-9; };
     }
 
-    static Seg idle(int ticks) { return (d, t) -> t < ticks - 1; }
+    /** It stops: gliding a little first, as a mob whose path ends does. */
+    static Seg idle(int ticks) {
+        return (d, t) -> {
+            if (d.speed > 0.003) { d.speed *= 1.0 - EASE; d.move(d.speed); } else d.speed = 0.0;
+            return t < ticks - 1;
+        };
+    }
 
     static Seg set(java.util.function.Consumer<Driver> r) { return (d, t) -> { r.accept(d); return false; }; }
 

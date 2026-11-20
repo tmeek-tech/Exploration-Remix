@@ -256,6 +256,16 @@ public final class MantisPose {
                 foot.lerp(t0, 0.3 * fall);
             }
             Vector3d ankle = ankleAt[i].set(foot).fma(spec.ankleUp, n0).fma(-side * spec.ankleIn, flatLeft);
+            if (!ft.planted) {
+                // a foot in the air out of the leg's reach (left behind as it sets off), or lifted nearer its hip than the
+                // folded leg comes (over a step's edge), is carried along the line to its hip, as the leg would carry it
+                double d = ankle.distance(hip), max = spec.reach() * 0.995, min = Math.abs(spec.tibia - spec.femur) * 1.03;
+                if (d > max || (d < min && d > 1.0E-6)) {
+                    t3.set(hip).sub(ankle).mul((d - (d > max ? max : min)) / d);
+                    ankle.add(t3);
+                    foot.add(t3);
+                }
+            }
             // the knee arches up and out, a little ahead for the middle legs and behind for the hind ones
             pl.set(u).fma(side * 0.55, l).fma(ft.mid ? 0.14 : -0.14, f);
             if (fall > 0) pl.lerp(t0.set(0, 1, 0), fall * 0.5);

@@ -20,6 +20,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import javax.annotation.Nullable;
+import java.util.List;
 
 /**
  * The stilt mantis herds grow back slowly after losses (0.20.0), as the Skeins do: a herd short of its size gets one
@@ -64,8 +65,11 @@ public final class MantisRefill {
         int reach = (int) Math.ceil(NEAR_MAX / MantisHerds.CELL);
         int in = 0;
         for (int cx = pcx - reach; cx <= pcx + reach; cx++)
-            for (int cz = pcz - reach; cz <= pcz + reach; cz++)
-                for (MantisHerds.Home h : MantisHerds.homes(t, cx, cz)) {
+            for (int cz = pcz - reach; cz <= pcz + reach; cz++) {
+                // a cell not planned yet is planned off the server thread, and looked at next time
+                List<MantisHerds.Home> homes = MantisHerds.homesIfPlanned(t, cx, cz);
+                if (homes == null) continue;
+                for (MantisHerds.Home h : homes) {
                     Vec3 home = new Vec3(h.x() + 0.5, h.y(), h.z() + 0.5);
                     double d = nearestPlayer(level, home);
                     if (d < NEAR_MIN || d > NEAR_MAX) continue;
@@ -77,6 +81,7 @@ public final class MantisRefill {
                     ROLLS++;
                     if (moveIn(level, h)) { MOVED_IN++; in++; }
                 }
+            }
         return in;
     }
 
@@ -99,6 +104,7 @@ public final class MantisRefill {
     private static boolean moveIn(ServerLevel level, MantisHerds.Home h) {
         for (int k = 0; k < 12; k++) {
             int x = h.x() + level.random.nextInt(9) - 4, z = h.z() + level.random.nextInt(9) - 4;
+            if (!level.isPositionEntityTicking(new BlockPos(x, h.y(), z))) continue;
             BlockPos at = StiltMantisEntity.stand(level, x, h.y(), z, 4);
             if (at == null || seen(level, at)) continue;
             StiltMantisEntity m = EREntities.STILT_MANTIS.get().create(level);

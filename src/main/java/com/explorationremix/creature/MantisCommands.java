@@ -34,7 +34,9 @@ import java.util.Locale;
  *     <li>{@code /remix mantis homes [radius]}: the herd homes planned round you (the vent field's plan), nearest first:
  *     where, colour, size, how many of the herd are near home now; and the herds set down with the world since the game
  *     started, and the refill's counts</li>
- *     <li>{@code /remix mantis tp [n]}: to the nth nearest herd home (from 1), standing a little way off, facing it</li>
+ *     <li>{@code /remix mantis tp [n] [distance]}: to the nth nearest herd home (from 1), standing a little way off
+ *     (14 blocks, or the distance given), facing it</li>
+ *     <li>{@code /remix mantis tpcolour <colour> [distance]}: the same, to the nearest herd of that colour</li>
  *     <li>{@code /remix mantis scare}: the mantises within 24 blocks startle from you, as if you had run at them</li>
  *     <li>{@code /remix mantis refill}: every short herd round you gets one mantis back now (unseen spots only)</li>
  * </ul>
@@ -50,8 +52,14 @@ public final class MantisCommands {
                         .then(Commands.argument("radius", IntegerArgumentType.integer(4, 256)).executes(c -> list(c, IntegerArgumentType.getInteger(c, "radius")))))
                 .then(Commands.literal("homes").executes(c -> homes(c, 160))
                         .then(Commands.argument("radius", IntegerArgumentType.integer(16, 512)).executes(c -> homes(c, IntegerArgumentType.getInteger(c, "radius")))))
-                .then(Commands.literal("tp").executes(c -> tp(c, 1))
-                        .then(Commands.argument("n", IntegerArgumentType.integer(1, 64)).executes(c -> tp(c, IntegerArgumentType.getInteger(c, "n")))))
+                .then(Commands.literal("tp").executes(c -> tp(c, 1, 14, null))
+                        .then(Commands.argument("n", IntegerArgumentType.integer(1, 64)).executes(c -> tp(c, IntegerArgumentType.getInteger(c, "n"), 14, null))
+                                .then(Commands.argument("distance", IntegerArgumentType.integer(2, 40))
+                                        .executes(c -> tp(c, IntegerArgumentType.getInteger(c, "n"), IntegerArgumentType.getInteger(c, "distance"), null)))))
+                .then(Commands.literal("tpcolour")
+                        .then(Commands.argument("colour", StringArgumentType.word()).executes(c -> tp(c, 1, 14, StringArgumentType.getString(c, "colour")))
+                                .then(Commands.argument("distance", IntegerArgumentType.integer(2, 40))
+                                        .executes(c -> tp(c, 1, IntegerArgumentType.getInteger(c, "distance"), StringArgumentType.getString(c, "colour"))))))
                 .then(Commands.literal("scare").executes(MantisCommands::scare))
                 .then(Commands.literal("refill").executes(MantisCommands::refill));
     }
@@ -142,24 +150,26 @@ public final class MantisCommands {
         return found.size();
     }
 
-    private static int tp(CommandContext<CommandSourceStack> c, int n) {
+    private static int tp(CommandContext<CommandSourceStack> c, int n, int distance, String colour) {
         CommandSourceStack src = c.getSource();
         Terrain t = DeepWorld.installed() ? DeepWorld.terrain() : null;
         if (t == null || t.gardens == null || !(src.getEntity() instanceof ServerPlayer player)) {
             src.sendFailure(Component.literal("Needs a player in a level with the deep world"));
             return 0;
         }
-        List<Found> found = nearHomes(t, src.getPosition(), 512);
+        List<Found> found = nearHomes(t, src.getPosition(), colour == null ? 512 : 1024);
+        if (colour != null) found.removeIf(f -> !f.home.colour().getSerializedName().equals(colour.toLowerCase(Locale.ROOT)));
         if (found.size() < n) {
-            src.sendFailure(Component.literal("Only " + found.size() + " herd home(s) within 512 blocks"));
+            src.sendFailure(Component.literal("Only " + found.size() + " such herd home(s) near"));
             return 0;
         }
         MantisHerds.Home h = found.get(n - 1).home;
         ServerLevel level = src.getLevel();
-        // stand 14 blocks off where there is floor, facing the home
+        // stand off where there is floor, facing the home (the first way round with floor, from the seed's own turn)
+        double a0 = (h.id() & 0xFF) / 256.0 * Math.PI * 2.0;
         for (int k = 0; k < 24; k++) {
-            double a = k * Math.PI * 2.0 / 24.0;
-            int x = h.x() + (int) Math.round(Math.cos(a) * 14), z = h.z() + (int) Math.round(Math.sin(a) * 14);
+            double a = a0 + k * Math.PI * 2.0 / 24.0;
+            int x = h.x() + (int) Math.round(Math.cos(a) * distance), z = h.z() + (int) Math.round(Math.sin(a) * distance);
             level.getChunk(x >> 4, z >> 4);
             BlockPos at = StiltMantisEntity.stand(level, x, h.y(), z, 6);
             if (at == null) continue;

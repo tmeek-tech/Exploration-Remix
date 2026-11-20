@@ -55,7 +55,7 @@ public final class MantisBody {
     /** Standing, a foot further than this from where it rests steps back to it (blocks, at scale 1). */
     static final double SETTLE_FOOT = 0.32;
     /** A planted foot further than this share of the leg's reach from its hip has been left behind: it steps at once. */
-    static final double OVERREACH = 1.0;
+    static final double OVERREACH = 0.95;
     /** A step lands no further ahead than this share of the leg's reach. */
     static final double MAX_AHEAD = 0.35;
     static final double MAX_AIM_SPEED = 0.45;
