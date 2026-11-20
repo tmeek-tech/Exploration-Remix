@@ -769,6 +769,9 @@ def write_all(assets, write):
     # 0.18.8: the giant Skein of the Deep Blue Rift, drawn the same way at four times the length (giant_skein.py)
     import giant_skein
     names.update(giant_skein.write(assets, write))
+    # 0.20.0: the Deep Gardens' stilt mantis, in the four neon colours (stilt_mantis.py)
+    import stilt_mantis
+    names.update(stilt_mantis.write(assets, write))
     return names
 
 
