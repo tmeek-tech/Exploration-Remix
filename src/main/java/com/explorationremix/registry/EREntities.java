@@ -6,6 +6,7 @@ import com.explorationremix.creature.GiantSkeinEntity;
 import com.explorationremix.creature.MossbackDen;
 import com.explorationremix.creature.MossbackEntity;
 import com.explorationremix.creature.SkeinEntity;
+import com.explorationremix.creature.StiltMantisEntity;
 import com.explorationremix.entity.LavaBomb;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
@@ -21,7 +22,8 @@ import net.minecraftforge.registries.RegistryObject;
 /**
  * The mod's entities: the creatures, their spawn eggs and drops, and the dens that keep the Mossbacks; and the
  * Caldera's lava bombs (0.5.1). The Mossbacks live in the Upper Caves' dens only, the Skein and the blue fireflies in the
- * Blue Reaches only (creature.BlueReachesSpawner): nothing lives in the Basalt Galleries.
+ * Blue Reaches only (creature.BlueReachesSpawner), the stilt mantis herds in the Deep Gardens' groves: nothing lives in
+ * the Basalt Galleries.
  */
 public final class EREntities {
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, ExplorationRemix.MOD_ID);
@@ -63,6 +65,16 @@ public final class EREntities {
     /** What the giant Skein leaves: its long spines (and Skein plates), kept for crafting later. */
     public static final RegistryObject<Item> GIANT_SKEIN_SPINE = ERBlocks.ITEMS.register("giant_skein_spine", () -> new Item(new Item.Properties()));
 
+    // The stilt mantis of the Deep Gardens (0.20.0): a tall grazer on stilt legs, in herds in the groves of glow mats.
+    // Its box is narrow and tall (1.2 wide, 2.9 to the top of its head; its legs reach a block and a half past it, drawn
+    // from its body), so its paths keep to rooms two blocks wide and three high. MISC, as a villager: it counts against
+    // no mob cap and vanilla never spawns it; the herds are set down with the world (world.feature.StiltMantisesFeature).
+    public static final RegistryObject<EntityType<StiltMantisEntity>> STILT_MANTIS = ENTITIES.register("stilt_mantis",
+            () -> EntityType.Builder.of(StiltMantisEntity::new, MobCategory.MISC).sized(1.2F, 2.9F).clientTrackingRange(10).build("stilt_mantis"));
+
+    public static final RegistryObject<Item> STILT_MANTIS_SPAWN_EGG = ERBlocks.ITEMS.register("stilt_mantis_spawn_egg",
+            () -> new ForgeSpawnEggItem(STILT_MANTIS, 0x2b2350, 0xb46cff, new Item.Properties()));
+
     @SuppressWarnings("DataFlowIssue")
     public static final RegistryObject<BlockEntityType<MossbackDen.Tile>> DEN_TILE = BLOCK_ENTITIES.register("mossback_den",
             () -> BlockEntityType.Builder.of(MossbackDen.Tile::new, ERBlocks.MOSSBACK_DEN.get()).build(null));
@@ -87,5 +99,6 @@ public final class EREntities {
         // the Skein
         e.put(SKEIN.get(), SkeinEntity.attributes().build());
         e.put(GIANT_SKEIN.get(), GiantSkeinEntity.attributes().build());
+        e.put(STILT_MANTIS.get(), StiltMantisEntity.attributes().build());
     }
 }

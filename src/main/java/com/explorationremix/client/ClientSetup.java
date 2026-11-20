@@ -9,6 +9,7 @@ import com.explorationremix.client.render.GiantSkeinRenderer;
 import com.explorationremix.client.render.LavaBombRenderer;
 import com.explorationremix.client.render.MossbackRenderer;
 import com.explorationremix.client.render.SkeinRenderer;
+import com.explorationremix.client.render.StiltMantisRenderer;
 import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.registry.EREntities;
 import com.explorationremix.registry.ERParticles;
@@ -38,7 +39,8 @@ public final class ClientSetup {
             ResourceLocation neon = new ResourceLocation(ExplorationRemix.MOD_ID, "neon");
             ItemPropertyFunction colour = (stack, level, entity, seed) -> NeonBlock.neon(stack).ordinal() / (float) (Neon.values().length - 1);
             for (RegistryObject<Item> item : ERBlocks.ITEMS.getEntries()) {
-                if (item.get() instanceof BlockItem b && b.getBlock() instanceof NeonBlock) ItemProperties.register(b, neon, colour);
+                // the neon blocks, and since 0.20.2 the vent field's neon plants
+                if (item.get() instanceof BlockItem b && b.getBlock().defaultBlockState().hasProperty(NeonBlock.NEON)) ItemProperties.register(b, neon, colour);
             }
         });
     }
@@ -63,6 +65,8 @@ public final class ClientSetup {
         // 0.9.0 (eruption effects, round 2): the blasts' flash and the vents' glow, and the rubble's chunks
         event.registerSpriteSet(ERParticles.FLASH.get(), CaveParticles.Flash.Provider::new);
         event.registerSpriteSet(ERParticles.RUBBLE.get(), CaveParticles.Rubble.Provider::new);
+        // 0.20.2: the spores off the Deep Gardens' grass and small mushrooms
+        event.registerSpriteSet(ERParticles.SPORE.get(), CaveParticles.Spore.Provider::new);
     }
 
     @SubscribeEvent
@@ -83,6 +87,8 @@ public final class ClientSetup {
         event.registerEntityRenderer(EREntities.SKEIN.get(), SkeinRenderer::new);
         // 0.18.8: the giant Skein
         event.registerEntityRenderer(EREntities.GIANT_SKEIN.get(), GiantSkeinRenderer::new);
+        // 0.20.0: the stilt mantis of the Deep Gardens
+        event.registerEntityRenderer(EREntities.STILT_MANTIS.get(), StiltMantisRenderer::new);
         // 0.9.0: the eruptions' lava bombs, a spinning glowing block of magma in a halo
         event.registerEntityRenderer(EREntities.LAVA_BOMB.get(), LavaBombRenderer::new);
     }

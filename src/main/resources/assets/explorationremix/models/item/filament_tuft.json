@@ -1,0 +1,26 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "explorationremix:block/filament_tuft_magenta"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "explorationremix:neon": 0.1667
+      },
+      "model": "explorationremix:item/filament_tuft_violet"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.5
+      },
+      "model": "explorationremix:item/filament_tuft_lime"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.8333
+      },
+      "model": "explorationremix:item/filament_tuft_light_blue"
+    }
+  ]
+}

@@ -57,4 +57,9 @@ public final class ERParticles {
     public static final RegistryObject<SimpleParticleType> FLASH = PARTICLES.register("flash", () -> new SimpleParticleType(false));
     /** 0.9.0 (eruption effects, round 2): a chunk of broken rock thrown out by a blast or a crashed block, tinted as the rock. */
     public static final RegistryObject<SimpleParticleType> RUBBLE = PARTICLES.register("rubble", () -> new SimpleParticleType(false));
+    /**
+     * 0.20.2: a mote of light lifting off the Deep Gardens' grass and small mushrooms, drifting up as it fades; its colour
+     * (0 to 1 each) rides in the speed's three numbers.
+     */
+    public static final RegistryObject<SimpleParticleType> SPORE = PARTICLES.register("spore", () -> new SimpleParticleType(false));
 }

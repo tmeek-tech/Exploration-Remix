@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/glowworm_threads"
+      },
+      {
+        "model": "explorationremix:block/glowworm_threads_2"
+      }
+    ]
+  }
+}

@@ -10,20 +10,23 @@ import net.minecraft.world.level.material.MapColor;
  * ({@code GardensVents}: MAGENTA 0, VIOLET 1, LIME 2, LIGHTBLUE 3), so {@link #ofCode} maps a code to its colour.
  */
 public enum Neon implements StringRepresentable {
-    MAGENTA("magenta", MapColor.COLOR_MAGENTA),
-    VIOLET("violet", MapColor.COLOR_PURPLE),
-    LIME("lime", MapColor.COLOR_LIGHT_GREEN),
-    LIGHT_BLUE("light_blue", MapColor.COLOR_LIGHT_BLUE);
+    MAGENTA("magenta", MapColor.COLOR_MAGENTA, 0xFF46CD),
+    VIOLET("violet", MapColor.COLOR_PURPLE, 0xA860FF),
+    LIME("lime", MapColor.COLOR_LIGHT_GREEN, 0xB0FF46),
+    LIGHT_BLUE("light_blue", MapColor.COLOR_LIGHT_BLUE, 0x7DAFFF);
 
     private static final Neon[] BY_CODE = values();
 
     private final String name;
     /** The colour a block of this neon shows on a map. */
     public final MapColor mapColor;
+    /** The neon itself (tools/textures.py's NEON_RGB), for what the game tints: the spores off the plants (0.20.2). */
+    public final int rgb;
 
-    Neon(String name, MapColor mapColor) {
+    Neon(String name, MapColor mapColor, int rgb) {
         this.name = name;
         this.mapColor = mapColor;
+        this.rgb = rgb;
     }
 
     /** The colour of one of the vent field's colour codes (0 magenta, 1 violet, 2 lime, 3 light blue). */

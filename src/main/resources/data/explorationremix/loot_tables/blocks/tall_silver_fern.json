@@ -7,19 +7,67 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "explorationremix:tall_silver_fern",
-          "conditions": [
-            {
-              "condition": "minecraft:block_state_property",
-              "block": "explorationremix:tall_silver_fern",
-              "properties": {
-                "half": "lower"
-              }
-            }
-          ]
+          "name": "explorationremix:tall_silver_fern"
         }
       ],
       "conditions": [
+        {
+          "condition": "minecraft:block_state_property",
+          "block": "explorationremix:tall_silver_fern",
+          "properties": {
+            "half": "lower"
+          }
+        },
+        {
+          "condition": "minecraft:location_check",
+          "offsetY": 1,
+          "predicate": {
+            "block": {
+              "blocks": [
+                "explorationremix:tall_silver_fern"
+              ],
+              "state": {
+                "half": "upper"
+              }
+            }
+          }
+        },
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "bonus_rolls": 0,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "explorationremix:tall_silver_fern"
+        }
+      ],
+      "conditions": [
+        {
+          "condition": "minecraft:block_state_property",
+          "block": "explorationremix:tall_silver_fern",
+          "properties": {
+            "half": "upper"
+          }
+        },
+        {
+          "condition": "minecraft:location_check",
+          "offsetY": -1,
+          "predicate": {
+            "block": {
+              "blocks": [
+                "explorationremix:tall_silver_fern"
+              ],
+              "state": {
+                "half": "lower"
+              }
+            }
+          }
+        },
         {
           "condition": "minecraft:survives_explosion"
         }

@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "explorationremix:block/seep_reeds"
+      },
+      {
+        "model": "explorationremix:block/seep_reeds_2"
+      }
+    ]
+  }
+}

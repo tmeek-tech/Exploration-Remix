@@ -212,6 +212,24 @@ GIANT_SUBTITLES = {
 CREATURE_EVENTS.update(GIANT_EVENTS)
 CREATURE_SUBTITLES.update(GIANT_SUBTITLES)
 
+# 0.20.0's stilt mantis of the Deep Gardens (tools/synth_creature_sounds.py mantis): light and dry, nothing throaty, so
+# a herd reads as gentle: the tap of its stilt feet, a soft glassy chirr while it grazes, the papery rattle of its
+# wings flared in its startle display, a thin squeak hurt and a fading chirr as it dies. Quiet: heard across a grove.
+MANTIS_EVENTS = {
+    "stilt_mantis.step": creature("tap", 4, 0.55, 12, who="stilt_mantis"),
+    "stilt_mantis.chirr": creature("chirr", 3, 0.7, 20, who="stilt_mantis"),
+    "stilt_mantis.rattle": creature("rattle", 2, 0.9, 24, who="stilt_mantis"),
+    "stilt_mantis.hurt": creature("hurt", 2, 0.8, 16, who="stilt_mantis"),
+    "stilt_mantis.death": creature("death", 1, 0.9, 20, who="stilt_mantis"),
+}
+MANTIS_SUBTITLES = {
+    "stilt_mantis.step": "Stilt feet tap", "stilt_mantis.chirr": "Stilt Mantis chirrs",
+    "stilt_mantis.rattle": "Stilt Mantis rattles its wings", "stilt_mantis.hurt": "Stilt Mantis hurts",
+    "stilt_mantis.death": "Stilt Mantis dies",
+}
+CREATURE_EVENTS.update(MANTIS_EVENTS)
+CREATURE_SUBTITLES.update(MANTIS_SUBTITLES)
+
 
 def write_all(assets_dir, write):
     out = {}
