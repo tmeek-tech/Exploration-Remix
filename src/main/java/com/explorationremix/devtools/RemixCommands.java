@@ -141,6 +141,7 @@ public final class RemixCommands {
                         .then(Commands.literal("gate").then(Commands.argument("band", IntegerArgumentType.integer(1, 8))
                                 .executes(c -> tpGate(c, IntegerArgumentType.getInteger(c, "band")))))
                         .then(Commands.literal("den").executes(RemixCommands::tpDen))
+                        .then(Commands.literal("deepvent").executes(RemixCommands::tpDeepVent))
                         .then(Commands.literal("bedrock").executes(RemixCommands::tpBedrock))
                         .then(Commands.literal("biome").then(Commands.argument("name", StringArgumentType.word())
                                 .suggests((c, b) -> SharedSuggestionProvider.suggest(java.util.stream.Stream.concat(
@@ -340,6 +341,50 @@ public final class RemixCommands {
                 + "its ramp climbs to %.0f %.0f %.0f.", g.den, g.cellX, g.cellZ, sx, sy, sz, ramp.x2(), ramp.y2(), ramp.z2()));
         return 1;
     }
+
+    /**
+     * The nearest deep vent of the Deep Gardens whose throat winds down into the Wasteland's top tunnels (0.19.1): looked
+     * for off the server thread, since each deep site whose vents are not decided yet costs seconds, then the player
+     * stands on the vent's floor by its middle, facing the throat's mouth. About one deep site in five has one, so the
+     * nearest is usually a few hundred blocks off.
+     */
+    private static int tpDeepVent(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        if (t.gardens == null) {
+            c.getSource().sendFailure(Component.literal("This world has no Deep Gardens vent field."));
+            return 0;
+        }
+        ServerPlayer pl = c.getSource().getPlayerOrException();
+        ServerLevel level = pl.server.getLevel(Level.OVERWORLD);
+        if (level == null) return 0;
+        double px = pl.getX(), pz = pl.getZ();
+        say(c, "Looking for the nearest deep vent with a throat within " + (int) DEEP_VENT_REACH
+                + " blocks (the first search round a place can take a minute)...");
+        java.util.concurrent.CompletableFuture.supplyAsync(() -> t.gardens.throatsNear(px, pz, DEEP_VENT_REACH, 1))
+                .whenComplete((found, err) -> pl.server.execute(() -> {
+                    if (pl.hasDisconnected()) return;
+                    if (err != null || found == null || found.isEmpty()) {
+                        c.getSource().sendFailure(Component.literal(err != null ? "The search failed: " + err.getMessage()
+                                : "No deep vent with a throat within " + (int) DEEP_VENT_REACH + " blocks."));
+                        return;
+                    }
+                    com.explorationremix.world.terrain.GardensField.Throat v = found.get(0);
+                    int bottom = t.shape.bottom(Terrain.GARDENS), x = (int) Math.floor(v.x()), z = (int) Math.floor(v.z());
+                    BlockPos stand = findStand(level, x, bottom + v.floorRow(), z);
+                    double sx = x + 0.5, sz = z + 0.5, sy = stand != null ? stand.getY() : bottom + v.floorRow() + 1;
+                    // facing the mouth (yaw 0 looks along +z, 90 along -x), a little down
+                    float yaw = (float) Math.toDegrees(Math.atan2(-(v.mouthX() - sx), v.mouthZ() - sz));
+                    pl.teleportTo(level, sx, sy, sz, yaw, 15f);
+                    say(c, String.format(Locale.ROOT, "Deep vent at %.0f %.0f: standing on its floor (Y %.0f), facing the throat's mouth %.0f blocks ahead; "
+                            + "it winds down to the Wasteland's tunnels at Y %d. %.0f blocks from where you were.", sx, sz, sy,
+                            Math.hypot(v.mouthX() - sx, v.mouthZ() - sz), bottom + v.exitRow(), Math.hypot(v.x() - px, v.z() - pz)));
+                }));
+        return 1;
+    }
+
+    /** How far {@code /remix tp deepvent} looks. */
+    private static final double DEEP_VENT_REACH = 1500;
 
     /** How far from the middle of a den gate's upper landing {@code /remix tp den} stands. */
     private static final double DEN_RING = 8;

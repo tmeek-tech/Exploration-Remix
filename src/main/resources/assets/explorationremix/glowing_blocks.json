@@ -15,6 +15,8 @@
     "ember_vines_plant",
     "frostberry_vine",
     "frostberry_vine_plant",
+    "glow_cap",
+    "glow_mat",
     "glowbell",
     "gold_flower",
     "gold_threads",
@@ -28,8 +30,12 @@
     "lavender_flower",
     "pagoda_fungus",
     "pool_pearls",
+    "seep_crust",
     "smoulder_lichen",
     "snowbell",
+    "thin_glow_mat",
+    "vent_beads",
+    "vent_crown",
     "white_glow_flower"
   ]
 }

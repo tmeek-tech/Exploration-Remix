@@ -12,15 +12,18 @@ public record TerrainSettings(int bandThickness, int gateSpacing, double passage
     public static final String[] LAYER_IDS = {"blue_reaches", "deep_gardens", "wasteland", "basalt_galleries"};
 
     /**
-     * Four deep layers under the pack's floor at y -64: bands at -65, -273 and -529, bedrock at -832. Since 0.5 the old
-     * 288-block bottom layer is the Wasteland over the Basalt Galleries (144), so the floor stays where it was (Taran,
+     * Four deep layers under the pack's floor at y -64: bands at -65, -273 and -481, bedrock at -784. Since 0.5 the old
+     * 288-block bottom layer is the Wasteland over the Basalt Galleries (144), so the floor stayed where it was (Taran,
      * 2026-11-01: "Keep bedrock at Y -832"). Since 0.5.1 there is no band between them (see {@link #bandThickness(int)}):
-     * the Wasteland takes its 16 rows (-545..-688) and its caves open into the Galleries' ceiling.
+     * the Wasteland takes its 16 rows and its caves open into the Galleries' ceiling. Since round 3 of the Deep Gardens
+     * (Taran, 2026-11-19: "Reduce the layer height") they are 192 rows (-289..-480, 240 before), and the 48 rows they gave
+     * up come off the bottom of the world (Taran's answer on the card, 2026-11-19): every layer under them keeps its
+     * height, so the Wasteland is -497..-640, the Galleries -641..-784 and bedrock rose from -832 to -784.
      */
     public static TerrainSettings defaults() {
         return new TerrainSettings(16, 600, 4.5, 14.0, List.of(
                 new LayerSettings("blue_reaches", 192, 14, false, 80, 160, 30, 60),
-                new LayerSettings("deep_gardens", 240, 16, false, 30, 100, 40, 200),
+                new LayerSettings("deep_gardens", 192, 16, false, 30, 100, 40, 200),
                 new LayerSettings("wasteland", 128, 10, true, 15, 30, 15, 30),
                 new LayerSettings("basalt_galleries", 144, 10, true, 50, 110, 60, 110)));
     }

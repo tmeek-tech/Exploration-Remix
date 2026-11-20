@@ -27,7 +27,12 @@ public enum DeepBiome {
     // column tops over the lava, and red rifts of Create's scoria.
     CALDERA("caldera", Role.ROUTE),
     CAUSEWAY("causeway", Role.ROUTE),
-    SCORIA_CANYONS("scoria_canyons", Role.ROUTE);
+    SCORIA_CANYONS("scoria_canyons", Role.ROUTE),
+    // Deep Gardens round 2 (appended, as above): the vent field's three bands, top to bottom. The older Deep Gardens
+    // biomes stay, for worlds that hold them.
+    SEEP_BEDS("seep_beds", Role.ROUTE),          // top band: the oil seep flats
+    CHIMNEY_HALLS("chimney_halls", Role.REFUGE), // middle band: the dark chimneys
+    VENT_DOMES("vent_domes", Role.HUNTING);      // bottom band: the live vent domes, with the most neon life
 
     /** Refuges are bare and calm, routes have some growth, hunting grounds are the most overgrown; upper caves are safe. */
     public enum Role { REFUGE, ROUTE, HUNTING, SAFE }

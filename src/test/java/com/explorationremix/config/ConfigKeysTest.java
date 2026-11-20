@@ -28,6 +28,22 @@ class ConfigKeysTest {
         return (ForgeConfigSpec.ValueSpec) o;
     }
 
+    /**
+     * The Deep Gardens' vent field is built for 192 rows (round 3 of the layer, Taran: "Reduce the layer height"; 240
+     * from 0.19.1): the world config takes no other height and puts one back to 192, since a taller layer read past the
+     * vent field's tiles and crashed generation (0.19.4). The old 240 is refused like any other.
+     */
+    @Test
+    void theDeepGardensHeightIsFixed() {
+        ForgeConfigSpec.ValueSpec h = spec(WORLD, "world.deep_gardens.height");
+        assertEquals(192, h.getDefault());
+        assertTrue(h.test(192));
+        for (int v : new int[]{64, 176, 191, 193, 208, 224, 240, 256, 512}) {
+            assertFalse(h.test(v), "height " + v + " accepted");
+            assertEquals(192, h.correct(v), "height " + v + " not put back to 192");
+        }
+    }
+
     @Test
     void droppedKeysAreGone() {
         for (String k : List.of("quakes.debrisPerSecond", "eruptions.activeMinMinutes", "eruptions.activeMaxMinutes", "eruptions.bombPower",

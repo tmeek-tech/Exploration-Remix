@@ -1,0 +1,132 @@
+{
+  "variants": {
+    "neon=magenta": [
+      {
+        "model": "explorationremix:block/thin_glow_mat_magenta"
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_magenta",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_magenta",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_magenta",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_magenta_mirrored"
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_magenta_mirrored",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_magenta_mirrored",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_magenta_mirrored",
+        "y": 270
+      }
+    ],
+    "neon=violet": [
+      {
+        "model": "explorationremix:block/thin_glow_mat_violet"
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_violet",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_violet",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_violet",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_violet_mirrored"
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_violet_mirrored",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_violet_mirrored",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_violet_mirrored",
+        "y": 270
+      }
+    ],
+    "neon=lime": [
+      {
+        "model": "explorationremix:block/thin_glow_mat_lime"
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_lime",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_lime",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_lime",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_lime_mirrored"
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_lime_mirrored",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_lime_mirrored",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_lime_mirrored",
+        "y": 270
+      }
+    ],
+    "neon=light_blue": [
+      {
+        "model": "explorationremix:block/thin_glow_mat_light_blue"
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_light_blue",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_light_blue",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_light_blue",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_light_blue_mirrored"
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_light_blue_mirrored",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_light_blue_mirrored",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/thin_glow_mat_light_blue_mirrored",
+        "y": 270
+      }
+    ]
+  }
+}

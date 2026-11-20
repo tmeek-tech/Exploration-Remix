@@ -75,6 +75,21 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #               it, <id>_side square to it), turned to face away from the wall, in three sizes (property size: 0, 1
 #               and 2 drawn with <id>, <id>_medium and <id>_large and their _front and _side); it has no item, and
 #               drops the item named by option drop
+#   glow_cube   a full block drawn twice, its texture and over it the texture's glow overlay at full block light (the
+#               texture needs an entry in textures.GLOW). Option neon: the block has the property neon (block.Neon),
+#               a model per colour with textures <id>_<colour>; its item shows the colour in its BlockStateTag (the
+#               item property explorationremix:neon picks the model) and it drops itself in its colour. Option faces
+#               "top_side_bottom": textures <id>_<colour>_top, _side and _bottom, each with its glow. Option rock (a
+#               name in ROCKS): the block is that vanilla rock, drawn as vanilla draws it, with our texture over it as
+#               a cutout overlay (clear where the rock shows) and the overlay's glow over that; the texture
+#               <id>_<colour> covers every face, or option overlays maps the face groups it covers (top, side, bottom)
+#               to suffixes of their textures, <id>_<colour><suffix>, and leaves the others bare. Option turns: each
+#               colour takes one of eight models by the block's position, turned about y by 0, 90, 180 or 270
+#               degrees, plain or mirrored (every face's texture flipped), so a floor of them shows no stripes
+#   pointed     vanilla's pointed dripstone in our textures (a PointedDripstoneBlock): a model per thickness (tip_merge,
+#               tip, frustum, middle, base) and direction (down hanging, up standing) on vanilla's own model, two
+#               crossed planes, with texture <id>_<down|up>_<thickness>; its item is held like vanilla's, with texture
+#               item/<id>
 # Options: variants (how many textures: <id>, <id>_2, <id>_3; the game picks one per block from its position, so it
 # never changes), weights (one per variant), drop (hanging_fern, litter: the item it drops), chance (litter: how often
 # it drops it), resting (cross: a GlowbellBlock, drawn with <look>_resting while it rests), glow_under (shelf: the
@@ -167,11 +182,36 @@ BLOCKS = {
     # The bones and scraps round a den (DenLairFeature): ribs and vertebrae, a skull fragment, feathers and fur, and the
     # lizards' own shed scales and hide. A bone now and then.
     "bone_scraps": ("Bone Scraps", "litter", {"variants": 4, "drop": "minecraft:bone", "chance": 0.4}),
+    # Deep Gardens, the vent field (textures.py's vent field section has Taran's look rules): black dripstone and the
+    # giant mushrooms' pale stem; then the glowing blocks, each in the four neon colours (block.Neon), and the seeps'
+    # dim light blue crust. Round 3: the vents and spires are vanilla blackstone (vent rock and live vent rock left the
+    # game, ERRemaps), so the neon blocks on them are drawn over it (option rock), and the black dripstone has its
+    # pointed dripstone, vanilla's recoloured (block.PointedBlackDripstoneBlock).
+    "black_dripstone": ("Black Dripstone", "cube"),
+    "pointed_black_dripstone": ("Pointed Black Dripstone", "pointed"),
+    "pale_stem": ("Pale Stem", "cube"),
+    # round 3: the glow mat is a film over vanilla deepslate (tools/glow_mat_looks.py), the thin glow mat the sparser
+    # film of a patch's outer ring; the glow cap has a top, a rim and an underside (tools/glow_cap_looks.py)
+    "glow_mat": ("Glow Mat", "glow_cube", {"neon": True, "rock": "deepslate", "overlays": {"top": "_top", "side": "_side"},
+                                          "turns": True}),
+    "thin_glow_mat": ("Thin Glow Mat", "glow_cube", {"neon": True, "rock": "deepslate",
+                                                    "overlays": {"top": "_top", "side": "_side"}, "turns": True}),
+    "glow_cap": ("Glow Cap", "glow_cube", {"neon": True, "faces": "top_side_bottom"}),
+    "vent_crown": ("Vent Crown", "glow_cube", {"neon": True, "rock": "blackstone"}),
+    # 0.19.4's spire tip knobs on every face, over blackstone (round 4, Taran: "The vent bead texture was better
+    # before"; card pick "Old knobs over blackstone"). It caps the small spires, mixes with the crown over a live vent's
+    # top and runs down its walls, outside and in. (Round 4 also retired den fissure, vent glow and throat vein: beads
+    # took their places.)
+    "vent_beads": ("Vent Beads", "glow_cube", {"neon": True, "rock": "blackstone"}),
+    "seep_crust": ("Seep Crust", "glow_cube"),
 }
 NO_DROP = {"band_stone", "glow", "mossback_den"}
+# The vent field's blocks: rock, never growth to /remix census (the whole blocks count as floor and ceiling).
+VENT_FIELD_BLOCKS = {"black_dripstone", "pointed_black_dripstone", "pale_stem", "glow_mat", "thin_glow_mat", "glow_cap", "vent_crown",
+                     "vent_beads", "seep_crust"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
-# lifeless blocks of the Galleries, and the litter round the dens.
-NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"}
+# lifeless blocks of the Galleries, the litter round the dens, and the vent field's whole blocks.
+NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"} | VENT_FIELD_BLOCKS
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
@@ -189,8 +229,13 @@ BLOCK_TAGS = {
     # ferns only grow on #minecraft:dirt), and moss patches may spread over it.
     ("minecraft", "dirt"): ["frost_moss"],
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
-    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain"],
-    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen"],
+    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain",
+                                        # the Deep Gardens: the vent field's dripstone, and the neon blocks grown on its rock
+                                        "black_dripstone", "pointed_black_dripstone", "glow_mat", "thin_glow_mat", "vent_crown",
+                                        "vent_beads", "seep_crust"],
+    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen",
+                                    # Deep Gardens round 2: the giant mushrooms
+                                    "pale_stem", "glow_cap"],
     # The Galleries' lava glow is open space to a growing tree (TreeFeature asks isAir() or this tag): a sapling grows
     # through it, and its logs, leaves and roots take its place.
     ("minecraft", "replaceable_by_trees"): ["glow"],
@@ -239,6 +284,58 @@ def _sheet(key, extra):
     """Vanilla glow lichen's plane, just off the face of the block to the north."""
     return [dict({"from": [0, 0, 0.1], "to": [16, 16, 0.1],
                   "faces": {"north": {"uv": [16, 0, 0, 16], "texture": key}, "south": {"uv": [0, 0, 16, 16], "texture": key}}}, **extra)]
+
+
+def _cube(keys, extra):
+    """A whole block's cube, like vanilla's block/cube: keys maps each face drawn to its texture, each face culled
+    against the block beside it."""
+    return [dict({"from": [0, 0, 0], "to": [16, 16, 16],
+                  "faces": {f: {"texture": k, "cullface": f} for f, k in keys.items()}}, **extra)]
+
+
+# A glowing whole block's overlay: unshaded, so its glow is as bright on every face, at full block light.
+CUBE_GLOW = dict(EMISSIVE, shade=False)
+SIDES = ("north", "east", "south", "west")
+
+# The vanilla rocks a glowing block can be drawn over (kind glow_cube, option rock): the texture of the rock's top and
+# bottom, then of its sides, as vanilla's own model draws them (cube_column's end and side). These are the only vanilla
+# textures our models name; the check in block_assets refuses any other, as the game would show a typo as a purple and
+# black square.
+ROCKS = {"blackstone": ("minecraft:block/blackstone_top", "minecraft:block/blackstone"),
+         "deepslate": ("minecraft:block/deepslate_top", "minecraft:block/deepslate")}
+VANILLA_TEXTURES = {t for pair in ROCKS.values() for t in pair}
+# An overlay's face groups, and the faces of the cube each covers.
+OVERLAY_FACES = {"top": ("up",), "side": SIDES, "bottom": ("down",)}
+
+
+def overlays(opts):
+    """A glow_cube over a rock: its face groups with an overlay and their textures' suffixes (option overlays; by
+    default one texture on every face)."""
+    return opts.get("overlays", {g: "" for g in OVERLAY_FACES})
+
+
+def rock_template(groups):
+    """The name of the rock template whose overlay covers these face groups: rock_top_side_bottom_glow and so on."""
+    return "rock_" + "_".join(g for g in OVERLAY_FACES if g in groups) + "_glow"
+
+
+def _rock_overlay(groups):
+    """A vanilla rock's block with our overlay over the faces of some face groups: the rock as vanilla's cube_column
+    draws it (#rock_end on its top and bottom, #rock_side round it), then on each group's faces (OVERLAY_FACES) our
+    cutout overlay #<group>, shaded and lit by the world like the rock, and over that the overlay's glow #<group>_glow,
+    unshaded at full block light. The three lie on the same planes and are drawn in order, so each covers the one
+    before wherever it has pixels."""
+    rock = _cube(dict({"down": "#rock_end", "up": "#rock_end"}, **{f: "#rock_side" for f in SIDES}), {})
+    over = _cube({f: "#" + g for g in OVERLAY_FACES if g in groups for f in OVERLAY_FACES[g]}, {})
+    glow = _cube({f: f"#{g}_glow" for g in OVERLAY_FACES if g in groups for f in OVERLAY_FACES[g]}, CUBE_GLOW)
+    return {"parent": "minecraft:block/block", "textures": {"particle": "#rock_side"}, "elements": rock + over + glow}
+
+
+# Vanilla's pointed dripstone item (kind pointed): a flat sprite, held turned side on.
+POINTED_ITEM_DISPLAY = {
+    "thirdperson_righthand": {"rotation": [0, 100, 0], "translation": [-1, -1, 0], "scale": [0.9, 0.9, 0.9]},
+    "firstperson_righthand": {"rotation": [0, 100, 0], "translation": [0, -2, 0], "scale": [0.9, 0.9, 0.9]},
+}
 
 
 # The silver ferns (Taran, 1 Nov: fluffier, like the picture, and hanging on walls). Model planes can only turn
@@ -340,7 +437,36 @@ TEMPLATES = {
     "carpet_glow": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _flat("#texture", {}) + _flat("#glow", EMISSIVE)},
     "lichen": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _sheet("#texture", {})},
     "lichen_glow": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _sheet("#texture", {}) + _sheet("#glow", EMISSIVE)},
+    # the vent field's glowing whole blocks (kind glow_cube): the block, then its overlay over the same faces
+    "cube_glow": {"parent": "minecraft:block/block", "textures": {"particle": "#all"},
+                  "elements": _cube({f: "#all" for f in FACES}, {}) + _cube({f: "#glow" for f in FACES}, CUBE_GLOW)},
+    # and the glow cap's: a top, a side and a bottom, each with its overlay
+    "cube_top_side_bottom_glow": {"parent": "minecraft:block/block", "textures": {"particle": "#side"},
+                                  "elements": _cube(dict({"down": "#bottom", "up": "#top"}, **{f: "#side" for f in SIDES}), {})
+                                  + _cube(dict({"down": "#bottom_glow", "up": "#top_glow"}, **{f: "#side_glow" for f in SIDES}),
+                                          CUBE_GLOW)},
 }
+# and the blocks drawn over a vanilla rock (option rock): a template for each set of face groups their overlays cover
+for _entry in BLOCKS.values():
+    if len(_entry) > 2 and "rock" in _entry[2]:
+        TEMPLATES[rock_template(overlays(_entry[2]))] = _rock_overlay(overlays(_entry[2]))
+
+
+def mirrored(template):
+    """A template with every face's texture flipped left to right (option turns' mirrored models)."""
+    out = json.loads(json.dumps(template))
+    for el in out["elements"]:
+        for face in el["faces"].values():
+            u1, v1, u2, v2 = face.get("uv", [0, 0, 16, 16])
+            face["uv"] = [u2, v1, u1, v2]
+    return out
+
+
+for _entry in BLOCKS.values():
+    if len(_entry) > 2 and _entry[2].get("turns"):
+        _name = rock_template(overlays(_entry[2])) if "rock" in _entry[2] else "cube_glow"
+        TEMPLATES[_name + "_mirrored"] = mirrored(TEMPLATES[_name])
+TURNS = [(mirror, y) for mirror in (False, True) for y in (0, 90, 180, 270)]  # option turns' eight models
 
 
 def shelf_model(tex, under, glow_under=False):
@@ -392,8 +518,11 @@ def plane_model(tex, plain_parent, template, key):
     return {"parent": plain_parent, "render_type": "minecraft:cutout", "textures": t}
 
 
-def loot(bid, drop, kind, chance=None):
+def loot(bid, drop, kind, chance=None, neon=False):
     entry = {"type": "minecraft:item", "name": drop if ":" in drop else f"{MOD}:{drop}"}
+    if neon:
+        # the item keeps the block's colour (its BlockStateTag), and places the block in it again
+        entry["functions"] = [{"function": "minecraft:copy_state", "block": f"{MOD}:{bid}", "properties": ["neon"]}]
     if kind in ("tall", "tall_fern"):
         # both halves break together; only the lower half's table drops the plant
         entry["conditions"] = [{"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"half": "lower"}}]
@@ -533,14 +662,69 @@ def block_assets():
                 models[t] = shelf_model(ref(t), ref(bid + "_under"), opts.get("glow_under", False))
             states = {"variants": {f"facing={f}": pick([dict({"model": ref(t)}, **turn) for t in texs], weights) for f, turn in FACE4.items()}}
             item = {"parent": ref(bid)}
+        elif kind == "glow_cube":
+            colours = textures.NEONS if opts.get("neon") else [None]
+            for c in colours:
+                m = bid if c is None else f"{bid}_{c}"
+                if "rock" in opts:
+                    # the vanilla rock, then our overlay and its glow on the faces the overlay covers
+                    end, side = ROCKS[opts["rock"]]
+                    t = {"rock_end": end, "rock_side": side}
+                    for group, suffix in overlays(opts).items():
+                        t[group], t[group + "_glow"] = ref(m + suffix), ref(m + suffix + "_glow")
+                    template = rock_template(overlays(opts))
+                elif opts.get("faces") == "top_side_bottom":
+                    t = {g: ref(f"{m}_{g}") for g in ("top", "side", "bottom")}
+                    t.update({g + "_glow": ref(f"{m}_{g}_glow") for g in ("top", "side", "bottom")})
+                    template = "cube_top_side_bottom_glow"
+                else:
+                    t = {"all": ref(m), "glow": ref(m + "_glow")}
+                    template = "cube_glow"
+                models[m] = {"parent": f"{MOD}:block/template/{template}", "render_type": "minecraft:cutout", "textures": t}
+                if opts.get("turns"):
+                    models[m + "_mirrored"] = {"parent": f"{MOD}:block/template/{template}_mirrored",
+                                               "render_type": "minecraft:cutout", "textures": t}
+            if opts.get("neon"):
+                if opts.get("turns"):
+                    states = {"variants": {f"neon={c}": [dict({"model": ref(f"{bid}_{c}" + ("_mirrored" if mirror else ""))},
+                                                              **({"y": y} if y else {})) for mirror, y in TURNS]
+                                           for c in colours}}
+                else:
+                    states = {"variants": {f"neon={c}": {"model": ref(f"{bid}_{c}")} for c in colours}}
+                # The item property explorationremix:neon (client.ClientSetup) is the colour's place in block.Neon over
+                # the last place, 0 to 1; a colour's model takes over from halfway below its value. The game uses the
+                # last override that matches, so they go in order.
+                last = len(colours) - 1
+                item = {"parent": ref(f"{bid}_{colours[0]}"),
+                        "overrides": [{"predicate": {f"{MOD}:neon": round((k - 0.5) / last, 4)}, "model": ref(f"{bid}_{c}")}
+                                      for k, c in enumerate(colours) if k]}
+            else:
+                states = {"variants": {"": {"model": ref(bid)}}}
+                item = {"parent": ref(bid)}
+        elif kind == "pointed":
+            # vanilla's states and models (block/pointed_dripstone, two crossed planes), with our textures
+            variants = {}
+            for d in ("down", "up"):
+                for thickness in textures.POINTED_DRIP_THICKNESS:
+                    t = f"{bid}_{d}_{thickness}"
+                    models[t] = {"parent": "minecraft:block/pointed_dripstone", "render_type": "minecraft:cutout",
+                                 "textures": {"cross": ref(t)}}
+                    variants[f"thickness={thickness},vertical_direction={d}"] = {"model": ref(t)}
+            states = {"variants": variants}
+            item = {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/{bid}"},
+                    "display": POINTED_ITEM_DISPLAY}
         else:
             raise ValueError(f"{bid}: unknown kind {kind}")
         if opts.get("glow_under"):
             glowing.add(bid)
         for mname, m in models.items():
             for key, tex in m["textures"].items():
+                if tex.startswith("minecraft:"):  # vanilla's, which the game has: only the rocks' (a typo is refused)
+                    assert tex in VANILLA_TEXTURES, f"{bid}: {tex} is not one of the vanilla textures gen_data knows (ROCKS)"
+                    continue
                 painted = "block/" + tex.split("block/", 1)[1]
-                if key == "glow":
+                if key.endswith("glow"):  # an overlay: #glow, or a face's (#top_glow, #side_glow)
+                    assert painted[:-len("_glow")] in textures.GLOW, f"{bid}: no glow overlay is painted for {tex}"
                     used_glow.add(painted[:-len("_glow")])
                     if opts.get("shader_glow", True):
                         glowing.add(bid)
@@ -549,9 +733,11 @@ def block_assets():
             write(os.path.join(ASSETS, "models", "block", mname + ".json"), m)
         write(os.path.join(ASSETS, "blockstates", bid + ".json"), states)
         if item is not None:
+            for tex in item.get("textures", {}).values():  # an item's sprite needs a painter too
+                assert tex.split(":", 1)[1] in textures.PAINTERS, f"{bid}: no painter for its item's {tex}"
             write(os.path.join(ASSETS, "models", "item", bid + ".json"), item)
         if bid not in NO_DROP:
-            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind, opts.get("chance")))
+            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind, opts.get("chance"), opts.get("neon", False)))
     unused = set(textures.GLOW) - used_glow
     assert not unused, f"glow overlays no model draws: {sorted(unused)}"
     write(os.path.join(ASSETS, "glowing_blocks.json"), {"blocks": sorted(glowing)})

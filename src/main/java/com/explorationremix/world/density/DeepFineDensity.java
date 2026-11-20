@@ -17,9 +17,17 @@ public final class DeepFineDensity implements DensityFunction {
 
     public DeepFineDensity(DensityFunction coarse) { this.coarse = coarse; }
 
+    /**
+     * A point asked on its own (a {@link SinglePointContext}: the F3 screen's density line, which singleplayer works out
+     * on the render thread every frame, or another mod's sample) gets the coarse value. The fine pass can need the Deep
+     * Gardens' vent decisions and block tiles round the point, seconds of work in ground not visited since the game
+     * started, which froze the game with F3 open. World generation always asks through a noise chunk, so the blocks are
+     * unchanged.
+     */
     @Override
     public double compute(FunctionContext ctx) {
         double c = coarse.compute(ctx);
+        if (ctx instanceof SinglePointContext) return c;
         Terrain t = DeepWorld.terrain();
         return t == null ? c : t.fine(ctx.blockX(), ctx.blockY(), ctx.blockZ(), c);
     }

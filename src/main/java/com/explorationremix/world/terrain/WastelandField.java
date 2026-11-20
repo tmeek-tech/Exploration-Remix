@@ -84,6 +84,13 @@ public final class WastelandField {
      * (scale ROUGH3_SCALE, flattened 3:4): bulges, ledges and recesses the size of the cave.
      */
     static final double ROUGH = 2.0, ROUGH_SCALE = 14, ROUGH_W = 0.25, ROUGH3_SCALE = 28;
+    /**
+     * The roughness reads the layer's own rows, counted from its bottom as if that lay at ROUGH_BOT (-688, where it lay
+     * until round 3 of the Deep Gardens raised the world's floor by 48), so the Wasteland keeps its walls, openings and
+     * join wherever the stack puts it, as the Galleries do (their noise is two-dimensional); before, it read the world's
+     * rows.
+     */
+    static final int ROUGH_BOT = -688;
     /** The basalt columns in the walls: a per-column offset, constant over a small Voronoi cell (as 0.5.0). */
     static final double COLUMN = 1.7, COLUMN_CELL = 3.3;
     /** Floors take this share of the column offset, so the steps stay walkable (0.5.0's FLOOR_FADE). */
@@ -173,6 +180,8 @@ public final class WastelandField {
     final int li = Terrain.WASTELAND;
     /** The layer's top and bottom rows, and its lava table (the first row above the lava). */
     final int top, bot, W;
+    /** What the roughness adds to a block's row: {@link #ROUGH_BOT} less the layer's bottom. */
+    private final int roughDy;
     private final Perlin caveN, whN, lavaN, ashN, rough1, rough2, rough3, terN, clusterN, lavaWN, lavaEN, bumpN;
     /** The sheets' warp, lattices, floors and the lowest sheet's opening weight, shared with the Galleries' join. */
     final WastelandSheets sh;
@@ -210,6 +219,7 @@ public final class WastelandField {
         top = shape.top(li);
         bot = shape.bottom(li);
         W = shape.waterY(li);
+        roughDy = ROUGH_BOT - bot;
         this.breakthrough = breakthrough;
         this.lower = lower;
         this.joinOn = breakthrough != null && lower != null && Join.on(shape);
@@ -573,9 +583,10 @@ public final class WastelandField {
         return Math.max(floor - y, y - ceil);
     }
 
+    /** The walls' roughness at a block (its row read from {@link #ROUGH_BOT}). */
     double rough(int x, int y, int z) {
-        double s = ROUGH_SCALE;
-        return ROUGH * rough1.noise3(x / s, y / (s * 0.75), z / s) + ROUGH * 0.35 * rough2.noise3(x / (s * 0.4), y / (s * 0.4), z / (s * 0.4));
+        double s = ROUGH_SCALE, yr = y + roughDy;
+        return ROUGH * rough1.noise3(x / s, yr / (s * 0.75), z / s) + ROUGH * 0.35 * rough2.noise3(x / (s * 0.4), yr / (s * 0.4), z / (s * 0.4));
     }
 
     /** The core's inset in a vault of height h: deeper in tall caves, so their relief survives the per-block pass. */
@@ -616,7 +627,7 @@ public final class WastelandField {
         if (d > -lim && d < lim) {
             double r = (A / ROUGH) * rough(x, y, z);
             double broad = A * Terrain.smooth((c.wIn - 6) / 4);
-            if (broad > 0) r += broad * rough3.noise3(x / ROUGH3_SCALE, y / (ROUGH3_SCALE * 0.75), z / ROUGH3_SCALE);
+            if (broad > 0) r += broad * rough3.noise3(x / ROUGH3_SCALE, (y + roughDy) / (ROUGH3_SCALE * 0.75), z / ROUGH3_SCALE);
             d += r * c.roughK;
         }
         if (top - y < Terrain.SEAL) d = Math.max(d, Terrain.SEAL - (top - y));

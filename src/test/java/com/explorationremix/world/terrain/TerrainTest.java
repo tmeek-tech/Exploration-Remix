@@ -26,18 +26,21 @@ class TerrainTest {
     @Test
     void layersSitWhereTheSpecSays() {
         Shape s = terrain(1).shape;
-        assertEquals(-832, s.floorY);
+        assertEquals(-784, s.floorY);
         // Blue Reaches, Deep Gardens, Wasteland, Basalt Galleries (Taran swapped the two middle layers on 2026-10-28
         // and split the bottom one into the Wasteland and the Galleries on 2026-11-01, keeping bedrock at -832). In
         // 0.5.1 the Wasteland opens into the Galleries with no band between them: the band's 16 rows are the Wasteland's.
-        int[][] expected = {{-81, -272}, {-289, -528}, {-545, -688}, {-689, -832}};
+        // Since round 3 of the Deep Gardens (Taran, 2026-11-19: "Reduce the layer height") they are 192 rows (240 before)
+        // and the 48 rows came off the bottom of the world (Taran's answer on the card): every layer under them keeps its
+        // height and lies 48 higher, bedrock at -784 (-832 before).
+        int[][] expected = {{-81, -272}, {-289, -480}, {-497, -640}, {-641, -784}};
         assertEquals(4, s.layerCount);
         assertEquals("blue_reaches", s.id(0));
         assertEquals("deep_gardens", s.id(1));
         assertEquals("wasteland", s.id(2));
         assertEquals("basalt_galleries", s.id(3));
-        assertEquals(-678, s.waterY(Terrain.WASTELAND), "the Wasteland's lava table (10 over its bottom)");
-        assertEquals(-822, s.waterY(Terrain.GALLERIES), "the Galleries' lava table (its top block at -823, as before 0.5)");
+        assertEquals(-630, s.waterY(Terrain.WASTELAND), "the Wasteland's lava table (10 over its bottom)");
+        assertEquals(-774, s.waterY(Terrain.GALLERIES), "the Galleries' lava table (10 over the floor, its top block at -775; -823 before round 3)");
         for (int i = 0; i < 4; i++) {
             assertEquals(expected[i][0], s.top(i), "top of layer " + i);
             assertEquals(expected[i][1], s.bottom(i), "bottom of layer " + i);
@@ -61,6 +64,8 @@ class TerrainTest {
                 for (int i = 0; i <= 200; i++) {
                     double tt = i / 200.0;
                     int x = (int) Math.floor(g.px(tt)), y = (int) Math.floor(g.py(tt)), z = (int) Math.floor(g.pz(tt));
+                    // the Deep Gardens' ends of gates 2 and 3 are the vent field's blocks (GardensFieldTest)
+                    if (t.shape.layerAt(y) == Terrain.GARDENS) continue;
                     double d = y >= t.shape.packFloor ? Math.min(t.rawDensity(x, y, z), t.denGateCarve(x, y, z)) : t.rawDensity(x, y, z);
                     assertTrue(d < 0, "gate " + b + " blocked at t=" + tt + " (" + x + " " + y + " " + z + ") seed " + seed + " d=" + d);
                     if (y < t.shape.packFloor) assertEquals(Terrain.AIR, t.fluidAt(x, y, z), "gate " + b + " flooded at " + x + " " + y + " " + z);
@@ -339,7 +344,8 @@ class TerrainTest {
     }
 
     /**
-     * Each layer's fluid lies flat at its table. Above it only perched water: the Lantern Lake's perched lakes, each flat
+     * Each layer's fluid lies flat at its table (the Deep Gardens, the dry vent field since 0.19.1, have none: every
+     * sample there is air). Above it only perched water: the Lantern Lake's perched lakes (until 0.19.1), each flat
      * at its own level, and the pools of the Basalt Galleries' Obsidian Tubes. Under it the table's fluid but in a gate's
      * passage, and in the Wasteland, where the Galleries open into it, air ({@link Join#AIR_BETA}), and within {@link
      * WastelandField#crDry} of a hole the Galleries open with a ramp (its crater may go under the table): its lava pools
@@ -355,6 +361,11 @@ class TerrainTest {
             int x = r.nextInt(1200) - 600, z = r.nextInt(1200) - 600;
             int y = t.shape.bottom(li) + r.nextInt(t.shape.height(li));
             int f = t.fluidAt(x, y, z);
+            if (li == Terrain.GARDENS) {
+                // the Deep Gardens are the dry vent field since 0.19.1: no water over or under their old table
+                assertEquals(Terrain.AIR, f, "fluid in the dry Deep Gardens at " + x + " " + y + " " + z);
+                continue;
+            }
             if (y >= t.shape.waterY(li)) {
                 if (f != Terrain.AIR) assertTrue(f == Terrain.WATER && (li == Terrain.GALLERIES || inPerchedLake(t, li, x, y, z)), "fluid above the table at " + x + " " + y + " " + z);
             } else if (li == Terrain.WASTELAND) {
@@ -377,33 +388,8 @@ class TerrainTest {
         return false;
     }
 
-    /** No perched lake drains: every water block in its top layers is walled by rock or more water (planned layers). */
-    @Test
-    void perchedLakesHoldTheirWater() {
-        int lakes = 0;
-        for (long seed : SEEDS) {
-            Terrain t = terrain(seed);
-            for (int[] c : CELLS) for (int li = 0; li < t.shape.layerCount && Terrain.planned(li); li++) {
-                for (Net.Chamber hl : t.network.net(li, c[0], c[1]).ch) {
-                    // the perched lakes and the pools at the wells' feet
-                    if (!hl.keep || !Network.pool(hl) || hl.lakeY <= t.shape.waterY(li) + 0.5) continue;
-                    lakes++;
-                    int top = (int) Math.ceil(hl.lakeY) - 1, reach = (int) Math.ceil(hl.R()) + 1;
-                    int cx = (int) Math.floor(hl.x), cz = (int) Math.floor(hl.z);
-                    for (int y = top; y >= top - 3; y--) for (int x = cx - reach; x <= cx + reach; x++) for (int z = cz - reach; z <= cz + reach; z++) {
-                        if (t.rawDensity(x, y, z) >= 0 || t.fluidAt(x, y, z) != Terrain.WATER) continue;
-                        int[][] sides = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}};
-                        for (int[] n : sides) {
-                            int nx = x + n[0], ny = y + n[1], nz = z + n[2];
-                            assertFalse(t.rawDensity(nx, ny, nz) < 0 && t.fluidAt(nx, ny, nz) == Terrain.AIR,
-                                    "lake at " + cx + " " + cz + " drains from " + x + " " + y + " " + z + " into " + nx + " " + ny + " " + nz + " seed " + seed);
-                        }
-                    }
-                }
-            }
-        }
-        assertTrue(lakes > 0, "no perched lakes to check");
-    }
+    // perchedLakesHoldTheirWater went with the Deep Gardens' plans (0.19.1): the perched lakes and the wells' pools were
+    // theirs (the Lantern Lake's), and the Blue Reaches, the one planned layer left, plan none; the vent field is dry.
 
     /**
      * Each 600-block cell draws its own plans, so a seam would show as sharp rock walls lined up along the cell
@@ -463,7 +449,8 @@ class TerrainTest {
      * full depth inside the shorter Blue Reaches, and the Basalt Galleries keep their tall caverns. The rift is looked for
      * in three cells: where 0.2.0's rift would cut a den gate's landing (0.6.1) it is laid on another line, and there it
      * can stand a little less deep (136 in cell 0,0 of the first seed). The noise layers' open blocks take their own
-     * biomes: the Wasteland's one of its two, the Galleries' one of their five.
+     * biomes: the Wasteland's one of its two, the Galleries' one of their five. (The Deep Gardens' vent field, whose
+     * halls stand a storey tall in three bands since 0.19.1, is GardensFieldTest's.)
      */
     @Test
     void spacesFollowTheirBiomes() {
@@ -475,6 +462,7 @@ class TerrainTest {
                         DeepBiome.SCORIA_CANYONS, DeepBiome.OBSIDIAN_TUBES));
         java.util.List<String> strays = new java.util.ArrayList<>();
         for (int li = 0; li < t.shape.layerCount; li++) {
+            if (li == Terrain.GARDENS) continue;
             java.util.Set<DeepBiome> mine = own.get(li);
             int[][] cells = li == Terrain.BLUE ? new int[][]{{0, 0}, {-1, 0}, {0, -1}} : new int[][]{{0, 0}};
             for (int[] c : cells)
@@ -491,7 +479,6 @@ class TerrainTest {
         }
         assertTrue(strays.isEmpty(), "open blocks of the noise layers in another biome: " + strays);
         assertTrue(tallest[Terrain.BLUE] > 140, "the Deep Blue Rift is only " + tallest[Terrain.BLUE] + " blocks deep");
-        assertTrue(tallest[Terrain.GARDENS] > 60, "the Deep Gardens' tallest hall is only " + tallest[Terrain.GARDENS] + " blocks");
         // the Basalt Galleries' caverns: tall from the lava up
         assertTrue(tallest[Terrain.GALLERIES] >= 60, "the Basalt Galleries' tallest open space is only " + tallest[Terrain.GALLERIES] + " blocks");
     }

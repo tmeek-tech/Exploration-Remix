@@ -1,0 +1,12 @@
+{
+  "parent": "explorationremix:block/template/cube_top_side_bottom_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "top": "explorationremix:block/glow_cap_light_blue_top",
+    "side": "explorationremix:block/glow_cap_light_blue_side",
+    "bottom": "explorationremix:block/glow_cap_light_blue_bottom",
+    "top_glow": "explorationremix:block/glow_cap_light_blue_top_glow",
+    "side_glow": "explorationremix:block/glow_cap_light_blue_side_glow",
+    "bottom_glow": "explorationremix:block/glow_cap_light_blue_bottom_glow"
+  }
+}

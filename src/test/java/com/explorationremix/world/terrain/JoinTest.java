@@ -19,15 +19,18 @@ import static org.junit.jupiter.api.Assertions.*;
  * are made as the game makes them ({@link NoiseVox}). The wiring itself is {@link NoiseLayersTest#joinIsOneDensity}.
  */
 class JoinTest {
-    /** Seeds and centres of the boxes (the Wasteland's measured boxes), 384 x 384 columns, rows -720..-660. */
+    /**
+     * Seeds and centres of the boxes (the Wasteland's measured boxes), 384 x 384 columns, rows -672..-612 round the join
+     * (-720..-660 before round 3 of the Deep Gardens raised the world's floor by 48).
+     */
     static final long[][] BOXES = {{1, 300, 300}, {2, -900, 1400}, {8004, 2000, -1500}};
-    static final int SIZE = 384, YLO = -720, YHI = -660;
+    static final int SIZE = 384, YLO = -672, YHI = -612;
 
     /**
      * One density over 10^5 columns (50 areas of 512 x 512 anywhere in 16 000 x 16 000, {@link Spread}): at a random row
      * of the band the corner density is exactly the smooth minimum of the two fields' densities and the seal, and at the
-     * band's bottom and top rows it has the sign of the lone field there (the Galleries' at -704, the Wasteland's at
-     * -673), so nothing changes where the band begins.
+     * band's bottom and top rows it has the sign of the lone field there (the Galleries' at -656, the Wasteland's at
+     * -625), so nothing changes where the band begins.
      */
     @Test
     void joinIsOneDensity() {
@@ -1128,7 +1131,7 @@ class JoinTest {
 
     /**
      * W-ENG-3's end-to-end check (slow): from gate 3's lower landing of each of the cells -1..1 x -1..1 of seeds 1-4 (36
-     * landings), in a 512 x 512 box of both layers round it (rows -832..-545, blocks made as the game makes them), the
+     * landings), in a 512 x 512 box of both layers round it (rows -784..-497, blocks made as the game makes them), the
      * landing lies in the box's main component and that component holds the Galleries' dry floor, so a walk (climbs of
      * a row, drops of 15 at most) goes from the landing down to the floor and one comes back. The walks down and back
      * up are printed.

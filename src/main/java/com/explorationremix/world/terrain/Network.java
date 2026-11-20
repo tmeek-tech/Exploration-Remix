@@ -290,7 +290,7 @@ public final class Network {
     public static int layerOf(DeepBiome b) {
         return switch (b) {
             case DEEP_BLUE_RIFT, DEEP_DARK, ASURINE_GEODES -> Terrain.BLUE;
-            case LANTERN_LAKE, EMBER_GARDENS, RUST_SPRINGS -> Terrain.GARDENS;
+            case LANTERN_LAKE, EMBER_GARDENS, RUST_SPRINGS, SEEP_BEDS, CHIMNEY_HALLS, VENT_DOMES -> Terrain.GARDENS;
             case WASTELAND, ASH_HOLLOWS -> Terrain.WASTELAND;
             case BASALT_GALLERIES, OBSIDIAN_TUBES, CALDERA, CAUSEWAY, SCORIA_CANYONS -> Terrain.GALLERIES;
             default -> -1;
@@ -1614,6 +1614,7 @@ public final class Network {
     }
 
     double rough(int li, int x, int y, int z) {
+        requirePlanned(li);
         double a, s;
         switch (li) {
             case Terrain.GARDENS -> { a = 2.6; s = 12; }
