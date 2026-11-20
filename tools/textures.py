@@ -347,94 +347,13 @@ def vent_crown(neon):
     return img
 
 
-def den_fissure(neon):
-    """A den fissure, the floor of a live den: the vent's blackstone split by glowing cracks (an overlay). The cracks
-    run along the edges of a tileable Voronoi pattern, its pixels pushed about by a tileable noise first so the cracks
-    wander instead of running straight, about two in three of them open, so they meet in an irregular network that
-    wraps round the tile: neon along their middles, mid at their edges, hot where three plates part; their lips take a
-    deep tint of the glow, lit by the world."""
-    s = neon_shades(neon)
-    rng = random.Random(2873)
-    img = _old_rock(rng, NEAR_BLACK, pits=9, pit=NEAR_BLACK_PIT)
-    px = img.load()
-    seeds = _seeds(rng, 7, 4.2)
-    warp_x, warp_y = wrap_noise(rng, 16, 4), wrap_noise(rng, 16, 4)
-    open_ = {(a, b): rng.random() < 0.7 for a in range(len(seeds)) for b in range(len(seeds)) if a < b}
-    lips = []
-    for y in range(16):
-        for x in range(16):
-            # _cells measures from the pixel's middle; the warp moves that point up to 1.6 pixels each way
-            wx, wy = x + 3.2 * (warp_x[y][x] - 0.5), y + 3.2 * (warp_y[y][x] - 0.5)
-            (d1, k1), (d2, k2), (d3, _) = _cells(seeds, wx, wy)[:3]
-            if not open_[min(k1, k2), max(k1, k2)]:
-                continue
-            gap = d2 - d1
-            if gap < 0.5:
-                _put(px, x, y, s["hot"] if d3 - d1 < 1.1 else s["neon"])
-            elif gap < 0.95:
-                _put(px, x, y, s["mid"])
-            elif gap < 1.7:
-                lips.append((x, y))
-    for x, y in lips:
-        if rng.random() < 0.5:
-            _put(px, x, y, s["deep"])
-    return img
-
-
-def vent_glow(neon):
-    """Vent glow, lining the inside of a live vent: a patchy glowing mineral crust over the vent's blackstone (an
-    overlay), small patches over about two fifths of the tile, grainy within (mid and neon, hot sparkles) and rimmed
-    with dim crust that the world lights."""
-    s = neon_shades(neon)
-    rng = random.Random(2881)
-    img = _old_rock(rng, NEAR_BLACK, pits=6, pit=NEAR_BLACK_PIT)
-    px = img.load()
-    bare, rim, crust = _by_shares(_field(rng, grain=0.12), (0.5, 0.1, 0.4))
-    for x, y in rim:
-        _put(px, x, y, s["dim"])
-    for x, y in crust:
-        r = rng.random()
-        _put(px, x, y, s["hot"] if r < 0.1 else (s["neon"] if r < 0.5 else s["mid"]))
-    return img
-
-
-def throat_vein(neon):
-    """A throat vein, lining the throats that lead down: thin glowing veins through the vent's blackstone (an overlay).
-    A vein follows a contour of a tileable noise, so it winds and wraps round the tile, a pixel wide; a second, broader
-    noise thins it to mid and breaks it off in places, and a few hot beads sit along it. Its lips take a deep tint of
-    the glow."""
-    s = neon_shades(neon)
-    rng = random.Random(2891)
-    img = _old_rock(rng, VENT_RAMP, pits=8, pit=VENT_PIT, grains=3, grain=VENT_GRAIN)
-    px = img.load()
-    n = _field(rng, ((4, 0.6), (2, 0.3), (8, 0.1)), grain=0.0)
-    fade = _field(rng, ((2, 0.7), (4, 0.3)), grain=0.0)
-    level = sorted(n.values())[128]
-    vein = {}
-    for (x, y), v in n.items():
-        right, down = n[((x + 1) % 16, y)], n[(x, (y + 1) % 16)]
-        if (v < level) != (right < level) or (v < level) != (down < level):
-            f = fade[(x, y)]
-            if f > 0.28:
-                vein[(x, y)] = "neon" if f > 0.48 else "mid"
-    beads = [p for p, shade in sorted(vein.items()) if shade == "neon"]
-    for _ in range(3):
-        if beads:
-            vein[rng.choice(beads)] = "hot"
-    for (x, y) in vein:
-        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if (nx % 16, ny % 16) not in vein and rng.random() < 0.25:
-                _put(px, nx, ny, s["deep"])
-    for (x, y), shade in vein.items():
-        _put(px, x, y, s[shade])
-    return img
-
-
-def vent_beads_top(neon):
-    """Vent beads' top (and bottom), the glowing top of a small live spire (the spire tip until round 3): rounded
-    neon mineral knobs on the blackstone (an overlay), each lit from the top left (a hot highlight, neon, mid, then a
-    dim and a deep shadow side that the world lights) with a dark shadow on the rock below right of it. The knobs wrap
-    round the tile's edges."""
+def vent_beads(neon):
+    """Vent beads (the spire tip until round 3), on every face: rounded neon mineral knobs drawn over vanilla's
+    blackstone (an overlay), each lit from the top left (a hot highlight, neon, mid, then a dim and a deep shadow side
+    that the world lights) with a dark shadow on the rock below right of it. The knobs wrap round the tile's edges.
+    Round 3 put beaded trails on the sides; round 4 (Taran, 2026-11-19: "The vent bead texture was better before"; card
+    pick: "Old knobs over blackstone") brings back 0.19.4's knobs on every face, the same random numbers giving the same
+    knobs, over the vents' blackstone."""
     s = neon_shades(neon)
     rng = random.Random(2901)
     img = _old_rock(rng, NEAR_BLACK, pits=6, pit=NEAR_BLACK_PIT)
@@ -455,60 +374,6 @@ def vent_beads_top(neon):
     for cx, cy, r in knobs:
         plants.ball(px, cx, cy, r, ramp, wrap=True)
         _put(px, int(cx - 0.4 * r), int(cy - 0.4 * r), s["hot"])  # the highlight
-    return img
-
-
-BEAD_TRAIL = (2.0, 1.5, 1.0, 1.0, 0.5)  # the beads of a trail on vent beads' side, as radii from its head down
-
-
-def vent_beads_side(neon):
-    """Vent beads' sides: the knobs' neon mineral running down the blackstone in two beaded trails (an overlay), as
-    it also runs down a live vent's walls from the crown (round 3, Taran: "Have the spire tips run down the sides of
-    vents too"). A trail is a string of beads lit like the knobs (a hot highlight at the top left, a dark shadow below
-    right on the rock): a round bead at its head, then smaller and smaller down to a drop, joined by a thread of the deep
-    tint. Each trail wanders a pixel or so and fills the tile's height, so it runs on through the bottom edge into the
-    block below and a column of tips makes one long trail. The two lie seven to nine columns apart with their heads half
-    a tile apart, so the beads of a wall never line up in rows."""
-    s = neon_shades(neon)
-    rng = random.Random(2904)
-    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
-    px = img.load()
-    ramp = [_hex(s[k]) for k in ("deep", "dim", "mid", "neon", "hot")]
-    first = rng.randrange(16) + 0.5
-    columns = (first, (first + rng.choice((7, 8, 9))) % 16)
-    head = rng.random() * 16
-    beads, thread = [], []
-    for k, x0 in enumerate(columns):
-        amp, phase = rng.choice((0.5, 0.8, 1.0)), rng.random() * 2 * math.pi
-
-        def at(y, x0=x0, amp=amp, phase=phase):
-            return x0 + amp * math.sin(2 * math.pi * y / 16 + phase)  # the trail's column at row y; it wraps every 16
-
-        y = head + 8 * k + rng.random() * 2 - 1
-        gaps = [rng.random() + 0.3 for _ in BEAD_TRAIL]
-        free = 16 - sum(2 * r for r in BEAD_TRAIL)  # the rows between the beads, shared out so the trail fills 16
-        for r, gap in zip(BEAD_TRAIL, (g / sum(gaps) * free for g in gaps)):
-            beads.append((at(y + r), y + r, r))
-            for t in range(int(round(2 * r + gap))):
-                thread.append((at(y + t), y + t))
-            y += 2 * r + gap
-    for x, y in thread:
-        _put(px, int(math.floor(x)), int(math.floor(y)), s["deep"])
-    for cx, cy, r in beads:  # the shadows, below right of each bead, on the rock only
-        for y in range(int(cy - r) - 2, int(cy + r) + 3):
-            for x in range(int(cx - r) - 2, int(cx + r) + 3):
-                if math.hypot(x + 0.5 - cx - 0.7, y + 0.5 - cy - 0.7) <= r + 0.05 and px[x % 16, y % 16][3] == 0:
-                    _put(px, x, y, NEAR_BLACK_PIT)
-    for cx, cy, r in beads:
-        if r <= 0.5:  # a drop
-            _put(px, int(cx), int(cy), s["mid"])
-        elif r <= 1.0:  # a two by two bead
-            x, y = round(cx) - 1, round(cy) - 1
-            for (dx, dy), shade in (((0, 0), "hot"), ((1, 0), "neon"), ((0, 1), "neon"), ((1, 1), "mid")):
-                _put(px, x + dx, y + dy, s[shade])
-        else:
-            plants.ball(px, cx, cy, r, ramp, wrap=True)
-            _put(px, int(cx - 0.4 * r), int(cy - 0.4 * r), s["hot"])
     return img
 
 
@@ -662,14 +527,11 @@ for _name, _fn in (("black_dripstone", black_dripstone), ("pale_stem", pale_stem
     PAINTERS["block/" + _name] = _fn
 GLOW["block/seep_crust"] = {_hex(c) for c in SEEP_FILM[1:]}
 # The neon blocks, a texture per colour: <block>_<colour>, or <block>_<colour>_<face> for a block whose faces differ
-# (the glow mats' films _top and _side over deepslate; the glow cap's _top, _side and _bottom; the vent beads' _top, also
-# drawn on its bottom, and _side).
+# (the glow mats' films _top and _side over deepslate; the glow cap's _top, _side and _bottom).
 NEON_PAINTERS = {"glow_mat": {"top": _mat_face("top"), "side": _mat_face("side")},
                  "thin_glow_mat": {"top": _mat_face("edge_top"), "side": _mat_face("edge_side")},
                  "glow_cap": {"top": _cap_face("top"), "side": _cap_face("side"), "bottom": _cap_face("bottom")},
-                 "vent_crown": vent_crown,
-                 "den_fissure": den_fissure, "vent_glow": vent_glow, "throat_vein": throat_vein,
-                 "vent_beads": {"top": vent_beads_top, "side": vent_beads_side}}
+                 "vent_crown": vent_crown, "vent_beads": vent_beads}
 VENT_FIELD = ["block/black_dripstone", "block/pale_stem", "block/seep_crust"]  # every texture of the vent field, for cool_problems and tools/vent_sheet.py
 for _direction in ("down", "up"):
     for _thickness in POINTED_DRIP_THICKNESS:

@@ -24,7 +24,8 @@ later milestones, built on these caves.
 **New worlds only.** The overworld is extended to y -784 when a world is created (to y -832 before 0.19.6, when the
 Deep Gardens grew shorter). Existing chunks are not regenerated, so a world made with an older version keeps its old
 layout where it was explored, and one made before 0.19.6 loses its rows below y -784. One made before 0.19.7 keeps
-its old crude oil where it was explored, so pools there may not meet the new ones at the edge of explored ground.
+its old crude oil where it was explored, so pools there may not meet the new ones at the edge of explored ground. In
+one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and items) turn into vent beads.
 
 ## Installing
 
@@ -64,9 +65,10 @@ its old crude oil where it was explored, so pools there may not meet the new one
   top are low flats with flat, knee-deep pools of crude oil (with mcremix) sunk into the low ground, stepping down
   slopes behind dry rock edges, and seep glow along them; the **Chimney Halls** below are
   dark halls under black dripstone, reaching the bottom in places; the **Vent Domes** at the bottom are cave-like
-  domes round hollow blackstone vents, crowned and streaked with glowing vent beads. About a third of the rock is
-  black dripstone, with pointed black dripstone under its cones; neon glow mats and glow caps light the floors. A few
-  deep vents' throats wind down into the Wasteland's top tunnels.
+  domes round hollow blackstone vents, crowned and streaked with glowing vent beads, each vent's chamber sunk a few
+  blocks into the cave floor as a bowl with beads running down its inside walls. About a third of the rock is black
+  dripstone, with pointed black dripstone under its cones; neon glow mats, thinning out in a scattered edge, and glow
+  caps light the floors. A few deep vents' throats wind down into the Wasteland's top tunnels.
 * **Wasteland** (0.5): the old Basalt Galleries' look in a tighter network made for close encounters. Winding tunnels
   about 5 wide and 6 to 8 tall bend every 14 blocks or so and run at most 36 blocks from door to door between caves 15
   to 30 across, small fork rooms where three ways meet, a few short galleries and a great hall with an arch, on four

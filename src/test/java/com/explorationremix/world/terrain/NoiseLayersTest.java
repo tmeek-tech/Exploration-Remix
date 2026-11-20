@@ -33,12 +33,14 @@ class NoiseLayersTest {
      * band 3's bottom 48 higher, with the layer's bottom); the vents are half again as big too, grown into the ground
      * by roots and aprons, and none stands in the Seep Beds (GardensSites.GIRTH and TALL); and the pointed black
      * dripstone hangs from the skin (GardensDress.pointed), so the hashes follow the skin's bars too. The Blue Reaches'
-     * lines held ({@link #BLUE}).
+     * lines held ({@link #BLUE}). Pinned again in round 4 (0.19.9), after 0.19.7's sunken oil pools (GardensStoreys.oilFoot)
+     * and round 4's vent bowls (GardensVents.bowl: each vent's chamber sinks 3 to 5 rows into the ground under its
+     * sill): every line but one chunk of seed 2 moved, and the Blue Reaches' lines held again.
      */
     static final String[] GARDENS_AND_BANDS = {
-            "seed 1 blocks: a2655ab8d906ed4 75c8e32bf3007fb2 6c9d59669a6e3d5 b11030cff2578b99 aec6832a229ffb3e",
-            "seed 2 blocks: 4f20481d9ee45726 8f8eb42c2dc66d9c bde1a6e442853f59 d78ce67726b420bb 2ac34956092a65ce",
-            "seed 8004 blocks: 56eeb2374223c4de c15414753cf2540c 7a1c401bf7c8a005 3ec88834c7285954 f41bf790bfd1498b"};
+            "seed 1 blocks: 869bfdb4255e98a2 2d75558e5ac1bdbc 488ab93cf0c554d3 bdbe99bf0cdba892 77220ceeb0e6a906",
+            "seed 2 blocks: 174605078b24c0b1 8f8eb42c2dc66d9c c2e2781c7b835c6e e221f6413e044273 f7bccca70b7bbbc1",
+            "seed 8004 blocks: bfe35ae665d34d40 9f5ef41ff764b57b 56e5ca8ed1bc7cbd 34a1c394d7a24f73 44bebb1e4563f144"};
     /**
      * The Blue Reaches the same way: layer 0's plan hashes and its own rows (-272..-81 by default). Pinned again when
      * the view breaker went (Taran, 2026-11-02: long views are welcome, they make the caves look epic, and the breaker's

@@ -198,19 +198,17 @@ BLOCKS = {
                                                     "overlays": {"top": "_top", "side": "_side"}, "turns": True}),
     "glow_cap": ("Glow Cap", "glow_cube", {"neon": True, "faces": "top_side_bottom"}),
     "vent_crown": ("Vent Crown", "glow_cube", {"neon": True, "rock": "blackstone"}),
-    "den_fissure": ("Den Fissure", "glow_cube", {"neon": True, "rock": "blackstone"}),
-    "vent_glow": ("Vent Glow", "glow_cube", {"neon": True, "rock": "blackstone"}),
-    "throat_vein": ("Throat Vein", "glow_cube", {"neon": True, "rock": "blackstone"}),
-    # knobs on its top (and bottom), beads trailing down its sides: it also runs down the vents' walls from the crown
-    # (the spire tip until round 3)
-    "vent_beads": ("Vent Beads", "glow_cube", {"neon": True, "rock": "blackstone",
-                                               "overlays": {"top": "_top", "side": "_side", "bottom": "_top"}}),
+    # 0.19.4's spire tip knobs on every face, over blackstone (round 4, Taran: "The vent bead texture was better
+    # before"; card pick "Old knobs over blackstone"). It caps the small spires, mixes with the crown over a live vent's
+    # top and runs down its walls, outside and in. (Round 4 also retired den fissure, vent glow and throat vein: beads
+    # took their places.)
+    "vent_beads": ("Vent Beads", "glow_cube", {"neon": True, "rock": "blackstone"}),
     "seep_crust": ("Seep Crust", "glow_cube"),
 }
 NO_DROP = {"band_stone", "glow", "mossback_den"}
 # The vent field's blocks: rock, never growth to /remix census (the whole blocks count as floor and ceiling).
 VENT_FIELD_BLOCKS = {"black_dripstone", "pointed_black_dripstone", "pale_stem", "glow_mat", "thin_glow_mat", "glow_cap", "vent_crown",
-                     "den_fissure", "vent_glow", "throat_vein", "vent_beads", "seep_crust"}
+                     "vent_beads", "seep_crust"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
 # lifeless blocks of the Galleries, the litter round the dens, and the vent field's whole blocks.
 NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"} | VENT_FIELD_BLOCKS
@@ -233,8 +231,8 @@ BLOCK_TAGS = {
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain",
                                         # the Deep Gardens: the vent field's dripstone, and the neon blocks grown on its rock
-                                        "black_dripstone", "pointed_black_dripstone", "glow_mat", "thin_glow_mat", "vent_crown", "den_fissure",
-                                        "vent_glow", "throat_vein", "vent_beads", "seep_crust"],
+                                        "black_dripstone", "pointed_black_dripstone", "glow_mat", "thin_glow_mat", "vent_crown",
+                                        "vent_beads", "seep_crust"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen",
                                     # Deep Gardens round 2: the giant mushrooms
                                     "pale_stem", "glow_cap"],

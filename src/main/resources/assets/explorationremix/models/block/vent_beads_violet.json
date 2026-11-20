@@ -4,11 +4,11 @@
   "textures": {
     "rock_end": "minecraft:block/blackstone_top",
     "rock_side": "minecraft:block/blackstone",
-    "top": "explorationremix:block/vent_beads_violet_top",
-    "top_glow": "explorationremix:block/vent_beads_violet_top_glow",
-    "side": "explorationremix:block/vent_beads_violet_side",
-    "side_glow": "explorationremix:block/vent_beads_violet_side_glow",
-    "bottom": "explorationremix:block/vent_beads_violet_top",
-    "bottom_glow": "explorationremix:block/vent_beads_violet_top_glow"
+    "top": "explorationremix:block/vent_beads_violet",
+    "top_glow": "explorationremix:block/vent_beads_violet_glow",
+    "side": "explorationremix:block/vent_beads_violet",
+    "side_glow": "explorationremix:block/vent_beads_violet_glow",
+    "bottom": "explorationremix:block/vent_beads_violet",
+    "bottom_glow": "explorationremix:block/vent_beads_violet_glow"
   }
 }
