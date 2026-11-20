@@ -389,15 +389,10 @@ public final class ERBlocks {
     public static final RegistryObject<Block> GLOW_CAP = block("glow_cap", () -> new NeonBlock(mushroomBlock().mapColor(ERBlocks::neonMap).lightLevel(s -> 13)));
     /** The bright mineral rim of a live vent's mouth: crystalline neon crust on blackstone, the brightest of the set. */
     public static final RegistryObject<Block> VENT_CROWN = block("vent_crown", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 15)));
-    /** Blackstone split by glowing cracks: the floor of a live den. */
-    public static final RegistryObject<Block> DEN_FISSURE = block("den_fissure", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 10)));
-    /** A patchy glowing mineral crust on blackstone, lining the inside of a live vent. */
-    public static final RegistryObject<Block> VENT_GLOW = block("vent_glow", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 10)));
-    /** Blackstone with thin glowing veins, lining the throats that lead down (mostly lime). */
-    public static final RegistryObject<Block> THROAT_VEIN = block("throat_vein", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 7)));
     /**
-     * Vent beads (the spire tip until round 3): rounded neon mineral knobs on blackstone, with beads trailing down its
-     * sides. They cap the small live spires, mix with the crown over a live vent's top and run down its walls in streaks.
+     * Vent beads (the spire tip until round 3): rounded neon mineral knobs on blackstone, on every face (0.19.4's
+     * knobs, back in round 4). They cap the small live spires, mix with the crown over a live vent's top and run down its
+     * walls in streaks, outside and inside (round 4: they took the places of den fissure, vent glow and throat vein).
      */
     public static final RegistryObject<Block> VENT_BEADS = block("vent_beads", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 11)));
     /** A faint crust on the dry rock at the edge of the crude oil seeps: a dim light blue film, light blue only. */

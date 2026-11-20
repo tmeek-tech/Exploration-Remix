@@ -52,13 +52,35 @@ final class GardensDress {
      */
     static final double RIV_GAP = 8.0, RIV_WANDER = 1.8, RIV_EDGE = 0.8;
     static final int RIV_MIN = 4, RIV_MAX = 10;
+    /**
+     * Round 4, inside a live vent: the inner walls' rivulets, one per RIV_GAP_IN blocks round them (RIV_MIN_IN to
+     * RIV_MAX_IN); the ring of beads where the walls meet the chamber's floor (the share of the floor's edge, and of
+     * the walls' lowest row); a deep throat's beads over its first THROAT_ROWS rows under the sill (at most THROAT_BAR
+     * of the noise's band, fading to none).
+     */
+    static final double RIV_GAP_IN = 6.0, RING_P = 0.7, RING_WALL_P = 0.45, THROAT_BAR = 0.05, FLOOR_THIN = 0.3;
+    static final int RIV_MIN_IN = 3, RIV_MAX_IN = 10, THROAT_ROWS = 10;
     /** Round 3's cones: the hot ground's extra bar (round 2: 0.3), and the most of its room's height a cone may fill. */
     static final double DRIP_HOT = 0.15, DRIP_ROOM = 0.45;
     /**
      * The glow mat's fading edge: no cover under MAT_P0 x MAT_LO of light, full cover from MAT_P1 x MAT_LO; the thinner
-     * edge mat takes the blocks within MAT_EDGE under the dither.
+     * edge mat takes the blocks within MAT_EDGE under the dither. Round 4 (0.19.9) widened the fade from 0.55..1.45 and
+     * the edge mat from 0.16, and gave the dither MAT_HASH of a per-block hash (0.65 before) against the clump noise.
      */
-    static final double MAT_P0 = 0.55, MAT_P1 = 1.45, MAT_EDGE = 0.16;
+    static final double MAT_P0 = 0.3, MAT_P1 = 1.75, MAT_EDGE = 0.22, MAT_HASH = 0.8;
+    /**
+     * Round 4: the glow mats read the light spread a further MAT_SOFT columns either way along x and z and MAT_SOFT_Y
+     * rows up and down (a second box over the heat's), so its edge slopes over 2 x MAT_SOFT + 1 blocks where the heat's
+     * own box ends in a step, and up a slope over 2 x MAT_SOFT_Y + 1 rows.
+     */
+    static final int MAT_SOFT = 4, MAT_SOFT_Y = 2;
+    /**
+     * Round 4: each floor block reads the mats' light from a column up to MAT_JIT away along x and z (a per-block
+     * hash), so even where the light falls fast the edge scatters over at least 2 x MAT_JIT + 1 blocks.
+     */
+    static final int MAT_JIT = 2;
+    /** Round 4: the spread of a per-block hash on the mats' colour noise, so two colours meet in a scatter too. */
+    static final double MAT_COL_DITHER = 0.18;
     /** The dripstone skin's dither spread, and the margin over the bar that turns the rock behind a face too. */
     static final double SKIN_DITHER = 0.10, SKIN_DEEP = 0.06;
     static final int BODY = 1, DRIP_GAP = 4, REACH_XZ = 9, REACH_Y = 5, STEM_MIN = 5;
@@ -107,6 +129,13 @@ final class GardensDress {
     /** The offline checks' look at each finished dressing (null in the game). */
     static volatile java.util.function.Consumer<GardensDress> PROBE;
     private long t0;
+    /**
+     * The glow mats' softer light ({@link #heat}): integer sums over {@link #softDiv} in the game, the preview's floats
+     * in its rules.
+     */
+    private int[] softI;
+    private float[] softF;
+    private float softDiv;
 
     private void lap(String name) {
         if (!TIMING) return;
@@ -181,9 +210,9 @@ final class GardensDress {
         int[] gc = glow(pr[0], pr[1]);
         lap("glow");
         counts.put("crown", gc[0]);
-        counts.put("fissure", gc[1]);
-        counts.put("vent glow", gc[2]);
-        counts.put("throat vein", gc[3]);
+        counts.put("inner rivulet", gc[1]);
+        counts.put("inner ring", gc[2]);
+        counts.put("throat beads", gc[3]);
         counts.put("tip on a vent's top", gc[4]);
         counts.put("rivulet", gc[5]);
         counts.put("rivulet faces", gc[6]);
@@ -196,7 +225,9 @@ final class GardensDress {
         lap("heat");
         halo(heat);
         lap("halo");
-        mats(heat, ps[7], ps[8], pr[3]);
+        mats(ps[7], ps[8], pr[3]);
+        softI = null;
+        softF = null;
         lap("mats");
         columnDist(down, up);
         counts.put("mushrooms", mushrooms(heat, down, up, keepSp, ps[9], ps[8]));
@@ -533,25 +564,32 @@ final class GardensDress {
     }
 
     /**
-     * dress3._glow, round 3: live vents glow in their colour. A vent's top is a dither of CROWN and spire TIP (Taran,
-     * 2026-11-19: "The spire tip and vent crown look good together so dither them on the top of vents"): crown-led
-     * where the rim's angular noise is high (where round 2's crowns stood), tips taking over on its shoulders, a few
-     * blocks left bare. Below the top, tips run down the outer walls in rivulets (STREAK; "Have the spire tips run down
-     * the sides of vents too", card pick: "Rivulets down to the ground"): about one per RIV_GAP blocks round the wall
-     * (RIV_MIN to RIV_MAX), each from under the top down to where the vent's wall meets the ground, wandering a block
-     * or two either way as it runs down, two blocks wide where it leaves the top, then one or two, swelling into beads
-     * here and there, its edges dithered. FISSURE veins in the den floor, VGLOW flecks on the den's and flue's inner
-     * faces; deep vents also get TVEIN along their throat's walls (in the layer only: below its floor the throat stays
-     * dark). Dead vents give no light. Returns the counts: crowns, fissures, flecks, throat veins, tips on tops,
-     * rivulet blocks, and the outer faces under the tops (where rivulets may run).
+     * dress3._glow, rounds 3 and 4: live vents glow in their colour. A vent's top is a dither of CROWN and vent beads
+     * (TIP) (Taran, 2026-11-19: "The spire tip and vent crown look good together so dither them on the top of vents"):
+     * crown-led where the rim's angular noise is high (where round 2's crowns stood), beads taking over on its
+     * shoulders, a few blocks left bare. Below the top, beads run down the outer walls in rivulets (STREAK; "Have the
+     * spire tips run down the sides of vents too", card pick: "Rivulets down to the ground"): about one per RIV_GAP
+     * blocks round the wall (RIV_MIN to RIV_MAX), each from under the top down to where the vent's wall meets the
+     * ground, wandering a block or two either way as it runs down, two blocks wide where it leaves the top, then one or
+     * two, swelling into beads here and there, its edges dithered.
+     *
+     * <p>Round 4 (Taran: "Get rid of den fissure, throat vein, and vent glow. Decorate the inside of vents with vent
+     * beads"; card: "Rivulets down the inner walls"): beads run down the chimney's and the chamber's inner walls the
+     * same way, about one per RIV_GAP_IN blocks round them (RIV_MIN_IN to RIV_MAX_IN), from under the top down into the
+     * sunken chamber, and gather in a ring where the walls meet its floor (RING_P of the floor's edge, RING_WALL_P of
+     * the walls' lowest row); under the sill they run on down the bowl's floor, meeting at its bottom. A deep vent's
+     * throat keeps a few beads in its first THROAT_ROWS rows under the sill, fewer going down, then goes dark. Dead
+     * vents give no light. Returns the counts: crowns, inner rivulet blocks, ring blocks, throat beads, beads on tops,
+     * outer rivulet blocks, and the outer faces under the tops (where rivulets may run).
      */
     int[] glow(int[] pst, int[] pstL) {
         int[] cnt = new int[7];
         Geom g = new Geom();
         int[] six = {sx, -sx, 1, -1, SY, -SY};
         int[] five = {sx, -sx, SY, -SY, 1};
+        int[] four = {sx, -sx, SY, -SY};
         int xlo = x0 + 1, xhi = x0 + nx - 1, zlo = z0 + 1, zhi = z0 + nz - 1;
-        long hsTop = plan.seed + 5181, hsSide = plan.seed + 5182;
+        long hsTop = plan.seed + 5181, hsSide = plan.seed + 5182, hsIn = plan.seed + 5183;
         for (Vent v : vents) {
             if (v.t[16] < 0.5f) continue;
             int vv = v.idx + 1;
@@ -560,14 +598,15 @@ final class GardensDress {
             double H = v.t[8], R = Math.max(3.0, v.t[9]);
             double top = ys + (double) v.t[26];
             int r = (int) v.t[33] + 1;
-            double u12 = u(v.k24, 12), u13 = u(v.k24, 13);
+            double u12 = u(v.k24, 12);
             // the rivulets: evenly spread round the wall with a jitter, each wandering as it runs down (its angle per
             // row, from the meander field read down its own line) and swelling into beads (the width field)
             double o1 = 200.0 * Hashing.unit(Hashing.mix(hsSide, v.k24, 1, 0));
             double o2 = 200.0 * Hashing.unit(Hashing.mix(hsSide, v.k24, 2, 0));
             boolean deep = (int) v.t[1] == 3;
             int icx = ic(v.cx) + gv.ox, icz = ic(v.cz) + gv.oz;
-            int ya = Math.max(1, Math.min(ys - 2, (int) v.t[7])), yb = Math.min(SY - 1, (int) (ys + H + 4));
+            int ya = Math.max(1, Math.min(Math.min(ys - 2, (int) v.t[7]), ys - GardensVents.bowlRows(v) - 1));
+            int yb = Math.min(SY - 1, (int) (ys + H + 4));
             int nr = Math.max(RIV_MIN, Math.min(RIV_MAX, (int) Math.round(2.0 * Math.PI * R / RIV_GAP)));
             double turn = 2.0 * Math.PI * Hashing.unit(Hashing.mix(hsSide, v.k24, 3, 0));
             double[][] rivA = new double[nr][yb - ya], rivW = new double[nr][yb - ya];
@@ -579,6 +618,21 @@ final class GardensDress {
                     rivA[k][y - ya] = a0 + (RIV_WANDER / wr) * n2(pst, dn / 7.0 + 11.0 * k + o1, o2 + 5.0 * k);
                     rivW[k][y - ya] = 0.5 + 0.45 * (1.0 - ramp(dn, 1.0, 6.0))
                             + 0.4 * ramp(n2(pstL, dn / 2.6 + 7.0 * k + o2, o1 - 3.0 * k), 0.25, 0.6);
+                }
+            }
+            // the inner rivulets, on lines of their own round the inner wall (its radius at the sill, about)
+            double rinB = Math.max(1.5, GardensVents.profile((int) v.t[1], v.t[9], 0.0, v.t[43], v.t[44], v.t[45]) - v.t[13]);
+            int ni = Math.max(RIV_MIN_IN, Math.min(RIV_MAX_IN, (int) Math.round(2.0 * Math.PI * rinB / RIV_GAP_IN)));
+            double turnIn = 2.0 * Math.PI * Hashing.unit(Hashing.mix(hsIn, v.k24, 3, 0));
+            double[][] inA = new double[ni][yb - ya], inW = new double[ni][yb - ya];
+            for (int k = 0; k < ni; k++) {
+                double a0 = turnIn + 2.0 * Math.PI * (k + 0.35 * (Hashing.unit(Hashing.mix(hsIn, v.k24, 4, k)) - 0.5)) / ni;
+                for (int y = ya; y < yb; y++) {
+                    double dn = top - y;
+                    double wr = Math.max(2.0, rinB);
+                    inA[k][y - ya] = a0 + (RIV_WANDER / wr) * n2(pst, dn / 7.0 + 11.0 * k + o2 + 41.0, o1 + 5.0 * k);
+                    inW[k][y - ya] = 0.5 + 0.45 * (1.0 - ramp(dn, 1.0, 6.0))
+                            + 0.4 * ramp(n2(pstL, dn / 2.6 + 7.0 * k + o1 + 29.0, o2 - 3.0 * k), 0.25, 0.6);
                 }
             }
             for (int x = Math.max(xlo, icx - r); x < Math.min(xhi, icx + r + 1); x++)
@@ -607,28 +661,48 @@ final class GardensDress {
                                 continue;
                             }
                         }
-                        // den floor veins
-                        if (y == ys - 1 && g.rhoE < g.rin - 0.5) {
-                            boolean lit = Math.abs(n2(gv.pglow, x / 5.0 + 10.0 * u13, z / 5.0)) < 0.07;
-                            if (deep && Math.abs(wrap(g.th - v.t[35])) * g.rho < 1.0) lit = true;
-                            if (lit && (vpart[b + 1] == VP_DEN || mat[b + 1] == AIR)) {
-                                mat[b] = FISSURE;
+                        // the inside: the chimney's and the chamber's walls and the chamber's floor
+                        if (y < top - 1.0 && insideFace(b, vv, six)) {
+                            boolean floor = insideAir(b + 1, vv);
+                            boolean on = false, ring = false;
+                            double h = Hashing.unit(Hashing.mix(hsIn, x, y, z));
+                            if (floor) {
+                                // the floor's edge, where a wall rises beside it (two high: not a step of the bowl)
+                                for (int d : four)
+                                    if (!open(mat[b + d + 1]) && !open(mat[b + d + 2])) ring = true;
+                                ring &= h < RING_P;
+                                // under the sill the inner rivulets run on down the bowl's floor and meet at its bottom
+                                if (!ring && y < ys - 1) {
+                                    // thinner than on the walls and broken here and there, so they read as beads
+                                    // trickling down rather than spokes
+                                    double best = 9.0;
+                                    for (int k = 0; k < ni; k++)
+                                        best = Math.min(best, Math.abs(wrap(g.th - inA[k][y - ya])) * Math.max(1.0, g.rhoE) - inW[k][y - ya] + FLOOR_THIN);
+                                    on = (best < 0.0 && h < 0.85) || (best < RIV_EDGE && h < 0.3 * (1.0 - best / RIV_EDGE));
+                                }
+                            } else {
+                                boolean wall = false, foot = false;
+                                for (int d : four) {
+                                    int o = b + d;
+                                    if (insideAir(o, vv)) {
+                                        wall = true;
+                                        if (!open(mat[o - 1])) foot = true;
+                                    }
+                                }
+                                if (wall) {
+                                    ring = foot && h < RING_WALL_P;
+                                    double best = 9.0;
+                                    for (int k = 0; k < ni; k++)
+                                        best = Math.min(best, Math.abs(wrap(g.th - inA[k][y - ya])) * Math.max(1.0, g.rhoE) - inW[k][y - ya]);
+                                    on = best < 0.0 || (best < RIV_EDGE && h < 0.4 * (1.0 - best / RIV_EDGE));
+                                }
+                            }
+                            if (on || ring) {
+                                mat[b] = STREAK;
                                 colour[b] = col;
-                                cnt[1]++;
+                                cnt[on ? 1 : 2]++;
                                 continue;
                             }
-                        }
-                        // flecks on the inner faces of the den and the flue
-                        boolean nb = false;
-                        for (int d : six) {
-                            int o = b + d;
-                            if (vid[o] == vv && (vpart[o] == VP_DEN || vpart[o] == VP_FLUE) && mat[o] == AIR) nb = true;
-                        }
-                        if (nb && Math.abs(n3(gv.pglow, x / 5.0, y / 7.0, z / 5.0)) < 0.03) {
-                            mat[b] = VGLOW;
-                            colour[b] = col;
-                            cnt[2]++;
-                            continue;
                         }
                         // rivulets down the outer walls, from under the top to the ground
                         if (!outer || y >= top - 1.0) continue;
@@ -655,14 +729,14 @@ final class GardensDress {
                     }
                 }
             if (deep) {
-                // veins along the throat's walls
+                // a few beads on the throat's walls just under the sill, fewer going down, then none
                 double Rh = v.t[36];
                 int rr = (int) (Rh + 9);
-                int yt = Math.min(SY - 1, ys + 8);
+                int yt = Math.min(SY - 1, ys + 8), yl = Math.max(1, ys - THROAT_ROWS);
                 for (int x = Math.max(xlo, icx - rr); x < Math.min(xhi, icx + rr + 1); x++)
                     for (int z = Math.max(zlo, icz - rr); z < Math.min(zhi, icz + rr + 1); z++) {
                         int base = ((x - x0) * nz + (z - z0)) * SY;
-                        for (int y = 1; y < yt; y++) {
+                        for (int y = yl; y < yt; y++) {
                             int b = base + y;
                             if (mat[b] != ROCK && mat[b] != SEALROCK) continue;
                             boolean nb = false;
@@ -670,8 +744,9 @@ final class GardensDress {
                                 int o = b + d;
                                 if (vpart[o] == VP_TUBE && vid[o] == vv && mat[o] == AIR) nb = true;
                             }
-                            if (nb && Math.abs(n3(gv.pglow, x / 3.0, y / 4.0, z / 3.0)) < 0.035) {
-                                mat[b] = TVEIN;
+                            double bar = THROAT_BAR * (1.0 - ramp(ys - y, 0.0, THROAT_ROWS));
+                            if (nb && Math.abs(n3(gv.pglow, x / 3.0, y / 4.0, z / 3.0)) < bar) {
+                                mat[b] = STREAK;
                                 colour[b] = col;
                                 cnt[3]++;
                             }
@@ -680,6 +755,17 @@ final class GardensDress {
             }
         }
         return cnt;
+    }
+
+    /** Whether a block is the vent's own inside air: its chimney or its chamber (the sunken bowl too). */
+    boolean insideAir(int o, int vv) {
+        return vid[o] == vv && (vpart[o] == VP_DEN || vpart[o] == VP_FLUE) && mat[o] == AIR;
+    }
+
+    /** Whether a block of the vent's rock faces its own inside air. */
+    boolean insideFace(int b, int vv, int[] six) {
+        for (int d : six) if (insideAir(b + d, vv)) return true;
+        return false;
     }
 
     // ================================================================================================ dripstone
@@ -750,6 +836,11 @@ final class GardensDress {
     /**
      * The light the life reads: a box mean of the glowing blocks (19 x 11 x 19): tips, live spires and crowns 1;
      * fissures, flecks and the streaks down a vent's sides 0.3 (round 3: so the life round a vent stays about as it was).
+     * Round 4 keeps a softer copy for the glow mats ({@link #matLight}): the same box mean spread again by a box of
+     * MAT_SOFT either way along x and z and MAT_SOFT_Y up and down. One box alone gives a lone bright spire a square of
+     * even light that ends in a step at its reach, and its mat ended there in a hard straight line (Taran, 2026-11-19:
+     * "Have more dithering for glow mats"); spread twice, the light slopes down over nine blocks instead and the dither
+     * has room to scatter.
      */
     float[] heat() {
         int N = mat.length;
@@ -759,18 +850,22 @@ final class GardensDress {
             float[] h = new float[N];
             for (int b = 0; b < N; b++) {
                 byte m = mat[b];
-                h[b] = (m == TIP || m == LIVE || m == CROWN) ? 1f : ((m == FISSURE || m == VGLOW || m == STREAK) ? 0.3f : 0f);
+                h[b] = (m == TIP || m == LIVE || m == CROWN) ? 1f : (m == STREAK ? 0.3f : 0f);
             }
             uniform1d(h, 0, bx);
             uniform1d(h, 1, by);
             uniform1d(h, 2, bx);
+            softF = h.clone();
+            uniform1d(softF, 0, 2 * MAT_SOFT + 1);
+            uniform1d(softF, 1, 2 * MAT_SOFT_Y + 1);
+            uniform1d(softF, 2, 2 * MAT_SOFT + 1);
             return h;
         }
         // in the game, exact integer sums (tenths), so a tile's light never depends on where its window starts
         int[] a = new int[N], t = new int[N];
         for (int b = 0; b < N; b++) {
             byte m = mat[b];
-            a[b] = (m == TIP || m == LIVE || m == CROWN) ? 10 : ((m == FISSURE || m == VGLOW || m == STREAK) ? 3 : 0);
+            a[b] = (m == TIP || m == LIVE || m == CROWN) ? 10 : (m == STREAK ? 3 : 0);
         }
         boxSum(a, t, 0, REACH_XZ);
         boxSum(t, a, 1, REACH_Y);
@@ -778,8 +873,17 @@ final class GardensDress {
         float[] h = new float[N];
         float div = bx * by * bx * 10f;
         for (int b = 0; b < N; b++) h[b] = t[b] / div;
+        // the mats' softer light, still exact integers (at most 10 x 19 x 11 x 19 x 9 x 5 x 9, about 16 million)
+        boxSum(t, a, 0, MAT_SOFT);
+        boxSum(a, t, 1, MAT_SOFT_Y);
+        boxSum(t, a, 2, MAT_SOFT);
+        softI = a;
+        softDiv = div * (2 * MAT_SOFT + 1) * (2 * MAT_SOFT_Y + 1) * (2 * MAT_SOFT + 1);
         return h;
     }
+
+    /** The glow mats' softer light at block b, before the halo. */
+    float matLight(int b) { return softF != null ? softF[b] : softI[b] / softDiv; }
 
     int lineLen(int axis) { return axis == 0 ? nx : (axis == 1 ? SY : nz); }
 
@@ -843,21 +947,22 @@ final class GardensDress {
                     int b = base + y;
                     if (heat[b] <= 0f) continue;
                     int k = storeyAt(q, y + 1);
-                    if (Double.isNaN(fac[k])) {
-                        int vn = f.vnear[k][q];
-                        if (vn < 0 || vents.get(vn).t[16] < 0.5) fac[k] = 1.0;
-                        else {
-                            Vent v = vents.get(vn);
-                            float wv = f.vw[k][q];
-                            double th = Math.atan2(lz - v.cz, lx - v.cx);
-                            double s1 = 100.0 * u(v.k24, 14), s2 = 100.0 * u(v.k24, 15);
-                            double m = ramp(n2(gv.pvn, 0.9 * Math.cos(th) + s2, 0.9 * Math.sin(th) - s1), -0.15, 0.25);
-                            fac[k] = 1.0 - wv + wv * m;
-                        }
-                    }
+                    if (Double.isNaN(fac[k])) fac[k] = haloFac(q, k, lx, lz);
                     heat[b] = (float) (heat[b] * fac[k]);      // exact when fac is 1
                 }
             }
+    }
+
+    /** The halo's factor for storey k at column q (local centre lx, lz): 1 away from live vents. */
+    double haloFac(int q, int k, double lx, double lz) {
+        int vn = f.vnear[k][q];
+        if (vn < 0 || vents.get(vn).t[16] < 0.5) return 1.0;
+        Vent v = vents.get(vn);
+        float wv = f.vw[k][q];
+        double th = Math.atan2(lz - v.cz, lx - v.cx);
+        double s1 = 100.0 * u(v.k24, 14), s2 = 100.0 * u(v.k24, 15);
+        double m = ramp(n2(gv.pvn, 0.9 * Math.cos(th) + s2, 0.9 * Math.sin(th) - s1), -0.15, 0.25);
+        return 1.0 - wv + wv * m;
     }
 
     /**
@@ -865,21 +970,27 @@ final class GardensDress {
      * its lit side. The cover fades, from none at MAT_P0 x MAT_LO of light to full at MAT_P1 x MAT_LO, each block taken
      * where the cover beats a clumpy per-block dither (a world hash and a fine noise), so a patch thins out over a few
      * blocks in small clumps instead of ending at a hard line (Taran, 2026-11-19: "Dither the glow mat so there's no
-     * hard boundary"); the thinner edge mat takes the blocks just under the dither.
+     * hard boundary"); the thinner edge mat takes the blocks just under the dither. Round 4 (Taran: "Have more dithering
+     * for glow mats") reads the softer light ({@link #matLight}, with the halo's lean), spreads the fade over about twice
+     * the light and leans the dither on the hash, so the edge breaks into scattered single blocks and holes reaching
+     * further in and out, and a lone spire's mat no longer ends in a straight line; where two colours meet they mix
+     * over a few blocks too.
      */
-    void mats(float[] heat, int[] pm, int[] pcol, int[] pclump) {
+    void mats(int[] pm, int[] pcol, int[] pclump) {
         long hs = plan.seed + 5191;
+        double[] fac = new double[K];
         for (int i = 0; i < nx; i++)
             for (int j = 0; j < nz; j++) {
                 int q = i * nz + j, wx = x0 + i, wz = z0 + j, base = q * SY;
                 double jit = 0.5 * n2(pm, wx / 3.5, wz / 3.5);
                 double cn = n2(pcol, wx / 34.0, wz / 34.0);
                 double lx = (wx - gv.ox) + 0.5, lz = (wz - gv.oz) + 0.5;
+                Arrays.fill(fac, Double.NaN);
                 for (int y = 1; y < SY - 2; y++) {
                     int b = base + y;
                     if (mat[b] != ROCK || mat[b + 1] != AIR) continue;
                     byte vp = vpart[b];
-                    int bd = f.dom[storeyAt(q, y + 1)][q];
+                    int k = storeyAt(q, y + 1), bd = f.dom[k][q];
                     double side = 1.0;
                     if (vp != 0) {
                         if (vp != VP_SKIRT) continue;
@@ -891,13 +1002,20 @@ final class GardensDress {
                         side = ramp(ramp(n2(gv.pvn, 0.9 * Math.cos(th) + s2, 0.9 * Math.sin(th) - s1), -0.15, 0.25), 0.3, 0.7);
                         if (side <= 0.0) continue;
                     }
-                    double p = side * ramp(heat[b + 1] * (1.0 + jit) / MAT_LO[bd], MAT_P0, MAT_P1);
+                    int ji = Math.max(0, Math.min(nx - 1, i + (int) (Hashing.unit(Hashing.mix(hs + 1, wx, y, wz)) * (2 * MAT_JIT + 1)) - MAT_JIT));
+                    int jj = Math.max(0, Math.min(nz - 1, j + (int) (Hashing.unit(Hashing.mix(hs + 2, wx, y, wz)) * (2 * MAT_JIT + 1)) - MAT_JIT));
+                    double lt = matLight((ji * nz + jj) * SY + y + 1);
+                    if (lt <= 0.0) continue;
+                    if (Double.isNaN(fac[k])) fac[k] = haloFac(q, k, lx, lz);
+                    lt *= fac[k];
+                    double p = side * ramp(lt * (1.0 + jit) / MAT_LO[bd], MAT_P0, MAT_P1);
                     if (p <= 0.0) continue;
-                    double d = 0.65 * Hashing.unit(Hashing.mix(hs, wx, y, wz)) + 0.35 * (0.5 + 0.5 * n2(pclump, wx / 1.7, wz / 1.7));
+                    double d = MAT_HASH * Hashing.unit(Hashing.mix(hs, wx, y, wz)) + (1.0 - MAT_HASH) * (0.5 + 0.5 * n2(pclump, wx / 1.7, wz / 1.7));
                     if (p > d) mat[b] = MAT;
                     else if (p > d - MAT_EDGE) mat[b] = MATE;
                     else continue;
-                    colour[b] = (byte) (cn < T1[bd] ? 0 : (cn < T2[bd] ? 1 : 3));
+                    double cd = cn + MAT_COL_DITHER * (Hashing.unit(Hashing.mix(hs + 3, wx, y, wz)) - 0.5);
+                    colour[b] = (byte) (cd < T1[bd] ? 0 : (cd < T2[bd] ? 1 : 3));
                 }
             }
     }

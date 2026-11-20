@@ -62,9 +62,11 @@ public final class GardensBlocks {
         neon(C_MAT, ERBlocks.GLOW_MAT.get());
         neon(C_CAP, ERBlocks.GLOW_CAP.get());
         neon(C_CROWN, ERBlocks.VENT_CROWN.get());
-        neon(C_FISSURE, ERBlocks.DEN_FISSURE.get());
-        neon(C_VGLOW, ERBlocks.VENT_GLOW.get());
-        neon(C_TVEIN, ERBlocks.THROAT_VEIN.get());
+        // round 4: den fissure, vent glow and throat vein left the game; the dressing no longer writes their codes,
+        // which would place vent beads
+        neon(C_FISSURE, ERBlocks.VENT_BEADS.get());
+        neon(C_VGLOW, ERBlocks.VENT_BEADS.get());
+        neon(C_TVEIN, ERBlocks.VENT_BEADS.get());
         neon(C_TIP, ERBlocks.VENT_BEADS.get());
         neon(C_STREAK, ERBlocks.VENT_BEADS.get());
         neon(C_MATE, ERBlocks.THIN_GLOW_MAT.get());

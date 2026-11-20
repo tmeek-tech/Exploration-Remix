@@ -19,6 +19,10 @@ import static com.explorationremix.world.terrain.GardensSites.TALL;
  * ground under them"): a root of vent rock under its sill, spreading downward in noise lobes ({@link #VP_ROOT}), and
  * an apron of plain rock round its foot that carries the flare's slope on and eases out onto the floor, climbing at
  * most 1 in 2 to the sill in front of each open crack ({@link #VP_SKIRT}).
+ *
+ * <p>Round 4 (Taran, 2026-11-19: "The hollow chamber in vents should be recessed into the cave floor"): each vent's
+ * chamber sinks under its sill into a bowl ({@link #bowl}), lined with the vent's rock, so its floor lies under the cave
+ * floor round the vent and a crack leads down into it a block at a time.
  */
 final class GardensVents {
     static final int NV = 48;
@@ -35,6 +39,23 @@ final class GardensVents {
      */
     static final byte VP_BODY = 1, VP_SKIRT = 2, VP_DEN = 3, VP_FLUE = 4, VP_CRACK = 5, VP_DOOR = 6, VP_ADIT = 7,
             VP_TUBE = 8, VP_HOOD = 9, VP_RIM = 10, VP_FLARE = 11, VP_ROOT = 12;
+    /**
+     * What {@link #part} answers under the sill for the sunken chamber (round 4); the stamp writes them as VP_DEN air
+     * and VP_ROOT rock, but unlike those they carve and fill through the ground: VP_BOWL the chamber's air, VP_LINE the
+     * vent rock lining its floor and sides.
+     */
+    static final byte VP_BOWL = 13, VP_LINE = 14;
+
+    /**
+     * The sunken chamber (round 4, card: "A bowl, 3 to 5 blocks"). Its flat bottom lies BOWL_MIN to BOWL_MIN +
+     * BOWL_SPREAD (by vent) under the floor round the vent, taken as halfway between the vent's highest and lowest floor
+     * samples (the sill stands a row over the highest); from the inner wall the floor falls BOWL_K a block, under one
+     * row per block whatever the section's ellipse (0.8 / sqrt(0.75) = 0.92), so every step down is a single block and
+     * every way out a walk. A small chamber never reaches its full depth. BOWL_LINE rows of vent rock line its floor,
+     * and its sides out to BOWL_LINE_W past the inner wall; two rows of rock stay over any storey under it.
+     */
+    static final double BOWL_MIN = 3.0, BOWL_SPREAD = 2.0, BOWL_K = 0.8, BOWL_LINE_W = 2.0;
+    static final int BOWL_LINE = 2;
 
     /**
      * The foot's fill. The apron and the porches reach down at most APRON_DEPTH under the sill (the door test's floor
@@ -76,6 +97,8 @@ final class GardensVents {
         int idx;
         /** The deep throat's table: rows of (floor, radius, width, height), or null. */
         double[][] tab;
+        /** How far under its sill the chamber's flat bottom lies, at most ({@link GardensVents#bowlDepth}). */
+        double bowl;
 
         Vent(GardensSites.Site s) {
             site = s;
@@ -114,6 +137,30 @@ final class GardensVents {
     }
 
     static double u(long k24, int m) { return GardensSites.uSlot(k24, m); }
+
+    /**
+     * The rows of air under the sill at the sunken chamber's flat bottom: the sill's height over the floor round the vent
+     * (halfway between its highest and lowest floor samples) and BOWL_MIN to BOWL_MIN + BOWL_SPREAD more.
+     */
+    static double bowlDepth(double ys, double yLo, long k24) {
+        return 0.5 * (ys - 1.0 - yLo) + BOWL_MIN + BOWL_SPREAD * u(k24, 200);
+    }
+
+    /** The most rows under its sill the sunken chamber writes: its air and its lining. */
+    static int bowlRows(Vent v) { return (int) Math.ceil(v.bowl) + BOWL_LINE; }
+
+    /**
+     * The sunken chamber at a block {@code under} rows under the sill, g holding the section at the sill: VP_BOWL in
+     * its air, VP_LINE in its lining, else 0. The air reaches down min(bowl, BOWL_K x the depth inside the inner wall)
+     * rows, never so deep that fewer than two rows of rock stay over the ceiling of a storey under ({@code ceilLo}).
+     */
+    static int bowl(Vent v, Geom g, int under, float ceilLo) {
+        double d = Math.min(v.bowl, BOWL_K * (g.rin - g.rhoE));
+        d = Math.min(d, v.t[6] - Math.max(ceilLo, (float) GardensPlan.SEAL) - (BOWL_LINE + 2));
+        if (under <= d) return VP_BOWL;
+        if (g.rhoE < g.rin + BOWL_LINE_W && under <= Math.max(Math.floor(d), 0.0) + BOWL_LINE) return VP_LINE;
+        return 0;
+    }
 
     /** A column relative to the origin, clipped into the patch in the preview's rules. */
     int clipX(int x) { return plan.patch ? Math.max(0, Math.min(plan.psx - 1, x)) : x; }
@@ -269,6 +316,7 @@ final class GardensVents {
             t[36] = (float) Rh;
             t[37] = 0;
             t[38] = depth;
+            w.bowl = bowlDepth(ys, v.yLo, k24);
             t[40] = v.family;
             t[41] = (float) e;
             t[42] = (float) phiE;
@@ -387,7 +435,8 @@ final class GardensVents {
         boolean live = T[16] > 0.5f;
         double yp = y - ys;
         if (yp < -40 || yp > H + 14) return 0;
-        if (yp < 0 && y < Math.max(T[7] - 3.0, ceilLo + 2.0)) return 0;
+        boolean bowlRow = yp < 0 && -yp <= bowlRows(v);
+        if (yp < 0 && !bowlRow && y < Math.max(T[7] - 3.0, ceilLo + 2.0)) return 0;
         {
             // nothing of the vent lies past its walls' widest (t47), or under the sill past the root's widest: rhoE is
             // at least sqrt(e) of the distance from the axis
@@ -395,6 +444,13 @@ final class GardensVents {
             double dx = (x - ox) + 0.5 - (v.cx + T[14] * ypc), dz = (z - oz) + 0.5 - (v.cz + T[15] * ypc);
             double reach = T[47] + (yp < 0 ? ROOT_K / T[31] * -yp : 0.0);
             if ((dx * dx + dz * dz) * T[41] >= reach * reach) return 0;
+        }
+        if (bowlRow) {
+            // the sunken chamber: one surface whatever the row, so the section at the sill
+            geom(v, x, y, z, ys, g);
+            int bp = bowl(v, g, (int) -yp, ceilLo);
+            if (bp != 0) return bp;
+            if (y < Math.max(T[7] - 3.0, ceilLo + 2.0)) return 0;
         }
         geom(v, x, y, z, y, g);
         long k24 = v.k24;
@@ -738,7 +794,7 @@ final class GardensVents {
                 int ylo = SY, yhi = 0;
                 for (Vent v : list) {
                     // the root reaches 3 under yLo, an apron fills from its ground (apronDepth under ys - 1, so the same)
-                    ylo = Math.min(ylo, (int) v.t[7] - 4);
+                    ylo = Math.min(ylo, Math.min((int) v.t[7] - 4, (int) v.t[6] - bowlRows(v) - 1));
                     yhi = Math.max(yhi, (int) ((double) (v.t[6] + v.t[8]) + 14.0));
                 }
                 ylo = Math.max(ylo, 1);
@@ -765,7 +821,7 @@ final class GardensVents {
                 }
                 for (int y = ylo; y < yhi; y++) {
                     byte m0 = w.mat[base + y];
-                    Vent wallV = null, airV = null, aditV = null, flareV = null, rootV = null, doorV = null;
+                    Vent wallV = null, airV = null, aditV = null, flareV = null, rootV = null, doorV = null, bowlV = null, lineV = null;
                     int wallCode = 0, airPart = 0;
                     boolean door = false;
                     for (int li = 0; li < nl; li++) {
@@ -786,6 +842,10 @@ final class GardensVents {
                             if (flareV == null || v.idx < flareV.idx) flareV = v;
                         } else if (p == VP_ROOT) {
                             if (rootV == null || v.idx < rootV.idx) rootV = v;
+                        } else if (p == VP_BOWL) {
+                            if (bowlV == null || v.idx < bowlV.idx) bowlV = v;
+                        } else if (p == VP_LINE) {
+                            if (lineV == null || v.idx < lineV.idx) lineV = v;
                         }
                         for (int i = 0; i < 3; i++)
                             if (dcol[li * 3 + i] && doorRows(v, i, y)) {
@@ -816,6 +876,11 @@ final class GardensVents {
                         else out = live ? VLIVE : VDEAD;
                         op = wallCode;
                         ov = wallV;
+                    } else if (bowlV != null && m0 != SEALROCK) {
+                        // the sunken chamber carves the ground (round 4)
+                        out = AIR;
+                        op = VP_DEN;
+                        ov = bowlV;
                     } else if (airV != null && (m0 == AIR || m0 == TALUS || m0 == OIL)) {
                         out = AIR;
                         op = airPart;
@@ -826,6 +891,11 @@ final class GardensVents {
                         ov = aditV;
                     } else if (airV != null) {
                         // an air part never carves rock
+                    } else if (lineV != null && m0 != SEALROCK) {
+                        // and its lining of vent rock takes whatever lies under and round it
+                        out = lineV.live() ? VLIVE : VDEAD;
+                        op = VP_ROOT;
+                        ov = lineV;
                     } else if (flareV != null) {
                         out = flareV.live() ? VLIVE : VDEAD;
                         op = VP_BODY;

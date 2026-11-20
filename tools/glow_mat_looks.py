@@ -349,8 +349,8 @@ def look_a(face):
     """Colonies: small lobed glowing colonies that touch and merge, neon with hot hearts and a mid mottle, each rimmed
     by a dithered fall-off (mostly mid a pixel out, dim two out, sparse deep three out) into the rock between them.
     The edge mat keeps the same colonies whose middles lie well inside the block, shrunk, so a patch thins out rather
-    than changing pattern. On the side the colonies come over the edge in separate lobes, with a speckle of rim
-    between them."""
+    than changing pattern. On the side the colonies come over the edge and down the side, thinning out about half way
+    (round 4, _a_side)."""
     g = grid()
     if face == "top":
         return _a_top(seed_for("A"))
@@ -358,21 +358,57 @@ def look_a(face):
         f = {p: v - 0.9 * (1 - window(*p, margin=2.5, floor=0.0)) for p, v in _a_field(seed_for("A"), True).items()}
         _colony_film(g, f, 0.13, hot_share=0.012, mid_share=0.25, thin=True)
         return clear_border(g)
-    full = face == "side"
-    rng = random.Random(3103)
-    xs = even_points(rng, 3, box=(0, 0, 16, 0.01), wrap_y=False)
-    lobes = [(x, rng.uniform(-0.5, 0.3), s) for (x, _), s in zip(xs, (1.9, 1.5, 1.7))]
-    if not full:
-        lobes = [(x, y - 0.6, s * 0.8) for x, y, s in lobes[:2]]
-    det = blob_noise(rng, [(40, 0.9, (0.45, 0.65), (-0.2, 0.2))], wrap_y=False)
+    return _a_side(A_SIDE_REACH if face == "side" else A_EDGE_SIDE_REACH, thin=face == "edge_side")
+
+
+# Round 4 (Taran, 2026-11-19: "Have more dithering for glow mats and have the glow come further down the sides of the
+# block"; card: "About half way"): how many rows down a mat's side its colonies reach before they have thinned out,
+# and the edge mat's, which is thinner.
+A_SIDE_REACH, A_EDGE_SIDE_REACH = 9.0, 6.0
+
+
+def _a_side(reach, thin=False, seed=3121):
+    """A mat's side: the colonies themselves coming over the edge and down the side, as full as the top's at the edge
+    and thinning with depth (a bar that rises with the row) until none are left by `reach` rows, their rims dithered
+    out through mid, dim and deep as on the top, and a speckle of dim and deep trailing a quarter past the reach. Hot
+    hearts only in the upper half. The edge mat's side is the same, thinner (fewer colonies, thin rims), kept off the
+    side's left and right edges so it never stops against a bare neighbour."""
+    f0 = blob_noise(random.Random(seed), [(9, "strata", (1.0, 1.5), (0.85, 1.15)), (44, 0.85, (0.45, 0.65), (-0.24, 0.24))],
+                    wrap_y=False)
+    f0 = {(x, y): f0(x + 0.5, y + 0.5) for y in range(16) for x in range(16)}
+    vals = sorted(f0.values())
+    bar0 = vals[int(len(vals) * (0.8 if thin else 0.62))]
+    span = vals[-1] - bar0
     f = {}
+    for (x, y), v in f0.items():
+        dep = (y + 0.5) / reach
+        # the bar rises with depth; the top row is lifted a little, where the top face's film comes over the edge
+        f[x, y] = v - bar0 - span * 1.15 * dep ** 1.4 + (0.35 * span if y == 0 else 0.0)
+    core = {p for p, v in f.items() if v > 0}
+    d = dist_to(core, wrap_y=False)
+    g = grid()
     for y in range(16):
         for x in range(16):
-            v = sum(math.exp(-wdist(x + 0.5, y + 0.5, cx, cy, wrap_y=False) ** 2 / (2 * s * s)) for cx, cy, s in lobes)
-            f[x, y] = v + det(x + 0.5, y + 0.5)
-    _colony_film(g, f, 0.065 if full else 0.022, wrap_y=False, hot_share=0.008 if full else 0.0, mid_share=0.2,
-                 thin=not full)
-    if not full:
+            t, t2 = tau(x, y), tau(x, y, (9, 6))
+            v = f[x, y]
+            dep = (y + 0.5) / reach
+            if (x, y) in core:
+                if not thin and dep < 0.6 and v > 0.55 * span * (1 - dep):
+                    lvl = HOT if t < 0.5 else NEON
+                elif v < 0.12 * span and t < 0.6:
+                    lvl = MID
+                else:
+                    lvl = NEON
+            else:
+                lvl = (rim_thin if thin else rim)(d[x, y], t, t2)
+                if lvl == BARE and dep < 1.25:
+                    p = 0.5 * (1.0 - dep / 1.25) * (1.0 if d[x, y] < 4 else 0.5) * (0.6 if thin else 1.0)
+                    if t2 < 0.35 * p:
+                        lvl = DIM
+                    elif t2 < p:
+                        lvl = DEEP
+            g[y][x] = lvl
+    if thin:
         clear_border(g, keep_top=True)
     return g
 

@@ -290,8 +290,9 @@ class GardensFieldTest {
 
     /**
      * No vent stands in the Seep Beds (Taran, 2026-11-19: "No vents should be in the seeps"): over every column and row
-     * of the area no block of a vent's walls, root or glow (its blackstone, crown, fissure, vent glow, throat vein, the
-     * vent beads' rivulets down its sides, the blackstone dithered round its foot) lies where the band is the Seep Beds,
+     * of the area no block of a vent's walls, root or glow (its blackstone, crown, the vent beads down its sides and
+     * inside it, the blackstone dithered round its foot; the fissure, vent glow and throat vein codes, 15 to 17, are no
+     * longer written since round 4) lies where the band is the Seep Beds,
      * and no standing vent's rim spire does (its blocks are spire codes, so each vent's own shape is asked). The area
      * holds both, and the beds.
      */
