@@ -1049,4 +1049,53 @@ public final class CaveParticles {
             }
         }
     }
+
+    /**
+     * 0.20.2: a spore lifting off the Deep Gardens' grass and small mushrooms (Taran's card pick: "A few rising motes"):
+     * a tiny mote in the plant's neon (the speed's three numbers carry its colour), full bright, that drifts up slowly
+     * with a little wander, swelling in and fading out over three to six seconds.
+     */
+    public static final class Spore extends TextureSheetParticle {
+        private final float size;
+
+        Spore(ClientLevel level, double x, double y, double z, double r, double g, double b, SpriteSet sprites) {
+            super(level, x, y, z);
+            this.lifetime = 60 + random.nextInt(60);
+            this.gravity = -0.0006F;
+            this.friction = 0.96F;
+            this.xd = (random.nextDouble() - 0.5) * 0.006;
+            this.yd = 0.006 + random.nextDouble() * 0.006;
+            this.zd = (random.nextDouble() - 0.5) * 0.006;
+            this.size = 0.03F + random.nextFloat() * 0.02F;
+            this.quadSize = size;
+            this.setColor((float) r, (float) g, (float) b);
+            this.alpha = 0;
+            this.pickSprite(sprites);
+        }
+
+        @Override
+        public void tick() {
+            super.tick();
+            if (removed) return;
+            this.xd += (random.nextDouble() - 0.5) * 0.0016;
+            this.zd += (random.nextDouble() - 0.5) * 0.0016;
+            this.yd = Math.max(this.yd, 0.004);
+            float t = (float) age / lifetime;
+            this.alpha = 0.9F * Mth.clamp(t * 5, 0, 1) * Mth.clamp((1 - t) * 3, 0, 1);
+            this.quadSize = size * (0.7F + 0.3F * Mth.clamp(t * 4, 0, 1));
+        }
+
+        @Override
+        public int getLightColor(float partialTick) { return 0xF000F0; }
+
+        @Override
+        public ParticleRenderType getRenderType() { return ParticleRenderType.PARTICLE_SHEET_TRANSLUCENT; }
+
+        public record Provider(SpriteSet sprites) implements ParticleProvider<SimpleParticleType> {
+            @Override
+            public Particle createParticle(SimpleParticleType type, ClientLevel level, double x, double y, double z, double r, double g, double b) {
+                return new Spore(level, x, y, z, r, g, b, sprites);
+            }
+        }
+    }
 }

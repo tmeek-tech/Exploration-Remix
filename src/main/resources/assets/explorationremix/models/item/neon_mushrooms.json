@@ -1,0 +1,23 @@
+{
+  "parent": "explorationremix:block/neon_mushrooms_magenta_2",
+  "overrides": [
+    {
+      "predicate": {
+        "explorationremix:neon": 0.1667
+      },
+      "model": "explorationremix:item/neon_mushrooms_violet"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.5
+      },
+      "model": "explorationremix:item/neon_mushrooms_lime"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.8333
+      },
+      "model": "explorationremix:item/neon_mushrooms_light_blue"
+    }
+  ]
+}

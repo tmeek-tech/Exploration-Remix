@@ -131,8 +131,8 @@ public final class MantisHerds {
                 // down the column from the top: a run of open rows over a mat is a floor with room
                 for (int row = rows - 1; row >= 1; row--) {
                     int p = g.packed(x, row, z), c = p & 31;
-                    if (c == GardensField.C_AIR) { open++; continue; }
-                    if ((c == GardensField.C_MAT || c == GardensField.C_MATE) && open >= HEADROOM) floors.add(new Floor(x, row, z, p >> 5));
+                    if (GardensField.airy(c)) { open++; continue; }            // 0.20.2: grass over a mat is room too
+                    if ((c == GardensField.C_MAT || c == GardensField.C_MATE) && open >= HEADROOM) floors.add(new Floor(x, row, z, (p >> 5) & 3));
                     open = 0;
                 }
             }

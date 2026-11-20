@@ -1,0 +1,68 @@
+{
+  "variants": {
+    "half=lower,neon=magenta": [
+      {
+        "model": "explorationremix:block/tall_filament_grass_magenta_bottom"
+      },
+      {
+        "model": "explorationremix:block/tall_filament_grass_magenta_bottom_2"
+      }
+    ],
+    "half=upper,neon=magenta": [
+      {
+        "model": "explorationremix:block/tall_filament_grass_magenta_top"
+      },
+      {
+        "model": "explorationremix:block/tall_filament_grass_magenta_top_2"
+      }
+    ],
+    "half=lower,neon=violet": [
+      {
+        "model": "explorationremix:block/tall_filament_grass_violet_bottom"
+      },
+      {
+        "model": "explorationremix:block/tall_filament_grass_violet_bottom_2"
+      }
+    ],
+    "half=upper,neon=violet": [
+      {
+        "model": "explorationremix:block/tall_filament_grass_violet_top"
+      },
+      {
+        "model": "explorationremix:block/tall_filament_grass_violet_top_2"
+      }
+    ],
+    "half=lower,neon=lime": [
+      {
+        "model": "explorationremix:block/tall_filament_grass_lime_bottom"
+      },
+      {
+        "model": "explorationremix:block/tall_filament_grass_lime_bottom_2"
+      }
+    ],
+    "half=upper,neon=lime": [
+      {
+        "model": "explorationremix:block/tall_filament_grass_lime_top"
+      },
+      {
+        "model": "explorationremix:block/tall_filament_grass_lime_top_2"
+      }
+    ],
+    "half=lower,neon=light_blue": [
+      {
+        "model": "explorationremix:block/tall_filament_grass_light_blue_bottom"
+      },
+      {
+        "model": "explorationremix:block/tall_filament_grass_light_blue_bottom_2"
+      }
+    ],
+    "half=upper,neon=light_blue": [
+      {
+        "model": "explorationremix:block/tall_filament_grass_light_blue_top"
+      },
+      {
+        "model": "explorationremix:block/tall_filament_grass_light_blue_top_2"
+      }
+    ]
+  }
+}

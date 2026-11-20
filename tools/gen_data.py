@@ -9,6 +9,7 @@ import json, math, os, shutil
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import textures
+import plants_vent
 from plants_fern import HANGING_SIZES
 import worldgen
 import sounds
@@ -204,8 +205,23 @@ BLOCKS = {
     # took their places.)
     "vent_beads": ("Vent Beads", "glow_cube", {"neon": True, "rock": "blackstone"}),
     "seep_crust": ("Seep Crust", "glow_cube"),
+    # 0.20.2: the vent field's plant life (tools/plants_vent.py), grown by its dressing (GardensDress.plants). The grass
+    # comes in three heights and the mat's colour (option neon: a model list per colour, textures <id>_<colour>), drops
+    # only to shears (option shears), and a stilt mantis crops it to stubble that regrows (no item, no drop). The tube
+    # worms and the small mushrooms are 3D models (kinds tube_worms and mushrooms); the glowworm threads and the seep
+    # reeds are light blue only. None gives light: only their glow overlays shine.
+    "filament_tuft": ("Filament Tuft", "cross", {"neon": True, "variants": 2, "shears": True}),
+    "filament_grass": ("Filament Grass", "cross", {"neon": True, "variants": 2, "shears": True}),
+    "tall_filament_grass": ("Tall Filament Grass", "tall", {"neon": True, "variants": 2, "shears": True}),
+    "grazed_filament_grass": ("Grazed Filament Grass", "cross", {"neon": True, "variants": 2, "no_item": True}),
+    "tube_worms": ("Tube Worms", "tube_worms", {"neon": True}),
+    "glowworm_threads": ("Glowworm Threads", "vine", {"variants": 2}),
+    "glowworm_threads_plant": ("Glowworm Threads", "vine_body:glowworm_threads", {"variants": 2}),
+    "seep_reeds": ("Seep Reeds", "cross", {"variants": 2}),
+    "tall_seep_reeds": ("Tall Seep Reeds", "tall", {"variants": 2}),
+    "neon_mushrooms": ("Neon Mushrooms", "mushrooms", {"neon": True}),
 }
-NO_DROP = {"band_stone", "glow", "mossback_den"}
+NO_DROP = {"band_stone", "glow", "mossback_den", "grazed_filament_grass"}
 # The vent field's blocks: rock, never growth to /remix census (the whole blocks count as floor and ceiling).
 VENT_FIELD_BLOCKS = {"black_dripstone", "pointed_black_dripstone", "pale_stem", "glow_mat", "thin_glow_mat", "glow_cap", "vent_crown",
                      "vent_beads", "seep_crust"}
@@ -424,6 +440,61 @@ def _hanging_fern(size):
     return model
 
 
+def _tube_worms(look, out):
+    """A cluster of tube worms (plants_vent.WORM_LOOKS[look]): each tube a box two pixels square, its sides a ringed
+    strip of #worms (row 0 at its mouth), its top the open mouth; while the worms are out, a plume on each tube that has
+    one: two crossed planes six pixels across, their foot a pixel down in the tube, drawn again with #glow at full
+    block light."""
+    els = []
+    for (x, z, h, strip, plume) in plants_vent.WORM_LOOKS[look]:
+        a, b = plants_vent.TUBE_STRIPS[strip]
+        side = {"uv": [a, 0, b, h], "texture": "#worms"}
+        els.append({"from": [x, 0, z], "to": [x + 2, h, z + 2],
+                    "faces": dict({f: dict(side) for f in SIDES}, up={"uv": list(plants_vent.MOUTH), "texture": "#worms"})})
+        if out and plume is not None:
+            u0, v0, u1, v1 = plants_vent.PLUMES[plume]
+            cx, cz = x + 1, z + 1
+            turn = {"origin": [cx, h, cz], "axis": "y", "angle": 45}
+            for key, extra in (("#worms", {}), ("#glow", EMISSIVE)):
+                els.append(dict({"from": [cx - 3, h - 1, cz], "to": [cx + 3, h + 5, cz], "rotation": turn, "shade": False,
+                                 "faces": {f: {"uv": [u0, v0, u1, v1], "texture": key} for f in ("north", "south")}}, **extra))
+                els.append(dict({"from": [cx, h - 1, cz - 3], "to": [cx, h + 5, cz + 3], "rotation": turn, "shade": False,
+                                 "faces": {f: {"uv": [u0, v0, u1, v1], "texture": key} for f in ("west", "east")}}, **extra))
+    return {"parent": "minecraft:block/block", "ambientocclusion": False, "textures": {"particle": "#worms"}, "elements": els}
+
+
+def _mushrooms(count):
+    """Small mushrooms (plants_vent.MUSHROOM_LOOKS[count]): each a pale stem under a cap two pixels thick with a dome a
+    pixel high over it (caps 4 and 5), mapped from #mushrooms, the cap and dome drawn again with #glow at full block
+    light; a leaning one is turned 22.5 degrees about its foot."""
+    pv = plants_vent
+    els = []
+    for (x, z, h, w, cap, lean) in pv.MUSHROOM_LOOKS[count]:
+        a, _, _, _ = pv.MUSH_STEM
+        parts = [{"from": [x - w / 2, 0, z - w / 2], "to": [x + w / 2, h, z + w / 2],
+                  "faces": {f: {"uv": [a, 0, a + w, h], "texture": "#mushrooms"} for f in SIDES}}]
+        lit = []
+        for key, extra in (("#mushrooms", {}), ("#glow", dict(EMISSIVE, shade=False))):
+            box = {"from": [x - cap / 2, h, z - cap / 2], "to": [x + cap / 2, h + 2, z + cap / 2],
+                   "faces": dict({f: {"uv": list(pv.CAP_SIDE[cap]), "texture": key} for f in SIDES},
+                                 up={"uv": list(pv.CAP_TOP[cap]), "texture": key},
+                                 down={"uv": list(pv.CAP_UNDER[cap]), "texture": key})}
+            lit.append(dict(box, **extra))
+            if cap >= 4:
+                d = cap - 2
+                u0, v0, _, _ = pv.CAP_TOP[cap]
+                su0, sv0, _, _ = pv.CAP_SIDE[cap]
+                dome = {"from": [x - d / 2, h + 2, z - d / 2], "to": [x + d / 2, h + 3, z + d / 2],
+                        "faces": dict({f: {"uv": [su0 + 1, sv0, su0 + 1 + d, sv0 + 1], "texture": key} for f in SIDES},
+                                      up={"uv": [u0 + 1, v0 + 1, u0 + 1 + d, v0 + 1 + d], "texture": key})}
+                lit.append(dict(dome, **extra))
+        for el in parts + lit:
+            if lean:
+                el["rotation"] = {"origin": [x, 0, z], "axis": lean[0], "angle": lean[1]}
+            els.append(el)
+    return {"parent": "minecraft:block/block", "ambientocclusion": False, "textures": {"particle": "#mushrooms"}, "elements": els}
+
+
 TEMPLATES = {
     "fern": _fern(),
     "tall_fern_lower": _tall_fern("lower"),
@@ -434,6 +505,10 @@ TEMPLATES = {
     "cross_glow": {"ambientocclusion": False, "textures": {"particle": "#cross"},
                    "elements": _cross_planes("#cross", {}) + _cross_planes("#glow", EMISSIVE)},
     "carpet": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _flat("#texture", {})},
+    # 0.20.2: the tube worms, out (plumes up) and in, and the small mushrooms by count
+    **{f"tube_worms_{k}": _tube_worms(k, True) for k in range(len(plants_vent.WORM_LOOKS))},
+    **{f"tube_worms_{k}_in": _tube_worms(k, False) for k in range(len(plants_vent.WORM_LOOKS))},
+    **{f"neon_mushrooms_{n}": _mushrooms(n) for n in plants_vent.MUSHROOM_LOOKS},
     "carpet_glow": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _flat("#texture", {}) + _flat("#glow", EMISSIVE)},
     "lichen": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _sheet("#texture", {})},
     "lichen_glow": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _sheet("#texture", {}) + _sheet("#glow", EMISSIVE)},
@@ -518,14 +593,45 @@ def plane_model(tex, plain_parent, template, key):
     return {"parent": plain_parent, "render_type": "minecraft:cutout", "textures": t}
 
 
-def loot(bid, drop, kind, chance=None, neon=False):
+def neon_items(bid, colours, model_of):
+    """A neon plant's items (0.20.2): an item model per colour (item/<id>_<colour>, from model_of), and the item's own
+    model, the first colour's with overrides on explorationremix:neon picking the others (as kind glow_cube's do)."""
+    extra = {f"{bid}_{c}": model_of(c) for c in colours}
+    last = len(colours) - 1
+    item = dict(model_of(colours[0]), overrides=[{"predicate": {f"{MOD}:neon": round((k - 0.5) / last, 4)}, "model": f"{MOD}:item/{bid}_{c}"}
+                                                 for k, c in enumerate(colours) if k])
+    return item, extra
+
+
+SHEARS = {"condition": "minecraft:match_tool", "predicate": {"items": ["minecraft:shears"]}}
+
+
+def loot(bid, drop, kind, chance=None, neon=False, shears=False):
     entry = {"type": "minecraft:item", "name": drop if ":" in drop else f"{MOD}:{drop}"}
     if neon:
         # the item keeps the block's colour (its BlockStateTag), and places the block in it again
         entry["functions"] = [{"function": "minecraft:copy_state", "block": f"{MOD}:{bid}", "properties": ["neon"]}]
+    if shears:
+        # like vanilla's grass, only to shears
+        entry["conditions"] = [dict(SHEARS)]
+    if kind == "mushrooms":
+        # one for each mushroom, like vanilla's sea pickles
+        entry.setdefault("functions", []).extend(
+            {"function": "minecraft:set_count", "count": n, "add": False,
+             "conditions": [{"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"mushrooms": str(n)}}]}
+            for n in (2, 3))
     if kind in ("tall", "tall_fern"):
-        # both halves break together; only the lower half's table drops the plant
-        entry["conditions"] = [{"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"half": "lower"}}]
+        # both halves break together and either drops the plant once, as vanilla's tall grass does (0.20.2: the upper
+        # half dropped nothing before, the game breaking it with its own state): a half drops it while the other half
+        # still stands by it
+        pools = []
+        for half, other, dy in (("lower", "upper", 1), ("upper", "lower", -1)):
+            pools.append({"rolls": 1, "bonus_rolls": 0, "entries": [entry], "conditions": [
+                {"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"half": half}},
+                {"condition": "minecraft:location_check", "offsetY": dy,
+                 "predicate": {"block": {"blocks": [f"{MOD}:{bid}"], "state": {"half": other}}}},
+                {"condition": "minecraft:survives_explosion"}]})
+        return {"type": "minecraft:block", "pools": pools}
     elif kind == "lichen":
         # one for each face it covers, like vanilla's glow lichen (which needs shears; these don't)
         entry["functions"] = [{"function": "minecraft:set_count", "add": True, "count": 1,
@@ -552,11 +658,61 @@ def block_assets():
         lang[f"block.{MOD}.{bid}"] = name
         models = {}
         item = {"parent": "minecraft:item/generated", "textures": {"layer0": ref(bid)}}
+        extra_items = {}
         drop = bid
         if kind == "cube":
             models[bid] = {"parent": "minecraft:block/cube_all", "textures": {"all": ref(bid)}}
             states = {"variants": {"": {"model": ref(bid)}}}
             item = {"parent": ref(bid)}
+        elif kind == "cross" and opts.get("neon"):
+            # a model list per colour: <id>_<colour>, <id>_<colour>_2 ...
+            variants = {}
+            for c in textures.NEONS:
+                ts = variant_names(f"{bid}_{c}", len(texs))
+                for t in ts:
+                    models[t] = plane_model(t, "minecraft:block/cross", "cross", "cross")
+                variants[f"neon={c}"] = pick([{"model": ref(t)} for t in ts], weights)
+            states = {"variants": variants}
+            item, extra_items = neon_items(bid, textures.NEONS, lambda c: {"parent": "minecraft:item/generated", "textures": {"layer0": ref(f"{bid}_{c}")}})
+        elif kind == "tall" and opts.get("neon"):
+            variants = {}
+            for c in textures.NEONS:
+                bottoms, tops = variant_names(f"{bid}_{c}_bottom", len(texs)), variant_names(f"{bid}_{c}_top", len(texs))
+                for t in bottoms + tops:
+                    models[t] = plane_model(t, "minecraft:block/cross", "cross", "cross")
+                # as for "tall": both halves are seeded from the lower half's position
+                variants[f"half=lower,neon={c}"] = pick([{"model": ref(t)} for t in bottoms], weights)
+                variants[f"half=upper,neon={c}"] = pick([{"model": ref(t)} for t in tops], weights)
+            states = {"variants": variants}
+            item, extra_items = neon_items(bid, textures.NEONS, lambda c: {"parent": "minecraft:item/generated", "textures": {"layer0": ref(f"{bid}_{c}_top")}})
+        elif kind == "tube_worms":
+            # each colour's three looks, out and in, each turned four ways; the lists keep one order, so a cluster keeps
+            # its look and turn as its worms go in and out (block.TubeWormsBlock.OUT)
+            looks = range(len(plants_vent.WORM_LOOKS))
+            variants = {}
+            for c in textures.NEONS:
+                t = {"worms": ref(f"{bid}_{c}"), "glow": ref(f"{bid}_{c}_glow")}
+                for k in looks:
+                    for o in ("", "_in"):
+                        models[f"{bid}_{c}_{k}{o}"] = {"parent": f"{MOD}:block/template/tube_worms_{k}{o}", "render_type": "minecraft:cutout",
+                                                       "textures": t}
+                for out, o in (("true", ""), ("false", "_in")):
+                    variants[f"neon={c},out={out}"] = pick([dict({"model": ref(f"{bid}_{c}_{k}{o}")}, **({"y": r} if r else {}))
+                                                            for k in looks for r in (0, 90, 180, 270)])
+            states = {"variants": variants}
+            item, extra_items = neon_items(bid, textures.NEONS, lambda c: {"parent": ref(f"{bid}_{c}_0")})
+        elif kind == "mushrooms":
+            # a model per count (block.NeonMushroomsBlock.MUSHROOMS) and colour, turned four ways by position
+            variants = {}
+            for c in textures.NEONS:
+                t = {"mushrooms": ref(f"{bid}_{c}"), "glow": ref(f"{bid}_{c}_glow")}
+                for n in plants_vent.MUSHROOM_LOOKS:
+                    models[f"{bid}_{c}_{n}"] = {"parent": f"{MOD}:block/template/neon_mushrooms_{n}", "render_type": "minecraft:cutout",
+                                                "textures": t}
+                    variants[f"mushrooms={n},neon={c}"] = pick([dict({"model": ref(f"{bid}_{c}_{n}")}, **({"y": r} if r else {}))
+                                                               for r in (0, 90, 180, 270)])
+            states = {"variants": variants}
+            item, extra_items = neon_items(bid, textures.NEONS, lambda c: {"parent": ref(f"{bid}_{c}_2")})
         elif kind in ("cross", "vine", "crystal") or kind.startswith("vine_body:"):
             for t in texs:
                 models[t] = plane_model(t, "minecraft:block/cross", "cross", "cross")
@@ -732,12 +888,16 @@ def block_assets():
                     assert painted in textures.PAINTERS, f"{bid}: no painter for {tex}"
             write(os.path.join(ASSETS, "models", "block", mname + ".json"), m)
         write(os.path.join(ASSETS, "blockstates", bid + ".json"), states)
+        if opts.get("no_item"):
+            item, extra_items = None, {}
         if item is not None:
-            for tex in item.get("textures", {}).values():  # an item's sprite needs a painter too
-                assert tex.split(":", 1)[1] in textures.PAINTERS, f"{bid}: no painter for its item's {tex}"
-            write(os.path.join(ASSETS, "models", "item", bid + ".json"), item)
+            for name_, m_ in dict(extra_items, **{bid: item}).items():
+                for tex in m_.get("textures", {}).values():  # an item's sprite needs a painter too
+                    assert tex.split(":", 1)[1] in textures.PAINTERS, f"{bid}: no painter for its item's {tex}"
+                write(os.path.join(ASSETS, "models", "item", name_ + ".json"), m_)
         if bid not in NO_DROP:
-            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind, opts.get("chance"), opts.get("neon", False)))
+            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"),
+                  loot(bid, drop, kind, opts.get("chance"), opts.get("neon", False), opts.get("shears", False)))
     unused = set(textures.GLOW) - used_glow
     assert not unused, f"glow overlays no model draws: {sorted(unused)}"
     write(os.path.join(ASSETS, "glowing_blocks.json"), {"blocks": sorted(glowing)})
@@ -852,6 +1012,9 @@ PARTICLES = {
     # (round 3) the blasts' flash takes white-hot sprites of its own, after the glow's and the blaze's (picked by index)
     "flash": [f"{MOD}:flash_{i}" for i in range(2)] + [f"{MOD}:flash_hot_{i}" for i in range(2)],
     "rubble": [f"{MOD}:rubble_{i}" for i in range(4)],
+    # 0.20.2: the motes drifting up off the Deep Gardens' grass and small mushrooms, tinted their colour
+    # (CaveParticles.Spore), painted by tools/plants_vent.py
+    "spore": [f"{MOD}:spore_{i}" for i in range(2)],
 }
 
 

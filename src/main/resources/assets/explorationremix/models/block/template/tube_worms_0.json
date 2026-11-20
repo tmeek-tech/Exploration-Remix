@@ -1,0 +1,1233 @@
+{
+  "parent": "minecraft:block/block",
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "#worms"
+  },
+  "elements": [
+    {
+      "from": [
+        3,
+        0,
+        4
+      ],
+      "to": [
+        5,
+        11,
+        6
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            2,
+            11
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            0,
+            0,
+            2,
+            11
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            0,
+            0,
+            2,
+            11
+          ],
+          "texture": "#worms"
+        },
+        "west": {
+          "uv": [
+            0,
+            0,
+            2,
+            11
+          ],
+          "texture": "#worms"
+        },
+        "up": {
+          "uv": [
+            14,
+            0,
+            16,
+            2
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        1,
+        10,
+        5
+      ],
+      "to": [
+        7,
+        16,
+        5
+      ],
+      "rotation": {
+        "origin": [
+          4,
+          11,
+          5
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        4,
+        10,
+        2
+      ],
+      "to": [
+        4,
+        16,
+        8
+      ],
+      "rotation": {
+        "origin": [
+          4,
+          11,
+          5
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        1,
+        10,
+        5
+      ],
+      "to": [
+        7,
+        16,
+        5
+      ],
+      "rotation": {
+        "origin": [
+          4,
+          11,
+          5
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        },
+        "south": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        4,
+        10,
+        2
+      ],
+      "to": [
+        4,
+        16,
+        8
+      ],
+      "rotation": {
+        "origin": [
+          4,
+          11,
+          5
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        },
+        "east": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        7,
+        0,
+        3
+      ],
+      "to": [
+        9,
+        8,
+        5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            0,
+            4,
+            8
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            2,
+            0,
+            4,
+            8
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            2,
+            0,
+            4,
+            8
+          ],
+          "texture": "#worms"
+        },
+        "west": {
+          "uv": [
+            2,
+            0,
+            4,
+            8
+          ],
+          "texture": "#worms"
+        },
+        "up": {
+          "uv": [
+            14,
+            0,
+            16,
+            2
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        5,
+        7,
+        4
+      ],
+      "to": [
+        11,
+        13,
+        4
+      ],
+      "rotation": {
+        "origin": [
+          8,
+          8,
+          4
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        8,
+        7,
+        1
+      ],
+      "to": [
+        8,
+        13,
+        7
+      ],
+      "rotation": {
+        "origin": [
+          8,
+          8,
+          4
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        5,
+        7,
+        4
+      ],
+      "to": [
+        11,
+        13,
+        4
+      ],
+      "rotation": {
+        "origin": [
+          8,
+          8,
+          4
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#glow"
+        },
+        "south": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        8,
+        7,
+        1
+      ],
+      "to": [
+        8,
+        13,
+        7
+      ],
+      "rotation": {
+        "origin": [
+          8,
+          8,
+          4
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#glow"
+        },
+        "east": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        10,
+        0,
+        6
+      ],
+      "to": [
+        12,
+        10,
+        8
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            4,
+            0,
+            6,
+            10
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            4,
+            0,
+            6,
+            10
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            4,
+            0,
+            6,
+            10
+          ],
+          "texture": "#worms"
+        },
+        "west": {
+          "uv": [
+            4,
+            0,
+            6,
+            10
+          ],
+          "texture": "#worms"
+        },
+        "up": {
+          "uv": [
+            14,
+            0,
+            16,
+            2
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        8,
+        9,
+        7
+      ],
+      "to": [
+        14,
+        15,
+        7
+      ],
+      "rotation": {
+        "origin": [
+          11,
+          10,
+          7
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        11,
+        9,
+        4
+      ],
+      "to": [
+        11,
+        15,
+        10
+      ],
+      "rotation": {
+        "origin": [
+          11,
+          10,
+          7
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        8,
+        9,
+        7
+      ],
+      "to": [
+        14,
+        15,
+        7
+      ],
+      "rotation": {
+        "origin": [
+          11,
+          10,
+          7
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        },
+        "south": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        11,
+        9,
+        4
+      ],
+      "to": [
+        11,
+        15,
+        10
+      ],
+      "rotation": {
+        "origin": [
+          11,
+          10,
+          7
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        },
+        "east": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        5,
+        0,
+        9
+      ],
+      "to": [
+        7,
+        6,
+        11
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            6,
+            0,
+            8,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            6,
+            0,
+            8,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            6,
+            0,
+            8,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "west": {
+          "uv": [
+            6,
+            0,
+            8,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "up": {
+          "uv": [
+            14,
+            0,
+            16,
+            2
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        3,
+        5,
+        10
+      ],
+      "to": [
+        9,
+        11,
+        10
+      ],
+      "rotation": {
+        "origin": [
+          6,
+          6,
+          10
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        6,
+        5,
+        7
+      ],
+      "to": [
+        6,
+        11,
+        13
+      ],
+      "rotation": {
+        "origin": [
+          6,
+          6,
+          10
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        3,
+        5,
+        10
+      ],
+      "to": [
+        9,
+        11,
+        10
+      ],
+      "rotation": {
+        "origin": [
+          6,
+          6,
+          10
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#glow"
+        },
+        "south": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        6,
+        5,
+        7
+      ],
+      "to": [
+        6,
+        11,
+        13
+      ],
+      "rotation": {
+        "origin": [
+          6,
+          6,
+          10
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#glow"
+        },
+        "east": {
+          "uv": [
+            8,
+            8,
+            14,
+            14
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        9,
+        0,
+        10
+      ],
+      "to": [
+        11,
+        5,
+        12
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            0,
+            4,
+            5
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            2,
+            0,
+            4,
+            5
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            2,
+            0,
+            4,
+            5
+          ],
+          "texture": "#worms"
+        },
+        "west": {
+          "uv": [
+            2,
+            0,
+            4,
+            5
+          ],
+          "texture": "#worms"
+        },
+        "up": {
+          "uv": [
+            14,
+            0,
+            16,
+            2
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        7,
+        4,
+        11
+      ],
+      "to": [
+        13,
+        10,
+        11
+      ],
+      "rotation": {
+        "origin": [
+          10,
+          5,
+          11
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        10,
+        4,
+        8
+      ],
+      "to": [
+        10,
+        10,
+        14
+      ],
+      "rotation": {
+        "origin": [
+          10,
+          5,
+          11
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        7,
+        4,
+        11
+      ],
+      "to": [
+        13,
+        10,
+        11
+      ],
+      "rotation": {
+        "origin": [
+          10,
+          5,
+          11
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        },
+        "south": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        10,
+        4,
+        8
+      ],
+      "to": [
+        10,
+        10,
+        14
+      ],
+      "rotation": {
+        "origin": [
+          10,
+          5,
+          11
+        ],
+        "axis": "y",
+        "angle": 45
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        },
+        "east": {
+          "uv": [
+            8,
+            0,
+            14,
+            6
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        12,
+        0,
+        11
+      ],
+      "to": [
+        14,
+        3,
+        13
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            2,
+            3
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            0,
+            0,
+            2,
+            3
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            0,
+            0,
+            2,
+            3
+          ],
+          "texture": "#worms"
+        },
+        "west": {
+          "uv": [
+            0,
+            0,
+            2,
+            3
+          ],
+          "texture": "#worms"
+        },
+        "up": {
+          "uv": [
+            14,
+            0,
+            16,
+            2
+          ],
+          "texture": "#worms"
+        }
+      }
+    }
+  ]
+}

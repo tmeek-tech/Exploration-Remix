@@ -1,0 +1,208 @@
+{
+  "variants": {
+    "mushrooms=1,neon=magenta": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_1"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_1",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_1",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_1",
+        "y": 270
+      }
+    ],
+    "mushrooms=2,neon=magenta": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_2"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_2",
+        "y": 270
+      }
+    ],
+    "mushrooms=3,neon=magenta": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_3"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_3",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_3",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_magenta_3",
+        "y": 270
+      }
+    ],
+    "mushrooms=1,neon=violet": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_1"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_1",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_1",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_1",
+        "y": 270
+      }
+    ],
+    "mushrooms=2,neon=violet": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_2"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_2",
+        "y": 270
+      }
+    ],
+    "mushrooms=3,neon=violet": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_3"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_3",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_3",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_violet_3",
+        "y": 270
+      }
+    ],
+    "mushrooms=1,neon=lime": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_1"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_1",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_1",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_1",
+        "y": 270
+      }
+    ],
+    "mushrooms=2,neon=lime": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_2"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_2",
+        "y": 270
+      }
+    ],
+    "mushrooms=3,neon=lime": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_3"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_3",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_3",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_lime_3",
+        "y": 270
+      }
+    ],
+    "mushrooms=1,neon=light_blue": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_1"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_1",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_1",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_1",
+        "y": 270
+      }
+    ],
+    "mushrooms=2,neon=light_blue": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_2"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_2",
+        "y": 270
+      }
+    ],
+    "mushrooms=3,neon=light_blue": [
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_3"
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_3",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_3",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/neon_mushrooms_light_blue_3",
+        "y": 270
+      }
+    ]
+  }
+}

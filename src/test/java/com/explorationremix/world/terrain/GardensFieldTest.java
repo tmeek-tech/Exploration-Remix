@@ -358,7 +358,7 @@ class GardensFieldTest {
                     for (int[] d : side) {
                         int c = g.packed(x + d[0], y, z + d[1]) & 31, up = g.packed(x + d[0], y + 1, z + d[1]) & 31;
                         if (c == GardensField.C_AIR && fails.size() < 20) fails.add("oil open at its side at " + at);
-                        if (c != GardensField.C_AIR && c != GardensField.C_OIL && up == GardensField.C_AIR) shore++;
+                        if (c != GardensField.C_AIR && c != GardensField.C_OIL && GardensField.airy(up)) shore++;
                     }
                 }
         System.out.printf(Locale.ROOT, "theOilLiesFlatAndHeld: %d oil blocks (domes %d, halls %d, beds %d), %d shore sides one block up%n",
@@ -366,6 +366,77 @@ class GardensFieldTest {
         assertTrue(fails.isEmpty(), String.join("\n", fails));
         assertTrue(oil >= 1000 && byBand[0] > 0 && byBand[1] > 0 && byBand[2] > 0, "too little oil to check: " + oil);
         assertTrue(shore > oil / 4, "too few ways out of the pools: " + shore + " for " + oil + " oil blocks");
+    }
+
+    /**
+     * The plant life (0.20.2) stands where its blocks can live, over the area: every plant but a thread on whole rock
+     * (or on its own lower half), the tube worms on rock or a live vent's ledge, every thread hanging from rock or a
+     * thread and keeping its room over the floor; tall grass and tall reeds come in exactly two halves; grass on a glow
+     * mat takes the mat's colour, and grass is lime only within reach of a live deep vent (and always well within it).
+     * Some of every plant grows in the area, the grass most of the floors' and more than the threads.
+     */
+    @Test
+    void thePlantsStandOnTheirFloors() {
+        GardensField g = terrain().gardens;
+        List<String> fails = new ArrayList<>();
+        int[] n = new int[32];
+        int grassOnMat = 0, lime = 0;
+        Set<Integer> floorCodes = Set.of(GardensField.C_ROCK, GardensField.C_TALUS, GardensField.C_MAT, GardensField.C_MATE, GardensField.C_SKIN,
+                GardensField.C_SEEP, GardensField.C_VBASE);
+        Set<Integer> ceilCodes = Set.of(GardensField.C_ROCK, GardensField.C_SKIN, GardensField.C_DRIP, GardensField.C_TALUS, GardensField.C_SEALROCK);
+        for (int x = AX; x < AX + AS; x++)
+            for (int z = AZ; z < AZ + AS; z++)
+                for (int y = 1; y < GardensPlan.SY - 1; y++) {
+                    int p = g.packed(x, y, z), c = p & 31;
+                    if (!GardensField.plant(c)) continue;
+                    n[c]++;
+                    String at = x + " " + y + " " + z;
+                    int under = g.packed(x, y - 1, z) & 31, over = g.packed(x, y + 1, z) & 31;
+                    boolean floor = floorCodes.contains(under);
+                    switch (c) {
+                        case GardensField.C_THREAD -> {
+                            int top = y;
+                            while ((g.packed(x, top + 1, z) & 31) == GardensField.C_THREAD) top++;
+                            int bottom = y;
+                            while ((g.packed(x, bottom - 1, z) & 31) == GardensField.C_THREAD) bottom--;
+                            if (!ceilCodes.contains(g.packed(x, top + 1, z) & 31)) fails.add("a thread hangs from nothing at " + at);
+                            for (int k = 1; k <= GardensDress.THREAD_ROOM; k++)
+                                if (!GardensField.airy(g.packed(x, bottom - k, z) & 31)) { fails.add("a thread too near the floor at " + at); break; }
+                        }
+                        case GardensField.C_TALLG, GardensField.C_REED -> {
+                            boolean upper = under == c;
+                            if (upper && (g.packed(x, y - 2, z) & 31) == c) fails.add("a plant three high at " + at);
+                            if (!upper && !floor) fails.add("code " + c + " on code " + under + " at " + at);
+                            if (c == GardensField.C_TALLG && !upper && over != c) fails.add("tall grass with no upper half at " + at);
+                        }
+                        case GardensField.C_WORM -> {
+                            if (!floor && under != GardensField.C_LIVE && under != GardensField.C_VLIVE) fails.add("tube worms on code " + under + " at " + at);
+                        }
+                        default -> {
+                            if (!floor) fails.add("code " + c + " on code " + under + " at " + at);
+                        }
+                    }
+                    if (c == GardensField.C_GRASS || (c == GardensField.C_TALLG && under != c)) {
+                        int colour = (p >> 5) & 3, below = g.packed(x, y - 1, z);
+                        boolean nearLime = g.limeVentNear(x + 0.5, y, z + 0.5, GardensDress.LIME_REACH - 4.0);
+                        boolean inLime = g.limeVentNear(x + 0.5, y, z + 0.5, GardensDress.LIME_REACH + 4.0);
+                        if (colour == 2) lime++;
+                        if (colour == 2 && !inLime) fails.add("lime grass far from a lime vent at " + at);
+                        if (nearLime && colour != 2) fails.add("grass by a lime vent not lime at " + at);
+                        if (!inLime && (under == GardensField.C_MAT || under == GardensField.C_MATE)) {
+                            grassOnMat++;
+                            if (colour != ((below >> 5) & 3)) fails.add("grass not the mat's colour at " + at);
+                        }
+                    }
+                    if (fails.size() > 20) break;
+                }
+        System.out.printf(Locale.ROOT, "thePlantsStandOnTheirFloors: grass %d, tall grass %d, tube worms %d, glowworm threads %d, seep reeds %d, small mushrooms %d"
+                        + " (%d grass on mats, %d lime)%n", n[GardensField.C_GRASS], n[GardensField.C_TALLG], n[GardensField.C_WORM], n[GardensField.C_THREAD],
+                n[GardensField.C_REED], n[GardensField.C_SHROOM], grassOnMat, lime);
+        assertTrue(fails.isEmpty(), String.join("\n", fails));
+        for (int c = GardensField.C_GRASS; c <= GardensField.C_SHROOM; c++) assertTrue(n[c] > 0, "no plants of code " + c + " in the area");
+        assertTrue(n[GardensField.C_GRASS] + n[GardensField.C_TALLG] > 2 * (n[GardensField.C_WORM] + n[GardensField.C_SHROOM]), "the grass the floors' most common plant");
+        assertTrue(n[GardensField.C_THREAD] < n[GardensField.C_GRASS] + n[GardensField.C_TALLG], "fewer threads than grass");
     }
 
     /**
