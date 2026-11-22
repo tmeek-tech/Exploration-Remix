@@ -102,6 +102,14 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> GIANT_SKEIN_HURT = register("giant_skein.hurt");
     public static final RegistryObject<SoundEvent> GIANT_SKEIN_DEATH = register("giant_skein.death");
 
+    // The stilt mantis of the Deep Gardens (0.20.0, creature.StiltMantisEntity): light and dry, so a herd reads as
+    // gentle: its stilt feet's taps, its chirr while it grazes, its wings' rattle in its startle display, hurt, death.
+    public static final RegistryObject<SoundEvent> STILT_MANTIS_STEP = register("stilt_mantis.step");
+    public static final RegistryObject<SoundEvent> STILT_MANTIS_CHIRR = register("stilt_mantis.chirr");
+    public static final RegistryObject<SoundEvent> STILT_MANTIS_RATTLE = register("stilt_mantis.rattle");
+    public static final RegistryObject<SoundEvent> STILT_MANTIS_HURT = register("stilt_mantis.hurt");
+    public static final RegistryObject<SoundEvent> STILT_MANTIS_DEATH = register("stilt_mantis.death");
+
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ExplorationRemix.MOD_ID, name)));
     }
