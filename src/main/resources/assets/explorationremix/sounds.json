@@ -821,5 +821,90 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.giant_skein.death"
+  },
+  "stilt_mantis.step": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/stilt_mantis/tap1",
+        "volume": 0.55,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:creature/stilt_mantis/tap2",
+        "volume": 0.55,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:creature/stilt_mantis/tap3",
+        "volume": 0.55,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:creature/stilt_mantis/tap4",
+        "volume": 0.55,
+        "attenuation_distance": 12
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.stilt_mantis.step"
+  },
+  "stilt_mantis.chirr": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/stilt_mantis/chirr1",
+        "volume": 0.7,
+        "attenuation_distance": 20
+      },
+      {
+        "name": "explorationremix:creature/stilt_mantis/chirr2",
+        "volume": 0.7,
+        "attenuation_distance": 20
+      },
+      {
+        "name": "explorationremix:creature/stilt_mantis/chirr3",
+        "volume": 0.7,
+        "attenuation_distance": 20
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.stilt_mantis.chirr"
+  },
+  "stilt_mantis.rattle": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/stilt_mantis/rattle1",
+        "volume": 0.9,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:creature/stilt_mantis/rattle2",
+        "volume": 0.9,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.stilt_mantis.rattle"
+  },
+  "stilt_mantis.hurt": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/stilt_mantis/hurt1",
+        "volume": 0.8,
+        "attenuation_distance": 16
+      },
+      {
+        "name": "explorationremix:creature/stilt_mantis/hurt2",
+        "volume": 0.8,
+        "attenuation_distance": 16
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.stilt_mantis.hurt"
+  },
+  "stilt_mantis.death": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/stilt_mantis/death1",
+        "volume": 0.9,
+        "attenuation_distance": 20
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.stilt_mantis.death"
   }
 }

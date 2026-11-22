@@ -1202,6 +1202,10 @@ def build_features():
     # they rest on the rock and by the water and glowbells the chunk ends up with; every chunk, and the feature rolls
     # which of its spots are a swarm's home.
     feature("fireflies", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:fireflies", "config": {}}, [])
+    # The Deep Gardens' stilt mantis herds (StiltMantisesFeature, 0.20.0): set down as each chunk is made, last, on the
+    # floors the chunk ends up with; every vent field chunk, and the feature works out from the field's plan
+    # (MantisHerds) which chunks hold a herd's home.
+    feature("stilt_mantises", "top_layer_modification", VENT_FIELD, {"type": f"{MOD}:stilt_mantises", "config": {}}, [])
     # The Galleries' lava glow (HallGlowFeature, after everything else): invisible light along the rock above the flood
     # band, one try in every few-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
     # rock near black. 0.5.1, "brightly lit" but not flat: lit from the lava and the floor up. Level 15 just over the

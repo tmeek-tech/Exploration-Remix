@@ -828,6 +828,39 @@ public final class GardensField {
     }
 
     /**
+     * Whether a live deep vent (one of the ways down: lime, the only lime vents) stands within {@code reach} blocks of
+     * the point (x, row, z) of the layer (row 0 its bottom), measured to the nearest point of the vent's column from its
+     * base row to its top. For the stilt mantises (0.20.0, Taran's ask: green ones only close to green vents).
+     */
+    public boolean limeVentNear(double x, double row, double z, double reach) {
+        for (double[] v : limeVents(x - reach, z - reach, x + reach, z + reach))
+            if (inReach(v, x, row, z, reach)) return true;
+        return false;
+    }
+
+    /**
+     * The live deep vents (the lime ones, the ways down) whose columns stand in the box: each its column's x and z, the
+     * lowest row of its body and its height in rows.
+     */
+    public List<double[]> limeVents(double minX, double minZ, double maxX, double maxZ) {
+        List<double[]> out = new ArrayList<>();
+        for (GardensSites.Site s : ventsNear(minX, minZ, maxX, maxZ)) {
+            if (s.form != 3 || !s.live) continue;
+            double x = s.x + gv.ox, z = s.z + gv.oz;
+            if (x < minX || x > maxX || z < minZ || z > maxZ) continue;
+            out.add(new double[]{x, z, s.ys, s.H});
+        }
+        return out;
+    }
+
+    /** Whether a point (x, row, z) lies within {@code reach} of a vent from {@link #limeVents} (its body's column). */
+    public static boolean inReach(double[] vent, double x, double row, double z, double reach) {
+        double dx = vent[0] - x, dz = vent[1] - z;
+        double dy = Math.max(0.0, Math.max(vent[2] - row, row - (vent[2] + vent[3])));
+        return dx * dx + dz * dz + dy * dy <= reach * reach;
+    }
+
+    /**
      * Places of a band near (x, z), nearest first, for /remix tp biome and /remix view: storey floors on a grid, each
      * with a spot to stand on ({@code bottom} is the layer's bottom row as a world y).
      */

@@ -86,6 +86,8 @@ import java.util.Locale;
  *     <li>{@code /remix skein ...}: spawning, listing and steering Skeins (SkeinCommands)</li>
  *     <li>{@code /remix giant ...}: setting down, listing and steering the giant Skeins of the Deep Blue Rifts, and
  *     each rift's record of its giant (GiantSkeinCommands)</li>
+ *     <li>{@code /remix mantis ...}: spawning, listing, finding and startling the Deep Gardens' stilt mantis herds
+ *     (MantisCommands)</li>
  *     <li>{@code /remix entrances [cells]}: the entrance sites in the cells round you, why the other cells have none, and
  *     the nearest of each kind</li>
  *     <li>{@code /remix deadends [radius]}: the blind cave ends left above the old floor in the loaded chunks round you
@@ -118,6 +120,8 @@ public final class RemixCommands {
                 .then(com.explorationremix.creature.SkeinCommands.command())
                 // the giant Skein of the Deep Blue Rift (0.18.8)
                 .then(com.explorationremix.creature.GiantSkeinCommands.command())
+                // the stilt mantis herds of the Deep Gardens (0.20.0)
+                .then(com.explorationremix.creature.MantisCommands.command())
                 // vanilla's hostile mobs in groups
                 .then(com.explorationremix.creature.groups.MobGroupCommands.command())
                 // runes: rune items, rows, energy and run depth for trying them out
