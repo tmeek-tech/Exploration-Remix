@@ -1,10 +1,11 @@
 """Exploration Remix's runes: their art and their data. Called by gen_data.py.
 
 A rune is an item (explorationremix:rune_<id>) drawn as a small slate tablet with a glowing glyph carved into it. The
-glyph's colour tells the rune's kind at a glance: actions warm gold, modifiers pale cyan, each element its own colour
-(the colour its casts are drawn in, Element.java), the relays soft green and Fan white. Every tablet is the same
-stone, so the glyph is the only thing that changes from one rune to the next, and each glyph is drawn by hand on a
-10 by 10 grid so that it still reads at 16 by 16.
+glyph's colour tells the rune's kind (the socket it goes in) at a glance, in the enchanting table's colours: active
+runes light blue, modifiers lavender, passives silver-blue, and the four element passives their element's own colour
+(the colour its casts are drawn in, Element.java). Every tablet is the same stone, so the glyph is the only thing that
+changes from one rune to the next, and each glyph is drawn by hand on a 10 by 10 grid so that it still reads at 16 by
+16.
 
 This file also paints the textures the rune renderers tint (textures/entity/rune: white on transparent, a bright core
 and a soft alpha falloff), the blocks runes make for a while (Barrier glass, Frost's ice, Glow's light, a struck fern's
@@ -33,9 +34,10 @@ ELEMENT_JAVA = os.path.join(ROOT, "src/main/java/com/explorationremix/rune/engin
 
 # =============================================================================================== the runes
 # id -> (name, kind, layer), in RuneId's order. The name is RuneId's title in title case ("On hit" is "On Hit"); the
-# layer is where a rune is first found: 0 the Upper Caves, 1 the Blue Reaches, 2 the Deep Gardens.
+# kind is the socket it goes in (RuneKind: action is the active socket); the layer is where a rune is first found: 0 the
+# Upper Caves, 1 the Blue Reaches, 2 the Deep Gardens. Echo keeps the id "after" from when it was "After a Moment".
 RUNES = {
-    # actions
+    # active runes
     "spark": ("Spark", "action", 0),
     "shard": ("Shard", "action", 0),
     "orb": ("Orb", "action", 0),
@@ -55,29 +57,31 @@ RUNES = {
     "bounce": ("Bounce", "modifier", 0),
     "pierce": ("Pierce", "modifier", 1),
     "siphon": ("Siphon", "modifier", 2),
-    # elements
-    "ember": ("Ember", "element", 2),
-    "frost": ("Frost", "element", 2),
-    "storm": ("Storm", "element", 2),
-    "tide": ("Tide", "element", 2),
-    # relays and Fan
-    "on_hit": ("On Hit", "relay", 1),
-    "after": ("After a Moment", "relay", 1),
-    "fan": ("Fan", "fan", 1),
+    "fan": ("Fan", "modifier", 1),
+    # passives: the four elements, then the rest
+    "ember": ("Ember", "passive", 2),
+    "frost": ("Frost", "passive", 2),
+    "storm": ("Storm", "passive", 2),
+    "tide": ("Tide", "passive", 2),
+    "on_hit": ("On Hit", "passive", 1),
+    "after": ("Echo", "passive", 1),
+    "lantern": ("Lantern", "passive", 0),
+    "thirst": ("Thirst", "passive", 1),
 }
 LAYERS = ["upper_caves", "blue_reaches", "deep_gardens"]
 
-# What each rune does, one plain line (its tooltip: rune.explorationremix.<id>.desc).
+# What each rune does, one plain line (its tooltip: rune.explorationremix.<id>.desc). An active rune's second phase is
+# RuneId's phaseTwo, shown under it with its level.
 DESC = {
     "spark": "A quick bolt that flies straight and hits for 4.",
     "shard": "A cheap, fast splinter that hits for 3.",
     "orb": "A slow, heavy ball that hits for 7.",
     "glow": "A drifting mote that lights where it stops, or makes the creature it hits glow, for a minute.",
-    "burst": "A blast all round where it happens; hits for 6. Your own blast throws you but never hurts you.",
-    "cleave": "A wide slash in front of where it happens; hits for 6.",
-    "field": "A patch on the ground that pulses its element into all who stand in it. Let go in the air, it drops to the floor.",
+    "burst": "A blast all round you; hits for 6. Your own blast throws you but never hurts you.",
+    "cleave": "A wide slash in front of you; hits for 6.",
+    "field": "A patch on the ground that pulses into all who stand in it, with your weapon's element. Cast in the air, it drops to the floor.",
     "barrier": "A wall of rune glass across your aim, for 8 seconds.",
-    "dash": "Throws you along your aim; what follows goes off when you hit something.",
+    "dash": "Throws you along your aim.",
     "reel": "Yanks a creature toward you, or pulls you to the wall it catches, up over its top when it can. Reaches 16 blocks; sneak to let go.",
     "swift": "Faster, with a shorter delay.",
     "heavy": "Hits harder and knocks back further, but slower.",
@@ -86,43 +90,61 @@ DESC = {
     "arc": "Lobbed: falls in an arc.",
     "bounce": "Bounces off walls instead of stopping.",
     "pierce": "Passes through creatures and carries on.",
-    "siphon": "Well-placed hits knock loose white motes that refill this gear.",
-    "ember": "Sets alight. Steams the wet; thaws the frozen for extra damage.",
-    "frost": "Chills. Freezes the wet in place, and still water into ice.",
-    "storm": "Leaps to a second creature; stuns the wet.",
-    "tide": "Soaks, and puts out fire.",
-    "on_hit": "What follows goes off where the rune before it hits.",
-    "after": "What follows goes off a moment later, wherever the rune before it has got to.",
-    "fan": "Three copies of what follows, in a fan.",
+    "siphon": "Well-placed hits knock loose white motes that refill this weapon.",
+    "fan": "Three of your cast at once, in a fan.",
+    "ember": "Fire: full swings, arrows and casts set alight. Steams the wet, and thaws the frozen for extra damage.",
+    "frost": "Cold: full swings, arrows and casts chill. Freezes the wet in place, and still water into ice.",
+    "storm": "Lightning: full swings, arrows and casts leap to a second creature, and stun the wet.",
+    "tide": "Water: full swings, arrows and casts soak, and put out fire.",
+    "on_hit": "Every third full swing or arrow that hits a foe casts your active rune for free.",
+    "after": "Every cast goes again a moment later, at half strength (not walls, dashes or pulls).",
+    "lantern": "A soft light goes with you while the weapon is in your hand.",
+    "thirst": "Hits fill the weapon with energy 60% faster.",
 }
 
 # The blocks runes make for a while (RuneRegistry: TempBlock). They have no items and drop nothing. rune_frond is a
 # struck silver fern's fronds, unrolled down the rock (0.18.7, RunePlants); its textures are the fern's, painted with
-# the other plants (plants_upper.py).
-BLOCKS = {"rune_barrier": "Rune Barrier", "rune_ice": "Rune Ice", "rune_light": "Rune Light", "rune_frond": "Unrolled Fronds"}
+# the other plants (plants_upper.py). rune_lantern is Lantern's light, which follows the player: it is never drawn.
+BLOCKS = {"rune_barrier": "Rune Barrier", "rune_ice": "Rune Ice", "rune_light": "Rune Light", "rune_frond": "Unrolled Fronds",
+          "rune_lantern": "Rune Lantern"}
 ENTITIES = {"rune_bolt": "Rune Bolt", "rune_field": "Rune Field", "rune_mote": "Siphon Mote"}
 
-# Everything else the player reads: the tooltips' words, the rune screen, the key and what the casting code says.
+# Everything else the player reads: the tooltips' words, the enchanting table's rune view, the key and what the casting
+# code says.
 LANG = {
     f"itemGroup.{MOD}.runes": "Runes",
-    f"container.{MOD}.rune_editor": "Runes",
+    f"container.{MOD}.rune_table": "Runes",
     f"key.{MOD}.cast_runes": "Cast runes",
-    f"key.{MOD}.rune_screen": "Open the rune screen",
     f"key.categories.{MOD}": "Exploration Remix",
-    f"rune.{MOD}.kind.action": "Action",
+    f"rune.{MOD}.kind.active": "Active",
     f"rune.{MOD}.kind.modifier": "Modifier",
-    f"rune.{MOD}.kind.element": "Element",
-    f"rune.{MOD}.kind.relay": "Relay",
-    f"rune.{MOD}.kind.fan": "Fan",
+    f"rune.{MOD}.kind.passive": "Passive",
     f"rune.{MOD}.cost": "Costs %s energy",
-    f"rune.{MOD}.cost_each": "Adds %s energy to each action it changes",
-    f"message.{MOD}.runes.in_combat": "In combat: you can move runes in %s s",
+    f"rune.{MOD}.cost_each": "Adds %s energy to the cast it changes",
+    f"rune.{MOD}.phase_two": "Phase two at level %s: %s",
+    f"rune.{MOD}.set_at_table": "Set it into a weapon at an enchanting table",
+    f"rune.{MOD}.no_runes": "No runes: set them at an enchanting table",
+    # the enchanting table's rune view (RuneTableScreen)
+    f"screen.{MOD}.rune_table.how": "Click a socket to raise the runes you carry for it",
+    f"screen.{MOD}.rune_table.how_chosen": "Click a rune to set it, or anywhere else to put them back",
+    f"screen.{MOD}.rune_table.locked": "In combat: runes can be changed in %s s",
+    f"screen.{MOD}.rune_table.enchant": "Enchant",
+    f"screen.{MOD}.rune_table.empty": "Empty",
+    f"screen.{MOD}.rune_table.none_set": "No runes set in this weapon yet.",
+    f"screen.{MOD}.rune_table.socket_empty": "%s socket: empty",
+    f"screen.{MOD}.rune_table.click_choose": "Click to raise the %s runes you carry",
+    f"screen.{MOD}.rune_table.none_carried": "You carry no %s runes",
+    f"screen.{MOD}.rune_table.click_change": "Click to change it, right-click to take it out",
+    f"screen.{MOD}.rune_table.with_it": "With it, this weapon:",
+    f"screen.{MOD}.rune_table.take_out": "Take out %s",
+    f"screen.{MOD}.rune_table.back_to_you": "The rune goes back to your inventory",
     f"message.{MOD}.runes.sputter": "Not enough energy: needs %s, has %s",
-    f"message.{MOD}.runes.red": "Every cast costs more than this %s holds",
-    f"message.{MOD}.runes.nothing": "Nothing in this row casts",
+    f"message.{MOD}.runes.red": "This cast costs more than this %s holds",
+    f"message.{MOD}.runes.nothing": "Nothing on this %s casts: set an active rune at an enchanting table",
     f"message.{MOD}.runes.busy": "Too many runes in flight",
-    f"message.{MOD}.runes.deeper": "%s: your gear's deeper rune slots wake",
-    f"message.{MOD}.runes.home": "Home: your gear's deeper rune slots sleep until you go down again",
+    f"message.{MOD}.runes.phase_wakes": "%s: phase two wakes (level %s)",
+    f"message.{MOD}.runes.phase_sleeps": "%s: phase two sleeps until level %s",
+    f"message.{MOD}.runes.converted": "Your weapons' rune rows are now sockets: one active rune, one modifier and one passive each. The runes that didn't fit are back in your inventory.",
     # the rune damage type's death messages: %2$s is the caster, %3$s their named weapon (.item); .player is
     # for the rare death with no caster known, where %2$s is whoever was fighting the victim
     f"death.attack.{MOD}.rune": "%1$s was struck down by %2$s's runes",
@@ -222,12 +244,12 @@ def tablet():
 
 # =============================================================================================== the glyphs
 # Colours by kind: (main, core, dim). The main colour is the glyph's stroke; the core its brightest pixels (where the
-# glow is hottest), the dim its fainter ones. An element's main colour is the element's own (Element.java).
+# glow is hottest), the dim its fainter ones. They are the enchanting table's socket colours (RuneTableView), with no
+# warm colour or cyan among them. An element passive's main colour is the element's own (Element.java).
 KIND_GLYPH = {
-    "action": ("#FFC53D", "#FFF1BE", "#C7861B"),
-    "modifier": ("#7FF0E6", "#E2FFFB", "#3AA9AE"),
-    "relay": ("#A2EC88", "#E6FFDC", "#5C9F4C"),
-    "fan": ("#F1F5FF", "#FFFFFF", "#A6B2C8"),
+    "action": ("#8EC2FF", "#E6F2FF", "#4F7FC4"),
+    "modifier": ("#B7A8FF", "#F0ECFF", "#7666C4"),
+    "passive": ("#D6E6FF", "#FFFFFF", "#8495B8"),
 }
 ELEMENT_GLYPH = {
     "ember": ("#FF7A2E", "#FFE08A", "#B8461A"),
@@ -565,12 +587,37 @@ GLYPHS = {
         "....#.....",
         "..........",
     ],
+    # a small lantern on its ring, its glass alight
+    "lantern": [
+        "....#.....",
+        "...#.#....",
+        "...###....",
+        "..#####...",
+        "..#***#...",
+        "..#***#...",
+        "..#***#...",
+        "..#####...",
+        "...+++....",
+        "..........",
+    ],
+    # a goblet, brimming
+    "thirst": [
+        "..........",
+        ".########.",
+        ".#******#.",
+        "..#****#..",
+        "...#**#...",
+        "....##....",
+        "....##....",
+        "....##....",
+        "..######..",
+        "..........",
+    ],
 }
 
 
 def glyph_colours(rid):
-    kind = RUNES[rid][1]
-    return ELEMENT_GLYPH[rid] if kind == "element" else KIND_GLYPH[kind]
+    return ELEMENT_GLYPH[rid] if rid in ELEMENT_GLYPH else KIND_GLYPH[RUNES[rid][1]]
 
 
 def mix(a, b, t):
@@ -821,7 +868,7 @@ def frond_states():
 
 def block_models():
     """Barrier glass and ice are clear full blocks; Glow's light a tiny bright cube that light comes from; a fern's
-    unrolled fronds (frond_models)."""
+    unrolled fronds (frond_models); Lantern's light nothing at all (it is never drawn, only its breaking dust)."""
     six = ("down", "up", "north", "south", "west", "east")
     light = f"{MOD}:block/rune_light"
     return dict(frond_models(), **{
@@ -829,6 +876,7 @@ def block_models():
                          "textures": {"all": f"{MOD}:block/rune_barrier"}},
         "rune_ice": {"parent": "minecraft:block/cube_all", "render_type": "minecraft:translucent",
                      "textures": {"all": f"{MOD}:block/rune_ice"}},
+        "rune_lantern": {"textures": {"particle": light}},
         "rune_light": {"parent": "minecraft:block/block", "render_type": "minecraft:cutout", "ambientocclusion": False,
                        "textures": {"particle": light, "light": light},
                        "elements": [{"from": [6.5, 6.5, 6.5], "to": [9.5, 9.5, 9.5], "shade": False,

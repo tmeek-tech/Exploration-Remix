@@ -11,13 +11,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.client.IItemDecorator;
 
 /**
- * Runed gear in any slot (inventory, hotbar, chests) shows its energy as a thin cyan line along the top of the slot,
+ * Runed gear in any slot (inventory, hotbar, chests) shows its energy as a thin light blue line along the top of the slot,
  * as wide as vanilla's durability bar and well clear of it at the bottom. Gear without runes shows nothing.
  */
 final class RuneSlotEnergy implements IItemDecorator {
     static final RuneSlotEnergy INSTANCE = new RuneSlotEnergy();
 
-    private static final int BACK = 0xFF0B1A20, LINE = 0xFF3FE0FF;
+    private static final int BACK = 0xFF0B1220, LINE = 0xFF8EC2FF;
     /** The durability bar's width: the line spans x + 2 to x + 14. */
     private static final int WIDTH = 13;
 

@@ -1,337 +1,245 @@
 package com.explorationremix.rune.engine;
 
+import com.explorationremix.rune.menu.RuneTableMenu;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The reading rules, one by one, with the rows the design doc uses. */
+/** The socket rules, one by one: one active rune, one modifier, one passive, and the active rune's second phase. */
 class ReaderTest {
     static final HostSpec SWORD = HostSpec.of(Host.SWORD);
-    /** A netherite sword: six slots awake at depth 2, the longest row any gear has. */
-    static final HostSpec BLADE = HostSpec.of(Host.SWORD).withBonus(1);
     static final HostSpec BOW = HostSpec.of(Host.BOW);
-    /** A sword with room for long test rows (9 slots awake at depth 2). */
-    static final HostSpec LONG = HostSpec.of(Host.SWORD).withBonus(4).withMax(200);
 
-    static Reading read(String row, HostSpec spec) { return Reader.read(Row.parse(row), spec, 2); }
+    static Reading read(String runes, HostSpec spec) { return read(runes, spec, 0); }
+
+    static Reading read(String runes, HostSpec spec, int level) { return Reader.read(Loadout.parse(runes), spec, level); }
 
     static String acts(Part p) { return p.acts().toString(); }
 
-    // ------------------------------------------------------------------------------------------------ parts
+    // ------------------------------------------------------------------------------------------------ the loadout
 
     @Test
-    void speakingOrder() {
-        Reading r = read("spark on_hit burst", BLADE);
-        assertEquals(1, r.casts().size());
-        CastReading c = r.cast(0);
-        assertEquals(2, c.parts().size());
-        assertEquals("[spark]", acts(c.part(0)));
-        assertEquals("[burst]", acts(c.part(1)));
-        assertEquals(RuneId.ON_HIT, c.part(1).relay());
-        assertEquals(8 + 14, c.cost());
-        assertEquals("A spark; where it hits, a burst.", Explain.cast(c));
+    void runesGoToTheSocketOfTheirKindInAnyOrder() {
+        Loadout l = Loadout.parse("ember swift spark");
+        assertEquals(RuneId.SPARK, l.active());
+        assertEquals(RuneId.SWIFT, l.modifier());
+        assertEquals(RuneId.EMBER, l.passive());
+        assertEquals("spark swift ember", l.toString());
+        assertEquals(Loadout.parse("spark _ echo"), new Loadout(RuneId.SPARK, null, RuneId.AFTER), "echo is Echo's other name");
+        assertThrows(IllegalArgumentException.class, () -> Loadout.parse("spark orb"), "two active runes");
+        assertThrows(IllegalArgumentException.class, () -> Loadout.parse("moonbeam"));
     }
 
     @Test
-    void aPartFiresTogether() {
-        CastReading c = read("spark orb", BLADE).cast(0);
-        assertEquals(1, c.parts().size());
-        assertEquals("[spark, orb]", acts(c.part(0)));
-        assertEquals("A spark and an orb.", Explain.cast(c));
+    void aRuneOfTheWrongKindIsNeverKept() {
+        Loadout l = new Loadout(RuneId.SWIFT, RuneId.SPARK, RuneId.ORB);
+        assertTrue(l.isEmpty());
+        assertNull(Loadout.EMPTY.with(Socket.ACTIVE, RuneId.EMBER).active());
+        assertEquals(RuneId.ORB, Loadout.EMPTY.with(RuneId.ORB).with(RuneId.HEAVY).active());
     }
 
     @Test
-    void modifiersReachToTheirRight() {
-        assertEquals("[swift+spark, swift+orb]", acts(read("swift spark orb", BLADE).cast(0).part(0)));
-        assertEquals("[spark, swift+orb]", acts(read("spark swift orb", BLADE).cast(0).part(0)));
-    }
-
-    @Test
-    void modifiersStopAtTheNextRelay() {
-        CastReading c = read("heavy spark on_hit burst", BLADE).cast(0);
-        assertEquals("[heavy+spark]", acts(c.part(0)));
-        assertEquals("[burst]", acts(c.part(1)));
-    }
-
-    @Test
-    void sameModifiersAddUpToACap() {
-        Reading r = Reader.read(Row.parse("swift swift swift swift spark"), LONG, 2);
-        assertEquals("[swift+swift+swift+spark]", acts(r.cast(0).part(0)));
-        assertEquals(Note.State.GREY, r.note(0).state());
-        assertEquals(Note.Reason.AT_CAP, r.note(0).reason());
-        assertEquals("only 3 Swift count on one action", Explain.note(r, 0));
-        for (int i = 1; i <= 4; i++) assertTrue(r.note(i).live(), "slot " + i);
-    }
-
-    @Test
-    void theNearestElementWins() {
-        Reading r = read("frost ember spark", BLADE);
-        assertEquals("[ember+spark]", acts(r.cast(0).part(0)));
-        assertEquals(Note.Reason.OVERRULED, r.note(0).reason());
-        assertEquals("Ember is nearer: an action takes one element", Explain.note(r, 0));
-        // each element can still win the actions it is nearest
-        assertEquals("[frost+spark, ember+orb]", acts(read("frost spark ember orb", BLADE).cast(0).part(0)));
-    }
-
-    @Test
-    void aRelayHandsTheRestToEveryCarrierBeforeIt() {
-        Reading r = read("spark orb on_hit burst", BLADE);
-        CastReading c = r.cast(0);
-        Plan p = Plan.expand(c, Limits.DEFAULT);
-        assertEquals(2, p.roots.size());
-        for (Plan.Node n : p.roots) {
-            assertEquals(1, n.children.size());
-            assertEquals(RuneId.BURST, n.children.get(0).act.rune);
-            assertEquals(RuneId.ON_HIT, n.relay);
+    void theTablesButtonsFitInAByte() {
+        // the table's buttons name a socket and a rune in one number, which the game sends as a byte
+        assertTrue(RuneId.values().length < RuneTableMenu.STRIDE, "every rune's number fits under one socket's stride");
+        assertTrue(Socket.values().length * RuneTableMenu.STRIDE <= RuneTableMenu.ENCHANT);
+        assertTrue(RuneTableMenu.ENCHANT <= Byte.MAX_VALUE);
+        for (Socket s : Socket.values()) {
+            for (RuneId r : RuneId.ofKind(s.kind)) {
+                int id = RuneTableMenu.setButton(s, r);
+                assertEquals(s, Socket.byIndex(id / RuneTableMenu.STRIDE));
+                assertEquals(r, RuneId.byOrdinal(id % RuneTableMenu.STRIDE - 1));
+            }
+            assertEquals(0, RuneTableMenu.clearButton(s) % RuneTableMenu.STRIDE);
         }
-        assertEquals(8 + 14 + 2 * 14, c.cost());
-        assertEquals("A spark and an orb; where each hits, a burst.", Explain.cast(c));
+    }
+
+    // ------------------------------------------------------------------------------------------------ the cast
+
+    @Test
+    void noRunesCastNothing() {
+        Reading r = read("", SWORD);
+        assertNull(r.cast());
+        assertFalse(r.castable());
+        assertEquals("No runes yet: set them at an enchanting table.", Explain.castLine(r));
     }
 
     @Test
-    void instantsReleaseAtOnce() {
-        CastReading c = read("wide burst on_hit spark", BLADE).cast(0);
-        assertEquals("[wide+burst]", acts(c.part(0)));
-        assertEquals("[spark]", acts(c.part(1)));
-        assertEquals("A wide burst; at once, from there, a spark.", Explain.cast(c));
-    }
-
-    @Test
-    void movingOneRuneChangesTheJob() {
-        // the doc's pair: a ranged blast, and a blast around you that then fires a spark
-        CastReading ranged = read("spark on_hit wide burst", BLADE).cast(0);
-        CastReading close = read("wide burst on_hit spark", BLADE).cast(0);
-        assertEquals("[spark]", acts(ranged.part(0)));
-        assertEquals("[wide+burst]", acts(close.part(0)));
-        assertEquals(ranged.cost(), close.cost());
-    }
-
-    @Test
-    void fanCopiesWhatFollowsInItsPart() {
-        CastReading c = read("fan spark on_hit burst", BLADE).cast(0);
-        assertEquals("[3xspark]", acts(c.part(0)));
-        Plan p = Plan.expand(c, Limits.DEFAULT);
-        assertEquals(3, p.roots.size());
-        assertEquals(6, p.planned);
-        assertEquals(3 * 8 + 3 * 14, c.cost());
-        assertEquals("Three sparks in a fan; where each hits, a burst.", Explain.cast(c));
-        // the copies spread out from the middle one
-        assertEquals(0.0F, p.roots.get(0).yaw);
-        assertEquals(-12.0F, p.roots.get(1).yaw);
-        assertEquals(12.0F, p.roots.get(2).yaw);
-    }
-
-    @Test
-    void fanOnlyCopiesThingsWithADirection() {
-        Reading r = read("fan burst", BLADE);
-        assertEquals("[burst]", acts(r.cast(0).part(0)));
-        assertEquals(Note.Reason.CANT_CHANGE, r.note(0).reason());
-        assertEquals("Fan doesn't change a Burst", Explain.note(r, 0));
-        // but it copies the directional actions it reaches
-        assertEquals("[3xspark, burst]", acts(read("fan spark burst", BLADE).cast(0).part(0)));
-    }
-
-    @Test
-    void twoFansMakeFiveCopies() {
-        assertEquals("[5xspark]", acts(read("fan fan spark", BLADE).cast(0).part(0)));
-    }
-
-    @Test
-    void castBreaksSplitARow() {
-        Reading r = read("tide fan shard | storm spark", BLADE);
-        assertEquals(2, r.casts().size());
-        assertEquals("[3xtide+shard]", acts(r.cast(0).part(0)));
-        assertEquals("[storm+spark]", acts(r.cast(1).part(0)));
-        assertEquals(0, r.note(0).cast());
-        assertEquals(1, r.note(3).cast());
-        assertEquals(List.of(
-                "Cast 1 of 2: Three tide shards in a fan. (24 energy, 0.5 s)",
-                "Cast 2 of 2: A storm spark. (11 energy, 0.5 s)"), Explain.lines(r));
-    }
-
-    @Test
-    void greyRunesSayWhy() {
-        Reading r = read("spark swift", BLADE);
-        assertEquals(Note.Reason.NOTHING_RIGHT, r.note(1).reason());
-        assertEquals("Swift has nothing to its right", Explain.note(r, 1));
-        Reading b = read("bounce burst", BLADE);
-        assertEquals("Bounce doesn't change a Burst", Explain.note(b, 0));
-        assertEquals(14, b.cast(0).cost(), "a grey rune costs nothing");
-    }
-
-    @Test
-    void aRelayWithNothingToRideOnDoesNothing() {
-        Reading r = read("on_hit spark", BLADE);
-        assertEquals(Note.Reason.NOTHING_BEFORE, r.note(0).reason());
-        assertEquals("On hit has nothing before it to ride on", Explain.note(r, 0));
-        assertEquals(1, r.cast(0).parts().size());
-        assertEquals("[spark]", acts(r.cast(0).part(0)));
-        Reading after = read("spark on_hit", BLADE);
-        assertEquals("On hit has nothing after it", Explain.note(after, 1));
-    }
-
-    @Test
-    void aGreyRelayJoinsThePartsOnEitherSide() {
-        // the first relay carries nothing (Wide is no action): it does nothing, and Wide joins the spark's part
-        Reading r = Reader.read(Row.parse("spark on_hit wide after burst"), LONG, 2);
-        CastReading c = r.cast(0);
-        assertEquals(Note.Reason.NOTHING_AFTER, r.note(1).reason());
-        assertEquals(Note.Reason.NOTHING_RIGHT, r.note(2).reason());
-        assertEquals(2, c.parts().size());
-        assertEquals(RuneId.AFTER, c.part(1).relay());
-        assertEquals("[burst]", acts(c.part(1)));
-    }
-
-    @Test
-    void partsPastTheLimitAreTooDeep() {
-        Reading r = Reader.read(Row.parse("spark on_hit spark on_hit spark on_hit spark on_hit spark"), LONG.withBonus(4), 2);
-        CastReading c = r.cast(0);
-        assertEquals(4, c.parts().size());
-        assertEquals(Note.Reason.TOO_DEEP, r.note(7).reason());
-        assertEquals(Note.Reason.TOO_DEEP, r.note(8).reason());
-        assertEquals("too deep: four parts at most", Explain.note(r, 8));
-        assertEquals(4 * 8, c.cost());
-    }
-
-    @Test
-    void copiesPastTheLimitAreCutWholeAndNotPaid() {
-        // five sparks, three shards on each, a burst on each shard: 5 + 15 + 15 = 35 wanted, 16 cast
-        Reading r = Reader.read(Row.parse("fan fan spark on_hit fan shard on_hit burst"), LONG, 2);
-        CastReading c = r.cast(0);
-        assertEquals(35, c.wanted());
-        assertEquals(16, c.planned());
-        assertTrue(c.cut());
-        // 5 sparks, then 11 of the 15 shards; no burst fits
-        assertEquals(5 * 8 + 11 * 5, c.cost());
-        Plan p = Plan.expand(c, Limits.DEFAULT);
-        int n = 0;
-        for (Plan.Node root : p.roots) n += root.size();
-        assertEquals(16, n);
-        assertTrue(Explain.costs(r, c).contains("16 of 35 cast"));
-    }
-
-    @Test
-    void sleepingSlotsAreSkippedAndKept() {
-        Reading home = Reader.read(Row.parse("spark burst on_hit wide orb"), SWORD, 0);
-        assertEquals(3, home.awake());
-        assertEquals(Note.State.ASLEEP, home.note(3).state());
-        assertEquals("wakes in the Blue Reaches", Explain.note(home, 3));
-        assertEquals("wakes in the Deep Gardens", Explain.note(home, 4));
-        // [spark][burst][on hit] at home: the relay has nothing after it
-        assertEquals("[spark, burst]", acts(home.cast(0).part(0)));
-        Reading deep = Reader.read(Row.parse("spark burst on_hit wide orb"), SWORD, 2);
-        assertEquals(5, deep.awake());
-        assertEquals(2, deep.cast(0).parts().size());
-        // a bow keeps the shorter row
-        assertEquals(2, Reader.read(Row.empty(4), BOW, 0).awake());
-        assertEquals(4, Reader.read(Row.empty(4), BOW, 2).awake());
-    }
-
-    @Test
-    void diamondGearWakesOneMore() {
-        HostSpec diamond = SWORD.withBonus(1);
-        assertEquals(4, Reader.read(Row.empty(6), diamond, 0).awake());
-        assertEquals(6, Reader.read(Row.empty(6), diamond, 2).awake());
-    }
-
-    @Test
-    void aCastDearerThanTheGearHoldsIsRed() {
-        HostSpec small = SWORD.withMax(20);
-        Reading r = Reader.read(Row.parse("spark | orb on_hit burst"), small.withBonus(2), 2);
-        assertFalse(r.cast(0).red());
-        assertTrue(r.cast(1).red());
-        assertEquals("(costs 28, this sword holds 20)", Explain.costs(r, r.cast(1)));
-    }
-
-    // ------------------------------------------------------------------------------------------------ bow
-
-    @Test
-    void theArrowIsTheFirstCarrier() {
-        CastReading c = read("seek pierce", BOW).cast(0);
+    void theActiveRuneIsTheCast() {
+        Reading r = read("spark", SWORD);
+        CastReading c = r.cast();
+        assertEquals(1, r.casts().size());
         assertEquals(1, c.parts().size());
-        assertEquals("[seek+pierce+arrow]", acts(c.part(0)));
-        assertEquals(6, c.cost());
-        assertEquals("A seeking piercing arrow.", Explain.cast(c));
+        assertEquals("[spark]", acts(c.part(0)));
+        assertEquals(8, c.cost());
+        assertEquals(Host.SWORD.baseDelay + RuneId.SPARK.delay, c.delay());
+        assertEquals(Host.SWORD.baseRecovery + RuneId.SPARK.recovery, r.recovery());
+        assertEquals("A spark.", Explain.cast(c));
+        assertTrue(r.note(Socket.ACTIVE).live());
     }
 
     @Test
-    void whatFollowsTheArrowGoesOffWhereItLands() {
-        CastReading c = read("ember spark burst", BOW).cast(0);
-        assertEquals("[ember+arrow]", acts(c.part(0)));
+    void theModifierChangesTheActiveRune() {
+        Reading r = read("spark swift", SWORD);
+        CastReading c = r.cast();
+        assertEquals("[swift+spark]", acts(c.part(0)));
+        assertEquals(8 + 2, c.cost());
+        assertEquals(Host.SWORD.baseDelay + RuneId.SPARK.delay + RuneId.SWIFT.delay, c.delay());
+        assertEquals("A fast spark.", Explain.cast(c));
+        assertTrue(r.note(Socket.MODIFIER).live());
+        assertEquals("A heavy orb.", Explain.cast(read("orb heavy", SWORD).cast()));
+    }
+
+    @Test
+    void aModifierThatChangesNothingIsGreyAndFree() {
+        Reading r = read("burst swift", SWORD);
+        assertTrue(r.note(Socket.MODIFIER).grey());
+        assertEquals(Note.Reason.CANT_CHANGE, r.note(Socket.MODIFIER).reason());
+        assertEquals("Swift doesn't change a burst", Explain.note(r, Socket.MODIFIER));
+        assertEquals(14, r.cast().cost(), "Swift costs nothing here");
+        assertEquals(Host.SWORD.baseDelay + RuneId.BURST.delay, r.cast().delay());
+        assertEquals("[burst]", acts(r.cast().part(0)));
+    }
+
+    @Test
+    void aModifierAloneOnASwordDoesNothing() {
+        Reading r = read("heavy", SWORD);
+        assertNull(r.cast());
+        assertEquals(Note.Reason.NO_ACTIVE, r.note(Socket.MODIFIER).reason());
+        assertEquals("Heavy needs an active rune", Explain.note(r, Socket.MODIFIER));
+        assertEquals("No active rune: it casts nothing.", Explain.castLine(r));
+    }
+
+    @Test
+    void fanCopiesADirectionalRuneThreeTimes() {
+        Reading r = read("spark fan", SWORD);
+        CastReading c = r.cast();
+        assertEquals("[3xspark]", acts(c.part(0)));
+        assertEquals(3 * 8, c.cost(), "every copy pays");
+        assertEquals("Three sparks in a fan.", Explain.cast(c));
+        Reading burst = read("burst fan", SWORD);
+        assertTrue(burst.note(Socket.MODIFIER).grey(), "a burst has no direction to fan");
+        assertEquals("[burst]", acts(burst.cast().part(0)));
+    }
+
+    @Test
+    void aCastDearerThanTheWeaponHoldsIsRed() {
+        HostSpec small = SWORD.withMax(10);
+        Reading r = read("orb", small);
+        assertTrue(r.cast().red());
+        assertFalse(r.castable());
+        assertEquals("(costs 14, this sword holds 10)", Explain.costs(r, r.cast()));
+    }
+
+    // ------------------------------------------------------------------------------------------------ the passive
+
+    @Test
+    void anElementPassiveIsTheActiveRunesElementToo() {
+        Reading r = read("spark frost", SWORD);
+        assertEquals(Element.FROST, r.element());
+        assertEquals("[frost+spark]", acts(r.cast().part(0)));
+        assertEquals("A frost spark.", Explain.cast(r.cast()));
+        assertEquals("Every full swing carries frost, and so does the spark.", Explain.passiveLine(r));
+        assertEquals("Every arrow carries frost.", Explain.passiveLine(read("frost", BOW)));
+        assertEquals(8, r.cast().cost(), "passives are free");
+    }
+
+    @Test
+    void onHitAndEchoNeedAnActiveRune() {
+        assertEquals(Note.Reason.NO_ACTIVE, read("on_hit", SWORD).note(Socket.PASSIVE).reason());
+        assertEquals("On hit needs an active rune", Explain.note(read("on_hit", SWORD), Socket.PASSIVE));
+        assertEquals(Note.Reason.NO_ACTIVE, read("echo", SWORD).note(Socket.PASSIVE).reason());
+        assertTrue(read("spark on_hit", SWORD).passiveIs(RuneId.ON_HIT));
+        assertEquals("Every third full swing that hits a foe casts the spark for free.", Explain.passiveLine(read("spark on_hit", SWORD)));
+    }
+
+    @Test
+    void echoRepeatsOnlyWhatStrikesOrLights() {
+        for (RuneId a : RuneId.ofKind(RuneKind.ACTION)) {
+            Reading r = Reader.read(new Loadout(a, null, RuneId.AFTER), SWORD, 0);
+            boolean repeats = a != RuneId.BARRIER && a != RuneId.DASH && a != RuneId.REEL;
+            assertEquals(repeats, r.passiveIs(RuneId.AFTER), a.id);
+            if (!repeats) assertEquals(Note.Reason.CANT_ECHO, r.note(Socket.PASSIVE).reason(), a.id);
+        }
+        assertEquals("Echo can't repeat a dash", Explain.note(read("dash echo", SWORD), Socket.PASSIVE));
+    }
+
+    @Test
+    void lanternAndThirstAlwaysWork() {
+        assertTrue(read("lantern", SWORD).passiveIs(RuneId.LANTERN));
+        assertTrue(read("thirst", BOW).passiveIs(RuneId.THIRST));
+        assertNull(read("lantern", SWORD).cast(), "a passive alone casts nothing");
+    }
+
+    // ------------------------------------------------------------------------------------------------ bows
+
+    @Test
+    void aBowsCastRidesItsArrow() {
+        CastReading c = read("spark", BOW).cast();
+        assertEquals(2, c.parts().size());
+        assertEquals("[arrow]", acts(c.part(0)));
         assertEquals(RuneId.ON_HIT, c.part(1).relay());
-        assertEquals(-1, c.part(1).relaySlot());
-        assertEquals("[spark, burst]", acts(c.part(1)));
-        assertEquals("An ember arrow; where it hits, a spark and a burst.", Explain.cast(c));
+        assertEquals("[spark]", acts(c.part(1)));
+        assertEquals(8, c.cost(), "the arrow itself is free");
+        assertEquals("An arrow; where it hits, a spark.", Explain.cast(c));
+        assertEquals(RuneId.SPARK, c.active().rune);
     }
 
     @Test
-    void aRelayRightAfterTheFrontModifiersHooksTheArrow() {
-        CastReading air = read("after wide burst", BOW).cast(0);
-        assertEquals(RuneId.AFTER, air.part(1).relay());
-        assertEquals(0, air.part(1).relaySlot());
-        assertEquals("An arrow; a moment later, wherever it has got to, a wide burst.", Explain.cast(air));
-        // the doc's crossbow: a homing bolt that goes off over the group a moment after leaving
-        CastReading volley = read("seek after storm burst", HostSpec.of(Host.CROSSBOW)).cast(0);
-        assertEquals("[seek+arrow]", acts(volley.part(0)));
-        assertEquals("[storm+burst]", acts(volley.part(1)));
+    void someModifiersShapeABowsArrow() {
+        CastReading seek = read("spark seek", BOW).cast();
+        assertEquals("[seek+arrow]", acts(seek.part(0)));
+        assertEquals("[spark]", acts(seek.part(1)));
+        CastReading heavy = read("spark heavy", BOW).cast();
+        assertEquals("[arrow]", acts(heavy.part(0)));
+        assertEquals("[heavy+spark]", acts(heavy.part(1)), "Heavy changes the rune the arrow carries");
+        CastReading fan = read("spark fan", BOW).cast();
+        assertEquals("[3xarrow]", acts(fan.part(0)), "Fan looses three arrows, each carrying the rune");
+        assertEquals(3, fan.part(0).instances());
     }
 
     @Test
-    void fanAtTheFrontLoosesThreeArrows() {
-        CastReading c = read("fan on_hit burst", BOW).cast(0);
-        assertEquals("[3xarrow]", acts(c.part(0)));
-        // three bursts, and the two arrows the runes add
-        assertEquals(3 * 14 + 2 * Act.ARROW_COPY, c.cost());
+    void aBowWithAModifierAloneStillShapesItsArrows() {
+        Reading r = read("seek", BOW);
+        assertEquals("[seek+arrow]", acts(r.cast().part(0)));
+        assertNull(r.cast().active());
+        assertTrue(r.note(Socket.MODIFIER).live());
+        Reading wide = read("wide", BOW);
+        assertNull(wide.cast());
+        assertEquals("Wide doesn't change an arrow", Explain.note(wide, Socket.MODIFIER));
+    }
+
+    // ------------------------------------------------------------------------------------------------ the second phase
+
+    @Test
+    void theSecondPhaseWakesAtTheRunesLevel() {
+        int at = RuneId.SPARK.phaseLevel;
+        Reading below = read("spark", SWORD, at - 1);
+        assertFalse(below.empowered());
+        assertEquals(1, below.levelsToGo());
+        assertEquals("[spark]", acts(below.cast().part(0)));
+        assertEquals("Phase two at level " + at + ": " + RuneId.SPARK.phaseTwo, Explain.phaseLine(below));
+        Reading awake = read("spark", SWORD, at);
+        assertTrue(awake.empowered());
+        assertEquals(0, awake.levelsToGo());
+        assertEquals("[spark II]", acts(awake.cast().part(0)));
+        assertEquals("Phase two: " + RuneId.SPARK.phaseTwo, Explain.phaseLine(awake));
+        assertEquals(below.cast().cost(), awake.cast().cost(), "the second phase costs no more");
+        assertTrue(read("spark", BOW, at).cast().part(1).acts().get(0).empowered, "on a bow, the rune the arrow carries");
     }
 
     @Test
-    void theArrowsFanAddsAreNeverFree() {
-        CastReading three = read("fan", BOW).cast(0), five = read("fan fan", BOW).cast(0);
-        assertEquals("[3xarrow]", acts(three.part(0)));
-        assertEquals(2 * Act.ARROW_COPY, three.cost());
-        assertEquals("[5xarrow]", acts(five.part(0)));
-        assertEquals(4 * Act.ARROW_COPY, five.cost());
-        // a crossbow's too; the shot itself stays free
-        assertEquals(4 * Act.ARROW_COPY, read("fan fan", HostSpec.of(Host.CROSSBOW)).cast(0).cost());
-        assertEquals(6, read("seek pierce", BOW).cast(0).cost());
-    }
-
-    @Test
-    void modifiersThatCantShapeAnArrowAreGrey() {
-        Reading r = read("arc", BOW);
-        assertTrue(r.casts().isEmpty(), "a bare arrow is a plain shot, not a cast");
-        assertEquals("Arc doesn't change an arrow", Explain.note(r, 0));
-    }
-
-    // ------------------------------------------------------------------------------------------------ the doc's builds
-
-    @Test
-    void theDocsExampleBuildsReadAsWritten() {
-        assertEquals("An arrow; where it hits, three shards in a fan.", Explain.cast(read("on_hit fan shard", BOW).cast(0)));
-        assertEquals("A dash; when you hit something, a siphoning cleave.", Explain.cast(read("dash on_hit siphon cleave", SWORD).cast(0)));
-        assertEquals("A storm burst.", Explain.cast(read("storm burst", SWORD).cast(0)));
-        assertEquals("A lobbed orb; a moment later, wherever it has got to, a wide frost field.",
-                Explain.cast(read("arc orb after wide frost field", BLADE).cast(0)));
-        assertEquals("A fast spark; where it hits, a reel.", Explain.cast(read("swift spark on_hit reel", SWORD).cast(0)));
-        assertEquals("An orb; where it hits, three shards in a fan; where each hits, a burst.",
-                Explain.cast(read("orb on_hit fan shard on_hit burst", BLADE).cast(0)));
-        assertEquals("Three bouncing glow motes in a fan.", Explain.cast(read("bounce fan glow", BLADE).cast(0)));
-        assertEquals("A burst.", Explain.cast(read("burst", SWORD).cast(0)));
-        // every one of them fits its gear at the depth the doc gives
-        assertEquals(6, Reader.read(Row.empty(6), BLADE, 2).awake());
-    }
-
-    @Test
-    void nothingToCast() {
-        Reading r = read("", BLADE);
-        assertTrue(r.casts().isEmpty());
-        assertEquals(List.of("No runes."), Explain.lines(r));
-        assertNull(r.cast(0));
-        assertEquals(List.of("Nothing here casts."), Explain.lines(read("swift wide", BLADE)));
+    void everyActiveRuneHasItsOwnPhaseLevel() {
+        java.util.Set<Integer> levels = new java.util.HashSet<>();
+        for (RuneId a : RuneId.ofKind(RuneKind.ACTION)) {
+            assertTrue(a.phaseLevel > 0 && a.phaseLevel <= 30, a.id + " wakes at a level players reach");
+            assertFalse(a.phaseTwo.isBlank(), a.id + " says what its second phase does");
+            levels.add(a.phaseLevel);
+        }
+        assertEquals(RuneId.ofKind(RuneKind.ACTION).size(), levels.size(), "no two at the same level");
     }
 }

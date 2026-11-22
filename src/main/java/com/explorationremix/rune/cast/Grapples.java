@@ -24,8 +24,8 @@ import javax.annotation.Nullable;
  * and says when it is done. The server lets go itself on a sneak, a throw, the block caught being broken, a fall
  * well below the way, or the pull taking far too long, and tells the game to stop.
  *
- * <p>One pull each time they touch the ground (or water), so a sheer face can't be climbed pull after pull and a
- * fall can't be stopped again and again. A pull adds nothing to a fall, but a fall already under way when it started
+ * <p>One pull each time they touch the ground (or water), two in Reel's second phase, so a sheer face can't be
+ * climbed pull after pull and a fall can't be stopped again and again. A pull adds nothing to a fall, but a fall already under way when it started
  * still counts when they land.
  */
 public final class Grapples {
@@ -79,15 +79,18 @@ public final class Grapples {
      * Starts pulling the player to {@code at}, a point on a block (a carrier stopped there, or they aimed at it), in
      * sight and within reach. False if it can't: too near or too far, or not a block seen from where they are.
      */
-    static boolean start(ServerPlayer p, Vec3 at, int swift, int colour) {
+    static boolean start(ServerPlayer p, Vec3 at, int swift, int colour) { return start(p, at, swift, colour, Instants.GRAPPLE_RANGE, 1); }
+
+    /** As above, reaching up to {@code range} (more with Swift), with {@code airPulls} pulls before they must land. */
+    static boolean start(ServerPlayer p, Vec3 at, int swift, int colour, double range, int airPulls) {
         ServerLevel level = p.serverLevel();
         if (p.isPassenger() || p.isFallFlying() || p.isSpectator() || p.isSleeping()) return false;
         Caster c = CastService.caster(p);
-        if (c.airPullUsed) return false;
+        if (c.airPulls >= airPulls) return false;
         Vec3 chest = p.getEyePosition().add(0, -0.3, 0);
         Vec3 to = at.subtract(chest);
         double dist = to.length();
-        if (dist < 1.5 || dist > Instants.GRAPPLE_RANGE + 4 * swift) return false;
+        if (dist < 1.5 || dist > range + 4 * swift) return false;
         // the block the pull reaches, and the face it reaches it by, as seen from where they are
         BlockHitResult face = FlyingRune.clip(level, chest, at.add(to.scale(1.0 / dist)), p);
         if (face.getType() == HitResult.Type.MISS || face.getLocation().distanceTo(at) > 1.0) return false;
@@ -138,7 +141,7 @@ public final class Grapples {
         if (c.pull != null) letGo(p, c);
         int id = ++c.pullIds;
         c.pull = new Grapple(id, level, hit, caught, colour, now, until, lowest, p.isShiftKeyDown(), p.fallDistance);
-        c.airPullUsed = true;
+        c.airPulls++;
         c.pullTick = now;
         RuneNet.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), new RuneNet.PullStart(id, stand, speed, ticks, points));
         return true;

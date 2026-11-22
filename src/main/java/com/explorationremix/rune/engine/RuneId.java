@@ -6,54 +6,64 @@ import java.util.List;
 import java.util.Locale;
 
 import static com.explorationremix.rune.engine.RuneKind.ACTION;
-import static com.explorationremix.rune.engine.RuneKind.ELEMENT;
-import static com.explorationremix.rune.engine.RuneKind.FAN;
 import static com.explorationremix.rune.engine.RuneKind.MODIFIER;
-import static com.explorationremix.rune.engine.RuneKind.RELAY;
+import static com.explorationremix.rune.engine.RuneKind.PASSIVE;
 
 /**
- * Every rune, with the numbers the rules read: energy cost, cast delay and recovery (ticks), and for actions their
- * shape and base damage. Costs are per action actually cast; a modifier's or element's cost is paid again by every
- * action instance it changes. Delay counts once per rune in a cast, recovery once per rune in the row.
+ * Every rune, with the numbers the rules read: energy cost, cast delay and recovery (ticks), and for active runes their
+ * shape, base damage and the XP level their second phase wakes at. A weapon holds one rune of each kind (RuneKind): its
+ * active rune is what it casts, its modifier changes that cast, and its passive is what the weapon does all the time.
+ * A modifier's cost is paid by every copy of the cast it changes; passives cost nothing.
  *
  * <p>{@link #ARROW} is not a rune: it stands for a bow's or crossbow's own arrow, the first carrier of every cast
- * those gear make. It has no item and costs nothing.
+ * those weapons make. It has no item and costs nothing.
  *
- * <p>{@code layer} is where a rune is first found: 0 the Upper Caves (simple actions and modifiers), 1 the Blue
- * Reaches (relays, Fan and the rest of the actions), 2 the Deep Gardens (elements and Siphon).
+ * <p>{@code layer} is where a rune is first found: 0 the Upper Caves, 1 the Blue Reaches, 2 the Deep Gardens. The id
+ * of Echo is "after" (it was "After a moment" when runes sat in rows), so runes already found keep working.
  */
 public enum RuneId {
-    // ---- actions
-    SPARK("spark", "Spark", ACTION, 8, 3, 3, 0, Shape.BOLT, true, 4.0F),
-    SHARD("shard", "Shard", ACTION, 5, 2, 2, 0, Shape.BOLT, true, 3.0F),
-    ORB("orb", "Orb", ACTION, 14, 8, 6, 0, Shape.BOLT, true, 7.0F),
-    GLOW("glow", "Glow", ACTION, 4, 3, 2, 0, Shape.BOLT, true, 0.0F),
-    BURST("burst", "Burst", ACTION, 14, 6, 6, 0, Shape.INSTANT, false, 6.0F),
-    CLEAVE("cleave", "Cleave", ACTION, 10, 6, 4, 0, Shape.INSTANT, true, 6.0F),
-    FIELD("field", "Field", ACTION, 16, 8, 8, 1, Shape.FIELD, false, 1.0F),
-    BARRIER("barrier", "Barrier", ACTION, 12, 6, 8, 0, Shape.INSTANT, false, 0.0F),
-    DASH("dash", "Dash", ACTION, 10, 8, 8, 0, Shape.SELF, false, 0.0F),
-    REEL("reel", "Reel", ACTION, 8, 5, 6, 1, Shape.INSTANT, false, 0.0F),
-    // ---- modifiers (cap: how many of one kind can count on an action)
-    SWIFT("swift", "Swift", MODIFIER, 2, -2, 0, 0, 3),
-    HEAVY("heavy", "Heavy", MODIFIER, 4, 4, 2, 0, 3),
-    WIDE("wide", "Wide", MODIFIER, 4, 2, 2, 0, 3),
-    SEEK("seek", "Seek", MODIFIER, 3, 1, 1, 1, 2),
-    ARC("arc", "Arc", MODIFIER, 1, 0, 0, 0, 2),
-    BOUNCE("bounce", "Bounce", MODIFIER, 2, 0, 1, 0, 3),
-    PIERCE("pierce", "Pierce", MODIFIER, 3, 1, 1, 1, 3),
-    SIPHON("siphon", "Siphon", MODIFIER, 4, 2, 2, 2, 1),
-    // ---- elements: one per action, the nearest to its left wins
-    EMBER("ember", "Ember", ELEMENT, 3, 1, 1, 2, Element.EMBER),
-    FROST("frost", "Frost", ELEMENT, 3, 1, 1, 2, Element.FROST),
-    STORM("storm", "Storm", ELEMENT, 3, 1, 1, 2, Element.STORM),
-    TIDE("tide", "Tide", ELEMENT, 3, 1, 1, 2, Element.TIDE),
-    // ---- relays and Fan: free; only what they make costs
-    ON_HIT("on_hit", "On hit", RELAY, 0, 0, 0, 1, 1),
-    AFTER("after", "After a moment", RELAY, 0, 0, 0, 1, 1),
-    FAN("fan", "Fan", RuneKind.FAN, 0, 2, 2, 1, 2),
+    // ---- active runes: shape, directional (Fan can copy it), damage, and the XP level of the second phase
+    SPARK("spark", "Spark", ACTION, 8, 3, 3, 0, Shape.BOLT, true, 4.0F, 12,
+            "Fork: where it strikes a foe, it leaps on to two more nearby."),
+    SHARD("shard", "Shard", ACTION, 5, 2, 2, 0, Shape.BOLT, true, 3.0F, 6,
+            "Splinter: three smaller shards fly on from whatever it hits."),
+    ORB("orb", "Orb", ACTION, 14, 8, 6, 0, Shape.BOLT, true, 7.0F, 24,
+            "Gravity: it drags foes near its path in toward it, and bursts where it stops."),
+    GLOW("glow", "Glow", ACTION, 4, 3, 2, 0, Shape.BOLT, true, 0.0F, 4,
+            "Scatter: lights spray onto the rock all round where it stops, and foes near the one it marks glow too."),
+    BURST("burst", "Burst", ACTION, 14, 6, 6, 0, Shape.INSTANT, false, 6.0F, 20,
+            "Aftershock: a wider blast follows a moment later."),
+    CLEAVE("cleave", "Cleave", ACTION, 10, 6, 4, 0, Shape.INSTANT, true, 6.0F, 16,
+            "Wave: the slash flies on for ten blocks through everything in its way."),
+    FIELD("field", "Field", ACTION, 16, 8, 8, 1, Shape.FIELD, false, 1.0F, 14,
+            "Pull: it draws creatures in to its middle, and lasts twice as long."),
+    BARRIER("barrier", "Barrier", ACTION, 12, 6, 8, 0, Shape.INSTANT, false, 0.0F, 10,
+            "Bulwark: a bigger wall that shoves aside whatever stands where it rises, for 16 seconds."),
+    DASH("dash", "Dash", ACTION, 10, 8, 8, 0, Shape.SELF, false, 0.0F, 18,
+            "Charge: you slam through what you dash into, and can dash twice before you land."),
+    REEL("reel", "Reel", ACTION, 8, 5, 6, 1, Shape.INSTANT, false, 0.0F, 8,
+            "Long line: it reaches half as far again, and pulls twice before you land."),
+    // ---- modifiers: they change the active rune (on a bow, Swift, Seek, Pierce and Fan shape the arrow itself)
+    SWIFT("swift", "Swift", MODIFIER, 2, -2, 0, 0),
+    HEAVY("heavy", "Heavy", MODIFIER, 4, 4, 2, 0),
+    WIDE("wide", "Wide", MODIFIER, 4, 2, 2, 0),
+    SEEK("seek", "Seek", MODIFIER, 3, 1, 1, 1),
+    ARC("arc", "Arc", MODIFIER, 1, 0, 0, 0),
+    BOUNCE("bounce", "Bounce", MODIFIER, 2, 0, 1, 0),
+    PIERCE("pierce", "Pierce", MODIFIER, 3, 1, 1, 1),
+    SIPHON("siphon", "Siphon", MODIFIER, 4, 2, 2, 2),
+    FAN("fan", "Fan", MODIFIER, 0, 2, 2, 1),
+    // ---- passives: free; what the weapon does all the time
+    EMBER("ember", "Ember", PASSIVE, 0, 0, 0, 2, Element.EMBER),
+    FROST("frost", "Frost", PASSIVE, 0, 0, 0, 2, Element.FROST),
+    STORM("storm", "Storm", PASSIVE, 0, 0, 0, 2, Element.STORM),
+    TIDE("tide", "Tide", PASSIVE, 0, 0, 0, 2, Element.TIDE),
+    ON_HIT("on_hit", "On hit", PASSIVE, 0, 0, 0, 1, Element.NONE),
+    AFTER("after", "Echo", PASSIVE, 0, 0, 0, 1, Element.NONE),
+    LANTERN("lantern", "Lantern", PASSIVE, 0, 0, 0, 0, Element.NONE),
+    THIRST("thirst", "Thirst", PASSIVE, 0, 0, 0, 1, Element.NONE),
     // ---- not a rune: a bow's own arrow
-    ARROW("arrow", "Arrow", ACTION, 0, 0, 0, -1, Shape.BOLT, true, 0.0F);
+    ARROW("arrow", "Arrow", ACTION, 0, 0, 0, -1, Shape.BOLT, true, 0.0F, 0, "");
 
     /** Path of the id ({@code explorationremix:rune_<id>} for the item). */
     public final String id;
@@ -62,31 +72,34 @@ public enum RuneId {
     public final int cost, delay, recovery;
     /** 0 Upper Caves, 1 Blue Reaches, 2 Deep Gardens; -1 not a rune. */
     public final int layer;
-    /** Actions only. */
+    /** Active runes only. */
     public final Shape shape;
-    /** Actions only: Fan can copy it (it has a direction). */
+    /** Active runes only: Fan can copy it (it has a direction). */
     public final boolean directional;
-    /** Actions only: base damage before the gear's power and modifiers (Field: per pulse). */
+    /** Active runes only: base damage before the weapon's power and the modifier (Field: per pulse). */
     public final float damage;
-    /** Modifiers and Fan: how many of one kind count on an action. */
-    public final int cap;
-    /** Elements only. */
+    /** Active runes only: the XP level at which the second phase wakes (it works while the player's level is this or more). */
+    public final int phaseLevel;
+    /** Active runes only: what the second phase does, in a line. */
+    public final String phaseTwo;
+    /** The four element passives only. */
     public final Element element;
 
-    RuneId(String id, String title, RuneKind kind, int cost, int delay, int recovery, int layer, Shape shape, boolean directional, float damage) {
-        this(id, title, kind, cost, delay, recovery, layer, shape, directional, damage, 0, Element.NONE);
+    RuneId(String id, String title, RuneKind kind, int cost, int delay, int recovery, int layer, Shape shape, boolean directional, float damage,
+           int phaseLevel, String phaseTwo) {
+        this(id, title, kind, cost, delay, recovery, layer, shape, directional, damage, phaseLevel, phaseTwo, Element.NONE);
     }
 
-    RuneId(String id, String title, RuneKind kind, int cost, int delay, int recovery, int layer, int cap) {
-        this(id, title, kind, cost, delay, recovery, layer, null, false, 0.0F, cap, Element.NONE);
+    RuneId(String id, String title, RuneKind kind, int cost, int delay, int recovery, int layer) {
+        this(id, title, kind, cost, delay, recovery, layer, null, false, 0.0F, 0, "", Element.NONE);
     }
 
     RuneId(String id, String title, RuneKind kind, int cost, int delay, int recovery, int layer, Element element) {
-        this(id, title, kind, cost, delay, recovery, layer, null, false, 0.0F, 1, element);
+        this(id, title, kind, cost, delay, recovery, layer, null, false, 0.0F, 0, "", element);
     }
 
     RuneId(String id, String title, RuneKind kind, int cost, int delay, int recovery, int layer, Shape shape, boolean directional,
-           float damage, int cap, Element element) {
+           float damage, int phaseLevel, String phaseTwo, Element element) {
         this.id = id;
         this.title = title;
         this.kind = kind;
@@ -97,7 +110,8 @@ public enum RuneId {
         this.shape = shape;
         this.directional = directional;
         this.damage = damage;
-        this.cap = cap;
+        this.phaseLevel = phaseLevel;
+        this.phaseTwo = phaseTwo;
         this.element = element;
     }
 
@@ -112,30 +126,56 @@ public enum RuneId {
     /** Every real rune (not {@link #ARROW}), in the order of the rune list. */
     public static List<RuneId> runes() { return RUNES; }
 
-    /** The rune with this id path, or null (never {@link #ARROW}). */
+    /** The runes of one kind, in the rune list's order. */
+    public static List<RuneId> ofKind(RuneKind k) {
+        List<RuneId> out = new ArrayList<>();
+        for (RuneId r : RUNES) if (r.kind == k) out.add(r);
+        return out;
+    }
+
+    /** The rune with this id path, or null (never {@link #ARROW}); "echo" is Echo too. */
     public static RuneId byId(String id) {
         if (id == null || id.isEmpty()) return null;
         String s = id.toLowerCase(Locale.ROOT);
+        if (s.equals("echo")) return AFTER;
         for (RuneId r : RUNES) if (r.id.equals(s)) return r;
         return null;
     }
 
+    /** The rune at this place in {@link #values()} (as the table's buttons name them), or null; never {@link #ARROW}. */
+    public static RuneId byOrdinal(int i) {
+        RuneId[] all = values();
+        return i >= 0 && i < all.length && all[i] != ARROW ? all[i] : null;
+    }
+
     public boolean isAction() { return kind == ACTION; }
+
+    public boolean isModifier() { return kind == MODIFIER; }
+
+    public boolean isPassive() { return kind == PASSIVE; }
+
+    /** One of the four element passives. */
+    public boolean isElement() { return element != Element.NONE; }
 
     /** Hurts what it hits: elements, Heavy and Siphon can change it. */
     public boolean damaging() {
         return this == SPARK || this == SHARD || this == ORB || this == BURST || this == CLEAVE || this == FIELD || this == ARROW;
     }
 
+    /** An active rune Echo can repeat: one that strikes, or lights (never a wall, a throw or a pull). */
+    public boolean echoes() {
+        return this == SPARK || this == SHARD || this == ORB || this == GLOW || this == BURST || this == CLEAVE || this == FIELD;
+    }
+
     /** A bolt that flies through the air: Seek, Arc, Bounce and Pierce can change it. */
     public boolean flies() { return this == SPARK || this == SHARD || this == ORB || this == GLOW; }
 
-    /**
-     * Whether this modifier, element or Fan changes the action {@code a}. A rune that changes none of the actions to its
-     * right in its part does nothing and shows grey.
-     */
+    /** On a bow or crossbow, this modifier shapes the arrow itself rather than the rune the arrow carries. */
+    public boolean shapesArrow() { return this == SWIFT || this == SEEK || this == PIERCE || this == FAN; }
+
+    /** Whether this modifier changes the active rune {@code a}. A modifier that changes nothing shows grey. */
     public boolean changes(RuneId a) {
-        if (!a.isAction()) return false;
+        if (a == null || !a.isAction()) return false;
         return switch (this) {
             case SWIFT -> a.flies() || a == ARROW || a == DASH || a == REEL;
             case HEAVY -> a.damaging();
@@ -144,13 +184,12 @@ public enum RuneId {
             case ARC, BOUNCE -> a.flies();
             case PIERCE -> a == SPARK || a == SHARD || a == ORB || a == ARROW;
             case SIPHON -> a.damaging();
-            case EMBER, FROST, STORM, TIDE -> a.damaging();
             case FAN -> a.directional;
             default -> false;
         };
     }
 
-    /** "a"/"an" plus the lower-case name, for readings. */
+    /** The lower-case name, for readings ("a fast spark"). */
     public String noun() {
         return switch (this) {
             case GLOW -> "glow mote";

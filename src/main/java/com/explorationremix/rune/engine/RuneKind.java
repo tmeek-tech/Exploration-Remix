@@ -1,9 +1,15 @@
 package com.explorationremix.rune.engine;
 
 /**
- * What a rune is in a row. Actions make something happen; modifiers and elements change the actions to their right;
- * relays hand the rest of the row to what came before them; Fan copies what follows it in its part.
+ * Which socket a rune goes in. Every weapon has three: one active rune (what it casts), one modifier (how the active
+ * is shaped: faster, heavier, three at once...) and one passive (what the weapon does all the time: an element on every
+ * swing and arrow, a light that goes with you, a free cast every third hit...).
  */
 public enum RuneKind {
-    ACTION, MODIFIER, ELEMENT, RELAY, FAN
+    ACTION("active"), MODIFIER("modifier"), PASSIVE("passive");
+
+    /** The socket's word ("the active socket"). */
+    public final String word;
+
+    RuneKind(String word) { this.word = word; }
 }

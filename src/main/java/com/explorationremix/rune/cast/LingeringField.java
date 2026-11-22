@@ -19,9 +19,9 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * A Field: a patch on the ground, {@value #LIFE} ticks long, that pulses every {@value #PULSE} ticks into every creature
- * standing in it (its damage, and above all its element: a Tide field soaks a group for a Storm to shock). It lets go
- * what it carries at the first creature that steps in (On hit), or at its middle a moment after it was cast (After a
- * moment); if neither came, when it ends.
+ * standing in it (its damage, and above all its element: a Tide field soaks a group for a Storm to shock). In its
+ * second phase it lasts twice as long and draws the creatures round it in to its middle. It lets go what it carries at
+ * the first creature that steps in (On hit); if none came, when it ends.
  */
 final class LingeringField implements FieldLogic {
     static final int LIFE = 60, PULSE = 10;
@@ -33,6 +33,7 @@ final class LingeringField implements FieldLogic {
     private final Act a;
     private final Caster caster;
     private final float radius, damage;
+    private final int life;
     private int age;
     private boolean released, done;
 
@@ -43,6 +44,7 @@ final class LingeringField implements FieldLogic {
         this.caster = caster;
         this.radius = radius;
         this.damage = FlyingRune.damage(ctx, a);
+        this.life = a.empowered ? 2 * LIFE : LIFE;
     }
 
     static void place(CastContext ctx, Plan.Node node, Origin o, boolean root) {
@@ -58,7 +60,7 @@ final class LingeringField implements FieldLogic {
         LingeringField logic = new LingeringField(ctx, node, c, radius);
         RuneField f = new RuneField(RuneRegistry.FIELD.get(), ctx.level);
         f.setPos(at.x, at.y + 0.05, at.z);
-        f.start(logic, node.act.element, radius, LIFE);
+        f.start(logic, node.act.element, radius, logic.life);
         if (ctx.level.addFreshEntity(f)) {
             c.carriers.add(f);
             RuneFx.field(ctx.level, at.add(0, 0.1, 0), radius, node.act.element, false);
@@ -100,6 +102,7 @@ final class LingeringField implements FieldLogic {
         Vec3 c = f.position();
         AABB box = new AABB(c.x - radius, c.y - 0.5, c.z - radius, c.x + radius, c.y + 2.5, c.z + radius);
         boolean pulse = (age - 1) % PULSE == 0;
+        if (a.empowered) PhaseTwo.draw(ctx, a, c, radius, age);
         if (pulse || (hasPayload() && !released && node.relay == RuneId.ON_HIT)) {
             for (RuneHits.Touch t : RuneHits.touched(ctx, box, c)) {
                 Vec3 at = t.body().position();
@@ -116,11 +119,7 @@ final class LingeringField implements FieldLogic {
             }
             if (pulse) RuneFx.field(ctx.level, c.add(0, 0.1, 0), radius, a.element, true);
         }
-        if (hasPayload() && !released && node.relay == RuneId.AFTER && age > FlyingRune.AFTER_TICKS) {
-            released = true;
-            Executor.release(ctx, node.children, new Origin(c.add(0, 0.5, 0), ctx.owner.getLookAngle(), null));
-        }
-        if (age >= LIFE) {
+        if (age >= life) {
             if (hasPayload() && !released) {
                 released = true;
                 Executor.release(ctx, node.children, new Origin(c.add(0, 0.5, 0), ctx.owner.getLookAngle(), null));

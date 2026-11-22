@@ -28,7 +28,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * The blocks runes make for a while (Barrier glass, Frost's ice, Glow's light, a struck fern's fronds), kept to a few per player: a new one
+ * The blocks runes make for a while (Barrier glass, Frost's ice, Glow's light, a struck fern's fronds, a Lantern's light),
+ * kept to a few per player: a new one
  * past the limit ends that player's oldest still standing first. Runes only ever fill air (and still water, for ice),
  * never round anything standing or hanging there, and only where their caster could build (not in adventure mode,
  * under spawn protection, or where a claim refuses them), so they never break or replace anything built or grown.
@@ -41,7 +42,8 @@ public final class TempBlocks {
      */
     private static final class Placed {
         final GlobalPos at;
-        final long until;
+        /** Later for a lantern that stays where its player stands. */
+        long until;
 
         Placed(GlobalPos at, long until) {
             this.at = at;
@@ -61,6 +63,8 @@ public final class TempBlocks {
             case ICE -> RuneConfig.get(RuneConfig.INSTANCE.maxIceBlocks);
             case LIGHT -> RuneConfig.get(RuneConfig.INSTANCE.maxGlowBlocks);
             case FROND -> RuneConfig.get(RuneConfig.INSTANCE.maxFrondBlocks);
+            // the one a player stands in, and for a moment the next one as they step on
+            case LANTERN -> 2;
         };
     }
 
@@ -70,6 +74,7 @@ public final class TempBlocks {
             case ICE -> RuneRegistry.ICE.get();
             case LIGHT -> RuneRegistry.LIGHT.get();
             case FROND -> RuneRegistry.FROND.get();
+            case LANTERN -> RuneRegistry.LANTERN.get();
         };
     }
 
@@ -111,12 +116,17 @@ public final class TempBlocks {
 
     /** As above, as this state of a rune block (a frond's way and tip). */
     public static boolean place(ServerLevel level, BlockPos pos, BlockState state, ServerPlayer owner) {
+        return state.getBlock() instanceof TempBlock tb && place(level, pos, state, owner, tb.kind.life);
+    }
+
+    /** As above, standing {@code life} ticks rather than its kind's usual (a second phase's longer wall). */
+    public static boolean place(ServerLevel level, BlockPos pos, BlockState state, ServerPlayer owner, int life) {
         if (!(state.getBlock() instanceof TempBlock tb)) return false;
         TempBlock.Kind k = tb.kind;
         int cap = cap(k);
         if (cap <= 0 || !fits(level, pos, k)) return false;
         // glass and ice are solid: never round anyone (they would be stuck in it) or over a frame (it would drop)
-        if (k != TempBlock.Kind.LIGHT && k != TempBlock.Kind.FROND && occupied(level, pos)) return false;
+        if (k != TempBlock.Kind.LIGHT && k != TempBlock.Kind.FROND && k != TempBlock.Kind.LANTERN && occupied(level, pos)) return false;
         if (!mayChange(level, pos, owner)) return false;
         Deque<Placed> q = OWNED.computeIfAbsent(owner.getUUID(), u -> new HashMap<>()).computeIfAbsent(k, kk -> new ArrayDeque<>());
         // the ones that already ended no longer count, and are never ended again (another block may stand there now)
@@ -129,7 +139,7 @@ public final class TempBlocks {
             if (l != null && l.isLoaded(op) && l.getBlockState(op).getBlock() instanceof TempBlock old2 && old2.kind == k) old2.fade(l, op);
         }
         if (!level.setBlock(pos, state, Block.UPDATE_ALL)) return false;
-        Placed p = new Placed(GlobalPos.of(level.dimension(), pos.immutable()), level.getGameTime() + k.life);
+        Placed p = new Placed(GlobalPos.of(level.dimension(), pos.immutable()), level.getGameTime() + Math.max(1, life));
         STANDING.put(p.at, p);
         q.addLast(p);
         return true;
@@ -142,6 +152,20 @@ public final class TempBlocks {
     public static long until(ResourceKey<Level> dim, BlockPos pos) {
         Placed p = STANDING.get(GlobalPos.of(dim, pos));
         return p == null ? -1L : p.until;
+    }
+
+    /** Keeps the rune block standing at {@code at} until at least {@code until} (a lantern its player still stands in). */
+    public static void extend(GlobalPos at, long until) {
+        Placed p = STANDING.get(at);
+        if (p != null && p.until < until) p.until = until;
+    }
+
+    /** Ends the rune block of kind {@code k} standing at {@code at} now, if it still stands there. */
+    public static void end(net.minecraft.server.MinecraftServer server, GlobalPos at, TempBlock.Kind k) {
+        Placed p = STANDING.remove(at);
+        if (p == null) return;
+        ServerLevel l = server.getLevel(at.dimension());
+        if (l != null && l.isLoaded(at.pos()) && l.getBlockState(at.pos()).getBlock() instanceof TempBlock tb && tb.kind == k) tb.fade(l, at.pos());
     }
 
     /** Whether this block is standing now as one of the rune blocks some player made (so ending it is theirs to do). */
