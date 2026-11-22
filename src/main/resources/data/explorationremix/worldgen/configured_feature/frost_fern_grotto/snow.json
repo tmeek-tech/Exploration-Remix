@@ -1,8 +1,8 @@
 {
   "type": "minecraft:random_patch",
   "config": {
-    "tries": 16,
-    "xz_spread": 4,
+    "tries": 20,
+    "xz_spread": 5,
     "y_spread": 2,
     "feature": {
       "feature": {
@@ -53,6 +53,20 @@
                   "Properties": {
                     "layers": "1"
                   }
+                }
+              },
+              {
+                "type": "minecraft:not",
+                "predicate": {
+                  "type": "minecraft:matching_blocks",
+                  "offset": [
+                    0,
+                    -1,
+                    0
+                  ],
+                  "blocks": [
+                    "explorationremix:frost_moss"
+                  ]
                 }
               }
             ]

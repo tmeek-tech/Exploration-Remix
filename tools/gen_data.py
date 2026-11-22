@@ -172,6 +172,9 @@ BLOCKS = {
     # Wasteland's bare refuges). The ember crust gives light, so under Complementary its whole face glows (ShaderGlow);
     # the chain gives none, and its embers only glint (an overlay kept out of glowing_blocks.json).
     "ember_crust": ("Ember Crust", "cube"),
+    # 0.20.1: the deep Frost Fern Grotto's glowing ice, in veins through its ice crusts (world.terrain.Palette.glowingIce).
+    # Like packed ice it drops itself only to silk touch.
+    "glow_ice": ("Glow Ice", "cube", {"silk": True}),
     "cinder_chain": ("Cinder Chain", "cross", {"shader_glow": False}),
     # The Galleries' lava glow: invisible light in the air along the halls' rock (HallGlowFeature). Nothing is drawn and
     # there is no item.
@@ -210,8 +213,8 @@ NO_DROP = {"band_stone", "glow", "mossback_den"}
 VENT_FIELD_BLOCKS = {"black_dripstone", "pointed_black_dripstone", "pale_stem", "glow_mat", "thin_glow_mat", "glow_cap", "vent_crown",
                      "vent_beads", "seep_crust"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
-# lifeless blocks of the Galleries, the litter round the dens, and the vent field's whole blocks.
-NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"} | VENT_FIELD_BLOCKS
+# lifeless blocks of the Galleries, the litter round the dens, the vent field's whole blocks and the grotto's glow ice.
+NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps", "glow_ice"} | VENT_FIELD_BLOCKS
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
@@ -230,9 +233,13 @@ BLOCK_TAGS = {
     ("minecraft", "dirt"): ["frost_moss"],
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
     ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain",
+                                        # the Frost Fern Grotto's glow ice (0.20.1)
+                                        "glow_ice",
                                         # the Deep Gardens: the vent field's dripstone, and the neon blocks grown on its rock
                                         "black_dripstone", "pointed_black_dripstone", "glow_mat", "thin_glow_mat", "vent_crown",
                                         "vent_beads", "seep_crust"],
+    # Glow ice is ice: no snow settles on it (it would hide the glow), as on vanilla's ice and packed ice.
+    ("minecraft", "snow_layer_cannot_survive_on"): ["glow_ice"],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen",
                                     # Deep Gardens round 2: the giant mushrooms
                                     "pale_stem", "glow_cap"],
@@ -518,11 +525,15 @@ def plane_model(tex, plain_parent, template, key):
     return {"parent": plain_parent, "render_type": "minecraft:cutout", "textures": t}
 
 
-def loot(bid, drop, kind, chance=None, neon=False):
+def loot(bid, drop, kind, chance=None, neon=False, silk=False):
     entry = {"type": "minecraft:item", "name": drop if ":" in drop else f"{MOD}:{drop}"}
     if neon:
         # the item keeps the block's colour (its BlockStateTag), and places the block in it again
         entry["functions"] = [{"function": "minecraft:copy_state", "block": f"{MOD}:{bid}", "properties": ["neon"]}]
+    if silk:
+        # only to a silk touch tool, like vanilla's packed ice
+        entry["conditions"] = [{"condition": "minecraft:match_tool", "predicate": {
+            "enchantments": [{"enchantment": "minecraft:silk_touch", "levels": {"min": 1}}]}}]
     if kind in ("tall", "tall_fern"):
         # both halves break together; only the lower half's table drops the plant
         entry["conditions"] = [{"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"half": "lower"}}]
@@ -737,7 +748,8 @@ def block_assets():
                 assert tex.split(":", 1)[1] in textures.PAINTERS, f"{bid}: no painter for its item's {tex}"
             write(os.path.join(ASSETS, "models", "item", bid + ".json"), item)
         if bid not in NO_DROP:
-            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), loot(bid, drop, kind, opts.get("chance"), opts.get("neon", False)))
+            write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"),
+                  loot(bid, drop, kind, opts.get("chance"), opts.get("neon", False), opts.get("silk", False)))
     unused = set(textures.GLOW) - used_glow
     assert not unused, f"glow overlays no model draws: {sorted(unused)}"
     write(os.path.join(ASSETS, "glowing_blocks.json"), {"blocks": sorted(glowing)})

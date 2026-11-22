@@ -1,0 +1,8 @@
+{
+  "type": "explorationremix:ice_crust",
+  "config": {
+    "radius": 6,
+    "height": 5,
+    "on": "#explorationremix:ice_crust_rock"
+  }
+}
