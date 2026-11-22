@@ -1,0 +1,8 @@
+{
+  "parent": "explorationremix:block/template/neon_mushrooms_3",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "mushrooms": "explorationremix:block/neon_mushrooms_magenta",
+    "glow": "explorationremix:block/neon_mushrooms_magenta_glow"
+  }
+}

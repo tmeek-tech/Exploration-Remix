@@ -1,0 +1,755 @@
+{
+  "parent": "minecraft:block/block",
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "#mushrooms"
+  },
+  "elements": [
+    {
+      "from": [
+        5.5,
+        0,
+        5.0
+      ],
+      "to": [
+        7.5,
+        5,
+        7.0
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            13,
+            0,
+            15,
+            5
+          ],
+          "texture": "#mushrooms"
+        },
+        "east": {
+          "uv": [
+            13,
+            0,
+            15,
+            5
+          ],
+          "texture": "#mushrooms"
+        },
+        "south": {
+          "uv": [
+            13,
+            0,
+            15,
+            5
+          ],
+          "texture": "#mushrooms"
+        },
+        "west": {
+          "uv": [
+            13,
+            0,
+            15,
+            5
+          ],
+          "texture": "#mushrooms"
+        }
+      }
+    },
+    {
+      "from": [
+        4.0,
+        5,
+        3.5
+      ],
+      "to": [
+        9.0,
+        7,
+        8.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            6,
+            5,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "east": {
+          "uv": [
+            0,
+            6,
+            5,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "south": {
+          "uv": [
+            0,
+            6,
+            5,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "west": {
+          "uv": [
+            0,
+            6,
+            5,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "up": {
+          "uv": [
+            0,
+            0,
+            5,
+            5
+          ],
+          "texture": "#mushrooms"
+        },
+        "down": {
+          "uv": [
+            0,
+            9,
+            5,
+            14
+          ],
+          "texture": "#mushrooms"
+        }
+      }
+    },
+    {
+      "from": [
+        5.0,
+        7,
+        4.5
+      ],
+      "to": [
+        8.0,
+        8,
+        7.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            1,
+            6,
+            4,
+            7
+          ],
+          "texture": "#mushrooms"
+        },
+        "east": {
+          "uv": [
+            1,
+            6,
+            4,
+            7
+          ],
+          "texture": "#mushrooms"
+        },
+        "south": {
+          "uv": [
+            1,
+            6,
+            4,
+            7
+          ],
+          "texture": "#mushrooms"
+        },
+        "west": {
+          "uv": [
+            1,
+            6,
+            4,
+            7
+          ],
+          "texture": "#mushrooms"
+        },
+        "up": {
+          "uv": [
+            1,
+            1,
+            4,
+            4
+          ],
+          "texture": "#mushrooms"
+        }
+      }
+    },
+    {
+      "from": [
+        4.0,
+        5,
+        3.5
+      ],
+      "to": [
+        9.0,
+        7,
+        8.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            6,
+            5,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "east": {
+          "uv": [
+            0,
+            6,
+            5,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "south": {
+          "uv": [
+            0,
+            6,
+            5,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "west": {
+          "uv": [
+            0,
+            6,
+            5,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "up": {
+          "uv": [
+            0,
+            0,
+            5,
+            5
+          ],
+          "texture": "#glow"
+        },
+        "down": {
+          "uv": [
+            0,
+            9,
+            5,
+            14
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      },
+      "shade": false
+    },
+    {
+      "from": [
+        5.0,
+        7,
+        4.5
+      ],
+      "to": [
+        8.0,
+        8,
+        7.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            1,
+            6,
+            4,
+            7
+          ],
+          "texture": "#glow"
+        },
+        "east": {
+          "uv": [
+            1,
+            6,
+            4,
+            7
+          ],
+          "texture": "#glow"
+        },
+        "south": {
+          "uv": [
+            1,
+            6,
+            4,
+            7
+          ],
+          "texture": "#glow"
+        },
+        "west": {
+          "uv": [
+            1,
+            6,
+            4,
+            7
+          ],
+          "texture": "#glow"
+        },
+        "up": {
+          "uv": [
+            1,
+            1,
+            4,
+            4
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      },
+      "shade": false
+    },
+    {
+      "from": [
+        10.5,
+        0,
+        8.5
+      ],
+      "to": [
+        11.5,
+        3,
+        9.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            13,
+            0,
+            14,
+            3
+          ],
+          "texture": "#mushrooms"
+        },
+        "east": {
+          "uv": [
+            13,
+            0,
+            14,
+            3
+          ],
+          "texture": "#mushrooms"
+        },
+        "south": {
+          "uv": [
+            13,
+            0,
+            14,
+            3
+          ],
+          "texture": "#mushrooms"
+        },
+        "west": {
+          "uv": [
+            13,
+            0,
+            14,
+            3
+          ],
+          "texture": "#mushrooms"
+        }
+      },
+      "rotation": {
+        "origin": [
+          11.0,
+          0,
+          9.0
+        ],
+        "axis": "x",
+        "angle": 22.5
+      }
+    },
+    {
+      "from": [
+        9.5,
+        3,
+        7.5
+      ],
+      "to": [
+        12.5,
+        5,
+        10.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "east": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "south": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "west": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "up": {
+          "uv": [
+            9,
+            0,
+            12,
+            3
+          ],
+          "texture": "#mushrooms"
+        },
+        "down": {
+          "uv": [
+            9,
+            9,
+            12,
+            12
+          ],
+          "texture": "#mushrooms"
+        }
+      },
+      "rotation": {
+        "origin": [
+          11.0,
+          0,
+          9.0
+        ],
+        "axis": "x",
+        "angle": 22.5
+      }
+    },
+    {
+      "from": [
+        9.5,
+        3,
+        7.5
+      ],
+      "to": [
+        12.5,
+        5,
+        10.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "east": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "south": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "west": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "up": {
+          "uv": [
+            9,
+            0,
+            12,
+            3
+          ],
+          "texture": "#glow"
+        },
+        "down": {
+          "uv": [
+            9,
+            9,
+            12,
+            12
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      },
+      "shade": false,
+      "rotation": {
+        "origin": [
+          11.0,
+          0,
+          9.0
+        ],
+        "axis": "x",
+        "angle": 22.5
+      }
+    },
+    {
+      "from": [
+        3.5,
+        0,
+        10.5
+      ],
+      "to": [
+        4.5,
+        2,
+        11.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            13,
+            0,
+            14,
+            2
+          ],
+          "texture": "#mushrooms"
+        },
+        "east": {
+          "uv": [
+            13,
+            0,
+            14,
+            2
+          ],
+          "texture": "#mushrooms"
+        },
+        "south": {
+          "uv": [
+            13,
+            0,
+            14,
+            2
+          ],
+          "texture": "#mushrooms"
+        },
+        "west": {
+          "uv": [
+            13,
+            0,
+            14,
+            2
+          ],
+          "texture": "#mushrooms"
+        }
+      },
+      "rotation": {
+        "origin": [
+          4.0,
+          0,
+          11.0
+        ],
+        "axis": "z",
+        "angle": 22.5
+      }
+    },
+    {
+      "from": [
+        2.5,
+        2,
+        9.5
+      ],
+      "to": [
+        5.5,
+        4,
+        12.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "east": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "south": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "west": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#mushrooms"
+        },
+        "up": {
+          "uv": [
+            9,
+            0,
+            12,
+            3
+          ],
+          "texture": "#mushrooms"
+        },
+        "down": {
+          "uv": [
+            9,
+            9,
+            12,
+            12
+          ],
+          "texture": "#mushrooms"
+        }
+      },
+      "rotation": {
+        "origin": [
+          4.0,
+          0,
+          11.0
+        ],
+        "axis": "z",
+        "angle": 22.5
+      }
+    },
+    {
+      "from": [
+        2.5,
+        2,
+        9.5
+      ],
+      "to": [
+        5.5,
+        4,
+        12.5
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "east": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "south": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "west": {
+          "uv": [
+            9,
+            6,
+            12,
+            8
+          ],
+          "texture": "#glow"
+        },
+        "up": {
+          "uv": [
+            9,
+            0,
+            12,
+            3
+          ],
+          "texture": "#glow"
+        },
+        "down": {
+          "uv": [
+            9,
+            9,
+            12,
+            12
+          ],
+          "texture": "#glow"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      },
+      "shade": false,
+      "rotation": {
+        "origin": [
+          4.0,
+          0,
+          11.0
+        ],
+        "axis": "z",
+        "angle": 22.5
+      }
+    }
+  ]
+}

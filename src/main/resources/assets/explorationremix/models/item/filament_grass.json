@@ -1,0 +1,26 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "explorationremix:block/filament_grass_magenta"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "explorationremix:neon": 0.1667
+      },
+      "model": "explorationremix:item/filament_grass_violet"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.5
+      },
+      "model": "explorationremix:item/filament_grass_lime"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.8333
+      },
+      "model": "explorationremix:item/filament_grass_light_blue"
+    }
+  ]
+}

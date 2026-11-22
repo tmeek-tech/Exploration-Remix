@@ -1,0 +1,23 @@
+{
+  "parent": "explorationremix:block/tube_worms_magenta_0",
+  "overrides": [
+    {
+      "predicate": {
+        "explorationremix:neon": 0.1667
+      },
+      "model": "explorationremix:item/tube_worms_violet"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.5
+      },
+      "model": "explorationremix:item/tube_worms_lime"
+    },
+    {
+      "predicate": {
+        "explorationremix:neon": 0.8333
+      },
+      "model": "explorationremix:item/tube_worms_light_blue"
+    }
+  ]
+}

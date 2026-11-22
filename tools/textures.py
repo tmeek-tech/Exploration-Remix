@@ -548,6 +548,16 @@ for _block, _fns in NEON_PAINTERS.items():
             GLOW[_tex] = {_hex(neon_shades(_neon)[k]) for k in GLOWING}
             VENT_FIELD.append(_tex)
 
+# 0.20.2: the vent field's plant life (plants_vent.py: filament grass, tube worms, glowworm threads, seep reeds, neon
+# mushrooms), every texture under the vent field's colour rules, and the spores' mote (textures/particle)
+import plants_vent  # noqa: E402
+for _tex, (_fn, _glow) in plants_vent.textures().items():
+    PAINTERS[_tex] = _fn
+    if _glow:
+        GLOW[_tex] = _glow
+    VENT_FIELD.append(_tex)
+PAINTERS.update(plants_vent.PARTICLE_PAINTERS)
+
 
 def hue_sat(c):
     """HSV hue in degrees (None for a grey: channels within 6 of each other) and saturation of an RGB colour."""

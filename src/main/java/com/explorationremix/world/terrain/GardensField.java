@@ -795,12 +795,27 @@ public final class GardensField {
     public static final int C_AIR = 0, C_ROCK = 1, C_TALUS = 2, C_DEAD = 3, C_LIVE = 4, C_THROAT = 5, C_MAT = 6, C_STEM = 7,
             C_CAP = 8, C_OIL = 9, C_SEALROCK = 10, C_DRIP = 11, C_VDEAD = 12, C_VLIVE = 13, C_CROWN = 14, C_FISSURE = 15,
             C_VGLOW = 16, C_TVEIN = 17, C_TIP = 18, C_SEEP = 19, C_SKIN = 20, C_PDOWN = 21, C_PUP = 22, C_STREAK = 23,
-            C_VBASE = 24, C_MATE = 25;
+            C_VBASE = 24, C_MATE = 25,
+            // 0.20.2, the plant life (GardensDress.plants), each walked through like air: filament grass (a tuft, or
+            // with PLANT_BIT the taller grass), tall filament grass (both halves), tube worms, glowworm threads (a run
+            // hanging from a ceiling), seep reeds (one block or two) and small neon mushrooms (with PLANT_BIT crowded)
+            C_GRASS = 26, C_TALLG = 27, C_WORM = 28, C_THREAD = 29, C_REED = 30, C_SHROOM = 31;
+    /** A plant's extra bit in a packed block (over its colour, which is then {@code (p >> 5) & 3}). */
+    public static final int PLANT_BIT = 128;
 
-    /** Whether a block of the layer (row 0 = its bottom) is open: air, or the crude oil of a seep pool. */
+    /** Whether a block code is a plant's (0.20.2). */
+    public static boolean plant(int c) { return c >= C_GRASS && c <= C_SHROOM; }
+
+    /** Whether a block code is walked through: air or a plant. */
+    public static boolean airy(int c) { return c == C_AIR || plant(c); }
+
+    /**
+     * Whether a block of the layer (row 0 = its bottom) is open: air, a plant (0.20.2: what was air before the plants,
+     * so nothing that asks changes), or the crude oil of a seep pool.
+     */
     public boolean open(int x, int y, int z) {
         int c = packed(x, y, z) & 31;
-        return c == GardensVents.AIR || c == GardensVents.OIL;
+        return c == GardensVents.AIR || c == GardensVents.OIL || plant(c);
     }
 
     /**
@@ -816,7 +831,8 @@ public final class GardensField {
         PCol c = passB.col(x, z);
         StringBuilder fl = new StringBuilder();
         for (int k = 0; k < K; k++) if (c.foot(k)) fl.append(fl.length() > 0 ? ", " : "").append(k).append(String.format(java.util.Locale.ROOT, ": %.1f..%.1f", c.floor[k], c.ceil[k]));
-        out.add(String.format(java.util.Locale.ROOT, "Deep Gardens row %d: band %d, code %d colour %d; storeys %s", y, bandOf(x, y, z), p & 31, p >> 5, fl));
+        out.add(String.format(java.util.Locale.ROOT, "Deep Gardens row %d: band %d, code %d colour %d%s; storeys %s", y, bandOf(x, y, z), p & 31, (p >> 5) & 3,
+                (p & PLANT_BIT) != 0 ? " (plant bit)" : "", fl));
         for (GardensSites.Site s : ventsNear(x - 40, z - 40, x + 40, z + 40)) {
             double d = Math.hypot(s.x + gv.ox - x, s.z + gv.oz - z);
             if (d > 40) continue;

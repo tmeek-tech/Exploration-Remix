@@ -1,0 +1,8 @@
+{
+  "parent": "explorationremix:block/template/cross_glow",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "cross": "explorationremix:block/filament_tuft_lime_2",
+    "glow": "explorationremix:block/filament_tuft_lime_2_glow"
+  }
+}

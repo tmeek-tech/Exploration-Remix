@@ -1,0 +1,36 @@
+{
+  "variants": {
+    "neon=magenta": [
+      {
+        "model": "explorationremix:block/grazed_filament_grass_magenta"
+      },
+      {
+        "model": "explorationremix:block/grazed_filament_grass_magenta_2"
+      }
+    ],
+    "neon=violet": [
+      {
+        "model": "explorationremix:block/grazed_filament_grass_violet"
+      },
+      {
+        "model": "explorationremix:block/grazed_filament_grass_violet_2"
+      }
+    ],
+    "neon=lime": [
+      {
+        "model": "explorationremix:block/grazed_filament_grass_lime"
+      },
+      {
+        "model": "explorationremix:block/grazed_filament_grass_lime_2"
+      }
+    ],
+    "neon=light_blue": [
+      {
+        "model": "explorationremix:block/grazed_filament_grass_light_blue"
+      },
+      {
+        "model": "explorationremix:block/grazed_filament_grass_light_blue_2"
+      }
+    ]
+  }
+}

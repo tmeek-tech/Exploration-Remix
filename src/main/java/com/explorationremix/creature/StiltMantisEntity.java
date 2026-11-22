@@ -1,5 +1,6 @@
 package com.explorationremix.creature;
 
+import com.explorationremix.block.GrazedGrassBlock;
 import com.explorationremix.block.Neon;
 import com.explorationremix.block.NeonBlock;
 import com.explorationremix.creature.body.LevelTerrain;
@@ -37,6 +38,7 @@ import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.event.ForgeEventFactory;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -513,6 +515,10 @@ public class StiltMantisEntity extends PathfinderMob {
             return;
         }
         if (s == GRAZE) {
+            // 0.20.2 (card pick: "Crops it short, it regrows"): each pick of its arms may crop the grass ahead to
+            // stubble, which grows back in a few minutes; as a sheep's bite, only where mobs may change blocks
+            if (tickCount % PICK_TICKS == 0 && getRandom().nextFloat() < CROP_CHANCE && ForgeEventFactory.getMobGriefingEvent(level(), this))
+                cropAhead();
             if (--idleTicks <= 0) {
                 setState(CALM);
                 idleTicks = 15 + getRandom().nextInt(50);
@@ -536,7 +542,36 @@ public class StiltMantisEntity extends PathfinderMob {
         } else idleTicks = 40 + getRandom().nextInt(60);
     }
 
-    /** Whether it stands over something to graze: glow mat (or any floor, for one far from the Gardens). */
+    /** How often its arms pick while it grazes (ticks: two arms in turn, MantisBody.GRAZE_TICKS each); a pick's chance to crop. */
+    static final int PICK_TICKS = 23;
+    static final float CROP_CHANCE = 0.3F;
+
+    /** The filament grass its arms reach crops to stubble (the first found of a few spots ahead of it, on its floor). */
+    private void cropAhead() {
+        double a = Math.toRadians(yBodyRot), fx = -Math.sin(a), fz = Math.cos(a);
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int k = 0; k < 6; k++) {
+            double ahead = 0.7 + getRandom().nextDouble() * 1.3, across = (getRandom().nextDouble() - 0.5) * 1.4;
+            int x = Mth.floor(getX() + fx * ahead - fz * across), z = Mth.floor(getZ() + fz * ahead + fx * across);
+            for (int dy = 1; dy >= -1; dy--) {
+                p.set(x, getBlockY() + dy, z);
+                if (!level().hasChunkAt(p)) return;
+                if (GrazedGrassBlock.crop(level(), p, level().getBlockState(p))) return;
+            }
+        }
+    }
+
+    /** How much filament grass stands in the 3 x 3 columns round a block, at its row. */
+    static int grassRound(BlockGetter level, BlockPos at) {
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        int n = 0;
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dz = -1; dz <= 1; dz++)
+                if (GrazedGrassBlock.croppable(level.getBlockState(p.set(at.getX() + dx, at.getY(), at.getZ() + dz)))) n++;
+        return n;
+    }
+
+    /** Whether it stands over something to graze: glow mat or filament grass (or any floor, for one far from the Gardens). */
     private boolean onGrazing() {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         int mats = 0, floors = 0;
@@ -546,10 +581,13 @@ public class StiltMantisEntity extends PathfinderMob {
                 if (st.is(ERBlocks.GLOW_MAT.get()) || st.is(ERBlocks.THIN_GLOW_MAT.get())) mats++;
                 if (!st.isAir()) floors++;
             }
-        return mats > 0 || (home == null && floors > 4) || floors > 6;
+        return mats > 0 || grassRound(level(), blockPosition()) > 0 || (home == null && floors > 4) || floors > 6;
     }
 
-    /** Walks to a patch within {@code range} of {@code around}, on a floor with room over it, apart from its herd mates. */
+    /**
+     * Walks to a patch within {@code range} of {@code around}, on a floor with room over it, apart from its herd mates:
+     * best a glow mat with filament grass round it (0.20.2: it seeks out the grass), then either.
+     */
     private boolean walkTo(BlockPos around, int range) {
         BlockPos best = null;
         int bestScore = -1;
@@ -559,9 +597,9 @@ public class StiltMantisEntity extends PathfinderMob {
             if ((x - around.getX()) * (x - around.getX()) + (z - around.getZ()) * (z - around.getZ()) > range * range) continue;
             BlockPos at = stand(level(), x, around.getY(), z, 5);
             if (at == null || crowded(at)) continue;
-            int score = 1 + (onMat(level(), at) ? 4 : 0) + (at.distManhattan(blockPosition()) > 3 ? 1 : 0);
+            int score = 1 + (onMat(level(), at) ? 3 : 0) + (grassRound(level(), at) >= 3 ? 3 : 0) + (at.distManhattan(blockPosition()) > 3 ? 1 : 0);
             if (score > bestScore) { bestScore = score; best = at; }
-            if (bestScore >= 6) break;
+            if (bestScore >= 8) break;
         }
         if (best == null) return false;
         return getNavigation().moveTo(best.getX() + 0.5, best.getY(), best.getZ() + 0.5, WALK);

@@ -39,7 +39,8 @@ public final class ClientSetup {
             ResourceLocation neon = new ResourceLocation(ExplorationRemix.MOD_ID, "neon");
             ItemPropertyFunction colour = (stack, level, entity, seed) -> NeonBlock.neon(stack).ordinal() / (float) (Neon.values().length - 1);
             for (RegistryObject<Item> item : ERBlocks.ITEMS.getEntries()) {
-                if (item.get() instanceof BlockItem b && b.getBlock() instanceof NeonBlock) ItemProperties.register(b, neon, colour);
+                // the neon blocks, and since 0.20.2 the vent field's neon plants
+                if (item.get() instanceof BlockItem b && b.getBlock().defaultBlockState().hasProperty(NeonBlock.NEON)) ItemProperties.register(b, neon, colour);
             }
         });
     }
@@ -64,6 +65,8 @@ public final class ClientSetup {
         // 0.9.0 (eruption effects, round 2): the blasts' flash and the vents' glow, and the rubble's chunks
         event.registerSpriteSet(ERParticles.FLASH.get(), CaveParticles.Flash.Provider::new);
         event.registerSpriteSet(ERParticles.RUBBLE.get(), CaveParticles.Rubble.Provider::new);
+        // 0.20.2: the spores off the Deep Gardens' grass and small mushrooms
+        event.registerSpriteSet(ERParticles.SPORE.get(), CaveParticles.Spore.Provider::new);
     }
 
     @SubscribeEvent

@@ -46,7 +46,7 @@ class MantisHerdsTest {
                     int code = g.packed(h.x(), row, h.z()) & 31;
                     assertTrue(code == GardensField.C_MAT || code == GardensField.C_MATE, "a herd stands on a mat");
                     for (int up = 1; up <= MantisHerds.HEADROOM; up++)
-                        assertEquals(GardensField.C_AIR, g.packed(h.x(), row + up, h.z()) & 31, "room over the home");
+                        assertTrue(GardensField.airy(g.packed(h.x(), row + up, h.z()) & 31), "room over the home (air or plants)");
                     assertTrue(h.size() >= 2 && h.size() <= 4, "a herd of 2 to 4");
                     assertTrue(h.mats() >= (h.colour() == Neon.LIME ? MantisHerds.LIME_GROVE : MantisHerds.BIG_GROVE), "in a big grove (a lime vent's: a smaller one)");
                     boolean lime = g.limeVentNear(h.x() + 0.5, row + 1, h.z() + 0.5, MantisHerds.LIME_REACH);

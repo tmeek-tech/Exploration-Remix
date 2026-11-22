@@ -3,16 +3,21 @@ package com.explorationremix.world.gen;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.block.Neon;
 import com.explorationremix.block.NeonBlock;
+import com.explorationremix.block.NeonMushroomsBlock;
+import com.explorationremix.block.TubeWormsBlock;
 import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.world.terrain.GardensField;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.DripstoneThickness;
 import net.minecraftforge.registries.ForgeRegistries;
 
@@ -28,12 +33,21 @@ import static com.explorationremix.world.terrain.GardensField.*;
  * hold mcremix's crude oil ("mcremix has oil now. Can you use that?"), one block deep ("Knee-deep, one block": rock
  * fills each pool to a block under its surface), as still source blocks that only flow once a block beside them
  * changes; without mcremix the dips stay dry.
+ *
+ * <p>0.20.2's plant life (GardensDress.plants) by colour, each piece read from its own column: filament tufts or, with
+ * the plant bit, the grass; tall grass's upper half over its lower; a glowworm thread's tip at the bottom of its run;
+ * a seep reed one block or the two halves of a tall one; one or two small mushrooms, or three with the bit.
  */
 public final class GardensBlocks {
     private static final BlockState[][] STATES = new BlockState[32][4];
     /** Pointed black dripstone by direction (0 hanging, 1 standing) and thickness. */
     private static final BlockState[][] POINTED = new BlockState[2][DripstoneThickness.values().length];
     private static BlockState deepslate, oil;
+    /** 0.20.2's plants: by colour (and the mushrooms by count); the threads and reeds are light blue alone. */
+    private static final BlockState[] TUFT = new BlockState[4], GRASS = new BlockState[4], TALL_LOWER = new BlockState[4],
+            TALL_UPPER = new BlockState[4], WORMS = new BlockState[4];
+    private static final BlockState[][] SHROOMS = new BlockState[4][3];
+    private static BlockState threadTip, threadBody, reed, reedLower, reedUpper;
 
     private GardensBlocks() {}
 
@@ -70,6 +84,22 @@ public final class GardensBlocks {
         neon(C_TIP, ERBlocks.VENT_BEADS.get());
         neon(C_STREAK, ERBlocks.VENT_BEADS.get());
         neon(C_MATE, ERBlocks.THIN_GLOW_MAT.get());
+        for (Neon n : Neon.values()) {
+            int o = n.ordinal();
+            TUFT[o] = ERBlocks.FILAMENT_TUFT.get().defaultBlockState().setValue(NeonBlock.NEON, n);
+            GRASS[o] = ERBlocks.FILAMENT_GRASS.get().defaultBlockState().setValue(NeonBlock.NEON, n);
+            BlockState tall = ERBlocks.TALL_FILAMENT_GRASS.get().defaultBlockState().setValue(NeonBlock.NEON, n);
+            TALL_LOWER[o] = tall.setValue(DoublePlantBlock.HALF, DoubleBlockHalf.LOWER);
+            TALL_UPPER[o] = tall.setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER);
+            WORMS[o] = ERBlocks.TUBE_WORMS.get().defaultBlockState().setValue(NeonBlock.NEON, n).setValue(TubeWormsBlock.OUT, true);
+            for (int k = 0; k < 3; k++)
+                SHROOMS[o][k] = ERBlocks.NEON_MUSHROOMS.get().defaultBlockState().setValue(NeonBlock.NEON, n).setValue(NeonMushroomsBlock.MUSHROOMS, k + 1);
+        }
+        threadTip = ERBlocks.GLOWWORM_THREADS.get().defaultBlockState();
+        threadBody = ERBlocks.GLOWWORM_THREADS_PLANT.get().defaultBlockState();
+        reed = ERBlocks.SEEP_REEDS.get().defaultBlockState();
+        reedLower = ERBlocks.TALL_SEEP_REEDS.get().defaultBlockState().setValue(DoublePlantBlock.HALF, DoubleBlockHalf.LOWER);
+        reedUpper = ERBlocks.TALL_SEEP_REEDS.get().defaultBlockState().setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER);
         Block b = ForgeRegistries.BLOCKS.getValue(new ResourceLocation("mcremix", "crude_oil"));
         oil = b instanceof LiquidBlock ? b.defaultBlockState() : null;
         if (oil == null) ExplorationRemix.LOGGER.info("mcremix's crude oil is not installed: the Deep Gardens' seep pools stay dry");
@@ -97,12 +127,32 @@ public final class GardensBlocks {
         return POINTED[c == C_PDOWN ? 0 : 1][th.ordinal()];
     }
 
+    /** Whether the block at row r of the column is code c (false outside the layer). */
+    private static boolean is(GardensField g, int x, int r, int z, int rows, int c) {
+        return r >= 0 && r < rows && (g.packed(x, r, z) & 31) == c;
+    }
+
     /** The block at (x, y, z) of the Deep Gardens. */
     public static BlockState state(Terrain t, int x, int y, int z) {
         GardensField g = t.gardens;
-        int row = y - t.shape.bottom(Terrain.GARDENS);
-        int p = g.packed(x, row, z), c = p & 31;
+        int row = y - t.shape.bottom(Terrain.GARDENS), rows = t.shape.height(Terrain.GARDENS);
+        int p = g.packed(x, row, z), c = p & 31, colour = (p >> 5) & 3;
+        boolean bit = (p & PLANT_BIT) != 0;
         switch (c) {
+            case C_GRASS:
+                return (bit ? GRASS : TUFT)[colour];
+            case C_TALLG:
+                return (is(g, x, row - 1, z, rows, C_TALLG) ? TALL_UPPER : TALL_LOWER)[colour];
+            case C_WORM:
+                return WORMS[colour];
+            case C_THREAD:
+                return is(g, x, row - 1, z, rows, C_THREAD) ? threadBody : threadTip;
+            case C_REED:
+                if (is(g, x, row - 1, z, rows, C_REED)) return reedUpper;
+                return is(g, x, row + 1, z, rows, C_REED) ? reedLower : reed;
+            case C_SHROOM:
+                // crowded, three; else one or two by the spot
+                return SHROOMS[colour][bit ? 2 : (int) ((Mth.getSeed(x, row, z) >>> 20) & 1L)];
             case C_ROCK:
                 return deepslate;
             case C_OIL:

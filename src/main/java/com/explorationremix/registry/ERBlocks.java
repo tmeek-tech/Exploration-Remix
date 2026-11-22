@@ -5,17 +5,22 @@ import com.explorationremix.block.BandStoneBlock;
 import com.explorationremix.block.BoneScrapsBlock;
 import com.explorationremix.block.CavePlantBlock;
 import com.explorationremix.block.GlowBlock;
+import com.explorationremix.block.GrazedGrassBlock;
 import com.explorationremix.block.HangingFernBlock;
 import com.explorationremix.block.HangingPlantBlock;
 import com.explorationremix.block.HangingVinesBlock;
 import com.explorationremix.block.HangingVinesPlantBlock;
 import com.explorationremix.block.Neon;
 import com.explorationremix.block.NeonBlock;
+import com.explorationremix.block.NeonMushroomsBlock;
+import com.explorationremix.block.NeonPlantBlock;
 import com.explorationremix.block.PointedBlackDripstoneBlock;
 import com.explorationremix.block.PoolPlantBlock;
 import com.explorationremix.block.ShelfFungusBlock;
 import com.explorationremix.block.SubmergedPlantBlock;
 import com.explorationremix.block.TallCavePlantBlock;
+import com.explorationremix.block.TallNeonPlantBlock;
+import com.explorationremix.block.TubeWormsBlock;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -407,12 +412,55 @@ public final class ERBlocks {
     /** A faint crust on the dry rock at the edge of the crude oil seeps: a dim light blue film, light blue only. */
     public static final RegistryObject<Block> SEEP_CRUST = block("seep_crust", () -> new Block(ventRock().mapColor(MapColor.COLOR_BLACK).lightLevel(s -> 5)));
 
+    // =========================================================================================== Deep Gardens plant life
+    // 0.20.2 (Taran, 2026-11-20: "Can you add some atmospheric grass and plant life to the Deep Gardens?"): grown by the
+    // vent field's dressing (world.terrain.GardensDress.plants), in its neon on black. None gives light (card pick:
+    // "Glowing parts, no extra light"): only the glow overlays shine, so the mats and vents stay the layer's lights.
+    // The grass and the small mushrooms let a spore drift up now and then (card pick: "A few rising motes"): one
+    // animateTick in the number given (a block within 16 of the player gets about one a second).
+    /** Filament grass (card picks: "Dark blades, glowing tips", the mat's colour): the short tufts at a meadow's edge. */
+    public static final RegistryObject<Block> FILAMENT_TUFT = block("filament_tuft",
+            () -> new NeonPlantBlock(grass(), Block.box(2, 0, 2, 14, 7, 14), 0));
+    public static final RegistryObject<Block> FILAMENT_GRASS = block("filament_grass",
+            () -> new NeonPlantBlock(grass(), Block.box(2, 0, 2, 14, 13, 14), 90));
+    /** The knee-high drifts in a meadow's heart. */
+    public static final RegistryObject<Block> TALL_FILAMENT_GRASS = tallBlock("tall_filament_grass",
+            () -> new TallNeonPlantBlock(grass().offsetType(BlockBehaviour.OffsetType.XZ), Block.box(2, 0, 2, 14, 16, 14),
+                    Block.box(2, 0, 2, 14, 14, 14), 45));
+    /** The stubble a stilt mantis leaves (card pick: "Crops it short, it regrows"). No item, no drop. */
+    public static final RegistryObject<Block> GRAZED_FILAMENT_GRASS = BLOCKS.register("grazed_filament_grass",
+            () -> new GrazedGrassBlock(grass().randomTicks(), Block.box(2, 0, 2, 14, 5, 14)));
+    /** Tube worms round the live vents, in the vent's colour (card pick: "Yes, they pull in as you near"). */
+    public static final RegistryObject<Block> TUBE_WORMS = block("tube_worms", () -> new TubeWormsBlock(
+            BlockBehaviour.Properties.of().mapColor(ERBlocks::neonMap).noCollission().instabreak().sound(SoundType.WET_GRASS)
+                    .offsetType(BlockBehaviour.OffsetType.XZ).pushReaction(PushReaction.DESTROY)));
+    /** Silk threads beaded with light blue lights, hanging in the dark halls (card pick: "Light blue, in the dark halls"). */
+    public static final RegistryObject<Block> GLOWWORM_THREADS = BLOCKS.register("glowworm_threads",
+            () -> new HangingVinesBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.HANGING_ROOTS, 0), ERBlocks.GLOWWORM_THREADS_PLANT_REF));
+    public static final RegistryObject<Block> GLOWWORM_THREADS_PLANT = BLOCKS.register("glowworm_threads_plant",
+            () -> new HangingVinesPlantBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.HANGING_ROOTS, 0), ERBlocks.GLOWWORM_THREADS_REF));
+    static { item("glowworm_threads", GLOWWORM_THREADS); }
+    /** Slender dark reeds along the oil seeps, their heads beaded faint light blue (card pick: "Dark reeds, light blue tips"). */
+    public static final RegistryObject<Block> SEEP_REEDS = block("seep_reeds",
+            () -> new CavePlantBlock(plant(MapColor.COLOR_BLACK, SoundType.GRASS, 0).replaceable().offsetType(BlockBehaviour.OffsetType.XZ),
+                    Block.box(3, 0, 3, 13, 15, 13)));
+    public static final RegistryObject<Block> TALL_SEEP_REEDS = tallBlock("tall_seep_reeds",
+            () -> new TallCavePlantBlock(plant(MapColor.COLOR_BLACK, SoundType.GRASS, 0).offsetType(BlockBehaviour.OffsetType.XZ),
+                    Block.box(3, 0, 3, 13, 16, 13), Block.box(3, 0, 3, 13, 15, 13)));
+    /** Small mushrooms in their giant's colour round its stem (card pick: "Clusters round their stems"). */
+    public static final RegistryObject<Block> NEON_MUSHROOMS = block("neon_mushrooms",
+            () -> new NeonMushroomsBlock(BlockBehaviour.Properties.of().mapColor(ERBlocks::neonMap).noCollission().instabreak()
+                    .sound(SoundType.FUNGUS).offsetType(BlockBehaviour.OffsetType.XZ).pushReaction(PushReaction.DESTROY), 120));
+    private static final Supplier<Block> GLOWWORM_THREADS_REF = () -> GLOWWORM_THREADS.get();
+    private static final Supplier<Block> GLOWWORM_THREADS_PLANT_REF = () -> GLOWWORM_THREADS_PLANT.get();
+
     public static final RegistryObject<CreativeModeTab> TAB = TABS.register("main", () -> CreativeModeTab.builder()
             .title(Component.translatable("itemGroup." + ExplorationRemix.MOD_ID))
             .icon(() -> new ItemStack(LANTERN_FUNGUS.get()))
-            // a neon block's item once in each colour (it places the colour its BlockStateTag names)
+            // a neon block's item once in each colour (it places the colour its BlockStateTag names); the plants of the
+            // vent field too (0.20.2)
             .displayItems((params, out) -> ITEMS.getEntries().forEach(i -> {
-                if (i.get() instanceof BlockItem b && b.getBlock() instanceof NeonBlock) {
+                if (i.get() instanceof BlockItem b && b.getBlock().defaultBlockState().hasProperty(NeonBlock.NEON)) {
                     for (Neon n : Neon.values()) out.accept(NeonBlock.stack(b, n));
                 } else {
                     out.accept(i.get());
@@ -445,6 +493,15 @@ public final class ERBlocks {
 
     /** A neon block shows its colour on maps. */
     private static MapColor neonMap(BlockState state) { return state.getValue(NeonBlock.NEON).mapColor; }
+
+    /**
+     * The vent field's filament grass (0.20.2): like vanilla's grass, walked through, broken with a punch, placed over,
+     * set a little off the block's centre; its colour on maps the neon's.
+     */
+    private static BlockBehaviour.Properties grass() {
+        return BlockBehaviour.Properties.of().mapColor(ERBlocks::neonMap).noCollission().instabreak().sound(SoundType.GRASS).replaceable()
+                .offsetType(BlockBehaviour.OffsetType.XYZ).pushReaction(PushReaction.DESTROY);
+    }
 
     /** A small plant you walk through and break with a punch. */
     private static BlockBehaviour.Properties plant(MapColor color, SoundType sound, int light) {

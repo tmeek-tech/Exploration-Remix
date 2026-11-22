@@ -37,6 +37,15 @@ final class GardensDress {
      * the glow mat's thinner edge (MATE).
      */
     static final byte SKIN = 20, PDOWN = 21, PUP = 22, STREAK = 23, VBASE = 24, MATE = 25;
+    /**
+     * 0.20.2, the plant life ({@link #plants}): filament grass (GRASS, a tuft or with {@link #PLANT_BIT} the taller
+     * grass), tall filament grass (TALLG, both halves), tube worms (WORM), glowworm threads (THREAD, a column hanging
+     * from a ceiling), seep reeds (REED, one block or two) and small neon mushrooms (SHROOM, crowded with the bit). Air to
+     * everything that walks or flies (GardensField.open).
+     */
+    static final byte GRASS = 26, TALLG = 27, WORM = 28, THREAD = 29, REED = 30, SHROOM = 31;
+    /** A plant's extra bit, kept in its colour (4) and so packed into its code's bit 7 (GardensField.PLANT_BIT). */
+    static final byte PLANT_BIT = 4;
 
     // per band: bottom (Vent Domes), middle (Chimney Halls), top (Seep Beds)
     static final double[] MAX_H = {14.0, 10.0, 6.0}, THR_IN = {0.16, 0.22, 0.30}, KK = {0.0024, 0.0030, 0.0036},
@@ -258,6 +267,16 @@ final class GardensDress {
         lap("colDist+pointed");
         counts.put("vent foot blackstone", ventFeet(pr[7]));
         lap("ventFeet");
+        // 0.20.2: the plant life, last, on the finished rock (plants are air to every step before)
+        columnDist(down, up);
+        int[] pl = plants(heat, down);
+        counts.put("small mushrooms", pl[0]);
+        counts.put("tube worms", pl[1]);
+        counts.put("seep reeds", pl[2]);
+        counts.put("glowworm threads", pl[3]);
+        counts.put("grass", pl[4]);
+        counts.put("tall grass", pl[5]);
+        lap("plants");
         int[] by = new int[32];
         for (byte m : mat) by[m]++;
         counts.put("dead spire", by[DEAD]);
@@ -1275,6 +1294,338 @@ final class GardensDress {
         }
         return n;
     }
+
+    // ================================================================================================ 0.20.2 plants
+
+    /**
+     * Plant life (0.20.2; Taran, 2026-11-20: "Can you add some atmospheric grass and plant life to the Deep Gardens?"),
+     * last of all, on the finished rock, in Taran's card picks: small neon mushrooms crowding round each giant's stem
+     * ("Clusters round their stems"), tube worms at the live vents' feet in the vent's colour, seep reeds along the oil's
+     * shores, glowworm threads from the dark halls' ceilings ("Light blue, in the dark halls"), then the filament grass on
+     * the glow mats ("On the mats, spilling past"; "Meadows, thick in the middle"; "The mat's colour under it"). Each
+     * takes only a floor with open air over it (outside every vent) that no plant has yet. Every choice reads world
+     * hashes and noise and the blocks within a few columns, so tiles agree at their seams. Returns the blocks of each:
+     * mushrooms, worms, reeds, threads, grass and tall grass.
+     */
+    int[] plants(float[] heat, short[] down) {
+        int[] out = new int[6];
+        int[][] pp = new int[5][];
+        for (int i = 0; i < 5; i++) pp[i] = plan.perm(plan.seed + 5301 + i);
+        out[0] = smallMushrooms();
+        out[1] = tubeWorms(pp[0]);
+        out[2] = reeds(pp[1]);
+        out[3] = threads(heat, down, pp[2]);
+        int[] g = grass(pp[3], pp[4]);
+        out[4] = g[0];
+        out[5] = g[1];
+        return out;
+    }
+
+    /** Whether a plant may stand on block b: whole rock with open air over it, outside every vent. */
+    boolean plantFloor(int b) {
+        byte m = mat[b];
+        boolean rock = m == ROCK || m == TALUS || m == MAT || m == MATE || m == SKIN || m == SEEP || m == VBASE;
+        return rock && mat[b + 1] == AIR && vpart[b + 1] == 0 && (vpart[b] == 0 || vpart[b] == VP_SKIRT);
+    }
+
+    /** A plant's block, its colour and its extra bit. */
+    void plant(int b, byte code, int colourCode, boolean bit) {
+        mat[b] = code;
+        colour[b] = (byte) (colourCode | (bit ? PLANT_BIT : 0));
+    }
+
+    /** Small mushrooms round a giant's stem, within this many columns of its foot, at most this share of floors at 1. */
+    static final double SHROOM_R = 4.2, SHROOM_P = 0.7;
+
+    /**
+     * Small neon mushrooms in each giant's colour (its cap's) round its stem's foot: most likely right by the stem, few by
+     * {@link #SHROOM_R}; those within two columns crowd (three to a block) half the time. Returns blocks.
+     */
+    int smallMushrooms() {
+        long hs = plan.seed + 5311;
+        Map<Integer, double[]> best = new java.util.HashMap<>();       // floor block -> (chance, colour, crowded)
+        int r = (int) Math.ceil(SHROOM_R);
+        for (int i = r; i < nx - r; i++)
+            for (int j = r; j < nz - r; j++) {
+                int base = (i * nz + j) * SY;
+                for (int y = SEAL + 2; y < SY - 3; y++) {
+                    int b = base + y;
+                    if (mat[b] != STEM || mat[b - 1] == STEM || mat[b - 1] == AIR) continue;
+                    int ci = capColour(i, j, y);
+                    if (ci < 0) continue;
+                    for (int a = -r; a <= r; a++)
+                        for (int c = -r; c <= r; c++) {
+                            double d = Math.sqrt(a * a + c * c);
+                            if (d > SHROOM_R || d < 0.9) continue;
+                            int cb = ((i + a) * nz + j + c) * SY;
+                            for (int yy = y - 2; yy <= y + 1; yy++) {
+                                int f = cb + yy - 1;                  // the floor block under the spot at row yy
+                                if (yy < SEAL + 2 || !plantFloor(f)) continue;
+                                double pr = SHROOM_P * Math.pow(1.0 - (d - 0.9) / (SHROOM_R - 0.9 + 0.5), 1.5);
+                                double[] cur = best.get(f);
+                                if (cur == null || cur[0] < pr) best.put(f, new double[]{pr, ci, d < 2.2 ? 1 : 0});
+                            }
+                        }
+                }
+            }
+        int n = 0;
+        Integer[] keys = best.keySet().toArray(new Integer[0]);
+        Arrays.sort(keys);
+        for (int f : keys) {
+            double[] v = best.get(f);
+            int q = f / SY, y = f - q * SY, wx = x0 + q / nz, wz = z0 + q % nz;
+            double h = Hashing.unit(Hashing.mix(hs, wx, y, wz));
+            if (h >= v[0] || !plantFloor(f)) continue;
+            plant(f + 1, SHROOM, (int) v[1], v[2] > 0 && Hashing.unit(Hashing.mix(hs + 1, wx, y, wz)) < 0.5);
+            n++;
+        }
+        return n;
+    }
+
+    /** The colour of the giant whose stem stands at (i, j) from row y up: its cap's, over it or over a stem beside it. */
+    int capColour(int i, int j, int y) {
+        int[][] cols = {{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int[] d : cols) {
+            int ii = i + d[0], jj = j + d[1];
+            if (ii < 0 || jj < 0 || ii >= nx || jj >= nz) continue;
+            int cb = (ii * nz + jj) * SY;
+            for (int yy = y; yy < Math.min(SY, y + 24); yy++) {
+                byte m = mat[cb + yy];
+                if (m == CAP) return colour[cb + yy] & 3;
+                if (m != STEM && (d[0] != 0 || d[1] != 0 || yy > y)) break;
+            }
+        }
+        return -1;
+    }
+
+    /** Tube worms within this many columns of a live vent's wall; the most a floor beside one takes. */
+    static final double WORM_R = 3.6, WORM_P = 0.6;
+
+    /**
+     * Tube worms round each live vent: on the floor and the blackstone at its foot, and on its own ledges, most likely
+     * right against its wall and few by {@link #WORM_R}, in colonies (a fine noise), in the vent's colour. Returns blocks.
+     */
+    int tubeWorms(int[] pw) {
+        long hs = plan.seed + 5321;
+        int r = (int) Math.ceil(WORM_R), n = 0;
+        // the columns holding a live vent's wall, summed, so a column with none near is passed over at once
+        int[] sum = new int[(nx + 1) * (nz + 1)];
+        for (int i = 0; i < nx; i++)
+            for (int j = 0; j < nz; j++) {
+                int base = (i * nz + j) * SY, has = 0;
+                for (int y = 0; y < SY && has == 0; y++) {
+                    int vi = vid[base + y] - 1;
+                    if (vi >= 0 && GardensVentField.isWallPart(vpart[base + y]) && vents.get(vi).live()) has = 1;
+                }
+                sum[(i + 1) * (nz + 1) + j + 1] = has + sum[i * (nz + 1) + j + 1] + sum[(i + 1) * (nz + 1) + j] - sum[i * (nz + 1) + j];
+            }
+        for (int i = r; i < nx - r; i++)
+            for (int j = r; j < nz - r; j++) {
+                if (sum[(i + r + 1) * (nz + 1) + j + r + 1] - sum[(i - r) * (nz + 1) + j + r + 1] - sum[(i + r + 1) * (nz + 1) + j - r]
+                        + sum[(i - r) * (nz + 1) + j - r] == 0) continue;
+                int q = i * nz + j, wx = x0 + i, wz = z0 + j, base = q * SY;
+                double colony = -1;
+                for (int y = SEAL + 2; y < SY - 3; y++) {
+                    int b = base + y;
+                    byte m = mat[b];
+                    // the floor round a vent, or a ledge of its own wall (blackstone with open air over it)
+                    boolean ledge = (m == LIVE || m == VLIVE) && GardensVentField.isWallPart(vpart[b]) && mat[b + 1] == AIR && vpart[b + 1] == 0;
+                    if (!ledge && !plantFloor(b)) continue;
+                    if (mat[b + 1] != AIR) continue;
+                    int vent = -1;
+                    double dBest = ledge ? 0.0 : 99.0;
+                    if (ledge) vent = vid[b] - 1;
+                    else
+                        for (int a = -r; a <= r; a++)
+                            for (int c = -r; c <= r; c++) {
+                                double d = Math.sqrt(a * a + c * c);
+                                if (d > WORM_R || d >= dBest) continue;
+                                int cb = ((i + a) * nz + j + c) * SY;
+                                for (int yy = y - 1; yy <= y + 2; yy++) {
+                                    int o = cb + yy;
+                                    if (!GardensVentField.isWallPart(vpart[o]) || open(mat[o])) continue;
+                                    int vi = vid[o] - 1;
+                                    if (vi < 0 || !vents.get(vi).live()) continue;
+                                    dBest = d;
+                                    vent = vi;
+                                    break;
+                                }
+                            }
+                    if (vent < 0 || !vents.get(vent).live()) continue;
+                    if (colony < -0.5) colony = ramp(n2(pw, wx / 2.6, wz / 2.6), -0.25, 0.3);
+                    double pr = (ledge ? 0.45 : WORM_P * Math.max(0.0, 1.0 - (dBest - 1.0) / (WORM_R - 0.6))) * colony;
+                    if (Hashing.unit(Hashing.mix(hs, wx, y, wz)) >= pr) continue;
+                    plant(b + 1, WORM, vcol[vent], false);
+                    n++;
+                }
+            }
+        return n;
+    }
+
+    /**
+     * Seep reeds along the oil's shores: on a dry floor block beside the oil (eight ways, at the oil's row), and more
+     * thinly a block further out, in stands (a noise); a little over half of them two blocks tall where there is room.
+     * Light blue. Returns blocks.
+     */
+    int reeds(int[] pr) {
+        long hs = plan.seed + 5331;
+        int n = 0;
+        for (int i = 2; i < nx - 2; i++)
+            for (int j = 2; j < nz - 2; j++) {
+                int q = i * nz + j, wx = x0 + i, wz = z0 + j, base = q * SY;
+                double stand = -1;
+                for (int y = SEAL + 2; y < SY - 4; y++) {
+                    int b = base + y;
+                    byte m = mat[b];
+                    if ((m != ROCK && m != TALUS && m != SEEP && m != SKIN) || !plantFloor(b)) continue;
+                    int near = 9;
+                    for (int a = -2; a <= 2; a++)
+                        for (int c = -2; c <= 2; c++)
+                            if (mat[b + a * sx + c * SY] == OIL) near = Math.min(near, Math.max(Math.abs(a), Math.abs(c)));
+                    if (near > 2) continue;
+                    if (stand < -0.5) stand = ramp(n2(pr, wx / 4.0, wz / 4.0), -0.35, 0.2);
+                    double p = (near == 1 ? 0.62 : 0.22) * stand;
+                    if (Hashing.unit(Hashing.mix(hs, wx, y, wz)) >= p) continue;
+                    boolean tall = Hashing.unit(Hashing.mix(hs + 1, wx, y, wz)) < 0.55 && mat[b + 2] == AIR && mat[b + 3] == AIR
+                            && vpart[b + 2] == 0;
+                    plant(b + 1, REED, LIGHTBLUE, false);
+                    if (tall) plant(b + 2, REED, LIGHTBLUE, false);
+                    n += tall ? 2 : 1;
+                }
+            }
+        return n;
+    }
+
+    /** The darkest a ceiling's air may be lit for threads (of the light the glow mats need, MAT_LO); room they keep. */
+    static final double THREAD_DARK = 0.2;
+    static final int THREAD_ROOM = 6;
+    /** The share of a drift's ceiling blocks a thread hangs from, at its thickest (0.22 first: more thread than grass). */
+    static final double THREAD_P = 0.12;
+
+    /**
+     * Glowworm threads from the ceilings of the dark halls: under whole rock (not on a vent) where the vents' light is
+     * under {@link #THREAD_DARK} of what the mats need, in loose drifts (a slow noise), one to six blocks long, mostly
+     * short, always {@link #THREAD_ROOM} rows clear of the floor, so they never hang in anyone's way. Light blue.
+     * Returns blocks.
+     */
+    int threads(float[] heat, short[] down, int[] pt) {
+        long hs = plan.seed + 5341;
+        int n = 0;
+        for (int i = 1; i < nx - 1; i++)
+            for (int j = 1; j < nz - 1; j++) {
+                int q = i * nz + j, wx = x0 + i, wz = z0 + j, base = q * SY;
+                double drift = -9;
+                for (int y = SY - SEAL - 1; y > SEAL + THREAD_ROOM + 2; y--) {
+                    int c = base + y;
+                    byte m = mat[c];
+                    if (m != ROCK && m != SKIN && m != DRIP && m != TALUS && m != SEALROCK) continue;
+                    if (mat[c - 1] != AIR || vpart[c - 1] != 0 || vpart[c] != 0) continue;
+                    int gap = down[c - 1] + 1;
+                    if (gap < THREAD_ROOM + 2) continue;
+                    int k = storeyAt(q, y - gap), bd = f.dom[k][q];
+                    if (heat[c - 1] >= THREAD_DARK * MAT_LO[bd] || heat[c - gap] >= THREAD_DARK * MAT_LO[bd]) continue;
+                    if (drift < -5) drift = ramp(n2(pt, wx / 11.0, wz / 11.0), 0.0, 0.45);
+                    double p = THREAD_P * drift;
+                    if (Hashing.unit(Hashing.mix(hs, wx, y, wz)) >= p) continue;
+                    double h = Hashing.unit(Hashing.mix(hs + 1, wx, y, wz));
+                    int len = Math.min(1 + (int) (h * h * 6.0), gap - THREAD_ROOM);
+                    for (int e = 1; e <= len; e++) plant(c - e, THREAD, LIGHTBLUE, false);
+                    n += len;
+                }
+            }
+        return n;
+    }
+
+    /** The glow mats' cover a floor block reads, over this many columns either way and two rows up and down. */
+    static final int COVER_R = 3;
+
+    /**
+     * Filament grass on the glow mats and a little past them, in meadows: each floor block reads the mats' cover round it
+     * (the share of the columns within {@link #COVER_R} with a mat near its row, the thin edge mat counting half). On a
+     * mat the grass grows nearly everywhere the cover is high, a meadow's heart; towards a patch's edge it thins, with
+     * bare spots where the mat shows (a fine noise), and on the bare rock past it only stray tufts and a little grass.
+     * Its height follows the cover with drifts (a slow noise): tall grass in the hearts, the grass, then tufts. It takes
+     * the colour of the mat under it, or of most mats round it, but within LIME_REACH of a live deep vent (the lime ones,
+     * as the stilt mantises' herds) it is lime. Returns blocks of grass and of tall grass (both halves).
+     */
+    int[] grass(int[] pdrift, int[] pbare) {
+        long hs = plan.seed + 5351;
+        // the columns with any mat, summed, so a block with no mat near is passed over at once
+        int W = nx + 1;
+        int[] sum = new int[W * (nz + 1)];
+        for (int i = 0; i < nx; i++)
+            for (int j = 0; j < nz; j++) {
+                int base = (i * nz + j) * SY, has = 0;
+                for (int y = 0; y < SY; y++) if (mat[base + y] == MAT || mat[base + y] == MATE) { has = 1; break; }
+                sum[(i + 1) * (nz + 1) + j + 1] = has + sum[i * (nz + 1) + j + 1] + sum[(i + 1) * (nz + 1) + j] - sum[i * (nz + 1) + j];
+            }
+        List<double[]> limes = new ArrayList<>();
+        for (Vent v : vents) if (v.form() == 3 && v.live()) limes.add(new double[]{v.cx + gv.ox, v.cz + gv.oz, v.site.ys, v.site.H});
+        int R = COVER_R, area = (2 * R + 1) * (2 * R + 1), grass = 0, tall = 0;
+        double[] votes = new double[4];
+        for (int i = R; i < nx - R; i++)
+            for (int j = R; j < nz - R; j++) {
+                int nb = sum[(i + R + 1) * (nz + 1) + j + R + 1] - sum[(i - R) * (nz + 1) + j + R + 1] - sum[(i + R + 1) * (nz + 1) + j - R]
+                        + sum[(i - R) * (nz + 1) + j - R];
+                if (nb == 0) continue;
+                int q = i * nz + j, wx = x0 + i, wz = z0 + j, base = q * SY;
+                double drift = Double.NaN, bare = Double.NaN;
+                for (int y = SEAL + 3; y < SY - 4; y++) {
+                    int b = base + y;
+                    if (!plantFloor(b)) continue;
+                    byte m = mat[b];
+                    double cover = 0;
+                    Arrays.fill(votes, 0);
+                    for (int a = -R; a <= R; a++)
+                        for (int c = -R; c <= R; c++) {
+                            int cb = ((i + a) * nz + j + c) * SY;
+                            for (int yy = y - 2; yy <= y + 2; yy++) {
+                                byte mm = mat[cb + yy];
+                                if (mm != MAT && mm != MATE) continue;
+                                double w = mm == MAT ? 1.0 : 0.5;
+                                cover += w;
+                                votes[colour[cb + yy] & 3] += w;
+                                break;
+                            }
+                        }
+                    if (cover <= 0) continue;
+                    double g = cover / area;
+                    if (Double.isNaN(drift)) {
+                        drift = n2(pdrift, wx / 7.0, wz / 7.0);
+                        bare = ramp(n2(pbare, wx / 3.2, wz / 3.2), 0.2, 0.55);
+                    }
+                    double p = m == MAT ? ramp(g, 0.08, 0.5) : (m == MATE ? 0.8 * ramp(g, 0.15, 0.6) : 0.45 * ramp(g, 0.2, 0.65));
+                    p *= 1.0 - 0.85 * bare * (1.0 - ramp(g, 0.6, 0.95));
+                    if (Hashing.unit(Hashing.mix(hs, wx, y, wz)) >= p) continue;
+                    double h = Hashing.unit(Hashing.mix(hs + 1, wx, y, wz));
+                    double score = g + 0.3 * drift + 0.12 * (h - 0.5) - (m == MAT ? 0.0 : 0.25);
+                    int ci;
+                    if (m == MAT || m == MATE) ci = colour[b] & 3;
+                    else {
+                        ci = 0;
+                        for (int c = 1; c < 4; c++) if (votes[c] > votes[ci]) ci = c;
+                    }
+                    for (double[] v : limes) {
+                        double dx = v[0] - (wx + 0.5), dz = v[1] - (wz + 0.5);
+                        double dy = Math.max(0.0, Math.max(v[2] - (y + 1), (y + 1) - (v[2] + v[3])));
+                        double reach = LIME_REACH - 4.0 + 8.0 * Hashing.unit(Hashing.mix(hs + 2, wx, y, wz));
+                        if (dx * dx + dz * dz + dy * dy <= reach * reach) { ci = LIME; break; }
+                    }
+                    if (score > 0.98 && mat[b + 2] == AIR && mat[b + 3] == AIR && vpart[b + 2] == 0) {
+                        plant(b + 1, TALLG, ci, false);
+                        plant(b + 2, TALLG, ci, false);
+                        tall += 2;
+                    } else {
+                        plant(b + 1, GRASS, ci, score > 0.6);
+                        grass++;
+                    }
+                }
+            }
+        return new int[]{grass, tall};
+    }
+
+    /** The reach of the lime vents' colour (as creature.MantisHerds.LIME_REACH, which the herds' colour reads). */
+    static final double LIME_REACH = 30.0;
 
     // ================================================================================================ oil, wells, seep
 
