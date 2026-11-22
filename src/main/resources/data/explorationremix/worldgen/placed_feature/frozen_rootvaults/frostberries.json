@@ -43,10 +43,15 @@
         1,
         2
       ],
-      "min_chill": 5.0
+      "min_chill": 8.0
     },
     {
       "type": "minecraft:biome"
+    },
+    {
+      "type": "explorationremix:out_of_sight",
+      "biomes": "#explorationremix:frost_fern_grotto",
+      "reach": 20
     }
   ]
 }

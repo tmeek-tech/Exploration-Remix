@@ -14,7 +14,9 @@ import com.explorationremix.world.feature.FloorLavaFeature;
 import com.explorationremix.world.feature.FluidFallFeature;
 import com.explorationremix.world.feature.GiantFungusFeature;
 import com.explorationremix.world.feature.GiantSpikeFeature;
+import com.explorationremix.world.feature.GrottoIceFilter;
 import com.explorationremix.world.feature.HallGlowFeature;
+import com.explorationremix.world.feature.IceCrustFeature;
 import com.explorationremix.world.feature.JoinDeadEndsFeature;
 import com.explorationremix.world.feature.JunctionsPlacement;
 import com.explorationremix.world.feature.LavaPocketsFeature;
@@ -37,6 +39,7 @@ import com.explorationremix.world.feature.SinkholeRimFeature;
 import com.explorationremix.world.feature.SkeinsFeature;
 import com.explorationremix.world.feature.StiltMantisesFeature;
 import com.explorationremix.world.feature.FirefliesFeature;
+import com.explorationremix.world.feature.OutOfSightFilter;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
 import com.explorationremix.world.feature.TerracePoolsFeature;
 import com.explorationremix.world.feature.UnderTreesPlacement;
@@ -67,6 +70,8 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<GiantSpikeFeature.Config>> GIANT_SPIKE = FEATURES.register("giant_spike", () -> new GiantSpikeFeature(GiantSpikeFeature.Config.CODEC));
     public static final RegistryObject<Feature<PointedPatchFeature.Config>> POINTED_PATCH = FEATURES.register("pointed_patch", () -> new PointedPatchFeature(PointedPatchFeature.Config.CODEC));
     public static final RegistryObject<Feature<PillarFeature.Config>> PILLAR = FEATURES.register("pillar", () -> new PillarFeature(PillarFeature.Config.CODEC));
+    // 0.20.1: ice crusting the deep Frost Fern Grotto's walls, glowing in veins
+    public static final RegistryObject<Feature<IceCrustFeature.Config>> ICE_CRUST = FEATURES.register("ice_crust", () -> new IceCrustFeature(IceCrustFeature.Config.CODEC));
     public static final RegistryObject<Feature<TerracePoolsFeature.Config>> TERRACE_POOLS = FEATURES.register("terrace_pools", () -> new TerracePoolsFeature(TerracePoolsFeature.Config.CODEC));
     public static final RegistryObject<Feature<ColumnClusterFeature.Config>> COLUMN_CLUSTER = FEATURES.register("column_cluster", () -> new ColumnClusterFeature(ColumnClusterFeature.Config.CODEC));
     public static final RegistryObject<Feature<FluidFallFeature.Config>> FLUID_FALL = FEATURES.register("fluid_fall", () -> new FluidFallFeature(FluidFallFeature.Config.CODEC));
@@ -116,5 +121,8 @@ public final class ERWorldgen {
     public static final RegistryObject<PlacementModifierType<RiftBandPlacement>> RIFT_BAND = PLACEMENT_TYPES.register("rift_band", () -> () -> RiftBandPlacement.CODEC);
     // 0.18.6: features kept to the sinkholes whose trait (shelves, a spring, a bank, heavy ivy) lies in a range
     public static final RegistryObject<PlacementModifierType<PitTraitFilter>> PIT_TRAIT = PLACEMENT_TYPES.register("pit_trait", () -> () -> PitTraitFilter.CODEC);
+    // 0.20.1: the Frost Fern Grotto's features by how icy it is where they grow (icier deeper)
+    public static final RegistryObject<PlacementModifierType<GrottoIceFilter>> GROTTO_ICE = PLACEMENT_TYPES.register("grotto_ice", () -> () -> GrottoIceFilter.CODEC);
+    public static final RegistryObject<PlacementModifierType<OutOfSightFilter>> OUT_OF_SIGHT = PLACEMENT_TYPES.register("out_of_sight", () -> () -> OutOfSightFilter.CODEC);
     public static final RegistryObject<HeightProviderType<LayerHeight>> LAYER_HEIGHT = HEIGHT_PROVIDERS.register("layer_height", () -> () -> LayerHeight.CODEC);
 }

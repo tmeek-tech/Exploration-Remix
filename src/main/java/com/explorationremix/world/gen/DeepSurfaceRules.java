@@ -29,7 +29,7 @@ import net.minecraft.world.level.levelgen.SurfaceRules;
  * Surface rules for the deepened overworld. Before the pack's own: the deep layers' rock near open space (per biome, see
  * {@code Palette.shell}), deepslate where the pack's bedrock floor used to be, the set pieces' rock, the floors of the
  * caves near the surface (Root Vaults, frozen Root Vaults, sinkholes and oasis hollows) and the Frost Fern Grotto's ice
- * and moss. After the pack's own, so its grass, sand, snow and surface stone always win: the soil layer and the host
+ * and snow. After the pack's own, so its grass, sand, snow and surface stone always win: the soil layer and the host
  * rock the caves near the surface are carved into ({@link HostRule}).
  */
 public final class DeepSurfaceRules {
@@ -198,9 +198,15 @@ public final class DeepSurfaceRules {
                     if (b == rootCavern) return DeepMaterials.state(t.palette.ivory(x, y, z, above, below, wet, sh.hallLake(x, z)));
                 }
                 // The grotto's rock only under a roof: never on the top three blocks of a column (its open ground), should
-                // a grotto cell reach it next to a shaft of our own.
-                if (b == frost && frost != null && y < chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z) - 2)
-                    return DeepMaterials.state(t.palette.frostGrotto(x, y, z, above, below, wet));
+                // a grotto cell reach it next to a shaft of our own. Icier the deeper under the ground it lies (0.20.1).
+                if (b == frost && frost != null) {
+                    int ground = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
+                    if (y < ground - 2) {
+                        if (above > 2 && below > 1) return null; // inside the rock: the pack's (frostGrotto leaves it)
+                        return DeepMaterials.state(t.palette.frostGrotto(x, y, z, above, below, wet,
+                                t.palette.grottoIce(x, y, z, ground), t.palette.grottoGlow(x, y, z, ground)));
+                    }
+                }
                 if (b == fernRift || b == rootCavern) {
                     DeepBiome db = b == fernRift ? DeepBiome.SILVER_FERN_RIFT : DeepBiome.IVORY_ROOT_CAVERN;
                     return DeepMaterials.state(t.palette.upperShell(db, x, y, z, above, below, wet));

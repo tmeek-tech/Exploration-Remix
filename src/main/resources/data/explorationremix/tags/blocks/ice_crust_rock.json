@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:base_stone_overworld",
+    "minecraft:cobbled_deepslate",
+    "minecraft:dripstone_block",
+    "minecraft:calcite"
+  ]
+}

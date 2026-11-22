@@ -32,6 +32,11 @@
       "max_steps": 32
     },
     {
+      "type": "explorationremix:grotto_ice",
+      "top": 1.0,
+      "deep": 0.25
+    },
+    {
       "type": "minecraft:biome"
     }
   ]
