@@ -192,11 +192,18 @@ class FallSitesTest {
      * site ({@link FallSites#siteOf}), so the fall keeps to its site's share; a good share of the sites pour from under a
      * mass (measured: see the assertion's message); and each aim is found by the one chunk that holds it, the same in any
      * order ({@link #sitesAreTheSameInAnyOrder}).
+     * <p>With the halls (0.20.4) the share under a mass fell from 41.4 % (127 of 307 sites, 68 moved) to 20.6 % (74 of
+     * 360, 38 moved), and the bar from 30 to 18 %. A cluster hangs in proportion to the room under it
+     * (GalleriesField.clusters), and the halls' domed vaults stand lower than the old vault, so a mass of ANCHOR_HANG rows
+     * or more hangs over 4.6 % of the open columns outside the Caldera, against 9.0 % before; and the halls' walls stand
+     * by 144 of the sites not under a mass (62 before), whose falls pour down a wall's face. What fix round 3 was about,
+     * the falls with neither a mass nor a wall by them (a thin line from the vault, kept for a ledge's edge or a cliff's
+     * foot), stays as rare as it was: 142 of the 360 sites (39.4 %), 118 of 307 (38.4 %) before, held under 45 %.
      */
     @Test
     void sitesPourFromUnderTheMassesByThem() {
         assertTrue(GAL.aim() > 0, "the shipped sites have no aim");
-        int sites = 0, moved = 0, under = 0;
+        int sites = 0, moved = 0, under = 0, bare = 0;
         for (int i = -100; i < 100; i++) for (int j = -100; j < 100; j++) {
             if (!FallSites.site(T, GAL, i, j)) continue;
             int x = FallSites.x(T.seed, GAL, i, j), z = FallSites.z(T.seed, GAL, i, j);
@@ -208,16 +215,28 @@ class FallSitesTest {
             assertTrue(Math.hypot(a[0] - x, a[1] - z) <= GAL.anchor() + 1, what + ": past the anchor's reach");
             boolean mass = T.galleries.column(a[0], a[1]).hang >= com.explorationremix.world.terrain.GalleriesField.ANCHOR_HANG;
             if (mass) under++;
+            else if (!wallBy(x, z, GAL.anchor())) bare++;
             if (a[0] != x || a[1] != z) {
                 moved++;
                 assertTrue(mass, what + ": no mass hangs there");
                 assertTrue(!T.galleries.column(a[0], a[1]).closed(), what + ": a closed column");
             }
         }
-        String got = sites + " sites outside the Caldera, " + moved + " moved under a mass by them, " + under + " under a mass";
+        String got = sites + " sites outside the Caldera, " + moved + " moved under a mass by them, " + under + " under a mass, "
+                + bare + " with neither a mass nor a wall by them";
         System.out.println("FallSitesTest aims: " + got);
         assertTrue(sites >= 300, "too few sites to tell: " + got);
-        assertTrue(moved > 0 && under >= 0.3 * sites, "too few sites pour from under a mass: " + got);
+        assertTrue(moved > 0 && under >= 0.18 * sites, "too few sites pour from under a mass: " + got);
+        assertTrue(bare <= 0.45 * sites, "too many falls pour from the bare vault: " + got);
+    }
+
+    /** Whether a closed column (a wall) stands within r of open column (x, z): GalleriesField.fallAnchor's sixteen looks. */
+    private static boolean wallBy(int x, int z, double r) {
+        for (int k = 0; k < 16; k++) {
+            double a = k * (Math.PI / 8), d = (k & 1) == 0 ? r : 0.5 * r;
+            if (T.galleries.column((int) Math.floor(x + 0.5 + d * Math.cos(a)), (int) Math.floor(z + 0.5 + d * Math.sin(a))).closed()) return true;
+        }
+        return false;
     }
 
     /**
