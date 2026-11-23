@@ -70,6 +70,8 @@ public final class UpperCaveSounds {
     /** How far a ray looks for rock, in blocks. */
     private static final double REACH = 24;
     private static final double HUSH = 6.5, SING_AGAIN = 10, LET_GO = 28, NEAREST = 7, FARTHEST = 20;
+    /** About how long a cricket's bout runs, its echo too (the four files run 7.4 to 8.1 seconds), in ticks. */
+    private static final int BOUT = 155;
 
     @Nullable private static Chorus chorus;
     /** The chorus's volume, 0 to 1, as it fades toward the target. */
@@ -296,9 +298,12 @@ public final class UpperCaveSounds {
                 voice.muffle = muffle;
                 if (voice.isStopped() || !sounds.isActive(voice)) {
                     // a bout ended: rest a while before the next, four to sixteen seconds, so it never drowns the chorus;
-                    // with two in a big cave each rests twice as long, so the cave hears no more of them than of one
+                    // with two in a big cave each rests twice that and a bout more, so each sings half as often and the
+                    // cave hears bouts no more often than from one (twice the rest alone still left them singing in
+                    // half the seconds of a recording, against a third with one)
                     voice = null;
-                    rest = (80 + random.nextInt(240)) * Math.max(1, SINGERS.size());
+                    int n = Math.max(1, SINGERS.size());
+                    rest = (80 + random.nextInt(240)) * n + BOUT * (n - 1);
                 }
             } else if (!hush.quiet() && --rest <= 0) {
                 voice = new Voice(pos, pitch, muffle);
