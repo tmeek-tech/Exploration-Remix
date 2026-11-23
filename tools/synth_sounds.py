@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Makes Exploration Remix's ambient sounds from scratch: wind, birds, drips with echoes, bubbling hot springs, the
-distant roar of falling water and the basalt rumble. Every loop is built to repeat seamlessly (its noise and its
+"""Makes Exploration Remix's first ambient sounds from scratch: wind, birds, drips with echoes, bubbling hot springs, the
+distant roar of falling water and the basalt rumble (since 0.20.9 only the drips, the roar and the rolls of rumbling are
+still saved: see RETIRED; synth_layer_sounds.py makes each layer's own ambience). Every loop is built to repeat seamlessly (its noise and its
 events wrap around the loop's end). Deterministic: the same script gives the same sounds.
 
 Needs numpy and ffmpeg with libvorbis. Writes src/main/resources/assets/explorationremix/sounds/ambient/*.ogg.
@@ -296,21 +297,32 @@ def rumble(rng, seconds=4.5):
     return fade_edges(normalize_peak(x, -2.0), 0.05)
 
 
+# Made but no longer saved since 0.20.9, when each layer got its own ambience (synth_layer_sounds.py): the upper caves'
+# wind and birds (now crickets), the Deep Gardens' drips and hot springs (now a hush) and the old basalt rumble (almost
+# all below 20 Hz, so never heard). Still made, so the random numbers the kept sounds draw stay the same.
+RETIRED = {"upper_wind", "bird1", "bird2", "bird3", "bird4", "gardens_drips", "springs_bubbling", "basalt_rumble"}
+
+
+def keep(name, x, quality=4):
+    if name not in RETIRED:
+        save(name, x, quality)
+
+
 def main():
     rng = np.random.default_rng(20261028)
-    save("upper_wind", upper_wind(rng), 3)
+    keep("upper_wind", upper_wind(rng), 3)
     for k in range(1, 5):
-        save(f"bird{k}", bird(rng, k))
+        keep(f"bird{k}", bird(rng, k))
     for k in range(1, 5):
-        save(f"drip{k}", fade_edges(normalize_peak(np.concatenate([drip(rng), np.zeros(int(0.1 * SR))]), -3.0), 0.003))
+        keep(f"drip{k}", fade_edges(normalize_peak(np.concatenate([drip(rng), np.zeros(int(0.1 * SR))]), -3.0), 0.003))
     for k in range(1, 5):
-        save(f"echo_drip{k}", echo_drip(rng))
-    save("gardens_drips", gardens_drips(rng), 3)
-    save("springs_bubbling", springs_bubbling(rng), 3)
-    save("blue_roar", blue_roar(rng), 3)
-    save("basalt_rumble", basalt_rumble(rng), 3)
+        keep(f"echo_drip{k}", echo_drip(rng))
+    keep("gardens_drips", gardens_drips(rng), 3)
+    keep("springs_bubbling", springs_bubbling(rng), 3)
+    keep("blue_roar", blue_roar(rng), 3)
+    keep("basalt_rumble", basalt_rumble(rng), 3)
     for k in range(1, 3):
-        save(f"rumble{k}", rumble(rng))
+        keep(f"rumble{k}", rumble(rng))
 
 
 if __name__ == "__main__":

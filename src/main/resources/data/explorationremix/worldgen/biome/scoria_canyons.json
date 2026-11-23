@@ -24,7 +24,7 @@
     "ambient_sound": "explorationremix:ambient.basalt.loop",
     "additions_sound": {
       "sound": "explorationremix:ambient.basalt.additions",
-      "tick_chance": 0.012
+      "tick_chance": 0.0072
     }
   },
   "spawners": {

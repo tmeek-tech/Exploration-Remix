@@ -110,30 +110,41 @@ PARTICLES = {
     "vent_domes": ("minecraft:warped_spore", 0.006),
 }
 
-# Ambient sound: (loop, additions, additions chance per tick). Our sound events are registered by the mod (ERSounds).
+# Ambient sound: (loop, additions, additions chance per tick); None for none. Our sound events are registered by the
+# mod (ERSounds). 0.20.9 (Taran: "Change bird noises in the Upper Caves to calm, atmospheric cricket noises. The Deep
+# Gardens should be quiet and the Basalt Galleries should have a low rumble"): the upper caves' crickets are the client's
+# (UpperCaveSounds, in every upper cave, the pack's own too), so their biomes keep only the drips, at the rate they had
+# (the birds were two in three of their additions); the frozen caves are cold and still; every Deep Gardens biome hushes,
+# a far vent sighing every half minute or so; the Galleries keep their pops' rate and lose the rolls of rumbling, which
+# stay the lava's warning; their refuge, the Obsidian Tubes, sounds like the Wasteland's.
+UPPER_DRIPS = f"{MOD}:ambient.upper.additions"
+FROZEN = (f"{MOD}:ambient.frozen.loop", f"{MOD}:ambient.frozen.additions", 0.004)
+HUSH = (f"{MOD}:ambient.gardens.loop", f"{MOD}:ambient.gardens.additions", 0.0015)
+GALLERIES_SOUND = (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.0072)
+REFUGE_SOUND = (f"{MOD}:ambient.hollows.loop", f"{MOD}:ambient.hollows.additions", 0.004)
 SOUNDS = {
-    "rootvaults": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.008),
-    "silver_fern_rift": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.008),
-    "ivory_root_cavern": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.008),
-    "frozen_rootvaults": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.006),
-    "sinkhole": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.006),
-    "oasis_hollow": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.004),
-    "frost_fern_grotto": (f"{MOD}:ambient.upper.loop", f"{MOD}:ambient.upper.additions", 0.008),
-    "lantern_lake": (f"{MOD}:ambient.gardens.loop", f"{MOD}:ambient.gardens.additions", 0.012),
-    "ember_gardens": (f"{MOD}:ambient.springs.loop", f"{MOD}:ambient.gardens.additions", 0.012),
-    "rust_springs": (f"{MOD}:ambient.springs.loop", f"{MOD}:ambient.gardens.additions", 0.008),
+    "rootvaults": (None, UPPER_DRIPS, 0.0027),
+    "silver_fern_rift": (None, UPPER_DRIPS, 0.0027),
+    "ivory_root_cavern": (None, UPPER_DRIPS, 0.0027),
+    "frozen_rootvaults": FROZEN,
+    "sinkhole": (None, UPPER_DRIPS, 0.002),
+    "oasis_hollow": (None, UPPER_DRIPS, 0.0013),
+    "frost_fern_grotto": FROZEN,
+    "lantern_lake": HUSH,
+    "ember_gardens": HUSH,
+    "rust_springs": HUSH,
     "deep_blue_rift": (f"{MOD}:ambient.blue.loop", f"{MOD}:ambient.blue.additions", 0.006),
     "asurine_geodes": (f"{MOD}:ambient.blue.loop", f"{MOD}:ambient.blue.additions", 0.003),
-    "basalt_galleries": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
-    "obsidian_tubes": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.004),
-    "wasteland": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
-    "ash_hollows": (f"{MOD}:ambient.hollows.loop", f"{MOD}:ambient.hollows.additions", 0.004),
-    "caldera": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
-    "causeway": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
-    "scoria_canyons": (f"{MOD}:ambient.basalt.loop", f"{MOD}:ambient.basalt.additions", 0.012),
-    "seep_beds": (f"{MOD}:ambient.gardens.loop", f"{MOD}:ambient.gardens.additions", 0.012),
-    "chimney_halls": (f"{MOD}:ambient.gardens.loop", f"{MOD}:ambient.gardens.additions", 0.008),
-    "vent_domes": (f"{MOD}:ambient.springs.loop", f"{MOD}:ambient.gardens.additions", 0.012),
+    "basalt_galleries": GALLERIES_SOUND,
+    "obsidian_tubes": REFUGE_SOUND,
+    "wasteland": (f"{MOD}:ambient.wasteland.loop", f"{MOD}:ambient.wasteland.additions", 0.012),
+    "ash_hollows": REFUGE_SOUND,
+    "caldera": GALLERIES_SOUND,
+    "causeway": GALLERIES_SOUND,
+    "scoria_canyons": GALLERIES_SOUND,
+    "seep_beds": HUSH,
+    "chimney_halls": HUSH,
+    "vent_domes": HUSH,
 }
 
 HOT = {"ember_gardens", "rust_springs", "wasteland", "ash_hollows", "vent_domes"} | set(GALLERIES)
@@ -1458,8 +1469,10 @@ def effects(name):
         p, chance = PARTICLES[name]
         e["particle"] = {"options": {"type": p}, "probability": chance}
     loop, adds, chance = SOUNDS[name]
-    e["ambient_sound"] = loop
-    e["additions_sound"] = {"sound": adds, "tick_chance": chance}
+    if loop:
+        e["ambient_sound"] = loop
+    if adds:
+        e["additions_sound"] = {"sound": adds, "tick_chance": chance}
     return e
 
 
