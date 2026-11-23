@@ -38,6 +38,7 @@ import com.explorationremix.world.feature.ShelfVinesFeature;
 import com.explorationremix.world.feature.SinkholeRimFeature;
 import com.explorationremix.world.feature.SkeinsFeature;
 import com.explorationremix.world.feature.StiltMantisesFeature;
+import com.explorationremix.world.feature.ChimneyLurkersFeature;
 import com.explorationremix.world.feature.FirefliesFeature;
 import com.explorationremix.world.feature.OutOfSightFilter;
 import com.explorationremix.world.feature.SurfaceAttachFeature;
@@ -94,6 +95,8 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> FIREFLIES = FEATURES.register("fireflies", () -> new FirefliesFeature(NoneFeatureConfiguration.CODEC));
     // the Deep Gardens' stilt mantis herds, set down as each chunk is made (0.20.0), grazing their groves of glow mats
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> STILT_MANTISES = FEATURES.register("stilt_mantises", () -> new StiltMantisesFeature(NoneFeatureConfiguration.CODEC));
+    // the Deep Gardens' chimney lurkers, set down as each chunk is made (0.21.0), each waiting in its vent's mouth
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> CHIMNEY_LURKERS = FEATURES.register("chimney_lurkers", () -> new ChimneyLurkersFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
     // the Galleries' floor lava (fix round 2 after the 0.8.0 pack runs): the field's rule laid on its floors
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> FLOOR_LAVA = FEATURES.register("floor_lava", () -> new FloorLavaFeature(NoneFeatureConfiguration.CODEC));

@@ -869,6 +869,55 @@ public final class GardensField {
         return out;
     }
 
+    /**
+     * A live vent, for the chimney lurkers that wait in their mouths (0.21.0): its key (the same whichever chunk asks),
+     * the axis at its top (world x, z), its base row and its top row (layer rows, 0 the layer's bottom; the top is the
+     * rim's mean height round it), its flue's radius and its wall's outside a couple of rows under the top (means round
+     * it), its form (3: a deep vent) and colour (a {@code Neon} code: its beads' own, the glow mats' at its centre, lime
+     * for a deep vent), and the ways its open cracks face (radians from +x toward +z).
+     */
+    public record LiveVent(long key, double x, double z, int baseRow, double topRow, double flue, double wall, int form, int colour,
+                           double[] cracks) {}
+
+    /** How far a live vent's top may stand from its base (across, blocks: its lean, at most 0.05 a row). */
+    static final double LEAN_PAD = 8.0;
+
+    /** The live vents whose tops stand in the box (see {@link LiveVent}), in the canonical order. */
+    public List<LiveVent> liveVents(double minX, double minZ, double maxX, double maxZ) {
+        List<LiveVent> out = new ArrayList<>();
+        int[] pcol = null;
+        GardensVents.Geom g = new GardensVents.Geom();
+        for (GardensSites.Site s : ventsNear(minX, minZ, maxX, maxZ)) {
+            if (!s.live) continue;
+            // a vent leans at most a twentieth of a block a row: its top stands within a few blocks of its base
+            double bx = s.x + gv.ox, bz = s.z + gv.oz;
+            if (bx < minX - LEAN_PAD || bx >= maxX + LEAN_PAD || bz < minZ - LEAN_PAD || bz >= maxZ + LEAN_PAD) continue;
+            GardensVents.Vent v = gv.table(List.of(s), (x, y, z) -> 0).get(0);
+            float[] T = v.t;
+            double htop = T[26];
+            double ax = v.cx + T[14] * htop + gv.ox, az = v.cz + T[15] * htop + gv.oz;
+            if (ax < minX || ax >= maxX || az < minZ || az >= maxZ) continue;
+            if (pcol == null) pcol = plan.perm(plan.seed + 1000 + 8);
+            double top = 0, rin = 0, rout = 0;
+            int row = (int) Math.floor(T[6] + htop) - 2;
+            for (int a = 0; a < 8; a++) {
+                double th = a * Math.PI / 4;
+                top += gv.top(v, th);
+                gv.geom(v, (int) Math.floor(ax + Math.cos(th) * 2.0), row, (int) Math.floor(az + Math.sin(th) * 2.0), row, g);
+                rin += g.rin;
+                rout += g.rout;
+            }
+            int nc = 0;
+            for (double c : s.cracks) if (!Double.isNaN(c)) nc++;
+            double[] cracks = new double[nc];
+            nc = 0;
+            for (double c : s.cracks) if (!Double.isNaN(c)) cracks[nc++] = c;
+            long key = ((long) Math.floor(s.x + gv.ox) & 0x3FFFFFFL) << 38 | ((long) Math.floor(s.z + gv.oz) & 0x3FFFFFFL) << 12 | (s.ys & 0xFFFL);
+            out.add(new LiveVent(key, ax, az, s.ys, top / 8.0, rin / 8.0, rout / 8.0, s.form, GardensDress.ventColour(v, pcol, gv.ox, gv.oz), cracks));
+        }
+        return out;
+    }
+
     /** Whether a point (x, row, z) lies within {@code reach} of a vent from {@link #limeVents} (its body's column). */
     public static boolean inReach(double[] vent, double x, double row, double z, double reach) {
         double dx = vent[0] - x, dz = vent[1] - z;

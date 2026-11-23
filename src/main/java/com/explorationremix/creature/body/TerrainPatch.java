@@ -143,6 +143,16 @@ public final class TerrainPatch {
      * and {@code out} untouched, when no rock lies within reach.
      */
     public boolean field(double px, double py, double pz, double reach, double soft, double[] out) {
+        return field(px, py, pz, reach, soft, out, 0, 0, 0, -2.0);
+    }
+
+    /**
+     * As {@link #field(double, double, double, double, double, double[])}, counting only the rock on the side a body
+     * holds: a face whose way out to the point turns from (hx, hy, hz) (the body's way out now, unit) so far that their
+     * dot falls under {@code minDot} lies across the gap from it (the far wall of a narrow flue, a ceiling low over a
+     * rim, a wall beyond a narrow moat), and is left out. A {@code minDot} of -2 counts every face.
+     */
+    public boolean field(double px, double py, double pz, double reach, double soft, double[] out, double hx, double hy, double hz, double minDot) {
         if (solid(px, py, pz)) return escape(px, py, pz, out);
         touchedCount = 0;
         double r2 = reach * reach;
@@ -163,20 +173,23 @@ public final class TerrainPatch {
             double d2 = da * da + db * db + dn * dn;
             if (d2 > r2) continue;
             double d = Math.sqrt(d2);
+            double vn, va, vb;
+            if (d < 1.0E-7) { vn = sign; va = 0; vb = 0; }
+            else { vn = dn / d; va = da / d; vb = db / d; }
+            double wx, wy, wz;
+            switch (axis) {
+                case 0 -> { wx = vn; wy = va; wz = vb; }
+                case 1 -> { wy = vn; wx = va; wz = vb; }
+                default -> { wz = vn; wx = va; wy = vb; }
+            }
+            if (minDot > -1.5 && wx * hx + wy * hy + wz * hz < minDot) continue;
             int g = (int) faces[o + 7];
             boolean first = true;
             for (int i = 0; i < touchedCount; i++) if (touched[i] == g) { first = false; break; }
             if (first) { touched[touchedCount++] = g; gd[g] = Double.MAX_VALUE; }
             if (d >= gd[g]) continue;
             gd[g] = d;
-            double vn, va, vb;
-            if (d < 1.0E-7) { vn = sign; va = 0; vb = 0; }
-            else { vn = dn / d; va = da / d; vb = db / d; }
-            switch (axis) {
-                case 0 -> { gx[g] = vn; gy[g] = va; gz[g] = vb; }
-                case 1 -> { gy[g] = vn; gx[g] = va; gz[g] = vb; }
-                default -> { gz[g] = vn; gx[g] = va; gy[g] = vb; }
-            }
+            gx[g] = wx; gy[g] = wy; gz[g] = wz;
         }
         if (touchedCount == 0) return false;
         double min = Double.MAX_VALUE;

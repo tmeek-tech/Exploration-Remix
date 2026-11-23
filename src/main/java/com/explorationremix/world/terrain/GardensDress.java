@@ -564,16 +564,15 @@ final class GardensDress {
      * deep vent is lime, the colour of the ways down.
      */
     void ventColours(int[] pcol) {
-        for (Vent v : vents) {
-            int c;
-            if ((int) v.t[1] == 3) c = LIME;
-            else {
-                int bd = Math.max(0, Math.min(2, (int) v.t[2]));
-                double cn = n2(pcol, (v.cx + gv.ox) / 34.0, (v.cz + gv.oz) / 34.0);
-                c = cn < T1[bd] ? MAGENTA : (cn < T2[bd] ? VIOLET : LIGHTBLUE);
-            }
-            vcol[v.idx] = (byte) c;
-        }
+        for (Vent v : vents) vcol[v.idx] = (byte) ventColour(v, pcol, gv.ox, gv.oz);
+    }
+
+    /** One vent's colour (see {@link #ventColours}); {@code pcol} is the plan's field for it (seed + 1008). */
+    static int ventColour(Vent v, int[] pcol, int ox, int oz) {
+        if ((int) v.t[1] == 3) return LIME;
+        int bd = Math.max(0, Math.min(2, (int) v.t[2]));
+        double cn = n2(pcol, (v.cx + ox) / 34.0, (v.cz + oz) / 34.0);
+        return cn < T1[bd] ? MAGENTA : (cn < T2[bd] ? VIOLET : LIGHTBLUE);
     }
 
     /** Air of a vent's inside: its den, flue, cracks, doors, adits, hood and throat. */

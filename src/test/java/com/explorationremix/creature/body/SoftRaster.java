@@ -104,6 +104,54 @@ final class SoftRaster {
         }
     }
 
+    /**
+     * A glowing triangle laid over what is drawn (the game's eyes layer): each texel's colour times {@code level} is
+     * added where the triangle is at the front, so a glow pass over a body lights its own pixels and nothing it hides.
+     */
+    void triAdd(double[] p0, double[] p1, double[] p2, double[] uv0, double[] uv1, double[] uv2, Tex tex, double level) {
+        double[][] p = {p0, p1, p2};
+        for (int i = 0; i < 3; i++) {
+            double dx = p[i][0] - eye.x, dy = p[i][1] - eye.y, dz = p[i][2] - eye.z;
+            double cz = dx * fwd.x + dy * fwd.y + dz * fwd.z;
+            if (cz < 0.05) return;
+            double cx = dx * right.x + dy * right.y + dz * right.z, cy = dx * upv.x + dy * upv.y + dz * upv.z;
+            sx[i] = w / 2.0 + focal * cx / cz;
+            sy[i] = h / 2.0 - focal * cy / cz;
+            sz[i] = cz;
+        }
+        int minX = (int) Math.max(0, Math.floor(Math.min(sx[0], Math.min(sx[1], sx[2]))));
+        int maxX = (int) Math.min(w - 1, Math.ceil(Math.max(sx[0], Math.max(sx[1], sx[2]))));
+        int minY = (int) Math.max(0, Math.floor(Math.min(sy[0], Math.min(sy[1], sy[2]))));
+        int maxY = (int) Math.min(h - 1, Math.ceil(Math.max(sy[0], Math.max(sy[1], sy[2]))));
+        double area = (sx[1] - sx[0]) * (sy[2] - sy[0]) - (sx[2] - sx[0]) * (sy[1] - sy[0]);
+        if (Math.abs(area) < 1.0E-9) return;
+        double iz0 = 1 / sz[0], iz1 = 1 / sz[1], iz2 = 1 / sz[2];
+        for (int y = minY; y <= maxY; y++) {
+            double py = y + 0.5;
+            for (int x = minX; x <= maxX; x++) {
+                double px = x + 0.5;
+                double w0 = ((sx[1] - px) * (sy[2] - py) - (sx[2] - px) * (sy[1] - py)) / area;
+                double w1 = ((sx[2] - px) * (sy[0] - py) - (sx[0] - px) * (sy[2] - py)) / area;
+                double w2 = 1 - w0 - w1;
+                if (w0 < -1.0E-9 || w1 < -1.0E-9 || w2 < -1.0E-9) continue;
+                double zz = 1 / (w0 * iz0 + w1 * iz1 + w2 * iz2);
+                int idx = y * w + x;
+                if (zz > depth[idx] + 1.0E-3) continue;
+                double u = (w0 * uv0[0] * iz0 + w1 * uv1[0] * iz1 + w2 * uv2[0] * iz2) * zz;
+                double v = (w0 * uv0[1] * iz0 + w1 * uv1[1] * iz1 + w2 * uv2[1] * iz2) * zz;
+                int tx = Math.min(tex.tw - 1, Math.max(0, (int) Math.floor(u * tex.tw)));
+                int ty = Math.min(tex.th - 1, Math.max(0, (int) Math.floor(v * tex.th)));
+                int c = tex.argb[ty * tex.tw + tx];
+                if ((c >>> 24) < 128) continue;
+                int o = rgb[idx];
+                int r = (int) Math.min(255, ((o >> 16) & 255) + ((c >> 16) & 255) * level);
+                int g = (int) Math.min(255, ((o >> 8) & 255) + ((c >> 8) & 255) * level);
+                int b = (int) Math.min(255, (o & 255) + (c & 255) * level);
+                rgb[idx] = (r << 16) | (g << 8) | b;
+            }
+        }
+    }
+
     /** A dot drawn over everything (debug marks), in world space. */
     void dot(double[] p, int color, int radius) {
         double dx = p[0] - eye.x, dy = p[1] - eye.y, dz = p[2] - eye.z;

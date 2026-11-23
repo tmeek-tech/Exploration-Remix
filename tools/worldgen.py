@@ -1206,6 +1206,10 @@ def build_features():
     # floors the chunk ends up with; every vent field chunk, and the feature works out from the field's plan
     # (MantisHerds) which chunks hold a herd's home.
     feature("stilt_mantises", "top_layer_modification", VENT_FIELD, {"type": f"{MOD}:stilt_mantises", "config": {}}, [])
+    # The Deep Gardens' chimney lurkers (ChimneyLurkersFeature, 0.21.0): set down as each chunk is made, after the
+    # mantises, each in the mouth of its vent (about half the live vents); every vent field chunk, and the feature works
+    # out from the field's plan which vents' tops stand in the chunk.
+    feature("chimney_lurkers", "top_layer_modification", VENT_FIELD, {"type": f"{MOD}:chimney_lurkers", "config": {}}, [])
     # The Galleries' lava glow (HallGlowFeature, after everything else): invisible light along the rock above the flood
     # band, one try in every few-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
     # rock near black. 0.5.1, "brightly lit" but not flat: lit from the lava and the floor up. Level 15 just over the

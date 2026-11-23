@@ -906,5 +906,120 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.stilt_mantis.death"
+  },
+  "chimney_lurker.step": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/chimney_lurker/tap1",
+        "volume": 0.5,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:creature/chimney_lurker/tap2",
+        "volume": 0.5,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:creature/chimney_lurker/tap3",
+        "volume": 0.5,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:creature/chimney_lurker/tap4",
+        "volume": 0.5,
+        "attenuation_distance": 12
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.chimney_lurker.step"
+  },
+  "chimney_lurker.click": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/chimney_lurker/click1",
+        "volume": 0.75,
+        "attenuation_distance": 20
+      },
+      {
+        "name": "explorationremix:creature/chimney_lurker/click2",
+        "volume": 0.75,
+        "attenuation_distance": 20
+      },
+      {
+        "name": "explorationremix:creature/chimney_lurker/click3",
+        "volume": 0.75,
+        "attenuation_distance": 20
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.chimney_lurker.click"
+  },
+  "chimney_lurker.rattle": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/chimney_lurker/rattle1",
+        "volume": 1.0,
+        "attenuation_distance": 32
+      },
+      {
+        "name": "explorationremix:creature/chimney_lurker/rattle2",
+        "volume": 1.0,
+        "attenuation_distance": 32
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.chimney_lurker.rattle"
+  },
+  "chimney_lurker.hiss": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/chimney_lurker/hiss1",
+        "volume": 0.9,
+        "attenuation_distance": 20
+      },
+      {
+        "name": "explorationremix:creature/chimney_lurker/hiss2",
+        "volume": 0.9,
+        "attenuation_distance": 20
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.chimney_lurker.hiss"
+  },
+  "chimney_lurker.bite": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/chimney_lurker/bite1",
+        "volume": 1.0,
+        "attenuation_distance": 20
+      },
+      {
+        "name": "explorationremix:creature/chimney_lurker/bite2",
+        "volume": 1.0,
+        "attenuation_distance": 20
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.chimney_lurker.bite"
+  },
+  "chimney_lurker.hurt": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/chimney_lurker/hurt1",
+        "volume": 0.9,
+        "attenuation_distance": 16
+      },
+      {
+        "name": "explorationremix:creature/chimney_lurker/hurt2",
+        "volume": 0.9,
+        "attenuation_distance": 16
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.chimney_lurker.hurt"
+  },
+  "chimney_lurker.death": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/chimney_lurker/death1",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.chimney_lurker.death"
   }
 }
