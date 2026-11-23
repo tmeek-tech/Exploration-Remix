@@ -137,8 +137,9 @@ public final class IceColumnsFeature extends Feature<NoneFeatureConfiguration> {
      */
     static boolean open(BlockState s, Block icicle) {
         if (s.isAir() || s.is(Blocks.PACKED_ICE) || s.is(Blocks.BLUE_ICE) || icicle != null && s.is(icicle)) return true;
-        // a half slab: Terrain Slabs lays them in the air of a floor's or a ceiling's steps after this has run in its chunk
-        if (s.getBlock() instanceof SlabBlock && s.getValue(SlabBlock.TYPE) != SlabType.DOUBLE) return true;
+        // a dry half slab: Terrain Slabs lays them in the air of a floor's or a ceiling's steps after this has run in its chunk
+        if (s.getBlock() instanceof SlabBlock && s.hasProperty(SlabBlock.TYPE) && s.getValue(SlabBlock.TYPE) != SlabType.DOUBLE
+                && s.getFluidState().isEmpty()) return true;
         if (!s.getFluidState().isEmpty() || s.is(Blocks.ICE)) return false;
         return s.canBeReplaced() || !s.blocksMotion();
     }
