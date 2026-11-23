@@ -186,7 +186,7 @@ public final class UpperCaveSounds {
             nextSearch = 40;
             return;
         }
-        // two only in a big cave: two in every cave, with short rests, chirped a quarter of the time in a recording of
+        // two only in a big cave: two in every cave, with short rests, chirped in over half the seconds of a recording of
         // the game, too busy for the soft chorus
         int most = open > 0.45F ? 2 : 1;
         if (SINGERS.size() < most && --nextSearch <= 0) {
@@ -295,9 +295,10 @@ public final class UpperCaveSounds {
             if (voice != null) {
                 voice.muffle = muffle;
                 if (voice.isStopped() || !sounds.isActive(voice)) {
-                    // a bout ended: rest a while before the next, four to sixteen seconds, so it never drowns the chorus
+                    // a bout ended: rest a while before the next, four to sixteen seconds, so it never drowns the chorus;
+                    // with two in a big cave each rests twice as long, so the cave hears no more of them than of one
                     voice = null;
-                    rest = 80 + random.nextInt(240);
+                    rest = (80 + random.nextInt(240)) * Math.max(1, SINGERS.size());
                 }
             } else if (!hush.quiet() && --rest <= 0) {
                 voice = new Voice(pos, pitch, muffle);
