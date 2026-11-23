@@ -107,10 +107,8 @@
     [],
     [
       "minecraft:amethyst_geode",
-      "explorationremix:frost_fern_grotto/giant_icicles",
-      "explorationremix:frost_fern_grotto/icicle_clusters",
       "explorationremix:frost_fern_grotto/ice_columns",
-      "explorationremix:frost_fern_grotto/deep_ice_columns"
+      "explorationremix:frost_fern_grotto/icicle_clusters"
     ],
     [
       "minecraft:monster_room",

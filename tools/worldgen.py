@@ -922,29 +922,22 @@ def build_features():
     def snowy(reach=0): return looks(*VAULT_LOOKS, max_chill=reach)
     def thawed(reach=THAW): return looks(*VAULT_LOOKS, min_chill=reach)
 
-    # Ice first: giant icicles from the frozen ceilings by the openings, and Immersive Weathering's icicle clusters,
-    # before anything grows on the rock. The grotto's ice is its icy caves' (Taran: one sheet of ice over the ceiling
-    # looked odd), more of it the deeper (0.20.1: grotto_ice). Since 0.20.1 the frozen Root Vaults' icicle clusters hang
-    # all through them, not only near the openings (Taran: "There still should be ice in the cold Root Vaults too").
+    # Ice first, before anything grows on the rock. The Frost Fern Grotto's ice columns grow from noise (0.20.7, Taran:
+    # "Make ice columns procedurally generated instead of structures"; IceColumnsFeature, IceColumns): once per chunk,
+    # first of all, over the caves as the terrain left them, in groves of joined columns, broken spikes over stumps and
+    # fused masses that come thicker the deeper; they took the place of 0.14.0's columns placed one by one and of the
+    # grotto's giant icicles. Then the frozen Root Vaults' giant icicles from the frozen ceilings by the openings, and
+    # Immersive Weathering's icicle clusters. The grotto's ice is its icy caves' (Taran: one sheet of ice over the
+    # ceiling looked odd), more of it the deeper (0.20.1: grotto_ice). Since 0.20.1 the frozen Root Vaults' icicle
+    # clusters hang all through them, not only near the openings (Taran: "There still should be ice in the cold Root
+    # Vaults too").
+    feature("frost_fern_grotto/ice_columns", "local_modifications", fg, {"type": f"{MOD}:ice_columns", "config": {}}, [])
     feature("frozen_rootvaults/giant_icicles", "local_modifications", fz, giant_icicle,
             [PLANNED, count(3), SQUARE, layer(up)] + ceiling(offset=0) + [snowy(2), BIOME])
     feature("frozen_rootvaults/icicle_clusters", "local_modifications", fz, icicle_cluster((1, 4), (2, 5), (1, 2), (0.3, 0.6)),
             [count(12), SQUARE, layer(up)] + ceiling() + [BIOME, icy_around(6)])
-    feature("frost_fern_grotto/giant_icicles", "local_modifications", fg, giant_icicle,
-            [count(4), SQUARE, caves()] + ceiling(offset=0) + [grotto_ice(0.5, 1), BIOME])
     feature("frost_fern_grotto/icicle_clusters", "local_modifications", fg, icicle_cluster((2, 6), (3, 6), (1, 3), (0.3, 0.7)),
             [count(28), SQUARE, caves()] + ceiling() + [grotto_ice(0.45, 1), BIOME, icy_around(7)])
-    # Columns of packed and blue ice from ceiling to floor, like dripstone caves' columns (Taran, 0.14.0): only where
-    # the room is 6 to 26 tall over a solid dry floor and no other column stands within 12 blocks (PillarFeature), so
-    # most of the 48 tries a chunk find no spot and those that do stand about one to a chunk. Deeper down (0.20.1) more
-    # of them, as close as 9 blocks apart.
-    ice_column = mix((simple("minecraft:packed_ice"), 5), (simple("minecraft:blue_ice"), 1))
-    feature("frost_fern_grotto/ice_columns", "local_modifications", fg,
-            {"type": f"{MOD}:pillar", "config": {"body": ice_column, "radius": funiform(1.6, 3.4), "min_room": 6, "max_room": 26, "spacing": 12}},
-            [count(48), SQUARE, caves()] + ceiling(offset=0) + [BIOME])
-    feature("frost_fern_grotto/deep_ice_columns", "local_modifications", fg,
-            {"type": f"{MOD}:pillar", "config": {"body": ice_column, "radius": funiform(1.4, 3.0), "min_room": 5, "max_room": 26, "spacing": 9}},
-            [count(40), SQUARE, caves()] + ceiling(offset=0) + [grotto_ice(0, 1), BIOME])
     # Deep inside a frozen cluster, terraced pools like the root halls', rimmed with limestone and frost moss (a feature
     # below freezes their water over).
     feature("frozen_rootvaults/pools", "local_modifications", fz,
@@ -982,8 +975,8 @@ def build_features():
     # it lies (Taran: "less plant life ... small patches of frost moss with ferns and flowers ... without the blue
     # glowberry vines ... the deeper caves more icy"): small frost moss patches crowded with frosty ferns, asters and
     # glowing snowbells, fewer of them deeper; frost over the rock near the top; snow on the floors; icy-cave ice on the
-    # ceilings, over the pools' edges near the top and over whole pools deep down; ice crusting the deep walls, glowing
-    # in veins (no rime lichen since 0.14.0, no frostberries since 0.20.1); and the picture's dark speckled deepslate in
+    # ceilings, over the pools' edges near the top and over whole pools deep down; ice crusting the deep walls (no glow
+    # since 0.20.7, no rime lichen since 0.14.0, no frostberries since 0.20.1); and the picture's dark speckled deepslate in
     # patches on the walls (placed through the grotto's caves and the rock round them, so a patch shows where it cuts a
     # wall), from the old floor up to under the highest grotto.
     for name, block, size, n in (("deepslate_patches", "minecraft:deepslate", 40, 6), ("cobbled_patches", "minecraft:cobbled_deepslate", 24, 3)):
@@ -999,8 +992,8 @@ def build_features():
     feature("frost_fern_grotto/frost", "underground_decoration", fg,
             attach(simple(f"{IW}:frost"), "walls_ceiling", 96, frost_rock, radius=6, height=5, patch=True),
             [count(6), SQUARE, caves(), grotto_ice(1, 0.3), BIOME])
-    # Ice over the deep walls and the undersides of ledges and ceilings, in patches, glowing light blue in veins the
-    # deeper it lies (IceCrustFeature, Palette.glowingIce): none near the top.
+    # Ice over the deep walls and the undersides of ledges and ceilings, in patches, packed ice specked with blue
+    # (IceCrustFeature, Palette.grottoIceBlock; its glowing veins left with the glow ice in 0.20.7): none near the top.
     feature("frost_fern_grotto/ice_crust", "underground_decoration", fg,
             {"type": f"{MOD}:ice_crust", "config": {"radius": 6, "height": 5, "on": f"#{MOD}:ice_crust_rock"}},
             [count(30), SQUARE, caves(), grotto_ice(0, 1), BIOME])
@@ -1357,7 +1350,7 @@ BLOCK_TAGS = {
     # The Deep Gardens' pale ceilings, which grow cream stalactites.
     "pale_rock": ["minecraft:calcite"] + optional(["create:limestone"]),
     # Upper Caves rework: rock that frost and rime grow on, ice and snow included.
-    "frost_rock": [f"#{MOD}:cave_rock", "minecraft:packed_ice", "minecraft:ice", "minecraft:blue_ice", "minecraft:snow_block", f"{MOD}:glow_ice"],
+    "frost_rock": [f"#{MOD}:cave_rock", "minecraft:packed_ice", "minecraft:ice", "minecraft:blue_ice", "minecraft:snow_block"],
     # 0.20.1: what the cold caves' frost moss patches grow over: moss's ground (rock and soil), and the snow and packed
     # ice of their floors, so a patch has no holes where the floor turns to snow or ice.
     "frost_moss_ground": ["#minecraft:moss_replaceable", "minecraft:snow_block", "minecraft:packed_ice", "minecraft:gravel",

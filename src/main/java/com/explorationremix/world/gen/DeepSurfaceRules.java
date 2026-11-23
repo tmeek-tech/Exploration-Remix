@@ -203,8 +203,7 @@ public final class DeepSurfaceRules {
                     int ground = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
                     if (y < ground - 2) {
                         if (above > 2 && below > 1) return null; // inside the rock: the pack's (frostGrotto leaves it)
-                        return DeepMaterials.state(t.palette.frostGrotto(x, y, z, above, below, wet,
-                                t.palette.grottoIce(x, y, z, ground), t.palette.grottoGlow(x, y, z, ground)));
+                        return DeepMaterials.state(t.palette.frostGrotto(x, y, z, above, below, wet, t.palette.grottoIce(x, y, z, ground)));
                     }
                 }
                 if (b == fernRift || b == rootCavern) {

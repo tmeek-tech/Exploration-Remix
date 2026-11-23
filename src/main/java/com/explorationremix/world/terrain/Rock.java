@@ -66,9 +66,7 @@ public enum Rock {
     // the two bottom layers are natural stone.)
     EMBER_CRUST(0xe0782e),
     // ---- 0.14: the host rock round the caves near the surface keeps the pack's (WWOO's) stone: diorite under flower forests
-    DIORITE(0xbcbcbc),
-    // ---- 0.20.1: the deep Frost Fern Grotto's glowing ice, a mod block: light blue veins through its ice
-    GLOW_ICE(0xa8d4ff);
+    DIORITE(0xbcbcbc);
 
     public final int color;
 
