@@ -810,6 +810,15 @@ public final class GardensField {
     public static boolean airy(int c) { return c == C_AIR || plant(c); }
 
     /**
+     * Whether a block of code c is whole rock a plant can hold to (every face sturdy, 0.20.6's tube worms on walls): the
+     * rock, the vents' blackstone, the dripstone blocks, the stems and caps, the neon crusts and mats. Not air, a
+     * throat, oil, pointed dripstone or a plant.
+     */
+    public static boolean holds(int c) {
+        return c != C_AIR && c != C_THROAT && c != C_OIL && c != C_PDOWN && c != C_PUP && !plant(c);
+    }
+
+    /**
      * Whether a block of the layer (row 0 = its bottom) is open: air, a plant (0.20.2: what was air before the plants,
      * so nothing that asks changes), or the crude oil of a seep pool.
      */

@@ -21,6 +21,7 @@ import com.explorationremix.block.SubmergedPlantBlock;
 import com.explorationremix.block.TallCavePlantBlock;
 import com.explorationremix.block.TallNeonPlantBlock;
 import com.explorationremix.block.TubeWormsBlock;
+import com.explorationremix.block.WallTubeWormsBlock;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -431,9 +432,14 @@ public final class ERBlocks {
     public static final RegistryObject<Block> GRAZED_FILAMENT_GRASS = BLOCKS.register("grazed_filament_grass",
             () -> new GrazedGrassBlock(grass().randomTicks(), Block.box(2, 0, 2, 14, 5, 14)));
     /** Tube worms round the live vents, in the vent's colour (card pick: "Yes, they pull in as you near"). */
-    public static final RegistryObject<Block> TUBE_WORMS = block("tube_worms", () -> new TubeWormsBlock(
-            BlockBehaviour.Properties.of().mapColor(ERBlocks::neonMap).noCollission().instabreak().sound(SoundType.WET_GRASS)
-                    .offsetType(BlockBehaviour.OffsetType.XZ).pushReaction(PushReaction.DESTROY)));
+    public static final RegistryObject<Block> TUBE_WORMS = BLOCKS.register("tube_worms", () -> new TubeWormsBlock(
+            worms().offsetType(BlockBehaviour.OffsetType.XZ)));
+    /** 0.20.6: tube worms on a vent's steep wall, their tubes curving up (card pick: "Lower half, on ledges and walls"). */
+    public static final RegistryObject<Block> WALL_TUBE_WORMS = BLOCKS.register("wall_tube_worms", () -> new WallTubeWormsBlock(worms()));
+    // one item for both, as a torch's: against a wall it places the wall's worms
+    static {
+        ITEMS.register("tube_worms", () -> new StandingAndWallBlockItem(TUBE_WORMS.get(), WALL_TUBE_WORMS.get(), new Item.Properties(), Direction.DOWN));
+    }
     /** Silk threads beaded with light blue lights, hanging in the dark halls (card pick: "Light blue, in the dark halls"). */
     public static final RegistryObject<Block> GLOWWORM_THREADS = BLOCKS.register("glowworm_threads",
             () -> new HangingVinesBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.HANGING_ROOTS, 0), ERBlocks.GLOWWORM_THREADS_PLANT_REF));
@@ -501,6 +507,12 @@ public final class ERBlocks {
     private static BlockBehaviour.Properties grass() {
         return BlockBehaviour.Properties.of().mapColor(ERBlocks::neonMap).noCollission().instabreak().sound(SoundType.GRASS).replaceable()
                 .offsetType(BlockBehaviour.OffsetType.XYZ).pushReaction(PushReaction.DESTROY);
+    }
+
+    /** Tube worms (0.20.2; on walls too since 0.20.6): walked through, broken with a punch, wet underfoot. */
+    private static BlockBehaviour.Properties worms() {
+        return BlockBehaviour.Properties.of().mapColor(ERBlocks::neonMap).noCollission().instabreak().sound(SoundType.WET_GRASS)
+                .pushReaction(PushReaction.DESTROY);
     }
 
     /** A small plant you walk through and break with a punch. */

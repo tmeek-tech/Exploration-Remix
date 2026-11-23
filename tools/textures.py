@@ -557,6 +557,11 @@ for _tex, (_fn, _glow) in plants_vent.textures().items():
         GLOW[_tex] = _glow
     VENT_FIELD.append(_tex)
 PAINTERS.update(plants_vent.PARTICLE_PAINTERS)
+# 0.20.6: textures whose glow is also drawn as eyes are (added to what is under it, by the tube worms' near renderer):
+# under each glowing pixel the texture itself keeps only a dark tint of it (as the stilt mantis's does), or the added
+# light would wash the neon out pale; the block models draw the overlay over that tint, which hides it.
+DARK_UNDER_GLOW = {f"block/tube_worm_plumes_{_neon}" for _neon in NEONS}
+DARK_TINT = 0.12
 
 
 def hue_sat(c):
@@ -611,6 +616,18 @@ def glow_layer(img, colours):
     return out
 
 
+def dark_under(img, overlay):
+    """The texture with a dark tint (DARK_TINT of the colour) under each of the overlay's pixels."""
+    out = img.copy()
+    src, ov, dst = img.load(), overlay.load(), out.load()
+    for y in range(img.size[1]):
+        for x in range(img.size[0]):
+            if ov[x, y][3]:
+                r, g, b, a = src[x, y]
+                dst[x, y] = (round(r * DARK_TINT), round(g * DARK_TINT), round(b * DARK_TINT), a)
+    return out
+
+
 def write_all(textures_dir):
     for name, painter in PAINTERS.items():
         path = os.path.join(textures_dir, name + ".png")
@@ -619,11 +636,13 @@ def write_all(textures_dir):
         if name in VENT_FIELD:
             bad = cool_problems(name, img)
             assert not bad, f"{name}: colours outside the vent field's rules (x, y, colour, hue): {bad[:6]}"
-        img.save(path)
         if name in GLOW:
             overlay = glow_layer(img, GLOW[name])
             assert overlay.getbbox() is not None, f"{name}: none of its glow colours is in the texture"
             overlay.save(os.path.join(textures_dir, name + "_glow.png"))
+            if name in DARK_UNDER_GLOW:
+                img = dark_under(img, overlay)
+        img.save(path)
     for name in GLOW:
         assert name in PAINTERS, f"{name}: a glow overlay for a texture nobody paints"
 

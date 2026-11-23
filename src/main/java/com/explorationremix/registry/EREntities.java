@@ -1,6 +1,7 @@
 package com.explorationremix.registry;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.block.TubeWormsBlockEntity;
 import com.explorationremix.creature.FireflySwarm;
 import com.explorationremix.creature.GiantSkeinEntity;
 import com.explorationremix.creature.MossbackDen;
@@ -78,6 +79,14 @@ public final class EREntities {
     @SuppressWarnings("DataFlowIssue")
     public static final RegistryObject<BlockEntityType<MossbackDen.Tile>> DEN_TILE = BLOCK_ENTITIES.register("mossback_den",
             () -> BlockEntityType.Builder.of(MossbackDen.Tile::new, ERBlocks.MOSSBACK_DEN.get()).build(null));
+
+    /**
+     * 0.20.6: how the Deep Gardens' tube worms move, kept only in the client's world (block.TubeWormsBlockEntity): the
+     * floor's worms and the wall's.
+     */
+    @SuppressWarnings("DataFlowIssue")
+    public static final RegistryObject<BlockEntityType<TubeWormsBlockEntity>> TUBE_WORMS_TILE = BLOCK_ENTITIES.register("tube_worms",
+            () -> BlockEntityType.Builder.of(TubeWormsBlockEntity::new, ERBlocks.TUBE_WORMS.get(), ERBlocks.WALL_TUBE_WORMS.get()).build(null));
 
     // ---- the blue fireflies (creature.FireflySwarm): one entity is a whole swarm, and no mob, so MISC (not AMBIENT,
     // and never a monster): it counts against no mob cap, so it takes no place from the bats of its own caves, and
