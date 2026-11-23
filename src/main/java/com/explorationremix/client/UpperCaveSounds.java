@@ -188,8 +188,8 @@ public final class UpperCaveSounds {
             nextSearch = 40;
             return;
         }
-        // two only in a big cave: two in every cave, with short rests, chirped in over half the seconds of a recording of
-        // the game, too busy for the soft chorus
+        // two only in a big cave: two in every cave, with short rests, chirped in about half the seconds of a recording
+        // of the game, too busy for the soft chorus
         int most = open > 0.45F ? 2 : 1;
         if (SINGERS.size() < most && --nextSearch <= 0) {
             nextSearch = 20 + random.nextInt(40);
@@ -298,9 +298,9 @@ public final class UpperCaveSounds {
                 voice.muffle = muffle;
                 if (voice.isStopped() || !sounds.isActive(voice)) {
                     // a bout ended: rest a while before the next, four to sixteen seconds, so it never drowns the chorus;
-                    // with two in a big cave each rests twice that and a bout more, so each sings half as often and the
-                    // cave hears bouts no more often than from one (twice the rest alone still left them singing in
-                    // half the seconds of a recording, against a third with one)
+                    // with two in a big cave each rests twice that and a bout more, so each sings half as often as a
+                    // lone one and the cave hears bouts about as often as from one (twice the rest alone would leave
+                    // each singing more than half as often, a bout running about as long as a rest)
                     voice = null;
                     int n = Math.max(1, SINGERS.size());
                     rest = (80 + random.nextInt(240)) * n + BOUT * (n - 1);
