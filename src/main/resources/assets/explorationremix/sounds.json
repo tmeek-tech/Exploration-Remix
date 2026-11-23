@@ -1,36 +1,41 @@
 {
-  "ambient.upper.loop": {
+  "ambient.upper.crickets": {
     "sounds": [
       {
-        "name": "explorationremix:ambient/upper_wind",
-        "volume": 0.55,
+        "name": "explorationremix:ambient/crickets_loop",
+        "volume": 0.75,
         "stream": true
       }
     ],
-    "subtitle": "subtitles.explorationremix.ambient.upper.loop"
+    "subtitle": "subtitles.explorationremix.ambient.upper.crickets"
+  },
+  "ambient.upper.cricket": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/cricket1",
+        "volume": 0.6,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:ambient/cricket2",
+        "volume": 0.6,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:ambient/cricket3",
+        "volume": 0.6,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:ambient/cricket4",
+        "volume": 0.6,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.upper.cricket"
   },
   "ambient.upper.additions": {
     "sounds": [
-      {
-        "name": "explorationremix:ambient/bird1",
-        "volume": 0.35,
-        "weight": 2
-      },
-      {
-        "name": "explorationremix:ambient/bird2",
-        "volume": 0.35,
-        "weight": 2
-      },
-      {
-        "name": "explorationremix:ambient/bird3",
-        "volume": 0.35,
-        "weight": 2
-      },
-      {
-        "name": "explorationremix:ambient/bird4",
-        "volume": 0.35,
-        "weight": 2
-      },
       {
         "name": "explorationremix:ambient/drip1",
         "volume": 0.5
@@ -50,11 +55,53 @@
     ],
     "subtitle": "subtitles.explorationremix.ambient.upper.additions"
   },
+  "ambient.frozen.loop": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/cold_draft",
+        "volume": 0.8,
+        "stream": true
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.frozen.loop"
+  },
+  "ambient.frozen.additions": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/ice_tick1",
+        "volume": 0.7,
+        "weight": 3
+      },
+      {
+        "name": "explorationremix:ambient/ice_tick2",
+        "volume": 0.7,
+        "weight": 3
+      },
+      {
+        "name": "explorationremix:ambient/ice_tick3",
+        "volume": 0.7,
+        "weight": 3
+      },
+      {
+        "name": "explorationremix:ambient/ice_song1",
+        "volume": 0.6
+      },
+      {
+        "name": "explorationremix:ambient/ice_song2",
+        "volume": 0.6
+      },
+      {
+        "name": "explorationremix:ambient/ice_song3",
+        "volume": 0.6
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.frozen.additions"
+  },
   "ambient.gardens.loop": {
     "sounds": [
       {
-        "name": "explorationremix:ambient/gardens_drips",
-        "volume": 0.7,
+        "name": "explorationremix:ambient/gardens_hush",
+        "volume": 1.0,
         "stream": true
       }
     ],
@@ -63,33 +110,39 @@
   "ambient.gardens.additions": {
     "sounds": [
       {
-        "name": "explorationremix:ambient/echo_drip1",
-        "volume": 0.6
+        "name": "explorationremix:ambient/vent_sigh1",
+        "volume": 0.7
       },
       {
-        "name": "explorationremix:ambient/echo_drip2",
-        "volume": 0.6
+        "name": "explorationremix:ambient/vent_sigh2",
+        "volume": 0.7
       },
       {
-        "name": "explorationremix:ambient/echo_drip3",
-        "volume": 0.6
-      },
-      {
-        "name": "explorationremix:ambient/echo_drip4",
-        "volume": 0.6
+        "name": "explorationremix:ambient/vent_sigh3",
+        "volume": 0.7
       }
     ],
     "subtitle": "subtitles.explorationremix.ambient.gardens.additions"
   },
-  "ambient.springs.loop": {
+  "vent.simmer": {
     "sounds": [
       {
-        "name": "explorationremix:ambient/springs_bubbling",
-        "volume": 0.6,
-        "stream": true
+        "name": "explorationremix:ambient/vent_simmer1",
+        "volume": 0.5,
+        "attenuation_distance": 10
+      },
+      {
+        "name": "explorationremix:ambient/vent_simmer2",
+        "volume": 0.5,
+        "attenuation_distance": 10
+      },
+      {
+        "name": "explorationremix:ambient/vent_simmer3",
+        "volume": 0.5,
+        "attenuation_distance": 10
       }
     ],
-    "subtitle": "subtitles.explorationremix.ambient.springs.loop"
+    "subtitle": "subtitles.explorationremix.vent.simmer"
   },
   "ambient.blue.loop": {
     "sounds": [
@@ -129,14 +182,34 @@
   "ambient.basalt.loop": {
     "sounds": [
       {
-        "name": "explorationremix:ambient/basalt_rumble",
-        "volume": 0.8,
+        "name": "explorationremix:ambient/deep_rumble",
+        "volume": 0.45,
         "stream": true
       }
     ],
     "subtitle": "subtitles.explorationremix.ambient.basalt.loop"
   },
   "ambient.basalt.additions": {
+    "sounds": [
+      {
+        "name": "minecraft:liquid/lavapop",
+        "volume": 0.7,
+        "pitch": 0.9
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.basalt.additions"
+  },
+  "ambient.wasteland.loop": {
+    "sounds": [
+      {
+        "name": "explorationremix:ambient/deep_rumble",
+        "volume": 0.28,
+        "stream": true
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ambient.wasteland.loop"
+  },
+  "ambient.wasteland.additions": {
     "sounds": [
       {
         "name": "minecraft:liquid/lavapop",
@@ -153,15 +226,14 @@
         "volume": 0.8
       }
     ],
-    "subtitle": "subtitles.explorationremix.ambient.basalt.additions"
+    "subtitle": "subtitles.explorationremix.ambient.wasteland.additions"
   },
   "ambient.hollows.loop": {
     "sounds": [
       {
-        "name": "explorationremix:ambient/basalt_rumble",
-        "volume": 0.35,
-        "stream": true,
-        "pitch": 0.8
+        "name": "explorationremix:ambient/deep_rumble",
+        "volume": 0.2,
+        "stream": true
       }
     ],
     "subtitle": "subtitles.explorationremix.ambient.hollows.loop"

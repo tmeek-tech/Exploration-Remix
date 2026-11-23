@@ -189,6 +189,13 @@ def sound_files():
     for name in re.findall(r'register\(\s*"([a-z0-9_.]+)"\s*\)', src):
         if name not in events:
             errors.append(f"sound {MOD}:{name}: registered in ERSounds but not in sounds.json")
+    registered = set(re.findall(r'register\(\s*"([a-z0-9_.]+)"\s*\)', src))
+    for biome, bpath in files(os.path.join(DATA, "worldgen", "biome")).items():
+        fx = load(bpath).get("effects", {})
+        named = [fx.get("ambient_sound"), (fx.get("additions_sound") or {}).get("sound"), (fx.get("mood_sound") or {}).get("sound")]
+        for ref in named:
+            if isinstance(ref, str) and ref.startswith(MOD + ":") and ref.split(":", 1)[1] not in registered:
+                errors.append(f"biome {biome}: sound {ref} is not registered in ERSounds (the biome would not load)")
     for name, event in events.items():
         for sound in event.get("sounds", []):
             ref = sound["name"] if isinstance(sound, dict) else sound

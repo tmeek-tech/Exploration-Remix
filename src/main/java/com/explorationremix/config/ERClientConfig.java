@@ -28,6 +28,10 @@ public final class ERClientConfig {
     public final ForgeConfigSpec.DoubleValue shakeStrength;
     /** Which light tremors this player feels (0.9.0; big quakes always shake). */
     public final ForgeConfigSpec.EnumValue<TremorEffects> tremorEffects;
+    /** Where the Upper Caves' crickets sing (client.UpperCaveSounds, 0.20.9). */
+    public final ForgeConfigSpec.EnumValue<Crickets> crickets;
+    /** One or two crickets sing from the rock near the player and go quiet as they come close (0.20.9). */
+    public final ForgeConfigSpec.BooleanValue nearCrickets;
 
     /** Which light tremors and climb answers a player feels ({@code tremorEffects}). */
     public enum TremorEffects {
@@ -39,6 +43,16 @@ public final class ERClientConfig {
         NONE
     }
 
+    /** Where the Upper Caves' crickets sing ({@code crickets}). */
+    public enum Crickets {
+        /** In every cave above the first deep layer, the pack's own caves too, once the player is well underground. */
+        EVERY_UPPER_CAVE,
+        /** Only in the mod's own upper caves, where the birds were before 0.20.9. */
+        MOD_CAVES_ONLY,
+        /** Nowhere. */
+        OFF
+    }
+
     private ERClientConfig(ForgeConfigSpec.Builder b) {
         b.push("caves");
         caveFog = b.comment("Tint the distance in the deep layers with each biome's fog colour.").define("caveFog", true);
@@ -47,6 +61,14 @@ public final class ERClientConfig {
                 "Turned off, an eruption's fountain stays (thinner) and the grit that warns of falling rock still shows.").define("caveParticles", true);
         caveLight = b.comment("Tint the light of glowing blocks with each deep biome's own colour: cold blue in the Blue Reaches, red in",
                 "the Rust Springs and the Basalt Galleries.").define("caveLight", true);
+        b.pop();
+        b.push("sounds");
+        crickets = b.comment("Where crickets sing in the Upper Caves: in every cave above the first deep layer, the pack's own lush,",
+                "dripstone and plain caves too, once you are well underground; only in the mod's own upper caves (the Root Vaults,",
+                "Silver Fern Rifts, Ivory Root Caverns, sinkholes and oasis hollows); or nowhere. Never in the frozen caves.")
+                .defineEnum("crickets", Crickets.EVERY_UPPER_CAVE);
+        nearCrickets = b.comment("Let one or two crickets sing from the rock near you while the chorus plays. Each goes quiet when you come",
+                "within a few blocks and sings again once you have passed.").define("nearCrickets", true);
         b.pop();
         b.push("lavaCycle");
         screenShake = b.comment("Shake the view in the Basalt Galleries while the lava is about to rise and rising, in quakes and tremors, and",

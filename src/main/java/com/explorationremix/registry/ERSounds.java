@@ -42,16 +42,28 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> LAVA_BOMB_BURST = register("lava_bomb.burst");
     public static final RegistryObject<SoundEvent> LAVA_BOMB_FIZZ = register("lava_bomb.fizz");
 
-    public static final RegistryObject<SoundEvent> UPPER_LOOP = register("ambient.upper.loop");
+    // Each layer's own ambience (0.20.9; tools/synth_layer_sounds.py makes the new files, tools/sounds.py says which).
+    // The Upper Caves: crickets, played by the client (client.UpperCaveSounds) in every upper cave, a stereo bed and one or
+    // two single crickets set on the rock near the player, which go quiet as they come close; the mod's upper caves'
+    // water drips (their biomes' additions).
+    public static final RegistryObject<SoundEvent> UPPER_CRICKETS = register("ambient.upper.crickets");
+    public static final RegistryObject<SoundEvent> UPPER_CRICKET = register("ambient.upper.cricket");
     public static final RegistryObject<SoundEvent> UPPER_ADDITIONS = register("ambient.upper.additions");
+    // The frozen caves, cold and still: a thin draft, ice ticking and now and then singing
+    public static final RegistryObject<SoundEvent> FROZEN_LOOP = register("ambient.frozen.loop");
+    public static final RegistryObject<SoundEvent> FROZEN_ADDITIONS = register("ambient.frozen.additions");
+    // The Deep Gardens' hush and a far vent's sigh; a live vent's simmer up close (block.VentCrownBlock)
     public static final RegistryObject<SoundEvent> GARDENS_LOOP = register("ambient.gardens.loop");
     public static final RegistryObject<SoundEvent> GARDENS_ADDITIONS = register("ambient.gardens.additions");
-    public static final RegistryObject<SoundEvent> SPRINGS_LOOP = register("ambient.springs.loop");
+    public static final RegistryObject<SoundEvent> VENT_SIMMER = register("vent.simmer");
     public static final RegistryObject<SoundEvent> BLUE_LOOP = register("ambient.blue.loop");
     public static final RegistryObject<SoundEvent> BLUE_ADDITIONS = register("ambient.blue.additions");
+    // The Galleries' low steady rumble and lava pops; the Wasteland hears the rumble fainter, with rolls far off
     public static final RegistryObject<SoundEvent> BASALT_LOOP = register("ambient.basalt.loop");
     public static final RegistryObject<SoundEvent> BASALT_ADDITIONS = register("ambient.basalt.additions");
-    // 0.5: the Ash Hollows, the Wasteland's refuge, hear the rock only from far off
+    public static final RegistryObject<SoundEvent> WASTELAND_LOOP = register("ambient.wasteland.loop");
+    public static final RegistryObject<SoundEvent> WASTELAND_ADDITIONS = register("ambient.wasteland.additions");
+    // 0.5: the Ash Hollows, the Wasteland's refuge, hear the rock only from far off; 0.20.9: the Obsidian Tubes too
     public static final RegistryObject<SoundEvent> HOLLOWS_LOOP = register("ambient.hollows.loop");
     public static final RegistryObject<SoundEvent> HOLLOWS_ADDITIONS = register("ambient.hollows.additions");
 

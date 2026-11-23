@@ -32,7 +32,7 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
 1. Put `explorationremix-<version>.jar` in the `mods` folder of the client and the server.
 2. Create a new world. The server log says `Deep world installed: overworld now spans y -784 to 319`.
 3. Settings are in `config/explorationremix-world.toml` (world shape, read when a server starts) and
-   `config/explorationremix-client.toml` (fog and particles, per player).
+   `config/explorationremix-client.toml` (fog, particles and the Upper Caves' crickets, per player).
 4. If the server log ever shows `[Exploration Remix] The cave plan of layer ... threw`, the world kept generating: that
    cell's caves were planned again with their layout moved, or left as rock round their landings. Please report the
    line; it names the seed and the cell.
@@ -148,6 +148,14 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   embers over lava, and pollen in daylight shafts. Tuned for vanilla lighting without shaders: every biome carries
   enough glowing things to see by. While the camera is under the old world floor (y -64) the clouds are moved far
   above it, so no clouds (a shader pack's included) show past the edge of the drawn world in the deep caves.
+* **Sounds** (0.20.9): each layer has an ambience of its own. In the Upper Caves a soft far chorus of crickets sings
+  wherever you are well underground, in the pack's caves too, and one or two crickets sing from the rock near you,
+  going quiet when you come within a few blocks and starting again once you have passed. The frozen Root Vaults and
+  the Frost Fern Grotto are cold and still: a thin draft, and now and then the tick or the long falling song of ice.
+  The Deep Gardens are hushed, a faint draft and a far-off vent sighing now and then, and live vents hiss and simmer
+  softly within a few blocks of their crowns. The Basalt Galleries have a low, steady rumble of the deep rock, smooth,
+  so the lava's warning rumbles still stand out. `crickets` and `nearCrickets` in `explorationremix-client.toml` say
+  where the crickets sing.
 
 ## Hostile mobs in groups
 
@@ -241,7 +249,8 @@ shimmer and a soft note in your own hands; then, for as long as it has that ener
 ```
 ./gradlew build                 # jar in build/libs, runs the terrain tests
 python3 tools/gen_data.py       # regenerates every datapack JSON, model, texture and lang file from tools/*.py
-python3 tools/synth_sounds.py   # regenerates the ambient sound recordings
+python3 tools/synth_sounds.py   # regenerates the drips, the Deep Blue Rift's roar and the rolls of distant rumbling
+python3 tools/synth_layer_sounds.py  # regenerates each layer's own ambience: crickets, ice, vents, the Galleries' rumble
 python3 tools/synth_lava_sounds.py  # regenerates the lava cycle's rumbles and surge
 python3 tools/synth_swing_sounds.py # regenerates the swings' and the hunters' wind-up sounds
 ```

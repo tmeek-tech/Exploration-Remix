@@ -21,9 +21,9 @@
       },
       "probability": 0.06
     },
-    "ambient_sound": "explorationremix:ambient.basalt.loop",
+    "ambient_sound": "explorationremix:ambient.wasteland.loop",
     "additions_sound": {
-      "sound": "explorationremix:ambient.basalt.additions",
+      "sound": "explorationremix:ambient.wasteland.additions",
       "tick_chance": 0.012
     }
   },
