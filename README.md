@@ -148,14 +148,14 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   embers over lava, and pollen in daylight shafts. Tuned for vanilla lighting without shaders: every biome carries
   enough glowing things to see by. While the camera is under the old world floor (y -64) the clouds are moved far
   above it, so no clouds (a shader pack's included) show past the edge of the drawn world in the deep caves.
-* **Sounds** (0.20.9): each layer has an ambience of its own. In the Upper Caves a soft far chorus of crickets sings
-  wherever you are well underground, in the pack's caves too, and now and then a cricket sings from the rock near you,
-  going quiet when you come within a few blocks and starting again once you have passed. The frozen Root Vaults and
-  the Frost Fern Grotto are cold and still: a thin draft, and now and then the tick or the long falling song of ice.
-  The Deep Gardens are hushed, a faint draft and a far-off vent sighing now and then, and live vents hiss and simmer
-  softly within a few blocks of their crowns. The Basalt Galleries have a low, steady rumble of the deep rock, smooth,
-  so the lava's warning rumbles still stand out. `crickets` and `nearCrickets` in `explorationremix-client.toml` say
-  where the crickets sing.
+* **Sounds** (0.20.9): each layer has an ambience of its own. In the mod's own upper caves, where the birds were, a soft
+  far chorus of crickets sings (0.21.1; the client config can let it sing in the pack's caves too, wherever you are well
+  underground), and now and then a cricket sings from the rock near you, going quiet when you come within a few blocks
+  and starting again once you have passed. The frozen Root Vaults and the Frost Fern Grotto are cold and still: a thin
+  draft, and now and then the tick or the long falling song of ice. The Deep Gardens are hushed, a faint draft and a
+  far-off vent sighing now and then, and live vents hiss and simmer softly within a few blocks of their crowns. The
+  Basalt Galleries have a low, steady rumble of the deep rock, smooth, so the lava's warning rumbles still stand out.
+  `cricketCaves` and `nearCrickets` in `explorationremix-client.toml` say where the crickets sing.
 
 ## Hostile mobs in groups
 

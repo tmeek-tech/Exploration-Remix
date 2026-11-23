@@ -43,7 +43,7 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> LAVA_BOMB_FIZZ = register("lava_bomb.fizz");
 
     // Each layer's own ambience (0.20.9; tools/synth_layer_sounds.py makes the new files, tools/sounds.py says which).
-    // The Upper Caves: crickets, played by the client (client.UpperCaveSounds) in every upper cave, a stereo bed and a
+    // The Upper Caves: crickets, played by the client (client.UpperCaveSounds) in the mod's upper caves, a stereo bed and a
     // cricket (two in a big cave) singing now and then on the rock near the player, which goes quiet as they come close;
     // the mod's upper caves' water drips (their biomes' additions).
     public static final RegistryObject<SoundEvent> UPPER_CRICKETS = register("ambient.upper.crickets");
