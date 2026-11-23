@@ -117,9 +117,12 @@ public final class WastelandField {
      * with this, the column ends' rule ({@link #columns}) and the terraces' ({@link #TERRACE}), 11 pieces of 133 blocks,
      * plates over a gap a walker passes under). Deeper gaps stay open: filled down 4 rows, the rock walled the lower
      * sheet's caves across (8 pieces of 93 blocks left, but the blind ends of the five test boxes rose from 111 to 146,
-     * two boxes over {@code fewBlindEnds}' bar; filled down 2, 103).
+     * two boxes over {@code fewBlindEnds}' bar; filled down 2, 103). Filled down 3 since the halls (0.20.4): their walls
+     * change which holes the Galleries open, and seed 1's box kept a widened room at a hole they no longer open, its
+     * sheet-1 guard an 11-block plate 3 rows over the floor at (129, -623, 435); the five boxes' blind ends 92 to 106,
+     * every box under the bar (seed 77 at 0.219).
      */
-    static final double GUARD_GAP = 2;
+    static final double GUARD_GAP = 3;
     /**
      * Terraces: in caves (half-width from 6, fully at 10) the floor of each basalt column is set up or down by a whole
      * number of blocks, TERRACE times a noise read at the column's site (scale TERRACE_SCALE), so neighbouring columns
@@ -357,7 +360,9 @@ public final class WastelandField {
         lava *= (1 - clamp01(c.beta / Join.LAVA_BETA)) * (1 - c.ash);
         // and none within reach of a crater's open space under the table (crDry), so its air never meets lava
         if (c.ring < crDry + 3) lava *= clamp01((c.ring - crDry) / 3);
-        double hole = WastelandSheets.hole(c.beta);
+        // the noise's hole (the lowest sheet stays down under it) and the evenly spread ways' (only the rooms and the
+        // openings' weight take that: WastelandSheets.latticeHole)
+        double hb = WastelandSheets.hole(c.beta), hole = Math.max(hb, sh.latticeHole(x, z));
         // an opening only falls where the Galleries are open right under it, so it never ends in a pit on their rock (their
         // cap is rock at gTop - 3 at every column, so this guard stays shut and the holes are the craters': craterRing)
         c.under = hole > 0 ? Join.under(lower, gTop, x, z) : 1;
@@ -393,13 +398,14 @@ public final class WastelandField {
             double cave = clamp01((caveN.noise2(x / CAVE_SCALE + 13.1 * k, z / CAVE_SCALE - 29.7 * k) + (k == 0 ? 0.05 : 0) - CAVE_LO) / (CAVE_HI - CAVE_LO));
             cave *= CAVE_RUN + (1 - CAVE_RUN) * Terrain.smooth(1 - j / CAVE_J);
             double und = sh.undulation(k, x, z);
-            double f = sh.sheetFloor(k, x, z, k == 0 ? 1 - hole : 1, und);
+            double f = sh.sheetFloor(k, x, z, k == 0 ? 1 - hb : 1, und);
             // the lowest sheet's dips: only where it lies at its own level (not up a ramp)
             double low = k == 0 ? sh.low(f) : 0;
             // lava stays out of the junctions, so every pool has dry ground round its ends and the banks on either
             // side of it join there (lava along every edge round a cell would otherwise leave each bank an island)
-            double lw = lava * low * Terrain.smooth((j - LAVA_J) / LAVA_JF), hw = hole * low;
-            // lava pools lie along caves; openings at the middle of rooms round junctions
+            double lw = lava * low * Terrain.smooth((j - LAVA_J) / LAVA_JF), hw = hb * low;
+            // lava pools lie along caves; openings at the middle of rooms round junctions (the noise's: an evenly spread
+            // way's junction keeps its room as it is, so the caves change only by its crater)
             // the dip's weight is the shared opening site (the Galleries open under it) times the guard
             double hr = hw * Terrain.smooth(1 - j / HOLE_ROOM), hd = WastelandSheets.dipWeight(hole, low, j) * c.under;
             c.lavaW = Math.max(c.lavaW, lw);
@@ -826,8 +832,8 @@ public final class WastelandField {
         boolean crater = lower.craterRing(x, z) <= GalleriesField.CR_IN + GalleriesField.CR_REACH + 1.5 * r;
         for (int dx = -r; dx <= r; dx++) for (int dz = -r; dz <= r; dz++) {
             if (crater && column(x + dx, z + dz).crater > 0) return true;
-            // a dip needs beta over HOLE_BETA, and beta is cheap to ask
-            if (breakthrough.beta(x + dx, z + dz) <= Join.HOLE_BETA) continue;
+            // a dip needs beta over HOLE_BETA or a way's lattice point near, and both are cheap to ask
+            if (breakthrough.beta(x + dx, z + dz) <= Join.HOLE_BETA && sh.latticeHole(x + dx, z + dz) <= 0) continue;
             if (column(x + dx, z + dz).holeDip > 0) return true;
         }
         return false;

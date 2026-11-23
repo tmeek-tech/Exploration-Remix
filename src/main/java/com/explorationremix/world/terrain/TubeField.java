@@ -933,6 +933,7 @@ public final class TubeField {
         double Rv0;          // the unbulged section's vault height (end fade in): the floor's level
         double yc;           // axis height (absolute y)
         double phi;          // along-coordinate of the axis point nearest (v there)
+        double phiL;         // along-coordinate of the line's own axis point nearest, where its runs were sampled (phi for one tube)
         double ribP, ribD, ribK; // rib spacing, depth, strength 0..1
         double ribQ;         // blocks from the nearest rib's middle
         double rib;          // the rib's share here, 0..1 (rib())
@@ -1003,10 +1004,14 @@ public final class TubeField {
      */
     boolean line(Pt p, int k, double nearMax) {
         if (!geom(p, k, nearMax)) return false;
-        Run run = runs(p.c).at(k, p.phi);
-        double fade = run == null ? 0 : run.fade(p.phi);
+        // the run, its fade and its floor are read where the runs were sampled, on the line's own axis, so both twins
+        // open and close together (read on each twin's axis, which lies o x the normal's v part along it, a run's end
+        // fell on one twin and not the other: seed -42's twins at (-1559, -332), one whole, the other's columns closed
+        // beside it, 62 faces unlined)
+        Run run = runs(p.c).at(k, p.phiL);
+        double fade = run == null ? 0 : run.fade(p.phiL);
         double Rv0 = p.Rw * VSTRETCH;
-        double yc = (run == null ? W + FLOOR_LOW : run.floor(p.phi)) + FLOOR_CUT * Rv0;
+        double yc = (run == null ? W + FLOOR_LOW : run.floor(p.phiL)) + FLOOR_CUT * Rv0;
         yc = Math.max(yc, W + FLOOR_LOW + FLOOR_CUT * Rv0);
         yc = Math.min(yc, W + VAULT_MAX - Rv0);
         p.on = true;
@@ -1056,6 +1061,7 @@ public final class TubeField {
         p.o = o;
         p.d = d;
         p.phi = v - off * nV;
+        p.phiL = v - s * nV;
         p.Rw = R;
         p.ribP = RIB_P_MIN + (RIB_P_MAX - RIB_P_MIN) * Hashing.unit(Hashing.mix(lk, 2, 0, 0));
         p.ribD = RIB_D_MIN + (RIB_D_MAX - RIB_D_MIN) * Hashing.unit(Hashing.mix(lk, 3, 0, 0));
