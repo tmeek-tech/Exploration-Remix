@@ -4,12 +4,16 @@ import com.explorationremix.creature.BlueSpawnRules.Place;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.Random;
 import java.util.Set;
 
 import static com.explorationremix.creature.FireflyHomes.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Where the swarms live from the start: by water and glowbells most, none in the Deep Dark, fixed by the seed. */
+/**
+ * Where the swarms live from the start: by water and glowbells most, none in the Deep Dark, fewer in the rift's great
+ * chasm, fixed by the seed.
+ */
 class FireflyHomesTest {
     private static final long SEED = 8675309L;
 
@@ -62,5 +66,28 @@ class FireflyHomesTest {
         assertTrue(PERCH_REACH - EDGE + 2 <= 16 && DRAW_REACH - EDGE <= 16);
         // a chunk can hold its most swarms apart from each other within its tries' room
         assertTrue(MAX_PER_CHUNK >= 1 && MAX_PER_CHUNK <= 8);
+    }
+
+    @Test
+    void theRiftsGreatChasmKeepsOnlySomeOfItsSwarms() {
+        // 0.20.8, Taran's ask: "The big Deep Blue Rift has too many blue fireflies but the smaller tunnels have the perfect amount"
+        assertTrue(CHASM_KEEP > 0.0 && CHASM_KEEP < CHASM_KEEP_DRAWN && CHASM_KEEP_DRAWN < 1.0,
+                "some everywhere in it, more by its stream than on its bare walls, and fewer than before by its stream too");
+        Random r = new Random(SEED);
+        int n = 200_000, bare = 0, drawn = 0;
+        for (int i = 0; i < n; i++) {
+            int seed = r.nextInt();
+            boolean b = keptInChasm(seed, false), d = keptInChasm(seed, true);
+            assertEquals(b, keptInChasm(seed, false), "a swarm is judged the same way every time");
+            if (b) assertTrue(d, "one the bare rock keeps, water would keep too");
+            if (b) bare++;
+            if (d) drawn++;
+        }
+        assertEquals(CHASM_KEEP, bare / (double) n, 0.005);
+        assertEquals(CHASM_KEEP_DRAWN, drawn / (double) n, 0.005);
+        // the roll is the flock seed's own: neighbouring seeds are judged apart
+        int runs = 0;
+        for (int seed = 0; seed < 1000; seed++) if (keptInChasm(seed, false) != keptInChasm(seed + 1, false)) runs++;
+        assertTrue(runs > 100, runs + " changes over 1000 neighbouring seeds");
     }
 }

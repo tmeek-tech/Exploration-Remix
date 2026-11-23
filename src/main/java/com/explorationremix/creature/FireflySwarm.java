@@ -4,6 +4,9 @@ import com.explorationremix.creature.firefly.Flock;
 import com.explorationremix.creature.firefly.Perches;
 import com.explorationremix.registry.EREntities;
 import com.explorationremix.registry.ERSounds;
+import com.explorationremix.world.DeepWorld;
+import com.explorationremix.world.feature.FirefliesFeature;
+import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -189,6 +192,9 @@ public class FireflySwarm extends Entity {
     private boolean resettling;
     // it lives here for good (set down with the world, or a refill): no despawning, and it rests while nobody is near
     private boolean kept;
+    // a kept swarm judged by the rift chasm's rule (0.20.8, restingNow) and staying: set down or brought out since, or
+    // one an older version set down that the rule keeps; leavingChasm (not saved): judged since it was loaded, and going
+    private boolean chasmChecked, leavingChasm;
     // no player within REST_RANGE at the last look; resting: landed and alone, its ticks skipped
     private boolean alone, resting;
 
@@ -258,6 +264,7 @@ public class FireflySwarm extends Entity {
         s.setCount(count);
         s.full = s.count();
         s.kept = kept;
+        s.chasmChecked = kept;
         return level.addFreshEntity(s) ? s : null;
     }
 
@@ -279,6 +286,7 @@ public class FireflySwarm extends Entity {
         entityData.set(DATA_LANDED, true);
         this.landTicks = Math.max(1, landTicks);
         kept = true;
+        chasmChecked = true;
     }
 
     // ------------------------------------------------------------------------------------------------ the contract
@@ -459,14 +467,18 @@ public class FireflySwarm extends Entity {
      *
      * <p>A kept swarm whose home is in the Deep Dark goes instead, at a look with no player near enough to see it
      * ({@link #SEEN_FROM}): the swarms an older version set down there, in a world made before 0.19.8, leave the Deep
-     * Dark dark while nobody is looking (Taran's ask). True then too: this tick is over.
+     * Dark dark while nobody is looking (Taran's ask). True then too: this tick is over. So does one an older version
+     * set down in the rift's great chasm that the chasm's rule would not have kept ({@link #judgeChasm}, 0.20.8), so a
+     * world made before then thins out there as a new one is made.
      */
     private boolean restingNow() {
         if (!kept || isRemoved()) return resting = false;
         if ((tickCount + getId()) % REST_LOOK == 0) {
             alone = !playerWithin(REST_RANGE);
-            if (alone && !playerWithin(SEEN_FROM) && livesInDeepDark()) {
-                LEFT_DEEP_DARK++;
+            if (!chasmChecked && !leavingChasm) judgeChasm();
+            if (alone && !playerWithin(SEEN_FROM) && (leavingChasm || livesInDeepDark())) {
+                if (leavingChasm) LEFT_CHASM++;
+                else LEFT_DEEP_DARK++;
                 discard();
                 return true;
             }
@@ -476,6 +488,29 @@ public class FireflySwarm extends Entity {
 
     /** For /remix fireflies homes, since the game started: swarms that left the Deep Dark unseen ({@link #restingNow}). */
     public static long LEFT_DEEP_DARK;
+    /** For /remix fireflies homes, since the game started: swarms that left the rift's great chasm unseen ({@link #judgeChasm}). */
+    public static long LEFT_CHASM;
+
+    /**
+     * Judges a kept swarm an older version set down (0.20.8), once: one whose home lies in the Deep Blue Rift's great
+     * chasm, in the rift's own biome, stays only as the chasm's rule would have kept it when the world was made
+     * ({@link FireflyHomes#keptInChasm}), else it is leaving ({@link #restingNow}); every other stays. Those set down or
+     * brought out since were judged as they came, so a swarm that later moves its home into the chasm, or out of it, is
+     * never judged again. Not judged while the rock round its home is not loaded (it is read for water and glowbells),
+     * nor in a level that is not the deep world's.
+     */
+    private void judgeChasm() {
+        Terrain t = DeepWorld.installed() ? DeepWorld.terrain() : null;
+        if (t == null || !(level() instanceof ServerLevel sl) || sl.dimension() != Level.OVERWORLD) return;
+        BlockPos h = BlockPos.containing(home != null ? home : centre());
+        if (!t.inRiftChasm(h.getX(), h.getY(), h.getZ())) { chasmChecked = true; return; }
+        int reach = FireflyHomes.DRAW_REACH;
+        if (!level().hasChunksAt(h.getX() - reach, h.getZ() - reach, h.getX() + reach, h.getZ() + reach)) return;
+        // the rift's own swarms only, as when the world is made: a geode's whose hall opens into the chasm stays
+        if (BlueReachesSpawner.placeAt(sl, h) != BlueSpawnRules.Place.RIFT) { chasmChecked = true; return; }
+        if (FireflyHomes.keptInChasm(seed(), FirefliesFeature.drawn(level(), h))) chasmChecked = true;
+        else leavingChasm = true;
+    }
 
     /** Whether its home is in the Deep Dark (0.19.8: no swarm lives there; it never strays from its home's biome). */
     public boolean livesInDeepDark() {
@@ -945,6 +980,7 @@ public class FireflySwarm extends Entity {
         tag.putInt("Rest", restTicks);
         tag.putInt("Alone", aloneTicks);
         if (kept) tag.putBoolean("Kept", true);
+        if (chasmChecked) tag.putBoolean("ChasmChecked", true);
     }
 
     @Override
@@ -962,6 +998,7 @@ public class FireflySwarm extends Entity {
         restTicks = tag.getInt("Rest");
         aloneTicks = tag.getInt("Alone");
         kept = tag.getBoolean("Kept");
+        chasmChecked = tag.getBoolean("ChasmChecked");
     }
 
     /** For /remix fireflies list: what it is doing. */

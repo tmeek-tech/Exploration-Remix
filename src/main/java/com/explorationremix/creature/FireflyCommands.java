@@ -46,6 +46,9 @@ import java.util.Locale;
  *     <li>{@code /remix fireflies density [radius] [samples]}: how many swarms a player would have round them: at
  *     random spots a player could stand on in the Blue Reaches round you (in loaded chunks, with their neighbours'
  *     entities loaded), the swarms within the spawner's radius of each, by place, against what the caves keep</li>
+ *     <li>{@code /remix fireflies chasm [radius] [samples]}: the Deep Blue Rift's great chasm against the tunnels off
+ *     it (0.20.8): the swarms by where their homes are, and round spots to stand on, those near and those in sight, as
+ *     they are and as they would be with the chasm keeping fewer</li>
  * </ul>
  */
 public final class FireflyCommands {
@@ -64,6 +67,11 @@ public final class FireflyCommands {
                 .then(Commands.literal("scatter").executes(FireflyCommands::scatter))
                 .then(Commands.literal("startle").executes(FireflyCommands::startle))
                 .then(Commands.literal("homes").executes(FireflyCommands::homes))
+                .then(Commands.literal("chasm").executes(c -> chasm(c, 160, 2000))
+                        .then(Commands.argument("radius", IntegerArgumentType.integer(48, 1024))
+                                .executes(c -> chasm(c, IntegerArgumentType.getInteger(c, "radius"), 2000))
+                                .then(Commands.argument("samples", IntegerArgumentType.integer(10, 40000))
+                                        .executes(c -> chasm(c, IntegerArgumentType.getInteger(c, "radius"), IntegerArgumentType.getInteger(c, "samples"))))))
                 .then(Commands.literal("density").executes(c -> density(c, 160, 600))
                         .then(Commands.argument("radius", IntegerArgumentType.integer(48, 1024))
                                 .executes(c -> density(c, IntegerArgumentType.getInteger(c, "radius"), 600))
@@ -95,15 +103,16 @@ public final class FireflyCommands {
         say(c, String.format(Locale.ROOT, "Chunks made since the game started: %d, swarms set down in them: %d (%.2f a chunk, %.0f%% by water or glowbells).",
                 chunks, placed, chunks == 0 ? 0.0 : placed / (double) chunks, placed == 0 ? 0.0 : 100.0 * drawn / placed));
         long looked = FirefliesFeature.LOOKED.get(), roomy = FirefliesFeature.ROOMY.get(), perchless = FirefliesFeature.NO_PERCH.get();
-        say(c, String.format(Locale.ROOT, "Tries whose roll could make a home: %d, %d of them with room (%.0f%%); %d homes found no rock in reach.",
-                looked, roomy, looked == 0 ? 0.0 : 100.0 * roomy / looked, perchless));
+        say(c, String.format(Locale.ROOT, "Tries whose roll could make a home: %d, %d of them with room (%.0f%%); %d homes found no rock in reach; %d homes in the rift's great chasm kept no swarm.",
+                looked, roomy, looked == 0 ? 0.0 : 100.0 * roomy / looked, perchless, FirefliesFeature.GIVEN_UP.get()));
         say(c, String.format(Locale.ROOT, "Loaded now: %d swarms, %d kept for good, %d landed, %d resting (no player within %d blocks).",
                 loaded, kept, landed, resting, (int) FireflySwarm.REST_RANGE));
         StringBuilder b = new StringBuilder("Their homes by place:");
         for (BlueSpawnRules.Place p : BlueSpawnRules.Place.values())
             if (at[p.ordinal()] > 0) b.append(String.format(Locale.ROOT, " %s %d (%.0f%% by water or glowbells)", p.name().toLowerCase(Locale.ROOT),
                     at[p.ordinal()], 100.0 * drawnAt[p.ordinal()] / at[p.ordinal()]));
-        say(c, b.append(". Left the Deep Dark unseen since the game started: ").append(FireflySwarm.LEFT_DEEP_DARK).append('.').toString());
+        say(c, b.append(". Left unseen since the game started: the Deep Dark ").append(FireflySwarm.LEFT_DEEP_DARK)
+                .append(", the rift's great chasm ").append(FireflySwarm.LEFT_CHASM).append('.').toString());
         say(c, String.format(Locale.ROOT, "Refill: %d looks round a player with fewer swarms near than the caves keep, %d rolls came up, %d swarms came out.",
                 BlueReachesSpawner.SWARM_LOOKS, BlueReachesSpawner.SWARM_ROLLS, BlueReachesSpawner.SWARM_IN));
         return loaded;
@@ -160,6 +169,146 @@ public final class FireflyCommands {
                     100.0 * under / l.size(), kept, 100.0 * over / l.size(), max, 100.0 * byWater.getOrDefault(e.getKey(), 0) / l.size()));
         }
         return got;
+    }
+
+    /** Where a swarm's home or a spot to stand on lies, for /remix fireflies chasm. */
+    private enum Where { CHASM, TUNNELS, GEODES, ELSEWHERE }
+
+    private static Where where(ServerLevel level, Terrain t, BlockPos p) {
+        return switch (BlueReachesSpawner.placeAt(level, p)) {
+            case RIFT -> t.inRiftChasm(p.getX(), p.getY(), p.getZ()) ? Where.CHASM : Where.TUNNELS;
+            case GEODES -> Where.GEODES;
+            default -> Where.ELSEWHERE;
+        };
+    }
+
+    /**
+     * The shares of its swarms the chasm might keep that /remix fireflies chasm counts with (over bare rock, by water or
+     * glowbells): every one, as before 0.20.8, first, then fewer and fewer.
+     */
+    private static final double[][] CHASM_SHARES = {{1.0, 1.0}, {0.5, 0.75}, {0.3, 0.5}, {0.2, 0.4}, {0.15, 0.3}, {0.1, 0.2}, {0.05, 0.1}};
+    /** /remix fireflies chasm counts the swarms in sight of a spot this far off. */
+    private static final double SIGHT_COUNT = 64.0;
+
+    /** A loaded swarm, for /remix fireflies chasm: where its home is, whether water or glowbells are by it, its roll. */
+    private record Judged(Where where, boolean drawn, double roll) {
+        boolean keptAt(double[] share) { return where != Where.CHASM || roll < (drawn ? share[1] : share[0]); }
+    }
+
+    /**
+     * The rift's great chasm against the tunnels, grottos and halls off it (0.20.8), for setting
+     * {@link FireflyHomes#CHASM_KEEP}: the rifts near, with points along their paths; the loaded swarms by where their
+     * homes are; then, at up to {@code samples} random spots a player could stand on round the source (with the
+     * entities loaded within {@link #SIGHT_COUNT}), the swarms within the spawner's radius and those in sight (a clear
+     * line from the eyes) within {@link #SIGHT_COUNT}, by where the spot is, once for each of {@link #CHASM_SHARES}:
+     * counting only the chasm's swarms the rule would keep at that share. On a world made before 0.20.8 (or with the
+     * chasm keeping every swarm) the first share is the world as it was.
+     */
+    private static int chasm(CommandContext<CommandSourceStack> c, int radius, int samples) {
+        ServerLevel level = c.getSource().getLevel();
+        Vec3 o = c.getSource().getPosition();
+        Terrain t = DeepWorld.installed() ? DeepWorld.terrain() : null;
+        if (t == null) { c.getSource().sendFailure(Component.literal("The deep world is not installed in this world.")); return 0; }
+        int top = t.shape.top(Terrain.BLUE), bottom = t.shape.bottom(Terrain.BLUE);
+        for (com.explorationremix.world.terrain.Route rift : t.network.riftsNear(o.x, o.z, radius)) {
+            StringBuilder b = new StringBuilder(String.format(Locale.ROOT, "The rift of cell %d %d, %.0f blocks along its path; points on it:",
+                    rift.cellX, rift.cellZ, rift.walkLength));
+            for (double f : new double[]{0.1, 0.3, 0.5, 0.7, 0.9}) {
+                double[] q = rift.pathAt(rift.walkLength * f);
+                b.append(String.format(Locale.ROOT, " (%.0f %.0f %.0f)", q[0], Math.ceil(q[2] - 1e-9), q[1]));
+            }
+            say(c, b.toString());
+        }
+        int n = CHASM_SHARES.length;
+        java.util.IdentityHashMap<FireflySwarm, Judged> judged = new java.util.IdentityHashMap<>();
+        int[] homes = new int[Where.values().length];
+        int chasmDrawn = 0;
+        int[] chasmKept = new int[n];
+        for (var e : level.getAllEntities()) {
+            if (!(e instanceof FireflySwarm s) || !s.isAlive()) continue;
+            BlockPos h = BlockPos.containing(s.home() != null ? s.home() : s.centre());
+            Where w = where(level, t, h);
+            int reach = FireflyHomes.DRAW_REACH;
+            // water and glowbells are looked for only where the rock round it is loaded (reading past it would make chunks)
+            boolean drawn = w == Where.CHASM && level.hasChunksAt(h.getX() - reach, h.getZ() - reach, h.getX() + reach, h.getZ() + reach)
+                    && FirefliesFeature.drawn(level, h);
+            Judged j = new Judged(w, drawn, FireflyHomes.chasmRoll(s.seed()));
+            judged.put(s, j);
+            homes[w.ordinal()]++;
+            if (drawn) chasmDrawn++;
+            for (int k = 0; k < n; k++) if (w == Where.CHASM && j.keptAt(CHASM_SHARES[k])) chasmKept[k]++;
+        }
+        StringBuilder census = new StringBuilder(String.format(Locale.ROOT, "Loaded swarms by home: chasm %d (%d by water or glowbells), tunnels %d, geodes %d, elsewhere %d. The chasm keeps:",
+                homes[0], chasmDrawn, homes[1], homes[2], homes[3]));
+        for (int k = 0; k < n; k++) census.append(String.format(Locale.ROOT, " %s %d;", shareName(CHASM_SHARES[k]), chasmKept[k]));
+        say(c, census.toString());
+
+        int reach = (int) Math.ceil(SIGHT_COUNT) + 2;
+        double near = BlueSpawnRules.SWARM_RADIUS;
+        EnumMap<Where, List<int[]>> found = new EnumMap<>(Where.class);
+        var r = level.random;
+        int got = 0;
+        for (int i = 0; i < samples * 40 && got < samples; i++) {
+            int x = Mth.floor(o.x + (r.nextDouble() * 2.0 - 1.0) * radius);
+            int z = Mth.floor(o.z + (r.nextDouble() * 2.0 - 1.0) * radius);
+            if (!entitiesLoaded(level, x - reach, z - reach) || !entitiesLoaded(level, x + reach, z - reach)
+                    || !entitiesLoaded(level, x - reach, z + reach) || !entitiesLoaded(level, x + reach, z + reach)) continue;
+            int y0 = bottom + 2 + r.nextInt(Math.max(1, top - bottom - 3));
+            BlockPos feet = null;
+            for (int y = y0; y > y0 - 24 && y > bottom; y--) {
+                BlockPos p = new BlockPos(x, y, z);
+                if (FireflySwarm.open(level, p) && FireflySwarm.open(level, p.above()) && FireflySwarm.sturdy(level, p, Direction.DOWN)) { feet = p; break; }
+            }
+            if (feet == null) continue;
+            Where w = where(level, t, feet);
+            if (w == Where.ELSEWHERE) continue;
+            Vec3 eye = Vec3.atBottomCenterOf(feet).add(0.0, 1.62, 0.0);
+            int[] row = new int[2 * n];
+            for (FireflySwarm s : level.getEntitiesOfClass(FireflySwarm.class, new AABB(eye, eye).inflate(SIGHT_COUNT))) {
+                Judged j = judged.get(s);
+                if (j == null || !s.isAlive()) continue;
+                double d2 = s.centre().distanceToSqr(eye);
+                if (d2 > SIGHT_COUNT * SIGHT_COUNT) continue;
+                boolean isNear = d2 <= near * near;
+                boolean inSight = level.clip(new ClipContext(eye, s.centre(), ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, null)).getType() == HitResult.Type.MISS;
+                for (int k = 0; k < n; k++) {
+                    if (!j.keptAt(CHASM_SHARES[k])) continue;
+                    if (isNear) row[k]++;
+                    if (inSight) row[n + k]++;
+                }
+            }
+            found.computeIfAbsent(w, k -> new ArrayList<>()).add(row);
+            got++;
+        }
+        if (got == 0) { c.getSource().sendFailure(Component.literal("No spot to stand on in the Blue Reaches within " + radius + " blocks with the entities round it loaded.")); return 0; }
+        for (var e : found.entrySet()) {
+            List<int[]> rows = e.getValue();
+            for (int k = 0; k < n; k++) {
+                int[] a = column(rows, k), b = column(rows, n + k);
+                say(c, String.format(Locale.ROOT, "%s, chasm keeping %s: %d spots; within %d: %.1f on average (10%% %d, half %d, 90%% %d); in sight within %d: %.1f (half %d, 90%% %d)",
+                        e.getKey().name().toLowerCase(Locale.ROOT), shareName(CHASM_SHARES[k]), rows.size(), (int) near, mean(a), a[a.length / 10], a[a.length / 2],
+                        a[Math.min(a.length - 1, a.length * 9 / 10)], (int) SIGHT_COUNT, mean(b), b[b.length / 2], b[Math.min(b.length - 1, b.length * 9 / 10)]));
+            }
+        }
+        return got;
+    }
+
+    private static String shareName(double[] share) {
+        return String.format(Locale.ROOT, "%.2f/%.2f", share[0], share[1]);
+    }
+
+    /** Column {@code k} of the rows, sorted. */
+    private static int[] column(List<int[]> rows, int k) {
+        int[] a = new int[rows.size()];
+        for (int i = 0; i < a.length; i++) a[i] = rows.get(i)[k];
+        java.util.Arrays.sort(a);
+        return a;
+    }
+
+    private static double mean(int[] a) {
+        double s = 0;
+        for (int v : a) s += v;
+        return a.length == 0 ? 0 : s / a.length;
     }
 
     private static boolean entitiesLoaded(ServerLevel level, int x, int z) {
