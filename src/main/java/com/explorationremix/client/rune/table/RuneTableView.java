@@ -38,7 +38,6 @@ import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.client.event.RenderHighlightEvent;
 import net.minecraftforge.client.event.ViewportEvent;
-import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
@@ -57,12 +56,17 @@ import java.util.Map;
 /**
  * The enchanting table's rune view, drawn in the world itself (Taran, 2026-11-22: "a beautiful in-world interface on
  * the enchanting table"). The view eases from the player's eyes to over the table and looks down on its open book; the
- * room dims, and the weapon floats over the book, slowly turning, its three sockets hanging in a shallow arc below it:
- * the active rune (light blue), the modifier (lavender) and the passive (silver-blue), each a ring of light with its
- * rune at the middle and a thread of light up to the weapon. Picking a socket makes the runes the player carries for it
- * rise out of it into an arc over the weapon; picking one of those sets it. Round the active socket a second, finer
- * ring fills with the player's XP level toward the rune's second phase, and shines whole once it wakes. Motes drift up
+ * room dims, and the weapon floats over the book before a rune circle, slowly turning, its three sockets hanging in a
+ * shallow arc below it: the active rune (light blue), the modifier (lavender) and the passive (silver-blue), each a
+ * silver ring set with gems of its colour, its rune's tablet in the middle and a thread of light up to the weapon.
+ * Picking a socket makes the runes the player carries for it rise out of it into an arc over the weapon; picking one of
+ * those sets it. Up the active socket's outer side a gauge of pips fills with the player's XP level toward the rune's
+ * second phase, and glints once it wakes. Light runs slowly round the circle, stars twinkle about it, and motes drift up
  * from the book the whole time. Leaving gives the view back as smoothly as it was taken.
+ *
+ * <p>The rings, the circle, the pips and the stars are pixel art (Taran, 2026-11-23: "add some magical themed pixel
+ * art to the interface"), from textures/gui/rune_table_world.png (tools/rune_table_art.py), drawn sharp: a socket's
+ * ring and its rune's tablet share one texel size, so the two read as one piece.
  *
  * <p>Where things hang is worked out on the screen first, in GUI pixels ({@link #plan}), and then set into the world
  * where the settled view shows them there: so the layout fits every window and GUI scale, clear of the words at the top
@@ -88,11 +92,34 @@ public final class RuneTableView {
     private static final double BACK = 1.9, HEIGHT = 2.05, LOOK_AT = 0.95;
     /** How far toward the eye the sockets and the risen runes hang, in front of the weapon. */
     private static final double SOCKET_Z = 0.3, RISEN_Z = 0.15;
-    /**
-     * GUI pixels: the room the header keeps at the top, the least room the panel keeps at the foot (four lines and its
-     * margins), and the room the two lines of words under a socket take below its ring.
-     */
-    static final float TOP_ROOM = 34.0F, FOOT_ROOM = 60.0F, NAMES = 23.0F;
+    /** GUI pixels: the room the header keeps at the top, and the room the two lines of words under a socket take below its ring. */
+    static final float TOP_ROOM = 30.0F, NAMES = 23.0F;
+    /** How far toward the eye the rune circle hangs: just behind the weapon. */
+    private static final double SEAL_Z = -0.05;
+
+    // ---- the panel at the foot (RuneTableScreen), whose room the layout keeps whatever it says
+    /** GUI pixels: the panel's margins round its words, a line, how far its title's plate stands over its top edge, and the gap under it. */
+    static final int PANEL_PAD_X = 13, PANEL_PAD_TOP = 12, PANEL_PAD_BOTTOM = 10, PANEL_LINE = 10, PANEL_RAISED = 6, PANEL_MARGIN = 4;
+
+    // ---- the pixel art: where each piece lies on the sheet (texels)
+    private static final ResourceLocation ART = new ResourceLocation(ExplorationRemix.MOD_ID, "textures/gui/rune_table_world.png");
+    private static final float SHEET = 256.0F;
+    /** The rune circle, 128 texels across from the sheet's corner, its middle at texel 63.5. */
+    private static final int SEAL_SIZE = 128;
+    private static final float SEAL_MID = 63.5F;
+    /** The socket rings, 32 x 32 side by side from (128, 0): the active's, the modifier's, the passive's. */
+    private static final int RING_U = 128, RING_SIZE = 32;
+    /** The gauge's pips, 5 x 5 on the top row: dark, lit, and the glint that runs up them once the phase wakes. */
+    private static final int PIP_DARK_U = 224, PIP_LIT_U = 230, PIP_GLINT_U = 236, PIP_SIZE = 5;
+    /** The star's four frames (9 x 9, 10 apart), the stroke over a rune to take out (16 x 16), the kind icons (9 x 9, 10 apart). */
+    private static final int STAR_U = 128, STAR_V = 40, SLASH_U = 128, SLASH_V = 56, ICON_U = 128, ICON_V = 80;
+    /** A socket's texel, in its radius: its ring (32 texels) spans 2.56 radii, its rune's tablet (16) 1.28. */
+    private static final float TEXEL = 0.08F, RING_HALF = 16 * TEXEL, TABLET_HALF = 8 * TEXEL;
+    /** The pips in the gauge up the active socket's outer side, how far out from its middle they sit (in its radius), and the angle between them. */
+    private static final int PIPS = 6;
+    private static final float PIP_OUT = 1.45F, PIP_STEP = 20.0F;
+    /** Where the stars twinkle about the circle, in its radii from its middle (right, down). */
+    private static final float[][] STAR_SPOTS = {{-1.12F, -0.42F}, {1.08F, -0.55F}, {-0.62F, -1.02F}, {0.7F, -0.98F}, {-1.22F, 0.28F}, {1.2F, 0.18F}};
 
     @Nullable
     private static BlockPos table;
@@ -121,16 +148,12 @@ public final class RuneTableView {
     private static final Matrix4f PROJ = new Matrix4f(), VIEW = new Matrix4f();
     private static Vec3 cam = Vec3.ZERO;
     private static boolean drawn, pending;
-    private static float lastTime;
     static final List<Target> targets = new ArrayList<>();
 
     // ---- the layout, in GUI pixels, for the screen as it was last drawn
     private static float gw = 480.0F, gh = 270.0F;
-    private static float weaponX, weaponY, weaponPx, socketPx, risenPx, arcRX, arcRY;
+    private static float weaponX, weaponY, weaponPx, sealPx, socketPx, risenPx, arcRX, arcRY;
     private static final float[] socketX = new float[3], socketY = new float[3];
-    /** The room the screen's panel needs at the foot, and the glide to a new need (from, to, when it began). */
-    private static float footFrom = FOOT_ROOM, footTo = FOOT_ROOM, footAt = -100.0F;
-    private static boolean footFresh = true;
 
     private RuneTableView() {}
 
@@ -177,7 +200,6 @@ public final class RuneTableView {
         chosen = null;
         hovered = null;
         targets.clear();
-        footFresh = true;
     }
 
     /** The screen closed: the view eases back to the player's eyes, the sockets fading as it goes. */
@@ -277,7 +299,10 @@ public final class RuneTableView {
         if (t > 0.0F) e.setFOV(Mth.lerp(t, e.getFOV(), FOV));
     }
 
-    /** The hand, the block outline and the HUD stay out of the view while it has the camera. */
+    /**
+     * The hand, the block outline and the HUD stay out of the view while it has the camera; the chat too, since 0.20.5,
+     * as the panel at the foot now spans the corner it would show in (it comes back as the view gives the camera back).
+     */
     @SubscribeEvent
     public static void hand(RenderHandEvent e) {
         if (active()) e.setCanceled(true);
@@ -290,7 +315,7 @@ public final class RuneTableView {
 
     @SubscribeEvent
     public static void hud(RenderGuiOverlayEvent.Pre e) {
-        if (active() && e.getOverlay() != VanillaGuiOverlay.CHAT_PANEL.type()) e.setCanceled(true);
+        if (active()) e.setCanceled(true);
     }
 
     // ------------------------------------------------------------------------------------------------ the layout
@@ -309,7 +334,7 @@ public final class RuneTableView {
      * under them and the panel allow; the weapon over them, above the book; and the arc the runes rise into, round the
      * top of the weapon and clear of the header. Sizes follow the screen's height within bounds the words can live with.
      */
-    private static void plan(float time) {
+    private static void plan() {
         Window w = Minecraft.getInstance().getWindow();
         gw = Math.max(1, w.getGuiScaledWidth());
         gh = Math.max(1, w.getGuiScaledHeight());
@@ -317,7 +342,7 @@ public final class RuneTableView {
         socketPx = Mth.clamp(gh * 0.05F, 12.0F, 20.0F);
         risenPx = socketPx * 0.85F;
         float dip = socketPx * 0.55F;
-        float low = Math.min(gh * 0.64F, gh - foot(time) - NAMES - socketPx * 1.25F);
+        float low = Math.min(gh * 0.64F, gh - foot() - NAMES - socketPx * 1.25F);
         float dx = Math.min(Mth.clamp(gh * 0.36F, 100.0F, 170.0F), gw * 0.34F);
         for (Socket s : Socket.values()) {
             int i = s.ordinal() - 1;
@@ -327,35 +352,32 @@ public final class RuneTableView {
         weaponPx = Mth.clamp(gh * 0.21F, 44.0F, 120.0F);
         weaponX = cx;
         weaponY = Math.min(gh * 0.42F, low - dip - socketPx - 8.0F - weaponPx / 2.0F);
+        sealPx = weaponPx * 0.98F;
         // close round the weapon, so the runes plainly rise to it; wide, so many fit down its sides
         float inner = weaponPx / 2.0F + risenPx + 6.0F;
         arcRY = Math.max(inner, Math.min(weaponY - TOP_ROOM - 2.0F - risenPx, inner + gh * 0.035F));
         arcRX = Math.max(inner + 4.0F, Math.min(arcRY * 2.0F, gw * 0.42F));
     }
 
-    /** The screen's panel needs this much room at the foot (GUI pixels): the layout glides to make it, or takes it at once on opening. */
-    static void footNeed(float need) {
-        need = Math.max(FOOT_ROOM, need);
-        if (footFresh) {
-            footFresh = false;
-            footFrom = footTo = need;
-            footAt = -100.0F;
-            return;
-        }
-        if (Math.abs(need - footTo) < 0.5F) return;
-        footFrom = foot(lastTime);
-        footTo = need;
-        footAt = lastTime;
-    }
+    /**
+     * The lines of words the panel at the foot keeps room for on a screen this high (GUI pixels). Its room never
+     * changes with what it says, so nothing on the table moves as the mouse goes from one thing to the next; a longer
+     * say grows the panel up over the sockets' names for as long as it lasts.
+     */
+    static int panelLines(float height) { return height < 255.0F ? 4 : 5; }
 
-    private static float foot(float time) {
-        float t = Mth.clamp((time - footAt) / 6.0F, 0.0F, 1.0F);
-        return Mth.lerp(t * t * (3.0F - 2.0F * t), footFrom, footTo);
-    }
+    /** The panel's height with so many lines of words (GUI pixels). */
+    static int panelHeight(int lines) { return PANEL_PAD_TOP + lines * PANEL_LINE - 1 + PANEL_PAD_BOTTOM; }
+
+    /** The room the panel keeps at the foot: itself, its title's plate standing over its top edge, and a margin above and below. */
+    private static float foot() { return panelHeight(panelLines(gh)) + PANEL_RAISED + PANEL_MARGIN + 3.0F; }
 
     static Vec3 weaponAt(float time) { return place(weaponX, weaponY + gh * 0.008 * Math.sin(time * 0.06), 0.0); }
 
     static Vec3 socketAt(Socket s) { return place(socketX[s.ordinal()], socketY[s.ordinal()], SOCKET_Z); }
+
+    /** The rune circle's middle: behind the weapon, still while the weapon bobs. */
+    private static Vec3 sealAt() { return place(weaponX, weaponY, SEAL_Z); }
 
     /** Where the screen says there is nothing to raise: over the weapon (GUI pixels), or null. */
     @Nullable
@@ -451,9 +473,8 @@ public final class RuneTableView {
         PROJ.set(RenderSystem.getProjectionMatrix());
         VIEW.set(viewPose.last().pose());
         float time = ticks + partialTick;
-        lastTime = time;
         if (menu != null) {
-            plan(time);
+            plan();
             layout(menu, time);
         } else {
             // leaving: the sockets stay where they were, fading with the rest, and nothing is risen
@@ -469,13 +490,17 @@ public final class RuneTableView {
         PoseStack pose = new PoseStack();
         pose.last().pose().set(VIEW);
         pose.last().normal().set(viewPose.last().normal());
+        // shade, then light, the circle and the frames; the weapon and the tablets; then what lies over them
         shade(pose, camera, time, shown);
         light(pose, camera, time, shown);
+        seal(pose, camera, time, shown);
+        frames(pose, camera, time, shown);
         MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
         Lighting.setupLevel(pose.last().pose());
         weapon(mc, pose, camera, buffers, time, shown);
         for (Target tg : targets) tablet(pose, camera, buffers, tg, time, shown);
         buffers.endBatch();
+        sparkle(pose, camera, time, shown);
         project();
     }
 
@@ -503,11 +528,10 @@ public final class RuneTableView {
         return t;
     }
 
-    /** A rune's tablet, facing the eye, full bright: in a socket, risen over the weapon, or (dimmed) to take out. */
+    /** A rune's tablet, facing the eye, full bright, in its ring's slot: in a socket, risen over the weapon, or (dimmed) to take out. */
     private static void tablet(PoseStack pose, Camera camera, MultiBufferSource buffers, Target tg, float time, float shown) {
         if (tg.rune == null) return;
-        float half = tg.radius * 0.7F * shown;
-        if (tg.same(hovered)) half *= 1.14F;
+        float half = (float) (tg.radius * TABLET_HALF * grow(tg, shown) * lift(tg));
         Vec3 p = tg.at.subtract(cam);
         pose.pushPose();
         pose.translate(p.x, p.y, p.z);
@@ -526,12 +550,13 @@ public final class RuneTableView {
         double k = perPx(0.0);
         Vec3 middle = place(gw / 2.0, (weaponY + socketY[Socket.MODIFIER.ordinal()]) / 2.0, 0.0);
         g.vignette(middle, gw * 0.62 * k, gh * 0.75 * k, SHADE, 0.16F * shown, 0.42F * shown);
+        g.soft(sealAt(), (float) (sealPx * 1.1 * perPx(SEAL_Z)), SHADE, 0.3F * shown, 0.55F);
         g.soft(weaponAt(time), (float) (weaponPx * 0.8 * k), SHADE, 0.45F * shown, 0.4F);
         for (Target tg : targets) g.soft(tg.at, tg.radius * 2.1F, SHADE, (tg.kind == Target.Kind.SOCKET ? 0.62F : 0.55F) * shown, 0.5F);
         g.draw(false);
     }
 
-    /** Every ring, halo, thread and arc of light, added onto the picture in one go. */
+    /** Every halo, thread and soft ring of light, added onto the picture in one go (the frames are drawn over it). */
     private static void light(PoseStack pose, Camera camera, float time, float shown) {
         Glow g = new Glow(pose.last().pose(), camera);
         Vec3 w = weaponAt(time);
@@ -550,46 +575,136 @@ public final class RuneTableView {
                 Vec3 c = tg.at;
                 boolean filled = tg.rune != null, isChosen = chosen == tg.socket;
                 float flash = flashed == tg.socket ? Mth.clamp(1.0F - (time - flashedAt) / 14.0F, 0.0F, 1.0F) : 0.0F;
-                float a = (filled ? 0.85F : 0.45F) * shown;
-                if (hover) a = Math.min(1.0F, a + 0.25F);
-                if (isChosen) a = Math.min(1.0F, a + 0.15F * pulse + 0.1F);
-                g.disc(c, r * (filled ? 1.5F : 1.1F), colour, (filled ? 0.32F : 0.14F) * shown + 0.3F * flash);
-                g.ring(c, r * (hover ? 1.08F : 1.0F), r * 0.2F, colour, a);
-                g.ring(c, r * 0.82F, r * 0.08F, CORE, a * 0.45F);
-                if (isChosen) g.ring(c, r * (1.25F + 0.06F * pulse), r * 0.12F, colour, 0.55F * shown);
-                if (flash > 0.0F) g.ring(c, r * (1.0F + 1.6F * (1.0F - flash)), r * 0.2F, CORE, flash);
-                // a thread of light from a filled socket up to the weapon, a mote running up it
+                g.disc(c, r * (filled ? 1.6F : 1.25F), colour, (filled ? 0.32F : 0.16F) * shown + (hover ? 0.12F : 0.0F) + 0.3F * flash);
+                if (isChosen) g.ring(c, r * (1.34F + 0.05F * pulse), r * 0.1F, colour, (0.45F + 0.2F * pulse) * shown);
+                if (flash > 0.0F) g.ring(c, r * (1.1F + 1.6F * (1.0F - flash)), r * 0.2F, CORE, flash);
+                // a thread of light from a filled socket's ring up to the weapon, a mote running up it
                 if (filled) {
-                    Vec3 from = c.add(up.scale(r * 1.05)), to = w.add(c.subtract(w).normalize().scale(wr * 0.3));
+                    Vec3 dir = w.subtract(c).normalize();
+                    Vec3 from = c.add(dir.scale(r * 1.22)), to = w.subtract(dir.scale(wr * 0.3));
                     g.line(from, to, r * 0.08F, colour, 0.35F * shown);
                     float k = (time * 0.025F + tg.socket.ordinal() * 0.33F) % 1.0F;
                     g.disc(from.add(to.subtract(from).scale(k)), r * 0.23F, CORE, 0.8F * shown * Mth.sin(k * Mth.PI));
                 }
-                // round the active socket: the XP toward its rune's second phase, whole and shining once awake
-                if (tg.socket == Socket.ACTIVE && tg.rune != null) {
-                    float fill = Mth.clamp(level / (float) tg.rune.phaseLevel, 0.0F, 1.0F);
-                    float rr = r * 1.42F;
-                    g.arc(c, rr, r * 0.08F, 0.0F, 1.0F, DEEP, 0.4F * shown);
-                    if (fill >= 1.0F) {
-                        g.arc(c, rr, r * 0.17F, 0.0F, 1.0F, PHASE, (0.65F + 0.3F * pulse) * shown);
-                        g.disc(c, r * 2.1F, PHASE, (0.1F + 0.06F * pulse) * shown);
-                    } else {
-                        g.arc(c, rr, r * 0.15F, 0.0F, fill, PHASE, 0.85F * shown);
-                    }
+                // the active rune's second phase awake: a wide glow round its socket
+                if (tg.socket == Socket.ACTIVE && tg.rune != null && level >= tg.rune.phaseLevel) {
+                    g.disc(c, r * 2.2F, PHASE, (0.1F + 0.06F * pulse) * shown);
                 }
             } else {
-                float a = (tg.kind == Target.Kind.TAKE_OUT ? 0.5F : 0.8F) * shown;
-                if (hover) a = 1.0F;
-                g.disc(tg.at, r * (hover ? 1.9F : 1.45F), colour, (hover ? 0.4F : 0.2F) * shown);
-                g.ring(tg.at, r * (hover ? 1.1F : 1.0F), r * 0.19F, colour, a);
-                if (tg.kind == Target.Kind.TAKE_OUT) {
-                    // a stroke across it: this one comes out
-                    Vec3 d = g.r.add(g.u).normalize().scale(r * 0.75);
-                    g.line(tg.at.subtract(d), tg.at.add(d), r * 0.13F, CORE, a * 0.8F);
-                }
+                boolean out = tg.kind == Target.Kind.TAKE_OUT;
+                g.disc(tg.at, r * (hover ? 2.0F : 1.6F), colour, (hover ? 0.4F : out ? 0.1F : 0.2F) * shown);
             }
         }
         g.draw(true);
+    }
+
+    /** How far a socket's ring and tablet have grown in as the view settles: from a little over half their size. Risen runes grow as they rise. */
+    private static float grow(Target tg, float shown) { return tg.kind == Target.Kind.SOCKET ? 0.55F + 0.45F * shown : 1.0F; }
+
+    /** A little larger under the mouse. */
+    private static float lift(Target tg) { return tg.same(hovered) ? (tg.kind == Target.Kind.SOCKET ? 1.06F : 1.08F) : 1.0F; }
+
+    /** How bright the latest flash is now (a socket just set or emptied): 1 as it happens, fading over {@code ticks}. */
+    private static float flash(float time, float ticks) { return Mth.clamp(1.0F - (time - flashedAt) / ticks, 0.0F, 1.0F); }
+
+    /**
+     * The rune circle behind the weapon, added onto the picture: light runs slowly round it, it brightens while a socket
+     * is chosen and flares as a rune goes in or out; and stars twinkle about it.
+     */
+    private static void seal(PoseStack pose, Camera camera, float time, float shown) {
+        Sprites s = new Sprites(pose.last().pose(), camera);
+        double k = perPx(SEAL_Z);
+        double rad = sealPx * k * (0.85 + 0.15 * shown);
+        float base = (0.34F + (chosen != null ? 0.08F : 0.0F) + 0.25F * flash(time, 20.0F)) * shown;
+        // round clockwise as seen, once in about sixteen seconds
+        double sweep = -time * 0.02;
+        float run = 0.5F * shown;
+        s.seal(sealAt(), rad, base, a -> base + run * Math.pow(Math.max(0.0, Math.cos(a - sweep)), 10));
+        double texel = sealPx * 2.0 / SEAL_SIZE * k;
+        for (int i = 0; i < STAR_SPOTS.length; i++) {
+            float tw = Mth.sin(time * (0.05F + 0.011F * i) + i * 2.1F);
+            if (tw <= 0.0F) continue;
+            int frame = Math.min(3, (int) (tw * 4.0F));
+            int col = i % 3 == 0 ? ACTIVE : i % 3 == 1 ? MODIFIER : CORE;
+            Vec3 at = place(weaponX + STAR_SPOTS[i][0] * sealPx, weaponY + STAR_SPOTS[i][1] * sealPx, SEAL_Z);
+            s.piece(at, 4.5 * texel, STAR_U + 10 * frame, STAR_V, 9, 9, col, (0.35F + 0.65F * tw) * shown);
+        }
+        s.draw(true);
+    }
+
+    /**
+     * The frames, laid over the picture: each socket's ring (an empty one showing faintly what goes in it), the rings of
+     * the risen runes, and up the active socket's outer side the gauge of pips toward its rune's second phase.
+     */
+    private static void frames(PoseStack pose, Camera camera, float time, float shown) {
+        Sprites s = new Sprites(pose.last().pose(), camera);
+        int level = Minecraft.getInstance().player.experienceLevel;
+        for (Target tg : targets) {
+            double r = tg.radius * grow(tg, shown) * lift(tg);
+            int ring = RING_U + RING_SIZE * tg.socket.ordinal();
+            if (tg.kind == Target.Kind.SOCKET) {
+                s.piece(tg.at, r * RING_HALF, ring, 0, RING_SIZE, RING_SIZE, 0xFFFFFF, shown);
+                if (tg.rune == null) {
+                    s.piece(tg.at, r * TEXEL * 4.5, ICON_U + 10 * tg.socket.ordinal(), ICON_V, 9, 9, 0xFFFFFF, 0.45F * shown);
+                } else if (tg.socket == Socket.ACTIVE) {
+                    float fill = gauge(tg.rune, level);
+                    for (int p = 0; p < PIPS; p++) {
+                        s.piece(pipAt(s, tg, shown, p), r * TEXEL * 2.5, p + 1 <= fill ? PIP_LIT_U : PIP_DARK_U, 0, PIP_SIZE, PIP_SIZE, 0xFFFFFF, shown);
+                    }
+                }
+            } else {
+                boolean out = tg.kind == Target.Kind.TAKE_OUT;
+                s.piece(tg.at, r * RING_HALF, ring, 0, RING_SIZE, RING_SIZE, out ? 0x9AA3B5 : 0xFFFFFF, (out ? 0.8F : 1.0F) * shown);
+            }
+        }
+        s.draw(false);
+    }
+
+    /**
+     * Over the weapon and the tablets: the stroke across a rune to take out; then, added on, light on the ring the mouse
+     * is over and on the chosen socket's, the gauge's next pip warming as the XP toward it grows, and once the phase is
+     * awake a glint running up the gauge now and then.
+     */
+    private static void sparkle(PoseStack pose, Camera camera, float time, float shown) {
+        Sprites over = new Sprites(pose.last().pose(), camera);
+        for (Target tg : targets) {
+            if (tg.kind == Target.Kind.TAKE_OUT) over.piece(tg.at, tg.radius * lift(tg) * 0.72, SLASH_U, SLASH_V, 16, 16, 0xFFFFFF, shown);
+        }
+        over.draw(false);
+        Sprites add = new Sprites(pose.last().pose(), camera);
+        float pulse = 0.5F + 0.5F * Mth.sin(time * 0.12F);
+        int level = Minecraft.getInstance().player.experienceLevel;
+        for (Target tg : targets) {
+            double r = tg.radius * grow(tg, shown) * lift(tg);
+            int ring = RING_U + RING_SIZE * tg.socket.ordinal();
+            float light = tg.same(hovered) ? 0.32F : 0.0F;
+            if (tg.kind == Target.Kind.SOCKET && chosen == tg.socket) light = Math.max(light, 0.1F + 0.14F * pulse);
+            add.piece(tg.at, r * RING_HALF, ring, 0, RING_SIZE, RING_SIZE, 0xFFFFFF, light * shown);
+            if (tg.kind != Target.Kind.SOCKET || tg.socket != Socket.ACTIVE || tg.rune == null) continue;
+            float fill = gauge(tg.rune, level);
+            double half = r * TEXEL * 2.5;
+            if (fill < PIPS) {
+                int next = (int) fill;
+                add.piece(pipAt(add, tg, shown, next), half, PIP_LIT_U, 0, PIP_SIZE, PIP_SIZE, 0xFFFFFF, (fill - next) * (0.3F + 0.3F * pulse) * shown);
+            } else {
+                float at = (time * 0.12F) % 10.0F;
+                for (int p = 0; p < PIPS; p++) {
+                    float glint = 1.0F - Math.abs(at - p);
+                    if (glint > 0.0F) add.piece(pipAt(add, tg, shown, p), half * 1.2, PIP_GLINT_U, 0, PIP_SIZE, PIP_SIZE, 0xFFFFFF, glint * 0.9F * shown);
+                }
+            }
+        }
+        add.draw(true);
+    }
+
+    /** How far the active rune's gauge is filled, in pips (0 to {@link #PIPS}): the player's XP level toward its second phase's. */
+    private static float gauge(RuneId rune, int level) { return Mth.clamp(level / (float) rune.phaseLevel, 0.0F, 1.0F) * PIPS; }
+
+    /** Where the gauge's pip {@code p} sits round the socket: up its outer (left) side, filling from below. */
+    private static Vec3 pipAt(Sprites s, Target tg, float shown, int p) {
+        double th = Math.toRadians(-140.0 + p * PIP_STEP);
+        double rad = tg.radius * grow(tg, shown) * lift(tg) * PIP_OUT;
+        return tg.at.add(s.r.scale(Math.sin(th) * rad)).add(s.u.scale(Math.cos(th) * rad));
     }
 
     static int colour(Socket s) {
@@ -792,6 +907,84 @@ public final class RuneTableView {
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
             RenderSystem.enableBlend();
             if (light) RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
+            else RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+            RenderSystem.disableDepthTest();
+            RenderSystem.depthMask(false);
+            RenderSystem.disableCull();
+            try {
+                BufferUploader.drawWithShader(b.end());
+            } finally {
+                RenderSystem.enableCull();
+                RenderSystem.depthMask(true);
+                RenderSystem.enableDepthTest();
+                RenderSystem.defaultBlendFunc();
+                RenderSystem.disableBlend();
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------------ pixel art
+
+    /**
+     * Pieces of the pixel-art sheet in the plane facing the eye, as Glow lays its light: over the picture, or added onto
+     * it. The sheet is drawn without blur, so its texels stay square and sharp.
+     */
+    private static final class Sprites {
+        private static final int SEGMENTS = 48;
+        private final Matrix4f m;
+        final Vec3 r, u;
+        private final BufferBuilder b;
+
+        Sprites(Matrix4f m, Camera camera) {
+            this.m = m;
+            Vector3f left = camera.getLeftVector(), above = camera.getUpVector();
+            this.r = new Vec3(-left.x(), -left.y(), -left.z());
+            this.u = new Vec3(above.x(), above.y(), above.z());
+            this.b = Tesselator.getInstance().getBuilder();
+            b.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_TEX_COLOR);
+        }
+
+        private void v(Vec3 p, float tu, float tv, int rgb, float a) {
+            b.vertex(m, (float) (p.x - cam.x), (float) (p.y - cam.y), (float) (p.z - cam.z)).uv(tu / SHEET, tv / SHEET)
+                    .color(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255, Mth.clamp(Math.round(a * 255.0F), 0, 255)).endVertex();
+        }
+
+        /** The piece at texel (x, y), w x h, centred on {@code c} and {@code half} wide either side of it in the world, its texels square. */
+        void piece(Vec3 c, double half, int x, int y, int w, int h, int rgb, float a) {
+            if (a <= 0.004F || half <= 0.0) return;
+            Vec3 across = r.scale(half), down = u.scale(-half * h / w);
+            Vec3 tl = c.subtract(across).subtract(down), tr = c.add(across).subtract(down);
+            Vec3 br = c.add(across).add(down), bl = c.subtract(across).add(down);
+            v(tl, x, y, rgb, a);
+            v(bl, x, y + h, rgb, a);
+            v(br, x + w, y + h, rgb, a);
+            v(tl, x, y, rgb, a);
+            v(br, x + w, y + h, rgb, a);
+            v(tr, x + w, y, rgb, a);
+        }
+
+        /**
+         * The rune circle, as a fan from its middle so its light can vary round it: {@code mid} at the middle, and at the
+         * rim what {@code rim} gives for the angle there (radians, anticlockwise from the right, as seen).
+         */
+        void seal(Vec3 c, double rad, float mid, java.util.function.DoubleUnaryOperator rim) {
+            if (rad <= 0.0) return;
+            float k = SEAL_SIZE / 2.0F;
+            for (int i = 0; i < SEGMENTS; i++) {
+                double a0 = Math.PI * 2 * i / SEGMENTS, a1 = Math.PI * 2 * (i + 1) / SEGMENTS;
+                float c0 = (float) Math.cos(a0), s0 = (float) Math.sin(a0), c1 = (float) Math.cos(a1), s1 = (float) Math.sin(a1);
+                v(c, SEAL_MID, SEAL_MID, 0xFFFFFF, mid);
+                v(c.add(r.scale(c0 * rad)).add(u.scale(s0 * rad)), SEAL_MID + c0 * k, SEAL_MID - s0 * k, 0xFFFFFF, (float) rim.applyAsDouble(a0));
+                v(c.add(r.scale(c1 * rad)).add(u.scale(s1 * rad)), SEAL_MID + c1 * k, SEAL_MID - s1 * k, 0xFFFFFF, (float) rim.applyAsDouble(a1));
+            }
+        }
+
+        /** Added onto the picture, or laid over it. */
+        void draw(boolean add) {
+            RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
+            RenderSystem.setShaderTexture(0, ART);
+            RenderSystem.enableBlend();
+            if (add) RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
             else RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
             RenderSystem.disableDepthTest();
             RenderSystem.depthMask(false);

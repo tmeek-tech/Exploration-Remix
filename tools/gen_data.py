@@ -15,6 +15,7 @@ import worldgen
 import sounds
 import creatures
 import runes
+import rune_table_art
 import swings
 import check_data
 
@@ -1054,6 +1055,8 @@ def main():
     names.update(sounds.write_all(ASSETS, write))
     names.update(creatures.write_all(ASSETS, write))
     names.update(runes.write_all(RES, write, tag))
+    # 0.20.5: the rune table's pixel art (textures/gui)
+    rune_table_art.write_all(ASSETS)
     names.update({f"entity.{MOD}.{e}": n for e, n in ENTITY_NAMES.items()})
     creature_data()
     particles()
