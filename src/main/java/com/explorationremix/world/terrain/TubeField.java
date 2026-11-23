@@ -1550,7 +1550,7 @@ public final class TubeField {
     /**
      * Depth into the rock from the tube's smooth section (without the ribs' cut): about 0 at the tube's surface, rising
      * into the rock; under 0 for rock standing inside the smooth section (the rings, hanging column ends, floor steps);
-     * 1e9 where no tube is near. The lining's palette reads it (obsidian skin, basalt and scoria behind). Always finite.
+     * 1e9 where no tube is near. The lining's palette reads it (obsidian skin, basalt and smooth basalt behind). Always finite.
      *
      * <p>The open rows are quantised (a column cell's floor is its site's), so near the walls, where the bowl climbs
      * steeply, the tube's air reaches outside the smooth section: a cell's floor lies rows under the bowl beside it. So the

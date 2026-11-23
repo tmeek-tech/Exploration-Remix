@@ -8,7 +8,7 @@
           "data": {
             "type": "minecraft:simple_state_provider",
             "state": {
-              "Name": "minecraft:blackstone"
+              "Name": "minecraft:smooth_basalt"
             }
           },
           "weight": 3

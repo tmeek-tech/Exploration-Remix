@@ -24,7 +24,8 @@ public enum DeepBiome {
     WASTELAND("wasteland", Role.HUNTING),
     ASH_HOLLOWS("ash_hollows", Role.REFUGE),
     // The Basalt Galleries' lifeless sub-biomes (Taran's pick, 2026-11-01): the crater where eruptions start, basalt
-    // column tops over the lava, and red rifts of Create's scoria.
+    // column tops over the lava, and rifts of banded lava flows (red Create scoria until 0.20.4, when Taran asked for no
+    // scoria: now the Basalt Rifts, basalt and smooth basalt with thin scorchia bands; the id stays for old worlds).
     CALDERA("caldera", Role.ROUTE),
     CAUSEWAY("causeway", Role.ROUTE),
     SCORIA_CANYONS("scoria_canyons", Role.ROUTE),

@@ -38,7 +38,7 @@ NAMES = {
     "deep_blue_rift": "Deep Blue Rift", "asurine_geodes": "Asurine Geodes",
     "basalt_galleries": "Basalt Galleries", "obsidian_tubes": "Obsidian Tubes",
     "wasteland": "Wasteland", "ash_hollows": "Ash Hollows",
-    "caldera": "Caldera", "causeway": "Causeway", "scoria_canyons": "Scoria Canyons",
+    "caldera": "Caldera", "causeway": "Causeway", "scoria_canyons": "Basalt Rifts",   # 0.20.4: no scoria (id kept)
     "seep_beds": "Seep Beds", "chimney_halls": "Chimney Halls", "vent_domes": "Vent Domes",
 }
 LAYER = {"rootvaults": "upper", "silver_fern_rift": "upper", "ivory_root_cavern": "upper",
@@ -68,15 +68,16 @@ LOOKS = {
     "rust_springs":      ("#a9482a", "#c9662b", "#5a2a10", "#a08a50", "#907a40"),
     "deep_blue_rift":    ("#1f3f7c", "#2554ba", "#08183d", "#6a8aa8", "#5a7a98"),
     "asurine_geodes":    ("#2a4a86", "#3e72d8", "#0b1f4a", "#6f8fa8", "#5f7f98"),
-    # The Galleries' haze is lava-lit smoke: warm, reddest over the Caldera and the Scoria Canyons. The Ash Hollows'
-    # still air is a pale ash grey against the Wasteland's smoke.
+    # The Galleries' haze is lava-lit smoke: warm, reddest over the Caldera; the Basalt Rifts (the Scoria Canyons before
+    # 0.20.4, now basalt with no scoria) take the halls' haze. The Ash Hollows' still air is a pale ash grey against the
+    # Wasteland's smoke.
     "basalt_galleries":  ("#7c5040", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     "obsidian_tubes":    ("#4d3b42", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     "wasteland":         ("#70574b", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     "ash_hollows":       ("#78726c", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     "caldera":           ("#8a4630", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     "causeway":          ("#72544a", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
-    "scoria_canyons":    ("#80463a", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
+    "scoria_canyons":    ("#7c5040", "#40607a", "#1a2630", "#8a7a5a", "#7a6a4a"),
     # The vent field is black rock lit by its neon: cool, dark distances (blue over the seeps, violet over the live
     # domes), blue water, nothing warm and no teal (Taran's look rules, textures.py).
     "seep_beds":         ("#24345a", "#2b3f8f", "#0a1230", "#6a7a9a", "#5a6a8a"),
@@ -1097,10 +1098,11 @@ def build_features():
             out.append({"type": "minecraft:random_offset", "xz_spread": 0, "y_spread": uniform(*offset)})
         return out
     # Lava pools on the halls' terraces and the Causeway's column tops, their rims flush with the floor: natural rims of
-    # blackstone and basalt (0.5.1: no polished blackstone), rarer than 0.5.0's (rivers and lakes now form wherever the
-    # floor dips under the table, and the falls make their own pools).
+    # smooth basalt and basalt (0.5.1: no polished blackstone; 0.20.4, Taran: "Blackstone could be replaced with smooth
+    # basalt"), rarer than 0.5.0's (rivers and lakes now form wherever the floor dips under the table, and the falls make
+    # their own pools).
     feature("basalt_galleries/lava_pools", "local_modifications", halls,
-            pools(mix((simple("minecraft:blackstone"), 3), (simple("minecraft:basalt", axis="y"), 2)),
+            pools(mix((simple("minecraft:smooth_basalt"), 3), (simple("minecraft:basalt", axis="y"), 2)),
                   simple("minecraft:magma_block"), 5, lava=True),
             [rarity(3), SQUARE] + hall("floor", 6) + [BIOME])
     # 0.5.1: the standing columns, the hanging clusters and the Caldera's cones come from the Galleries' field (column
