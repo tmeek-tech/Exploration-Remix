@@ -359,7 +359,8 @@ public final class IceColumns {
         for (Seed s : seeds) {
             if (Math.abs(s.ax - x) > REACH || Math.abs(s.az - z) > REACH) continue;
             double d = distance(s, wx, wz);
-            if (d >= s.r0 * 1.1 * lump) continue;
+            // the widest its formation can be: a joined one at its iciest, or a broken one's base
+            if (d >= Math.max(s.r0 * 1.1, BROKEN_R) * lump) continue;
             if (near == null) {
                 near = new ArrayList<>();
                 dist = new ArrayList<>();
