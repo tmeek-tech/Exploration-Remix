@@ -67,8 +67,8 @@ public final class ERClientConfig {
                 "dripstone and plain caves too, once you are well underground; only in the mod's own upper caves (the Root Vaults,",
                 "Silver Fern Rifts, Ivory Root Caverns, sinkholes and oasis hollows); or nowhere. Never in the frozen caves.")
                 .defineEnum("crickets", Crickets.EVERY_UPPER_CAVE);
-        nearCrickets = b.comment("Let one or two crickets sing from the rock near you while the chorus plays. Each goes quiet when you come",
-                "within a few blocks and sings again once you have passed.").define("nearCrickets", true);
+        nearCrickets = b.comment("Let a cricket (two in a big cave) sing now and then from the rock near you while the chorus plays.",
+                "Each goes quiet when you come within a few blocks and sings again once you have passed.").define("nearCrickets", true);
         b.pop();
         b.push("lavaCycle");
         screenShake = b.comment("Shake the view in the Basalt Galleries while the lava is about to rise and rising, in quakes and tremors, and",

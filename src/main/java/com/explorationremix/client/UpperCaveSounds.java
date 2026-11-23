@@ -52,8 +52,9 @@ import java.util.Set;
  *     biomes' loops do, and is softer in tight tunnels than in big caves: one ray a tick round the player measures how
  *     open the cave is.</li>
  *     <li><b>Crickets close by</b> ({@code ambient.upper.cricket}, mono, so the game places it): while the chorus plays,
- *     one or two single crickets sing from spots on the rock 7 to 20 blocks off that the player can see, a short bout of
- *     slow chirps, a rest, another bout. Each goes quiet when the player comes within 6.5 blocks, as crickets do, and
+ *     a single cricket (two in a big cave) sings from a spot on the rock 7 to 20 blocks off that the player can see, a
+ *     short bout of slow chirps, a long rest, another bout, so it stays an accent on the chorus Taran chose for being
+ *     soft. Each goes quiet when the player comes within 6.5 blocks, as crickets do, and
  *     sings again once they have been 10 blocks off for three seconds; it is let go past 28 blocks or when the chorus
  *     fades. Out of sight behind rock it is softer.</li>
  * </ul>
@@ -185,7 +186,9 @@ public final class UpperCaveSounds {
             nextSearch = 40;
             return;
         }
-        int most = open > 0.3F ? 2 : 1;
+        // two only in a big cave: two in every cave, with short rests, chirped a quarter of the time in a recording of
+        // the game, too busy for the soft chorus
+        int most = open > 0.45F ? 2 : 1;
         if (SINGERS.size() < most && --nextSearch <= 0) {
             nextSearch = 20 + random.nextInt(40);
             for (int k = 0; k < 3; k++) {
@@ -292,9 +295,9 @@ public final class UpperCaveSounds {
             if (voice != null) {
                 voice.muffle = muffle;
                 if (voice.isStopped() || !sounds.isActive(voice)) {
-                    // a bout ended: rest a while before the next, two to ten seconds, so it never drowns the chorus
+                    // a bout ended: rest a while before the next, four to sixteen seconds, so it never drowns the chorus
                     voice = null;
-                    rest = 40 + random.nextInt(160);
+                    rest = 80 + random.nextInt(240);
                 }
             } else if (!hush.quiet() && --rest <= 0) {
                 voice = new Voice(pos, pitch, muffle);

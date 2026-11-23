@@ -13,22 +13,22 @@
     "sounds": [
       {
         "name": "explorationremix:ambient/cricket1",
-        "volume": 0.6,
+        "volume": 0.5,
         "attenuation_distance": 24
       },
       {
         "name": "explorationremix:ambient/cricket2",
-        "volume": 0.6,
+        "volume": 0.5,
         "attenuation_distance": 24
       },
       {
         "name": "explorationremix:ambient/cricket3",
-        "volume": 0.6,
+        "volume": 0.5,
         "attenuation_distance": 24
       },
       {
         "name": "explorationremix:ambient/cricket4",
-        "volume": 0.6,
+        "volume": 0.5,
         "attenuation_distance": 24
       }
     ],
