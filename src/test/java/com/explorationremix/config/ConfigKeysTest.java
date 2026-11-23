@@ -158,6 +158,22 @@ class ConfigKeysTest {
         }
     }
 
+    /**
+     * The Upper Caves' crickets (0.20.9) default to Taran's picks: the chorus in every upper cave (card: "Every upper
+     * cave", the recommended answer until one is given) and the crickets near you that go quiet as you walk up (card:
+     * "Yes, it goes quiet"). Each setting takes only its own values.
+     */
+    @Test
+    void theCricketsAreThePicks() {
+        ForgeConfigSpec.ValueSpec where = spec(CLIENT, "sounds.crickets");
+        assertEquals(ERClientConfig.Crickets.EVERY_UPPER_CAVE, where.getDefault());
+        for (ERClientConfig.Crickets c : ERClientConfig.Crickets.values()) assertTrue(where.test(c), c + " refused");
+        assertFalse(where.test("BIRDS"));
+        ForgeConfigSpec.ValueSpec near = spec(CLIENT, "sounds.nearCrickets");
+        assertEquals(true, near.getDefault());
+        assertFalse(near.test(3));
+    }
+
     @Test
     void nothingSaysNotBuilt() {
         List<String> comments = new ArrayList<>();

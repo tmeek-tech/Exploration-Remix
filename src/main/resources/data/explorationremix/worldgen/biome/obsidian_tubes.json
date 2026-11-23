@@ -21,9 +21,9 @@
       },
       "probability": 0.008
     },
-    "ambient_sound": "explorationremix:ambient.basalt.loop",
+    "ambient_sound": "explorationremix:ambient.hollows.loop",
     "additions_sound": {
-      "sound": "explorationremix:ambient.basalt.additions",
+      "sound": "explorationremix:ambient.hollows.additions",
       "tick_chance": 0.004
     }
   },
