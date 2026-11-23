@@ -1,6 +1,7 @@
 """Exploration Remix's sound events: assets/explorationremix/sounds.json. Called by gen_data.py.
 
-The ambient loops are the mod's own recordings, made by synth_sounds.py into assets/explorationremix/sounds/ambient/.
+The ambient loops are the mod's own recordings, made by synth_sounds.py and (0.20.9, each layer's own ambience)
+synth_layer_sounds.py into assets/explorationremix/sounds/ambient/.
 One-shot additions mix those with vanilla sounds, which are only referenced, never copied.
 The event ids must match ERSounds.java.
 """
@@ -26,36 +27,55 @@ def vanilla(name, volume=1.0, pitch=1.0, weight=1):
     return e
 
 
-DRIPS = [vanilla(f"block/pointed_dripstone/drip_water{i}", 0.55, p) for i in range(1, 16) for p in (0.8,) if i <= 15]
-
 EVENTS = {
-    # Upper caves: wind and birds from above, drips.
-    "ambient.upper.loop": [own("upper_wind", 0.55, stream=True)],
-    "ambient.upper.additions": [own(f"bird{i}", 0.35, weight=2) for i in range(1, 5)] + [own(f"drip{i}", 0.5) for i in range(1, 5)],
-    # Deep Gardens: drips with long echoes; bubbling and hissing by the hot springs.
-    "ambient.gardens.loop": [own("gardens_drips", 0.7, stream=True)],
-    "ambient.gardens.additions": [own(f"echo_drip{i}", 0.6) for i in range(1, 5)],
-    "ambient.springs.loop": [own("springs_bubbling", 0.6, stream=True)],
+    # Upper Caves (0.20.9, Taran: "Change bird noises in the Upper Caves to calm, atmospheric cricket noises"): no biome
+    # plays a loop here any more. The client's UpperCaveSounds plays the crickets in every upper cave, the pack's own
+    # caves too, once you are well underground: a stereo bed, a soft far chorus of tree crickets (card pick "Far chorus
+    # only"), and a single cricket (two in a big cave) singing now and then from the rock near you, which goes quiet as
+    # you come close (positional, mono; card pick "Yes, it goes quiet"). The mod's own upper caves keep their water drips
+    # as additions. Made by synth_layer_sounds.py, like everything new in 0.20.9.
+    "ambient.upper.crickets": [own("crickets_loop", 0.75, stream=True)],
+    "ambient.upper.cricket": [own(f"cricket{i}", 0.5, attenuation_distance=24) for i in range(1, 5)],
+    "ambient.upper.additions": [own(f"drip{i}", 0.5) for i in range(1, 5)],
+    # The frozen caves (the Frozen Root Vaults and the Frost Fern Grottos; Taran's card pick "Cold and still"): no
+    # crickets in the cold, a thin draft, the tick of ice settling, and now and then (one in four) ice singing far off.
+    "ambient.frozen.loop": [own("cold_draft", 0.8, stream=True)],
+    "ambient.frozen.additions": [own(f"ice_tick{i}", 0.7, weight=3) for i in range(1, 4)] + [own(f"ice_song{i}", 0.6) for i in range(1, 4)],
+    # Deep Gardens (0.20.9, Taran: "The Deep Gardens should be quiet"; card pick "Hushed, vents breathe up close"): a
+    # faint slow draft through the chimneys and a far vent sighing every half minute or so. A live vent's crown hisses and
+    # simmers, heard only within a few blocks (vent.simmer, VentCrownBlock). The drips and hot springs' bubbling of the
+    # old wet design are gone.
+    "ambient.gardens.loop": [own("gardens_hush", 1.0, stream=True)],
+    "ambient.gardens.additions": [own(f"vent_sigh{i}", 0.7) for i in range(1, 4)],
+    "vent.simmer": [own(f"vent_simmer{i}", 0.5, attenuation_distance=10) for i in range(1, 4)],
     # Blue Reaches: a distant roar of falling water.
     "ambient.blue.loop": [own("blue_roar", 0.7, stream=True)],
     "ambient.blue.additions": [own(f"echo_drip{i}", 0.45, pitch=0.7) for i in range(1, 5)],
-    # Basalt Galleries: rumbling and lava pops. 0.9.0: no rattle of stone any more (vanilla's basalt-deltas debris), now
-    # that rock really falls in the quakes: a rattle of stone means stone is coming down.
-    "ambient.basalt.loop": [own("basalt_rumble", 0.8, stream=True)],
-    "ambient.basalt.additions": [vanilla("liquid/lavapop", 0.7, 0.9, 3)]
-                                + [own(f"rumble{i}", 0.8) for i in range(1, 3)],
-    # Ash Hollows (0.5), the Wasteland's refuge: the same rock heard from far off, lower and much quieter, and now and
-    # then a distant rumble or a lava pop; no debris rattling down.
-    "ambient.hollows.loop": [own("basalt_rumble", 0.35, stream=True, pitch=0.8)],
+    # Basalt Galleries (0.20.9, Taran: "the Basalt Galleries should have a low rumble"): a low, steady rumble you can
+    # hear (the old basalt_rumble kept 99.9% of its level below 20 Hz, so the Galleries were silent) and lava pops. The
+    # rolls of rumbling are gone from here: with the lava's warnings (LavaWarnings) the only rumbles that roll, a roll
+    # always means the lava is coming. 0.9.0: no rattle of stone either (vanilla's basalt-deltas debris), since rock
+    # really falls in the quakes.
+    "ambient.basalt.loop": [own("deep_rumble", 0.45, stream=True)],
+    "ambient.basalt.additions": [vanilla("liquid/lavapop", 0.7, 0.9)],
+    # The Wasteland over them (no lava cycle there): the same rumble heard through the band, fainter, and now and then a
+    # heavier roll far off or a lava pop, as before 0.20.9.
+    "ambient.wasteland.loop": [own("deep_rumble", 0.28, stream=True)],
+    "ambient.wasteland.additions": [vanilla("liquid/lavapop", 0.7, 0.9, 3)] + [own(f"rumble{i}", 0.8) for i in range(1, 3)],
+    # The refuges, the Wasteland's Ash Hollows (0.5) and, since 0.20.9, the Galleries' Obsidian Tubes: the rock heard only
+    # from far off, quieter still, and now and then a distant rumble or a lava pop.
+    "ambient.hollows.loop": [own("deep_rumble", 0.2, stream=True)],
     "ambient.hollows.additions": [own(f"rumble{i}", 0.35, pitch=0.75) for i in range(1, 3)] + [vanilla("liquid/lavapop", 0.25, 0.8)],
 }
 
 SUBTITLES = {
-    "ambient.upper.loop": "Wind blows above", "ambient.upper.additions": "Birds sing above",
-    "ambient.gardens.loop": "Water drips", "ambient.gardens.additions": "A drip echoes",
-    "ambient.springs.loop": "Hot springs bubble", "ambient.blue.loop": "Water roars far below",
-    "ambient.blue.additions": "A drip echoes", "ambient.basalt.loop": "The rock rumbles",
-    "ambient.basalt.additions": "Lava pops",
+    "ambient.upper.crickets": "Crickets chirp", "ambient.upper.cricket": "A cricket chirps",
+    "ambient.upper.additions": "Water drips",
+    "ambient.frozen.loop": "A cold draft blows", "ambient.frozen.additions": "Ice settles",
+    "ambient.gardens.loop": "Air stirs", "ambient.gardens.additions": "A vent sighs far off", "vent.simmer": "A vent hisses",
+    "ambient.blue.loop": "Water roars far below", "ambient.blue.additions": "A drip echoes",
+    "ambient.basalt.loop": "The deep rock rumbles", "ambient.basalt.additions": "Lava pops",
+    "ambient.wasteland.loop": "The rock rumbles below", "ambient.wasteland.additions": "A distant rumble",
     "ambient.hollows.loop": "The rock rumbles far off", "ambient.hollows.additions": "A distant rumble",
 }
 

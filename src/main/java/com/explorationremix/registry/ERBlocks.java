@@ -21,6 +21,7 @@ import com.explorationremix.block.SubmergedPlantBlock;
 import com.explorationremix.block.TallCavePlantBlock;
 import com.explorationremix.block.TallNeonPlantBlock;
 import com.explorationremix.block.TubeWormsBlock;
+import com.explorationremix.block.VentCrownBlock;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -394,7 +395,7 @@ public final class ERBlocks {
     /** The giant mushrooms' cap, neon all over with darker specks. */
     public static final RegistryObject<Block> GLOW_CAP = block("glow_cap", () -> new NeonBlock(mushroomBlock().mapColor(ERBlocks::neonMap).lightLevel(s -> 13)));
     /** The bright mineral rim of a live vent's mouth: crystalline neon crust on blackstone, the brightest of the set. */
-    public static final RegistryObject<Block> VENT_CROWN = block("vent_crown", () -> new NeonBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 15)));
+    public static final RegistryObject<Block> VENT_CROWN = block("vent_crown", () -> new VentCrownBlock(onBlackstone().mapColor(ERBlocks::neonMap).lightLevel(s -> 15)));
     /**
      * Vent beads (the spire tip until round 3): rounded neon mineral knobs on blackstone, on every face (0.19.4's
      * knobs, back in round 4). They cap the small live spires, mix with the crown over a live vent's top and run down its

@@ -2,6 +2,7 @@ package com.explorationremix.registry;
 
 import com.explorationremix.ExplorationRemix;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -19,7 +20,9 @@ import java.util.Map;
  * the spire tip was renamed vent beads (its colour carries over: the blockstate keeps its neon property). In round 4
  * (0.19.9) den fissure, vent glow and throat vein left the game for vent beads, which take their places in the same
  * colour. The deep Frost Fern Grotto's glow ice (0.20.1) left in 0.20.7 (Taran: "Remove glow ice"): it turns into the
- * packed ice it was set in.
+ * packed ice it was set in. In 0.20.9, when each cave layer got its own ambience, the Upper Caves' old loop and the Deep
+ * Gardens' hot springs left with their sounds: a world keeps nothing of a sound, so every sound event of the mod's that a
+ * world remembers and the mod no longer has goes quietly, with no error in the log.
  */
 public final class ERRemaps {
     private ERRemaps() {}
@@ -58,5 +61,6 @@ public final class ERRemaps {
             if (ForgeRegistries.ITEMS.containsKey(id)) m.remap(ForgeRegistries.ITEMS.getValue(id));
             else m.ignore();
         }
+        for (MissingMappingsEvent.Mapping<SoundEvent> m : event.getMappings(ForgeRegistries.Keys.SOUND_EVENTS, ExplorationRemix.MOD_ID)) m.ignore();
     }
 }

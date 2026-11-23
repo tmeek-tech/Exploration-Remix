@@ -15,10 +15,9 @@
       "block_search_extent": 8,
       "offset": 2.0
     },
-    "ambient_sound": "explorationremix:ambient.upper.loop",
     "additions_sound": {
       "sound": "explorationremix:ambient.upper.additions",
-      "tick_chance": 0.008
+      "tick_chance": 0.0027
     }
   },
   "spawners": {
