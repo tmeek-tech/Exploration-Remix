@@ -21,10 +21,10 @@
       },
       "probability": 0.012
     },
-    "ambient_sound": "explorationremix:ambient.springs.loop",
+    "ambient_sound": "explorationremix:ambient.gardens.loop",
     "additions_sound": {
       "sound": "explorationremix:ambient.gardens.additions",
-      "tick_chance": 0.012
+      "tick_chance": 0.0015
     }
   },
   "spawners": {
