@@ -1192,12 +1192,15 @@ class GalleriesFieldTest {
      * halls' walls, doorways and domed vaults ({@link GalleriesLandscape#hall}), the walls giving way round the ways down
      * ({@link GalleriesField#give}), the Wasteland's evenly spread ways down (WastelandSheets.latticeHole) and its guard
      * filled 3 rows (WastelandField.GUARD_GAP), both twins of a tube line reading its runs on the line's own axis
-     * (TubeField.line), and a crater's broken rim staying down across a neck of rock between two holes
-     * (GalleriesField.CR_BN). A change to the Galleries' shapes shows here: pin again only on purpose.
+     * (TubeField.line), a crater's broken rim staying down across a neck of rock between two holes
+     * (GalleriesField.CR_BN), and the join's seal holding again from {@link Join#SEAL_GAP} inside a crater's dry ring
+     * (it was 92a8417241585f09; seed 12345's stayed: in seed 8675309's 1024 by 1024 box the seal now fills 44 open
+     * blocks of {@link Terrain#density} at the Wasteland's floor, rows W and W + 1 at rings 34 to 35, as it does everywhere
+     * else). A change to the Galleries' shapes shows here: pin again only on purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("92a8417241585f09", digest(8675309), "seed 8675309");
+        assertEquals("cbaa417241585f09", digest(8675309), "seed 8675309");
         assertEquals("2a337faf34895756", digest(12345), "seed 12345");
     }
 
