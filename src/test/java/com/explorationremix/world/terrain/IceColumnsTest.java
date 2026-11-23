@@ -15,9 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The Frost Fern Grotto's ice columns grown from noise (0.20.7, Taran: "Make ice columns procedurally generated instead
- * of structures"): over a cave of known shape, grown chunk by chunk as a world decorates them, writing each block as it
- * goes so later chunks read what earlier ones grew, the ice never floats, comes out block for block the same whichever
- * order the chunks come in, keeps out of a narrow tunnel, never stands in water, and grows both kinds of formation.
+ * of structures"): over a cave of known shape, grown chunk by chunk as a world decorates them (each chunk growing whole
+ * the formations of the cells that centre in it), writing each block as it goes so later chunks read what earlier ones
+ * grew, the ice never floats, comes out block for block the same whichever order the chunks come in, keeps out of a
+ * narrow tunnel, never stands in water, and grows both kinds of formation.
  */
 class IceColumnsTest {
     private static final byte ROCK = 0, AIR = 1, PACKED = 2, BLUE = 3, TIP = 4, WATER = 5;
@@ -106,14 +107,16 @@ class IceColumnsTest {
         IceColumns.Sink sink = new IceColumns.Sink() {
             @Override
             public void ice(int x, int y, int z, boolean blue) {
-                // each column is grown once, by its own chunk: what it fills is still the cave's air
-                assertEquals(AIR, v[idx(x - OX, y, z - OZ)], "ice only into open space");
+                // formations that overlap grow ice over each other's: only ever into the cave's open space
+                byte b = v[idx(x - OX, y, z - OZ)];
+                assertTrue(b == AIR || IceColumnsTest.ice(b), "ice only into open space");
                 v[idx(x - OX, y, z - OZ)] = blue ? BLUE : PACKED;
             }
 
             @Override
             public void icicle(int x, int y, int z, boolean down, int index, int length) {
-                assertEquals(AIR, v[idx(x - OX, y, z - OZ)], "an icicle only into air");
+                // as the feature does: an icicle only into air, never over another formation's ice
+                if (v[idx(x - OX, y, z - OZ)] != AIR) return;
                 v[idx(x - OX, y, z - OZ)] = TIP;
                 tips[0]++;
             }
@@ -183,12 +186,16 @@ class IceColumnsTest {
     }
 
     @Test
-    void noIceInTheNarrowTunnelOrStandingInWater() {
+    void theNarrowTunnelStaysWalkableAndNoIceStandsInWater() {
         byte[] v = grow(3, new int[1]);
-        // the tunnel's middle, past the reach of any formation whose middle is in the room
-        for (int x = 112; x < N; x++) for (int z = TUNNEL_Z - 1; z <= TUNNEL_Z + 1; z++)
-            for (int y = TUNNEL_FLOOR; y <= TUNNEL_TOP; y++)
-                assertEquals(AIR, v[idx(x, y, z)], "ice in the narrow tunnel at " + x + " " + y + " " + z);
+        // the tunnel's middle, past the reach of any formation whose middle is in the room: only hanging ice grows in so
+        // narrow a place, and it leaves two blocks clear over the floor
+        for (int x = 112; x < N; x++) for (int z = TUNNEL_Z - 1; z <= TUNNEL_Z + 1; z++) {
+            for (int y = TUNNEL_FLOOR; y <= TUNNEL_FLOOR + 1; y++)
+                assertEquals(AIR, v[idx(x, y, z)], "the narrow tunnel blocked at " + x + " " + y + " " + z);
+            for (int y = TUNNEL_FLOOR; y < TUNNEL_TOP; y++)
+                if (ice(v[idx(x, y, z)])) assertTrue(ice(v[idx(x, y + 1, z)]), "ice in the narrow tunnel not hanging at " + x + " " + y + " " + z);
+        }
         // standing ice grows from rock alone: none rests on water unless it is a whole column, held by the ceiling
         for (int x = 0; x < N; x++) for (int z = 0; z < N; z++) for (int y = 1; y < H - 1; y++) {
             if (!ice(v[idx(x, y, z)]) || v[idx(x, y - 1, z)] != WATER) continue;
@@ -204,10 +211,10 @@ class IceColumnsTest {
         List<IceColumns.Seed> sa = a.seeds(0, 0, 255, 255), sb = b.seeds(0, 0, 255, 255), sc = c.seeds(0, 0, 255, 255);
         assertEquals(sa.size(), sb.size());
         for (int i = 0; i < sa.size(); i++) {
-            assertEquals(sa.get(i).ax, sb.get(i).ax);
-            assertEquals(sa.get(i).az, sb.get(i).az);
+            assertArrayEquals(sa.get(i).ax, sb.get(i).ax);
+            assertArrayEquals(sa.get(i).az, sb.get(i).az);
         }
-        int[] axA = sa.stream().mapToInt(s -> s.ax * 4096 + s.az).toArray(), axC = sc.stream().mapToInt(s -> s.ax * 4096 + s.az).toArray();
+        int[] axA = sa.stream().mapToInt(s -> s.ax[0] * 4096 + s.az[0]).toArray(), axC = sc.stream().mapToInt(s -> s.ax[0] * 4096 + s.az[0]).toArray();
         assertTrue(!Arrays.equals(axA, axC), "another seed, other middles");
     }
 }

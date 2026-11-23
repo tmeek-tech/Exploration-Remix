@@ -10,9 +10,11 @@ import java.util.Map;
  * Until then each column was placed on its own: the same pinched hourglass stamped at spaced spots. Now the ice grows from
  * fields over world coordinates, as the caves themselves do, and the cave it grows in shapes it:
  * <ul>
- *     <li><b>Where.</b> A jittered grid keeps at most one formation's middle in each {@link #CELL}-block square, as often
- *     as a slow grove field and the grotto's iciness say ({@link #chance}): groves of formations in some caves and none
- *     in others, more and thicker the deeper the grotto lies (it grows icier with depth, {@link Palette#grottoIce}).</li>
+ *     <li><b>Where.</b> A jittered grid keeps at most one formation's middle in each {@link #CELL}-block square (the
+ *     first of a few spots in it with room for one, {@link #TRIES}), as often as a slow grove field and the grotto's
+ *     iciness say ({@link #chance}): groves of formations in some caves and few in others, so a big hall keeps long views
+ *     between its groves, and more and thicker the deeper the grotto lies (it grows icier with depth,
+ *     {@link Palette#grottoIce}).</li>
  *     <li><b>Footprint.</b> How far a column lies from a formation's middle is measured through a warped, lumpy field
  *     and stretched one way, so no two formations are round alike and two that stand close fuse into one mass.</li>
  *     <li><b>Profile.</b> In each column of open space a formation covers, its ice hangs from that column's ceiling and
@@ -21,10 +23,12 @@ import java.util.Map;
  *     the ceiling (a giant icicle) over a stump that never meets it. The lengths follow each column's own ceiling and
  *     floor, so the ice drapes over the cave's shape, and ice only ever hangs on from a ceiling or stands on from a
  *     floor: nothing floats.</li>
- *     <li><b>Agreement.</b> What a formation is depends on its middle's column alone: the room there (how tall it is, and
- *     how open at walking height, so that none stands in a tunnel and only hanging ice grows in narrow places), its
- *     biome and how icy it is. Every column a formation covers asks the same column, whichever chunk is decorated first:
- *     ice reads as open space ({@link World#open}), so a neighbour's finished formation reads as the room it grew in.</li>
+ *     <li><b>One chunk each.</b> What a formation is depends on its middle's column alone: the room there (how tall it
+ *     is, and how open at walking height, so that none stands in a tunnel and only hanging ice grows in narrow places),
+ *     its biome and how icy it is. The chunk its cell centres in decides it and grows it whole, into the chunks round it
+ *     too ({@link #chunk}), so no two chunks can judge it differently, even where something later turns rock to ice
+ *     (the grotto's ice crusts) between their turns. Ice reads as open space ({@link World#open}), so formations that
+ *     overlap add up to the same ice whichever grows first.</li>
  *     <li><b>Ice.</b> Packed ice, banded with uneven rings of blue ice that come wider the deeper ({@link #blue}), and
  *     an icicle at the point of each broken formation's spike and stump.</li>
  * </ul>
@@ -35,7 +39,7 @@ public final class IceColumns {
     public interface World {
         /**
          * Open to the ice: air, ice (packed or blue, so a formation already grown reads as the room it stands in), an
-         * icicle, a snow layer, a plant; not water, nor rock.
+         * icicle, a snow layer, a plant, a half slab; not water, nor rock.
          */
         boolean open(int x, int y, int z);
 
@@ -65,12 +69,22 @@ public final class IceColumns {
         /** Ice at a block: blue ice, or packed ice. */
         void ice(int x, int y, int z, boolean blue);
 
-        /** An icicle block at a block, pointing down (hanging) or up (standing), {@code index} blocks from its base, of {@code length}. */
+        /**
+         * An icicle block at a block, pointing down (hanging) or up (standing), {@code index} blocks from its base, of
+         * {@code length}: only into air, never over ice (another formation's), which keeps overlapping formations alike
+         * whichever grows first (ice in turn grows over an icicle).
+         */
         void icicle(int x, int y, int z, boolean down, int index, int length);
     }
 
     /** At most one formation's middle in each square this many blocks across. */
     static final int CELL = 7;
+    /**
+     * How many spots of a cell are tried for its middle, in turn: the first whose column has room for a formation is it.
+     * In a wide hall the first spot nearly always has room, so the halls keep the density the chance gives; the grotto's
+     * smaller, twisting caves catch a formation where one of the spots finds room.
+     */
+    static final int TRIES = 6;
     /** A formation's radius before the depth and the room scale it: {@link #R_LO} plus up to {@link #R_SPAN}, small ones commonest. */
     static final double R_LO = 1.6, R_SPAN = 3.0, R_POW = 1.6;
     /** How far the warp moves a column, over what distance it turns, and how much the lumps add or take off a radius. */
@@ -80,17 +94,20 @@ public final class IceColumns {
     /** No block of a formation lies further than this across the ground from its middle. */
     static final int REACH = 10;
     /** The grove field's scale, and a cell's chance of a formation in a grove's heart and away from any grove, deep down. */
-    static final double GROVE_SCALE = 72, P_GROVE = 0.32, P_OUT = 0.03;
+    static final double GROVE_SCALE = 72, P_GROVE = 0.7, P_OUT = 0.1;
     /** Share of the chance left at the grotto's top (iciness 0): the rest comes with depth. */
-    static final double P_TOP = 0.3;
+    static final double P_TOP = 0.5;
     /** Rooms lower than this get no formation; joined ones only up to {@link #JOIN_MAX} tall, broken ones from {@link #BROKEN_MIN}. */
-    static final int MIN_ROOM = 5, JOIN_MAX = 26, BROKEN_MIN = 8;
+    static final int MIN_ROOM = 5, JOIN_MAX = 26, BROKEN_MIN = 7;
     /** A joined column is at least this many times less wide (its radius) than its room is tall. */
     static final double SLENDER = 8;
     /** A broken formation's base radius, at least (before narrow places take a quarter off). */
     static final double BROKEN_R = 2.2;
-    /** How many of the eight ways out of a formation's middle must be open at walking height: for all of it, for hanging ice only. */
-    static final int OPEN_ALL = 5, OPEN_HANG = 3;
+    /**
+     * How many of the eight ways out of a formation's middle must be open at walking height: for all of it, and for
+     * hanging ice only (a tunnel's two ways: a spike keeps the headroom under it, {@link #decide}).
+     */
+    static final int OPEN_ALL = 4, OPEN_HANG = 2;
 
     private final long seed;
     private final Perlin groveN, warpX, warpZ, lumpN, dripN, bandN, bandM;
@@ -109,32 +126,51 @@ public final class IceColumns {
 
     public long seed() { return seed; }
 
-    /** Grows the ice of the 16 by 16 columns from (x0, z0): one chunk. */
+    /**
+     * Grows the formations of the cells that centre in the 16 by 16 columns from (x0, z0), one chunk: each whole, its
+     * ice up to {@link #REACH} blocks from its middle, which lies at most {@code CELL / 2} from its cell's centre, so up
+     * to 13 blocks into the chunks round this one.
+     */
     public void chunk(int x0, int z0, World w, Sink out) {
-        List<Seed> seeds = seeds(x0, z0, x0 + 15, z0 + 15);
-        if (seeds.isEmpty()) return;
         Cache cache = new Cache();
-        for (int x = x0; x < x0 + 16; x++) for (int z = z0; z < z0 + 16; z++) column(x, z, seeds, w, out, cache);
+        for (Seed s : owned(x0, z0)) {
+            int t = spot(s, w, cache);
+            if (t >= 0) grow(s, t, w, out, cache);
+        }
+    }
+
+    /** The cells (with a draw) whose centres lie in the 16 by 16 columns from (x0, z0). */
+    List<Seed> owned(int x0, int z0) {
+        List<Seed> out = new ArrayList<>();
+        int i0 = Math.floorDiv(x0 - CELL / 2 + CELL - 1, CELL), i1 = Math.floorDiv(x0 + 15 - CELL / 2, CELL);
+        int j0 = Math.floorDiv(z0 - CELL / 2 + CELL - 1, CELL), j1 = Math.floorDiv(z0 + 15 - CELL / 2, CELL);
+        for (int i = i0; i <= i1; i++) for (int j = j0; j <= j1; j++) {
+            Seed s = seed(i, j);
+            if (s != null) out.add(s);
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------------------------------------ the middles
 
-    /** A cell's formation middle and its draws (none of which depend on the room). */
+    /** A cell: the spots tried for its formation's middle, and its draws (none of which depend on the room). */
     public static final class Seed {
-        final int ax, az;
-        /** The draw that decides whether the formation is there ({@link #chance}); the grove field at its middle. */
+        /** The cell, and its key in the caches. */
+        final int i, j;
+        final long key;
+        /** The spots tried for the middle, in turn, and their warped positions. */
+        final int[] ax = new int[TRIES], az = new int[TRIES];
+        final double[] wx = new double[TRIES], wz = new double[TRIES];
+        /** The draw that decides whether the formation is there ({@link #chance}); the grove field at the cell. */
         final double roll, grove;
         final double r0, cos, sin, stretch;
         final double joinRoll, waist, split, drip, mound, hang, stand, stumpRoll;
-        /** The warped position of the middle. */
-        final double wx, wz;
 
-        Seed(int ax, int az, long h, double grove, double wx, double wz) {
-            this.ax = ax;
-            this.az = az;
+        Seed(int i, int j, long h, double grove) {
+            this.i = i;
+            this.j = j;
+            this.key = ((long) i << 32) ^ (j & 0xFFFFFFFFL);
             this.grove = grove;
-            this.wx = wx;
-            this.wz = wz;
             roll = Hashing.unit(Hashing.mix(h, 2, 0, 0));
             r0 = R_LO + R_SPAN * Math.pow(Hashing.unit(Hashing.mix(h, 3, 0, 0)), R_POW);
             double a = 2 * Math.PI * Hashing.unit(Hashing.mix(h, 4, 0, 0));
@@ -153,15 +189,21 @@ public final class IceColumns {
         }
     }
 
-    /** The cell's middle, or null where no depth would ever keep a formation there. */
+    /** The cell's spots and draws, or null where no depth would ever keep a formation there. */
     Seed seed(int i, int j) {
         long h = Hashing.mix(seed ^ 0x1CEC01L, i, j, 0);
-        int ax = i * CELL + 1 + (int) (Hashing.unit(Hashing.mix(h, 0, 0, 0)) * (CELL - 2));
-        int az = j * CELL + 1 + (int) (Hashing.unit(Hashing.mix(h, 1, 0, 0)) * (CELL - 2));
-        double g = grove(ax, az);
+        double g = grove(i * CELL + CELL / 2, j * CELL + CELL / 2);
         if (Hashing.unit(Hashing.mix(h, 2, 0, 0)) >= chance(g, 1)) return null;
-        return new Seed(ax, az, h, g, ax + 0.5 + WARP * warpX.noise2(ax / WARP_SCALE, az / WARP_SCALE),
-                az + 0.5 + WARP * warpZ.noise2(ax / WARP_SCALE, az / WARP_SCALE));
+        Seed s = new Seed(i, j, h, g);
+        for (int t = 0; t < TRIES; t++) {
+            int ax = i * CELL + 1 + (int) (Hashing.unit(Hashing.mix(h, 20 + t, 0, 0)) * (CELL - 2));
+            int az = j * CELL + 1 + (int) (Hashing.unit(Hashing.mix(h, 30 + t, 0, 0)) * (CELL - 2));
+            s.ax[t] = ax;
+            s.az[t] = az;
+            s.wx[t] = ax + 0.5 + WARP * warpX.noise2(ax / WARP_SCALE, az / WARP_SCALE);
+            s.wz[t] = az + 0.5 + WARP * warpZ.noise2(ax / WARP_SCALE, az / WARP_SCALE);
+        }
+        return s;
     }
 
     /** The grove field at a column: 1 in a grove's heart, 0 away from any. */
@@ -192,8 +234,8 @@ public final class IceColumns {
 
     /** What a formation is in one room: decided at its middle's column alone. */
     static final class Form {
-        /** The room at the middle: its lowest and highest open block. */
-        final int floor, ceil;
+        /** Its middle (which of the cell's spots), and the room there: its lowest and highest open block. */
+        final int spot, floor, ceil;
         final double r;
         final boolean joined;
         /** Joined: the core's share of the radius, filled floor to ceiling. */
@@ -203,7 +245,8 @@ public final class IceColumns {
         /** The profile's exponents: the hanging ice's and the standing ice's (a lower one swells, a higher one tapers). */
         final double drip, mound;
 
-        Form(int floor, int ceil, double r, boolean joined, double waist, double lc, double lf, double drip, double mound) {
+        Form(int spot, int floor, int ceil, double r, boolean joined, double waist, double lc, double lf, double drip, double mound) {
+            this.spot = spot;
             this.floor = floor;
             this.ceil = ceil;
             this.r = r;
@@ -220,16 +263,19 @@ public final class IceColumns {
     public static final class Cache {
         final Map<Long, int[]> runs = new HashMap<>();
         final Map<Long, Form> forms = new HashMap<>();
+        final Map<Long, Integer> spots = new HashMap<>();
     }
 
-    private static final Form NONE = new Form(0, 0, 0, false, 0, 0, 0, 1, 1);
+    private static final Form NONE = new Form(-1, 0, 0, 0, false, 0, 0, 0, 1, 1);
 
     /**
      * The formation of a seed in the room of its middle's column that shares most of {@code lo..hi} (a column's open
      * run), or null where it has none there.
      */
     Form form(Seed s, int lo, int hi, World w, Cache cache) {
-        int[] runs = runs(s.ax, s.az, w, cache);
+        int t = spot(s, w, cache);
+        if (t < 0) return null;
+        int[] runs = runs(s.ax[t], s.az[t], w, cache);
         int best = -1, overlap = 0;
         for (int k = 0; k < runs.length; k += 2) {
             int o = Math.min(hi, runs[k + 1]) - Math.max(lo, runs[k]) + 1;
@@ -239,14 +285,35 @@ public final class IceColumns {
             }
         }
         if (best < 0) return null;
-        int a = runs[best], b = runs[best + 1];
-        long key = (((long) s.ax * 31 + s.az) * 31 + a) * 1_000_003L + b;
+        return formAt(s, t, runs[best], runs[best + 1], w, cache);
+    }
+
+    /** The formation with its middle at spot t in the room a..b there, or null; decided once a pass. */
+    private Form formAt(Seed s, int t, int a, int b, World w, Cache cache) {
+        long key = (((s.key * 31 + t) * 31 + a) * 1_000_003L) + b;
         Form f = cache.forms.get(key);
         if (f == null) {
-            f = decide(s, a, b, w);
+            f = decide(s, t, a, b, w);
             cache.forms.put(key, f == null ? NONE : f);
         }
         return f == NONE ? null : f;
+    }
+
+    /**
+     * Which of a cell's spots is its formations' middle: the first whose column has room for a formation in any of its
+     * rooms, or -1 for none.
+     */
+    int spot(Seed s, World w, Cache cache) {
+        Integer known = cache.spots.get(s.key);
+        if (known != null) return known;
+        int pick = -1;
+        for (int t = 0; t < TRIES && pick < 0; t++) {
+            int[] runs = runs(s.ax[t], s.az[t], w, cache);
+            for (int k = 0; k < runs.length && pick < 0; k += 2)
+                if (formAt(s, t, runs[k], runs[k + 1], w, cache) != null) pick = t;
+        }
+        cache.spots.put(s.key, pick);
+        return pick;
     }
 
     /**
@@ -278,26 +345,27 @@ public final class IceColumns {
         return r;
     }
 
-    /** What a seed's formation is in the room a..b of its middle's column, or null for none. */
-    Form decide(Seed s, int a, int b, World w) {
+    /** What a seed's formation is with its middle at spot t, in the room a..b there, or null for none. */
+    Form decide(Seed s, int t, int a, int b, World w) {
         int room = b - a + 1;
         if (room < MIN_ROOM) return null;
+        int ax = s.ax[t], az = s.az[t];
         // its biome and how icy, judged near the floor (which no later crust shifts)
         int yRef = Math.min(b, a + 2);
-        if (!w.grotto(s.ax, yRef, s.az)) return null;
-        double ice = w.iciness(s.ax, yRef, s.az);
+        if (!w.grotto(ax, yRef, az)) return null;
+        double ice = w.iciness(ax, yRef, az);
         if (s.roll >= chance(s.grove, ice)) return null;
         double r = s.r0 * (0.8 + 0.3 * ice);
         r = Math.min(r, 0.8 + 0.2 * room);
-        if (w.way(s.ax, s.az, a, b, r + 1)) return null;
-        int open = openWays(s.ax, a, s.az, (int) Math.ceil(r + 2.5), w);
+        if (w.way(ax, az, a, b, r + 1)) return null;
+        int open = openWays(ax, a, az, (int) Math.ceil(r + 1.5), w);
         if (open < OPEN_HANG) return null;
         boolean wide = open >= OPEN_ALL;
-        boolean stands = wide && w.standable(s.ax, a - 1, s.az);
+        boolean stands = wide && w.standable(ax, a - 1, az);
         // joined only where the column would not be a pole: at least a quarter as thick as the room is tall
-        if (stands && room <= JOIN_MAX && r >= room / SLENDER && s.joinRoll < 0.35 + 0.25 * ice) {
+        if (stands && room <= JOIN_MAX && r >= room / SLENDER && s.joinRoll < 0.55 + 0.3 * ice) {
             double waist = Math.min(0.75, Math.max(s.waist, 0.85 / r));
-            return new Form(a, b, r, true, waist, s.split * room, (1 - s.split) * room, s.drip, s.mound);
+            return new Form(t, a, b, r, true, waist, s.split * room, (1 - s.split) * room, s.drip, s.mound);
         }
         if (room < BROKEN_MIN) return null;
         // a spike as thin as a pole reads as one: broken ones are at least BROKEN_R across their base
@@ -315,7 +383,7 @@ public final class IceColumns {
         if (lc < 2) return null;
         // a broken spike tapers steadily like a carrot to the icicle at its point, never a needle under a plate
         double cone = 0.62 + 0.25 * (s.drip - 0.9) / 0.6;
-        return new Form(a, b, r, false, 0, lc, lf, cone, s.mound);
+        return new Form(t, a, b, r, false, 0, lc, lf, cone, s.mound);
     }
 
     private static final int[][] WAYS = {{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
@@ -337,83 +405,56 @@ public final class IceColumns {
 
     // ------------------------------------------------------------------------------------------------ a column
 
-    /** How far a column lies from a seed's middle through the warped, lumpy field, before the radius divides it. */
-    static double distance(Seed s, double wx, double wz) {
-        double dx = wx - s.wx, dz = wz - s.wz;
+    /** How far a column lies from a seed's middle (spot t) through the warped, lumpy field, before the radius divides it. */
+    static double distance(Seed s, int t, double wx, double wz) {
+        double dx = wx - s.wx[t], dz = wz - s.wz[t];
         double a = dx * s.cos + dz * s.sin, b = -dx * s.sin + dz * s.cos;
         return Math.sqrt(a * a / (s.stretch * s.stretch) + b * b);
     }
 
     /**
-     * Grows the ice of column (x, z) between lo and hi: in each room of open space, every formation near enough that its
-     * middle's room shares it adds ice hanging from the room's ceiling and standing on its floor; where they meet, or a
-     * joined formation's core covers the column, the ice fills the room.
+     * Grows a cell's formations, with their middle at spot t (one in each room of that column with one), over every
+     * column they cover: in each room there that the middle's room shares, the ice hangs from the room's ceiling and
+     * stands on its floor as far as the profile says at the column's distance from the middle; where the two meet, or in
+     * a joined formation's core, it fills the room.
      */
-    public void column(int x, int z, List<Seed> seeds, World w, Sink out, Cache cache) {
-        double wx = x + 0.5 + WARP * warpX.noise2(x / WARP_SCALE, z / WARP_SCALE);
-        double wz = z + 0.5 + WARP * warpZ.noise2(x / WARP_SCALE, z / WARP_SCALE);
-        double lump = 1 + LUMP * 1.38 * lumpN.noise2(x / LUMP_SCALE, z / LUMP_SCALE);
-        // the seeds whose largest formation could reach this column
-        List<Seed> near = null;
-        List<Double> dist = null;
-        for (Seed s : seeds) {
-            if (Math.abs(s.ax - x) > REACH || Math.abs(s.az - z) > REACH) continue;
-            double d = distance(s, wx, wz);
-            // the widest its formation can be: a joined one at its iciest, or a broken one's base
-            if (d >= Math.max(s.r0 * 1.1, BROKEN_R) * lump) continue;
-            if (near == null) {
-                near = new ArrayList<>();
-                dist = new ArrayList<>();
-            }
-            near.add(s);
-            dist.add(d);
-        }
-        if (near == null) return;
-        int[] runs = runs(x, z, w, cache);
-        // drips: the flares' and points' lengths wander a little from column to column
-        double drip = 1 + 0.16 * 1.38 * dripN.noise2(x / 1.7, z / 1.7);
-        for (int k = 0; k < runs.length; k += 2) {
-            int a = runs[k], b = runs[k + 1], room = b - a + 1;
-            if (room < 3) continue;
-            double hang = 0, stand = 0;
-            boolean fill = false;
-            Seed tipSeed = null;
-            Form tipForm = null;
-            for (int i = 0; i < near.size() && !fill; i++) {
-                Seed s = near.get(i);
+    void grow(Seed s, int t, World w, Sink out, Cache cache) {
+        int mx = s.ax[t], mz = s.az[t];
+        // the widest the formation can be: a joined one at its iciest, or a broken one's base
+        double widest = Math.max(s.r0 * 1.1, BROKEN_R);
+        for (int x = mx - REACH; x <= mx + REACH; x++) for (int z = mz - REACH; z <= mz + REACH; z++) {
+            double wx = x + 0.5 + WARP * warpX.noise2(x / WARP_SCALE, z / WARP_SCALE);
+            double wz = z + 0.5 + WARP * warpZ.noise2(x / WARP_SCALE, z / WARP_SCALE);
+            double lump = 1 + LUMP * 1.38 * lumpN.noise2(x / LUMP_SCALE, z / LUMP_SCALE);
+            double d = distance(s, t, wx, wz);
+            if (d >= widest * lump) continue;
+            int[] runs = runs(x, z, w, cache);
+            // drips: the flares' and points' lengths wander a little from column to column
+            double drip = 1 + 0.16 * 1.38 * dripN.noise2(x / 1.7, z / 1.7);
+            for (int k = 0; k < runs.length; k += 2) {
+                int a = runs[k], b = runs[k + 1], room = b - a + 1;
+                if (room < 3) continue;
                 Form f = form(s, a, b, w, cache);
                 if (f == null) continue;
-                double u = dist.get(i) / (f.r * lump);
+                double u = d / (f.r * lump);
                 if (u >= 1) continue;
                 // how far out of the middle's run (0 at the core's edge or the middle, 1 at the footprint's edge)
-                double v;
-                if (f.joined) {
-                    if (u < f.waist) {
-                        fill = true;
-                        break;
-                    }
-                    v = (u - f.waist) / (1 - f.waist);
-                } else {
-                    v = u;
+                boolean fill = f.joined && u < f.waist;
+                double v = f.joined ? (u - f.waist) / (1 - f.waist) : u;
+                double hang = fill ? 0 : f.lc * (1 - Math.pow(v, 1 / f.drip)) * drip;
+                double stand = fill ? 0 : f.lf * (1 - Math.pow(v, 1 / f.mound)) * (0.5 + 0.5 * drip);
+                if (!w.standable(x, a - 1, z)) stand = 0;
+                int nh = (int) Math.floor(hang + 0.5), ns = (int) Math.floor(stand + 0.5);
+                if (fill || nh + ns >= room) {
+                    nh = room;
+                    ns = 0;
                 }
-                hang = Math.max(hang, f.lc * (1 - Math.pow(v, 1 / f.drip)) * drip);
-                stand = Math.max(stand, f.lf * (1 - Math.pow(v, 1 / f.mound)) * (0.5 + 0.5 * drip));
-                if (!f.joined && x == s.ax && z == s.az) {
-                    tipSeed = s;
-                    tipForm = f;
-                }
+                if (nh == 0 && ns == 0) continue;
+                double ice = w.iciness(x, (a + b) >> 1, z);
+                for (int y = b; y > b - nh; y--) out.ice(x, y, z, blue(x, y, z, ice));
+                for (int y = a; y < a + ns; y++) out.ice(x, y, z, blue(x, y, z, ice));
+                if (!f.joined && x == mx && z == mz && nh < room) tips(x, z, a, b, nh, ns, out);
             }
-            if (!w.standable(x, a - 1, z)) stand = 0;
-            int nh = (int) Math.floor(hang + 0.5), ns = (int) Math.floor(stand + 0.5);
-            if (fill || nh + ns >= room) {
-                nh = room;
-                ns = 0;
-            }
-            if (nh == 0 && ns == 0) continue;
-            double ice = w.iciness(x, (a + b) >> 1, z);
-            for (int y = b; y > b - nh; y--) out.ice(x, y, z, blue(x, y, z, ice));
-            for (int y = a; y < a + ns; y++) out.ice(x, y, z, blue(x, y, z, ice));
-            if (tipSeed != null && nh < room) tips(x, z, a, b, nh, ns, out);
         }
     }
 

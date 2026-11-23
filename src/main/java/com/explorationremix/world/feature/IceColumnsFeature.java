@@ -15,8 +15,10 @@ import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.PointedDripstoneBlock;
+import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
@@ -24,11 +26,11 @@ import net.minecraftforge.registries.ForgeRegistries;
 
 /**
  * The Frost Fern Grotto's ice columns (0.20.7, Taran: "Make ice columns procedurally generated instead of structures"),
- * grown over each chunk's own columns from {@link IceColumns}' fields, in place of 0.14.0's columns placed one by one
- * (the pillar feature) and the grotto's giant icicles: joined columns, broken spikes over stumps, and the fused masses
- * where they crowd, in groves that come thicker the deeper the grotto lies. It runs once per chunk with the grotto in it,
- * first of the grotto's features, so it reads the caves as the terrain left them; what it reads of other chunks (a
- * formation's middle may lie in one) it reads the same whichever chunk comes first ({@link IceColumns.World#open}).
+ * grown from {@link IceColumns}' fields in place of 0.14.0's columns placed one by one (the pillar feature) and the
+ * grotto's giant icicles: joined columns, broken spikes over stumps, and the fused masses where they crowd, in groves
+ * that come thicker the deeper the grotto lies. It runs once per chunk with the grotto in it, first of the grotto's
+ * features, and grows whole the formations whose cells centre in the chunk, up to 13 blocks into the chunks round it
+ * (a feature may change the chunks next to its own), so one chunk alone decides each formation.
  */
 public final class IceColumnsFeature extends Feature<NoneFeatureConfiguration> {
     /** Rooms are read from this far over the caves' old floor up to this far under the lowest ground round the column. */
@@ -117,8 +119,9 @@ public final class IceColumnsFeature extends Feature<NoneFeatureConfiguration> {
 
             @Override
             public void icicle(int x, int y, int z, boolean down, int index, int length) {
-                // Immersive Weathering's icicles melt by day outside its icy biomes: only in the grotto
-                if (icicleState == null || !level.getBiome(pos.set(x, y, z)).is(DeepBiomes.FROST_FERN_GROTTO)) return;
+                // Immersive Weathering's icicles melt by day outside its icy biomes: only in the grotto, and only into air
+                if (icicleState == null || !level.getBlockState(pos.set(x, y, z)).isAir()) return;
+                if (!level.getBiome(pos).is(DeepBiomes.FROST_FERN_GROTTO)) return;
                 level.setBlock(pos.set(x, y, z), icicleState.setValue(PointedDripstoneBlock.TIP_DIRECTION, down ? Direction.DOWN : Direction.UP)
                         .setValue(PointedDripstoneBlock.THICKNESS, PointedPatchFeature.thickness(index, length)), 2);
             }
@@ -128,12 +131,14 @@ public final class IceColumnsFeature extends Feature<NoneFeatureConfiguration> {
     }
 
     /**
-     * Open to the ice: air, ice (packed or blue: a formation already grown reads as the room it grew in), an icicle, and
-     * whatever a body walks through or a block replaces (snow layers, plants, moss carpets, frost); not water or the ice
-     * of a frozen pool, nor rock.
+     * Open to the ice: air, ice (packed or blue: a formation already grown reads as the room it grew in), an icicle, a
+     * half slab, and whatever a body walks through or a block replaces (snow layers, plants, moss carpets, frost); not
+     * water or the ice of a frozen pool, nor rock.
      */
     static boolean open(BlockState s, Block icicle) {
         if (s.isAir() || s.is(Blocks.PACKED_ICE) || s.is(Blocks.BLUE_ICE) || icicle != null && s.is(icicle)) return true;
+        // a half slab: Terrain Slabs lays them in the air of a floor's or a ceiling's steps after this has run in its chunk
+        if (s.getBlock() instanceof SlabBlock && s.getValue(SlabBlock.TYPE) != SlabType.DOUBLE) return true;
         if (!s.getFluidState().isEmpty() || s.is(Blocks.ICE)) return false;
         return s.canBeReplaced() || !s.blocksMotion();
     }
