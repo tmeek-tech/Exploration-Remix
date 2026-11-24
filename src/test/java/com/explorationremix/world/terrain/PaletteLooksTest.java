@@ -27,7 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The looks of the two bottom layers (Palette.shell): natural stone only, and no made block anywhere in them (palette,
- * features); no stripe at the high-water mark, and a tide that only darkens a column, once; every face of a column its
+ * features); the Galleries basalt and smooth basalt, scorchia sparingly, never blackstone, scoria or ember crust (0.20.4);
+ * no stripe at the high-water mark, and a tide that only darkens a column, once; every face of a column its
  * column's stone, top to underside; the Wasteland's and the Galleries' looks blended over ragged rows at the join; in the
  * Galleries magma only on rock the lava touches, checked on the blocks the real fields build; the Caldera's cinders on its
  * cones, not on the walls and vault over them; crying obsidian sparingly;
@@ -173,13 +174,23 @@ class PaletteLooksTest {
 
     private static int nz(Rock q) { return q == null ? 0 : q.name().hashCode(); }
 
+    /** The Wasteland's stones (and the Galleries' top rows', which may take its look at the join). */
+    private static final Set<Rock> WASTELAND_STONE = EnumSet.of(Rock.BASALT, Rock.SMOOTH_BASALT, Rock.BLACKSTONE,
+            Rock.GILDED_BLACKSTONE, Rock.MAGMA, Rock.OBSIDIAN, Rock.CRYING_OBSIDIAN, Rock.TUFF, Rock.CALCITE, Rock.DRIPSTONE,
+            Rock.SCORIA, Rock.SCORCHIA, Rock.DEEPSLATE_GOLD_ORE);
+    /**
+     * The Galleries' stones under the join's blend (Taran, 2026-11-23: "Blackstone could be replaced with smooth basalt.
+     * Don't use scoria but scorchia could be used sparingly. Remove ember crust."): no blackstone, gilded blackstone,
+     * scoria or ember crust.
+     */
+    private static final Set<Rock> GALLERIES_STONE = EnumSet.of(Rock.BASALT, Rock.SMOOTH_BASALT, Rock.MAGMA, Rock.OBSIDIAN,
+            Rock.CRYING_OBSIDIAN, Rock.TUFF, Rock.SCORCHIA, Rock.DEEPSLATE_GOLD_ORE);
+
     @Test
     void naturalStoneOnly() {
-        Set<Rock> allowed = EnumSet.of(Rock.BASALT, Rock.SMOOTH_BASALT, Rock.BLACKSTONE, Rock.GILDED_BLACKSTONE, Rock.MAGMA,
-                Rock.OBSIDIAN, Rock.CRYING_OBSIDIAN, Rock.TUFF, Rock.CALCITE, Rock.DRIPSTONE, Rock.SCORIA, Rock.SCORCHIA,
-                Rock.EMBER_CRUST, Rock.DEEPSLATE_GOLD_ORE);
         Terrain t = terrain();
         Shape s = t.shape;
+        int blend = s.top(Terrain.GALLERIES) - Palette.JOIN_BLEND;   // over it a Galleries block may take the Wasteland's look
         Random r = new Random(5);
         // no look queries, stand-ins that put columns, tubes and cones everywhere, and the noise fields' own (t.palette)
         for (Palette p : new Palette[]{new Palette(t, SEED, LookQueries.NONE), new Palette(t, SEED, new Stand()), t.palette}) {
@@ -193,9 +204,51 @@ class PaletteLooksTest {
                 int[] at = spread.next();
                 int x = at[0], z = at[1], y = s.bottom(li) + r.nextInt(s.height(li));
                 Rock q = p.shell(b, li, x, y, z, 1 + r.nextInt(8), 1 + r.nextInt(8), r.nextInt(4) == 0);
+                Set<Rock> allowed = gal && y <= blend ? GALLERIES_STONE : WASTELAND_STONE;
                 assertTrue(allowed.contains(q), q + " in " + b + " at " + x + " " + y + " " + z);
+                Rock i = p.interior(li, x, y, z);
+                assertTrue(allowed.contains(i), i + " deep in " + b + " at " + x + " " + y + " " + z);
             }
         }
+    }
+
+    @Test
+    void scorchiaSparingly() {
+        // Taran, 2026-11-23: "Don't use scoria but scorchia could be used sparingly." On the real fields' looks, over the
+        // Galleries under the join's blend: a column in forty in the halls and the Causeway, the Basalt Rifts' thin flow
+        // tops, the Caldera's cinder cones (its one big show), none in the Obsidian Tubes; and no blackstone, scoria or
+        // ember crust anywhere.
+        Terrain t = terrain();
+        Shape s = t.shape;
+        int lo = s.bottom(Terrain.GALLERIES), hi = s.top(Terrain.GALLERIES) - Palette.JOIN_BLEND;
+        Random r = new Random(23);
+        Map<DeepBiome, int[]> count = new EnumMap<>(DeepBiome.class);
+        Spread spread = new Spread(r, 4000, 512, 5000);
+        for (int k = 0; k < 300000; k++) {
+            DeepBiome b = GALLERIES[r.nextInt(GALLERIES.length)];
+            int[] at = spread.next();
+            int x = at[0], z = at[1], y = lo + r.nextInt(hi - lo + 1);
+            Rock q = t.palette.shell(b, Terrain.GALLERIES, x, y, z, 1 + r.nextInt(12), 1 + r.nextInt(12), r.nextInt(4) == 0);
+            assertTrue(GALLERIES_STONE.contains(q), q + " in " + b + " at " + x + " " + y + " " + z);
+            int[] c = count.computeIfAbsent(b, key -> new int[2]);
+            c[0]++;
+            if (q == Rock.SCORCHIA) c[1]++;
+        }
+        double[] most = new double[DeepBiome.values().length];
+        most[DeepBiome.BASALT_GALLERIES.ordinal()] = 0.04;
+        most[DeepBiome.CAUSEWAY.ordinal()] = 0.05;
+        most[DeepBiome.SCORIA_CANYONS.ordinal()] = 0.14;
+        most[DeepBiome.CALDERA.ordinal()] = 0.12;
+        most[DeepBiome.OBSIDIAN_TUBES.ordinal()] = 0;
+        StringBuilder shares = new StringBuilder();
+        for (Map.Entry<DeepBiome, int[]> e : count.entrySet())
+            shares.append(String.format(" %s %.4f", e.getKey(), e.getValue()[1] / (double) e.getValue()[0]));
+        for (Map.Entry<DeepBiome, int[]> e : count.entrySet()) {
+            double share = e.getValue()[1] / (double) e.getValue()[0];
+            assertTrue(share <= most[e.getKey().ordinal()] + 1e-9, "scorchia in " + e.getKey() + ":" + shares);
+        }
+        double halls = count.get(DeepBiome.BASALT_GALLERIES)[1] / (double) count.get(DeepBiome.BASALT_GALLERIES)[0];
+        assertTrue(halls > 0.003, "a scorchia column now and then in the halls:" + shares);
     }
 
     @Test
@@ -210,7 +263,7 @@ class PaletteLooksTest {
             for (int k = 0; k < n; k++) {
                 Rock q = p.shell(DeepBiome.BASALT_GALLERIES, Terrain.GALLERIES, k * 7 - 70000, y, (k * 13) % 4001 - 2000, 12, 12, false);
                 if (q == Rock.MAGMA) magma++;
-                if (q == Rock.BLACKSTONE) black++;
+                if (q == Rock.SMOOTH_BASALT) black++;   // 0.20.4: the tide turns columns smooth basalt, not blackstone
             }
             assertTrue(magma <= n / 100, "magma on " + magma + " of " + n + " walls at W+" + (y - W));
             dark[i] = black / (double) n;
@@ -221,17 +274,20 @@ class PaletteLooksTest {
             assertTrue(Math.abs(dark[i + 1] - dark[i]) < 0.5 * fall, "a step of " + (dark[i] - dark[i + 1]) + " of " + fall + " at W+" + (high - 12 + i - W));
     }
 
-    /** 0 basalt or smooth basalt (grey), 1 blackstone or gilded blackstone (dark), -1 a speck of anything else. */
+    /**
+     * 0 basalt (grey), 1 smooth basalt (dark: since 0.20.4 the Galleries' dark stone, which the tide turns columns to,
+     * as it turned them blackstone before), -1 a speck of anything else.
+     */
     private static int shade(Rock q) {
-        if (q == Rock.BASALT || q == Rock.SMOOTH_BASALT) return 0;
-        if (q == Rock.BLACKSTONE || q == Rock.GILDED_BLACKSTONE) return 1;
+        if (q == Rock.BASALT) return 0;
+        if (q == Rock.SMOOTH_BASALT) return 1;
         return -1;
     }
 
     @Test
     void theTideOnlyDarkensWholeColumns() {
         // The flood scorches what it covers, but the columns still read one by one (picture 1): under the mark a column
-        // keeps its stone or turns blackstone, once, at its own height, and never turns from dark to grey.
+        // keeps its stone or turns smooth basalt, once, at its own height, and never turns from dark to grey.
         Terrain t = terrain();
         Stand looks = new Stand();
         Palette p = new Palette(t, SEED, looks);
@@ -271,8 +327,8 @@ class PaletteLooksTest {
             assertEquals(0, lighter, what + ": columns that turn from dark to grey going down");
             assertEquals(0, twice, what + ": columns that change more than once");
             assertTrue(changed < 0.4 * both, what + ": " + changed + " of " + both + " places change between W+45 and W+12");
-            if (b != DeepBiome.CALDERA)   // the Caldera's walls are blackstone-led already
-                assertTrue(dark12 - dark45 >= 0.25 * both, what + ": blackstone " + dark45 + " at W+45, " + dark12 + " at W+12, of " + both);
+            if (b != DeepBiome.CALDERA)   // the Caldera's walls are smooth-basalt-led already
+                assertTrue(dark12 - dark45 >= 0.25 * both, what + ": smooth basalt " + dark45 + " at W+45, " + dark12 + " at W+12, of " + both);
         }
     }
 
@@ -383,9 +439,10 @@ class PaletteLooksTest {
 
     @Test
     void theConesStoneStaysOnTheCones() {
-        // The Caldera's cones (the field's cone floors, seed 8675309): cinders and the craters' throats on the cone's own
-        // ground, but the walls, hanging masses, ledges and vault over a cone's foot are the hall's, never scoria,
-        // scorchia or magma (round 1's palette dressed the whole height over a cone's foot as the cone)
+        // The Caldera's cones (the field's cone floors, seed 8675309): cinders (scorchia since 0.20.4, never scoria) and
+        // the craters' throats on the cone's own ground, but the walls, hanging masses, ledges and vault over a cone's
+        // foot are the hall's, never scoria, scorchia or magma (round 1's palette dressed the whole height over a cone's
+        // foot as the cone)
         Terrain t = terrain();
         Palette p = t.palette;
         LookQueries q = t.looks;
@@ -402,7 +459,8 @@ class PaletteLooksTest {
                 // the top block of a flank: cinders, but for its cooling cracks
                 Rock a = p.shell(DeepBiome.CALDERA, Terrain.GALLERIES, x, g, z, 1, 12, false);
                 flank++;
-                if (a == Rock.SCORIA || a == Rock.SCORCHIA) cinders++;
+                assertTrue(a != Rock.SCORIA, "scoria on a cone at " + x + " " + g + " " + z);
+                if (a == Rock.SCORCHIA) cinders++;
             }
             for (int y = Math.max(W + 1, g + Palette.CONE_OVER + 1); y <= W + 130; y += 3) {
                 for (int[] ab : new int[][]{{12, 12}, {12, 1}, {1, 12}}) {   // a wall, an underside, a ledge's top
@@ -422,7 +480,7 @@ class PaletteLooksTest {
     void aColumnIsOneStoneFromEndToEnd() {
         // Decision 3 and picture 1: every face of a basalt column, its top and the two blocks under it, its sides and its
         // underside, in a hanging cluster or not, is the column's stone, so it reads as one stone from end to end. Under
-        // the tide's mark it may turn blackstone, once, going down, and never back: a top is never darker than the side
+        // the tide's mark it may turn smooth basalt, once, going down, and never back: a top is never darker than the side
         // 4 to 6 blocks under it, an underside never lighter than the side over it. Over the tide's reach, no change.
         Terrain t = terrain();
         Stand looks = new Stand();
@@ -644,11 +702,12 @@ class PaletteLooksTest {
 
     @Test
     void columnsReadOneByOne() {
-        // over rows either side of the tide's mark: a block is in its column's stone, or blackstone where the tide turned it
+        // over rows either side of the tide's mark: a block is in its column's stone, or smooth basalt where the tide
+        // turned it
         Terrain t = terrain();
         Palette p = new Palette(t, SEED, new Stand());
         int W = t.shape.waterY(Terrain.GALLERIES), same = 0, all = 0;
-        Set<Rock> specks = EnumSet.of(Rock.GILDED_BLACKSTONE, Rock.DEEPSLATE_GOLD_ORE, Rock.EMBER_CRUST);
+        Set<Rock> specks = EnumSet.of(Rock.DEEPSLATE_GOLD_ORE);
         for (int c = 0; c < 2000; c++) {
             int x0 = Math.floorDiv(c * 3 * 37 - 100000, 3) * 3, z0 = (c * 3 * 53) % 6000 - 3000;   // the corner of a 3x3 column
             Map<Rock, Integer> count = new EnumMap<>(Rock.class);
@@ -658,10 +717,10 @@ class PaletteLooksTest {
             }
             int best = 0;
             for (Map.Entry<Rock, Integer> e : count.entrySet())
-                best = Math.max(best, e.getValue() + (e.getKey() == Rock.BLACKSTONE ? 0 : count.getOrDefault(Rock.BLACKSTONE, 0)));
+                best = Math.max(best, e.getValue() + (e.getKey() == Rock.SMOOTH_BASALT ? 0 : count.getOrDefault(Rock.SMOOTH_BASALT, 0)));
             same += best;
             all += count.values().stream().mapToInt(Integer::intValue).sum();
         }
-        assertTrue(same > 0.95 * all, "blocks of a column in its column's stone or blackstone: " + same + " of " + all);
+        assertTrue(same > 0.95 * all, "blocks of a column in its column's stone or smooth basalt: " + same + " of " + all);
     }
 }
