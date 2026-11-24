@@ -24,11 +24,12 @@ import org.joml.Vector4f;
 import javax.annotation.Nullable;
 
 /**
- * The chimney lurker as drawn (0.21.0): its shape from tools/chimney_lurker.py (geometry/chimney_lurker.json) laid on
- * its body each frame (creature.body.LurkerBody and LurkerPose): twelve legs from the rim of its prosoma, each up over
- * its arched knee and down to the foot it has set on the blocks under it; its abdomen swinging behind; its fangs folded
- * under its head, spread as it crouches and bites. One pose is worked out per lurker per frame ({@link #setupAnim}) and
- * drawn by the main pass and the glowing layer alike, as the mantis's (MantisModel).
+ * The vent urchin as drawn (0.21.3; 0.21.0's chimney lurker): its shape from tools/chimney_lurker.py
+ * (geometry/chimney_lurker.json) laid on its body each frame (creature.body.LurkerBody and LurkerPose): its round test,
+ * its sixteen walking spines, each from its socket up to a knee close to the test and down a long needle to the point it
+ * has set on the blocks under it; its coat of short spines, swaying and pointing at what it attends to; its five teeth
+ * under it, opened as it crouches and bites. One pose is worked out per urchin per frame ({@link #setupAnim}) and drawn
+ * by the main pass and the glowing layer alike, as the mantis's (MantisModel).
  */
 public class LurkerModel extends EntityModel<ChimneyLurkerEntity> {
     private final LurkerPose pose;
@@ -64,7 +65,7 @@ public class LurkerModel extends EntityModel<ChimneyLurkerEntity> {
         LurkerBody body = e.drawnBody();
         if (body == null) return;
         in.age = age;
-        // dying, its legs curl in under it and it rolls over onto its back
+        // dying, it settles onto the rock and its spines splay out flat round it
         in.dying = e.deathTime > 0 ? Math.min(1.0, (e.deathTime + pt - 1.0) / 16.0) : 0.0;
         level = e.level();
         burning = e.isOnFire();

@@ -2,9 +2,12 @@ package com.explorationremix.creature;
 
 import com.explorationremix.block.Neon;
 import com.explorationremix.creature.body.LevelTerrain;
+import com.explorationremix.creature.body.LurkerBody;
 import com.explorationremix.creature.body.LurkerCrawl;
 import com.explorationremix.creature.body.LurkerRig;
+import com.explorationremix.creature.body.LurkerSpec;
 import com.explorationremix.creature.body.Terrain;
+import com.explorationremix.creature.body.TerrainPatch;
 import com.explorationremix.world.terrain.GardensField;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -16,31 +19,48 @@ import org.joml.Vector3d;
 import javax.annotation.Nullable;
 
 /**
- * Where the chimney lurkers live (0.21.0): about half the Deep Gardens' live vents (Taran's card: "About half of
- * them"), one to a vent, waiting down in its mouth (card: "Down in the chimney's mouth"). Which vents hold one is
- * decided by each vent's own key, so every chunk agrees; where in the mouth it waits is read from the vent's blocks.
+ * Where the vent urchins live (0.21.3; the 0.21.0 chimney lurkers' vents): about half the Deep Gardens' live vents
+ * (Taran's card: "About half of them"), one to a vent, sat in its mouth (Taran's 0.21.3 card: "Half sunk into the
+ * mouth": its lower half down in the flue, its spines spread over the rim all round like a trap). Which vents hold one
+ * is decided by each vent's own key, so every chunk agrees; its seat, and the side it goes down and comes back up by,
+ * are read from the vent's blocks.
  *
- * <p>Its spot is on the flue's inner wall, head up, {@link ChimneyLurkerEntity#WAIT_DEPTH} under the rim, on a side of
- * the vent with no crack under it (a crack leads into the den, and it is too big to follow anyone through one: card,
- * "Legs spanning about 6 blocks"), with open air over the rim for its front feet to hook over.
+ * <p>Its seat is in its mouth over the axis or a little off it, its test's middle just over the rim's top (the
+ * middling height of the rim round the mouth), with room round its test down in the flue and most of its spines finding
+ * the rim. Its way down is
+ * on one side of the vent with no crack under it (a crack leads into the den, and it is too big to follow anyone through
+ * one): from over the rim's inner edge there, out over the rim, down the outside to the floor, and back.
  */
 public final class LurkerVents {
     private LurkerVents() {}
 
-    /** The share of the live vents with room in their flue that hold a lurker (about half of all live vents). */
-    static final double HELD = 0.76;
-    /** A flue narrower than this (its mean radius under the top, blocks) is too tight for one to wait in. */
-    public static final double MIN_FLUE = 2.0;
-    /** Its spot keeps this far round the axis from any of its vent's open cracks (radians). */
+    /**
+     * The share of the live vents with a flue it might fit that hold one, should their mouths have a seat for it (about
+     * half of all live vents on the test seed: most of the rest have mouths too wide or too lopsided for its spines).
+     */
+    static final double HELD = 0.92;
+    /**
+     * A flue narrower than the first (its mean radius a little under the top, blocks) is too tight for its test; one
+     * wider than the second has a mouth its spines cannot span. Between, its mouth's own blocks decide ({@link #mouth}).
+     */
+    public static final double MIN_FLUE = 1.0, MAX_FLUE = 5.0;
+    /** Its way down keeps this far round the axis from any of its vent's open cracks (radians). */
     static final double CRACK_CLEAR = Math.toRadians(42);
+    /** The sides of its mouth it reads (and tries for its way down). */
+    static final int SIDES = 16;
+    /** Its spines must find the rim with at least this many of its sixteen at its seat. */
+    static final int ON_RIM = 12;
+    /** Over the rim's inner edge on a side, its middle this far out past the edge (blocks): where its way down starts. */
+    static final double CREST_OUT = 0.75;
 
     /**
-     * A lurker's home: its vent (key, axis at the top), the rim's top over its spot, the way round the axis its spot
-     * lies (radians from +x toward +z), its spot (its body's middle), its vent wall's outside (across, from the axis)
-     * and its colour, the vent's own.
+     * An urchin's home: its vent (key, axis at the top), the rim's top (the middling height round the mouth: the first
+     * open row over it), the side its way down lies on (radians from +x toward +z), its seat (its test's middle, sat in
+     * the mouth), the mouth's mean radius at the rim, its vent wall's outside (across, from the axis) and its colour,
+     * the vent's own.
      */
-    public record Home(long key, double x, double z, double top, double azimuth, double waitX, double waitY, double waitZ, double wall,
-                       Neon colour) {
+    public record Home(long key, double x, double z, double top, double azimuth, double waitX, double waitY, double waitZ, double mouth,
+                       double wall, Neon colour) {
         public CompoundTag save() {
             CompoundTag t = new CompoundTag();
             t.putLong("Key", key);
@@ -51,8 +71,10 @@ public final class LurkerVents {
             t.putDouble("WaitX", waitX);
             t.putDouble("WaitY", waitY);
             t.putDouble("WaitZ", waitZ);
+            t.putDouble("Mouth", mouth);
             t.putDouble("Wall", wall);
             t.putByte("Colour", (byte) colour.ordinal());
+            t.putInt("Seat", 1);
             return t;
         }
 
@@ -60,30 +82,35 @@ public final class LurkerVents {
             int c = t.getByte("Colour");
             double wx = t.getDouble("WaitX"), wz = t.getDouble("WaitZ"), x = t.getDouble("X"), z = t.getDouble("Z");
             double wall = t.contains("Wall") ? t.getDouble("Wall") : Math.hypot(wx - x, wz - z) + 3.5;
-            return new Home(t.getLong("Key"), x, z, t.getDouble("Top"), t.getDouble("Azimuth"), wx, t.getDouble("WaitY"), wz, wall,
+            // a 0.21.0 home waited on its flue's inner wall: its mouth from there (see old)
+            double mouth = t.contains("Mouth") ? t.getDouble("Mouth") : Math.hypot(wx - x, wz - z) + 1.25;
+            return new Home(t.getLong("Key"), x, z, t.getDouble("Top"), t.getDouble("Azimuth"), wx, t.getDouble("WaitY"), wz, mouth, wall,
                     Neon.ofCode(c < 0 || c > 3 ? 1 : c));
         }
 
-        /** Its flue's inner wall under its spot (across, from the axis): where its spot's rock is. */
-        public double flue() { return across(waitX, waitZ) + LurkerRig.shared().spec.ride; }
+        /** Whether a saved home is a 0.21.0 lurker's (a spot on its flue's inner wall), from before the urchins sat in their mouths. */
+        public static boolean old(CompoundTag t) { return !t.contains("Seat"); }
 
-        /** Its spot as a box position (the box's feet under its body's middle). */
+        /** Its seat as a box position (the box's feet under its test's middle). */
         public double boxY() { return waitY - LurkerRig.shared().spec.ride; }
 
-        /** Where it looks out from while it waits: just over the rim's inner edge above its spot. */
+        /** Where it looks out from while it waits: its crown, over the rim. */
         public Vector3d peek(Vector3d out) {
-            double c = Math.cos(azimuth), s = Math.sin(azimuth);
-            double r = Math.hypot(waitX - x, waitZ - z) + 0.9;
-            return out.set(x + c * r, top + 0.7, z + s * r);
+            return out.set(waitX, waitY + LurkerRig.shared().spec.halfHeight + 0.15, waitZ);
         }
 
         /** How far (across) a point is from the vent's axis. */
         public double across(double px, double pz) { return Math.hypot(px - x, pz - z); }
     }
 
-    /** Whether a live vent holds a lurker: one with room in its flue, by its key alone. */
+    /** Whether a live vent holds an urchin: one whose mouth it fits, by its key alone. */
     public static boolean held(GardensField.LiveVent v) {
-        return v.flue() >= MIN_FLUE && unit(v.key()) < HELD;
+        return fits(v) && unit(v.key()) < HELD;
+    }
+
+    /** Whether a live vent's mouth is one it fits (from the vent's own numbers, before its blocks are read). */
+    public static boolean fits(GardensField.LiveVent v) {
+        return v.flue() >= MIN_FLUE && v.flue() <= MAX_FLUE;
     }
 
     /** Which blocks may be read (a world-gen region's own). */
@@ -97,139 +124,273 @@ public final class LurkerVents {
     }
 
     /**
-     * Its home at vent {@code v} read from the blocks, or null if no side of it will do. {@code bottom} is the Deep
+     * Its home at vent {@code v} read from the blocks, or null if the vent will not do. {@code bottom} is the Deep
      * Gardens layer's lowest world y (the vent's rows count from it). Only columns {@code readable} allows are read.
      */
     @Nullable
     public static Home find(LevelReader level, GardensField.LiveVent v, int bottom, Readable readable) {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         LevelTerrain lt = new LevelTerrain(level);
-        return find((x, y, z) -> solid(level, p.set(x, y, z)), (x, y, z, sink) -> { if (readable.at(x, z)) lt.boxes(x, y, z, sink); }, v, bottom, readable);
+        return find((x, y, z) -> solid(level, p.set(x, y, z)), (x, y, z, sink) -> { if (readable.at(x, z)) lt.boxes(x, y, z, sink); }, v, bottom, readable, null);
     }
 
-    /** For /remix lurker sides: each of vent {@code v}'s twelve sides and why it will or will not do, read from the level. */
+    /** For /remix lurker sides: its seat at vent {@code v} and each side of the mouth, and why each will or will not do for its way down. */
     public static String sides(LevelReader level, GardensField.LiveVent v, int bottom, Readable readable) {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         LevelTerrain lt = new LevelTerrain(level);
         Solid solid = (x, y, z) -> solid(level, p.set(x, y, z));
         Terrain rock = (x, y, z, sink) -> { if (readable.at(x, z)) lt.boxes(x, y, z, sink); };
         StringBuilder b = new StringBuilder();
-        double phase = phase(v);
-        for (int i = 0; i < 12; i++) {
-            double az = phase + i * (2.0 * Math.PI / 12.0);
-            StringBuilder why = new StringBuilder();
-            Home h = spotAt(solid, rock, v, bottom, readable, az, why);
-            b.append(String.format(java.util.Locale.ROOT, "\n %4.0f deg: %s", Math.toDegrees(LurkerCrawlMath.wrap(az)),
-                    h != null ? String.format(java.util.Locale.ROOT, "good, spot %.1f %.1f %.1f under rim %.0f", h.waitX(), h.waitY(), h.waitZ(), h.top()) : why));
-        }
+        find(solid, rock, v, bottom, readable, b);
         return b.toString();
     }
 
-    /** For /remix lurker trial: its ways out and home from its spot run as trials over the level's loaded rock, and how they went. */
+    /** For /remix lurker trial: its way down and back from its home's side, run as trials over the level's loaded rock, and how they went. */
     public static String trial(LevelReader level, Home h) {
         Terrain rock = loaded(level);
         Readable readable = (x, z) -> level.hasChunk(x >> 4, z >> 4);
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        Solid solid = (x, y, z) -> solid(level, p.set(x, y, z));
+        Vector3d crest = crest(solid, readable, h, h.azimuth());
+        if (crest == null) return "no rim found on its side";
         StringBuilder why = new StringBuilder();
-        Trial out = trialOut(rock, h, readable, why);
+        Trial out = trialOut(rock, h, crest, readable, why);
         if (out.verdict() != Verdict.FLOOR) return out.verdict() == Verdict.ON ? "out: off the loaded ground on its way down outside" : "out: " + why;
-        String o = String.format(java.util.Locale.ROOT, "out: to the floor at %.1f %.1f %.1f (%.1f off its axis, %.1f under its rim)",
-                out.at().x, out.at().y, out.at().z, h.across(out.at().x, out.at().z), h.top() - out.at().y);
-        Trial home = trialHome(rock, h, out.at(), readable, why);
-        return o + "; home: " + (home.verdict() == Verdict.HOME ? String.format(java.util.Locale.ROOT, "back at %.1f %.1f %.1f", home.at().x, home.at().y, home.at().z)
-                : home.verdict() == Verdict.ON ? "off the loaded ground" : why.toString());
+        String o = String.format(java.util.Locale.ROOT, "out: from %.1f %.1f %.1f to the floor at %.1f %.1f %.1f (%.1f off its axis, %.1f under its rim)",
+                crest.x, crest.y, crest.z, out.at().x, out.at().y, out.at().z, h.across(out.at().x, out.at().z), h.top() - out.at().y);
+        Trial home = trialHome(rock, h, crest, out.at(), readable, why);
+        return o + "; home: " + (home.verdict() == Verdict.HOME ? String.format(java.util.Locale.ROOT, "back over its rim at %.1f %.1f %.1f",
+                home.at().x, home.at().y, home.at().z) : home.verdict() == Verdict.ON ? "off the loaded ground" : why.toString());
+    }
+
+    // ------------------------------------------------------------------------------------------------ the mouth
+
+    /** The mouth of a vent read from its blocks: each side's rim (its inner edge out from the axis, its top), and its seat. */
+    static final class Mouth {
+        final double[] edge = new double[SIDES], top = new double[SIDES];
+        /** The rim's middling top (the first open row over it), its mean inner radius, and its widest. */
+        double refTop, mean, widest;
+        /** Its seat: its test's middle. */
+        final Vector3d seat = new Vector3d();
+
+        double side(int k) { return k * (2.0 * Math.PI / SIDES); }
     }
 
     /**
-     * As {@link #find(LevelReader, GardensField.LiveVent, int, Readable)}, its blocks read through {@code solid} and its
-     * rock (for the trial runs of its ways out and home) through {@code rock}. The sides of the vent are tried in a turn
-     * of its own (from its key): on each, its spot on the flue's inner wall {@link ChimneyLurkerEntity#WAIT_DEPTH} under
-     * the rim's top there, with room round it and up through the mouth; then its way out from there over the rim and down
-     * the outside to the floor, and its way home from there back to its spot (trial runs of its crawl, judged as the
-     * creature judges them, {@link Out} and {@link In}; one that leaves the readable ground on its way down outside is
-     * taken as good).
+     * The rim of vent (ax, az) on the side {@code th}: the highest row (from a few over the vent's mean top, {@code mean},
+     * down a few under) with rock within {@code reach} of the axis on that side, its inner edge's distance from the axis
+     * ({@code out[0]}) and the first open row over it ({@code out[1]}). False with none, or unreadable blocks.
      */
-    @Nullable
-    public static Home find(Solid solid, Terrain rock, GardensField.LiveVent v, int bottom, Readable readable) {
-        double phase = phase(v);
-        for (int i = 0; i < 12; i++) {
-            Home h = spotAt(solid, rock, v, bottom, readable, phase + i * (2.0 * Math.PI / 12.0), null);
-            if (h != null) return h;
+    static boolean rimAt(Solid solid, Readable readable, double ax, double az, double th, int mean, double reach, double[] out) {
+        double c = Math.cos(th), s = Math.sin(th);
+        for (int y = mean + 4; y >= mean - 4; y--) {
+            double r = firstRock(solid, readable, ax, az, c, s, y, reach);
+            if (r == UNREAD) return false;
+            if (Double.isNaN(r)) continue;
+            out[0] = r;
+            out[1] = y + 1;
+            return true;
         }
-        return null;
+        return false;
     }
 
-    /** The first of the twelve sides of vent {@code v} tried for its spot (radians): a turn of its own, from its key. */
-    static double phase(GardensField.LiveVent v) {
-        return unit(v.key() * 0x9E3779B97F4A7C15L + 0x5DEECE66DL) * 2.0 * Math.PI;
-    }
+    private static final double UNREAD = -1.0;
 
-    /** The narrowest its flue may be between its spot and its rim (from the axis to the wall, blocks): its body's way up. */
-    static final double MOUTH = 1.75;
-
-    /**
-     * Its home on the side {@code az} (radians from +x toward +z) of vent {@code v}, or null (with why, if asked) if that
-     * side will not do: a crack under it, no room in the flue there or up through its mouth, no open air over the rim,
-     * or (with {@code rock} to run them over) no way out from it or home to it.
-     */
-    @Nullable
-    static Home spotAt(Solid solid, @Nullable Terrain rock, GardensField.LiveVent v, int bottom, Readable readable, double az, @Nullable StringBuilder why) {
-        double ride = LurkerRig.shared().spec.ride;
-        if (nearCrack(v.cracks(), az)) return no(why, "a crack under it");
-        double c = Math.cos(az), s = Math.sin(az);
-        int mean = (int) Math.floor(v.topRow() + bottom);
-        double reach = v.flue() + 4.0;
-        // the flue's inner wall on this side, row by row from well under the rim's mean top up to where the wall ends
-        int y0 = mean - 3;
-        double[] wall = new double[12];
-        wall[0] = wallAt(solid, readable, v, c, s, y0, reach);
-        if (Double.isNaN(wall[0])) return no(why, "no inner wall at row " + y0);
-        int ty = Integer.MIN_VALUE;
-        for (int k = 1; k < wall.length; k++) {
-            wall[k] = wallAt(solid, readable, v, c, s, y0 + k, wall[k - 1] + 1.5);
-            if (Double.isNaN(wall[k])) { ty = y0 + k; break; }
-        }
-        if (ty == Integer.MIN_VALUE) return no(why, "its wall runs on up past its rim (into the roof?)");
-        // ty: the first open row over the wall's top. Its spot's row, two under: room for it, and up through its mouth
-        int ys = ty - (int) Math.round(ChimneyLurkerEntity.WAIT_DEPTH);
-        double rs = ys >= y0 ? wall[ys - y0] : wallAt(solid, readable, v, c, s, ys, reach);
-        if (Double.isNaN(rs)) return no(why, "no inner wall at its spot's row " + ys);
-        if (rs < MIN_FLUE) return no(why, String.format(java.util.Locale.ROOT, "the flue only %.1f across at its spot", rs));
-        for (int y = Math.max(ys + 1, y0); y < ty; y++)
-            if (wall[y - y0] < MOUTH) return no(why, String.format(java.util.Locale.ROOT, "its mouth narrows to %.1f at row %d", wall[y - y0], y));
-        // across the flue from its spot: room for its body and legs (no narrow slot)
-        if (!open(solid, readable, v.x() - c * 0.5, ys, v.z() - s * 0.5) || !open(solid, readable, v.x() - c * 1.5, ys, v.z() - s * 1.5))
-            return no(why, "rock across the flue");
-        // over the rim's inner edge: open air for its front feet, and headroom to go over
-        double rt = wall[ty - 1 - y0];
-        int bx = (int) Math.floor(v.x() + c * (rt + 0.45)), bz = (int) Math.floor(v.z() + s * (rt + 0.45));
-        if (!readable.at(bx, bz)) return no(why, "its rim unread");
-        if (solid.at(bx, ty, bz) || solid.at(bx, ty + 1, bz)) return no(why, "no air over its rim at " + ty);
-        // its spot on the inner wall under the rim, in the open (in from a lip over it, if it must be), with room toward the axis over it
-        double wy = ty - ChimneyLurkerEntity.WAIT_DEPTH, r = rs - ride;
-        while (r >= 1.0 && !(open(solid, readable, v.x() + c * r, wy, v.z() + s * r) && open(solid, readable, v.x() + c * r, wy + 1.0, v.z() + s * r))) r -= 0.25;
-        if (r < 1.0) return no(why, "its spot in rock");
-        double wx = v.x() + c * r, wz = v.z() + s * r;
-        if (!open(solid, readable, wx - c, wy, wz - s) || !open(solid, readable, wx - c, wy + 1.0, wz - s)) return no(why, "no room by its spot");
-        Home h = new Home(v.key(), v.x(), v.z(), ty, az, wx, wy, wz, Math.max(v.wall(), rt + 1.0), Neon.ofCode(v.colour()));
-        if (rock == null) return h;
-        Trial out = trialOut(rock, h, readable, why);
-        if (out.verdict() == Verdict.LOST) return null;
-        if (out.verdict() == Verdict.FLOOR && trialHome(rock, h, out.at(), readable, why).verdict() == Verdict.LOST) return null;
-        return h;
-    }
-
-    /** How far out from the axis the flue's wall is on row {@code y} (blocks; NaN if none within {@code reach}). */
-    private static double wallAt(Solid solid, Readable readable, GardensField.LiveVent v, double c, double s, int y, double reach) {
-        for (double r = 0.6; r <= reach; r += 0.2) {
-            int bx = (int) Math.floor(v.x() + c * r), bz = (int) Math.floor(v.z() + s * r);
-            if (!readable.at(bx, bz)) return Double.NaN;
+    /** How far out from the axis the first rock lies on row {@code y} along (c, s) (blocks; NaN if none within reach; UNREAD past the readable ground). */
+    private static double firstRock(Solid solid, Readable readable, double ax, double az, double c, double s, int y, double reach) {
+        for (double r = 0.3; r <= reach; r += 0.2) {
+            int bx = (int) Math.floor(ax + c * r), bz = (int) Math.floor(az + s * r);
+            if (!readable.at(bx, bz)) return UNREAD;
             if (solid.at(bx, y, bz)) return r;
         }
         return Double.NaN;
     }
 
+    /**
+     * Vent {@code v}'s mouth and its urchin's seat in it, or null (with why, if asked): every side's rim read, its seat
+     * with its test's middle {@link LurkerSpec#seat} over the rim's middling top (raised a little should its test fit no
+     * lower), over the axis or a little off it, and, with {@code rock} to lay its body on, where the most of its spines
+     * find the rim: at least {@link #ON_RIM} of them.
+     */
     @Nullable
-    private static Home no(@Nullable StringBuilder why, String reason) {
+    static Mouth mouth(Solid solid, @Nullable Terrain rock, GardensField.LiveVent v, int bottom, Readable readable, @Nullable StringBuilder why) {
+        LurkerSpec spec = LurkerRig.shared().spec;
+        Mouth m = new Mouth();
+        int mean = (int) Math.floor(v.topRow() + bottom);
+        double reach = v.flue() + 3.0, sum = 0;
+        double[] r = new double[2];
+        double[] tops = new double[SIDES];
+        for (int k = 0; k < SIDES; k++) {
+            double th = m.side(k);
+            if (!rimAt(solid, readable, v.x(), v.z(), th, mean, reach, r)) return no(why, String.format(java.util.Locale.ROOT, "no rim read at %.0f deg", Math.toDegrees(th)));
+            if (r[0] < 0.7) return no(why, String.format(java.util.Locale.ROOT, "its mouth shut at %.0f deg (rock %.1f from its axis)", Math.toDegrees(th), r[0]));
+            m.edge[k] = r[0];
+            m.top[k] = r[1];
+            tops[k] = r[1];
+            sum += r[0];
+            m.widest = Math.max(m.widest, r[0]);
+        }
+        java.util.Arrays.sort(tops);
+        m.refTop = 0.5 * (tops[SIDES / 2 - 1] + tops[SIDES / 2]);
+        m.mean = sum / SIDES;
+        if (m.mean < MIN_FLUE * 0.8) return no(why, String.format(java.util.Locale.ROOT, "its mouth only %.1f from its axis at its rim", m.mean));
+        // its seat: over the axis or a little off it (toward a narrower side of a lopsided mouth), where its test fits
+        // and the most of its spines find the rim (its top, or over its edge); raised a little if its test fits no lower
+        boolean fitted = false;
+        int bestOn = -1;
+        for (int lift = 0; lift <= 3 && bestOn < ON_RIM; lift++) {
+            double y = m.refTop + spec.seat + 0.2 * lift * spec.scale;
+            for (double[] o : SEAT_OFFSETS) {
+                double x = v.x() + o[0] * spec.scale, z = v.z() + o[1] * spec.scale;
+                if (!fits(solid, readable, x, y, z, 1.0)) continue;
+                if (!fitted || rock == null) m.seat.set(x, y, z);
+                fitted = true;
+                if (rock == null) return m;
+                int on = onRim(rock, new Vector3d(x, y, z), m.refTop);
+                if (on > bestOn) { bestOn = on; m.seat.set(x, y, z); }
+                if (on == SIDES) break;
+            }
+        }
+        if (!fitted) return no(why, "its test will not fit in its mouth");
+        if (bestOn < ON_RIM) return no(why, String.format(java.util.Locale.ROOT, "only %d of its spines find the rim (its mouth %.1f from its axis, at most %.1f)", bestOn, m.mean, m.widest));
+        return m;
+    }
+
+    /** The places its seat is tried at, nearest its mouth's axis first (blocks across, at scale 1): out to 0.8 off it. */
+    private static final double[][] SEAT_OFFSETS = seatOffsets();
+
+    private static double[][] seatOffsets() {
+        java.util.List<double[]> o = new java.util.ArrayList<>();
+        for (int gx = -2; gx <= 2; gx++) for (int gz = -2; gz <= 2; gz++) o.add(new double[]{gx * 0.4, gz * 0.4});
+        o.sort(java.util.Comparator.comparingDouble(a -> a[0] * a[0] + a[1] * a[1]));
+        return o.toArray(new double[0][]);
+    }
+
+    /** How many of its spines, laid out sat at {@code seat}, stand on the rim (no lower than a block and a half under its top). */
+    static int onRim(Terrain rock, Vector3d seat, double top) {
+        LurkerSpec spec = LurkerRig.shared().spec;
+        LurkerBody body = new LurkerBody(spec);
+        LurkerBody.Drive d = new LurkerBody.Drive();
+        d.x = seat.x; d.y = seat.y; d.z = seat.z;
+        d.upright = true;
+        d.mode = LurkerBody.Mode.SURFACE;
+        int[] b = new int[6];
+        body.bounds(d, b);
+        TerrainPatch patch = new TerrainPatch();
+        patch.build(rock, b[0], b[1], b[2], b[3], b[4], b[5]);
+        body.tick(patch, d);
+        int on = 0;
+        for (LurkerBody.Foot ft : body.feet) if (ft.planted && ft.at.y > top - 1.5) on++;
+        return on;
+    }
+
+    /**
+     * Whether its test fits with its middle at (x, y, z): open at its middle and all round its surface ({@code scale}
+     * of its size: its half width round, its half height up and down).
+     */
+    static boolean fits(Solid solid, Readable readable, double x, double y, double z, double scale) {
+        LurkerSpec spec = LurkerRig.shared().spec;
+        double w = spec.halfWidth * scale * 0.95, h = spec.halfHeight * scale * 0.95;
+        if (!open(solid, readable, x, y, z)) return false;
+        for (int el = -1; el <= 1; el++) {
+            double ce = el == 0 ? 1.0 : Math.cos(Math.toRadians(50)), se = el == 0 ? 0.0 : el * Math.sin(Math.toRadians(50));
+            for (int k = 0; k < 8; k++) {
+                double a = k * Math.PI / 4;
+                if (!open(solid, readable, x + Math.cos(a) * w * ce, y + se * h, z + Math.sin(a) * w * ce)) return false;
+            }
+        }
+        return open(solid, readable, x, y + h, z) && open(solid, readable, x, y - h, z);
+    }
+
+    /**
+     * Where its middle goes over the rim on the side {@code th} (radians from +x toward +z): {@link #CREST_OUT} past the
+     * rim's inner edge there, its ride over the rim's top; null with no rim found there (or unreadable blocks).
+     */
+    @Nullable
+    public static Vector3d crest(Solid solid, Readable readable, Home h, double th) {
+        double[] r = new double[2];
+        int mean = (int) Math.floor(h.top()) - 1;
+        if (!rimAt(solid, readable, h.x(), h.z(), th, mean, h.mouth() + 3.0, r)) return null;
+        double out = r[0] + CREST_OUT * LurkerRig.shared().spec.scale;
+        return new Vector3d(h.x() + Math.cos(th) * out, r[1] + LurkerRig.shared().spec.ride, h.z() + Math.sin(th) * out);
+    }
+
+    /** As {@link #crest(Solid, Readable, Home, double)}, read from the level's loaded blocks. */
+    @Nullable
+    public static Vector3d crest(LevelReader level, Home h, double th) {
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        return crest((x, y, z) -> solid(level, p.set(x, y, z)), (x, z) -> level.hasChunk(x >> 4, z >> 4), h, th);
+    }
+
+    // ------------------------------------------------------------------------------------------------ its home
+
+    /**
+     * As {@link #find(LevelReader, GardensField.LiveVent, int, Readable)}, its blocks read through {@code solid} and its
+     * rock (to lay its body on, and for the trial runs of its way down and back) through {@code rock}: its seat in the
+     * mouth ({@link #mouth}); then the sides of the vent in a turn of its own (from its key), each with no crack under
+     * it: its way down from over the rim's inner edge there, out over the rim and down the outside to the floor, and its
+     * way back from there up over the rim (trial runs of its crawl, judged as the creature judges them, {@link Out} and
+     * {@link In}; one that leaves the readable ground on its way down outside is taken as good). With {@code report},
+     * every side is tried and how each went written there.
+     */
+    @Nullable
+    public static Home find(Solid solid, Terrain rock, GardensField.LiveVent v, int bottom, Readable readable, @Nullable StringBuilder report) {
+        StringBuilder why = new StringBuilder();
+        Mouth m = mouth(solid, rock, v, bottom, readable, why);
+        if (m == null) {
+            if (report != null) report.append("no seat: ").append(why);
+            return null;
+        }
+        if (report != null) report.append(String.format(java.util.Locale.ROOT, "seat %.1f %.1f %.1f (rim's top %.1f, mouth %.1f from its axis, at most %.1f)",
+                m.seat.x, m.seat.y, m.seat.z, m.refTop, m.mean, m.widest));
+        double wall = Math.max(v.wall(), m.widest + 1.0);
+        int first = (int) Math.floor(phase(v) / (2.0 * Math.PI) * SIDES) % SIDES;
+        Home found = null;
+        for (int i = 0; i < SIDES; i++) {
+            int k = (first + i) % SIDES;
+            double th = m.side(k);
+            Home h = new Home(v.key(), v.x(), v.z(), m.refTop, th, m.seat.x, m.seat.y, m.seat.z, m.mean, wall, Neon.ofCode(v.colour()));
+            why.setLength(0);
+            boolean good = sideWorks(solid, rock, h, v.cracks(), readable, why);
+            if (report != null) report.append(String.format(java.util.Locale.ROOT, "\n %4.0f deg: %s", Math.toDegrees(LurkerCrawlMath.wrap(th)), good ? "good" : why));
+            if (good && found == null) {
+                found = h;
+                if (report == null) break;
+            }
+        }
+        return found;
+    }
+
+    /** Whether its way down and back works on home {@code h}'s side, its vent's cracks {@code cracks} (with why not, if not). */
+    static boolean sideWorks(Solid solid, Terrain rock, Home h, double[] cracks, Readable readable, StringBuilder why) {
+        double th = h.azimuth();
+        if (nearCrack(cracks, th)) { why.append("a crack under it"); return false; }
+        Vector3d crest = crest(solid, readable, h, th);
+        if (crest == null) { why.append("no rim read"); return false; }
+        if (!fits(solid, readable, crest.x, crest.y, crest.z, 0.9)) { why.append("no room over its rim"); return false; }
+        // its glide between its seat and over the rim there: room for its test all the way
+        for (int s = 1; s < 6; s++) {
+            double t = s / 6.0;
+            double x = h.waitX() + (crest.x - h.waitX()) * t, z = h.waitZ() + (crest.z - h.waitZ()) * t;
+            double y = h.waitY() + (crest.y - h.waitY()) * t + GLIDE_LIFT * Math.sin(Math.PI * t);
+            if (!fits(solid, readable, x, y, z, 0.8)) { why.append("no room to glide out over its rim"); return false; }
+        }
+        Trial out = trialOut(rock, h, crest, readable, why);
+        if (out.verdict() == Verdict.LOST) return false;
+        if (out.verdict() == Verdict.FLOOR && trialHome(rock, h, crest, out.at(), readable, why).verdict() == Verdict.LOST) return false;
+        return true;
+    }
+
+    /** How high its glide between its seat and over its rim rises over the straight way (blocks). */
+    public static final double GLIDE_LIFT = 0.45;
+
+    /** The first of the sides of vent {@code v} tried for its way down (radians): a turn of its own, from its key. */
+    static double phase(GardensField.LiveVent v) {
+        return unit(v.key() * 0x9E3779B97F4A7C15L + 0x5DEECE66DL) * 2.0 * Math.PI;
+    }
+
+    @Nullable
+    private static Mouth no(@Nullable StringBuilder why, String reason) {
         if (why != null) why.append(reason);
         return null;
     }
@@ -242,11 +403,11 @@ public final class LurkerVents {
     /** A trial run's end: FLOOR or HOME (and where), ON (off the readable ground on its way, taken as good) or LOST. */
     record Trial(Verdict verdict, @Nullable Vector3d at) {}
 
-    /** Its way out from its spot run as a trial: FLOOR (out and down to the floor, and where), ON (off the readable ground, down outside), or LOST. */
-    static Trial trialOut(Terrain rock, Home h, Readable readable, @Nullable StringBuilder why) {
+    /** Its way down from over its rim at {@code crest} run as a trial: FLOOR (out and down to the floor, and where), ON (off the readable ground, down outside), or LOST. */
+    static Trial trialOut(Terrain rock, Home h, Vector3d crest, Readable readable, @Nullable StringBuilder why) {
         LurkerCrawl c = new LurkerCrawl(LurkerRig.shared().spec.ride);
-        c.start(new Vector3d(h.waitX(), h.waitY(), h.waitZ()), h.x(), h.z(), LurkerCrawl.Sense.OUT);
-        Out judge = new Out(h, new Vector3d(h.waitX(), h.waitY(), h.waitZ()));
+        c.start(new Vector3d(crest), h.x(), h.z(), LurkerCrawl.Sense.OUT);
+        Out judge = new Out(h, new Vector3d(crest));
         for (int i = 0; i < 400; i++) {
             boolean held = c.step(rock, ChimneyLurkerEntity.EMERGE_CRAWL);
             if (offEdge(readable, c)) return judge.down() ? new Trial(Verdict.ON, null) : lost(why, "out", "off the readable ground before its rim", c, h);
@@ -258,8 +419,8 @@ public final class LurkerVents {
         return lost(why, "out", "too long", c, h);
     }
 
-    /** Its way home from {@code foot} run as a trial: HOME (back in its mouth near its spot), ON (off the readable ground), or LOST. */
-    static Trial trialHome(Terrain rock, Home h, Vector3d foot, Readable readable, @Nullable StringBuilder why) {
+    /** Its way back from {@code foot} run as a trial: HOME (back over its rim near {@code crest}), ON (off the readable ground), or LOST. */
+    static Trial trialHome(Terrain rock, Home h, Vector3d crest, Vector3d foot, Readable readable, @Nullable StringBuilder why) {
         LurkerCrawl c = new LurkerCrawl(LurkerRig.shared().spec.ride);
         c.start(new Vector3d(foot), h.x(), h.z(), LurkerCrawl.Sense.IN);
         In judge = new In(h);
@@ -271,8 +432,8 @@ public final class LurkerVents {
             Verdict j = judge.judge(c);
             if (j == Verdict.LOST) return lost(why, "home", "lost its way (" + judge.why() + ")", c, h);
             if (j == Verdict.HOME) {
-                double off = Math.hypot(c.pos.x - h.waitX(), c.pos.z - h.waitZ());
-                if (off > 2.5 || Math.abs(c.pos.y - h.waitY()) > 2.5) return lost(why, "home", String.format(java.util.Locale.ROOT, "came in %.1f from its spot", off), c, h);
+                double off = Math.hypot(c.pos.x - crest.x, c.pos.z - crest.z);
+                if (off > 2.5 || Math.abs(c.pos.y - crest.y) > 2.5) return lost(why, "home", String.format(java.util.Locale.ROOT, "came over %.1f from where it went", off), c, h);
                 return new Trial(j, new Vector3d(c.pos));
             }
             if (i % 30 == 29) {
@@ -304,18 +465,14 @@ public final class LurkerVents {
     }
 
     /**
-     * Where its way out from its spot comes down to the floor (a dry run of its crawl over the rim and down the
+     * Where its way down from over its rim on its home's side comes down to the floor (a dry run of its crawl down the
      * outside), or null if the crawl loses its way; read only in loaded chunks.
      */
     @Nullable
     public static Vector3d footOf(LevelReader level, Home h) {
-        return footOf(loaded(level), h);
-    }
-
-    /** As {@link #footOf(LevelReader, Home)}, over the rock {@code t}. */
-    @Nullable
-    public static Vector3d footOf(Terrain t, Home h) {
-        Trial out = trialOut(t, h, (x, z) -> true, null);
+        Vector3d crest = crest(level, h, h.azimuth());
+        if (crest == null) return null;
+        Trial out = trialOut(loaded(level), h, crest, (x, z) -> true, null);
         return out.verdict() == Verdict.FLOOR ? out.at() : null;
     }
 
@@ -325,20 +482,20 @@ public final class LurkerVents {
         ON,
         /** Out and down: on the floor outside its vent. */
         FLOOR,
-        /** In and down: at its spot in its mouth. */
+        /** In and up: over its rim's top, by its mouth. */
         HOME,
         /** Lost its way: down inside its vent going out, round its axis, up something over its rim, or too long. */
         LOST
     }
 
     /**
-     * Judges its way out (up its flue's inner wall, over its rim, down the outside to the floor), tick by tick: the
-     * emerging lurker's own, and the dry runs'. One that sets off outside its flue (on its rim's top or its outer wall,
-     * turned back on its way home) is over already.
+     * Judges its way down (from over its rim's inner edge, out over the rim, down the outside to the floor), tick by
+     * tick: the emerging urchin's own, and the dry runs'. One that sets off outside, down its vent's outer wall (turned
+     * back on its way home), is over its rim already.
      */
     public static final class Out {
         private final Home h;
-        private final double startY, flue, ride;
+        private final double startY, mouth, ride;
         private boolean crested;
         /** Its body's height as it went over its rim. */
         private double crestY;
@@ -348,9 +505,9 @@ public final class LurkerVents {
         public Out(Home h, Vector3d from) {
             this.h = h;
             this.startY = from.y;
-            this.flue = h.flue();
+            this.mouth = h.mouth();
             this.ride = LurkerRig.shared().spec.ride;
-            crested = from.y > h.top() + 0.3 || h.across(from.x, from.z) > (flue + h.wall()) * 0.5;
+            crested = from.y > h.top() + 0.3 || h.across(from.x, from.z) > (mouth + h.wall()) * 0.5;
             crestY = from.y;
         }
 
@@ -373,7 +530,7 @@ public final class LurkerVents {
             if (y > crestY + 3.0) return lost("up something over its rim");
             // back down inside: in its flue, or on rock that faces its axis within its wall
             double rim = c.highest - ride;
-            if (y < rim - 1.0 && (across < flue - 0.3 || (c.facingOut() < -0.6 && across < h.wall()))) return lost("back down inside");
+            if (y < rim - 1.0 && (across < mouth - 0.3 || (c.facingOut() < -0.6 && across < h.wall()))) return lost("back down inside");
             boolean below = y < Math.min(rim - 2.5, startY - 1.0);
             flat = below && across > h.wall() + 0.3 && c.facingUp() > 0.75 ? flat + 1 : 0;
             if (flat >= ChimneyLurkerEntity.FLOOR_TICKS || (below && across > h.wall() + 6.0)) return Verdict.FLOOR;
@@ -387,8 +544,8 @@ public final class LurkerVents {
     }
 
     /**
-     * Judges its way home (from outside, up its vent's outer wall, over its rim and down its flue's inner wall to its
-     * spot's depth), tick by tick: the climbing lurker's own, and the tests'.
+     * Judges its way home (from outside, up its vent's outer wall and over its rim to its mouth's edge, where it glides
+     * down into its seat), tick by tick: the climbing urchin's own, and the tests'.
      */
     public static final class In {
         private final Home h;
@@ -403,9 +560,6 @@ public final class LurkerVents {
             this.ride = LurkerRig.shared().spec.ride;
         }
 
-        /** The rim's top where it went over (its body's middle rode over it). */
-        public double rim(LurkerCrawl c) { return c.highest - ride; }
-
         /** Why it lost its way (for tests and /remix lurker). */
         public String why() { return why; }
 
@@ -419,11 +573,12 @@ public final class LurkerVents {
                 else if (y > h.top() + 5.0) return lost("up something over its rim");
                 else if (across > far) return lost("away from its vent (along a roof?)");
                 else if (c.ticks > 900) return lost("too long");
-                return Verdict.ON;
+                if (!crested) return Verdict.ON;
             }
-            double rim = rim(c);
-            if (c.facingOut() < -0.6 && across < h.wall() && y <= rim - ChimneyLurkerEntity.WAIT_DEPTH) return Verdict.HOME;
-            if (y < rim - ChimneyLurkerEntity.WAIT_DEPTH - 2.0) return lost("down its flue past its spot");
+            // over the rim: home once it comes to the mouth's edge (or starts down inside)
+            if (across < h.mouth() + CREST_OUT + 0.4 || c.facingOut() < -0.3) return Verdict.HOME;
+            double rim = c.highest - ride;
+            if (y < rim - 3.0) return lost("down its flue");
             if (across > h.wall() + 2.5) return lost("back out over its rim");
             return c.ticks > 900 ? lost("too long") : Verdict.ON;
         }

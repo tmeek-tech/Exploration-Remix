@@ -51,32 +51,40 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * The chimney lurker of the Deep Gardens (0.21.0, Taran's ask: "a spider-like hostile mob that lives in the tops of
- * active vents in the Deep Gardens. It should have lots of legs that land on real blocks, glow when it sees a player,
- * and be mostly black while it's waiting in ambush"). Taran's cards set the rest: twelve walking legs spanning about
- * six blocks; it waits down in its chimney's mouth with only its front feet's tips hooked over the rim; its eyes, a
- * bead pattern down its back and rings at its leg joints glow in its vent's colour, flashing on with a dry rattle when
- * it sees someone; it rushes down its vent headfirst, gives a short chase and climbs back up; it strikes with a half
- * second's crouch and a leaping bite (a strong swing in the crouch stops it); about twelve hearts; one in about half
- * the live vents, a new one moving in days after one is killed; now and then it strikes at the stilt mantises.
+ * The vent urchin of the Deep Gardens (0.21.3, Taran: "make the vent spiders more sea urchin-like than spider-like and
+ * have them straddle the vents that they live in"; the 0.21.0 chimney lurker, its id kept so the ones already set down
+ * in a world stay). Taran's cards set its look: a round black test about a block and a half across, sixteen walking
+ * spines each bending once at a knee close to the test, a dense coat of short spines, five teeth under it; it sits half
+ * sunk in its vent's mouth, its spines spread over the rim all round; neon bands down every spine glow in its vent's
+ * colour once it sees someone; it glides any way and never turns; its coat points at footsteps, then at you; it strikes
+ * with a crouch and a leap, flipping to bite with its five-toothed mouth; its spines prick only what bumps into it. The
+ * 0.21.0 cards it keeps: mostly black while it waits, the flash with a dry rattle as it sees someone, a rush down its
+ * vent, a short chase and back up, about twelve hearts, about half the live vents, a new one moving in days after one
+ * is killed, a strike at the stilt mantises now and then.
  *
- * <p>On its vent it moves as a spider on a wall: its body's middle is carried over the rock itself by a crawler
+ * <p>On its vent it moves as the spider did: its body's middle carried over the rock itself by a crawler
  * ({@link LurkerCrawl}: it reads the rock round it each tick, so a vent a player has dug into is climbed as it now is),
- * its box with it, the game's own movement off. On the floor it is a mob like any other (it climbs walls in its way, as
- * a spider does). Its body is drawn on the client from {@link LurkerBody}: twelve feet set on the blocks under them.
+ * its box with it, the game's own movement off; between its seat and its rim it glides. On the floor it is a mob like
+ * any other (it climbs walls in its way, as a spider does). Its body is drawn on the client from {@link LurkerBody}:
+ * sixteen spines' points set on the blocks under them.
  *
- * <p>Its senses while it waits: it looks out over its rim ({@link LurkerVents.Home#peek}), so a player in sight within
- * {@link #SIGHT} blocks (one sneaking, half that) brings it out; footsteps round its vent's foot stir it (its front
- * feet tap on the rim) and, kept up, bring it out unseen; a player within {@link #TOUCH} of it, or a blow, at once.
+ * <p>Its senses while it waits: it looks out from its crown ({@link LurkerVents.Home#peek}), so a player in sight within
+ * {@link #SIGHT} blocks (one sneaking, half that) brings it out; its spines over its rim feel round it; footsteps round
+ * its vent's foot stir it (its coat turns to them, its spines tap on the rim) and, kept up, bring it out unseen; a
+ * player within {@link #TOUCH} of it, or a blow, at once.
  */
 public class ChimneyLurkerEntity extends Monster implements WindUp {
     // ---- states (synced: its body and its glow pose from them)
-    public static final byte WAIT = 0, STIR = 1, EMERGE = 2, HUNT = 3, CROUCH = 4, LEAP = 5, RECOIL = 6, RETURN = 7, CLIMB = 8;
+    public static final byte WAIT = 0, STIR = 1, EMERGE = 2, HUNT = 3, CROUCH = 4, LEAP = 5, RECOIL = 6, RETURN = 7, CLIMB = 8, SETTLE = 9;
 
     private static final EntityDataAccessor<Byte> DATA_STATE = SynchedEntityData.defineId(ChimneyLurkerEntity.class, EntityDataSerializers.BYTE);
     private static final EntityDataAccessor<Byte> DATA_COLOUR = SynchedEntityData.defineId(ChimneyLurkerEntity.class, EntityDataSerializers.BYTE);
     /** The way it heads while it clings to its vent (zero on the floor, where its body's yaw says). */
     private static final EntityDataAccessor<Vector3f> DATA_HEADING = SynchedEntityData.defineId(ChimneyLurkerEntity.class, EntityDataSerializers.VECTOR3);
+    /** Sat in its vent's mouth, or gliding between there and its rim: its body held upright. */
+    private static final EntityDataAccessor<Boolean> DATA_UPRIGHT = SynchedEntityData.defineId(ChimneyLurkerEntity.class, EntityDataSerializers.BOOLEAN);
+    /** What its coat points at: the one whose footsteps it feels, then its quarry (an entity's id; -1 none). */
+    private static final EntityDataAccessor<Integer> DATA_FOCUS = SynchedEntityData.defineId(ChimneyLurkerEntity.class, EntityDataSerializers.INT);
 
     // ---- tuning
     /** About twelve hearts (card), and its bite (difficulty scales it: 4 on easy, 9 on hard). */
@@ -89,8 +97,8 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     /** It sees a player this far from over its rim (one sneaking, half that); one this near it notices at once. */
     public static final double SIGHT = 20.0, SIGHT_SNEAK = 10.0, TOUCH = 3.5;
     /**
-     * Waiting, its leg tips hooked over its rim feel and see round it: a player (or a mantis) this far from its rim's
-     * outer edge on their side, in sight of that edge, it notices (one sneaking, half that).
+     * Waiting, its spines over its rim feel round it: a player (or a mantis) this far from its rim's outer edge on their
+     * side, in sight of that edge, it notices (one sneaking, half that).
      */
     public static final double RIM_SIGHT = 12.0;
     /** Footsteps this far (across) from its vent's axis, under its rim, carry up the rock to it. */
@@ -104,8 +112,11 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     static final int NOTICE_TICKS = 6, CROUCH_TICKS = 10, LEAP_REST = 40;
     /** How far it leaps (blocks, across), and how much higher or lower its quarry may be. */
     static final double LEAP_MIN = 1.2, LEAP_MAX = 5.5, LEAP_UP = 2.5, LEAP_DOWN = 3.5;
-    /** How deep under its rim it waits (its body's middle, blocks). */
-    public static final double WAIT_DEPTH = 2.0;
+    /** Its rise out of its mouth and over its rim, and its glide back down into its seat (ticks). */
+    public static final int RISE_TICKS = 10, SETTLE_TICKS = 26;
+    /** What bumps into it is pricked this hard (Taran's card: "Only if you bump into it"), at most this often (ticks). */
+    static final float PRICK = 2.0F;
+    static final int PRICK_EVERY = 10;
     /** Ticks on level rock, well under its rim, before its way out is done and it runs on the floor. */
     public static final int FLOOR_TICKS = 5;
     /** A player it gave up on is let be this long (unless they come at it). */
@@ -139,6 +150,14 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     @Nullable private Vec3 leapFrom;
     /** For /remix lurker: the last thing that went wrong on its vent's rock (its way lost, its hold lost), and when. */
     @Nullable private String trouble;
+    /** Sat on its seat in its vent's mouth (its box put there, the game's movement off). */
+    private boolean onSeat;
+    /** Gliding between its seat and its rim: from, to, how far along (ticks) and how long. */
+    @Nullable private Vec3 glideFrom, glideTo;
+    private int glideT, glideN;
+    /** Its home is a 0.21.0 lurker's spot, to be read again as a seat once its vent's blocks are loaded. */
+    private boolean reseat;
+    private int prickTicks;
 
     // ---- client
     @Nullable private LurkerBody body;
@@ -175,6 +194,8 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         entityData.define(DATA_STATE, WAIT);
         entityData.define(DATA_COLOUR, (byte) -1);
         entityData.define(DATA_HEADING, new Vector3f());
+        entityData.define(DATA_UPRIGHT, false);
+        entityData.define(DATA_FOCUS, -1);
     }
 
     @Override
@@ -216,15 +237,27 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
 
     private static double ride() { return LurkerRig.shared().spec.ride; }
 
-    /** Makes it the lurker of a vent, waiting in its mouth. */
+    /** Makes it the urchin of a vent, sat in its mouth. */
     public void settleAt(LurkerVents.Home h) {
         home = h;
         setColour(h.colour());
         setPersistenceRequired();
         moveTo(h.waitX(), h.boxY(), h.waitZ(), (float) Math.toDegrees(h.azimuth()) - 90.0F, 0.0F);
-        setNoGravity(true);
-        entityData.set(DATA_HEADING, new Vector3f(0, 1, 0));
+        sitDown();
         toState(WAIT, 0);
+    }
+
+    /** Onto its seat in its vent's mouth: its box there, upright, the game's movement off. */
+    private void sitDown() {
+        crawl = null;
+        glideFrom = glideTo = null;
+        setPos(home.waitX(), home.boxY(), home.waitZ());
+        setDeltaMovement(Vec3.ZERO);
+        noPhysics = true;
+        setNoGravity(true);
+        onSeat = true;
+        entityData.set(DATA_HEADING, new Vector3f(0, 1, 0));
+        entityData.set(DATA_UPRIGHT, true);
     }
 
     // ------------------------------------------------------------------------------------------------ spawning, saving
@@ -243,7 +276,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         return out;
     }
 
-    /** One from an egg or a command takes the nearest live vent with no lurker of its own within 40 blocks, and goes home to it. */
+    /** One from an egg or a command takes the nearest live vent with no urchin of its own within 40 blocks, and goes home to it. */
     private void adoptVent(ServerLevelAccessor level) {
         com.explorationremix.world.terrain.Terrain t = DeepWorld.installed() ? DeepWorld.terrain() : null;
         if (t == null || t.gardens == null) return;
@@ -254,7 +287,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         LurkerVents.Home best = null;
         for (GardensField.LiveVent v : vents) {
             double d = (v.x() - getX()) * (v.x() - getX()) + (v.z() - getZ()) * (v.z() - getZ());
-            if (d >= 40.0 * 40.0 || v.flue() < LurkerVents.MIN_FLUE) continue;
+            if (d >= 40.0 * 40.0 || !LurkerVents.fits(v)) continue;
             if (!level.getEntitiesOfClass(ChimneyLurkerEntity.class, new AABB(v.x() - 24, getY() - 48, v.z() - 24, v.x() + 24, getY() + 48, v.z() + 24),
                     e -> e != this && e.home != null && e.home.key() == v.key()).isEmpty()) continue;
             best = LurkerVents.find(level, v, bottom, (x, z) -> level.hasChunk(x >> 4, z >> 4));
@@ -290,11 +323,13 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         super.readAdditionalSaveData(tag);
         if (tag.contains("Colour")) entityData.set(DATA_COLOUR, tag.getByte("Colour"));
         home = tag.contains("Home") ? LurkerVents.Home.load(tag.getCompound("Home")) : null;
+        // a 0.21.0 lurker's home (a spot on its flue's wall): read again as a seat in its mouth once it ticks
+        reseat = home != null && LurkerVents.Home.old(tag.getCompound("Home"));
         foot = tag.contains("FootX") ? new Vec3(tag.getDouble("FootX"), tag.getDouble("FootY"), tag.getDouble("FootZ")) : null;
         lair = tag.contains("LairX") ? new BlockPos(tag.getInt("LairX"), tag.getInt("LairY"), tag.getInt("LairZ")) : null;
-        // back where it was: waiting in its mouth, or (anything under way) going home
+        // back where it was: sat in its mouth (put on its seat as it next ticks), or (anything under way) going home
         byte s = tag.getByte("State");
-        toState(s == WAIT || s == STIR ? WAIT : RETURN, 0);
+        toState(s == WAIT || s == STIR || s == SETTLE ? WAIT : RETURN, 0);
         if (state() == RETURN) setNoGravity(false);
     }
 
@@ -311,12 +346,13 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
 
     // ------------------------------------------------------------------------------------------------ the box
 
-    /** Its box is its body's; its legs reach three blocks round it. */
+    /** Its box is its test's, standing on its spines; its spines reach some three blocks round it. */
     @Override
-    public AABB getBoundingBoxForCulling() { return getBoundingBox().inflate(3.3, 1.8, 3.3); }
+    public AABB getBoundingBoxForCulling() { return getBoundingBox().inflate(3.7, 2.2, 3.7); }
 
+    /** It sees from its crown. */
     @Override
-    protected float getStandingEyeHeight(Pose pose, EntityDimensions size) { return 0.95F; }
+    protected float getStandingEyeHeight(Pose pose, EntityDimensions size) { return 1.6F; }
 
     /** On its vent nothing moves it but its own legs. */
     @Override
@@ -331,7 +367,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     @Override
     public boolean isInWall() { return false; }
 
-    /** Its long legs take any fall. */
+    /** Its long spines take any fall. */
     @Override
     public boolean causeFallDamage(float distance, float multiplier, DamageSource source) { return false; }
 
@@ -339,10 +375,9 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     @Override
     public boolean onClimbable() { return !clinging() && horizontalCollision; }
 
-    /** Whether it clings to its vent now (its body carried over the rock, the game's movement off). */
+    /** Whether it clings to its vent now (sat in its mouth, gliding, or its body carried over the rock: the game's movement off). */
     private boolean clinging() {
-        byte s = state();
-        return crawl != null || ((s == WAIT || s == STIR) && home != null);
+        return crawl != null || onSeat || glideTo != null;
     }
 
     @Override
@@ -386,6 +421,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
             if (by instanceof LivingEntity le && le != this && huntable(le, true)) {
                 letBe = null;
                 byte s = state();
+                if (s == SETTLE) { sitDown(); toState(WAIT, 0); s = WAIT; }
                 if (s == WAIT || s == STIR) notice(le);
                 else {
                     if (getTarget() != le) { setTarget(le); chaseTicks = 0; }
@@ -460,7 +496,16 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
             case RECOIL -> recoil();
             case RETURN -> goingHome();
             case CLIMB -> climb();
+            case SETTLE -> settling();
             default -> toState(RETURN, 0);
+        }
+        if (!isAlive()) return;
+        pricks();
+        // its coat on its quarry (sat waiting, on the footsteps it feels: set as it feels them)
+        byte s = state();
+        if (s != WAIT && s != STIR) {
+            LivingEntity t = getTarget();
+            entityData.set(DATA_FOCUS, t != null && t.isAlive() ? t.getId() : -1);
         }
     }
 
@@ -473,6 +518,9 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
 
     /** Onto its vent's rock from where its body is, going {@code s}: the game's movement off. */
     private void startCrawl(LurkerCrawl.Sense s) {
+        onSeat = false;
+        glideFrom = glideTo = null;
+        entityData.set(DATA_UPRIGHT, false);
         if (crawl == null) crawl = new LurkerCrawl(ride());
         double ax = home != null ? home.x() : getX(), az = home != null ? home.z() : getZ();
         Vec3 c = centre();
@@ -507,6 +555,9 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
 
     /** Off its vent: the game's movement back on, its yaw the way it went. */
     private void dropToFloor() {
+        onSeat = false;
+        glideFrom = glideTo = null;
+        entityData.set(DATA_UPRIGHT, false);
         if (crawl != null) {
             Vector3d h = crawl.heading;
             if (h.x * h.x + h.z * h.z > 1.0E-4) {
@@ -564,28 +615,48 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     /** Whether a point lies inside its vent (its flue or den, under its rim). */
     private boolean insideVent(Vec3 p) {
         if (home == null) return false;
-        return home.across(p.x, p.z) < home.flue() + 0.6 && p.y < home.top() - 0.5;
+        return home.across(p.x, p.z) < home.mouth() + 0.6 && p.y < home.top() - 0.5;
+    }
+
+    // ------------------------------------------------------------------------------------------------ gliding
+
+    /** Glides its body's middle from {@code from} to {@code to} over {@code ticks} ticks, held upright (the game's movement off). */
+    private void glide(Vec3 from, Vec3 to, int ticks) {
+        crawl = null;
+        onSeat = false;
+        glideFrom = from;
+        glideTo = to;
+        glideT = 0;
+        glideN = ticks;
+        noPhysics = true;
+        setNoGravity(true);
+        getNavigation().stop();
+        setDeltaMovement(Vec3.ZERO);
+        entityData.set(DATA_UPRIGHT, true);
+        entityData.set(DATA_HEADING, new Vector3f(0, 1, 0));
+    }
+
+    /** One tick of its glide (eased, rising over the straight way between); true once it is there. */
+    private boolean glideTick() {
+        if (glideTo == null) return true;
+        double t = Math.min(1.0, ++glideT / (double) glideN), e = t * t * (3.0 - 2.0 * t);
+        Vec3 p = glideFrom.add(glideTo.subtract(glideFrom).scale(e)).add(0, LurkerVents.GLIDE_LIFT * Math.sin(Math.PI * t), 0);
+        setPos(p.x, p.y - ride(), p.z);
+        setDeltaMovement(Vec3.ZERO);
+        fallDistance = 0;
+        return t >= 1.0;
     }
 
     // ------------------------------------------------------------------------------------------------ waiting
 
     private void waiting() {
         if (home == null) { lurk(); return; }
-        if (crawl == null) {
-            // just loaded or come home: back onto its wall at its spot, head up
-            crawl = new LurkerCrawl(ride());
-            Vec3 c = centre();
-            crawl.start(new Vector3d(c.x, c.y, c.z), home.x(), home.z(), LurkerCrawl.Sense.OUT);
-            if (!crawl.read(rock())) { lostHold(); return; }
-            crawl.settle();
-            noPhysics = true;
-            setNoGravity(true);
-            moveBody();
-            entityData.set(DATA_HEADING, new Vector3f(0, 1, 0));
-        }
+        if (reseat) reseat();
+        // just loaded or come home: onto its seat in its mouth
+        if (!onSeat) sitDown();
         setDeltaMovement(Vec3.ZERO);
-        // now and then it feels for its hold again: rock dug out from under it brings it down
-        if ((tickCount + getId()) % 20 == 0 && !crawl.read(rock())) { lostHold(); return; }
+        // now and then it feels for its rim again: rock dug out from round its mouth brings it down
+        if ((tickCount + getId()) % 20 == 0 && !holds()) { lostHold(); return; }
         waitTicks++;
         if ((tickCount + getId()) % 4 != 0) return;
         LivingEntity p = sensePlayer(true);
@@ -594,6 +665,8 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
             setState(STIR);
             playSound(ERSounds.CHIMNEY_LURKER_CLICK.get(), 0.5F, 1.1F + random.nextFloat() * 0.2F);
         } else if (stir == 0 && state() == STIR) setState(WAIT);
+        // stirred, its coat turns to the footsteps it feels
+        entityData.set(DATA_FOCUS, state() == STIR && felt != null ? felt.getId() : -1);
         if (state() == STIR && random.nextInt(6) == 0) playSound(ERSounds.CHIMNEY_LURKER_CLICK.get(), 0.35F, 1.0F + random.nextFloat() * 0.3F);
         // now and then a stilt mantis grazing by its vent's foot
         if (waitTicks > STRIKE_WAIT && (tickCount + getId()) % 20 == 0 && random.nextInt(STRIKE_ROLL) == 0) {
@@ -602,19 +675,50 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         }
     }
 
+    /** Whether the rim round its mouth still holds its spines: rock under most of the ring they rest on. */
+    private boolean holds() {
+        BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+        int top = Mth.floor(home.top()), held = 0;
+        for (int k = 0; k < 12; k++) {
+            double a = k * Math.PI / 6.0, r = home.mouth() + 0.7;
+            int bx = Mth.floor(home.x() + Math.cos(a) * r), bz = Mth.floor(home.z() + Math.sin(a) * r);
+            if (!level().hasChunkAt(m.set(bx, top, bz))) return true;
+            for (int y = top - 3; y <= top + 2; y++) if (LurkerVents.solid(level(), m.set(bx, y, bz))) { held++; break; }
+        }
+        return held >= 7;
+    }
+
+    /**
+     * A 0.21.0 lurker's home (a spot on its flue's inner wall), read again as a seat in its vent's mouth; with its vent
+     * gone or no seat in it, it sits over its mouth's middle at its old rim's top as best it can.
+     */
+    private void reseat() {
+        reseat = false;
+        if (!(level() instanceof ServerLevel l)) return;
+        com.explorationremix.world.terrain.Terrain t = DeepWorld.installed() ? DeepWorld.terrain() : null;
+        if (t != null && t.gardens != null) {
+            int bottom = t.shape.bottom(com.explorationremix.world.terrain.Terrain.GARDENS);
+            for (GardensField.LiveVent v : t.gardens.liveVents(home.x() - 2, home.z() - 2, home.x() + 2, home.z() + 2)) {
+                if (v.key() != home.key()) continue;
+                LurkerVents.Home h = LurkerVents.find(l, v, bottom, (x, z) -> l.hasChunk(x >> 4, z >> 4));
+                if (h != null) { home = h; return; }
+            }
+        }
+        double seat = LurkerRig.shared().spec.seat;
+        home = new LurkerVents.Home(home.key(), home.x(), home.z(), home.top(), home.azimuth(), home.x(), home.top() + seat, home.z(), home.mouth(),
+                home.wall(), home.colour());
+    }
+
     /** Notes what went wrong on its vent's rock, for /remix lurker. */
     private void trouble(String what) {
         Vec3 c = centre();
         trouble = String.format(java.util.Locale.ROOT, "%s at %.1f %.1f %.1f, tick %d", what, c.x, c.y, c.z, tickCount);
     }
 
-    /** Its vent's rock is gone from round its spot: it drops, and goes looking for its way home. */
+    /** Its vent's rim is gone from round its mouth: it drops, and goes looking for its way home. */
     private void lostHold() {
         trouble("lost its hold waiting");
-        crawl = null;
-        noPhysics = false;
-        setNoGravity(false);
-        entityData.set(DATA_HEADING, new Vector3f());
+        dropToFloor();
         toState(RETURN, 0);
     }
 
@@ -628,9 +732,9 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     }
 
     /**
-     * A player it notices: one within {@link #TOUCH} of it; one in sight from over its rim (or from its eyes, off its
-     * vent) within {@link #SIGHT} ({@link #SIGHT_SNEAK} sneaking); or, waiting, the one whose footsteps round its vent's
-     * foot have gone on long enough ({@link #STIR_OUT}). Footsteps felt stir it ({@link #stir}).
+     * A player it notices: one within {@link #TOUCH} of it; one in sight from its crown (or from its eyes, off its vent)
+     * within {@link #SIGHT} ({@link #SIGHT_SNEAK} sneaking); one its spines over its rim feel; or, waiting, the one whose
+     * footsteps round its vent's foot have gone on long enough ({@link #STIR_OUT}). Footsteps felt stir it ({@link #stir}).
      */
     @Nullable
     private LivingEntity sensePlayer(boolean waiting) {
@@ -659,9 +763,13 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
             }
         }
         if (!anyFelt) stir = Math.max(0, stir - 1);
+        this.felt = felt;
         if (felt != null && stir >= STIR_OUT) return felt;
         return null;
     }
+
+    /** Waiting: the player whose footsteps it felt at its last look (null with none). */
+    @Nullable private Player felt;
 
     /** A stilt mantis near its vent's foot, in sight from over its rim. */
     @Nullable
@@ -676,8 +784,8 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     }
 
     /**
-     * Whether {@code eye} is within {@code range} of its rim's outer edge on that side, and in sight of it: its leg tips
-     * over its rim feel round it, though its body waits down in its mouth.
+     * Whether {@code eye} is within {@code range} of its rim's outer edge on that side, and in sight of it: its spines
+     * over its rim feel round it, though its body sits down in its mouth.
      */
     private boolean seenFromRim(Vec3 eye, double range) {
         if (home.across(eye.x, eye.z) > home.wall() + 4.0 + range || Math.abs(eye.y - home.top()) > range + 2.0) return false;
@@ -718,6 +826,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     /** It notices {@code t}: its glow flashes on with a dry rattle, and a moment later it rushes out. */
     private void notice(LivingEntity t) {
         setTarget(t);
+        entityData.set(DATA_FOCUS, t.getId());
         chaseTicks = 0;
         seenAgo = 0;
         stir = 0;
@@ -725,7 +834,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         playSound(ERSounds.CHIMNEY_LURKER_RATTLE.get(), 1.6F, 0.92F + random.nextFloat() * 0.16F);
         // a mantis hears the rattle: it startles and bolts, and its herd with it (they usually get away)
         if (t instanceof StiltMantisEntity m) m.bolt(position(), true);
-        // from its wall: down into its vent after a quarry in there, else up and out over its rim
+        // on its vent's rock: back down after a quarry below, else up and out over its rim (from its seat it rises first)
         if (crawl != null && home != null) crawlToward(t);
         toState(EMERGE, 0);
     }
@@ -746,7 +855,13 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
             if (crawl != null) moveBody();
             return;
         }
+        if (glideTo != null) {
+            // rising out of its mouth and over its rim: then onto the rock there, and down
+            if (glideTick()) offRim(t);
+            return;
+        }
         if (crawl == null) {
+            if (onSeat && home != null) { rise(t); return; }
             if (home == null || !clingingNow()) { toFloorHunt(); return; }
             crawlToward(t);
         }
@@ -772,9 +887,31 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         if (!moving() || stateTicks > 400) { trouble("stuck coming out"); toFloorHunt(); }
     }
 
-    /** Whether it is on its vent's rock (waiting or crawling). */
+    /**
+     * It rises out of its mouth toward {@code t}: up and over its rim on their side (or its own side, should the rim
+     * there not be found), gliding; a quarry down inside its vent it drops on, straight down its flue.
+     */
+    private void rise(LivingEntity t) {
+        if (insideVent(t.position()) && t.getY() < home.top() - 1.0) { toFloorHunt(); return; }
+        double th = Math.atan2(t.getZ() - home.z(), t.getX() - home.x());
+        Vector3d c = LurkerVents.crest(level(), home, th);
+        if (c == null) c = LurkerVents.crest(level(), home, th = home.azimuth());
+        if (c == null) { trouble("no rim to rise over"); toFloorHunt(); return; }
+        glide(centre(), new Vec3(c.x, c.y, c.z), RISE_TICKS);
+    }
+
+    /** Over its rim: onto the rock there, and on down its vent's outside after {@code t}. */
+    private void offRim(LivingEntity t) {
+        startCrawl(LurkerCrawl.Sense.OUT);
+        if (!crawl.read(rock())) { trouble("no rock over its rim"); toFloorHunt(); return; }
+        crawl.settle();
+        moveBody();
+        outJudge = new LurkerVents.Out(home, crawl.pos);
+    }
+
+    /** Whether it is on its vent's rock (sat, gliding or crawling). */
     private boolean clingingNow() {
-        return crawl != null || state() == EMERGE;
+        return crawl != null || onSeat || glideTo != null || state() == EMERGE;
     }
 
     private void toFloorHunt() {
@@ -823,7 +960,13 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         if (t instanceof Player p) { letBe = p.getUUID(); letBeTicks = LET_BE; }
         commanded = null;
         setTarget(null);
-        if (crawl != null) dropToFloor();
+        entityData.set(DATA_FOCUS, -1);
+        if (onSeat && home != null) {
+            // it never left its seat (its quarry gone as it flashed): it settles again
+            toState(WAIT, 0);
+            return;
+        }
+        if (crawl != null || glideTo != null) dropToFloor();
         toState(RETURN, 0);
         pathTicks = 0;
         climbTries = 0;
@@ -908,7 +1051,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     private void leap() {
         LivingEntity t = getTarget();
         if (t != null && t.isAlive()) {
-            // its fangs, at the front of its body, reach its quarry
+            // its mouth, flipped to the front of it as it flies, reaches its quarry
             Vec3 dm = getDeltaMovement();
             Vec3 ahead = dm.horizontalDistanceSqr() > 1.0E-4 ? new Vec3(dm.x, 0, dm.z).normalize() : getLookAngle();
             Vec3 jaws = centre().add(ahead.scale(0.9));
@@ -925,7 +1068,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         if (stateTicks >= stateLength) toState(HUNT, 0);
     }
 
-    /** Its fangs close on its quarry: a shield turns them aside (and is knocked out of the player's guard a moment). */
+    /** Its five teeth close on its quarry: a shield turns them aside (and is knocked out of the player's guard a moment). */
     private void bite(LivingEntity t) {
         DamageSource src = damageSources().mobAttack(this);
         Vec3 dm = getDeltaMovement();
@@ -1034,14 +1177,14 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         if (renotice()) return;
         if (!crawlTick(HOME_CRAWL)) { trouble("lost the rock climbing home"); failedClimb(); return; }
         if (crawl.sense() == LurkerCrawl.Sense.IN && inJudge != null) {
-            // up its vent's outside, over its rim, down into its mouth
+            // up its vent's outside and over its rim to its mouth's edge: then it glides down into its seat
             LurkerVents.Verdict j = inJudge.judge(crawl);
-            if (j == LurkerVents.Verdict.HOME) { settleIn(inJudge.rim(crawl)); return; }
+            if (j == LurkerVents.Verdict.HOME) { settleIn(); return; }
             if (j == LurkerVents.Verdict.LOST) { trouble("lost its way home (" + inJudge.why() + ")"); failedClimb(); return; }
         } else {
-            // up its inside from down in its vent, to its spot's depth on its flue's wall (never across its axis)
+            // up its inside from down in its vent (never across its axis): by its rim, it glides onto its seat
             if (home.across(crawl.pos.x, crawl.pos.z) < 0.6) { trouble("round its axis climbing up inside"); failedClimb(); return; }
-            if (crawl.facingOut() < -0.6 && crawl.pos.y >= home.top() - WAIT_DEPTH) { settleIn(home.top()); return; }
+            if (crawl.pos.y >= home.top() - 0.5) { settleIn(); return; }
         }
         if (!moving() || stateTicks > 900) { trouble("stuck climbing home"); failedClimb(); }
     }
@@ -1059,17 +1202,37 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         pathTicks = 0;
     }
 
-    /** Home in its mouth: its spot is where it now is (the rim's top over it {@code top}); it turns head up and braces. */
-    private void settleIn(double top) {
-        Vector3d p = crawl.pos;
-        double az = Math.atan2(p.z - home.z(), p.x - home.x());
-        double wall = Math.max(home.wall(), home.across(p.x, p.z) + ride() + 1.0);
-        home = new LurkerVents.Home(home.key(), home.x(), home.z(), top, az, p.x, p.y, p.z, wall, home.colour());
-        entityData.set(DATA_HEADING, new Vector3f(0, 1, 0));
+    /** Home by its mouth: it glides down into its seat. */
+    private void settleIn() {
+        glide(centre(), new Vec3(home.waitX(), home.waitY(), home.waitZ()), SETTLE_TICKS);
+        toState(SETTLE, SETTLE_TICKS);
+    }
+
+    /** Gliding down into its seat: sat, it waits again. */
+    private void settling() {
+        if (home == null) { dropToFloor(); toState(RETURN, 0); return; }
+        if (glideTo == null) glide(centre(), new Vec3(home.waitX(), home.waitY(), home.waitZ()), SETTLE_TICKS);
+        if (!glideTick()) return;
+        sitDown();
         waitTicks = 0;
         stir = 0;
         climbTries = 0;
         toState(WAIT, 0);
+    }
+
+    // ------------------------------------------------------------------------------------------------ its spines
+
+    /** Its spines prick what bumps into it (Taran's card: "Only if you bump into it"): never a player in creative or spectating. */
+    private void pricks() {
+        if (prickTicks > 0) { prickTicks--; return; }
+        AABB box = getBoundingBox().inflate(0.15);
+        for (LivingEntity e : level().getEntitiesOfClass(LivingEntity.class, box, o -> o != this && o.isAlive() && !(o instanceof ChimneyLurkerEntity))) {
+            if (e instanceof Player p && (p.isCreative() || p.isSpectator())) continue;
+            if (e.hurt(damageSources().thorns(this), PRICK)) {
+                prickTicks = PRICK_EVERY;
+                playSound(ERSounds.CHIMNEY_LURKER_CLICK.get(), 0.8F, 1.5F + random.nextFloat() * 0.2F);
+            }
+        }
     }
 
     // ------------------------------------------------------------------------------------------------ small things
@@ -1083,7 +1246,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     /** For /remix lurker: its state in words. */
     public String describe() {
         String s = switch (state()) {
-            case WAIT -> home != null ? "waiting in its vent" : "lurking";
+            case WAIT -> home != null ? "sat in its vent's mouth" : "lurking";
             case STIR -> "stirring (footsteps)";
             case EMERGE -> "coming out";
             case HUNT -> "hunting";
@@ -1092,13 +1255,14 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
             case RECOIL -> "recoiling";
             case RETURN -> "going home";
             case CLIMB -> "climbing home";
+            case SETTLE -> "settling into its mouth";
             default -> "?";
         };
         StringBuilder b = new StringBuilder(colour().getSerializedName()).append(", ").append(s);
         LivingEntity t = getTarget();
         if (t != null) b.append(" (").append(t.getName().getString()).append(")");
-        if (home != null) b.append(String.format(java.util.Locale.ROOT, ", vent at %.0f %.0f, rim %.0f, %.0f blocks from its axis", home.x(), home.z(),
-                home.top(), home.across(getX(), getZ())));
+        if (home != null) b.append(String.format(java.util.Locale.ROOT, ", vent at %.0f %.0f, rim %.0f, mouth %.1f across, %.0f blocks from its axis", home.x(), home.z(),
+                home.top(), home.mouth(), home.across(getX(), getZ())));
         else b.append(", no vent");
         if (foot != null) b.append(String.format(java.util.Locale.ROOT, ", climbs from %.0f %.0f %.0f", foot.x, foot.y, foot.z));
         if (stir > 0) b.append(", stir ").append(stir);
@@ -1108,14 +1272,14 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         return b.toString();
     }
 
-    /** For /remix lurker sight: how it would see {@code p} waiting in its vent (over its rim, from its rim's edge). */
+    /** For /remix lurker sight: how it would see {@code p} sat in its vent's mouth (from its crown, from its rim's edge). */
     public String sightReport(Player p) {
         if (home == null) return p.getName().getString() + ": it has no vent";
         Vec3 eye = p.getEyePosition();
         Vec3 from = toVec(home.peek(new Vector3d()));
         double range = p.isShiftKeyDown() ? SIGHT_SNEAK : SIGHT;
         StringBuilder b = new StringBuilder(p.getName().getString());
-        b.append(String.format(java.util.Locale.ROOT, " (%.1f off its axis, %.1f under its rim): over its rim %.1f off of %.0f, %s", home.across(eye.x, eye.z),
+        b.append(String.format(java.util.Locale.ROOT, " (%.1f off its axis, %.1f under its rim): from its crown %.1f off of %.0f, %s", home.across(eye.x, eye.z),
                 home.top() - eye.y, Math.sqrt(eye.distanceToSqr(from)), range, sightLine(from, eye)));
         Vec3 edge = rimEdgeToward(eye.x, eye.z);
         double rim = range * (RIM_SIGHT / SIGHT);
@@ -1142,6 +1306,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         rest = 0;
         dormant = false;
         byte s = state();
+        if (s == SETTLE) { sitDown(); toState(WAIT, 0); s = WAIT; }
         if (s == WAIT || s == STIR || s == CLIMB) {
             notice(t);
         } else {
@@ -1166,8 +1331,10 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
     /** For /remix lurker home: it gives up what it is doing and goes home. */
     public void sendHome() {
         letBe = null;
-        if (crawl != null && state() != WAIT && state() != STIR) dropToFloor();
         setTarget(null);
+        entityData.set(DATA_FOCUS, -1);
+        if (onSeat && home != null) { toState(WAIT, 0); return; }
+        if (crawl != null || glideTo != null) dropToFloor();
         toState(RETURN, 0);
     }
 
@@ -1190,7 +1357,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
             case CROUCH -> 1.0F;
             case RETURN -> 0.5F + 0.1F * Mth.sin(t * 0.12F);
             case CLIMB -> 0.55F * Math.max(0.0F, 1.0F - climbFade++ / 40.0F);
-            default -> 0.0F;
+            default -> 0.0F;   // settling into its mouth, its bands go dark
         };
         glow += (target - glow) * (target > glow ? 0.5F : 0.1F);
         flash *= 0.8F;
@@ -1249,21 +1416,27 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         else if (s == LEAP || (airTicks > 4 && vy < -0.1 && h.lengthSquared() < 0.25)) in.mode = LurkerBody.Mode.AIR;
         else in.mode = LurkerBody.Mode.SURFACE;
         in.crouch = s == CROUCH ? 1.0 : (s == WAIT && home == null ? 0.35 : 0.0);
-        in.brace = (s == WAIT || s == STIR) && home != null ? 1.0 : 0.0;
-        in.fangs = s == CROUCH ? 0.7 : s == LEAP ? 1.0 : s == HUNT || s == RECOIL ? 0.2 : 0.0;
+        in.mouth = s == CROUCH ? 0.45 : s == LEAP ? 1.0 : s == HUNT || s == RECOIL ? 0.12 : 0.0;
         in.tense = s == STIR ? 1.0 : 0.0;
         in.hurry = s == EMERGE || s == HUNT || s == LEAP;
+        in.upright = entityData.get(DATA_UPRIGHT);
+        // its coat points at the footsteps it feels, then at its quarry
+        Entity at = entityData.get(DATA_FOCUS) >= 0 ? level().getEntity(entityData.get(DATA_FOCUS)) : null;
+        if (at != null) {
+            in.focus.set(at.getX(), at.getY() + at.getBbHeight() * 0.6, at.getZ());
+            in.focusAmount = s == STIR || s == WAIT ? 0.65 : s == RETURN || s == CLIMB || s == SETTLE ? 0.0 : 1.0;
+        } else in.focusAmount = 0.0;
         body.bounds(in, bounds);
         rock.build(terrain, bounds[0], bounds[1], bounds[2], bounds[3], bounds[4], bounds[5]);
         body.tick(rock, in);
     }
 
-    /** Client: a foot lands: a light dry tap (a run's crowd of them thinned, so it patters rather than roars). */
+    /** Client: a spine's point lands: a light dry tap (a run's crowd of them thinned, so it patters rather than roars). */
     private void footfall(LurkerBody.Foot foot, boolean running, double speed) {
         if (isSilent() || tickCount - lastStep < (running ? 2 : 3)) return;
         lastStep = tickCount;
         float volume = running ? 0.3F : 0.18F;
-        float pitch = (foot.pair < 2 ? 1.1F : 0.95F) * (0.9F + random.nextFloat() * 0.2F);
+        float pitch = (foot.index % 4 == 0 ? 1.1F : 0.95F) * (0.9F + random.nextFloat() * 0.2F);
         level().playLocalSound(foot.at.x, foot.at.y, foot.at.z, ERSounds.CHIMNEY_LURKER_STEP.get(), getSoundSource(), volume, pitch, false);
     }
 }

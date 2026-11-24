@@ -18,11 +18,10 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * The Deep Gardens' chimney lurkers, set down as each chunk is made (0.21.0), so each waits in its vent's mouth before
- * anyone comes: about half the live vents hold one (Taran's card: "About half of them"; which, by each vent's own key,
- * {@link LurkerVents#held}). The chunk holding a vent's top (its axis) sets its lurker down, at the spot read from the
- * vent's blocks ({@link LurkerVents#find}), which may lie in the next chunk over: only the chunks round this one are
- * read or written.
+ * The Deep Gardens' vent urchins (0.21.3; 0.21.0's chimney lurkers), set down as each chunk is made, so each sits in
+ * its vent's mouth before anyone comes: about half the live vents hold one (Taran's card: "About half of them"; which,
+ * by each vent's own key, {@link LurkerVents#held}). The chunk holding a vent's top (its axis) sets its urchin down, on
+ * the seat read from the vent's blocks ({@link LurkerVents#find}): only the chunks round this one are read or written.
  *
  * <p>Runs last in the vent field's chunks (top layer), once the chunk's blocks are all in.
  */

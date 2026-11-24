@@ -252,9 +252,10 @@ CREATURE_EVENTS.update(MANTIS_EVENTS)
 CREATURE_SUBTITLES.update(MANTIS_SUBTITLES)
 
 
-# 0.21.0's chimney lurker of the Deep Gardens (tools/synth_creature_sounds.py chimney_lurker): dry and hard, lower and
-# heavier than the Skein. The rattle as its glow flashes on carries (heard before it comes over its rim); the clicks
-# while it stirs or hunts carry a little; its feet are heard only close.
+# The Deep Gardens' vent urchin (0.21.3; 0.21.0's chimney lurker, tools/synth_creature_sounds.py chimney_lurker): dry
+# and hard, lower and heavier than the Skein. The rattle of its spines as its glow flashes on carries (heard before it
+# comes over its rim); the clicks while it stirs or hunts carry a little; its spines' points on the rock are heard only
+# close.
 LURKER_EVENTS = {
     "chimney_lurker.step": creature("tap", 4, 0.5, 12, who="chimney_lurker"),
     "chimney_lurker.click": creature("click", 3, 0.75, 20, who="chimney_lurker"),
@@ -265,10 +266,10 @@ LURKER_EVENTS = {
     "chimney_lurker.death": creature("death", 1, 1.0, 24, who="chimney_lurker"),
 }
 LURKER_SUBTITLES = {
-    "chimney_lurker.step": "Hooked feet tick", "chimney_lurker.click": "Chimney Lurker clicks",
-    "chimney_lurker.rattle": "Chimney Lurker rattles", "chimney_lurker.hiss": "Chimney Lurker hisses",
-    "chimney_lurker.bite": "Fangs snap", "chimney_lurker.hurt": "Chimney Lurker hurts",
-    "chimney_lurker.death": "Chimney Lurker dies",
+    "chimney_lurker.step": "Spines tick on rock", "chimney_lurker.click": "Vent Urchin clicks",
+    "chimney_lurker.rattle": "Vent Urchin's spines rattle", "chimney_lurker.hiss": "Vent Urchin hisses",
+    "chimney_lurker.bite": "Teeth snap", "chimney_lurker.hurt": "Vent Urchin hurts",
+    "chimney_lurker.death": "Vent Urchin dies",
 }
 CREATURE_EVENTS.update(LURKER_EVENTS)
 CREATURE_SUBTITLES.update(LURKER_SUBTITLES)

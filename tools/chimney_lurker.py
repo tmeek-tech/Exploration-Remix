@@ -1,29 +1,28 @@
-"""The chimney lurker of the Deep Gardens (0.21.0, Taran's 2026-11-23 ask): its shape and textures.
+"""The vent urchin of the Deep Gardens (0.21.3, Taran's 2026-11-24 ask): its shape and textures.
 
-A big spider-like ambusher that lives down in the mouths of the live vents: a low cephalothorax ringed by twelve long
-walking legs (Taran's card: "Twelve walking legs") that span about six blocks ("Legs spanning about 6 blocks"), a
-fat egg-shaped abdomen behind it, two short fangs and two feelers at its front. Mostly black (Taran: "mostly black
-while it's waiting in ambush"): a matte near-black chitin with a faint cool sheen and fine bristles. Its eyes, a
-bead-like pattern down its back and bands at its leg joints glow in its vent's colour (cards: "Eyes and markings",
-"Its vent's colour"), and only while it hunts: the game draws the glow over the texture at the brightness the
-creature has it (0 waiting in the dark), so this file paints the glow at full and the renderer dims it. The mod's own
-creature; nothing here is taken from any other game.
+Taran: "Can you actually make the vent spiders more sea urchin-like than spider-like and have them straddle the vents
+that they live in?" It reworks 0.21.0's chimney lurker (the creature keeps its id, chimney_lurker, so the lurkers
+already set down in a world stay): a round black test (shell) about a block and a half across, ringed by sixteen long
+walking spines that it stands on, each bending once at a knee close to the test (Taran's card: "Needles with one
+knee", so it walks more like a spider on thin needles), a coat of short spines all over it, and its mouth underneath
+with five teeth. Mostly black (Taran's 0.21.0 card: "mostly black while it's waiting in ambush"): a matte near-black
+test with a faint cool sheen, the five-part star across its crown a row of paler pores. Neon bands ring every spine
+(Taran's card: "Bands down every spine"), glowing in its vent's colour only while it hunts: the game draws the glow
+over the texture at the brightness the creature has it (0 waiting in the dark), so this file paints the glow at full
+and the renderer dims it. The mod's own creature; nothing here is taken from any other game.
 
-The game poses every part itself (creature.body.LurkerPose): each part is a few boxes round its joint, with no rest
-pose of its own. Two kinds of part:
-  - body parts (the prosoma, the abdomen) lie along their own -z (forward; the abdomen along +z, backward from its
-    waist), their top toward -y, their left toward +x;
-  - limbs (each leg's coxa, femur, tibia and metatarsus, the fangs' bases and fangs, the feelers) run along their own
-    +y, from the joint they hang from to the next one.
-Lengths along a limb are the bone's own (LurkerSpec reads them from here: the longest box of each limb part).
+The game poses every part itself (creature.body.LurkerPose): each part is a few boxes round its own root, with no
+rest pose of its own. Two kinds of part:
+  - the test lies in its own frame: forward along -z, up along -y, its left along +x, its middle at the origin (and
+    each walking spine's boss, square with it, round its socket);
+  - rods (each walking spine's base and needle, the coat spines, the teeth) run along their own +y from their root.
+A rod part's pivot is where it sits on the test (the test's frame, pixels): LurkerSpec reads the sockets from there.
 
-Leg parts are named leg<pair><side>_<segment>: pair 0 (front) to 5 (back), side l or r.
-
-Textures are painted face by face in vanilla's box layout (creatures.faces). The glow overlay is drawn as eyes are
-(so shader packs light it), which adds its light to the texture's: under a glowing pixel the texture keeps only a
-dark tint of it (UNDER), and the two together come out the pixel's own neon (as on the mantis and the glow mats).
+Textures are painted face by face in vanilla's box layout (creatures.faces); the test is painted by where each texel
+lies on it (its way from the middle), so the star's five rays run unbroken over the boxes' faces. The glow overlay is
+drawn as eyes are (so shader packs light it), which adds its light to the texture's: under a glowing pixel the texture
+keeps only a dark tint of it (UNDER), and the two together come out the pixel's own neon (as on the mantis).
 """
-import json
 import math
 import os
 import random
@@ -41,89 +40,168 @@ NAME = "chimney_lurker"
 TEX_W, TEX_H = 256, 128
 
 # ================================================================================================ shape (pixels)
-PAIRS = 6
-SIDES = ("l", "r")
-# Each pair's segments (px): femur, tibia (with its knee), metatarsus (with its claw). The front pair is longest (it
-# reaches up over the rim of its vent as it waits), the back pair next, the middle ones shortest: about six blocks
-# across, foot to foot, standing.
-FEMUR = (26, 23, 21, 21, 23, 25)
-TIBIA = (25, 22, 20, 20, 22, 24)
-META = (18, 16, 15, 15, 16, 17)
-COXA = 3
-CHELICERA, FANG = 6, 4
-PALP_FEMUR, PALP_TIBIA = 6, 5
-
-
-def leg_name(pair, side):
-    return f"leg{pair}{side}"
-
-
-def limb(name, length, thick, bulb=None, extra=(), mat="rod"):
-    """A limb bone along +y: a square rod thick px across and length long, a joint bulb round its root (bulb px
-    across, inflated a quarter so it covers the rod's end), and any extra boxes."""
-    h = thick / 2.0
-    boxes = [B(mat, (-h, 0, -h), (thick, length, thick))]
-    if bulb:
-        g = bulb / 2.0
-        boxes.append(B("joint", (-g, -g, -g), (bulb, bulb, bulb), 0.25))
-    boxes += list(extra)
-    return P(name, "root", (0, 0, 0), (0, 0, 0), boxes)
-
-
-PARTS = [
-    # the prosoma (cephalothorax): a low, broad carapace with the head raised at its front, the sternum under it; its
-    # middle is the body's centre. Eight eyes on the head: the big pair in front, three smaller pairs round them.
-    P("prosoma", "root", (0, 0, 0), (0, 0, 0), [
-        B("carapace", (-7, -3, -8), (14, 5, 16)),
-        B("head", (-4.5, -5, -9), (9, 3, 6)),
-        B("sternum", (-5, 2, -6.5), (10, 1, 12)),
-        B("eye", (0.6, -5.7, -9.6), (2, 2, 1)),
-        B("eye", (-2.6, -5.7, -9.6), (2, 2, 1)),
-        B("eye_small", (3.0, -5.4, -8.8), (1, 1, 1)),
-        B("eye_small", (-4.0, -5.4, -8.8), (1, 1, 1)),
-        B("eye_small", (1.4, -5.6, -7.4), (1, 1, 1)),
-        B("eye_small", (-2.4, -5.6, -7.4), (1, 1, 1)),
-        B("eye_small", (3.6, -4.5, -6.6), (1, 1, 1)),
-        B("eye_small", (-4.6, -4.5, -6.6), (1, 1, 1)),
-    ]),
-    # the abdomen: egg-shaped behind the waist, widest past its middle, the spinnerets under its tip
-    P("abdomen", "root", (0, 0, 0), (0, 0, 0), [
-        B("waist", (-2, -1.5, 0), (4, 3, 2)),
-        B("belly", (-7, -6, 1.5), (14, 11, 4)),
-        B("belly", (-9.5, -8, 5), (19, 15, 13)),
-        B("belly", (-7.5, -6.5, 17.5), (15, 12, 5)),
-        B("tip", (-4, -3.5, 22), (8, 7, 2)),
-        B("spinner", (-1.5, 1, 23), (3, 2, 2)),
-    ]),
+# The test: an oblate ball 24 px across and 20 high, four boxes round its middle (a stepped ball, as the game's own
+# round things are). Its half sizes, for placing what sits on it.
+HALF_W, HALF_H = 12, 10
+TEST = [
+    B("test", (-10, -8, -10), (20, 16, 20)),
+    B("test", (-12, -6, -8), (24, 12, 16)),
+    B("test", (-8, -6, -12), (16, 12, 24)),
+    B("test", (-8, -10, -8), (16, 20, 16)),
 ]
-for side in SIDES:
-    PARTS += [limb(f"chelicera_{side}", CHELICERA, 3, bulb=None, mat="chelicera"),
-              limb(f"fang_{side}", FANG, 1, mat="fang"),
-              limb(f"palp_{side}_femur", PALP_FEMUR, 2, bulb=2),
-              limb(f"palp_{side}_tibia", PALP_TIBIA, 2, bulb=2, mat="palp")]
-for pair in range(PAIRS):
-    for side in SIDES:
-        n = leg_name(pair, side)
-        PARTS += [
-            limb(f"{n}_coxa", COXA, 3, bulb=3, mat="coxa"),
-            # the femur: thick, its root bulb the trochanter, a band of glow round its far end (by the knee)
-            limb(f"{n}_femur", FEMUR[pair], 3, bulb=4, mat="femur"),
-            # the tibia: its root bulb the knee (patella), glowing
-            limb(f"{n}_tibia", TIBIA[pair], 2, bulb=3, mat="tibia"),
-            # the metatarsus down to the foot: its root bulb the ankle, glowing; a hooked claw at its tip
-            limb(f"{n}_meta", META[pair], 2, bulb=2, mat="meta",
-                 extra=[B("claw", (-0.5, META[pair] - 0.5, -0.5), (1, 2, 1))]),
-        ]
+# The walking spines: sixteen round the test a little under its widest, each a short stout base from its socket's boss
+# to a knee, and from there a long needle tapering to a point: nearly three blocks in all (Taran's 0.21.0 card: legs
+# spanning about six blocks).
+SPINES = 16
+SPINE_ELEVATION = -9.0       # degrees: their sockets sit a little under the test's widest
+BASE_SEGS = ((3, 10),)                 # (thickness, length) from the socket to the knee: 10 px
+NEEDLE_SEGS = ((2, 16), (1, 20))       # from the knee to the point: 36 px
+KNEE = 3                               # the knee's knob, px across
+# The coat: short spines all over the test above its mouth, the longer ones among them, sockets spread evenly
+# (a golden-angle spiral), none on the bare crown round the star's middle nor on the soft skin round the mouth.
+COAT_TRIES = 84
+COAT_LOW, COAT_HIGH = -38.0, 71.0   # degrees: from just under its widest to the crown's edge
+# The mouth: five teeth under the test's middle, in a small ring, closing to a point.
+TEETH = 5
+TOOTH_RING = 2.2
+
+
+def dir_of(az, el):
+    """A way from the test's middle, (forward, up, left), from its azimuth (from forward toward the left) and its
+    elevation (degrees)."""
+    a, e = math.radians(az), math.radians(el)
+    return (math.cos(e) * math.cos(a), math.sin(e), math.cos(e) * math.sin(a))
+
+
+def to_model(fwd, up, left):
+    """The test's frame (forward, up, left) to model pixels (x left, y down, z back)."""
+    return (left, -up, -fwd)
+
+
+def surface(d):
+    """Where the way d (forward, up, left; unit) leaves the test's boxes: the distance out from its middle (px)."""
+    x, y, z = to_model(*d)
+    best = 0.0
+    for b in TEST:
+        ox, oy, oz = b["origin"]
+        sx, sy, sz = b["size"]
+        t = float("inf")
+        for o, s, v in ((ox, sx, x), (oy, sy, y), (oz, sz, z)):
+            if abs(v) < 1e-9: continue
+            t = min(t, ((o + s) if v > 0 else o) / v)
+        best = max(best, t)
+    return best
+
+
+def socket(az, el, sink):
+    """A socket on the test's surface at (az, el), sunk `sink` px into it: its place in model pixels."""
+    d = dir_of(az, el)
+    r = surface(d) - sink
+    return to_model(d[0] * r, d[1] * r, d[2] * r)
+
+
+def rod(name, segs, knob, tip_box=None, pivot=(0, 0, 0)):
+    """A rod part along +y: its segments (thickness, length) end to end from its root, a knob round its root (knob px
+    across, inflated a quarter so it covers the rod's end), and any extra box."""
+    boxes, y = [], 0.0
+    for thick, length in segs:
+        h = thick / 2.0
+        boxes.append(B("rod", (-h, y, -h), (thick, length, thick)))
+        y += length
+    if knob:
+        g = knob / 2.0
+        boxes.append(B("knob", (-g, -g, -g), (knob, knob, knob), 0.25))
+    if tip_box: boxes.append(tip_box)
+    return P(name, "root", pivot, (0, 0, 0), boxes)
+
+
+def coat_sockets():
+    """The coat's sockets: (azimuth, elevation, length px) along a golden-angle spiral over the test, kept off the
+    walking spines' ring (their knobs sit there), longer and shorter spines mixed."""
+    out = []
+    golden = math.pi * (3.0 - math.sqrt(5.0))
+    rng = random.Random(4417)
+    for k in range(COAT_TRIES):
+        # evenly over a sphere: heights evenly spaced, turning by the golden angle
+        s = 1.0 - 2.0 * (k + 0.5) / COAT_TRIES
+        el = math.degrees(math.asin(s))
+        az = math.degrees(k * golden) % 360.0
+        if not (COAT_LOW <= el <= COAT_HIGH): continue
+        # off the walking spines' knobs
+        near = min(abs(((az - i * 360.0 / SPINES) + 180.0) % 360.0 - 180.0) for i in range(SPINES))
+        if abs(el - SPINE_ELEVATION) < 9.0 and near < 8.0: continue
+        length = rng.choice((5, 6, 6, 7, 7, 8, 9, 10))
+        out.append((az, el, length))
+    return out
+
+
+COAT = coat_sockets()
+
+
+def build_parts():
+    parts = [P("test", "root", (0, 0, 0), (0, 0, 0), list(TEST))]
+    for t in range(TEETH):
+        # each tooth: a stout blade and a point; its root on a small ring under the test's middle (pivot, model px)
+        a = math.radians(t * 72.0)
+        pivot = (math.sin(a) * TOOTH_RING, HALF_H - 0.5, -math.cos(a) * TOOTH_RING)
+        parts.append(rod(f"tooth{t}", ((2, 4),), 0, B("tooth_tip", (-0.5, 4, -0.5), (1, 2, 1)), pivot))
+    for i in range(SPINES):
+        az = i * 360.0 / SPINES
+        pivot = socket(az, SPINE_ELEVATION, 1.0)
+        # the needle (its root slips into the test as it is pressed), and the boss it turns on: the test's own, so it
+        # stays put on the test whatever the needle does
+        parts.append(rod(f"base{i}", BASE_SEGS, 0, pivot=pivot))
+        parts.append(rod(f"spine{i}", NEEDLE_SEGS, KNEE, pivot=pivot))
+        parts.append(P(f"knob{i}", "root", pivot, (0, 0, 0), [B("knob", (-2, -2, -2), (4, 4, 4), 0.25)]))
+    for j, (az, el, length) in enumerate(COAT):
+        parts.append(rod(f"coat{j}", ((1, length),), 2, pivot=socket(az, el, 0.5)))
+    return parts
+
+
+PARTS = build_parts()
+
+
+def pack(parts):
+    """The texture's layout: the test, one tooth, one walking spine and one coat spine of each length get their own
+    places (creatures.pack); every other tooth and spine shares its twin's, so the ring reads as one creature's."""
+    first = {}
+    proto = []
+    for p in parts:
+        key = p["name"].rstrip("0123456789")
+        if key == "coat": key += str(int(p["boxes"][0]["size"][1]))
+        if key in first: continue
+        first[key] = p
+        proto.append(p)
+    cr.pack(proto, TEX_W, TEX_H)
+    for p in parts:
+        key = p["name"].rstrip("0123456789")
+        if key == "coat": key += str(int(p["boxes"][0]["size"][1]))
+        src = first[key]
+        if src is p: continue
+        for b, s in zip(p["boxes"], src["boxes"]):
+            b["uv"] = list(s["uv"])
+    return proto
 
 
 # ================================================================================================ painting
 # How much of a glowing pixel's colour the texture keeps under it (the overlay, added on top, brings the rest).
 UNDER = 0.12
-# The chitin: matte near-black, a little blue-violet, with a faint cool sheen on its upper faces and pale-ish bristles.
-CHITIN = [cr.C(c)[:3] for c in ("#09080C", "#0F0E14", "#15131B", "#1B1922", "#23202B")]
-SHEEN = cr.C("#34303F")[:3]
-BRISTLE = cr.C("#2C2935")[:3]
-FANG_GLOSS = [cr.C(c)[:3] for c in ("#100D10", "#1E1A1F", "#3A3239")]
+# The test: matte near-black, a little blue-violet; its plates' seams a shade lighter, a faint cool sheen up top.
+SHELL = [cr.C(c)[:3] for c in ("#08070B", "#0D0C12", "#121118", "#17151E", "#1D1A25")]
+SEAM = cr.C("#25212E")[:3]
+# The star's pores: a shade paler than the plates, dull (they do not glow).
+PORE = [cr.C(c)[:3] for c in ("#2E2A38", "#3A3546")]
+SHEEN = cr.C("#2F2B3A")[:3]
+TUBERCLE = cr.C("#2A2633")[:3]
+# The soft skin round its mouth, and its teeth (a cool pale grey, glossy, paler at their points).
+SKIN = [cr.C(c)[:3] for c in ("#140F18", "#1B1520", "#231B29")]
+TOOTH = [cr.C(c)[:3] for c in ("#5E6274", "#7C8194", "#9DA2B4", "#C3C7D4")]
+# The spines: black and glossy, a fine sheen down one side.
+SPINE = [cr.C(c)[:3] for c in ("#0A090D", "#110F15", "#18161E")]
+SPINE_SHEEN = cr.C("#2B2836")[:3]
+# Where the star's five rays run round the test (degrees from forward), and how far down its sides they reach.
+RAYS = tuple(18.0 + 72.0 * k for k in range(5))
+RAY_LOW = -24.0
 
 
 class Canvas:
@@ -148,11 +226,68 @@ class Canvas:
             self.gx[x, y] = (0, 0, 0, 0)
 
 
-def chitin(nz, lit=0.0):
-    """A chitin shade from a noise value (0 to 1), lifted by `lit` (0 to 1: the upper faces catch a little sheen)."""
-    k = nz * 0.75 + lit * 0.45
-    if k > 0.93: return SHEEN
-    return CHITIN[min(len(CHITIN) - 1, int(k * len(CHITIN)))]
+def texel_point(box, face, i, j):
+    """Where texel (i, j) of a box's face lies, in model pixels (vanilla's box layout, as MossbackRig.faces)."""
+    (x0, y0, z0), (w, h, d) = box["origin"], box["size"]
+    x1, y1, z1 = x0 + w, y0 + h, z0 + d
+    return {
+        "top": (x0 + i + 0.5, y0, z1 - j - 0.5),
+        "bottom": (x0 + i + 0.5, y1, z1 - j - 0.5),
+        "west": (x0, y0 + j + 0.5, z1 - i - 0.5),
+        "north": (x0 + i + 0.5, y0 + j + 0.5, z0),
+        "east": (x1, y0 + j + 0.5, z0 + i + 0.5),
+        "south": (x1 - i - 0.5, y0 + j + 0.5, z1),
+    }[face]
+
+
+def wrap(a):
+    return (a + 180.0) % 360.0 - 180.0
+
+
+def test_texel(cv, x, y, z, nz, rng):
+    """The test's colour at model point (x, y, z): the star's rays of pale pores from the crown down its sides, the
+    apical ring at the very top, plates and their seams between the rays, the soft skin round the mouth below."""
+    fwd, up, left = -z, -y, x
+    horiz = math.hypot(fwd, left)
+    el = math.degrees(math.atan2(up / HALF_H, max(1e-6, horiz) / HALF_W))
+    az = math.degrees(math.atan2(left, fwd)) % 360.0
+    r = math.sqrt(horiz * horiz + up * up)
+    # the crown: the apical ring (five pale pores round a dark middle) at the very top
+    if up >= HALF_H - 0.01:
+        rr = horiz
+        if rr < 1.3: return SHELL[0]
+        if rr < 3.2:
+            near = min(abs(wrap(az - a)) for a in RAYS)
+            if near < 22.0: return PORE[1]
+            return SHELL[1]
+    # the soft skin round its mouth, under it
+    if el < -52.0:
+        k = (el + 90.0) / 38.0
+        if horiz < 4.2: return SKIN[0]
+        return SKIN[min(2, int(nz * 2.0 + k))]
+    # the star's rays: a double row of pores down each, from the crown to under its widest
+    if el > RAY_LOW:
+        ring = max(1.0, horiz)                         # how far out from the test's axis the point lies (px)
+        for a in RAYS:
+            off = wrap(az - a) * math.pi / 180.0 * ring  # px across the ray
+            if abs(off) > 2.6: continue
+            # pores in pairs either side of the ray's line, at intervals down it
+            along = (90.0 - el) / 11.0
+            bead = along - math.floor(along)
+            row = 0.6 < abs(off) < 2.0
+            if row and 0.2 < bead < 0.8:
+                if el > 30.0: return PORE[1] if abs(off) < 1.4 and bead < 0.6 else PORE[0]
+                return PORE[0]
+            if abs(off) <= 0.6 and el > 40.0 and bead > 0.75: return SEAM
+            return SEAM if abs(off) < 0.6 else SHELL[2]
+    # plates between the rays: a grain of tubercles and a seam down the middle of each
+    mid_off = min(abs(wrap(az - a - 36.0)) for a in RAYS) * math.pi / 180.0 * max(1.0, horiz)
+    if mid_off < 0.5 and el > -20.0: return SEAM
+    if rng.random() < 0.08: return TUBERCLE
+    lit = max(0.0, min(1.0, (el + 10.0) / 80.0))
+    k = nz * 0.7 + lit * 0.45
+    if k > 0.98: return SHEEN
+    return SHELL[min(len(SHELL) - 1, int(k * len(SHELL)))]
 
 
 def paint_box(cv, part, box, rng):
@@ -162,120 +297,76 @@ def paint_box(cv, part, box, rng):
         n = cr.noise2(rng, max(1, fw), max(1, fh), 2.0)
         for j in range(fh):
             for i in range(fw):
-                c = texel(part, mat, face, i, j, fw, fh, n[j][i], rng, box["size"])
+                if mat == "test":
+                    c = test_texel(cv, *texel_point(box, face, i, j), n[j][i], rng)
+                else:
+                    c = texel(part, mat, face, i, j, fw, fh, n[j][i], rng, box)
                 if c is not None: cv.put(x0 + i, y0 + j, c)
 
 
-def bristles(nz, rng, lit):
-    """Fine bristles: a pale speck now and then on a dark ground."""
-    if rng.random() < 0.09: return BRISTLE
-    return chitin(nz, lit)
+def spine_shade(nz, face, rng):
+    if face == "east" and nz > 0.55: return SPINE_SHEEN
+    if rng.random() < 0.05: return SPINE[2]
+    return SPINE[0] if nz < 0.5 else SPINE[1]
 
 
-def texel(part, mat, face, i, j, fw, fh, nz, rng, size):
+def texel(part, mat, face, i, j, fw, fh, nz, rng, box):
     top, bottom = face == "top", face == "bottom"
-    if mat == "eye":
-        # the big front eyes: a hot heart, neon round it
-        if face == "north": return "hot" if (i, j) in ((0, 0), (1, 0), (0, 1), (1, 1)) and (i + j) % 3 != 2 else "neon"
-        return "neon"
-    if mat == "eye_small":
-        return "hot" if face in ("north", "top") else "neon"
-    if mat == "carapace":
-        if bottom: return chitin(nz * 0.5)
-        if top:
-            # the fovea, a glowing dot down the middle behind the head, and a fine dark radial grain
-            mid = fw // 2
-            if i in (mid - 1, mid) and j in (fh // 2 - 1, fh // 2): return "mid"
-            # two little beads either side of it
-            if j == fh // 2 + 2 and i in (mid - 4, mid + 3): return "neon"
-            return bristles(nz, rng, 0.55)
-        # its sides: a thin sheen along the rim
-        if j == 0: return SHEEN if nz > 0.5 else CHITIN[3]
-        return bristles(nz, rng, 0.2)
-    if mat == "head":
-        if top:
-            # a ring of faint glow round the eye mound's back edge
-            if j == 0 and 1 <= i < fw - 1: return "mid" if i % 2 == 0 else CHITIN[2]
-            return bristles(nz, rng, 0.6)
-        if face == "north": return chitin(nz * 0.6, 0.2)
-        return bristles(nz, rng, 0.25)
-    if mat == "sternum":
-        return chitin(nz * 0.5, 0.1)
-    if mat in ("waist", "spinner", "tip"):
-        if mat == "spinner" and bottom: return "dim"
-        return bristles(nz, rng, 0.3 if top else 0.1)
-    if mat == "belly":
-        return belly(face, i, j, fw, fh, nz, rng, size)
-    if mat == "chelicera":
-        # the fangs' bases: stout, glossy, a shine down their front
-        if face == "north" and i == 1: return FANG_GLOSS[2] if nz > 0.4 else FANG_GLOSS[1]
-        return FANG_GLOSS[0] if nz < 0.5 else FANG_GLOSS[1]
-    if mat == "fang":
-        if j >= fh - 1: return FANG_GLOSS[2]
-        return FANG_GLOSS[1] if face in ("north", "east") else FANG_GLOSS[0]
-    if mat == "palp":
-        if j >= fh - 1: return "mid"                         # the feeler's tip, a spark of glow
-        return bristles(nz, rng, 0.3)
-    if mat == "joint":
-        # each leg joint's knob is black chitin with a thin ring of glow round its middle (card: "bands at its leg
-        # joints"): brightest at the knees, dimmer at the ankles, faint where the femur leaves the body; the hips'
-        # and the feelers' knobs stay dark
-        if top or bottom: return chitin(nz * 0.5, 0.2)
-        ring = j == fh // 2
-        if part.endswith("_tibia") and ring: return "hot" if nz > 0.8 else "neon"     # the knee
-        if part.endswith("_meta") and ring: return "mid"                               # the ankle
-        if part.endswith("_femur") and ring: return "dim"                              # the trochanter
-        return bristles(nz, rng, 0.3)
-    if mat == "claw":
-        return FANG_GLOSS[2] if j == fh - 1 else FANG_GLOSS[1]
-    if mat in ("coxa", "femur", "tibia", "meta", "rod"):
-        if top or bottom: return chitin(nz * 0.4)
-        L = fh
-        # the rods stay black (the joints carry the rings); a fine sheen down the upper side, bristles all along
-        if mat == "meta" and j >= L - 2: return CHITIN[1]
-        upper = face == "east"
-        if upper and nz > 0.55: return SHEEN
-        return bristles(nz, rng, 0.35 if upper else 0.1)
-    return chitin(nz)
+    base_y = box["origin"][1]
+    if part.startswith("tooth"):
+        if mat == "tooth_tip": return TOOTH[3] if bottom or j >= fh - 1 else TOOTH[2]
+        if top: return TOOTH[0]
+        return TOOTH[2] if face in ("north", "east") and nz > 0.4 else TOOTH[1]
+    if mat == "knob":
+        # the ball joints (its socket's boss on the test, its knee): black, a dull sheen on the crown
+        if top: return SPINE_SHEEN if nz > 0.6 else SPINE[2]
+        return SPINE[1]
+    # a spine's shaft: black and glossy, ringed with neon bands (Taran's card: "Bands down every spine")
+    length = sum(b["size"][1] for b in PART_BY_NAME[part]["boxes"] if b["mat"] == "rod")
+    # the texel's place along the rod (px from its root, at the texel's middle): its end caps at the box's ends
+    y = base_y + (box["size"][1] - 0.5 if bottom else (0.5 if top else j + 0.5))
+    from_tip = length - y
+    band = spine_band(part, y, from_tip, length)
+    if band is not None: return band
+    if top or bottom: return SPINE[1]
+    return spine_shade(nz, face, rng)
 
 
-def belly(face, i, j, fw, fh, nz, rng, size):
-    """The abdomen's pieces: black and bristly, with the bead pattern down its back (the top faces of its three
-    pieces carry the beads in two rows that close in toward the tip, a line of small ones down the middle) and a row
-    of small beads low along each side."""
-    w, h, d = size
-    if face == "bottom": return chitin(nz * 0.45)
-    if face == "top":
-        # row 0 is the back edge (toward the tip), the last row the front; i runs with x (the left is +x)
-        mid = (fw - 1) / 2.0
-        # how far along the whole abdomen this row lies (0 at the waist, 1 at the tip): the pieces are told apart by width
-        if w == 14: a0, a1 = 0.0, 0.18
-        elif w == 19: a0, a1 = 0.18, 0.78
-        else: a0, a1 = 0.78, 1.0
-        along = a0 + (a1 - a0) * (1.0 - (j + 0.5) / fh)
-        half = (fw / 2.0) * (0.62 - 0.38 * along)            # the two rows close in toward the tip
-        dx = abs(i - mid)
-        phase = along * 6.0                                    # six pairs of beads along the back
-        k = phase - math.floor(phase)
-        if abs(dx - half) < 1.0 and 0.25 < k < 0.75:
-            return "hot" if abs(dx - half) < 0.5 and 0.38 < k < 0.62 else "neon"
-        # the middle line: small beads between the pairs
-        if dx < 0.6 and (k < 0.12 or k > 0.88) and along > 0.12: return "mid"
-        return bristles(nz, rng, 0.45)
-    if face in ("west", "east"):
-        # a row of small beads low along each side of the big piece
-        if w == 19 and j == fh - 4 and i % 4 == 1: return "mid"
-        frac = j / max(1, fh - 1)
-        return bristles(nz, rng, 0.35 * (1.0 - frac))
-    # front and back faces
-    if face == "south" and w == 8: return chitin(nz * 0.5)
-    return bristles(nz, rng, 0.2)
+# A walking spine's needle: its point, then a band every NEEDLE_BAND px up it (three px wide, brightest in the middle);
+# its base: one band round its middle. (Texels sit at half pixels along a rod, so the bands' middles do too.)
+NEEDLE_BAND = 7.0
+
+
+def spine_band(part, y, from_tip, length):
+    """The neon shade at y (px from the root; from_tip from the point) along a spine, or None between its bands."""
+    if part.startswith("spine"):
+        if from_tip < 1.0: return "hot"
+        if from_tip < 2.0: return "neon"
+        k = round((from_tip - 0.5) / NEEDLE_BAND)
+        c = k * NEEDLE_BAND + 0.5
+        if k >= 1 and c < length - 3.0:
+            off = abs(from_tip - c)
+            if off < 0.5: return "neon"
+            if off < 1.5: return "mid"
+        return None
+    if part.startswith("base"):
+        off = abs(y - (math.floor(length * 0.5) + 0.5))
+        if off < 0.5: return "neon"
+        if off < 1.5: return "mid"
+        return None
+    # a coat spine: its point, and on the longer ones a band a little down it
+    if from_tip < 1.0: return "neon"
+    if length >= 7 and abs(from_tip - 3.5) < 0.5: return "mid"
+    return None
+
+
+PART_BY_NAME = {p["name"]: p for p in PARTS}
 
 
 def paint(neon, seed=7301):
     cv = Canvas(neon)
     rng = random.Random(seed)
-    for p in PARTS:
+    for p in PACKED:
         for b in p["boxes"]:
             paint_box(cv, p["name"], b, rng)
     return cv
@@ -283,34 +374,36 @@ def paint(neon, seed=7301):
 
 def geometry_json(parts):
     return {"texture_width": TEX_W, "texture_height": TEX_H, "parts": [
-        {"name": p["name"], "parent": p["parent"], "pivot": p["pivot"], "rotation": p["rot"],
+        {"name": p["name"], "parent": p["parent"], "pivot": [round(v, 4) for v in p["pivot"]], "rotation": p["rot"],
          "boxes": [{"origin": b["origin"], "size": b["size"], "uv": b["uv"], "inflate": b["inflate"]} for b in p["boxes"]]}
         for p in parts]}
 
 
+PACKED = pack(PARTS)
+
+
 def write(assets, write_json):
-    """The lurker's geometry, a texture and a glow overlay for each neon colour, its spawn egg's model and its fang's
-    item model; returns its lang entries."""
-    cr.pack(PARTS, TEX_W, TEX_H)
+    """The urchin's geometry, a texture and a glow overlay for each neon colour and its spawn egg's model; returns its
+    lang entries."""
     write_json(os.path.join(assets, "geometry", NAME + ".json"), geometry_json(PARTS))
     tex_dir = os.path.join(assets, "textures", "entity", NAME)
     os.makedirs(tex_dir, exist_ok=True)
-    for i, neon in enumerate(T.NEONS):
+    for neon in T.NEONS:
         # one pattern for all four colours (the same seed), so they read as one creature in four colours
         cv = paint(neon, 7301)
         assert cv.glow.getbbox(), f"{NAME}: no glowing pixels"
         cv.img.save(os.path.join(tex_dir, f"{NAME}_{neon}.png"))
         cv.glow.save(os.path.join(tex_dir, f"{NAME}_{neon}_glow.png"))
     write_json(os.path.join(assets, "models", "item", NAME + "_spawn_egg.json"), {"parent": "minecraft:item/template_spawn_egg"})
-    return {f"entity.{MOD}.{NAME}": "Chimney Lurker", f"item.{MOD}.{NAME}_spawn_egg": "Chimney Lurker Spawn Egg",
-            f"item.{MOD}.{NAME}_fang": "Chimney Lurker Fang"}
+    return {f"entity.{MOD}.{NAME}": "Vent Urchin", f"item.{MOD}.{NAME}_spawn_egg": "Vent Urchin Spawn Egg",
+            f"item.{MOD}.{NAME}_fang": "Vent Urchin Spine"}
 
 
 if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else "."
     os.makedirs(out, exist_ok=True)
-    cr.pack(PARTS, TEX_W, TEX_H)
     from PIL import ImageChops
+    print(f"{len(PARTS)} parts, {len(COAT)} coat spines, {sum(len(p['boxes']) for p in PARTS)} boxes")
     for neon in T.NEONS:
         cv = paint(neon, 7301)
         lit = ImageChops.add(cv.img, cv.glow)

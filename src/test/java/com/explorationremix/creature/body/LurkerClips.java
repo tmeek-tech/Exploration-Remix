@@ -1,5 +1,8 @@
 package com.explorationremix.creature.body;
 
+import com.explorationremix.creature.ChimneyLurkerEntity;
+import com.explorationremix.creature.LurkerVents;
+import com.explorationremix.world.terrain.GardensField;
 import org.joml.Vector3d;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
@@ -12,16 +15,18 @@ import java.util.Random;
 import java.util.function.Predicate;
 
 /**
- * Clips of the chimney lurker's body in made-up places (standing, walking, its skitter, steps and rubble, waiting in
- * its chimney's mouth, out over the rim and down its vent, home again up the outside and in, the crouch and the leap,
- * dying), drawn with its real texture and glow and written as videos, to judge how it moves. Runs only when asked:
- * {@code ./gradlew test --tests '*LurkerClips*' -PslowTests -Dlurker.clips=<dir>} (and -Dlurker.only=walk,brace).
+ * Clips of the vent urchin's body in made-up places (standing, walking, running, steps and rubble, up a wall, sat half
+ * sunk in its vent's mouth, its rise over the rim and its way down the outside, home again up the outside and its glide
+ * back into its seat, the crouch and the leap, dying), drawn with its real texture and glow and written as videos, to
+ * judge how it moves. Runs only when asked:
+ * {@code ./gradlew test --tests '*LurkerClips*' -PslowTests -Dlurker.clips=<dir>} (and -Dlurker.only=walk,seat).
  */
 @Tag("slow")
 class LurkerClips {
     /**
-     * Moves the lurker as the game will: its box over a floor by the game's ground movement (up a block at a step, down
-     * by falling, through the air in a leap), its body over its vent by the crawler ({@link LurkerCrawl}).
+     * Moves the urchin as the game will: its box over a floor by the game's ground movement (up a block at a step, down
+     * by falling, through the air in a leap), its body over its vent by the crawler ({@link LurkerCrawl}), and held
+     * upright on its seat or gliding between its seat and its rim (the game's movement off).
      */
     static final class Driver {
         final BlockWorld world;
@@ -29,14 +34,19 @@ class LurkerClips {
         /** On the floor: its box's feet. */
         final Vector3d at = new Vector3d();
         double yaw, vy, speed;
-        boolean hurry, airborne, dead;
-        double crouch, brace, fangs, tense, glow;
+        boolean hurry, airborne, dead, upright;
+        double crouch, mouth, tense, glow;
+        /** What its spines point at, and how much. */
+        final Vector3d focus = new Vector3d();
+        double focusAmount;
         /** On its vent: the crawler holding it to the rock (null on the floor). */
         LurkerCrawl crawl;
+        /** Sat on its seat or gliding: its body's middle, held (null otherwise). */
+        Vector3d held;
         /** Leaping: its speed through the air. */
         final Vector3d flight = new Vector3d();
         boolean leaping;
-        static final double HW = 0.95;
+        static final double HW = 0.8;
 
         Driver(BlockWorld world, LurkerSpec spec, double x, double y, double z, double yawDeg) {
             this.world = world;
@@ -69,6 +79,13 @@ class LurkerClips {
 
         void turn(double deg) { yaw += Math.toRadians(deg); }
 
+        /** Its body's middle now. */
+        Vector3d centre() {
+            if (held != null) return new Vector3d(held);
+            if (crawl != null) return new Vector3d(crawl.pos);
+            return new Vector3d(at).add(0, spec.ride, 0);
+        }
+
         /** Off its vent onto the floor where the crawler left it, facing the way it went. */
         void toFloor() {
             at.set(crawl.pos).sub(0, spec.ride, 0);
@@ -80,7 +97,14 @@ class LurkerClips {
         }
 
         void drive(LurkerBody.Drive d) {
-            if (crawl != null) {
+            if (held != null) {
+                // as the entity's seat and glides: its heading straight up (it has no front), upright
+                d.x = held.x; d.y = held.y; d.z = held.z;
+                d.heading.set(0, 1, 0);
+                d.up.set(0, 0, 0);
+                d.mode = LurkerBody.Mode.SURFACE;
+                d.velocity.set(0, 0, 0);
+            } else if (crawl != null) {
                 d.x = crawl.pos.x; d.y = crawl.pos.y; d.z = crawl.pos.z;
                 d.heading.set(crawl.heading);
                 d.up.set(crawl.up);
@@ -95,7 +119,10 @@ class LurkerClips {
                 d.velocity.set(flight);
             }
             if (dead) d.mode = LurkerBody.Mode.DEAD;
-            d.crouch = crouch; d.brace = brace; d.fangs = fangs; d.tense = tense; d.hurry = hurry;
+            d.crouch = crouch; d.mouth = mouth; d.tense = tense; d.hurry = hurry;
+            d.upright = upright && held != null;
+            d.focus.set(focus);
+            d.focusAmount = focusAmount;
         }
     }
 
@@ -136,7 +163,7 @@ class LurkerClips {
 
     static Seg idle(int ticks) {
         return (d, t) -> {
-            if (d.crawl == null) {
+            if (d.crawl == null && d.held == null) {
                 if (d.speed > 0.003) { d.speed *= 1.0 - EASE; d.move(d.speed); } else d.speed = 0.0;
             }
             return t < ticks - 1;
@@ -145,25 +172,39 @@ class LurkerClips {
 
     static Seg set(java.util.function.Consumer<Driver> r) { return (d, t) -> { r.accept(d); return false; }; }
 
-    /** Waiting in its chimney's mouth: on the flue's inner wall at {@code azimuth}, head up, {@code depth} under the rim. */
-    static Seg waitIn(double ax, double az, double azimuth, double rFlue, double top, double depth) {
-        return set(d -> {
-            d.crawl = new LurkerCrawl(d.spec.ride);
-            Vector3d from = new Vector3d(ax + Math.cos(azimuth) * (rFlue - d.spec.ride), top - depth, az + Math.sin(azimuth) * (rFlue - d.spec.ride));
-            d.crawl.start(from, ax, az, LurkerCrawl.Sense.OUT);
-            if (d.crawl.read(d.world)) d.crawl.settle();
-            d.crawl.heading.set(0, 1, 0);
-            d.brace = 1;
-        });
+    /** Sat on its seat in its vent's mouth: its middle held there, upright. */
+    static Seg sit(Vector3d seat) {
+        return set(d -> { d.crawl = null; d.held = new Vector3d(seat); d.upright = true; });
+    }
+
+    /** Its middle glided to {@code to} over {@code ticks}, held upright: eased, rising over the straight way (as the game's). */
+    static Seg glide(Vector3d to, int ticks) {
+        Vector3d from = new Vector3d();
+        return (d, t) -> {
+            if (t == 0) {
+                from.set(d.centre());
+                d.crawl = null;
+                d.held = new Vector3d(from);
+                d.upright = true;
+            }
+            double s = Math.min(1.0, (t + 1) / (double) ticks), e = s * s * (3.0 - 2.0 * s);
+            d.held.set(from).lerp(to, e).add(0, LurkerVents.GLIDE_LIFT * Math.sin(Math.PI * s), 0);
+            return s < 1.0;
+        };
     }
 
     /** Over its vent's rock about the axis (ax, az) going {@code sense}, at {@code speed}, until {@code done} (or a limit). */
     static Seg crawl(LurkerCrawl.Sense sense, double ax, double az, double speed, Predicate<Driver> done, int limit) {
         return (d, t) -> {
             if (t == 0) {
-                Vector3d from = d.crawl != null ? new Vector3d(d.crawl.pos) : new Vector3d(d.at).add(0, d.spec.ride, 0);
-                if (d.crawl == null) d.crawl = new LurkerCrawl(d.spec.ride);
+                Vector3d from = d.centre();
+                boolean fresh = d.crawl == null;
+                if (fresh) d.crawl = new LurkerCrawl(d.spec.ride);
                 d.crawl.start(from, ax, az, sense);
+                // off its seat or its glide: onto the rock there (as the entity's offRim)
+                if (d.held != null && d.crawl.read(d.world)) d.crawl.settle();
+                d.held = null;
+                d.upright = false;
             }
             if (!d.crawl.step(d.world, speed)) System.out.println("  crawl lost its hold at tick " + t);
             Vector3d at = new Vector3d(d.crawl.pos);
@@ -176,27 +217,32 @@ class LurkerClips {
         };
     }
 
-    /** Out from its waiting spot: done on the floor (facing up, well under its rim), then off the vent onto the floor. */
-    static Seg out(double ax, double az, double speed, double top) {
-        int[] flat = {0};
-        return crawl(LurkerCrawl.Sense.OUT, ax, az, speed, d -> {
-            flat[0] = d.crawl.facingUp() > 0.85 && d.crawl.pos.y < top - 4 ? flat[0] + 1 : 0;
-            if (flat[0] < 2) return false;
+    /** Down its vent's outside from over its rim, judged as the game judges it: done on the floor, then off the vent onto it. */
+    static Seg out(LurkerVents.Home h, double speed) {
+        LurkerVents.Out[] judge = {null};
+        return crawl(LurkerCrawl.Sense.OUT, h.x(), h.z(), speed, d -> {
+            if (judge[0] == null) judge[0] = new LurkerVents.Out(h, new Vector3d(d.crawl.pos));
+            LurkerVents.Verdict j = judge[0].judge(d.crawl);
+            if (j == LurkerVents.Verdict.LOST) System.out.println("  out: lost its way (" + judge[0].why() + ")");
+            if (j != LurkerVents.Verdict.FLOOR) return j == LurkerVents.Verdict.LOST;
             d.toFloor();
             return true;
         }, 400);
     }
 
-    /** Home from the floor: up the outside, over the rim and down into the mouth, where it turns head up and braces. */
-    static Seg in(double ax, double az, double speed) {
-        return crawl(LurkerCrawl.Sense.IN, ax, az, speed, d -> {
-            if (d.crawl.facingOut() < -0.6 && d.crawl.pos.y <= d.crawl.highest - (1.2 + d.spec.ride)) {
-                d.crawl.heading.set(0, 1, 0);
-                d.brace = 1;
-                return true;
-            }
-            return false;
-        }, 400);
+    /** Home from the floor: up the outside and over its rim to its mouth's edge, judged as the game judges it. */
+    static Seg in(LurkerVents.Home h, double speed) {
+        LurkerVents.In judge = new LurkerVents.In(h);
+        return crawl(LurkerCrawl.Sense.IN, h.x(), h.z(), speed, d -> {
+            LurkerVents.Verdict j = judge.judge(d.crawl);
+            if (j == LurkerVents.Verdict.LOST) System.out.println("  home: lost its way (" + judge.why() + ")");
+            return j != LurkerVents.Verdict.ON;
+        }, 900);
+    }
+
+    /** Up whatever rock is about (ax, az), for {@code ticks}. */
+    static Seg climb(double ax, double az, double speed, int ticks) {
+        return crawl(LurkerCrawl.Sense.IN, ax, az, speed, d -> false, ticks);
     }
 
     /** A leap: crouched, it springs forward and up, its speed through the air taken down by the game's gravity and drag. */
@@ -205,7 +251,7 @@ class LurkerClips {
             if (t == 0) {
                 d.leaping = true;
                 d.crouch = 0;
-                d.fangs = 1;
+                d.mouth = 1;
                 d.flight.set(-Math.sin(d.yaw) * ahead, rise, Math.cos(d.yaw) * ahead);
             }
             d.at.add(d.flight);
@@ -216,7 +262,7 @@ class LurkerClips {
                 d.at.y = top;
                 d.leaping = false;
                 d.flight.set(0, 0, 0);
-                d.fangs = 0.3;
+                d.mouth = 0.12;
                 return false;
             }
             return true;
@@ -252,7 +298,7 @@ class LurkerClips {
     // ------------------------------------------------------------------------------------------------ worlds
 
     /**
-     * A vent like the Deep Gardens' live chimneys round the axis (0, 0): a column tapering from a flared foot to its rim,
+     * A vent like the Deep Gardens' live vents round the axis (0, 0): a column tapering from a flared foot to its rim,
      * a flange part way up, and a flue down its middle from its rim to a block over the floor.
      */
     static BlockWorld vent(double rFoot, double rTop, double rFlue, int height, int flangeY, double flange) {
@@ -272,11 +318,42 @@ class LurkerClips {
         return w;
     }
 
+    /**
+     * The urchin's home in a vent made by {@link #vent} ({@code height} rows), found as the game finds one (its seat in
+     * the mouth read from the blocks), its way down turned to the side {@code azimuth} for the camera.
+     */
+    static LurkerVents.Home home(BlockWorld w, double rFlue, double rTop, int height, double azimuth) {
+        GardensField.LiveVent v = new GardensField.LiveVent(0x5EEDL, 0.0, 0.0, 0, height - 1, rFlue, rTop, 0, 1, new double[0]);
+        StringBuilder report = new StringBuilder();
+        LurkerVents.Home h = LurkerVents.find((x, y, z) -> w.has(x, y, z), w, v, 0, (x, z) -> true, report);
+        System.out.println("  its home: " + report.toString().replace("\n", "\n  "));
+        if (h == null) throw new IllegalStateException("no home in the made-up vent: " + report);
+        return new LurkerVents.Home(h.key(), h.x(), h.z(), h.top(), azimuth, h.waitX(), h.waitY(), h.waitZ(), h.mouth(), h.wall(), h.colour());
+    }
+
+    static Vector3d seat(LurkerVents.Home h) { return new Vector3d(h.waitX(), h.waitY(), h.waitZ()); }
+
+    static Vector3d crest(BlockWorld w, LurkerVents.Home h) {
+        Vector3d c = LurkerVents.crest((x, y, z) -> w.has(x, y, z), (x, z) -> true, h, h.azimuth());
+        if (c == null) throw new IllegalStateException("no rim on its side");
+        return c;
+    }
+
+    /** Footsteps felt: its spines point at them a little, it stirs. */
+    static Seg feel(double x, double y, double z) {
+        return set(d -> { d.tense = 1; d.focus.set(x, y, z); d.focusAmount = 0.65; });
+    }
+
+    /** It sees its quarry: it lights, its spines all on it, and it hurries. */
+    static Seg see(double x, double y, double z) {
+        return set(d -> { d.tense = 0; d.glow = 1; d.hurry = true; d.focus.set(x, y, z); d.focusAmount = 1.0; });
+    }
+
     // ------------------------------------------------------------------------------------------------ scenes
 
     static List<Scene> scenes(LurkerSpec spec) {
         List<Scene> list = new ArrayList<>();
-        {   // standing still, turned three quarters to the camera
+        {   // standing still, lit
             BlockWorld w = new BlockWorld().fill(-10, -1, -10, 10, -1, 10);
             Driver d = new Driver(w, spec, 0, 0, 0, 30);
             list.add(new Scene("still", w, d, List.of(set(dd -> dd.glow = 1), idle(40)), new Vector3d(4.6, 2.6, 3.6)));
@@ -287,16 +364,16 @@ class LurkerClips {
             list.add(new Scene("orbit", w, d, List.of(set(dd -> dd.glow = 1), idle(120)), new Vector3d(0, 2.0, 5.6), -1,
                     new Vector3d(0, 0.2, 0), null, false));
         }
-        {   // walking on a flat floor: straight, a turn, a stop, a turn on the spot, on again
+        {   // walking on a flat floor: straight, a turn, a stop, a turn on the spot (it has no front: nothing to see), on again
             BlockWorld w = new BlockWorld().fill(-16, -1, -16, 16, -1, 16);
             Driver d = new Driver(w, spec, -3, 0, -7, 0);
             list.add(new Scene("walk", w, d, List.of(idle(10), walk(5.0, 0.09), arc(-90, 4.0, 0.09), walk(2.0, 0.09), idle(30), spin(140, 6),
                     idle(20), walk(3.0, 0.09), idle(30)), new Vector3d(-6.2, 4.2, -4.4)));
         }
-        {   // from the side: a walk, then its skitter
+        {   // from the side: a walk, then its run at a quarry
             BlockWorld w = new BlockWorld().fill(-8, -1, -16, 8, -1, 44);
             Driver d = new Driver(w, spec, 0, 0, -12, 0);
-            list.add(new Scene("run", w, d, List.of(idle(10), walk(4, 0.09), set(dd -> { dd.hurry = true; dd.glow = 1; }), walk(18, 0.26),
+            list.add(new Scene("run", w, d, List.of(idle(10), walk(4, 0.09), set(dd -> { dd.hurry = true; dd.glow = 1; }), walk(18, 0.24),
                     set(dd -> dd.hurry = false), walk(1.0, 0.09), idle(30)), new Vector3d(8.0, 2.4, 0.0)));
         }
         {   // steps, slabs and a drop
@@ -322,53 +399,69 @@ class LurkerClips {
         {   // a sheer wall six blocks high: up its face from the floor, over its top edge and on across the top, seen from the side
             BlockWorld w = new BlockWorld().fill(-16, -1, -10, 16, -1, 10).fill(-8, 0, -10, -1, 5, 10);
             Driver d = new Driver(w, spec, 6, 0, 0.3, 90);
-            list.add(new Scene("wall", w, d, List.of(idle(10), walk(2, 0.09), in(-60, 0.3, 0.12), idle(20)),
+            list.add(new Scene("wall", w, d, List.of(idle(10), walk(2, 0.09), climb(-60, 0.3, 0.12, 150), idle(20)),
                     new Vector3d(0.0, 1.5, 10.0), -1, new Vector3d(0, 0, 0), b -> b[1] >= 0 && (b[2] + b[5]) / 2 > 1.6, false));
         }
-        // its vent: ten blocks high, its flue six across the middle (as most live vents' are), a flange part way up
+        // its vent: ten blocks high, its flue a middling live vent's, a flange part way up; its way down on the +x side
         int height = 10;
-        double rFlue = 3.0, az = 0.12, depth = 2.0;
+        double rFlue = Double.parseDouble(System.getProperty("lurker.flue", "1.8")), rTop = 4.6, az = 0.12;
         Predicate<double[]> cutNear = b -> b[1] >= 0 && (b[2] + b[5]) / 2 > 0.6;
-        Predicate<double[]> cutAxisSide = b -> b[1] >= 0 && (b[0] + b[3]) / 2 < 0.8;
-        {   // waiting in its chimney's mouth, a cut through the vent: braced, stirring, then out and down to the floor
-            BlockWorld w = vent(6.6, 4.6, rFlue, height, 5, 1.1);
+        // where a player's footsteps are felt, and where it sees them: on the floor off its +x side
+        double px = 9.0, py = 1.0, pz = 1.5;
+        {   // sat in its vent's mouth, a cut through the vent: still, stirring at footsteps, then up over its rim and down to the floor
+            BlockWorld w = vent(6.6, rTop, rFlue, height, 5, 1.1);
+            LurkerVents.Home h = home(w, rFlue, rTop, height, az);
             Driver d = new Driver(w, spec, 0, 0, 0, 0);
-            list.add(new Scene("brace", w, d, List.of(waitIn(0, 0, az, rFlue, height, depth), idle(50), set(dd -> dd.tense = 1), idle(40),
-                    set(dd -> { dd.tense = 0; dd.brace = 0; dd.glow = 1; dd.hurry = true; }), out(0, 0, 0.24, height),
-                    walk(6, 0.26), set(dd -> dd.hurry = false), idle(30)),
+            list.add(new Scene("seat", w, d, List.of(sit(seat(h)), idle(50), feel(px, py, pz), idle(40), see(px, py, pz), idle(6),
+                    glide(crest(w, h), ChimneyLurkerEntity.RISE_TICKS), out(h, ChimneyLurkerEntity.EMERGE_CRAWL), walk(5, 0.2),
+                    set(dd -> dd.hurry = false), idle(30)),
                     new Vector3d(0.0, 1.0, 12.0), -1, new Vector3d(0, 0, 0), cutNear, false));
         }
-        {   // waiting, seen from across its chimney (the near half cut away): its back, its legs braced round the flue
-            BlockWorld w = vent(6.6, 4.6, rFlue, height, 5, 1.1);
+        {   // the same, seen from over the rim (no cut): a spiny ball in the vent's mouth, its spines spread over the rim all round
+            BlockWorld w = vent(6.6, rTop, rFlue, height, 5, 1.1);
+            LurkerVents.Home h = home(w, rFlue, rTop, height, az);
             Driver d = new Driver(w, spec, 0, 0, 0, 0);
-            list.add(new Scene("brace-back", w, d, List.of(waitIn(0, 0, az, rFlue, height, depth), idle(40), set(dd -> dd.tense = 1), idle(40)),
-                    new Vector3d(-6.5, 1.2, 0.8), -1, new Vector3d(0, 0.3, 0), cutAxisSide, false));
+            list.add(new Scene("seat-top", w, d, List.of(sit(seat(h)), idle(50), feel(px, py, pz), idle(40), see(px, py, pz), idle(6),
+                    glide(crest(w, h), ChimneyLurkerEntity.RISE_TICKS), out(h, ChimneyLurkerEntity.EMERGE_CRAWL), idle(20)),
+                    new Vector3d(-5.5, 4.5, 5.0), -1, new Vector3d(0, 0, 0), null, true));
         }
-        {   // the same, seen from over the rim (no cut): only its front feet's tips show over the rim
-            BlockWorld w = vent(6.6, 4.6, rFlue, height, 5, 1.1);
+        {   // sat, close and low over the rim (no cut): how its spines' points stand on the rim
+            BlockWorld w = vent(6.6, rTop, rFlue, height, 5, 1.1);
+            LurkerVents.Home h = home(w, rFlue, rTop, height, az);
             Driver d = new Driver(w, spec, 0, 0, 0, 0);
-            list.add(new Scene("brace-top", w, d, List.of(waitIn(0, 0, az, rFlue, height, depth), idle(50), set(dd -> dd.tense = 1), idle(40),
-                    set(dd -> { dd.tense = 0; dd.brace = 0; dd.glow = 1; dd.hurry = true; }), out(0, 0, 0.24, height), idle(20)),
-                    new Vector3d(-5.5, 6.0, 5.0), -1, new Vector3d(0, 0, 0), null, false));
+            list.add(new Scene("seat-near", w, d, List.of(sit(seat(h)), idle(40), feel(-px, py, pz), idle(40), see(-px, py, pz), idle(30)),
+                    new Vector3d(-3.2, 1.6, 3.6), -1, new Vector3d(0, -0.2, 0), null, true));
         }
-        {   // home: from the floor up the outside, over the rim and down into the mouth, where it turns and braces
-            BlockWorld w = vent(6.6, 4.6, rFlue, height, 5, 1.1);
+        {   // home: from the floor up the outside, over the rim, and its glide down into its seat
+            BlockWorld w = vent(6.6, rTop, rFlue, height, 5, 1.1);
+            LurkerVents.Home h = home(w, rFlue, rTop, height, az);
             Driver d = new Driver(w, spec, 10.0, 0, 1.2, 90);
-            list.add(new Scene("home", w, d, List.of(set(dd -> dd.glow = 0.6), idle(10), in(0, 0, 0.14), idle(60)),
+            list.add(new Scene("home", w, d, List.of(set(dd -> dd.glow = 0.6), idle(10), in(h, ChimneyLurkerEntity.HOME_CRAWL),
+                    set(dd -> dd.glow = 0), glide(seat(h), ChimneyLurkerEntity.SETTLE_TICKS), sit(seat(h)), idle(60)),
                     new Vector3d(0.0, 1.0, 12.0), -1, new Vector3d(0, 0, 0), cutNear, false));
         }
-        {   // a wide vent (its flue nine across): waiting, then out
-            BlockWorld w = vent(8.0, 6.4, 4.5, 9, 4, 1.0);
+        {   // a wide mouth (as wide as it sits in): sat, then out
+            double wide = Double.parseDouble(System.getProperty("lurker.wide", "2.5"));
+            BlockWorld w = vent(8.0, 6.0, wide, 9, 4, 1.0);
+            LurkerVents.Home h = home(w, wide, 6.0, 9, az);
             Driver d = new Driver(w, spec, 0, 0, 0, 0);
-            list.add(new Scene("wide", w, d, List.of(waitIn(0, 0, az, 4.5, 9, depth), idle(40), set(dd -> { dd.brace = 0; dd.glow = 1; dd.hurry = true; }),
-                    out(0, 0, 0.24, 9), walk(4, 0.26), idle(20)),
-                    new Vector3d(0.0, 2.0, 13.0), -1, new Vector3d(0, 0, 0), cutNear, false));
+            list.add(new Scene("wide", w, d, List.of(sit(seat(h)), idle(40), see(px + 2, py, pz), idle(6),
+                    glide(crest(w, h), ChimneyLurkerEntity.RISE_TICKS), out(h, ChimneyLurkerEntity.EMERGE_CRAWL), walk(4, 0.2), idle(20)),
+                    new Vector3d(-5.0, 5.0, 7.0), -1, new Vector3d(0, 0, 0), null, true));
+        }
+        {   // a narrow mouth (as narrow as it sits in): sat
+            double narrow = Double.parseDouble(System.getProperty("lurker.narrow", "1.1"));
+            BlockWorld w = vent(5.6, 3.6, narrow, 9, 4, 1.0);
+            LurkerVents.Home h = home(w, narrow, 3.6, 9, az);
+            Driver d = new Driver(w, spec, 0, 0, 0, 0);
+            list.add(new Scene("narrow", w, d, List.of(sit(seat(h)), idle(40), feel(px, py, pz), idle(30)),
+                    new Vector3d(-4.5, 3.5, 4.5), -1, new Vector3d(0, 0, 0), null, true));
         }
         {   // the crouch and the leap
             BlockWorld w = new BlockWorld().fill(-10, -1, -10, 10, -1, 24);
             Driver d = new Driver(w, spec, 0, 0, -4, 0);
-            list.add(new Scene("leap", w, d, List.of(set(dd -> dd.glow = 1), idle(10), set(dd -> { dd.crouch = 1; dd.fangs = 0.7; }), idle(10),
-                    leap(0.48, 0.42), idle(20), set(dd -> dd.fangs = 0), idle(20)), new Vector3d(7.5, 2.0, 1.0)));
+            list.add(new Scene("leap", w, d, List.of(set(dd -> dd.glow = 1), idle(10), set(dd -> { dd.crouch = 1; dd.mouth = 0.45; }), idle(10),
+                    leap(0.48, 0.42), idle(20), set(dd -> dd.mouth = 0), idle(20)), new Vector3d(7.5, 2.0, 1.0)));
         }
         {   // it dies where it stands
             BlockWorld w = new BlockWorld().fill(-10, -1, -10, 10, -1, 10);
@@ -438,13 +531,13 @@ class LurkerClips {
                         if (!ft.planted) continue;
                         worstMiss = Math.max(worstMiss, pose.reachMiss[i]);
                         if (pose.reachMiss[i] > 0.02) missFrames++;
-                        if (pose.kneeAt[i].distanceSquared(pose.hipAt[i]) > 0 && new Vector3d(pose.kneeAt[i]).sub(pose.hipAt[i]).dot(pose.upNow) < 0) kneesLow++;
+                        if (new Vector3d(pose.kneeAt[i]).sub(pose.socketAt[i]).dot(pose.upNow) < 0) kneesLow++;
                     }
                 }
                 Vector3d mid = new Vector3d(), f = new Vector3d(), u = new Vector3d();
                 body.frame(pt, mid, f, u);
                 if (cam == null) cam = new Vector3d(mid);
-                else cam.lerp(mid, s.driver.hurry ? 0.14 : 0.07);
+                else if (!s.fixedCam) cam.lerp(mid, s.driver.hurry ? 0.14 : 0.07);
                 Vector3d off = new Vector3d(s.camOffset).mul(ZOOM);
                 if (s.name.startsWith("orbit")) {
                     double a = Math.toRadians(ticks + pt) * 3.0;
@@ -462,7 +555,7 @@ class LurkerClips {
         }
         StringBuilder st = new StringBuilder();
         for (int i = 0; i < LurkerSpec.LEGS; i++) st.append(i == 0 ? "" : " ").append(steps[i]);
-        System.out.printf("  %d ticks, steps [%s], planted %.1f of 12, worst reach miss %.3f, frames short %d, knees under hips %d,"
+        System.out.printf("  %d ticks, steps [%s], planted %.1f of 16, worst reach miss %.3f, frames short %d, knees under sockets %d,"
                         + " planted feet off rock %d, stepping feet in rock %d, body against rock %d%n",
                 ticks, st, plantedTicks == 0 ? 0 : (double) planted / plantedTicks, worstMiss, missFrames, kneesLow, feetOff, feetIn, bodyNear);
         File mp4 = new File(dir.getParentFile(), s.name + ".mp4");
