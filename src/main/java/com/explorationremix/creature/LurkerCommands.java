@@ -1,6 +1,7 @@
 package com.explorationremix.creature;
 
 import com.explorationremix.block.Neon;
+import com.explorationremix.creature.body.LurkerRig;
 import com.explorationremix.registry.EREntities;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.feature.ChimneyLurkersFeature;
@@ -27,6 +28,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3d;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -47,6 +49,8 @@ import java.util.function.Consumer;
  *     is there now, a death on record; and the counts of those set down with the world and moved in since</li>
  *     <li>{@code /remix lurker tp [n] [distance]}: to the nth nearest vent that holds a lurker (from 1), standing that
  *     far off its axis (12 blocks, or the distance given) on its floor, facing its rim</li>
+ *     <li>{@code /remix lurker inside}: down inside the nearest urchin's vent, on its chamber's floor a little off its
+ *     flue's foot, looking up its flue at it (as someone come in through a crack)</li>
  *     <li>{@code /remix lurker place}: a lurker into the nearest vent that holds one and has none now (as the refill
  *     would, seen or not)</li>
  *     <li>{@code /remix lurker hunt [target]}: the nearest lurker notices you (or the target: any creature, for tests
@@ -71,6 +75,7 @@ public final class LurkerCommands {
                         .then(Commands.argument("n", IntegerArgumentType.integer(1, 64)).executes(c -> tp(c, IntegerArgumentType.getInteger(c, "n"), 12))
                                 .then(Commands.argument("distance", IntegerArgumentType.integer(3, 40))
                                         .executes(c -> tp(c, IntegerArgumentType.getInteger(c, "n"), IntegerArgumentType.getInteger(c, "distance"))))))
+                .then(Commands.literal("inside").executes(LurkerCommands::inside))
                 .then(Commands.literal("place").executes(LurkerCommands::place))
                 .then(Commands.literal("hunt").executes(c -> hunt(c, null))
                         .then(Commands.argument("target", EntityArgument.entity()).executes(c -> hunt(c, EntityArgument.getEntity(c, "target")))))
@@ -303,6 +308,49 @@ public final class LurkerCommands {
         player.teleportTo(level, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, yaw, pitch);
         src.sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "At the %s vent at %.0f %.0f (rim %.0f), from %s",
                 Neon.ofCode(v.colour()).getSerializedName(), v.x(), v.z(), f.top, at.toShortString())), true);
+    }
+
+    /**
+     * Down inside the nearest urchin's vent (0.21.4): on its chamber's floor two to four blocks off its flue's foot, in
+     * sight of its underside, looking up its flue at it.
+     */
+    private static int inside(CommandContext<CommandSourceStack> c) {
+        CommandSourceStack src = c.getSource();
+        if (!(src.getEntity() instanceof ServerPlayer player)) return 0;
+        ChimneyLurkerEntity e = nearest(src, 64, false);
+        LurkerVents.Home h = e == null ? null : e.home();
+        if (h == null) {
+            src.sendFailure(Component.literal("No vent urchin with a vent within 64 blocks"));
+            return 0;
+        }
+        ServerLevel level = src.getLevel();
+        List<Vector3d> way = LurkerVents.flueWay(level, h);
+        if (way == null) {
+            src.sendFailure(Component.literal("No way down its flue: " + e.describe()));
+            return 0;
+        }
+        Vector3d foot = way.get(way.size() - 1);
+        int fy = (int) Math.floor(foot.y - LurkerRig.shared().spec.ride);
+        Vec3 under = new Vec3(h.waitX(), h.waitY() - LurkerRig.shared().spec.halfHeight * 0.9, h.waitZ());
+        for (double r : new double[]{2.5, 3.0, 2.0, 3.5, 4.0}) {
+            for (int k = 0; k < 16; k++) {
+                double a = k * Math.PI / 8.0;
+                BlockPos at = floor(level, (int) Math.floor(foot.x + Math.cos(a) * r), fy + 1, (int) Math.floor(foot.z + Math.sin(a) * r), 4);
+                if (at == null) continue;
+                Vec3 eye = new Vec3(at.getX() + 0.5, at.getY() + 1.62, at.getZ() + 0.5);
+                if (level.clip(new ClipContext(eye, under, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player)).getType() != HitResult.Type.MISS) continue;
+                double dx = under.x - eye.x, dz = under.z - eye.z, dy = under.y - eye.y;
+                float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+                float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
+                player.teleportTo(level, at.getX() + 0.5, at.getY(), at.getZ() + 0.5, yaw, pitch);
+                double depth = h.waitY() - foot.y;
+                src.sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "Inside its vent at %s, its flue %.1f deep over you: %s", at.toShortString(), depth,
+                        e.describe())), true);
+                return 1;
+            }
+        }
+        src.sendFailure(Component.literal(String.format(Locale.ROOT, "No floor in sight of it inside its vent (its flue's foot at %.1f %.1f %.1f)", foot.x, foot.y, foot.z)));
+        return 0;
     }
 
     /** The highest floor (an open block with another over it, on a solid one) at or under {@code y}, within {@code depth} rows. */

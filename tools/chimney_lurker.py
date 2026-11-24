@@ -50,12 +50,12 @@ TEST = [
     B("test", (-8, -10, -8), (16, 20, 16)),
 ]
 # The walking spines: sixteen round the test a little under its widest, each a short stout base from its socket's boss
-# to a knee, and from there a long needle tapering to a point: nearly three blocks in all (Taran's 0.21.0 card: legs
-# spanning about six blocks).
+# to a knee, and from there a long needle tapering to a point: about three and a half blocks in all (0.21.4, Taran: "make
+# its legs a little longer so it can straddle big vents"; card: "A quarter longer"), so it spans about eight blocks.
 SPINES = 16
 SPINE_ELEVATION = -9.0       # degrees: their sockets sit a little under the test's widest
-BASE_SEGS = ((3, 10),)                 # (thickness, length) from the socket to the knee: 10 px
-NEEDLE_SEGS = ((2, 16), (1, 20))       # from the knee to the point: 36 px
+BASE_SEGS = ((3, 12),)                 # (thickness, length) from the socket to the knee: 12 px
+NEEDLE_SEGS = ((2, 20), (1, 25))       # from the knee to the point: 45 px
 KNEE = 3                               # the knee's knob, px across
 # The coat: short spines all over the test above its mouth, the longer ones among them, sockets spread evenly
 # (a golden-angle spiral), none on the bare crown round the star's middle nor on the soft skin round the mouth.

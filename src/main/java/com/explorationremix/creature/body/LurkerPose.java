@@ -33,6 +33,22 @@ public final class LurkerPose {
         void vertex(float x, float y, float z, float u, float v, float nx, float ny, float nz, int light);
     }
 
+    /**
+     * How much of its glow a point of it shows: by its way down the body and down its walking spine (pixels, see
+     * LurkerRig; -1 off the walking spines) and its way round it (0 to 1).
+     */
+    public interface Shade {
+        float at(float down, float leg, float round);
+    }
+
+    /** All of its glow everywhere. */
+    public static final Shade STEADY = (down, leg, round) -> 1.0F;
+
+    /** Takes each corner of each glowing quad, four to a quad, with the share of its glow there. */
+    public interface GlowSink {
+        void vertex(float x, float y, float z, float u, float v, float nx, float ny, float nz, float shade);
+    }
+
     /** Dying: its middle settles to this far over the rock under it (blocks at scale 1); its spines lie this far under level. */
     static final double DEATH_RIDE = 0.55, DEATH_SPLAY = Math.toRadians(13);
 
@@ -147,6 +163,19 @@ public final class LurkerPose {
             float nx = qx[q], ny = qy[q], nz = qz[q];
             int lt = bright ? fullBright : partLight[rig.vPart[i]];
             for (int c = 0; c < 4; c++, i++) sink.vertex(x[i], y[i], z[i], rig.vu[i], rig.vv[i], nx, ny, nz, lt);
+        }
+    }
+
+    /**
+     * Hands the quads of the spines that glow (cut across along them: LurkerRig) to {@code sink}, each corner shaded by
+     * {@code shade} (0.21.4: the pulses that run down its body as it chases).
+     */
+    public void emitGlow(GlowSink sink, Shade shade) {
+        if (!ready) return;
+        for (int q : rig.glowQuads) {
+            float nx = qx[q], ny = qy[q], nz = qz[q];
+            for (int c = 0, i = q * 4; c < 4; c++, i++)
+                sink.vertex(x[i], y[i], z[i], rig.vu[i], rig.vv[i], nx, ny, nz, shade.at(rig.vDown[i], rig.vLeg[i], rig.vRound[i]));
         }
     }
 

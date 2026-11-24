@@ -49,6 +49,12 @@ public final class LurkerBody {
         public boolean hurry;
         /** Sat in its vent's mouth, or rising out of it and gliding over its rim: held straight up whatever rock is near. */
         public boolean upright;
+        /**
+         * Climbing down or up the inside of its flue, held upright (0.21.4): its spines braced on the flue's walls, every
+         * other one reaching down the wall under it ({@link #braced}), the rest up the wall over it; its going up and down
+         * counted, so its spines step ahead of it.
+         */
+        public boolean climbing;
         /** What its spines point at (a place in the world) and how much (0 not at all, 1 all on it). */
         public final Vector3d focus = new Vector3d();
         public double focusAmount;
@@ -71,6 +77,17 @@ public final class LurkerBody {
     static final double SWEEP_FROM = Math.toRadians(-32), SWEEP_TO = Math.toRadians(118), SWEEP_STEP = Math.toRadians(6),
             SWEEP_UP = Math.toRadians(-84);
     static final int SWEEP_REFINE = 4;
+    /**
+     * Climbing its flue, a braced spine is swung from straight down (or up) to this far off it (radians), in steps; its
+     * way to its point must be clear for this share of it.
+     */
+    static final double BRACE_TO = Math.toRadians(80), BRACE_STEP = Math.toRadians(4), BRACE_CLEAR = 0.9;
+    /** Climbing its flue, a spine its test is coming toward lands this share of the way out to the end of its reach, one it is leaving this near in. */
+    static final double BRACE_LONG = 0.96, BRACE_SHORT = 1.06;
+    /** Climbing its flue: its steps this quick (ticks), as many spines up at once as running, two lifting at a tick. */
+    static final int BRACE_SWING = 3;
+    /** Off its flue's walls, a spine further than this from where it would rest steps there at once (blocks). */
+    static final double UNBRACE = 0.6;
     /**
      * Where a step lands: a spine the test will come toward hangs its needle this much longer (its point lands far out),
      * one it will go away from this much shorter (near in).
@@ -102,7 +119,7 @@ public final class LurkerBody {
     private final Vector3d vel = new Vector3d();
     private double crouch, crouchPrev, mouth, mouthPrev, tense, focusAmount;
     private double speed, speedPrev, mix, mixPrev;
-    private boolean running, upright;
+    private boolean running, upright, climbing;
     private int standing, settleNext;
     private Mode mode = Mode.SURFACE;
     private long ticks;
@@ -206,6 +223,8 @@ public final class LurkerBody {
         crouchPrev = crouch; mouthPrev = mouth;
         mode = in.mode;
         upright = in.upright;
+        boolean wasClimbing = climbing;
+        climbing = in.upright && in.climbing;
         if (!laid || lastBox.distanceSquared(in.x, in.y, in.z) > JUMP * JUMP) {
             lay(rock, in);
             return;
@@ -227,8 +246,20 @@ public final class LurkerBody {
         tense += (clamp01(in.tense) - tense) * 0.2;
 
         frameTick(rock, in);
+        // off its flue's walls (sat in its mouth, or down on the floor at its foot): its braced spines out to where they rest
+        if (wasClimbing && !climbing && mode == Mode.SURFACE) unbrace(rock);
         feet(rock, in);
         coatTick(in);
+    }
+
+    /** Its spines braced up or down its flue's walls step out at once (a quick ripple) to where they would rest now. */
+    private void unbrace(TerrainPatch rock) {
+        for (Foot ft : feet) {
+            if (!ft.planted || ft.swinging) continue;
+            hip(ft.index, hipNow);
+            if (!contact(rock, ft.index, hipNow, spec.restAngle[ft.index], spec.length[ft.index], t1, t2)) continue;
+            if (t1.distance(ft.at) > UNBRACE * spec.scale) begin(rock, ft, 4 + ft.index % 3, 0.3 * spec.scale);
+        }
     }
 
     /** How far out from the rock its middle rides now (crouched lower). */
@@ -271,9 +302,9 @@ public final class LurkerBody {
                 if (m > 0) p.add(fld[1] * m * 0.6, fld[2] * m * 0.6, fld[3] * m * 0.6);
             }
         } else p.lerp(target, 0.7);
-        // its going, along the rock
+        // its going, along the rock (up and down too, climbing its flue)
         t3.set(p).sub(pPrev);
-        t3.fma(-t3.dot(u), u);
+        if (!climbing) t3.fma(-t3.dot(u), u);
         vel.lerp(t3, 0.45);
         double s = vel.length();
         speed += (s - speed) * 0.35;
@@ -429,7 +460,7 @@ public final class LurkerBody {
         for (Foot ft : feet) if (ft.swinging) swing(rock, ft);
         boolean moving = speed > 0.006 * spec.scale;
         standing = moving ? 0 : standing + 1;
-        int most = running ? AIR_RUN : AIR_WALK;
+        int most = running || climbing ? AIR_RUN : AIR_WALK;
         // planted spines: how hard each pulls, and which must step
         Foot pick = null;
         for (Foot ft : feet) {
@@ -462,7 +493,7 @@ public final class LurkerBody {
             }
         }
         // the hardest pulled spine that may lift lifts (and, running, a second)
-        for (int k = 0; k < (running ? 2 : 1) && pick != null && up < most; k++) {
+        for (int k = 0; k < (running || climbing ? 2 : 1) && pick != null && up < most; k++) {
             begin(rock, pick, swingTicks(), liftNow());
             up++;
             Foot next = null;
@@ -532,6 +563,7 @@ public final class LurkerBody {
     }
 
     private int swingTicks() {
+        if (climbing) return BRACE_SWING;
         int t = (int) Math.round(0.7 * spec.scale / Math.max(speed, 0.05));
         return Math.max(3, Math.min(7, t));
     }
@@ -572,6 +604,17 @@ public final class LurkerBody {
         double L = spec.length[i];
         hip(i, t6);
         t6.fma(ticksLeft, vel);
+        if (climbing) {
+            // braced on its flue's wall: far down (or up) the wall it is coming toward, near in on the side it is leaving
+            double toward = vel.dot(u) * (bracedDown(i) ? -1.0 : 1.0);
+            double dist = spec.rest[i] * (toward > 0.01 * spec.scale ? spec.far * BRACE_LONG : toward < -0.01 * spec.scale ? spec.near * BRACE_SHORT : 1.0);
+            if (brace(rock, i, t6, spec.restAngle[i], dist, t1, t2) || brace(rock, i, t6, spec.restAngle[i], spec.rest[i], t1, t2)) {
+                ft.toRock = true;
+                ft.to.set(t1);
+                ft.toN.set(t2);
+                return;
+            }
+        }
         double a = spec.restAngle[i], len = L;
         double v = vel.length();
         if (v > 0.006 * spec.scale) {
@@ -683,6 +726,8 @@ public final class LurkerBody {
             from = h;
             reach = len + spec.upper[leg];
         }
+        // climbing its flue: braced on its wall over or under it, where there is one
+        if (climbing && brace(rock, leg, h, a, spec.rest[leg], out, n)) return true;
         if (!lower(rock, from, a, reach, SWEEP_FROM, out, n)) return false;
         if (lowEdge && lowFrac < 0.9) {
             // over an edge in its way: on over it, from just over the edge, to the rock beyond
@@ -695,6 +740,57 @@ public final class LurkerBody {
         }
         double d = out.distance(h) / spec.rest[leg];
         return d >= spec.near && d <= spec.far;
+    }
+
+    /** Climbing its flue, whether spine {@code leg} braces down the flue's wall under it (every other one) or up the wall over it. */
+    private static boolean bracedDown(int leg) { return leg % 2 == 0; }
+
+    /**
+     * Climbing its flue (0.21.4): spine {@code leg}'s point braced on the flue's wall, {@code dist} from its socket
+     * {@code h} round the way {@code a}: its spine held straight from its socket and swung from straight down (or up,
+     * {@link #bracedDown}) toward level until its point first meets rock with nothing in its way before it. {@code out}
+     * gets the point (just in the rock), {@code n} the way out of it. False if it meets none (no wall there).
+     */
+    private boolean brace(TerrainPatch rock, int leg, Vector3d h, double a, double dist, Vector3d out, Vector3d n) {
+        double side = bracedDown(leg) ? -1.0 : 1.0;
+        radial(a, t4);
+        double clearAt = -1.0;
+        for (double th = 0.0; th <= BRACE_TO + 1.0E-9; th += BRACE_STEP) {
+            int r = braceAt(rock, h, side, th, dist);
+            if (r == 1) {
+                // refined: the angle its point first touches rock
+                double lo = clearAt < 0 ? th : clearAt, hi = th;
+                if (clearAt >= 0) {
+                    for (int k = 0; k < SWEEP_REFINE; k++) {
+                        double mid = (lo + hi) * 0.5;
+                        if (braceAt(rock, h, side, mid, dist) == 1) hi = mid;
+                        else lo = mid;
+                    }
+                }
+                double s = Math.sin(hi), c = Math.cos(hi) * side;
+                out.set(h).fma(dist * s, t4).fma(dist * c, u);
+                // the way out of that rock: where a line from a little short of its point meets it
+                t5.set(h).fma(dist * 0.85 * s, t4).fma(dist * 0.85 * c, u);
+                if (rock.clip(t5.x, t5.y, t5.z, out.x + (out.x - t5.x) * 0.5, out.y + (out.y - t5.y) * 0.5, out.z + (out.z - t5.z) * 0.5, hit) && hit[4] < 0.5)
+                    n.set(hit[1], hit[2], hit[3]);
+                else n.set(t4).negate();
+                return true;
+            }
+            clearAt = r == 0 ? th : -1.0;
+        }
+        return false;
+    }
+
+    /**
+     * A braced spine's straight line from {@code h}, {@code th} off straight down ({@code side} -1) or up: 1 if its point
+     * lies in rock with its way there clear, 0 if all of it is clear, -1 if rock is in its way short of its point.
+     */
+    private int braceAt(TerrainPatch rock, Vector3d h, double side, double th, double dist) {
+        double s = Math.sin(th), c = Math.cos(th) * side;
+        double px = h.x + dist * (t4.x * s + u.x * c), py = h.y + dist * (t4.y * s + u.y * c), pz = h.z + dist * (t4.z * s + u.z * c);
+        double qx = h.x + (px - h.x) * BRACE_CLEAR, qy = h.y + (py - h.y) * BRACE_CLEAR, qz = h.z + (pz - h.z) * BRACE_CLEAR;
+        if (rock.clip(h.x, h.y, h.z, qx, qy, qz, hit)) return -1;
+        return rock.solid(px, py, pz) ? 1 : 0;
     }
 
     /**
@@ -711,11 +807,18 @@ public final class LurkerBody {
         double clear = Double.NaN;
         if (reach(rock, o, rx, ry, rz, from, len)) {
             if (hit[4] > 0.5) return false;
-            for (double th = from - SWEEP_STEP; th >= SWEEP_UP - 1.0E-9; th -= SWEEP_STEP) {
-                if (!reach(rock, o, rx, ry, rz, th, len)) { clear = th; break; }
+            if (hit[1] * u.x + hit[2] * u.y + hit[3] * u.z < -0.5) {
+                // under a roof (a low ceiling over it, 0.21.4): lowered from under it, never raised up through a hole in it
+                double th = from + SWEEP_STEP;
+                while (th < 0.0 && reach(rock, o, rx, ry, rz, th, len) && hit[1] * u.x + hit[2] * u.y + hit[3] * u.z < -0.5) th += SWEEP_STEP;
+                from = th;
+            } else {
+                for (double th = from - SWEEP_STEP; th >= SWEEP_UP - 1.0E-9; th -= SWEEP_STEP) {
+                    if (!reach(rock, o, rx, ry, rz, th, len)) { clear = th; break; }
+                }
+                if (Double.isNaN(clear)) return false;
+                from = clear + SWEEP_STEP;
             }
-            if (Double.isNaN(clear)) return false;
-            from = clear + SWEEP_STEP;
         }
         for (double th = from; th <= SWEEP_TO + 1.0E-9; th += SWEEP_STEP) {
             if (!reach(rock, o, rx, ry, rz, th, len)) { clear = th; continue; }

@@ -48,6 +48,8 @@ public class LurkerModel extends EntityModel<ChimneyLurkerEntity> {
     private float red, green, blue, alpha;
     private boolean burning;
     private final LurkerPose.Sink sink = this::vertex;
+    private float glowLevel;
+    private final LurkerPose.GlowSink glowSink = this::glowVertex;
 
     public LurkerModel() {
         super(RenderType::entityCutoutNoCull);
@@ -101,25 +103,44 @@ public class LurkerModel extends EntityModel<ChimneyLurkerEntity> {
         draw(poseStack, consumer, packedOverlay, r, g, b, a, false);
     }
 
-    /** Draws it again lit through and through (its markings, as the vents' glowing beads are lit). */
-    public void renderBright(PoseStack poseStack, VertexConsumer consumer, float r, float g, float b, float a) {
-        draw(poseStack, consumer, OverlayTexture.NO_OVERLAY, r, g, b, a, true);
+    /**
+     * Draws its glowing spines again lit through and through (its markings, as the vents' glowing beads are lit), at
+     * {@code level}, each point at the share {@code shade} gives it (0.21.4: pulses down its body as it chases).
+     */
+    public void renderGlow(PoseStack poseStack, VertexConsumer consumer, float level, LurkerPose.Shade shade) {
+        if (!pose.ready()) return;
+        place(poseStack);
+        out = consumer;
+        glowLevel = level;
+        pose.emitGlow(glowSink, shade);
+        out = null;
     }
 
     private void draw(PoseStack poseStack, VertexConsumer consumer, int packedOverlay, float r, float g, float b, float a, boolean bright) {
         if (!pose.ready()) return;
-        poseStack.pushPose();
-        // undo LivingEntityRenderer's flip of a model (a scale of -1, -1, 1 and a drop of 1.501): the pose is the world's
-        poseStack.translate(0.0F, 1.501F, 0.0F);
-        poseStack.scale(-1.0F, -1.0F, 1.0F);
-        matrix.set(poseStack.last().pose());
-        normals.set(poseStack.last().normal());
-        poseStack.popPose();
+        place(poseStack);
         out = consumer;
         overlay = packedOverlay;
         red = r; green = g; blue = b; alpha = a;
         pose.emit(sink, LightTexture.FULL_BRIGHT, bright);
         out = null;
+    }
+
+    /** The pose is the world's: undoes LivingEntityRenderer's flip of a model (a scale of -1, -1, 1 and a drop of 1.501). */
+    private void place(PoseStack poseStack) {
+        poseStack.pushPose();
+        poseStack.translate(0.0F, 1.501F, 0.0F);
+        poseStack.scale(-1.0F, -1.0F, 1.0F);
+        matrix.set(poseStack.last().pose());
+        normals.set(poseStack.last().normal());
+        poseStack.popPose();
+    }
+
+    private void glowVertex(float x, float y, float z, float u, float v, float nx, float ny, float nz, float shade) {
+        matrix.transform(p4.set(x, y, z, 1.0F));
+        normals.transform(n3.set(nx, ny, nz));
+        float c = Math.max(0.0F, Math.min(1.0F, glowLevel * shade));
+        out.vertex(p4.x(), p4.y(), p4.z(), c, c, c, 1.0F, u, v, OverlayTexture.NO_OVERLAY, LightTexture.FULL_BRIGHT, n3.x(), n3.y(), n3.z());
     }
 
     private void vertex(float x, float y, float z, float u, float v, float nx, float ny, float nz, int light) {
