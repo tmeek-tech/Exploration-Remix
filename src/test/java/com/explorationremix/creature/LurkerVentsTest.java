@@ -40,7 +40,8 @@ class LurkerVentsTest {
         Terrain rock = (x, y, z, sink) -> { if (solid.at(x, y, z)) sink.box(x, y, z, x + 1, y + 1, z + 1); };
         LurkerVents.Readable all = (x, z) -> true;
         List<GardensField.LiveVent> vents = f.liveVents(x0, z0, x0 + size, z0 + size);
-        int narrow = 0, wide = 0, held = 0, homes = 0, out = 0, back = 0;
+        int narrow = 0, wide = 0, held = 0, homes = 0, out = 0, back = 0, flueDown = 0;
+        double ride = com.explorationremix.creature.body.LurkerRig.shared().spec.ride;
         List<String> lines = new ArrayList<>(), fails = new ArrayList<>();
         boolean could = Boolean.getBoolean("lurker.could");
         // for setting MIN_FLUE, MAX_FLUE and HELD: every vent tried, by its flue's radius (half-block bins)
@@ -70,6 +71,14 @@ class LurkerVentsTest {
                 continue;
             }
             homes++;
+            // 0.21.4 (card: "Climbs down inside"): its way down the inside of its flue to the floor under it
+            List<Vector3d> flue = LurkerVents.flueWay(solid, all, h);
+            Vector3d flueEnd = flue == null ? null : flue.get(flue.size() - 1);
+            boolean flueFloor = flueEnd != null && solid.at((int) Math.floor(flueEnd.x), (int) Math.floor(flueEnd.y - ride - 0.01), (int) Math.floor(flueEnd.z));
+            if (flueFloor) flueDown++;
+            else fails.add(at + (flueEnd == null ? ": no way down its flue" : ": its way down its flue sticks at " + fmt(flueEnd)));
+            String flueAt = flueEnd == null ? "no way down its flue" : String.format(Locale.ROOT, "down its flue %.1f to %s%s", h.waitY() - flueEnd.y, fmt(flueEnd),
+                    flueFloor ? "" : " (stuck)");
             int on = LurkerVents.onRim(rock, new Vector3d(h.waitX(), h.waitY(), h.waitZ()), h.top());
             Vector3d crest = LurkerVents.crest(solid, all, h, h.azimuth());
             StringBuilder why = new StringBuilder();
@@ -84,13 +93,13 @@ class LurkerVentsTest {
             if (up.verdict() != LurkerVents.Verdict.HOME) { fails.add(at + ": its climb home from " + fmt(foot) + " fails (" + why + ")"); continue; }
             back++;
             lines.add(String.format(Locale.ROOT, "%s: sat at %.1f %.1f %.1f (%.2f over its rim's top, its mouth's edge %.1f out, %d spines on the rim), over the rim at %s,"
-                            + " down to the floor at %s (%.1f off its axis, %.1f under its rim), back over at %s",
+                            + " down to the floor at %s (%.1f off its axis, %.1f under its rim), back over at %s; %s",
                     at, h.waitX(), h.waitY(), h.waitZ(), h.waitY() - h.top(), h.mouth(), on, fmt(crest), fmt(foot), h.across(foot.x, foot.z), h.top() - foot.y,
-                    fmt(up.at())));
+                    fmt(up.at()), flueAt));
         }
         StringBuilder b = new StringBuilder();
-        b.append(String.format(Locale.ROOT, "%d live vents in %d x %d at %d %d: %d too narrow, %d too wide, %d chosen to hold an urchin, %d with a home (%.0f%% of all), %d reach the floor, %d climb home%n",
-                vents.size(), size, size, x0, z0, narrow, wide, held, homes, 100.0 * homes / Math.max(1, vents.size()), out, back));
+        b.append(String.format(Locale.ROOT, "%d live vents in %d x %d at %d %d: %d too narrow, %d too wide, %d chosen to hold an urchin, %d with a home (%.0f%% of all), %d reach the floor, %d climb home, %d climb down their flue to its floor%n",
+                vents.size(), size, size, x0, z0, narrow, wide, held, homes, 100.0 * homes / Math.max(1, vents.size()), out, back, flueDown));
         if (could) {
             int ca = 0, cc = 0;
             for (int i = 0; i < 16; i++) {
@@ -108,6 +117,8 @@ class LurkerVentsTest {
         double share = homes / (double) Math.max(1, vents.size());
         assertTrue(share > 0.38 && share < 0.62, "about half the live vents hold an urchin: " + b);
         assertTrue(back >= homes * 0.95, "nearly every urchin's way out and home works: " + b);
+        // 0.21.4: nearly every urchin can climb down the inside of its flue (one that cannot drops down it, as before)
+        assertTrue(flueDown >= homes * 0.9, "nearly every urchin's way down its flue reaches its floor: " + b);
     }
 
     private static String fmt(Vector3d v) { return String.format(Locale.ROOT, "%.1f %.1f %.1f", v.x, v.y, v.z); }

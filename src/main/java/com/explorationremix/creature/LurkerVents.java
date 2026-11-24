@@ -476,6 +476,83 @@ public final class LurkerVents {
         return out.verdict() == Verdict.FLOOR ? out.at() : null;
     }
 
+    // ------------------------------------------------------------------------------------------------ down its flue
+
+    /** Its way down its flue goes this far at a step (blocks), its test kept this much of its size clear of the rock. */
+    static final double FLUE_STEP = 0.5, FLUE_FIT = 0.85;
+    /** Its way down its flue goes no further than this (blocks), and is no way at all if it goes less than the second. */
+    public static final double FLUE_MOST = 40.0, FLUE_LEAST = 1.5;
+    /** Where its test may move over to at a step down its flue (blocks across, at scale 1): none first, then nearest first. */
+    private static final double[][] FLUE_SHIFTS = flueShifts();
+
+    private static double[][] flueShifts() {
+        java.util.List<double[]> o = new java.util.ArrayList<>();
+        o.add(new double[]{0, 0});
+        for (double r : new double[]{0.2, 0.4, 0.6})
+            for (int k = 0; k < 8; k++) o.add(new double[]{Math.cos(k * Math.PI / 4) * r, Math.sin(k * Math.PI / 4) * r});
+        return o.toArray(new double[0][]);
+    }
+
+    /**
+     * Its way down the inside of its vent from its seat (0.21.4, Taran's card: "Climbs down inside"): its test's middle
+     * every {@link #FLUE_STEP} down its flue, kept where its test fits (moved over as little as will do where the flue
+     * leans or its wall bulges in), to where it stands on the floor under its flue (its ride over it: the vent's
+     * chamber), or as far down as its test will go. The seat first; null if it goes less than {@link #FLUE_LEAST}.
+     */
+    @Nullable
+    public static java.util.List<Vector3d> flueWay(Solid solid, Readable readable, Home h) {
+        LurkerSpec spec = LurkerRig.shared().spec;
+        java.util.List<Vector3d> way = new java.util.ArrayList<>();
+        double x = h.waitX(), y = h.waitY(), z = h.waitZ();
+        way.add(new Vector3d(x, y, z));
+        for (int i = 0; i < FLUE_MOST / FLUE_STEP; i++) {
+            int bx = (int) Math.floor(x), bz = (int) Math.floor(z);
+            if (!readable.at(bx, bz)) break;
+            double down = y - FLUE_STEP;
+            // its feet come to the floor under it: there it stands
+            int fy = (int) Math.floor(down - spec.ride);
+            if (solid.at(bx, fy, bz)) {
+                double stand = fy + 1.0 + spec.ride;
+                if (stand < y - 0.05) {
+                    way.add(new Vector3d(x, stand, z));
+                    y = stand;
+                }
+                break;
+            }
+            // a step down: where it is, else moved over as little as fits
+            double[] to = null;
+            for (double[] o : FLUE_SHIFTS) {
+                if (fits(solid, readable, x + o[0] * spec.scale, down, z + o[1] * spec.scale, FLUE_FIT)) { to = o; break; }
+            }
+            if (to == null) break;
+            x += to[0] * spec.scale;
+            z += to[1] * spec.scale;
+            y = down;
+            way.add(new Vector3d(x, y, z));
+        }
+        return h.waitY() - y < FLUE_LEAST ? null : way;
+    }
+
+    /**
+     * How far along a way (0 to 1) at time t (0 to 1) at an even pace, eased up over the first share {@code a} of the
+     * time and down over the last (its climbs in its flue).
+     */
+    public static double eased(double t, double a) {
+        a = Math.max(1.0E-3, Math.min(0.5, a));
+        double s;
+        if (t < a) s = t * t / (2.0 * a);
+        else if (t > 1.0 - a) s = 1.0 - a - (1.0 - t) * (1.0 - t) / (2.0 * a);
+        else s = t - a * 0.5;
+        return Math.max(0.0, Math.min(1.0, s / (1.0 - a)));
+    }
+
+    /** As {@link #flueWay(Solid, Readable, Home)}, read from the level's loaded blocks. */
+    @Nullable
+    public static java.util.List<Vector3d> flueWay(LevelReader level, Home h) {
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        return flueWay((x, y, z) -> solid(level, p.set(x, y, z)), (x, z) -> level.hasChunk(x >> 4, z >> 4), h);
+    }
+
     /** How its way over the rim goes, tick by tick. */
     public enum Verdict {
         /** On its way. */

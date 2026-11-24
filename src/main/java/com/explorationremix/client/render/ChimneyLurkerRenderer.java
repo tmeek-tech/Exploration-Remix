@@ -4,6 +4,7 @@ import com.explorationremix.ExplorationRemix;
 import com.explorationremix.block.Neon;
 import com.explorationremix.client.model.LurkerModel;
 import com.explorationremix.creature.ChimneyLurkerEntity;
+import com.explorationremix.creature.body.LurkerPose;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -18,8 +19,9 @@ import net.minecraft.resources.ResourceLocation;
  * Draws the vent urchin as its body stands on the rock (0.21.3; see LurkerModel and creature.body): its colour's
  * texture (black), then its neon (the bands down every walking spine, Taran's 0.21.3 card: "Bands down every spine")
  * drawn again over it as eyes are, at the brightness it has them: dark while it sits in its vent's mouth (Taran: "mostly
- * black while it's waiting in ambush"), flashing on as it sees someone and throbbing while it hunts, surging as it
- * crouches to leap, fading as it climbs home and going out as it dies. Eyes add their light to what is under them, so
+ * black while it's waiting in ambush"), flashing on as it sees someone, pulses running down its body while it chases
+ * (0.21.4, quicker the nearer its quarry: see ChimneyLurkerEntity.Pulses), surging as it crouches to leap, fading as it
+ * climbs home and going out as it dies. Eyes add their light to what is under them, so
  * the texture keeps only a dark tint under its glowing pixels (tools/chimney_lurker.py), and the two together come out
  * its vent's colour.
  */
@@ -68,10 +70,11 @@ public class ChimneyLurkerRenderer extends MobRenderer<ChimneyLurkerEntity, Lurk
             if (e.isDeadOrDying()) level *= Math.max(0.0F, 1.0F - e.deathTime / 18.0F);
             if (e.isInvisible()) return;
             VertexConsumer vc = buffers.getBuffer(RenderType.eyes(GLOW[e.colour().ordinal()]));
-            if (level >= 0.02F) getParentModel().renderBright(pose, vc, level, level, level, 1.0F);
+            // chasing, pulses run down it (0.21.4): its glow shaded down its body
+            if (level >= 0.02F) getParentModel().renderGlow(pose, vc, level, e.pulseShade(partialTick));
             // the flash as it sees someone, and the surge as it crouches: its markings drawn again over themselves (it adds up)
             float flash = e.flash(partialTick) * 0.8F;
-            if (flash > 0.02F && !e.isDeadOrDying()) getParentModel().renderBright(pose, vc, flash, flash, flash, 1.0F);
+            if (flash > 0.02F && !e.isDeadOrDying()) getParentModel().renderGlow(pose, vc, flash, LurkerPose.STEADY);
         }
     }
 }

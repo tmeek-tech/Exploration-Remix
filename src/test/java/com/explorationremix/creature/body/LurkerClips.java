@@ -34,8 +34,10 @@ class LurkerClips {
         /** On the floor: its box's feet. */
         final Vector3d at = new Vector3d();
         double yaw, vy, speed;
-        boolean hurry, airborne, dead, upright;
+        boolean hurry, airborne, dead, upright, climbing;
         double crouch, mouth, tense, glow;
+        /** Its chase pulses (0.21.4): on (1) or off (0), or (below 0) on as it hurries; and how near its quarry is (0 far, 1 close). */
+        double pulse = -1, near = 0.6;
         /** What its spines point at, and how much. */
         final Vector3d focus = new Vector3d();
         double focusAmount;
@@ -121,6 +123,7 @@ class LurkerClips {
             if (dead) d.mode = LurkerBody.Mode.DEAD;
             d.crouch = crouch; d.mouth = mouth; d.tense = tense; d.hurry = hurry;
             d.upright = upright && held != null;
+            d.climbing = climbing && held != null;
             d.focus.set(focus);
             d.focusAmount = focusAmount;
         }
@@ -174,11 +177,14 @@ class LurkerClips {
 
     /** Sat on its seat in its vent's mouth: its middle held there, upright. */
     static Seg sit(Vector3d seat) {
-        return set(d -> { d.crawl = null; d.held = new Vector3d(seat); d.upright = true; });
+        return set(d -> { d.crawl = null; d.held = new Vector3d(seat); d.upright = true; d.climbing = false; });
     }
 
     /** Its middle glided to {@code to} over {@code ticks}, held upright: eased, rising over the straight way (as the game's). */
-    static Seg glide(Vector3d to, int ticks) {
+    static Seg glide(Vector3d to, int ticks) { return glide(to, ticks, LurkerVents.GLIDE_LIFT); }
+
+    /** A glide lifted {@code lift} at its middle (none climbing its flue: ChimneyLurkerEntity.upFlue). */
+    static Seg glide(Vector3d to, int ticks, double lift) {
         Vector3d from = new Vector3d();
         return (d, t) -> {
             if (t == 0) {
@@ -188,7 +194,7 @@ class LurkerClips {
                 d.upright = true;
             }
             double s = Math.min(1.0, (t + 1) / (double) ticks), e = s * s * (3.0 - 2.0 * s);
-            d.held.set(from).lerp(to, e).add(0, LurkerVents.GLIDE_LIFT * Math.sin(Math.PI * s), 0);
+            d.held.set(from).lerp(to, e).add(0, lift * Math.sin(Math.PI * s), 0);
             return s < 1.0;
         };
     }
@@ -243,6 +249,74 @@ class LurkerClips {
     /** Up whatever rock is about (ax, az), for {@code ticks}. */
     static Seg climb(double ax, double az, double speed, int ticks) {
         return crawl(LurkerCrawl.Sense.IN, ax, az, speed, d -> false, ticks);
+    }
+
+    /**
+     * Its middle along a way (down or up the inside of its flue, 0.21.4), held upright, at the game's pace
+     * (ChimneyLurkerEntity's glideAlong): the way made from where it is as the segment starts.
+     */
+    static Seg along(java.util.function.Function<Driver, List<Vector3d>> wayOf, double speed) {
+        Object[] st = new Object[3];
+        return (d, t) -> {
+            if (t == 0) {
+                @SuppressWarnings("unchecked") List<Vector3d> way = (List<Vector3d>) (st[0] = wayOf.apply(d));
+                double[] along = new double[way.size()];
+                for (int i = 1; i < way.size(); i++) along[i] = along[i - 1] + way.get(i).distance(way.get(i - 1));
+                st[1] = along;
+                st[2] = Math.max(2, (int) Math.ceil(along[along.length - 1] / speed) + ChimneyLurkerEntity.FLUE_EASE);
+                System.out.println(String.format(java.util.Locale.ROOT, "  along its flue: %d points, %.1f blocks, %d ticks, from %s to %s",
+                        way.size(), along[along.length - 1], (int) st[2], fmt(way.get(0)), fmt(way.get(way.size() - 1))));
+                d.crawl = null;
+                d.held = new Vector3d(way.get(0));
+                d.upright = true;
+                d.climbing = true;
+            }
+            @SuppressWarnings("unchecked") List<Vector3d> way = (List<Vector3d>) st[0];
+            double[] along = (double[]) st[1];
+            int n = (int) st[2];
+            double s = Math.min(1.0, (t + 1) / (double) n);
+            double at = along[along.length - 1] * LurkerVents.eased(s, ChimneyLurkerEntity.FLUE_EASE / (double) n);
+            for (int i = 1; i < way.size(); i++) {
+                if (at <= along[i] || i == way.size() - 1) {
+                    double seg = along[i] - along[i - 1], f = seg > 1.0E-9 ? Math.min(1.0, (at - along[i - 1]) / seg) : 1.0;
+                    d.held.set(way.get(i - 1)).lerp(way.get(i), f);
+                    break;
+                }
+            }
+            if (s >= 1.0) d.climbing = false;
+            return s < 1.0;
+        };
+    }
+
+    /** Its way down its flue from its seat (as the game reads it from the blocks). */
+    static List<Vector3d> flueWay(BlockWorld w, LurkerVents.Home h) {
+        List<Vector3d> way = LurkerVents.flueWay((x, y, z) -> w.has(x, y, z), (x, z) -> true, h);
+        if (way == null) throw new IllegalStateException("no way down its flue");
+        return way;
+    }
+
+    /** Its way back up its flue from where it is: to the nearest point of its way down, and up that to its seat. */
+    static List<Vector3d> flueUp(Driver d, BlockWorld w, LurkerVents.Home h) {
+        List<Vector3d> way = flueWay(w, h);
+        Vector3d c = d.centre();
+        int k = 0;
+        for (int i = 1; i < way.size(); i++) if (way.get(i).distanceSquared(c) < way.get(k).distanceSquared(c)) k = i;
+        List<Vector3d> up = new ArrayList<>();
+        up.add(c);
+        for (int i = k; i >= 0; i--) up.add(way.get(i));
+        return up;
+    }
+
+    /** Off its flue's walls onto the floor at its foot (held no longer). */
+    static Seg offFlue() {
+        return set(d -> {
+            Vector3d c = d.centre();
+            d.held = null;
+            d.crawl = null;
+            d.upright = false;
+            d.vy = 0;
+            d.at.set(c.x, c.y - d.spec.ride, c.z);
+        });
     }
 
     /** A leap: crouched, it springs forward and up, its speed through the air taken down by the game's gravity and drag. */
@@ -457,6 +531,33 @@ class LurkerClips {
             list.add(new Scene("narrow", w, d, List.of(sit(seat(h)), idle(40), feel(px, py, pz), idle(30)),
                     new Vector3d(-4.5, 3.5, 4.5), -1, new Vector3d(0, 0, 0), null, true));
         }
+        {   // someone down in its vent (0.21.4, card: "Climbs down inside"): from its seat it climbs down the inside of its
+            // flue toward them, hunts a moment at its foot, and climbs back up into its seat
+            BlockWorld w = vent(6.6, rTop, rFlue, height, 5, 1.1);
+            // a den at its foot: its flue opened out three blocks round, three rows high
+            for (int y = 1; y <= 3; y++)
+                for (int x = -4; x < 4; x++)
+                    for (int z = -4; z < 4; z++)
+                        if (Math.hypot(x + 0.5, z + 0.5) < 3.2) w.clear(x, y, z);
+            LurkerVents.Home h = home(w, rFlue, rTop, height, az);
+            double qx = 2.2, qy = 2.6, qz = -0.6;
+            java.util.function.Supplier<List<Seg>> script = () -> List.of(sit(seat(h)), idle(30), see(qx, qy, qz), set(dd -> { dd.pulse = 1; dd.near = 0.4; }),
+                    idle(6), set(dd -> { dd.hurry = false; dd.mouth = 0.28; }), along(dd -> flueWay(w, h), ChimneyLurkerEntity.FLUE_DOWN),
+                    offFlue(), set(dd -> { dd.hurry = true; dd.mouth = 0.12; dd.near = 0.9; }), idle(6), walk(0.8, 0.1), idle(30),
+                    set(dd -> { dd.hurry = false; dd.glow = 0; dd.pulse = 0; dd.focusAmount = 0; dd.mouth = 0; }),
+                    along(dd -> flueUp(dd, w, h), ChimneyLurkerEntity.FLUE_CLIMB), sit(seat(h)), idle(40));
+            list.add(new Scene("flue", w, new Driver(w, spec, 0, 0, 0, 0), script.get(),
+                    new Vector3d(0.0, 1.0, 12.0), -1, new Vector3d(0, 0, 0), cutNear, false));
+            // the same, the camera held on the whole vent
+            list.add(new Scene("flue-wide", w, new Driver(w, spec, 0, 0, 0, 0), script.get(),
+                    new Vector3d(0.0, 2.0, 17.0), -1, new Vector3d(0, -3.8, 0), cutNear, true));
+        }
+        {   // its chase pulses (0.21.4): standing lit, the pulses running down it slowly (its quarry far off), then racing (close)
+            BlockWorld w = new BlockWorld().fill(-10, -1, -10, 10, -1, 10);
+            Driver d = new Driver(w, spec, 0, 0, 0, 0);
+            list.add(new Scene("pulses", w, d, List.of(set(dd -> { dd.glow = 1; dd.pulse = 1; dd.near = 0; }), idle(60),
+                    set(dd -> dd.near = 0.5), idle(40), set(dd -> dd.near = 1), idle(60)), new Vector3d(4.6, 2.6, 3.6)));
+        }
         {   // the crouch and the leap
             BlockWorld w = new BlockWorld().fill(-10, -1, -10, 10, -1, 24);
             Driver d = new Driver(w, spec, 0, 0, -4, 0);
@@ -491,6 +592,8 @@ class LurkerClips {
         double worstMiss = 0;
         int missFrames = 0, kneesLow = 0, feetOff = 0, feetIn = 0, bodyNear = 0, planted = 0, plantedTicks = 0;
         double glow = 0;
+        ChimneyLurkerEntity.Pulses pulses = new ChimneyLurkerEntity.Pulses();
+        double pulseAmt = 0, pulseSpeed = ChimneyLurkerEntity.PULSE_SLOW, phase = 0, phaseO = 0;
         int per = Math.max(1, fps / 20);
         int[] bounds = new int[6];
         double[] fld = new double[4];
@@ -508,6 +611,13 @@ class LurkerClips {
                         s.driver.crawl != null ? " crawl " + fmt(s.driver.crawl.pos) + " out " + String.format("%.2f", s.driver.crawl.facingOut()) : "");
             }
             glow += (s.driver.glow - glow) * 0.25;
+            // its chase pulses, as the entity runs them (ChimneyLurkerEntity.clientTick)
+            double pulseWant = s.driver.dead ? 0.0 : s.driver.pulse >= 0 ? s.driver.pulse : s.driver.hurry ? 1.0 : 0.0;
+            pulseAmt += (pulseWant - pulseAmt) * (pulseWant > pulseAmt ? 0.25 : 0.08);
+            pulseSpeed += (ChimneyLurkerEntity.PULSE_SLOW + (ChimneyLurkerEntity.PULSE_FAST - ChimneyLurkerEntity.PULSE_SLOW) * s.driver.near
+                    - pulseSpeed) * 0.15;
+            phaseO = phase;
+            phase += pulseSpeed;
             if (deadAt < 0) {
                 for (LurkerBody.Foot ft : body.feet) {
                     if (ft.planted) {
@@ -549,7 +659,9 @@ class LurkerClips {
                 r.clear(0x15131c);
                 drawWorld(r, s.world, cam, s.cut);
                 double level = in.dying > 0 ? glow * (1.0 - in.dying) : glow;
-                drawPose(r, pose, tex, glowTex, level);
+                pulses.amount = (float) pulseAmt;
+                pulses.phase = phaseO + (phase - phaseO) * pt;
+                drawPose(r, pose, tex, glowTex, level, pulseAmt < 0.01 ? LurkerPose.STEADY : pulses);
                 r.save(new File(dir, String.format("f%05d.png", frame++)));
             }
         }
@@ -575,8 +687,7 @@ class LurkerClips {
         });
     }
 
-    static void drawPose(SoftRaster r, LurkerPose pose, SoftRaster.Tex tex, SoftRaster.Tex glow, double level) {
-        List<double[][]> quads = new ArrayList<>();
+    static void drawPose(SoftRaster r, LurkerPose pose, SoftRaster.Tex tex, SoftRaster.Tex glow, double level, LurkerPose.Shade shade) {
         double[][] q = new double[4][5];
         double[] n = new double[3];
         int[] k = {0};
@@ -586,18 +697,25 @@ class LurkerClips {
             n[0] = nx; n[1] = ny; n[2] = nz;
             if (k[0] == 4) {
                 k[0] = 0;
-                double[][] c = new double[4][];
-                for (int j = 0; j < 4; j++) c[j] = q[j].clone();
-                r.tri(c[0], c[1], c[2], uv(c[0]), uv(c[1]), uv(c[2]), tex, 0, n[0], n[1], n[2], 0);
-                r.tri(c[0], c[2], c[3], uv(c[0]), uv(c[2]), uv(c[3]), tex, 0, n[0], n[1], n[2], 0);
-                quads.add(c);
+                r.tri(q[0], q[1], q[2], uv(q[0]), uv(q[1]), uv(q[2]), tex, 0, n[0], n[1], n[2], 0);
+                r.tri(q[0], q[2], q[3], uv(q[0]), uv(q[2]), uv(q[3]), tex, 0, n[0], n[1], n[2], 0);
             }
         }, 0xF000F0, false);
         if (level <= 0.01) return;
-        for (double[][] c : quads) {
-            r.triAdd(c[0], c[1], c[2], uv(c[0]), uv(c[1]), uv(c[2]), glow, level);
-            r.triAdd(c[0], c[2], c[3], uv(c[0]), uv(c[2]), uv(c[3]), glow, level);
-        }
+        // its glow over its glowing spines, each slice at its corners' mean shade (the game's shades each corner)
+        float[] sh = new float[4];
+        pose.emitGlow((x, y, z, u, v, nx, ny, nz, s) -> {
+            int i = k[0]++;
+            q[i][0] = x; q[i][1] = y; q[i][2] = z; q[i][3] = u; q[i][4] = v;
+            sh[i] = s;
+            if (k[0] == 4) {
+                k[0] = 0;
+                double lv = level * (sh[0] + sh[1] + sh[2] + sh[3]) / 4.0;
+                if (lv <= 0.005) return;
+                r.triAdd(q[0], q[1], q[2], uv(q[0]), uv(q[1]), uv(q[2]), glow, lv);
+                r.triAdd(q[0], q[2], q[3], uv(q[0]), uv(q[2]), uv(q[3]), glow, lv);
+            }
+        }, shade);
     }
 
     private static double[] uv(double[] c) { return new double[]{c[3], c[4]}; }
