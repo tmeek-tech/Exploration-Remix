@@ -2,7 +2,6 @@ package com.explorationremix.rune.cast;
 
 import com.explorationremix.rune.RuneConfig;
 import com.explorationremix.rune.engine.Act;
-import com.explorationremix.rune.engine.CastReading;
 import com.explorationremix.rune.engine.Host;
 import com.explorationremix.rune.engine.Siphon;
 import net.minecraft.server.level.ServerLevel;
@@ -13,33 +12,43 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * One cast while it plays out: who cast it, from which gear, what it cost (for Siphon's refunds), and which creature
- * each rune has already struck (one rune strikes a creature once per cast, however many copies Fan made).
+ * One cast while it plays out: who cast it, from which weapon, what it cost (for Siphon's refunds), how strong it is (an
+ * Echo is half), whether it echoes, and which creature each rune has already struck (one rune strikes a creature once
+ * per cast, however many copies Fan made).
  */
 public final class CastContext {
     public final ServerPlayer owner;
     public final ServerLevel level;
     public final Host host;
-    /** The gear's rune damage multiplier times the server's. */
+    /** The weapon's rune damage multiplier times the server's, times the cast's strength. */
     public final float power;
-    /** The gear's id: Siphon's motes go back to it. */
+    /** The weapon's id: Siphon's motes go back to it. */
     public final int gearId;
-    public final CastReading cast;
     public final Siphon siphon;
+    /** 1, or less for an Echo. */
+    public final float strength;
+    /** The weapon has Echo, and this cast is not itself an echo: it is cast again a moment later, at half strength. */
+    public final boolean echoes;
+    private final float gearPower;
     private final Set<Long> struck = new HashSet<>(), pulsed = new HashSet<>(), plants = new HashSet<>();
     /** How many plants of each kind (RunePlants) this cast has set off. */
     private final int[] plantCounts = new int[4];
     private long dingTick = -1;
 
-    public CastContext(ServerPlayer owner, Host host, float gearPower, int gearId, CastReading cast, int paid) {
+    public CastContext(ServerPlayer owner, Host host, float gearPower, int gearId, int paid, float strength, boolean echoes) {
         this.owner = owner;
         this.level = owner.serverLevel();
         this.host = host;
-        this.power = gearPower * (float) RuneConfig.get(RuneConfig.INSTANCE.runeDamage);
+        this.gearPower = gearPower;
+        this.strength = strength;
+        this.power = gearPower * strength * (float) RuneConfig.get(RuneConfig.INSTANCE.runeDamage);
         this.gearId = gearId;
-        this.cast = cast;
         this.siphon = new Siphon(paid);
+        this.echoes = echoes;
     }
+
+    /** The echo of this cast: half as strong, paid for by nothing (so it refunds nothing), and it doesn't echo again. */
+    public CastContext echo() { return new CastContext(owner, host, gearPower, gearId, 0, strength * 0.5F, false); }
 
     /** True the first time this rune (its slot) strikes this creature in this cast. */
     public boolean firstStrike(Act a, Entity e) { return struck.add(((long) (a.slot + 1) << 32) ^ (e.getId() & 0xFFFFFFFFL)); }

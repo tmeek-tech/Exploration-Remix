@@ -4,10 +4,11 @@ import com.explorationremix.rune.engine.CastMachine;
 import com.explorationremix.rune.engine.CastState;
 import com.explorationremix.rune.engine.Explain;
 import com.explorationremix.rune.engine.HostSpec;
+import com.explorationremix.rune.engine.Loadout;
 import com.explorationremix.rune.engine.Reading;
-import com.explorationremix.rune.engine.Row;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.item.RuneItem;
+import com.explorationremix.rune.menu.RuneTableMenu;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -17,6 +18,8 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -29,13 +32,12 @@ import java.util.List;
  * {@code /remix rune ...} (operators): trying runes out without finding them.
  * <ul>
  *   <li>{@code give <rune|all> [count]}: rune items;</li>
- *   <li>{@code row <runes>}: writes a row onto the gear in hand, e.g. {@code row fan spark on_hit burst | orb} (runes by
- *   id, {@code _} for an empty slot, {@code |} for a cast break);</li>
- *   <li>{@code clear}: empties the gear's row (the runes are not given back);</li>
- *   <li>{@code energy [amount]}: fills the gear (or sets its energy);</li>
- *   <li>{@code depth <0|1|2>}: sets your run depth (how many slots are awake) and keeps it there wherever you go;
- *   {@code depth auto} goes back to following the run;</li>
- *   <li>{@code info}: the gear's row read out, with its energy.</li>
+ *   <li>{@code set <runes>}: sets the sockets of the weapon in hand, e.g. {@code set spark wide echo} (runes by id, in
+ *   any order: each goes to the socket of its kind; the runes are not taken from you);</li>
+ *   <li>{@code clear}: empties the weapon's sockets (the runes are not given back);</li>
+ *   <li>{@code energy [amount]}: fills the weapon (or sets its energy);</li>
+ *   <li>{@code table <pos>}: opens the sockets of the weapon in your main hand at the enchanting table there;</li>
+ *   <li>{@code info}: the weapon's runes read out at your XP level, with its energy.</li>
  * </ul>
  */
 public final class RuneCommands {
@@ -49,15 +51,18 @@ public final class RuneCommands {
                                 .executes(c -> give(c, StringArgumentType.getString(c, "rune"), 1))
                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 64))
                                         .executes(c -> give(c, StringArgumentType.getString(c, "rune"), IntegerArgumentType.getInteger(c, "count"))))))
-                .then(Commands.literal("row").then(Commands.argument("runes", StringArgumentType.greedyString()).executes(RuneCommands::row)))
+                .then(Commands.literal("set").then(Commands.argument("runes", StringArgumentType.greedyString())
+                        .suggests((c, b) -> SharedSuggestionProvider.suggest(names().subList(1, names().size()), b.createOffset(lastWord(b.getInput()))))
+                        .executes(RuneCommands::set)))
                 .then(Commands.literal("clear").executes(RuneCommands::clear))
                 .then(Commands.literal("energy").executes(c -> energy(c, -1.0F))
                         .then(Commands.argument("amount", FloatArgumentType.floatArg(0.0F)).executes(c -> energy(c, FloatArgumentType.getFloat(c, "amount")))))
-                .then(Commands.literal("depth")
-                        .then(Commands.literal("auto").executes(RuneCommands::depthAuto))
-                        .then(Commands.argument("depth", IntegerArgumentType.integer(0, RunDepth.MAX)).executes(RuneCommands::depth)))
+                .then(Commands.literal("table").then(Commands.argument("pos", BlockPosArgument.blockPos()).executes(RuneCommands::table)))
                 .then(Commands.literal("info").executes(RuneCommands::info));
     }
+
+    /** Where the last word of a command being typed starts (suggestions for {@code set} go there). */
+    private static int lastWord(String input) { return input.lastIndexOf(' ') + 1; }
 
     private static List<String> names() {
         List<String> out = new ArrayList<>();
@@ -87,7 +92,7 @@ public final class RuneCommands {
         return runes.size();
     }
 
-    /** The runed gear in the main hand, else the off hand. */
+    /** The weapon in the main hand, else the off hand. */
     private static ItemStack gear(ServerPlayer p) {
         ItemStack s = p.getItemInHand(InteractionHand.MAIN_HAND);
         if (RuneGear.isGear(s)) return s;
@@ -95,7 +100,7 @@ public final class RuneCommands {
         return RuneGear.isGear(s) ? s : ItemStack.EMPTY;
     }
 
-    private static int row(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
+    private static int set(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
         ServerPlayer p = c.getSource().getPlayerOrException();
         ItemStack g = gear(p);
         HostSpec spec = RuneGear.spec(g);
@@ -103,18 +108,14 @@ public final class RuneCommands {
             c.getSource().sendFailure(Component.literal("Hold a sword, bow or crossbow"));
             return 0;
         }
-        Row row;
+        Loadout l;
         try {
-            row = Row.parse(StringArgumentType.getString(c, "runes"));
+            l = Loadout.parse(StringArgumentType.getString(c, "runes"));
         } catch (IllegalArgumentException e) {
             c.getSource().sendFailure(Component.literal(e.getMessage()));
             return 0;
         }
-        if (row.size() > spec.slotCount()) {
-            c.getSource().sendFailure(Component.literal("This " + spec.host().word + " has " + spec.slotCount() + " slots"));
-            return 0;
-        }
-        RuneGear.setRow(g, row.resized(spec.slotCount()));
+        RuneGear.setLoadout(g, l);
         resetCursor(p, g, spec);
         return info(c);
     }
@@ -127,8 +128,24 @@ public final class RuneCommands {
             c.getSource().sendFailure(Component.literal("Hold a sword, bow or crossbow"));
             return 0;
         }
-        RuneGear.setRow(g, Row.empty(spec.slotCount()));
-        c.getSource().sendSuccess(() -> Component.literal("Row cleared"), false);
+        RuneGear.setLoadout(g, Loadout.EMPTY);
+        c.getSource().sendSuccess(() -> Component.literal("Sockets emptied"), false);
+        return 1;
+    }
+
+    private static int table(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
+        ServerPlayer p = c.getSource().getPlayerOrException();
+        BlockPos pos = BlockPosArgument.getLoadedBlockPos(c, "pos");
+        if (!RuneTableMenu.isTable(p.level().getBlockState(pos))) {
+            c.getSource().sendFailure(Component.literal("No enchanting table there"));
+            return 0;
+        }
+        if (!RuneGear.isGear(p.getMainHandItem())) {
+            c.getSource().sendFailure(Component.literal("Hold a sword, bow or crossbow in your main hand"));
+            return 0;
+        }
+        RuneTableMenu.open(p, pos);
+        c.getSource().sendSuccess(() -> Component.literal("Rune table opened"), false);
         return 1;
     }
 
@@ -160,22 +177,6 @@ public final class RuneCommands {
         return 1;
     }
 
-    private static int depth(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
-        ServerPlayer p = c.getSource().getPlayerOrException();
-        int d = IntegerArgumentType.getInteger(c, "depth");
-        RunDepth.pin(p, d);
-        c.getSource().sendSuccess(() -> Component.literal("Run depth " + d + " (" + Explain.depthName(d) + "), kept until /remix rune depth auto"), false);
-        return 1;
-    }
-
-    private static int depthAuto(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
-        ServerPlayer p = c.getSource().getPlayerOrException();
-        RunDepth.unpin(p);
-        int d = RunDepth.get(p);
-        c.getSource().sendSuccess(() -> Component.literal("Run depth follows the run again: " + d + " (" + Explain.depthName(d) + ")"), false);
-        return 1;
-    }
-
     private static int info(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
         ServerPlayer p = c.getSource().getPlayerOrException();
         ItemStack g = gear(p);
@@ -184,11 +185,10 @@ public final class RuneCommands {
             c.getSource().sendFailure(Component.literal("Hold a sword, bow or crossbow"));
             return 0;
         }
-        int depth = RunDepth.get(p);
-        Reading r = RuneGear.reading(g, depth);
+        Reading r = RuneGear.reading(g, p);
         long now = p.level().getGameTime();
         float e = CastMachine.energyAt(RuneGear.state(g, spec, now), spec, now);
-        c.getSource().sendSuccess(() -> Component.literal(RuneGear.row(g) + "  (" + r.awake() + " of " + spec.slotCount() + " slots awake, energy "
+        c.getSource().sendSuccess(() -> Component.literal(RuneGear.loadout(g) + "  (level " + p.experienceLevel + ", energy "
                 + Math.round(e) + " of " + Math.round(spec.maxEnergy()) + ")"), false);
         for (String line : Explain.lines(r)) c.getSource().sendSuccess(() -> Component.literal(line), false);
         return 1;

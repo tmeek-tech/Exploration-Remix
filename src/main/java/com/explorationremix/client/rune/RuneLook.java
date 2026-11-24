@@ -12,25 +12,20 @@ import net.minecraft.world.item.ItemStack;
 import javax.annotation.Nullable;
 
 /**
- * What the rune screen, the HUD, the tooltips and the slot decorations share, so they never disagree: one colour per
- * cast, the red of a cast the gear can never pay for, and a piece of gear's energy as it stands this frame.
+ * What the HUD, the tooltips and the slot decorations share, so they never disagree: the cast's colour, the red of a
+ * cast the weapon can never pay for, and a weapon's energy as it stands this frame.
  */
 final class RuneLook {
-    /**
-     * Cast 1, 2, 3... in order. Mid-bright on purpose: they read on the rune screen's light grey and on the dark backing
-     * the HUD draws over the world. No red or amber among them (those mean "never" and "not enough energy").
-     */
-    private static final int[] CASTS = {0xFF3D8BFF, 0xFFE0B000, 0xFF45C13A, 0xFFB05CFF, 0xFF19C2B4, 0xFFFF5CA8};
-    /** A cast that costs more than the gear can ever hold: it is skipped. */
+    /** The cast: the active rune's light blue, and paler once its second phase is awake. */
+    static final int CAST = 0xFF8EC2FF, CAST_TWO = 0xFFD6E6FF;
+    /** A cast that costs more than the weapon can ever hold: it never fires. */
     static final int RED = 0xFFE03C3C;
-    /** The next cast, while the gear has too little energy for it (it pulses between these). */
-    static final int AMBER_DIM = 0xFF6E4A00, AMBER = 0xFFFFB000;
+    /** The cast, while the weapon has too little energy for it (it pulses between these): slate to lavender. */
+    static final int SHORT_DIM = 0xFF2B3550, SHORT = 0xFFB7A8FF;
 
     private RuneLook() {}
 
-    static int castColour(int index) { return CASTS[Math.floorMod(index, CASTS.length)]; }
-
-    static int castColour(CastReading c) { return c.red() ? RED : castColour(c.index()); }
+    static int castColour(CastReading c, boolean empowered) { return c.red() ? RED : empowered ? CAST_TWO : CAST; }
 
     /**
      * Energy this frame: worked out from game time (the gear stores only when its energy last changed), between this

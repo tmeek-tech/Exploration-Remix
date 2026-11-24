@@ -11,7 +11,10 @@ import net.minecraft.world.phys.Vec3;
  */
 public record Fx(Kind kind, double x, double y, double z, float dx, float dy, float dz, int rgb, Element element, float size, float a, int entity) {
     public enum Kind {
-        /** A cast leaves the hand: {@code d} the way it goes, {@code entity} the caster, {@code a} 1 for the off hand. */
+        /**
+         * A cast leaves the hand: {@code d} the way it goes, {@code entity} the caster, {@code a} 1 for the off hand, plus 2
+         * when it is a second phase's.
+         */
         CAST,
         /** A bolt stops: {@code d} the way out of what it hit, {@code a} 1 when it hit a creature. */
         IMPACT,
@@ -52,7 +55,16 @@ public record Fx(Kind kind, double x, double y, double z, float dx, float dy, fl
         /** A struck silver fern's fronds unroll a block further: {@code d} the way they grow (down or up). */
         UNROLL,
         /** A struck frostberry vine bursts in a puff of cold {@code size} blocks across, that falls {@code a} blocks to the floor. */
-        FROST_PUFF
+        FROST_PUFF,
+        /** A second phase drags creatures in (Orb's gravity, Field's pull): light drawn in from {@code size} blocks round. */
+        WELL,
+        /** One stretch of Cleave's second-phase wave: {@code d} its way (flat), {@code size} half its width. */
+        WAVE,
+        /**
+         * A weapon's second phase wakes ({@code a} 1) as its player reaches the active rune's level, or sleeps ({@code a} 0)
+         * as they drop below it: {@code entity} the player.
+         */
+        PHASE
     }
 
     public Vec3 pos() { return new Vec3(x, y, z); }

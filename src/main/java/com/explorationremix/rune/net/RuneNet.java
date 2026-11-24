@@ -8,7 +8,6 @@ import com.explorationremix.rune.cast.LocalPull;
 import com.explorationremix.rune.cast.Pull;
 import com.explorationremix.rune.effect.Fx;
 import com.explorationremix.rune.effect.RuneFx;
-import com.explorationremix.rune.menu.RuneEditorMenu;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -20,15 +19,15 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.function.Supplier;
 
 /**
- * The runes' channel, {@code explorationremix:runes}. Small on purpose: the gear carries its own row and energy (sent
- * as item data, like any item change), the rune screen is a vanilla menu, and bolts, fields and motes are entities.
- * Only these need words of their own: the run depth (server to client), the cast key going down and up and "open
- * the rune screen" (client to server, which the server is free to refuse), Reel's pull on a player (the server starts it and may stop it, the player's own
- * game steers it and says when it is done), and effects: one small message per flash, blast or slam, which each nearby
- * client turns into its own particles, rings and shake.
+ * The runes' channel, {@code explorationremix:runes}. Small on purpose: a weapon carries its own runes and energy
+ * (sent as item data, like any item change), the rune table is a vanilla menu (its changes are menu buttons), and
+ * bolts, fields and motes are entities. Only these need words of their own: the run depth (server to client), the
+ * cast key going down and up (client to server), Reel's pull on a player (the server starts it and may stop it, the
+ * player's own game steers it and says when it is done), and effects: one small message per flash, blast or slam,
+ * which each nearby client turns into its own particles, rings and shake.
  */
 public final class RuneNet {
-    private static final String VERSION = "4";
+    private static final String VERSION = "5";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(new ResourceLocation(ExplorationRemix.MOD_ID, "runes"),
             () -> VERSION, VERSION::equals, VERSION::equals);
 
@@ -38,8 +37,6 @@ public final class RuneNet {
     public static void register() {
         CHANNEL.messageBuilder(DepthSync.class, 0, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(DepthSync::write).decoder(DepthSync::read).consumerMainThread(DepthSync::handle).add();
-        CHANNEL.messageBuilder(OpenEditor.class, 1, NetworkDirection.PLAY_TO_SERVER)
-                .encoder(OpenEditor::write).decoder(OpenEditor::read).consumerMainThread(OpenEditor::handle).add();
         CHANNEL.messageBuilder(PullStart.class, 2, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(PullStart::write).decoder(PullStart::read).consumerMainThread(PullStart::handle).add();
         CHANNEL.messageBuilder(PullStop.class, 3, NetworkDirection.PLAY_TO_CLIENT)
@@ -63,7 +60,7 @@ public final class RuneNet {
         }
     }
 
-    /** The player's run depth (0 to 2), which says how many slots their gear has awake. */
+    /** The player's run depth (0 to 2): kept, though the sockets don't wait on it for now. */
     public record DepthSync(int depth) {
         void write(FriendlyByteBuf b) { b.writeVarInt(depth); }
 
@@ -84,18 +81,6 @@ public final class RuneNet {
         void handle(Supplier<NetworkEvent.Context> ctx) {
             ServerPlayer p = ctx.get().getSender();
             if (p != null) CastService.castKey(p, down);
-        }
-    }
-
-    /** The rune screen key was pressed: open the rune screen if the player may (out of combat). */
-    public record OpenEditor() {
-        void write(FriendlyByteBuf b) {}
-
-        static OpenEditor read(FriendlyByteBuf b) { return new OpenEditor(); }
-
-        void handle(Supplier<NetworkEvent.Context> ctx) {
-            ServerPlayer p = ctx.get().getSender();
-            if (p != null) RuneEditorMenu.open(p);
         }
     }
 

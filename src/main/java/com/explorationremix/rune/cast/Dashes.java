@@ -10,9 +10,9 @@ import java.util.Iterator;
 
 /**
  * Dash: throws the caster along the aim (faster with Swift, with a hop off the ground), once per jump while in the
- * air, and no fall damage from the throw. What it carries goes off at the first creature or wall the caster runs into
- * within {@value #HIT_TICKS} ticks, or where they are when that ends (On hit), or a moment after the cast (After a
- * moment).
+ * air (twice in its second phase, when they also slam through what they run into), and no fall damage from the throw.
+ * What it carries goes off at the first creature or wall the caster runs into within {@value #HIT_TICKS} ticks, or
+ * where they are when that ends.
  */
 final class Dashes {
     static final int HIT_TICKS = 10;
@@ -37,17 +37,19 @@ final class Dashes {
 
     private Dashes() {}
 
-    /** Whether the caster could dash now: on the ground, or not yet dashed since they left it. */
-    static boolean canDash(ServerPlayer p, Caster c) { return p.onGround() || !c.airDashUsed || p.isInWater(); }
+    /** Whether the caster could dash now: on the ground, or not yet dashed as often as they may since they left it. */
+    static boolean canDash(ServerPlayer p, Caster c, boolean empowered) {
+        return p.onGround() || p.isInWater() || c.airDashes < (empowered ? 2 : 1);
+    }
 
     static void start(CastContext ctx, Plan.Node node, Origin o) {
         ServerPlayer p = ctx.owner;
         Caster c = CastService.caster(p);
-        if (!canDash(p, c)) {
+        if (!canDash(p, c, node.act.empowered)) {
             Executor.fizzle(ctx, p.position().add(0, 1, 0));
             return;
         }
-        if (!p.onGround() && !p.isInWater()) c.airDashUsed = true;
+        if (!p.onGround() && !p.isInWater()) c.airDashes++;
         Vec3 dir = Origin.turn(o.dir(), node.yaw);
         double speed = 1.2 + 0.4 * node.act.count(RuneId.SWIFT);
         Vec3 v = dir.scale(speed);
@@ -61,7 +63,7 @@ final class Dashes {
 
     /** Each tick of the caster's: no fall damage while thrown, and each dash's payload when its moment comes. */
     static void tick(ServerPlayer p, Caster c, long now) {
-        if (p.onGround() || p.isInWater()) c.airDashUsed = false;
+        if (p.onGround() || p.isInWater()) c.airDashes = 0;
         for (Iterator<Dash> it = c.dashes.iterator(); it.hasNext(); ) {
             Dash d = it.next();
             long age = now - d.start;
@@ -70,15 +72,13 @@ final class Dashes {
                 continue;
             }
             if (age <= HIT_TICKS + 2) p.fallDistance = 0;
+            // the charge: through whatever they run into while the throw lasts
+            if (d.node.act.empowered && age <= HIT_TICKS) PhaseTwo.charge(d.ctx, d.node.act, d.dir);
             if (d.released || !d.hasPayload()) {
                 if (age > HIT_TICKS + 2) it.remove();
                 continue;
             }
             Vec3 mid = p.position().add(0, p.getBbHeight() * 0.5, 0);
-            if (d.node.relay == RuneId.AFTER) {
-                if (age > FlyingRune.AFTER_TICKS) release(d, new Origin(mid, d.dir, null));
-                continue;
-            }
             // On hit: the first creature they run into, or a wall
             RuneHits.Touch hit = null;
             for (RuneHits.Touch t : RuneHits.touched(d.ctx, p.getBoundingBox().inflate(0.6), mid)) {

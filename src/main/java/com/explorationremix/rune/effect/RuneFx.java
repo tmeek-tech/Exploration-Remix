@@ -106,9 +106,12 @@ public final class RuneFx {
 
     // ------------------------------------------------------------------------------------------------ runes
 
-    /** A cast leaves {@code caster}'s {@code hand} at {@code at}, going {@code dir}. */
-    public static void cast(ServerLevel l, Vec3 at, Vec3 dir, RuneId rune, Element e, boolean loud, int caster, InteractionHand hand) {
-        send(l, Fx.Kind.CAST, at, dir, colour(rune, e), e, 1.0F, hand == InteractionHand.OFF_HAND ? 1.0F : 0.0F, caster, NEAR);
+    /** A cast leaves {@code caster}'s {@code hand} at {@code at}, going {@code dir}; a second phase's is brighter, and rings. */
+    public static void cast(ServerLevel l, Vec3 at, Vec3 dir, RuneId rune, Element e, boolean loud, int caster, InteractionHand hand,
+                            boolean empowered) {
+        send(l, Fx.Kind.CAST, at, dir, colour(rune, e), e, 1.0F, (hand == InteractionHand.OFF_HAND ? 1.0F : 0.0F) + (empowered ? 2.0F : 0.0F),
+                caster, NEAR);
+        if (empowered) play(l, at, SoundEvents.AMETHYST_BLOCK_RESONATE, 0.4F, 1.9F);
         if (!loud) return;
         play(l, at, SoundEvents.ILLUSIONER_CAST_SPELL, 0.45F, 1.5F + l.random.nextFloat() * 0.3F);
         switch (e) {
@@ -187,6 +190,30 @@ public final class RuneFx {
         send(l, Fx.Kind.DASH, at, dir, colour(RuneId.DASH, e), e, 1.0F, 0.0F, caster, NEAR);
         play(l, at, SoundEvents.TRIDENT_RIPTIDE_1, 0.55F, 1.5F);
         play(l, at, SoundEvents.PHANTOM_FLAP, 0.6F, 1.8F);
+    }
+
+    /** A second phase drags creatures toward {@code c} from {@code reach} blocks round (Orb's gravity, Field's pull). */
+    public static void well(ServerLevel l, Vec3 c, float reach, int rgb, Element e) {
+        send(l, Fx.Kind.WELL, c, Vec3.ZERO, rgb, e, reach, 0.0F, -1, NEAR);
+    }
+
+    /** One stretch of Cleave's second-phase wave, at {@code at} going {@code flat}, {@code halfWidth} either side. */
+    public static void wave(ServerLevel l, Vec3 at, Vec3 flat, float halfWidth, int rgb, Element e) {
+        send(l, Fx.Kind.WAVE, at, flat, rgb, e, halfWidth, 0.0F, -1, NEAR);
+    }
+
+    /**
+     * The second phase of the weapon in {@code player}'s hand wakes ({@code awake}) as they reach its active rune's level,
+     * or sleeps as they drop below it: a ring of light round them that only they and those near see, and a chime.
+     */
+    public static void phase(ServerLevel l, Vec3 feet, int rgb, boolean awake, int player) {
+        send(l, Fx.Kind.PHASE, feet, Vec3.ZERO, rgb, Element.NONE, 1.0F, awake ? 1.0F : 0.0F, player, NEAR);
+        if (awake) {
+            play(l, feet, SoundEvents.AMETHYST_BLOCK_RESONATE, 0.9F, 1.2F);
+            play(l, feet, SoundEvents.BEACON_POWER_SELECT, 0.4F, 1.8F);
+        } else {
+            play(l, feet, SoundEvents.AMETHYST_BLOCK_RESONATE, 0.5F, 0.6F);
+        }
     }
 
     /** A beam of light from {@code a} to {@code b} (Reel's line, Storm's leap). */

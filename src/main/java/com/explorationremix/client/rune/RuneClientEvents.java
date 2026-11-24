@@ -1,7 +1,6 @@
 package com.explorationremix.client.rune;
 
 import com.explorationremix.ExplorationRemix;
-import com.explorationremix.rune.RunDepth;
 import com.explorationremix.rune.RuneGear;
 import com.explorationremix.rune.cast.LocalPull;
 import com.explorationremix.rune.cast.Pull;
@@ -11,7 +10,8 @@ import com.explorationremix.rune.engine.Explain;
 import com.explorationremix.rune.engine.HostSpec;
 import com.explorationremix.rune.engine.Note;
 import com.explorationremix.rune.engine.Reading;
-import com.explorationremix.rune.engine.Row;
+import com.explorationremix.rune.engine.Socket;
+import com.explorationremix.rune.item.RuneItem;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.net.RuneNet;
 import net.minecraft.ChatFormatting;
@@ -37,17 +37,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The runes' client game events, on the Forge bus: the cast key tells the server when it goes down and up, the rune
- * screen key asks the server for the rune screen, Reel's pull is steered, and gear tooltips show the row and what it
- * does.
+ * The runes' client game events, on the Forge bus: the cast key tells the server when it goes down and up, Reel's pull
+ * is steered, and weapon tooltips show the sockets and what they do.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class RuneClientEvents {
-    /** Ticks before the key asks again, so one impatient double press on a slow server does not open the screen twice. */
-    private static final int KEY_COOLDOWN = 10;
-    /** The widest a tooltip line about what the row does gets (GUI pixels) before it wraps. */
+    /** The widest a tooltip line about what the runes do gets (GUI pixels) before it wraps. */
     private static final int TOOLTIP_WIDTH = 200;
-    private static int keyCooldown;
     /** Whether this game has told the server the cast key is down (and so owes it word when it comes up). */
     private static boolean castDown;
 
@@ -58,7 +54,6 @@ public final class RuneClientEvents {
     @SubscribeEvent
     public static void tick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
-        if (keyCooldown > 0) keyCooldown--;
         Minecraft mc = Minecraft.getInstance();
         boolean inGame = mc.screen == null && mc.player != null && mc.getConnection() != null;
         // the cast key: the server casts when it goes down and again each time the sword is ready until it comes up (a
@@ -72,13 +67,6 @@ public final class RuneClientEvents {
         if (castDown && (!RuneKeys.CAST.isDown() || !inGame)) {
             castDown = false;
             if (mc.getConnection() != null) RuneNet.CHANNEL.sendToServer(new RuneNet.CastKey(false));
-        }
-        boolean pressed = false;
-        while (RuneKeys.OPEN.consumeClick()) pressed = true;
-        if (pressed && keyCooldown == 0 && inGame) {
-            // the server opens it, or says why not (in combat)
-            RuneNet.CHANNEL.sendToServer(new RuneNet.OpenEditor());
-            keyCooldown = KEY_COOLDOWN;
         }
     }
 
@@ -141,9 +129,9 @@ public final class RuneClientEvents {
     // ------------------------------------------------------------------------------------------------ tooltips
 
     /**
-     * Gear only, right under its name: the runes in row order ("Spark, On hit, Burst | Orb", grey and asleep ones
-     * dimmed, a dear cast's in red), what the row does in the reading's own words, and its energy. Gear with no runes
-     * says how many slots it has awake and which key opens the rune screen.
+     * Weapons only, right under the name: the three sockets' runes in their colours (one that does nothing dimmed, a
+     * cast dearer than the weapon holds in red), what they do in the reading's own words (the second phase's line with
+     * the player's own XP level), and the weapon's energy. A weapon with no runes says where they are set.
      */
     @SubscribeEvent
     public static void tooltip(ItemTooltipEvent event) {
@@ -152,13 +140,11 @@ public final class RuneClientEvents {
         // no player: the game is filling its search index, not showing a tooltip
         if (spec == null || event.getEntity() == null) return;
         Minecraft mc = Minecraft.getInstance();
-        int depth = RunDepth.clientDepth();
         List<Component> add = new ArrayList<>();
         if (RuneGear.hasRunes(stack)) {
-            Reading r = RuneGear.reading(stack, depth);
+            Reading r = RuneGear.reading(stack, event.getEntity().experienceLevel);
             if (r != null) {
-                Component runes = runeList(r);
-                if (!runes.getSiblings().isEmpty()) add.add(runes);
+                add.add(sockets(r));
                 for (String line : Explain.lines(r)) wrap(add, mc.font, line);
             }
             Level level = mc.level;
@@ -166,43 +152,31 @@ public final class RuneClientEvents {
                 long now = level.getGameTime();
                 float energy = CastMachine.energyAt(RuneGear.state(stack, spec, now), spec, now);
                 add.add(Component.literal("Energy " + RuneLook.whole(energy) + " / " + Math.round(spec.maxEnergy()))
-                        .withStyle(ChatFormatting.DARK_AQUA));
+                        .withStyle(s -> s.withColor(0x8EC2FF)));
             }
         } else {
-            int n = spec.awakeSlots(depth);
-            MutableComponent line = Component.literal(n + (n == 1 ? " rune slot" : " rune slots"));
-            if (RuneKeys.OPEN.isUnbound()) line.append(" (set the rune screen key in Controls)");
-            else line.append(" (press ").append(RuneKeys.OPEN.getTranslatedKeyMessage()).append(" to open the rune screen)");
-            add.add(line.withStyle(ChatFormatting.DARK_GRAY));
+            add.add(Component.translatable("rune.explorationremix.no_runes").withStyle(ChatFormatting.DARK_GRAY));
         }
         List<Component> tip = event.getToolTip();
         tip.addAll(Math.min(1, tip.size()), add);
     }
 
-    /** The row's runes left to right, ", " between them and " | " where a break starts a new cast. */
-    private static Component runeList(Reading r) {
+    /** "Spark · Swift · Ember", each in its socket's colour; an empty socket's place left out. */
+    private static Component sockets(Reading r) {
         MutableComponent out = Component.empty();
-        Row row = r.row();
-        boolean any = false, cut = false;
-        for (int i = 0; i < row.size(); i++) {
-            RuneId rune = row.get(i);
-            if (rune != null) {
-                if (any) out.append(Component.literal(cut ? " | " : ", ").withStyle(cut ? ChatFormatting.GRAY : ChatFormatting.DARK_GRAY));
-                out.append(Component.literal(rune.title).withStyle(runeStyle(r, i)));
-                any = true;
-                cut = false;
-            }
-            // a break after an empty slot still parts the runes either side of it
-            if (row.breakAfter(i)) cut = true;
+        boolean any = false;
+        CastReading c = r.cast();
+        for (Socket s : Socket.values()) {
+            RuneId rune = r.loadout().get(s);
+            if (rune == null) continue;
+            if (any) out.append(Component.literal(" \u00b7 ").withStyle(ChatFormatting.DARK_GRAY));
+            Note n = r.note(s);
+            int colour = !n.live() ? 0x5F6E87 : s == Socket.ACTIVE && c != null && c.red() ? 0xFF5555 : RuneItem.kindColour(s.kind);
+            String name = rune.title + (s == Socket.ACTIVE && r.empowered() ? " II" : "");
+            out.append(Component.literal(name).withStyle(st -> st.withColor(colour)));
+            any = true;
         }
         return out;
-    }
-
-    private static ChatFormatting runeStyle(Reading r, int slot) {
-        Note n = r.note(slot);
-        if (!n.live()) return ChatFormatting.DARK_GRAY;
-        CastReading c = r.cast(n.cast());
-        return c != null && c.red() ? ChatFormatting.RED : ChatFormatting.WHITE;
     }
 
     /** One line of the reading, grey, wrapped to {@link #TOOLTIP_WIDTH}; the lines it wraps onto are indented. */

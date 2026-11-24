@@ -22,7 +22,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * A block a rune makes, that undoes itself: a Barrier's glass wall, Frost's ice on still water, a Glow mote's light, a
- * struck silver fern's unrolled fronds.
+ * struck silver fern's unrolled fronds, the light a Lantern passive carries.
  * Placing one (by a rune, a command, a contraption putting it back, or a quake moving it) schedules its end, and the
  * scheduled tick is saved with the chunk, so it cleans itself up even if the chunk unloads first. It drops nothing,
  * pistons can't push it and Create can't carry it (tag {@code create:non_movable}).
@@ -39,7 +39,12 @@ public class TempBlock extends Block {
          * A struck silver fern's unrolled fronds (FrondBlock): RunePlants rolls them back up after 30 s; this is only
          * the latest they go if that is lost (the server stopped). Back to air.
          */
-        FROND(1200);
+        FROND(1200),
+        /**
+         * The Lantern passive's light where its player stands: put out as they step on, and kept while they stand there;
+         * this is only how soon it goes out if they leave (or the server stops) with it still lit. Back to air.
+         */
+        LANTERN(40);
 
         public final int life;
 
@@ -99,6 +104,8 @@ public class TempBlock extends Block {
             case LIGHT -> level.sendParticles(ParticleTypes.WAX_OFF, x, y, z, 2, 0.1, 0.1, 0.1, 0.0);
             case FROND -> level.sendParticles(new net.minecraft.core.particles.BlockParticleOption(ParticleTypes.BLOCK, state), x, y, z, 4,
                     0.25, 0.4, 0.25, 0.0);
+            // a lantern's light just goes with its player: nothing to see where it was
+            case LANTERN -> {}
         }
     }
 
@@ -124,12 +131,18 @@ public class TempBlock extends Block {
 
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext ctx) {
-        return kind == Kind.LIGHT ? MOTE : Shapes.block();
+        // a lantern's light sits where its player's head is: nothing there for the crosshair to catch
+        return kind == Kind.LIGHT ? MOTE : kind == Kind.LANTERN ? Shapes.empty() : Shapes.block();
     }
 
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext ctx) {
-        return kind == Kind.LIGHT || kind == Kind.FROND ? Shapes.empty() : Shapes.block();
+        return kind == Kind.LIGHT || kind == Kind.FROND || kind == Kind.LANTERN ? Shapes.empty() : Shapes.block();
+    }
+
+    @Override
+    public net.minecraft.world.level.block.RenderShape getRenderShape(BlockState state) {
+        return kind == Kind.LANTERN ? net.minecraft.world.level.block.RenderShape.INVISIBLE : super.getRenderShape(state);
     }
 
     @Override

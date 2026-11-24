@@ -1,11 +1,11 @@
 package com.explorationremix.rune;
 
 import com.explorationremix.rune.engine.CastState;
-import com.explorationremix.rune.engine.Row;
+import com.explorationremix.rune.engine.Loadout;
 import com.explorationremix.rune.engine.RuneId;
+import com.explorationremix.rune.engine.Socket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 
 import javax.annotation.Nullable;
@@ -13,81 +13,121 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The two tags a piece of gear keeps, read and written as plain NBT, so what is saved can be checked without a game:
+ * The tags a weapon keeps, read and written as plain NBT, so what is saved can be checked without a game:
  * <ul>
- *   <li>{@value #ROW}: {@code {v: 1, s: ["spark", "", "burst"], b: <break mask>}};</li>
- *   <li>{@value #CAST}: {@code {i: gear id, e: energy, t: tick, g: regenerating since (-1), c: cursor, r: ready at,
- *   l: last cast}}. A gear id can be given before anything has happened to the gear: the state is only there once
- *   {@code t} is, and until then the gear reads as fresh (with its starting energy).</li>
+ *   <li>{@value #LOADOUT}: {@code {v: 2, a: "spark", m: "swift", p: "ember"}}, a socket left out when it is empty;</li>
+ *   <li>{@value #CAST}: {@code {i: weapon id, e: energy, t: tick, g: last gained energy (-1), c: cursor, r: ready at,
+ *   l: last cast}}. An id can be given before anything has happened to the weapon: the state is only there once
+ *   {@code t} is, and until then the weapon reads as fresh (with its starting energy).</li>
  * </ul>
- * A rune id the game doesn't know (from a later version, or edited data) reads as an empty slot and is kept nowhere.
+ * Before 0.20.3 runes sat in rows, {@value #OLD_ROW}: {@code {v: 1, s: ["spark", "", "burst"], b: <break mask>}}. A
+ * weapon that still has its row reads as its first active rune, first modifier and first passive; the server sets
+ * those in its sockets and hands the rest back ({@link #convert}). A rune id the game doesn't know (from a later
+ * version, or edited data) reads as nothing and is kept nowhere.
  */
 public final class RuneTags {
-    public static final String ROW = "explorationremix:runes";
+    public static final String LOADOUT = "explorationremix:loadout";
+    public static final String OLD_ROW = "explorationremix:runes";
     public static final String CAST = "explorationremix:cast";
-    static final int VERSION = 1;
+    static final int VERSION = 2;
+    private static final String[] KEYS = {"a", "m", "p"};
 
     private RuneTags() {}
 
-    // ------------------------------------------------------------------------------------------------ the row
+    // ------------------------------------------------------------------------------------------------ the sockets
 
-    /** The row stored in a gear's tag, {@code slots} long: runes stored past its end are not read. */
-    public static Row readRow(@Nullable CompoundTag gear, int slots) {
-        RuneId[] out = new RuneId[Math.max(0, slots)];
-        int breaks = 0;
-        ListTag list = stored(gear);
-        if (list != null) {
-            for (int i = 0; i < Math.min(out.length, list.size()); i++) out[i] = RuneId.byId(list.getString(i));
-            breaks = gear.getCompound(ROW).getInt("b");
+    /** The runes in a weapon's sockets (an old row read as it will be set: {@link #convert}). */
+    public static Loadout readLoadout(@Nullable CompoundTag gear) {
+        if (gear == null) return Loadout.EMPTY;
+        if (gear.contains(LOADOUT, Tag.TAG_COMPOUND)) {
+            CompoundTag t = gear.getCompound(LOADOUT);
+            Loadout l = Loadout.EMPTY;
+            for (Socket s : Socket.values()) {
+                RuneId r = RuneId.byId(t.getString(KEYS[s.ordinal()]));
+                if (r != null && r.kind == s.kind) l = l.with(s, r);
+            }
+            return l;
         }
-        return new Row(out, breaks);
+        return convert(oldRow(gear)).kept();
     }
 
-    /** Runes stored past the last of {@code slots} slots (only edited data can put them there). */
-    public static List<RuneId> readOverflow(@Nullable CompoundTag gear, int slots) {
+    /** The sockets' tag; null for no runes (the weapon then keeps no tag at all). */
+    @Nullable
+    public static CompoundTag writeLoadout(Loadout l) {
+        if (l.isEmpty()) return null;
+        CompoundTag t = new CompoundTag();
+        t.putInt("v", VERSION);
+        for (Socket s : Socket.values()) {
+            RuneId r = l.get(s);
+            if (r != null) t.putString(KEYS[s.ordinal()], r.id);
+        }
+        return t;
+    }
+
+    /** Whether it holds any rune the game knows. */
+    public static boolean hasRunes(@Nullable CompoundTag gear) { return !readLoadout(gear).isEmpty(); }
+
+    /** Every rune it keeps: in its sockets, and in an old row not set into them yet (all of the row's runes). */
+    public static List<RuneId> storedRunes(@Nullable CompoundTag gear) {
         List<RuneId> out = new ArrayList<>();
-        ListTag list = stored(gear);
-        if (list == null) return out;
-        for (int i = Math.max(0, slots); i < list.size(); i++) {
+        if (gear == null) return out;
+        if (gear.contains(LOADOUT, Tag.TAG_COMPOUND)) out.addAll(readLoadout(gear).runes());
+        out.addAll(oldRow(gear));
+        return out;
+    }
+
+    // ------------------------------------------------------------------------------------------------ old rows
+
+    /** Whether the weapon still keeps a row from before 0.20.3. */
+    public static boolean hasOldRow(@Nullable CompoundTag gear) { return gear != null && gear.contains(OLD_ROW, Tag.TAG_COMPOUND); }
+
+    /** The runes in an old row, in order (empty slots and unknown ids left out). */
+    public static List<RuneId> oldRow(@Nullable CompoundTag gear) {
+        List<RuneId> out = new ArrayList<>();
+        if (!hasOldRow(gear)) return out;
+        ListTag list = gear.getCompound(OLD_ROW).getList("s", Tag.TAG_STRING);
+        for (int i = 0; i < list.size(); i++) {
             RuneId r = RuneId.byId(list.getString(i));
             if (r != null) out.add(r);
         }
         return out;
     }
 
-    /** Every rune stored, in order, in the slots and past them. */
-    public static List<RuneId> storedRunes(@Nullable CompoundTag gear) { return readOverflow(gear, 0); }
+    /** What a row becomes: the first rune of each kind in its socket, and the rest to hand back. */
+    public record Converted(Loadout kept, List<RuneId> extras) {}
 
-    /** Whether any slot holds a rune the game knows. */
-    public static boolean hasRunes(@Nullable CompoundTag gear) {
-        ListTag list = stored(gear);
-        if (list == null) return false;
-        for (int i = 0; i < list.size(); i++) if (RuneId.byId(list.getString(i)) != null) return true;
-        return false;
+    public static Converted convert(List<RuneId> row) {
+        Loadout l = Loadout.EMPTY;
+        List<RuneId> extras = new ArrayList<>();
+        for (RuneId r : row) {
+            Socket s = Socket.of(r.kind);
+            if (l.get(s) == null) l = l.with(s, r);
+            else extras.add(r);
+        }
+        return new Converted(l, extras);
     }
 
-    /** The row's tag; null for an empty row with no breaks (the gear then keeps no row tag at all). */
+    /**
+     * A weapon with an old row, set in sockets: the sockets it already has win (only edited data has both), and every
+     * rune that doesn't fit goes to {@code extras}. Null if it has no old row.
+     */
     @Nullable
-    public static CompoundTag writeRow(Row row) {
-        if (row.isEmpty() && row.breaks() == 0) return null;
-        CompoundTag t = new CompoundTag();
-        t.putInt("v", VERSION);
-        ListTag list = new ListTag();
-        for (int i = 0; i < row.size(); i++) list.add(StringTag.valueOf(row.get(i) == null ? "" : row.get(i).id));
-        t.put("s", list);
-        t.putInt("b", row.breaks());
+    public static Converted convertGear(@Nullable CompoundTag gear) {
+        if (!hasOldRow(gear)) return null;
+        List<RuneId> row = oldRow(gear);
+        if (gear.contains(LOADOUT, Tag.TAG_COMPOUND)) return new Converted(readLoadout(withoutRow(gear)), row);
+        return convert(row);
+    }
+
+    private static CompoundTag withoutRow(CompoundTag gear) {
+        CompoundTag t = gear.copy();
+        t.remove(OLD_ROW);
         return t;
-    }
-
-    @Nullable
-    private static ListTag stored(@Nullable CompoundTag gear) {
-        if (gear == null || !gear.contains(ROW, Tag.TAG_COMPOUND)) return null;
-        return gear.getCompound(ROW).getList("s", Tag.TAG_STRING);
     }
 
     // ------------------------------------------------------------------------------------------------ the casting state
 
-    /** The casting state stored, or null if nothing has happened to the gear yet (it is fresh). */
+    /** The casting state stored, or null if nothing has happened to the weapon yet (it is fresh). */
     @Nullable
     public static CastState readState(@Nullable CompoundTag gear) {
         if (gear == null || !gear.contains(CAST, Tag.TAG_COMPOUND)) return null;
@@ -97,7 +137,7 @@ public final class RuneTags {
                 c.contains("l") ? c.getLong("l") : Long.MIN_VALUE / 4);
     }
 
-    /** The state's tag, with the gear's id ({@code 0}: none yet). */
+    /** The state's tag, with the weapon's id ({@code 0}: none yet). */
     public static CompoundTag writeState(CastState s, int gearId) {
         CompoundTag c = new CompoundTag();
         if (gearId != 0) c.putInt("i", gearId);
@@ -110,7 +150,7 @@ public final class RuneTags {
         return c;
     }
 
-    /** The gear's id, or 0 if it has none yet. */
+    /** The weapon's id, or 0 if it has none yet. */
     public static int gearId(@Nullable CompoundTag gear) {
         return gear != null && gear.contains(CAST, Tag.TAG_COMPOUND) ? gear.getCompound(CAST).getInt("i") : 0;
     }

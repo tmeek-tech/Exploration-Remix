@@ -28,13 +28,13 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * A bow's or crossbow's cast riding its arrow. The arrow is the first carrier: the modifiers at the front of the row
- * shape it (Swift flies faster, Heavy hits harder, Pierce passes through, Seek bends toward a foe, Ember sets it
- * alight, the other elements and Siphon act where it hits), and what follows goes off where it lands (On hit), or a
- * moment after the shot, wherever it has got to, and the arrow with it (After a moment). Fan at the front looses
- * copies to either side, made from the arrow as it left the bow; copies can't be picked up. The arrow deals its own
- * damage. Swift makes it faster, not harder-hitting (an arrow's hit grows with its speed, so its damage is scaled
- * back), as Swift does for every rune.
+ * A bow's or crossbow's cast riding its arrow. The arrow is the first carrier: a modifier that shapes arrows shapes it
+ * (Swift flies faster, Heavy hits harder, Pierce passes through, Seek bends toward a foe), its element passive rides it
+ * (Ember sets it alight, the others act where it hits, as Siphon does), and the active rune goes off where it lands
+ * (Echo: again a moment later, at half strength). Fan looses copies to either side, made from the arrow as it left the
+ * bow, each carrying the active rune; copies can't be picked up. The arrow deals its own damage. Swift makes it
+ * faster, not harder-hitting (an arrow's hit grows with its speed, so its damage is scaled back), as Swift does for
+ * every rune.
  *
  * <p>Runes never touch who they mustn't (RuneHits.canHit), however far the arrow has come: a copy Fan made passes them
  * by (and whatever isn't a creature), and so does the shot once it has struck something (a piercing arrow flying on);
@@ -306,13 +306,7 @@ public final class ArrowRides {
                     RunePlants.path(r.ctx, r.last, now);
                     r.last = now;
                     steer(r);
-                    if (r.node.relay == RuneId.AFTER && r.hasPayload() && r.age > FlyingRune.AFTER_TICKS) {
-                        Vec3 d = r.arrow.getDeltaMovement();
-                        release(r, new Origin(r.arrow.position(), d.lengthSqr() < 1.0E-8 ? new Vec3(0, 0, 1) : d.normalize(), null));
-                        RuneFx.impact(r.ctx.level, r.arrow.position(), d.lengthSqr() < 1.0E-8 ? new Vec3(0, 1, 0) : d.normalize(), RuneId.SPARK,
-                                r.a.element, 0.8F, false);
-                        r.arrow.discard();
-                    } else if (r.age > 200) {
+                    if (r.age > 200) {
                         if (r.hasPayload()) release(r, new Origin(r.arrow.position(), new Vec3(0, 0, 1), null));
                         r.released = true;
                     }
@@ -361,6 +355,14 @@ public final class ArrowRides {
     private static void release(Ride r, Origin o) {
         r.released = true;
         Executor.release(r.ctx, r.node.children, o);
+        // Echo: the shot's own payload goes again where it went (a Fan's copies don't each echo)
+        if (r.ctx.echoes && r.node.copy == 0) CastService.echoAt(r.ctx, r.node.children, o);
+    }
+
+    /** Whether a cast rides this arrow now (its runes act on what it hits themselves). */
+    public static boolean riding(AbstractArrow arrow) {
+        Ride r = RIDES.get(arrow.getId());
+        return r != null && r.arrow == arrow;
     }
 
     /** Seek on an arrow: it bends toward the nearest foe ahead, like a Seek bolt. */
