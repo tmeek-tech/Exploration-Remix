@@ -5,27 +5,25 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Paying and timing: all-or-nothing casts, delays, recovery, idle resets, fading to the floor, red casts, refunds. */
+/** Paying and timing: all-or-nothing casts, delays, recovery, fading to the floor, red casts, refunds. */
 class CastMachineTest {
     static final Limits LIM = Limits.DEFAULT;
-    /** A netherite sword: one slot more than plain ones. */
-    static final HostSpec BLADE = HostSpec.of(Host.SWORD).withBonus(1);
+    static final HostSpec BLADE = HostSpec.of(Host.SWORD);
 
-    static Reading read(String row, HostSpec spec) { return Reader.read(Row.parse(row), spec, 2); }
+    static Reading read(String runes, HostSpec spec) { return Reader.read(Loadout.parse(runes), spec, 0); }
 
     /** Full gear that has just been filled at tick 0 (it holds until the fade's delay is up). */
     static CastState full(HostSpec spec) { return new CastState(spec.maxEnergy(), 0, 0, 0, 0, Long.MIN_VALUE / 4); }
 
     @Test
     void aCastIsPaidInFullOrSputters() {
-        Reading r = read("orb on_hit burst", HostSpec.of(Host.SWORD));
-        CastState s = new CastState(20, 100, 100, 0, 0, Long.MIN_VALUE / 4);
+        Reading r = read("orb heavy", HostSpec.of(Host.SWORD));
+        CastState s = new CastState(10, 100, 100, 0, 0, Long.MIN_VALUE / 4);
         CastMachine.Outcome o = CastMachine.attempt(s, r, 100, false, LIM);
         assertEquals(CastMachine.Kind.SPUTTER, o.kind());
-        assertEquals(28, o.cost());
-        assertEquals(20.0F, o.have());
-        assertEquals(20.0F, s.energy, "nothing spent");
-        assertEquals(0, s.cursor);
+        assertEquals(18, o.cost());
+        assertEquals(10.0F, o.have());
+        assertEquals(10.0F, s.energy, "nothing spent");
         CastMachine.add(s, r.spec(), 100, 10);
         o = CastMachine.attempt(s, r, 100, false, LIM);
         assertEquals(CastMachine.Kind.CAST, o.kind());
@@ -33,46 +31,28 @@ class CastMachineTest {
     }
 
     @Test
-    void eachCastWaitsItsDelayAndTheLastWaitsTheRecovery() {
-        Reading r = read("spark | orb", BLADE);
-        CastState s = full(BLADE);
-        CastMachine.Outcome o = CastMachine.attempt(s, r, 10, false, LIM);
-        assertEquals(0, o.cast());
-        int d0 = r.cast(0).delay();
-        assertEquals(10 + d0, s.readyAt);
-        assertEquals(1, s.cursor);
-        // too soon
-        assertEquals(CastMachine.Kind.NOT_READY, CastMachine.attempt(s, r, 10 + d0 - 1, false, LIM).kind());
-        o = CastMachine.attempt(s, r, 10 + d0, false, LIM);
-        assertEquals(1, o.cast());
-        // after the last cast: the longer of its delay and the recovery, then the first cast again
-        long t = 10 + d0;
-        assertEquals(t + Math.max(r.cast(1).delay(), r.recovery()), s.readyAt);
-        assertEquals(0, s.cursor);
+    void aCastWaitsTheLongerOfItsDelayAndTheRecovery() {
+        for (String runes : new String[]{"spark", "orb heavy", "burst", "spark swift"}) {
+            Reading r = read(runes, BLADE);
+            CastState s = full(BLADE);
+            CastMachine.Outcome o = CastMachine.attempt(s, r, 10, false, LIM);
+            assertEquals(0, o.cast(), runes);
+            long wait = Math.max(r.cast().delay(), r.recovery());
+            assertEquals(10 + wait, s.readyAt, runes);
+            assertEquals(0, s.cursor, runes);
+            assertEquals(CastMachine.Kind.NOT_READY, CastMachine.attempt(s, r, 10 + wait - 1, false, LIM).kind(), runes + ": too soon");
+            assertEquals(CastMachine.Kind.CAST, CastMachine.attempt(s, r, 10 + wait, false, LIM).kind(), runes);
+        }
     }
 
     @Test
-    void idleGearGoesBackToItsFirstCast() {
-        Reading r = read("spark | orb | burst", BLADE);
-        CastState s = full(BLADE);
-        CastMachine.attempt(s, r, 0, false, LIM);
-        assertEquals(1, s.cursor);
-        assertEquals(1, CastMachine.next(s, r, LIM.idleTicks() - 1, LIM));
-        assertEquals(0, CastMachine.next(s, r, LIM.idleTicks(), LIM));
-        assertEquals(0, CastMachine.attempt(s, r, LIM.idleTicks(), false, LIM).cast());
-    }
-
-    @Test
-    void redCastsAreSkipped() {
-        HostSpec small = BLADE.withMax(20);
-        Reading r = read("spark | orb on_hit burst | shard", small);
-        assertTrue(r.cast(1).red());
-        CastState s = CastState.fresh(small, 0);
-        assertEquals(0, CastMachine.attempt(s, r, 0, false, LIM).cast());
-        assertEquals(2, s.cursor, "the red cast is skipped");
-        assertEquals(2, CastMachine.attempt(s, r, s.readyAt, false, LIM).cast());
-        Reading allRed = read("orb on_hit burst", small);
-        assertEquals(CastMachine.Kind.ALL_RED, CastMachine.attempt(CastState.fresh(small, 0), allRed, 0, false, LIM).kind());
+    void aRedCastNeverFires() {
+        HostSpec small = BLADE.withMax(10);
+        Reading r = read("orb", small);
+        assertTrue(r.cast().red());
+        assertEquals(-1, CastMachine.next(CastState.fresh(small, 0), r, 0, LIM));
+        assertEquals(CastMachine.Kind.ALL_RED, CastMachine.attempt(CastState.fresh(small, 0), r, 0, false, LIM).kind());
+        assertEquals(CastMachine.Kind.NOTHING, CastMachine.attempt(CastState.fresh(small, 0), read("lantern", small), 0, false, LIM).kind());
     }
 
     @Test
@@ -134,7 +114,7 @@ class CastMachineTest {
 
     @Test
     void aFreeCastCostsNothing() {
-        Reading r = read("storm burst", HostSpec.of(Host.SWORD));
+        Reading r = read("burst storm", HostSpec.of(Host.SWORD));
         CastState s = new CastState(0, 0, -1, 0, 0, 0);
         CastMachine.Outcome o = CastMachine.attempt(s, r, 10, true, LIM);
         assertEquals(CastMachine.Kind.CAST, o.kind());
@@ -143,14 +123,13 @@ class CastMachineTest {
     }
 
     @Test
-    void anEditedRowStartsAgainFromItsFirstCast() {
-        Reading three = read("spark | orb | burst", BLADE);
-        CastState s = full(BLADE);
-        CastMachine.attempt(s, three, 0, false, LIM);
-        CastMachine.attempt(s, three, s.readyAt, false, LIM);
-        assertEquals(2, s.cursor);
+    void aCursorLeftFromARowPointsAtTheOneCast() {
+        // a weapon whose row had three casts was saved with its cursor on the third
+        CastState s = new CastState(70, 0, -1, 2, 0, Long.MIN_VALUE / 4);
         Reading one = read("spark", BLADE);
-        assertEquals(0, CastMachine.next(s, one, s.readyAt, LIM), "the cursor never points past the row");
+        assertEquals(0, CastMachine.next(s, one, 0, LIM), "the cursor never points past the one cast");
+        assertEquals(CastMachine.Kind.CAST, CastMachine.attempt(s, one, 0, false, LIM).kind());
+        assertEquals(0, s.cursor);
     }
 
     @Test

@@ -3,9 +3,9 @@ package com.explorationremix.rune;
 import com.explorationremix.rune.engine.CastState;
 import com.explorationremix.rune.engine.Host;
 import com.explorationremix.rune.engine.HostSpec;
+import com.explorationremix.rune.engine.Loadout;
 import com.explorationremix.rune.engine.Reader;
 import com.explorationremix.rune.engine.Reading;
-import com.explorationremix.rune.engine.Row;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.item.RuneItem;
 import net.minecraft.nbt.CompoundTag;
@@ -22,25 +22,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Where a piece of gear keeps its runes, and what kind of gear it is. Two tags on the stack (read and written by
+ * Where a weapon keeps its runes, and what kind of weapon it is. Two tags on the stack (read and written by
  * {@link RuneTags}):
  * <ul>
- *   <li>{@value #ROW_TAG}: {@code {v: 1, s: ["spark", "", "burst"], b: <break mask>}}, written only when the row is
- *   edited;</li>
+ *   <li>{@value #LOADOUT_TAG}: {@code {v: 2, a: "spark", m: "swift", p: "ember"}}, written only when a rune is set at
+ *   the enchanting table;</li>
  *   <li>{@value #CAST_TAG}: {@code {e: energy, t: tick, g: last gained energy (-1), c: cursor, r: ready at, l: last
- *   cast, i: gear id}}, written only when something happens to the gear (a cast, a hit, a mote, taken in hand or put
- *   away); the energy in between is worked out from the ticks, so the stack is not rewritten every tick. The gear id
- *   is how a Siphon mote finds the gear that earned it.</li>
+ *   cast, i: weapon id}}, written only when something happens to the weapon (a cast, a hit, a mote, taken in hand or
+ *   put away); the energy in between is worked out from the ticks, so the stack is not rewritten every tick. The id
+ *   is how a Siphon mote finds the weapon that earned it.</li>
  * </ul>
- * A rune in a row is only its id: rune items carry nothing else, so taking a rune out makes the same item again.
+ * A rune in a socket is only its id: rune items carry nothing else, so taking a rune out makes the same item again.
  */
 public final class RuneGear {
-    public static final String ROW_TAG = RuneTags.ROW;
+    public static final String LOADOUT_TAG = RuneTags.LOADOUT;
     public static final String CAST_TAG = RuneTags.CAST;
 
     private RuneGear() {}
 
-    /** The kind of gear this is, or null if it carries no runes. */
+    /** The kind of weapon this is, or null if it carries no runes. */
     @Nullable
     public static Host host(ItemStack stack) {
         if (stack.isEmpty()) return null;
@@ -53,8 +53,8 @@ public final class RuneGear {
     public static boolean isGear(ItemStack stack) { return host(stack) != null; }
 
     /**
-     * This piece of gear's numbers: the most energy it holds, power and bonus slots by its kind and material, and the
-     * floor its energy settles back to and how fast, from the server's settings.
+     * This weapon's numbers: the most energy it holds and its power by its kind and material, and the floor its energy
+     * settles back to and how fast, from the server's settings.
      */
     @Nullable
     public static HostSpec spec(ItemStack stack) {
@@ -62,7 +62,7 @@ public final class RuneGear {
         if (h == null) return null;
         HostSpec base = switch (h) {
             case SWORD -> sword((SwordItem) stack.getItem());
-            case BOW, CROSSBOW -> new HostSpec(h, 60, 0, 1.0F, 0, HostSpec.Fade.DEFAULT);
+            case BOW, CROSSBOW -> new HostSpec(h, 60, 0, 1.0F, HostSpec.Fade.DEFAULT);
         };
         return base.withFloor(Math.round(base.maxEnergy() * RuneConfig.floorShare())).withFade(RuneConfig.fade());
     }
@@ -79,42 +79,37 @@ public final class RuneGear {
         else max = 40 + 10 * Math.max(0, Math.min(6, t.getLevel()));
         // an iron sword (6 attack damage) hits with plain rune damage; a netherite one a third harder
         float power = Math.max(0.6F, Math.min(1.6F, (item.getDamage() + 1.0F) / 6.0F));
-        int bonus = t.getLevel() >= 3 ? 1 : 0;
-        return new HostSpec(Host.SWORD, max, 0, power, bonus, HostSpec.Fade.DEFAULT);
+        return new HostSpec(Host.SWORD, max, 0, power, HostSpec.Fade.DEFAULT);
     }
 
-    // ------------------------------------------------------------------------------------------------ the row
+    // ------------------------------------------------------------------------------------------------ the sockets
 
-    /** The gear's row, as long as the gear has slots. Runes stored past its end (edited data) are not read. */
-    public static Row row(ItemStack stack) {
-        HostSpec spec = spec(stack);
-        return RuneTags.readRow(stack.getTag(), spec == null ? 0 : spec.slotCount());
-    }
+    /** The weapon's runes (an old row read as it will be set). */
+    public static Loadout loadout(ItemStack stack) { return RuneTags.readLoadout(stack.getTag()); }
 
-    /** Runes stored past the gear's last slot (only edited data can put them there). */
-    public static List<RuneId> overflow(ItemStack stack) {
-        HostSpec spec = spec(stack);
-        return spec == null ? new ArrayList<>() : RuneTags.readOverflow(stack.getTag(), spec.slotCount());
-    }
-
-    /** Writes the row (an empty row with no breaks removes the tag). */
-    public static void setRow(ItemStack stack, Row row) {
-        CompoundTag t = RuneTags.writeRow(row);
-        if (t == null) stack.removeTagKey(ROW_TAG);
-        else stack.addTagElement(ROW_TAG, t);
+    /** Writes the runes (no runes removes the tag). */
+    public static void setLoadout(ItemStack stack, Loadout l) {
+        CompoundTag t = RuneTags.writeLoadout(l);
+        stack.removeTagKey(RuneTags.OLD_ROW);
+        if (t == null) stack.removeTagKey(LOADOUT_TAG);
+        else stack.addTagElement(LOADOUT_TAG, t);
     }
 
     public static boolean hasRunes(ItemStack stack) { return RuneTags.hasRunes(stack.getTag()); }
 
-    /** The row read for this gear at a run depth, with the server's limits. */
+    /** The runes read for this weapon at an XP level, with the server's limits. */
     @Nullable
-    public static Reading reading(ItemStack stack, int depth) {
+    public static Reading reading(ItemStack stack, int level) {
         HostSpec spec = spec(stack);
         if (spec == null) return null;
-        return Reader.read(row(stack), spec, depth, RuneConfig.limits());
+        return Reader.read(loadout(stack), spec, level, RuneConfig.limits());
     }
 
-    /** Every rune in the row and past it, as items (a broken tool's, a grindstone's). */
+    /** The runes read for this weapon in this player's hands (their XP level wakes the second phase). */
+    @Nullable
+    public static Reading reading(ItemStack stack, Player p) { return reading(stack, p.experienceLevel); }
+
+    /** Every rune it keeps, as items (a broken weapon's, a grindstone's). */
     public static List<ItemStack> runeItems(ItemStack stack) {
         List<ItemStack> out = new ArrayList<>();
         for (RuneId r : RuneTags.storedRunes(stack.getTag())) {
@@ -124,27 +119,48 @@ public final class RuneGear {
         return out;
     }
 
-    /** Takes the row off (its runes have been handed out). */
-    public static void clearRunes(ItemStack stack) { stack.removeTagKey(ROW_TAG); }
+    /** Takes the runes off (they have been handed out). */
+    public static void clearRunes(ItemStack stack) {
+        stack.removeTagKey(LOADOUT_TAG);
+        stack.removeTagKey(RuneTags.OLD_ROW);
+    }
 
-    /** Gives every rune on a breaking tool back to its owner (into the inventory, or dropped at their feet). */
+    /** Gives every rune on a breaking weapon back to its owner (into the inventory, or dropped at their feet). */
     public static void dropRunes(ItemStack stack, Player player) {
         if (player.level().isClientSide) return;
-        for (ItemStack r : runeItems(stack)) {
-            if (!player.getInventory().add(r)) player.drop(r, false);
-        }
-        stack.removeTagKey(ROW_TAG);
+        for (ItemStack r : runeItems(stack)) give(player, r);
+        clearRunes(stack);
     }
 
     /**
-     * What a grindstone makes of one runed piece of gear: the same piece with no runes and, as a grindstone does,
-     * without its enchantments (curses stay) and with its repair cost reset. Its wear stays, and so do its energy and
-     * its wait, so a round trip through a grindstone never refills it.
+     * A weapon that still has its row from before 0.20.3: its first active rune, first modifier and first passive go in
+     * its sockets and the rest come back to the player. Server only. True if it had a row.
+     */
+    public static boolean convertOldRow(ItemStack stack, Player player) {
+        if (player.level().isClientSide || !isGear(stack)) return false;
+        RuneTags.Converted c = RuneTags.convertGear(stack.getTag());
+        if (c == null) return false;
+        setLoadout(stack, c.kept());
+        for (RuneId r : c.extras()) give(player, RuneItem.stack(r, 1));
+        return true;
+    }
+
+    /** Into the inventory, or dropped at the player's feet if there is no room (or they are dead). */
+    public static void give(Player p, ItemStack s) {
+        if (s.isEmpty()) return;
+        if (p.isDeadOrDying()) p.drop(s, false);
+        else if (!p.getInventory().add(s)) p.drop(s, false);
+    }
+
+    /**
+     * What a grindstone makes of one runed weapon: the same weapon with no runes and, as a grindstone does, without its
+     * enchantments (curses stay) and with its repair cost reset. Its wear stays, and so do its energy and its wait, so a
+     * round trip through a grindstone never refills it.
      */
     public static ItemStack ground(ItemStack stack) {
         ItemStack out = stack.copyWithCount(1);
-        out.removeTagKey(ROW_TAG);
-        // its energy and its wait stay (taking the runes off doesn't refill it); only its place in a row starts over
+        clearRunes(out);
+        // its energy and its wait stay (taking the runes off doesn't refill it)
         CastState s = RuneTags.readState(out.getTag());
         if (s != null) {
             s.cursor = 0;
@@ -194,8 +210,8 @@ public final class RuneGear {
     }
 
     /**
-     * The piece of gear with this id that the player carries: in a hand, anywhere in the inventory, or in the rune
-     * screen's gear slot. Null if they no longer have it.
+     * The weapon with this id that the player carries: in a hand or anywhere in the inventory (at the enchanting table
+     * it never leaves the hand). Null if they no longer have it.
      */
     @Nullable
     public static ItemStack findGear(Player player, int id) {
@@ -207,9 +223,6 @@ public final class RuneGear {
         for (int i = 0; i < inv.getContainerSize(); i++) {
             ItemStack s = inv.getItem(i);
             if (isGear(s) && gearId(s) == id) return s;
-        }
-        if (player.containerMenu instanceof com.explorationremix.rune.menu.RuneEditorMenu m && isGear(m.gear()) && gearId(m.gear()) == id) {
-            return m.gear();
         }
         return null;
     }

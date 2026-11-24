@@ -14,14 +14,14 @@ public final class Palette {
     private final long seed;
     private final Perlin interiorN, patchN, veinN, veinMask, seamN, seamMask, wobN, bandN;
     // 0.5.1, the two bottom layers: the flood's tide mark, the ragged join of the Wasteland's and the Galleries' looks,
-    // the dip of the Scoria Canyons' bands, and the patches of the terraces' cooling cracks
-    private final Perlin tideN, joinN, tiltN, crackN;
+    // and the dip of the Basalt Rifts' bands (0.20.4: the terraces' cooling cracks went with the ember crust)
+    private final Perlin tideN, joinN, tiltN;
     // 0.8.0: the clumps of magma where the Galleries' lava touches the rock
     private final Perlin heatN;
     // 0.14.5: the wander of the Fern Rift's bands by depth
     private final Perlin riftN;
-    // 0.20.1: the wander of the Frost Fern Grotto's icy depths, and the glowing veins through its deep ice
-    private final Perlin iceN, glowN, glowMask;
+    // 0.20.1: the wander of the Frost Fern Grotto's icy depths
+    private final Perlin iceN;
     /** What the noise fields of the two bottom layers tell the dressing ({@link LookQueries}). */
     private final LookQueries looks;
     /**
@@ -55,12 +55,9 @@ public final class Palette {
         tideN = new Perlin(Hashing.mix(s, 9, 0, 0));
         joinN = new Perlin(Hashing.mix(s, 10, 0, 0));
         tiltN = new Perlin(Hashing.mix(s, 11, 0, 0));
-        crackN = new Perlin(Hashing.mix(s, 12, 0, 0));
         heatN = new Perlin(Hashing.mix(s, 13, 0, 0));
         riftN = new Perlin(Hashing.mix(s, 14, 0, 0));
         iceN = new Perlin(Hashing.mix(s, 15, 0, 0));
-        glowN = new Perlin(Hashing.mix(s, 16, 0, 0));
-        glowMask = new Perlin(Hashing.mix(s, 17, 0, 0));
     }
 
     /** The row the noise and the hashes read for a block in row y ({@link #LOW_FLOOR}). */
@@ -91,18 +88,6 @@ public final class Palette {
         return Math.abs(seamN.noise3(x * 0.012, yn * 0.075, z * 0.012)) < 0.022;
     }
 
-    /**
-     * The Galleries' glowing seams: the same flat-lying sheets as {@link #seam}, a little thicker, so a cliff 60 or more
-     * tall has a few of them to light it where no lava reaches. {@code reach} is the mask below which no seam runs: the
-     * lower it is, the further the seams run on through the rock (at 0.06 about one wall block in thirty is ember crust,
-     * at -0.12 about one in eighteen).
-     */
-    private boolean emberSeam(int x, int y, int z, double reach) {
-        int yn = ny(y);
-        if (seamMask.noise3(x * 0.015, yn * 0.02, z * 0.015) < reach) return false;
-        return Math.abs(seamN.noise3(x * 0.012, yn * 0.075, z * 0.012)) < 0.03;
-    }
-
     // ============================================================================================== deep rock
 
     /** Rock more than a few blocks from any open space. */
@@ -119,9 +104,11 @@ public final class Palette {
                 if (n < -0.28) return Rock.ASURINE;
                 return Rock.DEEPSLATE;
             case Terrain.GALLERIES:
-                // Basalt with bold patches of blackstone and smooth basalt. No scoria: in the Galleries only the Scoria
-                // Canyons' walls show it.
-                if (n > 0.22) return Rock.BLACKSTONE;
+                // Basalt with bold patches of smooth basalt and, sparingly, a lump of scorchia (Taran, 2026-11-23:
+                // "Blackstone could be replaced with smooth basalt. Don't use scoria but scorchia could be used
+                // sparingly.")
+                if (n > 0.22) return Rock.SMOOTH_BASALT;
+                if (n < -0.46) return Rock.SCORCHIA;
                 if (n < -0.3) return Rock.SMOOTH_BASALT;
                 return Rock.BASALT;
             default:
@@ -155,9 +142,9 @@ public final class Palette {
     }
 
     /**
-     * A span of rock in the Scoria Canyons thin enough to have open space over and under it within a few blocks: a
-     * natural bridge or the lip of a ledge, which is basalt rather than banded scoria (in the flood band too, but for its
-     * magma rim).
+     * A span of rock in the Basalt Rifts thin enough to have open space over and under it within a few blocks: a
+     * natural bridge or the lip of a ledge, which is plain basalt rather than the walls' banded flows (in the flood band
+     * too, but for its magma rim).
      */
     private static boolean canyonSpan(int above, int below) { return above + below <= 8; }
 
@@ -359,38 +346,14 @@ public final class Palette {
     /** The cut that makes {@link #heat} true on about 12 % of blocks. */
     private static final double HEAT = 0.33;
 
-    /** Thin cracks, rarer than {@link #vein}'s: about one block in a hundred where they run. */
-    private boolean crack(int x, int y, int z, double width) {
-        int yn = ny(y);
-        if (veinMask.noise3(x * 0.02, yn * 0.03, z * 0.02) < 0.28) return false;
-        return Math.abs(veinN.noise3(x * 0.07, yn * 0.09, z * 0.07)) < width;
-    }
-
-    /**
-     * A glowing joint: ember crust in the joints between columns, in vertical streaks a few to a dozen blocks long where
-     * a slow noise allows, so a few columns of a cliff show lit cracks between them rather than seams across them.
-     */
-    private boolean glowingJoint(int x, int y, int z) {
-        if (crackN.noise3(x * 0.05, ny(y) * 0.035, z * 0.05) < 0.5) return false;
-        return looks.columnEdge(x, z) < 0.35;
-    }
-
-    /**
-     * The shore's cooling cracks: ember crust in the joints between the columns' tops in patches a few dozen blocks
-     * across, on the low ground within 14 blocks over the table only, commonest by the lava.
-     */
-    private boolean cooling(int x, int y, int z, long cell, int W) {
-        double near = 1 - (y - W) / 14.0;
-        if (near <= 0) return false;
-        if (crackN.noise2(x * 0.03, z * 0.03) < 0.5 - 0.25 * near) return false;
-        return cell != 0 ? looks.columnEdge(x, z) < 0.5 : crack(x, y, z, 0.05);
-    }
-
     /**
      * Rock near open space in the Wasteland and the Galleries. Natural stone only (Taran, 2026-11-02: "Polished
-     * blackstone doesn't fit. It looks too unnatural."): basalt, smooth basalt, blackstone and gilded blackstone, magma,
-     * obsidian and a little crying obsidian, tuff, calcite and dripstone, Create's scoria and scorchia (never their cut or
-     * layered forms), and the ember crust; no stripe at a fixed height.
+     * blackstone doesn't fit. It looks too unnatural."), never Create's cut or layered forms, and no stripe at a fixed
+     * height. The Wasteland: basalt, smooth basalt, blackstone and gilded blackstone, magma, tuff, calcite and dripstone.
+     * The Galleries (Taran, 2026-11-23: "Blackstone could be replaced with smooth basalt. Don't use scoria but scorchia
+     * could be used sparingly. Remove ember crust."): basalt and smooth basalt, scorchia sparingly (a few columns, the
+     * Caldera's cinder cones, thin bands in the Basalt Rifts), magma where the lava touches the rock, obsidian and a
+     * little crying obsidian, tuff in the Obsidian Tubes, and a speck of gold ore; no blackstone, scoria or ember crust.
      */
     private Rock basaltShell(DeepBiome b, int li, int x, int y, int z, int above, int below, boolean wet) {
         int look = lookLayer(li, x, y, z);
@@ -412,7 +375,7 @@ public final class Palette {
             // magma (cone). The cheap tests first: touchesLava may read the blocks beside.
             if (y <= W && heat(x, y, z) && cone >= CRATER && touchesLava(x, y, z, above, below, wet, W)) return Rock.MAGMA;
             // The tide. The Galleries' lava rises Terrain.surge over its table at the height of its cycle and scorches
-            // the walls and overhangs it covers. Its mark is not drawn: under it more and more columns are blackstone,
+            // the walls and overhangs it covers. Its mark is not drawn: under it more and more columns are smooth basalt,
             // a column turning dark once, at its own height, and never back (scorched), so the safe height reads
             // roughly, as the change from grey columns to dark ones. The Obsidian Tubes lie above it, and the Caldera's
             // cones keep their cinders under it.
@@ -447,17 +410,17 @@ public final class Palette {
             case CAUSEWAY:
                 return causeway(x, y, z, top, floor, ceil, wet, n, W);
             case SCORIA_CANYONS: {
-                // Red rifts of scoria banded with scorchia (scoriaBand), a few cracks of ember crust, and basalt bridges:
-                // any span of rock thin enough to have open space over and under it within a few blocks (a natural
-                // bridge, or the lip of a ledge).
+                // The Basalt Rifts (the Scoria Canyons before 0.20.4): walls of stacked lava flows, basalt banded with
+                // smooth basalt and thin scorchia flow tops (riftBand), and plain basalt bridges: any span of rock thin
+                // enough to have open space over and under it within a few blocks (a natural bridge, or the lip of a
+                // ledge). Floors of the same stones, scorchia only by the lava.
                 if (canyonSpan(above, below)) return n > 0.3 ? Rock.SMOOTH_BASALT : Rock.BASALT;
                 if (floor) {
-                    if (wet) return n > 0.2 ? Rock.BLACKSTONE : Rock.SCORCHIA;
-                    if (top) return n > 0.3 ? Rock.SCORCHIA : Rock.SCORIA;
-                    return Rock.SCORIA;
+                    if (wet) return n > -0.35 ? Rock.SMOOTH_BASALT : Rock.SCORCHIA;
+                    if (top) return n > 0.25 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+                    return Rock.BASALT;
                 }
-                if (crack(x, y, z, 0.02)) return Rock.EMBER_CRUST;   // cracks in networks, not dashes everywhere
-                return scoriaBand(x, y, z, false);
+                return riftBand(x, y, z, false);
             }
             default: {
                 // The Wasteland, with the old Basalt Galleries' look: basalt columns and blackstone floors, gilded
@@ -485,20 +448,20 @@ public final class Palette {
 
     /**
      * A wall or overhang the risen lava covers, {@code mark} the tide's mark over it: each column keeps its dry stone
-     * (dryColumn) or turns blackstone, a share of the columns that grows from 18 % at the mark to 36 % twelve blocks
+     * (dryColumn) or turns smooth basalt, a share of the columns that grows from 18 % at the mark to 36 % twelve blocks
      * under it. Only the dry rule's commonest stone turns, and a column that turns stays dark all the way down, so the
-     * tide only ever darkens a column, and once (the Scoria Canyons' bands turn to scorchia and blackstone).
+     * tide only ever darkens a column, and once (the Basalt Rifts' basalt flows turn to smooth basalt).
      */
     private Rock scorched(DeepBiome b, int x, int y, int z, int above, int below, double n, double mark, boolean ceil) {
-        if (b == DeepBiome.SCORIA_CANYONS) return canyonSpan(above, below) ? Rock.BASALT : scoriaBand(x, y, z, true);
+        if (b == DeepBiome.SCORIA_CANYONS) return canyonSpan(above, below) ? Rock.BASALT : riftBand(x, y, z, true);
         long cell = looks.columnCell(x, z);
-        if (cell != 0) return tide(cell, y, mark) ? Rock.BLACKSTONE : dryColumn(b, cell, x, z);
-        return n > 0.02 ? Rock.BLACKSTONE : Rock.BASALT;
+        if (cell != 0) return tide(cell, y, mark) ? Rock.SMOOTH_BASALT : dryColumn(b, cell, x, z);
+        return n > 0.02 ? Rock.SMOOTH_BASALT : Rock.BASALT;
     }
 
     /**
-     * Whether the tide has turned column {@code cell} to blackstone at row y, {@code mark} the mark over it: the top of
-     * columnUnit's range, a share of the columns growing from 18 % at the mark to 36 % twelve blocks under it.
+     * Whether the tide has turned column {@code cell} to smooth basalt at row y, {@code mark} the mark over it: the top
+     * of columnUnit's range, a share of the columns growing from 18 % at the mark to 36 % twelve blocks under it.
      */
     private boolean tide(long cell, int y, double mark) {
         return y < mark && columnUnit(cell) >= 1 - (0.18 + 0.18 * Math.max(0, Math.min(1, (mark - y) / 12.0)));
@@ -506,122 +469,104 @@ public final class Palette {
 
     /**
      * Column {@code cell}'s stone in a floor (a terrace's top and the two blocks under it): the stone the column's sides
-     * have at that height, its dry stone, or blackstone under the tide's mark where the tide turned it. So a column is
+     * have at that height, its dry stone, or smooth basalt under the tide's mark where the tide turned it. So a column is
      * one stone from its foot to its top, as in picture 1, and its top is never lighter than its sides.
      */
     private Rock columnFloor(DeepBiome b, long cell, int x, int y, int z, int W) {
-        if (y >= W && tide(cell, y, tideMark(x, z, W))) return Rock.BLACKSTONE;
+        if (y >= W && tide(cell, y, tideMark(x, z, W))) return Rock.SMOOTH_BASALT;
         return dryColumn(b, cell, x, z);
     }
 
     /**
      * A column's dry stone, by biome, on every face of the column: its walls, its top, its underside and, in a hanging
      * cluster, the whole hanging column, so each column is one stone from end to end. The one column() call the dry
-     * rules and the tide share. Each puts its commonest stone (basalt, in the Caldera blackstone) at the top of
-     * columnUnit's range, the part the tide turns to blackstone.
+     * rules and the tide share. Each puts its commonest stone (basalt, in the Caldera smooth basalt) at the top of
+     * columnUnit's range, the part the tide turns to smooth basalt.
      */
     private Rock dryColumn(DeepBiome b, long cell, int x, int z) {
         switch (b) {
             case CALDERA:
-                // blackstone-led, as its crust was before its floors took their columns' stone
-                return column(cell, Rock.BLACKSTONE, Rock.BASALT, 0.3, Rock.SMOOTH_BASALT, 0.06);
+                // smooth-basalt-led, dark round its lake (no scorchia: the cones are its cinders)
+                return column(cell, Rock.SMOOTH_BASALT, Rock.BASALT, 0.35, Rock.SMOOTH_BASALT, 0);
             case CAUSEWAY:
-                // the mosaic of its column ends, basalt, smooth basalt and blackstone, now the columns' own stone
-                return column(cell, Rock.BASALT, Rock.SMOOTH_BASALT, 0.3, Rock.BLACKSTONE, 0.15);
+                // the mosaic of its column ends, basalt and smooth basalt with a rare scorchia prism, the columns' own stone
+                return column(cell, Rock.BASALT, Rock.SMOOTH_BASALT, 0.4, Rock.SCORCHIA, 0.03);
             default:
-                // the halls' columns: dark and grey side by side, a third dark, from about a fifth to well over half
-                // from one stretch of wall to the next (picture 1's alternation), hanging clusters alike
-                return column(cell, Rock.BASALT, Rock.BLACKSTONE, share(0.35 + 0.3 * columnPatch(x, z)), Rock.SMOOTH_BASALT, 0.1);
+                // the halls' columns: dark and grey side by side, about two in five dark, from about a quarter to two
+                // thirds from one stretch of wall to the next (picture 1's alternation), hanging clusters alike, and one
+                // column in forty scorchia
+                return column(cell, Rock.BASALT, Rock.SMOOTH_BASALT, share(0.4 + 0.3 * columnPatch(x, z)), Rock.SCORCHIA, 0.025);
         }
     }
 
     /**
-     * The main cavern (the first reference picture): walls of basalt columns, each its own stone (mostly basalt, some
-     * blackstone, some smooth basalt, in bold patches), crossed by a few glowing seams of ember crust; terraces of the
-     * same column tops, each the stone of its column, with gilded specks on the blackstone and, near the lava, cooling
-     * cracks of ember crust; hanging clusters of the same columns; undersides the stone of their columns, the vault
-     * between the clusters cracked with ember crust; magma only where the lava touches the rock (basaltShell). Every
-     * face of a column is the column's stone, so each reads as one stone from end to end (decision 3, picture 1).
+     * The halls (the first reference picture): walls of basalt columns, each its own stone (mostly basalt, some smooth
+     * basalt, in bold patches, now and then a scorchia column); terraces of the same column tops, each the stone of its
+     * column; hanging clusters of the same columns; undersides the stone of their columns; magma only where the lava
+     * touches the rock (basaltShell), and a speck of gold ore in the walls. Every face of a column is the column's stone,
+     * so each reads as one stone from end to end (decision 3, picture 1). Nothing glows in the rock (0.20.4: the ember
+     * crust is gone); the lava, its falls and the unseen glow light the halls.
      */
     private Rock galleries(int x, int y, int z, boolean top, boolean floor, boolean ceil, boolean wet, double n, int W) {
         long cell = looks.columnCell(x, z);
         if (floor) {
-            if (wet) return n < -0.25 ? Rock.BASALT : Rock.BLACKSTONE;
-            if (top && cooling(x, y, z, cell, W)) return Rock.EMBER_CRUST;
-            Rock r = cell != 0 ? columnFloor(DeepBiome.BASALT_GALLERIES, cell, x, y, z, W) : n > -0.15 ? Rock.BLACKSTONE : Rock.BASALT;
-            return top && r == Rock.BLACKSTONE && speck(x, y, z) < 0.08 ? Rock.GILDED_BLACKSTONE : r;
+            if (wet) return n < -0.25 ? Rock.BASALT : Rock.SMOOTH_BASALT;
+            return cell != 0 ? columnFloor(DeepBiome.BASALT_GALLERIES, cell, x, y, z, W) : n > -0.15 ? Rock.SMOOTH_BASALT : Rock.BASALT;
         }
-        boolean hanging = looks.hang(x, y, z) > 0.05;
         if (ceil) {
-            if (!hanging && crack(x, y, z, 0.03)) return Rock.EMBER_CRUST;
             if (cell != 0) return dryColumn(DeepBiome.BASALT_GALLERIES, cell, x, z);
-            return n > 0.25 ? Rock.BLACKSTONE : Rock.BASALT;
+            return n > 0.25 ? Rock.SMOOTH_BASALT : Rock.BASALT;
         }
-        if (!hanging && (cell != 0 ? glowingJoint(x, y, z) : emberSeam(x, y, z, 0.3))) return Rock.EMBER_CRUST;
         if (speck(x, y, z) < 0.003) return Rock.DEEPSLATE_GOLD_ORE;
-        if (cell != 0) {
-            Rock r = dryColumn(DeepBiome.BASALT_GALLERIES, cell, x, z);
-            return r == Rock.BLACKSTONE && speck(x, y, z) < 0.02 ? Rock.GILDED_BLACKSTONE : r;
-        }
-        if (n > 0.3) return speck(x, y, z) < 0.04 ? Rock.GILDED_BLACKSTONE : Rock.BLACKSTONE;
+        if (cell != 0) return dryColumn(DeepBiome.BASALT_GALLERIES, cell, x, z);
         return n > 0.08 ? Rock.SMOOTH_BASALT : Rock.BASALT;
     }
 
     /**
-     * The Caldera, the brightest place in the Galleries: a crust of blackstone-led columns, each one stone to its top,
-     * with plates of ember crust on the low ground, cones of cinders ({@link #cone}, on the cones' own ground only:
-     * {@link #coneAt}), and walls and a vault seamed and cracked with ember crust; magma where its lava touches the rock
-     * (basaltShell) and in the cones' craters.
+     * The Caldera, the brightest place in the Galleries for its lava lake: a crust of dark, smooth-basalt-led columns,
+     * each one stone to its top, round the lake, cones of scorchia cinders ({@link #cone}, on the cones' own ground only:
+     * {@link #coneAt}), magma where its lava touches the rock (basaltShell) and in the cones' craters.
      */
     private Rock caldera(int x, int y, int z, boolean top, boolean floor, boolean ceil, boolean wet, double n, int W) {
         double d = coneAt(x, y, z);
         if (d < 1) return cone(x, y, z, d, n, W);
         long cell = looks.columnCell(x, z);
         if (floor) {
-            if (wet) return n > -0.2 ? Rock.BLACKSTONE : Rock.BASALT;
-            // hot ground: ember crust as cooling cracks that thin out up the slopes (patches on every step's top read
-            // as orange contour lines on terraces)
-            if (top && y < W + 30 && crack(x, y, z, 0.08 * (1 - (y - W) / 30.0))) return Rock.EMBER_CRUST;
+            if (wet) return n > -0.2 ? Rock.SMOOTH_BASALT : Rock.BASALT;
             if (cell != 0) return columnFloor(DeepBiome.CALDERA, cell, x, y, z, W);
-            return n > -0.32 ? Rock.BLACKSTONE : Rock.BASALT;
+            return n > -0.32 ? Rock.SMOOTH_BASALT : Rock.BASALT;
         }
         if (ceil) {
-            // cracks in networks (crack() leaves most of the vault without any), not a vein sheet cut by every step
-            if (crack(x, y, z, 0.045)) return Rock.EMBER_CRUST;
             if (cell != 0) return dryColumn(DeepBiome.CALDERA, cell, x, z);
-            return n > 0 ? Rock.BLACKSTONE : Rock.BASALT;
+            return n > 0 ? Rock.SMOOTH_BASALT : Rock.BASALT;
         }
-        if (emberSeam(x, y, z, 0.3)) return Rock.EMBER_CRUST;   // as rare as the halls': seams in a bowl read as contour lines
         if (cell != 0) return dryColumn(DeepBiome.CALDERA, cell, x, z);
-        return n < -0.3 ? Rock.BASALT : Rock.BLACKSTONE;
+        return n < -0.3 ? Rock.BASALT : Rock.SMOOTH_BASALT;
     }
 
     /**
-     * A Caldera cone, {@code d} its foot radii from the axis: cinders of scorchia with patches of scoria on the flanks,
-     * cooling cracks of ember crust thickening towards the lip, and the crater (the eruptions' vent, within
-     * {@link #CRATER} foot radii of the axis) a throat of magma and ember crust.
+     * A Caldera cone, {@code d} its foot radii from the axis: cinders of scorchia (the Galleries' one big show of it)
+     * with patches of basalt on the lower flanks, and the crater (the eruptions' vent, within {@link #CRATER} foot radii
+     * of the axis) a throat of magma and scorchia.
      */
     private Rock cone(int x, int y, int z, double d, double n, int W) {
-        if (d < CRATER) return n > 0.15 ? Rock.MAGMA : speck(x, y, z) < 0.45 ? Rock.EMBER_CRUST : Rock.BLACKSTONE;
-        double heat = 1 - (d - CRATER) / (1 - CRATER);
-        if (speck(x, y, z) < 0.05 * heat || heat > 0.3 && vein(x, y, z, 0.03 * heat)) return Rock.EMBER_CRUST;
-        if (d > 0.8 && n < -0.15) return Rock.BLACKSTONE;
-        return n > 0.18 ? Rock.SCORIA : Rock.SCORCHIA;
+        if (d < CRATER) return n > 0.15 || speck(x, y, z) < 0.4 ? Rock.MAGMA : Rock.SCORCHIA;
+        if (d > 0.75 && n < -0.15) return Rock.SMOOTH_BASALT;
+        return n > 0.32 ? Rock.BASALT : Rock.SCORCHIA;
     }
 
     /**
-     * The Causeway: coarse columns stepping out of the lava, each one stone from its foot to its end (basalt, smooth
-     * basalt or blackstone), so their tops make a mosaic of column ends; a little magma where the lava touches them
-     * (basaltShell), and a few cracks of ember crust.
+     * The Causeway: coarse columns stepping out of the lava, each one stone from its foot to its end (basalt or smooth
+     * basalt, a rare one scorchia), so their tops make a mosaic of column ends; a little magma where the lava touches
+     * them (basaltShell).
      */
     private Rock causeway(int x, int y, int z, boolean top, boolean floor, boolean ceil, boolean wet, double n, int W) {
         long cell = looks.columnCell(x, z);
         if (floor) {
-            if (wet) return n > 0.3 ? Rock.BLACKSTONE : Rock.BASALT;
+            if (wet) return n > 0.3 ? Rock.SMOOTH_BASALT : Rock.BASALT;
             if (cell != 0) return columnFloor(DeepBiome.CAUSEWAY, cell, x, y, z, W);
             return top && n <= -0.1 ? Rock.SMOOTH_BASALT : Rock.BASALT;
         }
-        if (crack(x, y, z, ceil ? 0.04 : 0.02)) return Rock.EMBER_CRUST;   // cracks in networks, not dashes everywhere
         if (cell != 0) return dryColumn(DeepBiome.CAUSEWAY, cell, x, z);
         if (ceil) return Rock.BASALT;
         return n < -0.4 ? Rock.SMOOTH_BASALT : Rock.BASALT;
@@ -629,14 +574,14 @@ public final class Palette {
 
     /**
      * The Obsidian Tubes (the second reference picture): arches of glossy obsidian, the tube's ribs; between them walls
-     * of column grain, basalt with pale tuff and brown scoria columns; a vault of obsidian and basalt (the tube field
-     * hangs whole column cells from it, TubeField.hang); stepped floors of obsidian and pale grey tuff and smooth basalt; still
-     * pools on dark obsidian. Crying obsidian sparingly, about one obsidian block in 40.
+     * of column grain, basalt with pale tuff and dark smooth basalt columns; a vault of obsidian and basalt (the tube
+     * field hangs whole column cells from it, TubeField.hang); stepped floors of obsidian and pale grey tuff and smooth
+     * basalt; still pools on dark obsidian. Crying obsidian sparingly, about one obsidian block in 40.
      */
     private Rock tubes(int x, int y, int z, boolean top, boolean floor, boolean ceil, boolean wet, double n) {
         double g = looks.tubeShellDepth(x, y, z);
         if (g >= 1.8) return g < 3.2 || n <= 0.2 ? Rock.BASALT : Rock.SMOOTH_BASALT;
-        if (floor && wet) return n > 0.25 ? Rock.BLACKSTONE : Rock.OBSIDIAN;
+        if (floor && wet) return n > 0.25 ? Rock.SMOOTH_BASALT : Rock.OBSIDIAN;
         if (looks.tubeRib(x, y, z)) return obsidian(x, y, z, 0.03);
         double m = wobN.noise3(x * 0.06, ny(y) * 0.085, z * 0.06);
         if (floor) {
@@ -649,7 +594,7 @@ public final class Palette {
         long cell = looks.columnCell(x, z);
         if (cell == 0) cell = Hashing.mix(seed ^ 0x5851F42D4C957F2DL, Math.floorDiv(x, 2), 0, Math.floorDiv(z, 2));
         double c = columnPatch(x, z);
-        return column(cell, Rock.BASALT, Rock.TUFF, share(0.22 + 0.3 * c), Rock.SCORIA, share(0.22 - 0.3 * c));
+        return column(cell, Rock.BASALT, Rock.TUFF, share(0.22 + 0.3 * c), Rock.SMOOTH_BASALT, share(0.22 - 0.3 * c));
     }
 
     private Rock obsidian(int x, int y, int z, double crying) {
@@ -657,24 +602,21 @@ public final class Palette {
     }
 
     /**
-     * The Scoria Canyons' walls: scoria with bands of scorchia about nine blocks apart, wavering a few blocks over a
+     * The Basalt Rifts' walls: stacked lava flows about nine blocks thick, each a band of basalt over one of smooth basalt
+     * with a thin scorchia top (a block or so, where the flow's crust cooled to cinders), wavering a few blocks over a
      * hundred, thickening and thinning along their length, and dipping a few degrees one way or another over a few
      * hundred blocks, so no band lies level. Natural stone only: never Create's cut or layered forms, whose dressed
-     * courses and framed caps read as masonry. Where the Galleries' lava rises ({@code scorched}) the scoria gives way to
-     * scorchia, Create's scorched scoria, banded with blackstone.
+     * courses and framed caps read as masonry. Where the Galleries' lava rises ({@code scorched}) the basalt gives way to
+     * smooth basalt, the scorchia tops staying.
      */
-    private Rock scoriaBand(int x, int y, int z, boolean scorched) {
+    private Rock riftBand(int x, int y, int z, boolean scorched) {
         int yn = ny(y);
         double v = (yn + 5.0 * bandN.noise3(x * 0.012, yn * 0.02, z * 0.012) + 14.0 * tiltN.noise2(x * 0.006, z * 0.006)) / 9.0;
         double f = v - Math.floor(v);
         double w = 0.1 * bandN.noise3(x * 0.03 + 50.5, yn * 0.05, z * 0.03 + 50.5);
-        if (scorched) {
-            if (f < 0.5 + w) return Rock.SCORCHIA;
-            return f < 0.82 ? Rock.BLACKSTONE : Rock.SCORCHIA;
-        }
-        if (f < 0.46 + w) return Rock.SCORIA;
-        if (f < 0.78 + w) return Rock.SCORCHIA;
-        return Rock.SCORIA;
+        if (f >= 0.86 + 0.5 * w && f < 0.95 + 0.5 * w) return Rock.SCORCHIA;
+        if (scorched) return Rock.SMOOTH_BASALT;
+        return f < 0.5 + w ? Rock.BASALT : Rock.SMOOTH_BASALT;
     }
 
     // ============================================================================================== the Fern Rift's bands
@@ -878,12 +820,13 @@ public final class Palette {
      * a mountain is as icy as one at the same height under the lowlands beside it: the ice comes as one goes down, not
      * as one walks in under a slope. The depths wander up and down by up to {@value #ICE_WOBBLE} blocks over a few
      * hundred. The grotto starts 18 under the ground ({@code PlantCaves.MIN_DEPTH}) and mostly lies 35 to 70 under it
-     * (the plant caves' band, 45 deep on average): ice starts at {@value #ICE_TOP}, covers all it will at
-     * {@value #ICE_FULL}, and glows from {@value #GLOW_TOP}, most at {@value #GLOW_FULL} and deeper. Where the band lies
-     * shallow a grotto keeps the top's look throughout, where it lies deep it is ice nearly all through.
+     * (the plant caves' band, 45 deep on average): ice starts at {@value #ICE_TOP} and covers all it will at
+     * {@value #ICE_FULL}. Where the band lies shallow a grotto keeps the top's look throughout, where it lies deep it is
+     * ice nearly all through. (0.20.1's glow ice, light blue veins through the deep ice, left the game in 0.20.7: Taran,
+     * "Remove glow ice".)
      */
     public static final int GROTTO_GROUND = 80;
-    public static final double ICE_TOP = 36, ICE_FULL = 62, GLOW_TOP = 42, GLOW_FULL = 80, ICE_WOBBLE = 8;
+    public static final double ICE_TOP = 36, ICE_FULL = 62, ICE_WOBBLE = 8;
 
     /** How deep a block of the grotto lies, as {@link #grottoIce} counts it, under ground at {@code ground}. */
     public double grottoDepth(int x, int y, int z, int ground) {
@@ -899,47 +842,29 @@ public final class Palette {
         return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
     }
 
-    /** How much of the grotto's ice glows at a block ({@link #glowingIce}), from 0 to 1, the more the deeper. */
-    public double grottoGlow(int x, int y, int z, int ground) {
-        double t = (grottoDepth(x, y, z, ground) - GLOW_TOP) / (GLOW_FULL - GLOW_TOP);
-        return t <= 0 ? 0 : Math.min(1, t);
+    /** A block of the grotto's ice crusts and floors: packed ice with specks of blue ice. */
+    public Rock grottoIceBlock(int x, int y, int z) {
+        return iceSpeck(x, y, z);
     }
 
     /**
-     * Whether a block of the deep grotto's ice is glow ice: thin light blue sheets through the ice that show as glowing
-     * veins where they cut a crust, more and wider the deeper (about one ice block in twenty 50 under the ground, one in
-     * ten 60 under it, one in four and a half 80 under it and deeper), none where {@code glow} is 0. A broad mask leaves
-     * stretches of the deep ice dark between the veins.
+     * The Frost Fern Grotto (the pack's caves under cold ground), by how icy it is there ({@code ice}, {@link #grottoIce}).
+     * Near the top its floors are bare rock with snow in broad drifts and a little packed ice; going down the ice takes
+     * them over, to three floors in five deep down, with snow on a quarter (0.20.1: no carpet of frost moss, which grows
+     * only in the small patches its features lay), and crusts the ceilings in patches, a fifth of them deep down (Taran,
+     * 0.14.0: one sheet of ice over a ceiling looked odd). Gravel and clay under its water. Everything under the floor's
+     * top and the walls keep the pack's rock: the grotto's ice crusts and Immersive Weathering's icicle clusters ice them
+     * over in patches.
      */
-    public boolean glowingIce(int x, int y, int z, double glow) {
-        if (glow <= 0 || glowMask.noise3(x * 0.02, y * 0.03, z * 0.02) < 0.05 - 0.35 * glow) return false;
-        return Math.abs(glowN.noise3(x * 0.09, y * 0.11, z * 0.09)) < 0.02 + 0.08 * glow;
-    }
-
-    /** A block of the grotto's ice: glow ice in its veins, else packed ice with specks of blue ice. */
-    public Rock grottoIceBlock(int x, int y, int z, double glow) {
-        return glowingIce(x, y, z, glow) ? Rock.GLOW_ICE : iceSpeck(x, y, z);
-    }
-
-    /**
-     * The Frost Fern Grotto (the pack's caves under cold ground), by how icy it is there ({@code ice}, {@link #grottoIce})
-     * and how much of its ice glows ({@code glow}, {@link #grottoGlow}). Near the top its floors are bare rock with snow
-     * in broad drifts and a little packed ice; going down the ice takes them over, to three floors in five deep down,
-     * with snow on a quarter (0.20.1: no carpet of frost moss, which grows only in the small patches its features lay),
-     * and crusts the ceilings in patches, a fifth of them deep down (Taran, 0.14.0: one sheet of ice over a ceiling looked
-     * odd). Deep down some of the ice glows ({@link #glowingIce}). Gravel and clay under its water. Everything under the
-     * floor's top and the walls keep the pack's rock: the grotto's ice crusts and Immersive Weathering's icicle
-     * clusters ice them over in patches.
-     */
-    public Rock frostGrotto(int x, int y, int z, int above, int below, boolean wet, double ice, double glow) {
+    public Rock frostGrotto(int x, int y, int z, int above, int below, boolean wet, double ice) {
         if (above > 2 && below > 1) return null;
         double n = patch(x, y, z);
         if (above <= 2) {
             if (wet) return n > 0.1 ? Rock.GRAVEL : Rock.CLAY;
             if (above > 1) return null;
-            if (n < -0.5 + 0.57 * ice) return grottoIceBlock(x, y, z, 0.6 * glow);
+            if (n < -0.5 + 0.57 * ice) return grottoIceBlock(x, y, z);
             return n > 0.035 + 0.145 * ice ? Rock.SNOW : null;
         }
-        return n > 0.75 - 0.52 * ice ? grottoIceBlock(x, y, z, glow) : null;
+        return n > 0.75 - 0.52 * ice ? grottoIceBlock(x, y, z) : null;
     }
 }

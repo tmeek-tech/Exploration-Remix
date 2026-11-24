@@ -45,7 +45,8 @@ import java.util.Set;
  *     <li><b>The chorus</b> ({@code ambient.upper.crickets}): a stereo bed, a soft far chorus of tree crickets echoing
  *     round the cave (Taran chose it alone, with no nearer chirpers in the loop), played round the listener in an upper
  *     cave. In the mod's own warm upper caves (Root Vaults, Silver Fern Rift, Ivory Root Cavern, sinkholes, oasis
- *     hollows) anywhere; with {@code crickets = EVERY_UPPER_CAVE} also in
+ *     hollows) anywhere, where the birds were (Taran's pick, the default since 0.21.1); with
+ *     {@code cricketCaves = EVERY_UPPER_CAVE} also in
  *     the pack's caves above the first band once the player is well underground (no sky light at the eyes, the surface 6
  *     to 14 blocks or more above them). Never in the cold (crickets fall silent there: the frozen caves have their own
  *     draft and ice), in the deep dark, under water or below the first band. It fades in and out over two seconds, as the

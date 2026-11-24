@@ -18,11 +18,11 @@ import org.joml.Quaternionf;
  * straight up in the world (taken before the square is turned to face the camera): that is lit fully from any angle,
  * and the square shows exactly its tint.
  */
-final class GlowSprite {
+public final class GlowSprite {
     private GlowSprite() {}
 
     /** explorationremix:textures/entity/rune/{@code name}.png */
-    static ResourceLocation texture(String name) {
+    public static ResourceLocation texture(String name) {
         return ResourceLocation.fromNamespaceAndPath(ExplorationRemix.MOD_ID, "textures/entity/rune/" + name + ".png");
     }
 
@@ -31,7 +31,7 @@ final class GlowSprite {
      * {@code spin} degrees about the line of sight, and set {@code back} blocks further from the camera (so of two squares
      * on one spot, the one set back is drawn first and the other shows over it).
      */
-    static void facing(PoseStack pose, VertexConsumer vc, Quaternionf camera, float half, float spin, float back, int rgb, float alpha) {
+    public static void facing(PoseStack pose, VertexConsumer vc, Quaternionf camera, float half, float spin, float back, int rgb, float alpha) {
         Matrix3f up = new Matrix3f(pose.last().normal());
         pose.pushPose();
         pose.mulPose(camera);

@@ -93,7 +93,6 @@ public final class DeepMaterials {
                 case FROST_MOSS -> ERBlocks.FROST_MOSS.get().defaultBlockState();
                 case EMBER_CRUST -> ERBlocks.EMBER_CRUST.get().defaultBlockState();
                 case DIORITE -> Blocks.DIORITE.defaultBlockState();
-                case GLOW_ICE -> ERBlocks.GLOW_ICE.get().defaultBlockState();
             };
             STATES.put(r, s);
             BY_ORDINAL[r.ordinal()] = s;

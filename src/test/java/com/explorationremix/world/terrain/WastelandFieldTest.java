@@ -37,10 +37,13 @@ class WastelandFieldTest {
      * pools and a lava fall that left a walk one way or a pit (seed 8675309 at 0,0 and -1831217569 at -1846,6353 one way;
      * -1249636696 at -1925,171, 392286899 at -4264,-1654 and -1314707143 at 5560,2806 pits of 2, 1 and 1 places), and the
      * two of thirty fresh boxes where a pool left the largest pits (-1563395035 at 2310,5212 and -667355435 at -6827,5355:
-     * 46 and 31 places).
+     * 46 and 31 places). And (0.20.4) the first two boxes drawn from Random(20261123), seeds with centres within 8000 of
+     * the origin ({@link #decorationsLeaveNoPits} needs pools and falls to look at: the evenly spread ways down keep the
+     * decorations off more ground round their craters, and the seven boxes placed 14 pools and 42 falls, 15 and 52 on
+     * 0.20.2; these two add 8 and 13, with no cut, one-way walk or pit).
      */
     static final long[][] DECOR_BOXES = {{8675309, 0, 0}, {-1831217569, -1846, 6353}, {-1249636696, -1925, 171}, {392286899, -4264, -1654},
-            {-1314707143, 5560, 2806}, {-1563395035, 2310, 5212}, {-667355435, -6827, 5355}};
+            {-1314707143, 5560, 2806}, {-1563395035, 2310, 5212}, {-667355435, -6827, 5355}, {-1787781758, -1745, 4725}, {-92017123, 4817, 7608}};
     static final int SIZE = 512, MARGIN = 96;
     /**
      * The openings' count ({@link #openingsAreCommonAndReachable}) is taken over BOXES and OPENING_BOXES more boxes drawn
@@ -895,7 +898,8 @@ class WastelandFieldTest {
      * measured box and in {@link #FLOAT_BOXES}. A floor guard over another sheet's open vault comes down to that sheet's
      * floor, column ends stand in no other sheet's vault, and a terrace lifts no rock over its walking floor's next row
      * ({@link WastelandField#GUARD_GAP}); over 60 random boxes of 384, 11 pieces of 133 blocks are left (54 of 848 before),
-     * guard plates over a gap a walker passes under.
+     * guard plates over a gap a walker passes under (measured with the guard filled down 2 rows; 3 since the halls, 0.20.4,
+     * which fills one more row under them).
      */
     @Test
     void noFloatingRock() {

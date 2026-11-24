@@ -761,6 +761,8 @@ public final class GalleriesField {
         final double[] mq = new double[3];
         final double[] tmp2 = new double[2];
         boolean pillar, massif;
+        /** The halls' query at the cell's site ({@link GalleriesLandscape#hall}): wall distance, vault distance, height, hash. */
+        final double[] hall = new double[4];
         /** Whether the cell's column top may stand FLOOR_OFF higher (flat ground, or a sub-biome). */
         boolean ragged;
         final double[] w = new double[6], w2 = new double[6];
@@ -801,15 +803,15 @@ public final class GalleriesField {
      * the first M_SEAM of that band (no seam where the measuring starts). A tube country's massif is one more: its blocks
      * to the edge are its own ({@link TubeField#massifAt}).
      */
-    static final double M_P = 170, M_T = 0.21, M_SUB = 0.25, M_NEAR = 0.32, M_SEAM = 0.1;
+    static final double M_P = 170, M_T = 0.42, M_SUB = 0.25, M_NEAR = 0.32, M_SEAM = 0.1;
     /**
      * The vault's relief under the cap (see {@link #vaultRelief}): VR0 + VR1 x (0.5 + a 2-octave noise of period VR_P)
      * plus the dome-and-sag term DS_A x a 2-octave noise of period DS_P, both linear (no clamp, so no plateau), with a
      * soft floor of width VR_K; eased off by VR_B under the breakthrough patches; VR2 x a fine noise of period VR2_P; all
      * of it down to VR_HF over high ground (VR_HR); and VR_MIN rows more everywhere but an opening's disc.
      */
-    static final double VR0 = 3, VR1 = 24, VR_P = 90, VR2 = 5, VR2_P = 16, VR_B = 0.6, VR_HF = 0.35, VR_HR = 40,
-            DS_A = 36, DS_P = 250, VR_K = 8, VR_MIN = 3;
+    static final double VR0 = 3, VR1 = 8, VR_P = 90, VR2 = 5, VR2_P = 16, VR_B = 0.6, VR_HF = 0.35, VR_HR = 40,
+            DS_A = 12, DS_P = 250, VR_K = 8, VR_MIN = 3;
     /**
      * The hanging clusters (see {@link #clusters}): a jittered lattice of HC_G blocks searched 5 x 5 (lobes reach under
      * HC_REACH < 2.15 HC_G); chance HC_P0..HC_P1 from a density noise of period HC_DP (gain HC_DS), times 0.35 + 0.9 x a
@@ -832,6 +834,42 @@ public final class GalleriesField {
     static final int CJ = 6, CJ_COARSE = 8;
     /** Flare: within FL_R blocks of a massif the vault comes down to (1 - FL_D) of the head room at the massif's face. */
     static final double FL_R = 22, FL_D = 0.4;
+    /**
+     * The halls' vaults (0.20.4): HALL_SPRING rows over the hall's ground at a wall, rising to the hall's height over the
+     * first HALL_R blocks in (a quarter circle); the basins' halls HALL_BASIN rows higher.
+     */
+    static final double HALL_SPRING = 5, HALL_R = 60, HALL_BASIN = 45;
+    /**
+     * A ramp's run ends RAMP_WALL blocks or more out of the halls' walls (as they stand before they give way round it,
+     * {@link #give}); where the hall's vault lies DK_ROCK rows or more under a deck, the deck runs in its rock.
+     */
+    static final double RAMP_WALL = 8, DK_ROCK = 4;
+    /**
+     * The walls give way round the ways down (0.20.4): within GIVE_R0 blocks of an opened hole's edge or of its ramp's
+     * strip a hall's wall thins by GIVE_D (more than a wall's half thickness ever is, {@link GalleriesLandscape#wallRaw}:
+     * it is gone), fading out over GIVE_R1 more, so every hole opens into a hall, a hole on a wall's line breaks it and a
+     * ramp crossing a wall comes down through a gap in it. (Holes kept GIVE_R0 off the walls instead lost the best of
+     * their sites: the junction rooms' middles near a wall shut, and holes at the rooms' edges opened in their place, one
+     * in seed 1's JoinTest box at (175, 98) with the Wasteland's floor climbing from its crater's rim in steps of 2 to 5
+     * rows, so its way down was no way back up. Kept to the holes alone, the walls let the ramps through in tunnels: 293
+     * of the 5071 samples of the first 30 blocks of the ramps in GalleriesFieldTest's box of seed 8675309 stood in a slot
+     * under a flat lid, every one at a head that ran into a wall within those 30 blocks, and in its random box 4 a ramp's
+     * filled deck and a wall beside it closed a pit of 7 places at (-10302, -745, 709).)
+     */
+    static final double GIVE_D = 40, GIVE_R0 = 8, GIVE_R1 = 12;
+
+    /** How many blocks the walls thin at a column {@code hole} blocks from the nearest opened hole's edge or ramp's strip. */
+    static double give(double hole) { return hole >= GIVE_R0 + GIVE_R1 ? 0 : GIVE_D * (1 - smooth((hole - GIVE_R0) / GIVE_R1)); }
+
+    /**
+     * Whether a hall's wall stands within {@code margin} blocks of (x, z), {@code w2} its warped point
+     * ({@link #warpXZ}); {@code cl} is scratch (the climate is read here). Never inside a standing tube country's rim.
+     */
+    boolean wallNear(double x, double z, double[] w2, Climate cl, double margin) {
+        if (tubesAt(x, z) && tubes.rimAt(x, z) > 0) return false;
+        land.climateWarped(w2[0], w2[1], cl);
+        return land.wallNear(w2, cl, margin);
+    }
     /** Skirt: within SK_R blocks of a massif the floor rises up to SK_H rows (column stairs up to its foot). */
     static final double SK_R = 20, SK_H = 4;
     /** Fine floor relief: DT_A x a noise of period DT_P. */
@@ -1073,10 +1111,18 @@ public final class GalleriesField {
         out.mouth = 0;
         // ---- massifs: the cavern's own, but none inside a standing tube country's rim, where its massif and its
         // collapse gaps stand for them (TubeField.rimAt)
-        boolean tube = tubesAt(x, z);
-        double m = tube && tubes.rimAt(x, z) > 0 ? M_T - M_NEAR - 1 : massN.fbm2(wx / M_P, wz / M_P, 2) - M_SUB * (cl.wCal + cl.wCaus);
+        boolean tube = tubesAt(x, z), rim = tube && tubes.rimAt(x, z) > 0;
+        double m = rim ? M_T - M_NEAR - 1 : massN.fbm2(wx / M_P, wz / M_P, 2) - M_SUB * (cl.wCal + cl.wCaus);
         out.mass = m - M_T;
-        if (m > M_T) {
+        // ---- the halls (0.20.4): a wall between two halls stands as a massif does, rock from floor to vault; none inside
+        // a standing tube country's rim, as no massif
+        // the join: the opened openings' discs and the ramps round the column (the walls give way round both, {@link #give})
+        RampHit rh = out.rh;
+        rampsAt(x, z, rh, cl.wCaus > 0.5 ? HW_CO : 0);
+        double[] hl = out.hall;
+        if (rim) { hl[0] = hl[1] = 1e9; hl[2] = GalleriesLandscape.HALL_H0 + GalleriesLandscape.HALL_H1; hl[3] = 0; }
+        else land.hall(w, cl, hl, give(Math.min(rh.hole, Math.max(0, rh.side))));
+        if (m > M_T || hl[0] < 0) {
             out.massif = true;
             out.F = out.C = out.cap = W + 200;
             out.open = 0; out.hang = 0; out.rise = 0; out.pillar = false; out.jt = 0; out.dm = 0;
@@ -1093,19 +1139,24 @@ public final class GalleriesField {
         }
         // a tube country's massif is one more standing massif (its gaps' walls too): its feet, its flare, the rivers
         // ending short of it
+        double dmOwn = dm;
         if (tube) {
             double mc = -tubes.massifAt(x, z);
             if (mc < dm) { dm = mc; sw = 1; }
         }
         out.dm = dm;
-        double fl = dm < FL_R ? sw * (1 - smooth(dm / FL_R)) : 0;
-        // ---- the join: the opened openings' discs and the ramps round the column, and the breakthrough noise
-        RampHit rh = out.rh;
-        rampsAt(x, z, rh, cl.wCaus > 0.5 ? HW_CO : 0);
+        // the vault's distance: to the nearest massif's edge, wall's face, or (where a wall breaks) the line between halls;
+        // not to a tube country's massif, whose tubes open at their mouths into the cavern's air (TubeField: past a mouth
+        // a section stays whole FADE_OUT blocks and closes over FADE_LEN in that air, where it opens nothing; a vault come
+        // down to the massif's foot would put those blocks in its rock)
+        double ed = Math.min(dmOwn, hl[1]);
+        double fl = Math.max(dm < FL_R ? sw * (1 - smooth(dm / FL_R)) : 0, hl[1] < FL_R ? 1 - smooth(hl[1] / FL_R) : 0);
+        // ---- the join: the breakthrough noise (the discs and the ramps were read above)
         double beta = join != null ? join.beta(x, z) : 0;
         out.open = 1 - fl;
         // ---- the floor
-        double Fs = landscape(x, z, w);
+        double[] base = out.tmp2;
+        double Fs = land.landscape(x, z, w, base), Fh = base[0];
         double clrR = Math.max(rh.clr, rh.near);   // the rubble keeps off the discs and the ramps
         double Fb = floorBase(x, z, w, Fs, cl, dm, clrR);
         double skirt = 0, skirtSlope = 0;
@@ -1114,6 +1165,14 @@ public final class GalleriesField {
             double q = dm / SK_R;
             skirt = SK_H * sw * (1 - smooth(q));
             skirtSlope = SK_H * sw * 6 * q * (1 - q) / SK_R;
+        }
+        if (hl[0] < SK_R) {
+            // and the halls' walls' (not where a wall breaks: there the floor runs on through)
+            double q = hl[0] / SK_R, sk = SK_H * (1 - smooth(q));
+            if (sk > skirt) {
+                skirt = sk;
+                skirtSlope = SK_H * 6 * q * (1 - q) / SK_R;
+            }
         }
         double F = Fb + skirt;
         // the slope: the floor before the skirts SL_D blocks along x and z (the same climate, the massif's distance and the
@@ -1219,8 +1278,15 @@ public final class GalleriesField {
             cap = Math.max(cap, ringTop + RING_UP);
             through = ringed = true;
         }
-        double C = Fs + (cap - Fs) * (1 - FL_D * fl);
-        if (beta > 0.35) C = Math.max(C, lerp(C, cap, smooth((beta - 0.35) / 0.25) * (1 - fl)));
+        // the hall's vault (0.20.4): a dome over the hall's ground (the landscape without the refuge mounds, Fh), springing
+        // HALL_SPRING rows over it at the walls and rising, steeply at first, to the hall's height HALL_R blocks in; the
+        // basins' great halls stand higher (HALL_BASIN); a fine relief roughens it (the column ends hang under it too)
+        double u = Math.min(1, ed / HALL_R);
+        double hh = hl[2] + HALL_BASIN * Math.max(cl.wCal, cl.wCaus);
+        double C = Math.min(cap, Fh + HALL_SPRING + (hh - HALL_SPRING) * u * (2 - u)
+                - VR2 * (0.5 + ceilN2.noise2(x / VR2_P, z / VR2_P)));
+        // (0.20.4: no lift toward the cap under the breakthrough patches any more: a hall keeps its dome, and an opening
+        // its funnel, below)
         if (cut > C) C = lerp(cut, C, fl);   // the funnel holds but where the vault flares down onto a massif
         if (rh.jt > 0 || ringed) C = Math.max(C, cap);
         else if (through) C = Math.max(C, reach);
@@ -1248,6 +1314,10 @@ public final class GalleriesField {
                 double a = 4 * sp * (1 - sp);
                 out.deckTh = rh.th0 + gap * (1 - a) + DK_J * Hashing.unit(Hashing.mix(cellHash, 10, 0, 0));
             }
+            // 0.20.4: where the hall's vault lies under the deck by DK_ROCK rows or more, the deck runs in the vault's rock
+            // (a tunnel down through the dome, its body the rock of the vault): solid from the vault up to it, the hall's
+            // air under that, as round it
+            if (C > F + 2 && C <= dk - DK_ROCK) out.deckTh = dk - C;
             // where the vault comes down near the deck, its head room grows along the first stretch: a breach up into the
             // vault, under BR_F of its relief (so it keeps the relief's lie and never lies flat at the cap), not a cut
             // stair tunnel
@@ -1331,7 +1401,7 @@ public final class GalleriesField {
         hang *= clear;
         up *= clear * (1 - rh.near);
         if (clear < 0.7) pillar = false;
-        if (dm < SK_R) pillar = false;
+        if (dm < SK_R || hl[0] < SK_R) pillar = false;
         if (pillar && rh.near >= 1) {
             // no pillar within NEAR_IN of a ramp's deck (as no spire): its cluster ends PIL_GAP rows over the floor
             pillar = false;
@@ -1653,10 +1723,16 @@ public final class GalleriesField {
      * breaks, and a lip of a block or two stays low to look down from: the level tread is the ramp's side only. Within
      * CR_BX blocks of another hole's outline the rim comes down by smooth(that distance / CR_BX) ({@link #otherHoleQ}), so
      * two holes a few blocks apart share a low saddle (the two rims rising over the rock between them, 1.7 blocks wide,
-     * left a knob of 12 blocks over the Galleries' open cell, touching no rock: seed 77 at (-6360, -5293)).
+     * left a knob of 12 blocks over the Galleries' open cell, touching no rock: seed 77 at (-6360, -5293)). And where the
+     * rock between two holes is a neck (the column's distances to both outlines under CR_BN + CR_BNF together) the rim
+     * comes down by smooth((that sum - CR_BN) / CR_BNF) as well, so across a neck under CR_BN blocks wide, wherever the
+     * two craters' floors meet, it stays down and they share it (0.20.4: a column a block or two off one hole's outline
+     * and 5 or 6 off the other's took the near one's broken rim nearly whole, and the crater's space shut over two
+     * columns of the Galleries' open cell, a knob of 12 blocks touching no rock between holes 13 blocks apart in seed
+     * 13579's box at (-2815, 1648), and one of 15 between holes 11 apart in seed 12345's at (3304, -543)).
      */
     static final double CR_T = 14, CR_TU = 16, CR_TE = 3, CR_TW = 3, CR_TB = 4, CR_TK = 1.5, CR_LA = 0.85, CR_LF = 0.3,
-            CR_B = 10, CR_BK = 1.1, CR_BM = 0.75, CR_BG = 1.4, CR_BQ = 3, CR_BX = 6;
+            CR_B = 10, CR_BK = 1.1, CR_BM = 0.75, CR_BG = 1.4, CR_BQ = 3, CR_BX = 6, CR_BN = 10, CR_BNF = 4;
     /**
      * A cell that opens with its ringed neighbours ({@link #ringedOpen}) opens RING_UP rows past its crater's floor, into
      * the Wasteland's space over it: opened to the floor's own row, it kept that row of rock wherever the floor's height
@@ -1904,6 +1980,8 @@ public final class GalleriesField {
         Ramp ramp;
         /** The lowest deck's ramp's form: the gap under its base it is filled from ({@link #formOf}). */
         double dkFill;
+        /** Blocks from the column to the nearest opened hole's edge (within its reach; +inf: none), {@link #give}. */
+        double hole;
         /**
          * The ramps' taluses over the column, up to TAL_N (the highest by the ground under their centre lines kept): each
          * one's deck, share u of its width and that estimate; {@link #shape} takes the highest at the column's own floor.
@@ -2162,7 +2240,7 @@ public final class GalleriesField {
     /**
      * Blocks past its radius r that an opened opening's disc, crater and funnel touch columns ({@link #rampsAt}: the
      * crater's floor out to CR_IN + CR_REACH, the funnel out to the rim's RIM_A + LIP + FUN_R, the farthest, the clearing,
-     * the broken rim's look at the other holes, RIM_A + CR_BX), with 2 blocks' margin for the rim's noise.
+     * the broken rim's look at the other holes, RIM_A + CR_BN + CR_BNF), with 2 blocks' margin for the rim's noise.
      */
     static final double NEAR_DISC = Math.max(CR_IN + CR_REACH, RIM_A + LIP + FUN_R) + 2;
     /**
@@ -2392,6 +2470,7 @@ public final class GalleriesField {
         rh.gf = Double.POSITIVE_INFINITY;
         rh.near = 0;
         rh.op = null;
+        rh.hole = Double.POSITIVE_INFINITY;
         if (join == null) return;
         int ci = (int) Math.floor(x / OP_G), cj = (int) Math.floor(z / OP_G);
         double top = headTop;
@@ -2403,6 +2482,7 @@ public final class GalleriesField {
             double d = Math.sqrt(d2);
             Ramp rp = o.ramp;
             if (rp == null) continue;                // (opened openings all keep a ramp)
+            rh.hole = Math.min(rh.hole, d - o.r);
             double t0 = o.r + LIP, t = dx * rp.ux + dz * rp.uz, rr = rimR(o, dx, dz, d, t);
             double jt = smooth((rr + LIP - d) / 1.5);
             // the crater's floor as the Wasteland lays it ({@link #craterRing}: the ring with the hole's outline, the
@@ -2560,7 +2640,7 @@ public final class GalleriesField {
             // the hole's edge
             double ox = 64 * Hashing.unit(Hashing.mix(o.h, 31, 0, 0)), oz = 64 * Hashing.unit(Hashing.mix(o.h, 32, 0, 0));
             double qo = otherHoleQ(o, px, pz);
-            sh += CR_B * off * smooth(q / CR_BQ) * smooth(qo / CR_BX)
+            sh += CR_B * off * smooth(q / CR_BQ) * smooth(qo / CR_BX) * smooth((q + qo - CR_BN) / CR_BNF)
                     * smooth(CR_BM + CR_BG * rimN.noise2(dx / d * CR_BK + ox, dz / d * CR_BK + oz));
         }
         return Math.max(0, q + sh);
@@ -2568,13 +2648,14 @@ public final class GalleriesField {
 
     /**
      * Blocks from (px, pz) out of the nearest hole's outline ({@link #rimR}) of the opened openings near it other than o
-     * (negative inside one), or +inf where none lies within CR_BX: the broken rim keeps low between two holes.
+     * (negative inside one), or +inf where none lies within CR_BN + CR_BNF (at least CR_BX): the broken rim keeps low
+     * between two holes.
      */
     double otherHoleQ(Opening o, double px, double pz) {
         double best = Double.POSITIVE_INFINITY;
         for (Opening p : nearOps((int) Math.floor(px / OP_G), (int) Math.floor(pz / OP_G))) {
             if (p == o || p.ramp == null) continue;
-            double dx = px - p.x, dz = pz - p.z, lim = p.r + RIM_A + CR_BX;
+            double dx = px - p.x, dz = pz - p.z, lim = p.r + RIM_A + CR_BN + CR_BNF;
             if (Math.abs(dx) >= lim || Math.abs(dz) >= lim) continue;
             double d = len(dx, dz);
             if (d >= lim) continue;
@@ -2966,7 +3047,8 @@ public final class GalleriesField {
      * lava river's bed ({@code cl} the climate there, {@code w2} the warped point).
      */
     boolean dryEnd(double fl, Climate cl, double[] w2) {
-        return !(fl < W + 6 || cl.wCan > 0.05 || cl.wCal > 0.3 || (fl < W + RIVER_LOW + 16 && lineDistW(riverN, w2, RIVER_P) < 14));
+        return !(fl < W + 6 || cl.wCan > 0.05 || cl.wCal > 0.3 || (fl < W + RIVER_LOW + 16 && lineDistW(riverN, w2, RIVER_P) < 14)
+                || land.wallNear(w2, cl, RAMP_WALL));
     }
 
     /**
@@ -3034,6 +3116,8 @@ public final class GalleriesField {
         climate(ex, ez, cl);
         if (cl.wCan > 0.05 || cl.wCal > 0.3) return null;
         warp(ex, ez, w2);
+        if (wallNear(ex, ez, w2, cl, RAMP_WALL)) return null;   // its foot in a hall, out of the walls (0.20.4)
+        climate(ex, ez, cl);
         if (endF < W + RIVER_LOW + 16 && lineDistW(riverN, w2, RIVER_P) < 14) return null;
         // the fill starts where the free height under the base thickness first comes within its form's rows
         double tg = tEnd;

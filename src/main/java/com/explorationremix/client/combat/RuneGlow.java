@@ -3,7 +3,6 @@ package com.explorationremix.client.combat;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.client.rune.fx.GlowRender;
 import com.explorationremix.registry.ERSounds;
-import com.explorationremix.rune.RunDepth;
 import com.explorationremix.rune.RuneConfig;
 import com.explorationremix.rune.RuneGear;
 import com.explorationremix.rune.engine.CastMachine;
@@ -104,11 +103,15 @@ public final class RuneGlow {
 
     // ------------------------------------------------------------------------------------------------ when it plays
 
-    /** How ready a sword is: 1 ready to cast, {@link #WAITING} with the energy but waiting out a delay, 0 short of energy. */
-    static float readiness(ItemStack stack, long now) {
+    /**
+     * How ready a sword is: 1 ready to cast, {@link #WAITING} with the energy but waiting out a delay, 0 short of energy.
+     * Read at its holder's XP level (another player's is not sent to this game, but the level only wakes the second
+     * phase, which changes neither the cost nor the wait).
+     */
+    static float readiness(Player holder, ItemStack stack, long now) {
         if (RuneGear.host(stack) != Host.SWORD || !RuneGear.hasRunes(stack)) return 0.0F;
         HostSpec spec = RuneGear.spec(stack);
-        Reading r = RuneGear.reading(stack, RunDepth.clientDepth());
+        Reading r = RuneGear.reading(stack, holder);
         if (spec == null || r == null) return 0.0F;
         CastState s = RuneGear.state(stack, spec, now);
         int next = CastMachine.next(s, r, now, RuneConfig.limits());
@@ -135,7 +138,7 @@ public final class RuneGlow {
                 long key = key(p.getId(), hand);
                 SEEN_NOW.add(key);
                 Object held = p == mc.player && hand == InteractionHand.MAIN_HAND ? new Held(stack.getItem(), p.getInventory().selected) : stack.getItem();
-                float readiness = readiness(stack, now);
+                float readiness = readiness(p, stack, now);
                 if (readiness > 0) CHARGED.add(key);
                 boolean starts = TRIGGERS.computeIfAbsent(key, k -> new BladeLight.Trigger()).update(held, readiness, clock);
                 // only your own swords are heard (runes.ready: a quiet shimmer, and a soft note as the tip flares)

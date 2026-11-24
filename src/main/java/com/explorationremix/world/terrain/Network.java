@@ -269,6 +269,17 @@ public final class Network {
         return out;
     }
 
+    /**
+     * Whether (x, y, z) lies in the open of the Deep Blue Rift itself, the great chasm through a Blue Reaches cell
+     * (0.20.8): between its floor and its ceiling over that column, give or take {@code margin} blocks. The tunnels,
+     * grottos and halls that open off it share its biome but lie outside its walls, so they are not in it.
+     */
+    public boolean inRiftChasm(int x, int y, int z, double margin) {
+        if (Terrain.BLUE >= shape.layerCount || !hasPlan(Terrain.BLUE)) return false;
+        LCol lc = layer(column(x, z), Terrain.BLUE);
+        return lc.r != null && lc.rOn && lc.rrC > lc.rrF && y >= lc.rrF - margin && y <= lc.rrC + margin;
+    }
+
     /** The plan of layer li in cell (cx, cz), for the dev tools; null for a layer with no plan ({@link #hasPlan}). */
     public Net network(int li, int cx, int cz) { return hasPlan(li) ? net(li, cx, cz) : null; }
 

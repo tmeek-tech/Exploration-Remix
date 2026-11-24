@@ -33,9 +33,11 @@ class GalleriesDecorTest {
     static final int FLOOR_LEAST_BOX = 1_200, FLOOR_LEAST_REGION = 5_000;
 
     /**
-     * The three ways down round (4, 125), (21, 126) and (19, 151), with their whole reach, decorated: no lava on a ramp's
-     * deck band or in a hole's throat, every way walking down to its foot and back up through the decorations, the halls'
-     * falls few, spaced and 1 to 3 sources wide, and the halls' faces as bright as with the old falls. On the 0.8.0 data
+     * The three ways down round (4, 125), (21, 126) and (44, 29) (0.20.4: (19, 151) no longer opens under the halls, and
+     * the ramps reach 150 to 175 blocks, so the box grew from 364 x 386 at (-160, -55)), with their whole reach,
+     * decorated: no lava on a ramp's deck band or in a hole's throat, every way walking down to its foot and back up
+     * through the decorations, the halls' falls few, spaced and 1 to 3 sources wide, and the halls' faces as bright as
+     * with the old falls. On the 0.8.0 data
      * the same box held 634 falls (the nearest other fall 5.8 blocks off at the median, 84 in one 128-block square), lava
      * on all three ramps (235 blocks), the way at (21, 126) one way at its foot, and faces at 10.33 on average, 7.7 %
      * under 8; the 0.8.0 fix round's data 50 falls, the nearest 27.7 blocks off at the least, and 10.6, 4.6 %. Fix round
@@ -45,7 +47,7 @@ class GalleriesDecorTest {
      */
     @Test
     void theFallsAreFewSpacedAndWideAndKeepOffTheWaysDown() throws Exception {
-        Box b = new Box(-160, -55, 364, 386);
+        Box b = new Box(-162, -146, 381, 455);
         List<String> bad = new ArrayList<>();
         assertTrue(b.ops.size() >= 3, "the box lost its ways down: " + b.ops.size());
         List<String> where = new ArrayList<>();

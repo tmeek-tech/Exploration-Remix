@@ -62,8 +62,9 @@ class VentSitesTest {
     void askingLeavesTheTerrainAsItWas() {
         Terrain t = new Terrain(TerrainSettings.defaults(), -64, 8675309);
         for (int x = -1024; x <= 1024; x += 256) for (int z = -1024; z <= 1024; z += 256) t.ventSitesNear(x, z, R);
-        // GalleriesFieldTest.digestPinned's (99d103d778b8355c until round 3 of the Deep Gardens raised the floor by 48)
-        assertEquals("254b83d778b8355c", GalleriesFieldTest.digest(t, 8675309), "seed 8675309");
+        // GalleriesFieldTest.digestPinned's (99d103d778b8355c until round 3 of the Deep Gardens raised the floor by 48,
+        // 254b83d778b8355c until 0.20.4's halls)
+        assertEquals("cbaa417241585f09", GalleriesFieldTest.digest(t, 8675309), "seed 8675309");
     }
 
     /** The middle of the first lattice point (every 200 blocks, outward from the origin) with a vent site within 100. */

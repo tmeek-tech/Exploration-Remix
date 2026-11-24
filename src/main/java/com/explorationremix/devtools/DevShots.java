@@ -329,13 +329,14 @@ public final class DevShots {
     }
 
     /**
-     * What the player does, for testing gear in the game: "! press use|attack|cast|runes|inventory" (one click of that
+     * What the player does, for testing gear in the game: "! press use|attack|cast|inventory" (one click of that
      * key), "! hold use|attack|cast" and "! release use|attack|cast" (keep it held down until released), "! slot n" (hotbar slot
      * 0 to 8), "! look yaw pitch", "! gui on|off" (the hotbar and HUD), "! view first|third|front" (the camera),
      * "! swing light|strong combo tau" (the player's own timed swing held still tau ticks in; "! swing off" lets go),
      * "! glow tick" (the ready light on the sword in hand held still that many ticks into its play; "! glow off" lets go),
      * "! sparkle tick" (a charged sword's sparkle held still at that tick of its clock; "! sparkle off" lets go),
-     * "! close" (the open screen) and "! snap name"
+     * "! table choose|hover|set|out|enchant arg" (the enchanting table's rune view, open: choose a socket, hold the
+     * mouse over a socket, a risen rune or "out", set a rune, take one out), "! close" (the open screen) and "! snap name"
      * (a picture of this very frame, without moving or settling, for things in flight and screens). False if the
      * line is none of these.
      */
@@ -348,7 +349,6 @@ public final class DevShots {
                     case "attack" -> mc.options.keyAttack;
                     case "inventory" -> mc.options.keyInventory;
                     case "cast" -> com.explorationremix.client.rune.RuneKeys.CAST;
-                    case "runes" -> com.explorationremix.client.rune.RuneKeys.OPEN;
                     // walking about (0.16.0, the fireflies: running through a flying swarm, creeping up on a landed one)
                     case "forward" -> mc.options.keyUp;
                     case "back" -> mc.options.keyDown;
@@ -427,6 +427,10 @@ public final class DevShots {
                 case "front" -> net.minecraft.client.CameraType.THIRD_PERSON_FRONT;
                 default -> net.minecraft.client.CameraType.FIRST_PERSON;
             });
+            case "table" -> {
+                // "! table choose|hover|set|out|enchant arg": the enchanting table's rune view (RuneTableScreen.dev)
+                if (!com.explorationremix.client.rune.table.RuneTableScreen.dev(arg, s.length > 3 ? s[3] : "")) return false;
+            }
             case "close" -> {
                 if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) mc.player.closeContainer();
                 else if (mc.screen != null) mc.setScreen(null);

@@ -213,13 +213,24 @@ def stubble(v, neon):
 
 
 # =============================================================================================== tube worms
-# One texture per colour, mapped by tools/gen_data.py's tube worm models: four ringed tube strips two pixels wide
-# (columns 0-7, row 0 at a tube's mouth), two plumes (columns 8-13: rows 0-5 and 8-13) and the open mouth seen from
-# above (columns 14-15, rows 0-1).
+# The tubes' texture, one per colour, mapped by tools/gen_data.py's tube worm models: four ringed tube strips two
+# pixels wide (columns 0-7, row 0 at a tube's mouth), the open mouth seen from above (columns 14-15, rows 0-1) and the
+# closed foot of a wall worm's tube seen from below (columns 12-13, rows 0-1).
+#
+# 0.20.6 (Taran, 2026-11-23: "Tube worms should play a pulling in animation ... They should also be in clusters and
+# mostly on the lower half of vents. Also give them an animation so that they wiggle when out."): the plumes moved to
+# a texture of their own, tube_worm_plumes_<colour>, so the game tells a plume's faces from a tube's by their sprite:
+# near the player the plumes are drawn moving (client.render.TubeWormsRenderer) and the block's model keeps only the
+# tubes; farther off the model draws them still. The moving plumes glow as eyes do (their light added to what is under
+# them), so the plume texture keeps only a dark tint under its glowing pixels (textures.DARK_UNDER_GLOW); the still
+# ones draw the glow over that tint, which hides it.
 
 TUBE_STRIPS = [(0, 2), (2, 4), (4, 6), (6, 8)]
-PLUMES = [(8, 0, 14, 6), (8, 8, 14, 14)]
 MOUTH = (14, 0, 16, 2)
+FOOT = (12, 0, 14, 2)
+# a wall worm's elbow, where its tube leaves the rock: the lower rows of a strip, turned to run along the stub
+STUB_ROWS = (10, 15)
+PLUMES = [(0, 0, 6, 6), (8, 0, 14, 6), (0, 8, 6, 14)]
 PLUME_SHADES = {"h": "hot", "n": "neon", "m": "mid", "d": "dim", "e": "deep"}
 PLUME_ROWS = [
     ["h.h..h",
@@ -233,6 +244,13 @@ PLUME_ROWS = [
      "nmn.m.",
      ".nmnm.",
      "..mm..",
+     "..de.."],
+    # 0.20.6: a narrower crown, leaning, for variety in the thicker clusters
+    ["..h.h.",
+     ".hn.nh",
+     "h.nmn.",
+     ".nmm..",
+     "..md..",
      "..de.."],
 ]
 # pale lilac-white chitin, its grooves a few steps darker and the foot greyed with the vent's grime
@@ -257,28 +275,120 @@ def tube_worms(neon):
                 lit = 6
             cv.put(a, y, TUBE[max(0, min(6, lit))])
             cv.put(a + 1, y, TUBE[max(0, min(6, lit - 2))])
-    # the plumes: feathery crowns fanning out of the tube's mouth, drawn by hand (h hot, n neon, m mid, d dim, e deep)
-    for (x0, y0, _, _), rows in zip(PLUMES, PLUME_ROWS):
-        for dy, row in enumerate(rows):
-            for dx, ch in enumerate(row):
-                if ch != ".":
-                    cv.put(x0 + dx, y0 + dy, s[PLUME_SHADES[ch]])
     # the open mouth from above: a pale lip round a dark hole with the worm's deep colour in it
     mx, my = MOUTH[0], MOUTH[1]
     cv.put(mx, my, TUBE[5])
     cv.put(mx + 1, my, TUBE[4])
     cv.put(mx, my + 1, TUBE[3])
     cv.put(mx + 1, my + 1, s["deep"])
+    # a wall worm's closed foot from below: the chitin's grimy grey
+    fx, fy = FOOT[0], FOOT[1]
+    for dx in range(2):
+        for dy in range(2):
+            cv.put(fx + dx, fy + dy, TUBE[1 + dx + dy])
     return cv.img
 
 
-# The tube worms' clusters (gen_data's models): per look, tubes as (x, z, height, strip, plume or None), in pixels,
-# each tube two pixels square; a plume stands on its tube's top, six pixels across and high, while the worms are out.
-WORM_LOOKS = [
-    [(3, 4, 11, 0, 0), (7, 3, 8, 1, 1), (10, 6, 10, 2, 0), (5, 9, 6, 3, 1), (9, 10, 5, 1, 0), (12, 11, 3, 0, None)],
-    [(4, 5, 9, 2, 1), (8, 4, 11, 0, 0), (11, 8, 7, 3, 1), (6, 10, 5, 1, 0), (3, 11, 3, 0, None)],
-    [(5, 3, 7, 1, 0), (9, 5, 9, 3, 1), (4, 8, 10, 0, 1), (8, 10, 6, 2, 0), (12, 9, 4, 1, None), (11, 2, 3, 2, None)],
-]
+def tube_worm_plumes(neon):
+    """The feathery crowns fanning out of the tubes' mouths, drawn by hand (h hot, n neon, m mid, d dim, e deep)."""
+    s = shades(neon)
+    cv = Canvas()
+    for (x0, y0, _, _), rows in zip(PLUMES, PLUME_ROWS):
+        for dy, row in enumerate(rows):
+            for dx, ch in enumerate(row):
+                if ch != ".":
+                    cv.put(x0 + dx, y0 + dy, s[PLUME_SHADES[ch]])
+    return cv.img
+
+
+# The tube worms' clusters (gen_data's models), in pixels. A floor look's tubes are (x, z, height, strip, plume or
+# None), each tube two pixels square from the floor up; a wall look's are (x, foot, out, height, strip, plume), its
+# wall on the south side (z 16): each tube rises from its foot, `out` pixels from the wall, on a stub that leaves the
+# rock at the foot (none when out is 0: that tube lies against the rock). A plume stands on its tube's top, six pixels
+# across and high, while the worms are out.
+#
+# 0.20.6 (card pick: "Thick clumps, tallest in the middle"): a clump's middle blocks are dense (seven to nine tubes,
+# the tallest), its edge blocks sparse (two to four short ones), so a clump rises to its middle.
+FLOOR_LOOKS = {
+    "dense": [
+        [(2, 3, 9, 0, 0), (5, 6, 13, 1, 1), (9, 2, 11, 2, 2), (12, 6, 8, 3, 1), (7, 10, 10, 0, 2), (3, 11, 7, 2, 0),
+         (11, 11, 12, 1, 0), (13, 2, 5, 3, None)],
+        [(3, 2, 12, 1, 1), (7, 4, 10, 0, 0), (11, 3, 13, 2, 2), (2, 7, 8, 3, 0), (6, 8, 11, 2, 1), (12, 8, 9, 0, 0),
+         (4, 12, 10, 1, 2), (9, 12, 7, 3, 1), (13, 13, 4, 2, None)],
+        [(4, 4, 11, 2, 2), (8, 2, 9, 0, 0), (12, 5, 12, 1, 1), (2, 9, 10, 3, 1), (7, 7, 13, 1, 0), (11, 10, 10, 0, 2),
+         (5, 12, 8, 2, 0), (9, 13, 6, 3, None), (13, 13, 7, 1, 1)],
+    ],
+    "sparse": [
+        [(4, 5, 6, 1, 0), (9, 8, 8, 0, 1), (6, 11, 4, 2, None)],
+        [(5, 4, 7, 2, 1), (10, 6, 5, 3, 0), (3, 10, 3, 0, None), (8, 11, 6, 1, 2)],
+        [(7, 6, 8, 3, 2), (4, 10, 5, 0, 0)],
+    ],
+}
+WALL_LOOKS = {
+    "dense": [
+        [(1, 6, 1, 7, 0, 0), (4, 1, 3, 9, 1, 1), (7, 7, 0, 8, 2, 2), (10, 2, 2, 10, 3, 0), (13, 5, 1, 6, 1, 1),
+         (2, 0, 4, 5, 2, None), (8, 0, 4, 6, 0, 2)],
+        [(2, 2, 2, 9, 1, 1), (5, 8, 1, 6, 2, 0), (8, 1, 3, 11, 0, 2), (11, 6, 1, 8, 3, 1), (13, 0, 4, 6, 2, 0),
+         (1, 11, 3, 4, 3, None), (5, 0, 0, 5, 0, None)],
+        [(1, 3, 3, 8, 2, 0), (4, 7, 0, 7, 3, 2), (7, 2, 2, 10, 1, 1), (10, 8, 1, 7, 0, 0), (13, 2, 3, 9, 1, 2),
+         (4, 0, 2, 4, 0, None)],
+    ],
+    "sparse": [
+        [(3, 3, 2, 7, 1, 0), (9, 1, 1, 5, 2, 1), (12, 7, 3, 4, 0, None)],
+        [(5, 2, 1, 8, 0, 2), (10, 5, 3, 6, 3, 0)],
+        [(2, 6, 2, 5, 2, 1), (7, 1, 0, 6, 1, 0), (12, 3, 2, 7, 3, 2)],
+    ],
+}
+
+
+def mirrored_wall_look(look):
+    """A wall look turned over left to right (x to 14 - x), for twice the variety along a wall."""
+    return [(14 - x, foot, out, h, strip, plume) for (x, foot, out, h, strip, plume) in look]
+
+
+def worm_boxes(look, wall):
+    """Every box a look's tubes fill (pixels: x0, y0, z0, x1, y1, z1), for the checks."""
+    boxes = []
+    for t in look:
+        if wall:
+            x, foot, out, h, _, _ = t
+            zt = 14 - out
+            boxes.append((x, foot, zt, x + 2, foot + h, zt + 2))
+            if out:
+                boxes.append((x, foot, zt + 2, x + 2, foot + 2, 16))
+        else:
+            x, z, h, _, _ = t
+            boxes.append((x, 0, z, x + 2, h, z + 2))
+    return boxes
+
+
+def check_worm_looks():
+    """Tubes inside their block, none through another, each look with at least two plumes."""
+    for kind, looks in (("floor", FLOOR_LOOKS), ("wall", WALL_LOOKS)):
+        for density, ls in looks.items():
+            for k, look in enumerate(ls):
+                boxes = worm_boxes(look, kind == "wall")
+                for b in boxes:
+                    assert all(0 <= c <= 16 for c in b), (kind, density, k, b)
+                for i in range(len(boxes)):
+                    for j in range(i + 1, len(boxes)):
+                        a, b = boxes[i], boxes[j]
+                        if all(a[d] < b[d + 3] and b[d] < a[d + 3] for d in range(3)):
+                            # a wall tube's own stub meets its tube: the only boxes that may touch inside
+                            same = kind == "wall" and _same_tube(look, a, b)
+                            assert same, (kind, density, k, a, b)
+                assert sum(1 for t in look if t[-1] is not None) >= 2, (kind, density, k)
+
+
+def _same_tube(look, a, b):
+    for t in look:
+        bs = worm_boxes([t], True)
+        if a in bs and b in bs:
+            return True
+    return False
+
+
+check_worm_looks()
 
 
 # =============================================================================================== glowworm threads
@@ -486,7 +596,8 @@ def textures():
             for half in ("bottom", "top"):
                 out[f"block/tall_filament_grass_{neon}_{half}{sfx}"] = (lambda v=v, n=neon, h=half: tall(v, n, h), g)
             out[f"block/grazed_filament_grass_{neon}{sfx}"] = (lambda v=v, n=neon: stubble(v, n), g)
-        out[f"block/tube_worms_{neon}"] = (lambda n=neon: tube_worms(n), g)
+        out[f"block/tube_worms_{neon}"] = (lambda n=neon: tube_worms(n), None)
+        out[f"block/tube_worm_plumes_{neon}"] = (lambda n=neon: tube_worm_plumes(n), g)
         out[f"block/neon_mushrooms_{neon}"] = (lambda n=neon: mushrooms(n), g)
     lb = glow_hexes("light_blue")
     for v in range(2):

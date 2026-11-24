@@ -1,13 +1,11 @@
 package com.explorationremix.block;
 
 import com.explorationremix.ExplorationRemix;
-import com.explorationremix.registry.ERBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -15,9 +13,10 @@ import net.minecraftforge.fml.common.Mod;
 
 /**
  * The tube worms' eyes (0.20.2, {@link TubeWormsBlock}): every {@link #EVERY} ticks each player (not a spectator) is
- * looked round, the blocks within {@link TubeWormsBlock#REACH} of them, and every cluster out that near pulls in, with
+ * looked round, the blocks within {@link TubeWormsBlock#REACH} of them, and every clump out that near pulls in, with
  * one soft snap for the lot. A few hundred block lookups a player each time, and only in loaded ground (round a
- * player it always is).
+ * player it always is). Since 0.20.6 each startled clump sends the scare on through its colony
+ * ({@link TubeWormSignals}), unless the player sneaks.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID)
 public final class TubeWormWatch {
@@ -35,8 +34,8 @@ public final class TubeWormWatch {
     }
 
     static void lookRound(ServerLevel level, ServerPlayer p) {
-        Block worms = ERBlocks.TUBE_WORMS.get();
-        double reach = p.isShiftKeyDown() ? TubeWormsBlock.REACH_SNEAK : TubeWormsBlock.REACH;
+        boolean sneaking = p.isShiftKeyDown();
+        double reach = sneaking ? TubeWormsBlock.REACH_SNEAK : TubeWormsBlock.REACH;
         int r = (int) Math.ceil(reach);
         BlockPos at = p.blockPosition();
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
@@ -46,10 +45,10 @@ public final class TubeWormWatch {
                 for (int dz = -r; dz <= r; dz++) {
                     m.set(at.getX() + dx, at.getY() + dy, at.getZ() + dz);
                     BlockState s = level.getBlockState(m);
-                    if (!s.is(worms) || !s.getValue(TubeWormsBlock.OUT)) continue;
+                    if (!(s.getBlock() instanceof TubeWormsBlock) || !s.getValue(TubeWormsBlock.OUT)) continue;
                     if (p.distanceToSqr(m.getX() + 0.5, m.getY() + 0.4, m.getZ() + 0.5) > reach * reach) continue;
                     BlockPos pos = m.immutable();
-                    TubeWormsBlock.pullIn(level, pos, s);
+                    TubeWormSignals.startle(level, pos, s, !sneaking);
                     if (first == null) first = pos;
                 }
         if (first != null)

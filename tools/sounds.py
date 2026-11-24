@@ -29,11 +29,12 @@ def vanilla(name, volume=1.0, pitch=1.0, weight=1):
 
 EVENTS = {
     # Upper Caves (0.20.9, Taran: "Change bird noises in the Upper Caves to calm, atmospheric cricket noises"): no biome
-    # plays a loop here any more. The client's UpperCaveSounds plays the crickets in every upper cave, the pack's own
-    # caves too, once you are well underground: a stereo bed, a soft far chorus of tree crickets (card pick "Far chorus
-    # only"), and a single cricket (two in a big cave) singing now and then from the rock near you, which goes quiet as
-    # you come close (positional, mono; card pick "Yes, it goes quiet"). The mod's own upper caves keep their water drips
-    # as additions. Made by synth_layer_sounds.py, like everything new in 0.20.9.
+    # plays a loop here any more. The client's UpperCaveSounds plays the crickets in the mod's own upper caves, where
+    # the birds were (card pick "Only where the birds were", 0.21.1; the client config can add the pack's own caves): a
+    # stereo bed, a soft far chorus of tree crickets (card pick "Far chorus only"), and a single cricket (two in a big
+    # cave) singing now and then from the rock near you, which goes quiet as you come close (positional, mono; card pick
+    # "Yes, it goes quiet"). The mod's own upper caves keep their water drips as additions. Made by
+    # synth_layer_sounds.py, like everything new in 0.20.9.
     "ambient.upper.crickets": [own("crickets_loop", 0.75, stream=True)],
     "ambient.upper.cricket": [own(f"cricket{i}", 0.5, attenuation_distance=24) for i in range(1, 5)],
     "ambient.upper.additions": [own(f"drip{i}", 0.5) for i in range(1, 5)],
@@ -250,6 +251,27 @@ MANTIS_SUBTITLES = {
 CREATURE_EVENTS.update(MANTIS_EVENTS)
 CREATURE_SUBTITLES.update(MANTIS_SUBTITLES)
 
+
+# 0.21.0's chimney lurker of the Deep Gardens (tools/synth_creature_sounds.py chimney_lurker): dry and hard, lower and
+# heavier than the Skein. The rattle as its glow flashes on carries (heard before it comes over its rim); the clicks
+# while it stirs or hunts carry a little; its feet are heard only close.
+LURKER_EVENTS = {
+    "chimney_lurker.step": creature("tap", 4, 0.5, 12, who="chimney_lurker"),
+    "chimney_lurker.click": creature("click", 3, 0.75, 20, who="chimney_lurker"),
+    "chimney_lurker.rattle": creature("rattle", 2, 1.0, 32, who="chimney_lurker"),
+    "chimney_lurker.hiss": creature("hiss", 2, 0.9, 20, who="chimney_lurker"),
+    "chimney_lurker.bite": creature("bite", 2, 1.0, 20, who="chimney_lurker"),
+    "chimney_lurker.hurt": creature("hurt", 2, 0.9, 16, who="chimney_lurker"),
+    "chimney_lurker.death": creature("death", 1, 1.0, 24, who="chimney_lurker"),
+}
+LURKER_SUBTITLES = {
+    "chimney_lurker.step": "Hooked feet tick", "chimney_lurker.click": "Chimney Lurker clicks",
+    "chimney_lurker.rattle": "Chimney Lurker rattles", "chimney_lurker.hiss": "Chimney Lurker hisses",
+    "chimney_lurker.bite": "Fangs snap", "chimney_lurker.hurt": "Chimney Lurker hurts",
+    "chimney_lurker.death": "Chimney Lurker dies",
+}
+CREATURE_EVENTS.update(LURKER_EVENTS)
+CREATURE_SUBTITLES.update(LURKER_SUBTITLES)
 
 def write_all(assets_dir, write):
     out = {}

@@ -23,6 +23,8 @@ public final class WastelandSheets {
             offA = new double[WastelandField.MAX_SHEETS], offB = new double[WastelandField.MAX_SHEETS];
     /** Gate 3's landings, for the top sheet's shift when the lowest sheet is the top one (a short layer); else null. */
     private final Plans plans;
+    /** The seed of the evenly spread ways down ({@link #latticeHole}). */
+    private final long latSeed;
 
     /** The sheets of the Wasteland (layer 2) of world seed {@code seed} over the layout {@code shape}. */
     WastelandSheets(long seed, Shape shape, TerrainSettings settings, Plans plans) {
@@ -43,6 +45,7 @@ public final class WastelandSheets {
         warpD = new Perlin(Hashing.mix(s, 4, 0, 0));
         floorN = new Perlin(Hashing.mix(s, 5, 0, 0));
         rampN = new Perlin(Hashing.mix(s, 6, 0, 0));
+        latSeed = Hashing.mix(s, 7, 0, 0);
         for (int k = 0; k < WastelandField.MAX_SHEETS; k++) {
             long h = Hashing.mix(s, 100 + k, 0, 0);
             sheetSeed[k] = h;
@@ -187,6 +190,34 @@ public final class WastelandSheets {
     /** How far the lowest sheet opens where the breakthrough noise is {@code beta}: 0 under Join.HOLE_BETA, 1 from 0.7. */
     static double hole(double beta) { return Terrain.smooth((beta - Join.HOLE_BETA) / Join.HOLE_RAMP); }
 
+    /**
+     * The ways down spread evenly (0.20.4, Taran: "The wasteland should let out into the lower galleries more often"):
+     * one point in each LAT_G-block cell of a jittered lattice (in its middle LAT_J share, so the disc round it stays in
+     * the cell), round which the lowest sheet's junction rooms open as where the breakthrough noise is high, out to LAT_R
+     * blocks and fading over the last LAT_F. The holes gathered where beta is high; with these, a way down is kept for
+     * a quarter more of the ground (55 to 69 a square kilometre in seed 8675309's box of 4096 at (-2048, -2048), 55 to
+     * 65 in seed -42's at (-6000, 4000)), and the share of it over 100 blocks from the nearest falls from 18 % to 10 %
+     * and 17 % to 12 % (with LAT_G 150, 63 a square kilometre and 12 %; at 100 and 80, 70 and 74 but no nearer: the
+     * ramps' keeping apart takes the rest). Only the opening's weight and its room take it: the sheet's floor keeps the
+     * noise's own hole ({@link #openingSite}, WastelandField), so a lattice point on a ramp up to the next sheet opens
+     * nothing and no floor steps at its disc.
+     */
+    static final double LAT_G = 120, LAT_J = 0.5, LAT_R = 24, LAT_F = 6;
+
+    /** How far the lowest sheet opens round the evenly spread ways' lattice points at column (x, z), 0..1. */
+    double latticeHole(double x, double z) {
+        int gi = floor(x / LAT_G), gj = floor(z / LAT_G);
+        long h = Hashing.mix(latSeed, gi, gj, 0);
+        double px = (gi + 0.5 + LAT_J * (Hashing.unit(Hashing.mix(h, 1, 0, 0)) - 0.5)) * LAT_G;
+        double pz = (gj + 0.5 + LAT_J * (Hashing.unit(Hashing.mix(h, 2, 0, 0)) - 0.5)) * LAT_G;
+        double dx = x - px, dz = z - pz, r = LAT_R;
+        if (dx * dx + dz * dz >= r * r) return 0;
+        return Terrain.smooth((LAT_R - Math.sqrt(dx * dx + dz * dz)) / LAT_F);
+    }
+
+    /** How far the lowest sheet opens at column (x, z) where the breakthrough noise is {@code beta}: the noise's or the lattice's. */
+    double holeAt(double beta, double x, double z) { return Math.max(hole(beta), latticeHole(x, z)); }
+
     /** Whether the lowest sheet lies at its own level (not up a ramp) at floor f: 1 to W + 6, 0 from W + 10. */
     double low(double f) { return clamp01((W + 10 - f) / 4); }
 
@@ -223,12 +254,13 @@ public final class WastelandSheets {
 
     /**
      * The weight of the Wasteland's opening dip at column (x, z) before its guard, 0..1, where the breakthrough noise is
-     * {@code beta}: its lowest sheet's junction room falling through its floor ({@link #dipWeight}). Computed afresh from
-     * the noise (no cache), exactly as the Wasteland's column pass computes it.
+     * {@code beta}: its lowest sheet's junction room falling through its floor ({@link #dipWeight}), the room opened by
+     * the noise's hole or the lattice's ({@link #holeAt}) and the floor read with the noise's own (as LAT_G says).
+     * Computed afresh from the noise (no cache), exactly as the Wasteland's column pass computes it.
      */
     double openingSite(double beta, double x, double z) {
-        if (beta <= Join.HOLE_BETA) return 0;
-        double hole = hole(beta);
+        double hb = beta > Join.HOLE_BETA ? hole(beta) : 0, hole = Math.max(hb, latticeHole(x, z));
+        if (hole <= 0) return 0;
         double u = x + warpX(x, z), v = z + warpZ(x, z);
         if (plans != null) {
             // a layer of one sheet: its top sheet is the lowest, and it slides toward gate 3's landing
@@ -245,7 +277,7 @@ public final class WastelandSheets {
         double j = junction(0, u, v);
         // outside a junction room the weight is 0 whatever the floor (dipWeight's last factor), so the floor is not read
         if (j >= WastelandField.HOLE_R) return 0;
-        double f = sheetFloor(0, x, z, 1 - hole, undulation(0, x, z));
+        double f = sheetFloor(0, x, z, 1 - hb, undulation(0, x, z));
         return dipWeight(hole, low(f), j);
     }
 

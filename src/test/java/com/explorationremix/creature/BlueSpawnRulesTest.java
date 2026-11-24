@@ -155,4 +155,27 @@ class BlueSpawnRulesTest {
         assertEquals(120, swarmSize(0.0));
         assertEquals(60, swarmSize(1.5), "a roll past 1 counts as 1");
     }
+
+    @Test
+    void theRiftsGreatChasmKeepsFewerRoundAPlayerThanItsTunnels() {
+        // 0.20.8: the chasm keeps fewer swarms, and the spawner keeps fewer round a player standing in it
+        assertTrue(CHASM_KEPT >= 1 && CHASM_KEPT <= CHASM_MAX && CHASM_KEPT < swarmsKept(Place.RIFT) && CHASM_MAX < swarmsMax(Place.RIFT));
+        assertEquals(CHASM_KEPT, swarmsKept(Place.RIFT, true));
+        assertEquals(CHASM_MAX, swarmsMax(Place.RIFT, true));
+        assertEquals(swarmsKept(Place.RIFT), swarmsKept(Place.RIFT, false), "the tunnels keep what they kept");
+        assertEquals(swarmsMax(Place.RIFT), swarmsMax(Place.RIFT, false));
+        assertEquals(swarmsKept(Place.GEODES), swarmsKept(Place.GEODES, true), "only the rift has the chasm");
+        assertEquals(0, swarmsKept(Place.DEEP_DARK, true));
+        assertTrue(wantSwarm(Place.RIFT, true, CHASM_KEPT - 1, true, false, 0.0), "short of its few: now and then");
+        assertFalse(wantSwarm(Place.RIFT, true, CHASM_KEPT, true, true, 0.0), "the chasm has its few: none comes");
+        assertTrue(wantSwarm(Place.RIFT, false, CHASM_KEPT, true, false, 0.0), "a player in the tunnels with as many is short");
+        assertEquals(wantSwarm(Place.RIFT, 5, true, false, 0.0), wantSwarm(Place.RIFT, false, 5, true, false, 0.0));
+        // a spot in the chasm only for a player standing in it
+        assertTrue(swarmSpot(Place.RIFT, true, true, -150, TOP, BOTTOM, 25, 25));
+        assertFalse(swarmSpot(Place.RIFT, true, false, -150, TOP, BOTTOM, 25, 25), "none brought out in the chasm for a player in the tunnels");
+        assertTrue(swarmSpot(Place.RIFT, false, true, -150, TOP, BOTTOM, 25, 25), "one in a tunnel by the chasm for a player in it");
+        assertTrue(swarmSpot(Place.RIFT, false, false, -150, TOP, BOTTOM, 25, 25));
+        assertFalse(swarmSpot(Place.RIFT, true, true, -150, TOP, BOTTOM, 10, 10), "too near a player");
+        assertFalse(swarmSpot(Place.DEEP_DARK, false, true, -150, TOP, BOTTOM, 25, 25));
+    }
 }

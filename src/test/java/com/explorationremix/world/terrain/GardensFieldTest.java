@@ -1,11 +1,14 @@
 package com.explorationremix.world.terrain;
 
+import com.explorationremix.block.TubeWormSignals;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Random;
 import java.util.Set;
@@ -410,7 +413,11 @@ class GardensFieldTest {
                             if (c == GardensField.C_TALLG && !upper && over != c) fails.add("tall grass with no upper half at " + at);
                         }
                         case GardensField.C_WORM -> {
-                            if (!floor && under != GardensField.C_LIVE && under != GardensField.C_VLIVE) fails.add("tube worms on code " + under + " at " + at);
+                            // 0.20.6: standing on whole rock, or on a wall beside them, with room for the plumes over them
+                            boolean holds = GardensField.holds(under);
+                            for (int[] d : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) holds |= GardensField.holds(g.packed(x + d[0], y, z + d[1]) & 31);
+                            if (!holds) fails.add("tube worms holding to nothing at " + at);
+                            if (GardensField.holds(over) || over == GardensField.C_WORM) fails.add("tube worms under code " + over + " at " + at);
                         }
                         default -> {
                             if (!floor) fails.add("code " + c + " on code " + under + " at " + at);
@@ -437,6 +444,142 @@ class GardensFieldTest {
         for (int c = GardensField.C_GRASS; c <= GardensField.C_SHROOM; c++) assertTrue(n[c] > 0, "no plants of code " + c + " in the area");
         assertTrue(n[GardensField.C_GRASS] + n[GardensField.C_TALLG] > 2 * (n[GardensField.C_WORM] + n[GardensField.C_SHROOM]), "the grass the floors' most common plant");
         assertTrue(n[GardensField.C_THREAD] < n[GardensField.C_GRASS] + n[GardensField.C_TALLG], "fewer threads than grass");
+    }
+
+    /**
+     * The tube worms (0.20.6; Taran: "They should also be in clusters and mostly on the lower half of vents"): over the
+     * area, most worm blocks are in clumps (three or more touching), the clumps many; the worms on a vent's own rock are
+     * nearly all on its lower half and none near its top; some hold to the vents' steep walls; a clump's thick middle is
+     * a good share of the worms but not most. And their warning ("send a propagating signal to nearby tube worms to
+     * pull in", block.TubeWormSignals) crosses a colony: passed from worm to worm no further than its hop, it reaches
+     * nearly all the worms near where it began (with a hop of 3.3 blocks it reached 59% and often died in the first
+     * clump).
+     */
+    @Test
+    void theTubeWormsGrowInClumpsLowOnTheVents() {
+        GardensField g = terrain().gardens;
+        Set<Integer> ventRock = Set.of(GardensField.C_LIVE, GardensField.C_VLIVE, GardensField.C_CROWN, GardensField.C_TIP, GardensField.C_STREAK);
+        List<int[]> worms = new ArrayList<>();
+        Map<Long, Integer> at = new HashMap<>();
+        int wall = 0, thick = 0;
+        for (int x = AX; x < AX + AS; x++)
+            for (int z = AZ; z < AZ + AS; z++)
+                for (int y = 1; y < GardensPlan.SY - 1; y++) {
+                    int p = g.packed(x, y, z);
+                    if ((p & 31) != GardensField.C_WORM) continue;
+                    int under = g.packed(x, y - 1, z) & 31;
+                    boolean onWall = !GardensField.holds(under);
+                    boolean onVent = ventRock.contains(under);
+                    for (int[] d : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}})
+                        if (onWall && ventRock.contains(g.packed(x + d[0], y, z + d[1]) & 31)) onVent = true;
+                    if (onWall) wall++;
+                    if ((p & GardensField.PLANT_BIT) != 0) thick++;
+                    at.put(BlockPosKey.of(x, y, z), worms.size());
+                    worms.add(new int[]{x, y, z, onVent ? 1 : 0});
+                }
+        int n = worms.size();
+        assertTrue(n > 200, "too few tube worms to check: " + n);
+        // clumps: worms touching (26 ways) join
+        int[] parent = new int[n];
+        for (int i = 0; i < n; i++) parent[i] = i;
+        for (int i = 0; i < n; i++) {
+            int[] w = worms.get(i);
+            for (int a = -1; a <= 1; a++)
+                for (int b = -1; b <= 1; b++)
+                    for (int c = -1; c <= 1; c++) {
+                        Integer o = at.get(BlockPosKey.of(w[0] + a, w[1] + b, w[2] + c));
+                        if (o != null) parent[find(parent, i)] = find(parent, o);
+                    }
+        }
+        Map<Integer, Integer> size = new HashMap<>();
+        for (int i = 0; i < n; i++) size.merge(find(parent, i), 1, Integer::sum);
+        int inClumps = 0;
+        for (int i = 0; i < n; i++) if (size.get(find(parent, i)) >= 3) inClumps++;
+        // up the vents: each worm on a vent's own rock, by the nearest live vent's height over its sill
+        int onVents = 0, low = 0, high = 0;
+        for (int[] w : worms) {
+            if (w[3] == 0) continue;
+            GardensSites.Site best = null;
+            double bd = 1e9;
+            for (GardensSites.Site s : g.ventsNear(w[0] - 24, w[2] - 24, w[0] + 24, w[2] + 24)) {
+                if (!s.live) continue;
+                double d = Math.hypot(s.x + g.gv.ox - w[0], s.z + g.gv.oz - w[2]);
+                if (d < bd) { bd = d; best = s; }
+            }
+            if (best == null) continue;
+            onVents++;
+            double hr = (w[1] - best.ys) / Math.max(1.0, best.H);
+            if (hr < 0.5) low++;
+            if (hr > 0.75) high++;
+        }
+        // the scare (block.TubeWormSignals) passed from worm to worm, each no further than its hop: of the worms within
+        // its sure reach of a start (past it the scare thins out), how many it gets to, from every third worm
+        int r = (int) Math.ceil(TubeWormSignals.HOP);
+        double hop2 = TubeWormSignals.HOP * TubeWormSignals.HOP, sure2 = TubeWormSignals.THIN_FROM * TubeWormSignals.THIN_FROM,
+                reach2 = TubeWormSignals.REACH * TubeWormSignals.REACH;
+        int[][] next = new int[n][];
+        for (int i = 0; i < n; i++) {
+            int[] w = worms.get(i);
+            List<Integer> l = new ArrayList<>();
+            for (int a = -r; a <= r; a++)
+                for (int b = -TubeWormSignals.HOP_UP; b <= TubeWormSignals.HOP_UP; b++)
+                    for (int c = -r; c <= r; c++) {
+                        if ((a == 0 && b == 0 && c == 0) || a * a + b * b + c * c > hop2) continue;
+                        Integer o = at.get(BlockPosKey.of(w[0] + a, w[1] + b, w[2] + c));
+                        if (o != null) l.add(o);
+                    }
+            next[i] = l.stream().mapToInt(Integer::intValue).toArray();
+        }
+        double coverSum = 0;
+        int starts = 0, whole = 0;
+        for (int s0 = 0; s0 < n; s0 += 3) {
+            int[] st = worms.get(s0);
+            boolean[] seen = new boolean[n];
+            java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>();
+            seen[s0] = true;
+            queue.add(s0);
+            int got = 0, within = 0;
+            while (!queue.isEmpty()) {
+                int i = queue.poll();
+                if (dist2(worms.get(i), st) <= sure2) got++;
+                for (int o : next[i])
+                    if (!seen[o] && dist2(worms.get(o), st) <= reach2) {
+                        seen[o] = true;
+                        queue.add(o);
+                    }
+            }
+            for (int[] w : worms) if (dist2(w, st) <= sure2) within++;
+            coverSum += (double) got / within;
+            starts++;
+            if (got == within) whole++;
+        }
+        double cover = coverSum / starts;
+        System.out.printf(Locale.ROOT, "theTubeWormsGrowInClumpsLowOnTheVents: %d worm blocks, %d clumps, %d in clumps of 3+, %d on walls, %d thick;"
+                + " %d on vents' rock, %d on their lower half, %d high; a scare reaches %.0f%% of the worms within %.0f of its start, all of them from %d of %d starts%n",
+                n, size.size(), inClumps, wall, thick, onVents, low, high, 100 * cover, TubeWormSignals.THIN_FROM, whole, starts);
+        assertTrue(inClumps >= 0.75 * n, "worms not in clumps: " + inClumps + " of " + n + " in clumps of three or more");
+        assertTrue(size.size() >= 20, "too few clumps: " + size.size());
+        assertTrue(onVents > 50 && low >= 0.85 * onVents, "worms not on the vents' lower halves: " + low + " of " + onVents);
+        assertTrue(high <= 0.01 * onVents, "worms near the vents' tops: " + high + " of " + onVents);
+        assertTrue(wall >= 0.05 * n, "too few worms on the vents' walls: " + wall + " of " + n);
+        assertTrue(thick >= 0.15 * n && thick <= 0.7 * n, "the clumps' thick middles: " + thick + " of " + n);
+        assertTrue(cover >= 0.85, "a scare dies out in its colony: it reaches " + Math.round(100 * cover) + "% of the worms near its start");
+        assertTrue(whole >= 0.5 * starts, "a scare reaches all the worms near its start from only " + whole + " of " + starts + " starts");
+    }
+
+    private static int dist2(int[] a, int[] b) {
+        int dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    private static int find(int[] parent, int i) {
+        while (parent[i] != i) i = parent[i] = parent[parent[i]];
+        return i;
+    }
+
+    /** A block's place as one long key. */
+    private static final class BlockPosKey {
+        static long of(int x, int y, int z) { return ((long) x & 0x3FFFFFF) << 38 | ((long) z & 0x3FFFFFF) << 12 | (y & 0xFFF); }
     }
 
     /**

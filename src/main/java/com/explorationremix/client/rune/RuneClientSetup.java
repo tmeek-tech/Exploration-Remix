@@ -21,8 +21,8 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.registries.ForgeRegistries;
 
 /**
- * The runes' client registrations, on the mod bus: the rune screen, the runes' keys, the HUD, the energy line on gear in
- * slots, and how bolts, Fields and Siphon's motes are drawn.
+ * The runes' client registrations, on the mod bus: the enchanting table's rune view, the cast key, the HUD, the energy
+ * line on weapons in slots, and how bolts, Fields and Siphon's motes are drawn.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class RuneClientSetup {
@@ -30,7 +30,7 @@ public final class RuneClientSetup {
 
     @SubscribeEvent
     public static void setup(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> MenuScreens.register(RuneRegistry.EDITOR.get(), RuneEditorScreen::new));
+        event.enqueueWork(() -> MenuScreens.register(RuneRegistry.TABLE.get(), com.explorationremix.client.rune.table.RuneTableScreen::new));
         // effects the server sends, and the trails behind bolts, motes and Fields
         RuneFx.client = RuneFxClient.INSTANCE;
     }
@@ -38,7 +38,6 @@ public final class RuneClientSetup {
     @SubscribeEvent
     public static void keys(RegisterKeyMappingsEvent event) {
         event.register(RuneKeys.CAST);
-        event.register(RuneKeys.OPEN);
     }
 
     @SubscribeEvent

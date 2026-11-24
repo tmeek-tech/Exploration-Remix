@@ -27,6 +27,9 @@ public final class Plan {
             this.yaw = yaw;
         }
 
+        /** One copy of an action that carries nothing, turned {@code yaw} degrees off the aim (a second phase's splinter). */
+        public static Node single(Act act, float yaw) { return new Node(act, 0, yaw); }
+
         /** Actions in this copy and everything it carries. */
         public int size() {
             int n = 1;

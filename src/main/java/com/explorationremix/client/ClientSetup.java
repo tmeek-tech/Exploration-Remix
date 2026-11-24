@@ -4,12 +4,15 @@ import com.explorationremix.ExplorationRemix;
 import com.explorationremix.block.Neon;
 import com.explorationremix.block.NeonBlock;
 import com.explorationremix.client.model.Geometry;
+import com.explorationremix.client.model.TubeWormsModel;
+import com.explorationremix.client.render.ChimneyLurkerRenderer;
 import com.explorationremix.client.render.FireflySwarmRenderer;
 import com.explorationremix.client.render.GiantSkeinRenderer;
 import com.explorationremix.client.render.LavaBombRenderer;
 import com.explorationremix.client.render.MossbackRenderer;
 import com.explorationremix.client.render.SkeinRenderer;
 import com.explorationremix.client.render.StiltMantisRenderer;
+import com.explorationremix.client.render.TubeWormsRenderer;
 import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.registry.EREntities;
 import com.explorationremix.registry.ERParticles;
@@ -20,6 +23,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
+import net.minecraftforge.client.event.ModelEvent;
 import net.minecraftforge.client.event.RegisterParticleProvidersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -36,6 +40,8 @@ public final class ClientSetup {
         // A neon block's item shows the colour it places (NeonBlock.neon: its BlockStateTag's) through its model's
         // overrides on explorationremix:neon (tools/gen_data.py): 0 magenta, 1/3 violet, 2/3 lime, 1 light blue.
         event.enqueueWork(() -> {
+            // 0.20.6: the tube worms' block entities are made on this thread, and only here
+            TubeWormsClient.init();
             ResourceLocation neon = new ResourceLocation(ExplorationRemix.MOD_ID, "neon");
             ItemPropertyFunction colour = (stack, level, entity, seed) -> NeonBlock.neon(stack).ordinal() / (float) (Neon.values().length - 1);
             for (RegistryObject<Item> item : ERBlocks.ITEMS.getEntries()) {
@@ -89,7 +95,18 @@ public final class ClientSetup {
         event.registerEntityRenderer(EREntities.GIANT_SKEIN.get(), GiantSkeinRenderer::new);
         // 0.20.0: the stilt mantis of the Deep Gardens
         event.registerEntityRenderer(EREntities.STILT_MANTIS.get(), StiltMantisRenderer::new);
+        // 0.21.0: the chimney lurker of the Deep Gardens' vents
+        event.registerEntityRenderer(EREntities.CHIMNEY_LURKER.get(), ChimneyLurkerRenderer::new);
         // 0.9.0: the eruptions' lava bombs, a spinning glowing block of magma in a halo
         event.registerEntityRenderer(EREntities.LAVA_BOMB.get(), LavaBombRenderer::new);
+        // 0.20.6: the tube worms' plumes, moving
+        event.registerBlockEntityRenderer(EREntities.TUBE_WORMS_TILE.get(), TubeWormsRenderer::new);
+    }
+
+    /** 0.20.6: the tube worms' blockstate models leave their plumes out where they are drawn moving. */
+    @SubscribeEvent
+    public static void models(ModelEvent.ModifyBakingResult event) {
+        TubeWormsModel.wrap(event);
+        TubeWormsRenderer.bakes++;
     }
 }

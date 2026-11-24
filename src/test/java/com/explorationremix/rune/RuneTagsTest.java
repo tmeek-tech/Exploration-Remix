@@ -1,7 +1,7 @@
 package com.explorationremix.rune;
 
 import com.explorationremix.rune.engine.CastState;
-import com.explorationremix.rune.engine.Row;
+import com.explorationremix.rune.engine.Loadout;
 import com.explorationremix.rune.engine.RuneId;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -22,13 +22,24 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** What gear saves: its row and its casting state survive being written, saved to bytes and read back. */
+/** What a weapon saves: its sockets and its casting state survive being written, saved to bytes and read back. */
 class RuneTagsTest {
-    /** A gear tag holding this row, as a stack's tag would. */
-    static CompoundTag gearWith(Row row) {
+    /** A weapon's tag holding these runes, as a stack's tag would. */
+    static CompoundTag gearWith(Loadout l) {
         CompoundTag gear = new CompoundTag();
-        CompoundTag r = RuneTags.writeRow(row);
-        if (r != null) gear.put(RuneTags.ROW, r);
+        CompoundTag t = RuneTags.writeLoadout(l);
+        if (t != null) gear.put(RuneTags.LOADOUT, t);
+        return gear;
+    }
+
+    /** A weapon's tag from before 0.20.3, holding a row of runes by id ("_" an empty slot). */
+    static CompoundTag gearWithRow(String... ids) {
+        ListTag list = new ListTag();
+        for (String id : ids) list.add(StringTag.valueOf(id.equals("_") ? "" : id));
+        CompoundTag row = new CompoundTag();
+        row.put("s", list);
+        CompoundTag gear = new CompoundTag();
+        gear.put(RuneTags.OLD_ROW, row);
         return gear;
     }
 
@@ -40,71 +51,60 @@ class RuneTagsTest {
     }
 
     @Test
-    void aRowWithEmptySlotsAndBreaksComesBackTheSame() throws IOException {
-        Row row = Row.parse("fan spark on_hit _ | orb");
-        CompoundTag gear = saved(gearWith(row));
-        assertEquals(row, RuneTags.readRow(gear, row.size()));
+    void theSocketsComeBackTheSame() throws IOException {
+        Loadout l = Loadout.parse("spark fan echo");
+        CompoundTag gear = saved(gearWith(l));
+        assertEquals(l, RuneTags.readLoadout(gear));
         assertTrue(RuneTags.hasRunes(gear));
-        assertEquals(List.of(RuneId.FAN, RuneId.SPARK, RuneId.ON_HIT, RuneId.ORB), RuneTags.storedRunes(gear));
+        assertEquals(List.of(RuneId.SPARK, RuneId.FAN, RuneId.AFTER), RuneTags.storedRunes(gear));
+        Loadout some = Loadout.parse("_ heavy");
+        assertEquals(some, RuneTags.readLoadout(saved(gearWith(some))));
     }
 
     @Test
-    void anEmptyRowKeepsNoTagAndReadsEmpty() {
-        assertNull(RuneTags.writeRow(Row.empty(5)));
-        CompoundTag gear = gearWith(Row.empty(5));
-        assertFalse(gear.contains(RuneTags.ROW));
-        assertEquals(Row.empty(5), RuneTags.readRow(gear, 5));
-        assertEquals(Row.empty(3), RuneTags.readRow(null, 3));
+    void noRunesKeepNoTagAndReadEmpty() {
+        assertNull(RuneTags.writeLoadout(Loadout.EMPTY));
+        CompoundTag gear = gearWith(Loadout.EMPTY);
+        assertFalse(gear.contains(RuneTags.LOADOUT));
+        assertEquals(Loadout.EMPTY, RuneTags.readLoadout(gear));
+        assertEquals(Loadout.EMPTY, RuneTags.readLoadout(null));
         assertFalse(RuneTags.hasRunes(null));
+        assertTrue(RuneTags.storedRunes(null).isEmpty());
     }
 
     @Test
-    void anEmptyRowWithABreakIsStillKept() {
-        Row row = Row.empty(4).withBreak(1, true);
-        assertNotNull(RuneTags.writeRow(row));
-        assertEquals(row, RuneTags.readRow(gearWith(row), 4));
-        assertFalse(RuneTags.hasRunes(gearWith(row)));
-    }
-
-    @Test
-    void gearWithFewerSlotsReadsTheFrontAndTheRestIsOverflow() {
-        CompoundTag gear = gearWith(Row.parse("swift spark heavy orb burst"));
-        assertEquals(Row.parse("swift spark heavy"), RuneTags.readRow(gear, 3));
-        assertEquals(List.of(RuneId.ORB, RuneId.BURST), RuneTags.readOverflow(gear, 3));
-        assertEquals(List.of(), RuneTags.readOverflow(gear, 5));
-        assertEquals(5, RuneTags.storedRunes(gear).size(), "a broken tool gives back every rune it holds");
-    }
-
-    @Test
-    void gearWithMoreSlotsReadsTheRowPaddedWithEmptySlots() {
-        CompoundTag gear = gearWith(Row.parse("spark | orb"));
-        Row read = RuneTags.readRow(gear, 5);
-        assertEquals(5, read.size());
-        assertEquals(RuneId.SPARK, read.get(0));
-        assertEquals(RuneId.ORB, read.get(1));
-        assertTrue(read.breakAfter(0));
-        assertNull(read.get(4));
-    }
-
-    @Test
-    void aRuneTheGameDoesNotKnowReadsAsAnEmptySlot() {
-        CompoundTag row = new CompoundTag();
-        ListTag list = new ListTag();
-        list.add(StringTag.valueOf("spark"));
-        list.add(StringTag.valueOf("moonbeam"));
-        list.add(StringTag.valueOf("orb"));
-        row.put("s", list);
+    void aRuneTheGameDoesNotKnowOrOfTheWrongKindReadsAsAnEmptySocket() {
+        CompoundTag t = new CompoundTag();
+        t.putString("a", "moonbeam");
+        t.putString("m", "spark");
+        t.putString("p", "ember");
         CompoundTag gear = new CompoundTag();
-        gear.put(RuneTags.ROW, row);
-        assertEquals(Row.parse("spark _ orb"), RuneTags.readRow(gear, 3));
-        assertEquals(List.of(RuneId.SPARK, RuneId.ORB), RuneTags.storedRunes(gear));
-        CompoundTag onlyUnknown = new CompoundTag();
-        ListTag l2 = new ListTag();
-        l2.add(StringTag.valueOf("moonbeam"));
-        CompoundTag r2 = new CompoundTag();
-        r2.put("s", l2);
-        onlyUnknown.put(RuneTags.ROW, r2);
-        assertFalse(RuneTags.hasRunes(onlyUnknown));
+        gear.put(RuneTags.LOADOUT, t);
+        assertEquals(new Loadout(null, null, RuneId.EMBER), RuneTags.readLoadout(gear));
+        assertEquals(List.of(RuneId.EMBER), RuneTags.storedRunes(gear));
+    }
+
+    @Test
+    void anOldRowIsSetInTheSocketsAndTheRestGoBack() {
+        CompoundTag gear = gearWithRow("fan", "spark", "on_hit", "_", "orb", "swift", "moonbeam", "frost");
+        assertTrue(RuneTags.hasOldRow(gear));
+        assertEquals(new Loadout(RuneId.SPARK, RuneId.FAN, RuneId.ON_HIT), RuneTags.readLoadout(gear), "read as it will be set");
+        RuneTags.Converted c = RuneTags.convertGear(gear);
+        assertNotNull(c);
+        assertEquals(new Loadout(RuneId.SPARK, RuneId.FAN, RuneId.ON_HIT), c.kept());
+        assertEquals(List.of(RuneId.ORB, RuneId.SWIFT, RuneId.FROST), c.extras(), "the unknown rune is lost, as it always was");
+        assertEquals(6, RuneTags.storedRunes(gear).size(), "a weapon broken before it is converted gives back every rune");
+        assertNull(RuneTags.convertGear(gearWith(Loadout.parse("spark"))), "nothing to convert");
+    }
+
+    @Test
+    void socketsAlreadySetWinOverAnOldRow() {
+        CompoundTag gear = gearWith(Loadout.parse("orb heavy"));
+        gear.put(RuneTags.OLD_ROW, gearWithRow("spark", "swift").getCompound(RuneTags.OLD_ROW));
+        RuneTags.Converted c = RuneTags.convertGear(gear);
+        assertNotNull(c);
+        assertEquals(Loadout.parse("orb heavy"), c.kept());
+        assertEquals(List.of(RuneId.SPARK, RuneId.SWIFT), c.extras());
     }
 
     @Test
@@ -150,12 +150,11 @@ class RuneTagsTest {
     }
 
     @Test
-    void theRowAndTheStateAreSeparateTags() {
-        CompoundTag gear = gearWith(Row.parse("spark"));
+    void theSocketsAndTheStateAreSeparateTags() {
+        CompoundTag gear = gearWith(Loadout.parse("spark"));
         gear.put(RuneTags.CAST, RuneTags.writeState(new CastState(3.0F, 1L, -1L, 0, 0L, 0L), 8));
-        CompoundTag r = RuneTags.writeRow(Row.parse("orb"));
-        gear.put(RuneTags.ROW, r);
-        assertEquals(Row.parse("orb"), RuneTags.readRow(gear, 1));
-        assertEquals(8, RuneTags.gearId(gear), "editing the row keeps the gear's id");
+        gear.put(RuneTags.LOADOUT, RuneTags.writeLoadout(Loadout.parse("orb")));
+        assertEquals(Loadout.parse("orb"), RuneTags.readLoadout(gear));
+        assertEquals(8, RuneTags.gearId(gear), "changing the runes keeps the weapon's id");
     }
 }

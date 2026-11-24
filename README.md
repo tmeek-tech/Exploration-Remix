@@ -48,7 +48,7 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
 | Deep Gardens | -289 to -480 | Chimney Halls | Seep Beds | Vent Domes |
 | Band 3 | -481 to -496 | | | |
 | Wasteland | -497 to -640 | Ash Hollows | Wasteland | the whole layer (nothing hunts yet) |
-| Basalt Galleries | -641 to -784 | Obsidian Tubes | Basalt Galleries; also the Caldera, the Causeway and the Scoria Canyons | none: nothing lives there |
+| Basalt Galleries | -641 to -784 | Obsidian Tubes | Basalt Galleries; also the Caldera, the Causeway and the Basalt Rifts | none: nothing lives there |
 
 * **Bands** are 16 blocks of unbreakable band stone (none lies between the Wasteland and the Basalt Galleries: the
   Wasteland's caves open into the Galleries' ceiling). Each has one **gate** per 600 by 600 block cell: a twisting
@@ -74,16 +74,22 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   to 30 across, small fork rooms where three ways meet, a few short galleries and a great hall with an arch, on four
   storeys 25 apart joined by staged climbs. There are no dead ends: every room has at least two ways out. Its refuge,
   the **Ash Hollows**, is two pale, bare domed rooms per cell, each cut into a quiet tunnel.
-* **Basalt Galleries** (0.5): a few great halls per cell, 60 to 100 blocks across and up to about 100 tall, each a ring
-  of ledges round a lava lake, joined by galleries 8 to 16 wide; the **Caldera**, a crater of magma and ember crust
-  round a lava lake with the vents where eruptions will start; the **Causeway**, a field of basalt columns over the
-  lava with a path across their tops; the **Scoria Canyons**, a rift of banded Create scoria over a lava river with
-  natural bridges; two **Obsidian Tubes** hubs per cell. Walkable arches and bridges cross the halls, and flights of
+* **Basalt Galleries** (0.5; halls since 0.20.4): the biggest caves in the game, domed halls about 80 to 130 blocks
+  across and up to about 90 tall, each its own cave behind ragged basalt walls that break here and there, and every
+  hall opens into each of its neighbours through a doorway; their floors are a landscape of ledges and low ground round
+  lava lakes. The **Caldera**, a crater of magma round a lava lake with the vents where eruptions will start, and the
+  **Causeway**, a field of basalt columns over the lava with a path across their tops, are each one greater hall; the
+  **Basalt Rifts** are rifts of basalt and smooth basalt banded with thin flows of scorchia over a lava river, with
+  natural bridges; two **Obsidian Tubes** hubs per cell. The rock is basalt and smooth basalt, with a column of scorchia
+  now and then. The Wasteland lets out into the halls about every 120 blocks: a crater in its lowest tunnels opens into a
+  hall's vault, and a ramp winds down from it to the hall's floor (the walls give way round the holes and the ramps, so
+  a ramp that meets one comes down through a gap in it). Walkable arches and bridges cross the halls, and flights of
   stairs lead from the bedrock landing up out of the flood and from the entry landing down to the halls; there are no
-  climbs. Nothing lives here: no plants and no mobs. Light comes from the lava, a few big lava falls, chains of shallow
-  lava pools winding along the halls' low floors, magma, glowing ember crust and an unseen glow along the rock that
-  lights the halls' walls, ledges and vaults as their lava would. The glow (`explorationremix:glow`) is light with
-  nothing to see or hit: a placed block, fire, a nether portal, a growing tree or the lava takes its place, and a glow
+  climbs.
+  Nothing lives here: no plants and no mobs. Light comes from the lava, a few big lava falls, chains of shallow lava
+  pools winding along the halls' low floors, magma and an unseen glow along the rock that lights the halls' walls,
+  ledges and vaults as their lava would. The glow (`explorationremix:glow`) is light with nothing to see or hit: a
+  placed block, fire, a nether portal, a growing tree or the lava takes its place, and a glow
   taken that way comes back only with the terrain reset (the flood band's also after each flood). `/fill ... keep` and
   `replace minecraft:air` skip it; fill with `replace explorationremix:glow` to clear it.
 * **Blue Reaches** keep 0.2.0's sizes: the Deep Blue Rift, up to 160 blocks deep, with its ledge path, natural bridges
@@ -143,19 +149,19 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   caps, wisteria, lantern pods, lavender flowers and glowing gold flowers, silver ferns (placed on the side of a block
   they hang down it, as in the Silver Fern Rift), orange shelf fungi, lavender coral, pale coral fans, ember vines,
   asurine crystals, blue glow mushrooms and vines), glow berries thick in the upper caves, lantern weed on the lake
-  beds, lava falls, magma and glowing ember crust in the Wasteland and the Basalt Galleries, cinder chains instead of
+  beds, lava falls and magma in the Wasteland and the Basalt Galleries, cinder chains instead of
   vines in the lifeless biomes, each biome's own fog, water colour, particles and ambient sound, steam over hot pools,
   embers over lava, and pollen in daylight shafts. Tuned for vanilla lighting without shaders: every biome carries
   enough glowing things to see by. While the camera is under the old world floor (y -64) the clouds are moved far
   above it, so no clouds (a shader pack's included) show past the edge of the drawn world in the deep caves.
-* **Sounds** (0.20.9): each layer has an ambience of its own. In the Upper Caves a soft far chorus of crickets sings
-  wherever you are well underground, in the pack's caves too, and now and then a cricket sings from the rock near you,
-  going quiet when you come within a few blocks and starting again once you have passed. The frozen Root Vaults and
-  the Frost Fern Grotto are cold and still: a thin draft, and now and then the tick or the long falling song of ice.
-  The Deep Gardens are hushed, a faint draft and a far-off vent sighing now and then, and live vents hiss and simmer
-  softly within a few blocks of their crowns. The Basalt Galleries have a low, steady rumble of the deep rock, smooth,
-  so the lava's warning rumbles still stand out. `crickets` and `nearCrickets` in `explorationremix-client.toml` say
-  where the crickets sing.
+* **Sounds** (0.20.9): each layer has an ambience of its own. In the mod's own upper caves, where the birds were, a soft
+  far chorus of crickets sings (0.21.1; the client config can let it sing in the pack's caves too, wherever you are well
+  underground), and now and then a cricket sings from the rock near you, going quiet when you come within a few blocks
+  and starting again once you have passed. The frozen Root Vaults and the Frost Fern Grotto are cold and still: a thin
+  draft, and now and then the tick or the long falling song of ice. The Deep Gardens are hushed, a faint draft and a
+  far-off vent sighing now and then, and live vents hiss and simmer softly within a few blocks of their crowns. The
+  Basalt Galleries have a low, steady rumble of the deep rock, smooth, so the lava's warning rumbles still stand out.
+  `cricketCaves` and `nearCrickets` in `explorationremix-client.toml` say where the crickets sing.
 
 ## Hostile mobs in groups
 

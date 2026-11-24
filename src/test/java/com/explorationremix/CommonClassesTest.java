@@ -36,11 +36,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * signatures or their code. The one exception is the pattern {@code LavaNet}'s handlers use, {@code
  * DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Effects.accept(this))}: inside a lambda's own synthetic method a
  * static call to this mod's client classes with plain-typed arguments, which the server never runs and its verifier
- * never loads.
+ * never loads. Forge's model data ({@code net.minecraftforge.client.model.data}: {@code ModelData}, {@code
+ * ModelProperty}) is let through too: it sits in Forge's client package, but Forge's own common {@code
+ * IForgeBlockEntity.getModelData} returns it and it names no client type, so it loads on a dedicated server (0.20.6's
+ * tube worms hand their block entity to their model through it).
  */
 class CommonClassesTest {
     private static final String[] CLIENT = {"net/minecraft/client/", "com/mojang/blaze3d/", "net/minecraftforge/client/", "com/explorationremix/client/"};
     private static final String[] EXEMPT = {"com/explorationremix/client/", "com/explorationremix/devtools/"};
+    /** In Forge's client package but loaded on both sides (see the class's doc). */
+    private static final String COMMON_IN_CLIENT = "net/minecraftforge/client/model/data/";
 
     @Test
     void commonClassesNameNoClientType() throws IOException, URISyntaxException {
@@ -77,12 +82,16 @@ class CommonClassesTest {
         assertTrue(found.size() == 1 && found.get(0).contains("bad") && found.get(0).contains("net/minecraft/client/Minecraft"), String.valueOf(found));
     }
 
-    /** A common class done wrong in one method and right in a lambda, for the scan's own test. */
+    /** A common class done wrong in one method and right in a lambda and with Forge's model data, for the scan's own test. */
     @SuppressWarnings("unused")
     private static final class Sample {
         static Object bad() { return net.minecraft.client.Minecraft.class; }
 
         static Runnable good() { return () -> com.explorationremix.client.QuakeEffects.accept(null); }
+
+        static net.minecraftforge.client.model.data.ModelData data() {
+            return net.minecraftforge.client.model.data.ModelData.builder().with(new net.minecraftforge.client.model.data.ModelProperty<String>(), "").build();
+        }
     }
 
     // ================================================================================================ helpers
@@ -113,7 +122,7 @@ class CommonClassesTest {
     }
 
     private static boolean client(String internalName) {
-        if (internalName == null) return false;
+        if (internalName == null || internalName.startsWith(COMMON_IN_CLIENT)) return false;
         for (String c : CLIENT) if (internalName.startsWith(c)) return true;
         return false;
     }
@@ -121,6 +130,7 @@ class CommonClassesTest {
     /** True when a descriptor, signature or type name names a client type. */
     private static boolean names(String s) {
         if (s == null) return false;
+        s = s.replace("L" + COMMON_IN_CLIENT, "L");   // Forge's model data names no client type
         if (client(s)) return true;
         for (String c : CLIENT) if (s.contains("L" + c)) return true;
         return false;

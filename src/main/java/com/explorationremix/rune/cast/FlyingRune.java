@@ -41,9 +41,11 @@ import java.util.Set;
  * a moment after it was cast (After a moment). Off a
  * wall the payload faces back out (and a Reel there pulls the caster to the wall); through a creature it carries on
  * and its bolts pass that creature by. A Glow mote leaves a light where it stops, or sticks to the creature it hits,
- * which then glows for a minute.
+ * which then glows for a minute. In their second phase a Spark forks to the foes near what it strikes, a Shard
+ * splinters, a Glow mote scatters its light, and an Orb drags foes in as it flies and bursts where it stops (PhaseTwo).
  */
 final class FlyingRune implements BoltLogic {
+    /** How long after a cast its Echo comes (and, before 0.20.3, an "After a moment" relay let go). */
     static final int AFTER_TICKS = 12;
     /** How long a Glow mote stuck on a creature makes it glow. */
     static final int GLOW_TAG_TICKS = 20 * 60;
@@ -132,7 +134,13 @@ final class FlyingRune implements BoltLogic {
 
     // ------------------------------------------------------------------------------------------------ launch
 
-    static void launch(CastContext ctx, Plan.Node node, Origin o, boolean root) {
+    static void launch(CastContext ctx, Plan.Node node, Origin o, boolean root) { launch(ctx, node, o, root, 1.0F); }
+
+    /**
+     * Launches a bolt; {@code scale} below 1 makes a lesser one (a second phase's splinter): that share of the damage,
+     * smaller, and gone sooner.
+     */
+    static void launch(CastContext ctx, Plan.Node node, Origin o, boolean root, float scale) {
         Caster c = CastService.caster(ctx.owner);
         if (c.carriers.size() >= RuneConfig.get(RuneConfig.INSTANCE.maxCarriers) || !ctx.level.isPositionEntityTicking(BlockPos.containing(o.pos()))) {
             Executor.fizzle(ctx, o.pos());
@@ -152,10 +160,10 @@ final class FlyingRune implements BoltLogic {
         int swift = a.count(RuneId.SWIFT), heavy = a.count(RuneId.HEAVY), wide = a.count(RuneId.WIDE);
         double speed = speed(a.rune) * Math.pow(1.3, swift) * Math.pow(0.85, heavy);
         double radius = radius(a.rune) + 0.25 * wide;
-        float size = size(a.rune) + 0.5F * wide;
-        float push = push(a.rune) + (a.rune == RuneId.GLOW ? 0.0F : 0.2F * heavy);
-        FlyingRune f = new FlyingRune(ctx, node, c, dir.scale(speed), radius, 0.035 * arc, a.rune.damaging() ? damage(ctx, a) : 0.0F, push,
-                life(a.rune));
+        float size = (size(a.rune) + 0.5F * wide) * (a.empowered ? 1.25F : 1.0F) * (0.5F + 0.5F * scale);
+        float push = (push(a.rune) + (a.rune == RuneId.GLOW ? 0.0F : 0.2F * heavy)) * scale;
+        FlyingRune f = new FlyingRune(ctx, node, c, dir.scale(speed), radius * (0.6 + 0.4 * scale), 0.035 * arc,
+                a.rune.damaging() ? damage(ctx, a) * scale : 0.0F, push, Math.max(6, Math.round(life(a.rune) * (scale < 1.0F ? 0.6F : 1.0F))));
         LivingEntity skip = RuneHits.body(o.hit());
         if (skip != null) f.passed.add(skip.getId());
         RuneBolt b = new RuneBolt(RuneRegistry.BOLT.get(), ctx.level);
@@ -193,11 +201,12 @@ final class FlyingRune implements BoltLogic {
         }
         age++;
         Vec3 pos = b.position();
-        if ((node.relay == RuneId.AFTER && hasPayload() && age > AFTER_TICKS) || age > life) {
+        if (age > life) {
             stop(b, pos, dir(), null, null);
             return;
         }
         steer(pos);
+        if (a.empowered && a.rune == RuneId.ORB) PhaseTwo.gravity(ctx, a, pos, age);
         if (gravity > 0) vel = vel.add(0, -gravity, 0);
         Vec3 from = pos, to = pos.add(vel);
         // never on into ground that is loaded but still (past the simulation distance): it would hang there, out
@@ -222,6 +231,7 @@ final class FlyingRune implements BoltLogic {
                     continue;
                 }
                 if (a.rune.damaging()) RuneHits.strike(ctx, a, h.body, h.box, h.at, dir(), damage, push, b, null);
+                if (a.empowered && a.rune == RuneId.SPARK) PhaseTwo.fork(ctx, a, h.body, damage);
                 if (pierces > 0 && a.rune != RuneId.GLOW && h.body.isAlive()) {
                     pierces--;
                     RuneFx.pierce(ctx.level, h.at, dir(), a.rune, a.element);
@@ -348,7 +358,10 @@ final class FlyingRune implements BoltLogic {
                 BlockPos p = BlockPos.containing(at);
                 if (!TempBlocks.place(l, p, TempBlock.Kind.LIGHT, ctx.owner)) TempBlocks.place(l, p.above(), TempBlock.Kind.LIGHT, ctx.owner);
             }
+            if (a.empowered) PhaseTwo.scatter(ctx, a, at, hit);
         }
+        if (a.empowered && a.rune == RuneId.SHARD) PhaseTwo.splinter(ctx, a, at, d, hit);
+        if (a.empowered && a.rune == RuneId.ORB) PhaseTwo.orbBurst(ctx, a, at);
         if (hasPayload()) Executor.release(ctx, node.children, new Origin(at, d, hit, wall != null));
         b.discard();
     }

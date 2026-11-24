@@ -5,6 +5,7 @@ import com.explorationremix.block.Neon;
 import com.explorationremix.block.NeonBlock;
 import com.explorationremix.block.NeonMushroomsBlock;
 import com.explorationremix.block.TubeWormsBlock;
+import com.explorationremix.block.WallTubeWormsBlock;
 import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.world.terrain.GardensField;
 import com.explorationremix.world.terrain.Terrain;
@@ -37,6 +38,10 @@ import static com.explorationremix.world.terrain.GardensField.*;
  * <p>0.20.2's plant life (GardensDress.plants) by colour, each piece read from its own column: filament tufts or, with
  * the plant bit, the grass; tall grass's upper half over its lower; a glowworm thread's tip at the bottom of its run;
  * a seep reed one block or the two halves of a tall one; one or two small mushrooms, or three with the bit.
+ *
+ * <p>0.20.6's tube worms: a clump's thick middle with the bit, its thin edge without; standing on the block under them
+ * if that holds them, else on a wall beside them (the first of the four sides that holds them, from a side picked
+ * per block), leaning out from it.
  */
 public final class GardensBlocks {
     private static final BlockState[][] STATES = new BlockState[32][4];
@@ -45,7 +50,10 @@ public final class GardensBlocks {
     private static BlockState deepslate, oil;
     /** 0.20.2's plants: by colour (and the mushrooms by count); the threads and reeds are light blue alone. */
     private static final BlockState[] TUFT = new BlockState[4], GRASS = new BlockState[4], TALL_LOWER = new BlockState[4],
-            TALL_UPPER = new BlockState[4], WORMS = new BlockState[4];
+            TALL_UPPER = new BlockState[4];
+    /** 0.20.6's tube worms: standing, by thickness (0 a clump's middle, 1 its edge) and colour; on a wall, by the way they lean too. */
+    private static final BlockState[][] WORMS = new BlockState[2][4];
+    private static final BlockState[][][] WALL_WORMS = new BlockState[4][2][4];
     private static final BlockState[][] SHROOMS = new BlockState[4][3];
     private static BlockState threadTip, threadBody, reed, reedLower, reedUpper;
 
@@ -91,7 +99,14 @@ public final class GardensBlocks {
             BlockState tall = ERBlocks.TALL_FILAMENT_GRASS.get().defaultBlockState().setValue(NeonBlock.NEON, n);
             TALL_LOWER[o] = tall.setValue(DoublePlantBlock.HALF, DoubleBlockHalf.LOWER);
             TALL_UPPER[o] = tall.setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER);
-            WORMS[o] = ERBlocks.TUBE_WORMS.get().defaultBlockState().setValue(NeonBlock.NEON, n).setValue(TubeWormsBlock.OUT, true);
+            for (int th = 0; th < 2; th++) {
+                WORMS[th][o] = ERBlocks.TUBE_WORMS.get().defaultBlockState().setValue(NeonBlock.NEON, n).setValue(TubeWormsBlock.OUT, true)
+                        .setValue(TubeWormsBlock.SPARSE, th == 1);
+                for (int f = 0; f < 4; f++)
+                    WALL_WORMS[f][th][o] = ERBlocks.WALL_TUBE_WORMS.get().defaultBlockState().setValue(NeonBlock.NEON, n)
+                            .setValue(TubeWormsBlock.OUT, true).setValue(TubeWormsBlock.SPARSE, th == 1)
+                            .setValue(WallTubeWormsBlock.FACING, Direction.from2DDataValue(f));
+            }
             for (int k = 0; k < 3; k++)
                 SHROOMS[o][k] = ERBlocks.NEON_MUSHROOMS.get().defaultBlockState().setValue(NeonBlock.NEON, n).setValue(NeonMushroomsBlock.MUSHROOMS, k + 1);
         }
@@ -127,6 +142,19 @@ public final class GardensBlocks {
         return POINTED[c == C_PDOWN ? 0 : 1][th.ordinal()];
     }
 
+    /** Tube worms at row {@code row} of column (x, z): on the floor if the block under holds them, else on a wall beside them. */
+    private static BlockState worms(GardensField g, int x, int row, int z, int colour, boolean middle) {
+        int th = middle ? 0 : 1;
+        if (row == 0 || holds(g.packed(x, row - 1, z) & 31)) return WORMS[th][colour];
+        int first = (int) ((Mth.getSeed(x, row, z) >>> 24) & 3);
+        for (int k = 0; k < 4; k++) {
+            Direction side = Direction.from2DDataValue((first + k) & 3);
+            if (holds(g.packed(x + side.getStepX(), row, z + side.getStepZ()) & 31))
+                return WALL_WORMS[side.getOpposite().get2DDataValue()][th][colour];
+        }
+        return WORMS[th][colour];       // nothing beside them holds them (the dressing leaves none so)
+    }
+
     /** Whether the block at row r of the column is code c (false outside the layer). */
     private static boolean is(GardensField g, int x, int r, int z, int rows, int c) {
         return r >= 0 && r < rows && (g.packed(x, r, z) & 31) == c;
@@ -144,7 +172,7 @@ public final class GardensBlocks {
             case C_TALLG:
                 return (is(g, x, row - 1, z, rows, C_TALLG) ? TALL_UPPER : TALL_LOWER)[colour];
             case C_WORM:
-                return WORMS[colour];
+                return worms(g, x, row, z, colour, bit);
             case C_THREAD:
                 return is(g, x, row - 1, z, rows, C_THREAD) ? threadBody : threadTip;
             case C_REED:

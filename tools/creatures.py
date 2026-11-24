@@ -772,6 +772,9 @@ def write_all(assets, write):
     # 0.20.0: the Deep Gardens' stilt mantis, in the four neon colours (stilt_mantis.py)
     import stilt_mantis
     names.update(stilt_mantis.write(assets, write))
+    # 0.21.0: the Deep Gardens' chimney lurker, in its vent's colour (chimney_lurker.py)
+    import chimney_lurker
+    names.update(chimney_lurker.write(assets, write))
     return names
 
 
@@ -1217,6 +1220,56 @@ def _skein_plate():
     return img
 
 
+# 0.21.0: the chimney lurker's drop (its chitin as tools/chimney_lurker.py paints it)
+LURKER_FANG = ["#08070B", "#0E0D13", "#15131B", "#1D1A25", "#272330", "#35304A"]
+LURKER_GLINT = ["#4A4468", "#7486D2", "#AABAF6"]
+
+
+def _lurker_fang():
+    """A Chimney Lurker Fang (its drop): one of its two fangs, a black hooked claw thick at its torn root, out and over
+    and down to a needle tip; a dull sheen along its outer curve, the tip still faintly pale blue."""
+    img = blank()
+    px = img.load()
+    pts = []
+    a, b, c = (3.4, 3.8), (14.4, 2.4), (8.8, 14.2)             # the root at the top left, out and over, down to the tip
+    for n in range(240):
+        t = n / 239
+        x = (1 - t) ** 2 * a[0] + 2 * (1 - t) * t * b[0] + t * t * c[0]
+        y = (1 - t) ** 2 * a[1] + 2 * (1 - t) * t * b[1] + t * t * c[1]
+        pts.append((x, y, t, 2.2 * (1 - t) ** 0.8 + 0.42))
+    centre = (7.0, 9.0)                                       # inside the hook's curve
+    body = {}
+    for yy in range(16):
+        for xx in range(16):
+            cx, cy = xx + 0.5, yy + 0.5
+            best = min(pts, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2 - p[3] ** 2)
+            d = math.hypot(best[0] - cx, best[1] - cy)
+            if d <= best[3]:
+                # > 0 on the outer side of the curve (the lit one), < 0 on the inner
+                side = math.hypot(cx - centre[0], cy - centre[1]) - math.hypot(best[0] - centre[0], best[1] - centre[1])
+                body[(xx, yy)] = (best[2], side / max(0.5, best[3]))
+    for (xx, yy), (t, side) in body.items():
+        edge = any((xx + dx, yy + dy) not in body for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+        if t > 0.9:
+            col = LURKER_GLINT[2 if t > 0.96 else 1]
+        elif t > 0.8:
+            col = LURKER_GLINT[0] if side > -0.3 else LURKER_FANG[3]
+        elif edge and side > 0.2:
+            col = LURKER_FANG[5]
+        elif edge:
+            col = LURKER_FANG[0]
+        else:
+            k = 2.0 + 2.2 * side + 0.8 * t
+            col = LURKER_FANG[max(1, min(len(LURKER_FANG) - 2, int(k)))]
+        put(px, xx, yy, col)
+    # the torn root: a ragged dark end with a little dull violet flesh in it
+    for xx, yy in ((1, 3), (2, 2), (1, 5), (2, 6)):
+        if (xx, yy) in body: put(px, xx, yy, LURKER_FANG[0])
+    for xx, yy in ((2, 4), (3, 3)):
+        if (xx, yy) in body: put(px, xx, yy, "#3B2E58")
+    return img
+
+
 PAINTERS = {
     "block/mossback_den": _den,
     "block/bone_scraps": _scraps_ribs,
@@ -1226,4 +1279,6 @@ PAINTERS = {
     "item/mossback_hide": _hide,
     # the Skein's
     "item/skein_plate": _skein_plate,
+    # the chimney lurker's (0.21.0)
+    "item/chimney_lurker_fang": _lurker_fang,
 }

@@ -173,9 +173,11 @@ public final class RuneFxClient implements RuneFx.ClientSide {
         float s = fx.size();
         switch (fx.kind()) {
             case CAST -> {
+                int flags = Math.round(fx.a());
                 // your own cast: your arm flicks here, as the server doesn't send it (see CastService.castFx)
-                if (mc.player != null && fx.entity() == mc.player.getId()) mc.player.swing(fx.a() > 0.5F ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND, false);
+                if (mc.player != null && fx.entity() == mc.player.getId()) mc.player.swing((flags & 1) != 0 ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND, false);
                 cast(l, r, at, d, rgb, e);
+                if ((flags & 2) != 0) castTwo(r, at, d, rgb);
             }
             case IMPACT -> impact(l, r, at, d, rgb, e, s, fx.a() > 0.5F, dist);
             case BURST -> burst(l, r, at, rgb, e, Math.max(0.5F, s), dist);
@@ -197,6 +199,81 @@ public final class RuneFxClient implements RuneFx.ClientSide {
             case PING -> ping(r, at, s);
             case UNROLL -> unroll(r, at, d);
             case FROST_PUFF -> frostPuff(l, r, at, s, fx.a());
+            case WELL -> well(r, at, rgb, s);
+            case WAVE -> wave(l, r, at, d, rgb, e, s);
+            case PHASE -> phase(r, at, rgb, fx.a() > 0.5F, mc.player != null && fx.entity() == mc.player.getId());
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------------ second phases
+
+    /** A second phase's cast: a bright ring round the hand, across the way it goes, and a few motes of light. */
+    private static void castTwo(RandomSource r, Vec3 at, Vec3 d, int rgb) {
+        Vec3 way = d.lengthSqr() < 1.0E-6 ? new Vec3(0, 0, 1) : d.normalize();
+        GlowParticle.ring(at.add(way.scale(0.3)), way).colour(WHITE).fadeTo(rgb).size(0.05F, 0.45F).alpha(0.8F).life(6).spawn();
+        for (int i = 0; i < count(4); i++) {
+            GlowParticle.dot(at.add(sphere(r).scale(0.12))).vel(cone(r, way, 50).scale(0.05)).colour(mix(rgb, WHITE, 0.7F)).fadeTo(rgb)
+                    .size(0.03F, 0.0F).life(8 + r.nextInt(5)).drag(0.9F).star().spawn();
+        }
+    }
+
+    /**
+     * A well: light drawn in to {@code c} from {@code reach} round, a ring closing on it and motes spiralling in, so a
+     * creature caught in it can see why it slides.
+     */
+    private static void well(RandomSource r, Vec3 c, int rgb, float reach) {
+        float rad = Mth.clamp(reach, 1.0F, 12.0F);
+        GlowParticle.ring(c, new Vec3(0, 1, 0)).colour(dim(rgb, 0.7F)).fadeTo(mix(rgb, WHITE, 0.6F)).size(rad, 0.3F).alpha(0.4F).life(10).ease(1.0F).spawn();
+        for (int i = 0; i < count(7); i++) {
+            double a = r.nextDouble() * Math.PI * 2, d = rad * (0.55 + 0.45 * r.nextDouble());
+            Vec3 o = new Vec3(Math.cos(a) * d, (r.nextDouble() - 0.5) * 1.2, Math.sin(a) * d);
+            Vec3 in = o.scale(-1.0 / 12.0);
+            Vec3 swirl = new Vec3(-o.z, 0, o.x).normalize().scale(0.06);
+            GlowParticle.dot(c.add(o)).vel(in.add(swirl)).colour(dim(rgb, 0.8F)).fadeTo(mix(rgb, WHITE, 0.7F)).size(0.03F, 0.07F)
+                    .alpha(0.8F).life(11 + r.nextInt(4)).drag(1.0F).spawn();
+        }
+    }
+
+    /** One stretch of Cleave's wave: a bright front across its width, flying on, and the element's bits in its wake. */
+    private static void wave(ClientLevel l, RandomSource r, Vec3 at, Vec3 d, int rgb, Element e, float half) {
+        Vec3 f = flat(d);
+        Vec3 side = new Vec3(-f.z, 0, f.x);
+        float w = Mth.clamp(half, 0.5F, 4.0F);
+        int n = count(5 + 3 * w);
+        int hot = mix(rgb, WHITE, 0.6F);
+        for (int i = 0; i <= n; i++) {
+            double t = (double) i / n * 2 - 1;
+            // a shallow crescent: its middle leads
+            Vec3 p = at.add(side.scale(t * w)).add(f.scale(0.35 * (1 - t * t))).add(0, (r.nextDouble() - 0.5) * 0.2, 0);
+            float mid = (float) (1 - t * t);
+            GlowParticle.streak(p).vel(f.scale(0.3)).colour(i % 2 == 0 ? WHITE : hot).fadeTo(dim(rgb, 0.5F)).size(0.05F + 0.06F * mid, 0.02F)
+                    .alpha(0.6F + 0.4F * mid).life(4 + r.nextInt(3)).drag(0.85F).stretch(2.5F).spawn();
+        }
+        if (r.nextInt(3) == 0) {
+            ParticleOptions ep = RuneFx.elementParticle(e);
+            if (ep != null) vanilla(l, ep, at.add(side.scale((r.nextDouble() - 0.5) * 2 * w)), f.scale(0.05));
+        }
+    }
+
+    /**
+     * A weapon's second phase wakes round a player: two rings of light rising up them and motes lifting off; or, as it
+     * sleeps, one dim ring sinking.
+     */
+    private static void phase(RandomSource r, Vec3 feet, int rgb, boolean awake, boolean mine) {
+        Vec3 up = new Vec3(0, 1, 0);
+        if (!awake) {
+            GlowParticle.ring(feet.add(0, 1.2, 0), up).colour(dim(rgb, 0.8F)).fadeTo(dim(rgb, 0.3F)).size(0.9F, 0.5F).alpha(0.5F).life(14).spawn();
+            return;
+        }
+        for (int k = 0; k < 2; k++) {
+            GlowParticle.ring(feet.add(0, 0.1 + 0.9 * k, 0), up).colour(mix(rgb, WHITE, 0.5F)).fadeTo(rgb).size(0.3F, 1.3F + 0.3F * k).alpha(mine ? 0.55F : 0.8F)
+                    .life(14 + 4 * k).spawn();
+        }
+        for (int i = 0; i < count(mine ? 10 : 16); i++) {
+            double a = r.nextDouble() * Math.PI * 2, d = 0.4 + r.nextDouble() * 0.5;
+            Vec3 p = feet.add(Math.cos(a) * d, r.nextDouble() * 0.6, Math.sin(a) * d);
+            GlowParticle.dot(p).vel(new Vec3(0, 0.06 + r.nextDouble() * 0.05, 0)).colour(mix(rgb, WHITE, 0.6F)).fadeTo(rgb).size(0.05F, 0.0F)
+                    .life(20 + r.nextInt(10)).drag(0.95F).star().spawn();
         }
     }
 

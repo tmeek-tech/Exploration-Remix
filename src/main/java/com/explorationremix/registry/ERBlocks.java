@@ -22,6 +22,7 @@ import com.explorationremix.block.TallCavePlantBlock;
 import com.explorationremix.block.TallNeonPlantBlock;
 import com.explorationremix.block.TubeWormsBlock;
 import com.explorationremix.block.VentCrownBlock;
+import com.explorationremix.block.WallTubeWormsBlock;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -284,15 +285,7 @@ public final class ERBlocks {
     /** Frost feathers over the rock near the cold mouths. No light. */
     public static final RegistryObject<Block> HOARFROST = block("hoarfrost",
             () -> new GlowLichenBlock(lichen(MapColor.SNOW, SoundType.POWDER_SNOW, 0)));
-    /**
-     * Ice lit light blue from inside, in veins through the deep Frost Fern Grotto's ice (0.20.1, Taran: the deeper caves
-     * icier, and lit by glowing ice now the frostberries are gone from the grotto). Like packed ice it never melts, is
-     * slippery and drops itself only to silk touch; its light (10) stays under what melts plain ice (over 10 where the ice
-     * is, which is at most 9 beside it) and snow. Drawn at full brightness without the shader, like magma.
-     */
-    public static final RegistryObject<Block> GLOW_ICE = block("glow_ice", () -> new Block(
-            BlockBehaviour.Properties.of().mapColor(MapColor.ICE).friction(0.98F).strength(0.5F).sound(SoundType.GLASS)
-                    .lightLevel(s -> 10).emissiveRendering((s, l, p) -> true).isValidSpawn((s, l, p, e) -> false)));
+    // (0.20.1's glow ice left the game in 0.20.7, Taran: "Remove glow ice"; ERRemaps turns old worlds' into packed ice.)
 
     // ------------------------------------------------------------------------------------------- Sinkholes and oasis hollows
     /** Grass hanging over a sinkhole's rim from the turf above. */
@@ -432,9 +425,14 @@ public final class ERBlocks {
     public static final RegistryObject<Block> GRAZED_FILAMENT_GRASS = BLOCKS.register("grazed_filament_grass",
             () -> new GrazedGrassBlock(grass().randomTicks(), Block.box(2, 0, 2, 14, 5, 14)));
     /** Tube worms round the live vents, in the vent's colour (card pick: "Yes, they pull in as you near"). */
-    public static final RegistryObject<Block> TUBE_WORMS = block("tube_worms", () -> new TubeWormsBlock(
-            BlockBehaviour.Properties.of().mapColor(ERBlocks::neonMap).noCollission().instabreak().sound(SoundType.WET_GRASS)
-                    .offsetType(BlockBehaviour.OffsetType.XZ).pushReaction(PushReaction.DESTROY)));
+    public static final RegistryObject<Block> TUBE_WORMS = BLOCKS.register("tube_worms", () -> new TubeWormsBlock(
+            worms().offsetType(BlockBehaviour.OffsetType.XZ)));
+    /** 0.20.6: tube worms on a vent's steep wall, their tubes curving up (card pick: "Lower half, on ledges and walls"). */
+    public static final RegistryObject<Block> WALL_TUBE_WORMS = BLOCKS.register("wall_tube_worms", () -> new WallTubeWormsBlock(worms()));
+    // one item for both, as a torch's: against a wall it places the wall's worms
+    static {
+        ITEMS.register("tube_worms", () -> new StandingAndWallBlockItem(TUBE_WORMS.get(), WALL_TUBE_WORMS.get(), new Item.Properties(), Direction.DOWN));
+    }
     /** Silk threads beaded with light blue lights, hanging in the dark halls (card pick: "Light blue, in the dark halls"). */
     public static final RegistryObject<Block> GLOWWORM_THREADS = BLOCKS.register("glowworm_threads",
             () -> new HangingVinesBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.HANGING_ROOTS, 0), ERBlocks.GLOWWORM_THREADS_PLANT_REF));
@@ -502,6 +500,12 @@ public final class ERBlocks {
     private static BlockBehaviour.Properties grass() {
         return BlockBehaviour.Properties.of().mapColor(ERBlocks::neonMap).noCollission().instabreak().sound(SoundType.GRASS).replaceable()
                 .offsetType(BlockBehaviour.OffsetType.XYZ).pushReaction(PushReaction.DESTROY);
+    }
+
+    /** Tube worms (0.20.2; on walls too since 0.20.6): walked through, broken with a punch, wet underfoot. */
+    private static BlockBehaviour.Properties worms() {
+        return BlockBehaviour.Properties.of().mapColor(ERBlocks::neonMap).noCollission().instabreak().sound(SoundType.WET_GRASS)
+                .pushReaction(PushReaction.DESTROY);
     }
 
     /** A small plant you walk through and break with a punch. */

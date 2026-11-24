@@ -822,6 +822,18 @@ public final class Terrain {
         return network.biomeAt(li, x, y, z);
     }
 
+    /**
+     * Whether a block of the Blue Reaches lies in the great chasm of the Deep Blue Rift (0.20.8), between its floor and
+     * its ceiling, give or take {@link #CHASM_MARGIN} blocks; false in the tunnels, grottos and halls off it (which
+     * share its biome) and everywhere outside the Blue Reaches.
+     */
+    public boolean inRiftChasm(int x, int y, int z) {
+        return shape.layerAt(y) == BLUE && network.inRiftChasm(x, y, z, CHASM_MARGIN);
+    }
+
+    /** How far past the chasm's floor and ceiling over a column a block still counts as in it ({@link #inRiftChasm}). */
+    public static final double CHASM_MARGIN = 2.0;
+
     /** The Deep Gardens' biome for a band of the vent field: 0 Vent Domes (bottom), 1 Chimney Halls, 2 Seep Beds (top). */
     public static DeepBiome gardensBiome(int band) {
         return band == 0 ? DeepBiome.VENT_DOMES : (band == 1 ? DeepBiome.CHIMNEY_HALLS : DeepBiome.SEEP_BEDS);

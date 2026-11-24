@@ -564,16 +564,15 @@ final class GardensDress {
      * deep vent is lime, the colour of the ways down.
      */
     void ventColours(int[] pcol) {
-        for (Vent v : vents) {
-            int c;
-            if ((int) v.t[1] == 3) c = LIME;
-            else {
-                int bd = Math.max(0, Math.min(2, (int) v.t[2]));
-                double cn = n2(pcol, (v.cx + gv.ox) / 34.0, (v.cz + gv.oz) / 34.0);
-                c = cn < T1[bd] ? MAGENTA : (cn < T2[bd] ? VIOLET : LIGHTBLUE);
-            }
-            vcol[v.idx] = (byte) c;
-        }
+        for (Vent v : vents) vcol[v.idx] = (byte) ventColour(v, pcol, gv.ox, gv.oz);
+    }
+
+    /** One vent's colour (see {@link #ventColours}); {@code pcol} is the plan's field for it (seed + 1008). */
+    static int ventColour(Vent v, int[] pcol, int ox, int oz) {
+        if ((int) v.t[1] == 3) return LIME;
+        int bd = Math.max(0, Math.min(2, (int) v.t[2]));
+        double cn = n2(pcol, (v.cx + ox) / 34.0, (v.cz + oz) / 34.0);
+        return cn < T1[bd] ? MAGENTA : (cn < T2[bd] ? VIOLET : LIGHTBLUE);
     }
 
     /** Air of a vent's inside: its den, flue, cracks, doors, adits, hood and throat. */
@@ -1312,7 +1311,7 @@ final class GardensDress {
         int[][] pp = new int[5][];
         for (int i = 0; i < 5; i++) pp[i] = plan.perm(plan.seed + 5301 + i);
         out[0] = smallMushrooms();
-        out[1] = tubeWorms(pp[0]);
+        out[1] = tubeWorms();
         out[2] = reeds(pp[1]);
         out[3] = threads(heat, down, pp[2]);
         int[] g = grass(pp[3], pp[4]);
@@ -1398,68 +1397,136 @@ final class GardensDress {
         return -1;
     }
 
-    /** Tube worms within this many columns of a live vent's wall; the most a floor beside one takes. */
-    static final double WORM_R = 3.6, WORM_P = 0.6;
+    /** Tube worms within this many steps (through the open air, six ways) of a live vent's wall. */
+    static final int WORM_STEPS = 4;
+    /** A floor spot's share by its steps from the wall (1 to {@link #WORM_STEPS}): thick at the foot, thin further out. */
+    static final double[] WORM_FLOOR = {0.0, 1.0, 0.85, 0.55, 0.25};
+    /**
+     * Up a vent's side, as a share of its height over its sill: worms everywhere under the first, thinning out to none
+     * at the second (Taran, 2026-11-23: "mostly on the lower half of vents").
+     */
+    static final double WORM_HIGH = 0.38, WORM_TOP = 0.6;
+    /**
+     * The clumps (card pick: "Thick clumps, tallest in the middle"): one middle in each cell of a lattice this big
+     * (columns, rows), somewhere in it by a hash, each a ball of its own radius; worms grow where a ball meets the vent's
+     * side or the floor at its foot. A middle near the rock makes a big clump, one further off a small tuft.
+     */
+    static final double CLUMP_CELL = 6.0, CLUMP_CELL_Y = 5.0, CLUMP_R_MIN = 1.8, CLUMP_R_MAX = 3.0;
+    /** A clump's middle, as a share of its radius, is thick (eight or nine tubes to a block); its edge thin. */
+    static final double CLUMP_THICK = 0.62;
 
     /**
-     * Tube worms round each live vent: on the floor and the blackstone at its foot, and on its own ledges, most likely
-     * right against its wall and few by {@link #WORM_R}, in colonies (a fine noise), in the vent's colour. Returns blocks.
+     * Tube worms round each live vent (0.20.6; Taran: "They should also be in clusters and mostly on the lower half of
+     * vents"; card pick: "Lower half, on ledges and walls"), in the vent's colour: in clumps ({@link #clump}) on its
+     * ledges and its steep walls (the wall's worms, their tubes curving up; world.gen.GardensBlocks sets them on the
+     * wall beside them) on its lower half ({@link #WORM_HIGH}), and on the floor round its foot. Each spot is open air
+     * outside every vent with open air over it (for the plumes). Returns blocks.
      */
-    int tubeWorms(int[] pw) {
-        long hs = plan.seed + 5321;
-        int r = (int) Math.ceil(WORM_R), n = 0;
-        // the columns holding a live vent's wall, summed, so a column with none near is passed over at once
-        int[] sum = new int[(nx + 1) * (nz + 1)];
-        for (int i = 0; i < nx; i++)
-            for (int j = 0; j < nz; j++) {
-                int base = (i * nz + j) * SY, has = 0;
-                for (int y = 0; y < SY && has == 0; y++) {
-                    int vi = vid[base + y] - 1;
-                    if (vi >= 0 && GardensVentField.isWallPart(vpart[base + y]) && vents.get(vi).live()) has = 1;
+    int tubeWorms() {
+        long hs = plan.seed + 5321, hc = plan.seed + 5322;
+        int n = 0;
+        int[] four = {sx, -sx, SY, -SY};
+        for (Vent v : vents) {
+            if (!v.live()) continue;
+            int vv = v.idx + 1, ys = (int) v.t[6];
+            byte col = vcol[v.idx];
+            double htop = Math.max(1.0, v.t[26]);
+            int r = (int) v.t[33] + WORM_STEPS + 2;
+            int icx = ic(v.cx) + gv.ox - x0, icz = ic(v.cz) + gv.oz - z0;
+            int i0 = Math.max(1, icx - r), i1 = Math.min(nx - 2, icx + r), j0 = Math.max(1, icz - r), j1 = Math.min(nz - 2, icz + r);
+            int ya = Math.max(SEAL + 2, Math.min(ys, (int) v.t[7]) - 3), yb = Math.min(SY - 3, (int) Math.ceil(ys + WORM_TOP * htop) + 1);
+            if (i0 > i1 || j0 > j1 || ya > yb) continue;
+            int bz = j1 - j0 + 1, by = yb - ya + 1;
+            byte[] steps = new byte[(i1 - i0 + 1) * bz * by];
+            IntList cur = new IntList(), nxt = new IntList();
+            // the open air touching the vent's own wall is a step from it; then on out through the open air
+            for (int i = i0; i <= i1; i++)
+                for (int j = j0; j <= j1; j++)
+                    for (int y = ya; y <= yb; y++) {
+                        int b = (i * nz + j) * SY + y;
+                        if (vid[b] != vv || !GardensVentField.isWallPart(vpart[b]) || !GardensField.holds(mat[b])) continue;
+                        for (int e = 0; e < 6; e++) {
+                            int ii = i + (e == 0 ? 1 : e == 1 ? -1 : 0), jj = j + (e == 2 ? 1 : e == 3 ? -1 : 0), yy = y + (e == 4 ? 1 : e == 5 ? -1 : 0);
+                            if (ii < i0 || ii > i1 || jj < j0 || jj > j1 || yy < ya || yy > yb) continue;
+                            int l = ((ii - i0) * bz + (jj - j0)) * by + (yy - ya);
+                            if (steps[l] != 0 || !outsideAir((ii * nz + jj) * SY + yy)) continue;
+                            steps[l] = 1;
+                            cur.add(l);
+                        }
+                    }
+            for (int d = 2; d <= WORM_STEPS && cur.n > 0; d++) {
+                nxt.n = 0;
+                for (int c = 0; c < cur.n; c++) {
+                    int l = cur.a[c], y = l % by + ya, q = l / by, jj0 = q % bz + j0, ii0 = q / bz + i0;
+                    for (int e = 0; e < 6; e++) {
+                        int ii = ii0 + (e == 0 ? 1 : e == 1 ? -1 : 0), jj = jj0 + (e == 2 ? 1 : e == 3 ? -1 : 0), yy = y + (e == 4 ? 1 : e == 5 ? -1 : 0);
+                        if (ii < i0 || ii > i1 || jj < j0 || jj > j1 || yy < ya || yy > yb) continue;
+                        int o = ((ii - i0) * bz + (jj - j0)) * by + (yy - ya);
+                        if (steps[o] != 0 || !outsideAir((ii * nz + jj) * SY + yy)) continue;
+                        steps[o] = (byte) d;
+                        nxt.add(o);
+                    }
                 }
-                sum[(i + 1) * (nz + 1) + j + 1] = has + sum[i * (nz + 1) + j + 1] + sum[(i + 1) * (nz + 1) + j] - sum[i * (nz + 1) + j];
+                IntList t = cur;
+                cur = nxt;
+                nxt = t;
             }
-        for (int i = r; i < nx - r; i++)
-            for (int j = r; j < nz - r; j++) {
-                if (sum[(i + r + 1) * (nz + 1) + j + r + 1] - sum[(i - r) * (nz + 1) + j + r + 1] - sum[(i + r + 1) * (nz + 1) + j - r]
-                        + sum[(i - r) * (nz + 1) + j - r] == 0) continue;
-                int q = i * nz + j, wx = x0 + i, wz = z0 + j, base = q * SY;
-                double colony = -1;
-                for (int y = SEAL + 2; y < SY - 3; y++) {
-                    int b = base + y;
-                    byte m = mat[b];
-                    // the floor round a vent, or a ledge of its own wall (blackstone with open air over it)
-                    boolean ledge = (m == LIVE || m == VLIVE) && GardensVentField.isWallPart(vpart[b]) && mat[b + 1] == AIR && vpart[b + 1] == 0;
-                    if (!ledge && !plantFloor(b)) continue;
-                    if (mat[b + 1] != AIR) continue;
-                    int vent = -1;
-                    double dBest = ledge ? 0.0 : 99.0;
-                    if (ledge) vent = vid[b] - 1;
-                    else
-                        for (int a = -r; a <= r; a++)
-                            for (int c = -r; c <= r; c++) {
-                                double d = Math.sqrt(a * a + c * c);
-                                if (d > WORM_R || d >= dBest) continue;
-                                int cb = ((i + a) * nz + j + c) * SY;
-                                for (int yy = y - 1; yy <= y + 2; yy++) {
-                                    int o = cb + yy;
-                                    if (!GardensVentField.isWallPart(vpart[o]) || open(mat[o])) continue;
-                                    int vi = vid[o] - 1;
-                                    if (vi < 0 || !vents.get(vi).live()) continue;
-                                    dBest = d;
-                                    vent = vi;
-                                    break;
-                                }
+            for (int i = i0; i <= i1; i++)
+                for (int j = j0; j <= j1; j++)
+                    for (int y = Math.max(ya, SEAL + 3); y <= yb; y++) {
+                        int d = steps[((i - i0) * bz + (j - j0)) * by + (y - ya)];
+                        if (d == 0) continue;
+                        int b = (i * nz + j) * SY + y;
+                        // room for the plumes over it, and never on another plant (worms on worms)
+                        if (mat[b] != AIR || mat[b + 1] != AIR || vpart[b + 1] != 0 || GardensField.plant(mat[b - 1])) continue;
+                        double share = 1.0 - ramp((y - ys) / htop, WORM_HIGH, WORM_TOP);
+                        if (share <= 0.0) continue;
+                        boolean ledge = vid[b - 1] == vv && GardensVentField.isWallPart(vpart[b - 1]) && GardensField.holds(mat[b - 1]);
+                        if (!ledge) {
+                            if (GardensField.holds(mat[b - 1])) {
+                                // the floor round the foot: whole rock outside the vents
+                                if (!plantFloor(b - 1)) continue;
+                                share *= WORM_FLOOR[d];
+                            } else {
+                                // the steep wall: a block of the vent's own beside it to hold to
+                                boolean wall = false;
+                                for (int o : four) wall |= vid[b + o] == vv && GardensVentField.isWallPart(vpart[b + o]) && GardensField.holds(mat[b + o]);
+                                if (!wall) continue;
                             }
-                    if (vent < 0 || !vents.get(vent).live()) continue;
-                    if (colony < -0.5) colony = ramp(n2(pw, wx / 2.6, wz / 2.6), -0.25, 0.3);
-                    double pr = (ledge ? 0.45 : WORM_P * Math.max(0.0, 1.0 - (dBest - 1.0) / (WORM_R - 0.6))) * colony;
-                    if (Hashing.unit(Hashing.mix(hs, wx, y, wz)) >= pr) continue;
-                    plant(b + 1, WORM, vcol[vent], false);
-                    n++;
-                }
-            }
+                        }
+                        int wx = x0 + i, wz = z0 + j;
+                        double f = clump(hc, wx, y, wz);
+                        if (f >= 1.0) continue;
+                        double pr = share * (f < 0.55 ? 0.95 : 0.95 - 0.55 * (f - 0.55) / 0.45);
+                        if (Hashing.unit(Hashing.mix(hs, wx, y, wz)) >= pr) continue;
+                        plant(b, WORM, col, f < CLUMP_THICK);
+                        n++;
+                    }
+        }
         return n;
+    }
+
+    /** Open air outside every vent (not its throat or bowl). */
+    private boolean outsideAir(int b) { return mat[b] == AIR && vpart[b] == 0; }
+
+    /**
+     * How deep block (x, y, z) lies in the nearest tube worm clump: its distance from the clump's middle over the clump's
+     * radius, the least of the clumps of the 27 cells round it (1 or more: in none). World hashes only, so tiles agree.
+     */
+    static double clump(long hc, int x, int y, int z) {
+        int cx = (int) Math.floor(x / CLUMP_CELL), cy = (int) Math.floor(y / CLUMP_CELL_Y), cz = (int) Math.floor(z / CLUMP_CELL);
+        double best = 9.0, px = x + 0.5, py = y + 0.5, pz = z + 0.5;
+        for (int a = -1; a <= 1; a++)
+            for (int e = -1; e <= 1; e++)
+                for (int c = -1; c <= 1; c++) {
+                    long h = Hashing.mix(hc, cx + a, cy + e, cz + c);
+                    double mx = (cx + a + Hashing.unit(Hashing.mix(h, 1, 0, 0))) * CLUMP_CELL - px;
+                    double my = (cy + e + Hashing.unit(Hashing.mix(h, 2, 0, 0))) * CLUMP_CELL_Y - py;
+                    double mz = (cz + c + Hashing.unit(Hashing.mix(h, 3, 0, 0))) * CLUMP_CELL - pz;
+                    double rc = CLUMP_R_MIN + (CLUMP_R_MAX - CLUMP_R_MIN) * Hashing.unit(Hashing.mix(h, 4, 0, 0));
+                    best = Math.min(best, Math.sqrt(mx * mx + my * my + mz * mz) / rc);
+                }
+        return best;
     }
 
     /**

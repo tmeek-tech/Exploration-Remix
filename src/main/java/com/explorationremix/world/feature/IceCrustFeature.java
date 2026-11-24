@@ -14,7 +14,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
@@ -22,10 +21,10 @@ import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfigur
 /**
  * Ice crusting the rock round a spot of the deep Frost Fern Grotto (0.20.1, Taran: "the deeper caves more icy"): in an
  * ellipsoid of its own size each time (solid in the middle, ragged at the rim), every block of rock of the kinds given
- * that lies bare to the air beside it or under it becomes ice, glow ice where {@link Palette#glowingIce} runs its veins
- * (more of them the deeper, {@link Palette#grottoGlow}), packed ice with specks of blue ice elsewhere. The tops of floors
- * and ledges are left to the grotto's floors ({@link Palette#frostGrotto}), where its frost moss patches grow, so the
- * crust ices walls and the undersides of ledges and ceilings: patches of ice over the rock, glowing in veins deep down.
+ * that lies bare to the air beside it or under it becomes packed ice with specks of blue ice
+ * ({@link Palette#grottoIceBlock}; 0.20.1's glowing veins left with the glow ice in 0.20.7). The tops of floors and ledges
+ * are left to the grotto's floors ({@link Palette#frostGrotto}), where its frost moss patches grow, so the crust ices
+ * walls and the undersides of ledges and ceilings: patches of ice over the rock.
  */
 public final class IceCrustFeature extends Feature<IceCrustFeature.Config> {
     public record Config(int radius, int height, HolderSet<Block> on) implements FeatureConfiguration {
@@ -53,7 +52,6 @@ public final class IceCrustFeature extends Feature<IceCrustFeature.Config> {
         boolean any = false;
         for (int dx = -c.radius(); dx <= c.radius(); dx++) for (int dz = -c.radius(); dz <= c.radius(); dz++) {
             int x = origin.getX() + dx, z = origin.getZ() + dz;
-            int ground = Integer.MIN_VALUE;
             for (int dy = -c.height(); dy <= c.height(); dy++) {
                 double q = (dx * dx + dz * dz) / (rx * rx) + dy * dy / (ry * ry);
                 if (q > 1 || q > 0.5 && random.nextFloat() < (q - 0.5) / 0.5 * 0.8) continue;
@@ -62,9 +60,7 @@ public final class IceCrustFeature extends Feature<IceCrustFeature.Config> {
                 // the top of a floor or a ledge stays the floor's
                 if (level.getBlockState(side.setWithOffset(pos, Direction.UP)).isAir()) continue;
                 if (!bare(level, pos, side)) continue;
-                if (ground == Integer.MIN_VALUE) ground = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
-                int y = pos.getY();
-                level.setBlock(pos, DeepMaterials.state(t.palette.grottoIceBlock(x, y, z, t.palette.grottoGlow(x, y, z, ground))), 2);
+                level.setBlock(pos, DeepMaterials.state(t.palette.grottoIceBlock(x, pos.getY(), z)), 2);
                 any = true;
             }
         }

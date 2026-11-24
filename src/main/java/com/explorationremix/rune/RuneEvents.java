@@ -7,7 +7,7 @@ import com.explorationremix.rune.cast.CastService;
 import com.explorationremix.rune.cast.Grapples;
 import com.explorationremix.rune.cast.Statuses;
 import com.explorationremix.rune.engine.Host;
-import com.explorationremix.rune.menu.RuneEditorMenu;
+import com.explorationremix.rune.menu.RuneTableMenu;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
@@ -17,6 +17,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.core.NonNullList;
 import net.minecraft.world.Container;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.GrindstoneMenu;
@@ -67,6 +69,24 @@ public final class RuneEvents {
         if (RuneGear.host(s) == Host.CROSSBOW && CrossbowItem.isCharged(s) && RuneGear.hasRunes(s)) CastService.crossbowAboutToFire(sp, e.getHand());
     }
 
+    // ------------------------------------------------------------------------------------------------ the enchanting table
+
+    /**
+     * An enchanting table used with a weapon in the main hand opens its rune sockets instead (RuneTableMenu); from
+     * there the table's own enchanting is a click away. Anything else in hand enchants as ever. Both sides answer, so
+     * the player's game neither draws a bow nor waits on the table's own screen. In combat it opens with the sockets
+     * held shut until the combat is over.
+     */
+    @SubscribeEvent
+    public static void rightClickBlock(PlayerInteractEvent.RightClickBlock e) {
+        Player p = e.getEntity();
+        if (e.getHand() != InteractionHand.MAIN_HAND || p instanceof FakePlayer || p.isSpectator() || p.isSecondaryUseActive()) return;
+        if (!RuneGear.isGear(p.getMainHandItem()) || !RuneTableMenu.isTable(e.getLevel().getBlockState(e.getPos()))) return;
+        e.setCanceled(true);
+        e.setCancellationResult(InteractionResult.sidedSuccess(e.getLevel().isClientSide()));
+        if (p instanceof ServerPlayer sp) RuneTableMenu.open(sp, e.getPos());
+    }
+
     /**
      * A bow's or crossbow's shot came into the world. An arrow the runes shaped that comes back (with its chunk, or
      * through a portal or a teleport to another world) comes back plain, and a copy Fan made doesn't come back.
@@ -106,14 +126,14 @@ public final class RuneEvents {
         }
     }
 
-    // ------------------------------------------------------------------------------------------------ combat, and the rune screen
+    // ------------------------------------------------------------------------------------------------ combat, and the rune table
 
-    /** Hurt: in combat for a few seconds, and the rune screen closes. */
+    /** Hurt: in combat for a few seconds, and the rune table lets go. */
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void hurt(LivingHurtEvent e) {
         if (e.isCanceled() || !(e.getEntity() instanceof ServerPlayer p) || e.getAmount() <= 0.0F) return;
         Combat.hurt(p);
-        if (p.containerMenu instanceof RuneEditorMenu) p.closeContainer();
+        if (p.containerMenu instanceof RuneTableMenu) p.closeContainer();
     }
 
     /** A held creature (stunned, rooted) can't strike. */
@@ -176,20 +196,20 @@ public final class RuneEvents {
         if (e.getEntity() instanceof ServerPlayer p) RunDepth.sync(p);
     }
 
-    /** Leaving: the rune screen closes first (its gear goes back before the player is saved), then the rest is let go. */
+    /** Leaving: the rune table closes first, then the rest is let go. */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void loggedOut(PlayerEvent.PlayerLoggedOutEvent e) {
         if (!(e.getEntity() instanceof ServerPlayer p)) return;
-        if (p.containerMenu instanceof RuneEditorMenu) p.closeContainer();
+        if (p.containerMenu instanceof RuneTableMenu) p.closeContainer();
         CastService.forget(p);
         // the combat lock is kept: it runs on the level's clock, so leaving and rejoining doesn't skip it
     }
 
-    /** The server is stopping: rune screens close first, so what is on a cursor is back in the inventory to be saved. */
+    /** The server is stopping: rune tables close first. */
     @SubscribeEvent
     public static void stopping(ServerStoppingEvent e) {
         for (ServerPlayer p : e.getServer().getPlayerList().getPlayers()) {
-            if (p.containerMenu instanceof RuneEditorMenu) p.closeContainer();
+            if (p.containerMenu instanceof RuneTableMenu) p.closeContainer();
         }
     }
 

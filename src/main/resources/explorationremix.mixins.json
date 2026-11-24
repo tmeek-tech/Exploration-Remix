@@ -47,7 +47,8 @@
     "client.ItemInHandLayerMixin",
     "client.HumanoidModelMixin",
     "client.MinecraftAttackMixin",
-    "client.GuiAttackIndicatorMixin"
+    "client.GuiAttackIndicatorMixin",
+    "client.CameraMixin"
   ],
   "injectors": {
     "defaultRequire": 1

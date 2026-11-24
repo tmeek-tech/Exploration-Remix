@@ -34,6 +34,15 @@ public final class Join {
     static final double HOLE_BETA = 0.45, HOLE_RAMP = 0.25;
     /** The Galleries keep 4 rows of rock under their top where beta is under this. */
     static final double CLOSED_BETA = 0.3;
+    /**
+     * How far inside {@link WastelandField#crDry} a crater's seal-free ground ends ({@link #seal}; 0.20.4): the rows
+     * between are sealed as anywhere else, so a crater's air under the lava table and the nearest lava pool's dip (none
+     * comes nearer than crDry) never meet. With none the two met at crDry: in GalleriesFieldTest's slow box of seed 12345
+     * a block of the Wasteland's lava at (3917, -631, -1914) lay beside the air of a stray pocket under a crater's floor,
+     * round an evenly spread way down at (3928.5, -1869) (those stand where beta is low, so lava pools lie all round them).
+     * Under CR_DRY_GAP: the crater's floor rises past W + 2 at crDry - CR_DRY_GAP, so the rows sealed lie under it.
+     */
+    static final double SEAL_GAP = 3;
 
     /** What the join needs from the layer under the Wasteland (the Galleries' field). */
     public interface Lower {
@@ -107,11 +116,11 @@ public final class Join {
      * space under the lava table is air, no lava pool comes near, and the Galleries' own rock (their first rock row at
      * T - 6 or lower outside their discs and their ramps' head room) keeps the layers apart. Further out a crater's floor lies over the table (crDry is where it
      * rises past W + 2, plus a gap), the fluid under the table is lava again, and the seal holds as anywhere else, so no
-     * interpolation opens a block of lava there.
+     * interpolation opens a block of lava there; it holds from {@link #SEAL_GAP} inside crDry on.
      */
     double seal(int x, int y, int z) {
         WastelandField.Col c = upper.column(x, z);
-        if (c.crater > 0 && c.ring < upper.crDry) return -Terrain.SOLID;
+        if (c.crater > 0 && c.ring < upper.crDry - SEAL_GAP) return -Terrain.SOLID;
         double b = c.beta, s = -Terrain.SOLID;
         if (y >= wBot && y <= W + 1 && b < HOLE_BETA && c.lavaDip <= 0) s = Math.max(s, 1 + (W + 1 - y));
         if (y >= wBot && y <= wBot + 3 && b < LAVA_BETA) s = Math.max(s, 1 + (wBot + 3 - y));

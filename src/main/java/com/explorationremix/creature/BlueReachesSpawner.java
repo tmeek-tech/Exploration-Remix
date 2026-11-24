@@ -77,6 +77,12 @@ public final class BlueReachesSpawner {
         return BlueSpawnRules.place(level.getBiome(pos).unwrapKey().map(k -> k.location().toString()).orElse(""));
     }
 
+    /** Whether a block of the Deep Blue Rift lies in its great chasm (0.20.8), where the swarms are fewer. */
+    static boolean inChasm(Place place, BlockPos pos) {
+        Terrain t = DeepWorld.installed() ? DeepWorld.terrain() : null;
+        return place == Place.RIFT && t != null && t.inRiftChasm(pos.getX(), pos.getY(), pos.getZ());
+    }
+
     private static void lookRound(ServerLevel level, ServerPlayer p) {
         int top = top(), bottom = bottom();
         if (!level.isLoaded(p.blockPosition())) return;
@@ -97,12 +103,14 @@ public final class BlueReachesSpawner {
             else SKEIN_DUE.add(id);
         } else if (skeins > 0) SKEIN_DUE.remove(id);
         int swarms = countNear(level, FireflySwarm.class, p.position(), BlueSpawnRules.SWARM_RADIUS);
-        boolean short_ = swarms < BlueSpawnRules.swarmsKept(place);
+        // a player in the rift's great chasm is kept fewer swarms than one in the tunnels off it (0.20.8)
+        boolean chasm = inChasm(place, p.blockPosition());
+        boolean short_ = swarms < BlueSpawnRules.swarmsKept(place, chasm);
         if (short_) SWARM_LOOKS++;
-        if (BlueSpawnRules.wantSwarm(place, swarms, mobSpawning && server.isSpawningAnimals(), SWARM_DUE.contains(id), level.random.nextDouble())) {
+        if (BlueSpawnRules.wantSwarm(place, chasm, swarms, mobSpawning && server.isSpawningAnimals(), SWARM_DUE.contains(id), level.random.nextDouble())) {
             if (!SWARM_DUE.contains(id)) SWARM_ROLLS++;
             // due until a spot out of every player's sight turns up, as for a Skein
-            if (spawnSwarm(level, p, top, bottom)) { SWARM_DUE.remove(id); SWARM_IN++; }
+            if (spawnSwarm(level, p, chasm, top, bottom)) { SWARM_DUE.remove(id); SWARM_IN++; }
             else SWARM_DUE.add(id);
         } else if (!short_) SWARM_DUE.remove(id);
     }
@@ -182,10 +190,13 @@ public final class BlueReachesSpawner {
      */
     public static long SWARM_LOOKS, SWARM_ROLLS, SWARM_IN;
 
-    /** A swarm comes out out of every player's sight, kept for good, or not this time (false). */
-    private static boolean spawnSwarm(ServerLevel level, ServerPlayer p, int top, int bottom) {
+    /**
+     * A swarm comes out out of every player's sight, kept for good, or not this time (false); {@code chasm}, for a
+     * player standing in the rift's great chasm (only they are brought swarms out there).
+     */
+    private static boolean spawnSwarm(ServerLevel level, ServerPlayer p, boolean chasm, int top, int bottom) {
         for (int i = 0; i < SWARM_TRIES; i++) {
-            Vec3 spot = swarmSpot(level, p, top, bottom);
+            Vec3 spot = swarmSpot(level, p, chasm, top, bottom);
             if (spot != null && !seenByAnyone(level, spot))
                 return FireflySwarm.spawn(level, spot, BlueSpawnRules.swarmSize(level.random.nextDouble()), true) != null;
         }
@@ -194,7 +205,7 @@ public final class BlueReachesSpawner {
 
     /** A point of open cave air on the ring round {@code p}, with rock not far under it, where a swarm may come out. */
     @Nullable
-    private static Vec3 swarmSpot(ServerLevel level, ServerPlayer p, int top, int bottom) {
+    private static Vec3 swarmSpot(ServerLevel level, ServerPlayer p, boolean chasm, int top, int bottom) {
         Vec3 c = ringPoint(level, p, BlueSpawnRules.SWARM_FAR, top, bottom);
         BlockPos at = BlockPos.containing(c);
         if (!level.hasChunksAt(at.getX() - 2, at.getZ() - 2, at.getX() + 2, at.getZ() + 2)) return null;
@@ -202,7 +213,8 @@ public final class BlueReachesSpawner {
         Vec3 mid = Vec3.atCenterOf(at);
         // it is counted where its box stands, half a box under its centre
         double fromPlayer = mid.subtract(0.0, FireflySwarm.HALF, 0.0).distanceTo(p.position());
-        return BlueSpawnRules.swarmSpot(placeAt(level, at), mid.y, top, bottom, nearestPlayer(level, mid), fromPlayer) ? mid : null;
+        Place place = placeAt(level, at);
+        return BlueSpawnRules.swarmSpot(place, inChasm(place, at), chasm, mid.y, top, bottom, nearestPlayer(level, mid), fromPlayer) ? mid : null;
     }
 
     // ------------------------------------------------------------------------------------------------ shared

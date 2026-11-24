@@ -27,7 +27,9 @@ import javax.annotation.Nullable;
  * slash in front), Barrier (a wall of rune glass across the aim) and Reel (yanks a creature toward the caster, or the
  * caster to a wall). Cast from the gear, a Burst goes off on the block aimed at when it is close (the ground at your
  * feet: a blast jump), else round the caster, and a Barrier stands a few blocks ahead; let go by a carrier, both happen
- * where it was. A blast of your own never hurts you but does throw you.
+ * where it was. A blast of your own never hurts you but does throw you. In their second phase a Burst's aftershock
+ * follows and a Cleave's wave flies on (PhaseTwo), a Barrier is a bulwark that shoves aside what stands where it
+ * rises, and Reel reaches further and pulls twice before you land.
  */
 final class Instants {
     /** How close the block aimed at must be for a Burst cast from the gear to go off on it. */
@@ -57,10 +59,20 @@ final class Instants {
     // ------------------------------------------------------------------------------------------------ Burst
 
     private static Origin burst(CastContext ctx, Act a, Vec3 c, Origin o) {
-        ServerLevel l = ctx.level;
         int wide = a.count(RuneId.WIDE), heavy = a.count(RuneId.HEAVY);
         double r = 2.5 + wide;
-        float base = FlyingRune.damage(ctx, a), push = 0.7F + 0.3F * heavy;
+        float base = FlyingRune.damage(ctx, a);
+        blast(ctx, a, c, r, base, 0.7F + 0.3F * heavy, true);
+        if (a.empowered && a.slot != PhaseTwo.AFTERSHOCK) PhaseTwo.aftershock(ctx, a, c, r, base);
+        return new Origin(c, o.dir(), o.hit(), o.wall());
+    }
+
+    /**
+     * A blast of radius {@code r} round {@code c}: {@code base} damage at its heart, less at its edge, the push, its
+     * element on the world round it and on the plants, and (for {@code throwSelf}) the throw of the caster's own blast.
+     */
+    static void blast(CastContext ctx, Act a, Vec3 c, double r, float base, float push, boolean throwSelf) {
+        ServerLevel l = ctx.level;
         for (RuneHits.Touch t : RuneHits.touched(ctx, new AABB(c, c).inflate(r), c)) {
             double d = Math.sqrt(t.distSqr());
             if (d > r) continue;
@@ -70,11 +82,10 @@ final class Instants {
             float falloff = (float) (1.0 - 0.4 * Math.min(1.0, d / r));
             RuneHits.strike(ctx, a, t.body(), t.box(), m, m.subtract(c), base * falloff, push, null, c);
         }
-        RuneFx.burst(l, c, r, a.rune, a.element);
+        RuneFx.burst(l, c, r, a.rune == RuneId.ORB ? RuneId.ORB : RuneId.BURST, a.element);
         if (a.element != Element.NONE) RuneHits.world(ctx, a.element, c, r);
         RunePlants.area(ctx, c, r);
-        blastSelf(ctx, c, r, heavy);
-        return new Origin(c, o.dir(), o.hit(), o.wall());
+        if (throwSelf) blastSelf(ctx, c, r, a.count(RuneId.HEAVY));
     }
 
     /**
@@ -142,6 +153,7 @@ final class Instants {
         RuneFx.cleave(l, from, flat, range, Math.acos(cosHalf), a.rune, a.element);
         if (a.element != Element.NONE) RuneHits.world(ctx, a.element, from.add(flat.scale(range * 0.5)), range * 0.5);
         RunePlants.arc(ctx, from, flat, range, cosHalf);
+        if (a.empowered && a.slot != PhaseTwo.WAVE) PhaseTwo.wave(ctx, a, from, flat, 1.4 + 0.5 * wide, dmg * PhaseTwo.WAVE_DAMAGE);
         return new Origin(from.add(flat.scale(1.5)), flat, first != null ? first : o.hit());
     }
 
@@ -150,7 +162,9 @@ final class Instants {
     private static Origin barrier(CastContext ctx, Act a, Vec3 at, Vec3 dir, boolean root, Origin o) {
         ServerLevel l = ctx.level;
         int wide = a.count(RuneId.WIDE);
-        int width = 3 + 2 * wide, height = 2 + wide;
+        // the bulwark (second phase): bigger, longer, and it shoves aside what stands where it rises
+        int width = (a.empowered ? 5 : 3) + 2 * wide, height = (a.empowered ? 3 : 2) + wide;
+        int life = a.empowered ? 2 * TempBlock.Kind.BARRIER.life : TempBlock.Kind.BARRIER.life;
         Vec3 flat = Origin.flat(dir);
         if (flat == Vec3.ZERO) flat = Origin.flat(ctx.owner.getLookAngle());
         if (flat == Vec3.ZERO) flat = new Vec3(0, 0, 1);
@@ -165,18 +179,48 @@ final class Instants {
             baseY = Mth.floor(at.y - (height - 1) * 0.5);
         }
         int made = 0;
+        java.util.List<BlockPos> blocked = new java.util.ArrayList<>();
         for (int i = 0; i < width; i++) {
             double off = i - (width - 1) * 0.5;
             Vec3 p = centre.add(right.scale(off));
             for (int h = 0; h < height; h++) {
                 // never round a creature (or the caster), nor over a frame or painting: TempBlocks.place
-                if (TempBlocks.place(l, BlockPos.containing(p.x, baseY + h, p.z), TempBlock.Kind.BARRIER, ctx.owner)) made++;
+                BlockPos bp = BlockPos.containing(p.x, baseY + h, p.z);
+                if (TempBlocks.place(l, bp, BARRIER_STATE.get(), ctx.owner, life)) made++;
+                else if (a.empowered) blocked.add(bp);
             }
         }
         Vec3 mid = new Vec3(centre.x, baseY + height * 0.5, centre.z);
+        if (!blocked.isEmpty()) shove(ctx, blocked, flat, mid, life);
         if (made > 0) RuneFx.barrier(l, mid, right, width, height, a.element);
         else Executor.fizzle(ctx, mid);
         return new Origin(mid, flat, o.hit());
+    }
+
+    private static final java.util.function.Supplier<net.minecraft.world.level.block.state.BlockState> BARRIER_STATE =
+            () -> com.explorationremix.rune.RuneRegistry.BARRIER.get().defaultBlockState();
+
+    /**
+     * The bulwark rises where creatures stand: they are shoved out to the side of the wall they stand on, and the wall
+     * fills in behind them a moment later (wherever they have gone from).
+     */
+    private static void shove(CastContext ctx, java.util.List<BlockPos> blocked, Vec3 flat, Vec3 mid, int life) {
+        ServerLevel l = ctx.level;
+        java.util.Set<LivingEntity> pushed = new java.util.HashSet<>();
+        for (BlockPos bp : blocked) {
+            for (RuneHits.Touch t : RuneHits.touched(ctx, new AABB(bp), Vec3.atCenterOf(bp))) {
+                if (!pushed.add(t.body())) continue;
+                Vec3 side = t.body().position().subtract(mid);
+                Vec3 way = side.dot(flat) >= 0 ? flat : flat.scale(-1);
+                RuneHits.push(t.body(), way, 0.9F);
+            }
+        }
+        if (pushed.isEmpty()) return;
+        RuneFx.play(l, mid, SoundEvents.AMETHYST_BLOCK_RESONATE, 0.8F, 0.6F);
+        CastService.later(ctx.owner, 4, () -> {
+            if (Executor.gone(ctx)) return;
+            for (BlockPos bp : blocked) TempBlocks.place(l, bp, BARRIER_STATE.get(), ctx.owner, life);
+        });
     }
 
     // ------------------------------------------------------------------------------------------------ Reel
@@ -188,8 +232,10 @@ final class Instants {
      */
     private static Origin reel(CastContext ctx, Act a, Origin o, Vec3 dir, boolean root) {
         int swift = a.count(RuneId.SWIFT);
+        // the long line (second phase): half as far again, and two pulls before landing
+        double reach = a.empowered ? 1.5 : 1.0;
         if (root) {
-            double range = REEL_REACH + 2 * swift;
+            double range = REEL_REACH * reach + 2 * swift;
             BlockHitResult bh = FlyingRune.clip(ctx.level, o.pos(), o.pos().add(dir.scale(range)), ctx.owner);
             boolean wall = bh.getType() != HitResult.Type.MISS;
             LivingEntity t = aimedCreature(ctx, o.pos(), dir, wall ? Math.min(range, bh.getLocation().distanceTo(o.pos()) + 0.5) : range);
@@ -235,7 +281,8 @@ final class Instants {
         double dist = at.distanceTo(chest);
         Vec3 back = dist < 1.0E-6 ? Vec3.ZERO : chest.subtract(at).scale(0.3 / dist);
         int colour = RuneFx.colour(a.rune, a.element);
-        if (!RuneHits.clear(ctx.level, chest, at.add(back), p) || !Grapples.start(p, at, swift, colour)) {
+        double range = GRAPPLE_RANGE * (a.empowered ? 1.5 : 1.0);
+        if (!RuneHits.clear(ctx.level, chest, at.add(back), p) || !Grapples.start(p, at, swift, colour, range, a.empowered ? 2 : 1)) {
             Executor.fizzle(ctx, at);
             return o;
         }

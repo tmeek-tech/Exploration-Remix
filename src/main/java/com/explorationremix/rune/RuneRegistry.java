@@ -7,7 +7,7 @@ import com.explorationremix.rune.effect.RuneField;
 import com.explorationremix.rune.effect.RuneMote;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.item.RuneItem;
-import com.explorationremix.rune.menu.RuneEditorMenu;
+import com.explorationremix.rune.menu.RuneTableMenu;
 import com.explorationremix.rune.world.TempBlock;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -37,7 +37,7 @@ import java.util.Map;
 
 /**
  * Everything the runes add to the game: one item per rune, the blocks runes make for a while (Barrier glass, Frost's
- * ice, Glow's light), the flying and lingering runes and Siphon's motes, the rune screen, and the creative tab. Kept
+ * ice, Glow's light, a Lantern's), the flying and lingering runes and Siphon's motes, the rune table, and the creative tab. Kept
  * apart from the rest of the mod's registries so the rune code stays in its own packages.
  */
 public final class RuneRegistry {
@@ -100,6 +100,14 @@ public final class RuneRegistry {
             BlockBehaviour.Properties.of().mapColor(MapColor.METAL).replaceable().noCollission().instabreak().noLootTable().lightLevel(s -> 3)
                     .sound(SoundType.GRASS).pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, t) -> false)));
 
+    /**
+     * The Lantern passive's light, in the air where its player's head is while the weapon is in hand: unseen, walked
+     * through, never caught by the crosshair, replaced by anything placed there; it drops nothing.
+     */
+    public static final RegistryObject<Block> LANTERN = BLOCKS.register("rune_lantern", () -> new TempBlock(TempBlock.Kind.LANTERN,
+            BlockBehaviour.Properties.of().replaceable().noCollission().noOcclusion().instabreak().noLootTable().lightLevel(s -> 12)
+                    .sound(SoundType.AMETHYST_CLUSTER).pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, t) -> false)));
+
     // ------------------------------------------------------------------------------------------------ entities
 
     /** A flying rune (Spark, Shard, Orb, Glow). Never saved; sent every tick so it flies smoothly. */
@@ -117,10 +125,11 @@ public final class RuneRegistry {
             EntityType.Builder.<RuneMote>of(RuneMote::new, MobCategory.MISC).sized(0.25F, 0.25F).clientTrackingRange(6).updateInterval(1)
                     .fireImmune().noSave().noSummon().build(MOD + ":rune_mote"));
 
-    // ------------------------------------------------------------------------------------------------ the rune screen
+    // ------------------------------------------------------------------------------------------------ the rune table
 
-    public static final RegistryObject<MenuType<RuneEditorMenu>> EDITOR = MENUS.register("rune_editor",
-            () -> IForgeMenuType.create(RuneEditorMenu::client));
+    /** An enchanting table opened with a weapon in hand: its three rune sockets (RuneTableMenu). */
+    public static final RegistryObject<MenuType<RuneTableMenu>> TABLE = MENUS.register("rune_table",
+            () -> IForgeMenuType.create(RuneTableMenu::client));
 
     // ------------------------------------------------------------------------------------------------ creative tab
 

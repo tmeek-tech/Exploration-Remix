@@ -159,14 +159,17 @@ class ConfigKeysTest {
     }
 
     /**
-     * The Upper Caves' crickets (0.20.9) default to Taran's picks: the chorus in every upper cave (card: "Every upper
-     * cave", the recommended answer until one is given) and the crickets near you that go quiet as you walk up (card:
-     * "Yes, it goes quiet"). Each setting takes only its own values.
+     * The Upper Caves' crickets default to Taran's picks: the chorus only in the mod's own upper caves, where the birds
+     * were (card: "Only where the birds were", 0.21.1), and the crickets near you that go quiet as you walk up (card: "Yes,
+     * it goes quiet"). Each setting takes only its own values. The first moved to a new key with its new default, so a
+     * file written by 0.20.9, whose default was every upper cave, takes it too: the old key is gone from the spec, and
+     * Forge drops a key the spec does not hold.
      */
     @Test
     void theCricketsAreThePicks() {
-        ForgeConfigSpec.ValueSpec where = spec(CLIENT, "sounds.crickets");
-        assertEquals(ERClientConfig.Crickets.EVERY_UPPER_CAVE, where.getDefault());
+        ForgeConfigSpec.ValueSpec where = spec(CLIENT, "sounds.cricketCaves");
+        assertEquals(ERClientConfig.Crickets.MOD_CAVES_ONLY, where.getDefault());
+        assertFalse(CLIENT.contains("sounds.crickets"), "0.20.9's key, whose saved default was every upper cave");
         for (ERClientConfig.Crickets c : ERClientConfig.Crickets.values()) assertTrue(where.test(c), c + " refused");
         assertFalse(where.test("BIRDS"));
         ForgeConfigSpec.ValueSpec near = spec(CLIENT, "sounds.nearCrickets");
