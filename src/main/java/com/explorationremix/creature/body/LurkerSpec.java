@@ -19,7 +19,7 @@ public final class LurkerSpec {
     public static final int LEGS = 16;
     /** Its teeth, in a ring under its middle. */
     public static final int TEETH = 5;
-    /** The game's urchin: its test about a block and a half across, its spines spanning about six blocks. */
+    /** The game's urchin: its test about a block and a half across, its spines spanning about eight blocks (0.21.4). */
     public static final double GAME_SCALE = 1.0;
 
     public final double scale;
