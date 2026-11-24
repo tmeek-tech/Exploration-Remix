@@ -251,6 +251,27 @@ CREATURE_EVENTS.update(MANTIS_EVENTS)
 CREATURE_SUBTITLES.update(MANTIS_SUBTITLES)
 
 
+# 0.21.0's chimney lurker of the Deep Gardens (tools/synth_creature_sounds.py chimney_lurker): dry and hard, lower and
+# heavier than the Skein. The rattle as its glow flashes on carries (heard before it comes over its rim); the clicks
+# while it stirs or hunts carry a little; its feet are heard only close.
+LURKER_EVENTS = {
+    "chimney_lurker.step": creature("tap", 4, 0.5, 12, who="chimney_lurker"),
+    "chimney_lurker.click": creature("click", 3, 0.75, 20, who="chimney_lurker"),
+    "chimney_lurker.rattle": creature("rattle", 2, 1.0, 32, who="chimney_lurker"),
+    "chimney_lurker.hiss": creature("hiss", 2, 0.9, 20, who="chimney_lurker"),
+    "chimney_lurker.bite": creature("bite", 2, 1.0, 20, who="chimney_lurker"),
+    "chimney_lurker.hurt": creature("hurt", 2, 0.9, 16, who="chimney_lurker"),
+    "chimney_lurker.death": creature("death", 1, 1.0, 24, who="chimney_lurker"),
+}
+LURKER_SUBTITLES = {
+    "chimney_lurker.step": "Hooked feet tick", "chimney_lurker.click": "Chimney Lurker clicks",
+    "chimney_lurker.rattle": "Chimney Lurker rattles", "chimney_lurker.hiss": "Chimney Lurker hisses",
+    "chimney_lurker.bite": "Fangs snap", "chimney_lurker.hurt": "Chimney Lurker hurts",
+    "chimney_lurker.death": "Chimney Lurker dies",
+}
+CREATURE_EVENTS.update(LURKER_EVENTS)
+CREATURE_SUBTITLES.update(LURKER_SUBTITLES)
+
 def write_all(assets_dir, write):
     out = {}
     lang = {}

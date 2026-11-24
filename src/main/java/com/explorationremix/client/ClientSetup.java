@@ -5,6 +5,7 @@ import com.explorationremix.block.Neon;
 import com.explorationremix.block.NeonBlock;
 import com.explorationremix.client.model.Geometry;
 import com.explorationremix.client.model.TubeWormsModel;
+import com.explorationremix.client.render.ChimneyLurkerRenderer;
 import com.explorationremix.client.render.FireflySwarmRenderer;
 import com.explorationremix.client.render.GiantSkeinRenderer;
 import com.explorationremix.client.render.LavaBombRenderer;
@@ -94,6 +95,8 @@ public final class ClientSetup {
         event.registerEntityRenderer(EREntities.GIANT_SKEIN.get(), GiantSkeinRenderer::new);
         // 0.20.0: the stilt mantis of the Deep Gardens
         event.registerEntityRenderer(EREntities.STILT_MANTIS.get(), StiltMantisRenderer::new);
+        // 0.21.0: the chimney lurker of the Deep Gardens' vents
+        event.registerEntityRenderer(EREntities.CHIMNEY_LURKER.get(), ChimneyLurkerRenderer::new);
         // 0.9.0: the eruptions' lava bombs, a spinning glowing block of magma in a halo
         event.registerEntityRenderer(EREntities.LAVA_BOMB.get(), LavaBombRenderer::new);
         // 0.20.6: the tube worms' plumes, moving

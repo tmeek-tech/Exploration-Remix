@@ -1011,7 +1011,7 @@ def biome_modifiers():
 
 
 def creature_data():
-    """The creatures' drops: the Mossback's (and what it hunts), the Skein's and the giant Skein's."""
+    """The creatures' drops: the Mossback's (and what it hunts), the Skein's, the giant Skein's and the chimney lurker's."""
     write(os.path.join(DATA, "loot_tables", "entities", "mossback.json"), {
         "type": "minecraft:entity",
         "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:mossback_hide", "functions": [
@@ -1050,6 +1050,16 @@ def creature_data():
                   runes.drop_pool(0.4, 0.1, [("deep_gardens", None)])]})
     write(os.path.join(ASSETS, "models", "item", "giant_skein_spine.json"),
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/giant_skein_spine"}})
+    # 0.21.0: the chimney lurker of the Deep Gardens' vents: a fang or two, and when a player kills it, a rune of the Deep
+    # Gardens a little more often than a Skein gives one (it is the layer's hunter, and a hard fight)
+    write(os.path.join(DATA, "loot_tables", "entities", "chimney_lurker.json"), {
+        "type": "minecraft:entity",
+        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:chimney_lurker_fang", "functions": [
+            {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}},
+            {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]},
+                  runes.drop_pool(0.4, 0.05, [("deep_gardens", None)])]})
+    write(os.path.join(ASSETS, "models", "item", "chimney_lurker_fang.json"),
+          {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/chimney_lurker_fang"}})
 
 
 # Entities that are not creatures (creatures.py names those): 0.5.1's lava bomb, thrown by the Caldera's eruptions.

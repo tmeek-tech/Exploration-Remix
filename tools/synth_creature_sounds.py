@@ -8,7 +8,7 @@ Deterministic: the same script gives the same sounds.
 
 Needs numpy and ffmpeg with libvorbis. Writes src/main/resources/assets/explorationremix/sounds/creature/<name>/*.ogg
 (tools/sounds.py lists them in sounds.json). Run from anywhere: python3 tools/synth_creature_sounds.py [mossback]
-[skein] [firefly] [stilt_mantis] (all when none is named).
+[skein] [firefly] [stilt_mantis] [chimney_lurker] (all when none is named).
 """
 import os, sys
 import numpy as np
@@ -436,10 +436,132 @@ def mantis_death(rng):
 MANTIS_MAKERS = {"tap": mantis_tap, "chirr": mantis_chirr, "rattle": mantis_rattle, "hurt": mantis_hurt,
                  "death": mantis_death}
 
+# =============================================================================================== the chimney lurker
+# 0.21.0: the Deep Gardens' ambush hunter, waiting in its vent's mouth. Dry and hard, chitin on rock, lower and heavier
+# than the Skein: the tick of a hooked foot set down, slow dry clicks while it stirs or hunts (a knock at its fangs'
+# roots, its body ringing hollow with each), the rattle as its glow flashes on (hard clicks bursting out and running
+# together, held, then stopped dead), a breathy hiss over a quickening clatter as it crouches, the snap of its fangs, a
+# dry rasp hurt, and its rattle running down as it dies. A short, hard echo: a stone throat.
+
+LURKER_COUNTS = {"tap": 4, "click": 3, "rattle": 2, "hiss": 2, "bite": 2, "hurt": 2, "death": 1}
+
+
+def lurker_tap(rng):
+    """A hooked foot set on rock: a hard dry tick, the claw's little scrape after it, a faint knock up the leg."""
+    n = secs(0.14)
+    t = np.arange(n) / SR
+    x = clicks(rng, n, [0.002], 2200, 3400, 0.8, 2.0, 0.003)
+    x += clicks(rng, n, [0.002 + rng.uniform(0.012, 0.025)], 3800, 5200, 0.3, 1.4, 0.002) * 0.35
+    x += 0.3 * S.tone(rng.uniform(300, 420) * np.ones(n), np.exp(-t / 0.012), ((1, 1.0), (2.3, 0.35)))
+    x = S.filt(x, S.highpass(180, 2))
+    return S.normalize_peak(hard_room(x, rng, 0.1), -7.0)
+
+
+def lurker_click(rng):
+    """While it stirs or hunts: a short, uneven run of slow dry clicks, each ringing faintly hollow."""
+    count = int(rng.integers(3, 7))
+    times, at = [], 0.01
+    for _ in range(count):
+        times.append(at)
+        at += rng.uniform(0.055, 0.11)
+    n = secs(at + 0.15)
+    t = np.arange(n) / SR
+    x = clicks(rng, n, times, 1100, 1900, 0.5, 2.6, 0.006) * 1.2
+    x += clicks(rng, n, [a + 0.0015 for a in times], 3200, 4400, 0.2, 1.6, 0.002) * 0.4
+    ring = S.filt(np.abs(x), S.lowpass(60, 1)) * np.sin(2 * np.pi * rng.uniform(620, 760) * t) * 0.8
+    return S.normalize_peak(hard_room(x + ring, rng, 0.18), -6.0)
+
+
+def lurker_rattle(rng):
+    """It sees you: a dry rattle bursts out, hard clicks running together into a buzz, held, then stopped dead."""
+    dur = rng.uniform(0.55, 0.7)
+    n = secs(dur + 0.05)
+    t = np.arange(n) / SR
+    times, at = [], 0.0
+    rate_hi = rng.uniform(70, 90)
+    while at < dur:
+        rate = rate_hi * (0.75 + 0.25 * np.exp(-at / 0.08)) * (1 + 0.1 * np.sin(2 * np.pi * 7 * at))
+        at += (1.0 / rate) * rng.uniform(0.75, 1.25)
+        times.append(at)
+    knocks = clicks(rng, n, times, 900, 1700, 0.45, 2.4, 0.006) * 1.3
+    shells = clicks(rng, n, [a + rng.uniform(0.0, 0.003) for a in times], 2600, 4200, 0.2, 1.3, 0.003) * 0.55
+    body = S.filt(np.abs(knocks), S.lowpass(90, 1)) * np.sin(2 * np.pi * rng.uniform(260, 320) * t) * 0.9
+    env = np.minimum(1, t / 0.006) * (1.0 - 0.25 * np.minimum(1, t / dur)) * np.clip((dur + 0.01 - t) / 0.012, 0, 1)
+    return S.normalize_peak(hard_room((knocks + shells + body) * env, rng, 0.2), -1.5)
+
+
+def lurker_hiss(rng):
+    """It crouches to leap: a breathy hiss swelling over half a second, its plates clattering faster under it."""
+    dur = rng.uniform(0.5, 0.6)
+    n = secs(dur + 0.08)
+    t = np.arange(n) / SR
+    air = noise(rng, n, S.bandpass(rng.uniform(2600, 3200), 0.9))
+    air = air / (np.std(air) + 1e-12)
+    swell = np.minimum(1, t / dur) ** 1.5
+    cut = np.clip((dur + 0.02 - t) / 0.03, 0, 1)
+    times, at = [], 0.02
+    while at < dur:
+        at += 1.0 / (14 + 50 * (at / dur) ** 2) * rng.uniform(0.8, 1.2)
+        times.append(at)
+    clatter = clicks(rng, n, times, 1000, 2000, 0.4, 2.2, 0.005) * 0.9
+    x = (air * 0.3 * (0.25 + 0.75 * swell) + clatter * (0.4 + 0.6 * swell)) * cut
+    x = S.filt(x, S.lowpass(7000, 2))
+    return S.normalize_peak(hard_room(x, rng, 0.16), -3.0)
+
+
+def lurker_bite(rng):
+    """Its fangs strike: a hard double snap, a quick crack and a deep knock."""
+    n = secs(0.28)
+    t = np.arange(n) / SR
+    gap = rng.uniform(0.004, 0.009)
+    x = clicks(rng, n, [0.002, 0.002 + gap], 1800, 2800, 0.8, 2.2, 0.007) * 1.5
+    crack = noise(rng, n, S.bandpass(rng.uniform(1300, 1800), 1.3)) * np.exp(-t / 0.014) * 0.7
+    knock = S.tone(rng.uniform(190, 240) * np.ones(n), np.exp(-t / 0.03), ((1, 1.0), (2.6, 0.45)))
+    return S.normalize_peak(hard_room(x + crack + 0.5 * knock, rng, 0.14), -1.0)
+
+
+def lurker_hurt(rng):
+    """A dry rasp that drops away (a file of ridges scraped, low), its legs clattering."""
+    dur = rng.uniform(0.26, 0.34)
+    n = secs(dur)
+    t = np.arange(n) / SR
+    x = screech(rng, dur, rng.uniform(120, 150), rng.uniform(60, 80))
+    x *= np.minimum(1, t / 0.008) * np.exp(-t / (dur * 0.5))
+    x = S.filt(x, S.lowpass(4200, 1.5))
+    x += clicks(rng, n, sorted(rng.uniform(0, dur * 0.7, 9)), 900, 1800, 0.4, 2.0, 0.006) * 0.8
+    return S.normalize_peak(hard_room(x, rng, 0.2), -2.0)
+
+
+def lurker_death(rng):
+    """A last rasp, then its rattle runs down: clicks slowing and spreading apart, and its legs ticking as they curl."""
+    dur = 2.0
+    n = secs(dur)
+    t = np.arange(n) / SR
+    times, at = [], 0.0
+    while at < dur - 0.4:
+        times.append(at)
+        at += 1.0 / (70.0 * (1 - at / dur) ** 2.5 + 4.0) * rng.uniform(0.85, 1.15)
+    x = clicks(rng, n, times, 900, 1700, 0.5, 2.4, 0.006) * np.exp(-t / 0.8)
+    rasp = screech(rng, 0.45, 120, 55)
+    tr = np.arange(len(rasp)) / SR
+    rasp = S.filt(rasp * np.minimum(1, tr / 0.01) * np.exp(-tr / 0.2), S.lowpass(3800, 1.5))
+    S.add_clipped(x, rasp * 0.7, 0)
+    legs = [rng.uniform(0.6, 0.9)]
+    while legs[-1] < dur - 0.15:
+        legs.append(legs[-1] + rng.uniform(0.08, 0.25))
+    x += clicks(rng, n, legs, 2200, 3400, 0.3, 2.0, 0.003) * 0.35
+    x *= np.clip((dur - t) / 0.2, 0, 1)
+    return S.normalize_peak(hard_room(x, rng, 0.24), -2.0)
+
+
+LURKER_MAKERS = {"tap": lurker_tap, "click": lurker_click, "rattle": lurker_rattle, "hiss": lurker_hiss,
+                 "bite": lurker_bite, "hurt": lurker_hurt, "death": lurker_death}
+
 # each creature's sounds (how many of each), their makers and the base of their seeds
 CREATURES = {"mossback": (COUNTS, MAKERS, 7700), "skein": (SKEIN_COUNTS, SKEIN_MAKERS, 9100),
              "firefly": (FIREFLY_COUNTS, FIREFLY_MAKERS, 9900),
-             "stilt_mantis": (MANTIS_COUNTS, MANTIS_MAKERS, 10300)}
+             "stilt_mantis": (MANTIS_COUNTS, MANTIS_MAKERS, 10300),
+             "chimney_lurker": (LURKER_COUNTS, LURKER_MAKERS, 10700)}
 
 
 def make(name):

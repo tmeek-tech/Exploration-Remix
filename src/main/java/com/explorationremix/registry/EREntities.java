@@ -2,6 +2,7 @@ package com.explorationremix.registry;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.block.TubeWormsBlockEntity;
+import com.explorationremix.creature.ChimneyLurkerEntity;
 import com.explorationremix.creature.FireflySwarm;
 import com.explorationremix.creature.GiantSkeinEntity;
 import com.explorationremix.creature.MossbackDen;
@@ -23,8 +24,8 @@ import net.minecraftforge.registries.RegistryObject;
 /**
  * The mod's entities: the creatures, their spawn eggs and drops, and the dens that keep the Mossbacks; and the
  * Caldera's lava bombs (0.5.1). The Mossbacks live in the Upper Caves' dens only, the Skein and the blue fireflies in the
- * Blue Reaches only (creature.BlueReachesSpawner), the stilt mantis herds in the Deep Gardens' groves: nothing lives in
- * the Basalt Galleries.
+ * Blue Reaches only (creature.BlueReachesSpawner), the stilt mantis herds in the Deep Gardens' groves and the chimney
+ * lurkers in the mouths of its live vents: nothing lives in the Basalt Galleries.
  */
 public final class EREntities {
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, ExplorationRemix.MOD_ID);
@@ -76,6 +77,21 @@ public final class EREntities {
     public static final RegistryObject<Item> STILT_MANTIS_SPAWN_EGG = ERBlocks.ITEMS.register("stilt_mantis_spawn_egg",
             () -> new ForgeSpawnEggItem(STILT_MANTIS, 0x2b2350, 0xb46cff, new Item.Properties()));
 
+    // The chimney lurker of the Deep Gardens (0.21.0): the hunter that waits in the mouths of the live vents. Its box is
+    // its body's (1.6 wide, 1.1 tall; its twelve legs reach some three blocks round it, drawn from its body), too wide
+    // for a vent's cracks. A monster, but vanilla never spawns it: each is set down in its vent with the world
+    // (world.feature.ChimneyLurkersFeature) and a new one moves in after one is killed (creature.LurkerRefill). Sent
+    // every other tick, so its body runs smoothly over the rock as it climbs.
+    public static final RegistryObject<EntityType<ChimneyLurkerEntity>> CHIMNEY_LURKER = ENTITIES.register("chimney_lurker",
+            () -> EntityType.Builder.of(ChimneyLurkerEntity::new, MobCategory.MONSTER).sized(1.6F, 1.1F).clientTrackingRange(10).updateInterval(2)
+                    .build("chimney_lurker"));
+
+    public static final RegistryObject<Item> CHIMNEY_LURKER_SPAWN_EGG = ERBlocks.ITEMS.register("chimney_lurker_spawn_egg",
+            () -> new ForgeSpawnEggItem(CHIMNEY_LURKER, 0x14121a, 0x9a84ff, new Item.Properties()));
+
+    /** What a chimney lurker leaves: its fangs, kept for crafting later. */
+    public static final RegistryObject<Item> CHIMNEY_LURKER_FANG = ERBlocks.ITEMS.register("chimney_lurker_fang", () -> new Item(new Item.Properties()));
+
     @SuppressWarnings("DataFlowIssue")
     public static final RegistryObject<BlockEntityType<MossbackDen.Tile>> DEN_TILE = BLOCK_ENTITIES.register("mossback_den",
             () -> BlockEntityType.Builder.of(MossbackDen.Tile::new, ERBlocks.MOSSBACK_DEN.get()).build(null));
@@ -109,5 +125,6 @@ public final class EREntities {
         e.put(SKEIN.get(), SkeinEntity.attributes().build());
         e.put(GIANT_SKEIN.get(), GiantSkeinEntity.attributes().build());
         e.put(STILT_MANTIS.get(), StiltMantisEntity.attributes().build());
+        e.put(CHIMNEY_LURKER.get(), ChimneyLurkerEntity.attributes().build());
     }
 }

@@ -122,6 +122,17 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> STILT_MANTIS_HURT = register("stilt_mantis.hurt");
     public static final RegistryObject<SoundEvent> STILT_MANTIS_DEATH = register("stilt_mantis.death");
 
+    // The chimney lurker of the Deep Gardens (0.21.0, creature.ChimneyLurkerEntity): dry and hard, chitin on rock: its
+    // hooked feet's ticks, its slow clicks while it stirs or hunts, the rattle as its glow flashes on, the hiss of its
+    // crouch, its fangs' snap, hurt and death.
+    public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_STEP = register("chimney_lurker.step");
+    public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_CLICK = register("chimney_lurker.click");
+    public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_RATTLE = register("chimney_lurker.rattle");
+    public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_HISS = register("chimney_lurker.hiss");
+    public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_BITE = register("chimney_lurker.bite");
+    public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_HURT = register("chimney_lurker.hurt");
+    public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_DEATH = register("chimney_lurker.death");
+
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ExplorationRemix.MOD_ID, name)));
     }
