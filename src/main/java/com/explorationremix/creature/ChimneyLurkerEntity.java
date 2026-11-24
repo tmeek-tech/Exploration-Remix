@@ -1261,7 +1261,7 @@ public class ChimneyLurkerEntity extends Monster implements WindUp {
         StringBuilder b = new StringBuilder(colour().getSerializedName()).append(", ").append(s);
         LivingEntity t = getTarget();
         if (t != null) b.append(" (").append(t.getName().getString()).append(")");
-        if (home != null) b.append(String.format(java.util.Locale.ROOT, ", vent at %.0f %.0f, rim %.0f, mouth %.1f across, %.0f blocks from its axis", home.x(), home.z(),
+        if (home != null) b.append(String.format(java.util.Locale.ROOT, ", vent at %.0f %.0f (rim %.0f, its mouth's edge %.1f out), %.0f blocks from its axis", home.x(), home.z(),
                 home.top(), home.mouth(), home.across(getX(), getZ())));
         else b.append(", no vent");
         if (foot != null) b.append(String.format(java.util.Locale.ROOT, ", climbs from %.0f %.0f %.0f", foot.x, foot.y, foot.z));

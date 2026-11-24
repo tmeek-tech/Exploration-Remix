@@ -83,7 +83,7 @@ class LurkerVentsTest {
             LurkerVents.Trial up = LurkerVents.trialHome(rock, h, crest, foot, all, why);
             if (up.verdict() != LurkerVents.Verdict.HOME) { fails.add(at + ": its climb home from " + fmt(foot) + " fails (" + why + ")"); continue; }
             back++;
-            lines.add(String.format(Locale.ROOT, "%s: sat at %.1f %.1f %.1f (%.2f over its rim's top, mouth %.1f across, %d spines on the rim), over the rim at %s,"
+            lines.add(String.format(Locale.ROOT, "%s: sat at %.1f %.1f %.1f (%.2f over its rim's top, its mouth's edge %.1f out, %d spines on the rim), over the rim at %s,"
                             + " down to the floor at %s (%.1f off its axis, %.1f under its rim), back over at %s",
                     at, h.waitX(), h.waitY(), h.waitZ(), h.waitY() - h.top(), h.mouth(), on, fmt(crest), fmt(foot), h.across(foot.x, foot.z), h.top() - foot.y,
                     fmt(up.at())));
