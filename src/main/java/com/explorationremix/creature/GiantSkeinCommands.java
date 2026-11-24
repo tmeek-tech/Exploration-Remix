@@ -43,13 +43,20 @@ import java.util.Locale;
  *     <li>{@code /remix giant forget}: forgets that the nearest rift has had its giant, so it gets one again</li>
  *     <li>{@code /remix giant list [radius]}: the giants round you, where each is and what it is doing</li>
  *     <li>{@code /remix giant state <name> [ticks]}: sets the nearest one's state (rest, crawl, alert, hunt, rear,
- *     retreat): a hunt or strike is at you</li>
+ *     retreat, hang, drop, fall): a hunt, strike, hang or drop is at you; fall lets go of its rock</li>
  *     <li>{@code /remix giant trace [ticks]}: logs how the nearest one's body moves each tick, to the server log</li>
+ *     <li>{@code /remix giant watch [ticks] [roam]}: watches the nearest one for that long (6000 ticks by default) and
+ *     logs how its body as drawn lies against the rock (its worst, and the ticks it touched or went into rock), how its
+ *     head rides, how far it went, its turns to another face, its slips and its paces, every minute and at the end;
+ *     with roam it never rests; 0 stops</li>
  *     <li>{@code /remix giant path}: puts you on its rift's ledge path where the nearest giant sees you, about 16
  *     blocks off (else where the path passes nearest it), facing it (for testing its hunt)</li>
  *     <li>{@code /remix giant stand [blocks]}: puts you on a glass block in the air out from the nearest giant's head,
  *     that many blocks off its rock (6 by default, in reach of its strike), facing it (for testing its notice and
  *     strike at a player)</li>
+ *     <li>{@code /remix giant under}: puts you on a floor near the nearest giant, in its sight, under a roof 12 to 22
+ *     blocks up that it can drop from (for testing its drop); {@code /remix giant bait}: a villager held still there
+ *     instead, which it hunts (from the console)</li>
  *     <li>{@code /remix giant strike}: it rears and strikes at a chicken hung in the air out from its head (it bites
  *     it if its strike lands there; /remix giant list counts its bites)</li>
  *     <li>{@code /remix giant hold <rear|lunge|recover> <0-1>}: holds the nearest one that far through that phase of a
@@ -82,6 +89,8 @@ public final class GiantSkeinCommands {
                 .then(Commands.literal("path").executes(GiantSkeinCommands::path))
                 .then(Commands.literal("stand").executes(c -> stand(c, 6))
                         .then(Commands.argument("blocks", IntegerArgumentType.integer(3, 24)).executes(c -> stand(c, IntegerArgumentType.getInteger(c, "blocks")))))
+                .then(Commands.literal("under").executes(c -> under(c, false)))
+                .then(Commands.literal("bait").executes(c -> under(c, true)))
                 .then(Commands.literal("strike").executes(GiantSkeinCommands::strike))
                 .then(Commands.literal("hold")
                         .then(Commands.literal("off").executes(GiantSkeinCommands::letGo))
@@ -90,7 +99,10 @@ public final class GiantSkeinCommands {
                                 .then(Commands.argument("progress", FloatArgumentType.floatArg(0.0F, 1.0F))
                                         .executes(c -> hold(c, StringArgumentType.getString(c, "phase"), FloatArgumentType.getFloat(c, "progress"))))))
                 .then(Commands.literal("trace").executes(c -> trace(c, 600))
-                        .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 12000)).executes(c -> trace(c, IntegerArgumentType.getInteger(c, "ticks")))));
+                        .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 12000)).executes(c -> trace(c, IntegerArgumentType.getInteger(c, "ticks")))))
+                .then(Commands.literal("watch").executes(c -> watch(c, 6000, false))
+                        .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 72000)).executes(c -> watch(c, IntegerArgumentType.getInteger(c, "ticks"), false))
+                                .then(Commands.literal("roam").executes(c -> watch(c, IntegerArgumentType.getInteger(c, "ticks"), true)))));
     }
 
     private static void say(CommandContext<CommandSourceStack> c, String msg) {
@@ -281,6 +293,15 @@ public final class GiantSkeinCommands {
         return 1;
     }
 
+    private static int watch(CommandContext<CommandSourceStack> c, int ticks, boolean roam) {
+        List<GiantSkeinEntity> all = near(c, 128);
+        if (all.isEmpty()) { c.getSource().sendFailure(Component.literal("No giant Skein within 128 blocks.")); return 0; }
+        all.get(0).watch(ticks, roam);
+        say(c, ticks == 0 ? "Stopped watching it" : "Watching how its body lies for " + ticks + " ticks" + (roam ? ", never resting" : "")
+                + ", in the server log ([giant watch] lines)");
+        return 1;
+    }
+
     private static int path(CommandContext<CommandSourceStack> c) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         ServerPlayer pl = c.getSource().getPlayerOrException();
         List<GiantSkeinEntity> all = near(c, 256);
@@ -342,6 +363,94 @@ public final class GiantSkeinCommands {
         say(c, String.format(Locale.ROOT, "On glass at %s, %d blocks out from the giant's head, %s (%s)", feet.toShortString(), blocks,
                 g.sees(stand.add(0.0, pl.getEyeHeight(), 0.0)) ? "in its sight" : "out of its sight", g.describe()));
         return 1;
+    }
+
+    /**
+     * {@code /remix giant under}: puts you on a floor near the nearest giant, in its rift and its sight, under a roof it
+     * can drop from (12 to 22 blocks over you, out of reach of its strike from up there), facing it; {@code bait}: a
+     * villager held still there instead (200 health), which it hunts (from the console, for testing its drop).
+     */
+    private static int under(CommandContext<CommandSourceStack> c, boolean bait) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayer pl = bait ? null : c.getSource().getPlayerOrException();
+        List<GiantSkeinEntity> all = near(c, 128);
+        if (all.isEmpty()) { c.getSource().sendFailure(Component.literal("No giant Skein within 128 blocks.")); return 0; }
+        GiantSkeinEntity g = all.get(0);
+        ServerLevel level = c.getSource().getLevel();
+        double[] roof = new double[1];
+        Vec3 stand = underARoof(level, g, roof);
+        if (stand == null) {
+            c.getSource().sendFailure(Component.literal("No floor under a roof 12 to 22 blocks up within 36 blocks of it, in its sight (loaded ground only)"));
+            return 0;
+        }
+        Vec3 to = g.eyes().subtract(stand.add(0.0, 1.62, 0.0));
+        float yaw = (float) (Math.toDegrees(Math.atan2(to.z, to.x)) - 90.0);
+        float pitch = (float) -Math.toDegrees(Math.atan2(to.y, Math.sqrt(to.x * to.x + to.z * to.z)));
+        if (!bait) {
+            pl.teleportTo(level, stand.x, stand.y, stand.z, yaw, pitch);
+            say(c, String.format(Locale.ROOT, "On the floor at %s, under a roof %.0f blocks up, %.0f blocks from the giant (%s)",
+                    BlockPos.containing(stand).toShortString(), roof[0], stand.distanceTo(g.position()), g.describe()));
+            return 1;
+        }
+        net.minecraft.world.entity.npc.Villager v = net.minecraft.world.entity.EntityType.VILLAGER.create(level);
+        if (v == null) return 0;
+        v.moveTo(stand.x, stand.y, stand.z, yaw, 0.0F);
+        v.setNoAi(true);
+        v.setPersistenceRequired();
+        v.addTag("giant_bait");
+        var health = v.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH);
+        if (health != null) health.setBaseValue(200.0);
+        v.setHealth(200.0F);
+        level.addFreshEntity(v);
+        boolean hunts = g.forceState((byte) Arrays.asList(STATES).indexOf("hunt"), 400, v);
+        say(c, String.format(Locale.ROOT, "A villager at %s, under a roof %.0f blocks up, %.0f blocks from the giant; %s (%s)",
+                BlockPos.containing(stand).toShortString(), roof[0], stand.distanceTo(g.position()),
+                hunts ? "it hunts it" : "it will not hunt it", g.describe()));
+        return 1;
+    }
+
+    /**
+     * A broad floor (two open blocks over rock, and rock under most of the blocks round it, as it drops only onto such a
+     * floor: GiantSkeinEntity#LANDING_FLOOR) within 36 blocks of {@code g}, in its rift and its sight, with a roof
+     * straight over it 12 to 22 blocks up (into {@code roof[0]}): about 18 blocks off and 16 under its roof by choice.
+     * Loaded ground only; null when there is none.
+     */
+    @Nullable
+    private static Vec3 underARoof(ServerLevel level, GiantSkeinEntity g, double[] roof) {
+        Vec3 eyes = g.eyes();
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        int gx = (int) Math.floor(eyes.x), gy = (int) Math.floor(eyes.y), gz = (int) Math.floor(eyes.z);
+        Vec3 best = null;
+        double bestScore = Double.MAX_VALUE;
+        for (int dx = -36; dx <= 36; dx++)
+            for (int dz = -36; dz <= 36; dz++) {
+                double h = Math.sqrt(dx * dx + dz * dz);
+                if (h < 6.0 || h > 36.0) continue;
+                int x = gx + dx, z = gz + dz;
+                if (!level.hasChunk(x >> 4, z >> 4)) continue;
+                for (int y = gy - 32; y <= gy + 8; y++) {
+                    if (!solid(level, p.set(x, y - 1, z)) || solid(level, p.set(x, y, z)) || solid(level, p.set(x, y + 1, z))) continue;
+                    int floor = 0;
+                    for (int fx = -1; fx <= 1; fx++)
+                        for (int fz = -1; fz <= 1; fz++) if (solid(level, p.set(x + fx, y - 1, z + fz))) floor++;
+                    if (floor < GiantSkeinEntity.LANDING_FLOOR) continue;
+                    int k = 2;
+                    while (k <= 23 && !solid(level, p.set(x, y + k, z))) k++;
+                    if (k < 12 || k > 22) continue;
+                    Vec3 feet = new Vec3(x + 0.5, y, z + 0.5);
+                    if (!g.inRift(feet.x, feet.y, feet.z) || g.isRefuge(BlockPos.containing(feet)) || !g.sees(feet.add(0.0, 1.62, 0.0))) continue;
+                    double score = Math.abs(h - 18.0) + 0.5 * Math.abs(k - 16.0);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        best = feet;
+                        roof[0] = k;
+                    }
+                }
+            }
+        return best;
+    }
+
+    private static boolean solid(ServerLevel level, BlockPos p) {
+        return !level.getBlockState(p).getCollisionShape(level, p).isEmpty();
     }
 
     // ------------------------------------------------------------------------------------------------ its strike

@@ -153,6 +153,18 @@ public final class SkeinSpine {
 
     /** A chain of {@code joints} joints, the first at the head. */
     public SkeinSpine(int joints) {
+        this(joints, DRIFT);
+    }
+
+    /** The furthest this one's lead strays from the trail (see {@link #DRIFT}). */
+    private final double drift;
+
+    /**
+     * As {@link #SkeinSpine(int)}, its lead straying no further than {@code drift} from the trail (the giant Skein's
+     * body, four times the size, would stray four times as far, out through the walls of a winding tunnel; 0.21.5).
+     */
+    public SkeinSpine(int joints, double drift) {
+        this.drift = drift;
         this.joints = Math.max(2, joints);
         this.cur = new double[STRIDE * this.joints];
         this.prev = new double[STRIDE * this.joints];
@@ -331,11 +343,11 @@ public final class SkeinSpine {
             // never far from the trail
             double ox = pos[0] - flat.base[0], oy = pos[1] - flat.base[1], oz = pos[2] - flat.base[2];
             double ol = Math.sqrt(ox * ox + oy * oy + oz * oz);
-            if (ol > DRIFT) {
-                double k = DRIFT / ol;
+            if (ol > drift) {
+                double k = drift / ol;
                 pos[0] = flat.base[0] + ox * k; pos[1] = flat.base[1] + oy * k; pos[2] = flat.base[2] + oz * k;
                 u = flat.toWorld(pos, leadAlong, hi, u, lead);
-                ol = DRIFT;
+                ol = drift;
             }
             // where the step took it, drawn onto the rock where the flat puts it
             double cx = lead[0] - wx, cy = lead[1] - wy, cz = lead[2] - wz, cl = Math.sqrt(cx * cx + cy * cy + cz * cz);
