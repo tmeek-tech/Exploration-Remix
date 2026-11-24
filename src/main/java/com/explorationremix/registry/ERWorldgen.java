@@ -16,6 +16,7 @@ import com.explorationremix.world.feature.GiantFungusFeature;
 import com.explorationremix.world.feature.GiantSpikeFeature;
 import com.explorationremix.world.feature.GrottoIceFilter;
 import com.explorationremix.world.feature.HallGlowFeature;
+import com.explorationremix.world.feature.IceColumnsFeature;
 import com.explorationremix.world.feature.IceCrustFeature;
 import com.explorationremix.world.feature.JoinDeadEndsFeature;
 import com.explorationremix.world.feature.JunctionsPlacement;
@@ -26,7 +27,6 @@ import com.explorationremix.world.feature.MixStateProvider;
 import com.explorationremix.world.feature.MushroomShelfFeature;
 import com.explorationremix.world.feature.OpenSpanPlacement;
 import com.explorationremix.world.feature.OpenWayFeature;
-import com.explorationremix.world.feature.PillarFeature;
 import com.explorationremix.world.feature.PitTraitFilter;
 import com.explorationremix.world.feature.PlannedUpperFilter;
 import com.explorationremix.world.feature.PointedPatchFeature;
@@ -69,8 +69,9 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<SurfaceAttachFeature.Config>> SURFACE_ATTACH = FEATURES.register("surface_attach", () -> new SurfaceAttachFeature(SurfaceAttachFeature.Config.CODEC));
     public static final RegistryObject<Feature<GiantSpikeFeature.Config>> GIANT_SPIKE = FEATURES.register("giant_spike", () -> new GiantSpikeFeature(GiantSpikeFeature.Config.CODEC));
     public static final RegistryObject<Feature<PointedPatchFeature.Config>> POINTED_PATCH = FEATURES.register("pointed_patch", () -> new PointedPatchFeature(PointedPatchFeature.Config.CODEC));
-    public static final RegistryObject<Feature<PillarFeature.Config>> PILLAR = FEATURES.register("pillar", () -> new PillarFeature(PillarFeature.Config.CODEC));
-    // 0.20.1: ice crusting the deep Frost Fern Grotto's walls, glowing in veins
+    // 0.20.7: the Frost Fern Grotto's ice columns grown from noise over each chunk (0.14.0's placed pillars are gone)
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> ICE_COLUMNS = FEATURES.register("ice_columns", () -> new IceColumnsFeature(NoneFeatureConfiguration.CODEC));
+    // 0.20.1: ice crusting the deep Frost Fern Grotto's walls (its glowing veins left with the glow ice in 0.20.7)
     public static final RegistryObject<Feature<IceCrustFeature.Config>> ICE_CRUST = FEATURES.register("ice_crust", () -> new IceCrustFeature(IceCrustFeature.Config.CODEC));
     public static final RegistryObject<Feature<TerracePoolsFeature.Config>> TERRACE_POOLS = FEATURES.register("terrace_pools", () -> new TerracePoolsFeature(TerracePoolsFeature.Config.CODEC));
     public static final RegistryObject<Feature<ColumnClusterFeature.Config>> COLUMN_CLUSTER = FEATURES.register("column_cluster", () -> new ColumnClusterFeature(ColumnClusterFeature.Config.CODEC));

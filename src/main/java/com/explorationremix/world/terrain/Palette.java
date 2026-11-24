@@ -20,8 +20,8 @@ public final class Palette {
     private final Perlin heatN;
     // 0.14.5: the wander of the Fern Rift's bands by depth
     private final Perlin riftN;
-    // 0.20.1: the wander of the Frost Fern Grotto's icy depths, and the glowing veins through its deep ice
-    private final Perlin iceN, glowN, glowMask;
+    // 0.20.1: the wander of the Frost Fern Grotto's icy depths
+    private final Perlin iceN;
     /** What the noise fields of the two bottom layers tell the dressing ({@link LookQueries}). */
     private final LookQueries looks;
     /**
@@ -58,8 +58,6 @@ public final class Palette {
         heatN = new Perlin(Hashing.mix(s, 13, 0, 0));
         riftN = new Perlin(Hashing.mix(s, 14, 0, 0));
         iceN = new Perlin(Hashing.mix(s, 15, 0, 0));
-        glowN = new Perlin(Hashing.mix(s, 16, 0, 0));
-        glowMask = new Perlin(Hashing.mix(s, 17, 0, 0));
     }
 
     /** The row the noise and the hashes read for a block in row y ({@link #LOW_FLOOR}). */
@@ -822,12 +820,13 @@ public final class Palette {
      * a mountain is as icy as one at the same height under the lowlands beside it: the ice comes as one goes down, not
      * as one walks in under a slope. The depths wander up and down by up to {@value #ICE_WOBBLE} blocks over a few
      * hundred. The grotto starts 18 under the ground ({@code PlantCaves.MIN_DEPTH}) and mostly lies 35 to 70 under it
-     * (the plant caves' band, 45 deep on average): ice starts at {@value #ICE_TOP}, covers all it will at
-     * {@value #ICE_FULL}, and glows from {@value #GLOW_TOP}, most at {@value #GLOW_FULL} and deeper. Where the band lies
-     * shallow a grotto keeps the top's look throughout, where it lies deep it is ice nearly all through.
+     * (the plant caves' band, 45 deep on average): ice starts at {@value #ICE_TOP} and covers all it will at
+     * {@value #ICE_FULL}. Where the band lies shallow a grotto keeps the top's look throughout, where it lies deep it is
+     * ice nearly all through. (0.20.1's glow ice, light blue veins through the deep ice, left the game in 0.20.7: Taran,
+     * "Remove glow ice".)
      */
     public static final int GROTTO_GROUND = 80;
-    public static final double ICE_TOP = 36, ICE_FULL = 62, GLOW_TOP = 42, GLOW_FULL = 80, ICE_WOBBLE = 8;
+    public static final double ICE_TOP = 36, ICE_FULL = 62, ICE_WOBBLE = 8;
 
     /** How deep a block of the grotto lies, as {@link #grottoIce} counts it, under ground at {@code ground}. */
     public double grottoDepth(int x, int y, int z, int ground) {
@@ -843,47 +842,29 @@ public final class Palette {
         return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
     }
 
-    /** How much of the grotto's ice glows at a block ({@link #glowingIce}), from 0 to 1, the more the deeper. */
-    public double grottoGlow(int x, int y, int z, int ground) {
-        double t = (grottoDepth(x, y, z, ground) - GLOW_TOP) / (GLOW_FULL - GLOW_TOP);
-        return t <= 0 ? 0 : Math.min(1, t);
+    /** A block of the grotto's ice crusts and floors: packed ice with specks of blue ice. */
+    public Rock grottoIceBlock(int x, int y, int z) {
+        return iceSpeck(x, y, z);
     }
 
     /**
-     * Whether a block of the deep grotto's ice is glow ice: thin light blue sheets through the ice that show as glowing
-     * veins where they cut a crust, more and wider the deeper (about one ice block in twenty 50 under the ground, one in
-     * ten 60 under it, one in four and a half 80 under it and deeper), none where {@code glow} is 0. A broad mask leaves
-     * stretches of the deep ice dark between the veins.
+     * The Frost Fern Grotto (the pack's caves under cold ground), by how icy it is there ({@code ice}, {@link #grottoIce}).
+     * Near the top its floors are bare rock with snow in broad drifts and a little packed ice; going down the ice takes
+     * them over, to three floors in five deep down, with snow on a quarter (0.20.1: no carpet of frost moss, which grows
+     * only in the small patches its features lay), and crusts the ceilings in patches, a fifth of them deep down (Taran,
+     * 0.14.0: one sheet of ice over a ceiling looked odd). Gravel and clay under its water. Everything under the floor's
+     * top and the walls keep the pack's rock: the grotto's ice crusts and Immersive Weathering's icicle clusters ice them
+     * over in patches.
      */
-    public boolean glowingIce(int x, int y, int z, double glow) {
-        if (glow <= 0 || glowMask.noise3(x * 0.02, y * 0.03, z * 0.02) < 0.05 - 0.35 * glow) return false;
-        return Math.abs(glowN.noise3(x * 0.09, y * 0.11, z * 0.09)) < 0.02 + 0.08 * glow;
-    }
-
-    /** A block of the grotto's ice: glow ice in its veins, else packed ice with specks of blue ice. */
-    public Rock grottoIceBlock(int x, int y, int z, double glow) {
-        return glowingIce(x, y, z, glow) ? Rock.GLOW_ICE : iceSpeck(x, y, z);
-    }
-
-    /**
-     * The Frost Fern Grotto (the pack's caves under cold ground), by how icy it is there ({@code ice}, {@link #grottoIce})
-     * and how much of its ice glows ({@code glow}, {@link #grottoGlow}). Near the top its floors are bare rock with snow
-     * in broad drifts and a little packed ice; going down the ice takes them over, to three floors in five deep down,
-     * with snow on a quarter (0.20.1: no carpet of frost moss, which grows only in the small patches its features lay),
-     * and crusts the ceilings in patches, a fifth of them deep down (Taran, 0.14.0: one sheet of ice over a ceiling looked
-     * odd). Deep down some of the ice glows ({@link #glowingIce}). Gravel and clay under its water. Everything under the
-     * floor's top and the walls keep the pack's rock: the grotto's ice crusts and Immersive Weathering's icicle
-     * clusters ice them over in patches.
-     */
-    public Rock frostGrotto(int x, int y, int z, int above, int below, boolean wet, double ice, double glow) {
+    public Rock frostGrotto(int x, int y, int z, int above, int below, boolean wet, double ice) {
         if (above > 2 && below > 1) return null;
         double n = patch(x, y, z);
         if (above <= 2) {
             if (wet) return n > 0.1 ? Rock.GRAVEL : Rock.CLAY;
             if (above > 1) return null;
-            if (n < -0.5 + 0.57 * ice) return grottoIceBlock(x, y, z, 0.6 * glow);
+            if (n < -0.5 + 0.57 * ice) return grottoIceBlock(x, y, z);
             return n > 0.035 + 0.145 * ice ? Rock.SNOW : null;
         }
-        return n > 0.75 - 0.52 * ice ? grottoIceBlock(x, y, z, glow) : null;
+        return n > 0.75 - 0.52 * ice ? grottoIceBlock(x, y, z) : null;
     }
 }

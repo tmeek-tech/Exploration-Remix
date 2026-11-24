@@ -108,7 +108,9 @@ class PaletteLooksTest {
         // and the rest of the upper caves answer exactly as before (the split hash over the same draws from 0.19.3's
         // classes is d903f5c9057642af; the combined one was 0.14.6's b287cdd84507762d). The frozen Root Vaults' chill
         // now ranges over -4 to 28, the same draw scaled, so their deep insides are sampled too, and the grotto's ice
-        // and glow are taken from x and z, so no draw is added.
+        // and glow are taken from x and z, so no draw is added. Pinned again for 0.20.7 (Taran, 2026-11-23: "Remove glow
+        // ice"): the grotto's ice floors are packed ice specked with blue all through, never glow ice, and its glow is no
+        // longer taken from z; the draws are the same, so only the cold caves' hash moves.
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
@@ -159,7 +161,7 @@ class PaletteLooksTest {
             hCold = hCold * 31 + nz(p.frozenVaults(r.nextInt(3), r.nextDouble() * 32 - 4, x, y, z, above, below, wet, shell));
             hUpper = hUpper * 31 + nz(p.sinkhole(x, y, z, above, below, wet, shell, r.nextBoolean()));
             hUpper = hUpper * 31 + nz(p.oasis(x, y, z, above, below, wet, shell, r.nextBoolean()));
-            hCold = hCold * 31 + nz(p.frostGrotto(x, y, z, above, below, wet, Math.floorMod(x, 11) / 10.0, Math.floorMod(z, 9) / 8.0));
+            hCold = hCold * 31 + nz(p.frostGrotto(x, y, z, above, below, wet, Math.floorMod(x, 11) / 10.0));
         }
         // all six at once, so a re-pin sees every part that moved
         final long fBiome = hBiome, fInterior = hInterior, fPublicOld = hPublicOld, fPublic = hPublic, fUpper = hUpper, fCold = hCold;
@@ -169,7 +171,7 @@ class PaletteLooksTest {
                 () -> assertEquals("87788ebdd351272a", String.format("%016x", fPublicOld), "layer 0 through the public path, and the bands (den rifts off)"),
                 () -> assertEquals("3d80c894a1e742aa", String.format("%016x", fPublic), "layer 0 through the public path, and the bands"),
                 () -> assertEquals("d903f5c9057642af", String.format("%016x", fUpper), "the upper caves but the cold ones"),
-                () -> assertEquals("99c78b663b1de110", String.format("%016x", fCold), "the frozen Root Vaults and the Frost Fern Grotto"));
+                () -> assertEquals("ac2a7d75882ff5c5", String.format("%016x", fCold), "the frozen Root Vaults and the Frost Fern Grotto"));
     }
 
     private static int nz(Rock q) { return q == null ? 0 : q.name().hashCode(); }
