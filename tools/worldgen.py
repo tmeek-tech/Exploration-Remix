@@ -583,14 +583,12 @@ def build_features():
     feature("silver_fern_rift/ivy", "underground_decoration", ["silver_fern_rift"],
             attach(simple("immersive_weathering:ivy"), "walls_ceiling", 48, f"#{MOD}:cave_rock", radius=6, height=6),
             [count(12), SQUARE, layer(up), band("green"), BIOME])
-    # Low down, specks of blue lichen and buds of asurine on its asurine, light blue from below, as in the Deep Blue
-    # Rift. Only on the asurine and never in solid patches: over the moss of the blend they read as lapis.
+    # Low down, specks of blue lichen on its asurine, light blue from below, as in the Deep Blue Rift. Only on the
+    # asurine and never in solid patches: over the moss of the blend they read as lapis. No asurine buds (0.20.8,
+    # Taran's ask: "Remove asurine buds from Silver Fern Rifts"): the crystals stay the Blue Reaches' own.
     feature("silver_fern_rift/blue_lichen", "underground_decoration", ["silver_fern_rift"],
             attach(simple(f"{MOD}:blue_lichen"), "walls", 40, f"#{MOD}:asurine_lining", radius=5, height=4),
             [count(12), SQUARE, layer(up), band("blue"), BIOME])
-    feature("silver_fern_rift/asurine_buds", "underground_decoration", ["silver_fern_rift"],
-            attach(simple(f"{MOD}:asurine_bud"), "walls", 24, f"#{MOD}:asurine_lining", radius=6, height=4),
-            [count(8), SQUARE, layer(up), band("blue"), BIOME])
     feature("ivory_root_cavern/brackets", "underground_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:ivory_bracket"), "walls", 64, f"#{MOD}:cave_rock", radius=7, height=8),
             [count(3), SQUARE, layer(up), BIOME])

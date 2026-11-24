@@ -32,6 +32,14 @@ import com.explorationremix.world.terrain.Hashing;
  * 17 or more: its narrow ways have few, its big halls by the streams many), 9 in the geodes; 53% of the rift's swarms
  * by water or glowbells. (The Deep Dark then had 3.4. Its tries make no home since 0.19.8; every try still draws what
  * it drew, so the rift's and the geodes' swarms stay where they were, but for the few a Deep Dark home had kept away.)
+ *
+ * <p>The rift's great chasm ({@link #CHASM_KEEP}, 0.20.8) was measured the same way (seed 8675309, round the rift of
+ * cell 0 0, 23 Nov 2026): it was home to 506 of the 723 rift swarms there, and at spots a player could stand on in it
+ * half had 35 or more within 40 blocks and 36 or more in sight within 64; in the tunnels and grottos off it, half had 9
+ * or more within 40 and 3 or more in sight. Keeping 15% of its swarms over bare rock and 30% by water leaves it, in a
+ * world made since, 111 swarms (two thirds by water or glowbells) and half its spots 9 within 40 (as the tunnels had)
+ * and 9 in sight; the tunnels keep theirs (219, against 217 in the world made before: two worlds of one seed differ
+ * a little where features reach across chunks).
  */
 public final class FireflyHomes {
     private FireflyHomes() {}
@@ -65,7 +73,36 @@ public final class FireflyHomes {
      */
     public static final double RIFT_BARE = 0.045, GEODES_BARE = 0.012;
 
+    /**
+     * The great chasm of the Deep Blue Rift keeps only some of the swarms the rules above give it (0.20.8, Taran's ask:
+     * "The big Deep Blue Rift has too many blue fireflies but the smaller tunnels have the perfect amount"). Those
+     * rules follow how much open air there is, and the chasm is nearly all open air, a hundred blocks deep and more,
+     * whose walls a player sees from far off: every chunk of it held as many swarms as a chunk may, up its walls all
+     * the way to the top. So of the homes they make in it (Terrain#inRiftChasm), it keeps this share over bare rock and
+     * {@link #CHASM_KEEP_DRAWN} by water or glowbells (by its stream, so the chasm's floor glimmers more than its walls),
+     * each by its swarm's own seed ({@link #keptInChasm}): about a quarter of what a player standing in it saw before
+     * (see the class notes). The tunnels, grottos and halls off the chasm keep every swarm they had: the chunk's tries
+     * all draw what they drew and the homes the chasm gives up still keep the others apart.
+     */
+    public static final double CHASM_KEEP = 0.15, CHASM_KEEP_DRAWN = 0.3;
+
     private static final long SALT = 0x46697265666C7921L;      // "Firefly!"
+    private static final long CHASM_SALT = 0x4368617372694674L; // "ChasriFt"
+
+    /**
+     * Whether a swarm whose home lies in the rift's great chasm is one the chasm keeps ({@link #CHASM_KEEP}): by a roll
+     * of its flock's {@code seed} (the seed every client draws its fireflies from), so a swarm set down with the world
+     * and one an older version set down there are judged the same way; {@code drawn}, its home has water or glowbells by
+     * it ({@link #DRAW_REACH}).
+     */
+    public static boolean keptInChasm(int seed, boolean drawn) {
+        return chasmRoll(seed) < (drawn ? CHASM_KEEP_DRAWN : CHASM_KEEP);
+    }
+
+    /** The roll {@link #keptInChasm} makes for a swarm of flock seed {@code seed}: uniform in [0, 1). */
+    public static double chasmRoll(int seed) {
+        return Hashing.unit(Hashing.mix(CHASM_SALT, seed, 0, 3));
+    }
 
     /**
      * The chance that a try at a spot in {@code p} is a swarm's home; {@code drawn}, with water or glowbells by it. None

@@ -36,7 +36,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * The Blue Reaches' firefly swarms, set down as each chunk is made (0.19.2), so they are there before anyone comes and
  * stay when everyone leaves, as the Skeins do ({@link SkeinsFeature}): where the rules of {@link FireflyHomes} make a
  * spot of open cave air a swarm's home (more often by water and glowbells), a swarm of 30 to 60 fireflies (now and then
- * a huge one) rests on the best patch of rock beside it, pulsing, until a player comes near enough to wake it.
+ * a huge one) rests on the best patch of rock beside it, pulsing, until a player comes near enough to wake it. The
+ * Deep Blue Rift's great chasm keeps only some of the swarms its homes would have (0.20.8, {@link FireflyHomes#CHASM_KEEP}).
  *
  * <p>Runs last in every chunk, after the Skeins (band 1 is the Deep Blue Rift under every column, which carries it
  * everywhere, as it does the den lairs), once the chunk's plants, vines and ways are in. Each swarm is kept in the new
@@ -50,6 +51,8 @@ public final class FirefliesFeature extends Feature<NoneFeatureConfiguration> {
      * with room for a swarm, and the homes that found no rock to rest on in reach (the try is given up).
      */
     public static final AtomicLong LOOKED = new AtomicLong(), ROOMY = new AtomicLong(), NO_PERCH = new AtomicLong();
+    /** For /remix fireflies homes: the homes in the rift's great chasm that keep no swarm (0.20.8, {@link FireflyHomes#CHASM_KEEP}). */
+    public static final AtomicLong GIVEN_UP = new AtomicLong();
 
     public FirefliesFeature(Codec<NoneFeatureConfiguration> codec) { super(codec); }
 
@@ -93,15 +96,23 @@ public final class FirefliesFeature extends Feature<NoneFeatureConfiguration> {
             RandomSource mine = RandomSource.create(own);
             Perch p = perch(level, at, mine, minX, minZ, rests);
             if (p == null) { NO_PERCH.incrementAndGet(); continue; }
-            FireflySwarm s = EREntities.FIREFLY_SWARM.get().create(level.getLevel());
-            if (s == null) return !homes.isEmpty();
             int landTicks = FireflySwarm.LAND_MIN + mine.nextInt(FireflySwarm.LAND_MAX - FireflySwarm.LAND_MIN + 1);
-            s.setDownAtGeneration(Vec3.atCenterOf(at), p.anchor, p.rock, BlueSpawnRules.swarmSize(mine.nextDouble()), mine.nextInt(), landTicks);
-            level.addFreshEntity(s);
+            int count = BlueSpawnRules.swarmSize(mine.nextDouble()), seed = mine.nextInt();
             homes.add(at);
             rests.add(p.anchor);
+            // the rift's great chasm keeps only some of its homes' swarms (0.20.8, FireflyHomes#CHASM_KEEP); a home it
+            // gives up still keeps the chunk's other homes apart, so every swarm outside the chasm is where it was
+            boolean byWater = drawn || drawn(level, at);
+            if (place == BlueSpawnRules.Place.RIFT && t.inRiftChasm(x, y, z) && !FireflyHomes.keptInChasm(seed, byWater)) {
+                GIVEN_UP.incrementAndGet();
+                continue;
+            }
+            FireflySwarm s = EREntities.FIREFLY_SWARM.get().create(level.getLevel());
+            if (s == null) return true;
+            s.setDownAtGeneration(Vec3.atCenterOf(at), p.anchor, p.rock, count, seed, landTicks);
+            level.addFreshEntity(s);
             PLACED.incrementAndGet();
-            if (drawn || drawn(level, at)) DRAWN.incrementAndGet();
+            if (byWater) DRAWN.incrementAndGet();
         }
         return !homes.isEmpty();
     }

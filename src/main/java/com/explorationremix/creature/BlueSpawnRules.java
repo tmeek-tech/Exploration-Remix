@@ -109,6 +109,25 @@ public final class BlueSpawnRules {
     }
 
     /**
+     * The swarms round a player standing in the Deep Blue Rift's great chasm (0.20.8, Taran's ask: "The big Deep Blue
+     * Rift has too many blue fireflies but the smaller tunnels have the perfect amount"), as the chasm keeps only some
+     * of its swarms ({@link FireflyHomes#CHASM_KEEP}): it leaves half the spots in it 9 or more within
+     * {@link #SWARM_RADIUS}, a tenth 5 or fewer (in the test pack). The spawner brings one out only where fewer than the
+     * first are left, so it tops the chasm up only where a Skein has eaten its swarms, never back to what it had.
+     */
+    public static final int CHASM_KEPT = 4, CHASM_MAX = 9;
+
+    /** {@link #swarmsKept(Place)} for a player in {@code p}; {@code chasm}, standing in the rift's great chasm. */
+    public static int swarmsKept(Place p, boolean chasm) {
+        return chasm && p == Place.RIFT ? CHASM_KEPT : swarmsKept(p);
+    }
+
+    /** {@link #swarmsMax(Place)} for a player in {@code p}; {@code chasm}, standing in the rift's great chasm. */
+    public static int swarmsMax(Place p, boolean chasm) {
+        return chasm && p == Place.RIFT ? CHASM_MAX : swarmsMax(p);
+    }
+
+    /**
      * Whether to look for a spot to bring a swarm out for a player in {@code p} with {@code nearby} within
      * {@link #SWARM_RADIUS}: only when fewer than {@link #swarmsKept} are left, and then now and then ({@code roll}
      * under {@link #SWARM_REFILL_CHANCE}), or at every look once one is {@code due} (the roll came up but no spot out
@@ -116,7 +135,12 @@ public final class BlueSpawnRules {
      * and the server spawning animals at all).
      */
     public static boolean wantSwarm(Place p, int nearby, boolean mobSpawning, boolean due, double roll) {
-        return mobSpawning && nearby < swarmsKept(p) && (due || roll < SWARM_REFILL_CHANCE);
+        return wantSwarm(p, false, nearby, mobSpawning, due, roll);
+    }
+
+    /** {@link #wantSwarm(Place, int, boolean, boolean, double)} for a player standing in the rift's great chasm or not ({@code chasm}). */
+    public static boolean wantSwarm(Place p, boolean chasm, int nearby, boolean mobSpawning, boolean due, double roll) {
+        return mobSpawning && nearby < swarmsKept(p, chasm) && (due || roll < SWARM_REFILL_CHANCE);
     }
 
     /**
@@ -136,6 +160,15 @@ public final class BlueSpawnRules {
      */
     public static boolean swarmSpot(Place p, double y, int top, int bottom, double nearestPlayer, double fromPlayer) {
         return swarmsLive(p) && inBand(y, top, bottom) && nearestPlayer >= NEAR && fromPlayer <= SWARM_RADIUS;
+    }
+
+    /**
+     * {@link #swarmSpot(Place, double, int, int, double, double)}, and a spot in the rift's great chasm ({@code inChasm})
+     * only for a player standing in it too ({@code forChasm}, 0.20.8): the chasm keeps its own few swarms, and a player
+     * in the tunnels by it is never brought swarms out there.
+     */
+    public static boolean swarmSpot(Place p, boolean inChasm, boolean forChasm, double y, int top, int bottom, double nearestPlayer, double fromPlayer) {
+        return (!inChasm || forChasm) && swarmSpot(p, y, top, bottom, nearestPlayer, fromPlayer);
     }
 
     /** How far from its player a spot is tried: {@link #NEAR} to {@code far}, by a uniform {@code roll}. */
