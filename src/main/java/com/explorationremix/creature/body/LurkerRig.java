@@ -4,9 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The chimney lurker's drawn shape (0.21.0), rigged to its body: every part is a solid bone. The prosoma and the
- * abdomen are plates in their own frames (left, down, back, as the model has them); each leg segment, fang and feeler
- * segment is a rod running along its own y from its joint (see {@link LurkerPose}, which poses them).
+ * The vent urchin's drawn shape (0.21.3), rigged to its body: every part is a solid bone. The test is a ball in its
+ * own frame (left, down, back, as the model has it), and so is the boss at each walking spine's socket; each walking
+ * spine's base and needle, each coat spine and each tooth is a rod running along its own y from its root (see
+ * {@link LurkerPose}, which poses them).
  *
  * <p>Every face keeps the texture vanilla's model boxes give it (ModelPart.Cube's layout), so the painted texture lands
  * where tools/chimney_lurker.py put it. Built once from the shape.
@@ -22,32 +23,23 @@ public final class LurkerRig {
     final int partCount;
 
     // the parts, by their index in the shape
-    final int prosoma, abdomen;
-    /** Per leg: coxa, femur, tibia, metatarsus. */
-    final int[][] leg = new int[LurkerSpec.LEGS][4];
-    /** Per side (left, right): the fang's base and the fang; the feeler's femur and tibia. */
-    final int[] chelicera = new int[2], fang = new int[2], palpFemur = new int[2], palpTibia = new int[2];
+    final int test;
+    final int[] base = new int[LurkerSpec.LEGS], spine = new int[LurkerSpec.LEGS], knob = new int[LurkerSpec.LEGS], tooth = new int[LurkerSpec.TEETH];
+    final int[] coat;
 
     public LurkerRig(CreatureShape shape, LurkerSpec spec) {
         this.shape = shape;
         this.spec = spec;
         partCount = shape.parts.size();
-        prosoma = shape.part("prosoma").index;
-        abdomen = shape.part("abdomen").index;
+        test = shape.part("test").index;
         for (int i = 0; i < LurkerSpec.LEGS; i++) {
-            String n = LurkerSpec.legName(i);
-            leg[i][0] = shape.part(n + "_coxa").index;
-            leg[i][1] = shape.part(n + "_femur").index;
-            leg[i][2] = shape.part(n + "_tibia").index;
-            leg[i][3] = shape.part(n + "_meta").index;
+            base[i] = shape.part("base" + i).index;
+            spine[i] = shape.part("spine" + i).index;
+            knob[i] = shape.part("knob" + i).index;
         }
-        for (int s = 0; s < 2; s++) {
-            String side = s == 0 ? "l" : "r";
-            chelicera[s] = shape.part("chelicera_" + side).index;
-            fang[s] = shape.part("fang_" + side).index;
-            palpFemur[s] = shape.part("palp_" + side + "_femur").index;
-            palpTibia[s] = shape.part("palp_" + side + "_tibia").index;
-        }
+        for (int t = 0; t < LurkerSpec.TEETH; t++) tooth[t] = shape.part("tooth" + t).index;
+        coat = new int[spec.coat];
+        for (int j = 0; j < spec.coat; j++) coat[j] = shape.part("coat" + j).index;
 
         List<double[]> verts = new ArrayList<>();
         List<Integer> parts = new ArrayList<>();
@@ -80,7 +72,7 @@ public final class LurkerRig {
 
     public int quadCount() { return vertexCount / 4; }
 
-    /** The lurker's shape packed in the mod's jar (or on the test class path), at {@code scale}. */
+    /** The urchin's shape packed in the mod's jar (or on the test class path), at {@code scale}. */
     public static LurkerRig load(double scale) {
         CreatureShape shape = CreatureShape.load("chimney_lurker");
         return new LurkerRig(shape, new LurkerSpec(shape, scale));
@@ -88,7 +80,7 @@ public final class LurkerRig {
 
     private static volatile LurkerRig shared;
 
-    /** The one rig every lurker is drawn with (and whose measurements every body moves by), at the game's scale. */
+    /** The one rig every urchin is drawn with (and whose measurements every body moves by), at the game's scale. */
     public static LurkerRig shared() {
         LurkerRig r = shared;
         if (r == null) {

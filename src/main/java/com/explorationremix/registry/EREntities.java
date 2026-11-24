@@ -77,19 +77,20 @@ public final class EREntities {
     public static final RegistryObject<Item> STILT_MANTIS_SPAWN_EGG = ERBlocks.ITEMS.register("stilt_mantis_spawn_egg",
             () -> new ForgeSpawnEggItem(STILT_MANTIS, 0x2b2350, 0xb46cff, new Item.Properties()));
 
-    // The chimney lurker of the Deep Gardens (0.21.0): the hunter that waits in the mouths of the live vents. Its box is
-    // its body's (1.6 wide, 1.1 tall; its twelve legs reach some three blocks round it, drawn from its body), too wide
-    // for a vent's cracks. A monster, but vanilla never spawns it: each is set down in its vent with the world
+    // The vent urchin of the Deep Gardens (0.21.3; the 0.21.0 chimney lurker, its id kept so the ones already set down in
+    // a world stay): the hunter that sits in the mouths of the live vents. Its box is its test's, standing on its spines
+    // (1.6 wide, 1.9 tall; its sixteen walking spines reach some three blocks round it, drawn from its body), too wide for
+    // a vent's cracks. A monster, but vanilla never spawns it: each is set down in its vent with the world
     // (world.feature.ChimneyLurkersFeature) and a new one moves in after one is killed (creature.LurkerRefill). Sent
     // every other tick, so its body runs smoothly over the rock as it climbs.
     public static final RegistryObject<EntityType<ChimneyLurkerEntity>> CHIMNEY_LURKER = ENTITIES.register("chimney_lurker",
-            () -> EntityType.Builder.of(ChimneyLurkerEntity::new, MobCategory.MONSTER).sized(1.6F, 1.1F).clientTrackingRange(10).updateInterval(2)
+            () -> EntityType.Builder.of(ChimneyLurkerEntity::new, MobCategory.MONSTER).sized(1.6F, 1.9F).clientTrackingRange(10).updateInterval(2)
                     .build("chimney_lurker"));
 
     public static final RegistryObject<Item> CHIMNEY_LURKER_SPAWN_EGG = ERBlocks.ITEMS.register("chimney_lurker_spawn_egg",
             () -> new ForgeSpawnEggItem(CHIMNEY_LURKER, 0x14121a, 0x9a84ff, new Item.Properties()));
 
-    /** What a chimney lurker leaves: its fangs, kept for crafting later. */
+    /** What a vent urchin leaves: one of its spines (the 0.21.0 lurker's fang, its id kept), kept for crafting later. */
     public static final RegistryObject<Item> CHIMNEY_LURKER_FANG = ERBlocks.ITEMS.register("chimney_lurker_fang", () -> new Item(new Item.Properties()));
 
     @SuppressWarnings("DataFlowIssue")

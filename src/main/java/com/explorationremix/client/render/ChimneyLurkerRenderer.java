@@ -15,12 +15,13 @@ import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * Draws the chimney lurker as its body stands on the rock (0.21.0: see LurkerModel and creature.body): its colour's
- * texture (black chitin), then its markings (its eyes, the beads down its back, the rings at its joints) drawn again
- * over it as eyes are, at the brightness it has them: dark while it waits in its vent (Taran: "mostly black while it's
- * waiting in ambush"), flashing on as it sees someone and throbbing while it hunts, surging as it crouches to leap,
- * fading as it climbs home and going out as it dies. Eyes add their light to what is under them, so the texture keeps
- * only a dark tint under its glowing pixels (tools/chimney_lurker.py), and the two together come out its vent's colour.
+ * Draws the vent urchin as its body stands on the rock (0.21.3; see LurkerModel and creature.body): its colour's
+ * texture (black), then its neon (the bands down every walking spine, Taran's 0.21.3 card: "Bands down every spine")
+ * drawn again over it as eyes are, at the brightness it has them: dark while it sits in its vent's mouth (Taran: "mostly
+ * black while it's waiting in ambush"), flashing on as it sees someone and throbbing while it hunts, surging as it
+ * crouches to leap, fading as it climbs home and going out as it dies. Eyes add their light to what is under them, so
+ * the texture keeps only a dark tint under its glowing pixels (tools/chimney_lurker.py), and the two together come out
+ * its vent's colour.
  */
 public class ChimneyLurkerRenderer extends MobRenderer<ChimneyLurkerEntity, LurkerModel> {
     private static final ResourceLocation[] TEXTURES = textures("");
@@ -50,7 +51,7 @@ public class ChimneyLurkerRenderer extends MobRenderer<ChimneyLurkerEntity, Lurk
     protected void setupRotations(ChimneyLurkerEntity e, PoseStack pose, float bob, float bodyYaw, float partialTick) {
     }
 
-    /** No shadow under it while it clings to its vent's rock (it would fall across the flue below it). */
+    /** No shadow under it while it sits in its vent's mouth or clings to its rock (it would fall across the flue below it). */
     @Override
     public void render(ChimneyLurkerEntity e, float yaw, float partialTick, PoseStack pose, MultiBufferSource buffers, int light) {
         shadowRadius = e.clingingForDraw() ? 0.0F : SHADOW;

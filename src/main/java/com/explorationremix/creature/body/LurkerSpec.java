@@ -1,116 +1,148 @@
 package com.explorationremix.creature.body;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * The chimney lurker measured (0.21.0): its parts' lengths from its shape (geometry/chimney_lurker.json, written by
- * tools/chimney_lurker.py) and where its twelve legs hang from its prosoma and where their feet rest, for the body
- * ({@link LurkerBody}) and the pose ({@link LurkerPose}).
+ * The vent urchin measured (0.21.3, Taran: "make the vent spiders more sea urchin-like than spider-like and have them
+ * straddle the vents that they live in"): its test (the round shell), its sixteen walking spines (each a short base
+ * from its socket to a knee close to the test, and a long needle from there to its point: Taran's card, "Needles with
+ * one knee") and its coat of short spines, read from its shape (geometry/chimney_lurker.json, written by
+ * tools/chimney_lurker.py), for the body ({@link LurkerBody}) and the pose ({@link LurkerPose}).
  *
- * <p>Places on the body are given in the prosoma's own frame: blocks forward, up and to the left of its middle (the
- * body's centre). Lengths are in blocks. Legs are numbered pair by pair from the front, left before right: leg
- * {@code 2 * pair + side}, side 0 left and 1 right.
+ * <p>Places on the body are given in the test's own frame: blocks forward, up and to the left of its middle (the
+ * body's centre). It has no front: "forward" only names one way round it. Lengths are in blocks. The walking spines
+ * are numbered round it from forward toward its left.
  */
 public final class LurkerSpec {
-    public static final int PAIRS = 6, LEGS = 12;
-    /** The game's lurker (Taran's size card: legs spanning about six blocks). */
+    /** Its walking spines. */
+    public static final int LEGS = 16;
+    /** Its teeth, in a ring under its middle. */
+    public static final int TEETH = 5;
+    /** The game's urchin: its test about a block and a half across, its spines spanning about six blocks. */
     public static final double GAME_SCALE = 1.0;
 
     public final double scale;
 
-    // ---- the legs (blocks), per leg
-    public final double[] coxa = new double[LEGS], femur = new double[LEGS], tibia = new double[LEGS], meta = new double[LEGS];
-    /** Where each leg's coxa hangs on the prosoma's rim: forward, up, left (+ for the left legs). */
-    public final double[][] hip = new double[LEGS][3];
-    /** Each foot's rest: its way round from straight ahead (radians, toward its own side) and its distance out from the centre. */
-    public final double[] restAngle = new double[LEGS], restRadius = new double[LEGS];
-    /** How far a foot may stray round from its rest way before it steps (radians): the legs never cross. */
+    // ---- the test
+    /** Its half width and half height (it is a little flattened). */
+    public final double halfWidth, halfHeight;
+
+    // ---- the walking spines
+    /** Each spine's base (from its socket to its knee) and its needle (from its knee to its point). */
+    public final double[] upper = new double[LEGS], length = new double[LEGS];
+    /** How far from its socket each spine's point rests, standing at ease. */
+    public final double[] rest = new double[LEGS];
+    /** How far its point may come in toward its socket, and go out from it (shares of its rest). */
+    public final double near, far;
+    /** At ease, each base rises from its socket this far over level (radians), out along its way. */
+    public static final double KNEE_UP = Math.toRadians(40);
+    /** Each spine's socket on the test: forward, up, left. */
+    public final double[][] socket = new double[LEGS][3];
+    /** The way round each spine points (radians from forward toward its left). */
+    public final double[] restAngle = new double[LEGS];
+    /** How far a planted spine's point may stray round from its own way before it steps (radians): they never cross. */
     public final double sector;
 
-    // ---- the body (blocks)
-    /** The prosoma's middle rides this far out from the rock its feet stand on. */
-    public final double ride;
-    /** The prosoma's half length (forward of its middle to the front of its head) and half width. */
-    public final double front, halfWidth;
-    /** The waist: this far behind the prosoma's middle and this far up; the abdomen's length behind it. */
-    public final double waistBack, waistUp, abdomen;
-    /** The fangs' bases hang this far forward of the middle and down, this far to each side; their lengths. */
-    public final double cheliceraForward, cheliceraDown, cheliceraSide, chelicera, fang;
-    /** The feelers: their roots (forward, down, side) and their two segments' lengths. */
-    public final double palpForward, palpDown, palpSide, palpFemur, palpTibia;
+    // ---- the coat
+    /** The short spines all over the test: how many, each one's socket (forward, up, left), its way out at rest (unit) and its length. */
+    public final int coat;
+    public final double[][] coatSocket, coatDir;
+    public final double[] coatLength;
 
-    // ---- gait
-    /** A stride's length (blocks the body moves in one cycle of the feet) walking and running; how high a foot lifts. */
-    public final double walkStride, runStride, walkLift, runLift;
+    // ---- the mouth
+    /** Each tooth's root under the test (forward, up, left), and the teeth's length. */
+    public final double[][] toothRoot = new double[TEETH][3];
+    public final double toothLength;
+
+    // ---- stances
+    /** Standing, its middle rides this far out from the rock its spines stand on. */
+    public final double ride;
+    /** Crouched to leap, this far. */
+    public final double crouchRide;
+    /** Sat in its vent's mouth, its middle this far over the rim's top (its lower half down in the flue). */
+    public final double seat;
 
     public LurkerSpec(CreatureShape shape, double scale) {
         this.scale = scale;
         double k = scale / 16.0;
-        for (int i = 0; i < LEGS; i++) {
-            String n = legName(i);
-            coxa[i] = rod(shape, n + "_coxa") * k;
-            femur[i] = rod(shape, n + "_femur") * k;
-            tibia[i] = rod(shape, n + "_tibia") * k;
-            meta[i] = rod(shape, n + "_meta") * k;
+        // the test: its half sizes from its boxes
+        double w = 0, h = 0;
+        for (CreatureShape.Box b : shape.part("test").boxes) {
+            w = Math.max(w, Math.max(-b.x(), b.x() + b.w()));
+            w = Math.max(w, Math.max(-b.z(), b.z() + b.d()));
+            h = Math.max(h, Math.max(-b.y(), b.y() + b.h()));
         }
-        chelicera = rod(shape, "chelicera_l") * k;
-        fang = rod(shape, "fang_l") * k;
-        palpFemur = rod(shape, "palp_l_femur") * k;
-        palpTibia = rod(shape, "palp_l_tibia") * k;
-        // the coxae hang round the prosoma's rim, under its edge: six a side from just behind the fangs to the waist
-        double[] along = {4.6, 2.9, 1.0, -1.0, -2.9, -4.6};
-        double[] out = {4.6, 5.4, 5.8, 5.8, 5.4, 4.6};
-        // the feet rest in a wide ring: the front pair far ahead, the back pair far behind, the middle ones out to the side
-        double[] ang = {21, 44, 71, 103, 132, 157};
-        double[] rad = {50, 46, 43, 43, 46, 48};
+        halfWidth = w * k;
+        halfHeight = h * k;
+        double nr = 0, fr = 0;
         for (int i = 0; i < LEGS; i++) {
-            int pair = i / 2;
-            double side = left(i) ? 1 : -1;
-            hip[i][0] = along[pair] * k;
-            hip[i][1] = -0.8 * k;
-            hip[i][2] = side * out[pair] * k;
-            restAngle[i] = Math.toRadians(ang[pair]);
-            restRadius[i] = rad[pair] * k;
+            CreatureShape.Part b = shape.part("base" + i), p = shape.part("spine" + i);
+            upper[i] = rodLength(b) * k;
+            length[i] = rodLength(p) * k;
+            frame(b, socket[i], k);
+            restAngle[i] = Math.atan2(socket[i][2], socket[i][0]);
+            rest[i] = 0.84 * (upper[i] + length[i]);
+            // folded no nearer than a little off its needle's own length less its base's; reaching to most of its length
+            nr = Math.max(nr, (length[i] - upper[i] + 0.15 * scale) / rest[i]);
+            fr = Math.max(fr, 0.97 * (upper[i] + length[i]) / rest[i]);
         }
-        sector = Math.toRadians(17);
-        ride = 12.0 * k;
-        front = 9.0 * k;
-        halfWidth = 7.0 * k;
-        waistBack = 8.0 * k;
-        waistUp = 0.5 * k;
-        abdomen = depth(shape, "abdomen") * k;
-        cheliceraForward = 7.6 * k;
-        cheliceraDown = 1.6 * k;
-        cheliceraSide = 1.8 * k;
-        palpForward = 7.0 * k;
-        palpDown = 1.2 * k;
-        palpSide = 3.6 * k;
-        walkStride = 1.5 * scale;
-        runStride = 2.5 * scale;
-        walkLift = 0.38 * scale;
-        runLift = 0.46 * scale;
+        near = nr;
+        far = fr;
+        sector = Math.PI / LEGS * 0.92;
+        List<CreatureShape.Part> coats = new ArrayList<>();
+        for (int j = 0; shape.has("coat" + j); j++) coats.add(shape.part("coat" + j));
+        coat = coats.size();
+        coatSocket = new double[coat][3];
+        coatDir = new double[coat][3];
+        coatLength = new double[coat];
+        for (int j = 0; j < coat; j++) {
+            CreatureShape.Part p = coats.get(j);
+            frame(p, coatSocket[j], k);
+            coatLength[j] = rodLength(p) * k;
+            // its way out at rest: the test's own way out where it sits (an ellipsoid's), a little toward the crown
+            double[] s = coatSocket[j];
+            double nx = s[0] / (halfWidth * halfWidth), ny = s[1] / (halfHeight * halfHeight), nz = s[2] / (halfWidth * halfWidth);
+            double nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            coatDir[j][0] = nx / nl; coatDir[j][1] = ny / nl + 0.12; coatDir[j][2] = nz / nl;
+            double dl = Math.sqrt(coatDir[j][0] * coatDir[j][0] + coatDir[j][1] * coatDir[j][1] + coatDir[j][2] * coatDir[j][2]);
+            for (int c = 0; c < 3; c++) coatDir[j][c] /= dl;
+        }
+        double tl = 0;
+        for (int t = 0; t < TEETH; t++) {
+            CreatureShape.Part p = shape.part("tooth" + t);
+            frame(p, toothRoot[t], k);
+            tl = 0;
+            for (CreatureShape.Box b : p.boxes) tl = Math.max(tl, b.y() + b.h());
+        }
+        toothLength = tl * k;
+        ride = 1.25 * scale;
+        crouchRide = 0.78 * scale;
+        seat = 0.05 * scale;
     }
 
-    public static String legName(int i) {
-        return "leg" + (i / 2) + (left(i) ? "l" : "r");
-    }
-
-    public static boolean left(int leg) { return leg % 2 == 0; }
-    public static int pair(int leg) { return leg / 2; }
-
-    /** A leg's reach from its hip (the coxa's tip) to its ankle. */
-    public double reach(int leg) { return femur[leg] + tibia[leg]; }
-
-    /** The longest box of a limb part: its bone's length (pixels). */
-    private static double rod(CreatureShape shape, String part) {
+    /** A rod part's length along its own y: from its root to its far end. */
+    private static double rodLength(CreatureShape.Part p) {
         double best = 0;
-        for (CreatureShape.Box b : shape.part(part).boxes) if (b.inflate() == 0 && b.h() > best && b.w() <= 3 && b.d() <= 3) best = b.h();
-        if (best <= 0) throw new IllegalStateException(part + " has no rod");
+        for (CreatureShape.Box b : p.boxes) if (b.inflate() == 0) best = Math.max(best, b.y() + b.h());
+        if (best <= 0) throw new IllegalStateException(p.name + " has no rod");
         return best;
     }
 
-    /** A body part's length along z: from its frontmost box to its hindmost. */
-    private static double depth(CreatureShape shape, String part) {
-        double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
-        for (CreatureShape.Box b : shape.part(part).boxes) { lo = Math.min(lo, b.z()); hi = Math.max(hi, b.z() + b.d()); }
-        return hi - lo;
+    /** A part's pivot (model pixels: x left, y down, z back) in the test's frame (forward, up, left), in blocks. */
+    private static void frame(CreatureShape.Part p, double[] out, double k) {
+        out[0] = -p.pz * k;
+        out[1] = -p.py * k;
+        out[2] = p.px * k;
+    }
+
+    /** How far a walking spine reaches from its socket, straightened. */
+    public double reach(int i) { return upper[i] + length[i]; }
+
+    /** The farthest a walking spine reaches from the test's middle (its socket out plus its reach). */
+    public double span() {
+        double best = 0;
+        for (int i = 0; i < LEGS; i++) best = Math.max(best, Math.hypot(socket[i][0], socket[i][2]) + reach(i));
+        return best;
     }
 }

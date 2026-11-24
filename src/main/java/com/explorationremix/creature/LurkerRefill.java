@@ -36,8 +36,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A vent's chimney lurker comes back after it is killed (0.21.0; Taran's card: "A new one moves in days later"): its
- * vent stands empty for {@link #MOVE_IN} ticks (two in-game days), and a little after that a new one is in its mouth,
+ * A vent's urchin (0.21.3; 0.21.0's chimney lurker) comes back after it is killed (Taran's card: "A new one moves in
+ * days later"): its vent stands empty for {@link #MOVE_IN} ticks (two in-game days), and a little after that a new one sits in its mouth,
  * moved in while no player was near enough to see it come. A held vent with no lurker and no death on record (in a
  * world made before the lurkers, or one whose lurker never found a spot as its chunk was made) fills this way too,
  * without the wait, so the vents round a player in an older world are taken within a few minutes.
@@ -81,7 +81,7 @@ public final class LurkerRefill {
         protected boolean removeEldestEntry(Map.Entry<Long, Long> e) { return size() > 512; }
     };
     static final long NO_SPOT_WAIT = 24000L;
-    /** Spots found but seen by a player at the time (by key), kept a while to try again without a new search. */
+    /** Homes found but seen by a player at the time (by key), kept a while to try again without a new search. */
     private static final Map<Long, Found> FOUND = new LinkedHashMap<>(64, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<Long, Found> e) { return size() > 256; }

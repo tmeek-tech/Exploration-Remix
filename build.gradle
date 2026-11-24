@@ -134,6 +134,6 @@ test {
     ['mossback.clips', 'mossback.only', 'mossback.fps'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
     // and the stilt mantis's (MantisClips, 0.20.0), in one of its four colours
     ['mantis.clips', 'mantis.only', 'mantis.fps', 'mantis.colour', 'mantis.zoom', 'mantis.cells', 'mantis.debug'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
-    // and the chimney lurker's (LurkerClips, 0.21.0)
-    ['lurker.clips', 'lurker.only', 'lurker.fps', 'lurker.colour', 'lurker.zoom', 'lurker.debug', 'lurker.trace', 'lurker.az', 'lurker.could', 'lurker.x0', 'lurker.z0', 'lurker.size'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
+    // and the vent urchin's (LurkerClips and LurkerVentsTest, 0.21.0, 0.21.3)
+    ['lurker.clips', 'lurker.only', 'lurker.fps', 'lurker.colour', 'lurker.zoom', 'lurker.debug', 'lurker.trace', 'lurker.az', 'lurker.could', 'lurker.x0', 'lurker.z0', 'lurker.size', 'lurker.flue', 'lurker.wide', 'lurker.narrow', 'lurker.seats'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
 }
