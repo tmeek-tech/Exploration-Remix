@@ -28,9 +28,9 @@ public final class ERClientConfig {
     public final ForgeConfigSpec.DoubleValue shakeStrength;
     /** Which light tremors this player feels (0.9.0; big quakes always shake). */
     public final ForgeConfigSpec.EnumValue<TremorEffects> tremorEffects;
-    /** Where the Upper Caves' crickets sing (client.UpperCaveSounds, 0.20.9). */
+    /** Where the Upper Caves' crickets sing (client.UpperCaveSounds, 0.20.9; key {@code cricketCaves} since 0.21.1). */
     public final ForgeConfigSpec.EnumValue<Crickets> crickets;
-    /** One or two crickets sing from the rock near the player and go quiet as they come close (0.20.9). */
+    /** A cricket near the player (two in a big cave) sings now and then and goes quiet as they come close (0.20.9). */
     public final ForgeConfigSpec.BooleanValue nearCrickets;
 
     /** Which light tremors and climb answers a player feels ({@code tremorEffects}). */
@@ -43,12 +43,12 @@ public final class ERClientConfig {
         NONE
     }
 
-    /** Where the Upper Caves' crickets sing ({@code crickets}). */
+    /** Where the Upper Caves' crickets sing ({@code cricketCaves}). */
     public enum Crickets {
+        /** Only in the mod's own upper caves, where the birds were before 0.20.9 (Taran's card pick, the default). */
+        MOD_CAVES_ONLY,
         /** In every cave above the first deep layer, the pack's own caves too, once the player is well underground. */
         EVERY_UPPER_CAVE,
-        /** Only in the mod's own upper caves, where the birds were before 0.20.9. */
-        MOD_CAVES_ONLY,
         /** Nowhere. */
         OFF
     }
@@ -63,10 +63,13 @@ public final class ERClientConfig {
                 "the Rust Springs and the Basalt Galleries.").define("caveLight", true);
         b.pop();
         b.push("sounds");
-        crickets = b.comment("Where crickets sing in the Upper Caves: in every cave above the first deep layer, the pack's own lush,",
-                "dripstone and plain caves too, once you are well underground; only in the mod's own upper caves (the Root Vaults,",
-                "Silver Fern Rifts, Ivory Root Caverns, sinkholes and oasis hollows); or nowhere. Never in the frozen caves.")
-                .defineEnum("crickets", Crickets.EVERY_UPPER_CAVE);
+        // 0.20.9 called this "crickets", with every upper cave as its default; under a new key a file written then takes
+        // the new default, and Forge drops the old key as one it no longer knows
+        crickets = b.comment("Where crickets sing in the Upper Caves: only in the mod's own upper caves, where the birds were before",
+                "(the Root Vaults, Silver Fern Rifts, Ivory Root Caverns, sinkholes and oasis hollows); in every cave above the",
+                "first deep layer, the pack's own lush, dripstone and plain caves too, once you are well underground; or nowhere.",
+                "Never in the frozen caves.")
+                .defineEnum("cricketCaves", Crickets.MOD_CAVES_ONLY);
         nearCrickets = b.comment("Let a cricket (two in a big cave) sing now and then from the rock near you while the chorus plays.",
                 "Each goes quiet when you come within a few blocks and sings again once you have passed.").define("nearCrickets", true);
         b.pop();

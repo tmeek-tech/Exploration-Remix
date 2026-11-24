@@ -29,11 +29,12 @@ def vanilla(name, volume=1.0, pitch=1.0, weight=1):
 
 EVENTS = {
     # Upper Caves (0.20.9, Taran: "Change bird noises in the Upper Caves to calm, atmospheric cricket noises"): no biome
-    # plays a loop here any more. The client's UpperCaveSounds plays the crickets in every upper cave, the pack's own
-    # caves too, once you are well underground: a stereo bed, a soft far chorus of tree crickets (card pick "Far chorus
-    # only"), and a single cricket (two in a big cave) singing now and then from the rock near you, which goes quiet as
-    # you come close (positional, mono; card pick "Yes, it goes quiet"). The mod's own upper caves keep their water drips
-    # as additions. Made by synth_layer_sounds.py, like everything new in 0.20.9.
+    # plays a loop here any more. The client's UpperCaveSounds plays the crickets in the mod's own upper caves, where
+    # the birds were (card pick "Only where the birds were", 0.21.1; the client config can add the pack's own caves): a
+    # stereo bed, a soft far chorus of tree crickets (card pick "Far chorus only"), and a single cricket (two in a big
+    # cave) singing now and then from the rock near you, which goes quiet as you come close (positional, mono; card pick
+    # "Yes, it goes quiet"). The mod's own upper caves keep their water drips as additions. Made by
+    # synth_layer_sounds.py, like everything new in 0.20.9.
     "ambient.upper.crickets": [own("crickets_loop", 0.75, stream=True)],
     "ambient.upper.cricket": [own(f"cricket{i}", 0.5, attenuation_distance=24) for i in range(1, 5)],
     "ambient.upper.additions": [own(f"drip{i}", 0.5) for i in range(1, 5)],
