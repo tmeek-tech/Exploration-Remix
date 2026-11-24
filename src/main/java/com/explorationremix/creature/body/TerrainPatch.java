@@ -153,7 +153,35 @@ public final class TerrainPatch {
      * rim, a wall beyond a narrow moat), and is left out. A {@code minDot} of -2 counts every face.
      */
     public boolean field(double px, double py, double pz, double reach, double soft, double[] out, double hx, double hy, double hz, double minDot) {
-        if (solid(px, py, pz)) return escape(px, py, pz, out);
+        return field(px, py, pz, reach, soft, out, hx, hy, hz, minDot, false);
+    }
+
+    /** Surfaces whose ways out lie closer than these (cosines) count as one where {@code distinct} (fully, and not at all). */
+    private static final double SAME_WAY = 0.985, OTHER_WAY = 0.82;
+    /**
+     * Where {@code distinct}, the blend reads the rock no nearer than this many surfaces as near as the nearest would
+     * (a little over two: a floor and a wall meeting are blended in full; the inside of a tube, rock on every side, is
+     * read as a hollow of two, not of twenty).
+     */
+    private static final double MOST_SURFACES = 2.2;
+
+    /**
+     * As {@link #field(double, double, double, double, double, double[], double, double, double, double)}; with
+     * {@code distinct}, a surface counts in the blend only as far as its way out differs from those of nearer ones
+     * (0.21.5, for the giant Skein). Without it, the top and the side of an outer edge both count, so every edge, step
+     * and knob nearby pulls the blend in a little more, and over rough rock (a staircase of blocks, a knobbly wall) it
+     * reads the rock a block or more nearer than it is; with it, only rock that really lies a different way (a wall
+     * rising from a floor) is blended, and over rough rock it reads close to the plain distance. When {@code out} has
+     * room, out[4] gets the plain distance to the nearest rock counted, and out[5..7] the way out from that rock alone.
+     */
+    public boolean field(double px, double py, double pz, double reach, double soft, double[] out, double hx, double hy, double hz,
+                         double minDot, boolean distinct) {
+        if (solid(px, py, pz)) {
+            boolean e = escape(px, py, pz, out);
+            if (out.length > 4) out[4] = out[0];
+            if (out.length > 7) { out[5] = out[1]; out[6] = out[2]; out[7] = out[3]; }
+            return e;
+        }
         touchedCount = 0;
         double r2 = reach * reach;
         for (int f = 0; f < faceCount; f++) {
@@ -192,6 +220,14 @@ public final class TerrainPatch {
             gx[g] = wx; gy[g] = wy; gz[g] = wz;
         }
         if (touchedCount == 0) return false;
+        if (distinct) {
+            // nearest first, so each surface is weighed against the nearer ones
+            for (int i = 1; i < touchedCount; i++) {
+                int g = touched[i], j = i - 1;
+                while (j >= 0 && gd[touched[j]] > gd[g]) { touched[j + 1] = touched[j]; j--; }
+                touched[j + 1] = g;
+            }
+        }
         double min = Double.MAX_VALUE;
         int best = -1;
         for (int i = 0; i < touchedCount; i++) {
@@ -202,13 +238,26 @@ public final class TerrainPatch {
         for (int i = 0; i < touchedCount; i++) {
             int g = touched[i];
             double w = Math.exp(-(gd[g] - min) / soft);
+            if (w < 1.0E-5) continue;
+            if (distinct && i > 0) {
+                double same = 0.0;
+                for (int j = 0; j < i && same < 1.0; j++) {
+                    int h = touched[j];
+                    double dot = gx[g] * gx[h] + gy[g] * gy[h] + gz[g] * gz[h];
+                    same = Math.max(same, (dot - OTHER_WAY) / (SAME_WAY - OTHER_WAY));
+                }
+                w *= 1.0 - Math.min(1.0, same);
+                if (w <= 0.0) continue;
+            }
             sum += w;
             nx += w * gx[g]; ny += w * gy[g]; nz += w * gz[g];
         }
         double len = Math.sqrt(nx * nx + ny * ny + nz * nz);
         if (len < 1.0E-4) { nx = gx[best]; ny = gy[best]; nz = gz[best]; len = 1.0; }
-        out[0] = min - soft * Math.log(sum);
+        out[0] = min - soft * (distinct ? Math.min(Math.log(sum), Math.log(MOST_SURFACES)) : Math.log(sum));
         out[1] = nx / len; out[2] = ny / len; out[3] = nz / len;
+        if (out.length > 4) out[4] = min;
+        if (out.length > 7) { out[5] = gx[best]; out[6] = gy[best]; out[7] = gz[best]; }
         return true;
     }
 

@@ -66,7 +66,15 @@ public final class GiantStrike {
      * the aim at {@code t}. Writes the head's point to out[0..2] and the way it points (unit) to out[3..5].
      */
     public static void head(double[] a, double[] n, double[] d, double[] h0, double[] t, int phase, double k, double[] out) {
-        double[] c = coil(a, n, d, t), s = struck(a, c, t);
+        head(a, n, d, h0, t, phase, k, COIL_RISE, out);
+    }
+
+    /**
+     * As {@link #head(double[], double[], double[], double[], double[], int, double, double[])}, its head coiling only
+     * {@code rise} off its rock (0.21.5: under a low roof, no higher than there is room for).
+     */
+    public static void head(double[] a, double[] n, double[] d, double[] h0, double[] t, int phase, double k, double rise, double[] out) {
+        double[] c = coil(a, n, d, t, rise), s = struck(a, c, t);
         double[] toT = unit(sub(t, c), d);
         switch (phase) {
             case COIL -> {
@@ -92,11 +100,16 @@ public final class GiantStrike {
 
     /** Coiled: up off the rock over the anchor, a little way out towards the aim along the rock. */
     static double[] coil(double[] a, double[] n, double[] d, double[] t) {
+        return coil(a, n, d, t, COIL_RISE);
+    }
+
+    /** Coiled, {@code rise} up off the rock over the anchor. */
+    static double[] coil(double[] a, double[] n, double[] d, double[] t, double rise) {
         double[] to = sub(t, a);
         double along = dot(to, n);
         double[] flat = unit(new double[]{to[0] - n[0] * along, to[1] - n[1] * along, to[2] - n[2] * along}, d);
-        return new double[]{a[0] + n[0] * COIL_RISE + flat[0] * NECK * COIL_OUT, a[1] + n[1] * COIL_RISE + flat[1] * NECK * COIL_OUT,
-                a[2] + n[2] * COIL_RISE + flat[2] * NECK * COIL_OUT};
+        return new double[]{a[0] + n[0] * rise + flat[0] * NECK * COIL_OUT, a[1] + n[1] * rise + flat[1] * NECK * COIL_OUT,
+                a[2] + n[2] * rise + flat[2] * NECK * COIL_OUT};
     }
 
     /**
