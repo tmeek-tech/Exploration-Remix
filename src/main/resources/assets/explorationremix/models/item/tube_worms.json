@@ -1,5 +1,5 @@
 {
-  "parent": "explorationremix:block/tube_worms_magenta_0",
+  "parent": "explorationremix:block/tube_worms_magenta_dense_0",
   "overrides": [
     {
       "predicate": {

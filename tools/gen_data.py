@@ -219,6 +219,9 @@ BLOCKS = {
     "tall_filament_grass": ("Tall Filament Grass", "tall", {"neon": True, "variants": 2, "shears": True}),
     "grazed_filament_grass": ("Grazed Filament Grass", "cross", {"neon": True, "variants": 2, "no_item": True}),
     "tube_worms": ("Tube Worms", "tube_worms", {"neon": True}),
+    # 0.20.6: tube worms on a wall (the vents' steep lower walls), a block of their own so they keep to their wall
+    # (the floor worms are set off a little by position); no item: they drop the tube worms and pick as them
+    "wall_tube_worms": ("Tube Worms", "wall_tube_worms", {"neon": True, "no_item": True}),
     "glowworm_threads": ("Glowworm Threads", "vine", {"variants": 2}),
     "glowworm_threads_plant": ("Glowworm Threads", "vine_body:glowworm_threads", {"variants": 2}),
     "seep_reeds": ("Seep Reeds", "cross", {"variants": 2}),
@@ -448,27 +451,76 @@ def _hanging_fern(size):
     return model
 
 
-def _tube_worms(look, out):
-    """A cluster of tube worms (plants_vent.WORM_LOOKS[look]): each tube a box two pixels square, its sides a ringed
-    strip of #worms (row 0 at its mouth), its top the open mouth; while the worms are out, a plume on each tube that has
-    one: two crossed planes six pixels across, their foot a pixel down in the tube, drawn again with #glow at full
-    block light."""
+def _worm_plume(cx, top, cz, plume):
+    """A tube worm's plume (plants_vent.PLUMES[plume]) on a tube whose mouth is at (cx, top, cz): two crossed planes
+    six pixels across, their foot a pixel down in the tube, drawn again with #glow at full block light. #plume is a
+    texture of its own (0.20.6), so near the player the game knows these faces and draws them moving instead
+    (client.render.TubeWormsRenderer)."""
+    u0, v0, u1, v1 = plants_vent.PLUMES[plume]
+    turn = {"origin": [cx, top, cz], "axis": "y", "angle": 45}
     els = []
-    for (x, z, h, strip, plume) in plants_vent.WORM_LOOKS[look]:
+    for key, extra in (("#plume", {}), ("#glow", EMISSIVE)):
+        els.append(dict({"from": [cx - 3, top - 1, cz], "to": [cx + 3, top + 5, cz], "rotation": turn, "shade": False,
+                         "faces": {f: {"uv": [u0, v0, u1, v1], "texture": key} for f in ("north", "south")}}, **extra))
+        els.append(dict({"from": [cx, top - 1, cz - 3], "to": [cx, top + 5, cz + 3], "rotation": turn, "shade": False,
+                         "faces": {f: {"uv": [u0, v0, u1, v1], "texture": key} for f in ("west", "east")}}, **extra))
+    return els
+
+
+def _tube_worms(look, out):
+    """A cluster of tube worms on a floor (a look of plants_vent.FLOOR_LOOKS): each tube a box two pixels square, its
+    sides a ringed strip of #worms (row 0 at its mouth), its top the open mouth; while the worms are out, a plume on
+    each tube that has one."""
+    els = []
+    for (x, z, h, strip, plume) in look:
         a, b = plants_vent.TUBE_STRIPS[strip]
         side = {"uv": [a, 0, b, h], "texture": "#worms"}
         els.append({"from": [x, 0, z], "to": [x + 2, h, z + 2],
                     "faces": dict({f: dict(side) for f in SIDES}, up={"uv": list(plants_vent.MOUTH), "texture": "#worms"})})
         if out and plume is not None:
-            u0, v0, u1, v1 = plants_vent.PLUMES[plume]
-            cx, cz = x + 1, z + 1
-            turn = {"origin": [cx, h, cz], "axis": "y", "angle": 45}
-            for key, extra in (("#worms", {}), ("#glow", EMISSIVE)):
-                els.append(dict({"from": [cx - 3, h - 1, cz], "to": [cx + 3, h + 5, cz], "rotation": turn, "shade": False,
-                                 "faces": {f: {"uv": [u0, v0, u1, v1], "texture": key} for f in ("north", "south")}}, **extra))
-                els.append(dict({"from": [cx, h - 1, cz - 3], "to": [cx, h + 5, cz + 3], "rotation": turn, "shade": False,
-                                 "faces": {f: {"uv": [u0, v0, u1, v1], "texture": key} for f in ("west", "east")}}, **extra))
+            els += _worm_plume(x + 1, h, z + 1, plume)
     return {"parent": "minecraft:block/block", "ambientocclusion": False, "textures": {"particle": "#worms"}, "elements": els}
+
+
+def _wall_tube_worms(look, out):
+    """A cluster of tube worms on a wall (0.20.6, card pick "Lower half, on ledges and walls"; a look of
+    plants_vent.WALL_LOOKS), the rock on the south side: each tube rises from its closed foot, a box two pixels square
+    standing out from the rock, joined to the rock by a stub along its lowest two pixels (none when it lies against the
+    rock); while the worms are out, a plume on each tube that has one. The blockstate turns the model to face away
+    from its wall."""
+    els = []
+    lo, hi = plants_vent.STUB_ROWS
+    for (x, foot, out_px, h, strip, plume) in look:
+        a, b = plants_vent.TUBE_STRIPS[strip]
+        zt = 14 - out_px
+        side = {"uv": [a, 0, b, h], "texture": "#worms"}
+        faces = {f: dict(side) for f in SIDES if not (f == "south" and out_px == 0)}
+        faces["up"] = {"uv": list(plants_vent.MOUTH), "texture": "#worms"}
+        faces["down"] = {"uv": list(plants_vent.FOOT), "texture": "#worms"}
+        els.append({"from": [x, foot, zt], "to": [x + 2, foot + h, zt + 2], "faces": faces})
+        if out_px:
+            run = {"uv": [a, lo, b, min(hi, lo + out_px)], "texture": "#worms"}
+            els.append({"from": [x, foot, zt + 2], "to": [x + 2, foot + 2, 16],
+                        "faces": {"up": dict(run), "down": dict(run), "east": dict(run, rotation=90), "west": dict(run, rotation=90)}})
+        if out and plume is not None:
+            els += _worm_plume(x + 1, foot + h, zt + 1, plume)
+    return {"parent": "minecraft:block/block", "ambientocclusion": False, "textures": {"particle": "#worms"}, "elements": els}
+
+
+def worm_looks(wall):
+    """The tube worms' looks by density, each a name and its tubes: plants_vent's floor looks, or its wall looks each
+    twice, as drawn and turned over left to right."""
+    out = {}
+    for density in ("dense", "sparse"):
+        if wall:
+            ls = []
+            for k, look in enumerate(plants_vent.WALL_LOOKS[density]):
+                ls.append((f"{k}", look))
+                ls.append((f"{k}_m", plants_vent.mirrored_wall_look(look)))
+        else:
+            ls = [(f"{k}", look) for k, look in enumerate(plants_vent.FLOOR_LOOKS[density])]
+        out[density] = ls
+    return out
 
 
 def _mushrooms(count):
@@ -513,9 +565,11 @@ TEMPLATES = {
     "cross_glow": {"ambientocclusion": False, "textures": {"particle": "#cross"},
                    "elements": _cross_planes("#cross", {}) + _cross_planes("#glow", EMISSIVE)},
     "carpet": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _flat("#texture", {})},
-    # 0.20.2: the tube worms, out (plumes up) and in, and the small mushrooms by count
-    **{f"tube_worms_{k}": _tube_worms(k, True) for k in range(len(plants_vent.WORM_LOOKS))},
-    **{f"tube_worms_{k}_in": _tube_worms(k, False) for k in range(len(plants_vent.WORM_LOOKS))},
+    # 0.20.2: the tube worms, out (plumes up) and in, and the small mushrooms by count; 0.20.6: the worms dense (a
+    # clump's middle) and sparse (its edge), on floors and on walls
+    **{f"tube_worms_{d}_{k}{o}": _tube_worms(look, o == "") for d, ls in worm_looks(False).items() for k, look in ls for o in ("", "_in")},
+    **{f"wall_tube_worms_{d}_{k}{o}": _wall_tube_worms(look, o == "") for d, ls in worm_looks(True).items() for k, look in ls
+       for o in ("", "_in")},
     **{f"neon_mushrooms_{n}": _mushrooms(n) for n in plants_vent.MUSHROOM_LOOKS},
     "carpet_glow": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _flat("#texture", {}) + _flat("#glow", EMISSIVE)},
     "lichen": {"ambientocclusion": False, "textures": {"particle": "#texture"}, "elements": _sheet("#texture", {})},
@@ -697,22 +751,37 @@ def block_assets():
                 variants[f"half=upper,neon={c}"] = pick([{"model": ref(t)} for t in tops], weights)
             states = {"variants": variants}
             item, extra_items = neon_items(bid, textures.NEONS, lambda c: {"parent": "minecraft:item/generated", "textures": {"layer0": ref(f"{bid}_{c}_top")}})
-        elif kind == "tube_worms":
-            # each colour's three looks, out and in, each turned four ways; the lists keep one order, so a cluster keeps
-            # its look and turn as its worms go in and out (block.TubeWormsBlock.OUT)
-            looks = range(len(plants_vent.WORM_LOOKS))
+        elif kind in ("tube_worms", "wall_tube_worms"):
+            # each colour's looks by density (0.20.6: dense for a clump's middle, sparse for its edge), out and in;
+            # a floor look turned four ways, a wall look as drawn and turned over, turned to face away from its wall.
+            # The lists keep one order out and in, so a cluster keeps its look as its worms go in and out
+            # (block.TubeWormsBlock.OUT; the near renderer finds the plumes of the look the game picked by the same
+            # order, client.render.TubeWormsRenderer)
+            wall = kind == "wall_tube_worms"
+            looks = worm_looks(wall)
             variants = {}
             for c in textures.NEONS:
-                t = {"worms": ref(f"{bid}_{c}"), "glow": ref(f"{bid}_{c}_glow")}
-                for k in looks:
-                    for o in ("", "_in"):
-                        models[f"{bid}_{c}_{k}{o}"] = {"parent": f"{MOD}:block/template/tube_worms_{k}{o}", "render_type": "minecraft:cutout",
-                                                       "textures": t}
-                for out, o in (("true", ""), ("false", "_in")):
-                    variants[f"neon={c},out={out}"] = pick([dict({"model": ref(f"{bid}_{c}_{k}{o}")}, **({"y": r} if r else {}))
-                                                            for k in looks for r in (0, 90, 180, 270)])
+                t = {"worms": ref(f"tube_worms_{c}"), "plume": ref(f"tube_worm_plumes_{c}"), "glow": ref(f"tube_worm_plumes_{c}_glow")}
+                for d, ls in looks.items():
+                    for k, _ in ls:
+                        for o in ("", "_in"):
+                            models[f"{bid}_{c}_{d}_{k}{o}"] = {"parent": f"{MOD}:block/template/{bid}_{d}_{k}{o}",
+                                                               "render_type": "minecraft:cutout", "textures": t}
+                    for out, o in (("true", ""), ("false", "_in")):
+                        sparse = "true" if d == "sparse" else "false"
+                        if wall:
+                            for facing, r in (("north", 0), ("east", 90), ("south", 180), ("west", 270)):
+                                variants[f"facing={facing},neon={c},out={out},sparse={sparse}"] = pick(
+                                    [dict({"model": ref(f"{bid}_{c}_{d}_{k}{o}")}, **({"y": r} if r else {})) for k, _ in ls])
+                        else:
+                            variants[f"neon={c},out={out},sparse={sparse}"] = pick(
+                                [dict({"model": ref(f"{bid}_{c}_{d}_{k}{o}")}, **({"y": r} if r else {}))
+                                 for k, _ in ls for r in (0, 90, 180, 270)])
             states = {"variants": variants}
-            item, extra_items = neon_items(bid, textures.NEONS, lambda c: {"parent": ref(f"{bid}_{c}_0")})
+            if wall:
+                drop = "tube_worms"
+            else:
+                item, extra_items = neon_items(bid, textures.NEONS, lambda c: {"parent": ref(f"{bid}_{c}_dense_0")})
         elif kind == "mushrooms":
             # a model per count (block.NeonMushroomsBlock.MUSHROOMS) and colour, turned four ways by position
             variants = {}

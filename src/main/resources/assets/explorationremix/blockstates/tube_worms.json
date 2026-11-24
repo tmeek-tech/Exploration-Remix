@@ -1,378 +1,754 @@
 {
   "variants": {
-    "neon=magenta,out=true": [
+    "neon=magenta,out=true,sparse=false": [
       {
-        "model": "explorationremix:block/tube_worms_magenta_0"
+        "model": "explorationremix:block/tube_worms_magenta_dense_0"
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_0",
+        "model": "explorationremix:block/tube_worms_magenta_dense_0",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_0",
+        "model": "explorationremix:block/tube_worms_magenta_dense_0",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_0",
+        "model": "explorationremix:block/tube_worms_magenta_dense_0",
         "y": 270
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_1"
+        "model": "explorationremix:block/tube_worms_magenta_dense_1"
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_1",
+        "model": "explorationremix:block/tube_worms_magenta_dense_1",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_1",
+        "model": "explorationremix:block/tube_worms_magenta_dense_1",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_1",
+        "model": "explorationremix:block/tube_worms_magenta_dense_1",
         "y": 270
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_2"
+        "model": "explorationremix:block/tube_worms_magenta_dense_2"
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_2",
+        "model": "explorationremix:block/tube_worms_magenta_dense_2",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_2",
+        "model": "explorationremix:block/tube_worms_magenta_dense_2",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_magenta_2",
-        "y": 270
-      }
-    ],
-    "neon=magenta,out=false": [
-      {
-        "model": "explorationremix:block/tube_worms_magenta_0_in"
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_0_in",
-        "y": 90
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_0_in",
-        "y": 180
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_0_in",
-        "y": 270
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_1_in"
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_1_in",
-        "y": 90
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_1_in",
-        "y": 180
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_1_in",
-        "y": 270
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_2_in"
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_2_in",
-        "y": 90
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_2_in",
-        "y": 180
-      },
-      {
-        "model": "explorationremix:block/tube_worms_magenta_2_in",
+        "model": "explorationremix:block/tube_worms_magenta_dense_2",
         "y": 270
       }
     ],
-    "neon=violet,out=true": [
+    "neon=magenta,out=false,sparse=false": [
       {
-        "model": "explorationremix:block/tube_worms_violet_0"
+        "model": "explorationremix:block/tube_worms_magenta_dense_0_in"
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_0",
+        "model": "explorationremix:block/tube_worms_magenta_dense_0_in",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_0",
+        "model": "explorationremix:block/tube_worms_magenta_dense_0_in",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_0",
+        "model": "explorationremix:block/tube_worms_magenta_dense_0_in",
         "y": 270
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_1"
+        "model": "explorationremix:block/tube_worms_magenta_dense_1_in"
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_1",
+        "model": "explorationremix:block/tube_worms_magenta_dense_1_in",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_1",
+        "model": "explorationremix:block/tube_worms_magenta_dense_1_in",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_1",
+        "model": "explorationremix:block/tube_worms_magenta_dense_1_in",
         "y": 270
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_2"
+        "model": "explorationremix:block/tube_worms_magenta_dense_2_in"
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_2",
+        "model": "explorationremix:block/tube_worms_magenta_dense_2_in",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_2",
+        "model": "explorationremix:block/tube_worms_magenta_dense_2_in",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_violet_2",
-        "y": 270
-      }
-    ],
-    "neon=violet,out=false": [
-      {
-        "model": "explorationremix:block/tube_worms_violet_0_in"
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_0_in",
-        "y": 90
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_0_in",
-        "y": 180
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_0_in",
-        "y": 270
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_1_in"
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_1_in",
-        "y": 90
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_1_in",
-        "y": 180
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_1_in",
-        "y": 270
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_2_in"
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_2_in",
-        "y": 90
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_2_in",
-        "y": 180
-      },
-      {
-        "model": "explorationremix:block/tube_worms_violet_2_in",
+        "model": "explorationremix:block/tube_worms_magenta_dense_2_in",
         "y": 270
       }
     ],
-    "neon=lime,out=true": [
+    "neon=magenta,out=true,sparse=true": [
       {
-        "model": "explorationremix:block/tube_worms_lime_0"
+        "model": "explorationremix:block/tube_worms_magenta_sparse_0"
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_0",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_0",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_0",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_0",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_0",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_0",
         "y": 270
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_1"
+        "model": "explorationremix:block/tube_worms_magenta_sparse_1"
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_1",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_1",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_1",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_1",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_1",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_1",
         "y": 270
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_2"
+        "model": "explorationremix:block/tube_worms_magenta_sparse_2"
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_2",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_2",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_2",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_2",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_lime_2",
-        "y": 270
-      }
-    ],
-    "neon=lime,out=false": [
-      {
-        "model": "explorationremix:block/tube_worms_lime_0_in"
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_0_in",
-        "y": 90
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_0_in",
-        "y": 180
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_0_in",
-        "y": 270
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_1_in"
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_1_in",
-        "y": 90
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_1_in",
-        "y": 180
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_1_in",
-        "y": 270
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_2_in"
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_2_in",
-        "y": 90
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_2_in",
-        "y": 180
-      },
-      {
-        "model": "explorationremix:block/tube_worms_lime_2_in",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_2",
         "y": 270
       }
     ],
-    "neon=light_blue,out=true": [
+    "neon=magenta,out=false,sparse=true": [
       {
-        "model": "explorationremix:block/tube_worms_light_blue_0"
+        "model": "explorationremix:block/tube_worms_magenta_sparse_0_in"
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_0",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_0_in",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_0",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_0_in",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_0",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_0_in",
         "y": 270
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_1"
+        "model": "explorationremix:block/tube_worms_magenta_sparse_1_in"
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_1",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_1_in",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_1",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_1_in",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_1",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_1_in",
         "y": 270
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_2"
+        "model": "explorationremix:block/tube_worms_magenta_sparse_2_in"
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_2",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_2_in",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_2",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_2_in",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_2",
+        "model": "explorationremix:block/tube_worms_magenta_sparse_2_in",
         "y": 270
       }
     ],
-    "neon=light_blue,out=false": [
+    "neon=violet,out=true,sparse=false": [
       {
-        "model": "explorationremix:block/tube_worms_light_blue_0_in"
+        "model": "explorationremix:block/tube_worms_violet_dense_0"
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_0_in",
+        "model": "explorationremix:block/tube_worms_violet_dense_0",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_0_in",
+        "model": "explorationremix:block/tube_worms_violet_dense_0",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_0_in",
+        "model": "explorationremix:block/tube_worms_violet_dense_0",
         "y": 270
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_1_in"
+        "model": "explorationremix:block/tube_worms_violet_dense_1"
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_1_in",
+        "model": "explorationremix:block/tube_worms_violet_dense_1",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_1_in",
+        "model": "explorationremix:block/tube_worms_violet_dense_1",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_1_in",
+        "model": "explorationremix:block/tube_worms_violet_dense_1",
         "y": 270
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_2_in"
+        "model": "explorationremix:block/tube_worms_violet_dense_2"
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_2_in",
+        "model": "explorationremix:block/tube_worms_violet_dense_2",
         "y": 90
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_2_in",
+        "model": "explorationremix:block/tube_worms_violet_dense_2",
         "y": 180
       },
       {
-        "model": "explorationremix:block/tube_worms_light_blue_2_in",
+        "model": "explorationremix:block/tube_worms_violet_dense_2",
+        "y": 270
+      }
+    ],
+    "neon=violet,out=false,sparse=false": [
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_0_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_0_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_0_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_0_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_1_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_1_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_1_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_1_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_2_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_2_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_2_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_dense_2_in",
+        "y": 270
+      }
+    ],
+    "neon=violet,out=true,sparse=true": [
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_0"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_0",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_0",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_0",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_1"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_1",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_1",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_1",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_2"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_2",
+        "y": 270
+      }
+    ],
+    "neon=violet,out=false,sparse=true": [
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_0_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_0_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_0_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_0_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_1_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_1_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_1_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_1_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_2_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_2_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_2_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_violet_sparse_2_in",
+        "y": 270
+      }
+    ],
+    "neon=lime,out=true,sparse=false": [
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_0"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_0",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_0",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_0",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_1"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_1",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_1",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_1",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_2"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_2",
+        "y": 270
+      }
+    ],
+    "neon=lime,out=false,sparse=false": [
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_0_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_0_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_0_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_0_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_1_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_1_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_1_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_1_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_2_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_2_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_2_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_dense_2_in",
+        "y": 270
+      }
+    ],
+    "neon=lime,out=true,sparse=true": [
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_0"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_0",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_0",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_0",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_1"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_1",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_1",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_1",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_2"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_2",
+        "y": 270
+      }
+    ],
+    "neon=lime,out=false,sparse=true": [
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_0_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_0_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_0_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_0_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_1_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_1_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_1_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_1_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_2_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_2_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_2_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_lime_sparse_2_in",
+        "y": 270
+      }
+    ],
+    "neon=light_blue,out=true,sparse=false": [
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_0"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_0",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_0",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_0",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_1"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_1",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_1",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_1",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_2"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_2",
+        "y": 270
+      }
+    ],
+    "neon=light_blue,out=false,sparse=false": [
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_0_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_0_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_0_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_0_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_1_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_1_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_1_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_1_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_2_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_2_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_2_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_dense_2_in",
+        "y": 270
+      }
+    ],
+    "neon=light_blue,out=true,sparse=true": [
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_0"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_0",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_0",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_0",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_1"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_1",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_1",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_1",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_2"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_2",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_2",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_2",
+        "y": 270
+      }
+    ],
+    "neon=light_blue,out=false,sparse=true": [
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_0_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_0_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_0_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_0_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_1_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_1_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_1_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_1_in",
+        "y": 270
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_2_in"
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_2_in",
+        "y": 90
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_2_in",
+        "y": 180
+      },
+      {
+        "model": "explorationremix:block/tube_worms_light_blue_sparse_2_in",
         "y": 270
       }
     ]

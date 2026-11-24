@@ -1,0 +1,9 @@
+{
+  "parent": "explorationremix:block/template/wall_tube_worms_dense_1_in",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "worms": "explorationremix:block/tube_worms_magenta",
+    "plume": "explorationremix:block/tube_worm_plumes_magenta",
+    "glow": "explorationremix:block/tube_worm_plumes_magenta_glow"
+  }
+}

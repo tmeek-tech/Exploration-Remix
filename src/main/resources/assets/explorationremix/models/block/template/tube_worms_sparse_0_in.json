@@ -1,0 +1,186 @@
+{
+  "parent": "minecraft:block/block",
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "#worms"
+  },
+  "elements": [
+    {
+      "from": [
+        4,
+        0,
+        5
+      ],
+      "to": [
+        6,
+        6,
+        7
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            2,
+            0,
+            4,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            2,
+            0,
+            4,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            2,
+            0,
+            4,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "west": {
+          "uv": [
+            2,
+            0,
+            4,
+            6
+          ],
+          "texture": "#worms"
+        },
+        "up": {
+          "uv": [
+            14,
+            0,
+            16,
+            2
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        9,
+        0,
+        8
+      ],
+      "to": [
+        11,
+        8,
+        10
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            2,
+            8
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            0,
+            0,
+            2,
+            8
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            0,
+            0,
+            2,
+            8
+          ],
+          "texture": "#worms"
+        },
+        "west": {
+          "uv": [
+            0,
+            0,
+            2,
+            8
+          ],
+          "texture": "#worms"
+        },
+        "up": {
+          "uv": [
+            14,
+            0,
+            16,
+            2
+          ],
+          "texture": "#worms"
+        }
+      }
+    },
+    {
+      "from": [
+        6,
+        0,
+        11
+      ],
+      "to": [
+        8,
+        4,
+        13
+      ],
+      "faces": {
+        "north": {
+          "uv": [
+            4,
+            0,
+            6,
+            4
+          ],
+          "texture": "#worms"
+        },
+        "east": {
+          "uv": [
+            4,
+            0,
+            6,
+            4
+          ],
+          "texture": "#worms"
+        },
+        "south": {
+          "uv": [
+            4,
+            0,
+            6,
+            4
+          ],
+          "texture": "#worms"
+        },
+        "west": {
+          "uv": [
+            4,
+            0,
+            6,
+            4
+          ],
+          "texture": "#worms"
+        },
+        "up": {
+          "uv": [
+            14,
+            0,
+            16,
+            2
+          ],
+          "texture": "#worms"
+        }
+      }
+    }
+  ]
+}
