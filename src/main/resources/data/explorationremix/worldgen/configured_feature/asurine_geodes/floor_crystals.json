@@ -25,7 +25,7 @@
       ]
     },
     "faces": "floor",
-    "tries": 24,
+    "tries": 36,
     "radius": 2,
     "height": 2,
     "on": "#explorationremix:asurine_lining",

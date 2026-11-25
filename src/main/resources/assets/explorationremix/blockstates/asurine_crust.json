@@ -10,6 +10,12 @@
         },
         {
           "model": "explorationremix:block/asurine_crust_2"
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3"
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4"
         }
       ]
     },
@@ -28,6 +34,12 @@
         },
         {
           "model": "explorationremix:block/asurine_crust_2"
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3"
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4"
         }
       ]
     },
@@ -43,6 +55,16 @@
         },
         {
           "model": "explorationremix:block/asurine_crust_2",
+          "y": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3",
+          "y": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4",
           "y": 90,
           "uvlock": true
         }
@@ -65,6 +87,16 @@
         },
         {
           "model": "explorationremix:block/asurine_crust_2",
+          "y": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3",
+          "y": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4",
           "y": 90,
           "uvlock": true
         }
@@ -84,6 +116,16 @@
           "model": "explorationremix:block/asurine_crust_2",
           "y": 180,
           "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3",
+          "y": 180,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4",
+          "y": 180,
+          "uvlock": true
         }
       ]
     },
@@ -104,6 +146,16 @@
         },
         {
           "model": "explorationremix:block/asurine_crust_2",
+          "y": 180,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3",
+          "y": 180,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4",
           "y": 180,
           "uvlock": true
         }
@@ -123,6 +175,16 @@
           "model": "explorationremix:block/asurine_crust_2",
           "y": 270,
           "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3",
+          "y": 270,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4",
+          "y": 270,
+          "uvlock": true
         }
       ]
     },
@@ -143,6 +205,16 @@
         },
         {
           "model": "explorationremix:block/asurine_crust_2",
+          "y": 270,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3",
+          "y": 270,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4",
           "y": 270,
           "uvlock": true
         }
@@ -162,6 +234,16 @@
           "model": "explorationremix:block/asurine_crust_2",
           "x": 270,
           "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3",
+          "x": 270,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4",
+          "x": 270,
+          "uvlock": true
         }
       ]
     },
@@ -182,6 +264,16 @@
         },
         {
           "model": "explorationremix:block/asurine_crust_2",
+          "x": 270,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3",
+          "x": 270,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4",
           "x": 270,
           "uvlock": true
         }
@@ -201,6 +293,16 @@
           "model": "explorationremix:block/asurine_crust_2",
           "x": 90,
           "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3",
+          "x": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4",
+          "x": 90,
+          "uvlock": true
         }
       ]
     },
@@ -221,6 +323,16 @@
         },
         {
           "model": "explorationremix:block/asurine_crust_2",
+          "x": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_3",
+          "x": 90,
+          "uvlock": true
+        },
+        {
+          "model": "explorationremix:block/asurine_crust_4",
           "x": 90,
           "uvlock": true
         }
