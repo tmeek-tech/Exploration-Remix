@@ -72,7 +72,7 @@ public record Loadout(RuneId active, RuneId modifier, RuneId passive) {
             if (w.isEmpty() || w.equals("_") || w.equals("-")) continue;
             RuneId r = RuneId.byId(w);
             if (r == null) throw new IllegalArgumentException("unknown rune " + w);
-            if (r.kind.armor()) throw new IllegalArgumentException(r.id + " is an armor rune");
+            if (!r.kind.weapon()) throw new IllegalArgumentException(r.id + " is " + (r.kind.armor() ? "an armor" : "a tool") + " rune");
             Socket s = Socket.of(r.kind);
             if (l.get(s) != null) throw new IllegalArgumentException("two " + r.kind.word + " runes: " + l.get(s).id + " and " + r.id);
             l = l.with(s, r);

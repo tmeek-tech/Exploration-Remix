@@ -1,5 +1,6 @@
 package com.explorationremix.rune;
 
+import com.explorationremix.rune.engine.ArmorRunes;
 import com.explorationremix.rune.engine.CastState;
 import com.explorationremix.rune.engine.Loadout;
 import com.explorationremix.rune.engine.RuneId;
@@ -74,6 +75,7 @@ class RuneTagsTest {
 
     @Test
     void aRuneTheGameDoesNotKnowOrOfTheWrongKindReadsAsAnEmptySocket() {
+        // one of the wrong kind is still kept, to be handed back (a sword's Lantern from before 0.22.6 is a helmet's now)
         CompoundTag t = new CompoundTag();
         t.putString("a", "moonbeam");
         t.putString("m", "spark");
@@ -81,7 +83,8 @@ class RuneTagsTest {
         CompoundTag gear = new CompoundTag();
         gear.put(RuneTags.LOADOUT, t);
         assertEquals(new Loadout(null, null, RuneId.EMBER), RuneTags.readLoadout(gear));
-        assertEquals(List.of(RuneId.EMBER), RuneTags.storedRunes(gear));
+        assertEquals(List.of(RuneId.SPARK, RuneId.EMBER), RuneTags.storedRunes(gear));
+        assertEquals(List.of(RuneId.SPARK), RuneTags.without(RuneTags.storedRunes(gear), RuneTags.readLoadout(gear).runes()), "what goes back");
     }
 
     @Test
@@ -156,5 +159,53 @@ class RuneTagsTest {
         gear.put(RuneTags.LOADOUT, RuneTags.writeLoadout(Loadout.parse("orb")));
         assertEquals(Loadout.parse("orb"), RuneTags.readLoadout(gear));
         assertEquals(8, RuneTags.gearId(gear), "changing the runes keeps the weapon's id");
+    }
+
+    // ------------------------------------------------------------------------------------------------ 0.22.6
+
+    @Test
+    void armorAndToolRunesKeepTheirSockets() {
+        ArmorRunes a = ArmorRunes.parse("leap mend vigor");
+        CompoundTag boots = new CompoundTag();
+        boots.put(RuneTags.LOADOUT, RuneTags.writeArmor(a));
+        assertEquals(a, RuneTags.readArmor(boots));
+        assertEquals(List.of(RuneId.LEAP, RuneId.MEND, RuneId.VIGOR), RuneTags.storedRunes(boots));
+        assertEquals(Loadout.EMPTY, RuneTags.readLoadout(boots), "armor's runes are no weapon's");
+        assertNull(RuneTags.writeArmor(ArmorRunes.EMPTY));
+        CompoundTag pick = new CompoundTag();
+        pick.put(RuneTags.LOADOUT, RuneTags.writeTool(RuneId.BOUNTY));
+        assertEquals(RuneId.BOUNTY, RuneTags.readTool(pick));
+        assertEquals(ArmorRunes.EMPTY, RuneTags.readArmor(pick));
+        assertTrue(RuneTags.hasRunes(pick), "a grindstone or a broken tool gives it back");
+        assertNull(RuneTags.writeTool(RuneId.SPARK), "only a tool rune goes in a tool");
+        assertNull(RuneTags.writeTool(null));
+    }
+
+    @Test
+    void aWeaponsOldPassiveThatIsArmorsNowIsHandedBack() {
+        // before 0.22.6 Lantern and Thirst were weapon passives and Glow a sword's active: the sockets keep them unread
+        CompoundTag t = new CompoundTag();
+        t.putString("a", "glow");
+        t.putString("p", "lantern");
+        CompoundTag sword = new CompoundTag();
+        sword.put(RuneTags.LOADOUT, t);
+        assertEquals(new Loadout(RuneId.GLOW, null, null), RuneTags.readLoadout(sword), "Glow is still an active rune, a bow's");
+        assertEquals(List.of(RuneId.LANTERN), RuneTags.without(RuneTags.storedRunes(sword), RuneTags.readLoadout(sword).runes()));
+    }
+
+    @Test
+    void overflowsChargeIsKeptWithTheWeapon() {
+        CastState s = new CastState(30.0F, 100L, 90L, 0, 104L, 95L);
+        s.brim = true;
+        CompoundTag gear = new CompoundTag();
+        gear.put(RuneTags.CAST, RuneTags.writeState(s, 5));
+        CastState back = RuneTags.readState(gear);
+        assertEquals(s, back);
+        assertTrue(back.brim);
+        s.brim = false;
+        gear.put(RuneTags.CAST, RuneTags.writeState(s, 5));
+        assertFalse(RuneTags.readState(gear).brim);
+        assertFalse(gear.getCompound(RuneTags.CAST).contains("o"), "an uncharged weapon writes nothing for it");
+        assertFalse(back.copy().equals(s), "the charge is part of the state");
     }
 }

@@ -13,7 +13,8 @@ import java.util.List;
  * @param empowered the active rune's second phase is awake
  */
 public record Reading(Loadout loadout, HostSpec spec, int level, List<CastReading> casts, Note[] notes, int recovery, boolean empowered) {
-    public Note note(Socket s) { return notes[s.ordinal()]; }
+    /** A weapon socket's note; an armor or tool socket, which no weapon has, is empty. */
+    public Note note(Socket s) { return s.ordinal() < notes.length ? notes[s.ordinal()] : Note.EMPTY; }
 
     /** The cast, or null. */
     public CastReading cast() { return casts.isEmpty() ? null : casts.get(0); }

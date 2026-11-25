@@ -87,9 +87,12 @@ public final class Explain {
 
     /** Why a socket does nothing, or "" if it is live or empty. */
     public static String note(Reading r, Socket s) {
-        Note n = r.note(s);
         RuneId rune = r.loadout().get(s);
-        String name = rune == null ? "" : rune.title;
+        return note(r.note(s), rune == null ? "" : rune.title);
+    }
+
+    /** Why a socket holding the rune called {@code name} does nothing, or "" if it is live or empty. */
+    public static String note(Note n, String name) {
         return switch (n.reason()) {
             case NONE -> "";
             case NO_ACTIVE -> name + " needs an active rune";
