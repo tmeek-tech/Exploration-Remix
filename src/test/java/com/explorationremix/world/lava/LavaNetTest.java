@@ -12,9 +12,30 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class LavaNetTest {
     @Test
-    void theVersionIsThree() {
+    void theVersionIsFour() {
         // any change to a message's fields needs a new version, so an old client is refused cleanly when it joins
-        assertEquals("3", LavaNet.VERSION);
+        // (4: 0.21.6's sync carries the rise's climbs)
+        assertEquals("4", LavaNet.VERSION);
+    }
+
+    @Test
+    void aSyncComesBackAsSentWithItsClimbs() {
+        LavaNet.Sync s = new LavaNet.Sync(true, 20_700, new int[]{18300, 1800, 2400, 1200, 300}, false, -1890, 40, -1850, -1920, 4, 0.5);
+        FriendlyByteBuf b = buf();
+        s.write(b);
+        assertTrue(b.readableBytes() <= 56, "about 50 bytes: " + b.readableBytes());
+        LavaNet.Sync back = LavaNet.Sync.read(b);
+        assertEquals(0, b.readableBytes());
+        assertArrayEquals(s.lengths(), back.lengths());
+        assertEquals(new LavaNet.Sync(back.on(), back.tick(), s.lengths(), back.frozen(), back.tableY(), back.rise(), back.top(), back.bottom(),
+                back.stages(), back.breakShare()), s);
+        // the client's cycle is the server's: the same height at every tick
+        LavaCycle server = new LavaCycle(s.lengths(), 40, 4, 0.5), client = back.cycle();
+        for (int t = 0; t < 24000; t += 13) assertEquals(server.height(t), client.height(t), 0, "at " + t);
+        LavaNet.Sync off = LavaNet.Sync.off();
+        assertFalse(off.on());
+        off.write(b = buf());
+        assertFalse(LavaNet.Sync.read(b).on());
     }
 
     private static FriendlyByteBuf buf() { return new FriendlyByteBuf(Unpooled.buffer()); }

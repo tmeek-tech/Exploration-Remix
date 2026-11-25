@@ -208,7 +208,7 @@ public final class Quakes {
         List<ServerPlayer> watchers = NearChunks.players(level, band);
         List<ServerPlayer> actors = actors(watchers);
         int quiet = QuakeSchedule.quietLeft(cycleOn, state.phase() == LavaCycle.Phase.WARNING, state.phase() == LavaCycle.Phase.RISE,
-                state.into(), state.left());
+                state.into(), state.left(), riseLength());
         Build.tick(level, now);
         // toppling has its own switch: off, its jobs, queues and answers are forgotten and the quakes only shake
         Topple.Work w = null;
@@ -629,6 +629,12 @@ public final class Quakes {
         return level;
     }
 
+    /** The lava's rise in ticks, for the quiet window: the server's plane's cycle, or 0 with the cycle off. */
+    private static int riseLength() {
+        LavaCycle c = com.explorationremix.world.lava.LavaPlane.SERVER.cycle();
+        return c == null ? 0 : c.length(LavaCycle.Phase.RISE);
+    }
+
     private static int status(CommandContext<CommandSourceStack> c) {
         ServerLevel level = galleries(c);
         if (level == null) return 0;
@@ -641,9 +647,9 @@ public final class Quakes {
         String big = q == null || !q.begun() ? "a moment" : time(q.nextBig() - now);
         LavaCycle.State st = lastState;
         int quiet = st == null ? 0 : QuakeSchedule.quietLeft(lastCycleOn, st.phase() == LavaCycle.Phase.WARNING, st.phase() == LavaCycle.Phase.RISE,
-                st.into(), st.left());
+                st.into(), st.left(), riseLength());
         say(c, String.format(Locale.ROOT, "Quakes%s: %s, the next big quake in %s%s", held, tremor, big,
-                quiet > 0 ? "; quiet while the lava warns (" + time(quiet) + " left)" : ""));
+                quiet > 0 ? "; quiet while the lava warns and rises (" + time(quiet) + " left)" : ""));
         Event l = last;
         if (l != null) {
             say(c, String.format(Locale.ROOT, "  last: %s %s ago, %d s at strength %.2f: %d placed blocks toppled (%d fell, %d given back to the lava, "

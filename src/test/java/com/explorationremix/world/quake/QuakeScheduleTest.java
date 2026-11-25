@@ -155,14 +155,13 @@ class QuakeScheduleTest {
 
     @Test
     void theLavasWarningIsKeptQuiet() {
-        // the window: the whole warning, then the first 600 ticks of the rise; none with the cycle off
-        assertEquals(100 + 600, QuakeSchedule.quietLeft(true, true, false, 1700, 100));
-        assertEquals(600, QuakeSchedule.quietLeft(true, false, true, 0, 2400));
-        assertEquals(1, QuakeSchedule.quietLeft(true, false, true, 599, 1801));
-        assertEquals(0, QuakeSchedule.quietLeft(true, false, true, 600, 1800));
-        assertEquals(0, QuakeSchedule.quietLeft(true, false, false, 0, 1200), "full");
-        assertEquals(0, QuakeSchedule.quietLeft(false, true, false, 10, 100), "the cycle off: no window");
-        assertEquals(0, QuakeSchedule.quietLeft(false, false, true, 10, 100));
+        // the window: the whole warning, then the whole rise (0.21.6: each climb has its own warning); none with the cycle off
+        assertEquals(100 + 2400, QuakeSchedule.quietLeft(true, true, false, 1700, 100, 2400));
+        assertEquals(2400, QuakeSchedule.quietLeft(true, false, true, 0, 2400, 2400));
+        assertEquals(1, QuakeSchedule.quietLeft(true, false, true, 2399, 1, 2400));
+        assertEquals(0, QuakeSchedule.quietLeft(true, false, false, 0, 1200, 2400), "full");
+        assertEquals(0, QuakeSchedule.quietLeft(false, true, false, 10, 100, 2400), "the cycle off: no window");
+        assertEquals(0, QuakeSchedule.quietLeft(false, false, true, 10, 100, 2400));
         // Taran's cycle, run for twenty cycles: no big quake starts in the window, and one that fell due in it comes 200
         // to 600 ticks after the window ends; a tremor that falls in it is silent, and only then
         LavaCycle cycle = LavaCycle.standard(40);
@@ -171,7 +170,8 @@ class QuakeScheduleTest {
         long dueInWindow = -1, windowEnd = -1;
         for (long now = 0; now < 20L * cycle.length(); now++) {
             LavaCycle.State st = cycle.at(now);
-            int quiet = QuakeSchedule.quietLeft(true, st.phase() == LavaCycle.Phase.WARNING, st.phase() == LavaCycle.Phase.RISE, st.into(), st.left());
+            int quiet = QuakeSchedule.quietLeft(true, st.phase() == LavaCycle.Phase.WARNING, st.phase() == LavaCycle.Phase.RISE, st.into(), st.left(),
+                    cycle.length(LavaCycle.Phase.RISE));
             if (quiet > 0 && q.begun() && q.nextBig() <= now && dueInWindow < 0) {
                 dueInWindow = now;
                 windowEnd = now + quiet;

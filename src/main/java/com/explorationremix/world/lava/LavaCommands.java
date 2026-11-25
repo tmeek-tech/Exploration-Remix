@@ -21,11 +21,13 @@ import java.util.Locale;
 /**
  * {@code /remix lava}: the Basalt Galleries' lava cycle, for operators testing a world.
  * <ul>
- *     <li>{@code /remix lava}: the phase, the time left in it, the lava's height, how many chunks round the players in
- *     or near the Galleries are still catching up, and what the flood has cost per tick</li>
+ *     <li>{@code /remix lava}: the phase (and the climb or break in the rise), the time left in it, the lava plane's
+ *     height and surface, how many chunks round the players in or near the Galleries still drain lava blocks an older
+ *     build left, and what that has cost per tick</li>
  *     <li>{@code /remix lava set <calm|warning|rise|full|drain> [seconds]}: jumps the clock to that far into a phase
  *     (it stays held if it was frozen)</li>
- *     <li>{@code /remix lava level <0-40>}: jumps the lava to that height over its table and holds the clock there</li>
+ *     <li>{@code /remix lava level <0-40>}: jumps the lava to the moment that many rows of the band are first under its
+ *     surface and holds the clock there</li>
  *     <li>{@code /remix lava freeze}, {@code unfreeze}: holds the clock, or lets it run on</li>
  *     <li>{@code /remix lava length <minutes>}: the cycle's length from now on, keeping the place in the phase (0: back
  *     to the config's)</li>
@@ -61,22 +63,23 @@ public final class LavaCommands {
         LavaCycle cycle = clock.cycle(b.rise());
         LavaCycle.State s = cycle.at(clock.tick(level.getGameTime()));
         boolean on = ERConfig.INSTANCE.lavaCycleEnabled.get();
-        int h = on ? s.level() : 0;
-        say(c, String.format(Locale.ROOT, "Lava cycle%s: %s, %s left of %s; the lava %d of %d blocks over its table (top block y %d, table y %d)%s",
-                on ? "" : " (turned off in explorationremix-world.toml: the lava stays at its table)", s.phase().id(),
-                LavaFlood.minutes(s.left()), LavaFlood.minutes(s.phaseLength()), h, b.rise(), b.tableY() + h - 1, b.tableY() - 1,
-                clock.frozen() ? ", clock held" : ""));
+        double h = on ? s.height() : 0;
+        say(c, String.format(Locale.ROOT, "Lava cycle%s: %s%s, %s left of %s; the lava %.2f of %d blocks over its table (surface y %.2f, %d rows under it, table y %d)%s",
+                on ? "" : " (turned off in explorationremix-world.toml: the lava stays at its table)", s.phase().id(), stage(cycle, s),
+                LavaFlood.minutes(s.left()), LavaFlood.minutes(s.phaseLength()), h, b.rise(), b.tableY() - LavaCycle.SURFACE_DROP + h,
+                on ? s.level() : 0, b.tableY() - 1, clock.frozen() ? ", clock held" : ""));
         say(c, String.format(Locale.ROOT, "  cycle %s (%s)%s, %d cycles ended", LavaFlood.minutes(cycle.length()), LavaFlood.describe(cycle),
                 clock.lengthOverride() > 0 ? ", length set by command" : "", clock.cycles()));
         LavaFlood.Stats st = LavaFlood.stats();
-        say(c, String.format(Locale.ROOT, "  chunks round players in or near the Galleries: %d, %d still catching up", LavaFlood.nearChunks(), LavaFlood.pending()));
+        say(c, String.format(Locale.ROOT, "  chunks round players in or near the Galleries: %d, %d still draining lava blocks from before 0.21.6",
+                LavaFlood.nearChunks(), LavaFlood.pending()));
         if (st.ticks() > 0) {
             say(c, String.format(Locale.ROOT, "  over the last %d ticks with work: %.2f ms per tick (at most %.2f), %.0f blocks changed and %.0f looked at per tick",
                     st.ticks(), st.avgMs(), st.maxMs(), st.avgChanges(), st.avgChecks()));
         }
         Vec3 p = c.getSource().getPosition();
         int here = LavaFlood.chunkLevel(level, (int) Math.floor(p.x), (int) Math.floor(p.z));
-        if (here >= 0) say(c, String.format(Locale.ROOT, "  this chunk's lava: %d over the table", here));
+        if (here > 0) say(c, String.format(Locale.ROOT, "  this chunk still has old lava blocks %d over the table", here));
         return 1;
     }
 
@@ -152,10 +155,18 @@ public final class LavaCommands {
         LavaFlood.Band b = LavaFlood.band();
         LavaCycle cycle = clock.cycle(b.rise());
         LavaCycle.State s = cycle.at(clock.tick(level.getGameTime()));
-        say(c, String.format(Locale.ROOT, "%s: %s, %s into it (%s left), the lava %d of %d blocks over its table%s; cycle %s (%s)", what,
-                s.phase().id(), LavaFlood.minutes(s.into()), LavaFlood.minutes(s.left()), s.level(), b.rise(),
+        say(c, String.format(Locale.ROOT, "%s: %s%s, %s into it (%s left), the lava %.2f of %d blocks over its table%s; cycle %s (%s)", what,
+                s.phase().id(), stage(cycle, s), LavaFlood.minutes(s.into()), LavaFlood.minutes(s.left()), s.height(), b.rise(),
                 clock.frozen() ? ", clock held" : "", LavaFlood.minutes(cycle.length()), LavaFlood.describe(cycle)));
         return 1;
+    }
+
+    /** In the rise, which climb it is in or which break it waits in (" (climb 2 of 4)", " (break after climb 2, 12 s left)"); else nothing. */
+    static String stage(LavaCycle cycle, LavaCycle.State s) {
+        LavaCycle.Stage st = cycle.stage(s);
+        if (st == null) return "";
+        if (st.climbing()) return String.format(Locale.ROOT, " (climb %d of %d)", st.index() + 1, cycle.stages());
+        return String.format(Locale.ROOT, " (break after climb %d, %s left)", st.index() + 1, LavaFlood.seconds(st.left()));
     }
 
     private static ServerLevel overworld(CommandContext<CommandSourceStack> c) {

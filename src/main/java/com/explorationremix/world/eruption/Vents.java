@@ -89,7 +89,7 @@ final class Vents {
             m.setY(y);
             BlockState s = c.getBlockState(m);
             if (!open(c, m, s)) return new int[]{y, lava};
-            if (lava == NONE && s.getFluidState().is(FluidTags.LAVA)) lava = y;
+            if (lava == NONE && (s.getFluidState().is(FluidTags.LAVA) || LavaFlood.underPlane(y))) lava = y;
         }
         return null;
     }
@@ -107,7 +107,7 @@ final class Vents {
         for (int y = from; y >= bottom; y--) {
             m.setY(y);
             BlockState s = c.getBlockState(m);
-            if (!open(c, m, s) || s.getFluidState().is(FluidTags.LAVA)) return y;
+            if (!open(c, m, s) || s.getFluidState().is(FluidTags.LAVA) || LavaFlood.underPlane(y)) return y;
         }
         return orElse;
     }
@@ -139,7 +139,8 @@ final class Vents {
             m.set(x, feet.getY() + dy, z);
             BlockState s = c.getBlockState(m);
             if (s.getFluidState().is(FluidTags.LAVA)) return BombFlight.LAVA;
-            return open(c, m, s) ? BombFlight.OPEN : BombFlight.SOLID;
+            if (!open(c, m, s)) return BombFlight.SOLID;
+            return LavaFlood.underPlane(m.getY()) ? BombFlight.LAVA : BombFlight.OPEN;
         });
     }
 
@@ -169,7 +170,7 @@ final class Vents {
                 m.set(x, y, z);
                 BlockState s = chunk.getBlockState(m);
                 if (!s.getCollisionShape(chunk, m).isEmpty()) return BombFlight.SOLID;
-                return s.getFluidState().isEmpty() ? BombFlight.OPEN : BombFlight.LAVA;
+                return s.getFluidState().isEmpty() && !LavaFlood.underPlane(y) ? BombFlight.OPEN : BombFlight.LAVA;
             }
         };
     }

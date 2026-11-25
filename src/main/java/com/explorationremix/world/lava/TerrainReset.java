@@ -68,6 +68,11 @@ import java.util.Locale;
  * block under their feet) is left for a later look, so nobody is shut in rock or has the floor taken from under them at
  * once; under the sea it is not (no pocket rides out the flood). Blocks put back near players give off smoke and a hiss,
  * so the land is seen to re-form.
+ *
+ * <p><b>0.21.6.</b> The risen sea is the lava plane ({@link LavaPlane}), with no blocks under it: every block comes back
+ * as it was generated (the sea's own blocks are only in chunks an older build flooded, and those are put back once
+ * they have drained), a block where a player stands waits for them at every height, and a container waits until the
+ * plane is down at its table.
  */
 public final class TerrainReset {
     private TerrainReset() {}
@@ -117,7 +122,8 @@ public final class TerrainReset {
         int max = cfg.resetChangesPerTick.get();
         if (level.getServer().getAverageTickTime() > 40) max = Math.max(64, max / 2);
         long t0 = System.nanoTime();
-        Pass p = new Pass(level, band, bottom, (int) Math.min(Integer.MAX_VALUE, gen), state.level(), max, near);
+        // 0.21.6: the sea is the plane, so a chunk's own lava blocks stand at 0 once an older build's have drained
+        Pass p = new Pass(level, band, bottom, (int) Math.min(Integer.MAX_VALUE, gen), 0, max, near);
         NearChunks.walk(level, near, NearChunks.radius(level), now, p::visit);
         nearChunks = p.chunks;
         pendingChunks = p.stale;
@@ -292,9 +298,9 @@ public final class TerrainReset {
                 pos.set(x, y, z);
                 BlockState cur = chunk.getBlockState(pos);
                 if (cur.hasBlockEntity()) {
-                    // a container breaks the way a player's pick breaks it, contents and all, but only once this chunk's
-                    // lava is down at its table, so nothing it drops falls into lava
-                    if (d.level > 0) {
+                    // a container breaks the way a player's pick breaks it, contents and all, but only once the lava is
+                    // down at its table, so nothing it drops falls into lava
+                    if (d.level > 0 || LavaFlood.seaHeight() > 0) {
                         waiting++;
                         continue;
                     }

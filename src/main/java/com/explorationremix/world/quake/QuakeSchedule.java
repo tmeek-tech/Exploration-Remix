@@ -16,8 +16,9 @@ import java.util.Random;
  *     lasts 30 to 50 ticks at a strength of 0.15 to 0.35, and never comes within {@link #AROUND_BIG} ticks of a big
  *     quake: one due then is put off to that long after the big quake's end.</li>
  *     <li>The lava's warning is the layer's only clock, so it is kept quiet ({@link #quietLeft}): a big quake due while
- *     the lava warns or in the first {@link #QUIET_RISE} ticks of its rise is put off to that window's end and 200 to
- *     600 ticks more; a tremor due then runs silent (its blocks still topple, but no client hears or feels it).</li>
+ *     the lava warns or rises is put off to that window's end and 200 to 600 ticks more; a tremor due then runs silent
+ *     (its blocks still topple, but no client hears or feels it). Since 0.21.6 the window holds the whole rise, as each
+ *     of its climbs has its own warning (until then only its first 600 ticks).</li>
  *     <li>A quake due with no player there to take part ({@code actors}) is skipped and the next one drawn. Nothing starts
  *     while the lava clock or a quake is held; the clock moves on, and a quake that fell due starts at the release.</li>
  * </ul>
@@ -28,8 +29,6 @@ public final class QuakeSchedule {
     public static final int TREMOR = 0, BIG = 1, CLIMB = 2;
     /** No tremor comes this many ticks before a big quake, during one or this many ticks after it. */
     public static final int AROUND_BIG = 400;
-    /** The first ticks of the lava's rise that are kept quiet with its warning. */
-    public static final int QUIET_RISE = 600;
     /** A big quake put off by the quiet window comes this many ticks after its end, and up to {@link #QUIET_SPREAD} more. */
     public static final int QUIET_AFTER = 200, QUIET_SPREAD = 400;
 
@@ -52,14 +51,13 @@ public final class QuakeSchedule {
 
     /**
      * Ticks left of the quiet window at cycle phase {@code phase} ({@code into} ticks into it, {@code left} to go), or 0
-     * outside it: the whole warning and the first {@link #QUIET_RISE} ticks of the rise. With the lava cycle off there is
-     * no window. (A rise shorter than {@link #QUIET_RISE} is quiet throughout, and the window counted from the warning
-     * then runs a little past it: a big quake is put off a little longer, nothing else.)
+     * outside it: the whole warning and the whole rise, which is {@code riseLength} ticks long. With the lava cycle off
+     * there is no window.
      */
-    public static int quietLeft(boolean cycleOn, boolean warning, boolean rising, int into, int left) {
+    public static int quietLeft(boolean cycleOn, boolean warning, boolean rising, int into, int left, int riseLength) {
         if (!cycleOn) return 0;
-        if (warning) return left + QUIET_RISE;
-        if (rising && into < QUIET_RISE) return QUIET_RISE - into;
+        if (warning) return left + Math.max(0, riseLength);
+        if (rising) return Math.max(0, left);
         return 0;
     }
 

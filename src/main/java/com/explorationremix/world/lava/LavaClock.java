@@ -28,6 +28,9 @@ public final class LavaClock {
 
     private transient LavaCycle cycle;
     private transient int cycleRise = -1;
+    /** How the rise is split into climbs (0.21.6, from the config; not saved: it applies at once). */
+    private transient int stages = LavaCycle.DEFAULT_STAGES;
+    private transient double breakShare = LavaCycle.DEFAULT_BREAK_SHARE;
 
     /** A clock whose first cycle begins at game time {@code now}, calm. */
     public LavaClock(long now, int[] lengths) {
@@ -62,13 +65,24 @@ public final class LavaClock {
         return t;
     }
 
-    /** The current cycle with the lava climbing {@code rise} blocks (cached until the lengths change). */
+    /** The current cycle with the lava climbing {@code rise} blocks (cached until the lengths or the climbs change). */
     public LavaCycle cycle(int rise) {
         if (cycle == null || cycleRise != rise) {
-            cycle = new LavaCycle(lengths, rise);
+            cycle = new LavaCycle(lengths, rise, stages, breakShare);
             cycleRise = rise;
         }
         return cycle;
+    }
+
+    /**
+     * How the rise is split: {@code stages} climbs with breaks between them taking {@code breakShare} of it (the
+     * config's, read every tick; a change applies at once, as it only moves the plane within the rise).
+     */
+    public void climbs(int stages, double breakShare) {
+        if (stages == this.stages && Double.compare(breakShare, this.breakShare) == 0) return;
+        this.stages = stages;
+        this.breakShare = breakShare;
+        cycle = null;
     }
 
     private void setLengths(int[] l) {
@@ -142,7 +156,7 @@ public final class LavaClock {
     public void rescale(long now, int[] newLengths, int override) {
         int rise = Math.max(0, cycleRise);
         LavaCycle.State s = cycle(rise).at(tick(now));
-        LavaCycle n = new LavaCycle(newLengths, rise);
+        LavaCycle n = new LavaCycle(newLengths, rise, stages, breakShare);
         int len = n.length(s.phase());
         int into = (int) Math.round(s.progress() * len);
         int t = n.tickOf(s.phase(), into);

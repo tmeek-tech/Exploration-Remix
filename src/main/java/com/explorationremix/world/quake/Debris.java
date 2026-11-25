@@ -483,6 +483,8 @@ final class Debris {
                 if (fl.is(FluidTags.LAVA)) f |= DebrisSearch.LAVA;
             }
             if (s.getBlock() instanceof LiquidBlock) f |= DebrisSearch.LIQUID;
+            // 0.21.6: an open cell under the lava plane's surface is in the sea, as its lava source was before
+            if (fl.isEmpty() && (f & DebrisSearch.EMPTY) != 0 && LavaFlood.underPlane(y)) f |= DebrisSearch.FLUID | DebrisSearch.SOURCE | DebrisSearch.LAVA;
             int dy = y - bottom;
             if (GalleryChanges.inLayer(y) && (log == null || !ChangeLog.holds(dy) || log.has(ChangeLog.key(bx & 15, dy, bz & 15)))) {
                 f |= DebrisSearch.HELD;
