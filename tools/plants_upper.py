@@ -11,8 +11,7 @@ leaflets instead run on into the tile below, drawn wrapped, and are the same in 
 import math, random
 from PIL import Image
 from plants_fern import LIT as FERN_LIT, STALK as FERN_STALK, BACK_LIT as FERN_BACK_LIT, BACK_STALK
-from plants import (hexc, grid, blank, _line, register, put, stamp, sway, bezier, prisms, speckle_sheet,
-                    put_wrap)
+from plants import (hexc, grid, blank, _line, register, put, stamp, sway, bezier, prisms, put_wrap)
 
 PAINTERS = {}
 
@@ -483,11 +482,91 @@ register(PAINTERS, "pagoda_fungus_bottom", lambda: _pagoda().crop((0, 16, 16, 32
 register(PAINTERS, "pagoda_fungus_top_2", lambda: _pagoda(PAGODA_CAPS_2).crop((0, 0, 16, 16)), glow=[PAGODA["rim"]])
 register(PAINTERS, "pagoda_fungus_bottom_2", lambda: _pagoda(PAGODA_CAPS_2).crop((0, 16, 16, 32)), glow=[PAGODA["rim"]])
 
-# Blue lichen: specks of light on the rift's walls; the third look in larger patches.
-LICHEN_BLUE = ["#18285C", "#22408E", "#2E58BE", "#3D74DC", "#6AA6F6"]
-register(PAINTERS, "blue_lichen", lambda: speckle_sheet(9301, 0, 0.7, 1.6, LICHEN_BLUE, coverage=0.34), glow=["#3D74DC", "#6AA6F6"])
-register(PAINTERS, "blue_lichen_2", lambda: speckle_sheet(9302, 0, 0.6, 1.2, LICHEN_BLUE, coverage=0.26), glow=["#3D74DC", "#6AA6F6"])
-register(PAINTERS, "blue_lichen_3", lambda: speckle_sheet(9303, 0, 0.9, 2.0, LICHEN_BLUE, coverage=0.5), glow=["#3D74DC", "#6AA6F6"])
+# Blue lichen (0.21.7, the Blue Reaches polish; the look card's "Rosettes"): leafy rosettes of silver-blue lobes on the
+# rifts' walls, two or three to a face, each with a glowing light-blue rim and a cup or two of glow near its middle.
+# The thick lichen of the streaks down the rifts' walls (climbable like vines) is the same rosettes grown into one
+# another over the whole face, wrapping round its edges so a streak runs on unbroken from block to block.
+L_BODY = ("#3E5288", "#566DA4", "#7189BE", "#8DA3D2")      # dark line, mid, light, pale: silver blue
+L_GLOW = ("#78A8F2", "#A8CCFF")                            # the glowing rims and cups
+
+
+def _rosette(px, rng, cx, cy, R, wrap=False):
+    """One rosette of 5 to 8 lobes round (cx, cy), lit from the top left, its rim glowing."""
+    dot = put_wrap if wrap else put
+    lobes = rng.choice((5, 6, 7, 8))
+    ph = rng.random() * 6.28
+    for y in range(int(cy - R - 1), int(cy + R + 2)):
+        for x in range(int(cx - R - 1), int(cx + R + 2)):
+            dx, dy = x + 0.5 - cx, y + 0.5 - cy
+            d = math.hypot(dx, dy)
+            wave = abs(math.cos(lobes * math.atan2(dy, dx) / 2 + ph))
+            edge = R * (0.72 + 0.28 * wave)
+            if d > edge:
+                continue
+            t = d / edge
+            lit = -(dx + dy) / (d * 1.414) if d > 0.01 else 0.0
+            if t > 0.74:
+                c = L_GLOW[1] if lit > 0.15 else L_GLOW[0]
+            elif wave < 0.22 and t > 0.3:
+                c = L_BODY[0]
+            elif t > 0.45:
+                c = L_BODY[3] if lit > 0.3 else L_BODY[2]
+            else:
+                c = L_BODY[1]
+            dot(px, x, y, c)
+    # fruiting cups near the middle
+    for _ in range(1 if R < 4 else 2):
+        ox, oy = int(cx + rng.uniform(-R * 0.3, R * 0.3)), int(cy + rng.uniform(-R * 0.3, R * 0.3))
+        dot(px, ox, oy, L_GLOW[1]); dot(px, ox + 1, oy, L_GLOW[0]); dot(px, ox, oy + 1, L_GLOW[0]); dot(px, ox + 1, oy + 1, L_BODY[0])
+
+
+def _lichen_rosettes(seed, count):
+    """Two or three rosettes apart on a face (blue lichen)."""
+    rng = random.Random(seed)
+    img = blank()
+    px = img.load()
+    placed = []
+    for _ in range(400):
+        if len(placed) >= count:
+            break
+        R = rng.choice((3.0, 3.6, 4.4, 5.2, 6.0))
+        cx, cy = rng.uniform(R + 0.6, 15.4 - R), rng.uniform(R + 0.6, 15.4 - R)
+        if any(math.hypot(cx - a, cy - b) < R + q - 0.5 for a, b, q in placed):
+            continue
+        placed.append((cx, cy, R))
+        _rosette(px, rng, cx, cy, R)
+    return img
+
+
+def _thick_lichen(seed):
+    """Rosettes grown into one another over the whole face, wrapping round its edges (thick blue lichen): four or five
+    big ones touching, over a dark mat of old growth that shows between them."""
+    rng = random.Random(seed)
+    img = blank()
+    px = img.load()
+    for y in range(16):   # the old growth under them, dark
+        for x in range(16):
+            if rng.random() < 0.6:
+                put(px, x, y, L_BODY[0])
+    placed = []
+    for _ in range(2000):
+        if len(placed) >= 4:
+            break
+        R = rng.choice((4.4, 5.2, 6.0))
+        cx, cy = rng.uniform(0, 16), rng.uniform(0, 16)
+        if any(min(abs(cx - a), 16 - abs(cx - a)) ** 2 + min(abs(cy - b), 16 - abs(cy - b)) ** 2 < (0.85 * (R + q)) ** 2 for a, b, q in placed):
+            continue
+        placed.append((cx, cy, R))
+    for cx, cy, R in sorted(placed, key=lambda p: -p[2]):   # the big ones under, the small ones over them
+        _rosette(px, rng, cx, cy, R, wrap=True)
+    return img
+
+
+register(PAINTERS, "blue_lichen", lambda: _lichen_rosettes(9311, 3), glow=list(L_GLOW))
+register(PAINTERS, "blue_lichen_2", lambda: _lichen_rosettes(9312, 2), glow=list(L_GLOW))
+register(PAINTERS, "blue_lichen_3", lambda: _lichen_rosettes(9316, 3), glow=list(L_GLOW))
+register(PAINTERS, "thick_blue_lichen", lambda: _thick_lichen(9325), glow=list(L_GLOW))
+register(PAINTERS, "thick_blue_lichen_2", lambda: _thick_lichen(9328), glow=list(L_GLOW))
 
 # Asurine buds: small crystals among the big ones (asurine_geodes.jpg, deep_blue_rift.jpg).
 ASURINE = {"dark": "#1C3478", "left": "#3368D8", "right": "#4486EE", "edge": "#6AA6F6", "tip": "#A8D0FF"}
@@ -503,26 +582,56 @@ def _asurine_bud(v):
 register(PAINTERS, "asurine_bud", lambda: _asurine_bud(1), glow=["#6AA6F6", "#A8D0FF"])
 register(PAINTERS, "asurine_bud_2", lambda: _asurine_bud(2), glow=["#6AA6F6", "#A8D0FF"])
 
-# Asurine crust: a sheet of small facets over the asurine of the geodes' lining and the rift's walls, which a shader
-# leaves near black where nothing glows (asurine_geodes.jpg, deep_blue_rift.jpg). Each facet has a lit edge, a face and
-# a shadow; a few carry a pale glint.
-CRUST = ["#1C3478", "#2650B4", "#3368D8", "#4486EE", "#8CC0FF"]
+# Asurine crust (0.21.7, the Blue Reaches polish; the look card's "Druse"): a druse of small asurine points seen end
+# on, crowded in a cluster or two over the asurine of the geodes' lining and the rifts' walls, which a shader leaves
+# near black where nothing glows (asurine_geodes.jpg, deep_blue_rift.jpg). Each point is a hexagon of six facets lit
+# from the top left, with a pale glint at its tip and a contact shadow at its foot.
+C_FACE = ("#1A2B66", "#2A4AA8", "#3F6BD4", "#5E92EE", "#8EBEFF", "#BEDCFF")   # shadow, dark, mid, lit, bright, glint
 
 
-def _facet(px, rng, x, y):
-    """One small facet: lit edge, face, shadow; now and then a pale glint."""
-    shape = ([(0, -1, 3), (-1, 0, 3), (0, 0, 2), (1, 0, 1), (0, 1, 1), (1, 1, 0)] if rng.random() < 0.6
-             else [(0, 0, 3), (1, 0, 2), (0, 1, 1), (1, 1, 0)])
-    for dx, dy, c in shape:
-        put_wrap(px, x + dx, y + dy, CRUST[c])
-    if rng.random() < 0.18:
-        put_wrap(px, x, y - (1 if len(shape) == 6 else 0), CRUST[4])
+def _point(px, cx, cy, r):
+    """A crystal point seen end on, of radius r round (cx, cy)."""
+    for y in range(int(cy - r - 1), int(cy + r + 2)):
+        for x in range(int(cx - r - 1), int(cx + r + 2)):
+            dx, dy = x + 0.5 - cx, y + 0.5 - cy
+            sector = math.floor((math.atan2(dy, dx) + math.pi) / (math.pi / 3)) % 6
+            na = -math.pi + (sector + 0.5) * math.pi / 3
+            if dx * math.cos(na) + dy * math.sin(na) > r * 0.87:
+                continue
+            light = -(math.cos(na) + math.sin(na)) / 1.414
+            if math.hypot(dx, dy) < 0.75:
+                c = C_FACE[5]
+            elif light > 0.6:
+                c = C_FACE[4]
+            elif light > 0.0:
+                c = C_FACE[3]
+            elif light > -0.6:
+                c = C_FACE[2]
+            else:
+                c = C_FACE[1]
+            put(px, x, y, c)
+    # contact shadow on the bottom right
+    for k in range(int(r) + 1):
+        sx, sy = int(cx + r * 0.6 + 1), int(cy + k - r * 0.3)
+        if 0 <= sx < 16 and 0 <= sy < 16 and px[sx, sy][3] == 0:
+            put(px, sx, sy, C_FACE[0])
 
 
-register(PAINTERS, "asurine_crust", lambda: speckle_sheet(9401, 0, 0, 0, CRUST, coverage=0.6, stamp_fn=_facet),
-         glow=["#8CC0FF", "#4486EE"])
-register(PAINTERS, "asurine_crust_2", lambda: speckle_sheet(9402, 0, 0, 0, CRUST, coverage=0.5, stamp_fn=_facet),
-         glow=["#8CC0FF", "#4486EE"])
+def _druse(seed):
+    rng = random.Random(seed)
+    img = blank()
+    px = img.load()
+    for _ in range(rng.choice((1, 2))):
+        gx, gy = rng.uniform(4, 12), rng.uniform(4, 12)
+        pts = [(gx + rng.gauss(0, 2.2), gy + rng.gauss(0, 2.2), rng.choice((1.2, 1.6, 2.0, 2.6))) for _ in range(rng.randint(5, 8))]
+        for x, y, r in sorted(pts, key=lambda p: p[2]):
+            if r + 0.3 < x < 15.7 - r and r + 0.3 < y < 15.7 - r:
+                _point(px, x, y, r)
+    return img
+
+
+register(PAINTERS, "asurine_crust", lambda: _druse(9411), glow=[C_FACE[4], C_FACE[5]])
+register(PAINTERS, "asurine_crust_2", lambda: _druse(9412), glow=[C_FACE[4], C_FACE[5]])
 
 # More looks for the existing asurine crystal and blue glow mushroom, in their palettes and with their glow.
 ASURINE_CRYSTAL = {"dark": "#1C3478", "left": "#3368D8", "right": "#4486EE", "edge": "#4486EE", "tip": "#A8D0FF"}
@@ -577,3 +686,96 @@ register(PAINTERS, "blue_glow_mushroom_3", lambda: grid([
 ], BLUE_MUSHROOM), glow=["#6AA6F6", "#A8D0FF"])
 
 
+
+
+# ------------------------------------------------------------------------------------------------ silver cattails
+# 0.21.7 (Taran's card pick, 25 Nov 2026: "Silver cattails"): reeds two or three blocks tall by the rifts' water, to
+# hide in. A plant is drawn whole, on a canvas 16 wide and 16 a block tall, so its blades run on across the joins
+# between its blocks; each block's texture is its slice (block.SilverCattailsBlock seeds every block of a plant from
+# its foot, so the slices of one drawing stand together). Silver-blue blades, back ones a shade darker, fan out from
+# the foot, some bending over near their tips; a few stems stand above them, each with a cattail head two pixels wide
+# that glows light blue, and a pale spike over it.
+CATTAIL_BLADE = ("#2E3B5C", "#45577E", "#5F759F", "#7F96C0", "#A3B7DC")   # shadow, dark, mid, light, pale
+CATTAIL_HEAD = ("#2F5FC8", "#4A86E6", "#6FA8F4", "#9CC8FF")               # the glowing heads, dark to light
+CATTAIL_PARTS = {2: ("short_top", "short_bottom"), 3: ("top", "middle", "bottom")}   # top first, as drawn
+
+
+def _cattail_blade(px, rng, H, x0, h, lean, ramp, wide):
+    def cput(x, y, c):
+        x, y = int(math.floor(x)), int(math.floor(y))
+        if 0 <= x < 16 and 0 <= y < H:
+            px[x, y] = hexc(c)
+
+    droop = rng.random() < 0.3
+    top = H - h
+    tip = (x0 + lean * (1.8 if droop else 1.0), top + (h * 0.18 if droop else 0))
+    ctrl = (x0 + lean * (0.5 if droop else 0.15), top - (h * 0.05 if droop else 0))
+    pts = bezier((x0, H + 0.5), ctrl, tip, steps=6 * H)
+    seen = set()
+    for i, (x, y) in enumerate(pts):
+        key = (int(x), int(y))
+        if key in seen:
+            continue
+        seen.add(key)
+        t = i / (len(pts) - 1)
+        cput(x, y, ramp[1] if t < 0.25 else ramp[2] if t < 0.6 else ramp[3] if t < 0.9 else ramp[4])
+        if wide and t < 0.4:
+            cput(x + 1, y, ramp[0] if t < 0.2 else ramp[1])
+
+
+def _cattails(seed, n):
+    """A silver cattail plant n blocks tall, on a 16 x 16n canvas."""
+    rng = random.Random(seed * 7919 + n)
+    H = 16 * n
+    canvas = Image.new("RGBA", (16, H), (0, 0, 0, 0))
+    px = canvas.load()
+
+    def cput(x, y, c):
+        if 0 <= x < 16 and 0 <= y < H:
+            px[x, y] = hexc(c)
+
+    k = rng.randint(7, 9)
+    blades = []
+    for i in range(k):
+        x0 = 1.0 + (i + rng.uniform(0.15, 0.85)) * 13.0 / k
+        h = rng.uniform(0.55, 0.95) * H
+        lean = (x0 - 8) / 8 * rng.uniform(1.0, 3.5) + rng.uniform(-1.2, 1.2)
+        blades.append((rng.random(), x0, h, max(-x0 + 0.5, min(15.4 - x0, lean))))
+    for depth, x0, h, lean in sorted(blades):
+        ramp = CATTAIL_BLADE if depth > 0.4 else (CATTAIL_BLADE[0],) + CATTAIL_BLADE[:4]   # back blades a shade darker
+        _cattail_blade(px, rng, H, x0, h, lean, ramp, rng.random() < 0.55)
+    head = 5 if n == 2 else 6
+    for _ in range(2 if n == 2 else 3):
+        x = rng.randint(3, 11)
+        top = int(rng.uniform(0.0, 0.12) * H) + 3
+        for y in range(top + head, H):
+            cput(x, y, CATTAIL_BLADE[3] if y % 5 else CATTAIL_BLADE[2])
+        for i in range(head):   # the head: a rounded spike two wide, lit on its left
+            y = top + i
+            if i == 0:
+                cput(x, y, CATTAIL_HEAD[3])
+            elif i == head - 1:
+                cput(x, y, CATTAIL_HEAD[1])
+                cput(x + 1, y, CATTAIL_HEAD[0])
+            else:
+                cput(x, y, CATTAIL_HEAD[3] if i == 1 else CATTAIL_HEAD[2])
+                cput(x + 1, y, CATTAIL_HEAD[1])
+        for y in range(top - 3, top):
+            cput(x, y, CATTAIL_BLADE[4])
+    return canvas
+
+
+def _cattail_slice(seed, n, k):
+    return _cattails(seed, n).crop((0, 16 * k, 16, 16 * k + 16))
+
+
+CATTAIL_LOOKS = 3
+for _n, _parts in CATTAIL_PARTS.items():
+    for _k, _part in enumerate(_parts):
+        for _v in range(1, CATTAIL_LOOKS + 1):
+            _name = f"silver_cattails_{_part}" + ("" if _v == 1 else f"_{_v}")
+            _img = _cattail_slice(_v * 31 + _n, _n, _k)
+            _heads = {hexc(c) for c in CATTAIL_HEAD}
+            _glows = any(_img.getpixel((x, y)) in _heads for x in range(16) for y in range(16))
+            register(PAINTERS, _name, (lambda s=_v * 31 + _n, n=_n, k=_k: _cattail_slice(s, n, k)),
+                     glow=list(CATTAIL_HEAD) if _glows else None)

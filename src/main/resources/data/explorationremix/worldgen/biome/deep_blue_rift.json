@@ -116,9 +116,11 @@
       "explorationremix:deep_blue_rift/crust"
     ],
     [
-      "explorationremix:deep_blue_rift/waterfalls"
+      "explorationremix:deep_blue_rift/waterfalls",
+      "explorationremix:deep_blue_rift/pond_spills"
     ],
     [
+      "explorationremix:deep_blue_rift/cattail_beds",
       "explorationremix:deep_blue_rift/glow_vines",
       "explorationremix:deep_blue_rift/mushrooms",
       "explorationremix:deep_blue_rift/glowbells",

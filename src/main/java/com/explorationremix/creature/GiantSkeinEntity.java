@@ -1,6 +1,7 @@
 package com.explorationremix.creature;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.block.SilverCattailsBlock;
 import com.explorationremix.combat.Stagger;
 import com.explorationremix.combat.WindUp;
 import com.explorationremix.creature.body.GiantCrawl;
@@ -127,6 +128,13 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     static final int ALERT_TICKS = 30, REAR_TICKS = 20, LUNGE_TICKS = 10, RECOVER_TICKS = 26, STRIKE_COOLDOWN = 40;
     /** Hunting, it asks the way again this often; it gives up after this long without sight of its quarry, after a look. */
     static final int REPATH = 10, LOSE_TICKS = 200, SEARCH_TICKS = 400;
+    /**
+     * A quarry hidden in silver cattails (0.21.7, Taran's card: "Hidden while you're in them") it neither sees nor
+     * strikes at unless they are this near its jaws, right by it; hunting one that hides there, it loses them after
+     * this long and goes to look where it saw them last.
+     */
+    static final double FOUND_IN_REEDS = 3.0;
+    static final int HIDDEN_LOSE_TICKS = 30;
     /** It rests this long between crawls (ticks), and goes this far in a crawl's leg, one to three legs a crawl. */
     static final int REST_MIN = 600, REST_MAX = 2400, SHORT_REST = 200;
     /**
@@ -1167,7 +1175,7 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
         long now = level().getGameTime();
         boolean sees = canSee(t);
         if (sees) { lastSeen = now; lastSeenAt = t.position(); }
-        else if (now - lastSeen > LOSE_TICKS) { startSearch(); return; }
+        else if (now - lastSeen > (SilverCattailsBlock.inCattails(t) ? HIDDEN_LOSE_TICKS : LOSE_TICKS)) { startSearch(); return; }
         // on its way up over them it keeps to the climb, striking only if they come right up to its jaws
         if (tickCount % 2 == 0 && (!perching || inReach(t, CLOSE_STRIKE)) && canStrike(t)) { startStrike(t); return; }
         if (tickCount % 2 == 1 && sees && canDrop(t)) { startHang(t); return; }
@@ -1234,7 +1242,8 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
 
     /** Whether it can strike at {@code t} now: in reach of its jaws, with a clear line from its eyes. */
     private boolean canStrike(LivingEntity t) {
-        return strikeCooldown == 0 && inReach(t, STRIKE_REACH) && clearTo(eyes(), t) && inRift(t.position()) && roomToStrike(t);
+        return strikeCooldown == 0 && inReach(t, STRIKE_REACH) && clearTo(eyes(), t) && !SilverCattailsBlock.hides(t, mouth(), FOUND_IN_REEDS)
+                && inRift(t.position()) && roomToStrike(t);
     }
 
     /**
@@ -1746,9 +1755,9 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
 
     // --- senses
 
-    /** It sees what is in the open round its head, not through rock. */
+    /** It sees what is in the open round its head, not through rock, and not a player hidden in cattails unless right by its jaws. */
     public boolean canSee(LivingEntity t) {
-        return !t.isInvisible() && clearTo(eyes(), t);
+        return !t.isInvisible() && !SilverCattailsBlock.hides(t, mouth(), FOUND_IN_REEDS) && clearTo(eyes(), t);
     }
 
     /** Whether it sees the point {@code p} from its eyes (for /remix giant path). */

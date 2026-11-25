@@ -179,6 +179,8 @@ public final class Net {
     public boolean failed;
     /** Blue Reaches: the rasterised deep dark of this cell (null elsewhere). */
     NetDark.Plan dark;
+    /** Blue Reaches: the cell's kept city hall, or null (set with the index, {@link NetIndex#build}). */
+    Chamber city;
 
     // ---- spatial index for the per-column lookups: 16-block buckets over the cell and a 48-block apron
     static final int BK = 16, APRON = 48;

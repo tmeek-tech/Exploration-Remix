@@ -1,6 +1,7 @@
 package com.explorationremix.creature;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.block.SilverCattailsBlock;
 import com.explorationremix.combat.Stagger;
 import com.explorationremix.combat.WindUp;
 import com.explorationremix.rune.effect.RuneFx;
@@ -1169,9 +1170,12 @@ public class SkeinEntity extends Monster implements ClimbMoveControl.Climber, IE
         return true;
     }
 
-    /** It sees what is in the open round its head (its feelers take in every side), not through rock. */
+    /**
+     * It sees what is in the open round its head (its feelers take in every side), not through rock, and not a player
+     * hidden in silver cattails unless they are within its touch (0.21.7, Taran's card: "Hidden while you're in them").
+     */
     public boolean canSee(LivingEntity t) {
-        return !t.isInvisible() && clearTo(eyes(), t);
+        return !t.isInvisible() && !SilverCattailsBlock.hides(t, eyes(), TOUCH) && clearTo(eyes(), t);
     }
 
     /** Whether there is a clear line from {@code from} to {@code t}'s eyes or its middle. */
