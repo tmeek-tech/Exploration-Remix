@@ -14,15 +14,20 @@ import com.explorationremix.world.terrain.Hashing;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SculkShriekerBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.SculkShriekerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
@@ -44,6 +49,14 @@ public final class ChoirSummon {
     private static final int SPROUTS = 8;
     private static final double SPROUT_R = ChoirSites.FLOOR_R * 0.8;
     private static final long SALT_SPROUT = 7001;
+    /**
+     * How far from the dais a sculk shrieker is struck dumb ({@link #hush}): as far out as a fighter still counts as
+     * fighting, plus the eight blocks a sculk sensor hears them over and the eight more a shrieker hears that sensor
+     * over, so no noise made in the fight can reach one that still has its call.
+     */
+    public static final double HUSH_R = HollowChoirEntity.KEEP + 2 * 8 + 1;
+    /** The Choir's own pale blue for the lines it puts over the hotbar: never aqua, which is cyan. */
+    private static final Style PALE = Style.EMPTY.withColor(ChoirLook.GLOW);
 
     private ChoirSummon() {}
 
@@ -88,10 +101,13 @@ public final class ChoirSummon {
         level.playSound(null, pos, ERSounds.CHOIR_KEY_SET.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
         ChoirSites.Site s = siteAt(level, pos);
         if (s == null || !(level instanceof ServerLevel sl)) return;
+        // the first key is already a promise of a fight here, so it is the first key that takes the Warden out of it,
+        // and the line over the hotbar says so the once it happens
+        boolean hushed = hush(sl, s) > 0;
         int n = filled(level, s);
         if (n < 3) {
-            player.displayClientMessage(Component.translatable("message.explorationremix.choir.keys", n, 3)
-                    .withStyle(ChatFormatting.AQUA), true);
+            player.displayClientMessage(Component.translatable(hushed ? "message.explorationremix.choir.keys_hush"
+                    : "message.explorationremix.choir.keys", n, 3).withStyle(PALE), true);
             return;
         }
         summon(sl, s, player);
@@ -104,7 +120,7 @@ public final class ChoirSummon {
         if (fighting(level, s) != null) return;
         if (filled(level, s) < 3) {
             player.displayClientMessage(Component.translatable("message.explorationremix.choir.keys",
-                    filled(level, s), 3).withStyle(ChatFormatting.AQUA), true);
+                    filled(level, s), 3).withStyle(PALE), true);
             return;
         }
         summon(sl, s, player);
@@ -122,6 +138,7 @@ public final class ChoirSummon {
         if (fighting(level, s) != null) return;
         HollowChoirEntity choir = EREntities.HOLLOW_CHOIR.get().create(level);
         if (choir == null) return;
+        hush(level, s);
         dress(level, s, 0);
         choir.settle(s, s.ceil());
         choir.setPos(s.x(), s.floorY() + HollowChoirEntity.CROWN_UP, s.z());
@@ -129,9 +146,58 @@ public final class ChoirSummon {
                 MobSpawnType.TRIGGERED, null, null);
         level.addFreshEntity(choir);
         level.playSound(null, s.x(), s.floorY() + 3, s.z(), ERSounds.CHOIR_WAKE.get(), SoundSource.HOSTILE, 2.0F, 1.0F);
-        ring(level, s, 0, 40);
+        // the bowl rings: circles of its motes out over the whole floor, one inside the next
+        for (double r = 3; r < ChoirSites.FLOOR_R; r += 3) ring(level, s, r, (int) (r * 5));
         if (by != null) by.displayClientMessage(Component.translatable("message.explorationremix.choir.woken")
-                .withStyle(ChatFormatting.AQUA), true);
+                .withStyle(PALE), true);
+    }
+
+    // --------------------------------------------------------------------------------------- keeping the Warden out
+
+    /**
+     * Strikes dumb every sculk shrieker round an arena (0.22.0), and says how many it found with their call still in
+     * them. A shrieker struck dumb still shrieks at a noise, but it warns nobody, darkens nothing and can never call
+     * the Warden: it is what vanilla already does to the shriekers a catalyst grows ({@code can_summon=false}).
+     *
+     * <p>Why it is needed: the arena stands in the Deep Dark, and vanilla's sculk patches grow sensors and shriekers
+     * wherever they like, the rim walk included. The test arena had two shriekers four blocks past its rim with a
+     * sensor between them and the bowl, so a fight, which is nothing but noise, would have had the Warden climb out
+     * of the floor in the middle of it. The Choir is the fight here and nothing of the Warden's belongs in it.
+     *
+     * <p>It happens when a key goes into a socket and not before (Taran's card), so the walk to an arena is as
+     * dangerous as the rest of the Deep Dark, and the hush is something the keys do. It stays done: the blockstate is
+     * the whole record. Only chunks that are loaded are looked at, and the Choir asks again as the fight goes on
+     * ({@link HollowChoirEntity}), so a chunk that comes in late is hushed too.
+     */
+    public static void hush(HollowChoirEntity choir) {
+        if (!(choir.level() instanceof ServerLevel sl)) return;
+        ChoirSites.Site s = siteAt(sl, BlockPos.containing(choir.daisX(), choir.floorY(), choir.daisZ()));
+        if (s != null) hush(sl, s);
+    }
+
+    public static int hush(ServerLevel level, ChoirSites.Site s) {
+        double mx = s.x(), my = s.floorY() + 2, mz = s.z();
+        int r = (int) Math.ceil(HUSH_R);
+        List<BlockPos> found = new ArrayList<>();
+        for (int cx = (int) Math.floor(mx - r) >> 4; cx <= (int) Math.floor(mx + r) >> 4; cx++)
+            for (int cz = (int) Math.floor(mz - r) >> 4; cz <= (int) Math.floor(mz + r) >> 4; cz++) {
+                // never load or generate a chunk for this: what is not there yet cannot hear the fight either
+                LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
+                if (chunk == null) continue;
+                for (java.util.Map.Entry<BlockPos, BlockEntity> e : chunk.getBlockEntities().entrySet()) {
+                    if (!(e.getValue() instanceof SculkShriekerBlockEntity)) continue;
+                    BlockPos p = e.getKey();
+                    if (p.distToCenterSqr(mx, my, mz) > HUSH_R * HUSH_R) continue;
+                    BlockState st = chunk.getBlockState(p);
+                    if (st.is(Blocks.SCULK_SHRIEKER) && st.getValue(SculkShriekerBlock.CAN_SUMMON)) found.add(p.immutable());
+                }
+            }
+        for (BlockPos p : found) {
+            level.setBlock(p, level.getBlockState(p).setValue(SculkShriekerBlock.CAN_SUMMON, false), 2);
+            level.playSound(null, p, SoundEvents.SCULK_BLOCK_SPREAD, SoundSource.BLOCKS, 0.8F, 0.6F);
+            motes(level, p.getX() + 0.5, p.getY() + 0.6, p.getZ() + 0.5, 0.6, 14);
+        }
+        return found.size();
     }
 
     // -------------------------------------------------------------------------------------------- dressing the bowl
@@ -329,22 +395,29 @@ public final class ChoirSummon {
 
     /** A circle of the Choir's pale motes over the floor. */
     private static void ring(ServerLevel level, double x, double y, double z, double rad, int n) {
-        ParticleOptions mote = ERParticles.SPORE.get();
         for (int i = 0; i < n; i++) {
             double a = i * 2 * Math.PI / n;
-            level.sendParticles(mote, x + rad * Math.cos(a), y, z + rad * Math.sin(a), 1,
-                    ChoirLook.GLOW_RGB[0], ChoirLook.GLOW_RGB[1], ChoirLook.GLOW_RGB[2], 0);
+            mote(level, x + rad * Math.cos(a), y, z + rad * Math.sin(a), ChoirLook.GLOW_RGB);
         }
     }
 
     /** A puff of motes round a point. */
     private static void motes(ServerLevel level, double x, double y, double z, double rad, int n) {
-        ParticleOptions mote = ERParticles.SPORE.get();
         for (int i = 0; i < n; i++) {
             double a = level.random.nextDouble() * Math.PI * 2, r = rad * level.random.nextDouble();
-            float[] c = level.random.nextInt(4) == 0 ? ChoirLook.BONE_RGB : ChoirLook.GLOW_RGB;
-            level.sendParticles(mote, x + r * Math.cos(a), y + level.random.nextDouble() * 1.2, z + r * Math.sin(a),
-                    1, c[0], c[1], c[2], 0);
+            mote(level, x + r * Math.cos(a), y + level.random.nextDouble() * 1.2, z + r * Math.sin(a),
+                    level.random.nextInt(4) == 0 ? ChoirLook.BONE_RGB : ChoirLook.GLOW_RGB);
         }
+    }
+
+    /**
+     * One of the Choir's motes, in its own colour. The mote takes its colour from the three numbers of its speed
+     * ({@code CaveParticles.Spore}), and a player's game only reads those as they were sent when the count is 0: with
+     * a count it rolls speeds of its own and takes the three numbers for a spread instead. Sent with a count of 1 and
+     * a speed of 0, as 0.21.9 did, every mote of the fight arrived black, a block or so off its mark, and could not be
+     * seen at all. So each goes alone, with count 0 and speed 1, and lands where it was sent in the colour it was sent.
+     */
+    private static void mote(ServerLevel level, double x, double y, double z, float[] rgb) {
+        level.sendParticles(ERParticles.SPORE.get(), x, y, z, 0, rgb[0], rgb[1], rgb[2], 1.0);
     }
 }

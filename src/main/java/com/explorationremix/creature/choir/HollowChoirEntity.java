@@ -97,6 +97,13 @@ public class HollowChoirEntity extends Monster implements WindUp {
     /** Nobody within this far of the dais for this long and the fight is let go. */
     public static final double KEEP = 44;
     public static final int LEAVE_TICKS = 100;
+    /**
+     * How long after it is called the Choir waits before its first turn: time to see what has woken and get down
+     * off the rim. Without it (0.21.9) the first slam came down on whoever set the third key 1.6 seconds later.
+     */
+    public static final int ENTER_TICKS = 80;
+    /** How often it strikes dumb any shrieker that has come into range since ({@link ChoirSummon#hush}). */
+    private static final int HUSH_EVERY = 100;
     /** What it gives up: about twenty levels' worth of experience. */
     public static final int XP = 1400;
     /** A slam's reach on the floor and what it costs to stand in it. */
@@ -193,6 +200,7 @@ public class HollowChoirEntity extends Monster implements WindUp {
         entityData.set(DATA_FLOOR, (float) site.floorY());
         setPos(site.x(), site.floorY() + CROWN_UP, site.z());
         growTendrils();
+        actTimer = ENTER_TICKS;
     }
 
     public int phase() { return entityData.get(DATA_PHASE); }
@@ -275,19 +283,30 @@ public class HollowChoirEntity extends Monster implements WindUp {
      * every mob's, so the fight there is a walk-through rather than a fight; that is the difficulty's own promise and
      * not ours to break. Standing there instead of vanishing is.
      */
-    @Override public boolean shouldDespawnInPeaceful() { return false; }
+    @Override protected boolean shouldDespawnInPeaceful() { return false; }
 
     // --------------------------------------------------------------------------------------------------- the fight
 
     @Override
     public void tick() {
         super.tick();
+        // on both sides: a player's own game picks what a swing strikes from where the parts stand in its own world,
+        // and nothing but this tells it where a tendril is. Left to the server alone (0.21.9) the six boxes sat at
+        // the world's origin on every client, and no sword could find one.
+        placeTendrils();
         if (level().isClientSide) {
             clientTick();
             return;
         }
-        placeTendrils();
         hover();
+    }
+
+    /** The player's game hears which tendrils stand: their boxes follow, as the server's do when it cuts or grows one. */
+    @Override
+    public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
+        super.onSyncedDataUpdated(key);
+        if (DATA_STANDING.equals(key) && tendrils != null)
+            for (Tendril t : tendrils) if (t != null) t.refreshDimensions();
     }
 
     @Override
@@ -296,6 +315,7 @@ public class HollowChoirEntity extends Monster implements WindUp {
         bar.setProgress(getHealth() / getMaxHealth());
 
         if (letGo()) return;
+        if (tickCount % HUSH_EVERY == 0) ChoirSummon.hush(this);
         mend();
         if (stallTicks > 0) { stallTicks--; setAct(ACT_STALL, 0, stallTicks); return; }
 
@@ -562,6 +582,16 @@ public class HollowChoirEntity extends Monster implements WindUp {
         Vec3 f = tendrilFoot(place);
         level().playSound(null, f.x, f.y + 2, f.z, ERSounds.CHOIR_TENDRIL_CUT.get(), SoundSource.HOSTILE, 1.1F, 1.0F);
         ChoirSummon.tendrilCutFx(this, place);
+    }
+
+    /**
+     * Dev tools ({@code /remix choir cut}): every standing tendril parts at once, as if each had been cut through, so
+     * the crown falls and the open core can be tested without the minutes of cutting that lead to it.
+     */
+    public int devCutAll() {
+        int n = 0;
+        for (int i = 0; i < PLACES; i++) if (standing(i)) { cutThrough(i); n++; }
+        return n;
     }
 
     /** Health crossing a phase border: the arena darkens, the sculk comes out, and it drops at once. */

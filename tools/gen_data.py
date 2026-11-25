@@ -1117,6 +1117,7 @@ CHOIR_WORDS = {
     f"item.{MOD}.choir_key.tip2": "Every ancient city keeps one.",
     f"message.{MOD}.choir.need": "The socket is empty. It wants a choir key.",
     f"message.{MOD}.choir.keys": "%s of %s keys set.",
+    f"message.{MOD}.choir.keys_hush": "%s of %s keys set. No shrieker here can call the Warden now.",
     f"message.{MOD}.choir.woken": "The Hollow Choir wakes.",
     f"message.{MOD}.choir.held": "The crown is held up. Cut the tendrils.",
 }

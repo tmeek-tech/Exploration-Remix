@@ -186,6 +186,7 @@
   "key.explorationremix.cast_runes": "Cast runes",
   "message.explorationremix.choir.held": "The crown is held up. Cut the tendrils.",
   "message.explorationremix.choir.keys": "%s of %s keys set.",
+  "message.explorationremix.choir.keys_hush": "%s of %s keys set. No shrieker here can call the Warden now.",
   "message.explorationremix.choir.need": "The socket is empty. It wants a choir key.",
   "message.explorationremix.choir.woken": "The Hollow Choir wakes.",
   "message.explorationremix.runes.busy": "Too many runes in flight",
