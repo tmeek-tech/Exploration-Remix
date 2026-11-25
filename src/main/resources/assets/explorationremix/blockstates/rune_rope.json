@@ -1,15 +1,107 @@
 {
   "variants": {
-    "end=false,fast=false": {
+    "end=false,facing=north,fast=false,lip=false": {
       "model": "explorationremix:block/rune_rope"
     },
-    "end=false,fast=true": {
+    "end=false,facing=east,fast=false,lip=false": {
+      "model": "explorationremix:block/rune_rope"
+    },
+    "end=false,facing=south,fast=false,lip=false": {
+      "model": "explorationremix:block/rune_rope"
+    },
+    "end=false,facing=west,fast=false,lip=false": {
+      "model": "explorationremix:block/rune_rope"
+    },
+    "end=false,facing=north,fast=false,lip=true": {
+      "model": "explorationremix:block/rune_rope_lip",
+      "y": 0
+    },
+    "end=false,facing=east,fast=false,lip=true": {
+      "model": "explorationremix:block/rune_rope_lip",
+      "y": 90
+    },
+    "end=false,facing=south,fast=false,lip=true": {
+      "model": "explorationremix:block/rune_rope_lip",
+      "y": 180
+    },
+    "end=false,facing=west,fast=false,lip=true": {
+      "model": "explorationremix:block/rune_rope_lip",
+      "y": 270
+    },
+    "end=false,facing=north,fast=true,lip=false": {
       "model": "explorationremix:block/rune_rope_fast"
     },
-    "end=true,fast=false": {
+    "end=false,facing=east,fast=true,lip=false": {
+      "model": "explorationremix:block/rune_rope_fast"
+    },
+    "end=false,facing=south,fast=true,lip=false": {
+      "model": "explorationremix:block/rune_rope_fast"
+    },
+    "end=false,facing=west,fast=true,lip=false": {
+      "model": "explorationremix:block/rune_rope_fast"
+    },
+    "end=false,facing=north,fast=true,lip=true": {
+      "model": "explorationremix:block/rune_rope_fast_lip",
+      "y": 0
+    },
+    "end=false,facing=east,fast=true,lip=true": {
+      "model": "explorationremix:block/rune_rope_fast_lip",
+      "y": 90
+    },
+    "end=false,facing=south,fast=true,lip=true": {
+      "model": "explorationremix:block/rune_rope_fast_lip",
+      "y": 180
+    },
+    "end=false,facing=west,fast=true,lip=true": {
+      "model": "explorationremix:block/rune_rope_fast_lip",
+      "y": 270
+    },
+    "end=true,facing=north,fast=false,lip=false": {
       "model": "explorationremix:block/rune_rope_end"
     },
-    "end=true,fast=true": {
+    "end=true,facing=east,fast=false,lip=false": {
+      "model": "explorationremix:block/rune_rope_end"
+    },
+    "end=true,facing=south,fast=false,lip=false": {
+      "model": "explorationremix:block/rune_rope_end"
+    },
+    "end=true,facing=west,fast=false,lip=false": {
+      "model": "explorationremix:block/rune_rope_end"
+    },
+    "end=true,facing=north,fast=false,lip=true": {
+      "model": "explorationremix:block/rune_rope_end"
+    },
+    "end=true,facing=east,fast=false,lip=true": {
+      "model": "explorationremix:block/rune_rope_end"
+    },
+    "end=true,facing=south,fast=false,lip=true": {
+      "model": "explorationremix:block/rune_rope_end"
+    },
+    "end=true,facing=west,fast=false,lip=true": {
+      "model": "explorationremix:block/rune_rope_end"
+    },
+    "end=true,facing=north,fast=true,lip=false": {
+      "model": "explorationremix:block/rune_rope_fast_end"
+    },
+    "end=true,facing=east,fast=true,lip=false": {
+      "model": "explorationremix:block/rune_rope_fast_end"
+    },
+    "end=true,facing=south,fast=true,lip=false": {
+      "model": "explorationremix:block/rune_rope_fast_end"
+    },
+    "end=true,facing=west,fast=true,lip=false": {
+      "model": "explorationremix:block/rune_rope_fast_end"
+    },
+    "end=true,facing=north,fast=true,lip=true": {
+      "model": "explorationremix:block/rune_rope_fast_end"
+    },
+    "end=true,facing=east,fast=true,lip=true": {
+      "model": "explorationremix:block/rune_rope_fast_end"
+    },
+    "end=true,facing=south,fast=true,lip=true": {
+      "model": "explorationremix:block/rune_rope_fast_end"
+    },
+    "end=true,facing=west,fast=true,lip=true": {
       "model": "explorationremix:block/rune_rope_fast_end"
     }
   }

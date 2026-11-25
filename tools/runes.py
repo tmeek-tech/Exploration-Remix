@@ -1302,11 +1302,45 @@ def rope_model(look):
                          plane([8, 0, 6.5], [8, 16, 9.5], {f: {"uv": [3, 0, 6, 16], "texture": "#rope"} for f in ("west", "east")})]}
 
 
+def rope_lip_model(look):
+    """A rope's top block where it reaches a wall's lip or hangs from a ledge's edge (the block level with the top): a
+    short stub up from the strand below, then the strand bent over flat onto the top, reaching a little over half a block
+    in (toward north here; the block state turns it). The flat part is the same crossed planes laid on their side, a
+    pixel and a quarter over the top so it never flickers with the stone under it."""
+    tex = f"{MOD}:block/{look}"
+
+    def piece(frm, to, axis, origin, faces):
+        return {"from": frm, "to": to, "shade": False, "rotation": {"origin": origin, "axis": axis, "angle": 45},
+                "forge_data": {"block_light": 15}, "faces": faces}
+    stub = [8, 1.25, 8]
+    flat = [8, 1.25, 1]
+    return {"parent": "minecraft:block/block", "render_type": "minecraft:cutout", "ambientocclusion": False,
+            "textures": {"particle": tex, "rope": tex},
+            "elements": [
+                # the stub: the hanging strand's last pixels, up to the bend
+                piece([6.5, 0, 8], [9.5, 2.75, 8], "y", stub, {f: {"uv": [0, 13.25, 3, 16], "texture": "#rope"} for f in ("north", "south")}),
+                piece([8, 0, 6.5], [8, 2.75, 9.5], "y", stub, {f: {"uv": [3, 13.25, 6, 16], "texture": "#rope"} for f in ("west", "east")}),
+                # the strand laid over the top, from the bend at the block's middle on over the lip
+                piece([6.5, 1.25, -6], [9.5, 1.25, 9.5], "z", flat, {f: {"uv": [0, 0, 3, 15.5], "texture": "#rope"} for f in ("up", "down")}),
+                piece([8, -0.25, -6], [8, 2.75, 9.5], "z", flat,
+                      {f: {"uv": [3, 0, 6, 15.5], "rotation": 90, "texture": "#rope"} for f in ("west", "east")})]}
+
+
 def rope_states():
-    """fast (the second phase's paler rope) x end (the bottom block, frayed)."""
-    return {"variants": {f"end={end},fast={fast}": {"model": f"{MOD}:block/rune_rope" + ("_fast" if fast == "true" else "")
-                                                    + ("_end" if end == "true" else "")}
-                         for end in ("false", "true") for fast in ("false", "true")}}
+    """fast (the second phase's paler rope) x end (the bottom block, frayed) x lip (the top block bent over a lip or an
+    edge, turned to face it)."""
+    turn = {"north": 0, "east": 90, "south": 180, "west": 270}
+    out = {}
+    for end in ("false", "true"):
+        for fast in ("false", "true"):
+            for lip in ("false", "true"):
+                for facing in ("north", "east", "south", "west"):
+                    key = f"end={end},facing={facing},fast={fast},lip={lip}"
+                    if lip == "true" and end == "false":
+                        out[key] = {"model": f"{MOD}:block/rune_rope" + ("_fast" if fast == "true" else "") + "_lip", "y": turn[facing]}
+                    else:
+                        out[key] = {"model": f"{MOD}:block/rune_rope" + ("_fast" if fast == "true" else "") + ("_end" if end == "true" else "")}
+    return {"variants": out}
 
 
 def _frond_sheet_model(look):
@@ -1358,6 +1392,7 @@ def block_models():
     six = ("down", "up", "north", "south", "west", "east")
     light = f"{MOD}:block/rune_light"
     ropes = {look: rope_model(look) for look in ("rune_rope", "rune_rope_end", "rune_rope_fast", "rune_rope_fast_end")}
+    ropes.update({look + "_lip": rope_lip_model(look) for look in ("rune_rope", "rune_rope_fast")})
     return dict(frond_models(), **ropes, **{
         "rune_barrier": {"parent": "minecraft:block/cube_all", "render_type": "minecraft:translucent",
                          "textures": {"all": f"{MOD}:block/rune_barrier"}},

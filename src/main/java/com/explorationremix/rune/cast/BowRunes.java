@@ -137,8 +137,8 @@ final class BowRunes {
     /**
      * Rope. Its arrow stuck in a ceiling: it hangs down from there. In a wall: from there, or from the wall's lip when
      * that is a few blocks above, so its top reaches the top. In the ground: from the edge of what it landed on, toward
-     * the shooter, so it hangs down the ledge's face. Never from a creature. It unrolls down to the floor, a few blocks
-     * a tick.
+     * the shooter, so it hangs down the ledge's face. Over a lip or an edge, its top block bends over onto the top
+     * (RopeBlock.LIP). Never from a creature. It unrolls down to the floor, a few blocks a tick.
      */
     private static Origin rope(CastContext ctx, Act a, Origin o) {
         ServerLevel l = ctx.level;
@@ -153,6 +153,8 @@ final class BowRunes {
             return o;
         }
         BlockPos top = cell;
+        // the way the rope's top bends over onto what it hangs from: the wall's top, or the ledge the arrow landed on
+        Direction lip = null;
         if (stuck.getAxis().isHorizontal()) {
             // up the wall to its lip, if the top is near: then the rope's top block stands level with the top
             for (int k = 1; k <= ROPE_UP; k++) {
@@ -160,6 +162,7 @@ final class BowRunes {
                 if (!l.getBlockState(up).isAir()) break;
                 if (!solid(l, up.relative(stuck))) {
                     top = up;
+                    lip = stuck;
                     break;
                 }
             }
@@ -181,6 +184,7 @@ final class BowRunes {
                 return o;
             }
             top = edge;
+            lip = way.getOpposite();
         }
         // down to the floor
         List<BlockPos> rope = new ArrayList<>();
@@ -196,20 +200,21 @@ final class BowRunes {
         int life = a.empowered ? 2 * TempBlock.Kind.ROPE.life : TempBlock.Kind.ROPE.life;
         RuneFx.impact(l, Vec3.atCenterOf(top), new Vec3(0, -1, 0), a.rune, a.element, 1.0F, false);
         RuneFx.play(l, Vec3.atCenterOf(top), SoundEvents.CHAIN_PLACE, 1.0F, 1.3F);
-        unroll(ctx, rope, 0, a.empowered, life);
+        unroll(ctx, rope, 0, a.empowered, life, lip);
         return new Origin(Vec3.atCenterOf(rope.get(rope.size() - 1)), new Vec3(0, -1, 0), null, true);
     }
 
     /** The rope drops a few blocks a tick, from the top. */
-    private static void unroll(CastContext ctx, List<BlockPos> rope, int from, boolean fast, int life) {
+    private static void unroll(CastContext ctx, List<BlockPos> rope, int from, boolean fast, int life, @Nullable Direction lip) {
         if (Executor.gone(ctx) || from >= rope.size()) return;
         ServerLevel l = ctx.level;
         int to = Math.min(rope.size(), from + ROPE_DROP);
         for (int i = from; i < to; i++) {
             BlockState s = RuneRegistry.ROPE.get().defaultBlockState().setValue(RopeBlock.FAST, fast).setValue(RopeBlock.END, i == rope.size() - 1);
+            if (i == 0 && lip != null) s = s.setValue(RopeBlock.LIP, true).setValue(RopeBlock.FACING, lip);
             if (!TempBlocks.place(l, rope.get(i), s, ctx.owner, life)) return;
         }
-        if (to < rope.size()) CastService.later(ctx.owner, 1, () -> unroll(ctx, rope, to, fast, life));
+        if (to < rope.size()) CastService.later(ctx.owner, 1, () -> unroll(ctx, rope, to, fast, life, lip));
         else RuneFx.play(l, Vec3.atCenterOf(rope.get(rope.size() - 1)), SoundEvents.CHAIN_STEP, 0.8F, 1.2F);
     }
 
