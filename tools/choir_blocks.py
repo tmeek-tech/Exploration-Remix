@@ -6,7 +6,8 @@ Five blocks, none of which fits gen_data.py's plant and rock kinds, so they are 
                  an `open` property: shut, a pale blue line of light runs along the seam of its lid; open, the lid is
                  tilted back and the inside is empty and dark.
   key_socket     one of the three cradles round the arena's rim, `filled` false or true.
-  choir_brazier  the arena's shallow bowl of cold flame, `lit` true or false.
+  choir_brazier  the arena's shallow bowl of cold flame, `lit` true or false; lit, a flame a block tall stands out of
+                 it, so the twelve of them read from across a cavern.
   choir_sprout   the rooted sprout the Choir raises out of the sculk.
   choir_bell     the trophy a beaten Choir leaves, horizontal facing, lit from inside.
 
@@ -203,7 +204,7 @@ def choir_brazier_top(lit):
     _disc(px, 8, 8, 5.0, VOID)
     if lit:
         _disc(px, 8, 8, 4.0, GLOW)
-        _disc(px, 8, 8, 2.1, BONE)
+        _disc(px, 8, 8, 1.4, BONE)
         for d in ((0, -5), (5, 0), (0, 5), (-5, 0)):
             px[8 + d[0], 8 + d[1]] = hexc(GLOW)
     else:
@@ -212,6 +213,30 @@ def choir_brazier_top(lit):
         for _ in range(14):
             a, r = rng.random() * math.tau, rng.random() * 3.4
             px[int(8 + r * math.cos(a)), int(8 + r * math.sin(a))] = hexc(STONE[0])
+    return img
+
+
+def choir_brazier_flame():
+    """
+    The cold flame, drawn once and stood up over the bowl as a crossed pair of quads.
+
+    The bowl's own lit pixels are ten across and read as nothing from the far side of a cavern, which is the whole
+    hint a player gets that an arena is down there. A flame a block tall carries. It is drawn to fill the texture and
+    the model narrows it, so the shape here is wider than it looks in the world: wide where it leaves the bowl, widest
+    a third of the way up, then drawn out to a point, with a little lean so it is not a leaf.
+    """
+    img = blank()
+    px = img.load()
+    for y in range(1, 16):
+        u = (15 - y) / 14.0                              # 0 at the bowl, 1 at the tip
+        half = 4.6 + 1.8 * (u / 0.25) if u < 0.25 else 6.4 * (1 - (u - 0.25) / 0.75) ** 0.8
+        cx = 8 + 1.1 * math.sin(u * 3.2)                 # the lean
+        core = half - 3.0 if u < 0.3 else -1          # a small white heart only where it leaves the bowl
+        for x in range(16):
+            d = abs(x + 0.5 - cx)
+            if d > half:
+                continue
+            px[x, y] = hexc(BONE if d <= core else GLOW)
     return img
 
 
@@ -310,6 +335,7 @@ def textures():
         "choir_brazier_top": choir_brazier_top(True),
         "choir_brazier_top_unlit": choir_brazier_top(False),
         "choir_brazier_side": choir_brazier_side(True),
+        "choir_brazier_flame": choir_brazier_flame(),
         "choir_brazier_side_unlit": choir_brazier_side(False),
         "choir_sprout": choir_sprout(),
         "choir_bell_side": choir_bell_side(),
@@ -402,15 +428,24 @@ def write_all(assets, write):
         "filled=true": {"model": b("key_socket_filled")},
     }})
 
-    # ---- the brazier: a shallow bowl 10 wide and 7 tall
+    # ---- the brazier: a shallow bowl 10 wide and 7 tall, the lit one with a flame a block tall standing out of it
+    flame_turn = {"origin": [8, 8, 8], "axis": "y", "angle": 45, "rescale": True}
+    flame = [dict({"from": [4.5, 5, 8], "to": [11.5, 17, 8], "rotation": flame_turn, "shade": False,
+                   "faces": {d: {"uv": [0, 0, 16, 16], "texture": "#flame"} for d in ("north", "south")}}, **EMISSIVE),
+             dict({"from": [8, 5, 4.5], "to": [8, 17, 11.5], "rotation": flame_turn, "shade": False,
+                   "faces": {d: {"uv": [0, 0, 16, 16], "texture": "#flame"} for d in ("west", "east")}}, **EMISSIVE)]
     for suffix in ("", "_unlit"):
         t = {"particle": b("choir_brazier_side" + suffix), "side": b("choir_brazier_side" + suffix),
              "top": b("choir_brazier_top" + suffix), "bottom": b("choir_brazier_side" + suffix)}
         lit = suffix == ""
         if lit:
             t.update({"side_glow": b("choir_brazier_side_glow"), "top_glow": b("choir_brazier_top_glow"),
-                      "bottom_glow": b("choir_brazier_side_glow")})
-        model("choir_brazier" + suffix, _box(t, (3, 0, 3), (13, 7, 13), glow=lit))
+                      "bottom_glow": b("choir_brazier_side_glow"), "flame": b("choir_brazier_flame")})
+        bowl = _box(t, (3, 0, 3), (13, 7, 13), glow=lit)
+        if lit:
+            bowl["elements"].extend(flame)
+            bowl["ambientocclusion"] = False
+        model("choir_brazier" + suffix, bowl)
     state("choir_brazier", {"variants": {
         "lit=true": {"model": b("choir_brazier")},
         "lit=false": {"model": b("choir_brazier_unlit")},

@@ -8,9 +8,9 @@
       }
     },
     "faces": "walls_ceiling",
-    "tries": 96,
-    "radius": 7,
-    "height": 7,
+    "tries": 24,
+    "radius": 3,
+    "height": 3,
     "on": "#explorationremix:asurine_lining",
     "in_water": false
   }

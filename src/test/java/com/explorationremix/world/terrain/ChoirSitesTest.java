@@ -1,5 +1,6 @@
 package com.explorationremix.world.terrain;
 
+import com.explorationremix.block.ChoirBrazierBlock;
 import com.explorationremix.world.feature.ChoirArena;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,33 @@ class ChoirSitesTest {
         // enough that far inside the cell), which lands at about a third
         assertTrue(share > 0.2 && share < 0.45,
                 "arenas in " + with + " of " + all.size() + " cells (" + Math.round(share * 100) + "%), wanted about one in three");
+    }
+
+    /**
+     * 0.21.7 opened noise rifts all through the Blue Reaches, the deep dark included. A rift is far deeper than the
+     * ten blocks the arena feature plugs under itself, so one under the bowl would leave the floor a plate over a
+     * chasm and the apron standing on air. {@code NetRifts.keep} eases them shut round an arena; this is what says
+     * the band is wide enough.
+     */
+    @Test
+    void noNoiseRiftOpensUnderAnArena() {
+        int arenas = 0, columns = 0;
+        for (Found f : sweep()) {
+            ChoirSites.Site s = f.site();
+            if (s == null) continue;
+            arenas++;
+            Network w = terrain(f.seed()).network;
+            int r = (int) Math.ceil(ChoirSites.RIM_R) + 4;
+            for (int x = (int) s.x() - r; x <= s.x() + r; x += 2)
+                for (int z = (int) s.z() - r; z <= s.z() + r; z += 2) {
+                    if (Math.hypot(x - s.x(), z - s.z()) > r) continue;
+                    columns++;
+                    assertFalse(w.scratch(x, z, Terrain.BLUE).nOn, "seed " + f.seed() + ": a noise rift opens in the"
+                            + " arena of cell " + s.cellX() + ", " + s.cellZ() + " at " + x + ", " + z);
+                }
+        }
+        assertTrue(arenas > 10, "only " + arenas + " arenas to look at");
+        assertTrue(columns > 10000, "only " + columns + " columns looked at");
     }
 
     @Test
@@ -215,10 +243,18 @@ class ChoirSitesTest {
             double ang = Math.abs(Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1]));
             assertEquals(2 * Math.PI / 3, ang, 0.12, "sockets " + i + " and " + ((i + 1) % 3) + " are not a third of a turn apart");
         }
-        for (int[] b : ChoirArena.braziers(s)) {
+        int[][] braziers = ChoirArena.braziers(s);
+        assertEquals(ChoirArena.BRAZIER_TREAD + ChoirArena.BRAZIER_FLOOR + ChoirArena.BRAZIER_DAIS, braziers.length,
+                "the three rings do not add up");
+        for (int[] b : braziers) {
             assertEquals(ChoirArena.topY(s, b[0] + 0.5, b[1] + 0.5) + 1, b[2], "a brazier floats or is buried");
             laid(s, b[0], b[1], "a brazier");
         }
+        for (int i = 0; i < braziers.length; i++)
+            for (int j = i + 1; j < braziers.length; j++) {
+                double d = Math.hypot(braziers[i][0] - braziers[j][0], braziers[i][1] - braziers[j][1]);
+                assertTrue(d >= 3, "braziers " + i + " and " + j + " stand " + Math.round(d * 10) / 10.0 + " apart");
+            }
         ChoirArena.Stump[] stumps = ChoirArena.stumps(s);
         assertTrue(stumps.length >= 3, "only " + stumps.length + " broken pillars");
         for (ChoirArena.Stump st : stumps) {
@@ -257,5 +293,43 @@ class ChoirSitesTest {
         assertEquals(taken[0], taken[1], "phase 1 should not move the sculk: the arena darkens first");
         assertTrue(taken[2] > taken[1] * 1.5, "phase 2 barely spreads the sculk (" + taken[1] + " -> " + taken[2] + ")");
         assertTrue(taken[3] > taken[2] * 1.3, "phase 3 barely spreads the sculk (" + taken[2] + " -> " + taken[3] + ")");
+    }
+
+    /**
+     * The fighting floor is lit at every phase, and the dais brightest of all.
+     *
+     * <p>A brazier's light falls a step for every block of the path it takes, not for every block of the straight
+     * line, so a floor thirty-two across cannot be lit from its edge whatever the light level: two rings left the
+     * middle, where the whole fight happens, at light 2. That is what the third ring on the dais is for, and why it is
+     * the one that never goes out. The Choir and its tendrils are drawn lit whatever the block light round them, so
+     * the fight is readable in the dark either way; the floor still has to be, because that is what a player reads a
+     * wind-up against.
+     */
+    @Test
+    void thereIsLightToFightBy() {
+        ChoirSites.Site s = anySite();
+        int[][] br = ChoirArena.braziers(s);
+        for (int phase = 0; phase <= ChoirArena.LAST_PHASE; phase++) {
+            int floor = 0, lit = 0, dais = 0;
+            for (int x = (int) s.x() - 17; x <= s.x() + 17; x++)
+                for (int z = (int) s.z() - 17; z <= s.z() + 17; z++) {
+                    if (!ChoirArena.onFloor(s, x + 0.5, z + 0.5)) continue;
+                    int y = ChoirArena.topY(s, x + 0.5, z + 0.5);
+                    if (y == ChoirArena.NONE) continue;
+                    floor++;
+                    int light = 0;
+                    for (int i = 0; i < br.length; i++) {
+                        if (!ChoirArena.brazierLit(i, phase)) continue;
+                        // the path the game's light takes: a step for each block along each axis
+                        int steps = Math.abs(x - br[i][0]) + Math.abs(z - br[i][1]) + Math.abs(y + 1 - br[i][2]);
+                        light = Math.max(light, ChoirBrazierBlock.LIGHT - steps);
+                    }
+                    if (light >= 4) lit++;
+                    if (Math.hypot(x + 0.5 - s.x(), z + 0.5 - s.z()) <= ChoirArena.DAIS_R) dais = Math.max(dais, light);
+                }
+            String at = "at phase " + phase;
+            assertTrue(dais >= 8, "the dais is at light " + dais + " " + at);
+            assertTrue(lit * 2 > floor, lit + " of " + floor + " floor columns reach light 4 " + at);
+        }
     }
 }

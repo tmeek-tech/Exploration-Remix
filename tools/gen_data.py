@@ -63,6 +63,9 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #   coral_fan   a flat fan, like vanilla's coral fans
 #   shelf       bracket fungus on a wall, turned to face away from it
 #   tall        a two-block plant: textures <id>_bottom and <id>_top; drops from its lower half only
+#   cattails    a plant two or three blocks tall (block.SilverCattailsBlock): property part (short_bottom and short_top
+#               for two, bottom, middle and top for three) and waterlogged, textures <id>_<part>; every block of a
+#               plant is seeded from its foot, so variant k's slices stand together; drops once, from its foot
 #   lichen      a sheet on any of the six faces, like glow lichen (a GlowLichenBlock); drops one per face
 #   carpet      a flat sheet lying on the floor, turned at random
 #   litter      a flat sheet lying on the floor whose look and turn are the block's state (properties look, one per
@@ -137,6 +140,8 @@ BLOCKS = {
     "glowbell": ("Glowbell", "cross", {"variants": 2, "resting": True}),
     "pagoda_fungus": ("Pagoda Fungus", "tall", {"variants": 2}),
     "blue_lichen": ("Blue Lichen", "lichen", {"variants": 3}),
+    # 0.21.7: the streaks down the noise rifts' walls, climbable like vines (Taran's card: "Climbable lichen streaks")
+    "thick_blue_lichen": ("Thick Blue Lichen", "lichen", {"variants": 2}),
     "asurine_bud": ("Asurine Bud", "crystal", {"variants": 2}),
     "asurine_crust": ("Asurine Crust", "lichen", {"variants": 2}),
     # ---- vegetation rework, part B: Deep Gardens (no green) and Basalt Galleries
@@ -225,6 +230,8 @@ BLOCKS = {
     "glowworm_threads_plant": ("Glowworm Threads", "vine_body:glowworm_threads", {"variants": 2}),
     "seep_reeds": ("Seep Reeds", "cross", {"variants": 2}),
     "tall_seep_reeds": ("Tall Seep Reeds", "tall", {"variants": 2}),
+    # 0.21.7, the Blue Reaches polish: reeds by the rifts' water to hide in (Taran's card pick: "Silver cattails")
+    "silver_cattails": ("Silver Cattails", "cattails", {"variants": 3}),
     "neon_mushrooms": ("Neon Mushrooms", "mushrooms", {"neon": True}),
 }
 NO_DROP = {"band_stone", "glow", "mossback_den", "grazed_filament_grass"}
@@ -246,7 +253,9 @@ BLOCK_TAGS = {
                                  # Upper Caves rework
                                  "frostberry_vine", "frostberry_vine_plant", "trailing_grass", "trailing_grass_plant",
                                  # 0.5: the Galleries' climbs
-                                 "cinder_chain"],
+                                 "cinder_chain",
+                                 # 0.21.7: the lichen streaks down the noise rifts' walls
+                                 "thick_blue_lichen"],
     # Frost moss is ground, as vanilla's moss is: ferns, flowers and saplings grow on it (Immersive Weathering's frosty
     # ferns only grow on #minecraft:dirt), and moss patches may spread over it.
     ("minecraft", "dirt"): ["frost_moss"],
@@ -255,7 +264,7 @@ BLOCK_TAGS = {
                                         # the Deep Gardens: the vent field's dripstone, and the neon blocks grown on its rock
                                         "black_dripstone", "pointed_black_dripstone", "glow_mat", "thin_glow_mat", "vent_crown",
                                         "vent_beads", "seep_crust"],
-    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen",
+    ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "thick_blue_lichen", "smoulder_lichen",
                                     # Deep Gardens round 2: the giant mushrooms
                                     "pale_stem", "glow_cap"],
     # The Galleries' lava glow is open space to a growing tree (TreeFeature asks isAir() or this tag): a sapling grows
@@ -641,6 +650,10 @@ def pick(entries, weights=None):
     return entries[0] if len(entries) == 1 else entries
 
 
+# The parts of a cattail plant (kind cattails), as block.SilverCattailsBlock.Part names them.
+CATTAIL_PARTS = ("short_bottom", "short_top", "bottom", "middle", "top")
+
+
 def plane_model(tex, plain_parent, template, key):
     """A cross, carpet or lichen model, drawn with the glow overlay when its texture has one."""
     t = {key: ref(tex)}
@@ -693,6 +706,11 @@ def loot(bid, drop, kind, chance=None, neon=False, shears=False, silk=False):
                  "predicate": {"block": {"blocks": [f"{MOD}:{bid}"], "state": {"half": other}}}},
                 {"condition": "minecraft:survives_explosion"}]})
         return {"type": "minecraft:block", "pools": pools}
+    elif kind == "cattails":
+        # one plant, one drop, from its foot: breaking any other block of it breaks the foot (SilverCattailsBlock)
+        entry.setdefault("conditions", []).append({"condition": "minecraft:any_of", "terms": [
+            {"condition": "minecraft:block_state_property", "block": f"{MOD}:{bid}", "properties": {"part": p}}
+            for p in ("short_bottom", "bottom")]})
     elif kind == "lichen":
         # one for each face it covers, like vanilla's glow lichen (which needs shears; these don't)
         entry["functions"] = [{"function": "minecraft:set_count", "add": True, "count": 1,
@@ -816,6 +834,17 @@ def block_assets():
             states = {"variants": {"half=lower": pick([{"model": ref(t)} for t in bottoms], weights),
                                    "half=upper": pick([{"model": ref(t)} for t in tops], weights)}}
             item = {"parent": "minecraft:item/generated", "textures": {"layer0": ref(tops[0])}}
+        elif kind == "cattails":
+            variants = {}
+            for part in CATTAIL_PARTS:
+                ts = variant_names(f"{bid}_{part}", len(texs))
+                for t in ts:
+                    models[t] = plane_model(t, "minecraft:block/cross", "cross", "cross")
+                # Lists of one length and order for every part: all the blocks of a plant are seeded from its foot.
+                for wet in ("false", "true"):
+                    variants[f"part={part},waterlogged={wet}"] = pick([{"model": ref(t)} for t in ts], weights)
+            states = {"variants": variants}
+            item = {"parent": "minecraft:item/generated", "textures": {"layer0": ref(f"{bid}_short_top")}}
         elif kind == "moss_carpet":
             models[bid] = {"parent": "minecraft:block/carpet", "textures": {"wool": ref(opts["texture"])}}
             states = {"variants": {"": {"model": ref(bid)}}}

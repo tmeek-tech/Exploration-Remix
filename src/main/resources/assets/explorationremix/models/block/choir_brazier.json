@@ -8,7 +8,8 @@
     "bottom": "explorationremix:block/choir_brazier_side",
     "side_glow": "explorationremix:block/choir_brazier_side_glow",
     "top_glow": "explorationremix:block/choir_brazier_top_glow",
-    "bottom_glow": "explorationremix:block/choir_brazier_side_glow"
+    "bottom_glow": "explorationremix:block/choir_brazier_side_glow",
+    "flame": "explorationremix:block/choir_brazier_flame"
   },
   "elements": [
     {
@@ -80,6 +81,99 @@
         "block_light": 15
       },
       "shade": false
+    },
+    {
+      "from": [
+        4.5,
+        5,
+        8
+      ],
+      "to": [
+        11.5,
+        17,
+        8
+      ],
+      "rotation": {
+        "origin": [
+          8,
+          8,
+          8
+        ],
+        "axis": "y",
+        "angle": 45,
+        "rescale": true
+      },
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#flame"
+        },
+        "south": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#flame"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
+    },
+    {
+      "from": [
+        8,
+        5,
+        4.5
+      ],
+      "to": [
+        8,
+        17,
+        11.5
+      ],
+      "rotation": {
+        "origin": [
+          8,
+          8,
+          8
+        ],
+        "axis": "y",
+        "angle": 45,
+        "rescale": true
+      },
+      "shade": false,
+      "faces": {
+        "west": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#flame"
+        },
+        "east": {
+          "uv": [
+            0,
+            0,
+            16,
+            16
+          ],
+          "texture": "#flame"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      }
     }
-  ]
+  ],
+  "ambientocclusion": false
 }

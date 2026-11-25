@@ -1285,9 +1285,11 @@ class NetworkTest {
     }
 
     /**
-     * Why a fall at a place is allowed (the rift, the deep dark, a helix, a city, a gate's mouth), or null. The deep dark
-     * is a tier's span as the plan keeps it, within 6 blocks: a roof brought down under a way ({@link Network#DARK_ROOF})
-     * leaves it as it was.
+     * Why a fall at a place is allowed (the rift, a noise rift, the deep dark, a helix, a city, a gate's mouth), or null.
+     * The deep dark is a tier's span as the plan keeps it, within 6 blocks: a roof brought down under a way
+     * ({@link Network#DARK_ROOF}) leaves it as it was. The noise rifts (0.21.7) are the Deep Blue Rift's cross-section
+     * from a sheer ravine to a stepped chasm (Taran's card), their lips' lichen streaks the way down: a fall within 8 of
+     * one's walls, or of a column 4 away (where a rift shuts its carve runs a block or two past its last columns).
      */
     static String fallPlace(Terrain t, int li, int x, int y, int z) {
         Network w = t.network;
@@ -1298,6 +1300,8 @@ class NetworkTest {
             if (lc.c[k].kind == Kind.CITY) return "city";
         }
         if (lc.rOn && Math.abs(lc.rV) < lc.rHalfTop + 8) return "rift";
+        if (li == Terrain.BLUE)
+            for (int dx = -4; dx <= 4; dx += 4) for (int dz = -4; dz <= 4; dz += 4) if (w.inNoiseRift(x + dx, z + dz, 8)) return "noise rift";
         if (lc.darkOn && ((lc.aC0 > lc.aF && y > lc.aF - 6 && y < lc.aC0 + 6) || (lc.bC0 > lc.bF && y > lc.bF - 6 && y < lc.bC0 + 6))) return "deep dark";
         if (gateMouth(t, lc.net, x, z)) return "gate mouth";
         return null;

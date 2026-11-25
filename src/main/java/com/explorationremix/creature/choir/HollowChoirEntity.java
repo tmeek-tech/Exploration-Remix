@@ -57,13 +57,25 @@ import java.util.List;
  */
 public class HollowChoirEntity extends Monster implements WindUp {
     // ------------------------------------------------------------------------------------------------------ numbers
-    /** The core's own health: what the bar shows. Tuned for diamond gear and a few runes, about five minutes. */
-    public static final float HEALTH = 320;
+    /**
+     * The core's own health: what the bar shows. Tuned for diamond gear and a few runes, about five minutes.
+     *
+     * <p>How the budget works, since the three numbers below only make sense together. Nearly all of a player's
+     * damage goes into tendrils, and only {@link #TENDRIL_SHARE} of that reaches the core, so the most damage the
+     * fight can ever ask for is {@code HEALTH / TENDRIL_SHARE}: 2700 here, which at a diamond sword's rate, with the
+     * time spent dodging and the time the crown is simply unhittable, comes out near five minutes.
+     *
+     * <p>The other half of the budget is that cutting a whole phase's tendrils has to come to <em>less</em> than one
+     * phase's slice of the health (180 here): 6 x 120 x 0.2 = 144, 5 x 150 x 0.2 = 150, 4 x 190 x 0.2 = 152. That is
+     * what makes the crown fall because you cut the last tendril, which is the whole loop. Were it more, the health
+     * border would always come first and cut the rest for you, and the tendrils would be scenery.
+     */
+    public static final float HEALTH = 540;
     /** Phase borders, as a share of the health. */
     public static final float PHASE2 = 2 / 3F, PHASE3 = 1 / 3F;
     /** The tendrils: how many stand in each phase, and what it takes to cut one through. */
     public static final int[] TENDRILS = {6, 5, 4};
-    public static final float[] TENDRIL_CUT = {45, 60, 80};
+    public static final float[] TENDRIL_CUT = {120, 150, 190};
     /** Six places a tendril can stand, so a phase's tendrils are spread evenly round the dais. */
     public static final int PLACES = 6;
     /** How far out the tendrils are rooted, and how far out the crown's rim reaches. */
@@ -74,10 +86,10 @@ public class HollowChoirEntity extends Monster implements WindUp {
     public static final int OPEN_TICKS = 180, FALL_TICKS = 24, RISE_TICKS = 50;
     /** A tendril's reachable part: a box this wide, standing this tall off the floor. */
     public static final float TENDRIL_W = 1.6F, TENDRIL_H = 5.0F;
-    /** Of the damage a tendril takes, this share reaches the Choir itself. */
-    public static final float TENDRIL_SHARE = 0.5F;
+    /** Of the damage a tendril takes, this share reaches the Choir itself (see {@link #HEALTH} for why it is low). */
+    public static final float TENDRIL_SHARE = 0.2F;
     /** A strong attack in a slam's wind-up spoils it: the tendril loses this much, and the Choir stalls this long. */
-    public static final float INTERRUPT_CUT = 12;
+    public static final float INTERRUPT_CUT = 20;
     public static final int INTERRUPT_STALL = 40;
     /** The sprouts: each mends the Choir this often and takes this share off a blow, up to this much in all. */
     public static final int SPROUT_MEND_EVERY = 40;
@@ -253,6 +265,17 @@ public class HollowChoirEntity extends Monster implements WindUp {
     @Override public boolean canChangeDimensions() { return false; }
 
     @Override public boolean removeWhenFarAway(double d) { return false; }
+
+    /**
+     * The Choir stays on Peaceful. Vanilla takes every {@link Monster} off the world the tick the difficulty goes to
+     * Peaceful, which for a summoned boss means the three keys are spent and the fight is gone with them. The mod is
+     * mostly peaceful exploration and this is the one thing in it a player goes looking for a fight with, so it is
+     * theirs to start and theirs to finish whatever the difficulty says. (It is also how the test rig sees it at all:
+     * a fresh server starts on Peaceful.) Vanilla still takes the Choir's blows down to nothing on Peaceful, as it does
+     * every mob's, so the fight there is a walk-through rather than a fight; that is the difficulty's own promise and
+     * not ours to break. Standing there instead of vanishing is.
+     */
+    @Override public boolean shouldDespawnInPeaceful() { return false; }
 
     // --------------------------------------------------------------------------------------------------- the fight
 

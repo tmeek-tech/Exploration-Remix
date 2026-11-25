@@ -162,11 +162,11 @@ public final class ChoirSummon {
                         : ChoirArena.sculkAt(s, x, z, phase) ? Blocks.SCULK.defaultBlockState() : ChoirArena.surface(s, x, z);
                 if (!now.is(want.getBlock())) level.setBlock(p, want, 2);
             }
-        // the braziers: the middle ring goes out in phase 2, the floor's in phase 3
+        // the braziers, outwards in: the seats' ring goes out in phase 2, the floor's in phase 3, and the three on the
+        // dais burn to the end, so the bowl closes in on a lit dais rather than on the dark
         int[][] br = ChoirArena.braziers(s);
         for (int i = 0; i < br.length; i++) {
-            boolean tread = i < 6;
-            boolean lit = phase <= 0 || (tread ? phase < 2 : phase < 3);
+            boolean lit = ChoirArena.brazierLit(i, phase);
             p.set(br[i][0], br[i][2], br[i][1]);
             BlockState st = level.getBlockState(p);
             if (st.is(ERBlocks.CHOIR_BRAZIER.get()) && st.getValue(ChoirBrazierBlock.LIT) != lit)

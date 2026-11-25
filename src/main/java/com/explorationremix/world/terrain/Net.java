@@ -179,6 +179,8 @@ public final class Net {
     public boolean failed;
     /** Blue Reaches: the rasterised deep dark of this cell (null elsewhere). */
     NetDark.Plan dark;
+    /** Blue Reaches: the cell's kept city hall, or null (set with the index, {@link NetIndex#build}). */
+    Chamber city;
     /** Blue Reaches: the Hollow Choir's arena in this cell, or null where it has none ({@link ChoirSites}). */
     ChoirSites.Site choir;
 

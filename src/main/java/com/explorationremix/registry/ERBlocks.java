@@ -22,6 +22,7 @@ import com.explorationremix.block.PointedBlackDripstoneBlock;
 import com.explorationremix.block.ReliquaryBlock;
 import com.explorationremix.block.PoolPlantBlock;
 import com.explorationremix.block.ShelfFungusBlock;
+import com.explorationremix.block.SilverCattailsBlock;
 import com.explorationremix.block.SubmergedPlantBlock;
 import com.explorationremix.block.TallCavePlantBlock;
 import com.explorationremix.block.TallNeonPlantBlock;
@@ -177,12 +178,27 @@ public final class ERBlocks {
     /** Blue specks over the rift's walls: light only where it covers a face, like glow lichen. */
     public static final RegistryObject<Block> BLUE_LICHEN = block("blue_lichen",
             () -> new GlowLichenBlock(lichen(MapColor.COLOR_BLUE, SoundType.GLOW_LICHEN, 4)));
+    /**
+     * 0.21.7: the lichen of the streaks down the noise rifts' walls, grown thick, which a player climbs like vines (tag
+     * minecraft:climbable; Taran's card: "Climbable lichen streaks"), a little brighter than the thin lichen so a streak
+     * shows the way up.
+     */
+    public static final RegistryObject<Block> THICK_BLUE_LICHEN = block("thick_blue_lichen",
+            () -> new GlowLichenBlock(lichen(MapColor.COLOR_BLUE, SoundType.GLOW_LICHEN, 5)));
     public static final RegistryObject<Block> ASURINE_BUD = block("asurine_bud", () -> new AmethystClusterBlock(3, 4,
             BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).forceSolidOn().noOcclusion().sound(SoundType.SMALL_AMETHYST_BUD)
                     .strength(1.5F).lightLevel(s -> 5).pushReaction(PushReaction.DESTROY)));
     /** A crust of small asurine facets over the asurine: light only where it covers a face, like glow lichen. */
     public static final RegistryObject<Block> ASURINE_CRUST = block("asurine_crust",
             () -> new GlowLichenBlock(lichen(MapColor.COLOR_LIGHT_BLUE, SoundType.AMETHYST_CLUSTER, 3)));
+    /**
+     * 0.21.7: reeds two or three blocks tall by the rifts' water, which hide a player standing in them from the Skeins
+     * (Taran's card picks: "Silver cattails", "Hidden while you're in them"). Its item sets down the whole plant. The
+     * heads at the plant's top glow faintly (light 3), so a bed shows by the water in the dark.
+     */
+    public static final RegistryObject<Block> SILVER_CATTAILS = block("silver_cattails",
+            () -> new SilverCattailsBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.WET_GRASS, 0).offsetType(BlockBehaviour.OffsetType.XZ)
+                    .lightLevel(s -> s.getValue(SilverCattailsBlock.PART).top() ? 3 : 0)));
     /** The deep dark's only new plant: dark strands whose cold specks glow without giving light, so the dark stays dark. */
 
     // =========================================================================================== vegetation rework, part B

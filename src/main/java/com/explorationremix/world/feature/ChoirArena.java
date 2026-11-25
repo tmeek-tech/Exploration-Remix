@@ -39,8 +39,14 @@ public final class ChoirArena {
      * level. A socket out there would stand on whatever the cavern left.
      */
     public static final double SOCKET_R = ChoirSites.RIM_R - 1.5;
-    /** The braziers: six round the middle tread and three in on the fighting floor. */
-    public static final double BRAZIER_TREAD_R = ChoirSites.SEAT_R0 + TREAD + TREAD / 2, BRAZIER_FLOOR_R = 13;
+    /**
+     * The braziers, in three rings: six round the middle tread, three in on the fighting floor, and three on the dais
+     * ring itself. Three rings because a brazier lights fifteen blocks and the bowl is forty-eight across, so a ring
+     * round the rim alone leaves the dais in the dark — which is where the whole fight happens. The rings also give
+     * the fight its three steps of light: the seats go out, then the floor, and the dais burns to the end.
+     */
+    public static final double BRAZIER_TREAD_R = ChoirSites.SEAT_R0 + TREAD + TREAD / 2, BRAZIER_FLOOR_R = 13,
+            BRAZIER_DAIS_R = DAIS_RING - 1;
     /** The broken pillars on the fighting floor: how many, how far out, and how tall (they never block the view). */
     public static final int PILLARS = 5;
     public static final double PILLAR_R0 = 9, PILLAR_R1 = ChoirSites.FLOOR_R - 2;
@@ -87,7 +93,9 @@ public final class ChoirArena {
      * two share one: the three sockets at 0, 120 and 240 degrees, a brazier on the seats under each of those and on
      * the three spokes between them, a brazier in on the floor on those three between, and the two ramps on the
      * quarter turns, 90 and 270, which the rest leaves empty. So a ramp is always a clean cut through the seats with
-     * nothing standing in it, and you can see both of them from the middle.
+     * nothing standing in it, and you can see both of them from the middle. The dais ring's three braziers are the one
+     * thing that shares a spoke, the sockets' own: they stand five blocks out and a socket twenty-two, so the two can
+     * never meet, and standing in line is the point of them.
      */
     private static double rampDrop(ChoirSites.Site s, double dx, double dz, double r) {
         for (int i = 0; i < 2; i++) {
@@ -188,9 +196,15 @@ public final class ChoirArena {
         return out;
     }
 
-    /** Where the braziers stand: {x, z, y} with y the block the brazier itself sits on. */
+    /** How many braziers stand in each ring, outwards in: the dais, the fighting floor, the seats. */
+    public static final int BRAZIER_TREAD = 6, BRAZIER_FLOOR = 3, BRAZIER_DAIS = 3;
+
+    /**
+     * Where the braziers stand: {x, z, y} with y the block the brazier itself sits on. The first {@link #BRAZIER_TREAD}
+     * are the seats' ring, the next {@link #BRAZIER_FLOOR} the floor's, the last {@link #BRAZIER_DAIS} the dais's.
+     */
     public static int[][] braziers(ChoirSites.Site s) {
-        int[][] out = new int[9][];
+        int[][] out = new int[BRAZIER_TREAD + BRAZIER_FLOOR + BRAZIER_DAIS][];
         // six round the seats: one under each socket, one on each spoke between them
         for (int i = 0; i < 6; i++) {
             double a = s.turn() + i * Math.PI / 3;
@@ -203,9 +217,29 @@ public final class ChoirArena {
             double a = s.turn() + Math.PI / 3 + i * 2 * Math.PI / 3;
             int x = (int) Math.floor(s.x() + BRAZIER_FLOOR_R * Math.cos(a));
             int z = (int) Math.floor(s.z() + BRAZIER_FLOOR_R * Math.sin(a));
-            out[6 + i] = new int[]{x, z, topY(s, x + 0.5, z + 0.5) + 1};
+            out[BRAZIER_TREAD + i] = new int[]{x, z, topY(s, x + 0.5, z + 0.5) + 1};
+        }
+        // three on the dais ring, on the sockets' own spokes: from each socket you look down an aisle of flame to the
+        // dais. They stand on the ring of worked stone, never on the sculk the crown hangs over.
+        for (int i = 0; i < BRAZIER_DAIS; i++) {
+            double a = s.turn() + i * 2 * Math.PI / 3;
+            int x = (int) Math.floor(s.x() + BRAZIER_DAIS_R * Math.cos(a));
+            int z = (int) Math.floor(s.z() + BRAZIER_DAIS_R * Math.sin(a));
+            out[BRAZIER_TREAD + BRAZIER_FLOOR + i] = new int[]{x, z, topY(s, x + 0.5, z + 0.5) + 1};
         }
         return out;
+    }
+
+    /**
+     * Whether the brazier at this index of {@link #braziers} burns at a phase of the fight (0 before it starts): the
+     * seats' ring goes out as phase 2 begins, the floor's as phase 3 does, and the three on the dais never do. The
+     * fight and the tests both read it here, so the two cannot drift apart.
+     */
+    public static boolean brazierLit(int i, int phase) {
+        if (phase <= 0) return true;
+        if (i < BRAZIER_TREAD) return phase < 2;
+        if (i < BRAZIER_TREAD + BRAZIER_FLOOR) return phase < 3;
+        return true;
     }
 
     /** A broken pillar on the fighting floor: the low corner of its 2 x 2 and how many blocks tall it stands. */

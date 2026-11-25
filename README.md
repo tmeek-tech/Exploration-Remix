@@ -198,8 +198,9 @@ single **choir key**. Three cities, three keys. Nothing else drops one.
 
 **The arena.** About one Blue Reaches cell in three has a **sunken amphitheatre**, cut into the floor of one of that
 cell's deep dark caverns: a round deepslate bowl 48 blocks across and 6 deep, three unclimbable tiers of seats round
-it, two ramps cut through them to walk in and out, broken pillars on the fighting floor and braziers burning pale
-blue. Nothing is built over the rim, so the cavern's own ceiling is the roof and you can see clean across the bowl
+it, two ramps cut through them to walk in and out, broken pillars on the fighting floor and twelve braziers burning
+pale blue, each with a flame standing a block out of its bowl: six round the seats, three in on the fighting floor and
+three on the dais ring, since a bowl this wide cannot be lit from its edge alone. Nothing is built over the rim, so the cavern's own ceiling is the roof and you can see clean across the bowl
 from anywhere on it. A sleeping arena rings once every half minute or so, and the toll carries about 150 blocks
 through the rock, so you hear one before you find one; that and the pale blue glow are the only hints, and there is no
 trail and no pull on the keys to lead you there. Three **key sockets** stand on the rim walk, a third of a turn apart.
@@ -213,8 +214,9 @@ crown has nothing left to hang from. It falls, the bell opens, and for nine seco
 you have. Then it climbs back and grows new tendrils, fewer and tougher each phase: six, then five, then four. A
 strong attack that lands while a tendril is rearing to slam spoils the slam and leaves the Choir stalled.
 
-Three phases, and the arena changes with each: the braziers go out one ring at a time and the sculk creeps further out
-over the floor, so the last phase is fought in the Choir's own light on ground that is nearly all sculk. It raises
+Three phases, and the arena changes with each: the braziers go out a ring at a time, outside in, and the sculk creeps
+further out over the floor, so the last phase is fought on ground that is nearly all sculk by the three flames left
+standing on the dais. It raises
 rooted **sprouts** to mend itself and blunt your blows; they are the only help it gets, and they can be cut down.
 Leave the bowl and it lets you go, putting the arena back as it was.
 

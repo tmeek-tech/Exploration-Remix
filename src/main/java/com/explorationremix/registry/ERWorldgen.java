@@ -35,6 +35,8 @@ import com.explorationremix.world.feature.RootHairsFeature;
 import com.explorationremix.world.feature.RootvaultsLookFilter;
 import com.explorationremix.world.feature.RootvaultsOpeningsPlacement;
 import com.explorationremix.world.feature.ShelfVinesFeature;
+import com.explorationremix.world.feature.PondSpillFeature;
+import com.explorationremix.world.feature.CattailBedsFeature;
 import com.explorationremix.world.feature.SinkholeRimFeature;
 import com.explorationremix.world.feature.SkeinsFeature;
 import com.explorationremix.world.feature.StiltMantisesFeature;
@@ -69,6 +71,9 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> OPEN_WAY = FEATURES.register("open_way", () -> new OpenWayFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> CLIMB_VINES = FEATURES.register("climb_vines", () -> new ClimbVinesFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> SHELF_VINES = FEATURES.register("shelf_vines", () -> new ShelfVinesFeature(NoneFeatureConfiguration.CODEC));
+    // 0.21.7: the Blue Reaches' spilling ponds' waterfalls, laid at once, and the silver cattail beds by the rifts' water
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> POND_SPILLS = FEATURES.register("pond_spills", () -> new PondSpillFeature(NoneFeatureConfiguration.CODEC));
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> CATTAIL_BEDS = FEATURES.register("cattail_beds", () -> new CattailBedsFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<SurfaceAttachFeature.Config>> SURFACE_ATTACH = FEATURES.register("surface_attach", () -> new SurfaceAttachFeature(SurfaceAttachFeature.Config.CODEC));
     public static final RegistryObject<Feature<GiantSpikeFeature.Config>> GIANT_SPIKE = FEATURES.register("giant_spike", () -> new GiantSpikeFeature(GiantSpikeFeature.Config.CODEC));
     public static final RegistryObject<Feature<PointedPatchFeature.Config>> POINTED_PATCH = FEATURES.register("pointed_patch", () -> new PointedPatchFeature(PointedPatchFeature.Config.CODEC));
