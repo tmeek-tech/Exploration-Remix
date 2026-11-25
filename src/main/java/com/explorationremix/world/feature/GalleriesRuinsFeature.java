@@ -120,7 +120,11 @@ public final class GalleriesRuinsFeature extends Feature<GalleriesRuinsFeature.C
             RandomizableContainerBlockEntity.setLootTable(level, ctx.random(), pos, ch[3] == 1 ? RUNE_CHEST : LOOT_CHEST);
             any = true;
         }
-        // the lava, where its block holds it as built
+        // the lava, where its block holds it as built: a side or the block under it holds it where the world's block
+        // there does (rock, or a lava source) or where the plan lays lava there too, which this pass sets in turn (or
+        // the chunk beside, as it is made; the plan holds every lava block with its neighbours laid, GalleriesRuins.held).
+        // The rig's first look (0.22.1) found a hall's channel of 16 chiseled all but its last block: each was looked
+        // at while the next one along was still air.
         for (int x = ax; x <= bx; x++)
             for (int z = az; z <= bz; z++)
                 for (int y = p.yMin(); y <= p.yMax(); y++) {
@@ -128,14 +132,24 @@ public final class GalleriesRuinsFeature extends Feature<GalleriesRuinsFeature.C
                     pos.set(x, y, z);
                     BlockState cur = level.getBlockState(pos);
                     if (!cur.getFluidState().isEmpty()) continue;
-                    boolean held = FloorLavaFeature.solid(level.getBlockState(nb.setWithOffset(pos, Direction.DOWN)))
+                    boolean held = holdsLava(level, p, nb.setWithOffset(pos, Direction.DOWN), true)
                             && level.getBlockState(nb.setWithOffset(pos, Direction.UP)).isAir();
                     for (Direction dir : Direction.Plane.HORIZONTAL)
-                        held &= FloorLavaFeature.holds(level.getBlockState(nb.setWithOffset(pos, dir)));
+                        held &= holdsLava(level, p, nb.setWithOffset(pos, dir), false);
                     level.setBlock(pos, held ? Blocks.LAVA.defaultBlockState() : pal.state(GalleriesRuins.CHISELED), 2);
                     any = true;
                 }
         return any;
+    }
+
+    /**
+     * Whether the block at q keeps a lava block beside it (or over it, {@code under}) still: rock (solid, for the floor)
+     * or a lava source, as the world stands; or a block the plan lays lava in that holds no other fluid now.
+     */
+    private static boolean holdsLava(WorldGenLevel level, GalleriesRuins.Plan p, BlockPos q, boolean under) {
+        BlockState s = level.getBlockState(q);
+        if (under ? FloorLavaFeature.solid(s) || FloorLavaFeature.holds(s) : FloorLavaFeature.holds(s)) return true;
+        return p.at(q.getX(), q.getY(), q.getZ()) == GalleriesRuins.LAVA && s.getFluidState().isEmpty();
     }
 
     /** Whether a fluid lies over block pos or on one of its four sides (air set there would loose it). */

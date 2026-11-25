@@ -1105,6 +1105,51 @@ public final class GalleriesRuins {
     static final int[] SMALL_R = {5, 4, 4, 3, 2, 4, 3, 2};
     static final String[] SMALL_NAMES = {"wall", "columns", "hut", "arch", "brazier", "fallen column", "stair", "well"};
 
+    /**
+     * A hut's frame turned so that its doorway (local side -v, b blocks out) opens onto the ground that lies nearest its
+     * floor (paving row py) just outside it, lower ground before higher (steps can be laid down to it, {@link
+     * #doorSteps}, but not cut up into a bank). A hut's paving may stand up to SMALL_LO rows over the ground round it,
+     * and on the first plans one hut of the two test seeds' 74 chests stood on such a plinth with its doorway over the
+     * drop and a bank two rows over its floor on the far side: its loot chest could be dropped into but not walked out of.
+     */
+    private Frame doorFrame(Plan p, Frame f, int b, int py) {
+        Frame best = f;
+        int bestCost = Integer.MAX_VALUE;
+        for (int k = 0; k < 4; k++) {
+            Frame fk = k == 0 ? f : new Frame(f.ox, f.oz, f.rot + k, f.mirror);
+            int x = fk.x(0, -b - 1), z = fk.z(0, -b - 1);
+            if (!p.inBox(x, z) || !plainCell(g.column(x, z))) continue;
+            int t = terrain(p, x, z), cost = t > py ? 3 * (t - py) : py - t;
+            if (cost < bestCost) { bestCost = cost; best = fk; }
+        }
+        return best;
+    }
+
+    /**
+     * Steps down from a hut's doorway (frame f, its wall b blocks out along -v, paving row py) to the ground outside,
+     * where that lies more than a row under the floor: a brick stair a row lower at each block out, rising toward the
+     * door, over rock filled to it, until the ground is a step from the last stair (at most SMALL_LO of them). Stops at
+     * a column that is not plain ground or that holds another piece's blocks; loose rubble on a stair's column goes.
+     */
+    private void doorSteps(Plan p, Frame f, int b, int py) {
+        int top = py;
+        for (int k = 1; k <= SMALL_LO; k++) {
+            int x = f.x(0, -b - k), z = f.z(0, -b - k);
+            if (!p.inBox(x, z) || !plainCell(g.column(x, z))) return;
+            int t = terrain(p, x, z), s = top - 1;
+            if (t >= s) return;
+            for (int y = t + 1; y <= s + 3; y++) {
+                byte o = p.at(x, y, z);
+                if (o != NONE && o != AIR && o != COBBLED && o != CRACKED_BRICKS && o != BRICKS && o != SLAB) return;
+            }
+            for (int y = Math.max(p.y0, t + 1); y < s; y++) p.set(x, y, z, BRICKS);
+            p.set(x, s, z, (byte) (STAIRS + f.side(1)));
+            for (int y = s + 1; y <= s + 3 && y <= p.yMax(); y++) if (p.at(x, y, z) != AIR) p.set(x, y, z, NONE);
+            setGround(p, x, z, s);
+            top = s;
+        }
+    }
+
     /** Small ruin of the given type at frame f on paving row py; true where it took a chest (given one). */
     private boolean small(Plan p, Frame f, int py, int type, long h, boolean chest) {
         switch (type) {
@@ -1132,6 +1177,7 @@ public final class GalleriesRuins {
             case HUT: {
                 int a = 2 + (Hashing.unit(h) < 0.5 ? 1 : 0), b = 2 + (Hashing.unit(Hashing.mix(h, 1, 0, 0)) < 0.6 ? 0 : 1);
                 int H = 3 + (Hashing.unit(Hashing.mix(h, 2, 0, 0)) < 0.5 ? 1 : 0);
+                f = doorFrame(p, f, b, py);
                 for (int u = -a; u <= a; u++)
                     for (int v = -b; v <= b; v++) {
                         int x = f.x(u, v), z = f.z(u, v);
@@ -1149,6 +1195,7 @@ public final class GalleriesRuins {
                     if (Math.abs(u) == a || Math.abs(v) == b) continue;
                     rubble(p, f.x(u, v), f.z(u, v), 1, py);
                 }
+                doorSteps(p, f, b, py);
                 if (chest) {
                     int u = a - 1, v = b - 1;
                     chest(p, f.x(u, v), py + 1, f.z(u, v), f.side(3), false);

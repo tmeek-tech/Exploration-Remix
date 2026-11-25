@@ -197,6 +197,56 @@ class GalleriesRuinsTest {
         }
     }
 
+    /**
+     * Every chest can be walked to and back from the high ground round its cluster: on the blocks the game makes
+     * ({@link NoiseVox}) with the plan's set over them, some standing place within reach of the chest (3 blocks round,
+     * up to 3 rows under it) lies in the same two-way walk component as the most of the places on the tops 40 to 60
+     * blocks from the middle. So no terrace, wall or heap shuts a chest in, and no one who climbs to it is stuck there.
+     * (Stairs, slabs and walls count as full blocks, chests too.) On the first plans 73 of the two seeds' 74 chests were
+     * reached: a hut stood on a plinth four rows over the ground, its doorway over the drop and a bank two rows over its
+     * floor behind it, so its chest could be dropped into and not walked out of. Now a hut's doorway opens onto the
+     * nearest ground and steps lead down to it (GalleriesRuins.doorFrame, doorSteps): all 74.
+     */
+    @Test
+    void everyChestCanBeWalkedTo() {
+        List<String> shut = new ArrayList<>();
+        int chests = 0;
+        for (long seed : SEEDS) {
+            Terrain t = terrain(seed);
+            for (GalleriesRuins.Plan p : plans(seed)) {
+                int R = 90, ylo = Math.max(t.shape.bottom(Terrain.GALLERIES), p.gy - 50), yhi = Math.min(t.join.wBot + 40, p.gy + 60);
+                NoiseVox v = NoiseVox.build(t, p.cx - R, p.cz - R, 2 * R, 2 * R, ylo, yhi);
+                for (int x = p.x0; x < p.x0 + GalleriesRuins.SX; x++)
+                    for (int z = p.z0; z < p.z0 + GalleriesRuins.SX; z++)
+                        for (int y = p.yMin(); y <= p.yMax(); y++) {
+                            byte c = p.at(x, y, z);
+                            if (c == GalleriesRuins.NONE || !v.in(x, y, z)) continue;
+                            v.set(x, y, z, c == GalleriesRuins.AIR ? NoiseVox.AIR : c == GalleriesRuins.LAVA ? NoiseVox.LAVA : NoiseVox.ROCK);
+                        }
+                v.graph();
+                Map<Integer, Integer> onRing = new LinkedHashMap<>();
+                for (int q = 0; q < v.places; q++) {
+                    double d = Math.hypot(v.px(q) - p.cx, v.pz(q) - p.cz);
+                    if (d >= 40 && d <= 60 && Math.abs(v.py(q) - (p.gy + 1)) <= 6) onRing.merge(v.comp[q], 1, Integer::sum);
+                }
+                int ring = onRing.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse(-1);
+                assertTrue(ring >= 0, "seed " + seed + " " + where(p) + ": no high ground round it");
+                for (int[] c : p.chests) {
+                    chests++;
+                    boolean reached = false;
+                    for (int dx = -3; dx <= 3 && !reached; dx++)
+                        for (int dz = -3; dz <= 3 && !reached; dz++)
+                            for (int dy = -3; dy <= 1 && !reached; dy++) {
+                                int q = v.index(c[0] + dx, c[1] + dy, c[2] + dz);
+                                reached = q >= 0 && v.comp[q] == ring;
+                            }
+                    if (!reached) shut.add("seed " + seed + " " + where(p) + ": the " + (c[3] == 1 ? "rune" : "loot") + " chest at (" + c[0] + ", " + c[1] + ", " + c[2] + ")");
+                }
+            }
+        }
+        assertTrue(shut.isEmpty(), shut.size() + " of " + chests + " chests can't be walked to: " + shut);
+    }
+
     /** Whether code b is a block (not nothing, air or lava). */
     static boolean block(byte b) {
         return b != GalleriesRuins.NONE && b != GalleriesRuins.AIR && b != GalleriesRuins.LAVA;
