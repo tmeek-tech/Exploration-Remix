@@ -823,9 +823,9 @@ public final class Terrain {
     }
 
     /**
-     * Whether a block of the Blue Reaches lies in the great chasm of the Deep Blue Rift (0.20.8), between its floor and
-     * its ceiling, give or take {@link #CHASM_MARGIN} blocks; false in the tunnels, grottos and halls off it (which
-     * share its biome) and everywhere outside the Blue Reaches.
+     * Whether a block of the Blue Reaches lies in the great chasm of the Deep Blue Rift (0.20.8) or a noise rift
+     * (0.21.7), between its floor and its ceiling, give or take {@link #CHASM_MARGIN} blocks; false in the tunnels,
+     * grottos and halls off it (which share its biome) and everywhere outside the Blue Reaches.
      */
     public boolean inRiftChasm(int x, int y, int z) {
         return shape.layerAt(y) == BLUE && network.inRiftChasm(x, y, z, CHASM_MARGIN);

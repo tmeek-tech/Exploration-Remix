@@ -4,7 +4,9 @@
   "features": [
     "explorationremix:climb_vines",
     "explorationremix:shelf_vines",
-    "explorationremix:open_way"
+    "explorationremix:open_way",
+    "explorationremix:choir_arena",
+    "explorationremix:choir_reliquary"
   ],
   "step": "top_layer_modification"
 }

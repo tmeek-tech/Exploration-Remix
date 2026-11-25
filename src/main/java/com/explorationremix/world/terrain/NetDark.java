@@ -268,6 +268,12 @@ final class NetDark {
             return F[t][i * N + k];
         }
 
+        /** The tier's ceiling at a raster point near (x, z) (at or below the floor where the tier is shut). */
+        double ceilAt(int t, double x, double z) {
+            int i = Math.max(0, Math.min(N - 1, ix(x))), k = Math.max(0, Math.min(N - 1, iz(z)));
+            return C[t][i * N + k];
+        }
+
         /** Distance from (x, z) to the nearest boundary cell of region g (inside the cell). */
         double distTo(Region g, double x, double z) {
             double best = 1e9;

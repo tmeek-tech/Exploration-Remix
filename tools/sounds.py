@@ -274,6 +274,52 @@ LURKER_SUBTITLES = {
 CREATURE_EVENTS.update(LURKER_EVENTS)
 CREATURE_SUBTITLES.update(LURKER_SUBTITLES)
 
+# The Hollow Choir, the Deep Dark's boss (0.21.9; tools/synth_choir_sounds.py makes the files): a ring of bone plates
+# with bells under it, hanging over its arena on six tendrils. Everything it has is a struck bell and cold, hollow
+# voices; the stone and bone of the arena is the rest. The toll is what the fight is read by, so it carries across the
+# whole bowl; toll_far is the same bell from the other side of the cavern and the trophy bell's idle note, so it
+# carries 160 blocks (the arena's own hint, heard before it is found). The windup is the tell before a slam, so it has
+# to be heard before the slam lands. The reliquary and the key are block sounds in an ancient city, heard close up.
+def choir(name, volume=1.0, attenuation=None, count=1):
+    """One of the Choir's files, or the several a sound has (name_1, name_2, ...)."""
+    out = []
+    for i in range(1, count + 1):
+        e = {"name": f"{MOD}:creature/hollow_choir/{name}" + ("" if count == 1 else f"_{i}"), "volume": volume}
+        if attenuation: e["attenuation_distance"] = attenuation
+        out.append(e)
+    return out
+
+
+CHOIR_EVENTS = {
+    "choir.wake": choir("wake", 1.0, 64),
+    "choir.toll": choir("toll", 1.0, 48),
+    "choir.toll_far": choir("toll_far", 0.8, 160),
+    "choir.windup": choir("windup", 1.0, 24),
+    "choir.slam": choir("slam", 1.0, 32),
+    "choir.tendril_cut": choir("tendril_cut", 1.0, 20),
+    "choir.fall": choir("fall", 1.0, 32),
+    "choir.rise": choir("rise", 1.0, 32),
+    "choir.core": choir("core", 0.9, count=3),
+    "choir.bloom": choir("bloom", 1.0, 40),
+    "choir.sprout": choir("sprout", 0.5, 12),
+    "choir.hurt": choir("hurt", 1.0, 24, count=2),
+    "choir.idle": choir("idle", 0.7, 32),
+    "choir.death": choir("death", 1.0, 64),
+    "choir.reliquary": choir("reliquary", 0.8),
+    "choir.key_set": choir("key_set", 0.8),
+}
+CHOIR_SUBTITLES = {
+    "choir.wake": "The Hollow Choir wakes", "choir.toll": "Hollow Choir tolls",
+    "choir.toll_far": "A bell tolls far off", "choir.windup": "A tendril lifts",
+    "choir.slam": "A tendril slams down", "choir.tendril_cut": "A tendril parts",
+    "choir.fall": "The crown falls", "choir.rise": "The crown rises", "choir.core": "The core is struck",
+    "choir.bloom": "Sculk blooms", "choir.sprout": "A sprout rises", "choir.hurt": "Hollow Choir hurts",
+    "choir.idle": "The Hollow Choir hums", "choir.death": "Hollow Choir dies",
+    "choir.reliquary": "A reliquary grinds open", "choir.key_set": "A choir key settles",
+}
+CREATURE_EVENTS.update(CHOIR_EVENTS)
+CREATURE_SUBTITLES.update(CHOIR_SUBTITLES)
+
 def write_all(assets_dir, write):
     out = {}
     lang = {}

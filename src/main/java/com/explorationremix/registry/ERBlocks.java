@@ -4,18 +4,24 @@ import com.explorationremix.ExplorationRemix;
 import com.explorationremix.block.BandStoneBlock;
 import com.explorationremix.block.BoneScrapsBlock;
 import com.explorationremix.block.CavePlantBlock;
+import com.explorationremix.block.ChoirBellBlock;
+import com.explorationremix.block.ChoirBrazierBlock;
+import com.explorationremix.block.ChoirSproutBlock;
 import com.explorationremix.block.GrazedGrassBlock;
 import com.explorationremix.block.HangingFernBlock;
 import com.explorationremix.block.HangingPlantBlock;
 import com.explorationremix.block.HangingVinesBlock;
 import com.explorationremix.block.HangingVinesPlantBlock;
+import com.explorationremix.block.KeySocketBlock;
 import com.explorationremix.block.Neon;
 import com.explorationremix.block.NeonBlock;
 import com.explorationremix.block.NeonMushroomsBlock;
 import com.explorationremix.block.NeonPlantBlock;
 import com.explorationremix.block.PointedBlackDripstoneBlock;
+import com.explorationremix.block.ReliquaryBlock;
 import com.explorationremix.block.PoolPlantBlock;
 import com.explorationremix.block.ShelfFungusBlock;
+import com.explorationremix.block.SilverCattailsBlock;
 import com.explorationremix.block.SubmergedPlantBlock;
 import com.explorationremix.block.TallCavePlantBlock;
 import com.explorationremix.block.TallNeonPlantBlock;
@@ -171,12 +177,27 @@ public final class ERBlocks {
     /** Blue specks over the rift's walls: light only where it covers a face, like glow lichen. */
     public static final RegistryObject<Block> BLUE_LICHEN = block("blue_lichen",
             () -> new GlowLichenBlock(lichen(MapColor.COLOR_BLUE, SoundType.GLOW_LICHEN, 4)));
+    /**
+     * 0.21.7: the lichen of the streaks down the noise rifts' walls, grown thick, which a player climbs like vines (tag
+     * minecraft:climbable; Taran's card: "Climbable lichen streaks"), a little brighter than the thin lichen so a streak
+     * shows the way up.
+     */
+    public static final RegistryObject<Block> THICK_BLUE_LICHEN = block("thick_blue_lichen",
+            () -> new GlowLichenBlock(lichen(MapColor.COLOR_BLUE, SoundType.GLOW_LICHEN, 5)));
     public static final RegistryObject<Block> ASURINE_BUD = block("asurine_bud", () -> new AmethystClusterBlock(3, 4,
             BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).forceSolidOn().noOcclusion().sound(SoundType.SMALL_AMETHYST_BUD)
                     .strength(1.5F).lightLevel(s -> 5).pushReaction(PushReaction.DESTROY)));
     /** A crust of small asurine facets over the asurine: light only where it covers a face, like glow lichen. */
     public static final RegistryObject<Block> ASURINE_CRUST = block("asurine_crust",
             () -> new GlowLichenBlock(lichen(MapColor.COLOR_LIGHT_BLUE, SoundType.AMETHYST_CLUSTER, 3)));
+    /**
+     * 0.21.7: reeds two or three blocks tall by the rifts' water, which hide a player standing in them from the Skeins
+     * (Taran's card picks: "Silver cattails", "Hidden while you're in them"). Its item sets down the whole plant. The
+     * heads at the plant's top glow faintly (light 3), so a bed shows by the water in the dark.
+     */
+    public static final RegistryObject<Block> SILVER_CATTAILS = block("silver_cattails",
+            () -> new SilverCattailsBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.WET_GRASS, 0).offsetType(BlockBehaviour.OffsetType.XZ)
+                    .lightLevel(s -> s.getValue(SilverCattailsBlock.PART).top() ? 3 : 0)));
     /** The deep dark's only new plant: dark strands whose cold specks glow without giving light, so the dark stays dark. */
 
     // =========================================================================================== vegetation rework, part B
@@ -443,6 +464,39 @@ public final class ERBlocks {
     public static final RegistryObject<Block> NEON_MUSHROOMS = block("neon_mushrooms",
             () -> new NeonMushroomsBlock(BlockBehaviour.Properties.of().mapColor(ERBlocks::neonMap).noCollission().instabreak()
                     .sound(SoundType.FUNGUS).offsetType(BlockBehaviour.OffsetType.XZ).pushReaction(PushReaction.DESTROY), 120));
+    // ------------------------------------------------------------------------- the Hollow Choir (0.21.9)
+    /**
+     * The casket at an ancient city's heart holding one choir key: it cannot be broken, pushed or picked up, so the one
+     * key a city holds is got by opening it and no other way.
+     */
+    public static final RegistryObject<Block> RELIQUARY = BLOCKS.register("reliquary", () -> new ReliquaryBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).strength(-1.0F, 3600000.0F).noLootTable()
+                    .noOcclusion().pushReaction(PushReaction.BLOCK).isValidSpawn((st, l, p, e) -> false)
+                    .lightLevel(s -> s.getValue(ReliquaryBlock.OPEN) ? 0 : ReliquaryBlock.LIGHT)));
+
+    /** One of the three sockets round the arena's rim. Unbreakable, so no arena can be taken apart for its keys. */
+    public static final RegistryObject<Block> KEY_SOCKET = BLOCKS.register("key_socket", () -> new KeySocketBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).strength(-1.0F, 3600000.0F).noLootTable()
+                    .sound(SoundType.DEEPSLATE_BRICKS).noOcclusion().pushReaction(PushReaction.BLOCK)
+                    .isValidSpawn((st, l, p, e) -> false)
+                    .lightLevel(s -> s.getValue(KeySocketBlock.FILLED) ? 8 : 0)));
+
+    /** A brazier of the arena, which the Choir puts out as the fight goes on. Can be taken away and set down again. */
+    public static final RegistryObject<Block> CHOIR_BRAZIER = block("choir_brazier", () -> new ChoirBrazierBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).instrument(NoteBlockInstrument.BASEDRUM)
+                    .requiresCorrectToolForDrops().strength(2.5F, 6.0F).sound(SoundType.DEEPSLATE_BRICKS).noOcclusion()
+                    .lightLevel(s -> s.getValue(ChoirBrazierBlock.LIT) ? ChoirBrazierBlock.LIGHT : 0)));
+
+    /** A rooted sprout of the Choir: it falls to one hit and drops nothing, and is never found outside a fight. */
+    public static final RegistryObject<Block> CHOIR_SPROUT = BLOCKS.register("choir_sprout", () -> new ChoirSproutBlock(
+            plant(MapColor.COLOR_LIGHT_BLUE, SoundType.SCULK_VEIN, 5).noLootTable()));
+
+    /** The hollow bell: what a beaten Choir leaves, one to a Choir, to be set down and kept. */
+    public static final RegistryObject<Block> CHOIR_BELL = block("choir_bell", () -> new ChoirBellBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).instrument(NoteBlockInstrument.BELL)
+                    .requiresCorrectToolForDrops().strength(3.0F, 9.0F).sound(SoundType.DEEPSLATE_BRICKS).noOcclusion()
+                    .lightLevel(s -> 9)));
+
     private static final Supplier<Block> GLOWWORM_THREADS_REF = () -> GLOWWORM_THREADS.get();
     private static final Supplier<Block> GLOWWORM_THREADS_PLANT_REF = () -> GLOWWORM_THREADS_PLANT.get();
 

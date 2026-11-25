@@ -541,25 +541,28 @@ def build_features():
             attach(mix((simple("explorationremix:asurine_crystal"), 1), (simple("explorationremix:asurine_bud"), 2)), "walls_ceiling", 56,
                    f"#{MOD}:asurine_lining", radius=7, height=7),
             [count(14), SQUARE, layer("blue_reaches", above_water=True), BIOME])
-    # The geodes' crystals jut from the lining of the walls and hang from the ceilings, some in tight clusters, and about
-    # a fifth stand on the floor ledges (asurine_geodes.jpg).
+    # The geodes' crystals in tidy clusters (0.21.7, Taran's card: "Neat bands, tidy crystals": fewer, bigger clusters
+    # and much less crust): a few broad clusters jutting from the walls, some hanging from the vault and a few standing
+    # on the floor, with the smooth lining bare between them; none scattered singly any more (asurine_geodes.jpg).
+    # The wall clusters start from a spot on the floor and take the walls within four blocks of it, so they stand low
+    # on the walls round the floor's rim; the vault's start from a spot under it.
     feature("asurine_geodes/crystals", "underground_decoration", ["asurine_geodes"],
-            attach(mix((simple("explorationremix:asurine_crystal"), 2), (simple("explorationremix:asurine_bud"), 3)), "walls_ceiling", 160,
-                   f"#{MOD}:asurine_lining", radius=8, height=8),
-            [count(14), SQUARE, layer("blue_reaches", above_water=True), BIOME])
+            attach(mix((simple("explorationremix:asurine_crystal"), 3), (simple("explorationremix:asurine_bud"), 2)), "walls", 48,
+                   f"#{MOD}:asurine_lining", radius=4, height=5),
+            [count(8), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
     feature("asurine_geodes/crystal_clusters", "underground_decoration", ["asurine_geodes"],
-            attach(mix((simple("explorationremix:asurine_crystal"), 3), (simple("explorationremix:asurine_bud"), 2)), "walls_ceiling", 14,
-                   f"#{MOD}:asurine_lining", radius=2, height=2),
-            [count(10), SQUARE, layer("blue_reaches", above_water=True)] + ceiling(offset=0) + [BIOME])
+            attach(mix((simple("explorationremix:asurine_crystal"), 3), (simple("explorationremix:asurine_bud"), 2)), "walls_ceiling", 36,
+                   f"#{MOD}:asurine_lining", radius=3, height=3),
+            [count(6), SQUARE, layer("blue_reaches", above_water=True)] + ceiling(offset=0) + [BIOME])
     feature("asurine_geodes/floor_crystals", "underground_decoration", ["asurine_geodes"],
-            attach(mix((simple("explorationremix:asurine_crystal"), 1), (simple("explorationremix:asurine_bud"), 2)), "floor", 40,
-                   f"#{MOD}:asurine_lining", radius=6, height=2),
-            [count(20), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
-    # Under a shader the lining is black between the crystals; a crust of glowing facets over about a fifth of it keeps
-    # it blue. It comes after the crystals, which get first pick of the lining.
+            attach(mix((simple("explorationremix:asurine_crystal"), 2), (simple("explorationremix:asurine_bud"), 3)), "floor", 24,
+                   f"#{MOD}:asurine_lining", radius=2, height=2),
+            [count(6), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+    # A little crust of glowing points on the lining, in small patches, after the crystals (0.21.7: an eighth of what
+    # there was: Taran asked for much less crust).
     feature("asurine_geodes/crust", "underground_decoration", ["asurine_geodes"],
-            attach(simple(f"{MOD}:asurine_crust"), "walls_ceiling", 96, f"#{MOD}:asurine_lining", radius=7, height=7),
-            [count(120), SQUARE, layer("blue_reaches", above_water=True), BIOME])
+            attach(simple(f"{MOD}:asurine_crust"), "walls_ceiling", 24, f"#{MOD}:asurine_lining", radius=3, height=3),
+            [count(15), SQUARE, layer("blue_reaches", above_water=True), BIOME])
 
     # ---- vegetation rework, part A: sheets of ivy and lichen, wall ferns and brackets, before the floor and ceiling
     # plants take their spots. Ivy covers walls and ceilings but never floors, where a climbable sheet slows walking.
@@ -635,6 +638,10 @@ def build_features():
             [PLANNED, count(3), SQUARE, layer(up), BIOME])
     feature("deep_blue_rift/waterfalls", "fluid_springs", ["deep_blue_rift"], fall("minecraft:water", 16, (1, 3)),
             [count(8), SQUARE, layer("blue_reaches", above_water=True), BIOME])
+    # 0.21.7: the falls of the ponds on the rifts' shelves that spill (about half, Taran's card), laid at once down the
+    # platform's side and the ledges under it (PondSpillFeature); every chunk, as for the shelf vines, and the feature
+    # finds the ponds from the plan.
+    feature("deep_blue_rift/pond_spills", "fluid_springs", ["deep_blue_rift"], {"type": f"{MOD}:pond_spills", "config": {}}, [])
     feature("asurine_geodes/meltwater", "fluid_springs", ["asurine_geodes"], fall("minecraft:water", 0, (1, 1), search=12),
             [count(1), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
     # Lava falls lighting the Wasteland's caves (basalt_galleries.jpg), each from 3 to 6 blocks under a vault; every one
@@ -748,6 +755,10 @@ def build_features():
             patch(mix((simple("explorationremix:lavender_coral"), 2), (simple(f"{MOD}:pale_coral"), 2), (simple("explorationremix:pale_coral_fan"), 2)),
                   state("explorationremix:lavender_coral"), tries=32, xz=5, y=2, on=f"#{MOD}:garden_soil"),
             [scaled(56, GARDENS_PLANTS * EMBER_FLOOR), SQUARE, layer("deep_gardens", above_water=True)] + floor() + [BIOME])
+    # 0.21.7: beds of silver cattails in the shallows and on the banks of the rifts' streams and shelf ponds, to hide in
+    # from the Skeins (CattailBedsFeature; Taran's cards: "By water in the rifts", two to three blocks tall, mixed),
+    # before the floor plants take the banks; every chunk, and the feature finds the water from the plan.
+    feature("deep_blue_rift/cattail_beds", "vegetal_decoration", ["deep_blue_rift"], {"type": f"{MOD}:cattail_beds", "config": {}}, [])
     # The rift's strands hang in groups, with dark gaps between them (deep_blue_rift.jpg).
     feature("deep_blue_rift/glow_vines", "vegetal_decoration", ["deep_blue_rift"],
             hanging_patch(hanging_column("explorationremix:blue_glow_vines_plant", "explorationremix:blue_glow_vines", 2, 10), tries=6, xz=3, y=2),
@@ -1194,6 +1205,13 @@ def build_features():
     feature("climb_vines", "top_layer_modification", network, {"type": f"{MOD}:climb_vines", "config": {}}, [])
     feature("shelf_vines", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:shelf_vines", "config": {}}, [])
     feature("open_way", "top_layer_modification", network, {"type": f"{MOD}:open_way", "config": {}}, [])
+    # 0.21.9: the Hollow Choir's arena, cut into a deep dark cavern's floor, and the reliquary at an ancient city's
+    # heart that holds one of the three keys that call it. Both run after the ways are opened and the sculk is laid, so
+    # they lay their stone over whatever the cavern and the city had. They are added to minecraft:deep_dark by the
+    # deep_dark_open_way modifier below, which is where the deep dark's own chunks get their features; declaring them
+    # here with no biome of their own keeps them out of every other biome's list.
+    feature("choir_arena", "top_layer_modification", [], {"type": f"{MOD}:choir_arena", "config": {}}, [])
+    feature("choir_reliquary", "top_layer_modification", [], {"type": f"{MOD}:choir_reliquary", "config": {}}, [])
     # The Mossback lairs on the den gates' upper landings (DenLairFeature): each den, and the bones and scraps within 30
     # blocks of it, once the ways are open. Band 1 is the Deep Blue Rift under every column, so this reaches every
     # chunk, and the feature works out from the plan which chunks hold a lair.
@@ -1494,7 +1512,8 @@ def write_all(data_dir, res_dir, write):
         "features": [f"{MOD}:{n}" for n, _, _ in DEEP_DARK_FEATURES], "step": "underground_decoration"})
     write(os.path.join(data_dir, "forge", "biome_modifier", "deep_dark_open_way.json"), {
         "type": "forge:add_features", "biomes": "minecraft:deep_dark",
-        "features": [f"{MOD}:climb_vines", f"{MOD}:shelf_vines", f"{MOD}:open_way"], "step": "top_layer_modification"})
+        "features": [f"{MOD}:climb_vines", f"{MOD}:shelf_vines", f"{MOD}:open_way",
+                     f"{MOD}:choir_arena", f"{MOD}:choir_reliquary"], "step": "top_layer_modification"})
     # Its sky and fog, dark like the Reaches' own (DEEP_DARK_SKY).
     write(os.path.join(data_dir, "forge", "biome_modifier", "deep_dark_sky.json"), {
         "type": f"{MOD}:dark_sky", "biomes": "minecraft:deep_dark",

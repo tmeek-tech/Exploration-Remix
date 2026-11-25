@@ -1,0 +1,85 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "particle": "explorationremix:block/choir_bell_side",
+    "side": "explorationremix:block/choir_bell_side",
+    "top": "explorationremix:block/choir_bell_top",
+    "bottom": "explorationremix:block/choir_bell_top",
+    "side_glow": "explorationremix:block/choir_bell_side_glow",
+    "top_glow": "explorationremix:block/choir_bell_top_glow",
+    "bottom_glow": "explorationremix:block/choir_bell_top_glow"
+  },
+  "elements": [
+    {
+      "from": [
+        2,
+        0,
+        2
+      ],
+      "to": [
+        14,
+        15,
+        14
+      ],
+      "faces": {
+        "north": {
+          "texture": "#side"
+        },
+        "south": {
+          "texture": "#side"
+        },
+        "west": {
+          "texture": "#side"
+        },
+        "east": {
+          "texture": "#side"
+        },
+        "up": {
+          "texture": "#top"
+        },
+        "down": {
+          "texture": "#bottom",
+          "cullface": "down"
+        }
+      }
+    },
+    {
+      "from": [
+        1.998,
+        -0.002,
+        1.998
+      ],
+      "to": [
+        14.002,
+        15.002,
+        14.002
+      ],
+      "faces": {
+        "north": {
+          "texture": "#side_glow"
+        },
+        "south": {
+          "texture": "#side_glow"
+        },
+        "west": {
+          "texture": "#side_glow"
+        },
+        "east": {
+          "texture": "#side_glow"
+        },
+        "up": {
+          "texture": "#top_glow"
+        },
+        "down": {
+          "texture": "#bottom_glow",
+          "cullface": "down"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      },
+      "shade": false
+    }
+  ]
+}

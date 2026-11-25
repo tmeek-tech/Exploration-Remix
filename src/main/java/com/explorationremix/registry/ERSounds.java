@@ -133,6 +133,29 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_HURT = register("chimney_lurker.hurt");
     public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_DEATH = register("chimney_lurker.death");
 
+    // The Hollow Choir of the Deep Dark (0.21.9, creature.choir.HollowChoirEntity): bells and voices, never vanilla's
+    // bell block and never the Warden: the summoning's swell, the toll it fights with and the same toll heard a
+    // hundred and fifty blocks off (which is also the trophy bell's idle note), a tendril's lift and its slam, a
+    // tendril parting, the crown dropping and climbing back, a hit on the open core, the last phase's bloom, a sprout
+    // rising, hurt, the hum while it is up, and its coming apart. The city reliquary's lid and a key going home are
+    // block sounds, not the Choir's.
+    public static final RegistryObject<SoundEvent> CHOIR_WAKE = register("choir.wake");
+    public static final RegistryObject<SoundEvent> CHOIR_TOLL = register("choir.toll");
+    public static final RegistryObject<SoundEvent> CHOIR_TOLL_FAR = register("choir.toll_far");
+    public static final RegistryObject<SoundEvent> CHOIR_WINDUP = register("choir.windup");
+    public static final RegistryObject<SoundEvent> CHOIR_SLAM = register("choir.slam");
+    public static final RegistryObject<SoundEvent> CHOIR_TENDRIL_CUT = register("choir.tendril_cut");
+    public static final RegistryObject<SoundEvent> CHOIR_FALL = register("choir.fall");
+    public static final RegistryObject<SoundEvent> CHOIR_RISE = register("choir.rise");
+    public static final RegistryObject<SoundEvent> CHOIR_CORE = register("choir.core");
+    public static final RegistryObject<SoundEvent> CHOIR_BLOOM = register("choir.bloom");
+    public static final RegistryObject<SoundEvent> CHOIR_SPROUT = register("choir.sprout");
+    public static final RegistryObject<SoundEvent> CHOIR_HURT = register("choir.hurt");
+    public static final RegistryObject<SoundEvent> CHOIR_IDLE = register("choir.idle");
+    public static final RegistryObject<SoundEvent> CHOIR_DEATH = register("choir.death");
+    public static final RegistryObject<SoundEvent> CHOIR_RELIQUARY = register("choir.reliquary");
+    public static final RegistryObject<SoundEvent> CHOIR_KEY_SET = register("choir.key_set");
+
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ExplorationRemix.MOD_ID, name)));
     }

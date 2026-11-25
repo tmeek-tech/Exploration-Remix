@@ -39,6 +39,8 @@ public final class Network {
     static final int PORTAL_CACHE = 4096;
     /** The deep dark's floors keep this share of the roughness, so they stay walkable. */
     static final double DARK_FLOOR_ROUGH = 0.35;
+    /** A noise rift's stream bed and banks keep this share of it, so the shallows and the banks read clean. */
+    static final double RIFT_BED_ROUGH = 0.25;
 
     final Terrain base;
     final Shape shape;
@@ -47,9 +49,15 @@ public final class Network {
     final double cell;
     final Perlin warpA, warpB, floorN, ceilN, pendN, islandN, rough1, rough2, detail, ledgeN;
     final NetDark dark;
+    /** The Blue Reaches' noise rifts (0.21.7): their shape; the network keeps them clear of its works ({@link NetRifts}). */
+    final BlueRifts rifts;
+    /** Per worldgen thread: the pond sites seen lately ({@link NetRifts#pond}). */
+    final ThreadLocal<NetRifts.PondCache> pondCache = ThreadLocal.withInitial(NetRifts.PondCache::new);
     private final LoadingCache<Long, Net> nets;
     private final Cache<Long, List<Portal>> portalCache;
     private final ThreadLocal<Col[]> cache;
+    /** Per worldgen thread: a column apart from the ring, for the ponds' checks ({@link #scratch}). */
+    private final ThreadLocal<Col> scratchCol;
     /** Statistics: plans made, and how often a column's lists had to grow. */
     final LongAdder plansMade = new LongAdder(), columnGrowths = new LongAdder();
     /** Tests only: the per-block pass computes everything everywhere instead of only inside a column's span. */
@@ -72,12 +80,18 @@ public final class Network {
         detail = new Perlin(Hashing.mix(s, 9, 0, 0));
         ledgeN = new Perlin(Hashing.mix(s, 10, 0, 0));
         dark = new NetDark(seed, shape, cell);
+        rifts = new BlueRifts(seed, shape);
         // the planned layers only: a column keeps nothing for the noise layers
         int layers = Math.min(shape.layerCount, Terrain.WASTELAND);
         cache = ThreadLocal.withInitial(() -> {
             Col[] a = new Col[1024];
             for (int i = 0; i < a.length; i++) a[i] = new Col(layers);
             return a;
+        });
+        scratchCol = ThreadLocal.withInitial(() -> {
+            Col c = new Col(layers);
+            for (LCol l : c.l) l.noPonds = true;
+            return c;
         });
         nets = CacheBuilder.newBuilder().maximumSize(PLAN_CACHE).build(CacheLoader.from(k -> {
             plansMade.increment();
@@ -271,17 +285,71 @@ public final class Network {
 
     /**
      * Whether (x, y, z) lies in the open of the Deep Blue Rift itself, the great chasm through a Blue Reaches cell
-     * (0.20.8): between its floor and its ceiling over that column, give or take {@code margin} blocks. The tunnels,
-     * grottos and halls that open off it share its biome but lie outside its walls, so they are not in it.
+     * (0.20.8), or since 0.21.7 of a noise rift, as wide and open (Taran asked for fewer fireflies in the great chasm
+     * than in the tunnels): between its floor and its ceiling over that column, give or take {@code margin} blocks. The
+     * tunnels, grottos and halls that open off it share its biome but lie outside its walls, so they are not in it.
      */
     public boolean inRiftChasm(int x, int y, int z, double margin) {
         if (Terrain.BLUE >= shape.layerCount || !hasPlan(Terrain.BLUE)) return false;
         LCol lc = layer(column(x, z), Terrain.BLUE);
+        if (lc.nOn && lc.nV < lc.nSh[BlueRifts.HALF] && y >= lc.nF - margin && y <= lc.nTop + margin) return true;
         return lc.r != null && lc.rOn && lc.rrC > lc.rrF && y >= lc.rrF - margin && y <= lc.rrC + margin;
+    }
+
+    /**
+     * Whether a column lies in a noise rift of the Blue Reaches (0.21.7), within {@code margin} of its walls across: the
+     * rifts that get lichen streaks rather than the Deep Blue Rift's shelf vines.
+     */
+    public boolean inNoiseRift(int x, int z, double margin) {
+        if (Terrain.BLUE >= shape.layerCount || !hasPlan(Terrain.BLUE)) return false;
+        LCol lc = layer(column(x, z), Terrain.BLUE);
+        return lc.nOn && lc.nV < lc.nSh[BlueRifts.HALF] + margin;
+    }
+
+    /** Whether a column lies in the Deep Blue Rift, within {@code margin} of its walls across. */
+    public boolean inMainRift(int x, int z, double margin) {
+        if (Terrain.BLUE >= shape.layerCount || !hasPlan(Terrain.BLUE)) return false;
+        LCol lc = layer(column(x, z), Terrain.BLUE);
+        return lc.r != null && lc.rOn && lc.rrC > lc.rrF && Math.abs(lc.rV) < lc.rHalfTop + margin;
+    }
+
+    /**
+     * A pond on a rift's shelf, for the features: its centre and radius, its water's top block, where feet stand round
+     * it, its depth, its spill (direction, half width, how far from the centre its water runs) and whether it is on the
+     * Deep Blue Rift (else a noise rift).
+     */
+    public record PondInfo(double x, double z, double r, int top, int feet, int depth, double sx, double sz, double sw, double wet, boolean main) {
+        public boolean spills() { return sw > 0; }
+    }
+
+    /** The ponds of the Blue Reaches whose water reaches the box from (x0, z0) to (x1, z1), inclusive. */
+    public List<PondInfo> pondsIn(int x0, int z0, int x1, int z1) {
+        List<PondInfo> out = new ArrayList<>();
+        if (Terrain.BLUE >= shape.layerCount || !hasPlan(Terrain.BLUE)) return out;
+        // a pond reaches at most 14 blocks from its centre, which lies in its site's square or one beside it
+        int g = NetRifts.POND_GRID, m = NetRifts.POND_LOOK - 1;
+        for (int gx = Math.floorDiv(x0 - 15, g) - m; gx <= Math.floorDiv(x1 + 15, g) + m; gx++)
+            for (int gz = Math.floorDiv(z0 - 15, g) - m; gz <= Math.floorDiv(z1 + 15, g) + m; gz++) {
+                NetRifts.Pond p = NetRifts.pond(this, Terrain.BLUE, gx, gz);
+                if (p == null) continue;
+                double reach = p.reachAll() + 1;
+                if (p.x + reach < x0 || p.x - reach > x1 + 1 || p.z + reach < z0 || p.z - reach > z1 + 1) continue;
+                out.add(new PondInfo(p.x, p.z, p.r, p.top, p.feet, p.depth, p.sx, p.sz, p.sw, p.wet, p.main));
+            }
+        return out;
     }
 
     /** The plan of layer li in cell (cx, cz), for the dev tools; null for a layer with no plan ({@link #hasPlan}). */
     public Net network(int li, int cx, int cz) { return hasPlan(li) ? net(li, cx, cz) : null; }
+
+    /**
+     * The Hollow Choir's arena in Blue Reaches cell (cx, cz), or null where that cell has none ({@link ChoirSites}).
+     * Every arena lies well inside its own cell, so a chunk only ever has to ask about the cell its middle is in.
+     */
+    public ChoirSites.Site choirSite(int cx, int cz) {
+        if (!hasPlan(Terrain.BLUE)) return null;
+        return net(Terrain.BLUE, cx, cz).choir;
+    }
 
     // ================================================================================================ dev tools (12.5)
     /** A place showing a deep biome, for the dev tools: a chamber, the rift or a refuge geode, with spots to stand on. */
@@ -795,6 +863,20 @@ public final class Network {
         return false;
     }
 
+    /**
+     * The hearts of the ancient cities planned in cell (cx, cz) of the Blue Reaches: {x, z, floor} of every kept CITY
+     * chamber. The city's start piece stands within 24 blocks of one of these ({@link #citySite}), so the chunk that
+     * holds a heart is inside the city's middle: that is the one chunk the reliquary is looked for in
+     * ({@code world.feature.ChoirReliquaryFeature}).
+     */
+    public List<double[]> cityHearts(int cx, int cz) {
+        List<double[]> out = new ArrayList<>();
+        if (!hasPlan(Terrain.BLUE)) return out;
+        for (Chamber c : net(Terrain.BLUE, cx, cz).ch)
+            if (c.keep && c.kind == Kind.CITY) out.add(new double[]{c.x, c.z, c.f0});
+        return out;
+    }
+
     /** True when chunk (chunkX, chunkZ) is where vanilla's own spread (24 / 8, the same salt) may start a city. */
     public static boolean vanillaCityChunk(long seed, int chunkX, int chunkZ) {
         int rx = Math.floorDiv(chunkX, 24), rz = Math.floorDiv(chunkZ, 24);
@@ -967,6 +1049,23 @@ public final class Network {
         double entryD, exitD;
         /** The heights the per-block pass must look at; outside them the interpolated density stands. */
         double fLo, fHi;
+        // the noise rifts (Blue, NetRifts.noiseCol): whether one is open here, how much of it the works round leave
+        // (nKeep), the column's distance from its centre line and side, its open span (floor to vault, and nTop where a
+        // deep dark tier over it joins it), its cross-section, and its shelf on this side (floor line, edge, riser's foot)
+        boolean nOn, nShelf;
+        double nKeep, nV, nF, nC, nTop, nS, nEdge, nOut;
+        int nSide;
+        final double[] nLine = new double[6], nG = new double[2], nSh = new double[8], nShelfAt = new double[5];
+        // the Deep Blue Rift's shelf on this side (NetRifts.mainShelfCol): floor line, edge, riser's foot
+        boolean rShelf;
+        double rS2, rEdge, rOut;
+        // the ponds that reach the column (NetRifts.pondsCol): each one's distance from its centre, along and across its
+        // spill, and whether the column is on its shelf; none for the ponds' own checks (noPonds)
+        boolean noPonds;
+        int np;
+        NetRifts.Pond[] pond = new NetRifts.Pond[4];
+        final double[] pondR = new double[4], pondA = new double[4], pondX = new double[4];
+        final boolean[] pondOn = new boolean[4];
 
         void growC() {
             int n = c.length * 2;
@@ -1134,7 +1233,30 @@ public final class Network {
                 if (d < g.landR + 6) { lc.fLo = Math.min(lc.fLo, g.lFloor - 9); lc.fHi = Math.max(lc.fHi, g.lCy + g.landHalf + 4); }
             }
         }
+        // the rifts (0.21.7): the noise rifts, kept clear of all the above, and the shelves and ponds of both kinds
+        lc.nOn = lc.nShelf = lc.rShelf = false;
+        lc.np = 0;
+        if (li == Terrain.BLUE) {
+            NetRifts.noiseCol(this, lc, x, z, NetRifts.keep(this, lc, cx, cz, x, z));
+            if (lc.r != null) NetRifts.mainShelfCol(this, lc, x, z);
+            NetRifts.pondsCol(this, li, lc, x, z);
+        }
         lc.done = true;
+    }
+
+    /**
+     * Layer li of column (x, z) worked out apart from the per-thread ring, with no ponds of its own: for the ponds' own
+     * checks, which look at a column while another is being worked out. Valid until the thread's next call.
+     */
+    LCol scratch(int x, int z, int li) {
+        Col c = scratchCol.get();
+        c.x = x;
+        c.z = z;
+        c.valid = true;
+        LCol lc = c.l[li];
+        compute(c, li, lc);
+        lc.done = false;
+        return lc;
     }
 
     /**
@@ -1298,7 +1420,9 @@ public final class Network {
                 for (int gz = (int) Math.floor((z0 + inset) / grid) - 1; gz * grid <= z0 + cell - inset; gz++) {
                     if (!dark.gridPillar(t, gx, gz, pc)) continue;
                     if (pc[0] < x0 + inset || pc[0] > x0 + cell - inset || pc[1] < z0 + inset || pc[1] > z0 + cell - inset) continue;
-                    if (!pillarBared(p, t, pc, rift, riftHalf, halls, tc, span, tmp) && !wayCuts(p, t, pc, ways, box, tc)) continue;
+                    // a pillar through the Choir's bowl would hang from the ceiling once the arena is cut
+                    boolean inArena = ChoirSites.inBowl(n.choir, pc[0], pc[1], pc[2] * NetDark.PILLAR_REACH);
+                    if (!inArena && !pillarBared(p, t, pc, rift, riftHalf, halls, tc, span, tmp) && !wayCuts(p, t, pc, ways, box, tc)) continue;
                     if (no == out.length) out = Arrays.copyOf(out, no * 2);
                     out[no++] = NetDark.pillarKey(t, gx, gz);
                 }
@@ -1695,10 +1819,14 @@ public final class Network {
                 if (jt > lc.rrC) d = Math.min(d, Math.max(lc.rrF - y, y - jt));
             }
         }
+        // a noise rift (0.21.7), up to the tier over it where one joins it
+        if (lc.nOn) d = Math.min(d, Math.max(lc.nF - y, y - lc.nTop));
         if (d > -12 && d < 12) {
             // the deep dark's floors stay walkable: a third of the roughness within a few blocks of a tier's floor
             double rs = 1;
             if (lc.darkOn && ((lc.aC > lc.aF && y > lc.aF - 3 && y < lc.aF + 4) || (lc.bC > lc.bF && y > lc.bF - 3 && y < lc.bF + 4))) rs *= DARK_FLOOR_ROUGH;
+            // a noise rift's stream, shallows and banks stay clean for the reeds: a quarter of it by the water table
+            if (lc.nOn && y < W + 3) rs *= RIFT_BED_ROUGH;
             if (lc.ns > 0) rs *= mouthFade(lc, y);
             if (rs > 0) d += rs * rough(li, x, y, z);
         }
@@ -1738,11 +1866,16 @@ public final class Network {
         return f;
     }
 
+    /**
+     * How far a block lies outside the nearest geode's hollow (negative inside). 0.21.7 (Taran's card: "Neat bands, tidy
+     * crystals"): its walls smooth, swelling and sinking only gently over some sixteen blocks, where the old rough
+     * surface bulged a block either way every few, so its bands of rock ({@link Palette}) run clean round it.
+     */
     double geodeDist(LCol lc, int x, int y, int z) {
         double best = 1e9;
         for (int k = 0; k < lc.geoN; k++) best = Math.min(best, Terrain.geodeSdf(lc.geo[k], lc.geoD2[k], y));
         if (best > 12) return best;
-        return best + 0.7 * detail.noise3(x / 6.0, y / 6.0, z / 6.0);
+        return best + 0.45 * detail.noise3(x / 16.0, y / 16.0, z / 16.0);
     }
 
     /** One of 0.2.0's hourglass pillars of a deep dark tier: 0.75 pr across at its waist, flaring to its foot and top. */
@@ -1811,6 +1944,9 @@ public final class Network {
                 }
             }
         }
+        // a tunnel crossing a noise rift: its slab on an arch; the ponds' rims, floors and troughs
+        if (lc.nOn && lc.nw > 0) d = Math.max(d, NetRifts.arch(lc, y));
+        if (lc.np > 0) d = Math.max(d, NetRifts.pondStay(lc, y));
         Plans.Gate en = lc.en, ex = lc.ex;
         if (lc.entryD < en.landR) d = Math.max(d, Math.min(Math.min(en.lFloor - y, y - (en.lFloor - 7)), en.landR - lc.entryD));
         for (int k = 0; k < lc.nd; k++) {
@@ -1923,6 +2059,11 @@ public final class Network {
     /** A lip's drop: from 2 to this many blocks between the feet on the lip and the floor (or water) below. */
     public static final int SHELF_MAX_DROP = 48;
     /**
+     * A lichen streak's longest drop (0.21.7): it needs no rock to hang from, so it runs down a noise rift's whole wall,
+     * from its highest shelf.
+     */
+    public static final int STREAK_MAX_DROP = 100;
+    /**
      * How far over the feet on the lip the rock a shelf vine hangs from may be. The game's hanging vines need rock over
      * them, so a shelf vine hangs from the ceiling over the lip, past the lip, down to the floor below; the deep dark's
      * tiers are up to about 40 tall, and the rift's open terraces under its far vault get none (its ledge path joins them).
@@ -1937,6 +2078,20 @@ public final class Network {
         long h = Hashing.mix(seed, 8811, 0, 0);
         int ox = (int) Math.floorMod(h, (long) SHELF_PERIOD), oz = (int) Math.floorMod(h >>> 20, (long) SHELF_PERIOD);
         return Math.floorMod(x - ox, SHELF_PERIOD) == 0 || Math.floorMod(z - oz, SHELF_PERIOD) == 0;
+    }
+
+    /**
+     * 0.21.7: true where a lip's drop in column (x, z) to the floor at {@code fy} gets a lichen streak instead of a vine
+     * (ShelfVinesFeature, and the voxel harness): a column in a noise rift, within a block of its walls, and not in the
+     * Deep Blue Rift, whose floor there lies in the rift's open span. The lip may be the rift's own or a deep dark
+     * cavern's floor where the rift runs under it as a slot: the streak grows down the rift's own wall. A drop within a
+     * deep dark cavern over a rift, to the cavern's own floor, gets none (its drops keep no climbs, Taran's rule since
+     * 0.14.4).
+     */
+    public boolean streakAt(int x, int fy, int z) {
+        if (Terrain.BLUE >= shape.layerCount || !hasPlan(Terrain.BLUE)) return false;
+        LCol lc = layer(column(x, z), Terrain.BLUE);
+        return lc.nOn && lc.nV < lc.nSh[BlueRifts.HALF] + 1 && fy >= lc.nF - 2 && fy <= lc.nTop && !inMainRift(x, z, 1);
     }
 
     public static double angleDiff(double a, double b) {
@@ -1965,6 +2120,7 @@ public final class Network {
             if (lc.wOn && y < lc.cap) d = Math.min(d, pathCore(lc.wD, lc.rF, y, Terrain.CORE));
             if (lc.w2On && y < lc.cap2) d = Math.min(d, pathCore(lc.wD2, lc.rF2, y, Terrain.CORE));
         }
+        if (lc.np > 0) d = Math.min(d, NetRifts.pondOpen(lc, y));
         Plans.Gate en = lc.en, ex = lc.ex;
         if (lc.entryD < en.landR + 4 && y > en.lFloor - 2 && y < en.lCy + en.landHalf + 4)
             d = Math.min(d, landing(lc.entryD, en.landR, en.lCy, en.landHalf, en.lFloor, x, y, z));
@@ -2035,6 +2191,7 @@ public final class Network {
                 if (!pool(c)) continue;
                 if (y < c.lakeY && lc.e[k] < c.lakeE + 0.1 && y >= lc.F[k] - 2) return Terrain.WATER;
             }
+            if (lc.np > 0 && NetRifts.pondWater(lc, y)) return Terrain.WATER;
             return Terrain.AIR;
         }
         Plans.Gate ex = lc.ex;
@@ -2074,6 +2231,8 @@ public final class Network {
             for (Route.Link l : lc.r.links) if (l.dist(x, y, z) < 4) return DeepBiome.ASURINE_GEODES;
             if (lc.rOn && Math.abs(lc.rV) < lc.rHalfTop + 6 && y > lc.r.W - 6 && y < lc.rTop + 10 && bestD > 0) return DeepBiome.DEEP_BLUE_RIFT;
         }
+        // the noise rifts look like the Deep Blue Rift
+        if (lc.nOn && lc.nV < lc.nSh[BlueRifts.HALF] + 6 && y > shape.waterY(li) - 6 && y < lc.nTop + 10 && bestD > 0) return DeepBiome.DEEP_BLUE_RIFT;
         return best != null ? best : Terrain.routeBiome(li);
     }
 

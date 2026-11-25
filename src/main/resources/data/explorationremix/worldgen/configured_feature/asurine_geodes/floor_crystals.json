@@ -11,7 +11,7 @@
               "Name": "explorationremix:asurine_crystal"
             }
           },
-          "weight": 1
+          "weight": 2
         },
         {
           "data": {
@@ -20,13 +20,13 @@
               "Name": "explorationremix:asurine_bud"
             }
           },
-          "weight": 2
+          "weight": 3
         }
       ]
     },
     "faces": "floor",
-    "tries": 40,
-    "radius": 6,
+    "tries": 24,
+    "radius": 2,
     "height": 2,
     "on": "#explorationremix:asurine_lining",
     "in_water": false
