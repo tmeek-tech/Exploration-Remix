@@ -382,6 +382,41 @@ def check(cv):
     assert cv.glow.getbbox(), f"{NAME}: no glowing pixels"
 
 
+# ================================================================================================ its signs
+# What the fight draws on the floor to warn of a blow (0.22.3, client.render.ChoirSigns): a slam's circle and the disc
+# that fills it, a toll's ring and the low wall of light that runs with it, the grab's ripples, the sculk lit before a
+# bloom. They are added onto whatever is under them, so black is nothing and a pixel's brightness is its strength.
+# The sheet holds no colour and no soft edges of its own: the renderer gives every corner it draws the Choir's light
+# blue at the strength it wants there, so a ring's glow fades smoothly however far a pixel is stretched, and the
+# sheet only says where there is light at all. Its pieces (the renderer's contract; each is x, y, width, height in
+# pixels, with clear pixels between any two):
+SIGN_SIZE = 64
+SIGN_WHITE = (56, 0, 8, 8)       # plain light: every ring, disc, wall and thread is drawn from the middle of this
+SIGN_TILES = ((0, 24, 16, 16), (16, 24, 16, 16), (32, 24, 16, 16), (48, 24, 16, 16))   # sculk veins, four of them
+SIGN_TINT = (128, 190, 255)      # the light blue the renderer draws them in, for the preview only
+
+
+def signs():
+    """The sheet of signs."""
+    img = Image.new("RGBA", (SIGN_SIZE, SIGN_SIZE), (0, 0, 0, 0))
+    px = img.load()
+    x0, y0, w, h = SIGN_WHITE
+    for j in range(h):
+        for i in range(w):
+            px[x0 + i, y0 + j] = (255, 255, 255, 255)
+    for n, (x0, y0, w, h) in enumerate(SIGN_TILES):
+        for j in range(h):
+            for i in range(w):
+                p = (i + 0.5 + 37 * n, 0.0, j + 0.5 + 53 * n)
+                vein = max(crack(p, 4.5, 81 + n, 0.04), 0.8 * crack(p, 2.6, 91 + n, 0.035))
+                v = 0.30 + 0.60 * vein ** 1.3
+                if _hash3(i, j, n, 97) > 0.985:
+                    v = 1.0                        # a speck of full light here and there, as sculk has
+                g = round(255 * max(0.0, min(1.0, v)))
+                px[x0 + i, y0 + j] = (g, g, g, 255)
+    return img
+
+
 # ================================================================================================ its items
 # The key that opens the arena, and the bell the boss drops. Drawn as the mod's other 16 x 16 item art is, a character
 # per pixel (plants.grid): 1-4 bone, 5-6 sculk, 7-8 its light blue, 9 the dark inside a bell.
@@ -465,6 +500,7 @@ def write(assets, write_json):
     check(cv)
     cv.img.save(os.path.join(tex_dir, f"{NAME}.png"))
     cv.glow.save(os.path.join(tex_dir, f"{NAME}_glow.png"))
+    signs().save(os.path.join(tex_dir, f"{NAME}_signs.png"))
     item_dir = os.path.join(assets, "textures", "item")
     os.makedirs(item_dir, exist_ok=True)
     for name, painter in PAINTERS.items():
@@ -566,7 +602,12 @@ def montage(out_dir):
         items.paste(Image.alpha_composite(under, big), (pad + n * (16 * s + pad), pad))
     items_path = os.path.join(out_dir, "hollow_choir_items.png")
     items.save(items_path)
-    return [path, items_path]
+    s = 8
+    sheet = signs().resize((SIGN_SIZE * s, SIGN_SIZE * s), Image.NEAREST)
+    under = Image.new("RGBA", sheet.size, (22, 21, 28, 255))
+    signs_path = os.path.join(out_dir, "hollow_choir_signs.png")
+    ImageChops.add(under, ImageChops.multiply(sheet, Image.new("RGBA", sheet.size, SIGN_TINT + (255,)))).save(signs_path)
+    return [path, items_path, signs_path]
 
 
 def renders(out_dir, size=560, segs=8):

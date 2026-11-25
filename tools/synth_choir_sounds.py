@@ -39,9 +39,9 @@ HP_HZ, HP_ORDER = 33.0, 8        # the high-pass that holds that line (-19 dB at
 
 # every file: how many of it (one keeps the bare name, several are name_1, name_2, ...) and how long it should be
 FILES = {"wake": (1, 4.0), "toll": (1, 2.5), "toll_far": (1, 3.5), "windup": (1, 0.9), "slam": (1, 1.2),
-         "tendril_cut": (1, 1.1), "fall": (1, 2.0), "rise": (1, 2.0), "core": (3, 0.6), "bloom": (1, 1.8),
+         "tendril_cut": (1, 1.1), "fall": (1, 2.0), "rise": (1, 2.0), "core": (3, 0.6), "bloom": (1, 2.2),
          "sprout": (1, 0.5), "hurt": (2, 0.7), "idle": (1, 5.0), "death": (1, 5.0), "reliquary": (1, 1.6),
-         "key_set": (1, 1.2)}
+         "key_set": (1, 1.2), "grab": (1, 1.6), "root": (1, 0.6)}
 TOLERANCE = 0.15                 # how far a file may be off its length, in seconds
 PREVIEWS = ("toll", "toll_far", "wake", "death", "rise", "slam")
 
@@ -426,27 +426,84 @@ def core(rng):
     return S.normalize_peak(fade(hp(x), 0.002, 0.08), -7.0)
 
 
+# The fight's clock (creature.choir.ChoirActs), in seconds: the bloom's sculk brightens for 24 ticks before it pulses, and
+# the grab's ripples run in for 20 before it pulls. Each of the two sounds starts with its warning and has its blow at
+# that moment, so what is heard counts down with what is seen.
+BLOOM_AT, GRAB_AT = 1.2, 1.0
+
+
 def bloom(rng):
-    """The sculk blooming in the last phase: a low pressure pulse going out through the floor, and a dry crackle
-    spreading away over it, thinner and further off as it goes."""
-    n = secs(1.8)
+    """The sculk blooming in the last phase. First the warning: a dry crackle gathering over the floor, quickening and
+    brightening for a second and a fifth. Then the pulse itself, a low pressure going out through the floor, and the
+    crackle scattering away after it, thinner and further off as it goes."""
+    n = secs(2.2)
     t = np.arange(n) / SR
-    pulse = S.tone(np.full(n, rng.uniform(54, 68)) * (1 - 0.12 * np.clip(t / 0.5, 0, 1)),
-                   np.minimum(1, t / 0.045) * np.exp(-t / 0.4), ((1, 1.0), (2, 0.25), (3.2, 0.08)))
-    push = one_shot(burst(rng, 0.5, 0.14), S.lowpass(220, 2))
-    push = np.pad(push, (0, max(0, n - len(push))))[:n] * np.minimum(1, t / 0.05)
+    end = 2.05
     spread = np.zeros(n)
-    at = 0.02
-    while at < 1.55:
-        u = at / 1.55
-        c = burst(rng, rng.uniform(0.002, 0.007), rng.uniform(0.0004, 0.0014)) * rng.lognormal(0, 0.5) * (1 - 0.7 * u)
+    at = 0.03
+    while at < BLOOM_AT:                               # the gathering
+        u = at / BLOOM_AT
+        c = burst(rng, rng.uniform(0.002, 0.007), rng.uniform(0.0004, 0.0014)) * rng.lognormal(0, 0.5) * (0.5 + 0.5 * u)
+        S.add_clipped(spread, one_shot(c, S.bandpass(700 + 2200 * u ** 1.4, 0.9)), secs(at))
+        at += rng.exponential(1.0 / (36 + 90 * u * u))
+    at = BLOOM_AT + 0.02
+    while at < end:                                    # the scattering
+        u = (at - BLOOM_AT) / (end - BLOOM_AT)
+        c = burst(rng, rng.uniform(0.002, 0.007), rng.uniform(0.0004, 0.0014)) * rng.lognormal(0, 0.5) * (1 - 0.8 * u)
         S.add_clipped(spread, one_shot(c, S.bandpass(900 + 2600 * u ** 1.4, 0.9)), secs(at))
-        at += rng.exponential(1.0 / (90 * (1 - 0.55 * u)))
-    grow = unit(moving_band(rng.standard_normal(n), 500 + 1500 * np.clip(t / 1.4, 0, 1), 0.9))
-    grow = grow * np.minimum(1, t / 0.08) * np.exp(-t / 0.7) * 0.2
-    x = 0.8 * pulse + 0.35 * push + 1.1 * spread + grow
+        at += rng.exponential(1.0 / (90 * (1 - 0.6 * u)))
+    k = np.clip(t - BLOOM_AT, 0, None)
+    on = (t >= BLOOM_AT).astype(float)
+    pulse = S.tone(np.full(n, rng.uniform(54, 68)) * (1 - 0.12 * np.clip(k / 0.5, 0, 1)),
+                   on * np.minimum(1, k / 0.03) * np.exp(-k / 0.4), ((1, 1.0), (2, 0.25), (3.2, 0.08)))
+    push = np.zeros(n)
+    S.add_clipped(push, one_shot(burst(rng, 0.5, 0.14), S.lowpass(220, 2)), secs(BLOOM_AT))
+    rise = np.clip(t / BLOOM_AT, 0, 1)
+    swell = unit(moving_band(rng.standard_normal(n), 400 + 1300 * rise, 0.9))
+    swell = swell * (0.25 + 0.75 * rise ** 2) * np.minimum(1, t / 0.05) * np.where(t >= BLOOM_AT, np.exp(-k / 0.25), 1.0) * 0.26
+    x = 0.8 * pulse + 0.35 * push + 1.1 * spread + swell
     x = arena(x, rng, n, decay=0.6, wet=0.32, lp=2600)
     return S.normalize_peak(fade(hp(x), 0.004, 0.14), -3.0)
+
+
+def grab(rng):
+    """The grab's warning and the grab: the floor drawing in. Three dry rasps run in over the stone, each nearer and
+    higher than the last, with the voices drawing one long breath in behind them; then, a second in, the pull itself:
+    the breath cut off, and a low hollow knock as everything in the bowl is taken a step towards the dais."""
+    n = secs(1.6)
+    t = np.arange(n) / SR
+    rasp = np.zeros(n)
+    for k in range(3):
+        m = secs(0.5)
+        u = np.arange(m) / m
+        band = unit(moving_band(rng.standard_normal(m), 320 + 260 * k + (700 + 300 * k) * u ** 1.5, 1.4, frame=1024))
+        S.add_clipped(rasp, band * np.sin(np.pi * u ** 0.7) ** 2 * (0.55 + 0.22 * k), secs(0.25 * k))
+    draw = np.clip(t / GRAB_AT, 0, 1)
+    breath = choir(rng, n, F0 * 2 * (1 + 0.5 * draw ** 2), (1.0, 1.5), spread=0.006, breath=0.9)
+    breath = breath * draw ** 1.5 * np.clip((GRAB_AT + 0.015 - t) / 0.015, 0, 1)
+    grit = pebbles(n, rng, 0.05, GRAB_AT, 40, 1800, amp=0.5) * draw
+    pull = np.zeros(n)
+    m = secs(0.45)
+    k = np.arange(m) / SR
+    S.add_clipped(pull, S.tone(rng.uniform(70, 82) - 18 * np.clip(k / 0.12, 0, 1), S.env_ad(m, 0.004, 0.11),
+                               ((1, 1.0), (2, 0.35), (3.1, 0.12))), secs(GRAB_AT))
+    S.add_clipped(pull, bone(rng, secs(0.2), 300, 620, 0.045) * 0.7, secs(GRAB_AT))
+    S.add_clipped(pull, one_shot(burst(rng, 0.12, 0.035), S.lowpass(320, 2)) * 0.6, secs(GRAB_AT))
+    x = 0.45 * rasp + 0.4 * breath + 0.25 * grit + 1.4 * pull
+    x = arena(x, rng, n, decay=0.45, wet=0.28, lp=2400)
+    return S.normalize_peak(fade(hp(x), 0.004, 0.12), -3.0)
+
+
+def root(rng):
+    """A tendril reaching the floor and taking root: the hard end of it knocked into the stone, the stone giving a
+    little under it, and its grit settling."""
+    n = secs(0.6)
+    x = stone_knock(rng, n, 150, 230, 0.03)
+    S.add_clipped(x, bone(rng, secs(0.18), 280, 560, 0.04) * 0.6, secs(0.002))
+    S.add_clipped(x, crack(rng, rng.uniform(700, 1300), 0.02, 0.004) * 0.45, secs(0.01))
+    x = x + pebbles(n, rng, 0.03, 0.4, 35, 2100, amp=0.3, fade_s=0.12)
+    x = arena(x, rng, n, decay=0.3, wet=0.2, lp=2600)
+    return S.normalize_peak(fade(hp(x), 0.001, 0.08), -6.0)
 
 
 def sprout(rng):
@@ -553,7 +610,8 @@ def key_set(rng):
 
 MAKERS = {"wake": wake, "toll": toll, "toll_far": toll_far, "windup": windup, "slam": slam,
           "tendril_cut": tendril_cut, "fall": fall, "rise": rise, "core": core, "bloom": bloom, "sprout": sprout,
-          "hurt": hurt, "idle": idle, "death": death, "reliquary": reliquary, "key_set": key_set}
+          "hurt": hurt, "idle": idle, "death": death, "reliquary": reliquary, "key_set": key_set,
+          "grab": grab, "root": root}
 
 
 def names():

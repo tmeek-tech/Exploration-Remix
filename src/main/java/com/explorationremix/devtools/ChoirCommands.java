@@ -37,6 +37,12 @@ import javax.annotation.Nullable;
  * player on the server at all. Only {@code tp}, {@code city} and {@code keys} need one, since they move a player or
  * put something in their hands. {@code choir cut} (0.22.0) parts every standing tendril, which is how the rig gets to
  * the open core and through the phases in a scripted fight.
+ *
+ * <p>For the fight's warnings (0.22.3): {@code choir act <blow>} has the Choir strike that blow next, and
+ * {@code choir pose <blow> <tick>} holds a blow still at one tick of its clock, so a picture can be taken of exactly
+ * what a player is shown at that moment ({@code choir pose off} lets it go). {@code choir phase} sets a Choir that is
+ * up to the start of that phase as well as dressing its arena, so the later phases' blows can be seen without the
+ * minutes of fighting that lead to them.
  */
 public final class ChoirCommands {
     /** How many cells out an arena or a city is looked for (each is 600 blocks across). */
@@ -53,8 +59,28 @@ public final class ChoirCommands {
                 .then(Commands.literal("keys").executes(ChoirCommands::keys))
                 .then(Commands.literal("summon").executes(ChoirCommands::summon))
                 .then(Commands.literal("cut").executes(ChoirCommands::cut))
+                .then(blows(Commands.literal("act"), false))
+                .then(blows(Commands.literal("pose"), true)
+                        .then(Commands.literal("hold").executes(ChoirCommands::hold))
+                        .then(Commands.literal("off").executes(c -> pose(c, -1, 0))))
                 .then(Commands.literal("phase").then(Commands.argument("phase", IntegerArgumentType.integer(0, 3))
                         .executes(c -> phase(c, IntegerArgumentType.getInteger(c, "phase")))));
+    }
+
+    /** The blows by name, each to be struck now ({@code act}) or held at a tick of its clock ({@code pose}). */
+    private static LiteralArgumentBuilder<CommandSourceStack> blows(LiteralArgumentBuilder<CommandSourceStack> on, boolean held) {
+        String[] names = {"windup", "slam", "toll", "grab", "bloom"};
+        int[] kinds = {HollowChoirEntity.ACT_WINDUP, HollowChoirEntity.ACT_SLAM, HollowChoirEntity.ACT_TOLL,
+                HollowChoirEntity.ACT_GRAB, HollowChoirEntity.ACT_BLOOM};
+        for (int i = 0; i < names.length; i++) {
+            int kind = kinds[i];
+            if (held) on.then(Commands.literal(names[i]).then(Commands.argument("tick", IntegerArgumentType.integer(0, 200))
+                    .executes(c -> pose(c, kind, IntegerArgumentType.getInteger(c, "tick")))));
+            else if (kind != HollowChoirEntity.ACT_SLAM) on.then(Commands.literal(names[i]).executes(c -> act(c, kind, 0))
+                    .then(Commands.literal("in").then(Commands.argument("ticks", IntegerArgumentType.integer(1, 600))
+                            .executes(c -> act(c, kind, IntegerArgumentType.getInteger(c, "ticks"))))));
+        }
+        return on;
     }
 
     // -------------------------------------------------------------------------------------------------- the lookups
@@ -237,6 +263,58 @@ public final class ChoirCommands {
         return n;
     }
 
+    /** The Choir that is up in the arena nearest the command, or null with the failure already said. */
+    @Nullable
+    private static HollowChoirEntity up(CommandContext<CommandSourceStack> c) {
+        Terrain t = terrain(c);
+        if (t == null) return null;
+        ServerLevel level = overworld(c);
+        net.minecraft.world.phys.Vec3 from = at(c);
+        ChoirSites.Site s = level == null ? null : nearest(t, from.x, from.z);
+        HollowChoirEntity choir = s == null ? null : ChoirSummon.fighting(level, s);
+        if (choir == null) c.getSource().sendFailure(Component.literal("No Hollow Choir is up near here."));
+        return choir;
+    }
+
+    /** Has the Choir strike a blow now: a slam (by its wind-up) at whoever is nearest, a toll, a grab or a bloom. */
+    private static int act(CommandContext<CommandSourceStack> c, int kind, int in) {
+        HollowChoirEntity choir = up(c);
+        if (choir == null) return 0;
+        if (!choir.devActIn(kind, in)) {
+            c.getSource().sendFailure(Component.literal("It cannot strike that now: it is coming down, open or climbing,"
+                    + " or (for a slam) nobody stands within a rooted tendril's reach."));
+            return 0;
+        }
+        c.getSource().sendSuccess(() -> Component.literal(in > 0 ? "The Choir strikes in " + in + " ticks." : "The Choir strikes."), false);
+        return 1;
+    }
+
+    /** Holds the fight as it stands, so one blow at a time can be staged. */
+    private static int hold(CommandContext<CommandSourceStack> c) {
+        HollowChoirEntity choir = up(c);
+        if (choir == null) return 0;
+        if (!choir.devHold()) {
+            c.getSource().sendFailure(Component.literal("It cannot be held while it is still coming down."));
+            return 0;
+        }
+        c.getSource().sendSuccess(() -> Component.literal("The Choir is held."), false);
+        return 1;
+    }
+
+    /** Holds a blow still at a tick of its clock, or lets it go. */
+    private static int pose(CommandContext<CommandSourceStack> c, int kind, int tick) {
+        HollowChoirEntity choir = up(c);
+        if (choir == null) return 0;
+        if (!choir.devPose(kind, tick)) {
+            c.getSource().sendFailure(Component.literal("It cannot be held in that now: it is coming down, open or"
+                    + " climbing, or (for a slam) nobody stands within a rooted tendril's reach."));
+            return 0;
+        }
+        c.getSource().sendSuccess(() -> Component.literal(kind < 0 ? "The Choir is let go."
+                : "The Choir is held at tick " + tick + " of that blow."), false);
+        return 1;
+    }
+
     private static int phase(CommandContext<CommandSourceStack> c, int phase) {
         Terrain t = terrain(c);
         if (t == null) return 0;
@@ -248,6 +326,9 @@ public final class ChoirCommands {
             return 0;
         }
         ChoirSummon.dress(level, s, phase);
+        // a Choir that is up goes to the start of that phase with it, its tendrils grown again
+        HollowChoirEntity choir = ChoirSummon.fighting(level, s);
+        if (choir != null && phase >= 1) choir.devPhase(phase);
         c.getSource().sendSuccess(() -> Component.literal(phase == 0
                 ? "The arena is dressed as it is at rest: braziers lit, the sculk back to the dais, no sprouts."
                 : "The arena is dressed for phase " + phase + "."), false);
