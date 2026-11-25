@@ -7,7 +7,7 @@ import java.util.Map;
 
 /**
  * The lower Basalt Galleries' ruins (0.22.1; Taran: "Can you make some scattered ruins in the lower Basalt Galleries?
- * ... Ruins should come in clusters with bigger structures in the middle and smaller around the edges"). His cards: a
+ * ... Ruins should come in clusters with bigger structures in the middle and smaller around the edges"). Taran's cards: a
  * cluster about every 400 blocks, on the high ground (the tablelands' tops, over the lava's highest line), half fallen,
  * a rune and some loot in each, and lava channels glowing in them (the Galleries' only light is lava you can see).
  *
