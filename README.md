@@ -213,8 +213,11 @@ the rim walk included. The first key set in a socket strikes dumb every shrieker
 to an arena is as dangerous as the rest of the Deep Dark; the fight in it is the Choir's alone.
 
 **The fight.** A crown of bone plates hangs over the dais with a bell inside it, held up by six great sculk tendrils
-that run from the cavern's ceiling past the crown down to roots on the floor. While the crown is up it cannot be hurt
-at all: a blow on it rings the bell and nothing more. The way in is the tendrils. Damage to a tendril wears that
+that run from the cavern's ceiling past the crown down to roots on the floor. The roots stand still, eight blocks out
+on the half spokes between the sockets (two of them in the paved lanes that run in from the ramps), and no broken
+pillar stands within reach of one (0.22.2; they turned with the
+crown before, and until this build each was drawn on the far side of the dais from where a sword found it). While the
+crown is up it cannot be hurt at all: a blow on it rings the bell and nothing more. The way in is the tendrils. Damage to a tendril wears that
 tendril through *and* tells on the Choir itself, so the bar moves while you work; cut the last standing tendril and the
 crown has nothing left to hang from. It falls, the bell opens, and for nine seconds the core inside takes everything
 you have. Then it climbs back and grows new tendrils, fewer and tougher each phase: six, then five, then four. A

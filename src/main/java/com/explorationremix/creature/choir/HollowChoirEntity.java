@@ -3,6 +3,7 @@ package com.explorationremix.creature.choir;
 import com.explorationremix.combat.WindUp;
 import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.registry.ERSounds;
+import com.explorationremix.world.feature.ChoirArena;
 import com.explorationremix.world.terrain.ChoirSites;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -77,9 +78,9 @@ public class HollowChoirEntity extends Monster implements WindUp {
     public static final int[] TENDRILS = {6, 5, 4};
     public static final float[] TENDRIL_CUT = {120, 150, 190};
     /** Six places a tendril can stand, so a phase's tendrils are spread evenly round the dais. */
-    public static final int PLACES = 6;
+    public static final int PLACES = ChoirArena.ROOTS;
     /** How far out the tendrils are rooted, and how far out the crown's rim reaches. */
-    public static final double TENDRIL_R = 8, CROWN_R = 2.25;
+    public static final double TENDRIL_R = ChoirArena.ROOT_R, CROWN_R = 2.25;
     /** The crown hangs this far over the bowl's floor, and lies this far over it once it has fallen. */
     public static final double CROWN_UP = 6, CROWN_DOWN = 1.0;
     /** How long the core stays open after a fall, and how long the crown takes to fall and to climb back. */
@@ -130,6 +131,9 @@ public class HollowChoirEntity extends Monster implements WindUp {
             SynchedEntityData.defineId(HollowChoirEntity.class, EntityDataSerializers.FLOAT);
     /** The bowl's floor, which everything else is measured from. Synched, so the client can place the tendrils. */
     private static final EntityDataAccessor<Float> DATA_FLOOR =
+            SynchedEntityData.defineId(HollowChoirEntity.class, EntityDataSerializers.FLOAT);
+    /** The arena's own turn, which the roots are laid out by ({@link ChoirArena#rootAngle}). */
+    private static final EntityDataAccessor<Float> DATA_TURN =
             SynchedEntityData.defineId(HollowChoirEntity.class, EntityDataSerializers.FLOAT);
 
     private final ServerBossEvent bar = new ServerBossEvent(
@@ -183,6 +187,7 @@ public class HollowChoirEntity extends Monster implements WindUp {
         entityData.define(DATA_TOP, 0F);
         entityData.define(DATA_SPIN, 0F);
         entityData.define(DATA_FLOOR, 0F);
+        entityData.define(DATA_TURN, 0F);
     }
 
     @Override
@@ -198,6 +203,7 @@ public class HollowChoirEntity extends Monster implements WindUp {
         cellZ = site.cellZ();
         entityData.set(DATA_TOP, (float) ceil);
         entityData.set(DATA_FLOOR, (float) site.floorY());
+        entityData.set(DATA_TURN, (float) site.turn());
         setPos(site.x(), site.floorY() + CROWN_UP, site.z());
         growTendrils();
         actTimer = ENTER_TICKS;
@@ -228,10 +234,12 @@ public class HollowChoirEntity extends Monster implements WindUp {
         return new Vec3(getX() + TENDRIL_R * Math.cos(a), floorY(), getZ() + TENDRIL_R * Math.sin(a));
     }
 
-    /** A place's angle round the dais. The client wants it too, so it is worked out from the id, not kept. */
-    public double placeAngle(int place) {
-        return place * 2 * Math.PI / PLACES + spin() * 0.0174532925;
-    }
+    /**
+     * A place's angle round the dais. The roots stand still (0.22.2): they turned with the crown before, a third of a
+     * block a second, which made a tendril a thing to chase rather than a thing to cut, dragged its box through the
+     * bowl's pillars, and left nothing fixed for a strike to rear from. The crown still turns; what holds it does not.
+     */
+    public double placeAngle(int place) { return ChoirArena.rootAngle(entityData.get(DATA_TURN), place); }
 
     /** The dais's middle: the crown's own column, which it never leaves. Right on the client too. */
     public double daisX() { return getX(); }
@@ -645,7 +653,9 @@ public class HollowChoirEntity extends Monster implements WindUp {
 
     private void hover() {
         setDeltaMovement(Vec3.ZERO);
-        if (open()) return;
+        // the fall, the open core and the climb back each set the crown's height themselves. The climb was left out of
+        // this (0.21.9), so the crown was put straight back up at its first tick and never seen to climb at all.
+        if (fallTicks > 0 || openTicks > 0 || riseTicks > 0) return;
         double y = floorY() + CROWN_UP + Math.sin(tickCount * 0.035) * 0.35;
         setPos(getX(), y, getZ());
     }
@@ -690,6 +700,7 @@ public class HollowChoirEntity extends Monster implements WindUp {
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         tag.putFloat("FloorY", entityData.get(DATA_FLOOR));
+        tag.putFloat("Turn", entityData.get(DATA_TURN));
         tag.putInt("CellX", cellX);
         tag.putInt("CellZ", cellZ);
         tag.putInt("Phase", phase);
@@ -707,6 +718,7 @@ public class HollowChoirEntity extends Monster implements WindUp {
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         entityData.set(DATA_FLOOR, tag.getFloat("FloorY"));
+        entityData.set(DATA_TURN, tag.getFloat("Turn"));
         cellX = tag.getInt("CellX");
         cellZ = tag.getInt("CellZ");
         phase = Math.max(1, tag.getInt("Phase"));
