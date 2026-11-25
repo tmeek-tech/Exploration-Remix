@@ -9,6 +9,7 @@
     "minecraft:deepslate_gold_ore",
     "minecraft:brown_terracotta",
     "explorationremix:ember_crust",
+    "explorationremix:smooth_ember_crust",
     {
       "id": "create:scoria",
       "required": false

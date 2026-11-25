@@ -30,7 +30,7 @@ import java.util.Set;
 public final class ShaderGlow {
     /** Complementary's id for modded light sources (block.10028 in its block.properties). */
     private static final int MODDED_LIGHT = 10028;
-    private static Set<ResourceLocation> overlays;
+    private static Set<ResourceLocation> overlays, asRock;
 
     private ShaderGlow() {
     }
@@ -46,8 +46,10 @@ public final class ShaderGlow {
             if (key == null || !key.getNamespace().equals(ExplorationRemix.MOD_ID)) {
                 continue;
             }
-            // a struck fern's unrolled fronds give a little light to climb by, but are leaves, not a glow
-            if (block instanceof FrondBlock) {
+            // a struck fern's unrolled fronds give a little light to climb by, but are leaves, not a glow; and the
+            // blocks drawn as rock with a glowing overlay (the ember crust, 0.22.9) are lit as the rock they are, so
+            // only their overlay's pixels glow
+            if (block instanceof FrondBlock || asRock().contains(key)) {
                 continue;
             }
             boolean overlay = overlays().contains(key);
@@ -72,20 +74,37 @@ public final class ShaderGlow {
 
     /** The blocks drawn with a glow overlay, listed by tools/gen_data.py. Some of them give no light (dusk vines). */
     private static Set<ResourceLocation> overlays() {
-        if (overlays == null) {
-            Set<ResourceLocation> out = new HashSet<>();
-            try (InputStream in = ShaderGlow.class.getResourceAsStream("/assets/" + ExplorationRemix.MOD_ID + "/glowing_blocks.json")) {
-                if (in != null) {
-                    JsonObject json = JsonParser.parseReader(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
-                    for (JsonElement e : json.getAsJsonArray("blocks")) {
-                        out.add(new ResourceLocation(ExplorationRemix.MOD_ID, e.getAsString()));
+        if (overlays == null) read();
+        return overlays;
+    }
+
+    /**
+     * The blocks the shader lights as rock even where they give light (gen_data's option shader_glow False): drawn as a
+     * vanilla rock with a glowing overlay, whose rock would glow too under id 10028.
+     */
+    private static Set<ResourceLocation> asRock() {
+        if (asRock == null) read();
+        return asRock;
+    }
+
+    private static void read() {
+        Set<ResourceLocation> glow = new HashSet<>(), rock = new HashSet<>();
+        try (InputStream in = ShaderGlow.class.getResourceAsStream("/assets/" + ExplorationRemix.MOD_ID + "/glowing_blocks.json")) {
+            if (in != null) {
+                JsonObject json = JsonParser.parseReader(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
+                for (JsonElement e : json.getAsJsonArray("blocks")) {
+                    glow.add(new ResourceLocation(ExplorationRemix.MOD_ID, e.getAsString()));
+                }
+                if (json.has("as_rock")) {
+                    for (JsonElement e : json.getAsJsonArray("as_rock")) {
+                        rock.add(new ResourceLocation(ExplorationRemix.MOD_ID, e.getAsString()));
                     }
                 }
-            } catch (Exception e) {
-                ExplorationRemix.LOGGER.warn("Could not read the mod's list of glowing blocks", e);
             }
-            overlays = out;
+        } catch (Exception e) {
+            ExplorationRemix.LOGGER.warn("Could not read the mod's list of glowing blocks", e);
         }
-        return overlays;
+        overlays = glow;
+        asRock = rock;
     }
 }

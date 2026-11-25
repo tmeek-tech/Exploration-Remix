@@ -63,10 +63,12 @@ public enum Rock {
     FROST_MOSS(0x5d8a96),
     // ---- 0.5: the ember crust, a mod block: the glowing seams that light the lifeless Galleries where lava cannot
     // reach. (0.5.1: polished basalt and polished blackstone are gone, 0.8.0: Create's layered scoria and scorchia too;
-    // the two bottom layers are natural stone.)
-    EMBER_CRUST(0xe0782e),
+    // the two bottom layers are natural stone.) 0.22.9: basalt with a glowing crack, and SMOOTH_EMBER_CRUST below.
+    EMBER_CRUST(0x5a4444),
     // ---- 0.14: the host rock round the caves near the surface keeps the pack's (WWOO's) stone: diorite under flower forests
-    DIORITE(0xbcbcbc);
+    DIORITE(0xbcbcbc),
+    // ---- 0.22.9: the ember crust's cracks in smooth basalt (last, so the others keep their ordinals)
+    SMOOTH_EMBER_CRUST(0x4c3e42);
 
     public final int color;
 

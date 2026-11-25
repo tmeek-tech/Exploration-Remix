@@ -1,6 +1,14 @@
 {
-  "parent": "minecraft:block/cube_all",
+  "parent": "explorationremix:block/template/rock_top_side_bottom_glow",
+  "render_type": "minecraft:cutout_mipped",
   "textures": {
-    "all": "explorationremix:block/ember_crust"
+    "rock_end": "minecraft:block/basalt_top",
+    "rock_side": "minecraft:block/basalt_side",
+    "top": "explorationremix:block/ember_crust_top",
+    "top_glow": "explorationremix:block/ember_crust_top_glow",
+    "side": "explorationremix:block/ember_crust_side",
+    "side_glow": "explorationremix:block/ember_crust_side_glow",
+    "bottom": "explorationremix:block/ember_crust_top",
+    "bottom_glow": "explorationremix:block/ember_crust_top_glow"
   }
 }

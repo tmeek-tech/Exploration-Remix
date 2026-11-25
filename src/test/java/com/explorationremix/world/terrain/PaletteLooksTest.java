@@ -189,11 +189,13 @@ class PaletteLooksTest {
             Rock.SCORIA, Rock.SCORCHIA, Rock.DEEPSLATE_GOLD_ORE);
     /**
      * The Galleries' stones under the join's blend (Taran, 2026-11-23: "Blackstone could be replaced with smooth basalt.
-     * Don't use scoria but scorchia could be used sparingly. Remove ember crust."): no blackstone, gilded blackstone,
-     * scoria or ember crust.
+     * Don't use scoria but scorchia could be used sparingly. Remove ember crust."): no blackstone, gilded blackstone or
+     * scoria. The ember crust came back in 0.22.9 as basalt and smooth basalt with a glowing crack in them (Taran,
+     * 2026-11-25: "re-add ember crust to light up the lower Galleries but give it a texture that blends in better with
+     * the basalt").
      */
     private static final Set<Rock> GALLERIES_STONE = EnumSet.of(Rock.BASALT, Rock.SMOOTH_BASALT, Rock.MAGMA, Rock.OBSIDIAN,
-            Rock.CRYING_OBSIDIAN, Rock.TUFF, Rock.SCORCHIA, Rock.DEEPSLATE_GOLD_ORE);
+            Rock.CRYING_OBSIDIAN, Rock.TUFF, Rock.SCORCHIA, Rock.DEEPSLATE_GOLD_ORE, Rock.EMBER_CRUST, Rock.SMOOTH_EMBER_CRUST);
 
     @Test
     void naturalStoneOnly() {
@@ -225,8 +227,8 @@ class PaletteLooksTest {
     void scorchiaSparingly() {
         // Taran, 2026-11-23: "Don't use scoria but scorchia could be used sparingly." On the real fields' looks, over the
         // Galleries under the join's blend: a column in forty in the halls and the Causeway, the Basalt Rifts' thin flow
-        // tops, the Caldera's cinder cones (its one big show), none in the Obsidian Tubes; and no blackstone, scoria or
-        // ember crust anywhere.
+        // tops, the Caldera's cinder cones (its one big show), none in the Obsidian Tubes; and no blackstone or scoria
+        // anywhere.
         Terrain t = terrain();
         Shape s = t.shape;
         int lo = s.bottom(Terrain.GALLERIES), hi = s.top(Terrain.GALLERIES) - Palette.JOIN_BLEND;

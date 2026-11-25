@@ -1,7 +1,78 @@
 {
   "variants": {
-    "": {
-      "model": "explorationremix:block/ember_crust"
-    }
+    "": [
+      {
+        "model": "explorationremix:block/ember_crust"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_r90"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_r180"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_r270"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_mirrored"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_mirrored_r90"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_mirrored_r180"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_mirrored_r270"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_2"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_2_r90"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_2_r180"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_2_r270"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_2_mirrored"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_2_mirrored_r90"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_2_mirrored_r180"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_2_mirrored_r270"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_3"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_3_r90"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_3_r180"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_3_r270"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_3_mirrored"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_3_mirrored_r90"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_3_mirrored_r180"
+      },
+      {
+        "model": "explorationremix:block/ember_crust_3_mirrored_r270"
+      }
+    ]
   }
 }

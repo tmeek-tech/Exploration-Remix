@@ -256,15 +256,27 @@ public final class ERBlocks {
     // Nothing grows in the Basalt Galleries (since 0.5 the bottom layer, under the Wasteland): their light and their climbs
     // come from rock. Neither block is a plant (gen_data.NOT_PLANTS), so /remix census counts neither as growth.
     /**
-     * Rock still glowing from the heat under it, in seams through the Galleries' walls and vaults and in plates over the
-     * Caldera's floor: it lights the halls where no lava reaches. Under Complementary a mod block that gives light glows
-     * over its whole face ({@code client/ShaderGlow}), and without the shader it is drawn at full brightness like magma,
-     * so its texture is glowing plates with dark seams between them. Unlike magma it is safe to walk on.
+     * Basalt with a crack in it that still glows from the heat under it: the light of the lower Galleries' halls, high
+     * ground, Caldera, Causeway and Basalt Rifts where no lava reaches (Palette, 0.22.9). Since 0.22.9 it is basalt up
+     * close (Taran, 2026-11-25: "re-add ember crust to light up the lower Galleries but give it a texture that blends in
+     * better with the basalt"): drawn as vanilla's basalt with a cutout crack over it whose deep red stretches alone are
+     * drawn at full brightness (tools/minerals.py, a glow_cube over a rock in tools/gen_data.py), so no emissive
+     * rendering, and as hard as basalt. Under Complementary it is lit as rock (client/ShaderGlow leaves it out), so its
+     * basalt does not glow. Unlike magma it is safe to walk on.
      */
-    public static final RegistryObject<Block> EMBER_CRUST = block("ember_crust", () -> new Block(
-            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_ORANGE).strength(1.5F, 6.0F).sound(SoundType.BASALT)
-                    .requiresCorrectToolForDrops().lightLevel(s -> 11).emissiveRendering((s, l, p) -> true)
-                    .isValidSpawn((s, l, p, e) -> false)));
+    public static final RegistryObject<Block> EMBER_CRUST = block("ember_crust", () -> new Block(emberCrust()));
+    /** The ember crust's cracks in smooth basalt, where the stone round it is smooth basalt (Palette.ember). */
+    public static final RegistryObject<Block> SMOOTH_EMBER_CRUST = block("smooth_ember_crust", () -> new Block(emberCrust()));
+    /** The ember crust's light: 12 in the blocks beside it, one less for each step further (taxicab), 6 at seven. */
+    public static final int EMBER_LIGHT = 13;
+
+    /** Basalt's properties (vanilla's Blocks.BASALT), with the ember crust's light and no mob spawning on it. */
+    private static BlockBehaviour.Properties emberCrust() {
+        return BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).instrument(NoteBlockInstrument.BASEDRUM)
+                .requiresCorrectToolForDrops().strength(1.25F, 4.2F).sound(SoundType.BASALT).lightLevel(s -> EMBER_LIGHT)
+                .isValidSpawn((s, l, p, e) -> false);
+    }
+
     /**
      * Beads of cinder fused into a hanging chain. 0.5's climbs of the Galleries and of the Wasteland's bare refuges hung
      * it; since 0.8.0 world generation places none (the two bottom layers are natural rock only), and it stays registered

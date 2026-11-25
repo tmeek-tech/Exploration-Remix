@@ -1,0 +1,14 @@
+{
+  "parent": "explorationremix:block/template/rock_top_side_bottom_glow_mirrored_r180",
+  "render_type": "minecraft:cutout_mipped",
+  "textures": {
+    "rock_end": "minecraft:block/smooth_basalt",
+    "rock_side": "minecraft:block/smooth_basalt",
+    "top": "explorationremix:block/ember_crust_top",
+    "top_glow": "explorationremix:block/ember_crust_top_glow",
+    "side": "explorationremix:block/ember_crust_side",
+    "side_glow": "explorationremix:block/ember_crust_side_glow",
+    "bottom": "explorationremix:block/ember_crust_top",
+    "bottom_glow": "explorationremix:block/ember_crust_top_glow"
+  }
+}
