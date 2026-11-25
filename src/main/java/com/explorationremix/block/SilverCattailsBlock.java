@@ -32,9 +32,10 @@ import javax.annotation.Nullable;
 
 /**
  * Silver cattails (0.21.7, the Blue Reaches polish; Taran's card picks "Silver cattails", "Two to three blocks, mixed"
- * and "Hidden while you're in them"): reeds by the rifts' water, two or three blocks tall, silver-blue blades with
- * cattail heads that glow light blue. A player standing in them is hidden from the Skeins and the giant Skeins unless
- * right next to one ({@link #hides}), and one hunting them loses them.
+ * and "Hidden while you're in them"): reeds by the rifts' water, two or three blocks tall. Since 0.22.8 they are
+ * drawn as glow sedge (Taran's later pick, "Glow Sedge", the name they show in game; the id stays so worlds keep their
+ * reeds): dark navy blades whose tips glow light blue. A player standing in them is hidden from the Skeins and the
+ * giant Skeins unless right next to one ({@link #hides}), and one hunting them loses them.
  *
  * <p>Each block is one {@link Part} of a plant, and every block of a plant is seeded from its foot ({@link #getSeed}),
  * so the game shows slices of one drawing (tools/plants_upper.py) that stand together. Any block of it may stand in

@@ -546,20 +546,23 @@ def build_features():
     # on the floor, with the smooth lining bare between them; none scattered singly any more (asurine_geodes.jpg).
     # The wall clusters start from a spot on the floor and take the walls within four blocks of it, so they stand low
     # on the walls round the floor's rim; the vault's start from a spot under it.
+    # 0.22.8 (Taran, 25 Nov 2026: "increase the number of asurine crystals in asurine geodes"): still in clusters, but
+    # many more of them, each a little fuller, and the walls' reaching a block higher: about five times the crystals of
+    # 0.21.7 (seed 8675309's geode by the Deep Blue Rift at -275 -156 303 holds 346 crystals and buds, against 64).
     feature("asurine_geodes/crystals", "underground_decoration", ["asurine_geodes"],
-            attach(mix((simple("explorationremix:asurine_crystal"), 3), (simple("explorationremix:asurine_bud"), 2)), "walls", 48,
-                   f"#{MOD}:asurine_lining", radius=4, height=5),
-            [count(8), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+            attach(mix((simple("explorationremix:asurine_crystal"), 3), (simple("explorationremix:asurine_bud"), 2)), "walls", 80,
+                   f"#{MOD}:asurine_lining", radius=4, height=6),
+            [count(32), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
     feature("asurine_geodes/crystal_clusters", "underground_decoration", ["asurine_geodes"],
-            attach(mix((simple("explorationremix:asurine_crystal"), 3), (simple("explorationremix:asurine_bud"), 2)), "walls_ceiling", 36,
+            attach(mix((simple("explorationremix:asurine_crystal"), 3), (simple("explorationremix:asurine_bud"), 2)), "walls_ceiling", 64,
                    f"#{MOD}:asurine_lining", radius=3, height=3),
-            [count(6), SQUARE, layer("blue_reaches", above_water=True)] + ceiling(offset=0) + [BIOME])
+            [count(24), SQUARE, layer("blue_reaches", above_water=True)] + ceiling(offset=0) + [BIOME])
     feature("asurine_geodes/floor_crystals", "underground_decoration", ["asurine_geodes"],
-            attach(mix((simple("explorationremix:asurine_crystal"), 2), (simple("explorationremix:asurine_bud"), 3)), "floor", 24,
+            attach(mix((simple("explorationremix:asurine_crystal"), 2), (simple("explorationremix:asurine_bud"), 3)), "floor", 36,
                    f"#{MOD}:asurine_lining", radius=2, height=2),
-            [count(6), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
-    # A little crust of glowing points on the lining, in small patches, after the crystals (0.21.7: an eighth of what
-    # there was: Taran asked for much less crust).
+            [count(20), SQUARE, layer("blue_reaches", above_water=True)] + floor() + [BIOME])
+    # A little crust of glittering grains on the lining (0.22.8: the "Sugar" look), in small patches, after the
+    # crystals (0.21.7: an eighth of what there was: Taran asked for much less crust).
     feature("asurine_geodes/crust", "underground_decoration", ["asurine_geodes"],
             attach(simple(f"{MOD}:asurine_crust"), "walls_ceiling", 24, f"#{MOD}:asurine_lining", radius=3, height=3),
             [count(15), SQUARE, layer("blue_reaches", above_water=True), BIOME])
@@ -595,7 +598,7 @@ def build_features():
     feature("ivory_root_cavern/brackets", "underground_decoration", ["ivory_root_cavern"],
             attach(simple(f"{MOD}:ivory_bracket"), "walls", 64, f"#{MOD}:cave_rock", radius=7, height=8),
             [count(3), SQUARE, layer(up), BIOME])
-    # The rift's blue walls are its asurine, near black under a shader: lichen specks and a crust of facets over about
+    # The rift's blue walls are its asurine, near black under a shader: lichen threads and a sugary crust over about
     # one asurine face in six turn them blue in patches, and leave the dark rock bare.
     feature("deep_blue_rift/lichen", "underground_decoration", ["deep_blue_rift"],
             attach(simple(f"{MOD}:blue_lichen"), "walls_ceiling", 48, f"#{MOD}:asurine_lining", radius=6, height=6),
