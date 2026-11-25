@@ -345,6 +345,28 @@ public final class RuneFx {
         play(l, at, SoundEvents.ZOMBIE_ATTACK_WOODEN_DOOR, 0.25F + 0.25F * amount, 1.4F);
     }
 
+    /**
+     * A sword's jump attack comes down (0.22.7): dust and a crack off the ground at {@code at} ({@code ground} its block's
+     * state id), {@code flat} the way {@code player} faced, {@code amount} 1 when it struck a creature, less when it
+     * struck only the ground.
+     */
+    public static void smash(ServerLevel l, Vec3 at, Vec3 flat, float amount, SoundEvent groundSound, int ground, int player) {
+        // the block's id goes as the colour: a whole int, where the extra number is bounded for drawing
+        send(l, Fx.Kind.SMASH, at, flat, ground, Element.NONE, amount, 0.0F, player, NEAR);
+        play(l, at, SoundEvents.GENERIC_BIG_FALL, 0.9F, 0.75F);
+        play(l, at, groundSound, 1.0F, 0.6F);
+    }
+
+    /** A sword's parry (0.22.7) at {@code at} on {@code player}'s blade, turning back what came along {@code -toward}. */
+    public static void parry(ServerLevel l, Vec3 at, Vec3 toward, int player) {
+        send(l, Fx.Kind.PARRY, at, toward, 0xFFFFFF, Element.NONE, 1.0F, 0.0F, player, FAR);
+    }
+
+    /** A blow taken on {@code player}'s raised sword (0.22.7) at {@code at}; {@code amount} 0 to 1 for how hard. */
+    public static void block(ServerLevel l, Vec3 at, Vec3 toward, float amount, int player) {
+        send(l, Fx.Kind.BLOCK, at, toward, 0xFFFFFF, Element.NONE, amount, 0.0F, player, NEAR);
+    }
+
     /** Motes landed in the gear of the player at {@code at}: {@code full} how full it is now. */
     public static void moteIn(ServerLevel l, Vec3 at, float full) {
         send(l, Fx.Kind.MOTE_IN, at, Vec3.ZERO, 0xFFFFFF, Element.NONE, full, 0.0F, -1, 16.0);

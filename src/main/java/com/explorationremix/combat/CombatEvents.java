@@ -36,7 +36,8 @@ import net.minecraftforge.fml.common.Mod;
 /**
  * The combat layer on the vanilla swing (Forge bus, server side): poise worn by players' hits and the stagger when it
  * breaks, momentum hits, wall slams, and the flash and sparks where a melee hit lands. Taran's picks (2026-11-08):
- * hidden poise, momentum, slams and hit feel; no dodge, parry or stamina, and blocking does only what it always did.
+ * hidden poise, momentum, slams and hit feel; no dodge or stamina. Since 2026-11-25 a sword can block and parry too
+ * (combat.guard); a shield still blocks as it always did.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID)
 public final class CombatEvents {
@@ -93,21 +94,28 @@ public final class CombatEvents {
             // lunge is not momentum (it has its own push), and it stops a creature winding up a strike
             Swordplay.Landing swing = Swordplay.landing(p);
             boolean strong = swing != null && swing.strong(), finisher = swing != null && swing.finisher();
-            float momentum = strength >= 0.9F && !strong ? Poise.momentum(Fighters.closing(p, t)) : 0.0F;
-            if (swing != null) amount *= Poise.swingDamage(strong, finisher);
+            boolean jump = swing != null && swing.jump();
+            // a heavy attack's own move (the thrust's lunge, the jump's fall) is not momentum: each has its own push
+            float momentum = strength >= 0.9F && !strong && !jump ? Poise.momentum(Fighters.closing(p, t)) : 0.0F;
+            if (jump) amount *= Poise.jumpDamage(swing.drop());
+            else if (swing != null) amount *= Poise.swingDamage(strong, finisher);
             if (momentum > 0.0F) {
                 amount *= Poise.momentumDamage(momentum);
                 Fighters.pushNext(p, t, Poise.momentumPush(momentum));
             } else if (strong) {
                 Fighters.pushNext(p, t, Poise.STRONG_PUSH);
+            } else if (jump) {
+                Fighters.pushNext(p, t, Poise.JUMP_PUSH);
             }
             poise = Poise.melee(amount, weapon(p.getMainHandItem().getItem()), strength, crit, momentum);
-            if (swing != null) poise *= Poise.swingPoise(strong, finisher);
-            if (strong && t instanceof WindUp w && w.windingUp()) {
+            if (jump) poise *= Poise.JUMP_POISE;
+            else if (swing != null) poise *= Poise.swingPoise(strong, finisher);
+            // a heavy attack stops a creature winding up a strike
+            if ((strong || jump) && t instanceof WindUp w && w.windingUp()) {
                 w.interrupt(p);
                 Stagger.interrupt(t);
             }
-            feel(p, t, strength, crit, momentum, strong);
+            feel(p, t, strength, crit, momentum, strong || jump, jump);
         } else if (src.is(DamageTypes.PLAYER_ATTACK)) {
             // a sweep's edge, on the creatures beside the one swung at
             poise = amount * 0.5F;
@@ -132,7 +140,7 @@ public final class CombatEvents {
     }
 
     /** Where a melee hit lands: a flash and sparks, and for a momentum hit a shockwave and a heavier sound. */
-    private static void feel(ServerPlayer p, LivingEntity t, float strength, boolean crit, float momentum, boolean strong) {
+    private static void feel(ServerPlayer p, LivingEntity t, float strength, boolean crit, float momentum, boolean strong, boolean jump) {
         if (!(t.level() instanceof ServerLevel l)) return;
         Vec3 eye = p.getEyePosition();
         Vec3 look = p.getLookAngle();
@@ -140,7 +148,7 @@ public final class CombatEvents {
         Vec3 at = box.clip(eye, eye.add(look.scale(8.0))).orElse(box.getCenter());
         Vec3 way = at.subtract(eye);
         way = way.lengthSqr() < 1.0E-6 ? look : way.normalize();
-        float k = strength < 0.9F ? 0.35F * strength : crit || strong ? 1.5F : 1.0F;
+        float k = strength < 0.9F ? 0.35F * strength : jump ? 2.2F : crit || strong ? 1.5F : 1.0F;
         RuneFx.hit(l, at, way, k + momentum);
         if (momentum >= 0.1F) RuneFx.momentum(l, at, way, momentum);
     }

@@ -339,6 +339,19 @@ public final class CastService {
         }
     }
 
+    /**
+     * A runed sword in hand parried {@code attacker}'s blow, or turned its arrow back (0.22.7): energy knocks loose from
+     * it as a full hit of the sword would (Taran's pick), more with Thirst awake on the armor.
+     */
+    public static void parried(ServerPlayer p, LivingEntity attacker) {
+        if (p instanceof FakePlayer) return;
+        ItemStack gear = p.getMainHandItem();
+        if (RuneGear.host(gear) != Host.SWORD || !RuneGear.hasRunes(gear)) return;
+        int id = RuneGear.ensureGearId(gear, p.getRandom());
+        float full = (float) p.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
+        knockLoose(p, attacker, full, id, ArmorEffects.thirst(p));
+    }
+
     /** On hit: counts a hit for this weapon; true on every third. */
     private static boolean counted(ServerPlayer p, int gearId) {
         Caster c = caster(p);

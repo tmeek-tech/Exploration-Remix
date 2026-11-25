@@ -70,7 +70,17 @@ public record Fx(Kind kind, double x, double y, double z, float dx, float dy, fl
         /** Snare's roots take hold: {@code size} how far round. */
         SNARE,
         /** Armor at work on {@code entity}: {@code a} 0 a Leap off the air, 1 Second Wind, 2 a glide's start. */
-        ARMOR
+        ARMOR,
+        /**
+         * A sword's jump attack comes down (0.22.7): on the ground at {@code at}, {@code d} the way the player faced,
+         * {@code size} how hard (1 when it struck), {@code rgb} the ground's block (its state id) for the dust;
+         * {@code entity} the player.
+         */
+        SMASH,
+        /** A sword's parry (0.22.7): at the blade, {@code d} towards what was turned back; {@code entity} the player who parried. */
+        PARRY,
+        /** A blow taken on a raised sword (0.22.7): at the blade, {@code d} towards the attacker, {@code size} how hard; {@code entity} the player. */
+        BLOCK
     }
 
     public Vec3 pos() { return new Vec3(x, y, z); }

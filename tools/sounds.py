@@ -183,13 +183,19 @@ SWING_EVENTS = {
     "swing.thrust": files("swing", "thrust", 2),
     "swing.charge": files("swing", "charge", 2, 0.9),
     "runes.ready": files("runes", "ready", 2, 0.8, 12),
+    # 0.22.7: a sword's jump attack coming down, and its guard: raised, a blow taken on it, a parry (heard far)
+    "swing.smash": files("swing", "smash", 2),
+    "guard.raise": files("guard", "raise", 2, 0.6, 10),
+    "guard.block": files("guard", "block", 3),
+    "guard.parry": files("guard", "parry", 2, 1.0, 32),
     "mossback.windup": creature("windup", 2, 1.0, 24),
     "skein.windup": creature("windup", 2, 1.0, 20, who="skein"),
 }
 SWING_SUBTITLES = {
     "swing.light": "Blade swishes", "swing.heavy": "Blade chops", "swing.thrust": "Blade thrusts",
     "swing.charge": "Blade gathers", "runes.ready": "Runes ready", "mossback.windup": "Mossback winds up",
-    "skein.windup": "Skein winds up",
+    "skein.windup": "Skein winds up", "swing.smash": "Blade smashes down", "guard.raise": "Blade raised",
+    "guard.block": "Blade blocks", "guard.parry": "Blade parries",
 }
 CREATURE_EVENTS.update(SWING_EVENTS)
 CREATURE_SUBTITLES.update(SWING_SUBTITLES)

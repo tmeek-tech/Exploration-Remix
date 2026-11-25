@@ -45,17 +45,50 @@ class SwingAnimTest {
             Hand from = Hand.REST;
             for (int combo = 0; combo < w.chain(); combo++) {
                 // each chained swing starts where the one before is when its recovery ends
-                from = run(w, SwingKind.LIGHT, combo, from, w.lightWindup() + w.lightRecover(), -1.0F);
+                from = run(w, SwingKind.LIGHT, combo, from, w.lightWindup() + w.lightRecover(), -1.0F, -1.0F);
             }
-            run(w, SwingKind.STRONG, 0, Hand.REST, SwingAnim.length(w.strongWindup(), w.lungeTicks(), true), w.holdAt() - 1.0F);
-            Hand end = run(w, SwingKind.LIGHT, 0, Hand.REST, SwingAnim.length(w.lightWindup(), w.lightRecover(), false), -1.0F);
+            run(w, SwingKind.STRONG, 0, Hand.REST, SwingAnim.length(shape(w, SwingKind.STRONG, 0, w.holdAt() - 1.0F, w.strongWindup())),
+                    w.holdAt() - 1.0F, -1.0F);
+            if (w.jumps()) {
+                // held overhead a while in the air, then brought down as the player lands
+                float land = 14.0F;
+                Hand end = run(w, SwingKind.JUMP, 0, Hand.REST, SwingAnim.length(shape(w, SwingKind.JUMP, 0, w.holdAt() - 1.0F, land)),
+                        w.holdAt() - 1.0F, land);
+                assertTrue(dist(end, Hand.REST) < 1.0E-4F, "a jump attack's blade back at rest");
+            }
+            Hand end = run(w, SwingKind.LIGHT, 0, Hand.REST, SwingAnim.length(shape(w, SwingKind.LIGHT, 0, -1.0F, w.lightWindup())), -1.0F, -1.0F);
             assertTrue(dist(end, Hand.REST) < 1.0E-4F, "back at rest");
         }
     }
 
-    /** A swing as the renderer draws it: a strong one is a light one until it turns strong at {@code upgradeAt}. */
-    private static Hand run(WeaponProfile w, SwingKind kind, int combo, Hand from, float until, float upgradeAt) {
+    /** A jump attack waits overhead for as long as the player is in the air: never over, and still until it lands. */
+    @Test
+    void aJumpAttackWaitsOverheadUntilItLands() {
+        WeaponProfile w = WeaponProfile.SWORD;
+        SwingAnim.Shape waiting = shape(w, SwingKind.JUMP, 0, w.holdAt() - 1.0F, SwingAnim.NOT_YET);
+        assertEquals(Float.MAX_VALUE, SwingAnim.length(waiting));
+        assertEquals(0.0F, SwingAnim.cutting(waiting, 30.0F));
+        Hand a = SwingAnim.hand(waiting, Hand.REST, 20.0F, 0.0F), b = SwingAnim.hand(waiting, Hand.REST, 40.0F, 0.0F);
+        assertTrue(dist(a, b) < 0.02F, "it holds overhead: " + dist(a, b));
+        assertTrue(dist(a, Hand.of(-0.352F, 0.795F, 0.202F, 76.9F, -29.1F, -13.3F)) < 0.05F, "overhead");
+    }
+
+    /** One swing's shape: {@code kind} (a light one until {@code upgradeAt}, if heavy), landing at {@code land}. */
+    private static SwingAnim.Shape shape(WeaponProfile w, SwingKind kind, int combo, float upgradeAt, float land) {
         SwingAnim.Keys light = SwingAnim.keys(SwingKind.LIGHT, combo, w);
+        float hold = switch (kind) {
+            case STRONG -> w.lungeTicks();
+            case JUMP -> w.jumpRecover();
+            default -> w.lightRecover();
+        };
+        return new SwingAnim.Shape(kind, SwingAnim.keys(kind, combo, w), SwingKind.LIGHT, light, w.lightWindup(), upgradeAt, land, hold);
+    }
+
+    /**
+     * A swing as the renderer draws it: a heavy one is a light one until it turns at {@code upgradeAt}; a jump attack
+     * comes down at {@code landAt}.
+     */
+    private static Hand run(WeaponProfile w, SwingKind kind, int combo, Hand from, float until, float upgradeAt, float landAt) {
         float step = 0.02F;
         Hand last = from;
         // the fastest the blade's tip moves is in the middle of a cut, about 3 blocks a tick; anything past twice that in
@@ -64,11 +97,11 @@ class SwingAnimTest {
         int steps = Math.round(until / step);
         for (int i = 0; i <= steps; i++) {
             float t = i == steps ? until : i * step;
-            boolean strong = kind == SwingKind.STRONG && t >= upgradeAt;
-            SwingKind now = strong ? SwingKind.STRONG : SwingKind.LIGHT;
-            SwingAnim.Keys k = SwingAnim.keys(now, combo, w);
-            float land = w.windup(now), hold = strong ? w.lungeTicks() : w.lightRecover();
-            Hand h = SwingAnim.hand(k, light, from, t, land, w.lightWindup(), hold, strong, strong ? upgradeAt : -1.0F, 0.0F);
+            boolean heavy = kind.heavy() && t >= upgradeAt;
+            SwingKind now = heavy ? kind : SwingKind.LIGHT;
+            float land = now == SwingKind.JUMP ? (t >= landAt ? landAt : SwingAnim.NOT_YET) : w.windup(now);
+            SwingAnim.Shape sh = shape(w, now, combo, heavy ? upgradeAt : -1.0F, land);
+            Hand h = SwingAnim.hand(sh, from, t, 0.0F);
             float d = dist(last, h);
             assertTrue(d < most, w.name() + " " + kind + " " + combo + ": the blade jumps " + d + " at " + t);
             last = h;

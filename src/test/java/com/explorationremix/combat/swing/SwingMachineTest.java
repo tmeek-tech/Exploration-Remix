@@ -27,7 +27,7 @@ class SwingMachineTest {
         final List<int[]> lands = new ArrayList<>();   // tick, seq, kind, combo
 
         @Override public void start(int seq, SwingKind kind, int combo) { events.add(tick + " start " + kind + " " + combo); }
-        @Override public void upgrade(int seq) { events.add(tick + " upgrade"); }
+        @Override public void upgrade(int seq, SwingKind kind) { events.add(tick + " upgrade" + (kind == SwingKind.STRONG ? "" : " " + kind)); }
         @Override public void land(int seq, SwingKind kind, int combo) {
             events.add(tick + " land " + kind + " " + combo);
             lands.add(new int[]{tick, seq, kind.ordinal(), combo});
@@ -41,13 +41,23 @@ class SwingMachineTest {
 
     /** Runs the machine {@code ticks} ticks: a press on the ticks {@code presses} says, the button held while {@code held} says. */
     static Log run(SwingMachine m, int ticks, IntPredicate presses, IntPredicate held) {
+        return run(m, ticks, presses, held, k -> SwingMachine.Footing.GROUND);
+    }
+
+    /** The same, the player's footing on each tick as {@code footing} says. */
+    static Log run(SwingMachine m, int ticks, IntPredicate presses, IntPredicate held, java.util.function.IntFunction<SwingMachine.Footing> footing) {
         Log log = new Log();
         for (int k = 0; k < ticks; k++) {
             log.tick = k;
             if (presses.test(k)) m.press(log);
-            m.tick(held.test(k), log);
+            m.tick(held.test(k), footing.apply(k), log);
         }
         return log;
+    }
+
+    /** In the air on ticks {@code from} to {@code to} (a jump), on their feet otherwise. */
+    static java.util.function.IntFunction<SwingMachine.Footing> jump(int from, int to) {
+        return k -> k >= from && k <= to ? SwingMachine.Footing.AIR : SwingMachine.Footing.GROUND;
     }
 
     @Test
@@ -99,12 +109,66 @@ class SwingMachineTest {
     @Test
     void aPressInAStrongAttacksCooldownIsRefusedButOneNearItsEndWaits() {
         SwingMachine m = new SwingMachine(SWORD);
-        // a strong attack (held from 0), landing on 9: its cooldown runs 24 ticks from there
-        Log log = run(m, 70, k -> k == 0 || k == 20 || k == 30, k -> k < 12);
-        assertTrue(log.has("20 refused"), log.events.toString());
-        // 30 is within the last ticks of the cooldown: it waits and starts as soon as the cooldown is over
-        assertFalse(log.has("30 refused"), log.events.toString());
-        assertTrue(log.events.stream().anyMatch(e -> e.matches("3[0-9] start LIGHT 0")), log.events.toString());
+        // a strong attack (held from 0), landing on 9: its cooldown runs 2 s (40 ticks) from there
+        Log log = run(m, 80, k -> k == 0 || k == 20 || k == 40 || k == 46, k -> k < 12);
+        assertTrue(log.has("20 refused") && log.has("40 refused"), log.events.toString());
+        // 46 is within the last ticks of the cooldown: it waits and starts as soon as the cooldown is over, on 49
+        assertFalse(log.has("46 refused"), log.events.toString());
+        assertTrue(log.has("49 start LIGHT 0"), log.events.toString());
+    }
+
+    @Test
+    void heldInMidAirASwordMakesAJumpAttackThatComesDownAsThePlayerTouchesDown() {
+        SwingMachine m = new SwingMachine(SWORD);
+        // a jump from tick 0 to 11; the button pressed on 1 and held (and the run stopped inside the cooldown)
+        Log log = run(m, 30, k -> k == 1, k -> k >= 1 && k < 30, jump(0, 11));
+        assertTrue(log.has("1 start LIGHT 0") && log.has("4 upgrade JUMP"), log.events.toString());
+        assertTrue(log.has("12 land JUMP 0"), log.events.toString());
+        assertTrue(m.cooldownFromStrong() && m.cooldownTotal() == SWORD.heavyCooldown(), "the heavy cooldown follows");
+        assertFalse(log.events.stream().anyMatch(e -> e.contains("lunge")), "no lunge");
+    }
+
+    @Test
+    void aJumpAttackComesDownNoSoonerThanItsWindUpAfterThePress() {
+        SwingMachine m = new SwingMachine(SWORD);
+        // pressed late in the jump: upgraded on 8, on the ground from 11, but down only as its wind-up allows (on 12)
+        Log log = run(m, 60, k -> k == 5, k -> k >= 5 && k < 30, jump(0, 10));
+        assertTrue(log.has("8 upgrade JUMP"), log.events.toString());
+        assertTrue(log.has("12 land JUMP 0"), log.events.toString());
+    }
+
+    @Test
+    void aJumpAttackIsDroppedInWaterOrInALongFall() {
+        SwingMachine m = new SwingMachine(SWORD);
+        Log log = run(m, 40, k -> k == 1, k -> k >= 1 && k < 30,
+                k -> k < 8 ? SwingMachine.Footing.AIR : SwingMachine.Footing.OTHER);
+        assertTrue(log.has("4 upgrade JUMP") && log.has("8 cancel"), log.events.toString());
+        assertTrue(log.lands.isEmpty(), log.events.toString());
+        assertEquals(0, m.cooldown(), "a dropped swing starts no cooldown");
+        SwingMachine m2 = new SwingMachine(SWORD);
+        Log log2 = run(m2, 80, k -> k == 1, k -> k >= 1, jump(0, 70));
+        assertTrue(log2.has((SwingMachine.JUMP_MAX_AIR + 1) + " cancel"), log2.events.toString());
+        assertTrue(log2.lands.isEmpty(), log2.events.toString());
+    }
+
+    @Test
+    void anAxeHeldInMidAirMakesAStrongAttackAndATapInMidAirIsALightSwing() {
+        Log axe = run(new SwingMachine(WeaponProfile.AXE), 40, k -> k == 1, k -> k >= 1 && k < 30, jump(0, 11));
+        assertTrue(axe.has("4 upgrade"), axe.events.toString());
+        assertTrue(axe.lands.stream().allMatch(l -> l[2] == SwingKind.STRONG.ordinal()), axe.events.toString());
+        Log tap = run(new SwingMachine(SWORD), 40, k -> k == 1, k -> k == 1, jump(0, 11));
+        assertTrue(tap.has("5 land LIGHT 0"), tap.events.toString());
+    }
+
+    @Test
+    void afterTheChainAJumpAttackCanStillBeMadeAndThenNothingFor2Seconds() {
+        SwingMachine m = new SwingMachine(SWORD);
+        // three taps (the chop lands on 22), then a press held through a jump from 26
+        Log log = run(m, 60, k -> k == 0 || k == 9 || k == 18 || k == 27, k -> k == 0 || k == 9 || k == 18 || (k >= 27 && k < 50),
+                jump(26, 38));
+        assertTrue(log.has("27 start STRONG 0") && log.has("30 upgrade JUMP"), log.events.toString());
+        assertTrue(log.has("39 land JUMP 0"), log.events.toString());
+        assertTrue(m.cooldownFromStrong() && m.cooldownTotal() == SWORD.heavyCooldown(), "the jump attack's cooldown");
     }
 
     @Test
@@ -123,21 +187,26 @@ class SwingMachineTest {
         assertTrue(m.cooldown() > 0);
     }
 
-    /** The server never refuses a landing the player's own game made, however the button is pressed and held. */
+    /** The server never refuses a landing the player's own game made, however the button is pressed and held, jumping or not. */
     @Test
     void everyLandingTheMachineMakesTheRulesAccept() {
         for (WeaponProfile w : new WeaponProfile[]{WeaponProfile.SWORD, WeaponProfile.AXE}) {
             for (int seed = 0; seed < 300; seed++) {
                 Random r = new Random(seed);
-                boolean[] press = new boolean[600], held = new boolean[600];
+                boolean[] press = new boolean[600], held = new boolean[600], air = new boolean[600];
                 boolean down = false;
+                int airLeft = 0;
                 for (int k = 0; k < 600; k++) {
                     if (!down && r.nextInt(seed % 3 == 0 ? 3 : 8) == 0) { down = true; press[k] = true; }
                     else if (down && r.nextInt(seed % 2 == 0 ? 2 : 9) == 0) down = false;
                     held[k] = down;
+                    // jumps (and now and then a long drop) for half the seeds
+                    if (airLeft == 0 && seed % 2 == 1 && r.nextInt(14) == 0) airLeft = r.nextInt(10) == 0 ? 20 + r.nextInt(50) : 9 + r.nextInt(5);
+                    air[k] = airLeft > 0;
+                    if (airLeft > 0) airLeft--;
                 }
                 SwingMachine m = new SwingMachine(w);
-                Log log = run(m, 600, k -> press[k], k -> held[k]);
+                Log log = run(m, 600, k -> press[k], k -> held[k], k -> air[k] ? SwingMachine.Footing.AIR : SwingMachine.Footing.GROUND);
                 SwingRules.State s = new SwingRules.State();
                 for (int[] l : log.lands) {
                     assertTrue(SwingRules.land(s, w, SwingKind.values()[l[2]], l[1], 1000L + l[0]),

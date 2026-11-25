@@ -3,7 +3,6 @@ package com.explorationremix.client.combat;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.client.combat.SwingAnim.Hand;
 import com.explorationremix.client.rune.fx.GlowRender;
-import com.explorationremix.combat.swing.SwingKind;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
@@ -28,8 +27,9 @@ import org.joml.Vector4f;
 
 /**
  * The player's own swings in first person: while one is under way the main hand's item is drawn here, in the swing's
- * pose ({@link SwingAnim}) instead of vanilla's, and through the cut a pale sweep trails the blade through the air.
- * Vanilla draws the hand whenever no swing is under way (it rests where vanilla rests it).
+ * pose ({@link SwingAnim}) instead of vanilla's, and through the cut a pale sweep trails the blade through the air. A
+ * sword held up in guard is drawn here too ({@link GuardClient}). Vanilla draws the hand whenever neither is under way
+ * (it rests where vanilla rests it).
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class SwingRender {
@@ -49,10 +49,7 @@ public final class SwingRender {
             float k = (now - s.cancelAt) / SwingClient.CANCEL_EASE;
             return k >= 1.0F ? Hand.REST : s.cancelFrom.lerp(Hand.REST, SwingAnim.smooth(Mth.clamp(k, 0.0F, 1.0F)));
         }
-        float tau = Math.max(0.0F, now - s.start);
-        boolean strong = s.kind == SwingKind.STRONG;
-        SwingAnim.Keys light = SwingAnim.keys(SwingKind.LIGHT, s.lightCombo, s.weapon);
-        return SwingAnim.hand(s.keys(), light, s.from, tau, s.land(), s.weapon.lightWindup(), s.hold(), strong, s.upgradeAt, now);
+        return SwingAnim.hand(s.shape(), s.from, Math.max(0.0F, now - s.start), now);
     }
 
     @SubscribeEvent
@@ -60,12 +57,20 @@ public final class SwingRender {
         if (e.getHand() != InteractionHand.MAIN_HAND) return;
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer p = mc.player;
-        if (p == null || p.isScoping() || p.isUsingItem() || p.isAutoSpinAttack()) return;
-        SwingClient.Swing s = SwingClient.swing(p.getId());
+        if (p == null || p.isScoping() || p.isAutoSpinAttack()) return;
         ItemStack stack = e.getItemStack();
-        if (s == null || stack.isEmpty() || !ItemStack.isSameItem(stack, p.getMainHandItem())) return;
+        if (stack.isEmpty() || !ItemStack.isSameItem(stack, p.getMainHandItem())) return;
         float now = SwingClient.now(e.getPartialTick());
-        if (s.over(now)) return;
+        Hand h;
+        SwingClient.Swing s = null;
+        if (GuardClient.shown(p, now)) {
+            h = GuardClient.handAt(now);
+        } else {
+            if (p.isUsingItem()) return;
+            s = SwingClient.swing(p.getId());
+            if (s == null || s.over(now)) return;
+            h = handAt(s, now);
+        }
         e.setCanceled(true);
 
         boolean right = p.getMainArm() == HumanoidArm.RIGHT;
@@ -77,11 +82,11 @@ public final class SwingRender {
         float equip = e.getEquipProgress();
 
         pose.pushPose();
-        place(pose, handAt(s, now), i, equip, grip);
+        place(pose, h, i, equip, grip);
         mc.getEntityRenderDispatcher().getItemInHandRenderer().renderItem(p, stack, ctx, !right, pose, e.getMultiBufferSource(), e.getPackedLight());
         pose.popPose();
 
-        trail(s, now, pose, e.getMultiBufferSource(), model, ctx, !right, i, equip, grip);
+        if (s != null) trail(s, now, pose, e.getMultiBufferSource(), model, ctx, !right, i, equip, grip);
     }
 
     /** The hand's place: vanilla's spot for an item in hand, then the swing's pose, turned about the grip. */
@@ -113,15 +118,14 @@ public final class SwingRender {
     private static void trail(SwingClient.Swing s, float now, PoseStack pose, MultiBufferSource buffers, BakedModel model, ItemDisplayContext ctx,
                               boolean leftHand, int i, float equip, Vector3f grip) {
         if (s.cancelAt >= 0.0F) return;
-        float land = s.land(), hold = s.hold();
-        boolean strong = s.kind == SwingKind.STRONG;
+        SwingAnim.Shape shape = s.shape();
         float tau = now - s.start;
-        float light = SwingAnim.cutting(tau, land, hold, strong);
+        float light = SwingAnim.cutting(shape, tau);
         // a moment more: the sweep fades out after the cut rather than vanishing with it
-        float tail = SwingAnim.cutting(tau - TRAIL_TICKS * 0.5F, land, hold, strong);
+        float tail = SwingAnim.cutting(shape, tau - TRAIL_TICKS * 0.5F);
         float k = Math.max(light, tail * 0.6F);
         if (k <= 0.01F) return;
-        float strength = strong ? 1.0F : s.combo >= s.weapon.chain() - 1 ? 0.9F : 0.75F;
+        float strength = s.kind.heavy() ? 1.0F : s.combo >= s.weapon.chain() - 1 ? 0.9F : 0.75F;
 
         Vector3f[] base = new Vector3f[TRAIL_STEPS + 1], tip = new Vector3f[TRAIL_STEPS + 1];
         PoseStack ps = new PoseStack();

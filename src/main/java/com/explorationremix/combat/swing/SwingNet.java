@@ -15,10 +15,11 @@ import java.util.function.Supplier;
  * The timed swings' messages. A player's own game times their swings and says when one starts (so the players round
  * them see it wind up), when it lands and on what, and what a strong attack's lunge runs into; the server checks each
  * landing ({@link SwingRules}) and deals the hits ({@link Swordplay}), and tells the players round the swinger what to
- * draw.
+ * draw. A sword going up in guard is said here too (it comes down by vanilla's own letting go of an item in use).
  */
 public final class SwingNet {
-    private static final String VERSION = "1";
+    /** 2 (0.22.7): the jump attack's kind, and the guard. */
+    private static final String VERSION = "2";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(new ResourceLocation(ExplorationRemix.MOD_ID, "swings"),
             () -> VERSION, VERSION::equals, VERSION::equals);
 
@@ -43,6 +44,8 @@ public final class SwingNet {
                 .encoder(Land::write).decoder(Land::read).consumerMainThread(Land::handle).add();
         CHANNEL.messageBuilder(Show.class, 2, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(Show::write).decoder(Show::read).consumerMainThread(Show::handle).add();
+        CHANNEL.messageBuilder(Guard.class, 3, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(Guard::write).decoder(Guard::read).consumerMainThread(Guard::handle).add();
     }
 
     /** What happened to a swing: it started (or changed kind), became strong, was dropped. */
@@ -93,6 +96,18 @@ public final class SwingNet {
         void handle(Supplier<NetworkEvent.Context> ctx) {
             ServerPlayer p = ctx.get().getSender();
             if (p != null) Swordplay.landed(p, seq, SwingKind.of(kind), combo, lunge, targets);
+        }
+    }
+
+    /** The player's game: their sword goes up in guard now. */
+    public record Guard() {
+        void write(FriendlyByteBuf b) {}
+
+        static Guard read(FriendlyByteBuf b) { return new Guard(); }
+
+        void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p != null) com.explorationremix.combat.guard.Guard.raise(p);
         }
     }
 

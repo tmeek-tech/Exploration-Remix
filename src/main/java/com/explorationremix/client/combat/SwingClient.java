@@ -43,8 +43,9 @@ import java.util.Set;
 /**
  * The timed swings on the player's own game: the attack button, held or tapped, runs the swing machine
  * ({@link SwingMachine}) instead of vanilla's attack; a swing finds what it hits as it lands ({@link SwingAim}) and
- * tells the server; a strong attack's lunge moves the player. The swings of everyone in sight are kept here for drawing
- * ({@link #swing}), the player's own and other players' (the server says when theirs start and land).
+ * tells the server; a strong attack's lunge moves the player, a jump attack plants them where they come down. The
+ * swings of everyone in sight are kept here for drawing ({@link #swing}), the player's own and other players' (the
+ * server says when theirs start and land).
  *
  * <p>A press on a block the weapon is meant for (an axe on wood, a sword on cobweb or leaves) with no creature in
  * reach still mines it the vanilla way, for as long as the button is held.
@@ -70,17 +71,22 @@ public final class SwingClient {
     /** One swing to draw: the player's own or another player's. */
     static final class Swing {
         SwingKind kind;
+        /** What it was before it turned heavy (the same, if it never did). */
+        SwingKind was;
         int combo;
         final int lightCombo;
         final WeaponProfile weapon;
         /** On the swings' clock, with the frame's part tick: when it started, when it became strong (ticks in), cancelled. */
         float start, upgradeAt = -1.0F, cancelAt = -1.0F;
+        /** A jump attack: ticks in when it came down ({@link SwingAnim#NOT_YET} until it does). */
+        float landAt = SwingAnim.NOT_YET;
         Hand from, cancelFrom = Hand.REST;
         int seq;
 
         Swing(int seq, SwingKind kind, int combo, WeaponProfile weapon, float start, Hand from) {
             this.seq = seq;
             this.kind = kind;
+            this.was = kind;
             this.combo = combo;
             this.lightCombo = combo;
             this.weapon = weapon;
@@ -88,17 +94,32 @@ public final class SwingClient {
             this.from = from;
         }
 
-        float land() { return weapon.windup(kind); }
+        /** Ticks in when it lands: a jump attack's only once it has come down. */
+        float land() { return kind == SwingKind.JUMP ? landAt : weapon.windup(kind); }
 
-        /** How long after landing the hand stays at the end of its cut: a light swing's recovery (a chained swing starts
-         *  from there), a strong attack's lunge. */
-        float hold() { return kind == SwingKind.STRONG ? weapon.lungeTicks() : weapon.lightRecover(); }
+        /**
+         * How long after landing the hand stays at the end of its cut: a light swing's recovery (a chained swing starts
+         * from there), a strong attack's lunge, a jump attack's moment with the blade where it struck.
+         */
+        float hold() {
+            return switch (kind) {
+                case STRONG -> weapon.lungeTicks();
+                case JUMP -> weapon.jumpRecover();
+                default -> weapon.lightRecover();
+            };
+        }
 
         SwingAnim.Keys keys() { return SwingAnim.keys(kind, combo, weapon); }
 
+        SwingAnim.Shape shape() {
+            return new SwingAnim.Shape(kind, keys(), was, SwingAnim.keys(was, lightCombo, weapon), weapon.windup(was), upgradeAt, land(), hold());
+        }
+
         boolean over(float now) {
             if (cancelAt >= 0.0F) return now - cancelAt > CANCEL_EASE;
-            return now - start > SwingAnim.length(land(), hold(), kind == SwingKind.STRONG);
+            // a jump attack whose landing never came (the player who made it went out of sight): let go of it in time
+            if (kind == SwingKind.JUMP && landAt < 0.0F) return now - start > SwingMachine.JUMP_MAX_AIR + 40;
+            return now - start > SwingAnim.length(shape());
         }
     }
 
@@ -160,7 +181,11 @@ public final class SwingClient {
 
     static double reach(LocalPlayer p, SwingKind kind, WeaponProfile w) {
         double base = p.getEntityReach();
-        return kind == SwingKind.STRONG ? base + w.strongReach() : base + 0.25;
+        return switch (kind) {
+            case STRONG -> base + w.strongReach();
+            case JUMP -> base + w.jumpReach();
+            default -> base + 0.25;
+        };
     }
 
     /** The machine follows the weapon in hand: another one drops the swing under way (the cooldown carries on). */
@@ -195,10 +220,23 @@ public final class SwingClient {
             boolean other = w == null || p.getInventory().selected != swingingSlot || !ItemStack.isSameItem(p.getMainHandItem(), swinging);
             if (other || p.isUsingItem() || mc.screen != null || p.isSpectator()) MACHINE.cancel(OUT);
         }
+        // a press that was waiting for the swing before it is dropped by a raised guard (or a bow drawn, food eaten)
+        if (p.isUsingItem()) MACHINE.unbuffer();
         if (w != null) MACHINE.profile(w);
         boolean held = mc.screen == null && mc.options.keyAttack.isDown() && mc.mouseHandler.isMouseGrabbed();
         if (!held) mining = false;
-        MACHINE.tick(held && !mining, OUT);
+        MACHINE.tick(held && !mining, footing(p), OUT);
+    }
+
+    /**
+     * Where the player is, for a jump attack: on their feet, in the air on their own (a jump, a step off a ledge), or
+     * neither (swimming, in lava, on a ladder or vines, gliding, flying, riding), where a jump attack is dropped. As the
+     * server judges it (Fighters), but for lava.
+     */
+    static SwingMachine.Footing footing(LocalPlayer p) {
+        if (p.isInWater() || p.isInLava() || p.onClimbable() || p.isFallFlying() || p.isPassenger() || p.getAbilities().flying)
+            return SwingMachine.Footing.OTHER;
+        return p.onGround() ? SwingMachine.Footing.GROUND : SwingMachine.Footing.AIR;
     }
 
     @SubscribeEvent
@@ -218,6 +256,7 @@ public final class SwingClient {
         MACHINE.reset();
         SWINGS.clear();
         mining = false;
+        GuardClient.reset();
     }
 
     // ------------------------------------------------------------------------------------------------ the machine's news
@@ -232,12 +271,13 @@ public final class SwingClient {
         }
 
         @Override
-        public void upgrade(int seq) {
+        public void upgrade(int seq, SwingKind kind) {
             LocalPlayer p = Minecraft.getInstance().player;
             if (p == null) return;
-            upgraded(p.getId(), seq);
-            send(new SwingNet.Start(seq, SwingNet.UPGRADED, (byte) SwingKind.STRONG.ordinal(), (byte) 0));
-            play(p, ERSounds.SWING_CHARGE.get(), 0.55F, 1.0F);
+            upgraded(p.getId(), seq, kind);
+            send(new SwingNet.Start(seq, SwingNet.UPGRADED, (byte) kind.ordinal(), (byte) 0));
+            // the jump attack's blade rising overhead: the same charge, lower
+            play(p, ERSounds.SWING_CHARGE.get(), 0.55F, kind == SwingKind.JUMP ? 0.8F : 1.0F);
         }
 
         @Override
@@ -247,7 +287,11 @@ public final class SwingClient {
             if (p == null) return;
             WeaponProfile w = MACHINE.profile();
             landed(p.getId(), seq);
-            double cone = kind == SwingKind.STRONG ? w.strongCone() : combo >= w.chain() - 1 ? w.lightCone() * 0.75 : w.lightCone();
+            double cone = switch (kind) {
+                case STRONG -> w.strongCone();
+                case JUMP -> w.jumpCone();
+                default -> combo >= w.chain() - 1 ? w.lightCone() * 0.75 : w.lightCone();
+            };
             List<SwingAim.Target> found = SwingAim.find(p, reach(p, kind, w), cone);
             int most = kind == SwingKind.STRONG ? 6 : 1;
             List<Integer> ids = new ArrayList<>();
@@ -259,6 +303,16 @@ public final class SwingClient {
             }
             send(new SwingNet.Land(seq, (byte) kind.ordinal(), (byte) combo, false, ids.stream().mapToInt(Integer::intValue).toArray()));
             boolean finisher = kind == SwingKind.LIGHT && combo >= w.chain() - 1;
+            if (kind == SwingKind.JUMP) {
+                play(p, ERSounds.SWING_SMASH.get(), 1.0F, 1.0F);
+                // planted where they came down: no sliding on after the blow
+                Vec3 v = p.getDeltaMovement();
+                p.setDeltaMovement(v.x * 0.25, v.y, v.z * 0.25);
+                lungeWay = Vec3.ZERO;
+                RuneCamera.kick(ids.isEmpty() ? 1.4F : 2.4F, (p.getRandom().nextFloat() - 0.5F) * 0.4F);
+                RuneCamera.shake(ids.isEmpty() ? 0.45F : 0.7F);
+                return;
+            }
             if (kind == SwingKind.STRONG) {
                 play(p, ERSounds.SWING_THRUST.get(), 0.9F, 1.0F);
                 Vec3 look = p.getViewVector(1.0F);
@@ -346,7 +400,7 @@ public final class SwingClient {
         if (Minecraft.getInstance().getConnection() != null) SwingNet.CHANNEL.sendToServer(msg);
     }
 
-    private static void play(LocalPlayer p, SoundEvent s, float volume, float pitch) {
+    static void play(LocalPlayer p, SoundEvent s, float volume, float pitch) {
         p.level().playLocalSound(p.getX(), p.getEyeY() - 0.3, p.getZ(), s, SoundSource.PLAYERS, volume,
                 pitch * (0.94F + p.getRandom().nextFloat() * 0.12F), false);
     }
@@ -359,27 +413,36 @@ public final class SwingClient {
         if (old != null && old.seq == seq && old.cancelAt < 0.0F) {
             // the same swing, changed (a strong attack out of the cooldown let go as the cooldown ran out: a light one)
             old.kind = kind;
+            old.was = kind;
             old.combo = combo;
             old.upgradeAt = -1.0F;
             return;
         }
-        Hand from = old == null ? Hand.REST : SwingRender.handAt(old, now);
+        // from where the hand is: the swing before still easing back, or the guard just let down
+        Hand from = Minecraft.getInstance().player != null && player == Minecraft.getInstance().player.getId() && GuardClient.lowering(now)
+                ? GuardClient.takeHand(now) : old == null ? Hand.REST : SwingRender.handAt(old, now);
         SWINGS.put(player, new Swing(seq, kind, combo, w, now, from));
     }
 
-    private static void upgraded(int player, int seq) {
+    private static void upgraded(int player, int seq, SwingKind kind) {
         Swing s = SWINGS.get(player);
-        if (s == null || s.seq != seq || s.kind == SwingKind.STRONG) return;
+        if (s == null || s.seq != seq || s.kind == kind || !kind.heavy()) return;
         s.upgradeAt = clock + Minecraft.getInstance().getFrameTime() - s.start;
-        s.kind = SwingKind.STRONG;
+        s.was = s.kind;
+        s.kind = kind;
     }
 
     private static void landed(int player, int seq) {
         Swing s = SWINGS.get(player);
         if (s == null || s.seq != seq) return;
-        // the cut is drawn crossing the middle as the swing lands
         float now = clock + Minecraft.getInstance().getFrameTime();
         float tau = now - s.start;
+        if (s.kind == SwingKind.JUMP) {
+            // it comes down now, as the player touches down
+            if (s.landAt < 0.0F) s.landAt = Math.max(0.0F, tau);
+            return;
+        }
+        // the cut is drawn crossing the middle as the swing lands
         if (Math.abs(tau - s.land()) > 0.5F) s.start = now - s.land();
     }
 
@@ -393,9 +456,10 @@ public final class SwingClient {
 
     /**
      * Dev pictures only (the shot driver's "! swing" step): the player's own swing of {@code kind}, {@code combo} in the
-     * chain, shown {@code tau} ticks in and held there, the swings' clock stopped (a strong one became strong where a
-     * held press does); {@code chained}, a light one starts where the swings before it in the chain left the hand,
-     * each pressed as soon as the one before allowed; {@code tau} below 0 lets the clock run again and drops it.
+     * chain, shown {@code tau} ticks in and held there, the swings' clock stopped (a strong or jump attack became one
+     * where a held press does; a jump attack comes down {@link #DEV_JUMP_LAND} ticks in); {@code chained}, a light one
+     * starts where the swings before it in the chain left the hand, each pressed as soon as the one before allowed;
+     * {@code tau} below 0 lets the clock run again and drops it.
      */
     public static void devPose(SwingKind kind, int combo, float tau, boolean chained) {
         LocalPlayer p = Minecraft.getInstance().player;
@@ -409,24 +473,28 @@ public final class SwingClient {
         if (w == null) return;
         heldAt = clock;
         SWINGS.remove(p.getId());
-        int c = kind == SwingKind.STRONG ? 0 : Math.max(0, Math.min(combo, w.chain() - 1));
+        int c = kind.heavy() ? 0 : Math.max(0, Math.min(combo, w.chain() - 1));
         Hand from = Hand.REST;
         if (chained && kind == SwingKind.LIGHT) {
             for (int i = 0; i < c; i++) {
                 SwingAnim.Keys k = SwingAnim.keys(SwingKind.LIGHT, i, w);
-                from = SwingAnim.hand(k, k, from, w.lightWindup() + w.lightRecover(), w.lightWindup(), w.lightWindup(), w.lightRecover(), false,
-                        -1.0F, 0.0F);
+                SwingAnim.Shape sh = new SwingAnim.Shape(SwingKind.LIGHT, k, SwingKind.LIGHT, k, w.lightWindup(), -1.0F, w.lightWindup(), w.lightRecover());
+                from = SwingAnim.hand(sh, from, w.lightWindup() + w.lightRecover(), 0.0F);
             }
         }
-        Swing s = new Swing(-1, kind == SwingKind.STRONG ? SwingKind.LIGHT : kind, c, w, heldAt - tau, from);
-        if (kind == SwingKind.STRONG) {
-            s.kind = SwingKind.STRONG;
+        Swing s = new Swing(-1, SwingKind.LIGHT, c, w, heldAt - tau, from);
+        if (kind.heavy()) {
+            s.kind = kind;
             s.upgradeAt = w.holdAt() - 1.0F;
+            if (kind == SwingKind.JUMP) s.landAt = DEV_JUMP_LAND;
         }
         SWINGS.put(p.getId(), s);
         swinging = p.getMainHandItem();
         swingingSlot = p.getInventory().selected;
     }
+
+    /** A dev picture's jump attack comes down this many ticks in. */
+    static final float DEV_JUMP_LAND = 12.0F;
 
     /** Another player's swing, as the server tells it. */
     static void show(SwingNet.Show s) {
@@ -438,7 +506,7 @@ public final class SwingClient {
         if (w == null) w = WeaponProfile.SWORD;
         switch (s.what()) {
             case SwingNet.STARTED -> begin(s.player(), s.seq(), s.swingKind(), s.combo(), w);
-            case SwingNet.UPGRADED -> upgraded(s.player(), s.seq());
+            case SwingNet.UPGRADED -> upgraded(s.player(), s.seq(), s.swingKind());
             case SwingNet.LANDED -> {
                 Swing sw = SWINGS.get(s.player());
                 if (sw == null || sw.seq != s.seq()) begin(s.player(), s.seq(), s.swingKind(), s.combo(), w);

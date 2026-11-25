@@ -394,6 +394,9 @@
   "subtitles.explorationremix.giant_skein.notice": "Giant Skein turns",
   "subtitles.explorationremix.giant_skein.step": "Heavy legs scrape",
   "subtitles.explorationremix.giant_skein.windup": "Giant Skein rears",
+  "subtitles.explorationremix.guard.block": "Blade blocks",
+  "subtitles.explorationremix.guard.parry": "Blade parries",
+  "subtitles.explorationremix.guard.raise": "Blade raised",
   "subtitles.explorationremix.lava.rumble": "The deep rock rumbles",
   "subtitles.explorationremix.lava.surge": "Lava surges up",
   "subtitles.explorationremix.lava_bomb.burst": "A lava bomb bursts",
@@ -428,6 +431,7 @@
   "subtitles.explorationremix.swing.charge": "Blade gathers",
   "subtitles.explorationremix.swing.heavy": "Blade chops",
   "subtitles.explorationremix.swing.light": "Blade swishes",
+  "subtitles.explorationremix.swing.smash": "Blade smashes down",
   "subtitles.explorationremix.swing.thrust": "Blade thrusts",
   "subtitles.explorationremix.vent.simmer": "A vent hisses"
 }

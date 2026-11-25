@@ -102,25 +102,116 @@ def charge(rng):
 
 
 def ready(rng, note):
-    """A rune sword's ready light (Taran, 2026-11-11 14:45: a sound again, subtler than the old chime): a faint, airy
-    shimmer rising with the light as it runs up the sword, then one soft, round note as it reaches the tip (a third of a
-    second in), dying away. Near-harmonic partials and a slow onset keep it from ringing like glass."""
+    """A rune sword's ready light (0.22.7, Taran 2026-11-25: the whole sword swells with light and bursts into glints,
+    then sparkles): a faint, airy shimmer rising with the swell, one soft, round note at its height (0.15 s in), and a
+    few tiny, quiet glints sprinkled after it as the burst's stars flash, all dying away. Near-harmonic partials and a
+    slow onset keep the note from ringing like glass."""
     dur = 1.2
     n = secs(dur)
     t = np.arange(n) / SR
-    tip = 0.34
-    k = np.clip(t / tip, 0, 1)
-    shimmer = sweep_band(rng.standard_normal(n), 2000 + 3000 * k, 2.5)
-    shimmer *= k ** 1.5 * np.exp(-np.maximum(0, t - tip) / 0.06) * 0.12
-    tt = np.maximum(0, t - tip)
+    peak = 0.15
+    k = np.clip(t / peak, 0, 1)
+    shimmer = sweep_band(rng.standard_normal(n), 2400 + 3000 * k, 2.5)
+    shimmer *= k ** 1.5 * np.exp(-np.maximum(0, t - peak) / 0.08) * 0.12
+    tt = np.maximum(0, t - peak)
     bell = np.zeros(n)
     for ratio, amp, decay in ((1.0, 1.0, 0.4), (2.0, 0.15, 0.18), (3.01, 0.04, 0.1)):
         bell += amp * np.sin(2 * np.pi * note * ratio * tt) * np.exp(-tt / decay)
-    bell *= (t >= tip) * np.minimum(1, tt / 0.02)
-    x = bell + shimmer
+    bell *= (t >= peak) * np.minimum(1, tt / 0.02)
+    # the burst's glints: a handful of tiny high notes, quiet, scattered through the third of a second after the height
+    glints = np.zeros(n)
+    for _ in range(5):
+        at = peak + 0.03 + rng.uniform(0.0, 0.33)
+        f = note * rng.choice([3.0, 4.0, 5.04, 6.0])
+        g = np.maximum(0, t - at)
+        glints += (t >= at) * np.sin(2 * np.pi * f * g) * np.exp(-g / 0.045) * np.minimum(1, g / 0.003) * rng.uniform(0.04, 0.08)
+    x = bell + shimmer + glints
     wet = S.convolve(x, S.reverb_ir(0.9, rng, 0.3, lp=4000))[:n]
-    x = S.filt(x + 0.3 * wet, S.lowpass(5000, 2))
+    x = S.filt(x + 0.3 * wet, S.lowpass(6500, 2))
     return S.normalize_peak(S.fade_edges(x, 0.004), -14.0)
+
+
+def smash(rng):
+    """A sword's heavy jump attack (0.22.7) coming down: a deep rush of air as the blade falls, then a heavy, dull thud
+    with a crunch of grit as it meets what is under it, and a short low tail."""
+    dur = 0.62
+    n = secs(dur)
+    t = np.arange(n) / SR
+    hit = 0.17
+    rush = whoosh(rng, hit + 0.04, 260, 1100, 420, 0.8, 0.9, q=1.0)
+    x = np.zeros(n)
+    x[:len(rush)] += S.normalize_peak(rush, 0.0) * 0.55
+    tt = np.maximum(0, t - hit)
+    on = t >= hit
+    # the thud: a low sine dropping in pitch, struck hard
+    f = 68 * (1 + 0.6 * np.exp(-tt / 0.03))
+    thud = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-tt / 0.11) * on
+    body = S.filt(rng.standard_normal(n), S.bandpass(rng.uniform(150, 190), 1.1)) * np.exp(-tt / 0.07) * on
+    grit = S.filt(rng.standard_normal(n), lambda fr: S.bandpass(2200, 0.8)(fr)) * np.exp(-tt / 0.035) * on
+    crack = S.filt(rng.standard_normal(n), S.lowpass(5000, 2)) * np.exp(-tt / 0.008) * on
+    x += thud * 1.0 + body / (np.std(body[on]) + 1e-9) * 0.25 + grit / (np.std(grit[on]) + 1e-9) * 0.12 \
+        + crack / (np.std(crack[on]) + 1e-9) * 0.2
+    wet = S.convolve(x, S.reverb_ir(0.5, rng, 0.14, lp=1800))[:n]
+    x = S.filt(x + 0.25 * wet, S.lowpass(7000, 2))
+    return S.normalize_peak(S.fade_edges(x, 0.004), -1.5)
+
+
+def metal(rng, t, partials, at):
+    """Struck metal from {at} seconds: (frequency, amplitude, decay) partials, each a little out of tune."""
+    tt = np.maximum(0, t - at)
+    x = np.zeros(len(t))
+    for f, a, d in partials:
+        f = f * rng.uniform(0.985, 1.015)
+        x += a * np.sin(2 * np.pi * f * tt + rng.uniform(0, 6.28)) * np.exp(-tt / d)
+    return x * (t >= at) * np.minimum(1, tt / 0.0015)
+
+
+def guard_raise(rng):
+    """A sword brought up to guard (0.22.7): a short, soft slide of steel through the air and a faint ring."""
+    dur = 0.3
+    n = secs(dur)
+    t = np.arange(n) / SR
+    air = whoosh(rng, 0.16, 1400, 4200, 2600, 0.55, 0.15, q=1.8)
+    x = np.zeros(n)
+    x[:len(air)] += S.normalize_peak(air, 0.0) * 0.7
+    x += metal(rng, t, ((3150, 1.0, 0.07), (4890, 0.5, 0.05), (6420, 0.25, 0.035)), 0.1) * 0.12
+    x = S.filt(x, lambda f: S.lowpass(8000, 2)(f) * S.highpass(500, 2)(f))
+    return S.normalize_peak(S.fade_edges(x, 0.003), -9.0)
+
+
+def guard_block(rng):
+    """A blow taken on a raised sword (0.22.7): a dull, heavy clank, the blade shuddering under it, quickly damped."""
+    dur = 0.42
+    n = secs(dur)
+    t = np.arange(n) / SR
+    at = 0.005
+    tt = np.maximum(0, t - at)
+    knock = S.filt(rng.standard_normal(n), S.lowpass(2400, 2)) * np.exp(-tt / 0.012) * (t >= at)
+    thump = np.sin(2 * np.pi * rng.uniform(105, 125) * tt) * np.exp(-tt / 0.06) * (t >= at)
+    clank = metal(rng, t, ((610, 1.0, 0.09), (1330, 0.7, 0.07), (2190, 0.45, 0.05), (3020, 0.25, 0.035)), at)
+    x = knock / (np.std(knock[t >= at]) + 1e-9) * 0.35 + thump * 0.6 + clank * 0.55
+    wet = S.convolve(x, S.reverb_ir(0.4, rng, 0.1, lp=2500))[:n]
+    x = S.filt(x + 0.2 * wet, S.lowpass(6000, 2))
+    return S.normalize_peak(S.fade_edges(x, 0.003), -2.5)
+
+
+def guard_parry(rng):
+    """A parry (0.22.7): a sharp, bright clash of steel on the beat, ringing on clear and high for half a second, with a
+    glint of shimmer over it, so a parry is heard as plainly as it is seen."""
+    dur = 0.9
+    n = secs(dur)
+    t = np.arange(n) / SR
+    at = 0.004
+    tt = np.maximum(0, t - at)
+    on = t >= at
+    clash = S.filt(rng.standard_normal(n), S.highpass(1800, 2)) * np.exp(-tt / 0.006) * on
+    ring = metal(rng, t, ((1870, 0.8, 0.32), (1893, 0.5, 0.3), (3080, 1.0, 0.42), (4610, 0.6, 0.3), (6170, 0.35, 0.2),
+                          (8020, 0.15, 0.12)), at)
+    shimmer = sweep_band(rng.standard_normal(n), 5200 + 1500 * np.exp(-t / 0.2), 3.0) * np.exp(-tt / 0.18) * on * 0.08
+    x = clash / (np.std(clash[on]) + 1e-9) * 0.4 + ring * 0.55 + shimmer
+    wet = S.convolve(x, S.reverb_ir(0.8, rng, 0.25, lp=6000))[:n]
+    x = S.filt(x + 0.3 * wet, S.lowpass(11000, 2))
+    return S.normalize_peak(S.fade_edges(x, 0.003), -1.5)
 
 
 def mossback_windup(rng):
@@ -167,6 +258,10 @@ SETS = [
     ("swing", "thrust", thrust, 2, 4300),
     ("swing", "charge", charge, 2, 4400),
     ("runes", "ready", ready, 2, 4500),
+    ("swing", "smash", smash, 2, 4800),
+    ("guard", "raise", guard_raise, 2, 4900),
+    ("guard", "block", guard_block, 3, 5000),
+    ("guard", "parry", guard_parry, 2, 5100),
     ("creature/mossback", "windup", mossback_windup, 2, 4600),
     ("creature/skein", "windup", skein_windup, 2, 4700),
 ]

@@ -390,14 +390,16 @@ public final class DevShots {
             // show whether a creature is drawn where it can be hit
             case "hitboxes" -> mc.getEntityRenderDispatcher().setRenderHitBoxes(arg.equals("on"));
             case "swing" -> {
-                // "! swing light|strong combo tau [chain]": the player's own swing held still that many ticks in (with "chain",
-                // a light one starts where the chain's swings before it left the hand, pressed as fast as they go); "! swing off"
+                // "! swing light|strong|jump combo tau [chain]": the player's own swing held still that many ticks in (with
+                // "chain", a light one starts where the chain's swings before it left the hand, pressed as fast as they go; a
+                // jump attack comes down 12 ticks in); "! swing off"
                 if (arg.equals("off")) {
                     com.explorationremix.client.combat.SwingClient.devPose(com.explorationremix.combat.swing.SwingKind.LIGHT, 0, -1.0F, false);
                 } else {
                     if (s.length < 5) return false;
                     try {
                         com.explorationremix.client.combat.SwingClient.devPose(arg.equals("strong") ? com.explorationremix.combat.swing.SwingKind.STRONG
+                                : arg.equals("jump") ? com.explorationremix.combat.swing.SwingKind.JUMP
                                 : com.explorationremix.combat.swing.SwingKind.LIGHT, Integer.parseInt(s[3]), Float.parseFloat(s[4]),
                                 s.length > 5 && s[5].equals("chain"));
                     } catch (NumberFormatException ex) {
@@ -405,6 +407,23 @@ public final class DevShots {
                     }
                 }
             }
+            case "guardpose" -> {
+                // "! guardpose armX armY armZ grip twist": the guard seen from outside posed outright (radians); "! guardpose off"
+                if (arg.equals("off")) {
+                    com.explorationremix.client.combat.SwingPoses.devGuard(null);
+                } else {
+                    if (s.length < 7) return false;
+                    try {
+                        float[] v = new float[5];
+                        for (int i = 0; i < 5; i++) v[i] = Float.parseFloat(s[2 + i]);
+                        com.explorationremix.client.combat.SwingPoses.devGuard(v);
+                    } catch (NumberFormatException ex) {
+                        return false;
+                    }
+                }
+            }
+            // "! poselog": the next guard pose set on a player's model, and the arm as its item is drawn, to the log
+            case "poselog" -> com.explorationremix.client.combat.SwingPoses.devLog();
             case "glow" -> {
                 if (arg.equals("off")) {
                     com.explorationremix.client.combat.RuneGlow.devHold(-1.0F);

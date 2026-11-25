@@ -1,15 +1,23 @@
 package com.explorationremix.combat.swing;
 
+import com.explorationremix.combat.Fighters;
+import com.explorationremix.combat.guard.Guard;
 import com.explorationremix.mixin.accessor.LivingEntityAccessor;
 import com.explorationremix.registry.ERSounds;
+import com.explorationremix.rune.effect.RuneFx;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.AbstractArrow;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.entity.PartEntity;
 import net.minecraftforge.network.PacketDistributor;
 
@@ -28,18 +36,28 @@ import java.util.UUID;
  * {@link #landing} says which swing it is, for the combat layer's damage, poise and the strong attack's interrupt.
  */
 public final class Swordplay {
-    /** A swing whose hit is being dealt now. */
-    public record Landing(ServerPlayer player, SwingKind kind, int combo, WeaponProfile weapon) {
+    /**
+     * A swing whose hit is being dealt now; for a jump attack, {@code drop} is how far the player fell before it landed
+     * (blocks, from the top of the jump).
+     */
+    public record Landing(ServerPlayer player, SwingKind kind, int combo, WeaponProfile weapon, double drop) {
         /** The chain's last light swing (the chop). */
         public boolean finisher() { return kind == SwingKind.LIGHT && combo >= weapon.chain() - 1; }
 
         public boolean strong() { return kind == SwingKind.STRONG; }
+
+        public boolean jump() { return kind == SwingKind.JUMP; }
+
+        /** A strong attack or a jump attack. */
+        public boolean heavy() { return kind.heavy(); }
     }
 
     /** A strong attack's thrust hits at most this many creatures. */
     static final int STRONG_TARGETS = SwingNet.MAX_TARGETS;
     /** Reach to spare (blocks): the player's game saw the target a moment ago, and where they stood. */
     static final double LIGHT_SPARE = 1.5, LUNGE_SPARE = 2.5;
+    /** A jump attack counts only if the server saw the player off the ground within this many ticks of its landing. */
+    static final int JUMP_AIR_SEEN = 12;
 
     private static final class P {
         final SwingRules.State rules = new SwingRules.State();
@@ -47,6 +65,7 @@ public final class Swordplay {
         long landTick;
         SwingKind landKind = SwingKind.LIGHT;
         int landCombo;
+        double landDrop;
         final Set<Integer> hit = new HashSet<>();
     }
 
@@ -65,11 +84,13 @@ public final class Swordplay {
         if (!p.isAlive() || p.isSpectator() || Weapons.profile(p.getMainHandItem()) == null) return;
         p.resetLastActionTime();
         show(p, seq, what, kind, combo);
-        if (what == SwingNet.UPGRADED) sound(p, ERSounds.SWING_CHARGE.get(), 0.6F, 1.0F);
+        if (what == SwingNet.UPGRADED) sound(p, ERSounds.SWING_CHARGE.get(), 0.6F, kind == SwingKind.JUMP ? 0.8F : 1.0F);
     }
 
     static void landed(ServerPlayer p, int seq, SwingKind kind, int combo, boolean lunge, int[] targets) {
         if (!p.isAlive() || p.isSpectator() || !(p.level() instanceof ServerLevel level)) return;
+        // nothing swings out of a raised guard (the client never sends it; a late or doctored message is dropped)
+        if (Guard.guarding(p)) return;
         WeaponProfile w = Weapons.profile(p.getMainHandItem());
         if (w == null) return;
         P s = MAP.computeIfAbsent(p.getUUID(), u -> new P());
@@ -78,14 +99,18 @@ public final class Swordplay {
             // more of a strong attack's thrust, while its lunge lasts
             if (seq != s.landSeq || s.landKind != SwingKind.STRONG || now - s.landTick > w.lungeTicks() + SwingRules.SLACK + 2) return;
         } else {
+            // a jump attack is made in the air: the player must have been off the ground a moment ago
+            if (kind == SwingKind.JUMP && !Fighters.airborneWithin(p, JUMP_AIR_SEEN)) return;
             if (!SwingRules.land(s.rules, w, kind, seq, now)) return;
             s.landSeq = seq;
             s.landTick = now;
             s.landKind = kind;
             s.landCombo = Math.max(0, Math.min(combo, w.chain() - 1));
+            s.landDrop = kind == SwingKind.JUMP ? Fighters.drop(p) : 0.0;
             s.hit.clear();
             show(p, seq, SwingNet.LANDED, kind, s.landCombo);
             whoosh(p, kind, s.landCombo, w);
+            if (kind == SwingKind.JUMP) smash(p, level, targets.length > 0);
         }
         int most = s.landKind == SwingKind.STRONG ? STRONG_TARGETS : 1;
         for (int id : targets) {
@@ -94,8 +119,21 @@ public final class Swordplay {
             if (!fair(p, e, s.landKind, w)) continue;
             Entity root = e instanceof PartEntity<?> part ? part.getParent() : e;
             if (!s.hit.add(root.getId())) continue;
-            strike(p, e, s.landKind, s.landCombo, w);
+            strike(p, e, s.landKind, s.landCombo, w, s.landDrop);
         }
+    }
+
+    /** A jump attack's landing: the thud of the blade and the player coming down, and dust off the ground in front. */
+    private static void smash(ServerPlayer p, ServerLevel level, boolean struck) {
+        Vec3 look = p.getLookAngle();
+        Vec3 flat = new Vec3(look.x, 0.0, look.z);
+        flat = flat.lengthSqr() < 1.0E-4 ? Vec3.ZERO : flat.normalize();
+        Vec3 at = p.position().add(flat.scale(1.1)).add(0.0, 0.05, 0.0);
+        BlockPos below = BlockPos.containing(at.x, p.getY() - 0.2, at.z);
+        BlockState ground = level.getBlockState(below);
+        if (ground.isAir()) ground = level.getBlockState(p.getOnPos());
+        SoundEvent crack = ground.isAir() ? SoundEvents.STONE_BREAK : ground.getSoundType(level, below, p).getBreakSound();
+        RuneFx.smash(level, at, flat, struck ? 1.0F : 0.6F, crack, Block.getId(ground), p.getId());
     }
 
     /** Whether {@code p} may hit {@code e} with this swing: as the game's own attack allows, and within reach. */
@@ -103,15 +141,15 @@ public final class Swordplay {
         if (e == null || e == p || !e.isAlive() || e.level() != p.level() || !e.isAttackable()) return false;
         if (e instanceof ItemEntity || e instanceof ExperienceOrb || e instanceof AbstractArrow) return false;
         if (e instanceof PartEntity<?> part && (part.getParent() == p || !part.getParent().isAlive())) return false;
-        double spare = kind == SwingKind.STRONG ? w.strongReach() + LUNGE_SPARE : LIGHT_SPARE;
+        double spare = kind == SwingKind.STRONG ? w.strongReach() + LUNGE_SPARE : kind == SwingKind.JUMP ? w.jumpReach() + LIGHT_SPARE : LIGHT_SPARE;
         return p.canReach(e, spare);
     }
 
     /** One hit, through the game's own attack at full strength. */
-    private static void strike(ServerPlayer p, Entity e, SwingKind kind, int combo, WeaponProfile w) {
+    private static void strike(ServerPlayer p, Entity e, SwingKind kind, int combo, WeaponProfile w, double drop) {
         ((LivingEntityAccessor) p).er$setAttackStrengthTicker(1 << 16);
         Landing before = current;
-        current = new Landing(p, kind, combo, w);
+        current = new Landing(p, kind, combo, w, drop);
         try {
             p.attack(e);
         } finally {
@@ -129,7 +167,8 @@ public final class Swordplay {
 
     /** The swing's whoosh, for everyone near but the swinger (their own game plays it the moment it lands). */
     private static void whoosh(ServerPlayer p, SwingKind kind, int combo, WeaponProfile w) {
-        if (kind == SwingKind.STRONG) sound(p, ERSounds.SWING_THRUST.get(), 1.0F, 1.0F);
+        if (kind == SwingKind.JUMP) sound(p, ERSounds.SWING_SMASH.get(), 1.0F, 1.0F);
+        else if (kind == SwingKind.STRONG) sound(p, ERSounds.SWING_THRUST.get(), 1.0F, 1.0F);
         else if (combo >= w.chain() - 1) sound(p, ERSounds.SWING_HEAVY.get(), 0.9F, 1.0F);
         else sound(p, ERSounds.SWING_LIGHT.get(), 0.8F, 1.0F);
     }

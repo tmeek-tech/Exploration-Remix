@@ -29,6 +29,7 @@ public abstract class ItemInHandLayerMixin {
         if (!(((RenderLayer<?, ?>) (Object) this).getParentModel() instanceof HumanoidModel<?> model)) return;
         float armX = arm == HumanoidArm.RIGHT ? model.rightArm.xRot : model.leftArm.xRot;
         float turn = SwingPoses.gripTurn(holder, arm, armX);
+        SwingPoses.devDrawn(arm == HumanoidArm.RIGHT ? model.rightArm : model.leftArm, turn);
         if (turn != 0.0F) pose.mulPose(Axis.XP.rotation(turn));
     }
 }

@@ -5,13 +5,14 @@ import java.util.Objects;
 
 /**
  * The pure parts of a rune sword's ready light (RuneGlow draws it): where the light can lie, along which way it runs,
- * how bright each spot is as it plays, and when it plays.
+ * how bright each spot is as it plays, its star glints, and when it plays.
  *
  * <p>The light lies on the item's own texels: each face the item is drawn with is cut into the squares of the texture
- * pixels it shows, and only the opaque ones are kept, so the light has the sword's own pixel edges, flat or 3D. It runs
- * over the whole sword (Taran, 14:45 the same day), from the end in the hand to the tip: a bright band up it, the tip
- * flaring as it gets there, then a short afterglow that fades to nothing. And while the sword has the energy to cast,
- * it sparkles (Taran, 15:00): texels picked at random flash and fade, ten a second.
+ * pixels it shows, and only the opaque ones are kept, so the light has the sword's own pixel edges, flat or 3D. Since
+ * 0.22.7 (Taran, 2026-11-25) it is a sparkly glow: the whole sword swells with light at once (washing from the hand to
+ * the tip in a blink), a burst of star glints flashes over it, and a soft halo spills past its edges; then it settles
+ * into the sparkle it keeps while it has the energy to cast (Taran, 2026-11-11): texels picked at random flash and fade,
+ * ten a second, the brighter ones with a small star that crosses the sword's edges.
  */
 public final class BladeLight {
     private BladeLight() {}
@@ -191,51 +192,136 @@ public final class BladeLight {
     // ------------------------------------------------------------------------------------------------ the light as it plays
 
     /** Ticks the light lasts, all told. */
-    public static final float END = 26.0F;
-    /** Ticks the band takes to run from just below the pommel to just past the tip. */
-    static final float SWEEP = 9.0F;
-    /** Texels of the band's tail; of the band before and past the sword; of the tip that flares. */
-    static final float TAIL = 2.5F, BEFORE = 2.0F, PAST = 3.0F, TIP = 2.0F;
-    /** The afterglow's strength, and when it starts to fade. */
-    static final float AFTER = 0.3F, AFTER_FADE = 12.0F;
-    /** How long the tip's flare takes to die down (ticks). */
-    static final float FLARE = 4.0F;
+    public static final float END = 22.0F;
+    /** The swell comes up in this long (ticks), holds at its height this long, then fades away by {@link #END}. */
+    static final float SWELL_UP = 3.0F, SWELL_HOLD = 1.5F;
+    /** It reaches the tip this long after the end in the hand (ticks): all at once, but with a hint of flow. */
+    static final float WASH = 1.2F;
+    /** The halo round the sword at the swell's height, as strong as this (the sword's own texels are at full). */
+    public static final float HALO = 0.3F;
 
-    /** Where the band's front is ({@code texels} from the start) at tick {@code t}, on a sword {@code len} texels long. */
-    static float front(float t, float len) { return smooth(0.0F, SWEEP, t) * (len + BEFORE + PAST) - BEFORE; }
-
-    /** When the band's front reaches the tip of a sword {@code len} texels long. */
-    static float tipAt(float len) {
-        float y = (len + BEFORE) / (len + BEFORE + PAST);
-        // the inverse of smoothstep
-        float k = (float) (0.5 - Math.sin(Math.asin(1.0 - 2.0 * y) / 3.0));
-        return k * SWEEP;
+    /** The swell's strength at tick {@code t} of the light (0 to 1): up fast, a moment held, then a soft fade that lingers. */
+    public static float swell(float t) {
+        if (t < 0 || t >= END) return 0;
+        if (t < SWELL_UP) return smooth(0.0F, SWELL_UP, t);
+        float f = (t - SWELL_UP - SWELL_HOLD) / (END - SWELL_UP - SWELL_HOLD);
+        if (f <= 0) return 1;
+        return (float) Math.exp(-3.0 * f) * (1.0F - f);
     }
 
     /**
      * How bright the light is at tick {@code t} of its play, {@code x} texels along a sword {@code len} long; and in
-     * {@code white[0]}, how near white it burns there (the band and the flare burn whitest).
+     * {@code white[0]}, how near white it burns there (whitest at the swell's height).
      */
     public static float light(float x, float len, float t, float[] white) {
         white[0] = 0;
         if (t < 0 || t >= END || x < 0) return 0;
-        float d = front(t, len) - x;
-        float band = d >= 0 ? (float) Math.exp(-d / TAIL) : (float) Math.exp(d * 2.0F);
-        float after = d >= 0 ? AFTER * (1.0F - smooth(AFTER_FADE, END, t)) : 0.0F;
-        float flare = 0.0F;
-        if (x >= len - TIP) {
-            float at = tipAt(len);
-            flare = smooth(at - 1.5F, at, t) * (t < at ? 1.0F : (float) Math.exp(-(t - at) / FLARE));
-        }
-        float end = 1.0F - smooth(END - 4.0F, END, t);
-        float hot = Math.max(band * 0.9F, flare);
-        white[0] = hot * end;
-        return Math.max(hot, after) * end;
+        float lag = len <= 0 ? 0.0F : WASH * Math.min(1.0F, x / len);
+        float k = swell(t - lag);
+        white[0] = 0.9F * k * k;
+        return k;
     }
 
     static float smooth(float e0, float e1, float x) {
         float k = Math.min(1.0F, Math.max(0.0F, (x - e0) / (e1 - e0)));
         return k * k * (3.0F - 2.0F * k);
+    }
+
+    // ------------------------------------------------------------------------------------------------ star glints
+
+    /** The burst: how many star glints flash over the sword as it swells, from when and over how long (ticks). */
+    static final int BURST = 7;
+    static final float BURST_FROM = 0.5F, BURST_SPREAD = 6.0F;
+    /** Ticks one star glint lasts; how big a burst's stars are at their brightest (texels, from the middle to a point). */
+    static final float GLINT = 6.0F, GLINT_SIZE = 3.2F;
+    /** A resting twinkle this bright or brighter shows a star, this big at a full twinkle (texels). */
+    static final float STAR_FROM = 0.45F, TWINKLE_STAR = 1.9F;
+
+    /**
+     * One star glint: on which of the sword's texels (counted in key order), from when (ticks into the light), how big
+     * (texels, at its brightest), and how its points are turned from upright (radians).
+     */
+    public record Glint(int texel, float at, float size, float tilt) {}
+
+    /**
+     * The burst over a sword of {@code d} texels (in key order), for the light {@code seed} names: {@link #BURST} star
+     * glints, one in each share of the texels (so they spread over the sword), at times picked through the first moments.
+     */
+    public static Glint[] burst(int d, int seed) {
+        int m = Math.min(BURST, d);
+        Glint[] g = new Glint[m];
+        for (int i = 0; i < m; i++) {
+            int h = mix(seed * 0x9E3779B1 + (i + 1) * 0x85EBCA6B);
+            int lo = i * d / m, hi = Math.max(lo + 1, (i + 1) * d / m);
+            int pick = lo + Math.min(hi - lo - 1, (int) (unit(h) * (hi - lo)));
+            float at = BURST_FROM + BURST_SPREAD * unit(mix(h));
+            float size = GLINT_SIZE * (0.75F + 0.5F * unit(mix(h ^ 0x5BD1E995)));
+            g[i] = new Glint(pick, at, size, tilt(h));
+        }
+        return g;
+    }
+
+    /** A star glint's strength {@code age} ticks after it starts: a sharp flash, then a fade as it shrinks. */
+    public static float glint(float age) {
+        if (age < 0 || age >= GLINT) return 0;
+        float k = age / GLINT;
+        if (k < RISE) return smooth(0.0F, RISE, k);
+        float f = 1.0F - (k - RISE) / (1.0F - RISE);
+        return f * f;
+    }
+
+    /** A star's turn from upright (radians), from a mixed number: within a quarter of a right angle either way. */
+    static float tilt(int h) { return (unit(mix(h ^ 0x27D4EB2F)) - 0.5F) * (float) (Math.PI / 4.0); }
+
+    /** A resting twinkle's star on the sword's {@code d}th texel (key order): its turn, the same each time it twinkles. */
+    public static float twinkleTilt(int d, int seed) { return tilt(mix(seed * 0x2C1B3C6D + d * 0x297A2D39)); }
+
+    /** A resting twinkle this bright ({@link #twinkles}) shows a star this strong (0 below {@link #STAR_FROM}). */
+    public static float twinkleStar(float twinkle) {
+        return twinkle <= STAR_FROM ? 0.0F : Math.min(1.0F, (twinkle - STAR_FROM) / (1.0F - STAR_FROM));
+    }
+
+    /** A sword's texels, each once, in key order (a texel's front, back and edge cells share a key). */
+    public static long[] distinct(long[] keys, int n) {
+        long[] texels = Arrays.copyOf(keys, n);
+        Arrays.sort(texels);
+        int d = 0;
+        for (int i = 0; i < n; i++) if (d == 0 || texels[i] != texels[d - 1]) texels[d++] = texels[i];
+        return Arrays.copyOf(texels, d);
+    }
+
+    // ------------------------------------------------------------------------------------------------ the halo
+
+    /** The halo is this many soft glows strung along the sword's run, each this wide (texels, its middle to its rim). */
+    public static final int HALO_GLOWS = 8;
+    public static final float HALO_RADIUS = 2.8F;
+
+    /**
+     * Where the halo's glows sit: the cells' middles ({@code xyz}, three each) averaged over each of {@code glows} equal
+     * stretches of the sword's run ({@code along}, from {@link #run}); four numbers a glow: x, y, z, and how far along
+     * the sword it is (-1: no cell in its stretch).
+     */
+    public static float[] haloGlows(float[] along, float[] xyz, int n, int glows) {
+        float[] out = new float[glows * 4];
+        int[] count = new int[glows];
+        for (int i = 0; i < n; i++) {
+            float a = along[i];
+            if (a < 0) continue;
+            int g = Math.min(glows - 1, (int) (a * glows));
+            out[g * 4] += xyz[i * 3];
+            out[g * 4 + 1] += xyz[i * 3 + 1];
+            out[g * 4 + 2] += xyz[i * 3 + 2];
+            out[g * 4 + 3] += a;
+            count[g]++;
+        }
+        for (int g = 0; g < glows; g++) {
+            if (count[g] == 0) {
+                out[g * 4 + 3] = -1.0F;
+                continue;
+            }
+            for (int d = 0; d < 4; d++) out[g * 4 + d] /= count[g];
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------------------------------------ the sparkle while charged
@@ -264,11 +350,13 @@ public final class BladeLight {
      * it a little (only the sword's own: nothing lights round its edge).
      */
     public static void sparkle(long[] keys, int n, float t, int seed, float[] out, float[] white) {
-        long[] texels = Arrays.copyOf(keys, n);
-        Arrays.sort(texels);
-        int d = 0;
-        for (int i = 0; i < n; i++) if (d == 0 || texels[i] != texels[d - 1]) texels[d++] = texels[i];
-        float[] own = twinkles(d, t, seed);
+        long[] texels = distinct(keys, n);
+        sparkle(keys, n, texels, twinkles(texels.length, t, seed), out, white);
+    }
+
+    /** The same, from the sword's {@link #distinct} texels and their own twinkles ({@link #twinkles}). */
+    public static void sparkle(long[] keys, int n, long[] texels, float[] own, float[] out, float[] white) {
+        int d = texels.length;
         for (int i = 0; i < n; i++) {
             long k = keys[i];
             float self = at(texels, d, own, k);
@@ -369,5 +457,8 @@ public final class BladeLight {
 
         /** Ticks since the light started (huge if it never has). */
         public float age(float now) { return now - startedAt; }
+
+        /** When the light last started (on the clock {@link #update} was given). */
+        public float startedAt() { return startedAt; }
     }
 }

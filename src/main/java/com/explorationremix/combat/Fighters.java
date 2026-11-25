@@ -39,6 +39,10 @@ public final class Fighters {
         int pushTarget = -1;
         long pushTick = -1;
         float push;
+        /** Off the ground on their own (a jump, a ledge): since when, the top of it, the last tick seen so, and where they came down. */
+        boolean inAir;
+        double peakY, landY;
+        long airTick = Long.MIN_VALUE / 4;
     }
 
     private static final Map<UUID, F> MAP = new HashMap<>();
@@ -54,6 +58,36 @@ public final class Fighters {
         f.tick[f.next] = p.level().getGameTime();
         f.moves[f.next] = p.connection == null ? 0 : ((ServerGamePacketListenerAccessor) p.connection).er$movePackets();
         f.next = (f.next + 1) % SPAN;
+        boolean air = !p.onGround() && !p.isInWater() && !p.onClimbable() && !p.isFallFlying() && !p.isPassenger() && !p.getAbilities().flying;
+        double y = p.getY();
+        if (air) {
+            if (!f.inAir) {
+                f.inAir = true;
+                f.peakY = y;
+            }
+            f.peakY = Math.max(f.peakY, y);
+            f.airTick = f.tick[(f.next + SPAN - 1) % SPAN];
+        } else if (f.inAir) {
+            f.inAir = false;
+            f.landY = y;
+        }
+    }
+
+    /** Whether the player was off the ground on their own (jumping or falling) at most {@code ticks} ago. */
+    public static boolean airborneWithin(ServerPlayer p, int ticks) {
+        F f = MAP.get(p.getUUID());
+        return f != null && p.level().getGameTime() - f.airTick <= ticks;
+    }
+
+    /**
+     * How far the player came down from the top of their last time in the air (blocks): where they landed, or where
+     * they are now if they haven't yet.
+     */
+    public static double drop(ServerPlayer p) {
+        F f = MAP.get(p.getUUID());
+        if (f == null || f.airTick == Long.MIN_VALUE / 4) return 0.0;
+        double bottom = f.inAir ? p.getY() : f.landY;
+        return Math.max(0.0, f.peakY - Math.min(bottom, p.getY()));
     }
 
     /**

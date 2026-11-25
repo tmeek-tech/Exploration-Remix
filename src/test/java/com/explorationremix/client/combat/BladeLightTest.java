@@ -7,9 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The rune sword's ready light (Taran, 2026-11-11 13:20 and 14:45): it lies on the sword's own texels and nowhere else,
- * runs over the whole sword from the end in the hand to the tip, plays once per recharge and is gone after; and its
- * sparkle while it has the energy to cast (15:00).
+ * The rune sword's ready light (Taran, 2026-11-11 13:20 and 14:45): it lies on the sword's own texels, plays once per
+ * recharge and is gone after; since 0.22.7 (2026-11-25) a sparkly glow that swells over the whole sword at once, with a
+ * burst of star glints and a soft halo along it; and its sparkle while it has the energy to cast (15:00).
  */
 class BladeLightTest {
     /** Vanilla's sword outline (every vanilla sword has it): '.' clear, anything else opaque. Row 0 is the top. */
@@ -166,41 +166,119 @@ class BladeLightTest {
     }
 
     @Test
-    void theLightRunsUpTheBladeOnceAndIsGone() {
-        float len = 12.0F;
+    void theWholeSwordSwellsAtOnceThenFades() {
+        float len = 20.0F;
         float[] white = new float[1];
         for (float x = 0; x <= len; x += 0.5F) {
             assertEquals(0.0F, BladeLight.light(x, len, -0.01F, white), "nothing before it starts");
             assertEquals(0.0F, BladeLight.light(x, len, BladeLight.END, white), "nothing once it is over");
             assertTrue(BladeLight.light(x, len, BladeLight.END - 0.05F, white) < 0.01F, "it fades out, not off");
         }
-        // each spot's brightest moment comes later the higher it is
-        float last = -1;
-        for (float x = 0; x <= len - 3; x += 1.0F) {
+        // every spot comes to its height within a quarter of a second, the tip barely after the hand
+        float first = -1, last = -1;
+        for (float x = 0; x <= len; x += 1.0F) {
             float best = 0, at = 0;
             for (float t = 0; t < BladeLight.END; t += 0.05F) {
                 float l = BladeLight.light(x, len, t, white);
-                assertTrue(l <= 1.0F && l >= 0.0F);
-                if (l > best) {
+                assertTrue(l >= 0.0F && l <= 1.0F);
+                if (l > best + 1.0E-6F) {
                     best = l;
                     at = t;
                 }
             }
-            assertTrue(best > 0.85F, "the band lights every spot it passes: " + best + " at " + x);
-            assertTrue(at > last, "the band climbs: " + at + " at " + x + " after " + last);
+            assertTrue(best > 0.99F, "the whole sword lit full: " + best + " at " + x);
+            if (first < 0) first = at;
+            assertTrue(at >= last, "a hint of flow from the hand to the tip: " + at + " at " + x + " after " + last);
             last = at;
         }
-        assertTrue(last < 9.0F, "it reaches the top within half a second: " + last);
-        // the tip flares as the band gets there, and dies down after
-        float flare = BladeLight.tipAt(len);
-        assertTrue(BladeLight.light(len - 0.5F, len, flare, white) > 0.9F, "the tip flares");
-        assertTrue(white[0] > 0.9F, "burning white");
-        assertTrue(BladeLight.light(len - 0.5F, len, flare + 8, white) < 0.4F, "then dies down");
-        // the afterglow, faint and fading
-        float glow = BladeLight.light(2.0F, len, 14.0F, white);
-        assertTrue(glow > 0.1F && glow < 0.35F, "a faint afterglow: " + glow);
-        assertTrue(BladeLight.light(2.0F, len, 22.0F, white) < glow, "fading");
+        assertTrue(last < 5.0F, "the whole sword at its height within a quarter of a second: " + last);
+        assertTrue(last - first <= BladeLight.WASH + 0.06F, "all at once, near enough: " + (last - first));
+        // whitest at its height, then a soft fade that lingers
+        BladeLight.light(len / 2, len, BladeLight.SWELL_UP + 1.0F, white);
+        assertTrue(white[0] > 0.85F, "near white at its height: " + white[0]);
+        float half = BladeLight.light(len / 2, len, 10.0F, white);
+        assertTrue(half > 0.2F && half < 0.6F, "fading by half a second: " + half);
+        float late = BladeLight.light(len / 2, len, 17.0F, white);
+        assertTrue(late > 0.02F && late < half, "lingering, and fading: " + late);
         assertEquals(0.0F, BladeLight.light(-1.0F, len, 5.0F, white), "nothing below the start");
+    }
+
+    @Test
+    void aBurstOfStarGlintsSpreadsOverTheSwordAsItSwells() {
+        int d = 84;
+        for (int seed = 0; seed < 50; seed++) {
+            BladeLight.Glint[] g = BladeLight.burst(d, seed);
+            assertEquals(BladeLight.BURST, g.length);
+            for (int i = 0; i < g.length; i++) {
+                assertTrue(g[i].texel() >= i * d / g.length && g[i].texel() < (i + 1) * d / g.length,
+                        "one in each share of the texels, so they spread over the sword: " + g[i]);
+                assertTrue(g[i].at() >= BladeLight.BURST_FROM && g[i].at() + BladeLight.GLINT <= BladeLight.END, "each over within the light");
+                assertTrue(g[i].size() > 0.5F * BladeLight.GLINT_SIZE && g[i].size() < 1.5F * BladeLight.GLINT_SIZE);
+                assertTrue(Math.abs(g[i].tilt()) <= Math.PI / 8 + 1.0E-6, "near upright: " + g[i].tilt());
+            }
+        }
+        BladeLight.Glint[] a = BladeLight.burst(d, 1), b = BladeLight.burst(d, 2);
+        int moved = 0;
+        for (int i = 0; i < a.length; i++) if (a[i].texel() != b[i].texel()) moved++;
+        assertTrue(moved >= a.length / 2, "another play's glints fall elsewhere: " + moved);
+        assertEquals(3, BladeLight.burst(3, 7).length, "a tiny sword: as many as it has texels");
+        assertEquals(0, BladeLight.burst(0, 7).length);
+    }
+
+    @Test
+    void aStarGlintFlashesSharplyAndFades() {
+        assertEquals(0.0F, BladeLight.glint(-0.01F));
+        assertEquals(0.0F, BladeLight.glint(BladeLight.GLINT));
+        float peak = 0, at = 0;
+        for (float t = 0; t < BladeLight.GLINT; t += 0.05F) {
+            float g = BladeLight.glint(t);
+            if (g > peak) {
+                peak = g;
+                at = t;
+            }
+        }
+        assertTrue(peak > 0.99F);
+        assertTrue(at < BladeLight.GLINT * 0.25F, "a sharp flash: " + at);
+        assertTrue(BladeLight.glint(BladeLight.GLINT - 0.05F) < 0.01F, "fading out, not off");
+        // a resting twinkle shows a star only when it is bright, coming in from nothing (so it never pops)
+        assertEquals(0.0F, BladeLight.twinkleStar(0.2F));
+        assertEquals(0.0F, BladeLight.twinkleStar(BladeLight.STAR_FROM));
+        assertEquals(1.0F, BladeLight.twinkleStar(1.0F), 1.0E-6F);
+        float some = BladeLight.twinkleStar(0.7F);
+        assertTrue(some > 0.0F && some < 1.0F);
+        assertEquals(BladeLight.twinkleTilt(5, 3), BladeLight.twinkleTilt(5, 3), "a texel's star turned the same each time");
+    }
+
+    @Test
+    void theHaloFollowsTheSwordFromTheHandToTheTip() {
+        BladeLight.Cells[] faces = swordFaces();
+        float[] mid = middles(faces, 2.5F / 16, 1 - 13.5F / 16, 0.5F);
+        int n = faces[0].count + faces[1].count;
+        BladeLight.Run run = BladeLight.run(mid, n, 1.0F / 16);
+        float[] glows = BladeLight.haloGlows(run.along(), mid, n, BladeLight.HALO_GLOWS);
+        float lastAlong = -1;
+        for (int g = 0; g < BladeLight.HALO_GLOWS; g++) {
+            float along = glows[g * 4 + 3];
+            assertTrue(along >= 0, "a glow in every stretch of a vanilla sword");
+            assertTrue(along > lastAlong, "in order from the hand to the tip");
+            lastAlong = along;
+            float best = Float.MAX_VALUE;
+            for (int i = 0; i < n; i++) best = Math.min(best, distance(glows, g * 4, mid, i * 3));
+            assertTrue(best * 16 < 1.5F, "on the sword: " + best * 16 + " texels from it");
+            if (g > 0) {
+                float gap = distance(glows, g * 4, glows, (g - 1) * 4) * 16;
+                assertTrue(gap < BladeLight.HALO_RADIUS * 1.2F, "each glow overlaps the next, so the halo reads as one: " + gap);
+            }
+        }
+        float[] two = BladeLight.haloGlows(new float[]{0.0F, 1.0F}, new float[]{0, 0, 0, 1, 1, 1}, 2, 4);
+        assertEquals(-1.0F, two[4 + 3], "a stretch with nothing in it has no glow");
+        assertEquals(1.0F, two[3 * 4 + 3]);
+        assertEquals(1.0F, two[3 * 4], 1.0E-6F);
+    }
+
+    private static float distance(float[] a, int i, float[] b, int j) {
+        float dx = a[i] - b[j], dy = a[i + 1] - b[j + 1], dz = a[i + 2] - b[j + 2];
+        return (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     @Test

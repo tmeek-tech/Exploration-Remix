@@ -99,6 +99,11 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> SWING_THRUST = register("swing.thrust");
     public static final RegistryObject<SoundEvent> SWING_CHARGE = register("swing.charge");
     public static final RegistryObject<SoundEvent> RUNES_READY = register("runes.ready");
+    // 0.22.7: a sword's heavy jump attack coming down, and a sword's guard (combat.guard): raised, a blow taken on it, a parry
+    public static final RegistryObject<SoundEvent> SWING_SMASH = register("swing.smash");
+    public static final RegistryObject<SoundEvent> GUARD_RAISE = register("guard.raise");
+    public static final RegistryObject<SoundEvent> GUARD_BLOCK = register("guard.block");
+    public static final RegistryObject<SoundEvent> GUARD_PARRY = register("guard.parry");
     // The hunters' wind-ups (0.12.0): half a second that swells into the strike, so the ear can time it
     public static final RegistryObject<SoundEvent> MOSSBACK_WINDUP = register("mossback.windup");
     public static final RegistryObject<SoundEvent> SKEIN_WINDUP = register("skein.windup");
