@@ -896,6 +896,8 @@ public class GiantSkeinEntity extends Monster implements ClimbMoveControl.Climbe
     // ------------------------------------------------------------------------------------------------ the mind
 
     private void toState(byte s, int length) {
+        // each hunt starts with its patience whole: a quarry it lost in the reeds and sees again is hunted afresh
+        if (s == HUNT && state() != HUNT) noWay = 0;
         entityData.set(DATA_STATE, s);
         stateTicks = 0;
         stateLength = length;

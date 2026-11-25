@@ -1,5 +1,6 @@
 package com.explorationremix.world.feature;
 
+import com.explorationremix.block.CavePlantBlock;
 import com.explorationremix.registry.ERBlocks;
 import com.explorationremix.registry.ERTags;
 import com.explorationremix.world.DeepWorld;
@@ -39,7 +40,8 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
  * vine: down the face of the rock under the lip from the lip's own floor to the floor below, where that rock runs
  * unbroken (else the vine as before, where one may hang). It needs no rock over the lip, so the open terraces under a
  * noise rift's far vault get theirs too. A fringe of thin lichen beside it on the same face, now and then, so it reads
- * as lichen grown down the wall.
+ * as lichen grown down the wall. This runs last, after the lichen, crust, sculk veins and floor plants: the streak
+ * takes the place of those in its column ({@link #soft}), where the harness, which has none of them, puts one.
  */
 public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
     private static final int[] DX = {1, -1, 0, 0}, DZ = {0, 0, 1, -1};
@@ -62,7 +64,9 @@ public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
             int last = Integer.MAX_VALUE;
             for (int y = hi; y >= lo; y--) {
                 if (y >= last) continue;
-                if (!air(level, p, qx, y + 1, qz) || !air(level, p, qx, y, qz) || !air(level, p, qx, y - 1, qz) || !air(level, p, qx, y - 2, qz)) continue;
+                // open, for a streak: the lichen, crust, sculk veins and small floor plants the earlier steps dressed the
+                // rock with take no room from it (it takes their place; wanting air, it lost about three in ten to them)
+                if (!soft(level, p, qx, y + 1, qz) || !soft(level, p, qx, y, qz) || !soft(level, p, qx, y - 1, qz) || !soft(level, p, qx, y - 2, qz)) continue;
                 // the lips beside the column: any (a streak's, if the drop is into a noise rift: down the rift's own wall,
                 // from a deep dark cavern's floor too where the rift runs under it as a slot), and the rift's (a vine's)
                 int lips = 0, riftLips = 0;
@@ -73,23 +77,24 @@ public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
                     if (t.biomeAt(x, y, z) == DeepBiome.DEEP_BLUE_RIFT) riftLips |= 1 << d;
                 }
                 if (lips == 0) continue;
-                int fy = y - 2;
-                while (fy > lo - 2 && air(level, p, qx, fy - 1, qz)) fy--;
-                BlockState under = level.getBlockState(p.set(qx, fy - 1, qz));
-                if (!(under.getFluidState().is(FluidTags.WATER) || under.isFaceSturdy(level, p, Direction.UP))) continue;
-                if (riftLips == 0 && !(y - fy <= Network.STREAK_MAX_DROP && t.network.streakAt(qx, fy, qz))) continue;
                 // in a noise rift, a lichen streak down the rock under the lip where it runs unbroken
-                if (y - fy <= Network.STREAK_MAX_DROP && t.network.streakAt(qx, fy, qz)) {
+                int sy = y - 2;
+                while (sy > lo - 2 && soft(level, p, qx, sy - 1, qz)) sy--;
+                if (y - sy <= Network.STREAK_MAX_DROP && floor(level, p, qx, sy, qz) && t.network.streakAt(qx, sy, qz)) {
                     int face = -1;
-                    for (int d = 0; d < 4 && face < 0; d++) if ((lips & 1 << d) != 0 && backed(level, p, qx, qz, d, fy, y)) face = d;
-                    if (face >= 0 && !touchesBuilt(level, p, qx, fy, y, qz)) {
-                        streak(level, p, cp, t.seed, qx, qz, face, fy, y);
+                    for (int d = 0; d < 4 && face < 0; d++) if ((lips & 1 << d) != 0 && backed(level, p, qx, qz, d, sy, y)) face = d;
+                    if (face >= 0 && !touchesBuilt(level, p, qx, sy, y, qz)) {
+                        streak(level, p, cp, t.seed, qx, qz, face, sy, y);
                         any = true;
-                        last = fy;
+                        last = sy;
                         continue;
                     }
                 }
-                if (riftLips == 0 || y - fy > Network.SHELF_MAX_DROP) continue;
+                // else the rift's vine, as before: through open air only
+                if (riftLips == 0 || !air(level, p, qx, y + 1, qz) || !air(level, p, qx, y, qz) || !air(level, p, qx, y - 1, qz) || !air(level, p, qx, y - 2, qz)) continue;
+                int fy = y - 2;
+                while (fy > lo - 2 && air(level, p, qx, fy - 1, qz)) fy--;
+                if (!floor(level, p, qx, fy, qz) || y - fy > Network.SHELF_MAX_DROP) continue;
                 int hy = y + 2;
                 while (hy <= y + 1 + Network.SHELF_MAX_UP && air(level, p, qx, hy, qz)) hy++;
                 if (hy > y + 1 + Network.SHELF_MAX_UP || !level.getBlockState(p.set(qx, hy, qz)).isFaceSturdy(level, p, Direction.DOWN)) continue;
@@ -149,6 +154,24 @@ public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
 
     private static boolean air(WorldGenLevel level, BlockPos.MutableBlockPos p, int x, int y, int z) {
         return level.getBlockState(p.set(x, y, z)).isAir();
+    }
+
+    /**
+     * Air, or what a streak may take the place of: lichen, crust or sculk veins on the rock (multiface blocks), or a
+     * one-block cave plant, out of the water. Not a tall plant, a cattail or a vine, whose other blocks it would leave.
+     */
+    private static boolean soft(WorldGenLevel level, BlockPos.MutableBlockPos p, int x, int y, int z) {
+        BlockState s = level.getBlockState(p.set(x, y, z));
+        if (s.isAir()) return true;
+        if (!s.getFluidState().isEmpty()) return false;
+        Block b = s.getBlock();
+        return b instanceof MultifaceBlock || b instanceof CavePlantBlock;
+    }
+
+    /** Whether something hung or grown down column (x, z) to {@code fy} has a floor under it: water, or a sturdy top. */
+    private static boolean floor(WorldGenLevel level, BlockPos.MutableBlockPos p, int x, int fy, int z) {
+        BlockState under = level.getBlockState(p.set(x, fy - 1, z));
+        return under.getFluidState().is(FluidTags.WATER) || under.isFaceSturdy(level, p, Direction.UP);
     }
 
     /** A standing place on rock: feet and head open (air or plants, or water), a block below with a sturdy top. */

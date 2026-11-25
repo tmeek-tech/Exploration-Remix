@@ -71,7 +71,7 @@ class PondsTest {
         }
         System.out.printf(java.util.Locale.ROOT, "PondsTest: %d ponds in 2 x 2 Blue cells, %d on the Deep Blue Rift, %d spilling; %d open beside a mouth, %d with a drop just behind%n",
                 ps.size(), main, spills, mouths, opensBehind);
-        // measured 18 (5 on the Deep Blue Rift, 8 spilling) when this was written; over 3 seeds x 9 cells 4.5 to 6.5 a cell
+        // measured 19 (8 on the Deep Blue Rift, 8 spilling) when this was written; over 3 seeds x 9 cells 4.5 to 6.5 a cell
         if (ps.size() < 12) fails.add("only " + ps.size() + " ponds in 4 cells");
         if (main < 2) fails.add("only " + main + " ponds on the Deep Blue Rift");
         double share = spills / (double) Math.max(1, ps.size());
