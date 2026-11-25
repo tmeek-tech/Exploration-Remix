@@ -155,6 +155,9 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> CHOIR_DEATH = register("choir.death");
     public static final RegistryObject<SoundEvent> CHOIR_RELIQUARY = register("choir.reliquary");
     public static final RegistryObject<SoundEvent> CHOIR_KEY_SET = register("choir.key_set");
+    // 0.22.3: the grab's warning (the floor drawing in, then the pull) and a tendril taking root
+    public static final RegistryObject<SoundEvent> CHOIR_GRAB = register("choir.grab");
+    public static final RegistryObject<SoundEvent> CHOIR_ROOT = register("choir.root");
 
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ExplorationRemix.MOD_ID, name)));

@@ -204,8 +204,9 @@ three on the dais ring, since a bowl this wide cannot be lit from its edge alone
 from anywhere on it. A sleeping arena rings once every half minute or so, and the toll carries about 150 blocks
 through the rock, so you hear one before you find one; that and the pale blue glow are the only hints, and there is no
 trail and no pull on the keys to lead you there. Three **key sockets** stand on the rim walk, a third of a turn apart.
-Put a key in each and the Choir comes. It holds its first blow for four seconds: time to see what has woken and to
-get down off the rim.
+Put a key in each and the Choir comes: the crown lowers out of the dark over the dais and its tendrils grow down
+from the ceiling to their roots, one after another (0.22.3). It holds its first blow for the four seconds that takes:
+time to see what has woken and to get down off the rim.
 
 **No Warden.** The arena stands in the Deep Dark, and vanilla's sculk grows sensors and shriekers wherever it likes,
 the rim walk included. The first key set in a socket strikes dumb every shrieker within about 60 blocks of the dais
@@ -222,6 +223,33 @@ tendril through *and* tells on the Choir itself, so the bar moves while you work
 crown has nothing left to hang from. It falls, the bell opens, and for nine seconds the core inside takes everything
 you have. Then it climbs back and grows new tendrils, fewer and tougher each phase: six, then five, then four. A
 strong attack that lands while a tendril is rearing to slam spoils the slam and leaves the Choir stalled.
+
+**Its blows (0.22.3).** This mod has no dodge roll, no parry and no stamina, so every blow the Choir strikes shows
+where it will land and counts down to when, in its own light blue, and each has a plain way out that takes nothing but
+walking, jumping and a sword. The fight and the drawing read the same clock, so a sign and its blow cannot drift apart.
+
+* **Slam.** A tendril lets go of the ceiling and curls over, head first, to hang above a circle of light on the floor
+  where you stood when it began. The circle does not follow you. A disc fills it from the middle, and the blow lands as
+  the disc meets the circle: 1.6 seconds from the start in the first phase, 1.4 in the second, 1.2 in the third. Walk
+  out of the circle. Or land a strong attack on any tendril while one rears, which spoils the slam and stalls the
+  Choir. A slam leaves an opening too: the tendril's head lies where it struck for most of a second, and a blow on it
+  there cuts half as much again as one on its root. A slam that does land throws you out to the edge of its circle and
+  never up, so the blow is all it costs you, and the head it leaves is still in reach of your sword from where you
+  come down.
+* **Toll.** The bell rings and a ring of light drops out of the crown, lands round the dais a second later and runs
+  out over the floor as a low wall of light. Jump it as it reaches you, or stand behind a broken pillar: the ring stops
+  at anything solid, and you can see the gap it leaves. From the second phase there are two rings, and two strokes of
+  the bell to count them by. A ring that strikes throws you two blocks out; jump as you come down and you are over the
+  one behind it.
+* **Grab** (from the second phase, and at any time for a player up on the seats). Three ripples run in from the rim to
+  the dais, then everyone in the arena is drawn in after them: five blocks or so across the floor, and from the rim
+  all the way down on to it. It does not hurt, and nor does the fall; it brings you down off the seats and under the
+  next blow. A pillar between you and the dais holds you.
+* **Bloom** (the third phase). Every block of sculk in the bowl lights and brightens for a little over a second, then
+  pulses. Be on bare stone.
+
+A tendril that has been worn shows it (its bands dim as it is cut and flash when struck), a cut one whips away into the
+ceiling, and each sprout is tied to the crown by a thread of light for as long as it mends it.
 
 Three phases, and the arena changes with each: the braziers go out a ring at a time, outside in, and the sculk creeps
 further out over the floor, so the last phase is fought on ground that is nearly all sculk by the three flames left
@@ -301,9 +329,12 @@ shimmer and a soft note in your own hands; then, for as long as it has that ener
 | `/remix choir summon` | fills that arena's three sockets and calls the Choir |
 | `/remix choir cut` | parts every tendril that arena's Choir has standing, so the crown falls and the core opens |
 | `/remix choir phase <0-3>` | dresses that arena as it stands at rest or in a phase of the fight (the braziers, the sculk and the sprouts), without fighting through to it |
+| `/remix choir act <windup\|toll\|grab\|bloom>` | that arena's Choir strikes that blow now (`windup` is a slam on the nearest player); with `in <ticks>` after it, the blow begins that many ticks from now |
+| `/remix choir pose <windup\|slam\|toll\|grab\|bloom> <tick>` | holds that blow still at one tick of its clock, drawn exactly as it stands then, for a picture; nothing strikes while it is held |
+| `/remix choir pose hold`, `/remix choir pose off` | holds the fight as it stands, or lets it go; while it is held, a blow given with `act` plays once and the fight is held again |
 
-`/remix choir`, `/remix choir summon`, `/remix choir cut` and `/remix choir phase` go by where the command came from rather than by a
-player, so they work from the server console with `execute positioned <x> <y> <z> run remix choir ...`.
+`/remix choir`, `/remix choir summon`, `/remix choir cut`, `/remix choir phase`, `/remix choir act` and `/remix choir pose` go by
+where the command came from rather than by a player, so they work from the server console with `execute positioned <x> <y> <z> run remix choir ...`.
 
 ## Building
 
