@@ -64,7 +64,13 @@ public record Fx(Kind kind, double x, double y, double z, float dx, float dy, fl
          * A weapon's second phase wakes ({@code a} 1) as its player reaches the active rune's level, or sleeps ({@code a} 0)
          * as they drop below it: {@code entity} the player.
          */
-        PHASE
+        PHASE,
+        /** Burst's second-phase shockwave (0.22.6): a ring rolling out along the ground from {@code size} to {@code a} blocks. */
+        SHOCKWAVE,
+        /** Snare's roots take hold: {@code size} how far round. */
+        SNARE,
+        /** Armor at work on {@code entity}: {@code a} 0 a Leap off the air, 1 Second Wind, 2 a glide's start. */
+        ARMOR
     }
 
     public Vec3 pos() { return new Vec3(x, y, z); }

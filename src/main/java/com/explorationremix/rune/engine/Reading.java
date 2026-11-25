@@ -26,21 +26,24 @@ public record Reading(Loadout loadout, HostSpec spec, int level, List<CastReadin
         return c != null && !c.red();
     }
 
-    public RuneId active() { return loadout.active(); }
+    /** The active rune, if it fits this weapon (one that doesn't is read as nothing). */
+    public RuneId active() { return fitting(loadout.active()); }
 
-    public RuneId modifier() { return loadout.modifier(); }
+    public RuneId modifier() { return fitting(loadout.modifier()); }
 
-    public RuneId passive() { return loadout.passive(); }
+    public RuneId passive() { return fitting(loadout.passive()); }
+
+    private RuneId fitting(RuneId r) { return r != null && r.fits(spec.host()) ? r : null; }
 
     /** The weapon's element (its element passive), or NONE. */
-    public Element element() { return loadout.passive() == null ? Element.NONE : loadout.passive().element; }
+    public Element element() { return passive() == null ? Element.NONE : passive().element; }
 
     /** Whether this passive is set and does its work. */
-    public boolean passiveIs(RuneId p) { return loadout.passive() == p && note(Socket.PASSIVE).live(); }
+    public boolean passiveIs(RuneId p) { return passive() == p && p != null && note(Socket.PASSIVE).live(); }
 
     /** Levels still to gain before the second phase wakes (0 when it is awake, or there is no active rune). */
     public int levelsToGo() {
-        RuneId a = loadout.active();
+        RuneId a = active();
         return a == null ? 0 : Math.max(0, a.phaseLevel - level);
     }
 }

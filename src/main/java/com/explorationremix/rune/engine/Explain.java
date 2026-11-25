@@ -54,9 +54,9 @@ public final class Explain {
 
     /** What the passive does on this weapon, or why it does nothing; "" with no passive. */
     public static String passiveLine(Reading r) {
+        if (r.note(Socket.PASSIVE).grey()) return note(r, Socket.PASSIVE) + ".";
         RuneId p = r.passive();
         if (p == null) return "";
-        if (r.note(Socket.PASSIVE).grey()) return note(r, Socket.PASSIVE) + ".";
         boolean bow = r.spec().host().arrowCarrier;
         RuneId a = r.active();
         if (p.isElement()) {
@@ -66,15 +66,17 @@ public final class Explain {
         return switch (p) {
             case ON_HIT -> bow ? "Every third arrow that hits a foe sets the " + a.noun() + " off there, for free."
                     : "Every third full swing that hits a foe casts the " + a.noun() + " for free.";
-            case AFTER -> "Each cast echoes a moment later, at half strength.";
-            case LANTERN -> "A soft light goes with you while it is in your hand.";
-            case THIRST -> (bow ? "Its arrows" : "Its hits") + " fill it with energy " + Math.round((THIRST_GAIN - 1.0F) * 100) + "% faster.";
+            case AFTER -> "Energy it gains past full makes its next cast a third stronger.";
+            case RECALL -> "Its arrows fly back to you once they land.";
+            case QUICKDRAW -> r.spec().host() == Host.CROSSBOW ? "It loads in half the time." : "It draws in half the time.";
             default -> "";
         };
     }
 
-    /** How much more energy Thirst's hits knock loose. */
-    public static final float THIRST_GAIN = 1.6F;
+    /** How much more energy hits knock loose with Thirst awake on the armor, and with its full set. */
+    public static final float THIRST_GAIN = 1.4F, THIRST_FULL_GAIN = 1.8F;
+    /** Overflow: how much stronger the cast after energy came in past full is. */
+    public static final float OVERFLOW = 4.0F / 3.0F;
 
     /** The active rune's second phase: "Phase two at level 12: ..." or, awake, "Phase two: ...". "" with no active. */
     public static String phaseLine(Reading r) {
@@ -93,12 +95,55 @@ public final class Explain {
             case NO_ACTIVE -> name + " needs an active rune";
             case CANT_CHANGE -> name + " doesn't change " + article(n.arg()) + " " + n.arg().toLowerCase(Locale.ROOT);
             case ARROW_CANT -> name + " doesn't change an arrow";
-            case CANT_ECHO -> name + " can't repeat " + article(n.arg()) + " " + n.arg().toLowerCase(Locale.ROOT);
+            case CANT_STRENGTHEN -> name + " can't strengthen " + article(n.arg()) + " " + n.arg().toLowerCase(Locale.ROOT);
+            case WRONG_GEAR -> name + " is not " + article(n.arg()) + " " + n.arg() + " rune";
+            case TOO_FEW -> name + " is on " + pieces(n.arg()) + "; it wakes on three";
+        };
+    }
+
+    private static String pieces(String count) {
+        return switch (count) {
+            case "1" -> "one piece";
+            case "2" -> "two pieces";
+            default -> count + " pieces";
         };
     }
 
     public static String seconds(int ticks) {
         return String.format(Locale.ROOT, "%.1f s", ticks / 20.0);
+    }
+
+    // ------------------------------------------------------------------------------------------------ armor
+
+    /**
+     * How far each collect rune on a worn piece has come, a line each (an effect rune says what it does in its own
+     * words, the same at every level). Empty with no collect runes.
+     */
+    public static List<String> collectLines(ArmorSet set, Piece p) {
+        List<String> out = new ArrayList<>();
+        ArmorRunes a = set.piece(p);
+        if (a == null) return out;
+        for (RuneId c : new RuneId[]{a.first(), a.second()}) if (c != null) out.add(collectLine(c, set.count(c)));
+        return out;
+    }
+
+    /**
+     * How far a collect rune's set has come with {@code count} pieces carrying it: asleep below three, awake at three, a
+     * full set at four.
+     */
+    public static String collectLine(RuneId c, int count) {
+        if (count >= ArmorSet.FULL) return c.title + ", full set: " + c.full;
+        if (count >= ArmorSet.WAKES) return c.title + ", three pieces: " + c.three + " A fourth makes the full set: " + lowerFirst(c.full);
+        String on = count <= 0 ? "on no piece" : "on " + pieces(Integer.toString(count));
+        return c.title + " is " + on + " yet; on three it wakes: " + lowerFirst(c.three);
+    }
+
+    /** "Mend 2/4", the short tally the table shows beside the worn pieces. */
+    public static String tally(RuneId c, int count) { return c.title + " " + count + "/" + ArmorSet.FULL; }
+
+    static String lowerFirst(String s) {
+        if (s.isEmpty() || (s.length() > 1 && Character.isUpperCase(s.charAt(1)))) return s;
+        return Character.toLowerCase(s.charAt(0)) + s.substring(1);
     }
 
     // ------------------------------------------------------------------------------------------------ words
@@ -125,7 +170,7 @@ public final class Explain {
             case HEAVY -> "heavy";
             case WIDE -> "wide";
             case SEEK -> "seeking";
-            case ARC -> "lobbed";
+            case ARC -> "returning";
             case BOUNCE -> "bouncing";
             case PIERCE -> "piercing";
             case SIPHON -> "siphoning";

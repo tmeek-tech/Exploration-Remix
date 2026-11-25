@@ -202,6 +202,88 @@ public final class RuneFxClient implements RuneFx.ClientSide {
             case WELL -> well(r, at, rgb, s);
             case WAVE -> wave(l, r, at, d, rgb, e, s);
             case PHASE -> phase(r, at, rgb, fx.a() > 0.5F, mc.player != null && fx.entity() == mc.player.getId());
+            case SHOCKWAVE -> shockwave(l, r, at, rgb, e, s, fx.a(), dist);
+            case SNARE -> snare(r, at, rgb, s);
+            case ARMOR -> armor(r, at, rgb, Math.round(fx.a()), mc.player != null && fx.entity() == mc.player.getId());
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------------ 0.22.6: bows and armor
+
+    /** Burst's shockwave: a ring along the ground rolling out from {@code from} to {@code to}, kicking dust as it goes. */
+    private static void shockwave(ClientLevel l, RandomSource r, Vec3 c, int rgb, Element e, float from, float to, double dist) {
+        Vec3 up = new Vec3(0, 1, 0);
+        int life = 9;
+        GlowParticle.ring(c.add(0, 0.12, 0), up).colour(mix(rgb, WHITE, 0.5F)).fadeTo(rgb).size(from, to).alpha(0.9F).life(life).spawn();
+        GlowParticle.ring(c.add(0, 0.5, 0), up).colour(mix(rgb, WHITE, 0.2F)).fadeTo(dim(rgb, 0.5F)).size(from * 0.8F, to * 0.92F).alpha(0.45F)
+                .life(life + 2).spawn();
+        int n = count(Math.round(10 + to * 4));
+        for (int i = 0; i < n; i++) {
+            double a = r.nextDouble() * Math.PI * 2, d = from + (to - from) * r.nextDouble();
+            Vec3 out = new Vec3(Math.cos(a), 0, Math.sin(a));
+            Vec3 p = c.add(out.scale(d)).add(0, 0.1, 0);
+            GlowParticle.dot(p).vel(out.scale(0.12 + r.nextDouble() * 0.1).add(0, 0.05 + r.nextDouble() * 0.08, 0)).colour(mix(rgb, WHITE, 0.4F))
+                    .fadeTo(rgb).size(0.07F, 0.0F).life(8 + r.nextInt(8)).drag(0.88F).spawn();
+            if (i % 3 == 0) vanilla(l, ParticleTypes.POOF, p, out.scale(0.08).add(0, 0.03, 0));
+        }
+        ParticleOptions ep = RuneFx.elementParticle(e);
+        if (ep != null) for (int i = 0; i < count(8); i++) vanilla(l, ep, c.add(flat(sphere(r)).scale(to * r.nextDouble())).add(0, 0.2, 0), up.scale(0.05));
+    }
+
+    /** Snare's roots: a ring on the ground and strands of light rising round it. */
+    private static void snare(RandomSource r, Vec3 c, int rgb, float rad) {
+        Vec3 up = new Vec3(0, 1, 0);
+        GlowParticle.ring(c.add(0, 0.08, 0), up).colour(mix(rgb, WHITE, 0.4F)).fadeTo(rgb).size(rad * 0.2F, rad).alpha(0.85F).life(12).spawn();
+        GlowParticle.ring(c.add(0, 0.08, 0), up).colour(rgb).fadeTo(dim(rgb, 0.5F)).size(rad, rad * 0.85F).alpha(0.5F).life(30).spawn();
+        for (int i = 0; i < count(20); i++) {
+            double a = r.nextDouble() * Math.PI * 2, d = rad * Math.sqrt(r.nextDouble());
+            Vec3 p = c.add(Math.cos(a) * d, 0.05, Math.sin(a) * d);
+            GlowParticle.dot(p).vel(new Vec3(0, 0.05 + r.nextDouble() * 0.07, 0)).colour(mix(rgb, WHITE, 0.5F)).fadeTo(rgb).size(0.06F, 0.01F)
+                    .life(16 + r.nextInt(10)).drag(0.9F).spawn();
+        }
+    }
+
+    /** Armor at work: a Leap's ring under the feet, Second Wind's rising light, a glide's start. */
+    private static void armor(RandomSource r, Vec3 at, int rgb, int what, boolean mine) {
+        Vec3 up = new Vec3(0, 1, 0);
+        switch (what) {
+            case 0 -> {
+                GlowParticle.ring(at.add(0, 0.05, 0), up).colour(mix(rgb, WHITE, 0.6F)).fadeTo(rgb).size(0.25F, 1.1F).alpha(mine ? 0.5F : 0.8F).life(7).spawn();
+                for (int i = 0; i < count(8); i++) {
+                    double a = r.nextDouble() * Math.PI * 2;
+                    Vec3 out = new Vec3(Math.cos(a), 0, Math.sin(a));
+                    GlowParticle.dot(at.add(out.scale(0.3))).vel(out.scale(0.08).add(0, -0.05, 0)).colour(mix(rgb, WHITE, 0.5F)).fadeTo(rgb)
+                            .size(0.05F, 0.0F).life(8 + r.nextInt(5)).drag(0.9F).spawn();
+                }
+            }
+            case 1 -> {
+                for (int k = 0; k < 3; k++) {
+                    GlowParticle.ring(at.add(0, 0.2 + 0.6 * k, 0), up).colour(mix(rgb, WHITE, 0.5F)).fadeTo(rgb).size(1.1F, 0.4F).alpha(mine ? 0.45F : 0.7F)
+                            .life(12 + 4 * k).spawn();
+                }
+                for (int i = 0; i < count(mine ? 10 : 16); i++) {
+                    double a = r.nextDouble() * Math.PI * 2, d = 0.3 + r.nextDouble() * 0.4;
+                    Vec3 p = at.add(Math.cos(a) * d, r.nextDouble() * 1.6, Math.sin(a) * d);
+                    GlowParticle.dot(p).vel(new Vec3(0, 0.05 + r.nextDouble() * 0.04, 0)).colour(mix(rgb, WHITE, 0.6F)).fadeTo(rgb).size(0.05F, 0.0F)
+                            .life(18 + r.nextInt(10)).drag(0.95F).star().spawn();
+                }
+            }
+            case 3 -> {
+                // a pull up onto a ledge: light kicked off the lip where the hands caught it
+                for (int i = 0; i < count(mine ? 5 : 8); i++) {
+                    Vec3 p = at.add(sphere(r).scale(0.35)).add(0, 1.5, 0);
+                    GlowParticle.dot(p).vel(sphere(r).scale(0.03).add(0, 0.04, 0)).colour(mix(rgb, WHITE, 0.5F)).fadeTo(rgb).size(0.045F, 0.0F)
+                            .life(8 + r.nextInt(6)).drag(0.88F).spawn();
+                }
+            }
+            default -> {
+                // a glide: specks left behind in the air, falling slower than the glider
+                for (int i = 0; i < count(mine ? 2 : 4); i++) {
+                    Vec3 p = at.add(sphere(r).scale(0.45)).add(0, 0.6, 0);
+                    GlowParticle.dot(p).vel(new Vec3(0, 0.01, 0)).colour(mix(rgb, WHITE, 0.5F)).fadeTo(rgb).size(0.04F, 0.0F).alpha(mine ? 0.5F : 0.85F)
+                            .life(12 + r.nextInt(8)).spawn();
+                }
+            }
         }
     }
 
@@ -688,7 +770,7 @@ public final class RuneFxClient implements RuneFx.ClientSide {
         }
         ParticleOptions e = RuneFx.elementParticle(b.element());
         if (e != null && r.nextInt(3) == 0) b.level().addParticle(e, at.x, at.y, at.z, v.x * 0.1, v.y * 0.1, v.z * 0.1);
-        if (b.rune() == RuneId.GLOW && r.nextInt(3) == 0) b.level().addParticle(ParticleTypes.END_ROD, at.x, at.y, at.z, 0, 0, 0);
+        if (b.rune() == RuneId.MINE && r.nextInt(6) == 0) b.level().addParticle(ParticleTypes.END_ROD, at.x, at.y + 0.1, at.z, 0, 0.01, 0);
     }
 
     @Override

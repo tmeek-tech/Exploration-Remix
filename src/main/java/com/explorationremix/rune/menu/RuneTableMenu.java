@@ -3,9 +3,12 @@ package com.explorationremix.rune.menu;
 import com.explorationremix.rune.Combat;
 import com.explorationremix.rune.RuneGear;
 import com.explorationremix.rune.RuneRegistry;
+import com.explorationremix.rune.RuneTags;
+import com.explorationremix.rune.engine.ArmorRunes;
 import com.explorationremix.rune.engine.CastState;
 import com.explorationremix.rune.engine.HostSpec;
 import com.explorationremix.rune.engine.Loadout;
+import com.explorationremix.rune.engine.Piece;
 import com.explorationremix.rune.engine.Reading;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.engine.Socket;
@@ -28,24 +31,24 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.network.NetworkHooks;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * An enchanting table opened with a weapon in the main hand: the weapon's three sockets (an active rune, a modifier, a
- * passive), set from the runes the player carries. The client draws it in the world, over the table
- * (RuneTableScreen); this is the server's side, which decides every change.
+ * An enchanting table: the rune sockets of the weapon in the main hand (an active rune, a modifier, a passive) and of
+ * each piece of armor worn (an effect rune and two collect runes), set from the runes the player carries. Since 0.22.6
+ * the table enchants no more: it is where runes are set, whatever is in hand. The client draws it in the world, over
+ * the table (RuneTableScreen); this is the server's side, which decides every change.
  *
- * <p>The weapon never leaves the hand, and a rune is always in exactly one place: setting one takes that rune item
- * from the inventory and hands back the one it replaces, taking one out hands it back. The player's inventory is in
- * the menu, unseen, only so their game is kept up to date with what they carry while it is open. Changes are menu
- * buttons ({@link #button}); while in combat (hurt in the last few seconds) runes can't be changed, and being hurt
- * closes it. Button {@link #ENCHANT} swaps to the table's own enchanting.
+ * <p>Gear never leaves the hand or the body, and a rune is always in exactly one place: setting one takes that rune
+ * item from the inventory and hands back the one it replaces, taking one out hands it back. The player's inventory and
+ * armor are in the menu, unseen, only so their game is kept up to date with what they carry and wear while it is open.
+ * Changes are RuneNet.TableEdit messages ({@link #edit}: a menu button's one byte can't say which piece and which
+ * rune); while in combat (hurt in the last few seconds) runes can't be changed, and being hurt closes it.
  */
 public class RuneTableMenu extends AbstractContainerMenu {
-    /** Socket {@code s} set to rune {@code r}: {@code s * STRIDE + r.ordinal() + 1}; taken out: {@code s * STRIDE}. */
-    public static final int STRIDE = 32;
-    /** The table's own enchanting, for the weapon or anything else. */
-    public static final int ENCHANT = 120;
+    /** Gear 0 is the weapon in the main hand; 1 to 4 the worn helmet, chestplate, leggings and boots. */
+    public static final int WEAPON = 0, GEAR = 1 + Piece.values().length;
     /** How far the player may stand from the table (as for any container). */
     private static final double REACH_SQR = 64.0;
 
@@ -54,19 +57,15 @@ public class RuneTableMenu extends AbstractContainerMenu {
     /** Ticks until runes can be changed (0: now); the server keeps it, the client is told. */
     private final DataSlot lock = DataSlot.standalone();
 
-    public static int setButton(Socket s, RuneId r) { return s.ordinal() * STRIDE + r.ordinal() + 1; }
-
-    public static int clearButton(Socket s) { return s.ordinal() * STRIDE; }
-
     /** The client's copy: the server says which table it is. */
     public static RuneTableMenu client(int id, Inventory inv, FriendlyByteBuf buf) { return new RuneTableMenu(id, inv, buf.readBlockPos()); }
 
-    /** Whether this block opens the rune sockets for a weapon (an enchanting table, a mod's included). */
+    /** Whether this block is where runes are set (an enchanting table, a mod's included). */
     public static boolean isTable(BlockState state) { return state.getBlock() instanceof EnchantmentTableBlock; }
 
-    /** Opens the sockets of the weapon in the player's main hand, at the table at {@code pos}. */
+    /** Opens the rune sockets of what the player holds and wears, at the table at {@code pos}. */
     public static void open(ServerPlayer p, BlockPos pos) {
-        if (!p.isAlive() || p.isSpectator() || p.isSleeping() || !RuneGear.isGear(p.getMainHandItem())) return;
+        if (!p.isAlive() || p.isSpectator() || p.isSleeping()) return;
         BlockPos at = pos.immutable();
         NetworkHooks.openScreen(p, new SimpleMenuProvider((id, inv, pl) -> new RuneTableMenu(id, inv, at),
                 Component.translatable("container.explorationremix.rune_table")), buf -> buf.writeBlockPos(at));
@@ -77,9 +76,11 @@ public class RuneTableMenu extends AbstractContainerMenu {
         super(RuneRegistry.TABLE.get(), id);
         this.player = inv.player;
         this.table = table;
-        // the inventory, unseen: its slots keep the player's game told what they carry (runes come and go from it)
+        // the inventory, unseen: its slots keep the player's game told what they carry (runes come and go from it) and
+        // wear (its armor's runes change)
         for (int i = 0; i < 36; i++) addSlot(new Unseen(inv, i));
         addSlot(new Unseen(inv, Inventory.SLOT_OFFHAND));
+        for (int i = 0; i < 4; i++) addSlot(new Unseen(inv, 36 + i));
         addDataSlot(lock);
     }
 
@@ -87,23 +88,63 @@ public class RuneTableMenu extends AbstractContainerMenu {
 
     public BlockPos table() { return table; }
 
+    public Player player() { return player; }
+
     /** The weapon whose sockets these are: the one in the main hand (empty if there is none). */
-    public ItemStack weapon() { return player.getMainHandItem(); }
+    public ItemStack weapon() {
+        ItemStack s = player.getMainHandItem();
+        return RuneGear.isGear(s) ? s : ItemStack.EMPTY;
+    }
+
+    /** The armor worn as {@code p} (empty if none, or if what is worn there isn't armor that takes runes). */
+    public ItemStack armor(Piece p) {
+        ItemStack s = player.getItemBySlot(RuneGear.slot(p));
+        return RuneGear.piece(s) == p ? s : ItemStack.EMPTY;
+    }
+
+    /** Gear {@code g}: the weapon ({@link #WEAPON}) or a worn piece (1 helmet to 4 boots); empty if there is none. */
+    public ItemStack gear(int g) {
+        if (g == WEAPON) return weapon();
+        return g > 0 && g < GEAR ? armor(Piece.values()[g - 1]) : ItemStack.EMPTY;
+    }
+
+    /** The piece gear {@code g} is, or null for the weapon. */
+    public static Piece piece(int g) { return g > 0 && g < GEAR ? Piece.values()[g - 1] : null; }
+
+    /** The gear number of a piece of armor. */
+    public static int gearOf(Piece p) { return 1 + p.ordinal(); }
+
+    /** Gear {@code g}'s sockets, left to right. */
+    public static Socket[] sockets(int g) { return g == WEAPON ? Socket.WEAPON : Socket.ARMOR; }
 
     public Loadout loadout() { return RuneGear.loadout(weapon()); }
+
+    /** The rune in socket {@code s} of gear {@code g} (null: empty, or no such gear). */
+    public RuneId rune(int g, Socket s) {
+        ItemStack st = gear(g);
+        if (st.isEmpty() || s.armor() == (g == WEAPON)) return null;
+        return g == WEAPON ? RuneGear.loadout(st).get(s) : RuneGear.armor(st).get(s);
+    }
 
     /** Ticks until runes can be changed (0: now). */
     public int lockTicks() { return player.level().isClientSide ? lock.get() : Combat.ticksUntilFree(player); }
 
     public boolean locked() { return lockTicks() > 0; }
 
-    /** How many of each rune the player carries (main inventory and off hand), for the socket {@code s}'s kind. */
-    public Map<RuneId, Integer> carried(Socket s) {
+    /**
+     * How many of each rune the player carries (main inventory and off hand) that could go in socket {@code s} of gear
+     * {@code g}: of its kind, and fitting that gear.
+     */
+    public Map<RuneId, Integer> carried(int g, Socket s) {
         Map<RuneId, Integer> out = new EnumMap<>(RuneId.class);
+        int fits = RuneGear.fits(gear(g));
+        if (fits == 0) return out;
         Inventory inv = player.getInventory();
         for (int i = 0; i < inv.getContainerSize(); i++) {
-            RuneId r = RuneItem.runeOf(inv.getItem(i));
-            if (r != null && r.kind == s.kind) out.merge(r, inv.getItem(i).getCount(), Integer::sum);
+            ItemStack st = inv.getItem(i);
+            RuneId r = RuneItem.runeOf(st);
+            // the armor's own slots are part of the inventory; a rune is never worn, but the count is of carried runes
+            if (r != null && r.kind == s.kind && r.fits(fits)) out.merge(r, st.getCount(), Integer::sum);
         }
         return out;
     }
@@ -116,41 +157,77 @@ public class RuneTableMenu extends AbstractContainerMenu {
         super.broadcastChanges();
     }
 
+    /** Nothing is a button any more: changes come as RuneNet.TableEdit ({@link #edit}). */
     @Override
-    public boolean clickMenuButton(Player p, int id) {
-        if (p.level().isClientSide || !(p instanceof ServerPlayer sp)) return false;
-        if (id == ENCHANT) {
-            enchant(sp);
-            return false;
-        }
-        if (id < 0 || id >= Socket.values().length * STRIDE) return false;
-        Socket s = Socket.byIndex(id / STRIDE);
-        int r = id % STRIDE;
-        if (s == null || locked() || !RuneGear.isGear(weapon())) return false;
-        return r == 0 ? takeOut(sp, s) : set(sp, s, RuneId.byOrdinal(r - 1));
+    public boolean clickMenuButton(Player p, int id) { return false; }
+
+    /**
+     * Sets rune {@code runeOrdinal} (of RuneId; below 0 takes out what is there) into socket {@code socketIndex} (of
+     * Socket) of gear {@code g}. Refused in combat, for a socket the gear hasn't, or a rune that doesn't go there.
+     */
+    public void edit(ServerPlayer p, int g, int socketIndex, int runeOrdinal) {
+        Socket s = Socket.byIndex(socketIndex);
+        if (s == null || g < 0 || g >= GEAR || locked() || !stillValid(p)) return;
+        ItemStack gear = gear(g);
+        if (gear.isEmpty() || s.armor() == (g == WEAPON)) return;
+        RuneId r = runeOrdinal < 0 ? null : RuneId.byOrdinal(runeOrdinal);
+        if (runeOrdinal >= 0 && r == null) return;
+        // runes that don't fit this gear (from before 0.22.6) go back first, so a change never loses them
+        RuneGear.handBack(gear, p);
+        if (r == null) takeOut(p, g, gear, s);
+        else set(p, g, gear, s, r);
     }
 
-    /** Sets {@code r} into the socket {@code s}: one is taken from what they carry, the one there before handed back. */
-    private boolean set(ServerPlayer p, Socket s, RuneId r) {
-        if (r == null || r.kind != s.kind) return false;
-        Loadout before = loadout();
-        RuneId was = before.get(s);
-        if (was == r) return false;
+    /**
+     * Sets {@code r} into the socket {@code s}: one is taken from what they carry, and what it displaces is handed back
+     * (the one there before; on armor, the same collect rune moving from the piece's other collect socket).
+     */
+    private boolean set(ServerPlayer p, int g, ItemStack gear, Socket s, RuneId r) {
+        if (r.kind != s.kind || !r.fits(RuneGear.fits(gear))) return false;
+        List<RuneId> before, after;
+        Loadout l = null;
+        ArmorRunes a = null;
+        if (g == WEAPON) {
+            Loadout was = RuneGear.loadout(gear);
+            if (was.get(s) == r) return false;
+            l = was.with(s, r);
+            before = was.runes();
+            after = l.runes();
+        } else {
+            ArmorRunes was = RuneGear.armor(gear);
+            if (was.get(s) == r) return false;
+            a = was.with(s, r);
+            before = was.runes();
+            after = a.runes();
+        }
+        // exactly the one rune comes in
+        if (!RuneTags.without(after, before).equals(List.of(r))) return false;
         if (!takeOne(p.getInventory(), r)) return false;
-        write(before.with(s, r));
-        if (was != null) give(p, RuneItem.stack(was, 1));
+        if (l != null) writeWeapon(l);
+        else RuneGear.setArmor(gear, a);
+        for (RuneId back : RuneTags.without(before, after)) give(p, RuneItem.stack(back, 1));
+        p.getInventory().setChanged();
         sound(SoundEvents.AMETHYST_BLOCK_RESONATE, 0.9F, pitch(s));
         sound(SoundEvents.ENCHANTMENT_TABLE_USE, 0.35F, 1.5F);
         return true;
     }
 
     /** Takes the rune out of the socket {@code s}, back to the player. */
-    private boolean takeOut(ServerPlayer p, Socket s) {
-        Loadout before = loadout();
-        RuneId was = before.get(s);
-        if (was == null) return false;
-        write(before.with(s, null));
+    private boolean takeOut(ServerPlayer p, int g, ItemStack gear, Socket s) {
+        RuneId was;
+        if (g == WEAPON) {
+            Loadout l = RuneGear.loadout(gear);
+            was = l.get(s);
+            if (was == null) return false;
+            writeWeapon(l.with(s, null));
+        } else {
+            ArmorRunes a = RuneGear.armor(gear);
+            was = a.get(s);
+            if (was == null) return false;
+            RuneGear.setArmor(gear, a.with(s, null));
+        }
         give(p, RuneItem.stack(was, 1));
+        p.getInventory().setChanged();
         sound(SoundEvents.AMETHYST_CLUSTER_BREAK, 0.6F, 1.4F);
         return true;
     }
@@ -160,6 +237,8 @@ public class RuneTableMenu extends AbstractContainerMenu {
             case ACTIVE -> 1.0F;
             case MODIFIER -> 1.26F;
             case PASSIVE -> 1.5F;
+            case EFFECT -> 1.12F;
+            case COLLECT_1, COLLECT_2 -> 1.4F;
         };
     }
 
@@ -188,10 +267,10 @@ public class RuneTableMenu extends AbstractContainerMenu {
     }
 
     /**
-     * Writes the sockets. A change waits out the longer of the recovery before and after it from the last cast, so
-     * swapping runes never skips a wait.
+     * Writes the weapon's sockets. A change waits out the longer of the recovery before and after it from the last
+     * cast, so swapping runes never skips a wait.
      */
-    private void write(Loadout l) {
+    private void writeWeapon(Loadout l) {
         ItemStack g = weapon();
         HostSpec spec = RuneGear.spec(g);
         if (spec == null) return;
@@ -206,20 +285,11 @@ public class RuneTableMenu extends AbstractContainerMenu {
             s.cursor = 0;
             RuneGear.setState(g, s);
         }
-        player.getInventory().setChanged();
-    }
-
-    /** The table's own enchanting, for whatever they hold. */
-    private void enchant(ServerPlayer p) {
-        BlockState state = p.level().getBlockState(table);
-        if (!isTable(state)) return;
-        net.minecraft.world.MenuProvider provider = state.getMenuProvider(p.level(), table);
-        if (provider != null) p.openMenu(provider);
     }
 
     @Override
     public boolean stillValid(Player p) {
-        return p.isAlive() && RuneGear.isGear(p.getMainHandItem()) && isTable(p.level().getBlockState(table))
+        return p.isAlive() && isTable(p.level().getBlockState(table))
                 && p.distanceToSqr(table.getX() + 0.5, table.getY() + 0.5, table.getZ() + 0.5) <= REACH_SQR;
     }
 

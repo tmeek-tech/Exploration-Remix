@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * The blocks runes make for a while (Barrier glass, Frost's ice, Glow's light, a struck fern's fronds, a Lantern's light),
+ * The blocks runes make for a while (Barrier glass, Frost's ice, Glow's light, a struck fern's fronds, a Lantern's light, a rope),
  * kept to a few per player: a new one
  * past the limit ends that player's oldest still standing first. Runes only ever fill air (and still water, for ice),
  * never round anything standing or hanging there, and only where their caster could build (not in adventure mode,
@@ -63,8 +63,10 @@ public final class TempBlocks {
             case ICE -> RuneConfig.get(RuneConfig.INSTANCE.maxIceBlocks);
             case LIGHT -> RuneConfig.get(RuneConfig.INSTANCE.maxGlowBlocks);
             case FROND -> RuneConfig.get(RuneConfig.INSTANCE.maxFrondBlocks);
-            // the one a player stands in, and for a moment the next one as they step on
-            case LANTERN -> 2;
+            // the one a player stands in, and for a moment the next one as they step on; a helmet's beacon too
+            case LANTERN -> 4;
+            // two long ropes
+            case ROPE -> 2 * (BowRunes.ROPE_LENGTH + BowRunes.ROPE_UP);
         };
     }
 
@@ -75,6 +77,7 @@ public final class TempBlocks {
             case LIGHT -> RuneRegistry.LIGHT.get();
             case FROND -> RuneRegistry.FROND.get();
             case LANTERN -> RuneRegistry.LANTERN.get();
+            case ROPE -> RuneRegistry.ROPE.get();
         };
     }
 
@@ -126,7 +129,7 @@ public final class TempBlocks {
         int cap = cap(k);
         if (cap <= 0 || !fits(level, pos, k)) return false;
         // glass and ice are solid: never round anyone (they would be stuck in it) or over a frame (it would drop)
-        if (k != TempBlock.Kind.LIGHT && k != TempBlock.Kind.FROND && k != TempBlock.Kind.LANTERN && occupied(level, pos)) return false;
+        if (k != TempBlock.Kind.LIGHT && k != TempBlock.Kind.FROND && k != TempBlock.Kind.LANTERN && k != TempBlock.Kind.ROPE && occupied(level, pos)) return false;
         if (!mayChange(level, pos, owner)) return false;
         Deque<Placed> q = OWNED.computeIfAbsent(owner.getUUID(), u -> new HashMap<>()).computeIfAbsent(k, kk -> new ArrayDeque<>());
         // the ones that already ended no longer count, and are never ended again (another block may stand there now)

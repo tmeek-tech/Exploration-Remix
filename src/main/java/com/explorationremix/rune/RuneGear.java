@@ -1,15 +1,20 @@
 package com.explorationremix.rune;
 
+import com.explorationremix.rune.engine.ArmorRunes;
 import com.explorationremix.rune.engine.CastState;
+import com.explorationremix.rune.engine.Fits;
 import com.explorationremix.rune.engine.Host;
 import com.explorationremix.rune.engine.HostSpec;
 import com.explorationremix.rune.engine.Loadout;
 import com.explorationremix.rune.engine.Reader;
+import com.explorationremix.rune.engine.Piece;
 import com.explorationremix.rune.engine.Reading;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.item.RuneItem;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
@@ -22,11 +27,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Where a weapon keeps its runes, and what kind of weapon it is. Two tags on the stack (read and written by
- * {@link RuneTags}):
+ * Where a weapon or a piece of armor keeps its runes, and what kind of gear it is. Two tags on the stack (read and
+ * written by {@link RuneTags}):
  * <ul>
- *   <li>{@value #LOADOUT_TAG}: {@code {v: 2, a: "spark", m: "swift", p: "ember"}}, written only when a rune is set at
- *   the enchanting table;</li>
+ *   <li>{@value #LOADOUT_TAG}: {@code {v: 2, a: "spark", m: "swift", p: "ember"}} on a weapon, {@code {v: 2, e: "leap",
+ *   c: "mend", d: "vigor"}} on armor, written only when a rune is set at the enchanting table;</li>
  *   <li>{@value #CAST_TAG}: {@code {e: energy, t: tick, g: last gained energy (-1), c: cursor, r: ready at, l: last
  *   cast, i: weapon id}}, written only when something happens to the weapon (a cast, a hit, a mote, taken in hand or
  *   put away); the energy in between is worked out from the ticks, so the stack is not rewritten every tick. The id
@@ -50,7 +55,50 @@ public final class RuneGear {
         return null;
     }
 
+    /** Whether it is a weapon that casts (a sword, a bow or a crossbow). */
     public static boolean isGear(ItemStack stack) { return host(stack) != null; }
+
+    /** The piece of armor this is (any mod's armor, by the slot it is worn in), or null. */
+    @Nullable
+    public static Piece piece(ItemStack stack) {
+        if (stack.isEmpty() || !(stack.getItem() instanceof ArmorItem a)) return null;
+        return piece(a.getEquipmentSlot());
+    }
+
+    /** The piece worn in an armor slot, or null for a hand. */
+    @Nullable
+    public static Piece piece(EquipmentSlot slot) {
+        return switch (slot) {
+            case HEAD -> Piece.HELMET;
+            case CHEST -> Piece.CHEST;
+            case LEGS -> Piece.LEGS;
+            case FEET -> Piece.BOOTS;
+            default -> null;
+        };
+    }
+
+    /** The armor slot a piece is worn in. */
+    public static EquipmentSlot slot(Piece p) {
+        return switch (p) {
+            case HELMET -> EquipmentSlot.HEAD;
+            case CHEST -> EquipmentSlot.CHEST;
+            case LEGS -> EquipmentSlot.LEGS;
+            case BOOTS -> EquipmentSlot.FEET;
+        };
+    }
+
+    public static boolean isArmor(ItemStack stack) { return piece(stack) != null; }
+
+    /** Whether it takes runes at all: a weapon or a piece of armor. */
+    public static boolean takesRunes(ItemStack stack) { return isGear(stack) || isArmor(stack); }
+
+    /** Which runes it takes ({@link Fits} bits), 0 for none. */
+    public static int fits(ItemStack stack) {
+        Host h = host(stack);
+        if (h != null) return Fits.of(h);
+        Piece p = piece(stack);
+        return p == null ? 0 : Fits.of(p);
+    }
 
     /**
      * This weapon's numbers: the most energy it holds and its power by its kind and material, and the floor its energy
@@ -95,7 +143,57 @@ public final class RuneGear {
         else stack.addTagElement(LOADOUT_TAG, t);
     }
 
+    /** The weapon's passive rune if it fits the weapon, else null: read straight from its tag, for checks made often. */
+    @Nullable
+    public static RuneId passive(ItemStack stack) {
+        Host h = host(stack);
+        if (h == null || !stack.hasTag()) return null;
+        RuneId p = RuneTags.readLoadout(stack.getTag()).passive();
+        return p != null && p.fits(Fits.of(h)) ? p : null;
+    }
+
+    /** Whether it keeps any rune (fitting or not: what it would give back). */
     public static boolean hasRunes(ItemStack stack) { return RuneTags.hasRunes(stack.getTag()); }
+
+    /** A piece of armor's runes (only the ones that fit it), or EMPTY. */
+    public static ArmorRunes armor(ItemStack stack) {
+        Piece p = piece(stack);
+        return p == null ? ArmorRunes.EMPTY : RuneTags.readArmor(stack.getTag()).fitting(p);
+    }
+
+    /** Writes a piece of armor's runes (no runes removes the tag). */
+    public static void setArmor(ItemStack stack, ArmorRunes a) {
+        CompoundTag t = RuneTags.writeArmor(a);
+        if (t == null) stack.removeTagKey(LOADOUT_TAG);
+        else stack.addTagElement(LOADOUT_TAG, t);
+    }
+
+    /**
+     * Gear keeping runes that don't fit it (0.22.6: sword actives on a bow, Glow on a sword, Lantern or Thirst in a
+     * weapon's passive socket): those come back to the player, and the rest stay where they are. Server only; the
+     * runes handed back, none if all fit. An old row is left for {@link #convertOldRow}.
+     */
+    public static List<RuneId> handBack(ItemStack stack, Player player) {
+        if (player.level().isClientSide || RuneTags.hasOldRow(stack.getTag())) return List.of();
+        List<RuneId> all = RuneTags.socketed(stack.getTag());
+        if (all.isEmpty()) return List.of();
+        List<RuneId> back;
+        Host h = host(stack);
+        Piece p = piece(stack);
+        if (h != null) {
+            Loadout kept = RuneTags.readLoadout(stack.getTag()).fitting(Fits.of(h));
+            back = RuneTags.without(all, kept.runes());
+            if (!back.isEmpty()) setLoadout(stack, kept);
+        } else if (p != null) {
+            ArmorRunes kept = RuneTags.readArmor(stack.getTag()).fitting(p);
+            back = RuneTags.without(all, kept.runes());
+            if (!back.isEmpty()) setArmor(stack, kept);
+        } else {
+            return List.of();
+        }
+        for (RuneId r : back) give(player, RuneItem.stack(r, 1));
+        return back;
+    }
 
     /** The runes read for this weapon at an XP level, with the server's limits. */
     @Nullable

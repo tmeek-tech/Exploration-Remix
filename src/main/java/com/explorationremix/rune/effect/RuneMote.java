@@ -6,6 +6,8 @@ import com.explorationremix.rune.RuneRegistry;
 import com.explorationremix.rune.engine.CastMachine;
 import com.explorationremix.rune.engine.CastState;
 import com.explorationremix.rune.engine.HostSpec;
+import com.explorationremix.rune.engine.Reading;
+import com.explorationremix.rune.engine.RuneId;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -204,8 +206,17 @@ public class RuneMote extends Entity {
         if (stack != null && spec != null) {
             long now = level().getGameTime();
             CastState s = RuneGear.state(stack, spec, now);
-            CastMachine.add(s, spec, now, energy);
+            float got = CastMachine.add(s, spec, now, energy);
+            // Overflow: energy coming in past full charges the next cast, a third stronger
+            boolean brims = !s.brim && energy > got + 1.0E-3F && overflows(stack, p);
+            if (brims) s.brim = true;
             RuneGear.setState(stack, s);
+            if (brims) {
+                p.displayClientMessage(net.minecraft.network.chat.Component.translatable("message.explorationremix.runes.overflow",
+                        spec.host().word).withStyle(st -> st.withColor(0xBFD9FF)), true);
+                level().playSound(null, p.getX(), p.getY(), p.getZ(), SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 0.6F, 1.5F);
+                RuneFx.overflow((ServerLevel) level(), p);
+            }
             float full = spec.maxEnergy() <= 0 ? 1.0F : s.energy / spec.maxEnergy();
             Long heard = HEARD.get(p.getUUID());
             if (heard == null || now - heard >= 3 || now < heard) {
@@ -220,6 +231,11 @@ public class RuneMote extends Entity {
             level().playSound(null, getX(), getY(), getZ(), SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.1F, 2.0F);
         }
         discard();
+    }
+
+    private static boolean overflows(ItemStack stack, ServerPlayer p) {
+        Reading r = RuneGear.reading(stack, p);
+        return r != null && r.passiveIs(RuneId.AFTER);
     }
 
     private void fade() {

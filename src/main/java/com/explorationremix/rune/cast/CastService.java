@@ -5,6 +5,7 @@ import com.explorationremix.rune.RunDepth;
 import com.explorationremix.rune.RuneConfig;
 import com.explorationremix.rune.RuneGear;
 import com.explorationremix.rune.RuneTags;
+import com.explorationremix.rune.armor.ArmorEffects;
 import com.explorationremix.rune.effect.RuneFx;
 import com.explorationremix.rune.effect.RuneMote;
 import com.explorationremix.rune.engine.Act;
@@ -21,9 +22,6 @@ import com.explorationremix.rune.engine.Reading;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.engine.Shape;
 import com.explorationremix.rune.menu.RuneTableMenu;
-import com.explorationremix.rune.world.TempBlock;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.GlobalPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -56,23 +54,20 @@ import java.util.UUID;
  * in the hand for {@code swapTicks} casts, so swapping weapons can't skip their waits. The active rune's second phase
  * is the player's XP level's to wake (Reader), read each time it casts.
  *
- * <p>Also here: the passives that aren't an element on the cast (Echo casts again a moment later at half strength; On
- * hit casts for free every third full hit; Lantern carries a light; Thirst fills faster) and an element passive on the
- * weapon's own hits; a hit with a runed weapon on a creature fighting you knocks energy loose as motes that fly back
- * into it; and weapons still holding a row from before the sockets have it set into them. Fake players (a Create
- * deployer holding a sword) never cast or fill weapons.
+ * <p>Also here: the passives that aren't an element on the cast (Overflow makes the cast after energy came in past full
+ * a third stronger; On hit casts for free every third full hit; Recall brings a bow's arrows back) and an element passive on the weapon's
+ * own hits; a hit with a runed weapon on a creature fighting you knocks energy loose as motes that fly back into it
+ * (more with Thirst awake on the armor); weapons still holding a row from before the sockets have it set into them,
+ * and gear keeping runes that no longer fit it hands them back. Fake players (a Create deployer holding a sword) never
+ * cast or fill weapons.
  */
 public final class CastService {
     private static final Map<UUID, Caster> CASTERS = new HashMap<>();
 
     public enum Result { CAST, WAIT, NONE }
 
-    /** Echo: how long after a cast it is cast again. */
-    public static final int ECHO_TICKS = 12;
     /** On hit: every this many full hits on foes casts the active rune for free. */
     public static final int ON_HIT_EVERY = 3;
-    /** How long a lantern's light stays lit once its player has gone from it (they put it out as they step on, too). */
-    static final int LANTERN_LIFE = 40;
 
     private CastService() {}
 
@@ -82,8 +77,8 @@ public final class CastService {
     static Caster casterOrNull(ServerPlayer p) { return CASTERS.get(p.getUUID()); }
 
     /**
-     * Runs {@code run} at the end of the server tick {@code ticks} from now (0: this one's end): an echo, an aftershock,
-     * a wave's next stretch. What is set to run checks for itself that its cast still stands. A player has at most
+     * Runs {@code run} at the end of the server tick {@code ticks} from now (0: this one's end): an aftershock, a wave's
+     * next stretch. What is set to run checks for itself that its cast still stands. A player has at most
      * {@link Caster#MAX_LATER} waiting; past that, the new one is dropped.
      */
     static void later(ServerPlayer owner, int ticks, Runnable run) {
@@ -172,6 +167,7 @@ public final class CastService {
         if (full && !(p.containerMenu instanceof RuneTableMenu) && inHandLongEnough(p, c, hand, gear, now)) cast(p, c, hand, gear, now, arrow);
         // marked once the cast has made its copies, so only the arrow itself fills the weapon
         arrow.getPersistentData().putInt(GEAR_TAG, id);
+        if (r != null && r.passiveIs(RuneId.RECALL) && arrow.pickup == AbstractArrow.Pickup.ALLOWED) Recall.track(arrow, p);
     }
 
     // ------------------------------------------------------------------------------------------------ casting
@@ -207,14 +203,18 @@ public final class CastService {
         }
         if (!o.fired()) return Result.WAIT;
         int id = RuneGear.ensureGearId(gear, p.getRandom());
+        // Overflow's charge goes into this cast (and is spent, even if Overflow has since come out)
+        boolean brim = s.brim && r.passiveIs(RuneId.AFTER);
+        s.brim = false;
         RuneGear.setState(gear, s);
-        CastContext ctx = new CastContext(p, spec.host(), spec.power(), id, o.cost(), 1.0F, r.passiveIs(RuneId.AFTER));
+        CastContext ctx = new CastContext(p, spec.host(), spec.power(), id, o.cost(), brim ? Explain.OVERFLOW : 1.0F);
+        if (brim) RuneFx.play(p.serverLevel(), p.getEyePosition(), SoundEvents.AMETHYST_BLOCK_RESONATE, 0.8F, 1.9F);
         if (arrow != null) {
+            if (brim) arrow.setBaseDamage(arrow.getBaseDamage() * Explain.OVERFLOW);
             ArrowRides.shoot(ctx, plan.roots, arrow);
         } else {
             castFx(p, hand, plan, true);
             Executor.cast(ctx, plan.roots, Origin.eyes(p));
-            if (ctx.echoes) echo(ctx, hand, plan);
         }
         return Result.CAST;
     }
@@ -248,37 +248,9 @@ public final class CastService {
         return out > 0 && c.carriers.size() + out > RuneConfig.get(RuneConfig.INSTANCE.maxCarriers);
     }
 
-    /** Echo: the sword's cast goes again a moment later, from where they are then, at half strength. */
-    private static void echo(CastContext ctx, InteractionHand hand, Plan plan) {
-        ServerPlayer p = ctx.owner;
-        later(p, ECHO_TICKS, () -> {
-            if (Executor.gone(ctx) || p.isSpectator()) return;
-            Caster c = caster(p);
-            // the echo is the cast's, so a cast that went out in the meantime doesn't stop it, but the limits still hold
-            if (busy(p, c, plan)) {
-                Executor.fizzle(ctx, p.getEyePosition().add(p.getLookAngle()));
-                return;
-            }
-            castFx(p, hand, plan, false);
-            RuneFx.play(p.serverLevel(), p.getEyePosition(), SoundEvents.AMETHYST_BLOCK_CHIME, 0.7F, 1.6F);
-            Executor.cast(ctx.echo(), plan.roots, Origin.eyes(p));
-        });
-    }
-
-    /** Echo on a bow's shot: what the arrow let go goes again a moment later, where it was let go, at half strength. */
-    static void echoAt(CastContext ctx, List<Plan.Node> nodes, Origin o) {
-        if (nodes.isEmpty()) return;
-        Origin at = new Origin(o.pos(), o.dir(), null, o.wall());
-        later(ctx.owner, ECHO_TICKS, () -> {
-            if (Executor.gone(ctx)) return;
-            RuneFx.play(ctx.level, at.pos(), SoundEvents.AMETHYST_BLOCK_CHIME, 0.7F, 1.6F);
-            Executor.release(ctx.echo(), nodes, at);
-        });
-    }
-
     /**
      * The cast leaves the hand: the arm flicks, a spell sound, a flash and sparks of the first rune's colour at the hand,
-     * brighter for a second phase. An echo ({@code own} false) shows the same light, softer, and doesn't flick the arm.
+     * brighter for a second phase. Not {@code own} shows the same light, softer, and doesn't flick the arm.
      */
     private static void castFx(ServerPlayer p, InteractionHand hand, Plan plan, boolean own) {
         if (plan.roots.isEmpty()) return;
@@ -324,7 +296,8 @@ public final class CastService {
     // ------------------------------------------------------------------------------------------------ the weapon's own hits
 
     /**
-     * Melee damage landed. A runed sword's hit on a creature fighting you knocks energy loose into it (more with Thirst);
+     * Melee damage landed. A runed sword's hit on a creature fighting you knocks energy loose into it (more with Thirst
+     * awake on the armor);
      * a full swing at the creature (not a sweep's edge) carries the sword's element passive, and with On hit every third
      * one on a foe casts the active rune for free. What hits back waits for the end of the tick, after this hit.
      */
@@ -335,7 +308,7 @@ public final class CastService {
         int id = RuneGear.ensureGearId(gear, p.getRandom());
         Reading r = RuneGear.reading(gear, p);
         if (r == null) return;
-        knockLoose(p, target, amount, id, r.passiveIs(RuneId.THIRST));
+        knockLoose(p, target, amount, id, ArmorEffects.thirst(p));
         boolean full = Fighters.swungAt(p, target) && Fighters.swingStrength(p, target) >= 0.9F;
         if (!full) return;
         if (r.element() != Element.NONE) weaponElement(p, r, id, target, p.getLookAngle());
@@ -346,8 +319,8 @@ public final class CastService {
 
     /**
      * An arrow's own hit landed. If a runed weapon loosed it, the hit knocks energy loose into the weapon (more with
-     * Thirst); a plain arrow (one no cast rode) carries the weapon's element passive; and with On hit every third arrow
-     * that hits a foe sets the active rune off there, for free.
+     * Thirst awake on the armor); a plain arrow (one no cast rode) carries the weapon's element passive; with On hit
+     * every third arrow that hits a foe sets the active rune off there, for free; and with Recall the arrow comes back.
      */
     public static void arrowDamage(ServerPlayer p, AbstractArrow arrow, LivingEntity target, float amount) {
         if (p instanceof FakePlayer) return;
@@ -355,8 +328,9 @@ public final class CastService {
         if (id == 0) return;
         ItemStack gear = RuneGear.findGear(p, id);
         Reading r = gear == null ? null : RuneGear.reading(gear, p);
-        knockLoose(p, target, amount, id, r != null && r.passiveIs(RuneId.THIRST));
+        knockLoose(p, target, amount, id, ArmorEffects.thirst(p));
         if (r == null) return;
+        if (r.passiveIs(RuneId.RECALL)) Recall.struck(p, arrow);
         Vec3 dir = arrow.getDeltaMovement().lengthSqr() < 1.0E-8 ? p.getLookAngle() : arrow.getDeltaMovement().normalize();
         if (r.element() != Element.NONE && !ArrowRides.riding(arrow)) weaponElement(p, r, id, target, dir);
         if (r.passiveIs(RuneId.ON_HIT) && RuneHits.isFoe(p, target) && counted(p, id)) {
@@ -400,7 +374,7 @@ public final class CastService {
         Plan plan = Plan.expand(cast, RuneConfig.limits());
         Caster c = caster(p);
         if (fits(p, c, plan) != Result.CAST) return;
-        CastContext ctx = new CastContext(p, r.spec().host(), r.spec().power(), gearId, 0, 1.0F, false);
+        CastContext ctx = new CastContext(p, r.spec().host(), r.spec().power(), gearId, 0, 1.0F);
         castFx(p, InteractionHand.MAIN_HAND, plan, true);
         RuneFx.play(p.serverLevel(), p.getEyePosition(), SoundEvents.AMETHYST_BLOCK_RESONATE, 0.6F, 1.7F);
         Executor.cast(ctx, plan.roots, Origin.eyes(p));
@@ -417,21 +391,21 @@ public final class CastService {
         if (plan.roots.isEmpty()) return;
         List<Plan.Node> payload = plan.roots.get(0).children;
         if (payload.isEmpty()) return;
-        CastContext ctx = new CastContext(p, r.spec().host(), r.spec().power(), gearId, 0, 1.0F, false);
+        CastContext ctx = new CastContext(p, r.spec().host(), r.spec().power(), gearId, 0, 1.0F);
         RuneFx.play(p.serverLevel(), at, SoundEvents.AMETHYST_BLOCK_RESONATE, 0.6F, 1.7F);
         Executor.release(ctx, payload, new Origin(target.isAlive() ? RuneHits.middle(target) : at, dir, target.isAlive() ? target : null));
     }
 
     /**
      * A hit for {@code amount} with the weapon {@code gearId} on {@code target}: if it is fighting the player, energy for
-     * the damage it took flies back as motes (Thirst: more). No more than the creature had left counts (still its health
-     * before this hit), so overkill on a weak one gives nothing extra.
+     * the damage it took flies back as motes ({@code thirst} times as much: Thirst on the armor). No more than the
+     * creature had left counts (still its health before this hit), so overkill on a weak one gives nothing extra.
      */
-    private static void knockLoose(ServerPlayer p, LivingEntity target, float amount, int gearId, boolean thirst) {
+    private static void knockLoose(ServerPlayer p, LivingEntity target, float amount, int gearId, float thirst) {
         if (gearId == 0 || amount <= 0.0F || !RuneHits.isFoe(p, target)) return;
         float dealt = Math.min(amount, target.getHealth());
         float energy = (float) Math.min(RuneConfig.get(RuneConfig.INSTANCE.energyMaxPerHit), dealt * RuneConfig.get(RuneConfig.INSTANCE.energyPerDamage));
-        if (thirst) energy *= Explain.THIRST_GAIN;
+        energy *= thirst;
         if (energy <= 0.0F) return;
         RuneMote.spawn(p.serverLevel(), target.position().add(0, target.getBbHeight() * 0.6, 0), p, gearId, energy);
     }
@@ -440,8 +414,9 @@ public final class CastService {
 
     /**
      * Each player's tick, at its end (after the server has moved them): which weapon is in hand, a held cast key,
-     * dashes, a Reel's pull, throws set this tick, safe landings from their own blasts, a Lantern's light, a second
-     * phase waking or sleeping, and once a second old rows to set into sockets.
+     * dashes, a Reel's pull, throws set this tick, safe landings from their own blasts, a second phase waking or
+     * sleeping, and once a second old rows to set into sockets and runes that no longer fit to hand back. (What worn
+     * runes do each tick is ArmorEffects'.)
      */
     public static void tick(ServerPlayer p) {
         if (p instanceof FakePlayer) return;
@@ -459,52 +434,12 @@ public final class CastService {
         if (now <= c.safeUntil && p.getY() > c.safeAboveY) p.fallDistance = 0.0F;
         if (c.airBlastUsed && (p.onGround() || p.isInWater())) c.airBlastUsed = false;
         if (c.airPulls > 0 && c.pull == null && now - c.pullTick > 4 && (p.onGround() || p.isInWater())) c.airPulls = 0;
-        lantern(p, c, now);
         if (p.tickCount % 10 == 0) phase(p, c);
         if (p.tickCount % 20 == 0) {
             convertOldRows(p, c);
             // kept up to date though nothing reads it for now: the sockets don't wait on depth (a card's answer may change that)
             RunDepth.update(p);
         }
-    }
-
-    /** A Lantern passive in either hand: a soft light where their head is (or their feet, if the head is in something). */
-    private static void lantern(ServerPlayer p, Caster c, long now) {
-        BlockPos at = null;
-        if (!p.isSpectator() && p.isAlive() && (hasPassive(p.getMainHandItem(), p, RuneId.LANTERN) || hasPassive(p.getOffhandItem(), p, RuneId.LANTERN))) {
-            ServerLevel l = p.serverLevel();
-            BlockPos head = BlockPos.containing(p.getEyePosition()), feet = p.blockPosition();
-            at = TempBlocks.fits(l, head, TempBlock.Kind.LANTERN) || isLantern(l, head) ? head
-                    : TempBlocks.fits(l, feet, TempBlock.Kind.LANTERN) || isLantern(l, feet) ? feet : null;
-        }
-        GlobalPos here = at == null ? null : GlobalPos.of(p.level().dimension(), at);
-        if (c.lantern != null && !c.lantern.equals(here)) {
-            // the next light goes up before this one goes out, so the light never blinks as they walk
-            GlobalPos old = c.lantern;
-            c.lantern = null;
-            if (here != null && TempBlocks.place(p.serverLevel(), at, TempBlock.Kind.LANTERN, p)) c.lantern = here;
-            TempBlocks.end(p.server, old, TempBlock.Kind.LANTERN);
-            return;
-        }
-        if (here == null) return;
-        if (c.lantern == null) {
-            if (TempBlocks.place(p.serverLevel(), at, TempBlock.Kind.LANTERN, p)) c.lantern = here;
-        } else if (!TempBlocks.standing(here.dimension(), at)) {
-            // put out from outside (something placed there, water over it): lit again when there is room
-            c.lantern = null;
-        } else {
-            TempBlocks.extend(here, now + LANTERN_LIFE);
-        }
-    }
-
-    private static boolean isLantern(ServerLevel l, BlockPos pos) {
-        return l.getBlockState(pos).getBlock() instanceof TempBlock tb && tb.kind == TempBlock.Kind.LANTERN;
-    }
-
-    private static boolean hasPassive(ItemStack s, ServerPlayer p, RuneId passive) {
-        if (!RuneGear.isGear(s) || !RuneGear.hasRunes(s)) return false;
-        Reading r = RuneGear.reading(s, p);
-        return r != null && r.passiveIs(passive);
     }
 
     /**
@@ -536,18 +471,31 @@ public final class CastService {
 
     /**
      * Weapons still holding a row from before the sockets: its first active rune, modifier and passive are set in, and
-     * the rest come back as items. The player is told once a session.
+     * the rest come back as items. The player is told once a session. Gear keeping runes that don't fit it since 0.22.6
+     * (a sword's active on a bow, Lantern or Thirst in a weapon's passive socket, where armor runes now go) hands those
+     * back, and the player is told which.
      */
     private static void convertOldRows(ServerPlayer p, Caster c) {
         net.minecraft.world.entity.player.Inventory inv = p.getInventory();
         boolean any = false;
+        List<RuneId> back = new ArrayList<>();
         for (int i = 0; i < inv.getContainerSize(); i++) {
             ItemStack s = inv.getItem(i);
-            if (RuneTags.hasOldRow(s.getTag()) && RuneGear.convertOldRow(s, p)) any = true;
+            if (RuneTags.hasOldRow(s.getTag())) {
+                if (RuneGear.convertOldRow(s, p)) any = true;
+            } else if (RuneGear.takesRunes(s) && RuneGear.hasRunes(s)) {
+                back.addAll(RuneGear.handBack(s, p));
+            }
         }
         if (any && !c.toldConverted) {
             c.toldConverted = true;
             p.sendSystemMessage(Component.translatable("message.explorationremix.runes.converted").withStyle(st -> st.withColor(0xBFD9FF)));
+        }
+        if (!back.isEmpty()) {
+            List<String> names = new ArrayList<>();
+            for (RuneId r : back) names.add(r.title);
+            p.sendSystemMessage(Component.translatable("message.explorationremix.runes.handed_back", String.join(", ", names))
+                    .withStyle(st -> st.withColor(0xBFD9FF)));
         }
     }
 
@@ -564,7 +512,7 @@ public final class CastService {
     }
 
     /**
-     * The end of each server tick: what was set to run now (echoes, aftershocks, a wave's stretches, the hits that wait
+     * The end of each server tick: what was set to run now (aftershocks, a wave's stretches, the hits that wait
      * for the end of the tick), payloads that waited their turn, carriers left on still ground, the arrows' casts.
      */
     public static void serverTick(MinecraftServer server) {
@@ -575,6 +523,7 @@ public final class CastService {
             if (!c.carriers.isEmpty() || !c.stillSince.isEmpty()) dropStill(c, tick);
         }
         ArrowRides.tick();
+        Recall.tick(server);
         RunePlants.tick(server);
     }
 
@@ -638,22 +587,23 @@ public final class CastService {
 
     // ------------------------------------------------------------------------------------------------ leaving
 
-    /** The player left: their runes in flight end, their blocks stop counting (a lantern goes out), their arrows fly plain. */
+    /** The player left: their runes in flight end, their blocks stop counting, their arrows fly plain. */
     public static void forget(ServerPlayer p) {
         Caster c = CASTERS.remove(p.getUUID());
         if (c != null) {
             for (Entity e : new ArrayList<>(c.carriers)) e.discard();
             c.queue.clear();
             c.later.clear();
-            if (c.lantern != null) TempBlocks.end(p.server, c.lantern, TempBlock.Kind.LANTERN);
         }
         ArrowRides.forget(p.getUUID());
+        Recall.forget(p.getUUID());
         TempBlocks.forget(p.getUUID());
     }
 
     public static void clear() {
         CASTERS.clear();
         ArrowRides.clear();
+        Recall.clear();
         TempBlocks.clear();
         RunePlants.clear();
         Statuses.clear();

@@ -58,7 +58,10 @@ public final class CastMachine {
         s.energyTick = now;
     }
 
-    /** Adds energy (a hit's motes landing), up to what the gear holds; the fight is on again, so it stops fading. */
+    /**
+     * Adds energy (a hit's motes landing), up to what the gear holds; the fight is on again, so it stops fading. Returns
+     * what it gained: less than {@code amount} when it came in past full, which Overflow turns into a stronger cast.
+     */
     public static float add(CastState s, HostSpec h, long now, float amount) {
         settle(s, h, now);
         float before = s.energy;

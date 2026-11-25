@@ -2,12 +2,15 @@ package com.explorationremix.rune.net;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.rune.RunDepth;
+import com.explorationremix.rune.armor.ArmorEffects;
+import com.explorationremix.rune.armor.Sensed;
 import com.explorationremix.rune.cast.CastService;
 import com.explorationremix.rune.cast.Grapples;
 import com.explorationremix.rune.cast.LocalPull;
 import com.explorationremix.rune.cast.Pull;
 import com.explorationremix.rune.effect.Fx;
 import com.explorationremix.rune.effect.RuneFx;
+import com.explorationremix.rune.menu.RuneTableMenu;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -23,11 +26,13 @@ import java.util.function.Supplier;
  * (sent as item data, like any item change), the rune table is a vanilla menu (its changes are menu buttons), and
  * bolts, fields and motes are entities. Only these need words of their own: the run depth (server to client), the
  * cast key going down and up (client to server), Reel's pull on a player (the server starts it and may stop it, the
- * player's own game steers it and says when it is done), and effects: one small message per flash, blast or slam,
- * which each nearby client turns into its own particles, rings and shake.
+ * player's own game steers it and says when it is done), effects: one small message per flash, blast or slam, which
+ * each nearby client turns into its own particles, rings and shake; and since 0.22.6 what worn runes did in the
+ * player's own game (a leap, a pull onto a ledge, a creature peered at), the creatures Sense feels hunting them, and a
+ * rune set into a socket at the table (a menu button's one byte can't say which piece and which rune).
  */
 public final class RuneNet {
-    private static final String VERSION = "5";
+    private static final String VERSION = "6";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(new ResourceLocation(ExplorationRemix.MOD_ID, "runes"),
             () -> VERSION, VERSION::equals, VERSION::equals);
 
@@ -47,6 +52,76 @@ public final class RuneNet {
                 .encoder(FxMsg::write).decoder(FxMsg::read).consumerMainThread(FxMsg::handle).add();
         CHANNEL.messageBuilder(CastKey.class, 6, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(CastKey::write).decoder(CastKey::read).consumerMainThread(CastKey::handle).add();
+        CHANNEL.messageBuilder(ArmorAct.class, 7, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(ArmorAct::write).decoder(ArmorAct::read).consumerMainThread(ArmorAct::handle).add();
+        CHANNEL.messageBuilder(SenseSync.class, 8, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(SenseSync::write).decoder(SenseSync::read).consumerMainThread(SenseSync::handle).add();
+        CHANNEL.messageBuilder(TableEdit.class, 9, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(TableEdit::write).decoder(TableEdit::read).consumerMainThread(TableEdit::handle).add();
+    }
+
+    /**
+     * What worn runes did in the player's own game, which moves them: a jump in the air ({@link #LEAP}), a pull up onto
+     * a ledge ({@link #CLIMB}), or a creature peered at through Far Sight ({@link #MARK}, {@code arg} its id). The
+     * server checks the runes and does its part (a fall forgiven, a creature marked).
+     */
+    public record ArmorAct(int what, int arg) {
+        public static final int LEAP = 0, CLIMB = 1, MARK = 2;
+
+        void write(FriendlyByteBuf b) {
+            b.writeByte(what);
+            b.writeVarInt(arg);
+        }
+
+        static ArmorAct read(FriendlyByteBuf b) { return new ArmorAct(b.readByte(), b.readVarInt()); }
+
+        void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p == null || !p.isAlive() || p.isSpectator()) return;
+            switch (what) {
+                case LEAP -> ArmorEffects.leapt(p);
+                case CLIMB -> ArmorEffects.climbed(p);
+                case MARK -> ArmorEffects.marked(p, arg);
+                default -> {}
+            }
+        }
+    }
+
+    /** The creatures Sense feels hunting this player now, by entity id (sorted; none: no more). */
+    public record SenseSync(int[] ids) {
+        /** The most it tells of. */
+        static final int MOST = 64;
+
+        void write(FriendlyByteBuf b) { b.writeVarIntArray(ids); }
+
+        static SenseSync read(FriendlyByteBuf b) { return new SenseSync(b.readVarIntArray(MOST)); }
+
+        void handle(Supplier<NetworkEvent.Context> ctx) {
+            int[] sorted = ids.clone();
+            java.util.Arrays.sort(sorted);
+            Sensed.set(sorted);
+        }
+    }
+
+    /**
+     * At the enchanting table: set rune {@code rune} (an ordinal of RuneId; -1 takes out what is there) into socket
+     * {@code socket} (an ordinal of Socket) of {@code gear}: 0 the weapon in hand, 1 to 4 the worn helmet, chestplate,
+     * leggings or boots. For the open table {@code container}; the server decides.
+     */
+    public record TableEdit(int container, int gear, int socket, int rune) {
+        void write(FriendlyByteBuf b) {
+            b.writeVarInt(container);
+            b.writeByte(gear);
+            b.writeByte(socket);
+            b.writeVarInt(rune);
+        }
+
+        static TableEdit read(FriendlyByteBuf b) { return new TableEdit(b.readVarInt(), b.readByte(), b.readByte(), b.readVarInt()); }
+
+        void handle(Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer p = ctx.get().getSender();
+            if (p != null && p.containerMenu instanceof RuneTableMenu m && m.containerId == container) m.edit(p, gear, socket, rune);
+        }
     }
 
     /** An effect to draw ({@link Fx}); null when it was of a kind this game doesn't know. */

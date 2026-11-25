@@ -27,9 +27,10 @@ import javax.annotation.Nullable;
  * slash in front), Barrier (a wall of rune glass across the aim) and Reel (yanks a creature toward the caster, or the
  * caster to a wall). Cast from the gear, a Burst goes off on the block aimed at when it is close (the ground at your
  * feet: a blast jump), else round the caster, and a Barrier stands a few blocks ahead; let go by a carrier, both happen
- * where it was. A blast of your own never hurts you but does throw you. In their second phase a Burst's aftershock
- * follows and a Cleave's wave flies on (PhaseTwo), a Barrier is a bulwark that shoves aside what stands where it
- * rises, and Reel reaches further and pulls twice before you land.
+ * where it was. A blast of your own never hurts you but does throw you. In their second phase a Burst's shockwave
+ * rolls out and a Cleave's wave flies on (PhaseTwo), a Barrier is a bulwark that shoves aside what stands where it
+ * rises, and Reel reaches further and pulls twice before you land. A bow's actives go off where its arrow lands
+ * (BowRunes).
  */
 final class Instants {
     /** How close the block aimed at must be for a Burst cast from the gear to go off on it. */
@@ -51,6 +52,7 @@ final class Instants {
             case CLEAVE -> cleave(ctx, a, o.pos(), dir, o);
             case BARRIER -> barrier(ctx, a, o.pos(), dir, root, o);
             case REEL -> reel(ctx, a, o, dir, root);
+            case GLOW, ROPE, SNARE, VOLLEY, MINE -> BowRunes.run(ctx, node, o);
             default -> o;
         };
         if (node.relay != null && !node.children.isEmpty()) Executor.release(ctx, node.children, next);
@@ -63,7 +65,7 @@ final class Instants {
         double r = 2.5 + wide;
         float base = FlyingRune.damage(ctx, a);
         blast(ctx, a, c, r, base, 0.7F + 0.3F * heavy, true);
-        if (a.empowered && a.slot != PhaseTwo.AFTERSHOCK) PhaseTwo.aftershock(ctx, a, c, r, base);
+        if (a.empowered && a.slot != PhaseTwo.SHOCKWAVE) PhaseTwo.shockwave(ctx, a, c, r, base);
         return new Origin(c, o.dir(), o.hit(), o.wall());
     }
 

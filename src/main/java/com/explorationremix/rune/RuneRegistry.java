@@ -37,7 +37,7 @@ import java.util.Map;
 
 /**
  * Everything the runes add to the game: one item per rune, the blocks runes make for a while (Barrier glass, Frost's
- * ice, Glow's light, a Lantern's), the flying and lingering runes and Siphon's motes, the rune table, and the creative tab. Kept
+ * ice, Glow's light, a Lantern's, a Rope's), the flying and lingering runes and Siphon's motes, the rune table, and the creative tab. Kept
  * apart from the rest of the mod's registries so the rune code stays in its own packages.
  */
 public final class RuneRegistry {
@@ -101,16 +101,25 @@ public final class RuneRegistry {
                     .sound(SoundType.GRASS).pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, t) -> false)));
 
     /**
-     * The Lantern passive's light, in the air where its player's head is while the weapon is in hand: unseen, walked
+     * A Lantern helmet's light, in the air where its player's head is (and, in its second phase, where they look): unseen, walked
      * through, never caught by the crosshair, replaced by anything placed there; it drops nothing.
      */
     public static final RegistryObject<Block> LANTERN = BLOCKS.register("rune_lantern", () -> new TempBlock(TempBlock.Kind.LANTERN,
             BlockBehaviour.Properties.of().replaceable().noCollission().noOcclusion().instabreak().noLootTable().lightLevel(s -> 12)
                     .sound(SoundType.AMETHYST_CLUSTER).pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, t) -> false)));
 
+    /**
+     * A Rope arrow's rope of light (BowRunes): 40 s, climbed like a ladder, walked through, a soft light so it reads in
+     * the dark; anything placed there replaces it, and it drops nothing.
+     */
+    public static final RegistryObject<Block> ROPE = BLOCKS.register("rune_rope", () -> new com.explorationremix.rune.world.RopeBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).replaceable().noCollission().noOcclusion().instabreak()
+                    .noLootTable().lightLevel(s -> 7).sound(SoundType.WOOL).pushReaction(PushReaction.DESTROY)
+                    .isValidSpawn((s, l, p, t) -> false)));
+
     // ------------------------------------------------------------------------------------------------ entities
 
-    /** A flying rune (Spark, Shard, Orb, Glow). Never saved; sent every tick so it flies smoothly. */
+    /** A flying rune (Spark, Orb, Shard's needles, Volley's arrows of light), or a bow's mine lying in wait. Never saved; sent every tick so it flies smoothly. */
     public static final RegistryObject<EntityType<RuneBolt>> BOLT = ENTITIES.register("rune_bolt", () ->
             EntityType.Builder.<RuneBolt>of(RuneBolt::new, MobCategory.MISC).sized(0.25F, 0.25F).clientTrackingRange(8).updateInterval(1)
                     .fireImmune().noSave().noSummon().build(MOD + ":rune_bolt"));
@@ -127,7 +136,7 @@ public final class RuneRegistry {
 
     // ------------------------------------------------------------------------------------------------ the rune table
 
-    /** An enchanting table opened with a weapon in hand: its three rune sockets (RuneTableMenu). */
+    /** An enchanting table: the rune sockets of the weapon in hand and of the armor worn (RuneTableMenu). */
     public static final RegistryObject<MenuType<RuneTableMenu>> TABLE = MENUS.register("rune_table",
             () -> IForgeMenuType.create(RuneTableMenu::client));
 

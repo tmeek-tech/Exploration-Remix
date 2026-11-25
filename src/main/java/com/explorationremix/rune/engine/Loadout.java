@@ -16,21 +16,33 @@ public record Loadout(RuneId active, RuneId modifier, RuneId passive) {
         if (passive != null && passive.kind != RuneKind.PASSIVE) passive = null;
     }
 
+    /** The rune in a weapon's socket {@code s} (an armor socket: none). */
     public RuneId get(Socket s) {
         return switch (s) {
             case ACTIVE -> active;
             case MODIFIER -> modifier;
             case PASSIVE -> passive;
+            default -> null;
         };
     }
 
-    /** The same runes with {@code r} in socket {@code s} (null empties it). A rune of another kind leaves it empty. */
+    /**
+     * The same runes with {@code r} in socket {@code s} (null empties it). A rune of another kind leaves it empty; an
+     * armor socket changes nothing.
+     */
     public Loadout with(Socket s, RuneId r) {
         return switch (s) {
             case ACTIVE -> new Loadout(r, modifier, passive);
             case MODIFIER -> new Loadout(active, r, passive);
             case PASSIVE -> new Loadout(active, modifier, r);
+            default -> this;
         };
+    }
+
+    /** Only the runes that fit this gear ({@link Fits} bits): a sword's runes on a bow are not a bow's. */
+    public Loadout fitting(int gear) {
+        return new Loadout(active != null && active.fits(gear) ? active : null, modifier != null && modifier.fits(gear) ? modifier : null,
+                passive != null && passive.fits(gear) ? passive : null);
     }
 
     /** The same runes with {@code r} in the socket of its kind. */
@@ -60,6 +72,7 @@ public record Loadout(RuneId active, RuneId modifier, RuneId passive) {
             if (w.isEmpty() || w.equals("_") || w.equals("-")) continue;
             RuneId r = RuneId.byId(w);
             if (r == null) throw new IllegalArgumentException("unknown rune " + w);
+            if (r.kind.armor()) throw new IllegalArgumentException(r.id + " is an armor rune");
             Socket s = Socket.of(r.kind);
             if (l.get(s) != null) throw new IllegalArgumentException("two " + r.kind.word + " runes: " + l.get(s).id + " and " + r.id);
             l = l.with(s, r);

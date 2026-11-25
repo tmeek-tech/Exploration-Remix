@@ -20,8 +20,8 @@ import net.minecraft.world.phys.Vec3;
 /**
  * A Field: a patch on the ground, {@value #LIFE} ticks long, that pulses every {@value #PULSE} ticks into every creature
  * standing in it (its damage, and above all its element: a Tide field soaks a group for a Storm to shock). In its
- * second phase it lasts twice as long and draws the creatures round it in to its middle. It lets go what it carries at
- * the first creature that steps in (On hit); if none came, when it ends.
+ * second phase it is a mire: it lasts twice as long and holds the creatures standing in it to a crawl. It lets go what
+ * it carries at the first creature that steps in (On hit); if none came, when it ends.
  */
 final class LingeringField implements FieldLogic {
     static final int LIFE = 60, PULSE = 10;
@@ -102,7 +102,7 @@ final class LingeringField implements FieldLogic {
         Vec3 c = f.position();
         AABB box = new AABB(c.x - radius, c.y - 0.5, c.z - radius, c.x + radius, c.y + 2.5, c.z + radius);
         boolean pulse = (age - 1) % PULSE == 0;
-        if (a.empowered) PhaseTwo.draw(ctx, a, c, radius, age);
+        if (a.empowered) PhaseTwo.mire(ctx, a, c, radius, age);
         if (pulse || (hasPayload() && !released && node.relay == RuneId.ON_HIT)) {
             for (RuneHits.Touch t : RuneHits.touched(ctx, box, c)) {
                 Vec3 at = t.body().position();

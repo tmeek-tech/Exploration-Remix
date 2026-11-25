@@ -64,10 +64,13 @@ final class Caster {
     /** The crossbow shot this tick has cast already (a multishot's other arrows fly plain). */
     boolean crossbowCast;
 
+    /** Their bows' mines lying in wait, oldest first (BowRunes). */
+    final List<com.explorationremix.rune.effect.RuneBolt> mines = new ArrayList<>();
+
     /** The last tick this player was told a cast couldn't go (sputter, too many out), so they're told twice a second. */
     long toldAt = Long.MIN_VALUE / 4;
 
-    /** Something a rune does a little later (an echo, an aftershock, a wave's next stretch): at server tick {@code at}. */
+    /** Something a rune does a little later (an aftershock, a wave's next stretch): at server tick {@code at}. */
     record Later(long at, Runnable run) {}
 
     /** What runs later, in the order it was set; at most {@link #MAX_LATER} wait at once. */
@@ -76,10 +79,6 @@ final class Caster {
 
     /** On hit: full hits on foes counted per weapon (by its id), every third casts for free. */
     final Map<Integer, Integer> hits = new HashMap<>();
-
-    /** Lantern: the light that goes with them, while it stands. */
-    @Nullable
-    net.minecraft.core.GlobalPos lantern;
 
     /** Whether this player has been told their old rune rows were set into sockets (once a session). */
     boolean toldConverted;

@@ -31,7 +31,7 @@ import java.util.UUID;
  * A bow's or crossbow's cast riding its arrow. The arrow is the first carrier: a modifier that shapes arrows shapes it
  * (Swift flies faster, Heavy hits harder, Pierce passes through, Seek bends toward a foe), its element passive rides it
  * (Ember sets it alight, the others act where it hits, as Siphon does), and the active rune goes off where it lands
- * (Echo: again a moment later, at half strength). Fan looses copies to either side, made from the arrow as it left the
+ * (with Overflow's charge, a third stronger, and so is the arrow). Fan looses copies to either side, made from the arrow as it left the
  * bow, each carrying the active rune; copies can't be picked up. The arrow deals its own damage. Swift makes it
  * faster, not harder-hitting (an arrow's hit grows with its speed, so its damage is scaled back), as Swift does for
  * every rune.
@@ -355,8 +355,6 @@ public final class ArrowRides {
     private static void release(Ride r, Origin o) {
         r.released = true;
         Executor.release(r.ctx, r.node.children, o);
-        // Echo: the shot's own payload goes again where it went (a Fan's copies don't each echo)
-        if (r.ctx.echoes && r.node.copy == 0) CastService.echoAt(r.ctx, r.node.children, o);
     }
 
     /** Whether a cast rides this arrow now (its runes act on what it hits themselves). */

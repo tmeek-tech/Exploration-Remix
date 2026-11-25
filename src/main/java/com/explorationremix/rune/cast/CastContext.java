@@ -12,9 +12,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * One cast while it plays out: who cast it, from which weapon, what it cost (for Siphon's refunds), how strong it is (an
- * Echo is half), whether it echoes, and which creature each rune has already struck (one rune strikes a creature once
- * per cast, however many copies Fan made).
+ * One cast while it plays out: who cast it, from which weapon, what it cost (for Siphon's refunds), how strong it is
+ * (Overflow makes it a third stronger), and which creature each rune has already struck (one rune strikes a creature
+ * once per cast, however many copies Fan made).
  */
 public final class CastContext {
     public final ServerPlayer owner;
@@ -25,30 +25,24 @@ public final class CastContext {
     /** The weapon's id: Siphon's motes go back to it. */
     public final int gearId;
     public final Siphon siphon;
-    /** 1, or less for an Echo. */
+    /** 1, or more with Overflow's charge. */
     public final float strength;
-    /** The weapon has Echo, and this cast is not itself an echo: it is cast again a moment later, at half strength. */
-    public final boolean echoes;
-    private final float gearPower;
     private final Set<Long> struck = new HashSet<>(), pulsed = new HashSet<>(), plants = new HashSet<>();
     /** How many plants of each kind (RunePlants) this cast has set off. */
     private final int[] plantCounts = new int[4];
     private long dingTick = -1;
+    /** Shard's needles that have struck each creature in this cast (its hail staggers at four). */
+    private final java.util.Map<Integer, Integer> needles = new java.util.HashMap<>();
 
-    public CastContext(ServerPlayer owner, Host host, float gearPower, int gearId, int paid, float strength, boolean echoes) {
+    public CastContext(ServerPlayer owner, Host host, float gearPower, int gearId, int paid, float strength) {
         this.owner = owner;
         this.level = owner.serverLevel();
         this.host = host;
-        this.gearPower = gearPower;
         this.strength = strength;
         this.power = gearPower * strength * (float) RuneConfig.get(RuneConfig.INSTANCE.runeDamage);
         this.gearId = gearId;
         this.siphon = new Siphon(paid);
-        this.echoes = echoes;
     }
-
-    /** The echo of this cast: half as strong, paid for by nothing (so it refunds nothing), and it doesn't echo again. */
-    public CastContext echo() { return new CastContext(owner, host, gearPower, gearId, 0, strength * 0.5F, false); }
 
     /** True the first time this rune (its slot) strikes this creature in this cast. */
     public boolean firstStrike(Act a, Entity e) { return struck.add(((long) (a.slot + 1) << 32) ^ (e.getId() & 0xFFFFFFFFL)); }
@@ -72,6 +66,9 @@ public final class CastContext {
         plantCounts[kind]++;
         return true;
     }
+
+    /** One more of this cast's needles struck {@code e}: how many have now. */
+    public int countNeedle(Entity e) { return needles.merge(e.getId(), 1, Integer::sum); }
 
     /** The caster hears a soft ding when a rune lands (once a tick), a brighter one for a reaction. */
     public void confirmHit(boolean reaction) {

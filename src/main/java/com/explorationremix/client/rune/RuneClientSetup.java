@@ -1,10 +1,15 @@
 package com.explorationremix.client.rune;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.rune.RuneGear;
 import com.explorationremix.rune.RuneRegistry;
+import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.client.rune.fx.RuneFxClient;
 import com.explorationremix.rune.effect.RuneFx;
 import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.renderer.item.ItemProperties;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.Item;
@@ -21,8 +26,8 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.registries.ForgeRegistries;
 
 /**
- * The runes' client registrations, on the mod bus: the enchanting table's rune view, the cast key, the HUD, the energy
- * line on weapons in slots, and how bolts, Fields and Siphon's motes are drawn.
+ * The runes' client registrations, on the mod bus: the enchanting table's rune view, the cast and peer keys, the HUD,
+ * the energy line on weapons in slots, a Quickdraw bow's pull, and how bolts, Fields and Siphon's motes are drawn.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class RuneClientSetup {
@@ -30,7 +35,15 @@ public final class RuneClientSetup {
 
     @SubscribeEvent
     public static void setup(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> MenuScreens.register(RuneRegistry.TABLE.get(), com.explorationremix.client.rune.table.RuneTableScreen::new));
+        event.enqueueWork(() -> {
+            MenuScreens.register(RuneRegistry.TABLE.get(), com.explorationremix.client.rune.table.RuneTableScreen::new);
+            // the bow's pull, drawn at Quickdraw's pace on a bow that has it (the game's own for every other)
+            ItemProperties.register(Items.BOW, new ResourceLocation("pull"), (stack, level, entity, seed) -> {
+                if (entity == null || entity.getUseItem() != stack) return 0.0F;
+                float per = RuneGear.passive(stack) == RuneId.QUICKDRAW ? 10.0F : 20.0F;
+                return (stack.getUseDuration() - entity.getUseItemRemainingTicks()) / per;
+            });
+        });
         // effects the server sends, and the trails behind bolts, motes and Fields
         RuneFx.client = RuneFxClient.INSTANCE;
     }
@@ -38,6 +51,7 @@ public final class RuneClientSetup {
     @SubscribeEvent
     public static void keys(RegisterKeyMappingsEvent event) {
         event.register(RuneKeys.CAST);
+        event.register(RuneKeys.PEER);
     }
 
     @SubscribeEvent
