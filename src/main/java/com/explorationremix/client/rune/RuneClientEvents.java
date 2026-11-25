@@ -4,6 +4,10 @@ import com.explorationremix.ExplorationRemix;
 import com.explorationremix.rune.RuneGear;
 import com.explorationremix.rune.cast.LocalPull;
 import com.explorationremix.rune.cast.Pull;
+import com.explorationremix.rune.armor.WornRunes;
+import com.explorationremix.rune.engine.ArmorRunes;
+import com.explorationremix.rune.engine.ArmorSet;
+import com.explorationremix.rune.engine.Piece;
 import com.explorationremix.rune.engine.CastMachine;
 import com.explorationremix.rune.engine.CastReading;
 import com.explorationremix.rune.engine.Explain;
@@ -38,7 +42,7 @@ import java.util.List;
 
 /**
  * The runes' client game events, on the Forge bus: the cast key tells the server when it goes down and up, Reel's pull
- * is steered, and weapon tooltips show the sockets and what they do.
+ * is steered, and the tooltips of weapons, armor and tools show their runes and what they do.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class RuneClientEvents {
@@ -129,16 +133,22 @@ public final class RuneClientEvents {
     // ------------------------------------------------------------------------------------------------ tooltips
 
     /**
-     * Weapons only, right under the name: the three sockets' runes in their colours (one that does nothing dimmed, a
-     * cast dearer than the weapon holds in red), what they do in the reading's own words (the second phase's line with
-     * the player's own XP level), and the weapon's energy. A weapon with no runes says where they are set.
+     * Right under the name. A weapon: its three sockets' runes in their colours (one that does nothing dimmed, a cast
+     * dearer than the weapon holds in red), what they do in the reading's own words (the second phase's line with the
+     * player's own XP level), and its energy; with no runes, where they are set. A piece of armor or a tool with runes:
+     * its runes in their colours, and what each does (a collect rune, how far its set has come on what the player wears).
      */
     @SubscribeEvent
     public static void tooltip(ItemTooltipEvent event) {
         ItemStack stack = event.getItemStack();
-        HostSpec spec = RuneGear.spec(stack);
         // no player: the game is filling its search index, not showing a tooltip
-        if (spec == null || event.getEntity() == null) return;
+        if (event.getEntity() == null) return;
+        if (RuneGear.isArmor(stack) || RuneGear.isTool(stack)) {
+            gearTooltip(event, stack);
+            return;
+        }
+        HostSpec spec = RuneGear.spec(stack);
+        if (spec == null) return;
         Minecraft mc = Minecraft.getInstance();
         List<Component> add = new ArrayList<>();
         if (RuneGear.hasRunes(stack)) {
@@ -161,12 +171,49 @@ public final class RuneClientEvents {
         tip.addAll(Math.min(1, tip.size()), add);
     }
 
+    /** A piece of armor's or a tool's runes, in their colours, and what each does; nothing for one with no runes. */
+    private static void gearTooltip(ItemTooltipEvent event, ItemStack stack) {
+        List<RuneId> runes = new ArrayList<>();
+        Piece piece = RuneGear.piece(stack);
+        ArmorRunes a = piece == null ? ArmorRunes.EMPTY : RuneGear.armor(stack);
+        if (piece != null) runes.addAll(a.runes());
+        else if (RuneGear.tool(stack) != null) runes.add(RuneGear.tool(stack));
+        if (runes.isEmpty()) return;
+        Minecraft mc = Minecraft.getInstance();
+        ArmorSet set = WornRunes.of(event.getEntity());
+        // worn or not, a collect rune is told as if this piece were on with the rest of what is worn
+        ArmorSet with = set;
+        if (piece != null && event.getEntity().getItemBySlot(RuneGear.slot(piece)) != stack) {
+            ArmorRunes[] pieces = new ArmorRunes[Piece.values().length];
+            for (Piece p : Piece.values()) pieces[p.ordinal()] = set.piece(p);
+            pieces[piece.ordinal()] = a;
+            with = new ArmorSet(pieces);
+        }
+        List<Component> add = new ArrayList<>();
+        MutableComponent names = Component.empty();
+        for (int i = 0; i < runes.size(); i++) {
+            RuneId r = runes.get(i);
+            if (i > 0) names.append(Component.literal(" \u00b7 ").withStyle(ChatFormatting.DARK_GRAY));
+            boolean asleep = r.isCollect() && !with.awake(r);
+            int colour = asleep ? 0x5F6E87 : RuneItem.kindColour(r.kind);
+            names.append(Component.literal(r.title).withStyle(st -> st.withColor(colour)));
+        }
+        add.add(names);
+        for (RuneId r : runes) {
+            String line = r.isCollect() ? Explain.collectLine(r, with.count(r))
+                    : r.title + ": " + Component.translatable("rune.explorationremix." + r.id + ".desc").getString();
+            wrap(add, mc.font, line);
+        }
+        List<Component> tip = event.getToolTip();
+        tip.addAll(Math.min(1, tip.size()), add);
+    }
+
     /** "Spark · Swift · Ember", each in its socket's colour; an empty socket's place left out. */
     private static Component sockets(Reading r) {
         MutableComponent out = Component.empty();
         boolean any = false;
         CastReading c = r.cast();
-        for (Socket s : Socket.values()) {
+        for (Socket s : Socket.WEAPON) {
             RuneId rune = r.loadout().get(s);
             if (rune == null) continue;
             if (any) out.append(Component.literal(" \u00b7 ").withStyle(ChatFormatting.DARK_GRAY));

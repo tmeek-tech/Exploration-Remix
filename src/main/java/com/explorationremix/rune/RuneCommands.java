@@ -1,12 +1,17 @@
 package com.explorationremix.rune;
 
+import com.explorationremix.rune.armor.WornRunes;
+import com.explorationremix.rune.engine.ArmorRunes;
+import com.explorationremix.rune.engine.ArmorSet;
 import com.explorationremix.rune.engine.CastMachine;
 import com.explorationremix.rune.engine.CastState;
 import com.explorationremix.rune.engine.Explain;
 import com.explorationremix.rune.engine.HostSpec;
 import com.explorationremix.rune.engine.Loadout;
+import com.explorationremix.rune.engine.Piece;
 import com.explorationremix.rune.engine.Reading;
 import com.explorationremix.rune.engine.RuneId;
+import com.explorationremix.rune.engine.RuneKind;
 import com.explorationremix.rune.item.RuneItem;
 import com.explorationremix.rune.menu.RuneTableMenu;
 import com.mojang.brigadier.arguments.FloatArgumentType;
@@ -32,12 +37,16 @@ import java.util.List;
  * {@code /remix rune ...} (operators): trying runes out without finding them.
  * <ul>
  *   <li>{@code give <rune|all> [count]}: rune items;</li>
- *   <li>{@code set <runes>}: sets the sockets of the weapon in hand, e.g. {@code set spark wide echo} (runes by id, in
- *   any order: each goes to the socket of its kind; the runes are not taken from you);</li>
+ *   <li>{@code set <runes>}: sets the sockets of the weapon in hand, e.g. {@code set spark wide overflow} (runes by id,
+ *   in any order: each goes to the socket of its kind; the runes are not taken from you);</li>
+ *   <li>{@code armor <piece> <runes>}: sets the sockets of the piece worn there, e.g. {@code armor boots leap mend vigor}
+ *   ({@code _} alone empties it);</li>
+ *   <li>{@code tool <rune|clear>}: sets the socket of the tool in your main hand;</li>
  *   <li>{@code clear}: empties the weapon's sockets (the runes are not given back);</li>
  *   <li>{@code energy [amount]}: fills the weapon (or sets its energy);</li>
- *   <li>{@code table <pos>}: opens the sockets of the weapon in your main hand at the enchanting table there;</li>
- *   <li>{@code info}: the weapon's runes read out at your XP level, with its energy.</li>
+ *   <li>{@code table <pos>}: opens the rune sockets of what you hold and wear at the enchanting table there;</li>
+ *   <li>{@code info}: the weapon's runes read out at your XP level, with its energy;</li>
+ *   <li>{@code worn}: what the runes you wear do, and how far each collect set has come.</li>
  * </ul>
  */
 public final class RuneCommands {
@@ -54,6 +63,19 @@ public final class RuneCommands {
                 .then(Commands.literal("set").then(Commands.argument("runes", StringArgumentType.greedyString())
                         .suggests((c, b) -> SharedSuggestionProvider.suggest(names().subList(1, names().size()), b.createOffset(lastWord(b.getInput()))))
                         .executes(RuneCommands::set)))
+                .then(Commands.literal("armor").then(Commands.argument("piece", StringArgumentType.word())
+                        .suggests((c, b) -> SharedSuggestionProvider.suggest(List.of("helmet", "chestplate", "leggings", "boots"), b))
+                        .then(Commands.argument("runes", StringArgumentType.greedyString())
+                                .suggests((c, b) -> SharedSuggestionProvider.suggest(armorNames(), b.createOffset(lastWord(b.getInput()))))
+                                .executes(RuneCommands::armor))))
+                .then(Commands.literal("tool").then(Commands.argument("rune", StringArgumentType.word())
+                        .suggests((c, b) -> {
+                            List<String> n = new ArrayList<>(List.of("clear"));
+                            for (RuneId r : RuneId.ofKind(RuneKind.TOOL)) n.add(r.id);
+                            return SharedSuggestionProvider.suggest(n, b);
+                        })
+                        .executes(RuneCommands::tool)))
+                .then(Commands.literal("worn").executes(RuneCommands::worn))
                 .then(Commands.literal("clear").executes(RuneCommands::clear))
                 .then(Commands.literal("energy").executes(c -> energy(c, -1.0F))
                         .then(Commands.argument("amount", FloatArgumentType.floatArg(0.0F)).executes(c -> energy(c, FloatArgumentType.getFloat(c, "amount")))))
@@ -63,6 +85,12 @@ public final class RuneCommands {
 
     /** Where the last word of a command being typed starts (suggestions for {@code set} go there). */
     private static int lastWord(String input) { return input.lastIndexOf(' ') + 1; }
+
+    private static List<String> armorNames() {
+        List<String> out = new ArrayList<>(List.of("_"));
+        for (RuneId r : RuneId.runes()) if (r.kind.armor()) out.add(r.id);
+        return out;
+    }
 
     private static List<String> names() {
         List<String> out = new ArrayList<>();
@@ -140,12 +168,70 @@ public final class RuneCommands {
             c.getSource().sendFailure(Component.literal("No enchanting table there"));
             return 0;
         }
-        if (!RuneGear.isGear(p.getMainHandItem())) {
-            c.getSource().sendFailure(Component.literal("Hold a sword, bow or crossbow in your main hand"));
-            return 0;
-        }
         RuneTableMenu.open(p, pos);
         c.getSource().sendSuccess(() -> Component.literal("Rune table opened"), false);
+        return 1;
+    }
+
+    private static int armor(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
+        ServerPlayer p = c.getSource().getPlayerOrException();
+        String which = StringArgumentType.getString(c, "piece").toLowerCase(java.util.Locale.ROOT);
+        Piece piece = null;
+        for (Piece pc : Piece.values()) if (pc.word.equals(which) || pc.name().toLowerCase(java.util.Locale.ROOT).equals(which)) piece = pc;
+        if (piece == null) {
+            c.getSource().sendFailure(Component.literal("No piece called " + which + ": helmet, chestplate, leggings or boots"));
+            return 0;
+        }
+        ItemStack worn = p.getItemBySlot(RuneGear.slot(piece));
+        if (RuneGear.piece(worn) != piece) {
+            c.getSource().sendFailure(Component.literal("Wear " + piece.withArticle() + " first"));
+            return 0;
+        }
+        ArmorRunes a;
+        try {
+            a = ArmorRunes.parse(StringArgumentType.getString(c, "runes"));
+        } catch (IllegalArgumentException e) {
+            c.getSource().sendFailure(Component.literal(e.getMessage()));
+            return 0;
+        }
+        if (a.effect() != null && !a.effect().fits(piece)) {
+            c.getSource().sendFailure(Component.literal(a.effect().title + " is not " + piece.withArticle() + " rune"));
+            return 0;
+        }
+        RuneGear.setArmor(worn, a);
+        return worn(c);
+    }
+
+    private static int tool(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
+        ServerPlayer p = c.getSource().getPlayerOrException();
+        ItemStack held = p.getMainHandItem();
+        if (!RuneGear.isTool(held)) {
+            c.getSource().sendFailure(Component.literal("Hold a pickaxe, axe, shovel or hoe"));
+            return 0;
+        }
+        String which = StringArgumentType.getString(c, "rune");
+        RuneId r = which.equals("clear") ? null : RuneId.byId(which);
+        if (!which.equals("clear") && (r == null || !r.isTool())) {
+            c.getSource().sendFailure(Component.literal("No tool rune called " + which));
+            return 0;
+        }
+        RuneGear.setTool(held, r);
+        c.getSource().sendSuccess(() -> Component.literal(r == null ? "Tool socket emptied" : r.title + " set"), false);
+        return 1;
+    }
+
+    private static int worn(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
+        ServerPlayer p = c.getSource().getPlayerOrException();
+        ArmorSet set = WornRunes.of(p);
+        for (Piece pc : Piece.values()) {
+            ArmorRunes a = set.piece(pc);
+            String line = pc.title + ": " + (a == null ? "nothing that takes runes" : a.toString());
+            c.getSource().sendSuccess(() -> Component.literal(line), false);
+        }
+        for (RuneId r : set.collects()) {
+            String line = Explain.collectLine(r, set.count(r));
+            c.getSource().sendSuccess(() -> Component.literal(line), false);
+        }
         return 1;
     }
 

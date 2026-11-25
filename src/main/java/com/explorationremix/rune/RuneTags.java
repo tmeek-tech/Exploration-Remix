@@ -4,6 +4,7 @@ import com.explorationremix.rune.engine.ArmorRunes;
 import com.explorationremix.rune.engine.CastState;
 import com.explorationremix.rune.engine.Loadout;
 import com.explorationremix.rune.engine.RuneId;
+import com.explorationremix.rune.engine.RuneKind;
 import com.explorationremix.rune.engine.Socket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -18,8 +19,8 @@ import java.util.List;
  * game:
  * <ul>
  *   <li>{@value #LOADOUT}: a weapon's {@code {v: 2, a: "spark", m: "swift", p: "ember"}}, a piece of armor's
- *   {@code {v: 2, e: "leap", c: "mend", d: "vigor"}} (its effect socket and its two collect sockets), a socket left out
- *   when it is empty;</li>
+ *   {@code {v: 2, e: "leap", c: "mend", d: "vigor"}} (its effect socket and its two collect sockets), a tool's
+ *   {@code {v: 2, t: "haste"}}, a socket left out when it is empty;</li>
  *   <li>{@value #CAST}: {@code {i: weapon id, e: energy, t: tick, g: last gained energy (-1), c: cursor, r: ready at,
  *   l: last cast, o: 1 while Overflow's charge waits (left out without)}}. An id can be given before anything has happened to the weapon: the state is only there once
  *   {@code t} is, and until then the weapon reads as fresh (with its starting energy).</li>
@@ -38,8 +39,8 @@ public final class RuneTags {
     public static final String OLD_ROW = "explorationremix:runes";
     public static final String CAST = "explorationremix:cast";
     static final int VERSION = 2;
-    /** The sockets' keys, by {@link Socket} order: a weapon's three, then a piece of armor's. */
-    private static final String[] KEYS = {"a", "m", "p", "e", "c", "d"};
+    /** The sockets' keys, by {@link Socket} order: a weapon's three, a piece of armor's, then a tool's. */
+    private static final String[] KEYS = {"a", "m", "p", "e", "c", "d", "t"};
 
     private RuneTags() {}
 
@@ -98,9 +99,27 @@ public final class RuneTags {
         return t;
     }
 
+    /** The rune in a tool's socket, or null. */
+    @Nullable
+    public static RuneId readTool(@Nullable CompoundTag gear) {
+        if (gear == null || !gear.contains(LOADOUT, Tag.TAG_COMPOUND)) return null;
+        RuneId r = RuneId.byId(gear.getCompound(LOADOUT).getString(KEYS[Socket.TOOL.ordinal()]));
+        return r != null && r.kind == RuneKind.TOOL ? r : null;
+    }
+
+    /** A tool's socket's tag; null for none (it then keeps no tag at all). */
+    @Nullable
+    public static CompoundTag writeTool(@Nullable RuneId r) {
+        if (r == null || r.kind != RuneKind.TOOL) return null;
+        CompoundTag t = new CompoundTag();
+        t.putInt("v", VERSION);
+        t.putString(KEYS[Socket.TOOL.ordinal()], r.id);
+        return t;
+    }
+
     /**
-     * Every rune the sockets keep, in socket order, whether or not it fits the socket it is in (a weapon's and an armor
-     * piece's keys alike): what the gear would give back.
+     * Every rune the sockets keep, in socket order, whether or not it fits the socket it is in (a weapon's, an armor
+     * piece's and a tool's keys alike): what the gear would give back.
      */
     public static List<RuneId> socketed(@Nullable CompoundTag gear) {
         List<RuneId> out = new ArrayList<>();
@@ -159,7 +178,7 @@ public final class RuneTags {
         for (RuneId r : row) {
             Socket s = Socket.of(r.kind);
             // a rune that has since gone to armor (Lantern, Thirst) has no weapon socket: it comes back
-            if (!s.armor() && l.get(s) == null) l = l.with(s, r);
+            if (s.kind.weapon() && l.get(s) == null) l = l.with(s, r);
             else extras.add(r);
         }
         return new Converted(l, extras);

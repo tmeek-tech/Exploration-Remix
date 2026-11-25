@@ -17,6 +17,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
+import net.minecraft.world.item.DiggerItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.Tier;
@@ -27,11 +28,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Where a weapon or a piece of armor keeps its runes, and what kind of gear it is. Two tags on the stack (read and
- * written by {@link RuneTags}):
+ * Where a weapon, a piece of armor or a tool keeps its runes, and what kind of gear it is. Two tags on the stack (read
+ * and written by {@link RuneTags}):
  * <ul>
  *   <li>{@value #LOADOUT_TAG}: {@code {v: 2, a: "spark", m: "swift", p: "ember"}} on a weapon, {@code {v: 2, e: "leap",
- *   c: "mend", d: "vigor"}} on armor, written only when a rune is set at the enchanting table;</li>
+ *   c: "mend", d: "vigor"}} on armor, {@code {v: 2, t: "haste"}} on a tool, written only when a rune is set at the
+ *   enchanting table;</li>
  *   <li>{@value #CAST_TAG}: {@code {e: energy, t: tick, g: last gained energy (-1), c: cursor, r: ready at, l: last
  *   cast, i: weapon id}}, written only when something happens to the weapon (a cast, a hit, a mote, taken in hand or
  *   put away); the energy in between is worked out from the ticks, so the stack is not rewritten every tick. The id
@@ -89,13 +91,17 @@ public final class RuneGear {
 
     public static boolean isArmor(ItemStack stack) { return piece(stack) != null; }
 
-    /** Whether it takes runes at all: a weapon or a piece of armor. */
-    public static boolean takesRunes(ItemStack stack) { return isGear(stack) || isArmor(stack); }
+    /** A tool that takes a tool rune: a pickaxe, an axe, a shovel or a hoe (any mod's that is one). */
+    public static boolean isTool(ItemStack stack) { return !stack.isEmpty() && stack.getItem() instanceof DiggerItem && host(stack) == null; }
+
+    /** Whether it takes runes at all: a weapon, a piece of armor or a tool. */
+    public static boolean takesRunes(ItemStack stack) { return isGear(stack) || isArmor(stack) || isTool(stack); }
 
     /** Which runes it takes ({@link Fits} bits), 0 for none. */
     public static int fits(ItemStack stack) {
         Host h = host(stack);
         if (h != null) return Fits.of(h);
+        if (isTool(stack)) return Fits.TOOL;
         Piece p = piece(stack);
         return p == null ? 0 : Fits.of(p);
     }
@@ -168,6 +174,17 @@ public final class RuneGear {
         else stack.addTagElement(LOADOUT_TAG, t);
     }
 
+    /** A tool's rune, or null (none, or not a tool). */
+    @Nullable
+    public static RuneId tool(ItemStack stack) { return isTool(stack) ? RuneTags.readTool(stack.getTag()) : null; }
+
+    /** Writes a tool's rune (null removes the tag). */
+    public static void setTool(ItemStack stack, @Nullable RuneId r) {
+        CompoundTag t = RuneTags.writeTool(r);
+        if (t == null) stack.removeTagKey(LOADOUT_TAG);
+        else stack.addTagElement(LOADOUT_TAG, t);
+    }
+
     /**
      * Gear keeping runes that don't fit it (0.22.6: sword actives on a bow, Glow on a sword, Lantern or Thirst in a
      * weapon's passive socket): those come back to the player, and the rest stay where they are. Server only; the
@@ -188,6 +205,10 @@ public final class RuneGear {
             ArmorRunes kept = RuneTags.readArmor(stack.getTag()).fitting(p);
             back = RuneTags.without(all, kept.runes());
             if (!back.isEmpty()) setArmor(stack, kept);
+        } else if (isTool(stack)) {
+            RuneId kept = RuneTags.readTool(stack.getTag());
+            back = RuneTags.without(all, kept == null ? List.of() : List.of(kept));
+            if (!back.isEmpty()) setTool(stack, kept);
         } else {
             return List.of();
         }

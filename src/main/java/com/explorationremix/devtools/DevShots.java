@@ -432,7 +432,7 @@ public final class DevShots {
                 default -> net.minecraft.client.CameraType.FIRST_PERSON;
             });
             case "table" -> {
-                // "! table choose|hover|set|out|enchant arg": the enchanting table's rune view (RuneTableScreen.dev)
+                // "! table gear|choose|hover|set|out arg": the enchanting table's rune view (RuneTableScreen.dev)
                 if (!com.explorationremix.client.rune.table.RuneTableScreen.dev(arg, s.length > 3 ? s[3] : "")) return false;
             }
             case "close" -> {

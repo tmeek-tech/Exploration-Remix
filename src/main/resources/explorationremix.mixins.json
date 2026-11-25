@@ -36,6 +36,7 @@
     "rune.ArrowPassByMixin",
     "rune.ExperienceOrbMendMixin",
     "rune.WadeMixin",
+    "rune.ToolRunesMixin",
     "rune.CrossbowQuickdrawMixin",
     "rune.RopeClimbMixin",
     "LivingImmobileMixin",

@@ -355,7 +355,7 @@ public final class CastService {
         float power = r.spec().power();
         later(p, 0, () -> {
             if (!target.isAlive() || p.isRemoved() || target.level() != p.level() || !RuneHits.canHit(p, target)) return;
-            CastContext ctx = new CastContext(p, host, power, gearId, 0, 1.0F, false);
+            CastContext ctx = new CastContext(p, host, power, gearId, 0, 1.0F);
             // the weapon's own hit carries it: no rune of its own, so an ARROW act (no damage; the hit dealt its own)
             Act a = new Act(RuneId.ARROW, -1, 0, new int[Act.MODS.length], e, 1, false);
             Vec3 at = RuneHits.middle(target);
