@@ -307,7 +307,16 @@ class ChoirSitesTest {
      */
     @Test
     void thereIsLightToFightBy() {
-        ChoirSites.Site s = anySite();
+        int arenas = 0;
+        for (Found f : sweep()) {
+            if (f.site() == null) continue;
+            arenas++;
+            lightToFightBy(f.site());
+        }
+        assertTrue(arenas >= 10, "only " + arenas + " arenas to look at");
+    }
+
+    private static void lightToFightBy(ChoirSites.Site s) {
         int[][] br = ChoirArena.braziers(s);
         for (int phase = 0; phase <= ChoirArena.LAST_PHASE; phase++) {
             int floor = 0, lit = 0, dais = 0;
@@ -327,7 +336,7 @@ class ChoirSitesTest {
                     if (light >= 4) lit++;
                     if (Math.hypot(x + 0.5 - s.x(), z + 0.5 - s.z()) <= ChoirArena.DAIS_R) dais = Math.max(dais, light);
                 }
-            String at = "at phase " + phase;
+            String at = "at phase " + phase + " of the arena at " + (int) s.x() + ", " + (int) s.z();
             assertTrue(dais >= 8, "the dais is at light " + dais + " " + at);
             assertTrue(lit * 2 > floor, lit + " of " + floor + " floor columns reach light 4 " + at);
         }
