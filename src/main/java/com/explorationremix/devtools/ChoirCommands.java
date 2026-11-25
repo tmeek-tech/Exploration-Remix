@@ -35,7 +35,8 @@ import javax.annotation.Nullable;
  * {@code choir}, {@code choir summon} and {@code choir phase} ask only where the command came from, so the rig can
  * drive a whole fight from the server console with {@code execute positioned <x> <y> <z> run remix choir ...} and no
  * player on the server at all. Only {@code tp}, {@code city} and {@code keys} need one, since they move a player or
- * put something in their hands.
+ * put something in their hands. {@code choir cut} (0.22.0) parts every standing tendril, which is how the rig gets to
+ * the open core and through the phases in a scripted fight.
  */
 public final class ChoirCommands {
     /** How many cells out an arena or a city is looked for (each is 600 blocks across). */
@@ -51,6 +52,7 @@ public final class ChoirCommands {
                 .then(Commands.literal("city").executes(ChoirCommands::tpCity))
                 .then(Commands.literal("keys").executes(ChoirCommands::keys))
                 .then(Commands.literal("summon").executes(ChoirCommands::summon))
+                .then(Commands.literal("cut").executes(ChoirCommands::cut))
                 .then(Commands.literal("phase").then(Commands.argument("phase", IntegerArgumentType.integer(0, 3))
                         .executes(c -> phase(c, IntegerArgumentType.getInteger(c, "phase")))));
     }
@@ -215,6 +217,24 @@ public final class ChoirCommands {
         c.getSource().sendSuccess(() -> Component.literal("Called the Hollow Choir of the arena of cell "
                 + s.cellX() + ", " + s.cellZ() + "."), false);
         return 1;
+    }
+
+    /** Parts every tendril the nearest arena's Choir has standing, so its crown falls and its core opens. */
+    private static int cut(CommandContext<CommandSourceStack> c) {
+        Terrain t = terrain(c);
+        if (t == null) return 0;
+        ServerLevel level = overworld(c);
+        net.minecraft.world.phys.Vec3 from = at(c);
+        ChoirSites.Site s = level == null ? null : nearest(t, from.x, from.z);
+        HollowChoirEntity choir = s == null ? null : ChoirSummon.fighting(level, s);
+        if (choir == null) {
+            c.getSource().sendFailure(Component.literal("No Hollow Choir is up near here."));
+            return 0;
+        }
+        int n = choir.devCutAll();
+        c.getSource().sendSuccess(() -> Component.literal(n == 0 ? "It has no tendril standing: the crown is down or on its way."
+                : "Cut " + n + " tendrils: the crown falls and the core opens."), false);
+        return n;
     }
 
     private static int phase(CommandContext<CommandSourceStack> c, int phase) {
