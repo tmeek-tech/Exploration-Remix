@@ -1,7 +1,6 @@
 package com.explorationremix.client;
 
 import com.explorationremix.ExplorationRemix;
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.config.ERClientConfig;
 import com.explorationremix.registry.ERParticles;
 import com.explorationremix.registry.ERSounds;
@@ -375,7 +374,7 @@ public final class QuakeEffects {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
         int bx = Mth.floor(x), bz = Mth.floor(z), top = Integer.MIN_VALUE;
         for (int by = Mth.floor(cam.y) + 1; by <= Mth.floor(y); by++) {
-            if (!GlowBlock.open(level.getBlockState(p.set(bx, by, bz)))) break;
+            if (!level.getBlockState(p.set(bx, by, bz)).isAir()) break;
             top = by;
         }
         if (top == Integer.MIN_VALUE) return;

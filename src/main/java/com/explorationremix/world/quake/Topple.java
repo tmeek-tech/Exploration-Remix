@@ -1,6 +1,5 @@
 package com.explorationremix.world.quake;
 
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.config.ERConfig;
 import com.explorationremix.registry.ERTags;
 import com.explorationremix.world.lava.ChangeLog;
@@ -543,7 +542,7 @@ final class Topple {
         if (!ticking) return false;
         BlockState at = c.getBlockState(n);
         FluidState af = at.getFluidState();
-        boolean open = GlowBlock.open(at) || (at.getBlock() instanceof LiquidBlock && Support.ownLeak(wet, af.is(FluidTags.WATER), af.isSource()));
+        boolean open = at.isAir() || (at.getBlock() instanceof LiquidBlock && Support.ownLeak(wet, af.is(FluidTags.WATER), af.isSource()));
         if (!open) return false;
         boolean fluid = fluidBeside(w.level, n, pos, wet);
         boolean player = playerInColumn(w, n.getX(), n.getZ(), restRow(w.level, n.getX(), n.getY() - 1, n.getZ()), n.getY());

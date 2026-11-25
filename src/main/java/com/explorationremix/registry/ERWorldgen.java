@@ -11,11 +11,11 @@ import com.explorationremix.world.feature.DenLairFeature;
 import com.explorationremix.world.feature.FallSitesPlacement;
 import com.explorationremix.world.feature.FallbackStateProvider;
 import com.explorationremix.world.feature.FloorLavaFeature;
+import com.explorationremix.world.feature.GalleriesRuinsFeature;
 import com.explorationremix.world.feature.FluidFallFeature;
 import com.explorationremix.world.feature.GiantFungusFeature;
 import com.explorationremix.world.feature.GiantSpikeFeature;
 import com.explorationremix.world.feature.GrottoIceFilter;
-import com.explorationremix.world.feature.HallGlowFeature;
 import com.explorationremix.world.feature.IceColumnsFeature;
 import com.explorationremix.world.feature.IceCrustFeature;
 import com.explorationremix.world.feature.JoinDeadEndsFeature;
@@ -112,9 +112,10 @@ public final class ERWorldgen {
      */
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> CHOIR_ARENA = FEATURES.register("choir_arena", () -> new ChoirArenaFeature(NoneFeatureConfiguration.CODEC));
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> CHOIR_RELIQUARY = FEATURES.register("choir_reliquary", () -> new ChoirReliquaryFeature(NoneFeatureConfiguration.CODEC));
-    public static final RegistryObject<Feature<HallGlowFeature.Config>> HALL_GLOW = FEATURES.register("hall_glow", () -> new HallGlowFeature(HallGlowFeature.Config.CODEC));
     // the Galleries' floor lava (fix round 2 after the 0.8.0 pack runs): the field's rule laid on its floors
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> FLOOR_LAVA = FEATURES.register("floor_lava", () -> new FloorLavaFeature(NoneFeatureConfiguration.CODEC));
+    // 0.22.4: the lower Galleries' ruins, clusters planned on the tablelands' tops (GalleriesRuins) set chunk by chunk
+    public static final RegistryObject<Feature<GalleriesRuinsFeature.Config>> GALLERIES_RUINS = FEATURES.register("galleries_ruins", () -> new GalleriesRuinsFeature(GalleriesRuinsFeature.Config.CODEC));
     // 0.18.6: grass trails, roots and ivy over the lip of the plains' sinkholes, in the surface's biome
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> SINKHOLE_RIM = FEATURES.register("sinkhole_rim", () -> new SinkholeRimFeature(NoneFeatureConfiguration.CODEC));
     // 0.18.6: hanging roots under the trees' roots through the Root Vaults (strands, pillars, stubs), the sunken ways' tops too

@@ -64,7 +64,7 @@ public final class Support {
 
     // ------------------------------------------------------------------------------------------- what a block is like
 
-    /** Trait: air, the Galleries' glow, or fire ({@code GlowBlock.open}, {@code #minecraft:fire}). */
+    /** Trait: air or fire ({@code isAir}, {@code #minecraft:fire}). */
     public static final int T_AIRLIKE = 1;
     /** Trait: a fluid's block ({@code LiquidBlock}: lava or water, flowing or a source). */
     public static final int T_LIQUID = 2;

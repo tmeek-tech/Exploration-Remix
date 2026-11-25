@@ -364,7 +364,8 @@ public final class WastelandField {
         // openings' weight take that: WastelandSheets.latticeHole)
         double hb = WastelandSheets.hole(c.beta), hole = Math.max(hb, sh.latticeHole(x, z));
         // an opening only falls where the Galleries are open right under it, so it never ends in a pit on their rock (their
-        // cap is rock at gTop - 3 at every column, so this guard stays shut and the holes are the craters': craterRing)
+        // cap is rock at gTop - 3 at every column but an opened hole's own cells, which open through their top: there the
+        // dip falls into their open space and changes no block, so the holes are the craters': craterRing)
         c.under = hole > 0 ? Join.under(lower, gTop, x, z) : 1;
         double wh = whN.noise2(x / WH_SCALE, z / WH_SCALE) / 0.4, wh2 = whN.noise2(x / WH_SCALE + 40.5, z / WH_SCALE - 12.5) / 0.4;
         wh = wh < -1 ? -1 : (wh > 1 ? 1 : wh);
@@ -817,7 +818,8 @@ public final class WastelandField {
 
     /**
      * How much of an opening's dip a column has (0..1): openingSite times the guard ({@link Join#under}), 0 at every column
-     * while the Galleries' cap shuts the guard; the holes into the Galleries are the craters' ({@link #openingNear}).
+     * where the Galleries' cap shuts the guard, all but an opened hole's own cells (into the Galleries' open space there);
+     * the holes into the Galleries are the craters' ({@link #openingNear}).
      */
     public double openingRim(int x, int z) { return column(x, z).holeDip; }
 

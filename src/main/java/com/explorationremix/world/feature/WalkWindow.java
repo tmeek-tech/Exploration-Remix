@@ -1,6 +1,5 @@
 package com.explorationremix.world.feature;
 
-import com.explorationremix.block.GlowBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
@@ -99,7 +98,7 @@ public final class WalkWindow {
      */
     public static int kind(BlockGetter level, BlockPos pos) {
         BlockState s = level.getBlockState(pos);
-        if (GlowBlock.open(s)) return Detour.OPEN;
+        if (s.isAir()) return Detour.OPEN;
         if (!s.getFluidState().isEmpty()) return Detour.OTHER;
         if (s.isSolid()) return Detour.SOLID;
         return s.getCollisionShape(level, pos).isEmpty() ? Detour.OPEN : Detour.OTHER;

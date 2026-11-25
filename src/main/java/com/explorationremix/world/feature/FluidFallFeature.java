@@ -1,6 +1,5 @@
 package com.explorationremix.world.feature;
 
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.Terrain;
 import com.mojang.serialization.Codec;
@@ -361,7 +360,7 @@ public final class FluidFallFeature extends Feature<FluidFallFeature.Config> {
      * ({@link #laidBottom}), which the fall's lava takes the place of (see the class comment).
      */
     private static boolean room(Config c, BlockState s) {
-        return GlowBlock.open(s) || (lava(c) && laidBottom(s));
+        return s.isAir() || (lava(c) && laidBottom(s));
     }
 
     private static boolean lava(Config c) { return c.fluid().getFluidState().getType().isSame(Fluids.LAVA); }

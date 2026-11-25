@@ -167,6 +167,34 @@ final class GalleriesLandscape {
         return new double[]{lo, cap};
     }
 
+    /**
+     * The basins' ramps (0.22.4, {@link GalleriesField#tops}): the least over the Calderas and Causeways round the warped
+     * point w of their shore's level (its lake's or flat's rim level, rising SHORE_S rows a block outward as the basin's
+     * shore does) out to where the patch's weight starts to fall, rising s rows a block beyond it; or +inf where none lies
+     * within reach rows. The outward unit vector (warped) of the one it is from in u[at..at + 1] where it rises s a block
+     * (0 short of that).
+     */
+    double basinRamp(double[] w, double s, double reach, double[] u, int at) {
+        double px = w[0], pz = w[1];
+        int gi = (int) Math.floor(px / SP), gj = (int) Math.floor(pz / SP);
+        double best = Double.POSITIVE_INFINITY;
+        Patch[] pc = patches.get();
+        for (int di = -2; di <= 2; di++) for (int dj = -2; dj <= 2; dj++) {
+            Patch p = patch(pc, gi + di, gj + dj);
+            if (p.kind == G || p.kind == CANYONS) continue;
+            double dx = px - p.cx, dz = pz - p.cz, d = len(dx, dz);
+            double lake = p.r * (p.kind == CALDERA ? CAL_LAKE : CAUS_FLAT);
+            double q = Math.max(0, d - lake), qF = Math.max(0, p.r * (1 - PATCH_BLEND) - lake), out = Math.max(0, q - qF);
+            double v = (p.kind == CALDERA ? W - 4 : W - 1) + SHORE_S * Math.min(q, qF) + s * out;
+            if (v - (W - 4) > reach || v >= best) continue;
+            best = v;
+            boolean on = out > 0 && d > 1e-9;
+            u[at] = on ? dx / d : 0;
+            u[at + 1] = on ? dz / d : 0;
+        }
+        return best;
+    }
+
     /** The highest refuge mound floor at the warped point w (rows, unrounded), or -inf ({@link GalleriesField#MD_G}). */
     double mounds(double[] w) {
         double wx = w[0], wz = w[1];
@@ -261,8 +289,10 @@ final class GalleriesLandscape {
      * wall), out[1] the vault's distance: the blocks from the wall's line less its half thickness before the
      * {@link #WALL_MIN} step, so it runs on smoothly past a wall's end and grows into a doorway or a break (its vault
      * rises there: an arch between two halls, high where the gap is wide), out[2] the hall's height (rows over the
-     * landscape at its middle) and out[3] the hall's hash (as a double's bits). {@code give}: blocks the wall thins here
-     * besides its doorways (round the holes, {@link GalleriesField#give}).
+     * landscape at its middle) and out[3] the hall's hash (as a double's bits); where out holds 6, out[4] the distance
+     * from the line between the halls and out[5] the wall's half thickness as it stands where it neither breaks nor gives
+     * way (the tablelands' ledges keep to that line, {@link GalleriesField#wallBlocks}). {@code give}: blocks the wall
+     * thins here besides its doorways (round the holes, {@link GalleriesField#give}).
      */
     void hall(double[] w, Climate cl, double[] out, double give) {
         double wx = w[0] + WALL_WA * wallWa.noise2(w[0] / WALL_WP, w[1] / WALL_WP);
@@ -284,11 +314,12 @@ final class GalleriesLandscape {
             } else if (d < d3) d3 = d;
         }
         double e = 0.5 * (d2 - d1);
-        double t = Math.min(wallRaw(w, cl), WALL_CAP * len(bx - ax, bz - az)) - give;
+        double ts = Math.min(wallRaw(w, cl), WALL_CAP * len(bx - ax, bz - az)), t = ts - give;
         double door = door(wx, wz, ax, az, h1, bx, bz, h2);
         if (door > 0) t -= DOOR_D * door * smooth(Math.min(1, (d3 - d2) / DOOR_FADE));
         out[0] = e - (t > 0 ? WALL_MIN + t : t);
         out[1] = e - t;
+        if (out.length >= 6) { out[4] = e; out[5] = ts; }
         double size = (r1 - HALL_W0) / (HALL_W1 - HALL_W0);
         out[2] = HALL_H0 + HALL_H1 * (0.5 * size + 0.5 * Hashing.unit(Hashing.mix(h1, 3, 0, 0)));
         out[3] = Double.longBitsToDouble(h1 & 0x7FEFFFFFFFFFFFFFL);

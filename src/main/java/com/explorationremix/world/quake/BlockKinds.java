@@ -1,6 +1,5 @@
 package com.explorationremix.world.quake;
 
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.world.lava.ChangeLog;
 import com.explorationremix.world.lava.GalleryChanges;
 import net.minecraft.core.BlockPos;
@@ -36,7 +35,7 @@ public final class BlockKinds {
     /** The traits that matter in a first block the change log holds: open (air, the glow, fire) or a fluid, and a source. */
     public static int firstTraits(BlockState s) {
         int t = 0;
-        if (GlowBlock.open(s) || s.is(BlockTags.FIRE)) t |= Support.T_AIRLIKE;
+        if (s.isAir() || s.is(BlockTags.FIRE)) t |= Support.T_AIRLIKE;
         if (s.getBlock() instanceof LiquidBlock) {
             t |= Support.T_LIQUID;
             if (s.getFluidState().isSource()) t |= Support.T_SOURCE;

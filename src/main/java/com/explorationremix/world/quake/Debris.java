@@ -1,6 +1,5 @@
 package com.explorationremix.world.quake;
 
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.config.ERConfig;
 import com.explorationremix.registry.ERTags;
 import com.explorationremix.world.lava.ChangeLog;
@@ -472,7 +471,7 @@ final class Debris {
             m.set(bx, y, bz);
             BlockState s = c.getBlockState(m);
             int f = 0;
-            if (GlowBlock.open(s)) f |= DebrisSearch.OPEN;
+            if (s.isAir()) f |= DebrisSearch.OPEN;
             VoxelShape shape = s.getCollisionShape(c, m);
             if (shape.isEmpty()) f |= DebrisSearch.EMPTY;
             else if (shape.max(Direction.Axis.Y) < 1) f |= DebrisSearch.LOW;

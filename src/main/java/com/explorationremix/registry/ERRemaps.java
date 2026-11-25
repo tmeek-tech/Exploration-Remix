@@ -22,7 +22,9 @@ import java.util.Map;
  * colour. The deep Frost Fern Grotto's glow ice (0.20.1) left in 0.20.7 (Taran: "Remove glow ice"): it turns into the
  * packed ice it was set in. In 0.20.9, when each cave layer got its own ambience, the Upper Caves' old loop and the Deep
  * Gardens' hot springs left with their sounds: a world keeps nothing of a sound, so every sound event of the mod's that a
- * world remembers and the mod no longer has goes quietly, with no error in the log.
+ * world remembers and the mod no longer has goes quietly, with no error in the log. In 0.22.4 the Basalt Galleries'
+ * invisible lava glow left (Taran: "remove the invisible light sources"): it goes quietly, and a chunk that held it reads
+ * air there (a block a chunk names that the game no longer has loads as air).
  */
 public final class ERRemaps {
     private ERRemaps() {}
@@ -36,7 +38,7 @@ public final class ERRemaps {
             Map.entry("vent_rock", "minecraft:blackstone"), Map.entry("live_vent_rock", "minecraft:blackstone"),
             Map.entry("spire_tip", BEADS),
             Map.entry("den_fissure", BEADS), Map.entry("vent_glow", BEADS), Map.entry("throat_vein", BEADS),
-            Map.entry("glow_ice", "minecraft:packed_ice"));
+            Map.entry("glow_ice", "minecraft:packed_ice"), Map.entry("glow", ""));
     private static final Map<String, String> ITEMS = Map.ofEntries(
             Map.entry("frost_fern", IW + "frosty_fern"), Map.entry("tall_frost_fern", IW + "frosty_fern"),
             Map.entry("icicle", IW + "icicle"), Map.entry("silver_wall_fern", ExplorationRemix.MOD_ID + ":silver_fern"),

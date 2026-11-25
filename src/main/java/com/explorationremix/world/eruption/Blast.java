@@ -1,6 +1,5 @@
 package com.explorationremix.world.eruption;
 
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.config.ERConfig;
 import com.explorationremix.entity.LavaBomb;
 import com.explorationremix.registry.ERTags;
@@ -260,16 +259,15 @@ public final class Blast {
         int magma = r.nextDouble() < cfg.eruptionCraterMagma.get() ? Crater.magma(removed, Mth.floor(c.x), Mth.floor(c.z), cells) : -1;
         Direction face = hit instanceof BlockHitResult bh ? bh.getDirection() : Direction.UP;
         int[] thrown = Crater.ejecta(removed, cells, magma, c.x, c.y, c.z, face.getStepX(), face.getStepY(), face.getStepZ(), cfg.eruptionEjecta.get());
-        int blocks = 0, glow = 0;
+        int blocks = 0;
         for (int i = 0; i < removed.size(); i++) {
             int[] q = removed.get(i);
             BlockPos p = new BlockPos(q[0], q[1], q[2]);
-            if (removedStates.get(i).getBlock() instanceof GlowBlock) glow++;
-            else blocks++;
+            blocks++;
             level.setBlock(p, i == magma ? Blocks.MAGMA_BLOCK.defaultBlockState() : air, 3);
             Quakes.tookAway(p);
         }
-        Eruptions.cratered(b, blocks, glow);
+        Eruptions.cratered(b, blocks);
         if (thrown.length == 0) return;
         // the cell across the face struck, which holds the blast's centre; a living thing struck, the centre's own cell
         BlockPos from;
@@ -285,13 +283,13 @@ public final class Blast {
     }
 
     /**
-     * Throws one rock of a crater from {@code from}, which must be air or the glow (the falling block writes air there)
+     * Throws one rock of a crater from {@code from}, which must be air (the falling block writes air there)
      * and on entity-ticking ground: no item if it cannot land, tagged and tracked as ejecta (it breaks on whoever it
      * reaches), and its motion sent at once, as the falling block was added still.
      */
     private static void throwOut(ServerLevel level, BlockPos from, BlockState state, Direction face, Random r, @Nullable Eruptions.Eruption e) {
         LevelChunk ch = level.getChunkSource().getChunkNow(from.getX() >> 4, from.getZ() >> 4);
-        if (ch == null || !GlowBlock.open(ch.getBlockState(from)) || !level.isPositionEntityTicking(from) || !GalleryChanges.inLayer(from.getY())) return;
+        if (ch == null || !ch.getBlockState(from).isAir() || !level.isPositionEntityTicking(from) || !GalleryChanges.inLayer(from.getY())) return;
         if (state.hasProperty(BlockStateProperties.WATERLOGGED) || !state.getFluidState().isEmpty()) return;
         FallingBlockEntity f = FallingBlockEntity.fall(level, from, state);
         f.dropItem = false;
@@ -313,7 +311,6 @@ public final class Blast {
         if (fluid) b |= Crater.FLUID;
         if (s.is(ERTags.QUAKE_DEBRIS) && !fluid && !s.hasProperty(BlockStateProperties.WATERLOGGED)) b |= Crater.DEBRIS;
         if (kept(s)) b |= Crater.KEEP;
-        if (s.getBlock() instanceof GlowBlock) b |= Crater.GLOW;
         if (!Vents.open(ch, p, s)) b |= Crater.SOLID;
         return b;
     }

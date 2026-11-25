@@ -1,6 +1,5 @@
 package com.explorationremix.world.terrain;
 
-import com.explorationremix.world.feature.GlowLight;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -29,25 +28,34 @@ class GalleriesDecorTest {
     /**
      * The least floor lava ({@link Box#floorLavaHeld}) the three ways' box and the pack run's region hold, to tell (fix
      * round 2: 1678 and 7250 blocks, every one held; fix round 3, each open to the air above as well: 1678 and 7251).
+     * 0.22.4: the box moved with its ways down, and the high ground halves the floor's lava: 0.22.2 laid 1764 blocks in
+     * the new box (13618 a km2), the tablelands 982 (7581 a km2; before the ways' bridges 897, when 23 % of its open
+     * floor's columns lay in a rubble cone's cells or on a ramp's plane, where the rule lays none, and fewer of the rest
+     * lay on a line). So the box's bar went from 1200 to 700, the share of what the box holds that 1200 was of 1678.
      */
-    static final int FLOOR_LEAST_BOX = 1_200, FLOOR_LEAST_REGION = 5_000;
+    static final int FLOOR_LEAST_BOX = 700, FLOOR_LEAST_REGION = 5_000;
 
     /**
-     * The three ways down round (4, 125), (21, 126) and (44, 29) (0.20.4: (19, 151) no longer opens under the halls, and
-     * the ramps reach 150 to 175 blocks, so the box grew from 364 x 386 at (-160, -55)), with their whole reach,
-     * decorated: no lava on a ramp's deck band or in a hole's throat, every way walking down to its foot and back up
-     * through the decorations, the halls' falls few, spaced and 1 to 3 sources wide, and the halls' faces as bright as
-     * with the old falls. On the 0.8.0 data
+     * The three ways down round (4, 125), (21, 126) and (19, 151) (0.22.4; from 0.20.4 to 0.22.2 (44, 29) in place of
+     * (19, 151), which did not open under the halls then), with their whole reach, decorated: no lava on a ramp's deck
+     * band or in a hole's throat, every way walking down to its foot and back up
+     * through the decorations, and the halls' falls few, spaced and 1 to 3 sources wide (until 0.22.4 the halls' faces
+     * were also held as bright as with the old falls, by the invisible glow, which left the game then). On the 0.8.0 data
      * the same box held 634 falls (the nearest other fall 5.8 blocks off at the median, 84 in one 128-block square), lava
      * on all three ramps (235 blocks), the way at (21, 126) one way at its foot, and faces at 10.33 on average, 7.7 %
      * under 8; the 0.8.0 fix round's data 50 falls, the nearest 27.7 blocks off at the least, and 10.6, 4.6 %. Fix round
      * 2: 14 falls (7 one source wide, 7 two), the nearest 43.7 apart, at most 4 in a view; the faces at 12.5 on
      * average, 13.1 under 60 rows over the table and 12.3 higher up, none under 8. Fix round 3: 10 falls (9 two sources
      * wide, 1 three; 2 pour from a hanging mass), the nearest 37.3 apart, at most 3 in a view; the faces as in round 2.
+     * 0.22.4: the tablelands moved which holes keep a ramp: (44, 29) lost its ramp and (19, 151) opens again, so the box
+     * moved to (-166, -50), 364 x 370, which holds the whole reach of (4, 125), (21, 126) and (19, 151) (the old box held
+     * only (21, 126)'s). There: 6 falls (5 two sources wide, 1 three; none from a hanging mass), the nearest 44.2 apart,
+     * 1 in a 128-block square, at most 2 in a view of 400 and 1 in 95 of 100; floor lava as {@link #FLOOR_LEAST_BOX}
+     * tells. (0.22.2 laid 11 falls in it, and 0.22.4 before the ways' bridges 10.)
      */
     @Test
     void theFallsAreFewSpacedAndWideAndKeepOffTheWaysDown() throws Exception {
-        Box b = new Box(-162, -146, 381, 455);
+        Box b = new Box(-166, -50, 364, 370);
         List<String> bad = new ArrayList<>();
         assertTrue(b.ops.size() >= 3, "the box lost its ways down: " + b.ops.size());
         List<String> where = new ArrayList<>();
@@ -60,9 +68,24 @@ class GalleriesDecorTest {
         }
         assertTrue(bad.isEmpty(), "ways down that do not walk down and back up through the decorations: " + bad);
         b.fewSpacedAndWide(40, 200, 4, 5);
-        b.asBright(10.33, 0.077);
-        b.litFromTheFloorUp(12.2, 0.005);
         b.floorLavaHeld(FLOOR_LEAST_BOX);
+    }
+
+    /**
+     * 0.22.4 (Taran: "remove the invisible light sources"): no feature the data ships places light with nothing to see,
+     * neither the old glow pass (feature type explorationremix:hall_glow) nor its block (explorationremix:glow), in any
+     * layer, so every light in the Galleries comes from lava or blocks you can see.
+     */
+    @Test
+    void noInvisibleLight() throws Exception {
+        List<String> found = new ArrayList<>();
+        try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(WORLDGEN)) {
+            for (Path f : (Iterable<Path>) files.filter(q -> q.toString().endsWith(".json"))::iterator) {
+                String text = java.nio.file.Files.readString(f);
+                if (text.contains("explorationremix:hall_glow") || text.contains("\"explorationremix:glow\"")) found.add(WORLDGEN.relativize(f).toString());
+            }
+        }
+        assertTrue(found.isEmpty(), "invisible light in the shipped worldgen: " + found);
     }
 
     /**
@@ -164,7 +187,6 @@ class GalleriesDecorTest {
         // fix round 3 (judge3: none of the falls poured from a hanging mass): about a third pour from a mass's underside
         int mass = b.d.fromMasses(), n = b.d.falls.size();
         assertTrue(mass >= 0.25 * n, "too few falls pour from a hanging mass: " + mass + " of " + n);
-        b.asBright(10.30, 0.076);
         b.floorLavaHeld(FLOOR_LEAST_REGION);
     }
 
@@ -174,7 +196,8 @@ class GalleriesDecorTest {
      * falls, 7 of them in a chunk's border column). Every block a fall sets now lies in the chunk being decorated, which
      * has had its slab pass, and so the falls are the same in whatever order the chunks are decorated: on the pack
      * region's north-west, decorated row by row and in a shuffled order, no fall sets a block outside its chunk (the
-     * whole region before: 886 of its falls' 4624 blocks) and the falls are the same, source for source.
+     * whole region before: 886 of its falls' 4624 blocks) and the falls are the same, source for source. 0.22.4: on the
+     * tablelands the region holds 16 falls (before the ways' bridges 14, with the ruins kept off and without them alike).
      */
     @Test
     void theFallsKeepToTheirChunksInAnyOrder() {
@@ -261,27 +284,6 @@ class GalleriesDecorTest {
         }
 
         /**
-         * Fix round 2 after the 0.8.0 pack runs (the halls read dim, rock 36.6 on average at the pack's cameras against 44.0 in
-         * the first run): the halls' faces (GlowLight: every lava block and glow spot) at least
-         * {@code mean} on average and at most {@code under8} of them under 8, and still lit from the floor up: the faces
-         * under 60 rows over the table brighter on average than those higher up by half a level or more. With the glow
-         * before this round the box measured 10.6 on average (GalleriesDecorTest light).
-         */
-        void litFromTheFloorUp(double mean, double under8) throws Exception {
-            GlowLight gl = GlowLight.measure(t, GlowLight.shipped(WORLDGEN), (x, y, z) -> v.mat(x, y, z), x0, z0, nx, nz, 16);
-            long[] all = new long[16], low = new long[16];
-            for (int band = 0; band < 3; band++) for (int l = 0; l < 16; l++) {
-                all[l] += gl.hall[band][l];
-                if (band < 2) low[l] += gl.hall[band][l];
-            }
-            long faces = Arrays.stream(all).sum();
-            System.out.println("GalleriesDecorTest lit from the floor up: " + gl);
-            assertTrue(GlowLight.mean(all) >= mean, "the halls darker than " + mean + " on average: " + gl);
-            assertTrue(GlowLight.under(all, 8) <= under8 * faces, "more hall faces under 8 than " + under8 + ": " + gl);
-            assertTrue(GlowLight.mean(low) >= GlowLight.mean(gl.hall[2]) + 0.5, "not lit from the floor up: " + gl);
-        }
-
-        /**
          * The floor's lava (fix round 2, FloorLavaFeature: GalleriesField.floorLavaRow) as it stands once every chunk is
          * decorated: at least {@code least} blocks of it, and every one held, with rock under it and rock or a lava source
          * on its four sides, whatever the decorations laid round it before or after it ({@link GalleriesDecor#floorLavaHeld}),
@@ -299,16 +301,5 @@ class GalleriesDecorTest {
             assertEquals(0, held[2], "floor lava under a block: " + loose);
         }
 
-        /** The halls' faces (GlowLight: every lava block and glow spot) at least {@code mean} on average, at most {@code under8} of them under 8. */
-        void asBright(double mean, double under8) throws Exception {
-            GlowLight gl = GlowLight.measure(t, GlowLight.shipped(WORLDGEN), (x, y, z) -> v.mat(x, y, z), x0, z0, nx, nz, 16);
-            long[] all = new long[16];
-            for (long[] band : gl.hall) for (int l = 0; l < 16; l++) all[l] += band[l];
-            long faces = Arrays.stream(all).sum();
-            System.out.println("GalleriesDecorTest light: " + gl);
-            assertTrue(faces > 100_000, "too few hall faces: " + gl);
-            assertTrue(GlowLight.mean(all) >= mean, "the halls darker than with the 0.8.0 falls (" + mean + "): " + gl);
-            assertTrue(GlowLight.under(all, 8) <= under8 * faces, "more hall faces under 8 than with the 0.8.0 falls (" + under8 + "): " + gl);
-        }
     }
 }
