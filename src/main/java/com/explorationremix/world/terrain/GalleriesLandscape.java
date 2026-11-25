@@ -168,7 +168,7 @@ final class GalleriesLandscape {
     }
 
     /**
-     * The basins' ramps (0.22.1, {@link GalleriesField#tops}): the least over the Calderas and Causeways round the warped
+     * The basins' ramps (0.22.3, {@link GalleriesField#tops}): the least over the Calderas and Causeways round the warped
      * point w of their shore's level (its lake's or flat's rim level, rising SHORE_S rows a block outward as the basin's
      * shore does) out to where the patch's weight starts to fall, rising s rows a block beyond it; or +inf where none lies
      * within reach rows. The outward unit vector (warped) of the one it is from in u[at..at + 1] where it rises s a block

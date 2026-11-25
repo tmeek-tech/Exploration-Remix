@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The lower Galleries' ruins as {@link GalleriesRuins} plans them (0.22.1; Taran's cards: a cluster about every 400
+ * The lower Galleries' ruins as {@link GalleriesRuins} plans them (0.22.3; Taran's cards: a cluster about every 400
  * blocks, on the high ground, half fallen, a rune and some loot, lava glowing in them): 4 x 4 cells of two seeds, every
  * cluster's blocks checked as the feature would set them. On the first plan 13 and 12 of the 16 cells held a cluster,
  * with 75 and 71 small ruins round them, 5.8 a centre.

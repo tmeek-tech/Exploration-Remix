@@ -182,7 +182,7 @@ BLOCKS = {
     "ember_crust": ("Ember Crust", "cube"),
     # (0.20.1's glow ice, the deep Frost Fern Grotto's glowing veins, left the game in 0.20.7: Taran, "Remove glow ice".)
     "cinder_chain": ("Cinder Chain", "cross", {"shader_glow": False}),
-    # (The Galleries' invisible lava glow left the game in 0.22.1, Taran: "remove the invisible light sources".)
+    # (The Galleries' invisible lava glow left the game in 0.22.3, Taran: "remove the invisible light sources".)
     # A Mossback's den (creature.MossbackDen): trampled moss and gnawed bone on a den gate's upper landing. It drops
     # nothing, so nobody can carry one off to farm lizards.
     "mossback_den": ("Mossback Den", "moss_carpet", {"texture": "mossback_den"}),
@@ -1168,7 +1168,7 @@ def particles():
 
 
 def ruin_loot():
-    """0.22.1: the lower Galleries' ruins' chests (GalleriesRuinsFeature; Taran's card: "A rune and some loot"). The rune's
+    """0.22.3: the lower Galleries' ruins' chests (GalleriesRuinsFeature; Taran's card: "A rune and some loot"). The rune's
     chest in each cluster's big structure holds a rune for certain, most often one of the deep layers' (each item in a
     tag takes its entry's weight: the Deep Gardens' 5 x 10, the Blue Reaches' 7 x 5, the Upper Caves' 16 x 2), and a few
     things besides; the loot chests in two or three of its huts hold the builders' leavings: gold, iron, torches for the

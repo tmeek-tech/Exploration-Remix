@@ -22,7 +22,7 @@ import java.util.Map;
  * colour. The deep Frost Fern Grotto's glow ice (0.20.1) left in 0.20.7 (Taran: "Remove glow ice"): it turns into the
  * packed ice it was set in. In 0.20.9, when each cave layer got its own ambience, the Upper Caves' old loop and the Deep
  * Gardens' hot springs left with their sounds: a world keeps nothing of a sound, so every sound event of the mod's that a
- * world remembers and the mod no longer has goes quietly, with no error in the log. In 0.22.1 the Basalt Galleries'
+ * world remembers and the mod no longer has goes quietly, with no error in the log. In 0.22.3 the Basalt Galleries'
  * invisible lava glow left (Taran: "remove the invisible light sources"): it goes quietly, and a chunk that held it reads
  * air there (a block a chunk names that the game no longer has loads as air).
  */

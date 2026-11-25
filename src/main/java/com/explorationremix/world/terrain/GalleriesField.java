@@ -55,7 +55,7 @@ public final class GalleriesField {
     /** The floor's lava ({@link #floorLavaRow}): its rills' lines and widths, and the gaps that break them into pools. */
     final Perlin rillN, rillW, poolN;
     /**
-     * The tablelands (0.22.1, {@link #TL_TOP}): the chasms' two families of lines, their masks and widths, the raised
+     * The tablelands (0.22.3, {@link #TL_TOP}): the chasms' two families of lines, their masks and widths, the raised
      * tops' level, the ledges' widths, and the bridges' widths.
      */
     final Perlin chN1, chN2, chM1, chM2, chW, topN, ledgeN, brN, chSad;
@@ -387,20 +387,20 @@ public final class GalleriesField {
         Ramp dkRamp;
         int dkRow, dkDrop, dkGround;
         /**
-         * The rubble cones over the cell (0.22.1, {@link #coneRow}): how many (0..2) and each's apex, top and slope (4
+         * The rubble cones over the cell (0.22.3, {@link #coneRow}): how many (0..2) and each's apex, top and slope (4
          * values a cone), read block by block; the highest row they raise the floor to (the tops' level at the cell).
          */
         byte cones;
         double[] cone;
         int coneCap;
         /**
-         * A ramp of the tablelands (0.22.1, {@link #CH_RAMP}): the floor is a plane read block by block, row tf at the site
+         * A ramp of the tablelands (0.22.3, {@link #CH_RAMP}): the floor is a plane read block by block, row tf at the site
          * rising (tgx, tgz) rows a block, never under f (the least row it leaves in the cell) or over coneCap.
          */
         boolean tilt;
         float tf, tgx, tgz;
         /**
-         * A tablelands' bridge stands on the cell (0.22.1, {@link #bridge}): its foot on the tops at an end, a band lying on
+         * A tablelands' bridge stands on the cell (0.22.3, {@link #bridge}): its foot on the tops at an end, a band lying on
          * a floor near the tops, or a pier. Kept out of the stairs' wear ({@link #stairFloor}), so the bridge stays held.
          */
         boolean pier;
@@ -1023,9 +1023,9 @@ public final class GalleriesField {
     /** A quarter of the cells (hashed) stand this many rows higher where the ground's slope is under FO_S: ragged column tops. */
     static final double FLOOR_OFF = 1, FO_S = 0.12;
 
-    // ---- the tablelands (0.22.1)
+    // ---- the tablelands (0.22.3)
     /**
-     * The tablelands (0.22.1, Taran: "give it interesting shapes where you're often high above the floor"; picked on the
+     * The tablelands (0.22.3, Taran: "give it interesting shapes where you're often high above the floor"; picked on the
      * cards: tablelands, ledges and bridges, most of the walking up high, 20 to 40 blocks over the floor). In the main
      * galleries most of a hall's floor is the flat top of a basalt tableland, and the low floor is a net of chasms
      * between them ({@link #chasmAt}), TL_DF of the hall's height deep (TL_D0..TL_D1 rows), so low halls keep their
@@ -1131,7 +1131,7 @@ public final class GalleriesField {
     }
 
     /**
-     * The Wasteland's ways down and the tablelands (0.22.1): a ramp is laid against the tops ({@link #tableFloor}) and
+     * The Wasteland's ways down and the tablelands (0.22.3): a ramp is laid against the tops ({@link #tableFloor}) and
      * crosses a chasm on a span of rock whose underside lies DK_SPAN rows under the tops, the chasm open under it (as a
      * ridge down to a chasm's floor it dammed the chasm, the floor either side a pit: seed 8675309, pits of 1079 places at
      * (-240, 95) and of 1200 at (62, 205), where a ridge ran along a chasm and split it into two slots). Its foot stands
@@ -1140,7 +1140,7 @@ public final class GalleriesField {
     static final int DK_SPAN = 3;
     static final double FOOT_CLEAR = 6;
     /**
-     * The chasms' floors come up to the tops (0.22.1, so every stretch of a chasm has a way up): at saddles, where a noise
+     * The chasms' floors come up to the tops (0.22.3, so every stretch of a chasm has a way up): at saddles, where a noise
      * of period CH_SP falls under CH_ST, and where a chasm's mask ends; each such floor rises CH_RAMP rows a block,
      * walked a row at a time (its cells' floors are planes read block by block, {@link Cell#tilt}). Slopes of TILT_MIN
      * rows a block or more are read so.
@@ -1218,7 +1218,7 @@ public final class GalleriesField {
     }
 
     /**
-     * The ledges' talus (0.22.1): a chasm's floor lies at most TALUS rows a block under the tops out from a ledge's edge
+     * The ledges' talus (0.22.3): a chasm's floor lies at most TALUS rows a block under the tops out from a ledge's edge
      * (a wall's or a massif's, {@link #chasmAt}), so where a ledge cuts a chasm short or runs along it, its floor climbs
      * to the ledge as rubble walked a row at a time. Cut off at the ledges with a cliff, the chasms left pieces walled in
      * wherever a line ran along a ledge, into a moat by a wall or where a wall's line wavered, each with no saddle, mask's
@@ -1354,7 +1354,7 @@ public final class GalleriesField {
 
     // ---- the tablelands' ways up: rubble cones
     /**
-     * The ways up out of the chasms (0.22.1; the card: "some sides step down as ... rubble slopes you can walk, the rest
+     * The ways up out of the chasms (0.22.3; the card: "some sides step down as ... rubble slopes you can walk, the rest
      * are sheer cliffs"): rubble cones against the cliffs, on a lattice of CN_G blocks, CN_P of whose cells try one at a
      * hashed point. The point is moved onto the nearest chasm's edge (a step along the edge's normal) and the cone stands
      * where it lands on an edge (within CN_ON blocks) of a chasm CN_MIN rows deep or more, on the tablelands, out of the
@@ -1378,7 +1378,7 @@ public final class GalleriesField {
     }
 
     /**
-     * The chasms' ends (0.22.1): where a chasm's line runs into a ledge (a wall's or a massif's, {@link #chasmAt}) a
+     * The chasms' ends (0.22.3): where a chasm's line runs into a ledge (a wall's or a massif's, {@link #chasmAt}) a
      * rubble cone stands with its apex on the ledge's edge, so a chasm cut off there walks up out of its end (cut off with
      * a cliff, a chasm between a wall and a doorway's ledge was a pit of 343 places in seed 8675309's box at (222, 3); a
      * ramp along every wall instead, as far out as a ramp runs, left a twentieth of the floor deep). Each lattice cell of
@@ -1686,7 +1686,7 @@ public final class GalleriesField {
 
     // ---- the tablelands' rock bridges
     /**
-     * Rock bridges over the chasms (0.22.1, picked on the cards with the tablelands and the ledges): natural arches from
+     * Rock bridges over the chasms (0.22.3, picked on the cards with the tablelands and the ledges): natural arches from
      * top to top. Each lattice cell of BR_G blocks holds one with chance BR_P, from the first of BR_TRIES hashed points
      * that lies in a chasm ({@link #tbridge}). It runs across the chasm (along the gradient of the distance to its edge,
      * turned up to BR_TURN either way) to the edge on both sides, read every BR_STEP blocks, at most BR_HALF blocks each
@@ -2181,7 +2181,7 @@ public final class GalleriesField {
             }
         }
         double F = Fb + skirt, Fpre = F;
-        // ---- the tablelands (0.22.1): most of the floor is a tableland's top, the chasms between them the low floor; the
+        // ---- the tablelands (0.22.3): most of the floor is a tableland's top, the chasms between them the low floor; the
         // low ground's terraces stay in the chasms
         double[] tq = out.tq;
         double hw = hl[0], dmT = 1e9, dgx = 0, dgz = 0;
@@ -2285,7 +2285,7 @@ public final class GalleriesField {
         // row at most ({@link #EDGE_LOW}) and no pillar stands within NEAR_IN of it (the hanging rock, below). None over
         // lava either (fix round 2b: in a Scoria Canyons slot the talus filled the lava up to a dry shelf).
         // Each ramp's talus is read at the column's own floor and the highest kept ({@link RampHit#tn}).
-        // (the tablelands' (0.22.1): where the tops are the ground raised out of the flood's reach the ridge stands sheer on
+        // (the tablelands' (0.22.3): where the tops are the ground raised out of the flood's reach the ridge stands sheer on
         // them as on the low ground)
         boolean chasm = tq[0] > 0.5 && !onTop;
         double Ft = chasm ? tq[1] : F;   // (in a chasm, the tops' over it)
@@ -2606,7 +2606,7 @@ public final class GalleriesField {
         // the rivers and the canyons read the warp's Jacobian: only they need it
         if (Fs < W + RIVER_LOW + 16 || cl.wCan > 0) warpJ(x, z, w);
         double F = riverFloor(x, z, w, Fs, riverPatch(w), 0);
-        // the tablelands (0.22.1): a ramp comes down onto a top or into a chasm as a player meets them
+        // the tablelands (0.22.3): a ramp comes down onto a top or into a chasm as a player meets them
         if (cl.wMain() > 0) {
             if (!(Fs < W + RIVER_LOW + 16 || cl.wCan > 0)) warpJ(x, z, w);
             F = tableFloor(x, z, w, cl, F, Fs);

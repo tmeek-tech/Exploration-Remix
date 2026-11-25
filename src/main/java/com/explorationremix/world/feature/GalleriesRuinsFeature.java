@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The lower Basalt Galleries' ruins (0.22.1; Taran: "Can you make some scattered ruins in the lower Basalt Galleries?
+ * The lower Basalt Galleries' ruins (0.22.3; Taran: "Can you make some scattered ruins in the lower Basalt Galleries?
  * ... Ruins should come in clusters with bigger structures in the middle and smaller around the edges"): sets each
  * chunk's own blocks of the clusters {@link GalleriesRuins} plans, once per chunk, last of the Galleries' passes. The plan
  * is the field's alone, so every chunk a cluster spans agrees on it whichever is made first.
@@ -123,7 +123,7 @@ public final class GalleriesRuinsFeature extends Feature<GalleriesRuinsFeature.C
         // the lava, where its block holds it as built: a side or the block under it holds it where the world's block
         // there does (rock, or a lava source) or where the plan lays lava there too, which this pass sets in turn (or
         // the chunk beside, as it is made; the plan holds every lava block with its neighbours laid, GalleriesRuins.held).
-        // The rig's first look (0.22.1) found a hall's channel of 16 chiseled all but its last block: each was looked
+        // The rig's first look (0.22.3) found a hall's channel of 16 chiseled all but its last block: each was looked
         // at while the next one along was still air.
         for (int x = ax; x <= bx; x++)
             for (int z = az; z <= bz; z++)

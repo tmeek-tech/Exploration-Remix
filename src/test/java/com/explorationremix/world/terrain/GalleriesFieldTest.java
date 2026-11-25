@@ -713,7 +713,7 @@ class GalleriesFieldTest {
      * moves), 0.215 % of the moves step off a place that stands only because a wall gave way and 0.017 % onto one,
      * 0.263 % off a ramp's deck, 0.257 % off other ground within 20 blocks of a ramp's strip, and 0.055 % elsewhere. Now
      * falls 0.81 and 0.67 %, drops 3.70 and 4.20 % (slow boxes: falls 0.87, 0.79, 0.80 and 0.88 %, drops 1.89, 3.17,
-     * 4.82 and 4.04 %). FALLS went to 1 % with the tablelands of 0.22.1 (Taran's cards: high ground over most of each
+     * 4.82 and 4.04 %). FALLS went to 1 % with the tablelands of 0.22.3 (Taran's cards: high ground over most of each
      * hall, its tops 20 to 40 rows over the floor, with chasms between them and sheer sides where no ramp or talus comes
      * down): falls 0.86 and 0.66 %, drops 3.19 and 3.59 % (slow boxes: falls 0.89, 0.74, 0.87 and 0.94 %, drops 1.92,
      * 3.01, 3.88 and 3.01 %).

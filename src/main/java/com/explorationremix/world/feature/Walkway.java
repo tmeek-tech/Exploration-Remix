@@ -20,7 +20,7 @@ import com.explorationremix.world.terrain.WastelandField;
  * <p>The Galleries' ways down from the Wasteland are a noise field's too: the ramps of the holes it opens, with their
  * feet and the holes' throats ({@link GalleriesField#wayNear}). No feature lays lava on them, takes their floor or hangs
  * into their head room (the 0.8.0 pack run found a lava pool and a fall cutting one), and lava falls keep further from
- * the heads and the throats ({@link #nearWayDown}). The lower Galleries' ruins (0.22.1, {@link GalleriesRuins#keepOff})
+ * the heads and the throats ({@link #nearWayDown}). The lower Galleries' ruins (0.22.3, {@link GalleriesRuins#keepOff})
  * are kept the same way: they are set last of the layer's passes, so no pool, fall or hanging column is laid where they
  * stand, and none is cut by them.
  *
@@ -72,7 +72,7 @@ public final class Walkway {
         if (nearGate(t, x, z, lo, hi, margin)) return true;
         if (lo >= t.shape.packFloor) return false;
         if (t.galleries != null && t.galleries.wayNear(x, z, lo, hi, margin, margin)) return true;
-        // 0.22.1: the lower Galleries' ruins, which are set last, so nothing laid before them is cut by them
+        // 0.22.3: the lower Galleries' ruins, which are set last, so nothing laid before them is cut by them
         if (t.galleries != null && GalleriesRuins.of(t).keepOff(x, z, lo, hi, margin)) return true;
         int li0 = t.shape.layerAt(Math.min(hi, t.shape.packFloor - 1)), li1 = t.shape.layerAt(lo);
         for (int li = 0; li < t.shape.layerCount; li++) {
