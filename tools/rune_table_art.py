@@ -4,11 +4,12 @@ interface"): two 256 x 256 sheets.
 textures/gui/rune_table.png, drawn on the screen one texel to a GUI pixel (RuneTableScreen):
   the panel's frame (a 9-slice: silver bars with blue gems at the corners), the lavender gem that crowns it, the
   Enchant button's frame (normal and lit), the flourishes either side of the weapon's name, and the sockets' kind
-  icons (a star for the active rune, a gem for the modifier, a crescent for the passive).
+  icons (a star for the active rune, a gem for the modifier, a crescent for the passive; since 0.22.6 a helmet for an
+  armor piece's effect rune, three gems for its collect runes and a pick for a tool's rune).
 
 textures/gui/rune_table_world.png, drawn in the world over the table (RuneTableView):
   the rune circle behind the weapon (drawn added onto the picture, so it glows), the silver socket rings with gems in
-  each socket's colour, the pips that fill with XP toward phase two, the twinkling stars and the stroke over a rune
+  each socket's colour (a weapon's three, then armor's effect and collect and a tool's), the pips that fill with XP toward phase two, the twinkling stars and the stroke over a rune
   to take out.
 
 Light falls from the top left. No warm colours and no cyan: silver-blue, light blue, lavender and white. The regions
@@ -51,6 +52,10 @@ GEMS = {
     "blue": (BLUE_HI, BLUE, BLUE_DK),
     "lavender": (LAV_HI, LAV, LAV_DK),
     "silver": (PASS_HI, PASS, PASS_DK),
+    # 0.22.6: armor's effect sockets periwinkle, its collect sockets pale lilac, a tool's pale sky blue
+    "periwinkle": ("#DCE5FF", "#9FB8FF", "#5B6FB5"),
+    "lilac": ("#F7F3FF", "#E0D4FF", "#9886C6"),
+    "sky": ("#EEF7FF", "#BFE0FF", "#6F96BE"),
 }
 
 
@@ -287,6 +292,43 @@ ICON_PHASE = [
 ]
 
 
+# 0.22.6, at (40, 72), (50, 72) and (60, 72): an armor piece's effect socket, a helmet; its collect sockets, three gems
+# (a set wakes on three); a tool's socket, a pick.
+ICON_HELMET = [
+    "..kkkkk..",
+    ".kHHHBBk.",
+    "kHHBBBBdk",
+    "kHBBBBBdk",
+    "kBkkkkkdk",
+    "kBk...kdk",
+    "kBk...kdk",
+    "kdk...kdk",
+    "kkk...kkk",
+]
+ICON_THREE = [
+    "...kkk...",
+    "...kHk...",
+    "...kBk...",
+    "...kkk...",
+    ".........",
+    "kkk...kkk",
+    "kHk...kHk",
+    "kBk...kdk",
+    "kkk...kkk",
+]
+ICON_PICK = [
+    ".kkkkkkk.",
+    "kHHHBBBdk",
+    "kHkkBkkdk",
+    "kk.kBk.kk",
+    "...kBk...",
+    "...kBk...",
+    "...kdk...",
+    "...kdk...",
+    "...kkk...",
+]
+
+
 def icons(img, origin=ICONS, pip=True):
     x0, y0 = origin
     stamp(img, ICON_STAR, {"k": INK, "B": BLUE, "H": BLUE_HI, "W": WHITE}, x0, y0)
@@ -294,6 +336,9 @@ def icons(img, origin=ICONS, pip=True):
     stamp(img, ICON_CRESCENT, {"k": INK, "H": PASS_HI, "P": PASS, "d": PASS_DK}, x0 + 20, y0)
     if pip:
         stamp(img, ICON_PHASE, {"k": INK, "H": BLUE_HI, "W": WHITE}, x0 + 30, y0)
+    stamp(img, ICON_HELMET, gem_legend("periwinkle"), x0 + 40, y0)
+    stamp(img, ICON_THREE, gem_legend("lilac"), x0 + 50, y0)
+    stamp(img, ICON_PICK, gem_legend("sky"), x0 + 60, y0)
 
 
 def gui_sheet():
@@ -419,8 +464,10 @@ def rune_circle(img):
 # The socket rings, 32 x 32: the active's at (128, 0), the modifier's at (160, 0), the passive's at (192, 0). A silver
 # band round a dark slot (the rune's tablet sits in it), lit from the top left, with a gem in the socket's colour at
 # each quarter and a stud between them.
-RINGS = {"active": (128, 0), "modifier": (160, 0), "passive": (192, 0)}
-RING_GEM = {"active": "blue", "modifier": "lavender", "passive": "silver"}
+RINGS = {"active": (128, 0), "modifier": (160, 0), "passive": (192, 0),
+         # 0.22.6: armor's effect and collect sockets and a tool's, a row down (RuneTableView.RING_V_GEAR)
+         "effect": (128, 96), "collect": (160, 96), "tool": (192, 96)}
+RING_GEM = {"active": "blue", "modifier": "lavender", "passive": "silver", "effect": "periwinkle", "collect": "lilac", "tool": "sky"}
 
 
 def socket_ring(img, kind):
@@ -571,8 +618,8 @@ def preview(path, scale=4):
     fw, fh = FLOURISH_SIZE
     bg.alpha_composite(g.crop((FLOURISH_LEFT[0], FLOURISH_LEFT[1], FLOURISH_LEFT[0] + fw, FLOURISH_LEFT[1] + fh)), (W // 2 - 40 - fw, 6))
     bg.alpha_composite(g.crop((FLOURISH_RIGHT[0], FLOURISH_RIGHT[1], FLOURISH_RIGHT[0] + fw, FLOURISH_RIGHT[1] + fh)), (W // 2 + 40, 6))
-    for k in range(3):
-        bg.alpha_composite(g.crop((ICONS[0] + 10 * k, ICONS[1], ICONS[0] + 10 * k + 9, ICONS[1] + 9)), (150 + 90 * k, 150))
+    for k in (0, 1, 2, 4, 5, 6):
+        bg.alpha_composite(g.crop((ICONS[0] + 10 * k, ICONS[1], ICONS[0] + 10 * k + 9, ICONS[1] + 9)), (150 + 40 * k, 150))
     # the world's pieces, at their own sizes; the circle added on at about the strength the game draws it
     circ = wsheet.crop((0, 0, 128, 128))
     cpx, bpx = circ.load(), bg.load()
@@ -585,7 +632,7 @@ def preview(path, scale=4):
                 bpx[tx, ty] = (min(255, o[0] + int(r * 0.55)), min(255, o[1] + int(gg * 0.55)), min(255, o[2] + int(b * 0.55)), 255)
     for k, kind in enumerate(RINGS):
         x, y = RINGS[kind]
-        bg.alpha_composite(wsheet.crop((x, y, x + 32, y + 32)), (130 + 90 * k, 160))
+        bg.alpha_composite(wsheet.crop((x, y, x + 32, y + 32)), (130 + 50 * k, 200))
     for k in range(3):
         bg.alpha_composite(wsheet.crop((PIP_DARK[0] + 6 * k, 0, PIP_DARK[0] + 6 * k + 5, 5)), (40 + 8 * k, 150))
     for k in range(4):

@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "end=false,fast=false": {
+      "model": "explorationremix:block/rune_rope"
+    },
+    "end=false,fast=true": {
+      "model": "explorationremix:block/rune_rope_fast"
+    },
+    "end=true,fast=false": {
+      "model": "explorationremix:block/rune_rope_end"
+    },
+    "end=true,fast=true": {
+      "model": "explorationremix:block/rune_rope_fast_end"
+    }
+  }
+}

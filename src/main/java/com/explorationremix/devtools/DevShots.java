@@ -336,8 +336,9 @@ public final class DevShots {
      * "! swing light|strong combo tau" (the player's own timed swing held still tau ticks in; "! swing off" lets go),
      * "! glow tick" (the ready light on the sword in hand held still that many ticks into its play; "! glow off" lets go),
      * "! sparkle tick" (a charged sword's sparkle held still at that tick of its clock; "! sparkle off" lets go),
-     * "! table choose|hover|set|out|enchant arg" (the enchanting table's rune view, open: choose a socket, hold the
-     * mouse over a socket, a risen rune or "out", set a rune, take one out), "! close" (the open screen) and "! snap name"
+     * "! table gear|choose|hover|set|out arg" (the enchanting table's rune view, open: show a piece of gear's sockets
+     * (hand, helmet, chestplate, leggings or boots), choose a socket, hold the mouse over a socket, a risen rune, a box
+     * of the gear column or "out", set a rune, take one out), "! close" (the open screen) and "! snap name"
      * (a picture of this very frame, without moving or settling, for things in flight and screens). False if the
      * line is none of these.
      */

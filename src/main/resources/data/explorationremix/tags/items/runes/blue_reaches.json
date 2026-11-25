@@ -3,11 +3,19 @@
   "values": [
     "explorationremix:rune_field",
     "explorationremix:rune_reel",
+    "explorationremix:rune_snare",
+    "explorationremix:rune_volley",
     "explorationremix:rune_seek",
     "explorationremix:rune_pierce",
     "explorationremix:rune_fan",
     "explorationremix:rune_on_hit",
     "explorationremix:rune_after",
-    "explorationremix:rune_thirst"
+    "explorationremix:rune_quickdraw",
+    "explorationremix:rune_sense",
+    "explorationremix:rune_glide",
+    "explorationremix:rune_climb",
+    "explorationremix:rune_swim",
+    "explorationremix:rune_leap",
+    "explorationremix:rune_bounty"
   ]
 }
