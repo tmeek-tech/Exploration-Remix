@@ -713,6 +713,66 @@
     ],
     "subtitle": "subtitles.explorationremix.runes.ready"
   },
+  "swing.smash": {
+    "sounds": [
+      {
+        "name": "explorationremix:swing/smash1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:swing/smash2",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.swing.smash"
+  },
+  "guard.raise": {
+    "sounds": [
+      {
+        "name": "explorationremix:guard/raise1",
+        "volume": 0.6,
+        "attenuation_distance": 10
+      },
+      {
+        "name": "explorationremix:guard/raise2",
+        "volume": 0.6,
+        "attenuation_distance": 10
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.guard.raise"
+  },
+  "guard.block": {
+    "sounds": [
+      {
+        "name": "explorationremix:guard/block1",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:guard/block2",
+        "volume": 1.0
+      },
+      {
+        "name": "explorationremix:guard/block3",
+        "volume": 1.0
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.guard.block"
+  },
+  "guard.parry": {
+    "sounds": [
+      {
+        "name": "explorationremix:guard/parry1",
+        "volume": 1.0,
+        "attenuation_distance": 32
+      },
+      {
+        "name": "explorationremix:guard/parry2",
+        "volume": 1.0,
+        "attenuation_distance": 32
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.guard.parry"
+  },
   "mossback.windup": {
     "sounds": [
       {

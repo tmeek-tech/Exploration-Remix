@@ -13,9 +13,9 @@ import net.minecraftforge.client.gui.overlay.ForgeGui;
 /**
  * The swings' marks under the crosshair, where vanilla's attack indicator was: one small pip per light swing of the
  * chain, lit as each lands; then the cooldown's bar draining away. After the chain's last light swing the bar is pale
- * blue with a bright point at its left end (a strong attack can still be made: hold the button); after a strong attack
- * it is grey (nothing can start until it runs out), and a press in it makes it blink. Shown only while a chain or a
- * cooldown is under way, in first person.
+ * blue with a bright point at its left end (a strong attack can still be made: hold the button); after a heavy attack
+ * (a strong one or a jump attack: two seconds) it is grey (nothing can start until it runs out), and a press in it makes
+ * it blink. Shown only while a chain or a cooldown is under way, in first person.
  */
 final class SwingHud {
     private static final int PIP = 3, PIP_GAP = 2, BAR_W = 16, BAR_H = 2;

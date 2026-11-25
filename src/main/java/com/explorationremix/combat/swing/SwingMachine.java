@@ -3,19 +3,22 @@ package com.explorationremix.combat.swing;
 /**
  * One player's swings, tick by tick, with no game in it (the player's own game runs it; tests run it too). A press
  * starts a light swing's wind-up; held on past {@link WeaponProfile#holdAt} it becomes a strong attack, which fires on
- * its own once wound up and then lunges (held without a break: a quick second click is a tap, not a hold). A press while a
- * swing is under way waits for it to finish. Light swings in a row make a chain: slash, backhand, chop; after the
- * chain's last one comes the cooldown, in which a press can only start a strong attack (held, or it is let go), and a
- * strong attack starts the cooldown again, in which nothing can start (a press is refused, unless it comes in the
- * cooldown's last few ticks: then it waits). Idle for a moment, the chain starts again from its first swing.
+ * its own once wound up and then lunges (held without a break: a quick second click is a tap, not a hold). Held in
+ * mid-air instead (a sword, Taran 2026-11-25), it becomes a heavy jump attack: the blade rises overhead and waits, and
+ * lands the moment the player touches down (never sooner than {@link WeaponProfile#jumpMin} after the press); in water,
+ * on a ladder, or still falling after {@link #JUMP_MAX_AIR} ticks, it is dropped. A press while a swing is under way
+ * waits for it to finish. Light swings in a row make a chain: slash, backhand, chop; after the chain's last one comes
+ * the cooldown, in which a press can only start a strong (or jump) attack (held, or it is let go), and a heavy attack
+ * starts the heavy cooldown, in which nothing can start (a press is refused, unless it comes in the cooldown's last few
+ * ticks: then it waits). Idle for a moment, the chain starts again from its first swing.
  */
 public final class SwingMachine {
     /** What the machine tells the game. */
     public interface Out {
         void start(int seq, SwingKind kind, int combo);
 
-        /** The light wind-up under way became a strong attack's. */
-        void upgrade(int seq);
+        /** The light wind-up under way became a heavy one: a strong attack's, or a jump attack's. */
+        void upgrade(int seq, SwingKind kind);
 
         void land(int seq, SwingKind kind, int combo);
 
@@ -24,14 +27,19 @@ public final class SwingMachine {
 
         void cancel(int seq);
 
-        /** A press that could start nothing (the cooldown after a strong attack). */
+        /** A press that could start nothing (the cooldown after a heavy attack). */
         void refused();
     }
 
     public enum Phase { IDLE, WINDUP, LUNGE, RECOVER }
 
+    /** Where the player is, each tick: on their feet, in the air on their own (jumped, or off a ledge), or neither. */
+    public enum Footing { GROUND, AIR, OTHER }
+
     /** A press this near the end of a cooldown waits for it instead of being refused. */
     static final int BUFFER_END = 4;
+    /** A jump attack still in the air this long after its press is dropped (a fall that long is no jump). */
+    public static final int JUMP_MAX_AIR = 50;
 
     private WeaponProfile w;
     private Phase phase = Phase.IDLE;
@@ -53,7 +61,7 @@ public final class SwingMachine {
     /** The attack button was pressed this tick. */
     public void press(Out out) {
         if (cooldownFromStrong && cooldown > BUFFER_END) {
-            // nothing can start in a strong attack's cooldown, even once its lunge is over
+            // nothing can start in a heavy attack's cooldown, even once its lunge is over
             out.refused();
             return;
         }
@@ -92,6 +100,9 @@ public final class SwingMachine {
         idle = 0;
     }
 
+    /** A press waiting for the swing under way is dropped (the guard went up). */
+    public void unbuffer() { buffered = false; }
+
     /** Back to nothing at all (a new world, death). */
     public void reset() {
         phase = Phase.IDLE;
@@ -102,8 +113,14 @@ public final class SwingMachine {
 
     // ------------------------------------------------------------------------------------------------ time
 
-    /** One tick, after this tick's presses: {@code held} is whether the attack button is down now. */
-    public void tick(boolean held, Out out) {
+    /** One tick on the ground (tests of the swings that don't jump). */
+    public void tick(boolean held, Out out) { tick(held, Footing.GROUND, out); }
+
+    /**
+     * One tick, after this tick's presses: {@code held} is whether the attack button is down now, {@code footing} where
+     * the player is now.
+     */
+    public void tick(boolean held, Footing footing, Out out) {
         if (cooldown > 0 && --cooldown == 0) cooldownFromStrong = false;
         switch (phase) {
             case IDLE -> {
@@ -113,7 +130,7 @@ public final class SwingMachine {
                     begin(out, true);
                 }
             }
-            case WINDUP -> windup(held, out);
+            case WINDUP -> windup(held, footing, out);
             case LUNGE -> {
                 if (t < w.lungeTicks()) out.lunge(seq, t, w.lunge()[t]);
                 if (++t >= w.lungeTicks()) {
@@ -134,9 +151,19 @@ public final class SwingMachine {
         }
     }
 
-    private void windup(boolean held, Out out) {
+    private void windup(boolean held, Footing footing, Out out) {
         t++;
         if (!held) let = true;
+        if (kind == SwingKind.JUMP) {
+            // overhead, waiting to come down: it lands as the player touches down
+            if (footing == Footing.OTHER || (footing == Footing.AIR && t > JUMP_MAX_AIR)) {
+                drop(out);
+                return;
+            }
+            if (footing == Footing.AIR || t < w.jumpMin()) return;
+            landNow(out);
+            return;
+        }
         if (fromCooldown && let && t <= w.holdAt()) {
             // a strong attack out of the cooldown is only made by holding; let go early, it is dropped, unless the
             // cooldown ran out meanwhile: then it goes on as the light swing it would now have been
@@ -147,33 +174,57 @@ public final class SwingMachine {
                 chain = 0;
                 out.start(seq, kind, combo);
             } else {
-                out.cancel(seq);
-                phase = Phase.IDLE;
-                idle = 0;
+                drop(out);
                 return;
             }
         }
-        if (kind == SwingKind.LIGHT && !let && t == w.holdAt()) {
-            kind = SwingKind.STRONG;
-            combo = 0;
-            out.upgrade(seq);
+        if (!let && t == w.holdAt()) {
+            if (footing == Footing.AIR && w.jumps()) {
+                // held in mid-air: a jump attack (out of the chain's cooldown too)
+                kind = SwingKind.JUMP;
+                combo = 0;
+                out.upgrade(seq, kind);
+                return;
+            }
+            if (kind == SwingKind.LIGHT) {
+                kind = SwingKind.STRONG;
+                combo = 0;
+                out.upgrade(seq, kind);
+            }
         }
         if (t < w.windup(kind)) return;
+        landNow(out);
+    }
+
+    private void landNow(Out out) {
         out.land(seq, kind, combo);
-        if (kind == SwingKind.LIGHT) {
-            if (++chain >= w.chain()) startCooldown(false);
-            phase = Phase.RECOVER;
-        } else {
-            startCooldown(true);
-            phase = Phase.LUNGE;
+        switch (kind) {
+            case LIGHT -> {
+                if (++chain >= w.chain()) startCooldown(SwingKind.LIGHT);
+                phase = Phase.RECOVER;
+            }
+            case STRONG -> {
+                startCooldown(kind);
+                phase = Phase.LUNGE;
+            }
+            case JUMP -> {
+                startCooldown(kind);
+                phase = Phase.RECOVER;
+            }
         }
         t = 0;
     }
 
-    private void startCooldown(boolean strong) {
+    private void drop(Out out) {
+        out.cancel(seq);
+        phase = Phase.IDLE;
+        idle = 0;
+    }
+
+    private void startCooldown(SwingKind k) {
         chain = 0;
-        cooldown = cooldownTotal = w.cooldown();
-        cooldownFromStrong = strong;
+        cooldown = cooldownTotal = w.cooldown(k);
+        cooldownFromStrong = k.heavy();
     }
 
     // ------------------------------------------------------------------------------------------------ for drawing
@@ -196,7 +247,7 @@ public final class SwingMachine {
 
     public int cooldownTotal() { return cooldownTotal; }
 
-    /** The cooldown is a strong attack's (nothing can start in it). */
+    /** The cooldown is a heavy attack's (nothing can start in it). */
     public boolean cooldownFromStrong() { return cooldownFromStrong; }
 
     /** The wind-up under way is a strong attack made out of the cooldown (it needs the button held). */

@@ -58,6 +58,29 @@ public final class Poise {
     /** And what it does to poise, on top of its damage: a strong attack breaks guards. */
     public static float swingPoise(boolean strong, boolean finisher) { return strong ? 2.5F : finisher ? 1.5F : 1.0F; }
 
+    /**
+     * A heavy jump attack's damage multiplier (Taran 2026-11-25: one much harder blow on the creature in front, no
+     * shockwave), times {@link #plunge} for how far the player came down onto it.
+     */
+    public static final float JUMP_DAMAGE = 2.25F;
+    /** What a jump attack does to poise, on top of its damage: nothing short of a boss keeps its guard. */
+    public static final float JUMP_POISE = 3.0F;
+    /** A jump attack throws what it hits this much harder (blocks a tick): a blow from above drives in more than out. */
+    public static final float JUMP_PUSH = 0.2F;
+    /** A drop up to this (a jump on the flat comes to 1.25 blocks) adds nothing; at {@link #PLUNGE_FULL} the blow is doubled. */
+    public static final double PLUNGE_FROM = 1.5, PLUNGE_FULL = 8.0;
+
+    /**
+     * How much harder a jump attack lands for falling {@code drop} blocks before it (Taran's pick: up to double from about
+     * 8 blocks; the fall hurts as any fall does): 1 for a hop, rising evenly to 2.
+     */
+    public static float plunge(double drop) {
+        return 1.0F + clamp01((float) ((drop - PLUNGE_FROM) / (PLUNGE_FULL - PLUNGE_FROM)));
+    }
+
+    /** A jump attack's whole damage multiplier, for a drop of {@code drop} blocks. */
+    public static float jumpDamage(double drop) { return JUMP_DAMAGE * plunge(drop); }
+
     /** A strong attack throws what it hits this much harder (blocks a tick, on top of the game's own knockback). */
     public static final float STRONG_PUSH = 0.45F;
 

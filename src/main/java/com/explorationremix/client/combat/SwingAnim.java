@@ -123,10 +123,57 @@ public final class SwingAnim {
             new Body(0.45F, -0.55F, 0.12F, 2.0F, 0.55F, -0.05F),
             new Body(-1.55F, 0.35F, 0.0F, -3.0F, -0.35F, 0.16F));
 
+    // A sword's heavy jump attack (0.22.7): the blade raised high over the right shoulder, point back, waiting for the
+    // ground; then brought straight down through the middle, ending driven into the ground just ahead.
+    static final Keys SMASH = new Keys(
+            Hand.of(-0.352F, 0.795F, 0.202F, 76.9F, -29.1F, -13.3F),
+            Hand.of(-0.511F, 0.61F, 0.162F, 132.2F, 10.7F, -45.9F),
+            Hand.of(-0.475F, 0.409F, 0.282F, 118.6F, 24.4F, -81.1F),
+            0.3F,
+            new Body(-2.95F, 0.15F, 0.0F, 0.0F, 0.1F, -0.15F),
+            new Body(-0.45F, -0.1F, 0.0F, -1.8F, -0.05F, 0.38F));
+
     static Keys keys(SwingKind kind, int combo, WeaponProfile w) {
+        if (kind == SwingKind.JUMP) return SMASH;
         if (kind == SwingKind.STRONG) return THRUST;
         if (combo >= w.chain() - 1) return CHOP;
         return combo % 2 == 0 ? SLASH : BACKHAND;
+    }
+
+    // ------------------------------------------------------------------------------------------------ the guard
+
+    /**
+     * A sword held up in guard (0.22.7): across the view low on the right, its point high on the left, the middle of the
+     * view left clear; a blow taken on it knocks it down and back a little; a parry flicks it up and out.
+     */
+    static final Hand GUARD = Hand.of(-0.343F, 0.361F, 0.212F, -171.4F, -57.2F, -71.3F);
+    static final Hand BLOCKED = Hand.of(-0.357F, 0.351F, 0.262F, -169.8F, -45.5F, -74.6F);
+    static final Hand PARRIED = Hand.of(-0.4F, 0.403F, 0.182F, 142.7F, -66.3F, -37.5F);
+    /** Third person: the arm across the body, as a shield is held, the blade's point up by the other shoulder. */
+    static final Body GUARD_BODY = new Body(-0.95F, -0.55F, 0.1F, 0.0F, -0.15F, 0.0F);
+
+    /** The guard comes up in this long, and down again in this long (ticks). */
+    static final float GUARD_UP = 3.0F, GUARD_DOWN = 3.0F;
+    /** A blow taken on it: the jolt's length; a parry: the flick out, and the way back into the guard. */
+    static final float JOLT = 5.0F, FLICK_OUT = 1.5F, FLICK_BACK = 5.0F;
+
+    /**
+     * The hand in guard: {@code up} 0 to 1 how far it is raised (from {@code from}, where the hand was), {@code jolt} ticks
+     * since a blow struck it (or below 0), {@code parry} whether that was a parry; {@code time} for a slight sway.
+     */
+    static Hand guard(Hand from, float up, float jolt, boolean parry, float time) {
+        Hand h = GUARD.shaken(0.0F, 0.004F * Mth.sin(time * 0.21F), 0.0F, 0.6F * Mth.sin(time * 0.17F + 1.0F));
+        if (jolt >= 0.0F) {
+            if (parry) {
+                float k = jolt < FLICK_OUT ? easeOut(jolt / FLICK_OUT) : 1.0F - smooth(Mth.clamp((jolt - FLICK_OUT) / FLICK_BACK, 0.0F, 1.0F));
+                h = h.lerp(PARRIED, k);
+            } else if (jolt < JOLT) {
+                // struck: knocked back at once, then eased up again
+                float k = jolt < 1.0F ? jolt : 1.0F - smooth((jolt - 1.0F) / (JOLT - 1.0F));
+                h = h.lerp(BLOCKED, k);
+            }
+        }
+        return from.lerp(h, smooth(Mth.clamp(up, 0.0F, 1.0F)));
     }
 
     // ------------------------------------------------------------------------------------------------ timing
@@ -135,28 +182,65 @@ public final class SwingAnim {
     static final float CUT_LEAD = 1.0F, CUT_TAIL = 1.1F;
     /** The thrust is quicker off the mark, and most of the way out as it lands. */
     static final float THRUST_LEAD = 0.5F, THRUST_TAIL = 0.8F;
+    /**
+     * A jump attack's blade is raised overhead in this long once it has become one; it comes down the moment the player
+     * touches down (no sooner: when that will be isn't known), all the way in this long.
+     */
+    static final float JUMP_RISE = 3.0F, JUMP_TAIL = 1.6F;
     /** After its hold, the hand is back at rest in this many ticks. */
     static final float BACK = 4.0F;
+    /** A jump attack's landing, until it lands. */
+    static final float NOT_YET = -1.0F;
+
+    static float lead(SwingKind kind) {
+        return switch (kind) {
+            case LIGHT -> CUT_LEAD;
+            case STRONG -> THRUST_LEAD;
+            case JUMP -> 0.0F;
+        };
+    }
+
+    static float tail(SwingKind kind) {
+        return switch (kind) {
+            case LIGHT -> CUT_TAIL;
+            case STRONG -> THRUST_TAIL;
+            case JUMP -> JUMP_TAIL;
+        };
+    }
+
+    /**
+     * One swing as its poses need it: its kind and poses now; what it was before it turned heavy ({@code was}, the same if
+     * it never did), with that wind-up's poses and length, and when it turned ({@code upgradeAt} ticks in, or -1); when
+     * it lands ({@code land} ticks in; a jump attack's is {@link #NOT_YET} until it comes down) and how long the hand
+     * holds at the end of the cut after that ({@code hold}).
+     */
+    record Shape(SwingKind kind, Keys keys, SwingKind was, Keys wasKeys, float wasLand, float upgradeAt, float land, float hold) {
+        boolean waiting() { return kind == SwingKind.JUMP && land < 0.0F; }
+    }
 
     /** Where a swing is: 0 to 1 through its wind-up, its cut, and its way back, from the swing's own times. */
     record Phase(float windup, float cut, float back) {}
 
-    /**
-     * The phases of a swing {@code tau} ticks after it started, landing at {@code land} ticks (its wind-up), its hand
-     * held at the end of the cut until {@code hold} ticks after it lands.
-     */
-    static Phase phase(float tau, float land, float hold, boolean strong) {
-        float lead = strong ? THRUST_LEAD : CUT_LEAD, tail = strong ? THRUST_TAIL : CUT_TAIL;
-        float cutFrom = land - lead, cutTo = land + tail;
+    /** The phases of swing {@code s}, {@code tau} ticks after it started. */
+    static Phase phase(Shape s, float tau) {
+        if (s.kind == SwingKind.JUMP) {
+            float w = Mth.clamp(tau / JUMP_RISE, 0.0F, 1.0F);
+            if (s.waiting()) return new Phase(w, 0.0F, 0.0F);
+            float c = Mth.clamp((tau - s.land) / JUMP_TAIL, 0.0F, 1.0F);
+            float b = Mth.clamp((tau - s.land - Math.max(JUMP_TAIL, s.hold)) / BACK, 0.0F, 1.0F);
+            return new Phase(w, c, b);
+        }
+        float cutFrom = s.land - lead(s.kind), cutTo = s.land + tail(s.kind);
         float w = Mth.clamp(tau / Math.max(0.5F, cutFrom), 0.0F, 1.0F);
         float c = Mth.clamp((tau - cutFrom) / (cutTo - cutFrom), 0.0F, 1.0F);
-        float b = Mth.clamp((tau - Math.max(cutTo, land + hold)) / BACK, 0.0F, 1.0F);
+        float b = Mth.clamp((tau - Math.max(cutTo, s.land + s.hold)) / BACK, 0.0F, 1.0F);
         return new Phase(w, c, b);
     }
 
-    /** From a swing's start until its hand is back at rest (ticks). */
-    static float length(float land, float hold, boolean strong) {
-        return Math.max(land + (strong ? THRUST_TAIL : CUT_TAIL), land + hold) + BACK;
+    /** From a swing's start until its hand is back at rest (ticks); a jump attack still waiting to come down: never. */
+    static float length(Shape s) {
+        if (s.waiting()) return Float.MAX_VALUE;
+        return Math.max(s.land + tail(s.kind), s.land + s.hold) + BACK;
     }
 
     /** Quick, then holding at the end: a wind-up. */
@@ -170,52 +254,83 @@ public final class SwingAnim {
     // ------------------------------------------------------------------------------------------------ evaluation
 
     /**
-     * The hand's pose for a swing: {@code from} where the hand was when it started, {@code tau} ticks in. A light
-     * wind-up that became a strong one at {@code upgradeAt} ticks (or -1) leaves its own wind-up from where it had got
-     * to by then ({@code lightLand} the light swing's own wind-up); {@code time} drives a strong wind-up's tremble.
+     * Where the wind-up has got to {@code tau} ticks in, before the cut: a light wind-up that became a heavy one at
+     * {@code upgradeAt} leaves its own wind-up from where it had got to by then; a strong one trembles as it fills, a
+     * jump attack's sways a little overhead as it waits ({@code time} drives both).
      */
-    static Hand hand(Keys k, Keys light, Hand from, float tau, float land, float lightLand, float hold, boolean strong, float upgradeAt,
-                     float time) {
-        Phase ph = phase(tau, land, hold, strong);
+    private static Hand wound(Shape s, Hand from, float tau, float time) {
+        Phase ph = phase(s, tau);
         Hand wound;
-        if (strong && upgradeAt >= 0.0F && tau >= upgradeAt) {
-            float lightWound = Mth.clamp(upgradeAt / Math.max(0.5F, lightLand - CUT_LEAD), 0.0F, 1.0F);
-            Hand mid = from.lerp(light.windup, easeOut(lightWound));
-            float k2 = Mth.clamp((tau - upgradeAt) / Math.max(0.5F, land - THRUST_LEAD - upgradeAt), 0.0F, 1.0F);
-            wound = mid.lerp(k.windup, easeOut(k2));
+        boolean heavy = s.kind.heavy();
+        if (heavy && s.upgradeAt >= 0.0F && tau >= s.upgradeAt) {
+            float wasFrom = s.wasLand - lead(s.was);
+            float before = Mth.clamp(s.upgradeAt / Math.max(0.5F, wasFrom), 0.0F, 1.0F);
+            Hand mid = from.lerp(s.wasKeys.windup, easeOut(before));
+            float riseEnd = s.kind == SwingKind.JUMP ? s.upgradeAt + JUMP_RISE : s.land - THRUST_LEAD;
+            float k2 = Mth.clamp((tau - s.upgradeAt) / Math.max(0.5F, riseEnd - s.upgradeAt), 0.0F, 1.0F);
+            wound = mid.lerp(s.keys.windup, easeOut(k2));
         } else {
-            wound = from.lerp(k.windup, easeOut(ph.windup));
+            wound = from.lerp(s.keys.windup, easeOut(ph.windup));
         }
-        if (strong && ph.cut <= 0.0F) {
+        if (ph.cut > 0.0F) return wound;
+        if (s.kind == SwingKind.STRONG) {
             // the thrust fills: a tremble that grows to the end of the wind-up
-            float s = Mth.clamp((tau - land * 0.45F) / (land * 0.55F), 0.0F, 1.0F);
-            s *= s;
-            wound = wound.shaken(0.006F * s * Mth.sin(time * 5.1F), 0.006F * s * Mth.sin(time * 6.3F + 1.0F),
-                    1.2F * s * Mth.sin(time * 4.7F), 1.2F * s * Mth.sin(time * 5.9F + 2.0F));
+            float k = Mth.clamp((tau - s.land * 0.45F) / (s.land * 0.55F), 0.0F, 1.0F);
+            k *= k;
+            wound = wound.shaken(0.006F * k * Mth.sin(time * 5.1F), 0.006F * k * Mth.sin(time * 6.3F + 1.0F),
+                    1.2F * k * Mth.sin(time * 4.7F), 1.2F * k * Mth.sin(time * 5.9F + 2.0F));
+        } else if (s.kind == SwingKind.JUMP) {
+            // held high, the blade sways as the player hangs in the air
+            float k = Mth.clamp((tau - (s.upgradeAt < 0.0F ? 0.0F : s.upgradeAt) - JUMP_RISE) / 2.0F, 0.0F, 1.0F);
+            wound = wound.shaken(0.004F * k * Mth.sin(time * 0.9F), 0.008F * k * Mth.sin(time * 1.3F + 0.5F),
+                    0.8F * k * Mth.sin(time * 1.1F + 1.0F), 1.5F * k * Mth.sin(time * 0.8F));
         }
-        if (ph.cut <= 0.0F) return wound;
-        Hand cut = Hand.curve(wound, k.mid, k.follow, strong ? easeOut(ph.cut) : easeInOut(ph.cut));
-        if (ph.back <= 0.0F) return cut;
-        float b = smooth(ph.back);
-        return cut.lerp(Hand.REST, b).dropped(k.dip * Mth.sin(b * Mth.PI));
+        return wound;
     }
 
-    /** The same swing's third-person pose, and how much of it holds (1 through the swing, easing to 0 at rest). */
-    static Body body(Keys k, float tau, float land, float hold, boolean strong) {
-        Phase ph = phase(tau, land, hold, strong);
-        Body b = Body.REST.lerp(k.bodyWindup, easeOut(ph.windup));
-        if (ph.cut > 0.0F) b = b.lerp(k.bodyFollow, easeInOut(ph.cut));
+    /** The hand's pose for swing {@code s}, {@code tau} ticks in: {@code from} where the hand was when it started. */
+    static Hand hand(Shape s, Hand from, float tau, float time) {
+        Phase ph = phase(s, tau);
+        Hand wound = wound(s, from, ph.cut > 0.0F ? Math.min(tau, cutStart(s)) : tau, time);
+        if (ph.cut <= 0.0F) return wound;
+        float k = switch (s.kind) {
+            case LIGHT -> easeInOut(ph.cut);
+            case STRONG -> easeOut(ph.cut);
+            // a smash is fast from the first moment, and slams to a stop
+            case JUMP -> 1.0F - (1.0F - ph.cut) * (1.0F - ph.cut);
+        };
+        Hand cut = Hand.curve(wound, s.keys.mid, s.keys.follow, k);
+        if (ph.back <= 0.0F) return cut;
+        float b = smooth(ph.back);
+        return cut.lerp(Hand.REST, b).dropped(s.keys.dip * Mth.sin(b * Mth.PI));
+    }
+
+    /** When the cut begins (ticks in): the wind-up is held as it was then. */
+    private static float cutStart(Shape s) { return s.land - lead(s.kind); }
+
+    /** The same swing's third-person pose. A light wind-up that turned heavy leaves from where it had got to. */
+    static Body body(Shape s, float tau) {
+        Phase ph = phase(s, tau);
+        Body b;
+        if (s.kind.heavy() && s.upgradeAt >= 0.0F) {
+            Shape was = new Shape(s.was, s.wasKeys, s.was, s.wasKeys, s.wasLand, -1.0F, s.wasLand, 0.0F);
+            Body mid = Body.REST.lerp(s.wasKeys.bodyWindup, easeOut(phase(was, Math.min(tau, s.upgradeAt)).windup));
+            float riseEnd = s.kind == SwingKind.JUMP ? s.upgradeAt + JUMP_RISE : s.land - THRUST_LEAD;
+            float k2 = Mth.clamp((tau - s.upgradeAt) / Math.max(0.5F, riseEnd - s.upgradeAt), 0.0F, 1.0F);
+            b = mid.lerp(s.keys.bodyWindup, easeOut(k2));
+        } else {
+            b = Body.REST.lerp(s.keys.bodyWindup, easeOut(ph.windup));
+        }
+        if (ph.cut > 0.0F) b = b.lerp(s.keys.bodyFollow, easeInOut(ph.cut));
         return b;
     }
 
     /** How much a third-person pose holds: all of it until the way back, then less and less. */
-    static float bodyWeight(float tau, float land, float hold, boolean strong) {
-        return 1.0F - smooth(phase(tau, land, hold, strong).back);
-    }
+    static float bodyWeight(Shape s, float tau) { return 1.0F - smooth(phase(s, tau).back); }
 
     /** Whether the blade is in its cut now (for its trail): 0 outside, up to 1 in the middle of it. */
-    static float cutting(float tau, float land, float hold, boolean strong) {
-        float c = phase(tau, land, hold, strong).cut;
+    static float cutting(Shape s, float tau) {
+        float c = phase(s, tau).cut;
         return c <= 0.0F || c >= 1.0F ? 0.0F : Mth.sin(c * Mth.PI);
     }
 }

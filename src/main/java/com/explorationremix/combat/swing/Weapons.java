@@ -14,6 +14,9 @@ public final class Weapons {
     /** Axes swing the timed way too (slower, a chain of two). */
     public static boolean axes = true;
 
+    /** Whether {@code stack} can be held up in guard, to block and parry (swords: Taran 2026-11-25; axes keep their own use). */
+    public static boolean guards(ItemStack stack) { return profile(stack) == WeaponProfile.SWORD; }
+
     @Nullable
     public static WeaponProfile profile(ItemStack stack) {
         if (stack.isEmpty()) return null;

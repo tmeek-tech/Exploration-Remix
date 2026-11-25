@@ -21,6 +21,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -205,6 +206,15 @@ public final class RuneFxClient implements RuneFx.ClientSide {
             case SHOCKWAVE -> shockwave(l, r, at, rgb, e, s, fx.a(), dist);
             case SNARE -> snare(r, at, rgb, s);
             case ARMOR -> armor(r, at, rgb, Math.round(fx.a()), mc.player != null && fx.entity() == mc.player.getId());
+            case SMASH -> smash(l, r, at, d, s, fx.rgb(), dist, mc.player != null && fx.entity() == mc.player.getId());
+            case PARRY -> {
+                parry(r, at, d, mc.player != null && fx.entity() == mc.player.getId());
+                com.explorationremix.client.combat.GuardClient.struck(fx.entity(), true, 1.0F);
+            }
+            case BLOCK -> {
+                block(r, at, d, s);
+                com.explorationremix.client.combat.GuardClient.struck(fx.entity(), false, s);
+            }
         }
     }
 
@@ -740,6 +750,56 @@ public final class RuneFxClient implements RuneFx.ClientSide {
         }
         for (int i = 0; i < count(4); i++) vanilla(l, ParticleTypes.POOF, at, hemi(r, n).scale(0.05));
         if (dist < 10.0) RuneCamera.shake((0.5F + 0.8F * k) * (float) (1.0 - dist / 10.0));
+    }
+
+    /**
+     * A sword's jump attack comes down (0.22.7): a flash where the blade meets the ground, a ring of dust rolling out over
+     * it, chips of the ground's own block thrown up and out, and a jolt for anyone near.
+     */
+    private static void smash(ClientLevel l, RandomSource r, Vec3 at, Vec3 facing, float s, int ground, double dist, boolean own) {
+        float k = Mth.clamp(s, 0.3F, 1.0F);
+        Vec3 up = new Vec3(0, 1, 0);
+        Vec3 way = flat(facing);
+        GlowParticle.flash(at.add(0, 0.15, 0)).colour(WHITE).fadeTo(0xD8DEE8).size(0.5F, 1.3F * k + 0.4F).alpha(0.75F).life(4).spawn();
+        GlowParticle.ring(at.add(0, 0.06, 0), up).colour(0xEEF1F6).fadeTo(0x868A92).size(0.3F, 1.9F * k + 0.5F).alpha(0.7F).life(9).spawn();
+        sparks(r, at.add(0, 0.1, 0), count(6 + 8 * k), () -> cone(r, way.add(0, 0.9, 0), 50), 0.32 + 0.2 * k, 0xEEF3FC, 0.05F, 8, 1.0F);
+        BlockState st = Block.stateById(ground);
+        if (!st.isAir()) {
+            BlockParticleOption bits = new BlockParticleOption(ParticleTypes.BLOCK, st);
+            for (int i = 0; i < count(18 + 16 * k); i++) {
+                Vec3 o = flat(sphere(r));
+                vanilla(l, bits, at.add(o.scale(0.2 + r.nextDouble() * 0.5)).add(0, 0.1, 0), o.scale(0.12 + 0.16 * k * r.nextDouble()).add(0, 0.12 + 0.14 * r.nextDouble(), 0));
+            }
+        }
+        for (int i = 0; i < count(6); i++) {
+            Vec3 o = flat(sphere(r));
+            vanilla(l, ParticleTypes.POOF, at.add(o.scale(0.4)).add(0, 0.1, 0), o.scale(0.08 + 0.05 * r.nextDouble()));
+        }
+        // the player's own came with its jolt the moment it landed on their game
+        if (!own && dist < 8.0) RuneCamera.shake((0.35F + 0.55F * k) * (float) (1.0 - dist / 8.0));
+    }
+
+    /**
+     * A sword's parry (0.22.7): a sharp white star where the blades meet, a ring thrown out towards what was turned back,
+     * and bright sparks sprayed that way.
+     */
+    private static void parry(RandomSource r, Vec3 at, Vec3 toward, boolean own) {
+        Vec3 way = toward.lengthSqr() < 1.0E-6 ? new Vec3(0, 0, 1) : toward.normalize();
+        // on your own blade the star sits close to the eye: smaller, so it doesn't white the view out
+        float k = own ? 0.6F : 1.0F;
+        GlowParticle.flash(at).colour(WHITE).fadeTo(0xCFE6FF).size(0.25F * k, 1.1F * k).alpha(0.95F).life(4).spawn();
+        GlowParticle.dot(at).colour(WHITE).fadeTo(0xD6ECFF).size(0.7F * k, 0.05F).life(7).star().spawn();
+        GlowParticle.ring(at.add(way.scale(0.1)), way).colour(WHITE).fadeTo(0xA8CCFF).size(0.15F, 1.1F).alpha(0.8F).life(6).spawn();
+        sparks(r, at, count(14), () -> cone(r, way, 40), 0.42, 0xF2F7FF, 0.05F, 7, 0.4F);
+        sparks(r, at, count(6), () -> sphere(r), 0.2, 0xD6ECFF, 0.035F, 6, 0.3F);
+    }
+
+    /** A blow taken on a raised sword (0.22.7): a dull flash and a few sparks off the blade. */
+    private static void block(RandomSource r, Vec3 at, Vec3 toward, float s) {
+        float k = Mth.clamp(s, 0.3F, 1.0F);
+        Vec3 way = toward.lengthSqr() < 1.0E-6 ? new Vec3(0, 0, 1) : toward.normalize();
+        GlowParticle.flash(at).colour(0xF0F4FA).fadeTo(0xA8B0BC).size(0.15F, 0.55F * k + 0.2F).alpha(0.75F).life(3).spawn();
+        sparks(r, at, count(4 + 5 * k), () -> cone(r, way, 60), 0.25, 0xE6EEFA, 0.04F, 6, 0.7F);
     }
 
     private static void moteIn(RandomSource r, Vec3 at, float full, double dist) {

@@ -69,4 +69,18 @@ class PoiseTest {
         assertEquals(4.0F + max * Poise.RECOVER_PER_TICK * 20, Poise.at(4.0F, max, 100, 100, 100 + Poise.RECOVER_DELAY + 20), 1.0E-4);
         assertEquals(max, Poise.at(4.0F, max, 100, 100, 100_000), "never past the most");
     }
+
+    /** Taran 2026-11-25: a jump attack lands much harder on the one creature in front, up to double from about 8 blocks. */
+    @Test
+    void aJumpAttackLandsHarderTheFurtherThePlayerFell() {
+        assertEquals(1.0F, Poise.plunge(0.0), 1.0E-6);
+        assertEquals(1.0F, Poise.plunge(1.25), 1.0E-6, "a jump on the flat");
+        assertEquals(2.0F, Poise.plunge(8.0), 1.0E-6);
+        assertEquals(2.0F, Poise.plunge(30.0), 1.0E-6, "never past double");
+        assertTrue(Poise.plunge(4.0) > 1.3F && Poise.plunge(4.0) < 1.5F);
+        // an iron sword's jump attack off a hop does more than a strong attack, and breaks a zombie's poise at once
+        assertTrue(Poise.jumpDamage(1.25) > Poise.swingDamage(true, false));
+        float zombie = Poise.max(20);
+        assertEquals(1, hitsToBreak(zombie, Poise.melee(6 * Poise.jumpDamage(1.25), Poise.Weapon.SWORD, 1.0F, false, 0.0F) * Poise.JUMP_POISE));
+    }
 }
