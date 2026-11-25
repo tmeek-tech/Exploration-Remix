@@ -14,12 +14,19 @@ import com.explorationremix.world.terrain.Hashing;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
+import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -29,10 +36,13 @@ import net.minecraft.world.level.block.entity.SculkShriekerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Everything the Hollow Choir's arena does: taking the three keys, calling the Choir, dressing the bowl as the fight
@@ -50,11 +60,13 @@ public final class ChoirSummon {
     private static final double SPROUT_R = ChoirSites.FLOOR_R * 0.8;
     private static final long SALT_SPROUT = 7001;
     /**
-     * How far from the dais a sculk shrieker is struck dumb ({@link #hush}): as far out as a fighter still counts as
-     * fighting, plus the eight blocks a sculk sensor hears them over and the eight more a shrieker hears that sensor
-     * over, so no noise made in the fight can reach one that still has its call.
+     * How far from the dais a sculk shrieker is struck dumb ({@link #hush}): well past where a fighter still counts as
+     * fighting ({@link HollowChoirEntity#KEEP}), the eight blocks a sculk sensor hears them over and the eight more a
+     * shrieker hears that sensor over, so no noise made in the fight can reach one that still has its call. It is the
+     * distance 0.22.0 was measured at and is kept as a number of its own: the fight drew in to the bowl in 0.22.3, and
+     * the hush did not need to draw in with it.
      */
-    public static final double HUSH_R = HollowChoirEntity.KEEP + 2 * 8 + 1;
+    public static final double HUSH_R = 61;
     /** The Choir's own pale blue for the lines it puts over the hotbar: never aqua, which is cyan. */
     private static final Style PALE = Style.EMPTY.withColor(ChoirLook.GLOW);
 
@@ -140,8 +152,8 @@ public final class ChoirSummon {
         if (choir == null) return;
         hush(level, s);
         dress(level, s, 0);
+        // it starts high over the dais and comes down (HollowChoirEntity.settle places it)
         choir.settle(s, s.ceil());
-        choir.setPos(s.x(), s.floorY() + HollowChoirEntity.CROWN_UP, s.z());
         choir.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(s.x(), s.floorY(), s.z())),
                 MobSpawnType.TRIGGERED, null, null);
         level.addFreshEntity(choir);
@@ -285,58 +297,129 @@ public final class ChoirSummon {
 
     // -------------------------------------------------------------------------------------------------- the strikes
 
-    /** A tendril's slam: it hurts and throws back whoever is standing in the circle it comes down on. */
-    public static void slam(HollowChoirEntity choir, double x, double z, double r, float hurt) {
+    /**
+     * A tendril's slam: it hurts and throws back whoever is standing in the circle it comes down on, which is the
+     * circle that was marked on the floor since the tendril began to rear ({@link ChoirActs#slamStrikes}). They are
+     * thrown out of the circle and never up: (rootX, rootZ) is the root of the tendril that struck, which is the way
+     * a player in the very middle is thrown on from.
+     */
+    public static void slam(HollowChoirEntity choir, double x, double y, double z, double rootX, double rootZ) {
         if (!(choir.level() instanceof ServerLevel sl)) return;
+        double ax = x - rootX, az = z - rootZ, al = Math.hypot(ax, az);
+        if (al < 0.05) { ax = x - choir.daisX(); az = z - choir.daisZ(); al = Math.hypot(ax, az); }
+        if (al < 0.05) { ax = 1; az = 0; al = 1; }
+        ax *= ChoirActs.SLAM_ALONG / al;
+        az *= ChoirActs.SLAM_ALONG / al;
         for (Player p : sl.players()) {
             if (p.isSpectator() || !p.isAlive()) continue;
-            double d = Math.hypot(p.getX() - x, p.getZ() - z);
-            if (d > r || Math.abs(p.getY() - choir.floorY()) > 6) continue;
-            p.hurt(sl.damageSources().mobAttack(choir), hurt);
-            Vec3 away = new Vec3(p.getX() - x, 0.35, p.getZ() - z).normalize().scale(0.75);
-            p.push(away.x, away.y, away.z);
-            p.hurtMarked = true;
+            double dx = p.getX() - x, dz = p.getZ() - z;
+            if (!ChoirActs.slamStrikes(Math.hypot(dx, dz), p.getY() - y)) continue;
+            Vec3 was = p.getDeltaMovement();
+            p.hurt(sl.damageSources().mobAttack(choir), HollowChoirEntity.SLAM_HURT);
+            double d = Math.hypot(dx + ax, dz + az), keep = unbraced(p);
+            if (d < 1e-3) { dx = 0; dz = 0; d = ChoirActs.SLAM_ALONG; }
+            fling(p, was, (dx + ax) / d * ChoirActs.SLAM_THROW * keep, ChoirActs.SLAM_LIFT * keep,
+                    (dz + az) / d * ChoirActs.SLAM_THROW * keep);
         }
-        motes(sl, x, choir.floorY() + 1.1, z, r, 50);
+        motes(sl, x, y + 0.1, z, ChoirActs.SLAM_R, 36);
+    }
+
+    /** What a player's armour leaves of a throw: netherite braces its wearer against a tenth of one a piece. */
+    private static double unbraced(Player p) {
+        return Math.max(0, 1 - p.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE));
     }
 
     /**
-     * One step of a toll's ring: it hurts whoever the ring passes at floor level. Standing on a broken pillar or up on
-     * the seats, or jumping as it goes by, is how it is dodged.
+     * Throws a player, at once and to the number: (x, y, z) is what they move at from the next tick, in place of
+     * whatever a blow's own knock gave them ({@code was} is how the game had them moving before the blow).
+     *
+     * <p>A push left for the game to pass on is passed on a tick late. By then the game has run the player a tick on
+     * by its own reckoning, through the floor's drag and into whatever stood in the way, and what it sends is what
+     * that left: half the push, and none of its lift if there was a brazier to step up on. So this sends the throw
+     * itself, the way the game does when one player strikes another, and puts its own reckoning back as it was.
+     * A player in the air is given less along the floor ({@link ChoirActs#AIR_SHARE}), so they land where one who
+     * stood would have.
      */
-    public static void tollRing(HollowChoirEntity choir, int reach) {
-        if (!(choir.level() instanceof ServerLevel sl)) return;
-        double y = choir.floorY();
-        if (reach <= 0) {
-            sl.playSound(null, choir.daisX(), y + 2, choir.daisZ(), ERSounds.CHOIR_TOLL.get(), SoundSource.HOSTILE, 1.4F, 1.0F);
-            return;
-        }
-        for (Player p : sl.players()) {
-            if (p.isSpectator() || !p.isAlive()) continue;
-            double d = Math.hypot(p.getX() - choir.daisX(), p.getZ() - choir.daisZ());
-            if (Math.abs(d - reach) > 1.6) continue;
-            // over the floor by more than a step: on a pillar, on the seats, or in the air over the ring
-            if (p.getY() - y > 1.3) continue;
-            p.hurt(sl.damageSources().mobAttack(choir), HollowChoirEntity.TOLL_HURT);
-            Vec3 away = new Vec3(p.getX() - choir.daisX(), 0.2, p.getZ() - choir.daisZ()).normalize().scale(0.5);
-            p.push(away.x, away.y, away.z);
+    private static void fling(Player p, Vec3 was, double x, double y, double z) {
+        p.setDeltaMovement(was);
+        p.hurtMarked = false;
+        if (!p.isAlive()) return;
+        double share = p.onGround() ? 1 : ChoirActs.AIR_SHARE;
+        Vec3 v = new Vec3(x * share, y, z * share);
+        if (p instanceof ServerPlayer sp && sp.connection != null) {
+            sp.connection.send(new ClientboundSetEntityMotionPacket(sp.getId(), v));
+        } else {
+            p.setDeltaMovement(v);
             p.hurtMarked = true;
         }
-        ring(sl, choir.daisX(), y + 0.6, choir.daisZ(), reach, Math.max(12, reach * 3));
     }
 
-    /** The grab: a tendril whips out and draws everyone in the bowl towards the dais, over the sculk. */
+    /**
+     * What stands in a toll's way: for each slice of the floor round a dais, how far out the nearest solid thing
+     * stands, or more than any ring runs where the slice is clear. Solid is anything standing on the floor with a
+     * body at least half a block tall: the bowl's broken pillars and whatever a player builds, but not its braziers,
+     * which are low enough for a ring to pass over.
+     * Both sides work this out from the blocks themselves as a ring lands, so the gap a player sees in the ring behind
+     * a pillar is the gap it leaves.
+     */
+    public static void tollWalls(Level level, double cx, int floorY, double cz, float[] out) {
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int s = 0; s < out.length; s++) {
+            double a = ChoirActs.sliceAngle(s), cos = Math.cos(a), sin = Math.sin(a);
+            float wall = Float.MAX_VALUE;
+            for (double r = ChoirActs.TOLL_R0; r <= ChoirActs.TOLL_R1; r += 0.25) {
+                p.set(Mth.floor(cx + r * cos), floorY + 1, Mth.floor(cz + r * sin));
+                BlockState st = level.getBlockState(p);
+                if (st.isAir()) continue;
+                VoxelShape shape = st.getCollisionShape(level, p);
+                if (shape.isEmpty() || shape.max(Direction.Axis.Y) < 0.5) continue;
+                wall = (float) r;
+                break;
+            }
+            out[s] = wall;
+        }
+    }
+
+    /**
+     * One tick of a toll's ring where it is now: it hurts whoever it passes with their feet on the floor and nothing
+     * solid between them and the dais ({@link ChoirActs#tollStrikes}), and each of them once.
+     */
+    public static void tollRing(HollowChoirEntity choir, double radius, Set<UUID> struck) {
+        if (!(choir.level() instanceof ServerLevel sl)) return;
+        int phase = choir.phase();
+        double floor = choir.floorY() + 1;
+        for (Player p : sl.players()) {
+            if (p.isSpectator() || !p.isAlive() || struck.contains(p.getUUID())) continue;
+            double dx = p.getX() - choir.daisX(), dz = p.getZ() - choir.daisZ();
+            float wall = choir.tollWall[ChoirActs.tollSlice(dx, dz)];
+            if (!ChoirActs.tollStrikes(phase, radius, Math.hypot(dx, dz), p.getY() - floor, wall)) continue;
+            struck.add(p.getUUID());
+            Vec3 was = p.getDeltaMovement();
+            p.hurt(sl.damageSources().mobAttack(choir), HollowChoirEntity.TOLL_HURT);
+            double d = Math.max(1e-6, Math.hypot(dx, dz)), keep = unbraced(p);
+            fling(p, was, dx / d * ChoirActs.TOLL_THROW * keep, ChoirActs.TOLL_LIFT * keep,
+                    dz / d * ChoirActs.TOLL_THROW * keep);
+        }
+    }
+
+    /**
+     * The grab: everyone the fight still holds is drawn in towards the dais, harder the further out they stand
+     * ({@link ChoirActs#grabPull}). It never hurts, and that includes the fall: whoever it takes off the seats or the
+     * rim comes down slowly.
+     */
     public static void grab(HollowChoirEntity choir) {
         if (!(choir.level() instanceof ServerLevel sl)) return;
         for (Player p : sl.players()) {
             if (p.isSpectator() || !p.isAlive()) continue;
-            double d = Math.hypot(p.getX() - choir.daisX(), p.getZ() - choir.daisZ());
-            if (d > ChoirSites.RIM_R || d < 2) continue;
-            Vec3 pull = new Vec3(choir.daisX() - p.getX(), 0, choir.daisZ() - p.getZ()).normalize().scale(1.15);
-            p.push(pull.x, 0.25, pull.z);
-            p.hurtMarked = true;
+            double dx = choir.daisX() - p.getX(), dz = choir.daisZ() - p.getZ();
+            double d = Math.hypot(dx, dz);
+            double pull = ChoirActs.grabPull(d);
+            if (d > HollowChoirEntity.KEEP || pull <= 0) continue;
+            fling(p, p.getDeltaMovement(), dx / d * pull, ChoirActs.GRAB_LIFT, dz / d * pull);
+            if (p.getY() > choir.floorY() + 1.5)
+                p.addEffect(new MobEffectInstance(MobEffects.SLOW_FALLING, 40, 0, false, false, false));
         }
-        motes(sl, choir.daisX(), choir.floorY() + 2, choir.daisZ(), 6, 40);
+        motes(sl, choir.daisX(), choir.floorY() + 2, choir.daisZ(), 5, 24);
     }
 
     /** The bloom of the last phase: the sculk pulses, and only clean stone is safe to stand on. */
@@ -348,9 +431,17 @@ public final class ChoirSummon {
             if (d > ChoirSites.RIM_R) continue;
             BlockPos under = BlockPos.containing(p.getX(), p.getY() - 0.2, p.getZ());
             if (!sl.getBlockState(under).is(Blocks.SCULK) && !sl.getBlockState(under.below()).is(Blocks.SCULK)) continue;
-            p.hurt(sl.damageSources().mobAttack(choir), 4);
+            p.hurt(sl.damageSources().mobAttack(choir), HollowChoirEntity.BLOOM_HURT);
         }
-        for (int i = 2; i < ChoirSites.RIM_R; i += 4) ring(sl, choir.daisX(), choir.floorY() + 0.6, choir.daisZ(), i, i * 2);
+    }
+
+    /** A tendril reaching the floor and taking root there: a knock through the stone and a puff of its motes. */
+    public static void rootFx(HollowChoirEntity choir, int place) {
+        if (!(choir.level() instanceof ServerLevel sl)) return;
+        Vec3 f = choir.tendrilFoot(place);
+        sl.playSound(null, f.x, f.y + 1, f.z, ERSounds.CHOIR_ROOT.get(), SoundSource.HOSTILE, 0.9F,
+                0.9F + sl.random.nextFloat() * 0.2F);
+        motes(sl, f.x, f.y + 1.1, f.z, 1.2, 14);
     }
 
     /** A blow on the crown while it is up: the bell rings and the player is told why nothing happened. */

@@ -1263,5 +1263,25 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.choir.key_set"
+  },
+  "choir.grab": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/grab",
+        "volume": 1.0,
+        "attenuation_distance": 40
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.grab"
+  },
+  "choir.root": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/root",
+        "volume": 0.8,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.root"
   }
 }

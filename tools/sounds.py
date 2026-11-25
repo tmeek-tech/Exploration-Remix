@@ -307,6 +307,8 @@ CHOIR_EVENTS = {
     "choir.death": choir("death", 1.0, 64),
     "choir.reliquary": choir("reliquary", 0.8),
     "choir.key_set": choir("key_set", 0.8),
+    "choir.grab": choir("grab", 1.0, 40),
+    "choir.root": choir("root", 0.8, 24),
 }
 CHOIR_SUBTITLES = {
     "choir.wake": "The Hollow Choir wakes", "choir.toll": "Hollow Choir tolls",
@@ -316,6 +318,7 @@ CHOIR_SUBTITLES = {
     "choir.bloom": "Sculk blooms", "choir.sprout": "A sprout rises", "choir.hurt": "Hollow Choir hurts",
     "choir.idle": "The Hollow Choir hums", "choir.death": "Hollow Choir dies",
     "choir.reliquary": "A reliquary grinds open", "choir.key_set": "A choir key settles",
+    "choir.grab": "The floor draws in", "choir.root": "A tendril takes root",
 }
 CREATURE_EVENTS.update(CHOIR_EVENTS)
 CREATURE_SUBTITLES.update(CHOIR_SUBTITLES)
