@@ -3,7 +3,10 @@ package com.explorationremix.client.rune.table;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.client.rune.GlowSprite;
 import com.explorationremix.client.rune.fx.GlowParticle;
+import com.explorationremix.rune.armor.WornRunes;
+import com.explorationremix.rune.engine.ArmorSet;
 import com.explorationremix.rune.engine.RuneId;
+import com.explorationremix.rune.engine.RuneKind;
 import com.explorationremix.rune.engine.Socket;
 import com.explorationremix.rune.menu.RuneTableMenu;
 import com.mojang.blaze3d.platform.GlStateManager;
@@ -56,13 +59,16 @@ import java.util.Map;
 /**
  * The enchanting table's rune view, drawn in the world itself (Taran, 2026-11-22: "a beautiful in-world interface on
  * the enchanting table"). The view eases from the player's eyes to over the table and looks down on its open book; the
- * room dims, and the weapon floats over the book before a rune circle, slowly turning, its three sockets hanging in a
- * shallow arc below it: the active rune (light blue), the modifier (lavender) and the passive (silver-blue), each a
- * silver ring set with gems of its colour, its rune's tablet in the middle and a thread of light up to the weapon.
- * Picking a socket makes the runes the player carries for it rise out of it into an arc over the weapon; picking one of
- * those sets it. Up the active socket's outer side a gauge of pips fills with the player's XP level toward the rune's
- * second phase, and glints once it wakes. Light runs slowly round the circle, stars twinkle about it, and motes drift up
- * from the book the whole time. Leaving gives the view back as smoothly as it was taken.
+ * room dims, and the gear being set (the weapon or tool in hand, or a worn piece of armor: picked in the screen's column,
+ * {@link #picked}) floats over the book before a rune circle, slowly turning, its sockets hanging in a shallow arc below
+ * it: a weapon's active rune (light blue), modifier (lavender) and passive (silver-blue), a piece of armor's effect rune
+ * (periwinkle) and two collect runes (pale lilac), or a tool's one rune (pale sky blue). Each is a silver ring set with
+ * gems of its colour, its rune's tablet in the middle and a thread of light up to the gear. Picking a socket makes the
+ * runes the player carries for it rise out of it into an arc over the gear; picking one of those sets it. Up the active
+ * socket's outer side a gauge of pips fills with the player's XP level toward the rune's second phase, and glints once
+ * it wakes; over a collect socket four pips count the worn pieces carrying its rune, and glint once three do. Light runs
+ * slowly round the circle, stars twinkle about it, and motes drift up from the book the whole time. Leaving gives the
+ * view back as smoothly as it was taken.
  *
  * <p>The rings, the circle, the pips and the stars are pixel art (Taran, 2026-11-23: "add some magical themed pixel
  * art to the interface"), from textures/gui/rune_table_world.png (tools/rune_table_art.py), drawn sharp: a socket's
@@ -81,6 +87,7 @@ import java.util.Map;
 public final class RuneTableView {
     // ---- the palette
     static final int ACTIVE = 0x8EC2FF, MODIFIER = 0xB7A8FF, PASSIVE = 0xD6E6FF, CORE = 0xEEF4FF, DEEP = 0x3F63B8, PHASE = 0xC9DEFF;
+    static final int EFFECT = 0x9FB8FF, COLLECT = 0xE0D4FF, TOOL = 0xBFE0FF;
     /** The shade the lights sit in: a blue so deep it reads as black. */
     private static final int SHADE = 0x03060E;
 
@@ -94,6 +101,8 @@ public final class RuneTableView {
     private static final double SOCKET_Z = 0.3, RISEN_Z = 0.15;
     /** GUI pixels: the room the header keeps at the top, and the room the two lines of words under a socket take below its ring. */
     static final float TOP_ROOM = 30.0F, NAMES = 23.0F;
+    /** GUI pixels: the room kept at the left for the column of gear (RuneTableScreen), and at the right for the sets' tally. */
+    static final float SIDE_LEFT = 40.0F, SIDE_RIGHT = 84.0F;
     /** How far toward the eye the rune circle hangs: just behind the weapon. */
     private static final double SEAL_Z = -0.05;
 
@@ -107,8 +116,11 @@ public final class RuneTableView {
     /** The rune circle, 128 texels across from the sheet's corner, its middle at texel 63.5. */
     private static final int SEAL_SIZE = 128;
     private static final float SEAL_MID = 63.5F;
-    /** The socket rings, 32 x 32 side by side from (128, 0): the active's, the modifier's, the passive's. */
-    private static final int RING_U = 128, RING_SIZE = 32;
+    /**
+     * The socket rings, 32 x 32 side by side: the active's, the modifier's and the passive's from (128, 0); the effect
+     * socket's, the collect sockets' and the tool's from (128, 96).
+     */
+    private static final int RING_U = 128, RING_SIZE = 32, RING_V_GEAR = 96;
     /** The gauge's pips, 5 x 5 on the top row: dark, lit, and the glint that runs up them once the phase wakes. */
     private static final int PIP_DARK_U = 224, PIP_LIT_U = 230, PIP_GLINT_U = 236, PIP_SIZE = 5;
     /** The star's four frames (9 x 9, 10 apart), the stroke over a rune to take out (16 x 16), the kind icons (9 x 9, 10 apart). */
@@ -118,6 +130,8 @@ public final class RuneTableView {
     /** The pips in the gauge up the active socket's outer side, how far out from its middle they sit (in its radius), and the angle between them. */
     private static final int PIPS = 6;
     private static final float PIP_OUT = 1.45F, PIP_STEP = 20.0F;
+    /** Over a collect socket: one pip for each piece of armor (lit for each worn piece carrying its rune), this far apart. */
+    private static final float SET_PIP_STEP = 24.0F;
     /** Where the stars twinkle about the circle, in its radii from its middle (right, down). */
     private static final float[][] STAR_SPOTS = {{-1.12F, -0.42F}, {1.08F, -0.55F}, {-0.62F, -1.02F}, {0.7F, -0.98F}, {-1.22F, 0.28F}, {1.2F, 0.18F}};
 
@@ -132,6 +146,9 @@ public final class RuneTableView {
     private static float yaw, pitch;
 
     // ---- what the screen asks for
+    /** The gear being set (RuneTableMenu's numbers: the hand, then the four pieces), and the tick it was picked. */
+    static int picked = RuneTableMenu.HAND;
+    static int pickedAt = -100;
     /** The socket whose runes are risen (null: none), and the tick they started to rise. */
     @Nullable
     static Socket chosen;
@@ -152,8 +169,12 @@ public final class RuneTableView {
 
     // ---- the layout, in GUI pixels, for the screen as it was last drawn
     private static float gw = 480.0F, gh = 270.0F;
-    private static float weaponX, weaponY, weaponPx, sealPx, socketPx, risenPx, arcRX, arcRY;
+    private static float weaponX, weaponY, weaponPx, sealPx, socketPx, risenPx, arcRX, arcRY, socketsY;
+    /** Where each socket of the gear shown hangs, by its place among its gear's sockets (Socket.pos). */
     private static final float[] socketX = new float[3], socketY = new float[3];
+    /** The gear drawn over the book, and its sockets (kept as the view leaves, so they fade where they were). */
+    private static ItemStack shownGear = ItemStack.EMPTY;
+    private static Socket[] shownSockets = Socket.WEAPON;
 
     private RuneTableView() {}
 
@@ -187,8 +208,8 @@ public final class RuneTableView {
 
     // ------------------------------------------------------------------------------------------------ opening and closing
 
-    /** The table's view opens (its screen did). */
-    static void open(BlockPos at) {
+    /** The table's view opens (its screen did), showing gear {@code first}. */
+    static void open(BlockPos at, int first) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
         if (table == null || !table.equals(at)) {
@@ -199,7 +220,17 @@ public final class RuneTableView {
         open = true;
         chosen = null;
         hovered = null;
+        picked = first;
         targets.clear();
+    }
+
+    /** The screen picked other gear to set: its sockets come in where the last one's were. */
+    static void pick(int g) {
+        if (g == picked) return;
+        picked = g;
+        pickedAt = ticks;
+        chosen = null;
+        hovered = null;
     }
 
     /** The screen closed: the view eases back to the player's eyes, the sockets fading as it goes. */
@@ -331,10 +362,11 @@ public final class RuneTableView {
 
     /**
      * Works out the layout for the screen as it is now (GUI pixels): the sockets in a shallow smile, as low as the words
-     * under them and the panel allow; the weapon over them, above the book; and the arc the runes rise into, round the
-     * top of the weapon and clear of the header. Sizes follow the screen's height within bounds the words can live with.
+     * under them and the panel allow and clear of the columns at either side; the gear over them, above the book; and
+     * the arc the runes rise into, round the top of the gear and clear of the header. Sizes follow the screen's height
+     * within bounds the words can live with.
      */
-    private static void plan() {
+    private static void plan(int sockets) {
         Window w = Minecraft.getInstance().getWindow();
         gw = Math.max(1, w.getGuiScaledWidth());
         gh = Math.max(1, w.getGuiScaledHeight());
@@ -344,10 +376,13 @@ public final class RuneTableView {
         float dip = socketPx * 0.55F;
         float low = Math.min(gh * 0.64F, gh - foot() - NAMES - socketPx * 1.25F);
         float dx = Math.min(Mth.clamp(gh * 0.36F, 100.0F, 170.0F), gw * 0.34F);
-        for (Socket s : Socket.values()) {
-            int i = s.ordinal() - 1;
-            socketX[s.ordinal()] = cx + i * dx;
-            socketY[s.ordinal()] = i == 0 ? low : low - dip;
+        // clear of the tally at the right (the wider side), the outer sockets' names included
+        dx = Math.max(socketPx * 3.2F, Math.min(dx, cx - SIDE_RIGHT - socketPx * 1.3F - 24.0F));
+        socketsY = low;
+        for (int i = 0; i < sockets; i++) {
+            float off = i - (sockets - 1) / 2.0F;
+            socketX[i] = cx + off * dx;
+            socketY[i] = off == 0.0F ? low : low - dip;
         }
         weaponPx = Mth.clamp(gh * 0.21F, 44.0F, 120.0F);
         weaponX = cx;
@@ -356,7 +391,7 @@ public final class RuneTableView {
         // close round the weapon, so the runes plainly rise to it; wide, so many fit down its sides
         float inner = weaponPx / 2.0F + risenPx + 6.0F;
         arcRY = Math.max(inner, Math.min(weaponY - TOP_ROOM - 2.0F - risenPx, inner + gh * 0.035F));
-        arcRX = Math.max(inner + 4.0F, Math.min(arcRY * 2.0F, gw * 0.42F));
+        arcRX = Math.max(inner + 4.0F, Math.min(arcRY * 2.0F, Math.min(gw * 0.42F, cx - SIDE_RIGHT - risenPx)));
     }
 
     /**
@@ -374,7 +409,7 @@ public final class RuneTableView {
 
     static Vec3 weaponAt(float time) { return place(weaponX, weaponY + gh * 0.008 * Math.sin(time * 0.06), 0.0); }
 
-    static Vec3 socketAt(Socket s) { return place(socketX[s.ordinal()], socketY[s.ordinal()], SOCKET_Z); }
+    static Vec3 socketAt(Socket s) { return place(socketX[s.pos], socketY[s.pos], SOCKET_Z); }
 
     /** The rune circle's middle: behind the weapon, still while the weapon bobs. */
     private static Vec3 sealAt() { return place(weaponX, weaponY, SEAL_Z); }
@@ -409,17 +444,21 @@ public final class RuneTableView {
         return new float[]{weaponX + (float) (Math.cos(a) * arcRX), weaponY - (float) (Math.sin(a) * arcRY)};
     }
 
-    /** Lays out what the mouse can pick this frame: the three sockets, and the runes risen for the chosen one. */
+    /** Lays out what the mouse can pick this frame: the gear's sockets (none without gear), and the runes risen for the chosen one. */
     private static void layout(RuneTableMenu menu, float time) {
         Target was = hovered;
         targets.clear();
-        for (Socket s : Socket.values()) {
-            targets.add(new Target(Target.Kind.SOCKET, s, menu.loadout().get(s), 1, socketAt(s), (float) (socketPx * perPx(SOCKET_Z))));
+        if (shownGear.isEmpty()) chosen = null;
+        else {
+            for (Socket s : shownSockets) {
+                targets.add(new Target(Target.Kind.SOCKET, s, menu.rune(picked, s), 1, socketAt(s), (float) (socketPx * perPx(SOCKET_Z))));
+            }
         }
+        if (chosen != null && !menu.has(picked, chosen)) chosen = null;
         if (chosen != null) {
             List<Target> risen = new ArrayList<>();
-            RuneId in = menu.loadout().get(chosen);
-            for (Map.Entry<RuneId, Integer> c : menu.carried(chosen).entrySet()) {
+            RuneId in = menu.rune(picked, chosen);
+            for (Map.Entry<RuneId, Integer> c : menu.carried(picked, chosen).entrySet()) {
                 if (c.getKey() != in) risen.add(new Target(Target.Kind.RUNE, chosen, c.getKey(), c.getValue(), Vec3.ZERO, 0.0F));
             }
             if (in != null) risen.add(new Target(Target.Kind.TAKE_OUT, chosen, in, 0, Vec3.ZERO, 0.0F));
@@ -428,7 +467,7 @@ public final class RuneTableView {
             // spaced evenly from the top of the arc down its sides; packed closer, and smaller, if there are many
             float spacing = n > 1 ? Math.min(risenPx * 2.8F, total / (n - 1)) : 0.0F;
             float fit = n > 1 ? Mth.clamp(spacing / (risenPx * 2.3F), 0.6F, 1.0F) : 1.0F;
-            float fx = socketX[chosen.ordinal()], fy = socketY[chosen.ordinal()];
+            float fx = socketX[chosen.pos], fy = socketY[chosen.pos];
             for (int k = 0; k < n; k++) {
                 Target r = risen.get(k);
                 // each rises out of the socket in turn, up and then over to its place, and settles
@@ -474,7 +513,9 @@ public final class RuneTableView {
         VIEW.set(viewPose.last().pose());
         float time = ticks + partialTick;
         if (menu != null) {
-            plan();
+            shownGear = menu.gear(picked);
+            shownSockets = menu.sockets(picked);
+            plan(shownSockets.length);
             layout(menu, time);
         } else {
             // leaving: the sockets stay where they were, fading with the rest, and nothing is risen
@@ -504,9 +545,9 @@ public final class RuneTableView {
         project();
     }
 
-    /** The weapon over the book, turning a little this way and that, bobbing. */
+    /** The gear being set, over the book, turning a little this way and that, bobbing; it grows in again when picked. */
     private static void weapon(Minecraft mc, PoseStack pose, Camera camera, MultiBufferSource buffers, float time, float shown) {
-        ItemStack w = mc.player.getMainHandItem();
+        ItemStack w = shownGear;
         if (w.isEmpty()) return;
         Vec3 p = weaponAt(time).subtract(cam);
         pose.pushPose();
@@ -514,7 +555,8 @@ public final class RuneTableView {
         pose.mulPose(camera.rotation());
         pose.mulPose(Axis.YP.rotationDegrees((float) (28.0 * Math.sin(time * 0.035))));
         // the item spans one block: scaled to the layout's size for it
-        float s = (float) (weaponPx * perPx(0.0)) * (0.6F + 0.4F * shown);
+        float picked = Mth.clamp((time - pickedAt) / 6.0F, 0.0F, 1.0F);
+        float s = (float) (weaponPx * perPx(0.0)) * (0.6F + 0.4F * shown) * (0.7F + 0.3F * (1.0F - (1.0F - picked) * (1.0F - picked)));
         pose.scale(s, s, s);
         mc.getItemRenderer().renderStatic(w, ItemDisplayContext.FIXED, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, pose, buffers, mc.level, 0);
         pose.popPose();
@@ -548,7 +590,7 @@ public final class RuneTableView {
     private static void shade(PoseStack pose, Camera camera, float time, float shown) {
         Glow g = new Glow(pose.last().pose(), camera);
         double k = perPx(0.0);
-        Vec3 middle = place(gw / 2.0, (weaponY + socketY[Socket.MODIFIER.ordinal()]) / 2.0, 0.0);
+        Vec3 middle = place(gw / 2.0, (weaponY + socketsY) / 2.0, 0.0);
         g.vignette(middle, gw * 0.62 * k, gh * 0.75 * k, SHADE, 0.16F * shown, 0.42F * shown);
         g.soft(sealAt(), (float) (sealPx * 1.1 * perPx(SEAL_Z)), SHADE, 0.3F * shown, 0.55F);
         g.soft(weaponAt(time), (float) (weaponPx * 0.8 * k), SHADE, 0.45F * shown, 0.4F);
@@ -565,8 +607,9 @@ public final class RuneTableView {
         // the weapon's halo, and a wide faint one round everything
         g.disc(w, wr * 0.8F, ACTIVE, 0.28F * shown);
         g.disc(w, wr * 0.38F, CORE, 0.22F * shown);
-        g.disc(place(gw / 2.0, (weaponY + socketY[Socket.MODIFIER.ordinal()]) / 2.0, 0.0), (float) (gh * 0.55 * perPx(0.0)), DEEP, 0.12F * shown);
+        g.disc(place(gw / 2.0, (weaponY + socketsY) / 2.0, 0.0), (float) (gh * 0.55 * perPx(0.0)), DEEP, 0.12F * shown);
         int level = Minecraft.getInstance().player.experienceLevel;
+        ArmorSet set = WornRunes.of(Minecraft.getInstance().player);
         for (Target tg : targets) {
             boolean hover = tg.same(hovered);
             int colour = colour(tg.socket);
@@ -583,12 +626,16 @@ public final class RuneTableView {
                     Vec3 dir = w.subtract(c).normalize();
                     Vec3 from = c.add(dir.scale(r * 1.22)), to = w.subtract(dir.scale(wr * 0.3));
                     g.line(from, to, r * 0.08F, colour, 0.35F * shown);
-                    float k = (time * 0.025F + tg.socket.ordinal() * 0.33F) % 1.0F;
+                    float k = (time * 0.025F + tg.socket.pos * 0.33F) % 1.0F;
                     g.disc(from.add(to.subtract(from).scale(k)), r * 0.23F, CORE, 0.8F * shown * Mth.sin(k * Mth.PI));
                 }
                 // the active rune's second phase awake: a wide glow round its socket
                 if (tg.socket == Socket.ACTIVE && tg.rune != null && level >= tg.rune.phaseLevel) {
                     g.disc(c, r * 2.2F, PHASE, (0.1F + 0.06F * pulse) * shown);
+                }
+                // a collect rune awake on three pieces: the same glow, brighter for a full set
+                if (tg.socket.kind == RuneKind.COLLECT && tg.rune != null && set.awake(tg.rune)) {
+                    g.disc(c, r * 2.2F, COLLECT, ((set.full(tg.rune) ? 0.16F : 0.1F) + 0.06F * pulse) * shown);
                 }
             } else {
                 boolean out = tg.kind == Target.Kind.TAKE_OUT;
@@ -639,22 +686,28 @@ public final class RuneTableView {
     private static void frames(PoseStack pose, Camera camera, float time, float shown) {
         Sprites s = new Sprites(pose.last().pose(), camera);
         int level = Minecraft.getInstance().player.experienceLevel;
+        ArmorSet set = WornRunes.of(Minecraft.getInstance().player);
         for (Target tg : targets) {
             double r = tg.radius * grow(tg, shown) * lift(tg);
-            int ring = RING_U + RING_SIZE * tg.socket.ordinal();
+            int ru = ringU(tg.socket), rv = ringV(tg.socket);
             if (tg.kind == Target.Kind.SOCKET) {
-                s.piece(tg.at, r * RING_HALF, ring, 0, RING_SIZE, RING_SIZE, 0xFFFFFF, shown);
+                s.piece(tg.at, r * RING_HALF, ru, rv, RING_SIZE, RING_SIZE, 0xFFFFFF, shown);
                 if (tg.rune == null) {
-                    s.piece(tg.at, r * TEXEL * 4.5, ICON_U + 10 * tg.socket.ordinal(), ICON_V, 9, 9, 0xFFFFFF, 0.45F * shown);
+                    s.piece(tg.at, r * TEXEL * 4.5, ICON_U + 10 * iconIndex(tg.socket), ICON_V, 9, 9, 0xFFFFFF, 0.45F * shown);
                 } else if (tg.socket == Socket.ACTIVE) {
                     float fill = gauge(tg.rune, level);
                     for (int p = 0; p < PIPS; p++) {
                         s.piece(pipAt(s, tg, shown, p), r * TEXEL * 2.5, p + 1 <= fill ? PIP_LIT_U : PIP_DARK_U, 0, PIP_SIZE, PIP_SIZE, 0xFFFFFF, shown);
                     }
+                } else if (tg.socket.kind == RuneKind.COLLECT) {
+                    int count = set.count(tg.rune);
+                    for (int p = 0; p < ArmorSet.FULL; p++) {
+                        s.piece(setPipAt(s, tg, shown, p), r * TEXEL * 2.5, p < count ? PIP_LIT_U : PIP_DARK_U, 0, PIP_SIZE, PIP_SIZE, 0xFFFFFF, shown);
+                    }
                 }
             } else {
                 boolean out = tg.kind == Target.Kind.TAKE_OUT;
-                s.piece(tg.at, r * RING_HALF, ring, 0, RING_SIZE, RING_SIZE, out ? 0x9AA3B5 : 0xFFFFFF, (out ? 0.8F : 1.0F) * shown);
+                s.piece(tg.at, r * RING_HALF, ru, rv, RING_SIZE, RING_SIZE, out ? 0x9AA3B5 : 0xFFFFFF, (out ? 0.8F : 1.0F) * shown);
             }
         }
         s.draw(false);
@@ -674,13 +727,26 @@ public final class RuneTableView {
         Sprites add = new Sprites(pose.last().pose(), camera);
         float pulse = 0.5F + 0.5F * Mth.sin(time * 0.12F);
         int level = Minecraft.getInstance().player.experienceLevel;
+        ArmorSet set = WornRunes.of(Minecraft.getInstance().player);
         for (Target tg : targets) {
             double r = tg.radius * grow(tg, shown) * lift(tg);
-            int ring = RING_U + RING_SIZE * tg.socket.ordinal();
             float light = tg.same(hovered) ? 0.32F : 0.0F;
             if (tg.kind == Target.Kind.SOCKET && chosen == tg.socket) light = Math.max(light, 0.1F + 0.14F * pulse);
-            add.piece(tg.at, r * RING_HALF, ring, 0, RING_SIZE, RING_SIZE, 0xFFFFFF, light * shown);
-            if (tg.kind != Target.Kind.SOCKET || tg.socket != Socket.ACTIVE || tg.rune == null) continue;
+            add.piece(tg.at, r * RING_HALF, ringU(tg.socket), ringV(tg.socket), RING_SIZE, RING_SIZE, 0xFFFFFF, light * shown);
+            if (tg.kind != Target.Kind.SOCKET || tg.rune == null) continue;
+            if (tg.socket.kind == RuneKind.COLLECT) {
+                // awake on three pieces: a glint runs over its pips now and then
+                if (!set.awake(tg.rune)) continue;
+                float at = (time * 0.12F + tg.socket.pos * 3.0F) % 8.0F;
+                for (int p = 0; p < ArmorSet.FULL; p++) {
+                    float glint = 1.0F - Math.abs(at - p);
+                    if (glint > 0.0F && p < set.count(tg.rune)) {
+                        add.piece(setPipAt(add, tg, shown, p), r * TEXEL * 3.0, PIP_GLINT_U, 0, PIP_SIZE, PIP_SIZE, 0xFFFFFF, glint * 0.9F * shown);
+                    }
+                }
+                continue;
+            }
+            if (tg.socket != Socket.ACTIVE) continue;
             float fill = gauge(tg.rune, level);
             double half = r * TEXEL * 2.5;
             if (fill < PIPS) {
@@ -707,11 +773,45 @@ public final class RuneTableView {
         return tg.at.add(s.r.scale(Math.sin(th) * rad)).add(s.u.scale(Math.cos(th) * rad));
     }
 
+    /** Where a collect socket's pip {@code p} sits: in an arc over the top of its ring, one for each piece of armor. */
+    private static Vec3 setPipAt(Sprites s, Target tg, float shown, int p) {
+        double th = Math.toRadians((p - (ArmorSet.FULL - 1) / 2.0) * SET_PIP_STEP);
+        double rad = tg.radius * grow(tg, shown) * lift(tg) * PIP_OUT;
+        return tg.at.add(s.r.scale(Math.sin(th) * rad)).add(s.u.scale(Math.cos(th) * rad));
+    }
+
     static int colour(Socket s) {
         return switch (s) {
             case ACTIVE -> ACTIVE;
             case MODIFIER -> MODIFIER;
             case PASSIVE -> PASSIVE;
+            case EFFECT -> EFFECT;
+            case COLLECT_1, COLLECT_2 -> COLLECT;
+            case TOOL -> TOOL;
+        };
+    }
+
+    /** A socket's ring on the sheet: the weapon's three from (128, 0), then the effect, collect and tool rings from (128, 96). */
+    private static int ringU(Socket s) {
+        int i = switch (s) {
+            case ACTIVE, EFFECT -> 0;
+            case MODIFIER, COLLECT_1, COLLECT_2 -> 1;
+            case PASSIVE, TOOL -> 2;
+        };
+        return RING_U + RING_SIZE * i;
+    }
+
+    private static int ringV(Socket s) { return s.kind.weapon() ? 0 : RING_V_GEAR; }
+
+    /** A socket's kind icon, on either sheet: the weapon's three kinds 0 to 2, effect 4, collect 5, tool 6 (3 is the second phase's mark). */
+    static int iconIndex(Socket s) {
+        return switch (s) {
+            case ACTIVE -> 0;
+            case MODIFIER -> 1;
+            case PASSIVE -> 2;
+            case EFFECT -> 4;
+            case COLLECT_1, COLLECT_2 -> 5;
+            case TOOL -> 6;
         };
     }
 

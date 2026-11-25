@@ -11,8 +11,11 @@ import java.util.List;
  *   crossbow the cast rides the arrow: Swift, Seek, Pierce and Fan shape the arrow itself (Fan looses three, each
  *   carrying the rune); the others change the rune the arrow carries, or the arrow when they can't change the rune.
  *   A bow with a modifier and no active rune still shapes its arrows.</li>
- *   <li>An element passive is the element of the active rune too. On hit and Echo need an active rune (Echo one that
- *   strikes or lights: not Barrier, Dash or Reel); Lantern and Thirst always work.</li>
+ *   <li>An element passive is the element of the active rune too. On hit and Overflow need an active rune (on a sword,
+ *   Overflow one that strikes: not Barrier, Dash or Reel; a bow's arrow always strikes); a bow's Recall and Quickdraw
+ *   always work.</li>
+ *   <li>A rune that doesn't fit the weapon (a sword's active on a bow) does nothing, and shows grey: the server hands
+ *   such runes back, so it is only ever seen for a moment.</li>
  * </ul>
  * The reading is pure: the same runes, weapon and level always read the same.
  */
@@ -22,11 +25,18 @@ public final class Reader {
     public static Reading read(Loadout l, HostSpec spec, int level) { return read(l, spec, level, Limits.DEFAULT); }
 
     public static Reading read(Loadout l, HostSpec spec, int level, Limits lim) {
+        int gear = Fits.of(spec.host());
+        Note[] notes = new Note[Socket.WEAPON.length];
+        // a rune that doesn't fit this weapon is read as nothing, and its socket is grey
+        Note wrong = Note.grey(Note.Reason.WRONG_GEAR, Fits.word(gear));
         RuneId a = l.active(), m = l.modifier(), p = l.passive();
+        boolean misfitA = a != null && !a.fits(gear), misfitM = m != null && !m.fits(gear), misfitP = p != null && !p.fits(gear);
+        if (misfitA) a = null;
+        if (misfitM) m = null;
+        if (misfitP) p = null;
         boolean bow = spec.host().arrowCarrier;
-        Note[] notes = new Note[Socket.values().length];
         boolean empowered = a != null && level >= a.phaseLevel;
-        notes[Socket.ACTIVE.ordinal()] = a == null ? Note.EMPTY : Note.LIVE;
+        notes[Socket.ACTIVE.ordinal()] = misfitA ? wrong : a == null ? Note.EMPTY : Note.LIVE;
 
         // ---- where the modifier goes: the active rune, or a bow's arrow
         boolean onArrow = false, onActive = false;
@@ -40,13 +50,13 @@ public final class Reader {
             else n = Note.grey(Note.Reason.CANT_CHANGE, a.title);
             notes[Socket.MODIFIER.ordinal()] = n;
         } else {
-            notes[Socket.MODIFIER.ordinal()] = Note.EMPTY;
+            notes[Socket.MODIFIER.ordinal()] = misfitM ? wrong : Note.EMPTY;
         }
 
         // ---- the passive
-        if (p == null) notes[Socket.PASSIVE.ordinal()] = Note.EMPTY;
+        if (p == null) notes[Socket.PASSIVE.ordinal()] = misfitP ? wrong : Note.EMPTY;
         else if ((p == RuneId.ON_HIT || p == RuneId.AFTER) && a == null) notes[Socket.PASSIVE.ordinal()] = Note.grey(Note.Reason.NO_ACTIVE, p.title);
-        else if (p == RuneId.AFTER && !a.echoes()) notes[Socket.PASSIVE.ordinal()] = Note.grey(Note.Reason.CANT_ECHO, a.title);
+        else if (p == RuneId.AFTER && !bow && !a.damaging()) notes[Socket.PASSIVE.ordinal()] = Note.grey(Note.Reason.CANT_STRENGTHEN, a.title);
         else notes[Socket.PASSIVE.ordinal()] = Note.LIVE;
         Element el = p == null ? Element.NONE : p.element;
 
@@ -61,7 +71,7 @@ public final class Reader {
         }
         List<Part> parts;
         if (bow) {
-            if (a == null && !onArrow) return new Reading(l, spec, level, List.of(), notes, recovery(spec, a, m, false), false);
+            if (a == null && !onArrow) return new Reading(l, spec, level, List.of(), notes, recovery(spec, null, m, false), false);
             Act arrow = new Act(RuneId.ARROW, -1, 0, arrowMods, el, arrowCopies, false);
             Part first = new Part(null, -1, List.of(arrow));
             parts = a == null ? List.of(first)

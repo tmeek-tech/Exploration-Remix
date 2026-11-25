@@ -43,13 +43,13 @@ class ReaderPropertiesTest {
     private static void check(Reading r, HostSpec spec, int level) {
         String what = r.loadout() + " on a " + spec.host().word + " at level " + level;
         assertTrue(r.casts().size() <= 1, what + ": one cast at most");
-        for (Socket s : Socket.values()) {
+        for (Socket s : Socket.WEAPON) {
             Note n = r.note(s);
             assertNotNull(n, what);
             assertEquals(r.loadout().get(s) == null, n.state() == Note.State.EMPTY, what + ": a socket is empty only when it holds nothing");
         }
         // a socket that does nothing costs nothing: the cast is the same without it
-        for (Socket s : Socket.values()) {
+        for (Socket s : Socket.WEAPON) {
             if (!r.note(s).grey()) continue;
             Reading without = Reader.read(r.loadout().with(s, null), spec, level);
             assertEquals(cost(without), cost(r), what + ": the grey " + s + " changes the cost");
@@ -73,6 +73,7 @@ class ReaderPropertiesTest {
             assertTrue(line.endsWith(".") || line.endsWith(")") || line.endsWith("!"), what + ": " + line);
         }
         for (Socket s : Socket.values()) assertFalse(Explain.note(r, s).contains("null"), what);
+        for (Socket s : Socket.values()) if (!s.kind.weapon()) assertEquals(Note.State.EMPTY, r.note(s).state(), what + ": no weapon has " + s);
     }
 
     private static int cost(Reading r) { return r.cast() == null ? 0 : r.cast().cost(); }

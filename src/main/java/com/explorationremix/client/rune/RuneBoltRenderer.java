@@ -22,7 +22,7 @@ import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
 /**
- * A flying rune: its own sprite (Spark, Shard, Orb or Glow) facing the camera and turning slowly, in its element's
+ * A flying rune: its own sprite (Spark, a needle of Shard, Orb, an arrow of Volley's, a bow's mine) facing the camera and turning slowly, in its element's
  * colour, with a hot white middle; round it a halo of the same colour that adds its light to what is behind it; and
  * behind it a ribbon of light through the places it has just been, wide at the bolt and thinning to nothing, a few
  * blocks long. Everything full bright, so it reads in a dark cave. Sparks it sheds come from the client's effects.
@@ -49,9 +49,10 @@ final class RuneBoltRenderer extends EntityRenderer<RuneBolt> {
     @Override
     public ResourceLocation getTextureLocation(RuneBolt b) {
         return switch (b.rune()) {
-            case SHARD -> SHARD;
+            case SHARD, VOLLEY -> SHARD;
             case ORB -> ORB;
-            case GLOW -> GLOW;
+            // a bow's mine lying in wait: Glow's old mote, now that Glow is a flare
+            case GLOW, MINE -> GLOW;
             default -> SPARK;
         };
     }
@@ -60,7 +61,9 @@ final class RuneBoltRenderer extends EntityRenderer<RuneBolt> {
     private static float side(RuneId rune) {
         return switch (rune) {
             case SHARD -> 0.45F;
+            case VOLLEY -> 0.4F;
             case ORB -> 0.8F;
+            case MINE -> 0.55F;
             default -> 0.5F;
         };
     }
@@ -79,8 +82,9 @@ final class RuneBoltRenderer extends EntityRenderer<RuneBolt> {
     private static double trailLength(RuneId rune) {
         return switch (rune) {
             case SHARD -> 3.2;
+            case VOLLEY -> 3.6;
             case ORB -> 2.2;
-            case GLOW -> 1.4;
+            case GLOW, MINE -> 1.4;
             default -> 2.8;
         };
     }

@@ -52,7 +52,7 @@ class CastMachineTest {
         assertTrue(r.cast().red());
         assertEquals(-1, CastMachine.next(CastState.fresh(small, 0), r, 0, LIM));
         assertEquals(CastMachine.Kind.ALL_RED, CastMachine.attempt(CastState.fresh(small, 0), r, 0, false, LIM).kind());
-        assertEquals(CastMachine.Kind.NOTHING, CastMachine.attempt(CastState.fresh(small, 0), read("lantern", small), 0, false, LIM).kind());
+        assertEquals(CastMachine.Kind.NOTHING, CastMachine.attempt(CastState.fresh(small, 0), read("ember", small), 0, false, LIM).kind());
     }
 
     @Test

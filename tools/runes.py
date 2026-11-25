@@ -3,15 +3,17 @@
 A rune is an item (explorationremix:rune_<id>) drawn as a small slate tablet with a glowing glyph carved into it. The
 glyph's colour tells the rune's kind (the socket it goes in) at a glance, in the enchanting table's colours: active
 runes light blue, modifiers lavender, passives silver-blue, and the four element passives their element's own colour
-(the colour its casts are drawn in, Element.java). Every tablet is the same stone, so the glyph is the only thing that
+(the colour its casts are drawn in, Element.java); armor's effect runes periwinkle, its collect runes pale lilac, and
+tool runes pale sky blue (0.22.6). Every tablet is the same stone, so the glyph is the only thing that
 changes from one rune to the next, and each glyph is drawn by hand on a 10 by 10 grid so that it still reads at 16 by
 16.
 
 This file also paints the textures the rune renderers tint (textures/entity/rune: white on transparent, a bright core
 and a soft alpha falloff), the blocks runes make for a while (Barrier glass, Frost's ice, Glow's light, a struck fern's
-unrolled fronds), and
-writes the rune data: the item tags by the layer a rune is first found in, the rune damage type (shields never block
-it), Create's tag that keeps contraptions from carrying the rune blocks off, and the English names.
+unrolled fronds, a Rope arrow's rope), and
+writes the rune data: the item tags by the layer a rune is first found in (and each layer's collect runes), the rune
+damage type (shields never block it), Create's tag that keeps contraptions from carrying the rune blocks off, the loot
+modifier that makes the world's loot plain now that the enchanting table sets runes, and the English names.
 
 The table below is copied from RuneId.java (the source of truth). check_table() compares the two whenever the Java is
 there, so a rune added, renamed or moved to another layer there fails here until this file is changed to match.
@@ -34,60 +36,96 @@ ELEMENT_JAVA = os.path.join(ROOT, "src/main/java/com/explorationremix/rune/engin
 
 # =============================================================================================== the runes
 # id -> (name, kind, layer), in RuneId's order. The name is RuneId's title in title case ("On hit" is "On Hit"); the
-# kind is the socket it goes in (RuneKind: action is the active socket); the layer is where a rune is first found: 0 the
-# Upper Caves, 1 the Blue Reaches, 2 the Deep Gardens. Echo keeps the id "after" from when it was "After a Moment".
+# kind is the socket it goes in (RuneKind: action is the active socket; effect and collect are armor's, tool a tool's);
+# the layer is where a rune is first found: 0 the Upper Caves, 1 the Blue Reaches, 2 the Deep Gardens. Some ids are
+# older than their names, so runes already found keep working: Overflow is "after" (once "After a Moment", then
+# Echo), Return is "arc".
 RUNES = {
-    # active runes
+    # sword actives
     "spark": ("Spark", "action", 0),
     "shard": ("Shard", "action", 0),
     "orb": ("Orb", "action", 0),
-    "glow": ("Glow", "action", 0),
     "burst": ("Burst", "action", 0),
     "cleave": ("Cleave", "action", 0),
     "field": ("Field", "action", 1),
     "barrier": ("Barrier", "action", 0),
     "dash": ("Dash", "action", 0),
     "reel": ("Reel", "action", 1),
+    # bow and crossbow actives: each goes off where its arrow lands
+    "glow": ("Glow", "action", 0),
+    "rope": ("Rope", "action", 0),
+    "snare": ("Snare", "action", 1),
+    "volley": ("Volley", "action", 1),
+    "mine": ("Mine", "action", 2),
     # modifiers
     "swift": ("Swift", "modifier", 0),
     "heavy": ("Heavy", "modifier", 0),
     "wide": ("Wide", "modifier", 0),
     "seek": ("Seek", "modifier", 1),
-    "arc": ("Arc", "modifier", 0),
+    "arc": ("Return", "modifier", 0),
     "bounce": ("Bounce", "modifier", 0),
     "pierce": ("Pierce", "modifier", 1),
     "siphon": ("Siphon", "modifier", 2),
     "fan": ("Fan", "modifier", 1),
-    # passives: the four elements, then the rest
+    # passives: the four elements, then the rest (Recall and Quickdraw are a bow's)
     "ember": ("Ember", "passive", 2),
     "frost": ("Frost", "passive", 2),
     "storm": ("Storm", "passive", 2),
     "tide": ("Tide", "passive", 2),
     "on_hit": ("On Hit", "passive", 1),
-    "after": ("Echo", "passive", 1),
-    "lantern": ("Lantern", "passive", 0),
-    "thirst": ("Thirst", "passive", 1),
+    "after": ("Overflow", "passive", 1),
+    "recall": ("Recall", "passive", 0),
+    "quickdraw": ("Quickdraw", "passive", 1),
+    # armor's effect runes, three to each piece: helmet, chestplate, leggings, boots
+    "lantern": ("Lantern", "effect", 0),
+    "sense": ("Sense", "effect", 1),
+    "far_sight": ("Far Sight", "effect", 0),
+    "glide": ("Glide", "effect", 1),
+    "second_wind": ("Second Wind", "effect", 2),
+    "steadfast": ("Steadfast", "effect", 0),
+    "stride": ("Stride", "effect", 0),
+    "climb": ("Climb", "effect", 1),
+    "swim": ("Swim", "effect", 1),
+    "leap": ("Leap", "effect", 1),
+    "feather": ("Feather", "effect", 0),
+    "frost_walk": ("Frost Walk", "effect", 2),
+    # armor's collect runes: two kinds to a layer, waking on three worn pieces
+    "mend": ("Mend", "collect", 0),
+    "vigor": ("Vigor", "collect", 0),
+    "fleet": ("Fleet", "collect", 1),
+    "thirst": ("Thirst", "collect", 1),
+    "ward": ("Ward", "collect", 2),
+    "wisdom": ("Wisdom", "collect", 2),
+    # tool runes: a pickaxe's, an axe's, a shovel's or a hoe's one socket
+    "haste": ("Haste", "tool", 0),
+    "bounty": ("Bounty", "tool", 1),
+    "gentle": ("Gentle", "tool", 2),
 }
 LAYERS = ["upper_caves", "blue_reaches", "deep_gardens"]
 
 # What each rune does, one plain line (its tooltip: rune.explorationremix.<id>.desc). An active rune's second phase is
-# RuneId's phaseTwo, shown under it with its level.
+# RuneId's phaseTwo, shown under it with its level; a collect rune's set on three pieces and as a full set are RuneId's
+# three and full, shown under it.
 DESC = {
     "spark": "A quick bolt that flies straight and hits for 4.",
-    "shard": "A cheap, fast splinter that hits for 3.",
+    "shard": "A close spray of five needles, each striking for itself, hardest up close.",
     "orb": "A slow, heavy ball that hits for 7.",
-    "glow": "A drifting mote that lights where it stops, or makes the creature it hits glow, for a minute.",
     "burst": "A blast all round you; hits for 6. Your own blast throws you but never hurts you.",
     "cleave": "A wide slash in front of you; hits for 6.",
     "field": "A patch on the ground that pulses into all who stand in it, with your weapon's element. Cast in the air, it drops to the floor.",
     "barrier": "A wall of rune glass across your aim, for 8 seconds.",
     "dash": "Throws you along your aim.",
     "reel": "Yanks a creature toward you, or pulls you to the wall it catches, up over its top when it can. Reaches 16 blocks; sneak to let go.",
+    "glow": "A flare: where the arrow sticks, a light burns for a minute; a creature it strikes glows through walls.",
+    "rope": "A rope of light hangs from where the arrow sticks, down to the floor or over a near lip, for 40 seconds. Climb it like a ladder.",
+    "snare": "Roots of light hold the creatures round where the arrow lands in place for 3 seconds.",
+    "volley": "Arrows of light rain down round where the arrow lands.",
+    "mine": "A mine stays where the arrow lands, and goes off when a hostile creature comes near.",
     "swift": "Faster, with a shorter delay.",
     "heavy": "Hits harder and knocks back further, but slower.",
     "wide": "Bigger: a wider blast, a longer wall, a fatter bolt.",
     "seek": "Bends toward the nearest creature that is fighting you.",
-    "arc": "Lobbed: falls in an arc.",
+    "arc": "Flies out and comes back to you, striking what it passes both ways.",
     "bounce": "Bounces off walls instead of stopping.",
     "pierce": "Passes through creatures and carries on.",
     "siphon": "Well-placed hits knock loose white motes that refill this weapon.",
@@ -97,16 +135,37 @@ DESC = {
     "storm": "Lightning: full swings, arrows and casts leap to a second creature, and stun the wet.",
     "tide": "Water: full swings, arrows and casts soak, and put out fire.",
     "on_hit": "Every third full swing or arrow that hits a foe casts your active rune for free.",
-    "after": "Every cast goes again a moment later, at half strength (not walls, dashes or pulls).",
-    "lantern": "A soft light goes with you while the weapon is in your hand.",
-    "thirst": "Hits fill the weapon with energy 60% faster.",
+    "after": "Energy the weapon gains past full makes its next cast a third stronger.",
+    "recall": "Arrows fly back to you once they land.",
+    "quickdraw": "A bow draws, and a crossbow loads, in half the time.",
+    "lantern": "A soft light goes with you.",
+    "sense": "Creatures hunting you within 24 blocks glow through the rock.",
+    "far_sight": "Hold the peer key (Z) to look far off, as through a spyglass; a creature you hold in view is marked.",
+    "glide": "Hold jump while falling to sink slowly and drift where you look. The landing never hurts.",
+    "second_wind": "A hit that would leave you low heals you four hearts instead. It rests two minutes after.",
+    "steadfast": "Knockback moves you half as far, and not at all while you sneak.",
+    "stride": "You step up a full block, and walk through cobwebs, powder snow and berry bushes unslowed.",
+    "climb": "Jump at a ledge up to two blocks over your head and you pull yourself up onto it.",
+    "swim": "You swim 60% faster.",
+    "leap": "Press jump in the air to jump once more before you land.",
+    "feather": "Falls hurt half as much.",
+    "frost_walk": "Still water freezes under your feet as you walk.",
+    "mend": "XP you gather mends your gear.",
+    "vigor": "More hearts.",
+    "fleet": "A quicker pace.",
+    "thirst": "Your weapons fill with energy faster.",
+    "ward": "Creatures' hits hurt you less.",
+    "wisdom": "More XP from what you kill and mine.",
+    "haste": "Digs faster, as Efficiency III.",
+    "bounty": "More from ores, as Fortune II.",
+    "gentle": "Picks blocks up whole, as Silk Touch.",
 }
 
 # The blocks runes make for a while (RuneRegistry: TempBlock). They have no items and drop nothing. rune_frond is a
 # struck silver fern's fronds, unrolled down the rock (0.18.7, RunePlants); its textures are the fern's, painted with
 # the other plants (plants_upper.py). rune_lantern is Lantern's light, which follows the player: it is never drawn.
 BLOCKS = {"rune_barrier": "Rune Barrier", "rune_ice": "Rune Ice", "rune_light": "Rune Light", "rune_frond": "Unrolled Fronds",
-          "rune_lantern": "Rune Lantern"}
+          "rune_lantern": "Rune Lantern", "rune_rope": "Rune Rope"}
 ENTITIES = {"rune_bolt": "Rune Bolt", "rune_field": "Rune Field", "rune_mote": "Siphon Mote"}
 
 # Everything else the player reads: the tooltips' words, the enchanting table's rune view, the key and what the casting
@@ -115,20 +174,37 @@ LANG = {
     f"itemGroup.{MOD}.runes": "Runes",
     f"container.{MOD}.rune_table": "Runes",
     f"key.{MOD}.cast_runes": "Cast runes",
+    f"key.{MOD}.peer": "Peer (Far Sight)",
     f"key.categories.{MOD}": "Exploration Remix",
     f"rune.{MOD}.kind.active": "Active",
     f"rune.{MOD}.kind.modifier": "Modifier",
     f"rune.{MOD}.kind.passive": "Passive",
+    f"rune.{MOD}.kind.effect": "Effect",
+    f"rune.{MOD}.kind.collect": "Collect",
+    f"rune.{MOD}.kind.tool": "Tool",
+    # what a rune fits (Fits.word), beside its kind on its tooltip
+    f"rune.{MOD}.fits.sword": "Swords",
+    f"rune.{MOD}.fits.bow": "Bows and crossbows",
+    f"rune.{MOD}.fits.weapon": "Swords, bows and crossbows",
+    f"rune.{MOD}.fits.armor": "Any armor",
+    f"rune.{MOD}.fits.helmet": "Helmets",
+    f"rune.{MOD}.fits.chestplate": "Chestplates",
+    f"rune.{MOD}.fits.leggings": "Leggings",
+    f"rune.{MOD}.fits.boots": "Boots",
+    f"rune.{MOD}.fits.tool": "Pickaxes, axes, shovels and hoes",
+    f"rune.{MOD}.fits.gear": "Gear",
+    # a collect rune's set (RuneId's three and full)
+    f"rune.{MOD}.collect_three": "On three pieces: %s",
+    f"rune.{MOD}.collect_full": "Full set: %s",
     f"rune.{MOD}.cost": "Costs %s energy",
     f"rune.{MOD}.cost_each": "Adds %s energy to the cast it changes",
     f"rune.{MOD}.phase_two": "Phase two at level %s: %s",
-    f"rune.{MOD}.set_at_table": "Set it into a weapon at an enchanting table",
+    f"rune.{MOD}.set_at_table": "Set it into your gear at an enchanting table",
     f"rune.{MOD}.no_runes": "No runes: set them at an enchanting table",
     # the enchanting table's rune view (RuneTableScreen)
     f"screen.{MOD}.rune_table.how": "Click a socket to raise the runes you carry for it",
     f"screen.{MOD}.rune_table.how_chosen": "Click a rune to set it, or anywhere else to put them back",
     f"screen.{MOD}.rune_table.locked": "In combat: runes can be changed in %s s",
-    f"screen.{MOD}.rune_table.enchant": "Enchant",
     f"screen.{MOD}.rune_table.empty": "Empty",
     f"screen.{MOD}.rune_table.none_set": "No runes set in this weapon yet.",
     f"screen.{MOD}.rune_table.socket_empty": "%s socket: empty",
@@ -144,13 +220,37 @@ LANG = {
     f"screen.{MOD}.rune_table.three": "A weapon holds three runes: one active, one modifier and one passive.",
     f"screen.{MOD}.rune_table.about.active": "The spell this weapon casts. Each active rune has a second, stronger phase that wakes at an XP level of its own.",
     f"screen.{MOD}.rune_table.about.modifier": "Shapes the active rune's spell: faster, heavier, wider, seeking, bouncing, piercing and more.",
-    f"screen.{MOD}.rune_table.about.passive": "Works on its own with every hit: an element, a free cast, an echo, a light or a thirst for energy.",
+    f"screen.{MOD}.rune_table.about.passive": "Works on its own: an element, a free cast, Overflow's charge, or a bow's Recall and Quickdraw.",
+    # 0.22.6: armor and tools at the table, and the column of gear down its left
+    f"screen.{MOD}.rune_table.about.effect": "What this piece does for you. Each piece has effect runes of its own.",
+    f"screen.{MOD}.rune_table.about.collect": "Wakes when three worn pieces carry the same kind; all four make a full set.",
+    f"screen.{MOD}.rune_table.about.tool": "A tool holds one rune: Haste digs faster, Bounty finds more ore, Gentle picks blocks up whole.",
+    f"screen.{MOD}.rune_table.armor_three": "A piece of armor holds three runes: one effect and two collect.",
+    f"screen.{MOD}.rune_table.none_set_armor": "No runes set in this piece yet.",
+    f"screen.{MOD}.rune_table.none_set_tool": "No rune set in this tool yet.",
+    f"screen.{MOD}.rune_table.no_effect": "No effect rune",
+    f"screen.{MOD}.rune_table.no_runes": "No runes",
+    f"screen.{MOD}.rune_table.hand": "In hand",
+    f"screen.{MOD}.rune_table.nothing_held": "Hold a sword, bow, crossbow or tool to set its runes",
+    f"screen.{MOD}.rune_table.nothing_worn": "Wear %s to set its runes",
+    f"screen.{MOD}.rune_table.click_gear": "Click to set its runes",
+    f"screen.{MOD}.rune_table.sets": "Sets",
+    f"screen.{MOD}.rune_table.set_on": "On: %s",
     f"message.{MOD}.runes.sputter": "Not enough energy: needs %s, has %s",
     f"message.{MOD}.runes.red": "This cast costs more than this %s holds",
     f"message.{MOD}.runes.nothing": "Nothing on this %s casts: set an active rune at an enchanting table",
     f"message.{MOD}.runes.busy": "Too many runes in flight",
     f"message.{MOD}.runes.phase_wakes": "%s: phase two wakes (level %s)",
     f"message.{MOD}.runes.phase_sleeps": "%s: phase two sleeps until level %s",
+    f"message.{MOD}.runes.overflow": "Overflow: this %s's next cast is a third stronger",
+    f"message.{MOD}.runes.handed_back": "Runes that don't fit where they were set are back in your inventory: %s",
+    # armor's sets waking, filling and falling asleep, and Second Wind (the action bar)
+    f"message.{MOD}.armor.wakes": "%s wakes: %s",
+    f"message.{MOD}.armor.full": "%s, full set: %s",
+    f"message.{MOD}.armor.not_full": "%s is no longer a full set: %s",
+    f"message.{MOD}.armor.sleeps": "%s sleeps: it is on %s pieces, and wakes on three",
+    f"message.{MOD}.armor.wind": "Second Wind!",
+    f"message.{MOD}.armor.wind_back": "Second Wind is back",
     f"message.{MOD}.runes.converted": "Your weapons' rune rows are now sockets: one active rune, one modifier and one passive each. The runes that didn't fit are back in your inventory.",
     # the rune damage type's death messages: %2$s is the caster, %3$s their named weapon (.item); .player is
     # for the rare death with no caster known, where %2$s is whoever was fighting the victim
@@ -257,6 +357,9 @@ KIND_GLYPH = {
     "action": ("#8EC2FF", "#E6F2FF", "#4F7FC4"),
     "modifier": ("#B7A8FF", "#F0ECFF", "#7666C4"),
     "passive": ("#D6E6FF", "#FFFFFF", "#8495B8"),
+    "effect": ("#9FB8FF", "#EEF3FF", "#5B6FB5"),
+    "collect": ("#E0D4FF", "#FFFFFF", "#9886C6"),
+    "tool": ("#BFE0FF", "#F4FAFF", "#6F96BE"),
 }
 ELEMENT_GLYPH = {
     "ember": ("#FF7A2E", "#FFE08A", "#B8461A"),
@@ -282,18 +385,18 @@ GLYPHS = {
         "....+.....",
         "..........",
     ],
-    # a slim diamond, its left facet catching the light
+    # a spray of needles, flying
     "shard": [
-        "....#.....",
-        "....#.....",
-        "...*#.....",
-        "...*#+....",
-        "..*##+....",
-        "..*##++...",
-        "...*#+....",
-        "...*#.....",
-        "....#.....",
-        "....+.....",
+        ".......#..",
+        "......*..#",
+        "..#..#..*.",
+        ".*..#..#..",
+        "#..*..#...",
+        "..#..*....",
+        ".#..#.....",
+        "#..*......",
+        "..#.......",
+        ".+........",
     ],
     # a filled circle
     "orb": [
@@ -451,17 +554,17 @@ GLYPHS = {
         "....#.....",
         "..........",
     ],
-    # a lob: up and over, coming down at its end
+    # a boomerang, and the way it comes back
     "arc": [
+        "......+++.",
+        ".##......+",
+        ".###.....+",
+        "..###...+.",
+        "...###....",
+        "....######",
+        ".....#####",
         "..........",
-        "...####...",
-        "..#....#..",
-        ".#......#.",
-        ".#......#.",
-        "#.......#.",
-        "#.......#.",
-        "*......###",
-        "........#.",
+        "..........",
         "..........",
     ],
     # a path off a line: down to the ground and up again
@@ -568,17 +671,17 @@ GLYPHS = {
         ".....#.##.",
         "....#..##.",
     ],
-    # an hourglass
+    # a full gauge, and energy rising past its top
     "after": [
-        ".#######..",
-        "..#...#...",
-        "..#+++#...",
-        "...#+#....",
-        "....#.....",
-        "...#+#....",
-        "..#...#...",
-        "..#+++#...",
-        ".#######..",
+        "....##....",
+        "...#**#...",
+        "..#.**.#..",
+        "....**....",
+        "##########",
+        "#********#",
+        "#********#",
+        "##########",
+        "..........",
         "..........",
     ],
     # three lines spreading
@@ -618,6 +721,336 @@ GLYPHS = {
         "....##....",
         "....##....",
         "..######..",
+        "..........",
+    ],
+    # ---- 0.22.6: bow and crossbow actives
+    # a rope hanging from an arrow stuck in a lip, its strands twisting
+    "rope": [
+        "#######...",
+        "...#..+*+.",
+        "...##...+.",
+        "...#+.....",
+        "...+#.....",
+        "....#+....",
+        "....+#....",
+        "....#+....",
+        "...+#.....",
+        "...**.....",
+    ],
+    # roots of light closing round a creature
+    "snare": [
+        "..#....#..",
+        ".#......#.",
+        "#...##...#",
+        "#..#**#..#",
+        "#..#**#..#",
+        ".#..##..#.",
+        "..#....#..",
+        "...#..#...",
+        "..#+..+#..",
+        ".#......#.",
+    ],
+    # arrows of light raining down
+    "volley": [
+        ".#........",
+        ".#....#...",
+        ".#....#...",
+        "#*#...#...",
+        ".+...#*#..",
+        "......+...",
+        "...#....#.",
+        "...#....#.",
+        "..#*#...#.",
+        "...+...#*#",
+    ],
+    # a mine on its spikes
+    "mine": [
+        "....#.....",
+        ".#..#..#..",
+        "..#####...",
+        "..#***#...",
+        "###*.*###.",
+        "..#***#...",
+        "..#####...",
+        ".#..#..#..",
+        "....#.....",
+        "..........",
+    ],
+    # ---- a bow's passives
+    # an arrow turning back
+    "recall": [
+        "..#.......",
+        ".##.......",
+        "#*#######.",
+        ".##......#",
+        "..#......#",
+        ".........#",
+        ".........#",
+        "........#.",
+        "..######..",
+        "..........",
+    ],
+    # a bow drawn, its arrow nocked
+    "quickdraw": [
+        "...#......",
+        "...##.....",
+        "...#.#....",
+        "...#..#.#.",
+        "++#######*",
+        "...#..#.#.",
+        "...#.#....",
+        "...##.....",
+        "...#......",
+        "..........",
+    ],
+    # ---- armor's effect runes
+    # rings of a sound going out: what hunts you, felt
+    "sense": [
+        "..........",
+        "..######..",
+        ".#......#.",
+        "#..####..#",
+        "..#....#..",
+        ".#..##..#.",
+        "...#..#...",
+        "....**....",
+        "....**....",
+        "..........",
+    ],
+    # an eye, looking far
+    "far_sight": [
+        "..........",
+        "..........",
+        "...####...",
+        ".##....##.",
+        "#...##...#",
+        "#..#**#..#",
+        "#...##...#",
+        ".##....##.",
+        "...####...",
+        "..........",
+    ],
+    # wings held out on the air
+    "glide": [
+        "..........",
+        "..........",
+        "+........+",
+        "##......##",
+        ".###..###.",
+        "...#**#...",
+        "....++....",
+        "..........",
+        "..+....+..",
+        "...+..+...",
+    ],
+    # a heart, and a breath of air curling round it
+    "second_wind": [
+        ".....###..",
+        "........#.",
+        ".##.##..#.",
+        "#**#**#.#.",
+        "#*****#...",
+        "#*****#...",
+        ".#***#....",
+        "..#*#.....",
+        "...#......",
+        "..........",
+    ],
+    # an anchor: knocked about, you hold
+    "steadfast": [
+        "....##....",
+        "...#..#...",
+        "....##....",
+        "..######..",
+        "....##....",
+        "....##....",
+        "#...##...#",
+        "##..**..##",
+        ".###**###.",
+        "...####...",
+    ],
+    # a step up
+    "stride": [
+        "..........",
+        "......####",
+        "......#...",
+        "......#...",
+        "...####...",
+        "...#......",
+        "...#......",
+        "####......",
+        "#.........",
+        "+.........",
+    ],
+    # pulled up over a ledge
+    "climb": [
+        "....######",
+        "....#.....",
+        "..#.#.....",
+        ".###......",
+        "#*#*#.....",
+        "..#.......",
+        "..#.......",
+        "..#.......",
+        "..+.......",
+        "..........",
+    ],
+    # a fish
+    "swim": [
+        "..........",
+        "..........",
+        "..####...#",
+        ".#.....###",
+        "#.*.....#.",
+        "#.......#.",
+        ".#.....###",
+        "..####...#",
+        "..........",
+        "..........",
+    ],
+    # up, and up again
+    "leap": [
+        "....##....",
+        "...#**#...",
+        "..#....#..",
+        ".#......#.",
+        "....##....",
+        "...#**#...",
+        "..#....#..",
+        ".#......#.",
+        "..........",
+        "+++++++++.",
+    ],
+    # a feather
+    "feather": [
+        "........#.",
+        "......###.",
+        ".....##*#.",
+        "....##*##.",
+        "...##*##..",
+        "..##*##...",
+        "..#*##....",
+        ".#*#......",
+        "#*........",
+        "+.........",
+    ],
+    # footprints on ice
+    "frost_walk": [
+        "......##..",
+        ".....####.",
+        ".....####.",
+        "......##..",
+        "..##......",
+        ".####.....",
+        ".####.....",
+        "..##......",
+        "..........",
+        "*#*#*#*#*#",
+    ],
+    # ---- armor's collect runes
+    # a hammer, to mend with
+    "mend": [
+        "..........",
+        "....##....",
+        "...####...",
+        "..###**#..",
+        "...###*#..",
+        "....#.##..",
+        "...#......",
+        "..#.......",
+        ".#........",
+        "+.........",
+    ],
+    # a heart, full
+    "vigor": [
+        "..........",
+        ".##....##.",
+        "#**#..####",
+        "#*########",
+        "##########",
+        ".########.",
+        "..######..",
+        "...####...",
+        "....##....",
+        "..........",
+    ],
+    # a winged boot
+    "fleet": [
+        "..........",
+        "#....###..",
+        "##...###..",
+        ".###.###..",
+        "...#####..",
+        ".....###..",
+        "++...#####",
+        ".++..#####",
+        "..........",
+        "..........",
+    ],
+    # a shield
+    "ward": [
+        ".########.",
+        ".#......#.",
+        ".#..**..#.",
+        ".#.****.#.",
+        ".#..**..#.",
+        "..#.**.#..",
+        "..#....#..",
+        "...#..#...",
+        "....##....",
+        "..........",
+    ],
+    # an owl
+    "wisdom": [
+        "#........#",
+        ".#......#.",
+        ".########.",
+        "#**#..#**#",
+        "#**#..#**#",
+        "#...##...#",
+        ".#..##..#.",
+        "..#....#..",
+        "...####...",
+        "..........",
+    ],
+    # ---- tool runes
+    # a pick, swung fast
+    "haste": [
+        "..#####...",
+        "+....###..",
+        ".+....##..",
+        "+....#.##.",
+        ".+..#...#.",
+        "...#....#.",
+        "..#.......",
+        ".#........",
+        "#.........",
+        "..........",
+    ],
+    # a gem, and its glint
+    "bounty": [
+        "........+.",
+        ".......+*+",
+        "..######+.",
+        ".#*#..#*#.",
+        "##########",
+        ".#......#.",
+        "..#....#..",
+        "...#..#...",
+        "....##....",
+        "..........",
+    ],
+    # a block, whole
+    "gentle": [
+        "....##....",
+        "..##**##..",
+        "##******##",
+        "#.##**##.#",
+        "#...##...#",
+        "#...##...#",
+        "#...##...#",
+        ".##.##.##.",
+        "...####...",
         "..........",
     ],
 }
@@ -827,7 +1260,87 @@ def rune_light():
     return img
 
 
-BLOCK_TEXTURES = {"rune_barrier": rune_barrier, "rune_ice": rune_ice, "rune_light": rune_light}
+def rune_rope(fast=False, end=False):
+    """A Rope arrow's rope of light, as a chain is drawn: two strands three pixels wide (x 0-2 and 3-5) for the model's
+    two crossed planes. Light blue, twisted every four pixels; the second phase's paler and brighter; the bottom block's
+    end frays into loose threads."""
+    main, core, dim = (hexc(c) for c in (("#BFD9FF", "#FFFFFF", "#7FA6E0") if fast else ("#8EC2FF", "#E6F2FF", "#4F7FC4")))
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    px = img.load()
+    for strand in (0, 3):
+        for y in range(16):
+            twist = ((y + strand) // 2) % 2
+            row = (dim, main, core) if twist == 0 else (core, main, dim)
+            for i, c in enumerate(row):
+                px[strand + i, y] = c
+        if end:
+            # the last five pixels fray: the middle thread runs on, the outer two stop short and splay
+            for y in range(11, 16):
+                for i in range(3):
+                    px[strand + i, y] = (0, 0, 0, 0)
+            for y, i, c in ((11, 0, dim), (11, 1, main), (11, 2, dim), (12, 1, core), (12, 0, dim), (13, 1, main), (13, 2, dim),
+                            (14, 1, dim)):
+                px[strand + i, y] = c
+    return img
+
+
+BLOCK_TEXTURES = {"rune_barrier": rune_barrier, "rune_ice": rune_ice, "rune_light": rune_light,
+                  "rune_rope": rune_rope, "rune_rope_end": lambda: rune_rope(end=True),
+                  "rune_rope_fast": lambda: rune_rope(fast=True), "rune_rope_fast_end": lambda: rune_rope(fast=True, end=True)}
+
+
+def rope_model(look):
+    """A rope's two crossed planes, as a chain's, lit full whatever the cave's light (it is light itself)."""
+    tex = f"{MOD}:block/{look}"
+
+    def plane(frm, to, faces):
+        return {"from": frm, "to": to, "shade": False, "rotation": {"origin": [8, 8, 8], "axis": "y", "angle": 45},
+                "forge_data": {"block_light": 15}, "faces": faces}
+    return {"parent": "minecraft:block/block", "render_type": "minecraft:cutout", "ambientocclusion": False,
+            "textures": {"particle": tex, "rope": tex},
+            "elements": [plane([6.5, 0, 8], [9.5, 16, 8], {f: {"uv": [0, 0, 3, 16], "texture": "#rope"} for f in ("north", "south")}),
+                         plane([8, 0, 6.5], [8, 16, 9.5], {f: {"uv": [3, 0, 6, 16], "texture": "#rope"} for f in ("west", "east")})]}
+
+
+def rope_lip_model(look):
+    """A rope's top block where it reaches a wall's lip or hangs from a ledge's edge (the block level with the top): a
+    short stub up from the strand below, then the strand bent over flat onto the top, reaching a little over half a block
+    in (toward north here; the block state turns it). The flat part is the same crossed planes laid on their side, a
+    pixel and a quarter over the top so it never flickers with the stone under it."""
+    tex = f"{MOD}:block/{look}"
+
+    def piece(frm, to, axis, origin, faces):
+        return {"from": frm, "to": to, "shade": False, "rotation": {"origin": origin, "axis": axis, "angle": 45},
+                "forge_data": {"block_light": 15}, "faces": faces}
+    stub = [8, 1.25, 8]
+    flat = [8, 1.25, 1]
+    return {"parent": "minecraft:block/block", "render_type": "minecraft:cutout", "ambientocclusion": False,
+            "textures": {"particle": tex, "rope": tex},
+            "elements": [
+                # the stub: the hanging strand's last pixels, up to the bend
+                piece([6.5, 0, 8], [9.5, 2.75, 8], "y", stub, {f: {"uv": [0, 13.25, 3, 16], "texture": "#rope"} for f in ("north", "south")}),
+                piece([8, 0, 6.5], [8, 2.75, 9.5], "y", stub, {f: {"uv": [3, 13.25, 6, 16], "texture": "#rope"} for f in ("west", "east")}),
+                # the strand laid over the top, from the bend at the block's middle on over the lip
+                piece([6.5, 1.25, -6], [9.5, 1.25, 9.5], "z", flat, {f: {"uv": [0, 0, 3, 15.5], "texture": "#rope"} for f in ("up", "down")}),
+                piece([8, -0.25, -6], [8, 2.75, 9.5], "z", flat,
+                      {f: {"uv": [3, 0, 6, 15.5], "rotation": 90, "texture": "#rope"} for f in ("west", "east")})]}
+
+
+def rope_states():
+    """fast (the second phase's paler rope) x end (the bottom block, frayed) x lip (the top block bent over a lip or an
+    edge, turned to face it)."""
+    turn = {"north": 0, "east": 90, "south": 180, "west": 270}
+    out = {}
+    for end in ("false", "true"):
+        for fast in ("false", "true"):
+            for lip in ("false", "true"):
+                for facing in ("north", "east", "south", "west"):
+                    key = f"end={end},facing={facing},fast={fast},lip={lip}"
+                    if lip == "true" and end == "false":
+                        out[key] = {"model": f"{MOD}:block/rune_rope" + ("_fast" if fast == "true" else "") + "_lip", "y": turn[facing]}
+                    else:
+                        out[key] = {"model": f"{MOD}:block/rune_rope" + ("_fast" if fast == "true" else "") + ("_end" if end == "true" else "")}
+    return {"variants": out}
 
 
 def _frond_sheet_model(look):
@@ -878,7 +1391,9 @@ def block_models():
     unrolled fronds (frond_models); Lantern's light nothing at all (it is never drawn, only its breaking dust)."""
     six = ("down", "up", "north", "south", "west", "east")
     light = f"{MOD}:block/rune_light"
-    return dict(frond_models(), **{
+    ropes = {look: rope_model(look) for look in ("rune_rope", "rune_rope_end", "rune_rope_fast", "rune_rope_fast_end")}
+    ropes.update({look + "_lip": rope_lip_model(look) for look in ("rune_rope", "rune_rope_fast")})
+    return dict(frond_models(), **ropes, **{
         "rune_barrier": {"parent": "minecraft:block/cube_all", "render_type": "minecraft:translucent",
                          "textures": {"all": f"{MOD}:block/rune_barrier"}},
         "rune_ice": {"parent": "minecraft:block/cube_all", "render_type": "minecraft:translucent",
@@ -938,14 +1453,21 @@ def write_all(res, write, tag):
     for name, model in block_models().items():
         write(os.path.join(assets, "models", "block", name + ".json"), model)
     for bid, name in BLOCKS.items():
-        states = frond_states() if bid == "rune_frond" else {"variants": {"": {"model": f"{MOD}:block/{bid}"}}}
+        states = frond_states() if bid == "rune_frond" else rope_states() if bid == "rune_rope" else {"variants": {"": {"model": f"{MOD}:block/{bid}"}}}
         write(os.path.join(assets, "blockstates", bid + ".json"), states)
         names[f"block.{MOD}.{bid}"] = name
     names.update({f"entity.{MOD}.{e}": n for e, n in ENTITIES.items()})
-    # the rune tags: every rune, and the runes first found in each layer (what the creatures there drop)
+    # the rune tags: every rune; the runes first found in each layer (what the creatures there drop, now and then); and
+    # each layer's two kinds of collect rune, which its creatures drop often (armor's sets want three of a kind)
     tag(MOD, "items", "runes", [f"{MOD}:rune_{r}" for r in RUNES])
     for i, layer in enumerate(LAYERS):
-        tag(MOD, "items", f"runes/{layer}", [f"{MOD}:rune_{r}" for r, (_, _, l) in RUNES.items() if l == i])
+        tag(MOD, "items", f"runes/{layer}", [f"{MOD}:rune_{r}" for r, (_, k, l) in RUNES.items() if l == i and k != "collect"])
+        tag(MOD, "items", f"runes/collect/{layer}", [f"{MOD}:rune_{r}" for r, (_, k, l) in RUNES.items() if l == i and k == "collect"])
+    # 0.22.6: the enchanting table sets runes now, so the world's loot comes plain (rune.loot.PlainLoot): an enchanted
+    # book found becomes a rune, enchanted gear comes without its enchantments
+    write(os.path.join(data, "loot_modifiers", "plain_loot.json"), {"type": f"{MOD}:plain_loot", "conditions": []})
+    write(os.path.join(res, "data", "forge", "loot_modifiers", "global_loot_modifiers.json"),
+          {"replace": False, "entries": [f"{MOD}:plain_loot"]})
     # rune damage: the caster's, and never blocked by a shield
     write(os.path.join(data, "damage_type", "rune.json"), {"message_id": f"{MOD}.rune", "exhaustion": 0.1, "scaling": "never"})
     # a slam (0.11.0, combat.Slams): a creature a player knocked into a wall

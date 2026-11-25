@@ -20,8 +20,13 @@ import java.util.WeakHashMap;
  */
 public final class Statuses {
     private static final class S {
-        long wetUntil, frozenUntil, heldUntil, immuneUntil;
+        long wetUntil, frozenUntil, heldUntil, immuneUntil, boundUntil;
+        /** Snare's bind in its second phase: what it holds takes {@link #BIND_HURT} times the damage. */
+        boolean boundHard;
     }
+
+    /** How much harder a creature held by a second-phase Snare is hurt. */
+    public static final float BIND_HURT = 1.33F;
 
     private static final Map<LivingEntity, S> MAP = new WeakHashMap<>();
 
@@ -94,6 +99,24 @@ public final class Statuses {
         if (e instanceof net.minecraft.world.entity.Mob m) m.getNavigation().stop();
         e.setDeltaMovement(0, Math.min(0, e.getDeltaMovement().y), 0);
         e.hurtMarked = true;
+    }
+
+    /**
+     * Snare's roots: held in place for {@code ticks} as {@link #hold} holds (players and bosses never), and in its second
+     * phase ({@code hard}) hurt a third harder while it lasts.
+     */
+    public static void bind(LivingEntity e, int ticks, boolean hard) {
+        if (!holdable(e) || ticks <= 0) return;
+        hold(e, ticks);
+        S s = of(e);
+        s.boundUntil = now(e) + ticks;
+        s.boundHard = hard;
+    }
+
+    /** How much harder a hit on {@code e} lands for a Snare's bind: 1, or {@link #BIND_HURT} for a second phase's. */
+    public static float bindHurt(LivingEntity e) {
+        S s = MAP.get(e);
+        return s != null && s.boundHard && s.boundUntil > now(e) ? BIND_HURT : 1.0F;
     }
 
     /**

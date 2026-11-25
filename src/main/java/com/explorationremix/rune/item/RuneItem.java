@@ -1,6 +1,7 @@
 package com.explorationremix.rune.item;
 
 import com.explorationremix.rune.RuneRegistry;
+import com.explorationremix.rune.engine.Fits;
 import com.explorationremix.rune.engine.RuneId;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -15,9 +16,9 @@ import javax.annotation.Nullable;
 import java.util.List;
 
 /**
- * A rune: an item you hold, keep, trade and set into a weapon's socket at an enchanting table. One item per rune,
- * carrying nothing but what it is, so a rune taken out of a weapon is the same item again. Runes never burn, never
- * despawn and can't be destroyed by blasts or cactus, so nothing is lost by tinkering.
+ * A rune: an item you hold, keep, trade and set into a socket of a weapon, a piece of armor or a tool at an enchanting
+ * table. One item per rune, carrying nothing but what it is, so a rune taken out is the same item again. Runes never
+ * burn, never despawn and can't be destroyed by blasts or cactus, so nothing is lost by tinkering.
  */
 public class RuneItem extends Item {
     public final RuneId rune;
@@ -40,21 +41,33 @@ public class RuneItem extends Item {
         return rune.layer >= 2 ? Rarity.RARE : rune.layer == 1 ? Rarity.UNCOMMON : Rarity.COMMON;
     }
 
-    /** The sockets' colours, which the enchanting table and the tooltips share: light blue, lavender and silver-blue. */
+    /**
+     * The sockets' colours, which the enchanting table and the tooltips share: light blue, lavender and silver-blue for a
+     * weapon's, periwinkle and pale lilac for armor's, pale sky blue for a tool's.
+     */
     public static int kindColour(com.explorationremix.rune.engine.RuneKind k) {
         return switch (k) {
             case ACTION -> 0x8EC2FF;
             case MODIFIER -> 0xB7A8FF;
             case PASSIVE -> 0xD6E6FF;
+            case EFFECT -> 0x9FB8FF;
+            case COLLECT -> 0xE0D4FF;
+            case TOOL -> 0xBFE0FF;
         };
     }
 
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tips, TooltipFlag flag) {
-        // what it does, in the rune list's words (lang: rune.explorationremix.<id>.desc), and which socket it goes in
+        // which socket it goes in and on what, then what it does, in the rune list's words (lang: rune.explorationremix.<id>.desc)
         int kind = kindColour(rune.kind);
-        tips.add(Component.translatable("rune.explorationremix.kind." + rune.kind.word).withStyle(s -> s.withColor(kind)));
+        tips.add(Component.translatable("rune.explorationremix.kind." + rune.kind.word).withStyle(s -> s.withColor(kind))
+                .append(Component.literal("  ").append(Component.translatable("rune.explorationremix.fits." + Fits.word(rune.fits)))
+                        .withStyle(net.minecraft.ChatFormatting.DARK_GRAY)));
         tips.add(Component.translatable("rune.explorationremix." + rune.id + ".desc").withStyle(net.minecraft.ChatFormatting.GRAY));
+        if (rune.isCollect()) {
+            tips.add(Component.translatable("rune.explorationremix.collect_three", rune.three).withStyle(s -> s.withColor(0xC9BFEA)));
+            tips.add(Component.translatable("rune.explorationremix.collect_full", rune.full).withStyle(s -> s.withColor(0xE0D4FF)));
+        }
         if (rune.isAction()) {
             tips.add(Component.translatable("rune.explorationremix.cost", rune.cost).withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
             tips.add(Component.translatable("rune.explorationremix.phase_two", rune.phaseLevel, rune.phaseTwo).withStyle(s -> s.withColor(0xA9B8E8)));

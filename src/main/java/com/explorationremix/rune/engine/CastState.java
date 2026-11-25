@@ -8,7 +8,8 @@ package com.explorationremix.rune.engine;
  *   {@code lastCast}, when the fight it was in went quiet, and its energy began to go back to the floor;</li>
  *   <li>{@code cursor}: the cast it fires next;</li>
  *   <li>{@code readyAt}: the first tick it may cast again (after a cast's delay, or the recovery after the last);</li>
- *   <li>{@code lastCast}: the tick it last cast, for going back to the first cast after an idle spell.</li>
+ *   <li>{@code lastCast}: the tick it last cast, for going back to the first cast after an idle spell;</li>
+ *   <li>{@code brim}: Overflow's charge: energy came in past full, so its next cast is a third stronger.</li>
  * </ul>
  * Energy is worked out when asked, so the gear needs writing only when something happens to it.
  */
@@ -19,6 +20,7 @@ public final class CastState {
     public int cursor;
     public long readyAt;
     public long lastCast = Long.MIN_VALUE / 4;
+    public boolean brim;
 
     public CastState() {}
 
@@ -36,12 +38,16 @@ public final class CastState {
         return new CastState(spec.floor(), now, -1, 0, 0, Long.MIN_VALUE / 4);
     }
 
-    public CastState copy() { return new CastState(energy, energyTick, lastGain, cursor, readyAt, lastCast); }
+    public CastState copy() {
+        CastState c = new CastState(energy, energyTick, lastGain, cursor, readyAt, lastCast);
+        c.brim = brim;
+        return c;
+    }
 
     @Override
     public boolean equals(Object o) {
         return o instanceof CastState s && s.energy == energy && s.energyTick == energyTick && s.lastGain == lastGain && s.cursor == cursor
-                && s.readyAt == readyAt && s.lastCast == lastCast;
+                && s.readyAt == readyAt && s.lastCast == lastCast && s.brim == brim;
     }
 
     @Override
@@ -49,6 +55,7 @@ public final class CastState {
 
     @Override
     public String toString() {
-        return "CastState{e=" + energy + "@" + energyTick + ", gain=" + lastGain + ", cursor=" + cursor + ", ready=" + readyAt + ", last=" + lastCast + "}";
+        return "CastState{e=" + energy + "@" + energyTick + ", gain=" + lastGain + ", cursor=" + cursor + ", ready=" + readyAt + ", last=" + lastCast
+                + (brim ? ", brim" : "") + "}";
     }
 }

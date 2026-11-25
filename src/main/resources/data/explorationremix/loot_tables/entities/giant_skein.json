@@ -86,6 +86,26 @@
           "expand": true
         }
       ]
+    },
+    {
+      "rolls": 1,
+      "conditions": [
+        {
+          "condition": "minecraft:killed_by_player"
+        },
+        {
+          "condition": "minecraft:random_chance_with_looting",
+          "chance": 1.0,
+          "looting_multiplier": 0.0
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:tag",
+          "name": "explorationremix:runes/collect/blue_reaches",
+          "expand": true
+        }
+      ]
     }
   ]
 }

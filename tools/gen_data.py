@@ -33,6 +33,8 @@ OWNED = [
     os.path.join(ASSETS, "sounds.json"), os.path.join(ASSETS, "particles"), os.path.join(ASSETS, "geometry"),
     # the runes (runes.py): their damage type, and Create's tag that keeps contraptions off the rune blocks
     os.path.join(DATA, "damage_type"), os.path.join(RES, "data", "create", "tags"),
+    # and the loot modifier that makes the world's loot plain (0.22.6)
+    os.path.join(DATA, "loot_modifiers"), os.path.join(RES, "data", "forge", "loot_modifiers"),
 ]
 
 
@@ -1042,8 +1044,10 @@ def creature_data():
         "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:mossback_hide", "functions": [
             {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}},
             {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]},
-                  # now and then a rune of the Upper Caves, when a player kills it
-                  runes.drop_pool(0.25, 0.05, [("upper_caves", None)])]})
+                  # now and then a rune of the Upper Caves, when a player kills it, and often one of the layer's two
+                  # kinds of collect rune (0.22.6: armor's sets want three of a kind)
+                  runes.drop_pool(0.25, 0.05, [("upper_caves", None)]),
+                  runes.drop_pool(0.5, 0.1, [("collect/upper_caves", None)])]})
     # cave animals it catches when hungry (creepers live in the lush caves and Root Vaults)
     tag(MOD, "entity_types", "mossback_prey", ["minecraft:bat", "minecraft:axolotl", "minecraft:glow_squid", "minecraft:creeper",
                                                "minecraft:frog", "minecraft:rabbit", "minecraft:chicken", "minecraft:fox",
@@ -1058,7 +1062,8 @@ def creature_data():
             {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]},
                   # a rune a little more often than a Mossback: four times in five one of the Blue Reaches', else one of
                   # the Deep Gardens' (each item in a tag takes its entry's weight: 7 x 20 against 5 x 7)
-                  runes.drop_pool(0.35, 0.05, [("blue_reaches", 20), ("deep_gardens", 7)])]})
+                  runes.drop_pool(0.35, 0.05, [("blue_reaches", 20), ("deep_gardens", 7)]),
+                  runes.drop_pool(0.45, 0.1, [("collect/blue_reaches", None)])]})
     write(os.path.join(ASSETS, "models", "item", "skein_plate.json"),
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/skein_plate"}})
     # 0.18.8: the giant Skein of the Deep Blue Rift, one to a rift and gone for good once killed, so it pays well: a
@@ -1072,7 +1077,8 @@ def creature_data():
                   {"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:skein_plate", "functions": [
                       {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 4, "max": 7}}]}]},
                   runes.drop_pool(1.0, 0.0, [("blue_reaches", None)]),
-                  runes.drop_pool(0.4, 0.1, [("deep_gardens", None)])]})
+                  runes.drop_pool(0.4, 0.1, [("deep_gardens", None)]),
+                  runes.drop_pool(1.0, 0.0, [("collect/blue_reaches", None)])]})
     write(os.path.join(ASSETS, "models", "item", "giant_skein_spine.json"),
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/giant_skein_spine"}})
     # 0.21.0: the chimney lurker of the Deep Gardens' vents: a fang or two, and when a player kills it, a rune of the Deep
@@ -1082,7 +1088,8 @@ def creature_data():
         "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:chimney_lurker_fang", "functions": [
             {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}},
             {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]},
-                  runes.drop_pool(0.4, 0.05, [("deep_gardens", None)])]})
+                  runes.drop_pool(0.4, 0.05, [("deep_gardens", None)]),
+                  runes.drop_pool(0.5, 0.1, [("collect/deep_gardens", None)])]})
     write(os.path.join(ASSETS, "models", "item", "chimney_lurker_fang.json"),
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/chimney_lurker_fang"}})
     # 0.21.9: the Hollow Choir of the Deep Dark. It costs three keys from three ancient cities and five minutes of a
@@ -1093,7 +1100,8 @@ def creature_data():
         "type": "minecraft:entity",
         "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:choir_bell"}]},
                   runes.drop_pool(1.0, 0.0, [("blue_reaches", None)]),
-                  runes.drop_pool(1.0, 0.0, [("blue_reaches", 10), ("deep_gardens", 10)])]})
+                  runes.drop_pool(1.0, 0.0, [("blue_reaches", 10), ("deep_gardens", 10)]),
+                  runes.drop_pool(1.0, 0.0, [("collect/deep_gardens", None)])]})
     # A boss never staggers (combat.Stagger) and nothing shoves it off its dais.
     tag("forge", "entity_types", "bosses", [f"{MOD}:hollow_choir"])
     # The two of its blocks a player may keep drop themselves; the reliquary, the sockets and the sprouts do not

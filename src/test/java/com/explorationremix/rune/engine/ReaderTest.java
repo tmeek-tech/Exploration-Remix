@@ -1,6 +1,5 @@
 package com.explorationremix.rune.engine;
 
-import com.explorationremix.rune.menu.RuneTableMenu;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -9,7 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The socket rules, one by one: one active rune, one modifier, one passive, and the active rune's second phase. */
+/**
+ * The socket rules, one by one: one active rune, one modifier, one passive, and the active rune's second phase. Since
+ * 0.22.6 swords and bows have actives of their own (modifiers and elements are shared), and Echo is Overflow.
+ */
 class ReaderTest {
     static final HostSpec SWORD = HostSpec.of(Host.SWORD);
     static final HostSpec BOW = HostSpec.of(Host.BOW);
@@ -29,7 +31,9 @@ class ReaderTest {
         assertEquals(RuneId.SWIFT, l.modifier());
         assertEquals(RuneId.EMBER, l.passive());
         assertEquals("spark swift ember", l.toString());
-        assertEquals(Loadout.parse("spark _ echo"), new Loadout(RuneId.SPARK, null, RuneId.AFTER), "echo is Echo's other name");
+        assertEquals(Loadout.parse("spark _ echo"), new Loadout(RuneId.SPARK, null, RuneId.AFTER), "echo is Overflow's old name");
+        assertEquals(Loadout.parse("spark _ overflow"), new Loadout(RuneId.SPARK, null, RuneId.AFTER));
+        assertEquals(Loadout.parse("return"), Loadout.parse("arc"), "Return keeps Arc's id");
         assertThrows(IllegalArgumentException.class, () -> Loadout.parse("spark orb"), "two active runes");
         assertThrows(IllegalArgumentException.class, () -> Loadout.parse("moonbeam"));
     }
@@ -43,19 +47,21 @@ class ReaderTest {
     }
 
     @Test
-    void theTablesButtonsFitInAByte() {
-        // the table's buttons name a socket and a rune in one number, which the game sends as a byte
-        assertTrue(RuneId.values().length < RuneTableMenu.STRIDE, "every rune's number fits under one socket's stride");
-        assertTrue(Socket.values().length * RuneTableMenu.STRIDE <= RuneTableMenu.ENCHANT);
-        assertTrue(RuneTableMenu.ENCHANT <= Byte.MAX_VALUE);
-        for (Socket s : Socket.values()) {
-            for (RuneId r : RuneId.ofKind(s.kind)) {
-                int id = RuneTableMenu.setButton(s, r);
-                assertEquals(s, Socket.byIndex(id / RuneTableMenu.STRIDE));
-                assertEquals(r, RuneId.byOrdinal(id % RuneTableMenu.STRIDE - 1));
-            }
-            assertEquals(0, RuneTableMenu.clearButton(s) % RuneTableMenu.STRIDE);
-        }
+    void armorAndToolRunesNeverGoInAWeapon() {
+        assertThrows(IllegalArgumentException.class, () -> Loadout.parse("spark lantern"), "an armor rune");
+        assertThrows(IllegalArgumentException.class, () -> Loadout.parse("haste"), "a tool rune");
+        assertTrue(new Loadout(RuneId.LANTERN, RuneId.MEND, RuneId.HASTE).isEmpty());
+        assertEquals(Loadout.EMPTY, Loadout.EMPTY.with(Socket.TOOL, RuneId.HASTE), "a weapon has no tool socket");
+    }
+
+    @Test
+    void theTableNamesSocketsAndRunesByTheirPlace() {
+        // a table edit names the socket and the rune by their places in the lists (RuneNet.TableEdit), -1 for none
+        for (Socket s : Socket.values()) assertEquals(s, Socket.byIndex(s.ordinal()));
+        for (RuneId r : RuneId.runes()) assertEquals(r, RuneId.byOrdinal(r.ordinal()));
+        assertNull(RuneId.byOrdinal(-1));
+        assertNull(RuneId.byOrdinal(RuneId.ARROW.ordinal()), "a bow's own arrow is never set");
+        assertNull(Socket.byIndex(Socket.values().length));
     }
 
     // ------------------------------------------------------------------------------------------------ the cast
@@ -149,55 +155,79 @@ class ReaderTest {
     }
 
     @Test
-    void onHitAndEchoNeedAnActiveRune() {
+    void onHitAndOverflowNeedAnActiveRune() {
         assertEquals(Note.Reason.NO_ACTIVE, read("on_hit", SWORD).note(Socket.PASSIVE).reason());
         assertEquals("On hit needs an active rune", Explain.note(read("on_hit", SWORD), Socket.PASSIVE));
-        assertEquals(Note.Reason.NO_ACTIVE, read("echo", SWORD).note(Socket.PASSIVE).reason());
+        assertEquals(Note.Reason.NO_ACTIVE, read("overflow", SWORD).note(Socket.PASSIVE).reason());
+        assertEquals(Note.Reason.NO_ACTIVE, read("overflow", BOW).note(Socket.PASSIVE).reason());
         assertTrue(read("spark on_hit", SWORD).passiveIs(RuneId.ON_HIT));
         assertEquals("Every third full swing that hits a foe casts the spark for free.", Explain.passiveLine(read("spark on_hit", SWORD)));
     }
 
     @Test
-    void echoRepeatsOnlyWhatStrikesOrLights() {
-        for (RuneId a : RuneId.ofKind(RuneKind.ACTION)) {
+    void overflowStrengthensOnlyWhatStrikes() {
+        for (RuneId a : RuneId.ofKind(RuneKind.ACTION, Fits.SWORD)) {
             Reading r = Reader.read(new Loadout(a, null, RuneId.AFTER), SWORD, 0);
-            boolean repeats = a != RuneId.BARRIER && a != RuneId.DASH && a != RuneId.REEL;
-            assertEquals(repeats, r.passiveIs(RuneId.AFTER), a.id);
-            if (!repeats) assertEquals(Note.Reason.CANT_ECHO, r.note(Socket.PASSIVE).reason(), a.id);
+            boolean strikes = a != RuneId.BARRIER && a != RuneId.DASH && a != RuneId.REEL;
+            assertEquals(strikes, r.passiveIs(RuneId.AFTER), a.id);
+            if (!strikes) assertEquals(Note.Reason.CANT_STRENGTHEN, r.note(Socket.PASSIVE).reason(), a.id);
         }
-        assertEquals("Echo can't repeat a dash", Explain.note(read("dash echo", SWORD), Socket.PASSIVE));
+        assertEquals("Overflow can't strengthen a dash", Explain.note(read("dash overflow", SWORD), Socket.PASSIVE));
+        assertEquals("Energy it gains past full makes its next cast a third stronger.", Explain.passiveLine(read("spark overflow", SWORD)));
+        // a bow's arrow always strikes, whatever rides it
+        for (RuneId a : RuneId.ofKind(RuneKind.ACTION, Fits.BOW)) {
+            assertTrue(Reader.read(new Loadout(a, null, RuneId.AFTER), BOW, 0).passiveIs(RuneId.AFTER), a.id);
+        }
     }
 
     @Test
-    void lanternAndThirstAlwaysWork() {
-        assertTrue(read("lantern", SWORD).passiveIs(RuneId.LANTERN));
-        assertTrue(read("thirst", BOW).passiveIs(RuneId.THIRST));
-        assertNull(read("lantern", SWORD).cast(), "a passive alone casts nothing");
+    void aBowsPassivesWorkWithoutAnActiveRune() {
+        assertTrue(read("recall", BOW).passiveIs(RuneId.RECALL));
+        assertTrue(read("quickdraw", BOW).passiveIs(RuneId.QUICKDRAW));
+        assertNull(read("recall", BOW).cast(), "a passive alone looses plain arrows");
+        assertEquals("Its arrows fly back to you once they land.", Explain.passiveLine(read("recall", BOW)));
+        assertEquals("It loads in half the time.", Explain.passiveLine(read("quickdraw", HostSpec.of(Host.CROSSBOW))));
+        assertEquals(Note.Reason.WRONG_GEAR, read("recall", SWORD).note(Socket.PASSIVE).reason(), "Recall is a bow's");
     }
 
     // ------------------------------------------------------------------------------------------------ bows
 
     @Test
     void aBowsCastRidesItsArrow() {
-        CastReading c = read("spark", BOW).cast();
+        CastReading c = read("volley", BOW).cast();
         assertEquals(2, c.parts().size());
         assertEquals("[arrow]", acts(c.part(0)));
         assertEquals(RuneId.ON_HIT, c.part(1).relay());
-        assertEquals("[spark]", acts(c.part(1)));
-        assertEquals(8, c.cost(), "the arrow itself is free");
-        assertEquals("An arrow; where it hits, a spark.", Explain.cast(c));
-        assertEquals(RuneId.SPARK, c.active().rune);
+        assertEquals("[volley]", acts(c.part(1)));
+        assertEquals(RuneId.VOLLEY.cost, c.cost(), "the arrow itself is free");
+        assertEquals("An arrow; where it hits, a volley.", Explain.cast(c));
+        assertEquals(RuneId.VOLLEY, c.active().rune);
+    }
+
+    @Test
+    void swordsAndBowsHaveActivesOfTheirOwn() {
+        for (RuneId a : RuneId.ofKind(RuneKind.ACTION)) {
+            assertTrue(a.fits(Fits.SWORD) != a.fits(Fits.BOW), a.id + " is a sword's or a bow's, not both");
+            HostSpec other = a.fits(Fits.SWORD) ? BOW : SWORD;
+            Reading r = Reader.read(new Loadout(a, null, null), other, 0);
+            assertEquals(Note.Reason.WRONG_GEAR, r.note(Socket.ACTIVE).reason(), a.id);
+            assertNull(r.cast(), a.id + " does nothing on the other weapon");
+        }
+        assertEquals("Spark is not a bow rune", Explain.note(read("spark", BOW), Socket.ACTIVE));
+        // modifiers and the elements are shared
+        assertTrue(read("volley heavy ember", BOW).note(Socket.MODIFIER).live());
+        assertEquals(Element.EMBER, read("volley heavy ember", BOW).element());
     }
 
     @Test
     void someModifiersShapeABowsArrow() {
-        CastReading seek = read("spark seek", BOW).cast();
+        CastReading seek = read("volley seek", BOW).cast();
         assertEquals("[seek+arrow]", acts(seek.part(0)));
-        assertEquals("[spark]", acts(seek.part(1)));
-        CastReading heavy = read("spark heavy", BOW).cast();
+        assertEquals("[volley]", acts(seek.part(1)));
+        CastReading heavy = read("volley heavy", BOW).cast();
         assertEquals("[arrow]", acts(heavy.part(0)));
-        assertEquals("[heavy+spark]", acts(heavy.part(1)), "Heavy changes the rune the arrow carries");
-        CastReading fan = read("spark fan", BOW).cast();
+        assertEquals("[heavy+volley]", acts(heavy.part(1)), "Heavy changes the rune the arrow carries");
+        CastReading fan = read("volley fan", BOW).cast();
         assertEquals("[3xarrow]", acts(fan.part(0)), "Fan looses three arrows, each carrying the rune");
         assertEquals(3, fan.part(0).instances());
     }
@@ -229,7 +259,9 @@ class ReaderTest {
         assertEquals("[spark II]", acts(awake.cast().part(0)));
         assertEquals("Phase two: " + RuneId.SPARK.phaseTwo, Explain.phaseLine(awake));
         assertEquals(below.cast().cost(), awake.cast().cost(), "the second phase costs no more");
-        assertTrue(read("spark", BOW, at).cast().part(1).acts().get(0).empowered, "on a bow, the rune the arrow carries");
+        int volley = RuneId.VOLLEY.phaseLevel;
+        assertTrue(read("volley", BOW, volley).cast().part(1).acts().get(0).empowered, "on a bow, the rune the arrow carries");
+        assertFalse(read("volley", BOW, volley - 1).cast().part(1).acts().get(0).empowered);
     }
 
     @Test

@@ -8,6 +8,7 @@ import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -66,7 +67,12 @@ public final class RuneFx {
             case SPARK -> 0xFFE9A8;
             case SHARD -> 0xBDEBFF;
             case ORB -> 0xD6A8FF;
-            case GLOW -> 0xFFF2B0;
+            // the bow's runes: a cold white flare, and light blues and lilacs
+            case GLOW -> 0xE4EEFF;
+            case ROPE -> 0xA9CCFF;
+            case SNARE -> 0xB4B9FF;
+            case VOLLEY -> 0xC3D6FF;
+            case MINE -> 0x9AAEFF;
             case BURST -> 0xFFC48A;
             case CLEAVE -> 0xE8F4FF;
             case FIELD -> 0xC8FFD8;
@@ -128,7 +134,7 @@ public final class RuneFx {
      * thrown back out, a ring on a wall, its element; and its sound, an Orb's a small blast.
      */
     public static void impact(ServerLevel l, Vec3 at, Vec3 out, RuneId rune, Element e, float size, boolean creature) {
-        float s = Mth.clamp(size * (rune == RuneId.ORB ? 1.5F : rune == RuneId.SHARD ? 0.75F : 1.0F), 0.3F, 4.0F);
+        float s = Mth.clamp(size * (rune == RuneId.ORB ? 1.5F : rune == RuneId.SHARD || rune == RuneId.VOLLEY ? 0.75F : 1.0F), 0.3F, 4.0F);
         send(l, Fx.Kind.IMPACT, at, out, colour(rune, e), e, s, creature ? 1.0F : 0.0F, -1, rune == RuneId.ORB ? FAR : NEAR);
         switch (rune) {
             case ORB -> {
@@ -139,13 +145,18 @@ public final class RuneFx {
                 play(l, at, SoundEvents.AMETHYST_CLUSTER_BREAK, 0.55F, 1.4F);
                 play(l, at, SoundEvents.GLASS_HIT, 0.4F, 1.6F);
             }
-            case GLOW -> play(l, at, SoundEvents.AMETHYST_BLOCK_CHIME, 0.8F, 1.0F);
+            case GLOW -> {
+                play(l, at, SoundEvents.AMETHYST_BLOCK_CHIME, 0.9F, 1.0F);
+                play(l, at, SoundEvents.FIRECHARGE_USE, 0.2F, 1.9F);
+            }
+            case ROPE, SNARE -> play(l, at, SoundEvents.AMETHYST_BLOCK_HIT, 0.6F, 1.1F);
+            case VOLLEY -> play(l, at, SoundEvents.ARROW_HIT, 0.4F, 1.3F);
             default -> {
                 play(l, at, SoundEvents.AMETHYST_CLUSTER_HIT, 0.6F, 1.2F);
                 play(l, at, SoundEvents.FIREWORK_ROCKET_BLAST, 0.5F, 1.5F);
             }
         }
-        if (creature && rune != RuneId.GLOW) play(l, at, SoundEvents.TRIDENT_HIT, 0.55F, rune == RuneId.ORB ? 0.8F : 1.1F);
+        if (creature && rune != RuneId.GLOW && rune != RuneId.VOLLEY) play(l, at, SoundEvents.TRIDENT_HIT, 0.55F, rune == RuneId.ORB ? 0.8F : 1.1F);
         elementSound(l, at, e, 0.55F);
     }
 
@@ -192,6 +203,32 @@ public final class RuneFx {
         play(l, at, SoundEvents.PHANTOM_FLAP, 0.6F, 1.8F);
     }
 
+    /** Burst's shockwave: a ring of force rolling out along the ground round {@code c}, from {@code from} to {@code to} blocks. */
+    public static void shockwave(ServerLevel l, Vec3 c, float from, float to, int rgb, Element e) {
+        send(l, Fx.Kind.SHOCKWAVE, c, Vec3.ZERO, rgb, e, from, to, -1, FAR);
+        play(l, c, SoundEvents.GENERIC_EXPLODE, 0.35F, 0.7F);
+    }
+
+    /** Snare's roots take hold round {@code c}, {@code radius} across. */
+    public static void snare(ServerLevel l, Vec3 c, float radius, int rgb, Element e) {
+        send(l, Fx.Kind.SNARE, c, Vec3.ZERO, rgb, e, radius, 0.0F, -1, NEAR);
+    }
+
+    /** What {@link #armor} shows: a Leap's push off the air, Second Wind, a glide, a pull up onto a ledge. */
+    public static final int ARMOR_LEAP = 0, ARMOR_WIND = 1, ARMOR_GLIDE = 2, ARMOR_CLIMB = 3;
+
+    /** Armor at work on {@code player} at {@code at} ({@code what}: {@link #ARMOR_LEAP} and the rest), for everyone near. */
+    public static void armor(ServerLevel l, Vec3 at, int rgb, int what, int player) {
+        send(l, Fx.Kind.ARMOR, at, Vec3.ZERO, rgb, Element.NONE, 1.0F, what, player, NEAR);
+    }
+
+    /** The same, for everyone near but {@code p}, whose own game drew it as it moved them (a leap, a pull). */
+    public static void armorFrom(ServerPlayer p, Vec3 at, int rgb, int what) {
+        Fx fx = Fx.of(Fx.Kind.ARMOR, at, Vec3.ZERO, rgb, Element.NONE, 1.0F, what, p.getId());
+        RuneNet.CHANNEL.send(PacketDistributor.NEAR.with(() -> new PacketDistributor.TargetPoint(p, at.x, at.y, at.z, NEAR, p.serverLevel().dimension())),
+                new RuneNet.FxMsg(fx));
+    }
+
     /** A second phase drags creatures toward {@code c} from {@code reach} blocks round (Orb's gravity, Field's pull). */
     public static void well(ServerLevel l, Vec3 c, float reach, int rgb, Element e) {
         send(l, Fx.Kind.WELL, c, Vec3.ZERO, rgb, e, reach, 0.0F, -1, NEAR);
@@ -215,6 +252,17 @@ public final class RuneFx {
             play(l, feet, SoundEvents.AMETHYST_BLOCK_RESONATE, 0.5F, 0.6F);
         }
     }
+
+    /**
+     * Overflow charged: energy came into the weapon past full, so its next cast is a third stronger. Rings of light rise
+     * round the player, in light blue (the caller plays the sound).
+     */
+    public static void overflow(ServerLevel l, ServerPlayer p) {
+        send(l, Fx.Kind.PHASE, p.position(), Vec3.ZERO, OVERFLOW_BLUE, Element.NONE, 1.0F, 1.0F, p.getId(), NEAR);
+    }
+
+    /** Overflow's light blue. */
+    public static final int OVERFLOW_BLUE = 0xBFD9FF;
 
     /** A beam of light from {@code a} to {@code b} (Reel's line, Storm's leap). */
     public static void beam(ServerLevel l, Vec3 a, Vec3 b, int rgb, Element e) {
@@ -376,6 +424,7 @@ public final class RuneFx {
             case REEL -> SoundEvents.FISHING_BOBBER_RETRIEVE;
             case FIELD -> SoundEvents.BEACON_ACTIVATE;
             case GLOW -> SoundEvents.AMETHYST_BLOCK_CHIME;
+            case ROPE, SNARE -> SoundEvents.CHAIN_PLACE;
             default -> SoundEvents.AMETHYST_CLUSTER_HIT;
         };
     }

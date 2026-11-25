@@ -21,8 +21,8 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * A block a rune makes, that undoes itself: a Barrier's glass wall, Frost's ice on still water, a Glow mote's light, a
- * struck silver fern's unrolled fronds, the light a Lantern passive carries.
+ * A block a rune makes, that undoes itself: a Barrier's glass wall, Frost's ice on still water, a Glow flare's light, a
+ * struck silver fern's unrolled fronds, the light a Lantern helmet carries, a Rope arrow's rope.
  * Placing one (by a rune, a command, a contraption putting it back, or a quake moving it) schedules its end, and the
  * scheduled tick is saved with the chunk, so it cleans itself up even if the chunk unloads first. It drops nothing,
  * pistons can't push it and Create can't carry it (tag {@code create:non_movable}).
@@ -44,7 +44,9 @@ public class TempBlock extends Block {
          * The Lantern passive's light where its player stands: put out as they step on, and kept while they stand there;
          * this is only how soon it goes out if they leave (or the server stops) with it still lit. Back to air.
          */
-        LANTERN(40);
+        LANTERN(40),
+        /** Rope's rope of light (RopeBlock): 40 s, climbed like a ladder; back to air. */
+        ROPE(800);
 
         public final int life;
 
@@ -106,6 +108,7 @@ public class TempBlock extends Block {
                     0.25, 0.4, 0.25, 0.0);
             // a lantern's light just goes with its player: nothing to see where it was
             case LANTERN -> {}
+            case ROPE -> level.sendParticles(ParticleTypes.WAX_OFF, x, y, z, 2, 0.1, 0.3, 0.1, 0.0);
         }
     }
 
@@ -137,7 +140,7 @@ public class TempBlock extends Block {
 
     @Override
     public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext ctx) {
-        return kind == Kind.LIGHT || kind == Kind.FROND || kind == Kind.LANTERN ? Shapes.empty() : Shapes.block();
+        return kind == Kind.LIGHT || kind == Kind.FROND || kind == Kind.LANTERN || kind == Kind.ROPE ? Shapes.empty() : Shapes.block();
     }
 
     @Override

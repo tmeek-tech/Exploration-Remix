@@ -7,8 +7,10 @@ import com.explorationremix.rune.effect.RuneField;
 import com.explorationremix.rune.effect.RuneMote;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.item.RuneItem;
+import com.explorationremix.rune.loot.PlainLoot;
 import com.explorationremix.rune.menu.RuneTableMenu;
 import com.explorationremix.rune.world.TempBlock;
+import com.mojang.serialization.Codec;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -26,6 +28,7 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraftforge.common.extensions.IForgeMenuType;
+import net.minecraftforge.common.loot.IGlobalLootModifier;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -37,8 +40,9 @@ import java.util.Map;
 
 /**
  * Everything the runes add to the game: one item per rune, the blocks runes make for a while (Barrier glass, Frost's
- * ice, Glow's light, a Lantern's), the flying and lingering runes and Siphon's motes, the rune table, and the creative tab. Kept
- * apart from the rest of the mod's registries so the rune code stays in its own packages.
+ * ice, Glow's light, a Lantern's, a Rope's), the flying and lingering runes and Siphon's motes, the rune table, and the creative tab. Kept
+ * apart from the rest of the mod's registries so the rune code stays in its own packages. Since 0.22.6 also the loot
+ * modifier that makes the world's loot plain (rune.loot.Plain).
  */
 public final class RuneRegistry {
     private static final String MOD = ExplorationRemix.MOD_ID;
@@ -47,6 +51,11 @@ public final class RuneRegistry {
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, MOD);
     public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(ForgeRegistries.MENU_TYPES, MOD);
     public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD);
+    public static final DeferredRegister<Codec<? extends IGlobalLootModifier>> LOOT_MODIFIERS =
+            DeferredRegister.create(ForgeRegistries.Keys.GLOBAL_LOOT_MODIFIER_SERIALIZERS, MOD);
+
+    /** Loot made plain (0.22.6): enchanted books found become runes, enchanted gear comes without its enchantments. */
+    public static final RegistryObject<Codec<PlainLoot>> PLAIN_LOOT = LOOT_MODIFIERS.register("plain_loot", PlainLoot.CODEC);
 
     /** Rune damage: credited to the caster, never blocked by a shield (data/explorationremix/damage_type/rune.json). */
     public static final ResourceKey<DamageType> RUNE_DAMAGE = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation(MOD, "rune"));
@@ -101,16 +110,25 @@ public final class RuneRegistry {
                     .sound(SoundType.GRASS).pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, t) -> false)));
 
     /**
-     * The Lantern passive's light, in the air where its player's head is while the weapon is in hand: unseen, walked
+     * A Lantern helmet's light, in the air where its player's head is (and, in its second phase, where they look): unseen, walked
      * through, never caught by the crosshair, replaced by anything placed there; it drops nothing.
      */
     public static final RegistryObject<Block> LANTERN = BLOCKS.register("rune_lantern", () -> new TempBlock(TempBlock.Kind.LANTERN,
             BlockBehaviour.Properties.of().replaceable().noCollission().noOcclusion().instabreak().noLootTable().lightLevel(s -> 12)
                     .sound(SoundType.AMETHYST_CLUSTER).pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, t) -> false)));
 
+    /**
+     * A Rope arrow's rope of light (BowRunes): 40 s, climbed like a ladder, walked through, a soft light so it reads in
+     * the dark; anything placed there replaces it, and it drops nothing.
+     */
+    public static final RegistryObject<Block> ROPE = BLOCKS.register("rune_rope", () -> new com.explorationremix.rune.world.RopeBlock(
+            BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).replaceable().noCollission().noOcclusion().instabreak()
+                    .noLootTable().lightLevel(s -> 7).sound(SoundType.WOOL).pushReaction(PushReaction.DESTROY)
+                    .isValidSpawn((s, l, p, t) -> false)));
+
     // ------------------------------------------------------------------------------------------------ entities
 
-    /** A flying rune (Spark, Shard, Orb, Glow). Never saved; sent every tick so it flies smoothly. */
+    /** A flying rune (Spark, Orb, Shard's needles, Volley's arrows of light), or a bow's mine lying in wait. Never saved; sent every tick so it flies smoothly. */
     public static final RegistryObject<EntityType<RuneBolt>> BOLT = ENTITIES.register("rune_bolt", () ->
             EntityType.Builder.<RuneBolt>of(RuneBolt::new, MobCategory.MISC).sized(0.25F, 0.25F).clientTrackingRange(8).updateInterval(1)
                     .fireImmune().noSave().noSummon().build(MOD + ":rune_bolt"));
@@ -127,7 +145,7 @@ public final class RuneRegistry {
 
     // ------------------------------------------------------------------------------------------------ the rune table
 
-    /** An enchanting table opened with a weapon in hand: its three rune sockets (RuneTableMenu). */
+    /** An enchanting table: the rune sockets of the weapon in hand and of the armor worn (RuneTableMenu). */
     public static final RegistryObject<MenuType<RuneTableMenu>> TABLE = MENUS.register("rune_table",
             () -> IForgeMenuType.create(RuneTableMenu::client));
 
@@ -154,5 +172,6 @@ public final class RuneRegistry {
         ENTITIES.register(modBus);
         MENUS.register(modBus);
         TABS.register(modBus);
+        LOOT_MODIFIERS.register(modBus);
     }
 }

@@ -2,11 +2,13 @@ package com.explorationremix.rune;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.mixin.accessor.ProjectileAccessor;
+import com.explorationremix.rune.armor.ArmorEffects;
 import com.explorationremix.rune.cast.ArrowRides;
 import com.explorationremix.rune.cast.CastService;
 import com.explorationremix.rune.cast.Grapples;
 import com.explorationremix.rune.cast.Statuses;
 import com.explorationremix.rune.engine.Host;
+import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.menu.RuneTableMenu;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -33,6 +35,7 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.ProjectileImpactEvent;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
+import net.minecraftforge.event.entity.player.ArrowLooseEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingFallEvent;
@@ -72,19 +75,31 @@ public final class RuneEvents {
     // ------------------------------------------------------------------------------------------------ the enchanting table
 
     /**
-     * An enchanting table used with a weapon in the main hand opens its rune sockets instead (RuneTableMenu); from
-     * there the table's own enchanting is a click away. Anything else in hand enchants as ever. Both sides answer, so
-     * the player's game neither draws a bow nor waits on the table's own screen. In combat it opens with the sockets
-     * held shut until the combat is over.
+     * An enchanting table opens its rune sockets (RuneTableMenu): the weapon in hand's and the worn armor's. Since
+     * 0.22.6 the table enchants no more, whatever is in hand. Sneaking with something in hand uses that as ever (a block
+     * is placed against the table). Both sides answer, so the player's game neither draws a bow nor waits on the
+     * table's own screen. In combat it opens with the sockets held shut until the combat is over.
      */
     @SubscribeEvent
     public static void rightClickBlock(PlayerInteractEvent.RightClickBlock e) {
         Player p = e.getEntity();
-        if (e.getHand() != InteractionHand.MAIN_HAND || p instanceof FakePlayer || p.isSpectator() || p.isSecondaryUseActive()) return;
-        if (!RuneGear.isGear(p.getMainHandItem()) || !RuneTableMenu.isTable(e.getLevel().getBlockState(e.getPos()))) return;
+        if (e.getHand() != InteractionHand.MAIN_HAND || p instanceof FakePlayer || p.isSpectator()) return;
+        if (!RuneTableMenu.isTable(e.getLevel().getBlockState(e.getPos()))) return;
+        if (p.isSecondaryUseActive() && !(p.getMainHandItem().isEmpty() && p.getOffhandItem().isEmpty())) return;
         e.setCanceled(true);
         e.setCancellationResult(InteractionResult.sidedSuccess(e.getLevel().isClientSide()));
         if (p instanceof ServerPlayer sp) RuneTableMenu.open(sp, e.getPos());
+    }
+
+    /**
+     * A bow with Quickdraw draws in half the time: the draw it was let go at counts twice. (A crossbow's loads in half
+     * the time: CrossbowQuickdrawMixin.) Both sides, so the player's own game shoots as the server does.
+     */
+    @SubscribeEvent
+    public static void arrowLoose(ArrowLooseEvent e) {
+        if (RuneGear.host(e.getBow()) == Host.BOW && RuneGear.passive(e.getBow()) == RuneId.QUICKDRAW) {
+            e.setCharge((int) Math.min(72000L, 2L * e.getCharge()));
+        }
     }
 
     /**
@@ -134,6 +149,14 @@ public final class RuneEvents {
         if (e.isCanceled() || !(e.getEntity() instanceof ServerPlayer p) || e.getAmount() <= 0.0F) return;
         Combat.hurt(p);
         if (p.containerMenu instanceof RuneTableMenu) p.closeContainer();
+    }
+
+    /** Snare's second phase: what its roots hold takes a third more from every hit. */
+    @SubscribeEvent
+    public static void bound(LivingHurtEvent e) {
+        if (e.getEntity().level().isClientSide() || !Statuses.any(e.getEntity())) return;
+        float k = Statuses.bindHurt(e.getEntity());
+        if (k != 1.0F) e.setAmount(e.getAmount() * k);
     }
 
     /** A held creature (stunned, rooted) can't strike. */
@@ -202,6 +225,7 @@ public final class RuneEvents {
         if (!(e.getEntity() instanceof ServerPlayer p)) return;
         if (p.containerMenu instanceof RuneTableMenu) p.closeContainer();
         CastService.forget(p);
+        ArmorEffects.forget(p);
         // the combat lock is kept: it runs on the level's clock, so leaving and rejoining doesn't skip it
     }
 

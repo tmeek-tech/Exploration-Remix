@@ -11,6 +11,7 @@
     "accessor.SurfaceContextAccessor",
     "accessor.MultiNoiseBiomeSourceAccessor",
     "accessor.ProjectileAccessor",
+    "accessor.AbstractArrowAccessor",
     "accessor.ServerGamePacketListenerAccessor",
     "MinecraftServerMixin",
     "NoiseBasedChunkGeneratorMixin",
@@ -31,6 +32,13 @@
     "rune.ItemStackRuneMixin",
     "rune.FurnaceRuneMixin",
     "rune.ArrowPassByMixin",
+    "rune.ExperienceOrbMendMixin",
+    "rune.WadeMixin",
+    "rune.ToolRunesMixin",
+    "rune.PlainMobGearMixin",
+    "rune.PlainRaidGearMixin",
+    "rune.CrossbowQuickdrawMixin",
+    "rune.RopeClimbMixin",
     "LivingImmobileMixin",
     "PlayerSweepMixin",
     "EntityLavaPlaneMixin"
@@ -47,7 +55,10 @@
     "client.HumanoidModelMixin",
     "client.MinecraftAttackMixin",
     "client.GuiAttackIndicatorMixin",
-    "client.CameraMixin"
+    "client.CameraMixin",
+    "client.SenseGlowMixin",
+    "client.SenseColourMixin",
+    "client.PeerTurnMixin"
   ],
   "injectors": {
     "defaultRequire": 1
