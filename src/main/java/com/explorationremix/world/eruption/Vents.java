@@ -1,6 +1,5 @@
 package com.explorationremix.world.eruption;
 
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.world.lava.GalleryChanges;
 import com.explorationremix.world.lava.LavaFlood;
 import com.explorationremix.world.terrain.Net;
@@ -177,6 +176,6 @@ final class Vents {
 
     /** True for a cell a scan passes through: air, the glow, fire, a liquid, or a block with no collision. */
     static boolean open(LevelChunk c, BlockPos p, BlockState s) {
-        return GlowBlock.open(s) || s.getBlock() instanceof LiquidBlock || s.is(BlockTags.FIRE) || s.getCollisionShape(c, p).isEmpty();
+        return s.isAir() || s.getBlock() instanceof LiquidBlock || s.is(BlockTags.FIRE) || s.getCollisionShape(c, p).isEmpty();
     }
 }

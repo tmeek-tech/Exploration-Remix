@@ -2,6 +2,7 @@ package com.explorationremix.world.feature;
 
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.GalleriesField;
+import com.explorationremix.world.terrain.GalleriesRuins;
 import com.explorationremix.world.terrain.Network;
 import com.explorationremix.world.terrain.Plans;
 import com.explorationremix.world.terrain.Route;
@@ -19,7 +20,9 @@ import com.explorationremix.world.terrain.WastelandField;
  * <p>The Galleries' ways down from the Wasteland are a noise field's too: the ramps of the holes it opens, with their
  * feet and the holes' throats ({@link GalleriesField#wayNear}). No feature lays lava on them, takes their floor or hangs
  * into their head room (the 0.8.0 pack run found a lava pool and a fall cutting one), and lava falls keep further from
- * the heads and the throats ({@link #nearWayDown}).
+ * the heads and the throats ({@link #nearWayDown}). The lower Galleries' ruins (0.22.4, {@link GalleriesRuins#keepOff})
+ * are kept the same way: they are set last of the layer's passes, so no pool, fall or hanging column is laid where they
+ * stand, and none is cut by them.
  *
  * <p>The Wasteland has no planned ways: its tunnels are a noise field's ({@link WastelandField}), and nothing carves a
  * way through them. There the guard keeps to the field's walking channels instead ({@link #nearChannel}): the middle
@@ -69,6 +72,8 @@ public final class Walkway {
         if (nearGate(t, x, z, lo, hi, margin)) return true;
         if (lo >= t.shape.packFloor) return false;
         if (t.galleries != null && t.galleries.wayNear(x, z, lo, hi, margin, margin)) return true;
+        // 0.22.4: the lower Galleries' ruins, which are set last, so nothing laid before them is cut by them
+        if (t.galleries != null && GalleriesRuins.of(t).keepOff(x, z, lo, hi, margin)) return true;
         int li0 = t.shape.layerAt(Math.min(hi, t.shape.packFloor - 1)), li1 = t.shape.layerAt(lo);
         for (int li = 0; li < t.shape.layerCount; li++) {
             if (li != li0 && li != li1 || !Terrain.planned(li)) continue;

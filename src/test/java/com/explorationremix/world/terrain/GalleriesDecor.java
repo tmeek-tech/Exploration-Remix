@@ -34,7 +34,7 @@ import java.util.TreeMap;
  * a try planned before any is set and every block of a fall in the chunk being decorated; FloorLavaFeature on every
  * column of the chunk),
  * asking the real walk guard ({@link Walkway} for this terrain). The other features of these biomes set no block in a
- * player's way (the climbing chains, the open way pass, the glow, whose light {@code GlowLight} measures, and the lava
+ * player's way (the climbing chains, the open way pass and the lava
  * pockets' pass, which finds no other mod's slabs in these blocks). Nor do these blocks hold Terrain Slabs' slabs, which
  * the game lays before the falls and which a lava fall reads as the blocks they stand in, a top slab as the vault's rock
  * it took the place of, a bottom slab as the open block at a step of the floor it was laid in (FluidFallFeature, fix

@@ -190,7 +190,7 @@ public final class Eruptions {
         /** The players told of it, dropped when they go out of its range so they are told again when they come back. */
         final Set<UUID> told = new HashSet<>();
         /** What it did, for the status. */
-        int bombs, near, craters, craterBlocks, glow, intoLava;
+        int bombs, near, craters, craterBlocks, intoLava;
         /** When its bombs go, in ticks into the burst ({@link BombFlight#launches}), and how many of them have had their turn. */
         int[] plan = new int[0];
         int next;
@@ -645,13 +645,12 @@ public final class Eruptions {
     @Nullable
     static Eruption eruptionOf(LavaBomb b) { return BOMBS.get(b); }
 
-    /** Bomb {@code b}'s blast took {@code blocks} blocks and {@code glow} of the glow: counted for the status. */
-    static void cratered(LavaBomb b, int blocks, int glow) {
+    /** Bomb {@code b}'s blast took {@code blocks} blocks: counted for the status. */
+    static void cratered(LavaBomb b, int blocks) {
         Eruption e = BOMBS.get(b);
         if (e == null) return;
         e.craters++;
         e.craterBlocks += blocks;
-        e.glow += glow;
     }
 
     /**
@@ -874,8 +873,8 @@ public final class Eruptions {
 
     /** The status's account of eruption {@code l}. */
     private static String lastLine(Eruption l, long now) {
-        return String.format(Locale.ROOT, "the last %s ago from the vent at %d %d %d, %d bombs (%d near a player): %d craters (%d blocks, %d glow), %d into the lava",
-                time(now - l.start), Mth.floor(l.vent.x), l.at.top(), Mth.floor(l.vent.z), l.bombs, l.near, l.craters, l.craterBlocks, l.glow, l.intoLava);
+        return String.format(Locale.ROOT, "the last %s ago from the vent at %d %d %d, %d bombs (%d near a player): %d craters (%d blocks), %d into the lava",
+                time(now - l.start), Mth.floor(l.vent.x), l.at.top(), Mth.floor(l.vent.z), l.bombs, l.near, l.craters, l.craterBlocks, l.intoLava);
     }
 
     private static double nearest(List<Net.Vent> vs, Vec3 here) {

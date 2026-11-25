@@ -1,6 +1,5 @@
 package com.explorationremix.client;
 
-import com.explorationremix.block.GlowBlock;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -123,7 +122,7 @@ public final class CaveParticles {
             long cell = BlockPos.asLong(bx, by, bz);
             for (int i = 0; i < 4; i++) if (cells[i] == cell) return rock[i];
             BlockState s = level.getBlockState(at.set(bx, by, bz));
-            boolean hit = !GlowBlock.open(s) && s.getFluidState().isEmpty();
+            boolean hit = !s.isAir() && s.getFluidState().isEmpty();
             cells[next] = cell;
             rock[next] = hit;
             next = (next + 1) & 3;

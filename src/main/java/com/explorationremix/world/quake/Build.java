@@ -1,7 +1,6 @@
 package com.explorationremix.world.quake;
 
 import com.explorationremix.ExplorationRemix;
-import com.explorationremix.block.GlowBlock;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -127,7 +126,7 @@ final class Build {
         for (int k = 0; k < REACH && m.getY() < level.getMaxBuildHeight(); k++, m.move(Direction.UP)) {
             BlockState s = Topple.stateAt(level, m);
             if (s == null) return null;
-            if (GlowBlock.open(s)) return m.immutable();
+            if (s.isAir()) return m.immutable();
         }
         return null;
     }

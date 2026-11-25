@@ -1,7 +1,6 @@
 package com.explorationremix.world.lava;
 
 import com.explorationremix.world.DeepWorld;
-import com.explorationremix.world.feature.HallGlowFeature;
 import com.explorationremix.world.terrain.Shape;
 import com.explorationremix.world.terrain.Terrain;
 import net.minecraft.core.BlockPos;
@@ -128,7 +127,8 @@ public final class GalleryChanges {
         int kind = Restore.seeThrough(LavaFlood.kindOf(cur), d.mask.get(i, x, z), d.glow.get(i, x, z), keptId >= 0);
         return switch (kind) {
             case Flood.AIR -> kindOf(cur) == Flood.AIR ? cur : Blocks.AIR.defaultBlockState();
-            case Flood.GLOW -> kindOf(cur) == Flood.GLOW ? cur : HallGlowFeature.bandGlow();
+            // the glow (explorationremix:glow) left the game in 0.22.4: where an old flood took one, the air comes back
+            case Flood.GLOW -> kindOf(cur) == Flood.AIR ? cur : Blocks.AIR.defaultBlockState();
             case Restore.KEPT -> Block.stateById(keptId);
             default -> cur;
         };

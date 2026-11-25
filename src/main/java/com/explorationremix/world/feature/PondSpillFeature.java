@@ -1,6 +1,5 @@
 package com.explorationremix.world.feature;
 
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.Network;
 import com.explorationremix.world.terrain.Terrain;
@@ -119,6 +118,6 @@ public final class PondSpillFeature extends Feature<NoneFeatureConfiguration> {
      * block that gives way to what is set in it, with no fluid in it).
      */
     static boolean room(BlockState s) {
-        return GlowBlock.open(s) || (s.canBeReplaced() && s.getFluidState().isEmpty());
+        return s.isAir() || (s.canBeReplaced() && s.getFluidState().isEmpty());
     }
 }

@@ -1,6 +1,5 @@
 package com.explorationremix.devtools;
 
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.registry.ERTags;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.Terrain;
@@ -27,7 +26,7 @@ import java.util.TreeMap;
  * {@code /remix census [radius]}: how overgrown and how lit the caves around you are, per biome, to tune the plant
  * counts in tools/worldgen.py against the targets of the vegetation design. It looks at the loaded chunks within radius
  * chunks of you (3 if not given) through your whole layer (48 blocks up and down above the first band), at the dry
- * open blocks: air (or the Galleries' invisible glow, {@code GlowBlock.open}, which also counts as a light), or a plant
+ * open blocks: air, or a plant
  * tagged {@code explorationremix:plants}. Of those it counts
  * <ul>
  *     <li>the floor (on a solid top that is not a plant) and the share of it holding a plant,</li>
@@ -74,7 +73,7 @@ public final class PlantCensus {
                     for (int y = y0; y <= y1; y++) {
                         BlockState s = chunk.getBlockState(m.set(x, y, z));
                         boolean plant = s.is(ERTags.PLANTS);
-                        if (!plant && !GlowBlock.open(s) || !s.getFluidState().isEmpty()) continue;
+                        if (!plant && !s.isAir() || !s.getFluidState().isEmpty()) continue;
                         String biome = chunk.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z))
                                 .unwrapKey().map(k -> k.location().getPath()).orElse("?");
                         long[] a = stats.computeIfAbsent(biome, k -> new long[8]);

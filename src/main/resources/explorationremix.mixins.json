@@ -24,8 +24,6 @@
     "WorldCarverMixin",
     "RuinedPortalPieceMixin",
     "BiomeFilterMixin",
-    "PortalShapeMixin",
-    "BaseFireBlockMixin",
     "LevelChunkMixin",
     "WorldGenRegionMixin",
     "accessor.LivingEntityAccessor",

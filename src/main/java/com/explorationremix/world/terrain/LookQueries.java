@@ -1,7 +1,7 @@
 package com.explorationremix.world.terrain;
 
 /**
- * What the two bottom layers' rock dressing ({@link Palette#shell}) and the Galleries' glow ({@code HallGlowFeature})
+ * What the two bottom layers' rock dressing ({@link Palette#shell}) and their features
  * ask of the noise fields that make the caves: the parts of a field's own working that show in the look. Every query is
  * a pure, thread-safe function of the seed and the position, like the fields' density, and costs about one field
  * lookup (a field answers from the same per-column caches its density uses).

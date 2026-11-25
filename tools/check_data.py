@@ -218,7 +218,7 @@ WORKED = re.compile(r"polished|bricks?\b|chiseled|_tiles\b|cut_|_cut\b|layered|_
 GALLERIES_BLOCKS = {"minecraft:" + b for b in (
     "basalt", "smooth_basalt", "blackstone", "gilded_blackstone", "magma_block", "obsidian", "crying_obsidian", "tuff", "calcite",
     "lava", "water", "air", "cave_air", "deepslate_gold_ore", "brown_terracotta")} | {
-    "create:scoria", "create:scorchia", f"{MOD}:ember_crust", f"{MOD}:glow"}
+    "create:scoria", "create:scorchia", f"{MOD}:ember_crust"}
 
 
 def blocks_in(obj, out):

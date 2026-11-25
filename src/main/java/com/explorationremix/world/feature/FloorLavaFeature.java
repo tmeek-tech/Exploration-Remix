@@ -1,6 +1,5 @@
 package com.explorationremix.world.feature;
 
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.GalleriesField;
 import com.explorationremix.world.terrain.Terrain;
@@ -65,8 +64,8 @@ public final class FloorLavaFeature extends Feature<NoneFeatureConfiguration> {
                 if (!held) continue;
                 // open above: air or a glow, or a generated slab with air or a glow over it, which goes
                 BlockState up = level.getBlockState(over.setWithOffset(pos, Direction.UP));
-                if (!GlowBlock.open(up)) {
-                    if (!coverSlab(up) || !GlowBlock.open(level.getBlockState(side.setWithOffset(over, Direction.UP)))) continue;
+                if (!up.isAir()) {
+                    if (!coverSlab(up) || !level.getBlockState(side.setWithOffset(over, Direction.UP)).isAir()) continue;
                     level.setBlock(over, Blocks.AIR.defaultBlockState(), 2);
                 }
                 level.setBlock(pos, lava, 2);
@@ -80,7 +79,7 @@ public final class FloorLavaFeature extends Feature<NoneFeatureConfiguration> {
      * FlowingFluid flows into what does not block motion).
      */
     static boolean solid(BlockState s) {
-        return !GlowBlock.open(s) && s.getFluidState().isEmpty() && s.blocksMotion();
+        return !s.isAir() && s.getFluidState().isEmpty() && s.blocksMotion();
     }
 
     /** A bottom slab another mod's slab pass laid on the floor, dry: one this lava clears. */

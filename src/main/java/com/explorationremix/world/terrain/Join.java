@@ -132,8 +132,9 @@ public final class Join {
      * How open the Galleries are right under the Wasteland's bottom at a column, 0..1: 1 where their density is at most -2
      * at both gTop-3 (the floor of an opening's dip) and gTop-6, 0 where either row is rock. The Wasteland's lowest sheet
      * only dips through its floor in proportion, so an opening never ends in a pit on a pillar, pinch or massif. The
-     * Galleries' cap is rock at gTop - 3 at every column (their space stops at gTop - 4, a disc's at gTop - 5), so this is
-     * 0 everywhere and the dip never falls: every opening is a crater's (W-ENG-2's obligation (ii), with a row of margin).
+     * Galleries' cap is rock at gTop - 3 at every column (their space stops at gTop - 4) but an opened hole's own cells,
+     * which open through their top (0.22.4), so this is 0 everywhere else and the dip falls only into the Galleries' open
+     * space, where it changes no block: every opening is a crater's (W-ENG-2's obligation (ii)).
      */
     double under(int x, int z) { return on ? under(lower, gTop, x, z) : 0; }
 

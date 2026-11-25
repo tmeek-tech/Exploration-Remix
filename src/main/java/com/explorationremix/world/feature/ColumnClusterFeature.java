@@ -1,6 +1,5 @@
 package com.explorationremix.world.feature;
 
-import com.explorationremix.block.GlowBlock;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -52,23 +51,23 @@ public final class ColumnClusterFeature extends Feature<ColumnClusterFeature.Con
             pos.set(o.getX() + dx, o.getY(), o.getZ() + dz);
             // Find the floor (or the ceiling for a hanging column) within a few blocks.
             int step = hang ? 1 : -1, tries = 0;
-            if (!GlowBlock.open(level.getBlockState(pos))) continue;
-            while (tries < 12 && GlowBlock.open(level.getBlockState(pos))) { pos.move(0, step, 0); tries++; }
-            if (tries >= 12 || GlowBlock.open(level.getBlockState(pos))) continue;
+            if (!level.getBlockState(pos).isAir()) continue;
+            while (tries < 12 && level.getBlockState(pos).isAir()) { pos.move(0, step, 0); tries++; }
+            if (tries >= 12 || level.getBlockState(pos).isAir()) continue;
             BlockState anchor = level.getBlockState(pos);
             if (!anchor.isSolid()) continue;
             if (hang && c.clearance() > 0) {
                 // the open blocks straight under the ceiling block, as far as the column and its clearance could reach
                 int open = 0;
                 BlockPos.MutableBlockPos q = pos.mutable();
-                while (open < h + c.clearance() && GlowBlock.open(level.getBlockState(q.move(0, -1, 0)))) open++;
+                while (open < h + c.clearance() && level.getBlockState(q.move(0, -1, 0)).isAir()) open++;
                 h = ColumnFit.hangingLength(h, open, c.clearance());
                 if (h < 1) continue;
             }
             if (Walkway.near(pos.getX(), pos.getZ(), pos.getY(), pos.getY() - step * h, 1)) continue;
             for (int k = 0; k < h; k++) {
                 pos.move(0, -step, 0);
-                if (!GlowBlock.open(level.getBlockState(pos))) break;
+                if (!level.getBlockState(pos).isAir()) break;
                 level.setBlock(pos, c.block().getState(random, pos), 2);
                 any = true;
             }
