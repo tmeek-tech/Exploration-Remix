@@ -53,7 +53,8 @@
     [
       "explorationremix:climb_vines",
       "explorationremix:open_way",
-      "explorationremix:lava_pockets"
+      "explorationremix:lava_pockets",
+      "explorationremix:basalt_galleries/ruins"
     ]
   ]
 }

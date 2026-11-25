@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The lower Basalt Galleries' ruins (0.21.8; Taran: "Can you make some scattered ruins in the lower Basalt Galleries?
+ * The lower Basalt Galleries' ruins (0.22.1; Taran: "Can you make some scattered ruins in the lower Basalt Galleries?
  * ... Ruins should come in clusters with bigger structures in the middle and smaller around the edges"). His cards: a
  * cluster about every 400 blocks, on the high ground (the tablelands' tops, over the lava's highest line), half fallen,
  * a rune and some loot in each, and lava channels glowing in them (the Galleries' only light is lava you can see).
@@ -64,7 +64,7 @@ public final class GalleriesRuins {
     static final double OUTER_W = 0.6;
     /** The plan's box: this many blocks either side of the middle, and rows from Y_UNDER under its paving up. */
     public static final int BOX = 46, SY = 60, Y_UNDER = 16;
-    static final int SX = 2 * BOX + 1;
+    public static final int SX = 2 * BOX + 1;
     /** A cluster's ground stands over the lava's highest line by at least this (the tops: W + 44 or more). */
     static final int DRY = 41;
     /** Half fallen: walls stand to between DECAY_LO and 1 of their height, the mean about a half. */
@@ -110,6 +110,8 @@ public final class GalleriesRuins {
         final long h;
         /** Open rows over the middle's floor. */
         int head;
+        /** Per column of the box, the lowest and highest rows the plan sets (air too; lo > hi: none), once laid. */
+        final short[] lo = new short[SX * SX], hi = new short[SX * SX];
 
         Plan(int i, int j, int cx, int cz, int gy, int kind, long h) {
             this.i = i; this.j = j; this.cx = cx; this.cz = cz; this.gy = gy; this.kind = kind; this.h = h;
@@ -454,7 +456,46 @@ public final class GalleriesRuins {
         }
         prune(p);
         settleLava(p);
+        seal(p);
         return true;
+    }
+
+    /** Notes each column's lowest and highest rows the plan sets ({@link #keepOff}). */
+    static void seal(Plan p) {
+        for (int k = 0; k < SX * SX; k++) {
+            int a = SY, b = -1;
+            for (int dy = 0; dy < SY; dy++)
+                if (p.b[k * SY + dy] != NONE) { a = Math.min(a, dy); b = dy; }
+            p.lo[k] = (short) a;
+            p.hi[k] = (short) b;
+        }
+    }
+
+    /** Rows a feature keeps off the ruins over their highest blocks (head room), and the margin it keeps at least. */
+    static final int KEEP_HEAD = 3;
+
+    /**
+     * Whether a structure in column (x, z) spanning rows lo..hi would come within {@code margin} blocks (sideways) of a
+     * cluster's blocks, at their rows (from the lowest the plan sets to KEEP_HEAD over its highest): the Galleries'
+     * other passes ask it through {@code Walkway.nearWays}, so no pool, fall or hanging column is laid in the ruins, and
+     * none is cut by them as they are set after it. Planning the cells round (x, z) if they are not yet.
+     */
+    public boolean keepOff(int x, int z, int lo, int hi, double margin) {
+        if (g == null || hi < g.B || lo > g.T + 8) return false;
+        int m = (int) Math.ceil(Math.max(0, margin));
+        for (Plan p : near(x - m, z - m, x + m, z + m)) {
+            if (hi < p.y0 || lo > p.y0 + SY + KEEP_HEAD) continue;
+            for (int dx = -m; dx <= m; dx++)
+                for (int dz = -m; dz <= m; dz++) {
+                    if (dx * dx + dz * dz > margin * margin + 0.5) continue;
+                    int cx = x + dx - p.x0, cz = z + dz - p.z0;
+                    if (cx < 0 || cz < 0 || cx >= SX || cz >= SX) continue;
+                    int k = cx * SX + cz;
+                    if (p.lo[k] > p.hi[k]) continue;
+                    if (hi >= p.y0 + p.lo[k] && lo <= p.y0 + p.hi[k] + KEEP_HEAD) return true;
+                }
+        }
+        return false;
     }
 
     /**

@@ -182,7 +182,7 @@ BLOCKS = {
     "ember_crust": ("Ember Crust", "cube"),
     # (0.20.1's glow ice, the deep Frost Fern Grotto's glowing veins, left the game in 0.20.7: Taran, "Remove glow ice".)
     "cinder_chain": ("Cinder Chain", "cross", {"shader_glow": False}),
-    # (The Galleries' invisible lava glow left the game in 0.21.8, Taran: "remove the invisible light sources".)
+    # (The Galleries' invisible lava glow left the game in 0.22.1, Taran: "remove the invisible light sources".)
     # A Mossback's den (creature.MossbackDen): trampled moss and gnawed bone on a den gate's upper landing. It drops
     # nothing, so nobody can carry one off to farm lizards.
     "mossback_den": ("Mossback Den", "moss_carpet", {"texture": "mossback_den"}),
@@ -1166,6 +1166,33 @@ def particles():
         write(os.path.join(ASSETS, "particles", name + ".json"), {"textures": sprites})
 
 
+def ruin_loot():
+    """0.22.1: the lower Galleries' ruins' chests (GalleriesRuinsFeature; Taran's card: "A rune and some loot"). The rune's
+    chest in each cluster's big structure holds a rune for certain, most often one of the deep layers' (each item in a
+    tag takes its entry's weight: the Deep Gardens' 5 x 10, the Blue Reaches' 7 x 5, the Upper Caves' 16 x 2), and a few
+    things besides; the loot chests in two or three of its huts hold the builders' leavings: gold, iron, torches for the
+    dark, obsidian, a bottle of fire resistance for the lava, now and then a diamond, a golden apple or ancient debris."""
+    def item(name, weight, lo=1, hi=1, extra=None):
+        e = {"type": "minecraft:item", "name": name, "weight": weight}
+        f = [] if lo == hi == 1 else [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": lo, "max": hi}}]
+        if extra: f.append(extra)
+        if f: e["functions"] = f
+        return e
+    leavings = [item("minecraft:gold_nugget", 20, 3, 9), item("minecraft:gold_ingot", 10, 1, 3), item("minecraft:iron_ingot", 12, 1, 4),
+                item("minecraft:torch", 12, 4, 12), item("minecraft:obsidian", 8, 1, 3), item("minecraft:magma_cream", 6, 1, 3),
+                item("minecraft:experience_bottle", 8, 1, 4),
+                item("minecraft:potion", 6, extra={"function": "minecraft:set_potion", "id": "minecraft:fire_resistance"}),
+                item("minecraft:diamond", 3, 1, 2), item("minecraft:golden_apple", 2), item("minecraft:ancient_debris", 1)]
+    write(os.path.join(DATA, "loot_tables", "chests", "galleries_ruin.json"), {
+        "type": "minecraft:chest",
+        "pools": [{"rolls": {"type": "minecraft:uniform", "min": 3, "max": 6}, "entries": leavings}]})
+    write(os.path.join(DATA, "loot_tables", "chests", "galleries_ruin_rune.json"), {
+        "type": "minecraft:chest",
+        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:tag", "name": f"{MOD}:runes/{layer}", "expand": True, "weight": w}
+                                           for layer, w in (("deep_gardens", 10), ("blue_reaches", 5), ("upper_caves", 2))]},
+                  {"rolls": {"type": "minecraft:uniform", "min": 2, "max": 4}, "entries": leavings}]})
+
+
 def main():
     kept = {}
     for path in KEPT:
@@ -1191,6 +1218,7 @@ def main():
     rune_table_art.write_all(ASSETS)
     names.update({f"entity.{MOD}.{e}": n for e, n in ENTITY_NAMES.items()})
     creature_data()
+    ruin_loot()
     particles()
     lang(names)
     for path, data in kept.items():

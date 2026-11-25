@@ -1245,11 +1245,18 @@ def build_features():
     # (GalleriesField.floorLavaRow) lays lava a block deep and flush in the floor along the lava rivers' channels over
     # the table and along rills on the low floors, in chains of pools with dry gaps and the rivers' fords between them,
     # held by rock under and beside every block of it, kept off the ways down, the tube country and the cliffs' feet and
-    # brinks. Once per chunk, after the ways are opened and before the glow, so the glow sees it. A rule of the field, not
+    # brinks. Once per chunk, after the ways are opened and before the ruins. A rule of the field, not
     # of a biome: its placement has no biome filter, and the hall biomes all carry it (the Obsidian Tubes do not: the rule
     # keeps out of the tube country anyway).
     feature("basalt_galleries/floor_lava", "top_layer_modification", halls, {"type": f"{MOD}:floor_lava", "config": {}}, [])
-    # (The Galleries' invisible lava glow, HallGlowFeature, left in 0.21.8, Taran: "remove the invisible light sources":
+    # The lower Galleries' ruins (GalleriesRuinsFeature, 0.22.1; Taran: "Can you make some scattered ruins in the lower
+    # Basalt Galleries? ... Ruins should come in clusters with bigger structures in the middle and smaller around the
+    # edges"): a cluster in most 400-block cells, on the tablelands' tops, planned by the field alone (GalleriesRuins)
+    # and set chunk by chunk, last of the layer's passes, so nothing laid before it is left loose and nothing after it
+    # builds into it. Its stone is the card's pick (blue asurine, Create's, falling back to deepslate without Create). All
+    # the Galleries' biomes carry it, so a cluster that reaches over a biome's edge stays whole.
+    feature("basalt_galleries/ruins", "top_layer_modification", GALLERIES, {"type": f"{MOD}:galleries_ruins", "config": {"stone": "asurine"}}, [])
+    # (The Galleries' invisible lava glow, HallGlowFeature, left in 0.22.1, Taran: "remove the invisible light sources":
     # every light in the layer now has a source you can see.)
 
 

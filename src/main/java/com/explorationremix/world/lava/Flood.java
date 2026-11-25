@@ -38,7 +38,7 @@ public final class Flood {
 
     /**
      * What the flood sees in a block: something it leaves alone, air, fire, a lava source, flowing lava, or the
-     * Galleries' invisible glow (explorationremix:glow, gone since 0.21.8: no block reads as it now, and where an old
+     * Galleries' invisible glow (explorationremix:glow, gone since 0.22.1: no block reads as it now, and where an old
      * world's flood marked one, its drain puts air back, {@link Slice#glow}).
      */
     public static final int OTHER = 0, AIR = 1, FIRE = 2, LAVA = 3, FLOWING = 4, GLOW = 5;

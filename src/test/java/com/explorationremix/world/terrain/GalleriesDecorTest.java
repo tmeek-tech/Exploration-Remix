@@ -35,7 +35,7 @@ class GalleriesDecorTest {
      * The three ways down round (4, 125), (21, 126) and (44, 29) (0.20.4: (19, 151) no longer opens under the halls, and
      * the ramps reach 150 to 175 blocks, so the box grew from 364 x 386 at (-160, -55)), with their whole reach,
      * decorated: no lava on a ramp's deck band or in a hole's throat, every way walking down to its foot and back up
-     * through the decorations, and the halls' falls few, spaced and 1 to 3 sources wide (until 0.21.8 the halls' faces
+     * through the decorations, and the halls' falls few, spaced and 1 to 3 sources wide (until 0.22.1 the halls' faces
      * were also held as bright as with the old falls, by the invisible glow, which left the game then). On the 0.8.0 data
      * the same box held 634 falls (the nearest other fall 5.8 blocks off at the median, 84 in one 128-block square), lava
      * on all three ramps (235 blocks), the way at (21, 126) one way at its foot, and faces at 10.33 on average, 7.7 %
@@ -63,7 +63,7 @@ class GalleriesDecorTest {
     }
 
     /**
-     * 0.21.8 (Taran: "remove the invisible light sources"): no feature the data ships places light with nothing to see,
+     * 0.22.1 (Taran: "remove the invisible light sources"): no feature the data ships places light with nothing to see,
      * neither the old glow pass (feature type explorationremix:hall_glow) nor its block (explorationremix:glow), in any
      * layer, so every light in the Galleries comes from lava or blocks you can see.
      */
