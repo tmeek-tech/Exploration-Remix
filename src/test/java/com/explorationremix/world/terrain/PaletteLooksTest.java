@@ -541,8 +541,10 @@ class PaletteLooksTest {
     void noMadeBlockInTheBottomLayers() throws IOException {
         // Taran, 2026-11-02: "Polished blackstone doesn't fit. It looks too unnatural." Every block the two bottom layers
         // can show: what the palette lays (as DeepMaterials turns rocks into blocks, Create's stones and their stand-ins
-        // both), what their biomes' features place (block tags expanded), and what those features' code names.
-        Set<String> found = new TreeSet<>();
+        // both), what their biomes' features place (block tags expanded), and what those features' code names. The
+        // Galleries' ruins (GalleriesRuinsFeature, 0.22.4; Taran, 2026-11-25: "Can you make some scattered ruins in the
+        // lower Basalt Galleries?") are built things, so their stones are kept apart: none of them is blackstone.
+        Set<String> found = new TreeSet<>(), ruins = new TreeSet<>();
         // 1. the palette, over both layers, with every look the noise fields can give
         Terrain t = terrain();
         Shape s = t.shape;
@@ -588,7 +590,7 @@ class PaletteLooksTest {
                     for (String type : types) {
                         if (!type.startsWith("explorationremix:")) continue;
                         String cls = featureClasses.get(type.substring(17));
-                        if (cls != null) found.addAll(codeBlocks(cls));
+                        if (cls != null) (type.equals("explorationremix:galleries_ruins") ? ruins : found).addAll(codeBlocks(cls));
                     }
                 }
             }
@@ -596,6 +598,7 @@ class PaletteLooksTest {
         List<String> made = new ArrayList<>();
         for (String b : found) if (MADE.matcher(b.substring(b.indexOf(':') + 1)).find()) made.add(b);
         assertTrue(made.isEmpty(), "made blocks in the two bottom layers: " + made + " (of " + found + ")");
+        assertTrue(ruins.contains("minecraft:deepslate_bricks") && ruins.stream().noneMatch(b -> b.contains("blackstone")), "the ruins' stones: " + ruins);
         assertTrue(found.contains("minecraft:basalt") && found.contains("minecraft:magma_block"), "the scan found the layers' rock: " + found);
     }
 

@@ -691,7 +691,8 @@ class TubeFieldTest {
      * column of the standing countries, lies within 1.8 of the tube's surface (the palette lines it), is surface rock (at
      * most 6 blocks deep in the game's density) and is in the Obsidian Tubes (measured 3.22 M faces since the runs go only
      * where rock encloses them, 4.95 M with the ring on the v2 Galleries, 5.07 M on the interim ones, counted per open
-     * block, all lined).
+     * block, all lined). 0.22.4's tablelands left 9 faces in the hall's biome where a tube cut a ramp's plane, whose rock
+     * stands over the least row its cell leaves open: the biome reads such a floor block by block now.
      */
     @Test
     void everyFaceIsLined() {

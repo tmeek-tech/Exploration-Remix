@@ -4793,7 +4793,10 @@ public final class GalleriesField {
      */
     public DeepBiome biome(int x, int y, int z) {
         Cell c = column(x, z);
-        if (tubes != null && !c.open(y) && tubes.inLining(x, y, z) && tubesAt(x + 0.5, z + 0.5) && density(x, y, z) > 0) return DeepBiome.OBSIDIAN_TUBES;
+        // (a rowed cell's floor is read block by block, its rubble cones or a ramp's plane standing over the least row f
+        // it leaves: their rock is not the cell's open space, and where a tube cuts them it is the tube's lining)
+        if (tubes != null && !(c.open(y) && !c.rowed()) && tubes.inLining(x, y, z) && tubesAt(x + 0.5, z + 0.5)
+                && !(c.open(y) && y >= floorAt(x, z)) && density(x, y, z) > 0) return DeepBiome.OBSIDIAN_TUBES;
         return switch (c.kind) {
             case CALDERA -> DeepBiome.CALDERA;
             case CAUSEWAY -> DeepBiome.CAUSEWAY;
