@@ -264,6 +264,26 @@ class ChoirSitesTest {
             for (int dx = 0; dx < 2; dx++)
                 for (int dz = 0; dz < 2; dz++) laid(s, st.x() + dx, st.z() + dz, "a broken pillar");
         }
+        // the Choir's six roots: on the half spokes, on the flat of the fighting floor, and no pillar or brazier in the
+        // way of one (a tendril is cut by standing at its root, and its box is a block and a half wide)
+        for (int k = 0; k < ChoirArena.ROOTS; k++) {
+            double a = ChoirArena.rootAngle(s.turn(), k);
+            double rx = s.x() + ChoirArena.ROOT_R * Math.cos(a), rz = s.z() + ChoirArena.ROOT_R * Math.sin(a);
+            assertTrue(ChoirArena.onFloor(s, rx, rz), "root " + k + " is off the fighting floor");
+            // two of the six stand in the paved lanes that run in from the ramps' feet, which is where a player coming
+            // down a ramp first meets one; what matters is that the floor under every root is the bowl's flat floor
+            assertEquals((int) s.floorY(), ChoirArena.topY(s, rx, rz), "root " + k + " stands on a step");
+            double off = Math.toDegrees(a - s.turn()) % 60;
+            assertEquals(30, off, 1e-6, "root " + k + " is not on a half spoke");
+            for (ChoirArena.Stump st : stumps) {
+                // the nearest point of the pillar's 2 x 2 to the root
+                double nx = Math.max(st.x(), Math.min(rx, st.x() + 2)), nz = Math.max(st.z(), Math.min(rz, st.z() + 2));
+                assertTrue(Math.hypot(nx - rx, nz - rz) >= 1.5,
+                        "a broken pillar stands " + Math.round(Math.hypot(nx - rx, nz - rz) * 10) / 10.0 + " from root " + k);
+            }
+            for (int[] b : braziers)
+                assertTrue(Math.hypot(b[0] + 0.5 - rx, b[1] + 0.5 - rz) >= 2.5, "a brazier stands at root " + k);
+        }
     }
 
     /**

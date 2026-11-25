@@ -47,6 +47,19 @@ public final class ChoirArena {
      */
     public static final double BRAZIER_TREAD_R = ChoirSites.SEAT_R0 + TREAD + TREAD / 2, BRAZIER_FLOOR_R = 13,
             BRAZIER_DAIS_R = DAIS_RING - 1;
+    /**
+     * The Choir's six tendrils are rooted this far out from the middle, on the half spokes: a twelfth of a turn off the
+     * first socket and every sixth after, so a root never shares a spoke with a socket or a brazier and stands the
+     * same every time the Choir is called. Two of the six stand in the paved lanes that run in from the ramps' feet,
+     * so a tendril is the first thing a player coming down a ramp meets. The broken pillars keep {@link #ROOT_CLEAR}
+     * off each of them.
+     */
+    public static final double ROOT_R = 8, ROOT_CLEAR = 3;
+    public static final int ROOTS = 6;
+
+    /** The way root {@code place} of an arena lies from its middle, given the arena's own turn. */
+    public static double rootAngle(double turn, int place) { return turn + Math.PI / 6 + place * Math.PI / 3; }
+
     /** The broken pillars on the fighting floor: how many, how far out, and how tall (they never block the view). */
     public static final int PILLARS = 5;
     public static final double PILLAR_R0 = 9, PILLAR_R1 = ChoirSites.FLOOR_R - 2;
@@ -245,7 +258,7 @@ public final class ChoirArena {
     /** A broken pillar on the fighting floor: the low corner of its 2 x 2 and how many blocks tall it stands. */
     public record Stump(int x, int z, int height) {}
 
-    /** The broken pillars, hashed round the floor and kept out of the dais and the ramps' feet. */
+    /** The broken pillars, hashed round the floor and kept out of the dais, the ramps' feet and the tendrils' roots. */
     public static Stump[] stumps(ChoirSites.Site s) {
         Stump[] out = new Stump[PILLARS];
         int n = 0;
@@ -263,6 +276,12 @@ public final class ChoirArena {
             boolean near = false;
             for (int k = 0; k < n; k++) if (Math.hypot(out[k].x() - x, out[k].z() - z) < 7) near = true;
             for (int[] b : braziers(s)) if (Math.hypot(b[0] - x, b[1] - z) < 4) near = true;
+            // nor where a tendril roots: its box and a pillar in one place would be a tendril nobody can get at
+            for (int k = 0; k < ROOTS; k++) {
+                double ra = rootAngle(s.turn(), k);
+                if (Math.hypot(s.x() + ROOT_R * Math.cos(ra) - (x + 1), s.z() + ROOT_R * Math.sin(ra) - (z + 1)) < ROOT_CLEAR)
+                    near = true;
+            }
             if (near) continue;
             int hgt = (int) Math.round(Hashing.range(Hashing.mix(h, 2, 0, 0), PILLAR_LO, PILLAR_HI));
             out[n++] = new Stump(x, z, hgt);

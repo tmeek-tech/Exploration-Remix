@@ -17,6 +17,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 /**
  * Draws the Hollow Choir (0.21.9): a ring of eight bone plates with four ribs arching over it and five small bells
@@ -25,8 +26,8 @@ import org.joml.Quaternionf;
  *
  * <p>Everything comes out of six loose parts of geometry/hollow_choir.json (tools/hollow_choir.py), drawn again and
  * again: the plate eight times round the ring, the rib four times (it carries its own chain of children, so one
- * draw is a whole arch), the bell five times on its own swing, and the tendril segment fourteen times down a curve
- * per tendril with a foot at the bottom. The ring turns slowly on its axis the whole time, which is what tells you at
+ * draw is a whole arch), the bell five times on its own swing, and the tendril segment every block and a half up a
+ * curve per tendril with a foot at the bottom. The ring turns slowly on its axis the whole time, which is what tells you at
  * a glance whether the Choir is up and working or down and open.
  *
  * <p>A cut tendril is not drawn at all: the ring is visibly hanging on fewer and fewer threads as the fight goes on,
@@ -41,14 +42,27 @@ public class HollowChoirRenderer extends EntityRenderer<HollowChoirEntity> {
     private static final ResourceLocation GLOW =
             new ResourceLocation(ExplorationRemix.MOD_ID, "textures/entity/hollow_choir/hollow_choir_glow.png");
 
-    /** The ring's copies, the ribs', the bells', and how many segments a tendril is drawn from. */
-    private static final int PLATES = 8, RIBS = 4, BELLS = 5, SEGS = 14;
-    /** A segment is one block long in the model (16 px along -z), so a tendril's curve is stepped in blocks. */
-    private static final float SEG_LEN = 1.0F;
+    /** The ring's copies, the ribs' and the bells'. */
+    private static final int PLATES = 8, RIBS = 4, BELLS = 5;
+    /**
+     * A tendril is drawn half again as thick as its model, so the cord is three quarters of a block through and a
+     * tendril looks like something that could hold a crown up; its segments are cut to about that much longer too
+     * ({@link #SEG_STEP} blocks), however high the cavern is, so the cord is never a stretched texture.
+     */
+    private static final float THICK = 1.5F;
+    private static final double SEG_STEP = 1.5;
+    private static final int SEGS_MAX = 48;
+    /** A tendril runs this far up past the cavern's ceiling as the site knows it, so its end is always in the rock. */
+    private static final double BURY = 3.0;
+    /** The foot's pad lies this far under the root's own middle (6 px of the model), so the pad rests on the floor. */
+    private static final double FOOT_PAD = 6 / 16.0;
     /** How far the crown's middle is over the entity's own position (blocks): the middle of its box. */
     private static final float CENTRE = 1.2F;
-    /** The tendrils lean in to pass the ring, so they are not straight lines: how far in, at the ring's height. */
-    private static final double LEAN = 1.6;
+    /**
+     * The tendrils lean in to pass the ring, so they are not straight lines: how far in at the ring's height, and how
+     * far above and below it the lean is taken up over.
+     */
+    private static final double LEAN = 1.6, LEAN_SPAN = 7.0;
     /** A bell's idle swing and the jolt a toll or a slam gives it (radians). */
     private static final float SWING = 0.07F, JOLT = 0.38F;
     /** The glow while the crown is up, and once the core is open. */
@@ -143,27 +157,32 @@ public class HollowChoirRenderer extends EntityRenderer<HollowChoirEntity> {
         pose.popPose();
         pose.popPose();
 
-        // the tendrils: in world terms, not the crown's, since their roots stay on the floor while the crown moves
+        pose.popPose();
+
+        // the tendrils: in the world's own terms, not the crown's, since their roots stay on the floor while the crown
+        // moves. They are drawn outside the crown's turned-over space on purpose: 0.21.9 and 0.22.0 drew them inside
+        // it and turned only their heights back, so every tendril stood on the far side of the dais from its own box
+        // (its x the wrong way round) and a sword swung at one met nothing.
         double ex = Mth.lerp(pt, e.xOld, e.getX()), ey = Mth.lerp(pt, e.yOld, e.getY()), ez = Mth.lerp(pt, e.zOld, e.getZ());
         float tendrilShade = glowPass ? TENDRIL_GLOW : shade;
         for (int i = 0; i < HollowChoirEntity.PLACES; i++) {
             if (!e.standing(i)) continue;
             tendril(e, i, pose, vc, light, overlay, tendrilShade, ex, ey, ez);
         }
-        pose.popPose();
     }
 
     /**
-     * One tendril: a curve from its root on the floor, up past the ring (leaning in to it) and on to the cavern's
-     * ceiling, drawn as a chain of segments with a foot at the bottom. The segments are stepped a block at a time, so
-     * a tendril keeps the same look however high the cavern is.
+     * One tendril: a curve from its root on the floor, up past the ring (leaning in to it) and on into the cavern's
+     * ceiling, drawn as a chain of segments with a foot at the bottom. Every point of it is in the world's own terms
+     * and is drawn there, so the cord stands in the box a sword finds it by ({@link HollowChoirEntity#tendrilFoot}).
      */
     private void tendril(HollowChoirEntity e, int place, PoseStack pose, VertexConsumer vc, int light, int overlay,
                          float shade, double ex, double ey, double ez) {
         Vec3 root = e.tendrilFoot(place);
-        double topY = e.top();
-        double floorY = e.floorY();
-        double span = Math.max(4, topY - floorY);
+        // the floor's surface: the root's own y is the floor block's, which its box is sunk a block into
+        double floor = root.y + 1;
+        double baseY = floor + FOOT_PAD * THICK - 0.05;
+        double topY = Math.max(e.top() + BURY, baseY + 4);
         double ringY = ey;
 
         // the lean: the tendril bows in towards the ring at the ring's height and straightens again above it
@@ -171,41 +190,56 @@ public class HollowChoirRenderer extends EntityRenderer<HollowChoirEntity> {
         double len = Math.max(1e-6, Math.hypot(ax, az));
         double inX = -ax / len * LEAN, inZ = -az / len * LEAN;
 
-        double[] prev = null;
-        for (int k = 0; k <= SEGS; k++) {
-            double t = k / (double) SEGS;
-            double y = floorY + span * t;
-            // how near this point is to the ring's height, 0 away from it and 1 at it
-            double near = Math.max(0, 1 - Math.abs(y - ringY) / 5.0);
-            double bow = near * near;
-            double[] at = {root.x + inX * bow, y, root.z + inZ * bow};
-            if (prev != null) drawSeg(pose, vc, light, overlay, shade, prev, at, ex, ey, ez, e);
-            prev = at;
+        int segs = Mth.clamp((int) Math.round((topY - baseY) / SEG_STEP), 4, SEGS_MAX);
+        double[][] at = new double[segs + 1][3];
+        for (int k = 0; k <= segs; k++) {
+            double y = baseY + (topY - baseY) * k / segs;
+            // how near this point is to the ring's height, 0 away from it and 1 at it, eased both ways so the cord
+            // bends in a curve and not at a knee
+            double near = Mth.clamp(1 - Math.abs(y - ringY) / LEAN_SPAN, 0, 1);
+            double bow = near * near * (3 - 2 * near);
+            at[k][0] = root.x + inX * bow;
+            at[k][1] = y;
+            at[k][2] = root.z + inZ * bow;
         }
-        // the root on the floor
+        chain(pose, vc, light, overlay, shade, at, segs, ex, ey, ez);
+
+        // the root on the floor: the model's y grows downward, so it is turned over (a half turn, not a mirror)
         pose.pushPose();
-        pose.translate(root.x - ex, -(root.y - ey), root.z - ez);
+        pose.translate(root.x - ex, baseY - ey, root.z - ez);
+        pose.scale(-THICK, -THICK, THICK);
         foot.render(pose, vc, light, overlay, shade, shade, shade, 1);
         pose.popPose();
     }
 
-    /** One segment of a tendril, stretched between two points of its curve (the part runs 16 px along -z). */
-    private void drawSeg(PoseStack pose, VertexConsumer vc, int light, int overlay, float shade,
-                         double[] a, double[] b, double ex, double ey, double ez, HollowChoirEntity e) {
-        double dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
-        double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (len < 1e-5) return;
-        pose.pushPose();
-        // this space has y growing downwards, so the world's up is -y here
-        pose.translate(a[0] - ex, -(a[1] - ey), a[2] - ez);
-        float yawTo = (float) Math.atan2(dx, dz);
-        float pitchTo = (float) Math.atan2(-dy, Math.hypot(dx, dz));
-        pose.mulPose(new Quaternionf().rotateY(yawTo + Mth.PI));
-        pose.mulPose(new Quaternionf().rotateX(pitchTo));
-        float stretch = (float) (len / SEG_LEN);
-        pose.scale(1, 1, stretch);
-        seg.render(pose, vc, light, overlay, shade, shade, shade, 1);
-        pose.popPose();
+    /**
+     * A chain of segments through the points of a curve, first to last. Each segment is the model's one, which runs
+     * 16 px along its own -z, set at a point and turned to face the next. The turn is carried from one segment to the
+     * next (each is the last one's, turned only as far as the curve turned between them) rather than worked out afresh
+     * from each direction, so the cord never twists about itself and no direction is a special case: a tendril can
+     * stand straight up, arch right over and point straight down in one chain.
+     */
+    private void chain(PoseStack pose, VertexConsumer vc, int light, int overlay, float shade, double[][] at, int segs,
+                       double ex, double ey, double ez) {
+        Quaternionf turn = new Quaternionf().rotationX(Mth.HALF_PI);   // the segment's own -z, stood straight up
+        Vector3f was = new Vector3f(0, 1, 0), now = new Vector3f();
+        Quaternionf step = new Quaternionf();
+        for (int k = 0; k < segs; k++) {
+            double[] a = at[k], b = at[k + 1];
+            double dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+            double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (len < 1e-4) continue;
+            now.set((float) (dx / len), (float) (dy / len), (float) (dz / len));
+            turn.premul(step.rotationTo(was, now));
+            was.set(now);
+            pose.pushPose();
+            pose.translate(a[0] - ex, a[1] - ey, a[2] - ez);
+            pose.mulPose(turn);
+            // a hair long, so two segments meeting at a bend never show a gap on the outside of it
+            pose.scale(THICK, THICK, (float) len * 1.02F);
+            seg.render(pose, vc, light, overlay, shade, shade, shade, 1);
+            pose.popPose();
+        }
     }
 
     /** The light at the crown, which the tendrils and the ring are all drawn by. */

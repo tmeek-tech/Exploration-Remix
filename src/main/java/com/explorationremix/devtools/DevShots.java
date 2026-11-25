@@ -331,7 +331,8 @@ public final class DevShots {
     /**
      * What the player does, for testing gear in the game: "! press use|attack|cast|inventory" (one click of that
      * key), "! hold use|attack|cast" and "! release use|attack|cast" (keep it held down until released), "! slot n" (hotbar slot
-     * 0 to 8), "! look yaw pitch", "! gui on|off" (the hotbar and HUD), "! view first|third|front" (the camera),
+     * 0 to 8), "! look yaw pitch", "! gui on|off" (the hotbar and HUD), "! hitboxes on|off" (the boxes swings land on),
+     * "! view first|third|front" (the camera),
      * "! swing light|strong combo tau" (the player's own timed swing held still tau ticks in; "! swing off" lets go),
      * "! glow tick" (the ready light on the sword in hand held still that many ticks into its play; "! glow off" lets go),
      * "! sparkle tick" (a charged sword's sparkle held still at that tick of its clock; "! sparkle off" lets go),
@@ -384,6 +385,9 @@ public final class DevShots {
                 }
             }
             case "gui" -> mc.options.hideGui = !arg.equals("on");
+            // "! hitboxes on|off": the boxes the game strikes and picks by (F3+B), parts' boxes too, so a picture can
+            // show whether a creature is drawn where it can be hit
+            case "hitboxes" -> mc.getEntityRenderDispatcher().setRenderHitBoxes(arg.equals("on"));
             case "swing" -> {
                 // "! swing light|strong combo tau [chain]": the player's own swing held still that many ticks in (with "chain",
                 // a light one starts where the chain's swings before it left the hand, pressed as fast as they go); "! swing off"
