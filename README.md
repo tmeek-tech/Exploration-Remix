@@ -204,7 +204,13 @@ three on the dais ring, since a bowl this wide cannot be lit from its edge alone
 from anywhere on it. A sleeping arena rings once every half minute or so, and the toll carries about 150 blocks
 through the rock, so you hear one before you find one; that and the pale blue glow are the only hints, and there is no
 trail and no pull on the keys to lead you there. Three **key sockets** stand on the rim walk, a third of a turn apart.
-Put a key in each and the Choir comes.
+Put a key in each and the Choir comes. It holds its first blow for four seconds: time to see what has woken and to
+get down off the rim.
+
+**No Warden.** The arena stands in the Deep Dark, and vanilla's sculk grows sensors and shriekers wherever it likes,
+the rim walk included. The first key set in a socket strikes dumb every shrieker within about 60 blocks of the dais
+(0.22.0): they still shriek at a noise, but they warn nobody and can never call the Warden, here or after. The walk
+to an arena is as dangerous as the rest of the Deep Dark; the fight in it is the Choir's alone.
 
 **The fight.** A crown of bone plates hangs over the dais with a bell inside it, held up by six great sculk tendrils
 that run from the cavern's ceiling past the crown down to roots on the floor. While the crown is up it cannot be hurt
@@ -220,8 +226,8 @@ standing on the dais. It raises
 rooted **sprouts** to mend itself and blunt your blows; they are the only help it gets, and they can be cut down.
 Leave the bowl and it lets you go, putting the arena back as it was.
 
-Lose and nothing is spent: the Choir goes, the arena resets, your three keys stay in their sockets and you heal, so
-the next try costs only the walk back. Win and it gives up about twenty levels' worth of experience, a **choir bell**
+Lose and nothing is spent: the Choir goes, the arena resets and your three keys stay in their sockets, so the next
+try costs only the walk back; use any filled socket and it comes again, whole. Win and it gives up about twenty levels' worth of experience, a **choir bell**
 to hang as a trophy, and two runes. It can be called again with three new keys.
 
 ## Runes
@@ -290,9 +296,10 @@ shimmer and a soft note in your own hands; then, for as long as it has that ener
 | `/remix choir city` | the heart of the nearest planned ancient city, where its reliquary holds one choir key |
 | `/remix choir keys` | three choir keys |
 | `/remix choir summon` | fills that arena's three sockets and calls the Choir |
+| `/remix choir cut` | parts every tendril that arena's Choir has standing, so the crown falls and the core opens |
 | `/remix choir phase <0-3>` | dresses that arena as it stands at rest or in a phase of the fight (the braziers, the sculk and the sprouts), without fighting through to it |
 
-`/remix choir`, `/remix choir summon` and `/remix choir phase` go by where the command came from rather than by a
+`/remix choir`, `/remix choir summon`, `/remix choir cut` and `/remix choir phase` go by where the command came from rather than by a
 player, so they work from the server console with `execute positioned <x> <y> <z> run remix choir ...`.
 
 ## Building

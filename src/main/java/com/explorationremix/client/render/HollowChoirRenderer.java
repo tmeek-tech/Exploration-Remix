@@ -53,6 +53,13 @@ public class HollowChoirRenderer extends EntityRenderer<HollowChoirEntity> {
     private static final float SWING = 0.07F, JOLT = 0.38F;
     /** The glow while the crown is up, and once the core is open. */
     private static final float GLOW_UP = 0.35F, GLOW_OPEN = 1.0F;
+    /** The glow pass is drawn at full light, as every glow of the mod's is, so shader packs take it for a lamp. */
+    private static final int FULL_BRIGHT = 0xF000F0;
+    /**
+     * The tendrils' bands keep their own glow whatever the crown is doing: they are what shows a tendril at all against
+     * a dark cavern, and none stands while the core is open, so the crown's dim-and-flare has nothing to say to them.
+     */
+    private static final float TENDRIL_GLOW = 0.9F;
 
     private final ModelPart plate, rib, bell, core, seg, foot;
 
@@ -80,15 +87,17 @@ public class HollowChoirRenderer extends EntityRenderer<HollowChoirEntity> {
             glow = GLOW_UP + (GLOW_OPEN - GLOW_UP) * Mth.clamp(glow, 0, 1);
             draw(e, pt, pose, buffers.getBuffer(RenderType.entityCutoutNoCull(TEXTURE)),
                     light, OverlayTexture.NO_OVERLAY, 1, false);
-            // the glow over it, as eyes are drawn: added to what is under it, so shader packs treat it as a light
-            draw(e, pt, pose, buffers.getBuffer(RenderType.eyes(GLOW)), light, OverlayTexture.NO_OVERLAY, glow, true);
+            // the glow over it, as eyes are drawn: added to what is under it, so shader packs treat it as a light.
+            // Its strength has to ride in the colour: eyes are added one for one, so an alpha does nothing to them
+            // (0.21.9 passed it as one, and the glow stood at full the whole fight instead of flaring as it opens)
+            draw(e, pt, pose, buffers.getBuffer(RenderType.eyes(GLOW)), FULL_BRIGHT, OverlayTexture.NO_OVERLAY, glow, true);
         }
         super.render(e, yaw, pt, pose, buffers, light);
     }
 
     /** One pass over the whole Choir: the ring, the ribs, the bells, the core and the six tendrils. */
     private void draw(HollowChoirEntity e, float pt, PoseStack pose, VertexConsumer vc, int light, int overlay,
-                      float alpha, boolean glowPass) {
+                      float shade, boolean glowPass) {
         float spin = e.spin() * Mth.DEG_TO_RAD;
         float drop = Mth.lerp(pt, e.dropO, e.drop);
         float ring = Mth.lerp(pt, e.ringO, e.ring);
@@ -108,13 +117,13 @@ public class HollowChoirRenderer extends EntityRenderer<HollowChoirEntity> {
             pose.mulPose(new Quaternionf().rotateY(i * Mth.TWO_PI / PLATES));
             // the plates open outwards as the crown falls, which is what lets the core be reached
             pose.mulPose(new Quaternionf().rotateX(-drop * 0.5F));
-            plate.render(pose, vc, light, overlay, 1, 1, 1, alpha);
+            plate.render(pose, vc, light, overlay, shade, shade, shade, 1);
             pose.popPose();
         }
         for (int i = 0; i < RIBS; i++) {
             pose.pushPose();
             pose.mulPose(new Quaternionf().rotateY(i * Mth.TWO_PI / RIBS));
-            rib.render(pose, vc, light, overlay, 1, 1, 1, alpha);
+            rib.render(pose, vc, light, overlay, shade, shade, shade, 1);
             pose.popPose();
         }
         for (int i = 0; i < BELLS; i++) {
@@ -123,22 +132,23 @@ public class HollowChoirRenderer extends EntityRenderer<HollowChoirEntity> {
             float phase = bob + i * 1.7F;
             float swing = Mth.sin(phase) * SWING + Mth.sin(phase * 3.1F) * ring * JOLT;
             bell.setRotation(swing, 0, Mth.cos(phase * 0.7F) * SWING);
-            bell.render(pose, vc, light, overlay, 1, 1, 1, alpha);
+            bell.render(pose, vc, light, overlay, shade, shade, shade, 1);
             pose.popPose();
         }
         // the core: still while the crown is up, swelling as it opens
         pose.pushPose();
         float swell = 1 + 0.12F * drop + 0.02F * Mth.sin(bob * 1.3F);
         pose.scale(swell, swell, swell);
-        core.render(pose, vc, light, overlay, 1, 1, 1, glowPass ? alpha : 1);
+        core.render(pose, vc, light, overlay, shade, shade, shade, 1);
         pose.popPose();
         pose.popPose();
 
         // the tendrils: in world terms, not the crown's, since their roots stay on the floor while the crown moves
         double ex = Mth.lerp(pt, e.xOld, e.getX()), ey = Mth.lerp(pt, e.yOld, e.getY()), ez = Mth.lerp(pt, e.zOld, e.getZ());
+        float tendrilShade = glowPass ? TENDRIL_GLOW : shade;
         for (int i = 0; i < HollowChoirEntity.PLACES; i++) {
             if (!e.standing(i)) continue;
-            tendril(e, i, pose, vc, light, overlay, alpha, ex, ey, ez);
+            tendril(e, i, pose, vc, light, overlay, tendrilShade, ex, ey, ez);
         }
         pose.popPose();
     }
@@ -149,7 +159,7 @@ public class HollowChoirRenderer extends EntityRenderer<HollowChoirEntity> {
      * a tendril keeps the same look however high the cavern is.
      */
     private void tendril(HollowChoirEntity e, int place, PoseStack pose, VertexConsumer vc, int light, int overlay,
-                         float alpha, double ex, double ey, double ez) {
+                         float shade, double ex, double ey, double ez) {
         Vec3 root = e.tendrilFoot(place);
         double topY = e.top();
         double floorY = e.floorY();
@@ -169,18 +179,18 @@ public class HollowChoirRenderer extends EntityRenderer<HollowChoirEntity> {
             double near = Math.max(0, 1 - Math.abs(y - ringY) / 5.0);
             double bow = near * near;
             double[] at = {root.x + inX * bow, y, root.z + inZ * bow};
-            if (prev != null) drawSeg(pose, vc, light, overlay, alpha, prev, at, ex, ey, ez, e);
+            if (prev != null) drawSeg(pose, vc, light, overlay, shade, prev, at, ex, ey, ez, e);
             prev = at;
         }
         // the root on the floor
         pose.pushPose();
         pose.translate(root.x - ex, -(root.y - ey), root.z - ez);
-        foot.render(pose, vc, light, overlay, 1, 1, 1, alpha);
+        foot.render(pose, vc, light, overlay, shade, shade, shade, 1);
         pose.popPose();
     }
 
     /** One segment of a tendril, stretched between two points of its curve (the part runs 16 px along -z). */
-    private void drawSeg(PoseStack pose, VertexConsumer vc, int light, int overlay, float alpha,
+    private void drawSeg(PoseStack pose, VertexConsumer vc, int light, int overlay, float shade,
                          double[] a, double[] b, double ex, double ey, double ez, HollowChoirEntity e) {
         double dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
         double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -194,7 +204,7 @@ public class HollowChoirRenderer extends EntityRenderer<HollowChoirEntity> {
         pose.mulPose(new Quaternionf().rotateX(pitchTo));
         float stretch = (float) (len / SEG_LEN);
         pose.scale(1, 1, stretch);
-        seg.render(pose, vc, light, overlay, 1, 1, 1, alpha);
+        seg.render(pose, vc, light, overlay, shade, shade, shade, 1);
         pose.popPose();
     }
 
