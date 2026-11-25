@@ -33,6 +33,8 @@ final class NetRifts {
 
     /** How much of a noise rift a column keeps: 1 where nothing is near, 0 where it must shut. */
     static double keep(Network w, Network.LCol lc, int cx, int cz, double x, double z) {
+        // a cell whose plan failed is solid rock round its landings (NetPlanner): no rift opens in it
+        if (lc.net.failed) return 0;
         double k = 1;
         for (int i = 0; i < lc.nc && k > 0; i++) {
             Chamber c = lc.c[i];
@@ -568,6 +570,8 @@ final class NetRifts {
         int bx = (int) Math.floor(cx), bz = (int) Math.floor(cz);
         int cellX = w.cellOf(cx), cellZ = w.cellOf(cz);
         Net n = w.net(li, cellX, cellZ);
+        // a cell whose plan failed is solid rock round its landings: no pond in it
+        if (n.failed) return no(0);
         for (Chamber ch : n.ch) {
             if (!ch.keep || ch.dark >= 0 || ch.kind == Net.Kind.CANYON) continue;
             if ((w.e(ch, cx, cz) - 1) * Math.min(ch.rx, ch.rz) < reach + ROOM_OPEN) return no(2);
