@@ -775,6 +775,9 @@ def write_all(assets, write):
     # 0.21.0: the Deep Gardens' chimney lurker, in its vent's colour (chimney_lurker.py)
     import chimney_lurker
     names.update(chimney_lurker.write(assets, write))
+    # 0.21.9: the Deep Dark's Hollow Choir, a crown and six tendrils drawn from loose parts (hollow_choir.py)
+    import hollow_choir
+    names.update(hollow_choir.write(assets, write))
     return names
 
 

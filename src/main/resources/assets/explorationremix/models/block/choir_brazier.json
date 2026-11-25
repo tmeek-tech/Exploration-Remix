@@ -1,0 +1,85 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "particle": "explorationremix:block/choir_brazier_side",
+    "side": "explorationremix:block/choir_brazier_side",
+    "top": "explorationremix:block/choir_brazier_top",
+    "bottom": "explorationremix:block/choir_brazier_side",
+    "side_glow": "explorationremix:block/choir_brazier_side_glow",
+    "top_glow": "explorationremix:block/choir_brazier_top_glow",
+    "bottom_glow": "explorationremix:block/choir_brazier_side_glow"
+  },
+  "elements": [
+    {
+      "from": [
+        3,
+        0,
+        3
+      ],
+      "to": [
+        13,
+        7,
+        13
+      ],
+      "faces": {
+        "north": {
+          "texture": "#side"
+        },
+        "south": {
+          "texture": "#side"
+        },
+        "west": {
+          "texture": "#side"
+        },
+        "east": {
+          "texture": "#side"
+        },
+        "up": {
+          "texture": "#top"
+        },
+        "down": {
+          "texture": "#bottom",
+          "cullface": "down"
+        }
+      }
+    },
+    {
+      "from": [
+        2.998,
+        -0.002,
+        2.998
+      ],
+      "to": [
+        13.002,
+        7.002,
+        13.002
+      ],
+      "faces": {
+        "north": {
+          "texture": "#side_glow"
+        },
+        "south": {
+          "texture": "#side_glow"
+        },
+        "west": {
+          "texture": "#side_glow"
+        },
+        "east": {
+          "texture": "#side_glow"
+        },
+        "up": {
+          "texture": "#top_glow"
+        },
+        "down": {
+          "texture": "#bottom_glow",
+          "cullface": "down"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      },
+      "shade": false
+    }
+  ]
+}

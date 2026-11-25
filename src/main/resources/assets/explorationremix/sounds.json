@@ -1093,5 +1093,175 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.chimney_lurker.death"
+  },
+  "choir.wake": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/wake",
+        "volume": 1.0,
+        "attenuation_distance": 64
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.wake"
+  },
+  "choir.toll": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/toll",
+        "volume": 1.0,
+        "attenuation_distance": 48
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.toll"
+  },
+  "choir.toll_far": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/toll_far",
+        "volume": 0.8,
+        "attenuation_distance": 160
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.toll_far"
+  },
+  "choir.windup": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/windup",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.windup"
+  },
+  "choir.slam": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/slam",
+        "volume": 1.0,
+        "attenuation_distance": 32
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.slam"
+  },
+  "choir.tendril_cut": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/tendril_cut",
+        "volume": 1.0,
+        "attenuation_distance": 20
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.tendril_cut"
+  },
+  "choir.fall": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/fall",
+        "volume": 1.0,
+        "attenuation_distance": 32
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.fall"
+  },
+  "choir.rise": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/rise",
+        "volume": 1.0,
+        "attenuation_distance": 32
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.rise"
+  },
+  "choir.core": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/core_1",
+        "volume": 0.9
+      },
+      {
+        "name": "explorationremix:creature/hollow_choir/core_2",
+        "volume": 0.9
+      },
+      {
+        "name": "explorationremix:creature/hollow_choir/core_3",
+        "volume": 0.9
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.core"
+  },
+  "choir.bloom": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/bloom",
+        "volume": 1.0,
+        "attenuation_distance": 40
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.bloom"
+  },
+  "choir.sprout": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/sprout",
+        "volume": 0.5,
+        "attenuation_distance": 12
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.sprout"
+  },
+  "choir.hurt": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/hurt_1",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:creature/hollow_choir/hurt_2",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.hurt"
+  },
+  "choir.idle": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/idle",
+        "volume": 0.7,
+        "attenuation_distance": 32
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.idle"
+  },
+  "choir.death": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/death",
+        "volume": 1.0,
+        "attenuation_distance": 64
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.death"
+  },
+  "choir.reliquary": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/reliquary",
+        "volume": 0.8
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.reliquary"
+  },
+  "choir.key_set": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/hollow_choir/key_set",
+        "volume": 0.8
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.choir.key_set"
   }
 }

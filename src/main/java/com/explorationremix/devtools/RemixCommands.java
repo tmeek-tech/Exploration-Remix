@@ -144,6 +144,8 @@ public final class RemixCommands {
                                         .executes(c -> shapes(c, StringArgumentType.getString(c, "kind"), IntegerArgumentType.getInteger(c, "n"), false))
                                         .then(Commands.literal("view")
                                                 .executes(c -> shapes(c, StringArgumentType.getString(c, "kind"), IntegerArgumentType.getInteger(c, "n"), true))))))
+                // 0.21.9: the Hollow Choir's arena, its keys and the fight (ChoirCommands)
+                .then(ChoirCommands.branch())
                 .then(Commands.literal("dengates").executes(RemixCommands::denGates)
                         .then(Commands.literal("reach").executes(RemixCommands::denReach)))
                 .then(Commands.literal("tp")

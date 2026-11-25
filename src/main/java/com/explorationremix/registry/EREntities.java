@@ -9,6 +9,7 @@ import com.explorationremix.creature.MossbackDen;
 import com.explorationremix.creature.MossbackEntity;
 import com.explorationremix.creature.SkeinEntity;
 import com.explorationremix.creature.StiltMantisEntity;
+import com.explorationremix.creature.choir.HollowChoirEntity;
 import com.explorationremix.entity.LavaBomb;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
@@ -93,6 +94,19 @@ public final class EREntities {
     /** What a vent urchin leaves: one of its spines (the 0.21.0 lurker's fang, its id kept), kept for crafting later. */
     public static final RegistryObject<Item> CHIMNEY_LURKER_FANG = ERBlocks.ITEMS.register("chimney_lurker_fang", () -> new Item(new Item.Properties()));
 
+    // The Hollow Choir, the Deep Dark's boss (0.21.9, creature.choir.HollowChoirEntity): a crown hanging over the dais
+    // of its own arena, held up by six tendrils that are its parts. Its box is the crown alone (3.6 across, 2.4 tall);
+    // the tendrils and the bell are drawn well outside it, so it has its own culling box. Vanilla never spawns it: it
+    // comes only when three keys are set in the sockets round its bowl (ChoirSummon), it never leaves it, and it is
+    // never saved away as lost (setPersistenceRequired). Sent every other tick, so the tendrils move smoothly, and
+    // tracked from twelve chunks off so the fight reads from the rim.
+    public static final RegistryObject<EntityType<HollowChoirEntity>> HOLLOW_CHOIR = ENTITIES.register("hollow_choir",
+            () -> EntityType.Builder.of(HollowChoirEntity::new, MobCategory.MONSTER).sized(4.6F, 2.4F)
+                    .clientTrackingRange(12).updateInterval(2).fireImmune().build("hollow_choir"));
+
+    public static final RegistryObject<Item> HOLLOW_CHOIR_SPAWN_EGG = ERBlocks.ITEMS.register("hollow_choir_spawn_egg",
+            () -> new ForgeSpawnEggItem(HOLLOW_CHOIR, 0x101822, 0x8EC2FF, new Item.Properties()));
+
     @SuppressWarnings("DataFlowIssue")
     public static final RegistryObject<BlockEntityType<MossbackDen.Tile>> DEN_TILE = BLOCK_ENTITIES.register("mossback_den",
             () -> BlockEntityType.Builder.of(MossbackDen.Tile::new, ERBlocks.MOSSBACK_DEN.get()).build(null));
@@ -127,5 +141,6 @@ public final class EREntities {
         e.put(GIANT_SKEIN.get(), GiantSkeinEntity.attributes().build());
         e.put(STILT_MANTIS.get(), StiltMantisEntity.attributes().build());
         e.put(CHIMNEY_LURKER.get(), ChimneyLurkerEntity.attributes().build());
+        e.put(HOLLOW_CHOIR.get(), HollowChoirEntity.attributes().build());
     }
 }

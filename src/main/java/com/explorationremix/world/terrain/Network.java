@@ -283,6 +283,15 @@ public final class Network {
     /** The plan of layer li in cell (cx, cz), for the dev tools; null for a layer with no plan ({@link #hasPlan}). */
     public Net network(int li, int cx, int cz) { return hasPlan(li) ? net(li, cx, cz) : null; }
 
+    /**
+     * The Hollow Choir's arena in Blue Reaches cell (cx, cz), or null where that cell has none ({@link ChoirSites}).
+     * Every arena lies well inside its own cell, so a chunk only ever has to ask about the cell its middle is in.
+     */
+    public ChoirSites.Site choirSite(int cx, int cz) {
+        if (!hasPlan(Terrain.BLUE)) return null;
+        return net(Terrain.BLUE, cx, cz).choir;
+    }
+
     // ================================================================================================ dev tools (12.5)
     /** A place showing a deep biome, for the dev tools: a chamber, the rift or a refuge geode, with spots to stand on. */
     public static final class Place {
@@ -795,6 +804,20 @@ public final class Network {
         return false;
     }
 
+    /**
+     * The hearts of the ancient cities planned in cell (cx, cz) of the Blue Reaches: {x, z, floor} of every kept CITY
+     * chamber. The city's start piece stands within 24 blocks of one of these ({@link #citySite}), so the chunk that
+     * holds a heart is inside the city's middle: that is the one chunk the reliquary is looked for in
+     * ({@code world.feature.ChoirReliquaryFeature}).
+     */
+    public List<double[]> cityHearts(int cx, int cz) {
+        List<double[]> out = new ArrayList<>();
+        if (!hasPlan(Terrain.BLUE)) return out;
+        for (Chamber c : net(Terrain.BLUE, cx, cz).ch)
+            if (c.keep && c.kind == Kind.CITY) out.add(new double[]{c.x, c.z, c.f0});
+        return out;
+    }
+
     /** True when chunk (chunkX, chunkZ) is where vanilla's own spread (24 / 8, the same salt) may start a city. */
     public static boolean vanillaCityChunk(long seed, int chunkX, int chunkZ) {
         int rx = Math.floorDiv(chunkX, 24), rz = Math.floorDiv(chunkZ, 24);
@@ -1298,7 +1321,9 @@ public final class Network {
                 for (int gz = (int) Math.floor((z0 + inset) / grid) - 1; gz * grid <= z0 + cell - inset; gz++) {
                     if (!dark.gridPillar(t, gx, gz, pc)) continue;
                     if (pc[0] < x0 + inset || pc[0] > x0 + cell - inset || pc[1] < z0 + inset || pc[1] > z0 + cell - inset) continue;
-                    if (!pillarBared(p, t, pc, rift, riftHalf, halls, tc, span, tmp) && !wayCuts(p, t, pc, ways, box, tc)) continue;
+                    // a pillar through the Choir's bowl would hang from the ceiling once the arena is cut
+                    boolean inArena = ChoirSites.inBowl(n.choir, pc[0], pc[1], pc[2] * NetDark.PILLAR_REACH);
+                    if (!inArena && !pillarBared(p, t, pc, rift, riftHalf, halls, tc, span, tmp) && !wayCuts(p, t, pc, ways, box, tc)) continue;
                     if (no == out.length) out = Arrays.copyOf(out, no * 2);
                     out[no++] = NetDark.pillarKey(t, gx, gz);
                 }
