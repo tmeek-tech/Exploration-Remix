@@ -93,9 +93,10 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   **Ruins** (0.22.4): about every 400 blocks a half-fallen cluster stands on the high ground, over the flood's reach:
   a broken tower, a pillared hall, a stepped shrine or a great gate in the middle, and six or seven small ruins round it
   (wall pieces, column stubs and fallen columns, huts' footings, small arches, lava braziers, wells, stair stubs). They
-  are built of Create's blue asurine (deepslate bricks in a pack without Create; the `stone` of the
-  `basalt_galleries/ruins` feature picks another set). The middle holds a chest with a rune and some loot, and up to
-  three huts round it hold a loot chest. The terrain reset rebuilds a broken ruin, its chests empty.
+  are built of dark deepslate: bricks, tiles, polished and chiseled deepslate, basalt pillars (the `stone` of the
+  `basalt_galleries/ruins` feature can pick Create's blue asurine, calcite or stone instead). The middle holds a
+  chest with a rune and some loot, and up to three huts round it hold a loot chest. The terrain reset rebuilds a
+  broken ruin, its chests empty.
   Nothing lives here: no plants and no mobs. Light comes from lava you can see: a few big lava falls, chains of shallow
   lava pools winding along the halls' low floors, magma, and the lava in the ruins' channels and braziers. (Until 0.22.4
   an unseen glow block, `explorationremix:glow`, lit the walls too; an old world's glow turns to air.)

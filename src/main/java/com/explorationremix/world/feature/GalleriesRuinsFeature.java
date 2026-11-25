@@ -36,8 +36,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * chunk's own blocks of the clusters {@link GalleriesRuins} plans, once per chunk, last of the Galleries' passes. The plan
  * is the field's alone, so every chunk a cluster spans agrees on it whichever is made first.
  *
- * <p>Its stone is the config's ({@link Palette}: blue asurine by default, the card's pick while Taran chooses; each
- * Create block falls back to a vanilla one where Create is absent). A block of the plan goes in only where it leaves no
+ * <p>Its stone is the config's ({@link Palette}: dark deepslate, Taran's pick on the stone card, and an unknown name
+ * reads as it; Create's blue asurine and calcite, whose blocks each fall back to a vanilla one where Create is absent,
+ * and stone are the others). A block of the plan goes in only where it leaves no
  * fluid loose: open air is never set beside a fluid (nor over one), a fluid is only ever replaced by a full block, and
  * the plan's lava goes in last, where its block holds it in the world as built (solid under it and on its four sides,
  * or lava; open over it), else it is a chiseled block. The chests take their loot tables: the rune's ({@link
@@ -222,7 +223,7 @@ public final class GalleriesRuinsFeature extends Feature<GalleriesRuinsFeature.C
 
         /** Stone {@code name}'s palette (blue asurine for a name it does not know). */
         static Palette of(String name) {
-            return RESOLVED.computeIfAbsent(STONES.containsKey(name) ? name : "asurine", n -> new Palette(STONES.get(n)));
+            return RESOLVED.computeIfAbsent(STONES.containsKey(name) ? name : "deepslate", n -> new Palette(STONES.get(n)));
         }
 
         private Palette(String[][] ids) {
