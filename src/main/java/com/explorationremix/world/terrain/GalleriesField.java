@@ -56,9 +56,9 @@ public final class GalleriesField {
     final Perlin rillN, rillW, poolN;
     /**
      * The tablelands (0.21.8, {@link #TL_TOP}): the chasms' two families of lines, their masks and widths, the raised
-     * tops' level, the ledges' widths, and the bridges' lines.
+     * tops' level, the ledges' widths, and the bridges' widths.
      */
-    final Perlin chN1, chN2, chM1, chM2, chW, topN, ledgeN, brN, brM, chSad;
+    final Perlin chN1, chN2, chM1, chM2, chW, topN, ledgeN, brN, chSad;
 
     /**
      * The join with the Wasteland above, as the Galleries need it; null: no join (the seal stays). Every method reads the
@@ -151,7 +151,6 @@ public final class GalleriesField {
         topN = new Perlin(Hashing.mix(s, 86, 0, 0));
         ledgeN = new Perlin(Hashing.mix(s, 87, 0, 0));
         brN = new Perlin(Hashing.mix(s, 88, 0, 0));
-        brM = new Perlin(Hashing.mix(s, 89, 0, 0));
         chSad = new Perlin(Hashing.mix(s, 90, 0, 0));
     }
 
@@ -400,6 +399,11 @@ public final class GalleriesField {
          */
         boolean tilt;
         float tf, tgx, tgz;
+        /**
+         * A tablelands' bridge stands on the cell (0.21.8, {@link #bridge}): its foot on the tops at an end, a band lying on
+         * a floor near the tops, or a pier. Kept out of the stairs' wear ({@link #stairFloor}), so the bridge stays held.
+         */
+        boolean pier;
 
         public boolean closed() { return f >= c; }
 
@@ -733,8 +737,11 @@ public final class GalleriesField {
      * a block where they stand high, and worn from the side a ridge's deck sank 4 to 7 rows under its plane and ended in
      * risers of up to 7 rows where the wear stopped (575 of 12 003 columns of seed 12345's slow box's walked centre lines,
      * 112 with the talus over all dry ground); walked over, it brought the slope of one side's ground to the other's.
+     * So too a tablelands' bridge's cells ({@link Cell#pier}): worn, the tops at a bridge's ends sank under its band
+     * beside a shallow chasm, and the band was left in mid-air.
      */
     int stairFloor(Cell c, int x, int z) {
+        if (c.pier) return NO_GROUND;
         if (c.deckMode != 0 && c.f < c.c) {
             int row = deckRow(c, x, z);
             boolean deck = c.deckMode == 1 || (row != c.dkRow && c.bl + (row - c.dkRow) <= spanGround(c, x, z, row) + 1);
@@ -825,7 +832,7 @@ public final class GalleriesField {
          * from the nearest chasm's edge (under 0 inside one) and the ground the hall's vault springs from.
          */
         double tW, tTop, tLow, tEdge, tVault, tCap;
-        final double[] tq = new double[13], tmpH = new double[6], hwG = new double[2];
+        final double[] tq = new double[13], tmpH = new double[6], hwG = new double[4];
         /** A ramp of the tablelands at the site ({@link #CH_RAMP}): the floor's slope (rows a block) and its exact row there. */
         boolean tilt;
         double tGx, tGz, tF;
@@ -1051,7 +1058,12 @@ public final class GalleriesField {
      * The moats: along a share of the halls' walls (where a noise of period MOAT_P passes MOAT_T) a chasm
      * MOAT_W0..MOAT_W0 + MOAT_W1 blocks wide runs a ledge's width out from the rock, so a ledge runs along the wall over a
      * drop. Not along the massifs: their distance is measured only near them, and a moat ended in a cliff where it stopped
-     * (a pit of 681 places along a massif in seed 8675309's box at (-15, 190)).
+     * (a pit of 681 places along a massif in seed 8675309's box at (-15, 190)). Its band is read off the halls' own
+     * distance from the wall (in its units, {@link #wallBlocks}), which grows steadily out from the wall, and not off that
+     * distance over its gradient (the ledges' blocks): where the warp stretches the halls' plane the gradient grows toward
+     * a corner and drops back past it, where the next hall's wall becomes the nearer, so the blocks it gave fell and rose
+     * again out from the wall and left a piece of moat alone past its outer edge (seed 77, a slot 15 rows deep and 6
+     * wide by a way down from the Wasteland, a pit of 63 places at (40364, -741, -11386)).
      */
     static final double MOAT_P = 160, MOAT_T = 0.05, MOAT_F = 0.12, MOAT_W0 = 8, MOAT_W1 = 8;
 
@@ -1064,10 +1076,11 @@ public final class GalleriesField {
      * rim, where the tablelands stop: they stood over its floor as a cliff, and the rim's low ground was a pit of 726
      * places in the test's random box 9), 12 the tops' level before the ramps}. F is the floor before them (the
      * landscape, its rivers and rubble, the massifs' and walls' feet), Fh the landscape the halls' vaults stand over, hh
-     * the hall's height, hw the blocks from its wall's face with their gradient (hgx, hgz), dm from the nearest massif
-     * with theirs (dgx, dgz); w the warp with its Jacobian.
+     * the hall's height, hw the blocks from its wall's face with their gradient (hgx, hgz) and the halls' own distance hr
+     * they were read from with its gradient's length hn ({@link #wallBlocks}), dm from the nearest massif with theirs
+     * (dgx, dgz); w the warp with its Jacobian.
      */
-    void tops(double x, double z, double[] w, Climate cl, boolean rim, double F, double Fh, double hh, double hw, double hgx, double hgz, double dm, double dgx, double dgz, double[] out) {
+    void tops(double x, double z, double[] w, Climate cl, boolean rim, double F, double Fh, double hh, double hw, double hgx, double hgz, double hr, double hn, double dm, double dgx, double dgz, double[] out) {
         double wt = rim ? 0 : cl.wMain();
         out[0] = wt;
         out[4] = Fh;
@@ -1103,7 +1116,7 @@ public final class GalleriesField {
         }
         out[10] = ramp ? rgx : 0;
         out[11] = ramp ? rgz : 0;
-        chasmAt(x, z, w, hw, hgx, hgz, dm, dgx, dgz, Ht - Lf, out);   // writes out[3], out[5..7]
+        chasmAt(x, z, w, hw, hgx, hgz, hr, hn, dm, dgx, dgz, Ht - Lf, out);   // writes out[3], out[5..7]
         out[1] = Ht;
         out[2] = Ht - (Ht - Lf) * out[5];
         out[8] = Lf;
@@ -1139,9 +1152,9 @@ public final class GalleriesField {
      * share of its depth (rows, D) its floor lies at (0 up at the tops, at a saddle or a mask's end; 1 its whole depth),
      * out[6..7] that share's gradient (per block). w the warp with its Jacobian, Fs the landscape, wall the blocks to the
      * nearest hall's wall or massif (the ledges keep it), hallWall to the hall's wall (the moats follow it; both as
-     * {@link #wallBlocks} reads them).
+     * {@link #wallBlocks} reads them; hr and hn the halls' own distance and its gradient's length, the moats' band).
      */
-    void chasmAt(double x, double z, double[] w, double hw, double hgx, double hgz, double dm, double dgx, double dgz, double D, double[] out) {
+    void chasmAt(double x, double z, double[] w, double hw, double hgx, double hgz, double hr, double hn, double dm, double dgx, double dgz, double D, double[] out) {
         double e = 1e9, L = Math.max(1, D / CH_RAMP);
         double[] g = out;   // the shares' gradients go through out[6..7]
         double wn = smooth(0.5 + 1.2 * chW.noise2(x / CH_WP, z / CH_WP));
@@ -1178,9 +1191,9 @@ public final class GalleriesField {
             e = Math.min(e, er);
         }
         double mo = ledgeN.noise2(x / MOAT_P + 17.5, z / MOAT_P - 3.25);
-        if (mo > MOAT_T && hw < ledge + MOAT_W0 + MOAT_W1 + 2) {
+        if (mo > MOAT_T && hr < ledge + MOAT_W0 + MOAT_W1 + 2) {
             double mw = MOAT_W0 + MOAT_W1 * wn;
-            double em = Math.abs(hw - ledge - 0.5 * mw) - 0.5 * mw;
+            double em = (Math.abs(hr - ledge - 0.5 * mw) - 0.5 * mw) / hn;
             if (em < 0) {
                 double km = rampShare(ledgeN, x + 17.5 * MOAT_P, z - 3.25 * MOAT_P, null, MOAT_P, MOAT_T, L, g);
                 if (km < ks) { if (km > k) { k = km; kx = g[6]; kz = g[7]; } }
@@ -1301,11 +1314,15 @@ public final class GalleriesField {
      * ({@link GalleriesLandscape#hall}) over its gradient where that passes 1 (a block either way, through the warp; give
      * as the wall's). The halls' distance is a bisector's, twice warped, less the wall's half thickness, which falls
      * steeply into a doorway: by a doorway it grew 5 a block, and a moat meant to lie 8 to 16 blocks out from the wall was
-     * a slot of 3 (seed 8675309 at (136, 143), a pit of 63 places). w2 and h2 are scratch.
+     * a slot of 3 (seed 8675309 at (136, 143), a pit of 63 places). Into g: [0..1] the gradient over its length, [2] the
+     * halls' distance itself (not over its gradient, which the moats' band follows, {@link #MOAT_P}) and [3] that length
+     * (at least 1). w2 and h2 are scratch.
      */
     double wallBlocks(double x, double z, Climate cl, double give, double[] hl, double[] w2, double[] h2, double[] g) {
         double h = hl[4] - GalleriesLandscape.WALL_MIN - Math.max(0, hl[5]);
         g[0] = g[1] = 0;
+        g[2] = h;
+        g[3] = 1;
         if (h >= WB_REACH) return h;
         warpXZ(x + 1, z, w2); land.hall(w2, cl, h2, give); double a = h2[4] - Math.max(0, h2[5]);
         warpXZ(x - 1, z, w2); land.hall(w2, cl, h2, give); double gx = 0.5 * (a - h2[4] + Math.max(0, h2[5]));
@@ -1314,6 +1331,7 @@ public final class GalleriesField {
         double n = Math.max(1, Math.sqrt(gx * gx + gz * gz));
         g[0] = gx / n;
         g[1] = gz / n;
+        g[3] = n;
         return h / n;
     }
 
@@ -1385,7 +1403,7 @@ public final class GalleriesField {
         final double[] ev = new double[18], m2 = new double[2];
         final Shape0 sh = new Shape0();
         final Climate cl = new Climate();
-        final double[] w = new double[6], hl = new double[6], ch = new double[12], w2 = new double[6], h2 = new double[6], hg = new double[2];
+        final double[] w = new double[6], hl = new double[6], ch = new double[12], w2 = new double[6], h2 = new double[6], hg = new double[4];
         ConeCache() { for (int k = 0; k < c.length; k++) { c[k] = new TCone(); e[k] = new ECone(); } sh.noCones = true; }
     }
 
@@ -1471,7 +1489,7 @@ public final class GalleriesField {
         ConeCache cc = coneCache.get();
         land.hall(w, cl, cc.hl, 0);
         double hw = wallBlocks(x, z, cl, 0, cc.hl, cc.w2, cc.h2, cc.hg);
-        chasmAt(x, z, w, hw, cc.hg[0], cc.hg[1], 1e9, 0, 0, TL_D0, cc.ch);
+        chasmAt(x, z, w, hw, cc.hg[0], cc.hg[1], cc.hg[2], cc.hg[3], 1e9, 0, 0, TL_D0, cc.ch);
         return cc.ch[3];
     }
 
@@ -1518,9 +1536,9 @@ public final class GalleriesField {
         if (chM2.noise2(w[0] / CH_MP + 37.5, w[1] / CH_MP - 11.25) > CH_MT) lineDistW(chN2, w, CH_P2, o, 3);
         lineDistW(riverN, w, RIVER_P, o, 6);
         if (ledgeN.noise2(x / MOAT_P + 17.5, z / MOAT_P - 3.25) > MOAT_T) {
-            o[9] = hw - ledge - 0.5 * (MOAT_W0 + MOAT_W1 * wn);
-            o[10] = cc.hg[0];
-            o[11] = cc.hg[1];
+            o[9] = cc.hg[2] - ledge - 0.5 * (MOAT_W0 + MOAT_W1 * wn);
+            o[10] = cc.hg[0] * cc.hg[3];
+            o[11] = cc.hg[1] * cc.hg[3];
         }
         o[12] = hw - ledge;
         o[13] = cc.hg[0];
@@ -1668,26 +1686,198 @@ public final class GalleriesField {
 
     // ---- the tablelands' rock bridges
     /**
-     * Rock bridges over the chasms (0.21.8): along the zero lines of a noise of period BR_P where a mask noise of period
-     * BR_MP passes BR_T, BR_W0..BR_W0 + BR_W1 blocks either side of the line, a chasm's cells hold a band of rock whose
-     * top is the tops' level (walked on as they are) and which comes down to the chasm's floor within BR_ARCH blocks of
-     * its edges (the abutments), BR_TH0..BR_TH0 + BR_TH1 rows thick between them: a natural arch from top to top.
+     * Rock bridges over the chasms (0.21.8, picked on the cards with the tablelands and the ledges): natural arches from
+     * top to top. Each lattice cell of BR_G blocks holds one with chance BR_P, from the first of BR_TRIES hashed points
+     * that lies in a chasm ({@link #tbridge}). It runs across the chasm (along the gradient of the distance to its edge,
+     * turned up to BR_TURN either way) to the edge on both sides, read every BR_STEP blocks, at most BR_HALF blocks each
+     * way and BR_SPAN0..BR_SPAN1 between its edges, and stands only where the chasm's floor (its rubble cones counted)
+     * lies BR_DEEP rows or more under the tops over the middle half of its span and BR_LOW or more out to BR_FOOT blocks
+     * from its edges, where its feet may meet a cone's flank (but never within BR_CONE blocks of a cone's apex, the
+     * cone's way onto the tops); where the vault stands BR_HEAD rows or more over the tops; and where no massif, ramp's
+     * deck or talus (BR_DECK blocks round its strip), tube's mouth or opening lies on its line. So every bridge is held by
+     * the tops at both ends, and the chasm stays open under its middle. Its band ({@link #bridge}) lies BR_W0..BR_W0 +
+     * BR_W1 blocks either side of the line, its top running from the tops' level at one end to the other's, BR_TH0..
+     * BR_TH0 + BR_TH1 rows thick at its middle and up to BR_HAUNCH rows more toward its ends, but never more than BR_HF of
+     * the room under it. Most chasms are crossed by none: by their talus cones and the ways down's ramps, some 17 bridges
+     * stand in each of GalleriesFieldTest's boxes of 1536 x 1536 (seeds 8675309 and -42). (Bridges along the zero lines
+     * of a noise where a mask passed ended wherever a cell left them out: in mid-air where the mask ended, where the
+     * tablelands faded, over the cones by the edges, and where the stairs wore away the tops beside a shallow chasm: 349
+     * blocks floated in seed 8675309's box at (601, -732, -183), 77 in seed 31337's at (4331, -760, -807) and 32 in seed
+     * 883227291's at (-5154, -763, 14182).)
      */
-    static final double BR_P = 120, BR_MP = 260, BR_T = 0.05, BR_W0 = 2.2, BR_W1 = 1.6, BR_ARCH = 7, BR_TH0 = 4, BR_TH1 = 3;
+    static final double BR_G = 64, BR_P = 0.9, BR_STEP = 2, BR_HALF = 36, BR_SPAN0 = 10, BR_SPAN1 = 56, BR_DEEP = 12,
+            BR_LOW = 5, BR_FOOT = 4, BR_HEAD = 6, BR_DECK = 6, BR_TURN = 0.45, BR_END = 2, BR_W0 = 2.4, BR_W1 = 1.4, BR_TH0 = 4,
+            BR_TH1 = 3, BR_HAUNCH = 8, BR_HF = 0.4, BR_CONE = 4;
+    static final int BR_TRIES = 20;
 
-    /** A bridge's band in chasm cell c at site (x, z) of shape s, if one crosses it (see {@link #BR_P}). */
+    /** A bridge lattice cell's draw ({@link #tbridge}): whether a bridge stands, its point, its direction and its edges along it. */
+    static final class TBridge {
+        int i, j;
+        boolean valid, on;
+        double ax, az, ux, uz, t0, t1, top0, top1;
+    }
+
+    /** The bridges' draws a thread has read of late (32 x 32 slots), with scratch for the looks along their lines. */
+    private static final class BridgeCache {
+        final TBridge[] b = new TBridge[1024];
+        final Shape0 sh = new Shape0(), cn = new Shape0();
+        final Climate cl = new Climate();
+        final double[] w = new double[6];
+        final int n = (int) Math.floor(BR_HALF / BR_STEP);
+        final double[] dA = new double[n + 1], dB = new double[n + 1];
+        BridgeCache() { for (int k = 0; k < b.length; k++) b[k] = new TBridge(); sh.noCones = true; }
+    }
+
+    private final ThreadLocal<BridgeCache> bridgeCache = ThreadLocal.withInitial(BridgeCache::new);
+
+    /** Bridge lattice cell (i, j)'s draw: whether a bridge stands, and where (see {@link #BR_G}). */
+    TBridge tbridge(int i, int j) {
+        BridgeCache bc = bridgeCache.get();
+        TBridge t = bc.b[(i & 31) << 5 | (j & 31)];
+        if (t.valid && t.i == i && t.j == j) return t;
+        t.valid = true;
+        t.i = i;
+        t.j = j;
+        t.on = false;
+        long h = Hashing.mix(seed, 82001, i, j);
+        if (Hashing.unit(h) >= BR_P) return t;
+        for (int k = 0; k < BR_TRIES && !t.on; k++) {
+            double px = (i + 0.15 + 0.7 * Hashing.unit(Hashing.mix(h, 1, k, 0))) * BR_G;
+            double pz = (j + 0.15 + 0.7 * Hashing.unit(Hashing.mix(h, 2, k, 0))) * BR_G;
+            bridgeTry(t, px, pz, Hashing.mix(h, 3, k, 0));
+        }
+        return t;
+    }
+
+    /** One try of a bridge lattice cell's draw from point (px, pz) ({@link #tbridge}): t.on where it stands. */
+    private void bridgeTry(TBridge t, double px, double pz, long h) {
+        BridgeCache bc = bridgeCache.get();
+        Shape0 sh = bc.sh;
+        // (the chasm's own distance first, the whole look only in one)
+        climate(px, pz, bc.cl);
+        if (bc.cl.wMain() < 0.95 || edgeAt(px, pz, bc.w, bc.cl) > -2) return;
+        double d0 = bridgeLook(px, pz, bc), e0 = sh.tEdge;
+        if (!(d0 >= BR_LOW) || e0 > -2) return;
+        // across the chasm: along the gradient of the distance to its edge (on the chasm's middle line it has none to go
+        // by, so it is read a little to one side there)
+        double ex = 0, ez = 0;
+        for (int k = 0; k < 3 && len(ex, ez) < 1.2; k++) {
+            double gx = px + (k == 1 ? 3 : 0), gz = pz + (k == 2 ? 3 : 0);
+            ex = edgeAt(gx + 2, gz, bc.w, bc.cl) - edgeAt(gx - 2, gz, bc.w, bc.cl);
+            ez = edgeAt(gx, gz + 2, bc.w, bc.cl) - edgeAt(gx, gz - 2, bc.w, bc.cl);
+        }
+        if (len(ex, ez) < 1.2) return;
+        double a = Math.atan2(ez, ex) + BR_TURN * (2 * Hashing.unit(h) - 1), ux = Math.cos(a), uz = Math.sin(a);
+        double tA = bridgeEdge(px, pz, ux, uz, e0, bc.dA, bc), topA = bc.sh.tq[1];
+        double tB = bridgeEdge(px, pz, -ux, -uz, e0, bc.dB, bc), topB = bc.sh.tq[1];
+        if (!(tA > 0) || !(tB > 0) || tA + tB < BR_SPAN0 || tA + tB > BR_SPAN1) return;
+        // deep over its middle half, and not shallow but by its feet
+        double mid = 0.5 * (tA - tB), q4 = 0.25 * (tA + tB);
+        if (Math.abs(mid) <= q4 && !(d0 >= BR_DEEP)) return;
+        for (int k = 1; k <= bc.n; k++) {
+            double s = k * BR_STEP;
+            if (s < tA && Math.min(s + tB, tA - s) >= BR_FOOT && !(bc.dA[k] >= (Math.abs(s - mid) <= q4 ? BR_DEEP : BR_LOW))) return;
+            if (s < tB && Math.min(s + tA, tB - s) >= BR_FOOT && !(bc.dB[k] >= (Math.abs(-s - mid) <= q4 ? BR_DEEP : BR_LOW))) return;
+        }
+        // and clear of the rubble cones' apexes, where they meet the tops: their way up (a cone's crest is walked onto
+        // the tops only at its apex)
+        double reach = BR_W0 + BR_W1 + BR_CONE;
+        for (int end = 0; end < 2; end++) {
+            double s = end == 0 ? tA : -tB, qx = px + s * ux, qz = pz + s * uz;
+            Shape0 cn = bc.cn;
+            conesAt(qx, qz, cn);
+            for (int q = 0; q < 4 * cn.coneN; q += 4) {
+                double dx = cn.coneP[q] - px, dz = cn.coneP[q + 1] - pz, tt = dx * ux + dz * uz;
+                if (tt > -tB - BR_CONE && tt < tA + BR_CONE && Math.abs(dx * uz - dz * ux) < reach) return;
+            }
+        }
+        t.on = true;
+        t.ax = px;
+        t.az = pz;
+        t.ux = ux;
+        t.uz = uz;
+        t.t0 = -tB;
+        t.t1 = tA;
+        t.top0 = topB;
+        t.top1 = topA;
+    }
+
+    /**
+     * The blocks from (px, pz) along (ux, uz) to the chasm's edge (read every BR_STEP blocks, the edge put between the
+     * last two looks by their distances to it; e0 the distance at (px, pz)), with the depth at each look on the way into
+     * dep (dep[k] at k steps); NaN where the line runs into something a bridge does not cross or no edge lies within
+     * BR_HALF.
+     */
+    private double bridgeEdge(double px, double pz, double ux, double uz, double e0, double[] dep, BridgeCache bc) {
+        for (int k = 1; k <= bc.n; k++) {
+            double s = k * BR_STEP, d = bridgeLook(px + s * ux, pz + s * uz, bc);
+            if (d != d) return Double.NaN;
+            double e = bc.sh.tEdge;
+            if (e >= 0) return s - BR_STEP * e / (e - e0);
+            dep[k] = d;
+            e0 = e;
+        }
+        return Double.NaN;
+    }
+
+    /**
+     * A bridge's look at (x, z) (shape into bc.sh): the rows from the floor to the tops (the highest of its rubble cones
+     * there counted), or NaN where no bridge may cross: off the main galleries, a massif, a ramp's deck or within
+     * BR_DECK of its strip or its talus (which raises the tops or the floor round it), a tube's mouth, an opening, or the
+     * vault under BR_HEAD rows over the tops.
+     */
+    private double bridgeLook(double x, double z, BridgeCache bc) {
+        Climate cl = bc.cl;
+        climate(x, z, cl);
+        if (cl.wMain() < 0.95) return Double.NaN;
+        Shape0 sh = bc.sh;
+        shape(x, z, cl, sh, 0);
+        if (sh.massif || sh.tW < 0.95 || sh.deck == sh.deck || sh.rh.side < BR_DECK || sh.mouth > 0 || sh.rh.jt > 0
+                || sh.C - sh.tTop < BR_HEAD || sh.tTop > sh.tq[1] + 0.5) return Double.NaN;
+        if (sh.tEdge >= 0) return sh.F > sh.tq[1] + 1.5 ? Double.NaN : 0;
+        double f = sh.F;
+        Shape0 cn = bc.cn;
+        conesAt(x, z, cn);
+        for (int q = 0; q < 4 * cn.coneN; q += 4) f = Math.max(f, cn.coneP[q + 2] - cn.coneP[q + 3] * len(x - cn.coneP[q], z - cn.coneP[q + 1]));
+        return sh.tTop - f;
+    }
+
+    /**
+     * A bridge's band in cell c at site (x, z) of shape s, if one crosses it (see {@link #BR_G}): on the tops at its ends
+     * the cell is kept out of the stairs' wear ({@link Cell#pier}); in the chasm the band's underside rises from its ends
+     * to its middle; where the floor stands near the tops the band lies on it, and under a low vault it joins the vault.
+     */
     void bridge(Cell c, Shape0 s, double x, double z) {
-        if (s.tW < 0.5 || s.tEdge >= 0 || c.rowed()) return;
-        double mk = brM.noise2(x / BR_MP, z / BR_MP);
-        if (mk < BR_T) return;
-        double bw = (BR_W0 + BR_W1 * smooth(0.5 + brN.noise2(x / 40.0 + 9, z / 40.0))) * Math.sqrt(smooth((mk - BR_T) / 0.1));
-        if (lineDist(brN, x, z, BR_P) >= bw) return;
-        int bh = (int) Math.floor(s.tTop + 0.5);
-        if (bh <= c.f + 2 || bh >= c.c - 2) return;
+        if (s.tW < 0.5) return;
+        int gi = (int) Math.floor(x / BR_G), gj = (int) Math.floor(z / BR_G);
+        TBridge best = null;
+        double bt = 0, bd = 1e9;
+        for (int di = -1; di <= 1; di++) for (int dj = -1; dj <= 1; dj++) {
+            TBridge t = tbridge(gi + di, gj + dj);
+            if (!t.on) continue;
+            double dx = x - t.ax, dz = z - t.az, tt = dx * t.ux + dz * t.uz, dd = Math.abs(dx * t.uz - dz * t.ux);
+            if (tt < t.t0 - BR_END || tt > t.t1 + BR_END || dd >= bd) continue;
+            best = t;
+            bt = tt;
+            bd = dd;
+        }
+        if (best == null || bd >= BR_W0 + BR_W1 * smooth(0.5 + brN.noise2(x / 40.0 + 9, z / 40.0))) return;
+        if (s.tEdge >= 0) { c.pier = true; return; }
+        // (its top the tops' level at its ends, from one to the other: read cell by cell, the tops' level where a ramp's
+        // talus raised it stood the cells' bands apart, 42 blocks afloat in seed 8675309's box at (303, -718, -435))
+        double u = clamp01((bt - best.t0) / (best.t1 - best.t0));
+        int bh = (int) Math.floor(best.top0 + (best.top1 - best.top0) * u + 0.5);
+        if (bh <= c.f + 2) { c.f = Math.max(c.f, bh); c.pier = true; return; }
+        double half = 0.5 * (best.t1 - best.t0), arch = smooth(clamp01(Math.min(bt - best.t0, best.t1 - bt) / half));
         double th = BR_TH0 + BR_TH1 * Hashing.unit(Hashing.mix(c.h, 18, 0, 0));
-        double under = c.f + Math.max(0, bh - th - c.f) * smooth(-s.tEdge / BR_ARCH);
+        double under = bh - th - Math.min(BR_HAUNCH, BR_HF * Math.max(0, bh - th - c.f)) * (1 - arch);
         int bl = (int) Math.floor(under + 0.5);
-        if (bl <= c.f + 1) { c.f = bh; return; }   // an abutment: on the ground
+        if (bl <= c.f + 1) { c.f = bh; c.pier = true; return; }
+        if (bh >= c.c - 2) {
+            c.c = Math.min(c.c, bl);
+            if (c.c - c.f < 2) c.f = c.c = W + 200;
+            return;
+        }
         c.bl = bl;
         c.bh = bh;
     }
@@ -1779,7 +1969,7 @@ public final class GalleriesField {
                 if (s.coneN > 0 && s.tW > 0.5) cones(c, s);
                 // the tablelands' bridges take the old rock bands' place (a band crossed the tops at random)
                 if (s.tW > 0.5) bridge(c, s, x, z);
-                else band(c, x, z, cl, s.mouth, s.rh.side, c.stray);
+                else band(c, x, z, cl, s.mouth, s.rh.side, c.stray, s.tW);
             }
         }
         return c;
@@ -1996,6 +2186,8 @@ public final class GalleriesField {
         double[] tq = out.tq;
         double hw = hl[0], dmT = 1e9, dgx = 0, dgz = 0;
         out.hwG[0] = out.hwG[1] = 0;
+        out.hwG[2] = hw;
+        out.hwG[3] = 1;
         if (!rim && wMain > 0) {
             hw = wallBlocks(x, z, cl, give(Math.min(rh.hole, Math.max(0, rh.side))), hl, out.w2, out.tmpH, out.hwG);
             dmT = massifBlocks(m, w, out.tmp2);
@@ -2003,7 +2195,7 @@ public final class GalleriesField {
             dgz = out.tmp2[1];
             if (tube && dm < dmT) { dmT = dm; dgx = dgz = 0; }
         }
-        tops(x, z, w, cl, rim, F, Fh, hl[2] + HALL_BASIN * Math.max(cl.wCal, cl.wCaus), hw, out.hwG[0], out.hwG[1], dmT, dgx, dgz, tq);
+        tops(x, z, w, cl, rim, F, Fh, hl[2] + HALL_BASIN * Math.max(cl.wCal, cl.wCaus), hw, out.hwG[0], out.hwG[1], out.hwG[2], out.hwG[3], dmT, dgx, dgz, tq);
         out.tW = tq[0];
         out.tTop = tq[1];
         out.tLow = tq[2];
@@ -2143,7 +2335,13 @@ public final class GalleriesField {
         // crater's floor even where that lies over the cap, under the layer's top (its rock touches none whatever the
         // floor's height: on such a saddle the floor at a cell's site 0.17 rows over the cap kept a lid of 44 blocks in
         // seed 900913's box at (7004, 4575)); a fringe cell opens only under the cap
-        if (rh.jt >= J_OPEN) cap = Math.max(cap, rh.jtTop);
+        // (a cell on the disc, wholly or in part, opens through the layer's top: a part cell's columns past the crater's
+        // flat floor lie under the floor's rising rim, which stood over its space as a shelf, and where the rim's ring bent
+        // round a saddle between its columns, a shelf of 11 blocks touched no rock in the test's random box 0, seed
+        // -1868579027, at (10806, -645, -1032); and a whole cell's opening only to the layer's top on the crater's floor
+        // left its four rows of rock there when its fringe neighbours opened through, a lid of 12 blocks in seed 77 at
+        // (41352, -644, -11819))
+        if (rh.jt >= J_OPEN) cap = Math.max(cap, T + 1);
         else if (rh.jt > 0) cap = Math.min(lerp(cap, rh.jtTop, rh.jt), T - CR_DROP);
         if (rh.rb == rh.rb) cap = Math.max(cap, Math.min(cap0, rh.rb));   // the relief stays over a ramp's head room
         // the openings' cuts into the vault (cut: the row they open the column to; hanging rock stays over it): a hole's
@@ -2438,9 +2636,9 @@ public final class GalleriesField {
         }
         double[] hl = new double[6], tq = new double[13];
         land.hall(w, cl, hl, 0);
-        double[] hg = new double[2];
+        double[] hg = new double[4];
         double hw = wallBlocks(x, z, cl, 0, hl, new double[6], new double[6], hg);
-        tops(x, z, w, cl, false, F, Fs, hl[2] + HALL_BASIN * Math.max(cl.wCal, cl.wCaus), hw, hg[0], hg[1], 1e9, 0, 0, tq);
+        tops(x, z, w, cl, false, F, Fs, hl[2] + HALL_BASIN * Math.max(cl.wCal, cl.wCaus), hw, hg[0], hg[1], hg[2], hg[3], 1e9, 0, 0, tq);
         // the tops' level: a ramp crosses a chasm over a span of rock at the tops ({@link #DK_SPAN}), so its ground is the
         // tops all the way
         if (out != null) System.arraycopy(tq, 0, out, 0, 8);
@@ -4170,8 +4368,14 @@ public final class GalleriesField {
      * stood on the lava, a cell of band afloat over its rows W-1..W+70, 720 blocks in seed -2468's box at (8174, -1594)).
      */
     static final double BAND_P = 300, BAND_MASK = 0.12, BAND_FADE = 0.1, BAND_CUT = 1.5, BAND_CUT_F = 10;
+    /**
+     * Where the tablelands come in (their weight tw passing a half, where their bridges take the bands' place,
+     * {@link #build}) a band comes down to the ground the same way, over the last BAND_TW of that weight (cut off there, a
+     * band's cells floated in the Canyons' blend: 80, 70 and 56 blocks in seed 8675310's box at (-2126, -713, 2068)).
+     */
+    static final double BAND_TW = 0.2;
 
-    void band(Cell c, double x, double z, Climate cl, double mouth, double side, boolean footing) {
+    void band(Cell c, double x, double z, Climate cl, double mouth, double side, boolean footing, double tw) {
         double mk = bandMask.noise2(x / 240.0, z / 240.0);
         if (mk < BAND_MASK || mouth > 0) return;
         double fade = smooth((mk - BAND_MASK) / BAND_FADE);
@@ -4188,7 +4392,7 @@ public final class GalleriesField {
         double pier = Math.max(0, pierN.noise2(x / 34.0, z / 34.0) + 0.05) * 45;
         double under = deck - thick - pier - 3 * Hashing.unit(Hashing.mix(c.h, 7, 0, 0));
         under -= (1 - fade) * Math.max(0, under - c.f);
-        double cut = smooth((side - cutR) / BAND_CUT_F);
+        double cut = smooth((side - cutR) / BAND_CUT_F) * smooth((0.5 - tw) / BAND_TW);
         under -= (1 - cut) * Math.max(0, under - c.f);
         int bl = (int) Math.floor(under + 0.5), bh = (int) Math.floor(top + 0.5) + 1;
         if (bh <= c.f || bl >= c.c) return;
