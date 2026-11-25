@@ -100,6 +100,13 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   Nothing lives here: no plants and no mobs. Light comes from lava you can see: a few big lava falls, chains of shallow
   lava pools winding along the halls' low floors, magma, and the lava in the ruins' channels and braziers. (Until 0.22.4
   an unseen glow block, `explorationremix:glow`, lit the walls too; an old world's glow turns to air.)
+  **Ember crust** (0.22.9) lights the rest: basalt, or smooth basalt, with a crack in it that still glows deep red, the
+  stone round it up close. Lit cracks run down the joints between the columns of the walls and the high ground's cliffs,
+  small webs of cooling cracks lie across the tops about every ten blocks, and cracks run over the vaults, in the halls,
+  the Caldera, the Causeway and the Basalt Rifts (never under the flood's mark, where the lava lights the walls, nor on
+  the clusters hanging from the vaults). Each
+  gives light 13; together they light about two thirds of the high ground, with dark stretches between. Mined with a
+  pickaxe it drops itself, a light block that looks like basalt.
 * **Blue Reaches** keep 0.2.0's sizes: the Deep Blue Rift, up to 160 blocks deep, with its ledge path, natural bridges
   and the Asurine Geodes beside it; the deep dark's caverns on two tiers, with an ancient city in about one cell in
   seven and the Hollow Choir's arena in about one cell in three (below). The network's rooms and tunnels join them.

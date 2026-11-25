@@ -14,8 +14,9 @@ public final class Palette {
     private final long seed;
     private final Perlin interiorN, patchN, veinN, veinMask, seamN, seamMask, wobN, bandN;
     // 0.5.1, the two bottom layers: the flood's tide mark, the ragged join of the Wasteland's and the Galleries' looks,
-    // and the dip of the Basalt Rifts' bands (0.20.4: the terraces' cooling cracks went with the ember crust)
-    private final Perlin tideN, joinN, tiltN;
+    // and the dip of the Basalt Rifts' bands; and the ember crust's glowing joints and cooling cracks (gone with the crust
+    // in 0.20.4, back with it in 0.22.9)
+    private final Perlin tideN, joinN, tiltN, crackN;
     // 0.8.0: the clumps of magma where the Galleries' lava touches the rock
     private final Perlin heatN;
     // 0.14.5: the wander of the Fern Rift's bands by depth
@@ -55,6 +56,7 @@ public final class Palette {
         tideN = new Perlin(Hashing.mix(s, 9, 0, 0));
         joinN = new Perlin(Hashing.mix(s, 10, 0, 0));
         tiltN = new Perlin(Hashing.mix(s, 11, 0, 0));
+        crackN = new Perlin(Hashing.mix(s, 12, 0, 0));
         heatN = new Perlin(Hashing.mix(s, 13, 0, 0));
         riftN = new Perlin(Hashing.mix(s, 14, 0, 0));
         iceN = new Perlin(Hashing.mix(s, 15, 0, 0));
@@ -341,6 +343,81 @@ public final class Palette {
     /** The cut that makes {@link #heat} true on about 12 % of blocks. */
     private static final double HEAT = 0.33;
 
+    // ============================================================================================== the ember crust
+    // 0.22.9 (Taran, 2026-11-25: "re-add ember crust to light up the lower Galleries but give it a texture that blends in
+    // better with the basalt"): basalt or smooth basalt with a crack in it that still glows (ERBlocks.EMBER_CRUST, light
+    // 13), the light of the lower Galleries where no lava reaches. Built at the cards' recommended answers: glowing
+    // fissures in deep red, on the cliffs, walls and tops, lighting most of the high ground, in the halls, the Caldera, the
+    // Causeway and the Basalt Rifts. It is laid in three ways, each a stone's own crack (ember): glowing joints down the
+    // walls and cliffs, cooling cracks across the tops, and cracks in networks over the vaults. Never on a hanging
+    // cluster, under the flood's tide mark (its lava lights the walls it covers), in a wet floor, in scorchia or in the
+    // Obsidian Tubes.
+
+    /** How far the walls' and cliffs' glowing joints run: the cut on their slow noise (lower runs further). */
+    static final double EMBER_JOINT = 0.42;
+    /**
+     * The cooling cracks across the tops: one at most in each square of EMBER_CELL blocks, in EMBER_TOP of the squares,
+     * each the joints within 1.2 to 2.5 blocks of a point jittered over its square. With the walls' joints they light
+     * about two thirds of the high ground to 6 or more (EmberCrustTest: 0.69 and 0.67 of the two boxes' places, with
+     * about one top block in nineteen crust); squares of 12 in 0.8 of them light about half (0.51, 0.48).
+     */
+    static final double EMBER_TOP = 0.9;
+    static final int EMBER_CELL = 10;
+    /** The width of the vaults' cracks, and of the Basalt Rifts' walls' and the Caldera's cones'. */
+    static final double EMBER_VAULT = 0.035, EMBER_RIFT = 0.03;
+
+    /**
+     * The ember crust in stone {@code r}: the smooth ember crust in smooth basalt, the ember crust in basalt, so the crust
+     * is always the stone round it with a crack in it; any other stone (scorchia, magma, gold ore) keeps no crust.
+     */
+    static Rock ember(Rock r) {
+        if (r == Rock.BASALT) return Rock.EMBER_CRUST;
+        if (r == Rock.SMOOTH_BASALT) return Rock.SMOOTH_EMBER_CRUST;
+        return r;
+    }
+
+    /** Thin cracks in networks, rarer than {@link #vein}'s: about one block in a hundred where they run. */
+    private boolean crack(int x, int y, int z, double width) {
+        int yn = ny(y);
+        if (veinMask.noise3(x * 0.02, yn * 0.03, z * 0.02) < 0.28) return false;
+        return Math.abs(veinN.noise3(x * 0.07, yn * 0.09, z * 0.07)) < width;
+    }
+
+    /**
+     * A glowing joint in a wall or cliff: the joints between its columns ({@code columnEdge} under 0.35) in upright
+     * streaks a few to a dozen blocks long where a slow noise passes {@link #EMBER_JOINT}, so here and there a lit crack
+     * runs down between two columns, and the crust's own crack runs on from block to block down it.
+     */
+    private boolean glowingJoint(int x, int y, int z) {
+        if (crackN.noise3(x * 0.05, ny(y) * 0.035, z * 0.05) < EMBER_JOINT) return false;
+        return looks.columnEdge(x, z) < 0.35;
+    }
+
+    /**
+     * Cooling cracks across a top: the joints between the column tops ({@code columnEdge} under 0.5) round points
+     * scattered a square of {@link #EMBER_CELL} apart, a small lit web every ten blocks or so, so each lights its own
+     * patch of the ground and few blocks of it are crust.
+     */
+    private boolean coolingCrack(int x, int z) {
+        int cx = Math.floorDiv(x, EMBER_CELL), cz = Math.floorDiv(z, EMBER_CELL);
+        for (int i = cx - 1; i <= cx + 1; i++) {
+            for (int k = cz - 1; k <= cz + 1; k++) {
+                long h = Hashing.mix(seed ^ 0x3C6EF372FE94F82AL, i, 0, k);
+                if (Hashing.unit(h) >= EMBER_TOP) continue;
+                double px = (i + 0.1 + 0.8 * Hashing.unit(Hashing.mix(h, 1, 0, 0))) * EMBER_CELL;
+                double pz = (k + 0.1 + 0.8 * Hashing.unit(Hashing.mix(h, 2, 0, 0))) * EMBER_CELL;
+                double r = 1.2 + 1.3 * Hashing.unit(Hashing.mix(h, 3, 0, 0)), dx = x + 0.5 - px, dz = z + 0.5 - pz;
+                if (dx * dx + dz * dz <= r * r) return looks.columnEdge(x, z) < 0.5;
+            }
+        }
+        return false;
+    }
+
+    /** A hanging cluster's rock, which keeps no crust: the crust lights the ground, not the masses hanging over it. */
+    private boolean hanging(int x, int y, int z) {
+        return looks.hang(x, y, z) > 0.05;
+    }
+
     /**
      * Rock near open space in the Wasteland and the Galleries. Natural stone only (Taran, 2026-11-02: "Polished
      * blackstone doesn't fit. It looks too unnatural."), never Create's cut or layered forms, and no stripe at a fixed
@@ -348,7 +425,8 @@ public final class Palette {
      * The Galleries (Taran, 2026-11-23: "Blackstone could be replaced with smooth basalt. Don't use scoria but scorchia
      * could be used sparingly. Remove ember crust."): basalt and smooth basalt, scorchia sparingly (a few columns, the
      * Caldera's cinder cones, thin bands in the Basalt Rifts), magma where the lava touches the rock, obsidian and a
-     * little crying obsidian, tuff in the Obsidian Tubes, and a speck of gold ore; no blackstone, scoria or ember crust.
+     * little crying obsidian, tuff in the Obsidian Tubes, and a speck of gold ore; no blackstone or scoria. Since 0.22.9
+     * the ember crust again, as basalt and smooth basalt with a glowing crack in them (the ember crust's section).
      */
     private Rock basaltShell(DeepBiome b, int li, int x, int y, int z, int above, int below, boolean wet) {
         int look = lookLayer(li, x, y, z);
@@ -412,10 +490,15 @@ public final class Palette {
                 if (canyonSpan(above, below)) return n > 0.3 ? Rock.SMOOTH_BASALT : Rock.BASALT;
                 if (floor) {
                     if (wet) return n > -0.35 ? Rock.SMOOTH_BASALT : Rock.SCORCHIA;
-                    if (top) return n > 0.25 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+                    if (top) {
+                        Rock r = n > 0.25 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+                        return coolingCrack(x, z) ? ember(r) : r;
+                    }
                     return Rock.BASALT;
                 }
-                return riftBand(x, y, z, false);
+                // 0.22.9: cracks of ember crust in networks across the flows (riftBand's scorchia tops keep none)
+                Rock r = riftBand(x, y, z, false);
+                return crack(x, y, z, EMBER_RIFT) && !hanging(x, y, z) ? ember(r) : r;
             }
             default: {
                 // The Wasteland, with the old Basalt Galleries' look: basalt columns and blackstone floors, gilded
@@ -499,28 +582,32 @@ public final class Palette {
      * basalt, in bold patches, now and then a scorchia column); terraces of the same column tops, each the stone of its
      * column; hanging clusters of the same columns; undersides the stone of their columns; magma only where the lava
      * touches the rock (basaltShell), and a speck of gold ore in the walls. Every face of a column is the column's stone,
-     * so each reads as one stone from end to end (decision 3, picture 1). Nothing glows in the rock (0.20.4: the ember
-     * crust is gone); the lava, its falls and the unseen glow light the halls.
+     * so each reads as one stone from end to end (decision 3, picture 1). Since 0.22.9 the ember crust lights them again:
+     * glowing joints down the walls and the high ground's cliffs, cooling cracks across its tops and the floors, cracks
+     * over the vaults, each in the stone of its column; the lava and its falls light the rest. (0.20.4 took the old,
+     * orange crust out; 0.22.4 took out the unseen glow.)
      */
     private Rock galleries(int x, int y, int z, boolean top, boolean floor, boolean ceil, boolean wet, double n, int W) {
         long cell = looks.columnCell(x, z);
         if (floor) {
             if (wet) return n < -0.25 ? Rock.BASALT : Rock.SMOOTH_BASALT;
-            return cell != 0 ? columnFloor(DeepBiome.BASALT_GALLERIES, cell, x, y, z, W) : n > -0.15 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            Rock r = cell != 0 ? columnFloor(DeepBiome.BASALT_GALLERIES, cell, x, y, z, W) : n > -0.15 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            return top && coolingCrack(x, z) ? ember(r) : r;
         }
         if (ceil) {
-            if (cell != 0) return dryColumn(DeepBiome.BASALT_GALLERIES, cell, x, z);
-            return n > 0.25 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            Rock r = cell != 0 ? dryColumn(DeepBiome.BASALT_GALLERIES, cell, x, z) : n > 0.25 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            return crack(x, y, z, EMBER_VAULT) && !hanging(x, y, z) ? ember(r) : r;
         }
         if (speck(x, y, z) < 0.003) return Rock.DEEPSLATE_GOLD_ORE;
-        if (cell != 0) return dryColumn(DeepBiome.BASALT_GALLERIES, cell, x, z);
-        return n > 0.08 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+        Rock r = cell != 0 ? dryColumn(DeepBiome.BASALT_GALLERIES, cell, x, z) : n > 0.08 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+        return glowingJoint(x, y, z) && !hanging(x, y, z) ? ember(r) : r;
     }
 
     /**
      * The Caldera, the brightest place in the Galleries for its lava lake: a crust of dark, smooth-basalt-led columns,
      * each one stone to its top, round the lake, cones of scorchia cinders ({@link #cone}, on the cones' own ground only:
-     * {@link #coneAt}), magma where its lava touches the rock (basaltShell) and in the cones' craters.
+     * {@link #coneAt}), magma where its lava touches the rock (basaltShell) and in the cones' craters; since 0.22.9 the
+     * ember crust's joints, cooling cracks and vault cracks as in the halls.
      */
     private Rock caldera(int x, int y, int z, boolean top, boolean floor, boolean ceil, boolean wet, double n, int W) {
         double d = coneAt(x, y, z);
@@ -528,43 +615,46 @@ public final class Palette {
         long cell = looks.columnCell(x, z);
         if (floor) {
             if (wet) return n > -0.2 ? Rock.SMOOTH_BASALT : Rock.BASALT;
-            if (cell != 0) return columnFloor(DeepBiome.CALDERA, cell, x, y, z, W);
-            return n > -0.32 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            Rock r = cell != 0 ? columnFloor(DeepBiome.CALDERA, cell, x, y, z, W) : n > -0.32 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            return top && coolingCrack(x, z) ? ember(r) : r;
         }
         if (ceil) {
-            if (cell != 0) return dryColumn(DeepBiome.CALDERA, cell, x, z);
-            return n > 0 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            Rock r = cell != 0 ? dryColumn(DeepBiome.CALDERA, cell, x, z) : n > 0 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            return crack(x, y, z, EMBER_VAULT) && !hanging(x, y, z) ? ember(r) : r;
         }
-        if (cell != 0) return dryColumn(DeepBiome.CALDERA, cell, x, z);
-        return n < -0.3 ? Rock.BASALT : Rock.SMOOTH_BASALT;
+        Rock r = cell != 0 ? dryColumn(DeepBiome.CALDERA, cell, x, z) : n < -0.3 ? Rock.BASALT : Rock.SMOOTH_BASALT;
+        return glowingJoint(x, y, z) && !hanging(x, y, z) ? ember(r) : r;
     }
 
     /**
      * A Caldera cone, {@code d} its foot radii from the axis: cinders of scorchia (the Galleries' one big show of it)
      * with patches of basalt on the lower flanks, and the crater (the eruptions' vent, within {@link #CRATER} foot radii
-     * of the axis) a throat of magma and scorchia.
+     * of the axis) a throat of magma and scorchia. Since 0.22.9 the basalt patches are cracked with ember crust, more of
+     * it towards the crater (the cinders keep none).
      */
     private Rock cone(int x, int y, int z, double d, double n, int W) {
         if (d < CRATER) return n > 0.15 || speck(x, y, z) < 0.4 ? Rock.MAGMA : Rock.SCORCHIA;
-        if (d > 0.75 && n < -0.15) return Rock.SMOOTH_BASALT;
-        return n > 0.32 ? Rock.BASALT : Rock.SCORCHIA;
+        Rock r = d > 0.75 && n < -0.15 ? Rock.SMOOTH_BASALT : n > 0.32 ? Rock.BASALT : Rock.SCORCHIA;
+        double heat = 1 - (d - CRATER) / (1 - CRATER);
+        return r != Rock.SCORCHIA && crack(x, y, z, EMBER_RIFT * (0.5 + heat)) ? ember(r) : r;
     }
 
     /**
      * The Causeway: coarse columns stepping out of the lava, each one stone from its foot to its end (basalt or smooth
      * basalt, a rare one scorchia), so their tops make a mosaic of column ends; a little magma where the lava touches
-     * them (basaltShell).
+     * them (basaltShell); since 0.22.9 the ember crust's joints between its prisms, cooling cracks across their tops and
+     * cracks over its vault.
      */
     private Rock causeway(int x, int y, int z, boolean top, boolean floor, boolean ceil, boolean wet, double n, int W) {
         long cell = looks.columnCell(x, z);
         if (floor) {
             if (wet) return n > 0.3 ? Rock.SMOOTH_BASALT : Rock.BASALT;
-            if (cell != 0) return columnFloor(DeepBiome.CAUSEWAY, cell, x, y, z, W);
-            return top && n <= -0.1 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            Rock r = cell != 0 ? columnFloor(DeepBiome.CAUSEWAY, cell, x, y, z, W) : top && n <= -0.1 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+            return top && coolingCrack(x, z) ? ember(r) : r;
         }
-        if (cell != 0) return dryColumn(DeepBiome.CAUSEWAY, cell, x, z);
-        if (ceil) return Rock.BASALT;
-        return n < -0.4 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+        Rock r = cell != 0 ? dryColumn(DeepBiome.CAUSEWAY, cell, x, z) : ceil ? Rock.BASALT : n < -0.4 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+        if (ceil) return crack(x, y, z, EMBER_VAULT) && !hanging(x, y, z) ? ember(r) : r;
+        return glowingJoint(x, y, z) && !hanging(x, y, z) ? ember(r) : r;
     }
 
     /**

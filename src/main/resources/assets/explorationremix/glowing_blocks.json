@@ -50,5 +50,11 @@
     "vent_crown",
     "wall_tube_worms",
     "white_glow_flower"
+  ],
+  "as_rock": [
+    "ash_fern",
+    "cinder_chain",
+    "ember_crust",
+    "smooth_ember_crust"
   ]
 }

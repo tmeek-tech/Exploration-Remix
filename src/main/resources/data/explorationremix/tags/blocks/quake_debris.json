@@ -7,6 +7,7 @@
     "minecraft:blackstone",
     "minecraft:tuff",
     "explorationremix:ember_crust",
+    "explorationremix:smooth_ember_crust",
     {
       "id": "create:scoria",
       "required": false

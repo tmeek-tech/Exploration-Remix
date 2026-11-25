@@ -1384,10 +1384,11 @@ BLOCK_TAGS = {
                            "minecraft:blue_ice", "minecraft:gravel", "minecraft:calcite", "minecraft:cobblestone", "minecraft:mossy_cobblestone"],
     # The Wasteland's and the Galleries' rock: lava falls pour out of it, lichen and shards grow on it. Since 0.5 with the
     # Galleries' ember crust (brown terracotta stands in for scoria without Create); since 0.5.1 natural stone only (no
-    # polished basalt or blackstone), since 0.8.0 without Create's layered scoria and scorchia.
+    # polished basalt or blackstone), since 0.8.0 without Create's layered scoria and scorchia; since 0.22.9 with the
+    # smooth ember crust too.
     "basalt_rock": ["minecraft:basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:gilded_blackstone",
                     "minecraft:magma_block", "minecraft:deepslate_gold_ore", "minecraft:brown_terracotta",
-                    f"{MOD}:ember_crust"]
+                    f"{MOD}:ember_crust", f"{MOD}:smooth_ember_crust"]
                    + optional(["create:scoria", "create:scorchia"]),
     # 0.5.1's terrain reset (TerrainReset.RESET_AS_ROCK): blocks a reset puts back as plain rock, whatever the palette
     # chose there (ores and gilded blackstone are not given back to a player who mined them).
@@ -1396,7 +1397,7 @@ BLOCK_TAGS = {
     # the terrain reset on a quake or an eruption never turns one into an item (the reset regrows it where it was, so no
     # farm). Terrain Slabs' slabs are the ones its generation lays on the Galleries' rock.
     "galleries_rock": ["minecraft:basalt", "minecraft:polished_basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:tuff",
-                       "minecraft:magma_block", f"{MOD}:ember_crust"]
+                       "minecraft:magma_block", f"{MOD}:ember_crust", f"{MOD}:smooth_ember_crust"]
                       + optional(["create:scoria", "create:scorchia", "terrain_slabs:basalt_slab", "terrain_slabs:smooth_basalt_slab",
                                   "terrain_slabs:terrain_blackstone_slab", "terrain_slabs:terrain_tuff_slab"]),
     # 0.14.3: blocks only a structure places (the ancient cities' bricks, tiles, wool, wood, glass and redstone), never
@@ -1417,7 +1418,7 @@ BLOCK_TAGS = {
     # Not obsidian or crying obsidian (they never fall), magma, slabs, ores or gilded blackstone (#reset_as_rock: an ore
     # that fell would come back as rock and be lost).
     "quake_debris": ["minecraft:basalt", "minecraft:polished_basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:tuff",
-                     f"{MOD}:ember_crust"] + optional(["create:scoria", "create:scorchia"]),
+                     f"{MOD}:ember_crust", f"{MOD}:smooth_ember_crust"] + optional(["create:scoria", "create:scorchia"]),
 }
 
 # ----------------------------------------------------------------------------------------------- writing

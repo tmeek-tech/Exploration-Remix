@@ -93,7 +93,12 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 #               <id>_<colour> covers every face, or option overlays maps the face groups it covers (top, side, bottom)
 #               to suffixes of their textures, <id>_<colour><suffix>, and leaves the others bare. Option turns: each
 #               colour takes one of eight models by the block's position, turned about y by 0, 90, 180 or 270
-#               degrees, plain or mirrored (every face's texture flipped), so a floor of them shows no stripes
+#               degrees, plain or mirrored (every face's texture flipped), so a floor of them shows no stripes. Option
+#               turns "overlay" (with option rock, no neon): the eight turns are the overlay's alone, mirrored on every
+#               face and turned on the top and bottom only, while the rock under it stays as vanilla draws it; with
+#               option variants (<texture>, <texture>_2 ...) each variant takes the eight, and option texture names the
+#               overlay textures' base (default the block's id), so two blocks over different rocks can share them;
+#               option render_type its models' (default minecraft:cutout)
 #   pointed     vanilla's pointed dripstone in our textures (a PointedDripstoneBlock): a model per thickness (tip_merge,
 #               tip, frustum, middle, base) and direction (down hanging, up standing) on vanilla's own model, two
 #               crossed planes, with texture <id>_<down|up>_<thickness>; its item is held like vanilla's, with texture
@@ -102,8 +107,14 @@ def tag(ns, kind, name, values, replace=False): write(os.path.join(RES, "data", 
 # never changes), weights (one per variant), drop (hanging_fern, litter: the item it drops), chance (litter: how often
 # it drops it), resting (cross: a GlowbellBlock, drawn with <look>_resting while it rests), glow_under (shelf: the
 # whole underside glows), shader_glow (default True; False keeps the glow overlay but leaves the block out of
-# glowing_blocks.json, so under Complementary only the overlay shines and the rest is lit like rock). A texture with an
-# entry in textures.GLOW gets an emissive overlay.
+# glowing_blocks.json and lists it under as_rock there, so under Complementary it is lit like rock even where it gives
+# light, and only the overlay shines). A texture with an entry in textures.GLOW gets an emissive overlay.
+# The ember crust's options (both of its blocks): its overlay textures ember_crust<variant>_side round the block and
+# ember_crust<variant>_top on its top and its underside, three variants.
+# Drawn cutout_mipped, so its basalt has the mipmaps vanilla's basalt has and looks the same at a distance, where the
+# thin crack fades into it and only the light it gives shows.
+EMBER_CRUST = {"texture": "ember_crust", "overlays": {"top": "_top", "side": "_side", "bottom": "_top"}, "variants": 3,
+               "turns": "overlay", "shader_glow": False, "render_type": "minecraft:cutout_mipped"}
 BLOCKS = {
     "band_stone": ("Band Stone", "cube"),
     "white_glow_flower": ("White Glow Flower", "cross"),
@@ -179,9 +190,15 @@ BLOCKS = {
     "oasis_grass": ("Oasis Grass", "cross", {"variants": 3, "weights": [3, 2, 2]}),
     "dune_lily": ("Dune Lily", "cross", {"variants": 2}),
     # 0.5: the lifeless Basalt Galleries' glowing rock, and the chains their climbs hang in place of vines (also in the
-    # Wasteland's bare refuges). The ember crust gives light, so under Complementary its whole face glows (ShaderGlow);
-    # the chain gives none, and its embers only glint (an overlay kept out of glowing_blocks.json).
-    "ember_crust": ("Ember Crust", "cube"),
+    # Wasteland's bare refuges). The chain gives no light, and its embers only glint (an overlay kept out of
+    # glowing_blocks.json). 0.22.9 (Taran, 2026-11-25: "re-add ember crust to light up the lower Galleries but give it a
+    # texture that blends in better with the basalt"): the ember crust is vanilla's basalt with a crack in it that still
+    # glows (tools/minerals.py), the smooth ember crust smooth basalt with the same cracks, so each is the stone round it.
+    # Three cracks to a face, each turned or mirrored on its own over the rock, which stays as vanilla draws it (option
+    # turns "overlay"). They give light, but under Complementary they are lit as rock (shader_glow False: ShaderGlow
+    # leaves them out), so only their cracks glow and not the basalt.
+    "ember_crust": ("Ember Crust", "glow_cube", dict(EMBER_CRUST, rock="basalt")),
+    "smooth_ember_crust": ("Smooth Ember Crust", "glow_cube", dict(EMBER_CRUST, rock="smooth_basalt")),
     # (0.20.1's glow ice, the deep Frost Fern Grotto's glowing veins, left the game in 0.20.7: Taran, "Remove glow ice".)
     "cinder_chain": ("Cinder Chain", "cross", {"shader_glow": False}),
     # (The Galleries' invisible lava glow left the game in 0.22.4, Taran: "remove the invisible light sources".)
@@ -241,7 +258,7 @@ VENT_FIELD_BLOCKS = {"black_dripstone", "pointed_black_dripstone", "pale_stem", 
                      "vent_beads", "seep_crust"}
 # Blocks left out of explorationremix:plants: rock-like ground, which /remix census counts as floor, not growth, the
 # lifeless blocks of the Galleries, the litter round the dens and the vent field's whole blocks.
-NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "cinder_chain", "bone_scraps"} | VENT_FIELD_BLOCKS
+NOT_PLANTS = NO_DROP | {"frost_moss", "ember_crust", "smooth_ember_crust", "cinder_chain", "bone_scraps"} | VENT_FIELD_BLOCKS
 
 # Blocks in vanilla tags: vines climb like weeping vines, and lantern pods can hang from wisteria.
 BLOCK_TAGS = {
@@ -261,7 +278,8 @@ BLOCK_TAGS = {
     # ferns only grow on #minecraft:dirt), and moss patches may spread over it.
     ("minecraft", "dirt"): ["frost_moss"],
     ("minecraft", "mineable/hoe"): ["frost_moss", "frost_moss_carpet"],
-    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "cinder_chain",
+    ("minecraft", "mineable/pickaxe"): ["asurine_crystal", "asurine_bud", "asurine_crust", "amber_shard", "ember_crust", "smooth_ember_crust",
+                                        "cinder_chain",
                                         # the Deep Gardens: the vent field's dripstone, and the neon blocks grown on its rock
                                         "black_dripstone", "pointed_black_dripstone", "glow_mat", "thin_glow_mat", "vent_crown",
                                         "vent_beads", "seep_crust"],
@@ -331,7 +349,10 @@ SIDES = ("north", "east", "south", "west")
 # textures our models name; the check in block_assets refuses any other, as the game would show a typo as a purple and
 # black square.
 ROCKS = {"blackstone": ("minecraft:block/blackstone_top", "minecraft:block/blackstone"),
-         "deepslate": ("minecraft:block/deepslate_top", "minecraft:block/deepslate")}
+         "deepslate": ("minecraft:block/deepslate_top", "minecraft:block/deepslate"),
+         # 0.22.9: the Galleries' two stones, under the ember crust's cracks
+         "basalt": ("minecraft:block/basalt_top", "minecraft:block/basalt_side"),
+         "smooth_basalt": ("minecraft:block/smooth_basalt", "minecraft:block/smooth_basalt")}
 VANILLA_TEXTURES = {t for pair in ROCKS.values() for t in pair}
 # An overlay's face groups, and the faces of the cube each covers.
 OVERLAY_FACES = {"top": ("up",), "side": SIDES, "bottom": ("down",)}
@@ -601,11 +622,33 @@ def mirrored(template):
     return out
 
 
+def overlay_turned(template, mirror, turn):
+    """A rock template (option turns "overlay") with its overlay and glow, every element but the first (the rock),
+    mirrored on every face and turned on its top and bottom faces; the rock stays as vanilla draws it."""
+    out = json.loads(json.dumps(template))
+    for el in out["elements"][1:]:
+        for f, face in el["faces"].items():
+            if mirror:
+                u1, v1, u2, v2 = face.get("uv", [0, 0, 16, 16])
+                face["uv"] = [u2, v1, u1, v2]
+            if turn and f in ("up", "down"):
+                face["rotation"] = turn
+    return out
+
+
+def turn_suffix(mirror, turn):
+    return ("_mirrored" if mirror else "") + (f"_r{turn}" if turn else "")
+
+
+TURNS = [(mirror, y) for mirror in (False, True) for y in (0, 90, 180, 270)]  # option turns' eight models
 for _entry in BLOCKS.values():
-    if len(_entry) > 2 and _entry[2].get("turns"):
+    if len(_entry) > 2 and _entry[2].get("turns") is True:
         _name = rock_template(overlays(_entry[2])) if "rock" in _entry[2] else "cube_glow"
         TEMPLATES[_name + "_mirrored"] = mirrored(TEMPLATES[_name])
-TURNS = [(mirror, y) for mirror in (False, True) for y in (0, 90, 180, 270)]  # option turns' eight models
+    elif len(_entry) > 2 and _entry[2].get("turns") == "overlay":
+        _name = rock_template(overlays(_entry[2]))
+        for _mirror, _turn in TURNS[1:]:
+            TEMPLATES[_name + turn_suffix(_mirror, _turn)] = overlay_turned(TEMPLATES[_name], _mirror, _turn)
 
 
 def shelf_model(tex, under, glow_under=False):
@@ -725,6 +768,7 @@ def block_assets():
     lang = {}
     used_glow = set()
     glowing = set()  # blocks drawn with a glow overlay (assets/<mod>/glowing_blocks.json, read by client/ShaderGlow)
+    as_rock = set()  # blocks the shader lights as rock even where they give light (option shader_glow False)
     for name, model in TEMPLATES.items():
         write(os.path.join(ASSETS, "models", "block", "template", name + ".json"), model)
     for bid, entry in BLOCKS.items():
@@ -921,6 +965,23 @@ def block_assets():
                 models[t] = shelf_model(ref(t), ref(bid + "_under"), opts.get("glow_under", False))
             states = {"variants": {f"facing={f}": pick([dict({"model": ref(t)}, **turn) for t in texs], weights) for f, turn in FACE4.items()}}
             item = {"parent": ref(bid)}
+        elif kind == "glow_cube" and opts.get("turns") == "overlay":
+            # a vanilla rock under our overlay in variants, each in the eight turns of its overlay alone
+            end, side = ROCKS[opts["rock"]]
+            groups = overlays(opts)
+            entries = []
+            n = opts.get("variants", 1)
+            for tv, mv in zip(variant_names(opts.get("texture", bid), n), variant_names(bid, n)):
+                t = {"rock_end": end, "rock_side": side}
+                for group, suffix in groups.items():
+                    t[group], t[group + "_glow"] = ref(tv + suffix), ref(tv + suffix + "_glow")
+                for mirror, turn in TURNS:
+                    models[mv + turn_suffix(mirror, turn)] = {
+                        "parent": f"{MOD}:block/template/{rock_template(groups)}{turn_suffix(mirror, turn)}",
+                        "render_type": opts.get("render_type", "minecraft:cutout"), "textures": t}
+                    entries.append({"model": ref(mv + turn_suffix(mirror, turn))})
+            states = {"variants": {"": entries}}
+            item = {"parent": ref(bid)}
         elif kind == "glow_cube":
             colours = textures.NEONS if opts.get("neon") else [None]
             for c in colours:
@@ -976,6 +1037,8 @@ def block_assets():
             raise ValueError(f"{bid}: unknown kind {kind}")
         if opts.get("glow_under"):
             glowing.add(bid)
+        if not opts.get("shader_glow", True):
+            as_rock.add(bid)
         for mname, m in models.items():
             for key, tex in m["textures"].items():
                 if tex.startswith("minecraft:"):  # vanilla's, which the game has: only the rocks' (a typo is refused)
@@ -1004,7 +1067,7 @@ def block_assets():
                        opts.get("silk", False)))
     unused = set(textures.GLOW) - used_glow
     assert not unused, f"glow overlays no model draws: {sorted(unused)}"
-    write(os.path.join(ASSETS, "glowing_blocks.json"), {"blocks": sorted(glowing)})
+    write(os.path.join(ASSETS, "glowing_blocks.json"), {"blocks": sorted(glowing), "as_rock": sorted(as_rock)})
     lang[f"itemGroup.{MOD}"] = "Exploration Remix"
     return lang
 

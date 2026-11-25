@@ -8,6 +8,7 @@
     "minecraft:tuff",
     "minecraft:magma_block",
     "explorationremix:ember_crust",
+    "explorationremix:smooth_ember_crust",
     {
       "id": "create:scoria",
       "required": false
