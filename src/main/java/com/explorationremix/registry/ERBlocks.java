@@ -4,7 +4,6 @@ import com.explorationremix.ExplorationRemix;
 import com.explorationremix.block.BandStoneBlock;
 import com.explorationremix.block.BoneScrapsBlock;
 import com.explorationremix.block.CavePlantBlock;
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.block.GrazedGrassBlock;
 import com.explorationremix.block.HangingFernBlock;
 import com.explorationremix.block.HangingPlantBlock;
@@ -255,14 +254,8 @@ public final class ERBlocks {
     public static final RegistryObject<Block> CINDER_CHAIN = block("cinder_chain", () -> new HangingPlantBlock(
             BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BLACK).noCollission().strength(0.5F).sound(SoundType.BASALT)
                     .pushReaction(PushReaction.DESTROY).isValidSpawn((s, l, p, e) -> false), Block.box(5, 0, 5, 11, 16, 11)));
-    /**
-     * The Galleries' lava glow: invisible light in the air near the halls' rock ({@code HallGlowFeature}), which nothing
-     * collides with or aims at (a placed block, a falling block, a fluid or an explosion takes its place). Not air to the
-     * game: see {@link GlowBlock} for what still treats it as a block. No item.
-     */
-    public static final RegistryObject<Block> GLOW = BLOCKS.register("glow", () -> new GlowBlock(
-            BlockBehaviour.Properties.of().mapColor(MapColor.NONE).replaceable().noCollission().noOcclusion().noLootTable().instabreak()
-                    .sound(SoundType.EMPTY).pushReaction(PushReaction.DESTROY).lightLevel(s -> s.getValue(GlowBlock.LEVEL))));
+    // (The Galleries' invisible lava glow, explorationremix:glow, left the game in 0.21.8, Taran: "remove the invisible
+    // light sources"; ERRemaps turns old worlds' into air.)
 
     // =========================================================================================== Upper Caves rework
     // ------------------------------------------------------------------------------------------- Frost Fern Grotto

@@ -1,6 +1,5 @@
 package com.explorationremix.world.terrain;
 
-import com.explorationremix.world.feature.GlowLight;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -36,8 +35,8 @@ class GalleriesDecorTest {
      * The three ways down round (4, 125), (21, 126) and (44, 29) (0.20.4: (19, 151) no longer opens under the halls, and
      * the ramps reach 150 to 175 blocks, so the box grew from 364 x 386 at (-160, -55)), with their whole reach,
      * decorated: no lava on a ramp's deck band or in a hole's throat, every way walking down to its foot and back up
-     * through the decorations, the halls' falls few, spaced and 1 to 3 sources wide, and the halls' faces as bright as
-     * with the old falls. On the 0.8.0 data
+     * through the decorations, and the halls' falls few, spaced and 1 to 3 sources wide (until 0.21.8 the halls' faces
+     * were also held as bright as with the old falls, by the invisible glow, which left the game then). On the 0.8.0 data
      * the same box held 634 falls (the nearest other fall 5.8 blocks off at the median, 84 in one 128-block square), lava
      * on all three ramps (235 blocks), the way at (21, 126) one way at its foot, and faces at 10.33 on average, 7.7 %
      * under 8; the 0.8.0 fix round's data 50 falls, the nearest 27.7 blocks off at the least, and 10.6, 4.6 %. Fix round
@@ -60,9 +59,24 @@ class GalleriesDecorTest {
         }
         assertTrue(bad.isEmpty(), "ways down that do not walk down and back up through the decorations: " + bad);
         b.fewSpacedAndWide(40, 200, 4, 5);
-        b.asBright(10.33, 0.077);
-        b.litFromTheFloorUp(12.2, 0.005);
         b.floorLavaHeld(FLOOR_LEAST_BOX);
+    }
+
+    /**
+     * 0.21.8 (Taran: "remove the invisible light sources"): no feature the data ships places light with nothing to see,
+     * neither the old glow pass (feature type explorationremix:hall_glow) nor its block (explorationremix:glow), in any
+     * layer, so every light in the Galleries comes from lava or blocks you can see.
+     */
+    @Test
+    void noInvisibleLight() throws Exception {
+        List<String> found = new ArrayList<>();
+        try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(WORLDGEN)) {
+            for (Path f : (Iterable<Path>) files.filter(q -> q.toString().endsWith(".json"))::iterator) {
+                String text = java.nio.file.Files.readString(f);
+                if (text.contains("explorationremix:hall_glow") || text.contains("\"explorationremix:glow\"")) found.add(WORLDGEN.relativize(f).toString());
+            }
+        }
+        assertTrue(found.isEmpty(), "invisible light in the shipped worldgen: " + found);
     }
 
     /**
@@ -164,7 +178,6 @@ class GalleriesDecorTest {
         // fix round 3 (judge3: none of the falls poured from a hanging mass): about a third pour from a mass's underside
         int mass = b.d.fromMasses(), n = b.d.falls.size();
         assertTrue(mass >= 0.25 * n, "too few falls pour from a hanging mass: " + mass + " of " + n);
-        b.asBright(10.30, 0.076);
         b.floorLavaHeld(FLOOR_LEAST_REGION);
     }
 
@@ -261,27 +274,6 @@ class GalleriesDecorTest {
         }
 
         /**
-         * Fix round 2 after the 0.8.0 pack runs (the halls read dim, rock 36.6 on average at the pack's cameras against 44.0 in
-         * the first run): the halls' faces (GlowLight: every lava block and glow spot) at least
-         * {@code mean} on average and at most {@code under8} of them under 8, and still lit from the floor up: the faces
-         * under 60 rows over the table brighter on average than those higher up by half a level or more. With the glow
-         * before this round the box measured 10.6 on average (GalleriesDecorTest light).
-         */
-        void litFromTheFloorUp(double mean, double under8) throws Exception {
-            GlowLight gl = GlowLight.measure(t, GlowLight.shipped(WORLDGEN), (x, y, z) -> v.mat(x, y, z), x0, z0, nx, nz, 16);
-            long[] all = new long[16], low = new long[16];
-            for (int band = 0; band < 3; band++) for (int l = 0; l < 16; l++) {
-                all[l] += gl.hall[band][l];
-                if (band < 2) low[l] += gl.hall[band][l];
-            }
-            long faces = Arrays.stream(all).sum();
-            System.out.println("GalleriesDecorTest lit from the floor up: " + gl);
-            assertTrue(GlowLight.mean(all) >= mean, "the halls darker than " + mean + " on average: " + gl);
-            assertTrue(GlowLight.under(all, 8) <= under8 * faces, "more hall faces under 8 than " + under8 + ": " + gl);
-            assertTrue(GlowLight.mean(low) >= GlowLight.mean(gl.hall[2]) + 0.5, "not lit from the floor up: " + gl);
-        }
-
-        /**
          * The floor's lava (fix round 2, FloorLavaFeature: GalleriesField.floorLavaRow) as it stands once every chunk is
          * decorated: at least {@code least} blocks of it, and every one held, with rock under it and rock or a lava source
          * on its four sides, whatever the decorations laid round it before or after it ({@link GalleriesDecor#floorLavaHeld}),
@@ -299,16 +291,5 @@ class GalleriesDecorTest {
             assertEquals(0, held[2], "floor lava under a block: " + loose);
         }
 
-        /** The halls' faces (GlowLight: every lava block and glow spot) at least {@code mean} on average, at most {@code under8} of them under 8. */
-        void asBright(double mean, double under8) throws Exception {
-            GlowLight gl = GlowLight.measure(t, GlowLight.shipped(WORLDGEN), (x, y, z) -> v.mat(x, y, z), x0, z0, nx, nz, 16);
-            long[] all = new long[16];
-            for (long[] band : gl.hall) for (int l = 0; l < 16; l++) all[l] += band[l];
-            long faces = Arrays.stream(all).sum();
-            System.out.println("GalleriesDecorTest light: " + gl);
-            assertTrue(faces > 100_000, "too few hall faces: " + gl);
-            assertTrue(GlowLight.mean(all) >= mean, "the halls darker than with the 0.8.0 falls (" + mean + "): " + gl);
-            assertTrue(GlowLight.under(all, 8) <= under8 * faces, "more hall faces under 8 than with the 0.8.0 falls (" + under8 + "): " + gl);
-        }
     }
 }

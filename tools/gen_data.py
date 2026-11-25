@@ -176,9 +176,7 @@ BLOCKS = {
     "ember_crust": ("Ember Crust", "cube"),
     # (0.20.1's glow ice, the deep Frost Fern Grotto's glowing veins, left the game in 0.20.7: Taran, "Remove glow ice".)
     "cinder_chain": ("Cinder Chain", "cross", {"shader_glow": False}),
-    # The Galleries' lava glow: invisible light in the air along the halls' rock (HallGlowFeature). Nothing is drawn and
-    # there is no item.
-    "glow": ("Lava Glow", "invisible"),
+    # (The Galleries' invisible lava glow left the game in 0.21.8, Taran: "remove the invisible light sources".)
     # A Mossback's den (creature.MossbackDen): trampled moss and gnawed bone on a den gate's upper landing. It drops
     # nothing, so nobody can carry one off to farm lizards.
     "mossback_den": ("Mossback Den", "moss_carpet", {"texture": "mossback_den"}),
@@ -226,7 +224,7 @@ BLOCKS = {
     "tall_seep_reeds": ("Tall Seep Reeds", "tall", {"variants": 2}),
     "neon_mushrooms": ("Neon Mushrooms", "mushrooms", {"neon": True}),
 }
-NO_DROP = {"band_stone", "glow", "mossback_den", "grazed_filament_grass"}
+NO_DROP = {"band_stone", "mossback_den", "grazed_filament_grass"}
 # The vent field's blocks: rock, never growth to /remix census (the whole blocks count as floor and ceiling).
 VENT_FIELD_BLOCKS = {"black_dripstone", "pointed_black_dripstone", "pale_stem", "glow_mat", "thin_glow_mat", "glow_cap", "vent_crown",
                      "vent_beads", "seep_crust"}
@@ -257,9 +255,6 @@ BLOCK_TAGS = {
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "smoulder_lichen",
                                     # Deep Gardens round 2: the giant mushrooms
                                     "pale_stem", "glow_cap"],
-    # The Galleries' lava glow is open space to a growing tree (TreeFeature asks isAir() or this tag): a sapling grows
-    # through it, and its logs, leaves and roots take its place.
-    ("minecraft", "replaceable_by_trees"): ["glow"],
     # A cinder chain hangs from the chain above it, so a climb's whole column holds.
     (MOD, "hanging_supports"): ["wisteria", "wisteria_plant", "lantern_roots", "lantern_roots_plant", "pale_wisteria", "pale_wisteria_plant", "cinder_chain"],
 }

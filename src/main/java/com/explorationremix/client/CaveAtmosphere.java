@@ -1,7 +1,6 @@
 package com.explorationremix.client;
 
 import com.explorationremix.ExplorationRemix;
-import com.explorationremix.block.GlowBlock;
 import com.explorationremix.config.ERClientConfig;
 import com.explorationremix.registry.ERParticles;
 import com.explorationremix.world.lava.LavaNet;
@@ -283,7 +282,7 @@ public final class CaveAtmosphere {
             above.setWithOffset(p, 0, 1, 0);
             FluidState f = s.getFluidState();
             if (!f.isEmpty()) {
-                if (!GlowBlock.open(level.getBlockState(above))) continue;
+                if (!level.getBlockState(above).isAir()) continue;
                 Holder<Biome> h = level.getBiome(p);
                 if (f.is(FluidTags.WATER) && (h.is(EMBER_GARDENS) || h.is(RUST_SPRINGS))) {
                     // Steam off every hot pool.
@@ -302,9 +301,9 @@ public final class CaveAtmosphere {
                 }
                 continue;
             }
-            if (!GlowBlock.open(s)) continue;
+            if (!s.isAir()) continue;
             BlockState up = level.getBlockState(above);
-            if (GlowBlock.open(up)) {
+            if (up.isAir()) {
                 // Pollen in a shaft of daylight in the Root Vaults, the sinkholes and the oasis hollows (the biomes are
                 // only underground, so no surface check).
                 if (random.nextFloat() < 0.08F && level.getBrightness(LightLayer.SKY, p) >= 13) {
@@ -347,7 +346,7 @@ public final class CaveAtmosphere {
         private final BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
 
         @Override
-        public boolean open(int x, int y, int z) { return GlowBlock.open(level.getBlockState(p.set(x, y, z))); }
+        public boolean open(int x, int y, int z) { return level.getBlockState(p.set(x, y, z)).isAir(); }
 
         @Override
         public boolean lava(int x, int y, int z) { return level.getBlockState(p.set(x, y, z)).getFluidState().is(FluidTags.LAVA); }

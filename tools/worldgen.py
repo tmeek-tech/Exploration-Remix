@@ -1214,29 +1214,6 @@ def build_features():
     # mantises, each in the mouth of its vent (about half the live vents); every vent field chunk, and the feature works
     # out from the field's plan which vents' tops stand in the chunk.
     feature("chimney_lurkers", "top_layer_modification", VENT_FIELD, {"type": f"{MOD}:chimney_lurkers", "config": {}}, [])
-    # The Galleries' lava glow (HallGlowFeature, after everything else): invisible light along the rock above the flood
-    # band, one try in every few-block cube, so the halls read lit by their lava under Complementary, which leaves unlit
-    # rock near black. 0.5.1, "brightly lit" but not flat: lit from the lava and the floor up. Level 15 just over the
-    # flood band, fading to 14 seventy blocks higher; a spot with no floor in reach under it but only a vault over it one
-    # less; one up or down in slow patches. A face gets about 3 to 4 levels under the spot that lights it: on the look
-    # prototype's stand-in cavern, at 15 fading to 13, the floors measured 11.1, 10.1 and 9.0 on average 0-30, 30-60 and
-    # 60+ blocks over the band and the undersides 10.8, 9.9 and 9.2 (0.5.0's 15-to-14: 11.2 to 9.9 and 11.2 to 10.4,
-    # nearly flat). The first fade to 11 left the vaults at 8 on average, a third of the faces under 8. 0.8.0 fix round:
-    # the falls' columns lit the halls too, so with a tenth of the falls the fade goes to 14, not 13: on the pack run's
-    # region (GlowLight, every lava block and glow spot) the halls' faces measure 10.6 on average, 1 in 23 under 8, where
-    # the old falls with the fade to 13 gave 10.3 and 1 in 13 (the thinned falls with 13: 10.0 and 1 in 10); the lowest
-    # 60 rows stay a little under the old (11.5 and 11.25 on average against 11.8 and 11.4), the high halls, four faces in
-    # five, gain (10.5 against 10.0). The Obsidian Tubes take 14, as bright as the high halls (Taran's second picture:
-    # tubes lit to their far ends): on the real tube field their faces measure 10.3 on average from the glow alone, 1 in
-    # 27 under 8 (HallGlowFeatureTest; at 13, 9.3 and one in eight; at 9, about 6). Fix round 2 after the 0.8.0 pack
-    # runs (the halls read dim with the falls cut back: rock 36.6 on average at the pack's cameras against 44.0 in the
-    # first run, whose brightness came from lava filling the views, not from brighter faces): one try in every 2-block
-    # cube, lit only with rock right beside it (reach 1), so the spots hug the rock and light the faces themselves, and
-    # a vault's spot two less, so the vaults stay the dimmest. Under Complementary a face's brightness follows its block
-    # light steeply (15 about twice 14, 14 about twice 13): on a 256-block box of the pack's region (GlowCurve, the faces
-    # 30 to 60 and 60+ rows over the table) the faces' mean weight rises from 5.4 and 3.9 to 12.5 and 8.4, still lit
-    # from the floor up; 2.7 times the spots. At the pack's cameras (the land run's blocks relit) the rock reads about
-    # 15 brighter.
     # The lava's pockets given back in the bottom two layers (LavaPocketsFeature; fix round 3 after the 0.8.0 pack runs):
     # the pack's Terrain Slabs lays its slabs at underground_structures into any spot a body can pass, lava too, and
     # waterlogs every slab whose spot holds a fluid, so each 1 x 1 dip of the Wasteland's lava table (117 in the pack run's
@@ -1254,9 +1231,8 @@ def build_features():
     # of a biome: its placement has no biome filter, and the hall biomes all carry it (the Obsidian Tubes do not: the rule
     # keeps out of the tube country anyway).
     feature("basalt_galleries/floor_lava", "top_layer_modification", halls, {"type": f"{MOD}:floor_lava", "config": {}}, [])
-    feature("basalt_galleries/glow", "top_layer_modification", GALLERIES,
-            {"type": f"{MOD}:hall_glow", "config": {"spacing": 2, "reach": 1, "low": 15, "high": 14, "fade": 70, "patch": 1,
-                                                    "vault": 2, "tubes": 14}}, [])
+    # (The Galleries' invisible lava glow, HallGlowFeature, left in 0.21.8, Taran: "remove the invisible light sources":
+    # every light in the layer now has a source you can see.)
 
 
 # The vanilla deep dark, moved down into the Blue Reaches: its sculk, which vanilla only places relative to the old
