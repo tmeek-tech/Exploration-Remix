@@ -37,8 +37,8 @@ public final class ERConfig {
     public final LayerConfig[] layers = new LayerConfig[4];
     // The Basalt Galleries' lava cycle (world.lava.LavaFlood), read while the server runs.
     public final ForgeConfigSpec.BooleanValue lavaCycleEnabled;
-    public final ForgeConfigSpec.DoubleValue lavaCycleMinutes, lavaCalm, lavaWarning, lavaRise, lavaFull, lavaDrain;
-    public final ForgeConfigSpec.IntValue lavaChecksPerTick, lavaChangesPerTick, lavaRadius;
+    public final ForgeConfigSpec.DoubleValue lavaCycleMinutes, lavaCalm, lavaWarning, lavaRise, lavaFull, lavaDrain, lavaBreakShare;
+    public final ForgeConfigSpec.IntValue lavaChecksPerTick, lavaChangesPerTick, lavaRadius, lavaClimbs;
     // 0.9.0: the Basalt Galleries' quakes (world.quake.Quakes) and the Caldera's eruptions (world.eruption.Eruptions), and
     // 0.5.1's terrain reset (world.lava.TerrainReset), read while the server runs. Keys whose meaning or default changed
     // from 0.8.0's are new names, so Forge drops the old ones from a player's file and writes the new defaults.
@@ -169,23 +169,32 @@ public final class ERConfig {
                 .define("denRifts", true);
         b.pop();
 
-        b.comment("The Basalt Galleries' lava cycle: one lava sea that rises 40 blocks over the layer's lava table and falls again on the",
-                "layer's own clock, the same for every player, with warning signs before it rises. Read while the server runs.").push("lavaCycle");
-        lavaCycleEnabled = b.comment("Run the cycle. Turned off, the lava goes back down to its table round the players in the Galleries and stays there.")
+        // 0.21.6: the sea is a smooth plane that climbs in stages and falls at once; the calm and the fall have new names
+        // (calmMinutes, fallMinutes) for their new defaults, so a file written before keeps none of the old 13.5 and 2.0
+        b.comment("The Basalt Galleries' lava cycle: one lava sea, a smooth surface over the whole layer, that rises 40 blocks over the layer's",
+                "lava table in climbs with breaks between them and falls back at once, on the layer's own clock, the same for every player,",
+                "with warning signs before it rises and before each climb. Anything under its surface is in lava. Read while the server runs.")
+                .push("lavaCycle");
+        lavaCycleEnabled = b.comment("Run the cycle. Turned off, the lava stays down at its table.")
                 .define("enabled", true);
         lavaCycleMinutes = b.comment("Length of one cycle in minutes of game time. A change takes effect when the next cycle begins.")
                 .defineInRange("cycleMinutes", 20.0, 1.0, 240.0);
         lavaCalm = b.comment("How the cycle is shared out between its phases, in proportion (the defaults are minutes of the 20-minute cycle):",
-                "calm, with the lava at its table.").defineInRange("calm", 13.5, 0.0, 1000.0);
+                "calm, with the lava at its table.").defineInRange("calmMinutes", 15.25, 0.0, 1000.0);
         lavaWarning = b.comment("Warning: rumbles, shaking and smoke, the lava still at its table.").defineInRange("warning", 1.5, 0.0, 1000.0);
-        lavaRise = b.comment("Rise: the lava climbs 40 blocks at an even pace.").defineInRange("rise", 2.0, 0.0, 1000.0);
-        lavaFull = b.comment("Full: the lava stays at its height.").defineInRange("full", 1.0, 0.0, 1000.0);
-        lavaDrain = b.comment("Drain: the lava goes back down to its table at an even pace.").defineInRange("drain", 2.0, 0.0, 1000.0);
-        lavaChecksPerTick = b.comment("Most blocks the lava looks at in one tick, over all players.").defineInRange("checksPerTick", 16384, 256, 1_000_000);
-        lavaChangesPerTick = b.comment("Most blocks the lava changes in one tick, over all players (each one is re-lit and sent to the players",
-                "watching it). Both are halved while the server is falling behind.").defineInRange("changesPerTick", 1500, 16, 100_000);
-        lavaRadius = b.comment("The lava is kept up to date in the chunks this far round every player in or near the Galleries; other chunks catch",
-                "up when a player comes near. 0: one chunk past the server's view distance (every chunk a client can see).").defineInRange("playerRadius", 0, 0, 64);
+        lavaRise = b.comment("Rise: the lava climbs 40 blocks in its climbs, with the breaks between them.").defineInRange("rise", 2.0, 0.0, 1000.0);
+        lavaFull = b.comment("Full: the lava stays at its height while the land resets.").defineInRange("full", 1.0, 0.0, 1000.0);
+        lavaDrain = b.comment("Fall: the lava drops back to its table in one smooth fall.").defineInRange("fallMinutes", 0.25, 0.0, 1000.0);
+        lavaClimbs = b.comment("How many climbs the rise is made of, each an equal share of the 40 blocks (1: one steady climb).")
+                .defineInRange("climbs", 4, 1, 20);
+        lavaBreakShare = b.comment("The share of the rise spent in the breaks between its climbs, when the lava holds still (0.5: half of it;",
+                "with the defaults, four climbs of 15 seconds and three breaks of 20).").defineInRange("breakShare", 0.5, 0.0, 0.9);
+        lavaChecksPerTick = b.comment("Most blocks the drain looks at in one tick, over all players: only for lava blocks a build before 0.21.6 left",
+                "in the Galleries (the sea was blocks then), which drain when a player comes near.").defineInRange("checksPerTick", 16384, 256, 1_000_000);
+        lavaChangesPerTick = b.comment("Most of those blocks the drain changes in one tick, over all players (each one is re-lit and sent to the",
+                "players watching it). Both are halved while the server is falling behind.").defineInRange("changesPerTick", 1500, 16, 100_000);
+        lavaRadius = b.comment("Those old lava blocks drain in the chunks this far round every player in or near the Galleries. 0: one chunk past",
+                "the server's view distance (every chunk a client can see).").defineInRange("playerRadius", 0, 0, 64);
         b.pop();
 
         b.comment("Earthquakes in the Basalt Galleries: big quakes every few minutes shake the view and drop rock from the ceilings round",

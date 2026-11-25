@@ -34,7 +34,8 @@
     "rune.FurnaceRuneMixin",
     "rune.ArrowPassByMixin",
     "LivingImmobileMixin",
-    "PlayerSweepMixin"
+    "PlayerSweepMixin",
+    "EntityLavaPlaneMixin"
   ],
   "client": [
     "client.LightTextureMixin",

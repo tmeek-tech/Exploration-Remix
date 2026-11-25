@@ -7,6 +7,7 @@ import com.explorationremix.registry.ERParticles;
 import com.explorationremix.registry.ERSounds;
 import com.explorationremix.world.lava.LavaCycle;
 import com.explorationremix.world.lava.LavaNet;
+import com.explorationremix.world.lava.LavaPlane;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
@@ -39,13 +40,16 @@ import javax.annotation.Nullable;
  *     <li><b>Warning</b> (the lava still at its table): deep rumbles through the rock, far apart at first and closer
  *     and louder toward the rise, each with a jolt of the view over a slight tremor that grows; the lava's surface
  *     bubbling and bursting more and more, with pops, smoke and embers.</li>
- *     <li><b>Rise</b>: a continuous low surge, lava popping and smoking all over its surface, a gentle steady
- *     shake.</li>
+ *     <li><b>Rise</b>, in climbs with breaks between them (0.21.6): while it climbs, a continuous low surge, lava popping
+ *     and smoking all over its surface and a gentle steady shake; in a break the lava holds, the surge sinks and the
+ *     surface settles, then stirs again, and a rumble with a jolt of the view comes just before the next climb.</li>
  *     <li><b>Full</b>: heavy smoke over the lava while the surge dies away.</li>
- *     <li><b>Drain</b>: hissing and steam off the wet basalt the lava has just left.</li>
+ *     <li><b>Fall</b> (the drain, now one quick drop): a deep rumble and a jolt as it goes, the surge with it, and
+ *     hissing and steam off the wet basalt the lava has just left, which go on cooling a while into the calm.</li>
  * </ul>
  * The server tells the client where the cycle is ({@link LavaNet.Sync}) on joining, on each phase change and every
- * few seconds; in between the client counts on with its own game time. The shake goes to the view through
+ * few seconds; in between the client counts on with its own game time, and so does the client's lava plane
+ * ({@link LavaPlane#CLIENT}, set here from each sync), which the warnings follow. The shake goes to the view through
  * {@link CameraShake}, with the quakes' and eruptions' (the client's screenShake and shakeStrength and the game's
  * Distortion Effects, none while the clock is held, for pictures); particles follow caveParticles.
  */
@@ -64,15 +68,35 @@ public final class LavaWarnings {
     /** Sounds left this second, so a busy surface does not pile up pops and hisses. */
     private static int pops, hisses;
     @Nullable private static Surge surge;
+    /** The break (by its climb) whose warning before the next climb has played, or -1; the phase a tick ago. */
+    private static int warnedClimb = -1;
+    @Nullable private static LavaCycle.Phase lastPhase;
+    /** A break stirs again over its last this many ticks, and the rumble before the next climb comes this many before it. */
+    static final int STIR = 120, WARN_AHEAD = 40;
+    /** The wet basalt goes on steaming this many ticks into the calm after the fall. */
+    static final int COOL_AFTER = 400;
     private static final BlockPos.MutableBlockPos POS = new BlockPos.MutableBlockPos();
     private static final BlockPos.MutableBlockPos ABOVE = new BlockPos.MutableBlockPos();
 
     /** A sync from the server (on the main thread). */
     public static void accept(LavaNet.Sync s) {
         sync = s.on() ? s : null;
-        cycle = s.on() ? new LavaCycle(s.lengths(), s.rise()) : null;
+        cycle = s.on() ? s.cycle() : null;
         ClientLevel level = Minecraft.getInstance().level;
         syncedAt = level != null ? level.getGameTime() : Long.MIN_VALUE;
+        plane();
+    }
+
+    /** The client's lava plane follows the last sync from the moment it came (off without one, or before a level is there). */
+    private static void plane() {
+        LavaNet.Sync s = sync;
+        LavaCycle c = cycle;
+        if (s == null || c == null) {
+            LavaPlane.CLIENT.off();
+            return;
+        }
+        if (syncedAt == Long.MIN_VALUE) return;
+        LavaPlane.CLIENT.set(c, s.tableY(), s.top(), s.bottom(), s.tick(), syncedAt, s.frozen());
     }
 
     /** The server's last word on the cycle (its rows: the lava table, the Galleries' top), or null when it does not run here. */
@@ -84,7 +108,10 @@ public final class LavaWarnings {
     private static LavaCycle.State now(ClientLevel level) {
         LavaNet.Sync s = sync;
         if (s == null || cycle == null) return null;
-        if (syncedAt == Long.MIN_VALUE) syncedAt = level.getGameTime();
+        if (syncedAt == Long.MIN_VALUE) {
+            syncedAt = level.getGameTime();
+            plane();
+        }
         return cycle.at(s.frozen() ? s.tick() : s.tick() + (level.getGameTime() - syncedAt));
     }
 
@@ -93,6 +120,9 @@ public final class LavaWarnings {
         sync = null;
         cycle = null;
         syncedAt = Long.MIN_VALUE;
+        LavaPlane.CLIENT.off();
+        warnedClimb = -1;
+        lastPhase = null;
         shake = shakeBefore = jolt = 0;
         // leaving the world stops every sound
         surge = null;
@@ -114,12 +144,16 @@ public final class LavaWarnings {
         LavaNet.Sync s = sync;
         LavaCycle.State st = level.dimension() == Level.OVERWORLD ? now(level) : null;
         float tremor = 0, surgeVolume = 0;
-        if (st != null && s != null && player.getY() >= s.bottom() && player.getY() < s.top() + 2) {
+        if (st != null && s != null && cycle != null && player.getY() >= s.bottom() && player.getY() < s.top() + 2) {
             RandomSource random = level.random;
-            int surface = s.tableY() + st.level();
+            // the lava's surface: the plane's while it is up (0.21.6), else the top of the table's own lava blocks
+            double plane = LavaPlane.CLIENT.surface(level.getGameTime(), 0);
+            boolean up = !Double.isNaN(plane);
+            double surface = up ? plane : s.tableY() - LavaCycle.SURFACE_DROP;
             double above = player.getY() - surface;
             float near = (float) Mth.clamp(1 - above / 64.0, 0.3, 1.0);
             double u = st.progress();
+            int full = s.tableY() + s.rise();
             switch (st.phase()) {
                 case WARNING -> {
                     tremor = (float) (0.04 + 0.22 * u) * near;
@@ -127,25 +161,55 @@ public final class LavaWarnings {
                         rumble(random, (float) (0.35 + 0.65 * u) * near, (float) (0.4 + 0.9 * u) * near);
                         nextRumble = (int) (Mth.lerp(u, 300, 50) * (0.75 + 0.5 * random.nextDouble()));
                     }
-                    surface(level, player, random, surface, above, (int) (16 + 48 * u), (float) u);
+                    surface(level, player, random, surface, up, above, (int) (16 + 48 * u), (float) u);
+                    warnedClimb = -1;
                 }
                 case RISE -> {
-                    tremor = 0.3F * near;
-                    surgeVolume = Math.min(1, st.into() / 100F);
-                    if (--nextRumble <= 0) {
-                        rumble(random, 0.6F * near, 0.6F * near);
-                        nextRumble = 160 + random.nextInt(140);
+                    LavaCycle.Stage sg = cycle.stage(st);
+                    if (sg == null || sg.climbing()) {
+                        // a climb: the surge, a steady shake, the surface popping all over
+                        tremor = 0.3F * near;
+                        // it swells in over two seconds, from where the break left it after the first climb
+                        surgeVolume = sg == null ? 1 : (float) Math.min(1, (sg.index() > 0 ? 0.5 : 0) + sg.into() / 40);
+                        if (--nextRumble <= 0) {
+                            rumble(random, 0.6F * near, 0.6F * near);
+                            nextRumble = 160 + random.nextInt(140);
+                        }
+                        surface(level, player, random, surface, up, above, 72, 1);
+                    } else {
+                        // a break: the lava holds, the surge sinks and the surface settles; over the break's last
+                        // seconds it stirs again, and a rumble with a jolt comes just before the next climb
+                        double left = sg.left();
+                        float stir = (float) Mth.clamp(1 - left / STIR, 0, 1);
+                        tremor = (0.06F + 0.16F * stir) * near;
+                        surgeVolume = 0.12F + 0.4F * stir * stir;
+                        surface(level, player, random, surface, up, above, (int) (12 + 52 * stir), 0.15F + 0.85F * stir);
+                        if (warnedClimb != sg.index() && left <= WARN_AHEAD && !s.frozen()) {
+                            rumble(random, 0.9F * near, 1.2F * near);
+                            warnedClimb = sg.index();
+                        }
+                        nextRumble = 120 + random.nextInt(80);
                     }
-                    surface(level, player, random, surface, above, 72, 1);
                 }
                 case FULL -> {
                     float fade = Math.max(0, 1 - st.into() / 300F);
                     tremor = 0.3F * near * fade;
                     surgeVolume = fade;
-                    smoke(level, player, random, surface, above);
+                    smoke(level, player, random, surface, up, above);
                 }
-                case DRAIN -> cooling(level, player, random, surface, s.tableY() + s.rise(), (float) (1 - 0.7 * u));
-                default -> nextRumble = 100;
+                case DRAIN -> {
+                    // the fall: the sea drops away at once, with one deep rumble and a jolt as it goes
+                    if (lastPhase == LavaCycle.Phase.FULL && !s.frozen()) rumble(random, 1.0F * near, 1.4F * near);
+                    tremor = (float) (0.28 * (1 - u)) * near;
+                    surgeVolume = (float) (0.8 * (1 - u));
+                    cooling(level, player, random, surface, full, (float) (1 - 0.5 * u));
+                }
+                default -> {
+                    nextRumble = 100;
+                    warnedClimb = -1;
+                    // the basalt the fall left goes on steaming a while into the calm
+                    if (st.into() < COOL_AFTER) cooling(level, player, random, surface, full, 0.5F * (1 - st.into() / (float) COOL_AFTER));
+                }
             }
             if (s.frozen()) {
                 tremor = 0;
@@ -153,6 +217,7 @@ public final class LavaWarnings {
             }
             surgeVolume *= 0.5F + 0.5F * near;
         }
+        lastPhase = st == null ? null : st.phase();
         jolt *= 0.93F;
         shake += (tremor + jolt - shake) * 0.15F;
         surge(mc, surgeVolume);
@@ -178,17 +243,17 @@ public final class LavaWarnings {
     }
 
     /**
-     * The lava's surface near the player, sampled at random columns at the height of its top block: bubbling that
-     * bursts more and more as {@code u} goes from 0 to 1, with pops, smoke and embers.
+     * The lava's surface near the player, sampled at random columns at its height ({@code surface}: the plane's while
+     * it is {@code up}, else the table's lava): bubbling that bursts more and more as {@code u} goes from 0 to 1, with
+     * pops, smoke and embers.
      */
-    private static void surface(ClientLevel level, Player player, RandomSource random, int surface, double above, int samples, float u) {
+    private static void surface(ClientLevel level, Player player, RandomSource random, double surface, boolean up, double above, int samples, float u) {
         if (above > 56) return;
         boolean particles = ERClientConfig.INSTANCE.caveParticles.get();
         float share = SmokeBudget.share();
-        int y = surface - 1;
         for (int k = 0; k < samples; k++) {
-            if (!lavaTop(level, player.getBlockX() + random.nextInt(57) - 28, y, player.getBlockZ() + random.nextInt(57) - 28)) continue;
-            double x = POS.getX() + random.nextDouble(), z = POS.getZ() + random.nextDouble(), top = y + 0.9;
+            if (!surfaceAt(level, player.getBlockX() + random.nextInt(57) - 28, player.getBlockZ() + random.nextInt(57) - 28, surface, up)) continue;
+            double x = POS.getX() + random.nextDouble(), z = POS.getZ() + random.nextDouble(), top = surface;
             if (random.nextFloat() < 0.06F + 0.25F * u) {
                 // a burst: a bubble breaking, throwing up lava and smoke
                 if (particles) {
@@ -209,27 +274,34 @@ public final class LavaWarnings {
         }
     }
 
-    /** Heavy smoke over the full lava. */
-    private static void smoke(ClientLevel level, Player player, RandomSource random, int surface, double above) {
+    /** Heavy smoke over the full lava, and now and then a pop off its surface (the plane has no lava blocks to pop). */
+    private static void smoke(ClientLevel level, Player player, RandomSource random, double surface, boolean up, double above) {
         if (above > 56 || !ERClientConfig.INSTANCE.caveParticles.get()) return;
         float share = SmokeBudget.share();
-        int y = surface - 1;
         for (int k = 0; k < 96; k++) {
-            if (!lavaTop(level, player.getBlockX() + random.nextInt(65) - 32, y, player.getBlockZ() + random.nextInt(65) - 32)) continue;
+            if (!surfaceAt(level, player.getBlockX() + random.nextInt(65) - 32, player.getBlockZ() + random.nextInt(65) - 32, surface, up)) continue;
             double x = POS.getX() + random.nextDouble(), z = POS.getZ() + random.nextDouble();
+            if (random.nextFloat() < 0.03F) {
+                level.addParticle(ParticleTypes.LAVA, x, surface, z, 0, 0, 0);
+                if (pops > 0 && random.nextFloat() < 0.3F) {
+                    pops--;
+                    level.playLocalSound(x, surface, z, SoundEvents.LAVA_POP, SoundSource.BLOCKS, 0.3F, 0.8F + 0.3F * random.nextFloat(), false);
+                }
+            }
             float r = random.nextFloat();
             ParticleOptions p = r < 0.12F ? ParticleTypes.CAMPFIRE_COSY_SMOKE : r < 0.42F ? ParticleTypes.LARGE_SMOKE : null;
             if (p == null || random.nextFloat() >= share) continue;
-            level.addAlwaysVisibleParticle(p, true, x, y + 1.1, z, 0, 0.03 + 0.03 * random.nextDouble(), 0);
+            level.addAlwaysVisibleParticle(p, true, x, surface + 0.2, z, 0, 0.03 + 0.03 * random.nextDouble(), 0);
         }
     }
 
     /** Hissing and steam off the basalt the draining lava has just left (the band between its surface and its full height). */
-    private static void cooling(ClientLevel level, Player player, RandomSource random, int surface, int full, float strength) {
-        if (full <= surface) return;
+    private static void cooling(ClientLevel level, Player player, RandomSource random, double surface, int full, float strength) {
+        int from = Mth.ceil(surface);
+        if (full <= from) return;
         boolean particles = ERClientConfig.INSTANCE.caveParticles.get();
         for (int k = 0; k < 80; k++) {
-            int y = surface + random.nextInt(full - surface);
+            int y = from + random.nextInt(full - from);
             POS.set(player.getBlockX() + random.nextInt(49) - 24, y, player.getBlockZ() + random.nextInt(49) - 24);
             BlockState s = level.getBlockState(POS);
             if (GlowBlock.open(s) || !s.getFluidState().isEmpty() || !s.isFaceSturdy(level, POS, Direction.UP)) continue;
@@ -243,6 +315,18 @@ public final class LavaWarnings {
                         1.2F + 0.8F * random.nextFloat(), false);
             }
         }
+    }
+
+    /**
+     * True when the lava's surface shows in column (x, z): while the plane is {@code up}, the cell at its {@code surface}
+     * is open (air or the glow, not inside rock); else the table's top lava block has air over it. Leaves POS there.
+     */
+    private static boolean surfaceAt(ClientLevel level, int x, int z, double surface, boolean up) {
+        if (up) {
+            POS.set(x, Mth.floor(surface), z);
+            return GlowBlock.open(level.getBlockState(POS));
+        }
+        return lavaTop(level, x, Mth.floor(surface), z);
     }
 
     /** True when (x, y, z) is lava with air over it; leaves POS there. */

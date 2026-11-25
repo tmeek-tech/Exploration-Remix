@@ -20,11 +20,13 @@ import java.util.function.Supplier;
  * thread, and reaches client code only through {@code DistExecutor}, so a dedicated server never loads a client class.
  *
  * <p>Version 3 (0.9.0): the quake and eruption messages gained their ids, timing, holds and the rest, and the ceiling
- * debris message is new. A client of another version is refused cleanly when it joins.
+ * debris message is new. Version 4 (0.21.6): the sync carries the rise's climbs and the share of it their breaks take,
+ * as the client draws the lava's plane at the height the server reckons. A client of another version is refused
+ * cleanly when it joins.
  */
 public final class LavaNet {
     /** The channel's protocol version: any change to a message's fields needs a new one. */
-    static final String VERSION = "3";
+    static final String VERSION = "4";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(new ResourceLocation(ExplorationRemix.MOD_ID, "lava"),
             () -> VERSION, VERSION::equals, VERSION::equals);
 
@@ -44,13 +46,17 @@ public final class LavaNet {
 
     /**
      * Where the lava cycle is: whether it runs at all, the cycle tick when sent, the phase lengths, whether the clock is
-     * held, the lava table's Y, how far the lava rises, and the Galleries' top and bottom Y. The client counts on from
-     * the tick with its own game time until the next one; sent on joining, on each phase change, after a command and
-     * every few seconds to players in or near the Galleries. About 40 bytes.
+     * held, the lava table's Y, how far the lava rises, the Galleries' top and bottom Y, and how the rise climbs (its
+     * climbs and the share of it the breaks between them take, {@link LavaCycle}). The client counts on from the tick
+     * with its own game time until the next one; sent on joining, on each phase change, after a command and every few
+     * seconds to players in or near the Galleries. About 50 bytes.
      */
-    public record Sync(boolean on, int tick, int[] lengths, boolean frozen, int tableY, int rise, int top, int bottom) {
+    public record Sync(boolean on, int tick, int[] lengths, boolean frozen, int tableY, int rise, int top, int bottom, int stages, double breakShare) {
         /** Tells the client the cycle does not run here (no deep world, or turned off). */
-        static Sync off() { return new Sync(false, 0, new int[]{1, 0, 0, 0, 0}, true, 0, 0, 0, 0); }
+        static Sync off() { return new Sync(false, 0, new int[]{1, 0, 0, 0, 0}, true, 0, 0, 0, 0, 1, 0); }
+
+        /** The cycle this sync describes (its lengths, rise and climbs). */
+        public LavaCycle cycle() { return new LavaCycle(lengths, rise, stages, breakShare); }
 
         void write(FriendlyByteBuf b) {
             b.writeBoolean(on);
@@ -61,10 +67,13 @@ public final class LavaNet {
             b.writeVarInt(rise);
             b.writeInt(top);
             b.writeInt(bottom);
+            b.writeVarInt(stages);
+            b.writeDouble(breakShare);
         }
 
         static Sync read(FriendlyByteBuf b) {
-            return new Sync(b.readBoolean(), b.readVarInt(), b.readVarIntArray(), b.readBoolean(), b.readInt(), b.readVarInt(), b.readInt(), b.readInt());
+            return new Sync(b.readBoolean(), b.readVarInt(), b.readVarIntArray(), b.readBoolean(), b.readInt(), b.readVarInt(), b.readInt(), b.readInt(),
+                    b.readVarInt(), b.readDouble());
         }
 
         void handle(Supplier<NetworkEvent.Context> ctx) {

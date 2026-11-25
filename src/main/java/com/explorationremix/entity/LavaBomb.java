@@ -97,6 +97,14 @@ public class LavaBomb extends ThrowableProjectile {
         // the lava test: the game's own hit test passes through fluids, so a bomb would sink through the lake and burst
         // on its bed; the top of a fluid (a cell holding one with nothing to collide with) ends it here instead
         Vec3 from = position(), to = from.add(getDeltaMovement());
+        // 0.21.6: the risen sea is the lava plane, with no blocks for the hit test to find: a bomb coming down through
+        // its surface ends there too (one thrown up from under it, out of a flooded crater, flies on)
+        com.explorationremix.world.lava.LavaPlane plane = com.explorationremix.world.lava.LavaPlane.of(level());
+        if (plane != null && to.y < from.y && plane.under(to.y, level().getGameTime(), 0) && !plane.under(from.y, level().getGameTime(), 0)) {
+            Eruptions.intoLava(this);
+            fizzle();
+            return;
+        }
         BlockHitResult hit = level().clip(new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, this));
         if (hit.getType() == HitResult.Type.BLOCK) {
             BlockPos p = hit.getBlockPos();

@@ -44,6 +44,33 @@ class ConfigKeysTest {
         }
     }
 
+    /**
+     * 0.21.6, the lava plane: the calm and the fall have new names for their new defaults (15.25 calm minutes, a
+     * 15-second fall), so a file written before keeps none of the old 13.5 and 2; the rise's climbs and breaks are new.
+     */
+    @Test
+    void theLavaCycleKeysAreThePlanes() {
+        assertFalse(WORLD.contains("lavaCycle.calm"), "the old calm share is still in the config");
+        assertFalse(WORLD.contains("lavaCycle.drain"), "the old drain share is still in the config");
+        assertEquals(15.25, spec(WORLD, "lavaCycle.calmMinutes").getDefault());
+        assertEquals(1.5, spec(WORLD, "lavaCycle.warning").getDefault());
+        assertEquals(2.0, spec(WORLD, "lavaCycle.rise").getDefault());
+        assertEquals(1.0, spec(WORLD, "lavaCycle.full").getDefault());
+        assertEquals(0.25, spec(WORLD, "lavaCycle.fallMinutes").getDefault());
+        assertEquals(4, spec(WORLD, "lavaCycle.climbs").getDefault());
+        assertEquals(0.5, spec(WORLD, "lavaCycle.breakShare").getDefault());
+        // the defaults are LavaCycle's own
+        double[] shares = com.explorationremix.world.lava.LavaCycle.DEFAULT_SHARES;
+        assertEquals(shares[0], (double) spec(WORLD, "lavaCycle.calmMinutes").getDefault());
+        assertEquals(shares[4], (double) spec(WORLD, "lavaCycle.fallMinutes").getDefault());
+        assertEquals(com.explorationremix.world.lava.LavaCycle.DEFAULT_STAGES, spec(WORLD, "lavaCycle.climbs").getDefault());
+        assertEquals(com.explorationremix.world.lava.LavaCycle.DEFAULT_BREAK_SHARE, (double) spec(WORLD, "lavaCycle.breakShare").getDefault());
+        // Taran's other picks fit the ranges: three climbs with 40-second breaks, six with 12-second ones
+        assertTrue(spec(WORLD, "lavaCycle.climbs").test(3) && spec(WORLD, "lavaCycle.climbs").test(6));
+        assertTrue(spec(WORLD, "lavaCycle.breakShare").test(80.0 / 120));
+        assertFalse(spec(WORLD, "lavaCycle.breakShare").test(1.0), "a rise needs some time to climb");
+    }
+
     @Test
     void droppedKeysAreGone() {
         for (String k : List.of("quakes.debrisPerSecond", "eruptions.activeMinMinutes", "eruptions.activeMaxMinutes", "eruptions.bombPower",

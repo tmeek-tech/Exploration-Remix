@@ -199,11 +199,13 @@ public final class GalleryChanges {
 
     /**
      * The first Y over the chunk's lava: over the lake's rows (every open block under the lava table is the table's lava)
-     * and over its share of the risen sea ({@link #seaLevel}). Integer.MIN_VALUE when the world has no lava table.
+     * and over the risen sea: the rows under the lava plane's surface ({@link LavaFlood#seaRows}, 0.21.6), or the
+     * chunk's own share of an older build's block sea while it still holds one ({@link #seaLevel}). Integer.MIN_VALUE
+     * when the world has no lava table.
      */
     public static int seaTop(LevelChunk chunk) {
         LavaFlood.Band b = LavaFlood.band();
-        return b == null ? Integer.MIN_VALUE : b.tableY() + seaLevel(chunk);
+        return b == null ? Integer.MIN_VALUE : b.tableY() + Math.max(LavaFlood.seaRows(), seaLevel(chunk));
     }
 
     /**

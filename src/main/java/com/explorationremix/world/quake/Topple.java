@@ -639,7 +639,10 @@ final class Topple {
         return null;
     }
 
-    /** True when lava stands in the column under {@code pos}, down to the first block that is not open. */
+    /**
+     * True when lava stands in the column under {@code pos}, down to the first block that is not open: a lava block, or
+     * an open cell under the lava plane's surface (0.21.6).
+     */
     private static boolean lavaUnder(ServerLevel level, BlockPos pos) {
         LevelChunk c = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
         if (c == null) return true;
@@ -651,6 +654,7 @@ final class Topple {
             if (s.getFluidState().is(FluidTags.LAVA)) return true;
             int t = BlockKinds.traits(s, c, m);
             if ((t & (Support.T_AIRLIKE | Support.T_LIQUID | Support.T_NO_COLLISION)) == 0) return false;
+            if (LavaFlood.underPlane(y)) return true;
         }
         return false;
     }

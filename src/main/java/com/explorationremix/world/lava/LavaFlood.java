@@ -46,7 +46,14 @@ import java.util.function.Predicate;
  * Galleries' lava table and falls again on the layer's own clock ({@link LavaClock}, kept in the overworld's saved
  * data), never set off by players. Does nothing when the deep world is not installed.
  *
- * <p><b>Real lava, cheaply.</b> The lava is vanilla lava sources, written one slice (one Y, one chunk) at a time by the
+ * <p><b>0.21.6: a plane, not blocks.</b> The risen sea is the {@link LavaPlane}: a smooth surface that climbs in
+ * stages with breaks between and falls back in one quick drop ({@link LavaCycle}), with no lava blocks under it. This
+ * class sets the server's plane every tick and tells the clients where the cycle is, so each draws the plane at the same
+ * height; whatever is under its surface is in lava ({@link LavaPlane}), and {@link #seaRows} gives the quakes, debris,
+ * eruptions and the terrain reset its rows. The block flood below now only drains: a chunk saved by an older build with
+ * its sea's lava blocks still in it gives them back as before when a player comes near, and nothing new is written.
+ *
+ * <p><b>Real lava, cheaply (until 0.21.6).</b> The lava was vanilla lava sources, written one slice (one Y, one chunk) at a time by the
  * rules in {@link Flood}. Only chunks within the player radius (the server's view distance by default) of a player in
  * or near the Galleries are kept up to date, nearest first, taking players in turn; every other chunk keeps the height
  * it was left at in its own record ({@link LavaChunk}, saved with the chunk) and catches up when such a player comes
@@ -108,6 +115,9 @@ public final class LavaFlood {
     @Nullable private static LavaCycle.Phase lastPhase;
     private static boolean lastOn;
     private static int lastTarget = -1;
+    /** The rows of the band under the plane's surface now, and its height over the table, in blocks (0 with the cycle off). */
+    private static int seaRows;
+    private static double seaHeight;
     /** Work was left over last tick. */
     private static boolean busy;
     /** A chunk loaded, or a command moved the clock: look the chunks over on the next tick. */
@@ -137,6 +147,16 @@ public final class LavaFlood {
         if (event.getLevel() instanceof ServerLevel l && l.dimension() == Level.OVERWORLD) wake = true;
     }
 
+    /**
+     * 0.21.6: nothing spawns under the lava plane's surface. Its sea's lava blocks kept that space before, and a mob put
+     * there now would only burn.
+     */
+    @SubscribeEvent
+    public static void spawnCheck(net.minecraftforge.event.entity.living.MobSpawnEvent.SpawnPlacementCheck event) {
+        if (seaRows <= 0 || event.getLevel().getLevel().dimension() != Level.OVERWORLD) return;
+        if (underPlane(event.getPos().getY())) event.setResult(net.minecraftforge.eventbus.api.Event.Result.DENY);
+    }
+
     @SubscribeEvent
     public static void loggedIn(PlayerEvent.PlayerLoggedInEvent event) { tell(event.getEntity()); }
 
@@ -161,6 +181,9 @@ public final class LavaFlood {
         lastPhase = null;
         lastOn = false;
         lastTarget = -1;
+        seaRows = 0;
+        seaHeight = 0;
+        LavaPlane.SERVER.off();
         busy = false;
         wake = false;
         pending = 0;
@@ -215,9 +238,16 @@ public final class LavaFlood {
         long now = level.getGameTime();
         LavaClock clock = data.clock;
         if (clock.advance(now, nextLengths(clock.lengthOverride()))) data.setDirty();
-        LavaCycle.State s = clock.cycle(band.rise()).at(clock.tick(now));
+        clock.climbs(ERConfig.INSTANCE.lavaClimbs.get(), ERConfig.INSTANCE.lavaBreakShare.get());
+        LavaCycle cycle = clock.cycle(band.rise());
+        LavaCycle.State s = cycle.at(clock.tick(now));
         boolean on = ERConfig.INSTANCE.lavaCycleEnabled.get();
-        int target = on ? s.level() : 0;
+        // 0.21.6: the sea is the plane; the block flood only drains lava blocks an older build left
+        if (on) LavaPlane.SERVER.set(cycle, band.tableY(), band.top(), band.bottom(), clock.tick(now), now, clock.frozen());
+        else LavaPlane.SERVER.off();
+        seaRows = on ? s.level() : 0;
+        seaHeight = on ? s.height() : 0;
+        int target = 0;
         if (on != lastOn || s.phase() != lastPhase) {
             phaseChanged(lastOn ? lastPhase : null, on ? s.phase() : null, s);
             lastOn = on;
@@ -238,7 +268,7 @@ public final class LavaFlood {
         }
         STATS.tick();
         flood(level, target, now);
-        // 0.5.1: the terrain reset follows the flood (it reads the heights the flood left), then the quakes and eruptions
+        // 0.5.1: the terrain reset follows the flood (it waits for a chunk's old lava blocks to drain), then the quakes and eruptions
         TerrainReset.tick(level, band, s, now);
         com.explorationremix.world.quake.Quakes.tick(level, band, s, now);
         com.explorationremix.world.eruption.Eruptions.tick(level, band, s, now);
@@ -561,7 +591,9 @@ public final class LavaFlood {
         Band b = band;
         if (b == null || data == null || !ERConfig.INSTANCE.lavaCycleEnabled.get()) return LavaNet.Sync.off();
         LavaClock c = data.clock;
-        return new LavaNet.Sync(true, c.tick(level.getGameTime()), c.lengths(), c.frozen(), b.tableY(), b.rise(), b.top(), b.bottom());
+        LavaCycle cycle = c.cycle(b.rise());
+        return new LavaNet.Sync(true, c.tick(level.getGameTime()), c.lengths(), c.frozen(), b.tableY(), b.rise(), b.top(), b.bottom(),
+                cycle.stages(), cycle.breakShare());
     }
 
     private static void send(ServerLevel level, PacketDistributor.PacketTarget to) { LavaNet.CHANNEL.send(to, sync(level)); }
@@ -590,10 +622,30 @@ public final class LavaFlood {
     public static boolean held() { return data != null && data.clock.frozen(); }
 
     /**
-     * The lava height the flood is bringing the chunks round the players to now: the cycle's height, 0 with the cycle
-     * turned off, -1 before the flood's first tick. A chunk whose record stands elsewhere is still catching up.
+     * The lava height the block flood is bringing the chunks round the players to now: 0 (since 0.21.6 it only drains
+     * the lava blocks older builds left; the sea is the plane), -1 before the flood's first tick. A chunk whose record
+     * stands elsewhere is still draining.
      */
     static int target() { return lastTarget; }
+
+    /**
+     * The rows of the band under the plane's surface now (the rows whose middle is under it, {@link LavaCycle#rows}):
+     * the risen sea's whole blocks, which the quakes, debris, eruptions and the terrain reset read as lava. 0 with the
+     * cycle off or before its first tick.
+     */
+    public static int seaRows() { return seaRows; }
+
+    /** How many blocks the plane stands over its table now (0 with the cycle off). */
+    public static double seaHeight() { return seaHeight; }
+
+    /**
+     * True when row {@code y} is under the plane's lava now: from the lava table up through {@link #seaRows} rows. The
+     * table's own lava under it is real blocks, and every caller tests those itself.
+     */
+    public static boolean underPlane(int y) {
+        Band b = band;
+        return b != null && y >= b.tableY() && y < b.tableY() + seaRows;
+    }
 
     /** The clock and the cycle, or null when the cycle cannot run in this world. */
     @Nullable
@@ -661,9 +713,16 @@ public final class LavaFlood {
         for (LavaCycle.Phase p : LavaCycle.Phase.values()) {
             if (sb.length() > 0) sb.append(", ");
             sb.append(p.id()).append(' ').append(minutes(c.length(p)));
+            if (p == LavaCycle.Phase.RISE && c.stages() > 1 && c.length(p) > 0) {
+                LavaCycle.Stage first = c.stage(0, c.length(p)), brk = c.stage(first.length(), c.length(p));
+                sb.append(String.format(Locale.ROOT, " (%d climbs of %s, %s breaks)", c.stages(), seconds(first.length()), seconds(brk.length())));
+            }
         }
         return sb.toString();
     }
+
+    /** Ticks as seconds, to a tenth. */
+    static String seconds(double ticks) { return String.format(Locale.ROOT, "%.1f s", ticks / 20.0); }
 
     /** What the flood has cost: per tick with work over the last {@link #WINDOW} such ticks, and per phase for the log. */
     static final class Stats {

@@ -25,7 +25,7 @@ class LavaClockTest {
         LavaClock late = new LavaClock(5_000_000L, STD);
         LavaCycle.State s = late.cycle(RISE).at(late.tick(5_000_000L));
         assertEquals(Phase.CALM, s.phase());
-        assertEquals(16200, s.left());
+        assertEquals(18300, s.left());
     }
 
     @Test
@@ -97,32 +97,33 @@ class LavaClockTest {
         LavaClock c = new LavaClock(0, STD);
         LavaCycle cycle = c.cycle(RISE);
         c.set(5000, cycle.tickOf(Phase.WARNING, 200));
-        assertEquals(16400, c.tick(5000));
+        assertEquals(18500, c.tick(5000));
         assertEquals(Phase.WARNING, cycle.at(c.tick(5000)).phase());
-        assertEquals(16410, c.tick(5010));
+        assertEquals(18510, c.tick(5010));
         // the next roll-over comes a whole cycle after the start the set implies
-        assertFalse(c.advance(5000 + 24000 - 16400 - 1, STD));
-        assertTrue(c.advance(5000 + 24000 - 16400, STD));
-        assertEquals(0, c.tick(5000 + 24000 - 16400));
+        assertFalse(c.advance(5000 + 24000 - 18500 - 1, STD));
+        assertTrue(c.advance(5000 + 24000 - 18500, STD));
+        assertEquals(0, c.tick(5000 + 24000 - 18500));
         // held, a set moves the held tick (wrapped round the cycle) and the clock stays held
         c.freeze(20_000);
         c.set(20_000, -1);
         assertTrue(c.frozen());
         assertEquals(23999, c.tick(99_999));
-        assertEquals(1, cycle.at(c.tick(99_999)).level(), "the last tick of the drain");
+        assertEquals(Phase.DRAIN, cycle.at(c.tick(99_999)).phase(), "the last tick of the fall");
+        assertEquals(0, cycle.at(c.tick(99_999)).level(), "all but down at its table");
     }
 
     @Test
     void aNewLengthKeepsThePlaceInThePhase() {
         LavaClock c = new LavaClock(0, STD);
-        long now = 18000 + 600;                         // a quarter of the way through the 2-minute rise
+        long now = 20100 + 600;                         // a quarter of the way through the 2-minute rise
         c.rescale(now, SHORT, 2400);
         assertArrayEquals(SHORT, c.lengths());
         assertEquals(2400, c.lengthOverride());
         LavaCycle.State s = c.cycle(RISE).at(c.tick(now));
         assertEquals(Phase.RISE, s.phase());
         assertEquals(60, s.into(), "a quarter of the 12-second rise");
-        assertEquals(10, s.level());
+        assertEquals(10, s.level(), "in the break after the first of its four climbs");
         assertEquals(61, c.cycle(RISE).at(c.tick(now + 1)).into(), "and it runs on");
         // held, the place is kept in the held tick, and the clock stays held; 0 goes back to the config's length
         c.freeze(now);

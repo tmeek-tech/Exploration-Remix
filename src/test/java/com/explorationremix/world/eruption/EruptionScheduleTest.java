@@ -18,12 +18,12 @@ class EruptionScheduleTest {
     /** "Frequent and small". */
     static final EruptionSchedule.Settings FREQUENT = new EruptionSchedule.Settings(1, 2, 0.5, 1, 40, 4, 6, 48, 1.0);
 
-    /** The cycle of the pick: 20 minutes of calm 16200, warning 1800, rise 2400, full 1200 and drain 2400 ticks. */
+    /** The cycle of the pick: 20 minutes of calm 18300, warning 1800, rise 2400, full 1200 and fall 300 ticks (0.21.6). */
     static final LavaCycle CYCLE = LavaCycle.standard(40);
 
     @Test
     void theCycleIsTheOneTheSpecCounts() {
-        assertArrayEquals(new int[]{16200, 1800, 2400, 1200, 2400}, CYCLE.lengths());
+        assertArrayEquals(new int[]{18300, 1800, 2400, 1200, 300}, CYCLE.lengths());
     }
 
     @Test
