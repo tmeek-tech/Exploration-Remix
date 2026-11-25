@@ -14,6 +14,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.block.AmethystClusterBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.MultifaceBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -40,8 +41,8 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
  * vine: down the face of the rock under the lip from the lip's own floor to the floor below, where that rock runs
  * unbroken (else the vine as before, where one may hang). It needs no rock over the lip, so the open terraces under a
  * noise rift's far vault get theirs too. A fringe of thin lichen beside it on the same face, now and then, so it reads
- * as lichen grown down the wall. This runs last, after the lichen, crust, sculk veins and floor plants: the streak
- * takes the place of those in its column ({@link #soft}), where the harness, which has none of them, puts one.
+ * as lichen grown down the wall. This runs last, after the lichen, crust, crystals, sculk veins and floor plants: the
+ * streak takes the place of those in its column ({@link #soft}), where the harness, which has none of them, puts one.
  */
 public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
     private static final int[] DX = {1, -1, 0, 0}, DZ = {0, 0, 1, -1};
@@ -64,8 +65,8 @@ public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
             int last = Integer.MAX_VALUE;
             for (int y = hi; y >= lo; y--) {
                 if (y >= last) continue;
-                // open, for a streak: the lichen, crust, sculk veins and small floor plants the earlier steps dressed the
-                // rock with take no room from it (it takes their place; wanting air, it lost about three in ten to them)
+                // open, for a streak: the lichen, crust, crystals, sculk veins and small plants the earlier steps left
+                // take no room from it (it takes their place; wanting air, it lost about three in ten to them)
                 if (!soft(level, p, qx, y + 1, qz) || !soft(level, p, qx, y, qz) || !soft(level, p, qx, y - 1, qz) || !soft(level, p, qx, y - 2, qz)) continue;
                 // the lips beside the column: any (a streak's, if the drop is into a noise rift: down the rift's own wall,
                 // from a deep dark cavern's floor too where the rift runs under it as a slot), and the rift's (a vine's)
@@ -157,15 +158,16 @@ public final class ShelfVinesFeature extends Feature<NoneFeatureConfiguration> {
     }
 
     /**
-     * Air, or what a streak may take the place of: lichen, crust or sculk veins on the rock (multiface blocks), or a
-     * one-block cave plant, out of the water. Not a tall plant, a cattail or a vine, whose other blocks it would leave.
+     * Air, or what a streak may take the place of: lichen, crust or sculk veins on the rock (multiface blocks), a crystal
+     * or bud, or a one-block cave plant, out of the water. Not a tall plant, a cattail or a vine, whose other blocks it
+     * would leave.
      */
     private static boolean soft(WorldGenLevel level, BlockPos.MutableBlockPos p, int x, int y, int z) {
         BlockState s = level.getBlockState(p.set(x, y, z));
         if (s.isAir()) return true;
         if (!s.getFluidState().isEmpty()) return false;
         Block b = s.getBlock();
-        return b instanceof MultifaceBlock || b instanceof CavePlantBlock;
+        return b instanceof MultifaceBlock || b instanceof AmethystClusterBlock || b instanceof CavePlantBlock;
     }
 
     /** Whether something hung or grown down column (x, z) to {@code fy} has a floor under it: water, or a sturdy top. */
