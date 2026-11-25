@@ -25,9 +25,9 @@
       ]
     },
     "faces": "walls",
-    "tries": 48,
+    "tries": 80,
     "radius": 4,
-    "height": 5,
+    "height": 6,
     "on": "#explorationremix:asurine_lining",
     "in_water": false
   }

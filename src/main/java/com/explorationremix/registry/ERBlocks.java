@@ -187,13 +187,16 @@ public final class ERBlocks {
     public static final RegistryObject<Block> ASURINE_BUD = block("asurine_bud", () -> new AmethystClusterBlock(3, 4,
             BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_LIGHT_BLUE).forceSolidOn().noOcclusion().sound(SoundType.SMALL_AMETHYST_BUD)
                     .strength(1.5F).lightLevel(s -> 5).pushReaction(PushReaction.DESTROY)));
-    /** A crust of small asurine facets over the asurine: light only where it covers a face, like glow lichen. */
+    /** A crust of fine glittering asurine grains over the asurine (0.22.8: Taran's pick, "Sugar"): light only where it
+     * covers a face, like glow lichen. */
     public static final RegistryObject<Block> ASURINE_CRUST = block("asurine_crust",
             () -> new GlowLichenBlock(lichen(MapColor.COLOR_LIGHT_BLUE, SoundType.AMETHYST_CLUSTER, 3)));
     /**
      * 0.21.7: reeds two or three blocks tall by the rifts' water, which hide a player standing in them from the Skeins
-     * (Taran's card picks: "Silver cattails", "Hidden while you're in them"). Its item sets down the whole plant. The
-     * heads at the plant's top glow faintly (light 3), so a bed shows by the water in the dark.
+     * (Taran's card picks: "Silver cattails", "Hidden while you're in them"). Its item sets down the whole plant. Drawn
+     * as glow sedge since 0.22.8 (Taran's later pick, "Glow Sedge", and its name in game; the id stays so worlds keep
+     * their reeds): the blades' tips glow, and the plant's top gives a faint light (3), so a bed shows by the water in
+     * the dark.
      */
     public static final RegistryObject<Block> SILVER_CATTAILS = block("silver_cattails",
             () -> new SilverCattailsBlock(plant(MapColor.COLOR_LIGHT_BLUE, SoundType.WET_GRASS, 0).offsetType(BlockBehaviour.OffsetType.XZ)

@@ -156,7 +156,7 @@ BLOCKS = {
     # 0.21.7: the streaks down the noise rifts' walls, climbable like vines (Taran's card: "Climbable lichen streaks")
     "thick_blue_lichen": ("Thick Blue Lichen", "lichen", {"variants": 2}),
     "asurine_bud": ("Asurine Bud", "crystal", {"variants": 2}),
-    "asurine_crust": ("Asurine Crust", "lichen", {"variants": 2}),
+    "asurine_crust": ("Asurine Crust", "lichen", {"variants": 4}),
     # ---- vegetation rework, part B: Deep Gardens (no green) and Basalt Galleries
     "pale_wisteria": ("Pale Wisteria", "vine"),
     "pale_wisteria_plant": ("Pale Wisteria", "vine_body:pale_wisteria", {"variants": 2}),
@@ -247,8 +247,9 @@ BLOCKS = {
     "glowworm_threads_plant": ("Glowworm Threads", "vine_body:glowworm_threads", {"variants": 2}),
     "seep_reeds": ("Seep Reeds", "cross", {"variants": 2}),
     "tall_seep_reeds": ("Tall Seep Reeds", "tall", {"variants": 2}),
-    # 0.21.7, the Blue Reaches polish: reeds by the rifts' water to hide in (Taran's card pick: "Silver cattails")
-    "silver_cattails": ("Silver Cattails", "cattails", {"variants": 3}),
+    # 0.21.7, the Blue Reaches polish: reeds by the rifts' water to hide in (Taran's card pick: "Silver cattails"),
+    # drawn as glow sedge since 0.22.8 (Taran's later pick: "Glow Sedge"); the id stays, so worlds keep their reeds
+    "silver_cattails": ("Glow Sedge", "cattails", {"variants": 3}),
     "neon_mushrooms": ("Neon Mushrooms", "mushrooms", {"neon": True}),
 }
 NO_DROP = {"band_stone", "mossback_den", "grazed_filament_grass"}
