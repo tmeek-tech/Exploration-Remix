@@ -713,7 +713,7 @@ class GalleriesFieldTest {
      * moves), 0.215 % of the moves step off a place that stands only because a wall gave way and 0.017 % onto one,
      * 0.263 % off a ramp's deck, 0.257 % off other ground within 20 blocks of a ramp's strip, and 0.055 % elsewhere. Now
      * falls 0.81 and 0.67 %, drops 3.70 and 4.20 % (slow boxes: falls 0.87, 0.79, 0.80 and 0.88 %, drops 1.89, 3.17,
-     * 4.82 and 4.04 %). FALLS went to 1 % with the tablelands of 0.22.3 (Taran's cards: high ground over most of each
+     * 4.82 and 4.04 %). FALLS went to 1 % with the tablelands of 0.22.4 (Taran's cards: high ground over most of each
      * hall, its tops 20 to 40 rows over the floor, with chasms between them and sheer sides where no ramp or talus comes
      * down): falls 0.86 and 0.66 %, drops 3.19 and 3.59 % (slow boxes: falls 0.89, 0.74, 0.87 and 0.94 %, drops 1.92,
      * 3.01, 3.88 and 3.01 %).
@@ -1199,12 +1199,16 @@ class GalleriesFieldTest {
      * (GalleriesField.CR_BN), and the join's seal holding again from {@link Join#SEAL_GAP} inside a crater's dry ring
      * (it was 92a8417241585f09; seed 12345's stayed: in seed 8675309's 1024 by 1024 box the seal now fills 44 open
      * blocks of {@link Terrain#density} at the Wasteland's floor, rows W and W + 1 at rings 34 to 35, as it does everywhere
-     * else). A change to the Galleries' shapes shows here: pin again only on purpose.
+     * else). Pinned again for 0.22.4's high ground (it was cbaa417241585f09 and 2a337faf34895756): the tablelands' tops,
+     * chasms, ledges and bridges ({@link GalleriesField#tableFloor}, {@link GalleriesField#chasmAt}), the ways down laid
+     * against the tops, across a chasm on a span and down clear of one or on as a bridge to clear tops
+     * (GalleriesField.FOOT_CLEAR, BRIDGE_MAX), and an opened hole's own cells open through the layer's top. A change to
+     * the Galleries' shapes shows here: pin again only on purpose.
      */
     @Test
     void digestPinned() {
-        assertEquals("cbaa417241585f09", digest(8675309), "seed 8675309");
-        assertEquals("2a337faf34895756", digest(12345), "seed 12345");
+        assertEquals("b0c3c36f8ce9ac47", digest(8675309), "seed 8675309");
+        assertEquals("bce4691cacc6b850", digest(12345), "seed 12345");
     }
 
     static String digest(long seed) { return digest(new Terrain(TerrainSettings.defaults(), -64, seed), seed); }

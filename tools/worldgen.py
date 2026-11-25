@@ -1249,14 +1249,14 @@ def build_features():
     # of a biome: its placement has no biome filter, and the hall biomes all carry it (the Obsidian Tubes do not: the rule
     # keeps out of the tube country anyway).
     feature("basalt_galleries/floor_lava", "top_layer_modification", halls, {"type": f"{MOD}:floor_lava", "config": {}}, [])
-    # The lower Galleries' ruins (GalleriesRuinsFeature, 0.22.3; Taran: "Can you make some scattered ruins in the lower
+    # The lower Galleries' ruins (GalleriesRuinsFeature, 0.22.4; Taran: "Can you make some scattered ruins in the lower
     # Basalt Galleries? ... Ruins should come in clusters with bigger structures in the middle and smaller around the
     # edges"): a cluster in most 400-block cells, on the tablelands' tops, planned by the field alone (GalleriesRuins)
     # and set chunk by chunk, last of the layer's passes, so nothing laid before it is left loose and nothing after it
     # builds into it. Its stone is the card's pick (blue asurine, Create's, falling back to deepslate without Create). All
     # the Galleries' biomes carry it, so a cluster that reaches over a biome's edge stays whole.
     feature("basalt_galleries/ruins", "top_layer_modification", GALLERIES, {"type": f"{MOD}:galleries_ruins", "config": {"stone": "asurine"}}, [])
-    # (The Galleries' invisible lava glow, HallGlowFeature, left in 0.22.3, Taran: "remove the invisible light sources":
+    # (The Galleries' invisible lava glow, HallGlowFeature, left in 0.22.4, Taran: "remove the invisible light sources":
     # every light in the layer now has a source you can see.)
 
 

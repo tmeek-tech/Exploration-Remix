@@ -13,10 +13,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The lower Galleries' ruins as {@link GalleriesRuins} plans them (0.22.3; Taran's cards: a cluster about every 400
+ * The lower Galleries' ruins as {@link GalleriesRuins} plans them (0.22.4; Taran's cards: a cluster about every 400
  * blocks, on the high ground, half fallen, a rune and some loot, lava glowing in them): 4 x 4 cells of two seeds, every
  * cluster's blocks checked as the feature would set them. On the first plan 13 and 12 of the 16 cells held a cluster,
- * with 75 and 71 small ruins round them, 5.8 a centre.
+ * with 75 and 71 small ruins round them, 5.8 a centre. The ways' bridges then brought more ways down onto the tops, and
+ * left 13 and 8 (a shrine with one stair stub round it, another with its rune chest shut on its terrace): now a spot by
+ * a way down is passed over without counting it among the looks, a site with 4 or more small ruins round it is kept
+ * where one is found, the planner walks to its chests ({@link GalleriesRuins#walkable}) and, where the cell's own big
+ * structure finds no spot, looks for a tower: 14 and 14, every cell meant to hold one, with 86 and 98 small ruins, 6.6
+ * a centre.
  */
 class GalleriesRuinsTest {
     static final long[] SEEDS = {8675309L, -42L};
@@ -205,7 +210,11 @@ class GalleriesRuinsTest {
      * (Stairs, slabs and walls count as full blocks, chests too.) On the first plans 73 of the two seeds' 74 chests were
      * reached: a hut stood on a plinth four rows over the ground, its doorway over the drop and a bank two rows over its
      * floor behind it, so its chest could be dropped into and not walked out of. Now a hut's doorway opens onto the
-     * nearest ground and steps lead down to it (GalleriesRuins.doorFrame, doorSteps): all 74.
+     * nearest ground and steps lead down to it (GalleriesRuins.doorFrame, doorSteps): all 74. With the ways' bridges a
+     * shrine's paving stood as a terrace three and four rows over its ground, a bank higher than its stair's foot on the
+     * other side, so its rune chest was walked onto but not off; now the planner walks to each chest as this test does,
+     * on its own blocks over the field's ({@link GalleriesRuins#walkable}), and lays the cluster elsewhere where the
+     * rune's cannot be reached: all 86 of the two seeds' chests.
      */
     @Test
     void everyChestCanBeWalkedTo() {

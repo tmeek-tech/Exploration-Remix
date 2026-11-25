@@ -7,6 +7,7 @@ import com.google.common.cache.LoadingCache;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
@@ -55,7 +56,7 @@ public final class GalleriesField {
     /** The floor's lava ({@link #floorLavaRow}): its rills' lines and widths, and the gaps that break them into pools. */
     final Perlin rillN, rillW, poolN;
     /**
-     * The tablelands (0.22.3, {@link #TL_TOP}): the chasms' two families of lines, their masks and widths, the raised
+     * The tablelands (0.22.4, {@link #TL_TOP}): the chasms' two families of lines, their masks and widths, the raised
      * tops' level, the ledges' widths, and the bridges' widths.
      */
     final Perlin chN1, chN2, chM1, chM2, chW, topN, ledgeN, brN, chSad;
@@ -387,20 +388,20 @@ public final class GalleriesField {
         Ramp dkRamp;
         int dkRow, dkDrop, dkGround;
         /**
-         * The rubble cones over the cell (0.22.3, {@link #coneRow}): how many (0..2) and each's apex, top and slope (4
+         * The rubble cones over the cell (0.22.4, {@link #coneRow}): how many (0..2) and each's apex, top and slope (4
          * values a cone), read block by block; the highest row they raise the floor to (the tops' level at the cell).
          */
         byte cones;
         double[] cone;
         int coneCap;
         /**
-         * A ramp of the tablelands (0.22.3, {@link #CH_RAMP}): the floor is a plane read block by block, row tf at the site
+         * A ramp of the tablelands (0.22.4, {@link #CH_RAMP}): the floor is a plane read block by block, row tf at the site
          * rising (tgx, tgz) rows a block, never under f (the least row it leaves in the cell) or over coneCap.
          */
         boolean tilt;
         float tf, tgx, tgz;
         /**
-         * A tablelands' bridge stands on the cell (0.22.3, {@link #bridge}): its foot on the tops at an end, a band lying on
+         * A tablelands' bridge stands on the cell (0.22.4, {@link #bridge}): its foot on the tops at an end, a band lying on
          * a floor near the tops, or a pier. Kept out of the stairs' wear ({@link #stairFloor}), so the bridge stays held.
          */
         boolean pier;
@@ -1023,9 +1024,9 @@ public final class GalleriesField {
     /** A quarter of the cells (hashed) stand this many rows higher where the ground's slope is under FO_S: ragged column tops. */
     static final double FLOOR_OFF = 1, FO_S = 0.12;
 
-    // ---- the tablelands (0.22.3)
+    // ---- the tablelands (0.22.4)
     /**
-     * The tablelands (0.22.3, Taran: "give it interesting shapes where you're often high above the floor"; picked on the
+     * The tablelands (0.22.4, Taran: "give it interesting shapes where you're often high above the floor"; picked on the
      * cards: tablelands, ledges and bridges, most of the walking up high, 20 to 40 blocks over the floor). In the main
      * galleries most of a hall's floor is the flat top of a basalt tableland, and the low floor is a net of chasms
      * between them ({@link #chasmAt}), TL_DF of the hall's height deep (TL_D0..TL_D1 rows), so low halls keep their
@@ -1131,16 +1132,20 @@ public final class GalleriesField {
     }
 
     /**
-     * The Wasteland's ways down and the tablelands (0.22.3): a ramp is laid against the tops ({@link #tableFloor}) and
+     * The Wasteland's ways down and the tablelands (0.22.4): a ramp is laid against the tops ({@link #tableFloor}) and
      * crosses a chasm on a span of rock whose underside lies DK_SPAN rows under the tops, the chasm open under it (as a
      * ridge down to a chasm's floor it dammed the chasm, the floor either side a pit: seed 8675309, pits of 1079 places at
      * (-240, 95) and of 1200 at (62, 205), where a ridge ran along a chasm and split it into two slots). Its foot stands
-     * FOOT_CLEAR blocks or more from a chasm's edge, so it never ends on a span in mid-air.
+     * FOOT_CLEAR blocks or more from a chasm's edge, so it never ends on a span in mid-air; one that comes down over a
+     * chasm or by its edge runs on level, a bridge on its span, until it stands so (out to BRIDGE_MAX blocks further, the
+     * tops it passes over no higher than its deck, its end at most BRIDGE_STEP rows over them, as a foot's). A third of
+     * the runs came down in a chasm and a fifth more within FOOT_CLEAR of one (1137 of 1896 in seed 2's box of
+     * {@code JoinTest.waysDownAndUp}), and refused, they cost that box 3 of its 13 ways down.
      */
     static final int DK_SPAN = 3;
-    static final double FOOT_CLEAR = 6;
+    static final double FOOT_CLEAR = 6, BRIDGE_MAX = 48, BRIDGE_STEP = 2;
     /**
-     * The chasms' floors come up to the tops (0.22.3, so every stretch of a chasm has a way up): at saddles, where a noise
+     * The chasms' floors come up to the tops (0.22.4, so every stretch of a chasm has a way up): at saddles, where a noise
      * of period CH_SP falls under CH_ST, and where a chasm's mask ends; each such floor rises CH_RAMP rows a block,
      * walked a row at a time (its cells' floors are planes read block by block, {@link Cell#tilt}). Slopes of TILT_MIN
      * rows a block or more are read so.
@@ -1218,7 +1223,7 @@ public final class GalleriesField {
     }
 
     /**
-     * The ledges' talus (0.22.3): a chasm's floor lies at most TALUS rows a block under the tops out from a ledge's edge
+     * The ledges' talus (0.22.4): a chasm's floor lies at most TALUS rows a block under the tops out from a ledge's edge
      * (a wall's or a massif's, {@link #chasmAt}), so where a ledge cuts a chasm short or runs along it, its floor climbs
      * to the ledge as rubble walked a row at a time. Cut off at the ledges with a cliff, the chasms left pieces walled in
      * wherever a line ran along a ledge, into a moat by a wall or where a wall's line wavered, each with no saddle, mask's
@@ -1354,7 +1359,7 @@ public final class GalleriesField {
 
     // ---- the tablelands' ways up: rubble cones
     /**
-     * The ways up out of the chasms (0.22.3; the card: "some sides step down as ... rubble slopes you can walk, the rest
+     * The ways up out of the chasms (0.22.4; the card: "some sides step down as ... rubble slopes you can walk, the rest
      * are sheer cliffs"): rubble cones against the cliffs, on a lattice of CN_G blocks, CN_P of whose cells try one at a
      * hashed point. The point is moved onto the nearest chasm's edge (a step along the edge's normal) and the cone stands
      * where it lands on an edge (within CN_ON blocks) of a chasm CN_MIN rows deep or more, on the tablelands, out of the
@@ -1378,7 +1383,7 @@ public final class GalleriesField {
     }
 
     /**
-     * The chasms' ends (0.22.3): where a chasm's line runs into a ledge (a wall's or a massif's, {@link #chasmAt}) a
+     * The chasms' ends (0.22.4): where a chasm's line runs into a ledge (a wall's or a massif's, {@link #chasmAt}) a
      * rubble cone stands with its apex on the ledge's edge, so a chasm cut off there walks up out of its end (cut off with
      * a cliff, a chasm between a wall and a doorway's ledge was a pit of 343 places in seed 8675309's box at (222, 3); a
      * ramp along every wall instead, as far out as a ramp runs, left a twentieth of the floor deep). Each lattice cell of
@@ -1686,7 +1691,7 @@ public final class GalleriesField {
 
     // ---- the tablelands' rock bridges
     /**
-     * Rock bridges over the chasms (0.22.3, picked on the cards with the tablelands and the ledges): natural arches from
+     * Rock bridges over the chasms (0.22.4, picked on the cards with the tablelands and the ledges): natural arches from
      * top to top. Each lattice cell of BR_G blocks holds one with chance BR_P, from the first of BR_TRIES hashed points
      * that lies in a chasm ({@link #tbridge}). It runs across the chasm (along the gradient of the distance to its edge,
      * turned up to BR_TURN either way) to the edge on both sides, read every BR_STEP blocks, at most BR_HALF blocks each
@@ -2181,7 +2186,7 @@ public final class GalleriesField {
             }
         }
         double F = Fb + skirt, Fpre = F;
-        // ---- the tablelands (0.22.3): most of the floor is a tableland's top, the chasms between them the low floor; the
+        // ---- the tablelands (0.22.4): most of the floor is a tableland's top, the chasms between them the low floor; the
         // low ground's terraces stay in the chasms
         double[] tq = out.tq;
         double hw = hl[0], dmT = 1e9, dgx = 0, dgz = 0;
@@ -2285,7 +2290,7 @@ public final class GalleriesField {
         // row at most ({@link #EDGE_LOW}) and no pillar stands within NEAR_IN of it (the hanging rock, below). None over
         // lava either (fix round 2b: in a Scoria Canyons slot the talus filled the lava up to a dry shelf).
         // Each ramp's talus is read at the column's own floor and the highest kept ({@link RampHit#tn}).
-        // (the tablelands' (0.22.3): where the tops are the ground raised out of the flood's reach the ridge stands sheer on
+        // (the tablelands' (0.22.4): where the tops are the ground raised out of the flood's reach the ridge stands sheer on
         // them as on the low ground)
         boolean chasm = tq[0] > 0.5 && !onTop;
         double Ft = chasm ? tq[1] : F;   // (in a chasm, the tops' over it)
@@ -2606,10 +2611,11 @@ public final class GalleriesField {
         // the rivers and the canyons read the warp's Jacobian: only they need it
         if (Fs < W + RIVER_LOW + 16 || cl.wCan > 0) warpJ(x, z, w);
         double F = riverFloor(x, z, w, Fs, riverPatch(w), 0);
-        // the tablelands (0.22.3): a ramp comes down onto a top or into a chasm as a player meets them
+        // the tablelands (0.22.4): a ramp comes down onto a top or into a chasm as a player meets them (the Jacobian
+        // filled in here too, as the callers read it after: a run's dry end reads the rivers' line through it, {@link #dryEnd})
         if (cl.wMain() > 0) {
             if (!(Fs < W + RIVER_LOW + 16 || cl.wCan > 0)) warpJ(x, z, w);
-            F = tableFloor(x, z, w, cl, F, Fs);
+            F = tableFloor(x, z, w, cl, F);
         }
         if (cl.wCal > 0) F = Math.max(F, coneFloor(x, z));
         if (cl.wCan > 0) F = canyonFloor(x, z, w, cl, F);
@@ -2621,28 +2627,33 @@ public final class GalleriesField {
     }
 
     /**
-     * The floor F at (x, z) raised to the tablelands' tops ({@link #tops}; the walls read as they stand before they give
-     * way round the ways down): the ground the ramps are laid against (a ramp crosses a chasm on a span of rock at the
-     * tops, {@link #DK_SPAN}, and its foot stands clear of the chasms, {@link #FOOT_CLEAR}). w holds the warp with its
-     * Jacobian, Fs the landscape.
+     * The floor F at (x, z) raised to the tablelands' tops: the ground the ramps are laid against (a ramp crosses a chasm
+     * on a span of rock at the tops, {@link #DK_SPAN}, so its ground is the tops all the way, and its foot stands clear of
+     * the chasms, {@link #FOOT_CLEAR}). It is {@link #tops}'s level and weight (out[1] and out[9], with the basins' and
+     * the tube countries' rims' ramps), which neither the chasms nor the walls' ledges and moats move, so only they are
+     * read. (Reading the whole of {@link #tops} for them, the halls' walls five times over for their gradient, was half
+     * of a cold chunk's time: 1239 ms against the Blue Reaches' 342, GalleriesFieldTest.costWithinBudget.) w holds the
+     * warp, cl the climate, which the main galleries weigh over 0.
      */
-    double tableFloor(double x, double z, double[] w, Climate cl, double F, double Fs) { return tableFloor(x, z, w, cl, F, Fs, null); }
-
-    /** {@link #tableFloor}, the tablelands' reading at (x, z) ({@link #tops}) into out where not null. */
-    double tableFloor(double x, double z, double[] w, Climate cl, double F, double Fs, double[] out) {
-        if (tubesAt(x, z) && tubes.rimAt(x, z) > 0) {
-            if (out != null) { out[0] = 0; out[3] = 1e9; }
-            return F;
+    double tableFloor(double x, double z, double[] w, Climate cl, double F) {
+        if (tubesAt(x, z) && tubes.rimAt(x, z) > 0) return F;
+        double wt = cl.wMain();
+        if (wt <= 0) return F;
+        double top = W + TL_TOP + TL_TOPN * smooth(0.5 + topN.noise2(x / TL_TOPP, z / TL_TOPP));
+        double Ht = Math.max(F, top), wTop = wt;
+        double R = land.basinRamp(w, BASIN_S, Ht - W + 8, new double[2], 0);
+        if (tubesAt(x, z)) {
+            double d = -tubes.rimAt(x, z);
+            if (d < (Ht - F) / BASIN_S + 8) {
+                double Rr = F + BASIN_S * Math.max(0, d);
+                if (Rr < R) R = Rr;
+            }
         }
-        double[] hl = new double[6], tq = new double[13];
-        land.hall(w, cl, hl, 0);
-        double[] hg = new double[4];
-        double hw = wallBlocks(x, z, cl, 0, hl, new double[6], new double[6], hg);
-        tops(x, z, w, cl, false, F, Fs, hl[2] + HALL_BASIN * Math.max(cl.wCal, cl.wCaus), hw, hg[0], hg[1], hg[2], hg[3], 1e9, 0, 0, tq);
-        // the tops' level: a ramp crosses a chasm over a span of rock at the tops ({@link #DK_SPAN}), so its ground is the
-        // tops all the way
-        if (out != null) System.arraycopy(tq, 0, out, 0, 8);
-        return tq[0] > 0 ? lerp(F, tq[1], tq[9]) : F;
+        if (R < Ht) {
+            wTop = wt + (1 - wt) * smooth((Ht - R) / BASIN_FADE);
+            Ht = Math.max(F, R);
+        }
+        return lerp(F, Ht, wTop);
     }
 
     /** {@link #floorBase} at (x, z) with its own warp in w (the Jacobian only where the rivers need it). */
@@ -3021,6 +3032,8 @@ public final class GalleriesField {
         double ux, uz, s, hw, th0, tEnd, tg, ts, bendA, bk0, bk1, b0, reach, score;
         /** Its form ({@link #formOf}): the gap under its base it is filled from, its half width noise's offsets, its landings (from u past the head, lengths). */
         double dkFill, hk0, hk1, sd;
+        /** Blocks past its head from which the deck runs on level (a bridge over a chasm at its foot, {@link #BRIDGE_MAX}; +inf: none). */
+        double uLevel = Double.POSITIVE_INFINITY;
         int land;
         final double[] lu = new double[LD_N], ll = new double[LD_N];
         /** Centre-line samples every RAMP_DT along the axis from t = r, the ground under them ({@link #rampGround}) and the strip's half width there (with HW_SLACK). */
@@ -3124,9 +3137,10 @@ public final class GalleriesField {
      * asked) and each cell's opened openings, in two bounded caches keyed by the cell (the least recently used dropped
      * first; a dropped cell is found again bit for bit). A cold chunk asks for about 330 to 710 raw cells (measured at the
      * cost test's three places: the openings after each resolved one along its runs, {@link #crossings}, as well as before
-     * it), so RAW_CACHE holds many such windows; a resolution whose cells are dropped while it runs finds them again but
-     * repeats its work, so the caches must hold the working set. The opened openings that touch a column's cell are
-     * cached per thread (nearCells, keyed by the whole cell, {@link #nearOps}).
+     * it), so RAW_CACHE holds many such windows. A resolution holds the raw cells it has read until it ends ({@link #pins}),
+     * so one whose cells are dropped while it runs keeps the choices it made on them; the next resolution finds a dropped
+     * cell again and repeats its work, so the caches must hold the working set. The opened openings that touch a column's
+     * cell are cached per thread (nearCells, keyed by the whole cell, {@link #nearOps}).
      */
     static final int RAW_CACHE = 16384, OPEN_CACHE = 8192;
     /**
@@ -3145,8 +3159,31 @@ public final class GalleriesField {
 
     static long cellKey(int i, int j) { return (long) i << 32 | (j & 0xFFFFFFFFL); }
 
-    /** The openings (raw: not resolved) whose middles lie in lattice cell (i, j). */
-    OpCell rawCell(int i, int j) { return rawCells.getUnchecked(cellKey(i, j)); }
+    /**
+     * The raw cells the thread's resolution in progress ({@link #openedOf}: from its opening's choices to the ramp it keeps)
+     * has read, held until it ends. A pass's choice on an opening is kept on that opening, so a cell found anew mid-way
+     * had lost every choice made on it: the next pass chose again on all its openings, and they on all theirs, pass by
+     * pass down. With the caches emptied every 20 ms (GalleriesFieldTest.openingsArePure's 64 cells, alone on a 4-core
+     * machine) 0.22.2 resolved 15 cells in 37 s and then sat over 2.5 minutes on one (0.7 s for all 64 without the drops),
+     * and 0.22.4, whose high ground makes each ramp's check about twice as costly, ran past 7 minutes; holding its cells, a
+     * resolution takes them all in 12.6 s (1.6 s without the drops).
+     */
+    private final ThreadLocal<Pins> pins = ThreadLocal.withInitial(Pins::new);
+
+    private static final class Pins {
+        int depth;
+        final HashMap<Long, OpCell> cells = new HashMap<>();
+    }
+
+    /** The openings (raw: not resolved) whose middles lie in lattice cell (i, j); within a resolution, the ones it first read. */
+    OpCell rawCell(int i, int j) {
+        long key = cellKey(i, j);
+        Pins p = pins.get();
+        if (p.depth == 0) return rawCells.getUnchecked(key);
+        OpCell c = p.cells.get(key);
+        if (c == null) p.cells.put(key, c = rawCells.getUnchecked(key));
+        return c;
+    }
 
     private OpCell loadRaw(long key) {
         OpCell c = new OpCell();
@@ -3185,8 +3222,14 @@ public final class GalleriesField {
     Opening openedOf(Opening o) {
         Opening f = o.open;
         if (f == null) {
-            int q = kept(o);
-            f = q >= 0 ? opened(o, cand(o, q)) : SHUT;
+            Pins p = pins.get();
+            p.depth++;
+            try {
+                int q = kept(o);
+                f = q >= 0 ? opened(o, cand(o, q)) : SHUT;
+            } finally {
+                if (--p.depth == 0) p.cells.clear();
+            }
             if (!OPEN.compareAndSet(o, null, f)) f = o.open;
         }
         return f == SHUT ? null : f;
@@ -3514,6 +3557,7 @@ public final class GalleriesField {
      */
     static double deckDrop(Ramp rp, double u) {
         if (u <= 0) return 0;
+        if (u > rp.uLevel) u = rp.uLevel;   // (a bridge to clear tops runs on level, {@link #BRIDGE_MAX})
         double run = u;
         for (int k = 0; k < rp.land; k++) run -= (1 - LD_K) * Math.max(0, Math.min(u - rp.lu[k], rp.ll[k]));
         return rp.sd * run;
@@ -4185,6 +4229,18 @@ public final class GalleriesField {
         rp.b0 = bendN.noise2(t0 / BEND_P + rp.bk0, rp.bk1);
     }
 
+    /**
+     * Whether a ramp may come down at (ex, ez) on ground endF: out of the Canyons and the Caldera, in a hall out of its
+     * walls (0.20.4) and off a lava river's bed ({@code w2}, {@code cl} scratch).
+     */
+    private boolean footDry(double ex, double ez, double endF, double[] w2, Climate cl) {
+        climate(ex, ez, cl);
+        if (cl.wCan > 0.05 || cl.wCal > 0.3) return false;
+        warp(ex, ez, w2);
+        if (wallNear(ex, ez, w2, cl, RAMP_WALL)) return false;
+        return !(endF < W + RIVER_LOW + 16 && lineDistW(riverN, w2, RIVER_P) < 14);
+    }
+
     /** Opening o's ramp candidate in direction slot k (see the openings' notes above), or null where none can be built. */
     Ramp rampCandidate(Opening o, int k) {
         Ramp rp = new Ramp();
@@ -4193,7 +4249,7 @@ public final class GalleriesField {
         double top = headTop, t0 = o.r + LIP;
         double[] w2 = new double[6];
         Climate cl = new Climate();
-        int nMax = (int) (RAMP_MAX / RAMP_DT) + 2;
+        int nMax = (int) ((RAMP_MAX + BRIDGE_MAX) / RAMP_DT) + 3;
         double[] bx = new double[nMax], bz = new double[nMax], bf = new double[nMax], bh = new double[nMax];
         int dir = slotDir(o, k);
         rp.dir = dir;
@@ -4221,16 +4277,47 @@ public final class GalleriesField {
             reach = Math.max(reach, ext);
             if (top - deckDrop(rp, t - t0) <= Fl + 2) { tEnd = t; endF = Fl; break; }
         }
-        if (tEnd < 0 || endF < W + 6) return null;
+        if (tEnd < 0 || endF < W + 6 || !footDry(bx[n - 1], bz[n - 1], endF, w2, cl)) return null;
+        // its foot on the tablelands' tops, clear of their chasms: come down over one or by its edge, it runs on level, a
+        // bridge on its span, until it stands so ({@link #FOOT_CLEAR})
         double ex = bx[n - 1], ez = bz[n - 1];
         climate(ex, ez, cl);
-        if (cl.wCan > 0.05 || cl.wCal > 0.3) return null;
-        warp(ex, ez, w2);
-        if (wallNear(ex, ez, w2, cl, RAMP_WALL)) return null;   // its foot in a hall, out of the walls (0.20.4)
-        climate(ex, ez, cl);
-        if (endF < W + RIVER_LOW + 16 && lineDistW(riverN, w2, RIVER_P) < 14) return null;
-        // its foot on the tablelands' tops, clear of their chasms ({@link #FOOT_CLEAR})
-        if (cl.wMain() > 0.05 && !(tubesAt(ex, ez) && tubes.rimAt(ex, ez) > 0) && edgeAt(ex, ez, w2, cl) < FOOT_CLEAR) return null;
+        if (cl.wMain() > 0.05 && !(tubesAt(ex, ez) && tubes.rimAt(ex, ez) > 0) && edgeAt(ex, ez, w2, cl) < FOOT_CLEAR) {
+            double u0 = tEnd - t0, dk = top - deckDrop(rp, u0), t1 = tEnd;
+            boolean clear = false;
+            for (double t = t1 + RAMP_DT; t <= t1 + BRIDGE_MAX + 1e-9 && n < nMax; t += RAMP_DT) {
+                double b = bend(rp, t0, t);
+                double px = o.x + rp.ux * t + rp.uz * b, pz = o.z + rp.uz * t - rp.ux * b;
+                double hq = halfWidth(rp, t0, t, b) + HW_SLACK;
+                double ext = len(px - o.x, pz - o.z) + hq + TALUS_MAX + 4;
+                if (ext > RAMP_REACH) return null;
+                warpXZ(px, pz, w2);
+                if (massN.fbm2(w2[0] / M_P, w2[1] / M_P, 2) > M_T - 0.08) return null;
+                if (tubesAt(px, pz) && tubes.apronAt(px, pz) > 0.02) return null;
+                climate(px, pz, cl);
+                double Fl = rampGround(px, pz, w2, cl);
+                bx[n] = px;
+                bz[n] = pz;
+                bf[n] = Fl;
+                bh[n] = hq;
+                n++;
+                reach = Math.max(reach, ext);
+                if (!(cl.wMain() > 0.05) || (tubesAt(px, pz) && tubes.rimAt(px, pz) > 0)) return null;
+                double e = edgeAt(px, pz, w2, cl);
+                // on the tops between chasms or at its end, no step up off the deck (the deck is walked over the higher
+                // of its row and the ground); at its end the deck at most BRIDGE_STEP rows over the tops
+                if (e >= 0 && Fl > dk + 0.5) return null;
+                if (e >= FOOT_CLEAR) {
+                    if (dk - Fl > BRIDGE_STEP) return null;
+                    tEnd = t;
+                    endF = Fl;
+                    clear = true;
+                    break;
+                }
+            }
+            if (!clear || endF < W + 6 || !footDry(bx[n - 1], bz[n - 1], endF, w2, cl)) return null;
+            rp.uLevel = u0;
+        }
         // the fill starts where the free height under the base thickness first comes within its form's rows
         double tg = tEnd;
         for (int q = 0; q < n; q++) {

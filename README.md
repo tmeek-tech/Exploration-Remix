@@ -86,16 +86,18 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   a ramp that meets one comes down through a gap in it). Walkable arches and bridges cross the halls, and flights of
   stairs lead from the bedrock landing up out of the flood and from the entry landing down to the halls; there are no
   climbs.
-  **High ground** (0.22.3): most of a hall's walkable ground lies 20 to 40 blocks over its floor, on tablelands with
-  cliff edges, ledges along the walls and rock bridges between them, so you often walk high over the lava's lakes.
-  **Ruins** (0.22.3): about every 400 blocks a half-fallen cluster stands on the high ground, over the flood's reach:
-  a broken tower, a pillared hall, a stepped shrine or a great gate in the middle, and about six small ruins round it
+  **High ground** (0.22.4): most of a hall's walkable ground lies 20 to 40 blocks over its floor, on tablelands with
+  cliff edges, ledges along the walls and rock bridges between them, so you often walk high over the lava's lakes. The
+  ramps from the Wasteland come down onto the tops; one that would end over a chasm runs on as a level bridge to solid
+  ground.
+  **Ruins** (0.22.4): about every 400 blocks a half-fallen cluster stands on the high ground, over the flood's reach:
+  a broken tower, a pillared hall, a stepped shrine or a great gate in the middle, and six or seven small ruins round it
   (wall pieces, column stubs and fallen columns, huts' footings, small arches, lava braziers, wells, stair stubs). They
   are built of Create's blue asurine (deepslate bricks in a pack without Create; the `stone` of the
   `basalt_galleries/ruins` feature picks another set). The middle holds a chest with a rune and some loot, and up to
   three huts round it hold a loot chest. The terrain reset rebuilds a broken ruin, its chests empty.
   Nothing lives here: no plants and no mobs. Light comes from lava you can see: a few big lava falls, chains of shallow
-  lava pools winding along the halls' low floors, magma, and the lava in the ruins' channels and braziers. (Until 0.22.3
+  lava pools winding along the halls' low floors, magma, and the lava in the ruins' channels and braziers. (Until 0.22.4
   an unseen glow block, `explorationremix:glow`, lit the walls too; an old world's glow turns to air.)
 * **Blue Reaches** keep 0.2.0's sizes: the Deep Blue Rift, up to 160 blocks deep, with its ledge path, natural bridges
   and the Asurine Geodes beside it; the deep dark's caverns on two tiers, with an ancient city in about one cell in

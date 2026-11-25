@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The lower Basalt Galleries' ruins (0.22.3; Taran: "Can you make some scattered ruins in the lower Basalt Galleries?
+ * The lower Basalt Galleries' ruins (0.22.4; Taran: "Can you make some scattered ruins in the lower Basalt Galleries?
  * ... Ruins should come in clusters with bigger structures in the middle and smaller around the edges"). Taran's cards: a
  * cluster about every 400 blocks, on the high ground (the tablelands' tops, over the lava's highest line), half fallen,
  * a rune and some loot in each, and lava channels glowing in them (the Galleries' only light is lava you can see).
@@ -17,7 +17,10 @@ import java.util.Map;
  * tableland's top, no way down, deck, bridge or band near, open {@link #HEAD_C} rows over the floor. There stands its big structure, one of four: a broken tower, a pillared hall, a
  * stepped shrine or a great gate, 15 to 25 blocks across, with the rune's chest in it. Round it, out to
  * {@link #R_OUT}, 6 to 12 small ruins where their own ground is flat: wall pieces, column stubs and fallen columns,
- * huts' footings (two or three of them with a loot chest), small arches, lava braziers and wells, stair stubs.
+ * huts' footings (two or three of them with a loot chest), small arches, lava braziers and wells, stair stubs. A site
+ * is kept only where its rune's chest can be walked to and back ({@link #walkable}), and one with fewer than
+ * {@link #SMALL_WANT} small ruins only where no other spot of its cell gives more; where the cell's own kind of big
+ * structure finds no spot, the smallest, a tower, is looked for.
  *
  * <p>A plan is the blocks of one cluster in a box round its middle, as codes ({@link #AIR}, {@link #BRICKS}, ...),
  * worked out from the field alone (its floors and cells, never the level), so every chunk the cluster spans agrees on
@@ -35,8 +38,10 @@ public final class GalleriesRuins {
     /**
      * A cluster's middle is looked for on a grid of SCAN blocks over its cell, kept EDGE blocks off the cell's sides,
      * where the tops stand at least half its big structure's reach from a chasm's edge, a wall's face and a massif's foot;
-     * the LOOKS flattest are tried in turn ({@link #fit}). Not within TUBE_KEEP of a tube country's rim, nor within
-     * WAY_KEEP of a way down's deck or foot past its reach, nor within HEAD_WAY of a way's head or its hole's throat.
+     * the flattest are laid in turn ({@link #fit}), LOOKS of them at most. Not within TUBE_KEEP of a tube country's rim,
+     * nor within WAY_KEEP of a way down's deck or foot past its reach, nor within HEAD_WAY of a way's head or its hole's
+     * throat: such a spot is passed over and not counted (0.22.4's bridges brought more ways down onto the tops, and
+     * counted among the looks they left the 16 test cells of seed -42 8 clusters, against 10 not counted).
      */
     static final int SCAN = 12, EDGE = 64, LOOKS = 8, TUBE_KEEP = 8, WAY_KEEP = 4, HEAD_WAY = 4;
     /**
@@ -56,6 +61,11 @@ public final class GalleriesRuins {
     static final int R_GAP = 3, R_OUT = 34;
     /** A small piece's ground: its tops within SMALL_LO + SMALL_HI rows (see {@link #smallGround}); the spots tried for each. */
     static final int SMALL_LO = 4, SMALL_HI = 2, SMALL_TRIES = 16;
+    /**
+     * The small ruins a cluster wants round its middle: a site laid with fewer is kept only where no other of its cell's
+     * gives more ({@link #build}), and never with fewer than SMALL_LEAST.
+     */
+    static final int SMALL_WANT = 4, SMALL_LEAST = 2;
     /**
      * The room for them round a site ({@link #outer}): read every OUTER_STEP blocks, plain ground within OUTER_LO rows
      * under and OUTER_HI over the paving; it counts OUTER_W against the big structure's own ground in the site's score.
@@ -262,7 +272,19 @@ public final class GalleriesRuins {
         if (g == null) return null;
         long h = Hashing.mix(seed, 93001, i, j);
         if (Hashing.unit(h) >= HELD) return null;
-        int kind = (int) (Hashing.unit(Hashing.mix(h, 2, 0, 0)) * 4), R = CENTRE_R[kind];
+        int kind = (int) (Hashing.unit(Hashing.mix(h, 2, 0, 0)) * 4);
+        Plan p = site(i, j, h, kind);
+        // where the cell's own big structure finds no spot with the room round it, the smallest (a tower) is looked for
+        if (kind != TOWER && (p == null || p.smalls.size() < SMALL_WANT)) {
+            Plan q = site(i, j, Hashing.mix(h, 9, 0, 0), TOWER);
+            if (q != null && (p == null || q.smalls.size() > p.smalls.size())) p = q;
+        }
+        return p;
+    }
+
+    /** Cell (i, j)'s cluster round a big structure of the kind given, or null where no spot of its tops holds one. */
+    private Plan site(int i, int j, long h, int kind) {
+        int R = CENTRE_R[kind];
         GalleriesField.Climate cl = new GalleriesField.Climate();
         GalleriesField.Shape0 s = new GalleriesField.Shape0();
         // the candidates: a jittered grid over the cell's inner square, on the tops, each scored by how much of the
@@ -292,28 +314,33 @@ public final class GalleriesRuins {
                 cand.add(new double[]{fit + OUTER_W * out + 0.03 * Hashing.unit(Hashing.mix(hk, 2, 0, 0)), x, z, row[0]});
             }
         cand.sort((u, v) -> Double.compare(v[0], u[0]));
+        // laid in turn, LOOKS of them at most (a spot by a way down or under a low ceiling is passed over, not counted):
+        // the first with SMALL_WANT small ruins round it is kept, else the one laid with the most
         int tries = 0;
+        Plan best = null;
         for (int k = 0; k < cand.size() && tries < LOOKS; k++) {
             double[] q = cand.get(k);
             int x = (int) q[1], z = (int) q[2], gy = (int) q[3];
             if (gy < W + DRY) continue;
-            // apart from the ones tried already (a near one fails the same way)
+            // apart from the ones laid already (a near one fails the same way)
             boolean near = false;
             for (int m = 0; m < k && !near; m++) {
                 double[] o = cand.get(m);
                 if (o[0] < 0) near = Math.abs(o[1] - x) + Math.abs(o[2] - z) < 2 * SCAN;
             }
             if (near) continue;
-            q[0] = -1;   // tried
-            tries++;
             if (g.wayNear(x, z, gy - 6, gy + HEAD_C, R + WAY_KEEP, HEAD_WAY)) continue;
             GalleriesField.Cell c = g.column(x, z);
+            if (c.c - (gy + 1) < HEAD_C - FLAT_HI) continue;
+            q[0] = -1;   // laid
+            tries++;
             Plan p = new Plan(i, j, x, z, gy, kind, Hashing.mix(h, 3, k, 0));
             p.head = c.c - (gy + 1);
-            if (p.head < HEAD_C - FLAT_HI) continue;
-            if (lay(p)) return p;
+            if (!lay(p)) continue;
+            if (p.smalls.size() >= SMALL_WANT) return p;
+            if (best == null || p.smalls.size() > best.smalls.size()) best = p;
         }
-        return null;
+        return best;
     }
 
     /**
@@ -456,6 +483,7 @@ public final class GalleriesRuins {
         }
         prune(p);
         settleLava(p);
+        if (p.smalls.size() < SMALL_LEAST || !walkable(p)) return false;
         seal(p);
         return true;
     }
@@ -567,6 +595,170 @@ public final class GalleriesRuins {
             byte b = p.at(c[0], c[1], c[2]);
             return b < CHEST || b >= RUNE_CHEST + 4;
         });
+    }
+
+    // ------------------------------------------------------------------------------------------------ the walk
+    /** The longest drop a step may take (rows), as the tests' walk takes it. */
+    static final int DROP = 15;
+    /** A chest is reached from a place within CHEST_REACH columns of it, CHEST_UNDER rows under to one over its row. */
+    static final int CHEST_REACH = 3, CHEST_UNDER = 3;
+    /** The high ground round a cluster: the places RING_IN or more blocks from its middle within RING_ROWS of its paving. */
+    static final int RING_IN = 40, RING_ROWS = 6;
+    static final int[] WX = {1, -1, 0, 0}, WZ = {0, 0, 1, -1};
+
+    /**
+     * Whether plan p's rune chest can be walked to and back from the high ground round it; a loot chest that cannot is
+     * taken out (its hut left without one). Walked as GalleriesRuinsTest walks the blocks the game makes, on the plan's
+     * blocks over the field's own (its floors, bands and ceilings), in the box: a standing place is two open rows over a
+     * block (lava is not open); a step goes into a neighbouring column one row up (with head room over the feet), on the
+     * level, or down to the first place at most DROP rows under, never into lava. A chest is reached where a place within
+     * CHEST_REACH columns of it, CHEST_UNDER rows under to one over its row, lies in the same two-way part of the walk as
+     * most of the places of the high ground round the cluster (RING_IN, RING_ROWS). (A shrine's paving stood as a terrace
+     * three and four rows over its ground, a bank higher than its stair's foot on the other side, so its rune chest was
+     * walked onto but not off.)
+     */
+    boolean walkable(Plan p) {
+        int NR = SY + 2, cols = SX * SX;   // rows y0 - 1 .. y0 + SY, bit r of a column's words
+        long[] sol = new long[cols], lav = new long[cols];
+        for (int dx = 0; dx < SX; dx++)
+            for (int dz = 0; dz < SX; dz++) {
+                int x = p.x0 + dx, z = p.z0 + dz, k = dx * SX + dz, t = terrain(p, x, z);
+                GalleriesField.Cell c = g.column(x, z);
+                boolean shut = c.closed();
+                long s = 0, l = 0;
+                for (int r = 0; r < NR; r++) {
+                    int y = p.y0 - 1 + r, dy = y - p.y0;
+                    byte b = dy >= 0 && dy < SY ? p.b[k * SY + dy] : NONE;
+                    boolean solid;
+                    if (b != NONE) {
+                        solid = b != AIR && b != LAVA;
+                        if (b == LAVA) l |= 1L << r;
+                    } else solid = shut || y <= t || y >= c.c || (y >= c.bl && y < c.bh);
+                    if (solid) s |= 1L << r;
+                }
+                sol[k] = s;
+                lav[k] = l;
+            }
+        // the standing places, bottom up in each column
+        int[] start = new int[cols + 1];
+        for (int k = 0; k < cols; k++) start[k + 1] = start[k] + Long.bitCount(standBits(sol[k], lav[k], NR));
+        int P = start[cols];
+        int[] feet = new int[P];
+        for (int k = 0; k < cols; k++) {
+            long m = standBits(sol[k], lav[k], NR);
+            for (int q = start[k]; m != 0; q++, m &= m - 1) feet[q] = Long.numberOfTrailingZeros(m);
+        }
+        int[] next = new int[P * 4];
+        for (int k = 0; k < cols; k++) {
+            int dx = k / SX, dz = k % SX;
+            for (int q = start[k]; q < start[k + 1]; q++) {
+                int r = feet[q];
+                for (int d = 0; d < 4; d++) {
+                    int nx = dx + WX[d], nz = dz + WZ[d], to = -1;
+                    if (nx >= 0 && nz >= 0 && nx < SX && nz < SX) {
+                        int n = nx * SX + nz;
+                        long open = ~(sol[n] | lav[n]), own = ~(sol[k] | lav[k]);
+                        if (r + 2 < NR && (own >>> (r + 2) & 1) != 0 && place(start, feet, n, r + 1) >= 0) to = place(start, feet, n, r + 1);
+                        else if ((open >>> r & 1) != 0 && (open >>> (r + 1) & 1) != 0)
+                            for (int yy = r; yy >= 1 && yy >= r - DROP; yy--) {
+                                if ((open >>> yy & 1) == 0) break;
+                                if ((sol[n] >>> (yy - 1) & 1) != 0) { to = place(start, feet, n, yy); break; }
+                            }
+                    }
+                    next[q * 4 + d] = to;
+                }
+            }
+        }
+        int[] comp = components(next, P);
+        // the high ground's part: the one holding most of the places RING_IN or more out, near the paving's row
+        Map<Integer, Integer> ring = new LinkedHashMap<>();
+        for (int k = 0; k < cols; k++) {
+            int dx = k / SX - BOX, dz = k % SX - BOX;
+            if (dx * dx + dz * dz < RING_IN * RING_IN) continue;
+            for (int q = start[k]; q < start[k + 1]; q++)
+                if (Math.abs(p.y0 - 1 + feet[q] - (p.gy + 1)) <= RING_ROWS) ring.merge(comp[q], 1, Integer::sum);
+        }
+        int main = -1, most = 0;
+        for (Map.Entry<Integer, Integer> e : ring.entrySet()) if (e.getValue() > most) { most = e.getValue(); main = e.getKey(); }
+        boolean rune = false;
+        for (java.util.Iterator<int[]> it = p.chests.iterator(); it.hasNext(); ) {
+            int[] c = it.next();
+            boolean reached = false;
+            for (int dx = -CHEST_REACH; dx <= CHEST_REACH && !reached && main >= 0; dx++)
+                for (int dz = -CHEST_REACH; dz <= CHEST_REACH && !reached; dz++) {
+                    int x = c[0] + dx - p.x0, z = c[2] + dz - p.z0;
+                    if (x < 0 || z < 0 || x >= SX || z >= SX) continue;
+                    for (int dy = -CHEST_UNDER; dy <= 1 && !reached; dy++) {
+                        int q = place(start, feet, x * SX + z, c[1] + dy - (p.y0 - 1));
+                        reached = q >= 0 && comp[q] == main;
+                    }
+                }
+            if (reached) rune |= c[3] == 1;
+            else if (c[3] == 0) {
+                p.set(c[0], c[1], c[2], AIR);
+                it.remove();
+            }
+        }
+        return rune;
+    }
+
+    /** A column's standing places as bits (feet at bit r: rock at r - 1, open at r and r + 1; never the top two). */
+    static long standBits(long sol, long lav, int NR) {
+        long open = ~(sol | lav);
+        return open & (open >>> 1) & (sol << 1) & ((1L << (NR - 1)) - 1) & ~1L;
+    }
+
+    /** The place of column k with its feet at row r (bit), or -1. */
+    static int place(int[] start, int[] feet, int k, int r) {
+        for (int q = start[k]; q < start[k + 1]; q++) {
+            if (feet[q] == r) return q;
+            if (feet[q] > r) return -1;
+        }
+        return -1;
+    }
+
+    /** Each place's two-way part of the walk (Tarjan's strongly connected components, iterative), over moves next. */
+    static int[] components(int[] next, int P) {
+        int[] comp = new int[P], index = new int[P], low = new int[P], stack = new int[P], cs = new int[P];
+        byte[] ce = new byte[P];
+        boolean[] on = new boolean[P];
+        java.util.Arrays.fill(index, -1);
+        int idx = 0, comps = 0, sp = 0;
+        for (int s = 0; s < P; s++) {
+            if (index[s] >= 0) continue;
+            int top = 0;
+            cs[0] = s;
+            ce[0] = 0;
+            index[s] = low[s] = idx++;
+            stack[sp++] = s;
+            on[s] = true;
+            while (top >= 0) {
+                int v = cs[top];
+                if (ce[top] < 4) {
+                    int w = next[v * 4 + ce[top]++];
+                    if (w < 0) continue;
+                    if (index[w] < 0) {
+                        index[w] = low[w] = idx++;
+                        stack[sp++] = w;
+                        on[w] = true;
+                        cs[++top] = w;
+                        ce[top] = 0;
+                    } else if (on[w]) low[v] = Math.min(low[v], index[w]);
+                } else {
+                    if (low[v] == index[v]) {
+                        while (true) {
+                            int w = stack[--sp];
+                            on[w] = false;
+                            comp[w] = comps;
+                            if (w == v) break;
+                        }
+                        comps++;
+                    }
+                    if (--top >= 0) { int u = cs[top]; low[u] = Math.min(low[u], low[v]); }
+                }
+            }
+        }
+        return comp;
     }
 
     /**

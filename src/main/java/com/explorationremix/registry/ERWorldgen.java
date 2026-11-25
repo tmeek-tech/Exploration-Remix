@@ -114,7 +114,7 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> CHOIR_RELIQUARY = FEATURES.register("choir_reliquary", () -> new ChoirReliquaryFeature(NoneFeatureConfiguration.CODEC));
     // the Galleries' floor lava (fix round 2 after the 0.8.0 pack runs): the field's rule laid on its floors
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> FLOOR_LAVA = FEATURES.register("floor_lava", () -> new FloorLavaFeature(NoneFeatureConfiguration.CODEC));
-    // 0.22.3: the lower Galleries' ruins, clusters planned on the tablelands' tops (GalleriesRuins) set chunk by chunk
+    // 0.22.4: the lower Galleries' ruins, clusters planned on the tablelands' tops (GalleriesRuins) set chunk by chunk
     public static final RegistryObject<Feature<GalleriesRuinsFeature.Config>> GALLERIES_RUINS = FEATURES.register("galleries_ruins", () -> new GalleriesRuinsFeature(GalleriesRuinsFeature.Config.CODEC));
     // 0.18.6: grass trails, roots and ivy over the lip of the plains' sinkholes, in the surface's biome
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> SINKHOLE_RIM = FEATURES.register("sinkhole_rim", () -> new SinkholeRimFeature(NoneFeatureConfiguration.CODEC));

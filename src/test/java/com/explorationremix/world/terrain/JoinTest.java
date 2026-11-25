@@ -392,14 +392,24 @@ class JoinTest {
      * same weight times its guard (spec-galleries-field-v2 7.5, W-ENG-2): over three seeds, at every column within 24
      * blocks of an opening the Galleries find (opened or not) and at 20 000 columns anywhere (20 areas of 512 x 512 in
      * 8000 x 8000), the Wasteland's dip weight is exactly openingSite x under, bit for bit, so the two halves of an opening
-     * can never drift apart. And the dip never falls (W-ENG-2's obligation (ii), with a row of margin): the Galleries'
-     * space stops at their cap, 4 rows under their top (T - SEAL + 1 is its first rock row), and an opened disc's at its
-     * crater's floor (T - 5), so their density is rock at gTop - 3 at every column, the guard is shut at every site, and
-     * every opening is a crater's ({@link #sealedOrOpenNeverLidded}).
+     * can never drift apart. And the dip never falls onto rock (W-ENG-2's obligation (ii)): the Galleries' space stops at
+     * their cap, 4 rows under their top (T - SEAL + 1 is its first rock row), so their density is rock at gTop - 3 and the
+     * guard shut at every site but an opened hole's own cells, which open through the layer's top (0.22.4: up to their
+     * crater's floor, the disc's cells whose columns ran past its flat floor kept its rising rim over their space as a
+     * shelf touching no rock, and a whole cell's left its rows of rock there as a lid when its fringe neighbours opened
+     * through). There, within DISC_GUARD blocks of the hole's edge, the Galleries are open from gTop - 6 through gTop, so
+     * the dip falls into their open space, where it changes no block (the blocks of rows -660..-626 round every hole of
+     * 7 x 7 lattice cells of seeds 1 and 2 are the same with the dips and without them, 1788 and 1100 columns dipping);
+     * every opening is a crater's ({@link #sealedOrOpenNeverLidded}). Measured: 3576, 2874 and 3549 columns with the
+     * guard open, the farthest 3.44, 4.08 and 2.83 blocks past a hole's edge.
      */
+    static final double DISC_GUARD = 5;
+
     @Test
     void openingSiteIsThePreGuardDip() {
-        int checked = 0, sites = 0, dips = 0, guardOpen = 0;
+        int checked = 0, sites = 0, dips = 0, guardOpen = 0, guardOff = 0;
+        double farthest = 0;
+        String firstOff = null;
         for (long seed : new long[]{1, 2, 8004}) {
             Terrain t = new Terrain(TerrainSettings.defaults(), -64, seed);
             List<int[]> cols = new ArrayList<>();
@@ -413,17 +423,34 @@ class JoinTest {
             for (int[] p : cols) {
                 WastelandField.Col c = t.wasteland.column(p[0], p[1]);
                 double site = t.breakthrough.openingSite(p[0], p[1]);
-                if (site > 0) { sites++; if (c.under > 0) guardOpen++; }
+                if (site > 0) {
+                    sites++;
+                    if (c.under > 0) {
+                        guardOpen++;
+                        // an opened hole's own cells, open from gTop - 6 through gTop
+                        double edge = 1e9;
+                        int ci = Math.floorDiv(p[0], 64), cj = Math.floorDiv(p[1], 64);
+                        for (int i = ci - 1; i <= ci + 1; i++) for (int k = cj - 1; k <= cj + 1; k++)
+                            for (GalleriesField.Opening o : t.galleries.openings(i, k)) edge = Math.min(edge, Math.hypot(p[0] + 0.5 - o.x, p[1] + 0.5 - o.z) - o.r);
+                        farthest = Math.max(farthest, edge);
+                        boolean through = true;
+                        for (int y = t.join.gTop - 6; y <= t.join.gTop; y++) if (t.galleries.density(p[0], y, p[1]) >= 0) through = false;
+                        if (edge > DISC_GUARD || !through) {
+                            guardOff++;
+                            if (firstOff == null) firstOff = "seed " + seed + " at " + p[0] + " " + p[1] + ": " + String.format(java.util.Locale.ROOT, "%.2f", edge) + " past a hole's edge, open through " + through;
+                        }
+                    }
+                }
                 if (c.holeDip > 0) dips++;
                 if (c.holeDip != site * c.under) { wrong++; if (first == null) first = p[0] + " " + p[1] + ": " + c.holeDip + " against " + site + " x " + c.under; }
                 checked++;
             }
             assertEquals(0, wrong, "seed " + seed + ": dips unlike the opening site times the guard, first at " + first);
         }
-        System.out.printf(java.util.Locale.ROOT, "JoinTest opening sites: %d columns, %d with a site, %d with the guard open, %d dipping%n", checked, sites, guardOpen, dips);
+        System.out.printf(java.util.Locale.ROOT, "JoinTest opening sites: %d columns, %d with a site, %d with the guard open (the farthest %.2f past a hole's edge), %d dipping%n", checked, sites, guardOpen, farthest, dips);
         assertTrue(sites > 5000, "too few sites to check: " + sites);
-        assertEquals(0, guardOpen, "sites with the guard open (the Galleries open at gTop - 3)");
-        assertEquals(0, dips, "dips falling through");
+        assertEquals(0, guardOff, "sites with the guard open (the Galleries open at gTop - 3) off an opened hole's own cells, first " + firstOff);
+        assertEquals(guardOpen, dips, "dips falling off the sites with the guard open");
     }
 
     /**
