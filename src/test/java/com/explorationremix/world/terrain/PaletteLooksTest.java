@@ -196,12 +196,22 @@ class PaletteLooksTest {
      */
     private static final Set<Rock> GALLERIES_STONE = EnumSet.of(Rock.BASALT, Rock.SMOOTH_BASALT, Rock.MAGMA, Rock.OBSIDIAN,
             Rock.CRYING_OBSIDIAN, Rock.TUFF, Rock.SCORCHIA, Rock.DEEPSLATE_GOLD_ORE, Rock.EMBER_CRUST, Rock.SMOOTH_EMBER_CRUST);
+    /**
+     * The rows either side of the join (Palette.lookLayer), where a block of either layer takes either layer's look: the
+     * Wasteland's stones or the Galleries' (until 0.22.9 the Galleries' were all among the Wasteland's; the ember crust is
+     * the Galleries' alone).
+     */
+    private static final Set<Rock> JOIN_STONE = EnumSet.copyOf(WASTELAND_STONE);
+    static {
+        JOIN_STONE.addAll(GALLERIES_STONE);
+    }
 
     @Test
     void naturalStoneOnly() {
         Terrain t = terrain();
         Shape s = t.shape;
         int blend = s.top(Terrain.GALLERIES) - Palette.JOIN_BLEND;   // over it a Galleries block may take the Wasteland's look
+        int wasteland = s.top(Terrain.GALLERIES) + Palette.JOIN_BLEND;   // and up to it a Wasteland block the Galleries'
         Random r = new Random(5);
         // no look queries, stand-ins that put columns, tubes and cones everywhere, and the noise fields' own (t.palette)
         for (Palette p : new Palette[]{new Palette(t, SEED, LookQueries.NONE), new Palette(t, SEED, new Stand()), t.palette}) {
@@ -215,7 +225,7 @@ class PaletteLooksTest {
                 int[] at = spread.next();
                 int x = at[0], z = at[1], y = s.bottom(li) + r.nextInt(s.height(li));
                 Rock q = p.shell(b, li, x, y, z, 1 + r.nextInt(8), 1 + r.nextInt(8), r.nextInt(4) == 0);
-                Set<Rock> allowed = gal && y <= blend ? GALLERIES_STONE : WASTELAND_STONE;
+                Set<Rock> allowed = y <= blend ? GALLERIES_STONE : y > wasteland ? WASTELAND_STONE : JOIN_STONE;
                 assertTrue(allowed.contains(q), q + " in " + b + " at " + x + " " + y + " " + z);
                 Rock i = p.interior(li, x, y, z);
                 assertTrue(allowed.contains(i), i + " deep in " + b + " at " + x + " " + y + " " + z);
