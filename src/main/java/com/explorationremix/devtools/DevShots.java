@@ -338,7 +338,7 @@ public final class DevShots {
      * "! sparkle tick" (a charged sword's sparkle held still at that tick of its clock; "! sparkle off" lets go),
      * "! table gear|choose|hover|set|out arg" (the enchanting table's rune view, open: show a piece of gear's sockets
      * (hand, helmet, chestplate, leggings or boots), choose a socket, hold the mouse over a socket, a risen rune, a box
-     * of the gear column or "out", set a rune, take one out), "! close" (the open screen) and "! snap name"
+     * of the gear column ("gear helmet"), a set of the tally ("set mend") or "out", set a rune, take one out), "! close" (the open screen) and "! snap name"
      * (a picture of this very frame, without moving or settling, for things in flight and screens). False if the
      * line is none of these.
      */
@@ -434,7 +434,8 @@ public final class DevShots {
             });
             case "table" -> {
                 // "! table gear|choose|hover|set|out arg": the enchanting table's rune view (RuneTableScreen.dev)
-                if (!com.explorationremix.client.rune.table.RuneTableScreen.dev(arg, s.length > 3 ? s[3] : "")) return false;
+                if (!com.explorationremix.client.rune.table.RuneTableScreen.dev(arg,
+                        s.length > 3 ? String.join(" ", java.util.Arrays.copyOfRange(s, 3, s.length)) : "")) return false;
             }
             case "close" -> {
                 if (mc.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>) mc.player.closeContainer();

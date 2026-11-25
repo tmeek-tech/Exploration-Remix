@@ -620,6 +620,7 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
         hoveredSet = null;
         if (devHover != null) {
             if (devHover.startsWith("gear ")) hoveredGear = gearNamed(devHover.substring(5));
+            else if (devHover.startsWith("set ")) hoveredSet = RuneId.byId(devHover.substring(4));
             return;
         }
         if (mouseX >= BOX_X && mouseX < BOX_X + BOX) {
