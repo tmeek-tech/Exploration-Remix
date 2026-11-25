@@ -23,9 +23,10 @@ import java.util.Map;
  * A sword's guard on the player's own game (Taran 2026-11-25). The use button raises it when neither hand's own use took
  * the click (MinecraftAttackMixin, at the end of startUseItem: a shield in the other hand, food, a block or a torch to
  * place all work as they always did) and the sword isn't mid-swing; it is held up while the button is, as vanilla holds a
- * shield up: the attack button does nothing meanwhile and the player walks slowly. What it turns is the server's to judge ({@code combat.guard.Guard}).
- * Here: the hand's pose in first person (raised, knocked back by a blow, flicked out by a parry, let down), and the
- * guards of the players in sight, for their pose seen from outside.
+ * shield up: the attack button does nothing meanwhile and the player walks slowly. What it turns is the server's to
+ * judge ({@code combat.guard.Guard}). Here: the hand's pose in first person (raised, knocked back by a blow, flicked out
+ * by a parry, let down), the guards of the players in sight, for their pose seen from outside, and those players'
+ * bodies squaring up to where they look.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class GuardClient {
@@ -95,12 +96,28 @@ public final class GuardClient {
         }
         // the players in sight: whose guard is up, and since when
         for (Player other : mc.level.players()) {
-            if (other == p) continue;
-            if (guarding(other)) RAISED.putIfAbsent(other.getId(), now);
-            else RAISED.remove(other.getId());
+            if (other != p) {
+                if (guarding(other)) RAISED.putIfAbsent(other.getId(), now);
+                else RAISED.remove(other.getId());
+            }
+            squareUp(other, now);
         }
         RAISED.keySet().removeIf(id -> mc.level.getEntity(id) == null);
         STRUCK.values().removeIf(v -> now - v[0] > STRUCK_SHOWN);
+    }
+
+    /** How far a squaring player's body turns towards where they look each tick (as vanilla's own swing turns it). */
+    private static final float SQUARE_UP = 0.3F;
+
+    /**
+     * A player standing still keeps their body where it was until they look more than 50 degrees away from it; with a
+     * guard up or a timed swing under way it turns to face where they look, as vanilla turns it for its own swing, so
+     * the blade is held up, and swung, towards what they face. Only how they are drawn: the client works the body out.
+     */
+    private static void squareUp(Player p, float now) {
+        SwingClient.Swing s = SwingClient.swing(p.getId());
+        if (!guarding(p) && (s == null || s.over(now))) return;
+        p.yBodyRot = Mth.rotLerp(SQUARE_UP, p.yBodyRot, p.getYHeadRot());
     }
 
     /** A blow was taken on {@code player}'s blade ({@code parry}: turned back), as the server shows it to everyone near. */

@@ -407,6 +407,23 @@ public final class DevShots {
                     }
                 }
             }
+            case "guardpose" -> {
+                // "! guardpose armX armY armZ grip twist": the guard seen from outside posed outright (radians); "! guardpose off"
+                if (arg.equals("off")) {
+                    com.explorationremix.client.combat.SwingPoses.devGuard(null);
+                } else {
+                    if (s.length < 7) return false;
+                    try {
+                        float[] v = new float[5];
+                        for (int i = 0; i < 5; i++) v[i] = Float.parseFloat(s[2 + i]);
+                        com.explorationremix.client.combat.SwingPoses.devGuard(v);
+                    } catch (NumberFormatException ex) {
+                        return false;
+                    }
+                }
+            }
+            // "! poselog": the next guard pose set on a player's model, and the arm as its item is drawn, to the log
+            case "poselog" -> com.explorationremix.client.combat.SwingPoses.devLog();
             case "glow" -> {
                 if (arg.equals("off")) {
                     com.explorationremix.client.combat.RuneGlow.devHold(-1.0F);

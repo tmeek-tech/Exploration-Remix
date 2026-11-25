@@ -149,8 +149,12 @@ public final class SwingAnim {
     static final Hand GUARD = Hand.of(-0.343F, 0.361F, 0.212F, -171.4F, -57.2F, -71.3F);
     static final Hand BLOCKED = Hand.of(-0.357F, 0.351F, 0.262F, -169.8F, -45.5F, -74.6F);
     static final Hand PARRIED = Hand.of(-0.4F, 0.403F, 0.182F, 142.7F, -66.3F, -37.5F);
-    /** Third person: the arm across the body, as a shield is held, the blade's point up by the other shoulder. */
-    static final Body GUARD_BODY = new Body(-0.95F, -0.55F, 0.1F, 0.0F, -0.15F, 0.0F);
+    /**
+     * Third person: the arm raised nearly level and brought in across the body, the fist before the chest, the blade
+     * rising from it past the other shoulder with its flat to the front; the sword shoulder turned a little forward.
+     * (The arm's own raise adds a little of vanilla's walking swing on top, see SwingPoses.)
+     */
+    static final Body GUARD_BODY = new Body(-1.3F, -0.7F, 0.6F, 0.0F, -0.15F, 0.0F);
 
     /** The guard comes up in this long, and down again in this long (ticks). */
     static final float GUARD_UP = 3.0F, GUARD_DOWN = 3.0F;
