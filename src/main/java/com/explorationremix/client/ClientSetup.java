@@ -6,6 +6,7 @@ import com.explorationremix.block.NeonBlock;
 import com.explorationremix.client.model.Geometry;
 import com.explorationremix.client.model.TubeWormsModel;
 import com.explorationremix.client.render.ChimneyLurkerRenderer;
+import com.explorationremix.client.render.HollowChoirRenderer;
 import com.explorationremix.client.render.FireflySwarmRenderer;
 import com.explorationremix.client.render.GiantSkeinRenderer;
 import com.explorationremix.client.render.LavaBombRenderer;
@@ -82,6 +83,8 @@ public final class ClientSetup {
         event.registerLayerDefinition(SkeinRenderer.LAYER, () -> Geometry.load("skein"));
         // 0.18.8: the giant Skein of the Deep Blue Rift, drawn the same way
         event.registerLayerDefinition(GiantSkeinRenderer.LAYER, () -> Geometry.load("giant_skein"));
+        // 0.21.9: the Hollow Choir's loose parts (a crown plate, a rib, a bell, the core, a tendril segment, a foot)
+        event.registerLayerDefinition(HollowChoirRenderer.LAYER, () -> Geometry.load("hollow_choir"));
     }
 
     @SubscribeEvent
@@ -97,6 +100,8 @@ public final class ClientSetup {
         event.registerEntityRenderer(EREntities.STILT_MANTIS.get(), StiltMantisRenderer::new);
         // 0.21.0: the chimney lurker of the Deep Gardens' vents
         event.registerEntityRenderer(EREntities.CHIMNEY_LURKER.get(), ChimneyLurkerRenderer::new);
+        // 0.21.9: the Hollow Choir of the Deep Dark
+        event.registerEntityRenderer(EREntities.HOLLOW_CHOIR.get(), HollowChoirRenderer::new);
         // 0.9.0: the eruptions' lava bombs, a spinning glowing block of magma in a halo
         event.registerEntityRenderer(EREntities.LAVA_BOMB.get(), LavaBombRenderer::new);
         // 0.20.6: the tube worms' plumes, moving

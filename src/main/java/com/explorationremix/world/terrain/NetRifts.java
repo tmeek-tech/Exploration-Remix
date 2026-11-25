@@ -22,14 +22,24 @@ final class NetRifts {
     /**
      * Where a noise rift shuts and where it is whole again, in blocks past each thing it keeps clear of: a room's wall
      * (at most half the room's radius past it), a climb's shaft, a landing's rim, the exit's passage, a geode's shell,
-     * the city's reserve and the Deep Blue Rift's ledge path. Inside them the rift narrows, grows shallower and shuts,
-     * as at its own ends.
+     * the city's reserve, the Hollow Choir's arena and the Deep Blue Rift's ledge path. Inside them the rift narrows,
+     * grows shallower and shuts, as at its own ends.
+     *
+     * <p>The arena keeps the widest shut band of the lot. It is the one thing here whose floor is laid block by block
+     * over whatever the cavern had ({@code ChoirArenaFeature}), so a rift opening under the bowl would not show as a
+     * cut in it but as a hole the feature then plugs, and the apron round it would be left standing on air.
      */
     static final double ROOM_SHUT = 2, ROOM_OPEN = 12, SHAFT_SHUT = 2, SHAFT_OPEN = 8, LANDING_SHUT = 6, LANDING_OPEN = 22,
             PASSAGE_SHUT = 5, PASSAGE_OPEN = 16, GEODE_SHUT = 3, GEODE_OPEN = 12, CITY_OPEN = 24, WALK_SHUT = Terrain.CORE + 3,
-            WALK_OPEN = Terrain.CORE + 14;
+            WALK_OPEN = Terrain.CORE + 14, ARENA_SHUT = 8, ARENA_OPEN = 28;
 
     static double ease(double d, double shut, double open) { return Terrain.smooth((d - shut) / (open - shut)); }
+
+    /**
+     * How far out from an arena's middle the bowl reaches: its rim, its apron, and a block over. Kept here rather
+     * than read from the feature so this file does not depend on the world.feature package.
+     */
+    private static double arenaReach() { return ChoirSites.RIM_R + 3.5; }
 
     /** How much of a noise rift a column keeps: 1 where nothing is near, 0 where it must shut. */
     static double keep(Network w, Network.LCol lc, int cx, int cz, double x, double z) {
@@ -58,6 +68,9 @@ final class NetRifts {
         }
         Chamber city = lc.net.city;
         if (city != null) k *= ease(Math.hypot(x - city.x, z - city.z) - Network.CITY_RESERVE, 0, CITY_OPEN);
+        ChoirSites.Site arena = lc.net.choir;
+        if (arena != null) k *= ease(Math.hypot(x - arena.x(), z - arena.z()) - arenaReach(), ARENA_SHUT, ARENA_OPEN);
+        if (k <= 0) return 0;
         if (lc.r != null) {
             if (lc.wOn) k *= ease(lc.wD, WALK_SHUT, WALK_OPEN);
             if (lc.w2On) k *= ease(lc.wD2, WALK_SHUT, WALK_OPEN);
@@ -549,7 +562,7 @@ final class NetRifts {
         return p.S - out * SKIRT_SLOPE;
     }
 
-    /** Calibration only: when set, which of {@link #clearOfPlan}'s checks turned a pond away (1 to 19). */
+    /** Calibration only: when set, which of {@link #clearOfPlan}'s checks turned a pond away (0 to 20). */
     static volatile int[] clearDebug;
 
     private static boolean no(int why) {
@@ -586,6 +599,7 @@ final class NetRifts {
             if (!Double.isNaN(t) && ex.passageXZ(cx, y, cz) < ex.radiusAt(t) + reach + PASSAGE_OPEN) return no(6);
         }
         if (n.city != null && Math.hypot(cx - n.city.x, cz - n.city.z) < Network.CITY_RESERVE + CITY_OPEN + reach) return no(7);
+        if (n.choir != null && Math.hypot(cx - n.choir.x(), cz - n.choir.z()) < arenaReach() + ARENA_OPEN + reach) return no(20);
         if (!n.canyons.isEmpty()) {
             Route r = n.canyons.get(0);
             for (Route.Geode g : r.geodes) if (Math.hypot(cx - g.x(), cz - g.z()) < g.r() + reach + GEODE_OPEN) return no(8);

@@ -284,6 +284,8 @@ final class NetPlanner {
             // Blue Reaches: the bridges and the pillars the rift, the caverns or the city's hall would leave in mid-air
             // (the rift, the hall and the regions kept are final now)
             if (li == Terrain.BLUE) w.dropLooseBridges(n);
+            // the Hollow Choir's arena, before the pillars are settled so none is left standing through the bowl
+            n.choir = ChoirSites.plan(w, n);
             if (n.dark != null) w.dropExposedPillars(n);
             NetIndex.build(w, n);
         }

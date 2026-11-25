@@ -1,0 +1,85 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "particle": "explorationremix:block/key_socket_side_filled",
+    "side": "explorationremix:block/key_socket_side_filled",
+    "top": "explorationremix:block/key_socket_top_filled",
+    "bottom": "explorationremix:block/key_socket_side_filled",
+    "side_glow": "explorationremix:block/key_socket_side_filled_glow",
+    "top_glow": "explorationremix:block/key_socket_top_filled_glow",
+    "bottom_glow": "explorationremix:block/key_socket_side_filled_glow"
+  },
+  "elements": [
+    {
+      "from": [
+        1,
+        0,
+        1
+      ],
+      "to": [
+        15,
+        11,
+        15
+      ],
+      "faces": {
+        "north": {
+          "texture": "#side"
+        },
+        "south": {
+          "texture": "#side"
+        },
+        "west": {
+          "texture": "#side"
+        },
+        "east": {
+          "texture": "#side"
+        },
+        "up": {
+          "texture": "#top"
+        },
+        "down": {
+          "texture": "#bottom",
+          "cullface": "down"
+        }
+      }
+    },
+    {
+      "from": [
+        0.998,
+        -0.002,
+        0.998
+      ],
+      "to": [
+        15.002,
+        11.002,
+        15.002
+      ],
+      "faces": {
+        "north": {
+          "texture": "#side_glow"
+        },
+        "south": {
+          "texture": "#side_glow"
+        },
+        "west": {
+          "texture": "#side_glow"
+        },
+        "east": {
+          "texture": "#side_glow"
+        },
+        "up": {
+          "texture": "#top_glow"
+        },
+        "down": {
+          "texture": "#bottom_glow",
+          "cullface": "down"
+        }
+      },
+      "forge_data": {
+        "block_light": 15
+      },
+      "shade": false
+    }
+  ]
+}

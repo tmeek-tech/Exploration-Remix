@@ -1205,6 +1205,13 @@ def build_features():
     feature("climb_vines", "top_layer_modification", network, {"type": f"{MOD}:climb_vines", "config": {}}, [])
     feature("shelf_vines", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:shelf_vines", "config": {}}, [])
     feature("open_way", "top_layer_modification", network, {"type": f"{MOD}:open_way", "config": {}}, [])
+    # 0.21.9: the Hollow Choir's arena, cut into a deep dark cavern's floor, and the reliquary at an ancient city's
+    # heart that holds one of the three keys that call it. Both run after the ways are opened and the sculk is laid, so
+    # they lay their stone over whatever the cavern and the city had. They are added to minecraft:deep_dark by the
+    # deep_dark_open_way modifier below, which is where the deep dark's own chunks get their features; declaring them
+    # here with no biome of their own keeps them out of every other biome's list.
+    feature("choir_arena", "top_layer_modification", [], {"type": f"{MOD}:choir_arena", "config": {}}, [])
+    feature("choir_reliquary", "top_layer_modification", [], {"type": f"{MOD}:choir_reliquary", "config": {}}, [])
     # The Mossback lairs on the den gates' upper landings (DenLairFeature): each den, and the bones and scraps within 30
     # blocks of it, once the ways are open. Band 1 is the Deep Blue Rift under every column, so this reaches every
     # chunk, and the feature works out from the plan which chunks hold a lair.
@@ -1529,7 +1536,8 @@ def write_all(data_dir, res_dir, write):
         "features": [f"{MOD}:{n}" for n, _, _ in DEEP_DARK_FEATURES], "step": "underground_decoration"})
     write(os.path.join(data_dir, "forge", "biome_modifier", "deep_dark_open_way.json"), {
         "type": "forge:add_features", "biomes": "minecraft:deep_dark",
-        "features": [f"{MOD}:climb_vines", f"{MOD}:shelf_vines", f"{MOD}:open_way"], "step": "top_layer_modification"})
+        "features": [f"{MOD}:climb_vines", f"{MOD}:shelf_vines", f"{MOD}:open_way",
+                     f"{MOD}:choir_arena", f"{MOD}:choir_reliquary"], "step": "top_layer_modification"})
     # Its sky and fog, dark like the Reaches' own (DEEP_DARK_SKY).
     write(os.path.join(data_dir, "forge", "biome_modifier", "deep_dark_sky.json"), {
         "type": f"{MOD}:dark_sky", "biomes": "minecraft:deep_dark",

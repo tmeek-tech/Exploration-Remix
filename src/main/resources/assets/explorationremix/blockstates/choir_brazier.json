@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "lit=true": {
+      "model": "explorationremix:block/choir_brazier"
+    },
+    "lit=false": {
+      "model": "explorationremix:block/choir_brazier_unlit"
+    }
+  }
+}

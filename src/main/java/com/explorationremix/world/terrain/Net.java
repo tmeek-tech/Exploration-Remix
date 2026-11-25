@@ -181,6 +181,8 @@ public final class Net {
     NetDark.Plan dark;
     /** Blue Reaches: the cell's kept city hall, or null (set with the index, {@link NetIndex#build}). */
     Chamber city;
+    /** Blue Reaches: the Hollow Choir's arena in this cell, or null where it has none ({@link ChoirSites}). */
+    ChoirSites.Site choir;
 
     // ---- spatial index for the per-column lookups: 16-block buckets over the cell and a 48-block apron
     static final int BK = 16, APRON = 48;

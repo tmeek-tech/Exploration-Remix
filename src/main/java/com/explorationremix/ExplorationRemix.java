@@ -6,6 +6,7 @@ import com.explorationremix.devtools.DevAutoRun;
 import com.explorationremix.devtools.RemixCommands;
 import com.explorationremix.registry.ERBiomeModifiers;
 import com.explorationremix.registry.ERBlocks;
+import com.explorationremix.registry.ERItems;
 import com.explorationremix.registry.EREntities;
 import com.explorationremix.registry.ERParticles;
 import com.explorationremix.registry.ERRemaps;
@@ -46,6 +47,8 @@ public final class ExplorationRemix {
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ERConfig.SPEC, MOD_ID + "-world.toml");
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ERClientConfig.SPEC, MOD_ID + "-client.toml");
         ERBlocks.BLOCKS.register(modBus);
+        // the plain items hang off the same register, so their class has to be loaded before it goes to the bus
+        ERItems.load();
         ERBlocks.ITEMS.register(modBus);
         ERBlocks.TABS.register(modBus);
         EREntities.ENTITIES.register(modBus);
@@ -61,6 +64,8 @@ public final class ExplorationRemix {
         MinecraftForge.EVENT_BUS.register(DeepWorldInstaller.class);
         MinecraftForge.EVENT_BUS.register(RemixCommands.class);
         MinecraftForge.EVENT_BUS.register(ERRemaps.class);
+        // 0.21.9: the far toll of a sleeping Hollow Choir arena, which is how one is found
+        MinecraftForge.EVENT_BUS.register(com.explorationremix.creature.choir.ChoirAmbience.class);
         // The Basalt Galleries' lava cycle: its per-chunk record, the server side and the channel to the clients.
         modBus.addListener(LavaChunk::register);
         MinecraftForge.EVENT_BUS.register(LavaFlood.class);

@@ -77,13 +77,19 @@ class NoiseLayersTest {
      * and fifth of seeds 1 and 2 change, every changed column in a noise rift or within 8 of one: 3,463 and 33 blocks of
      * seed 1's and 11 and 1,882 of seed 2's open out of the rock, the rest change only the density's value in the rock
      * beside them; no block closes, and no fluid or biome changes. Seed 8004's five answer as before.
+     * Pinned again for the Hollow Choir (0.21.9, Taran, 2026-11-25: "a hard and fun skulk themed boss"): its arena
+     * stands in about one Blue Reaches cell in three, which leaves the pillars inside the bowl unstood and eases the
+     * noise rifts shut round it. Four of the twelve plans change, each one a cell that has an arena (seed 1's cell
+     * 0,0; seed 2's cells -1,0 and 0,0; seed 8004's cell -1,-1); the other eight answer as before. Not one of the
+     * fifteen chunk hashes moves: every arena lies at least 96 blocks inside its cell, and none of the five chunks
+     * (which sit at cell corners) is near one.
      */
     static final String[] BLUE = {
-            "seed 1 plans: 4f1616c455b3bddd fdc5a2a29a72e73c a50705f116826a0a 9bbfff1e07a231dc"
+            "seed 1 plans: 4f1616c455b3bddd fdc5a2a29a72e73c a50705f116826a0a 7bd3181d2cfbfc9c"
                     + " blocks: 829ceb570d9b8bca 6c97765a11a75ff3 f01b378b509e1196 ecc4c0bb6be38d3f 4d16c27253cc356e",
-            "seed 2 plans: 2571cae239f9b0a8 b4b00fae3a3a233a 84c1880fb287446f e6abde3fd779de77"
+            "seed 2 plans: 2571cae239f9b0a8 3e8147a5c34963ca 84c1880fb287446f b4c7dc1f97f3e767"
                     + " blocks: 9f607868bd285a84 86c1690fea0001f1 55f8f1bba395da45 37afd4d970cda9fe 7d94cd9ce3f7dad0",
-            "seed 8004 plans: 6a411bf8beb6e601 846d5418fe02a5d9 698302474e48987d 15075467ebe1c09c"
+            "seed 8004 plans: 54626aec27891bd1 846d5418fe02a5d9 698302474e48987d 15075467ebe1c09c"
                     + " blocks: ccfcc9e7ae39fcb5 96f095f23ac431a7 c1f625eeb8829011 5af8fcf25ca80c07 8533a8c9f6e3d85b"};
     static final long[] UNCHANGED_SEEDS = {1, 2, 8004};
 

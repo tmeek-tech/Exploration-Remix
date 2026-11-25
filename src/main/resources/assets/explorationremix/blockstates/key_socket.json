@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "filled=false": {
+      "model": "explorationremix:block/key_socket"
+    },
+    "filled=true": {
+      "model": "explorationremix:block/key_socket_filled"
+    }
+  }
+}

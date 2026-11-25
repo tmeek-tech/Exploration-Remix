@@ -94,8 +94,8 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   `replace minecraft:air` skip it; fill with `replace explorationremix:glow` to clear it.
 * **Blue Reaches** keep 0.2.0's sizes: the Deep Blue Rift, up to 160 blocks deep, with its ledge path, natural bridges
   and the Asurine Geodes beside it; the deep dark's caverns on two tiers, with an ancient city in about one cell in
-  seven. The network's rooms and tunnels join them. The long views stay open: nothing stands in the deep dark's
-  caverns or in the rift only to cut them.
+  seven and the Hollow Choir's arena in about one cell in three (below). The network's rooms and tunnels join them.
+  The long views stay open: nothing stands in the deep dark's caverns or in the rift only to cut them.
 * Each layer has a flat water table (lava in the Wasteland, at y -663, and in the Basalt Galleries, at y -823), with
   lakes perched above it.
 * **The Basalt Galleries' lava cycle:** every 20 minutes the lava sea rises 40 blocks, to y -783, and drains again, on
@@ -188,6 +188,42 @@ pillager outposts), patrols, phantoms, village sieges, the Nether and the End ar
 enderman's chance and how wooded the woods must be are in `explorationremix-world.toml` (`[mobGroups]`, read while the
 server runs; `enabled = false` brings vanilla's own spawning back).
 
+## The Hollow Choir
+
+The Deep Dark's boss (0.21.9). It does not wander and it cannot be stumbled into: you call it, into an arena that was
+always waiting, with three keys you have carried down from three ancient cities.
+
+**The keys.** Every planned ancient city has one **reliquary** at its heart, a casket on the city's own floor holding a
+single **choir key**. Three cities, three keys. Nothing else drops one.
+
+**The arena.** About one Blue Reaches cell in three has a **sunken amphitheatre**, cut into the floor of one of that
+cell's deep dark caverns: a round deepslate bowl 48 blocks across and 6 deep, three unclimbable tiers of seats round
+it, two ramps cut through them to walk in and out, broken pillars on the fighting floor and twelve braziers burning
+pale blue, each with a flame standing a block out of its bowl: six round the seats, three in on the fighting floor and
+three on the dais ring, since a bowl this wide cannot be lit from its edge alone. Nothing is built over the rim, so the cavern's own ceiling is the roof and you can see clean across the bowl
+from anywhere on it. A sleeping arena rings once every half minute or so, and the toll carries about 150 blocks
+through the rock, so you hear one before you find one; that and the pale blue glow are the only hints, and there is no
+trail and no pull on the keys to lead you there. Three **key sockets** stand on the rim walk, a third of a turn apart.
+Put a key in each and the Choir comes.
+
+**The fight.** A crown of bone plates hangs over the dais with a bell inside it, held up by six great sculk tendrils
+that run from the cavern's ceiling past the crown down to roots on the floor. While the crown is up it cannot be hurt
+at all: a blow on it rings the bell and nothing more. The way in is the tendrils. Damage to a tendril wears that
+tendril through *and* tells on the Choir itself, so the bar moves while you work; cut the last standing tendril and the
+crown has nothing left to hang from. It falls, the bell opens, and for nine seconds the core inside takes everything
+you have. Then it climbs back and grows new tendrils, fewer and tougher each phase: six, then five, then four. A
+strong attack that lands while a tendril is rearing to slam spoils the slam and leaves the Choir stalled.
+
+Three phases, and the arena changes with each: the braziers go out a ring at a time, outside in, and the sculk creeps
+further out over the floor, so the last phase is fought on ground that is nearly all sculk by the three flames left
+standing on the dais. It raises
+rooted **sprouts** to mend itself and blunt your blows; they are the only help it gets, and they can be cut down.
+Leave the bowl and it lets you go, putting the arena back as it was.
+
+Lose and nothing is spent: the Choir goes, the arena resets, your three keys stay in their sockets and you heal, so
+the next try costs only the walk back. Win and it gives up about twenty levels' worth of experience, a **choir bell**
+to hang as a trophy, and two runes. It can be called again with three new keys.
+
 ## Runes
 
 Runes are items set into a row on a sword, bow or crossbow. A row reads in speaking order, carrier first: `Spark, On
@@ -249,6 +285,15 @@ shimmer and a soft note in your own hands; then, for as long as it has that ener
 | `/remix groups here` | the group home of the ground, cave or water where you are, the groups of each home round you, and any monsters round you in no group |
 | `/remix groups spawn <kind>` | a group of `undead`, `spiders`, `witches`, `creepers`, `slimes`, `husks`, `strays` or `drowned` near you, at the first place of its home dark enough to take it |
 | `/remix groups stats` | what the group spawner has done since the server started |
+| `/remix choir` | the Hollow Choir's arena nearest you: where its bowl, rim and ceiling are, which cavern tier it is cut into, where its three sockets stand, how many are filled, and, if the Choir is up, its phase, tendrils standing, health and sprouts |
+| `/remix choir tp` | onto that arena's rim, looking in across the bowl |
+| `/remix choir city` | the heart of the nearest planned ancient city, where its reliquary holds one choir key |
+| `/remix choir keys` | three choir keys |
+| `/remix choir summon` | fills that arena's three sockets and calls the Choir |
+| `/remix choir phase <0-3>` | dresses that arena as it stands at rest or in a phase of the fight (the braziers, the sculk and the sprouts), without fighting through to it |
+
+`/remix choir`, `/remix choir summon` and `/remix choir phase` go by where the command came from rather than by a
+player, so they work from the server console with `execute positioned <x> <y> <z> run remix choir ...`.
 
 ## Building
 
@@ -259,6 +304,7 @@ python3 tools/synth_sounds.py   # regenerates the drips, the Deep Blue Rift's ro
 python3 tools/synth_layer_sounds.py  # regenerates each layer's own ambience: crickets, ice, vents, the Galleries' rumble
 python3 tools/synth_lava_sounds.py  # regenerates the lava cycle's rumbles and surge
 python3 tools/synth_swing_sounds.py # regenerates the swings' and the hunters' wind-up sounds
+python3 tools/synth_choir_sounds.py # regenerates the Hollow Choir's tolls, bells, slams and the arena's far toll
 ```
 
 `src/preview` holds an offline preview (`TerrainPreview`) that draws each deep layer's network, sections through its

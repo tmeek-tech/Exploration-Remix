@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import textures
 import plants_vent
 from plants_fern import HANGING_SIZES
+import choir_blocks
 import worldgen
 import sounds
 import creatures
@@ -1089,14 +1090,46 @@ def creature_data():
                   runes.drop_pool(0.4, 0.05, [("deep_gardens", None)])]})
     write(os.path.join(ASSETS, "models", "item", "chimney_lurker_fang.json"),
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/chimney_lurker_fang"}})
+    # 0.21.9: the Hollow Choir of the Deep Dark. It costs three keys from three ancient cities and five minutes of a
+    # hard fight, and there is one of it per arena per summoning, so it pays like nothing else: the hollow bell itself,
+    # and two runes for certain, one of the Blue Reaches and one of either deep layer (Taran's pick: experience, a
+    # trophy and two runes). The experience is the entity's own (HollowChoirEntity.XP), not a drop.
+    write(os.path.join(DATA, "loot_tables", "entities", "hollow_choir.json"), {
+        "type": "minecraft:entity",
+        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:choir_bell"}]},
+                  runes.drop_pool(1.0, 0.0, [("blue_reaches", None)]),
+                  runes.drop_pool(1.0, 0.0, [("blue_reaches", 10), ("deep_gardens", 10)])]})
+    # A boss never staggers (combat.Stagger) and nothing shoves it off its dais.
+    tag("forge", "entity_types", "bosses", [f"{MOD}:hollow_choir"])
+    # The two of its blocks a player may keep drop themselves; the reliquary, the sockets and the sprouts do not
+    # (ERBlocks gives those noLootTable).
+    for bid in ("choir_brazier", "choir_bell"):
+        write(os.path.join(DATA, "loot_tables", "blocks", bid + ".json"), {
+            "type": "minecraft:block",
+            "pools": [{"rolls": 1, "bonus_rolls": 0,
+                       "entries": [{"type": "minecraft:item", "name": f"{MOD}:{bid}"}],
+                       "conditions": [{"condition": "minecraft:survives_explosion"}]}]})
 
 
 # Entities that are not creatures (creatures.py names those): 0.5.1's lava bomb, thrown by the Caldera's eruptions.
 ENTITY_NAMES = {"lava_bomb": "Lava Bomb"}
 
 
+# What the Hollow Choir's arena says (0.21.9): the key's tooltip, how the three sockets stand, why a blow on the crown
+# did nothing, and the summoning. All of it is said on the action bar, so nothing fills the chat.
+CHOIR_WORDS = {
+    f"item.{MOD}.choir_key.tip": "One of three. Set it in a socket at the Choir's bowl.",
+    f"item.{MOD}.choir_key.tip2": "Every ancient city keeps one.",
+    f"message.{MOD}.choir.need": "The socket is empty. It wants a choir key.",
+    f"message.{MOD}.choir.keys": "%s of %s keys set.",
+    f"message.{MOD}.choir.woken": "The Hollow Choir wakes.",
+    f"message.{MOD}.choir.held": "The crown is held up. Cut the tendrils.",
+}
+
+
 def lang(extra):
     out = dict(extra)
+    out.update(CHOIR_WORDS)
     # the blue fireflies (creature.FireflySwarm; tools/fireflies.py paints their glow): one entity is a whole swarm
     out[f"entity.{MOD}.firefly_swarm"] = "Blue Fireflies"
     write(os.path.join(ASSETS, "lang", "en_us.json"), dict(sorted(out.items())))
@@ -1156,6 +1189,8 @@ def main():
     biome_modifiers()
     names.update(sounds.write_all(ASSETS, write))
     names.update(creatures.write_all(ASSETS, write))
+    # 0.21.9: the Hollow Choir's own blocks, whose shapes and states fit none of the kinds above (choir_blocks.py)
+    names.update(choir_blocks.write_all(ASSETS, write))
     names.update(runes.write_all(RES, write, tag))
     # 0.20.5: the rune table's pixel art (textures/gui)
     rune_table_art.write_all(ASSETS)
