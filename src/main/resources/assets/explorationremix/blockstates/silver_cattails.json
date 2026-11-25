@@ -1,0 +1,114 @@
+{
+  "variants": {
+    "part=short_bottom,waterlogged=false": [
+      {
+        "model": "explorationremix:block/silver_cattails_short_bottom"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_short_bottom_2"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_short_bottom_3"
+      }
+    ],
+    "part=short_bottom,waterlogged=true": [
+      {
+        "model": "explorationremix:block/silver_cattails_short_bottom"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_short_bottom_2"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_short_bottom_3"
+      }
+    ],
+    "part=short_top,waterlogged=false": [
+      {
+        "model": "explorationremix:block/silver_cattails_short_top"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_short_top_2"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_short_top_3"
+      }
+    ],
+    "part=short_top,waterlogged=true": [
+      {
+        "model": "explorationremix:block/silver_cattails_short_top"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_short_top_2"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_short_top_3"
+      }
+    ],
+    "part=bottom,waterlogged=false": [
+      {
+        "model": "explorationremix:block/silver_cattails_bottom"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_bottom_2"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_bottom_3"
+      }
+    ],
+    "part=bottom,waterlogged=true": [
+      {
+        "model": "explorationremix:block/silver_cattails_bottom"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_bottom_2"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_bottom_3"
+      }
+    ],
+    "part=middle,waterlogged=false": [
+      {
+        "model": "explorationremix:block/silver_cattails_middle"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_middle_2"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_middle_3"
+      }
+    ],
+    "part=middle,waterlogged=true": [
+      {
+        "model": "explorationremix:block/silver_cattails_middle"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_middle_2"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_middle_3"
+      }
+    ],
+    "part=top,waterlogged=false": [
+      {
+        "model": "explorationremix:block/silver_cattails_top"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_top_2"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_top_3"
+      }
+    ],
+    "part=top,waterlogged=true": [
+      {
+        "model": "explorationremix:block/silver_cattails_top"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_top_2"
+      },
+      {
+        "model": "explorationremix:block/silver_cattails_top_3"
+      }
+    ]
+  }
+}

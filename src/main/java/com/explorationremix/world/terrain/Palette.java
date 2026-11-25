@@ -208,19 +208,14 @@ public final class Palette {
                 return Rock.CRIMSITE;
             }
             case ASURINE_GEODES: {
-                // Dark rock outside, a band of white calcite, then the asurine lining. The floors are a patchwork of
-                // asurine, cream calcite and cobbled deepslate (asurine_geodes.jpg).
+                // Clean bands round the hollow (0.21.7, Taran's card: "Neat bands, tidy crystals"): the asurine lining,
+                // its floor too, a band of white calcite, a band of dark smooth basalt, then plain deepslate. The old
+                // floors' patchwork of calcite and cobbled deepslate and the cobbled patches outside are gone.
                 double g = t.geodeShellDepth(x, y, z);
-                if (g < 1.7) {
-                    if (top && !wet) {
-                        if (n > 0.28) return Rock.CALCITE;
-                        if (n < -0.05) return Rock.COBBLED_DEEPSLATE;
-                    }
-                    return Rock.ASURINE;
-                }
+                if (g < 1.7) return Rock.ASURINE;
                 if (g < 3.1) return Rock.CALCITE;
                 if (g < 4.5) return Rock.SMOOTH_BASALT;
-                return n > 0.2 ? Rock.COBBLED_DEEPSLATE : Rock.DEEPSLATE;
+                return Rock.DEEPSLATE;
             }
             case DEEP_BLUE_RIFT: {
                 // deep_blue_rift.jpg: dark deepslate and cobbled deepslate with broad sheets of blue asurine;

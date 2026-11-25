@@ -208,15 +208,23 @@ final class VoxelHarness {
         return out;
     }
 
+    /** How many of the last {@link #markShelfVines}' climbs were lichen streaks. */
+    int streaks;
+
     /**
      * Shelf vines as {@code ShelfVinesFeature} places them (section 10). A lip is a place standing on rock, in one of
      * the given biomes, beside a column that is air from a block over its head down to two under its feet. In such a
      * column on the vine lines ({@link Network#shelfVineColumn}), a vine hangs from the first rock over it (at most
      * {@link Network#SHELF_MAX_UP} over the feet) down through the air to the floor or water below, when that lies 2 to
-     * {@link Network#SHELF_MAX_DROP} under the feet. Returns the number of vines. Call before {@link #connect}.
+     * {@link Network#SHELF_MAX_DROP} under the feet. Since 0.21.7 a lip in any biome whose drop is into a noise rift
+     * ({@link Network#streakAt}) gets a lichen streak instead where the drop is at most {@link Network#STREAK_MAX_DROP}
+     * and the rock behind it on the lip's side runs unbroken from the floor's height up to the lip's floor: climbable
+     * from the floor up to the block under the lip's feet (else the vine as before, at a lip in the given biomes).
+     * Returns the number of vines and streaks. Call before {@link #connect}.
      */
     int markShelfVines(DeepBiome... biomes) {
         int vines = 0;
+        streaks = 0;
         Network w = t.network;
         for (int i = 0; i < nx; i++) for (int k = 0; k < nz; k++) {
             int qx = x0 + i, qz = z0 + k;
@@ -226,18 +234,37 @@ final class VoxelHarness {
                 int y = y0 + j;
                 if (y >= last) continue;
                 if (mat(qx, y + 1, qz) != AIR || mat(qx, y, qz) != AIR || mat(qx, y - 1, qz) != AIR || mat(qx, y - 2, qz) != AIR) continue;
-                boolean lip = false;
-                for (int d = 0; d < 4 && !lip; d++) {
+                int lips = 0, riftLips = 0;
+                for (int d = 0; d < 4; d++) {
                     int x = qx - DX[d], z = qz - DZ[d];
                     if (!in(x, y, z) || !place(x, y, z) || !solid(x, y - 1, z)) continue;
+                    lips |= 1 << d;
                     DeepBiome b = t.biomeAt(x, y, z);
-                    for (DeepBiome bb : biomes) if (b == bb) lip = true;
+                    for (DeepBiome bb : biomes) if (b == bb) riftLips |= 1 << d;
                 }
-                if (!lip) continue;
+                if (lips == 0) continue;
                 int fy = y - 2;
                 while (fy > y0 && mat(qx, fy - 1, qz) == AIR) fy--;
                 int under = mat(qx, fy - 1, qz);
-                if (y - fy > Network.SHELF_MAX_DROP || (under != ROCK && under != WATER)) continue;
+                if (under != ROCK && under != WATER) continue;
+                boolean streak = y - fy <= Network.STREAK_MAX_DROP && w.streakAt(qx, fy, qz);
+                if (riftLips == 0 && !streak) continue;
+                if (streak) {
+                    boolean backed = false;
+                    for (int d = 0; d < 4 && !backed; d++) {
+                        if ((lips & 1 << d) == 0) continue;
+                        backed = true;
+                        for (int yy = fy; yy < y && backed; yy++) backed = solid(qx - DX[d], yy, qz - DZ[d]);
+                    }
+                    if (backed) {
+                        for (int yy = fy; yy < y; yy++) setClimb(qx, yy, qz);
+                        vines++;
+                        streaks++;
+                        last = fy;
+                        continue;
+                    }
+                }
+                if (riftLips == 0 || y - fy > Network.SHELF_MAX_DROP) continue;
                 int hy = y + 2;
                 while (hy < y0 + ny && hy <= y + 1 + Network.SHELF_MAX_UP && mat(qx, hy, qz) == AIR) hy++;
                 if (hy >= y0 + ny || mat(qx, hy, qz) != ROCK) continue;

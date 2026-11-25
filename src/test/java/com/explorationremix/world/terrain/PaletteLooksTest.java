@@ -110,7 +110,14 @@ class PaletteLooksTest {
         // now ranges over -4 to 28, the same draw scaled, so their deep insides are sampled too, and the grotto's ice
         // and glow are taken from x and z, so no draw is added. Pinned again for 0.20.7 (Taran, 2026-11-23: "Remove glow
         // ice"): the grotto's ice floors are packed ice specked with blue all through, never glow ice, and its glow is no
-        // longer taken from z; the draws are the same, so only the cold caves' hash moves.
+        // longer taken from z; the draws are the same, so only the cold caves' hash moves. Pinned again for 0.21.7
+        // (Taran, 2026-11-25: the Blue Reaches polished; the geodes in "Neat bands, tidy crystals", and noise rifts): the
+        // Asurine Geodes' rock lies in clean bands (asurine, calcite, smooth basalt, then plain deepslate) round a hollow
+        // whose wobble is smoother, which changes the rock by biome at 96,429 of layer 0's 400,000 samples, all in the
+        // geodes (96,341 cobbled deepslate now plain deepslate, the rest the floors' patchwork gone and the bands moved
+        // a block by the wobble), and through the public path at 53 of layer 0's 60,000 (43 in the geodes, 10 where the
+        // geodes' edge or a noise rift's own biome moved the biome); the interior, layer 1, the bands and the upper caves
+        // answer as before.
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
@@ -166,10 +173,10 @@ class PaletteLooksTest {
         // all six at once, so a re-pin sees every part that moved
         final long fBiome = hBiome, fInterior = hInterior, fPublicOld = hPublicOld, fPublic = hPublic, fUpper = hUpper, fCold = hCold;
         assertAll(
-                () -> assertEquals("e97aebf3ae273cec", String.format("%016x", fBiome), "layers 0 and 1, by biome"),
+                () -> assertEquals("baa98f2afa09f366", String.format("%016x", fBiome), "layers 0 and 1, by biome"),
                 () -> assertEquals("a79cc526d8233378", String.format("%016x", fInterior), "layers 0 and 1, interior"),
-                () -> assertEquals("87788ebdd351272a", String.format("%016x", fPublicOld), "layer 0 through the public path, and the bands (den rifts off)"),
-                () -> assertEquals("3d80c894a1e742aa", String.format("%016x", fPublic), "layer 0 through the public path, and the bands"),
+                () -> assertEquals("4fee8427d07163cd", String.format("%016x", fPublicOld), "layer 0 through the public path, and the bands (den rifts off)"),
+                () -> assertEquals("05f6bdfe9f077f4d", String.format("%016x", fPublic), "layer 0 through the public path, and the bands"),
                 () -> assertEquals("d903f5c9057642af", String.format("%016x", fUpper), "the upper caves but the cold ones"),
                 () -> assertEquals("ac2a7d75882ff5c5", String.format("%016x", fCold), "the frozen Root Vaults and the Frost Fern Grotto"));
     }

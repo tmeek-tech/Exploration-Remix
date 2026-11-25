@@ -37,6 +37,8 @@ final class NetIndex {
             double r = s.r + REACH;
             cover(n, s.x - r, s.z - r, s.x + r, s.z + r, bs, s.id, -1, null);
         }
+        n.city = null;
+        for (Chamber c : n.ch) if (c.keep && c.kind == Net.Kind.CITY) { n.city = c; break; }
         n.bCh = toArr(bc);
         n.bWay = toArr(bw);
         n.bWaySeg = toArr(bh);
