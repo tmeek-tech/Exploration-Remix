@@ -19,7 +19,9 @@ block's position, each with a different rune on its sides and on its top and bot
 While a stone is dug, and when another one near it breaks, its carving lights up from inside: each face's `_lit`
 texture holds that light exactly, added over the face by the client (client.rune.stone.RuneStoneClient, scaled by how
 far the dig has got): the strokes' heart white, the strokes light blue, a soft light blue bleed a few pixels round
-them, so the light grows brighter without turning cyan. The atlas takes them from textures/block/ on its own.
+them, so the light grows brighter without turning cyan. Clear everywhere else: the client adds the light by its alpha,
+since Embeddium fills a texture's clear pixels with its average colour. The atlas takes them from textures/block/ on
+its own.
 
 Writes the textures, the models (on one template: the rock, the carving, the glow), the blockstates (property host, the
 four looks as random variants), the items, the loot tables (one rune for certain, a second one time in three, or half
@@ -93,10 +95,11 @@ SECOND = [0.3333, 0.4167, 0.5, 0.5833]
 # warm colour, no cyan (Taran's standing rules).
 MAIN, CORE, DIM = "#8EC2FF", "#E6F2FF", "#4F7FC4"
 # The light a carving gives as it is dug, or as it flares answering a broken stone, added over the stone as it is drawn
-# (the client's RuneStoneClient lays each face's _lit texture over it additively, at the dig's strength): the heart goes
-# white, the light blue strokes paler, the dim ones light blue, the strokes left dark wake up dim blue, and the light
-# bleeds into the stone round the strokes, fading over three pixels. Each is the colour to add, so a stroke ends where it
-# should: MAIN + LIT_MAIN is #CDE4FF, DIM + LIT_DIM is MAIN. Nothing here leans green: no cyan.
+# (the client's RuneStoneClient lays each face's _lit texture over it additively, by its alpha, at the dig's
+# strength): the heart goes white, the light blue strokes paler, the dim ones light blue, the strokes left dark wake up
+# dim blue, and the light bleeds into the stone round the strokes, fading over three pixels. Each is the colour to add,
+# so a stroke ends where it should: MAIN + LIT_MAIN is #CDE4FF, DIM + LIT_DIM is MAIN. Nothing here leans green: no
+# cyan.
 LIT_HEART, LIT_MAIN, LIT_DIM, LIT_DARK = (25, 13, 0), (63, 34, 0), (63, 67, 59), (45, 80, 150)
 LIT_BLEED, BLEED_REACH = (26, 46, 90), 3.2
 # Each rune on its grid: '#' a stroke, '*' its heart (it glows brightest), '+' a faint end, '.' bare stone. Five rows

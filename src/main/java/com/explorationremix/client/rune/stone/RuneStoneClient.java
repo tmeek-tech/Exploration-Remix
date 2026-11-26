@@ -352,6 +352,8 @@ public final class RuneStoneClient {
         for (Lit lit : LIT.values()) {
             float k = lit.light(pt);
             if (k < 0.004F || lit.gone) continue;
+            // broken here since the last tick: its light goes with it
+            if (!(level.getBlockState(lit.pos).getBlock() instanceof RuneStoneBlock)) continue;
             // a slow shimmer, quicker and deeper as the stone nears breaking
             float shimmer = 0.9F + 0.1F * Mth.sin(time * (0.35F + 0.5F * lit.dig) + lit.pos.hashCode());
             if (lit.dig > 0.7F) shimmer *= 0.92F + 0.16F * Mth.sin(time * 1.9F + lit.pos.getY());

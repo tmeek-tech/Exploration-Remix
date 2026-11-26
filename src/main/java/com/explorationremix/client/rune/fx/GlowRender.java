@@ -67,15 +67,18 @@ public final class GlowRender extends RenderType {
 
     /**
      * A rune stone's carving lit from inside (0.23.1, client.rune.stone.RuneStoneClient): its light texture from the block
-     * atlas laid again over the faces of the stone, the colour added as it is (the texture holds the light to add, black
-     * where there is none), nudged towards the eye so it wins against the face it lies on, hidden by whatever stands in
-     * front, and fading into the dark with the fog as the eyes of a spider do.
+     * atlas laid again over the faces of the stone, the colour added by its alpha (the texture holds the light to add,
+     * clear where there is none), nudged towards the eye so it wins against the face it lies on, hidden by whatever stands
+     * in front, and fading into the dark with the fog as the eyes of a spider do.
+     *
+     * <p>By its alpha, not as it is: Embeddium (and Sodium) fill the colour of an atlas texture's clear texels with the
+     * texture's average, so light added as it is would wash the whole face, not only round the carving.
      */
     public static final RenderType STONE = create("explorationremix_rune_stone_light", DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 4096,
             false, false, CompositeState.builder()
                     .setShaderState(RENDERTYPE_EYES_SHADER)
                     .setTextureState(new TextureStateShard(TextureAtlas.LOCATION_BLOCKS, false, true))
-                    .setTransparencyState(ADDITIVE_TRANSPARENCY)
+                    .setTransparencyState(LIGHTNING_TRANSPARENCY)
                     .setLayeringState(POLYGON_OFFSET_LAYERING)
                     .setWriteMaskState(COLOR_WRITE)
                     .createCompositeState(false));
