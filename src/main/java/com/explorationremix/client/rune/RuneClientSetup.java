@@ -27,7 +27,8 @@ import net.minecraftforge.registries.ForgeRegistries;
 
 /**
  * The runes' client registrations, on the mod bus: the enchanting table's rune view, the cast and peer keys, the HUD,
- * the energy line on weapons in slots, a Quickdraw bow's pull, and how bolts, Fields and Siphon's motes are drawn.
+ * the energy line on weapons in slots, a Quickdraw bow's pull, and how bolts, Fields, Siphon's motes and the runes freed
+ * from rune stones are drawn.
  */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class RuneClientSetup {
@@ -73,5 +74,6 @@ public final class RuneClientSetup {
         event.registerEntityRenderer(RuneRegistry.BOLT.get(), RuneBoltRenderer::new);
         event.registerEntityRenderer(RuneRegistry.FIELD.get(), RuneFieldRenderer::new);
         event.registerEntityRenderer(RuneRegistry.MOTE.get(), RuneMoteRenderer::new);
+        event.registerEntityRenderer(RuneRegistry.FREED_RUNE.get(), com.explorationremix.client.rune.stone.FreedRuneRenderer::new);
     }
 }

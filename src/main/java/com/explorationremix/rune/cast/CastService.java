@@ -621,5 +621,6 @@ public final class CastService {
         RunePlants.clear();
         Statuses.clear();
         RuneMote.clearAll();
+        com.explorationremix.rune.stone.FreedRune.clearAll();
     }
 }

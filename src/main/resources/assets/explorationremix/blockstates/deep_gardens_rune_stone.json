@@ -1,0 +1,32 @@
+{
+  "variants": {
+    "host=blackstone": [
+      {
+        "model": "explorationremix:block/rune_stone/blackstone_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/blackstone_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/blackstone_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/blackstone_3"
+      }
+    ],
+    "host=deepslate": [
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_3"
+      }
+    ]
+  }
+}

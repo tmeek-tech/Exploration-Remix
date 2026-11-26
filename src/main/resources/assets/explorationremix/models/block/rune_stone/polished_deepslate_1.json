@@ -1,0 +1,12 @@
+{
+  "parent": "explorationremix:block/template/rune_stone",
+  "render_type": "minecraft:cutout_mipped",
+  "textures": {
+    "rock_end": "minecraft:block/polished_deepslate",
+    "rock_side": "minecraft:block/polished_deepslate",
+    "end": "explorationremix:block/rune_stone/polished_deepslate_1_end",
+    "side": "explorationremix:block/rune_stone/polished_deepslate_1_side",
+    "end_glow": "explorationremix:block/rune_stone/polished_deepslate_1_end_glow",
+    "side_glow": "explorationremix:block/rune_stone/polished_deepslate_1_side_glow"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "variants": {
+    "host=stone_bricks": [
+      {
+        "model": "explorationremix:block/rune_stone/stone_bricks_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/stone_bricks_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/stone_bricks_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/stone_bricks_3"
+      }
+    ],
+    "host=mossy_stone_bricks": [
+      {
+        "model": "explorationremix:block/rune_stone/mossy_stone_bricks_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/mossy_stone_bricks_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/mossy_stone_bricks_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/mossy_stone_bricks_3"
+      }
+    ],
+    "host=cracked_stone_bricks": [
+      {
+        "model": "explorationremix:block/rune_stone/cracked_stone_bricks_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/cracked_stone_bricks_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/cracked_stone_bricks_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/cracked_stone_bricks_3"
+      }
+    ]
+  }
+}

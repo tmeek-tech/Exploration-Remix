@@ -1,6 +1,8 @@
 package com.explorationremix.client.rune.fx;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.client.rune.stone.RuneStoneClient;
+import com.explorationremix.client.rune.stone.RuneStoneFx;
 import com.explorationremix.rune.effect.Fx;
 import com.explorationremix.rune.effect.RuneBolt;
 import com.explorationremix.rune.effect.RuneField;
@@ -9,6 +11,7 @@ import com.explorationremix.rune.effect.RuneMote;
 import com.explorationremix.rune.engine.Element;
 import com.explorationremix.rune.engine.Reactions;
 import com.explorationremix.rune.engine.RuneId;
+import com.explorationremix.rune.stone.FreedRune;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.ParticleStatus;
@@ -161,7 +164,7 @@ public final class RuneFxClient implements RuneFx.ClientSide {
         if (l == null) return;
         Vec3 at = fx.pos();
         double far = switch (fx.kind()) {
-            case BURST, STAGGER, BELL -> 72.0;
+            case BURST, STAGGER, BELL, STONE_FLARE -> 72.0;
             case MOTE_IN -> 16.0;
             default -> 48.0;
         };
@@ -215,6 +218,9 @@ public final class RuneFxClient implements RuneFx.ClientSide {
                 block(r, at, d, s);
                 com.explorationremix.client.combat.GuardClient.struck(fx.entity(), false, s);
             }
+            case STONE_BURST -> RuneStoneFx.burst(l, r, at, d, fx.rgb(), dist);
+            case STONE_FLARE -> RuneStoneClient.answer(at, d, Math.round(fx.a()));
+            case STONE_CATCH -> RuneStoneFx.caught(r, at, Math.round(s), mc.player != null && fx.entity() == mc.player.getId());
         }
     }
 
@@ -849,6 +855,9 @@ public final class RuneFxClient implements RuneFx.ClientSide {
             if (e != null && r.nextInt(4) == 0) f.level().addParticle(e, p.x, p.y + 0.1, p.z, 0, 0.03, 0);
         }
     }
+
+    @Override
+    public void freedTick(FreedRune r) { RuneStoneFx.freedTick(r); }
 
     @Override
     public void moteTick(RuneMote m) {

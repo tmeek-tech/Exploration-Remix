@@ -9,6 +9,9 @@ import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.item.RuneItem;
 import com.explorationremix.rune.loot.PlainLoot;
 import com.explorationremix.rune.menu.RuneTableMenu;
+import com.explorationremix.rune.stone.FreedRune;
+import com.explorationremix.rune.stone.RuneStoneBlock;
+import com.explorationremix.rune.stone.RuneStoneKind;
 import com.explorationremix.rune.world.TempBlock;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.registries.Registries;
@@ -19,12 +22,14 @@ import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraftforge.common.extensions.IForgeMenuType;
@@ -126,6 +131,26 @@ public final class RuneRegistry {
                     .noLootTable().lightLevel(s -> 7).sound(SoundType.WOOL).pushReaction(PushReaction.DESTROY)
                     .isValidSpawn((s, l, p, t) -> false)));
 
+    /**
+     * The rune stones (0.23.1), one per layer, each hiding in its layer's stone and freeing one or two of its runes when
+     * broken (RuneStoneBlock). Coloured on maps as the stone each hides in; a little harder than it (hardness 4) so the
+     * carving's light has time to build while it is dug.
+     */
+    private static final Map<RuneStoneKind, RegistryObject<Block>> STONES = new EnumMap<>(RuneStoneKind.class);
+
+    static {
+        for (RuneStoneKind k : RuneStoneKind.values()) {
+            RegistryObject<Block> b = BLOCKS.register(k.id, () -> new RuneStoneBlock(k, BlockBehaviour.Properties.of()
+                    .mapColor(s -> s.getBlock() instanceof RuneStoneBlock rs ? rs.host(s).block().defaultMapColor() : MapColor.STONE)
+                    .instrument(NoteBlockInstrument.BASEDRUM).strength(5.0F, 6.0F).sound(SoundType.STONE)));
+            STONES.put(k, b);
+            ITEMS.register(k.id, () -> new BlockItem(b.get(), new Item.Properties()));
+        }
+    }
+
+    /** Kind k's rune stone block. */
+    public static Block stone(RuneStoneKind k) { return STONES.get(k).get(); }
+
     // ------------------------------------------------------------------------------------------------ entities
 
     /** A flying rune (Spark, Orb, Shard's needles, Volley's arrows of light), or a bow's mine lying in wait. Never saved; sent every tick so it flies smoothly. */
@@ -142,6 +167,14 @@ public final class RuneRegistry {
     public static final RegistryObject<EntityType<RuneMote>> MOTE = ENTITIES.register("rune_mote", () ->
             EntityType.Builder.<RuneMote>of(RuneMote::new, MobCategory.MISC).sized(0.25F, 0.25F).clientTrackingRange(6).updateInterval(1)
                     .fireImmune().noSave().noSummon().build(MOD + ":rune_mote"));
+
+    /**
+     * A rune freed from a broken rune stone (0.23.1), rising out of it and flying to the player who broke it. Saved with
+     * its chunk, so its rune is never lost; sent every tick so it flies smoothly.
+     */
+    public static final RegistryObject<EntityType<FreedRune>> FREED_RUNE = ENTITIES.register("freed_rune", () ->
+            EntityType.Builder.<FreedRune>of(FreedRune::new, MobCategory.MISC).sized(0.3F, 0.3F).clientTrackingRange(8).updateInterval(1)
+                    .fireImmune().noSummon().build(MOD + ":freed_rune"));
 
     // ------------------------------------------------------------------------------------------------ the rune table
 
@@ -163,6 +196,7 @@ public final class RuneRegistry {
                     Item i = item(r);
                     if (i != null) out.accept(i);
                 }
+                for (RuneStoneKind k : RuneStoneKind.values()) out.accept(stone(k));
             })
             .build());
 

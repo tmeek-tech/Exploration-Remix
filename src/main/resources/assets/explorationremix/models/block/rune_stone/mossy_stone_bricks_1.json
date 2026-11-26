@@ -1,0 +1,12 @@
+{
+  "parent": "explorationremix:block/template/rune_stone",
+  "render_type": "minecraft:cutout_mipped",
+  "textures": {
+    "rock_end": "minecraft:block/mossy_stone_bricks",
+    "rock_side": "minecraft:block/mossy_stone_bricks",
+    "end": "explorationremix:block/rune_stone/mossy_stone_bricks_1_end",
+    "side": "explorationremix:block/rune_stone/mossy_stone_bricks_1_side",
+    "end_glow": "explorationremix:block/rune_stone/mossy_stone_bricks_1_end_glow",
+    "side_glow": "explorationremix:block/rune_stone/mossy_stone_bricks_1_side_glow"
+  }
+}

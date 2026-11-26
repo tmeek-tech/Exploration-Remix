@@ -164,6 +164,14 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> CHOIR_GRAB = register("choir.grab");
     public static final RegistryObject<SoundEvent> CHOIR_ROOT = register("choir.root");
 
+    // The rune stones (0.23.1, rune.stone.RuneStones): the hum while one is dug, rising with the pick's work (looped);
+    // its breaking, a bright crack and a chime as the light bursts out; a freed rune reaching its player, a clear note
+    // (a fourth higher for the second); another stone answering, a far chime from where it lies.
+    public static final RegistryObject<SoundEvent> RUNE_STONE_HUM = register("rune_stone.hum");
+    public static final RegistryObject<SoundEvent> RUNE_STONE_BREAK = register("rune_stone.break");
+    public static final RegistryObject<SoundEvent> RUNE_STONE_CATCH = register("rune_stone.catch");
+    public static final RegistryObject<SoundEvent> RUNE_STONE_FLARE = register("rune_stone.flare");
+
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ExplorationRemix.MOD_ID, name)));
     }

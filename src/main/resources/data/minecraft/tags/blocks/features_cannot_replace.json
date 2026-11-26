@@ -1,6 +1,10 @@
 {
   "replace": false,
   "values": [
-    "explorationremix:band_stone"
+    "explorationremix:band_stone",
+    "explorationremix:upper_caves_rune_stone",
+    "explorationremix:blue_reaches_rune_stone",
+    "explorationremix:deep_gardens_rune_stone",
+    "explorationremix:galleries_rune_stone"
   ]
 }
