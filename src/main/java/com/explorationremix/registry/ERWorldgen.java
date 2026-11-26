@@ -105,6 +105,10 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> STILT_MANTISES = FEATURES.register("stilt_mantises", () -> new StiltMantisesFeature(NoneFeatureConfiguration.CODEC));
     // the Deep Gardens' chimney lurkers, set down as each chunk is made (0.21.0), each waiting in its vent's mouth
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> CHIMNEY_LURKERS = FEATURES.register("chimney_lurkers", () -> new ChimneyLurkersFeature(NoneFeatureConfiguration.CODEC));
+    // 0.23.1: the rune stones hidden in the vents' sunken chambers (one vent in eight) and in the Blue Reaches' pond beds
+    // (one pond in three); the Galleries' are the ruins' own, the strongholds' and cities' set with them (StructureStartMixin)
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> RUNE_STONE_VENTS = FEATURES.register("rune_stones_vents", () -> new com.explorationremix.world.feature.RuneStoneVentsFeature(NoneFeatureConfiguration.CODEC));
+    public static final RegistryObject<Feature<NoneFeatureConfiguration>> RUNE_STONE_PONDS = FEATURES.register("rune_stones_ponds", () -> new com.explorationremix.world.feature.RuneStonePondsFeature(NoneFeatureConfiguration.CODEC));
 
     /**
      * 0.21.9: the Hollow Choir's arena, cut into the floor of one of a Blue Reaches cell's own deep dark caverns, and

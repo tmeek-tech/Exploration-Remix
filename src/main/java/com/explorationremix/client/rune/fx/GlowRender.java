@@ -65,6 +65,40 @@ public final class GlowRender extends RenderType {
                     .setWriteMaskState(COLOR_WRITE)
                     .createCompositeState(false));
 
+    /**
+     * A rune stone's carving lit from inside (0.23.1, client.rune.stone.RuneStoneClient): its light texture from the block
+     * atlas laid again over the faces of the stone, the colour added by its alpha (the texture holds the light to add,
+     * clear where there is none), nudged towards the eye so it wins against the face it lies on, hidden by whatever stands
+     * in front, and fading into the dark with the fog as the eyes of a spider do.
+     *
+     * <p>By its alpha, not as it is: Embeddium (and Sodium) fill the colour of an atlas texture's clear texels with the
+     * texture's average, so light added as it is would wash the whole face, not only round the carving.
+     */
+    public static final RenderType STONE = create("explorationremix_rune_stone_light", DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 4096,
+            false, false, CompositeState.builder()
+                    .setShaderState(RENDERTYPE_EYES_SHADER)
+                    .setTextureState(new TextureStateShard(TextureAtlas.LOCATION_BLOCKS, false, true))
+                    .setTransparencyState(LIGHTNING_TRANSPARENCY)
+                    .setLayeringState(POLYGON_OFFSET_LAYERING)
+                    .setWriteMaskState(COLOR_WRITE)
+                    .createCompositeState(false));
+
+    private static final Function<ResourceLocation, RenderType> THROUGH = Util.memoize(tex -> create("explorationremix_rune_glow_through",
+            DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 1024, false, false, CompositeState.builder()
+                    .setShaderState(RENDERTYPE_EYES_SHADER)
+                    .setTextureState(new TextureStateShard(tex, false, false))
+                    .setTransparencyState(ADDITIVE_TRANSPARENCY)
+                    .setDepthTestState(NO_DEPTH_TEST)
+                    .setCullState(NO_CULL)
+                    .setWriteMaskState(COLOR_WRITE)
+                    .createCompositeState(false)));
+
+    /**
+     * As {@link #glow}, but seen through rock: what a broken rune stone's answer is drawn with as it shoots to another
+     * stone, and that stone's flare, so that the stones round a broken one show where they lie (0.23.1).
+     */
+    public static RenderType through(ResourceLocation texture) { return THROUGH.apply(texture); }
+
     /** The glow particles: added by their alpha, full bright, both sides, not written to depth. */
     public static final ParticleRenderType SHEET = new ParticleRenderType() {
         @Override

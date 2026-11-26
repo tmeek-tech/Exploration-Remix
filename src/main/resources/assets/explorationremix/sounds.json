@@ -1343,5 +1343,63 @@
       }
     ],
     "subtitle": "subtitles.explorationremix.choir.root"
+  },
+  "rune_stone.hum": {
+    "sounds": [
+      {
+        "name": "explorationremix:rune_stone/hum",
+        "volume": 0.8,
+        "attenuation_distance": 12
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.rune_stone.hum"
+  },
+  "rune_stone.break": {
+    "sounds": [
+      {
+        "name": "explorationremix:rune_stone/break_1",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:rune_stone/break_2",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.rune_stone.break"
+  },
+  "rune_stone.catch": {
+    "sounds": [
+      {
+        "name": "explorationremix:rune_stone/catch_1",
+        "volume": 0.7
+      },
+      {
+        "name": "explorationremix:rune_stone/catch_2",
+        "volume": 0.7
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.rune_stone.catch"
+  },
+  "rune_stone.flare": {
+    "sounds": [
+      {
+        "name": "explorationremix:rune_stone/flare_1",
+        "volume": 0.9,
+        "attenuation_distance": 32
+      },
+      {
+        "name": "explorationremix:rune_stone/flare_2",
+        "volume": 0.9,
+        "attenuation_distance": 32
+      },
+      {
+        "name": "explorationremix:rune_stone/flare_3",
+        "volume": 0.9,
+        "attenuation_distance": 32
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.rune_stone.flare"
   }
 }

@@ -1,0 +1,88 @@
+{
+  "variants": {
+    "host=deepslate": [
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_3"
+      }
+    ],
+    "host=deepslate_bricks": [
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_bricks_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_bricks_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_bricks_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_bricks_3"
+      }
+    ],
+    "host=cracked_deepslate_bricks": [
+      {
+        "model": "explorationremix:block/rune_stone/cracked_deepslate_bricks_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/cracked_deepslate_bricks_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/cracked_deepslate_bricks_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/cracked_deepslate_bricks_3"
+      }
+    ],
+    "host=deepslate_tiles": [
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_tiles_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_tiles_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_tiles_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/deepslate_tiles_3"
+      }
+    ],
+    "host=cracked_deepslate_tiles": [
+      {
+        "model": "explorationremix:block/rune_stone/cracked_deepslate_tiles_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/cracked_deepslate_tiles_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/cracked_deepslate_tiles_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/cracked_deepslate_tiles_3"
+      }
+    ],
+    "host=polished_deepslate": [
+      {
+        "model": "explorationremix:block/rune_stone/polished_deepslate_0"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/polished_deepslate_1"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/polished_deepslate_2"
+      },
+      {
+        "model": "explorationremix:block/rune_stone/polished_deepslate_3"
+      }
+    ]
+  }
+}

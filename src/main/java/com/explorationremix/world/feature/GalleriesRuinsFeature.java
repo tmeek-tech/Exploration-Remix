@@ -1,6 +1,9 @@
 package com.explorationremix.world.feature;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.rune.stone.RuneStoneHost;
+import com.explorationremix.rune.stone.RuneStoneKind;
+import com.explorationremix.rune.stone.RuneStones;
 import com.explorationremix.world.DeepWorld;
 import com.explorationremix.world.terrain.GalleriesRuins;
 import com.explorationremix.world.terrain.Terrain;
@@ -42,7 +45,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * fluid loose: open air is never set beside a fluid (nor over one), a fluid is only ever replaced by a full block, and
  * the plan's lava goes in last, where its block holds it in the world as built (solid under it and on its four sides,
  * or lava; open over it), else it is a chiseled block. The chests take their loot tables: the rune's ({@link
- * #RUNE_CHEST}: a rune for certain and some loot) and the others' ({@link #LOOT_CHEST}).
+ * #RUNE_CHEST}: a rune for certain and some loot) and the others' ({@link #LOOT_CHEST}). Two or three of the walls'
+ * blocks are rune stones (0.23.1, {@link GalleriesRuins#runes}).
  */
 public final class GalleriesRuinsFeature extends Feature<GalleriesRuinsFeature.Config> {
     /** The rune's chest's table and the loot chests'. */
@@ -97,6 +101,20 @@ public final class GalleriesRuinsFeature extends Feature<GalleriesRuinsFeature.C
                     level.setBlock(pos, pal.state(c), 2);
                     any = true;
                 }
+        // 0.23.1: the rune stones hidden in its walls, where its stone is one they hide in (the deepslate the ruins are
+        // built of unless the config chose another)
+        for (int[] r : p.runes) {
+            int x = r[0], y = r[1], z = r[2];
+            if (x < ax || x > bx || z < az || z > bz) continue;
+            BlockState stone = pal.state((byte) r[3]);
+            RuneStoneHost host = RuneStoneHost.of(stone);
+            if (host == null || !RuneStoneKind.GALLERIES.takes(host)) continue;
+            pos.set(x, y, z);
+            if (level.getBlockState(pos) != stone) continue;
+            level.setBlock(pos, RuneStoneKind.GALLERIES.state(host), 2);
+            RuneStones.placed(RuneStoneKind.GALLERIES);
+            any = true;
+        }
         // the walls' and the stairs' shapes, from what stands round them now
         for (int x = ax; x <= bx; x++)
             for (int z = az; z <= bz; z++)

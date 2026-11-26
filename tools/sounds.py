@@ -329,6 +329,33 @@ CHOIR_SUBTITLES = {
 CREATURE_EVENTS.update(CHOIR_EVENTS)
 CREATURE_SUBTITLES.update(CHOIR_SUBTITLES)
 
+# The rune stones (0.23.1; tools/synth_rune_stone_sounds.py makes the files). A stone being dug hums: a loop the
+# client plays louder and higher as the pick works, heard only close by. It breaks with a bright crack and a glassy
+# chime; each rune it frees lands in the pack with a clear note (the second a fourth higher, by its pitch); and every
+# stone answering a broken one chimes from where it lies, softly, as if from inside the rock, heard 32 blocks off.
+def rune_stone(name, volume=1.0, attenuation=None, count=1):
+    out = []
+    for i in range(1, count + 1):
+        e = {"name": f"{MOD}:rune_stone/{name}" + ("" if count == 1 else f"_{i}"), "volume": volume}
+        if attenuation: e["attenuation_distance"] = attenuation
+        out.append(e)
+    return out
+
+
+RUNE_STONE_EVENTS = {
+    "rune_stone.hum": rune_stone("hum", 0.8, 12),
+    "rune_stone.break": rune_stone("break", 1.0, 24, count=2),
+    "rune_stone.catch": rune_stone("catch", 0.7, count=2),
+    "rune_stone.flare": rune_stone("flare", 0.9, 32, count=3),
+}
+RUNE_STONE_SUBTITLES = {
+    "rune_stone.hum": "Rune stone hums", "rune_stone.break": "Rune stone shatters",
+    "rune_stone.catch": "A rune comes to you", "rune_stone.flare": "A rune stone answers",
+}
+CREATURE_EVENTS.update(RUNE_STONE_EVENTS)
+CREATURE_SUBTITLES.update(RUNE_STONE_SUBTITLES)
+
+
 def write_all(assets_dir, write):
     out = {}
     lang = {}

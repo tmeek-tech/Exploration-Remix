@@ -72,6 +72,11 @@ public final class GalleriesRuins {
      */
     static final int OUTER_STEP = 6, OUTER_LO = 8, OUTER_HI = 5;
     static final double OUTER_W = 0.6;
+    /**
+     * The rune stones a cluster hides in its walls (0.23.1, {@link #runes}): RUNES_LO, or one more half the time, at least
+     * RUNE_GAP blocks apart.
+     */
+    public static final int RUNES_LO = 2, RUNE_GAP = 8;
     /** The plan's box: this many blocks either side of the middle, and rows from Y_UNDER under its paving up. */
     public static final int BOX = 46, SY = 60, Y_UNDER = 16;
     public static final int SX = 2 * BOX + 1;
@@ -117,6 +122,8 @@ public final class GalleriesRuins {
         public final List<int[]> chests = new ArrayList<>();
         /** The small ruins, as kind names, for the tests and the logs. */
         public final List<String> smalls = new ArrayList<>();
+        /** The rune stones (0.23.1): x, y, z, and the code of the wall block each hides in (its stone). */
+        public final List<int[]> runes = new ArrayList<>();
         final long h;
         /** Open rows over the middle's floor. */
         int head;
@@ -485,7 +492,51 @@ public final class GalleriesRuins {
         settleLava(p);
         if (p.smalls.size() < SMALL_LEAST || !walkable(p)) return false;
         seal(p);
+        runes(p);
         return true;
+    }
+
+    /**
+     * Where plan p hides its rune stones (0.23.1; Taran: "Put the Galleries runes in the ruins", card pick "2-3 per ruin
+     * cluster"): wall blocks of brick, tile or polished stone (a stone they can hide in) with open air beside them a
+     * block or three over the ground there, at eye level first, then at the feet, then over the head; RUNES_LO or one
+     * more of them, at least RUNE_GAP apart, so a cluster's are spread over its ruins. Ties go by the plan's hash, so the
+     * same world always has them in the same blocks.
+     */
+    void runes(Plan p) {
+        List<long[]> cand = new ArrayList<>();
+        for (int dx = 0; dx < SX; dx++)
+            for (int dz = 0; dz < SX; dz++) {
+                int k = dx * SX + dz;
+                for (int dy = p.lo[k]; dy <= p.hi[k]; dy++) {
+                    byte c = p.b[k * SY + dy];
+                    if (c != BRICKS && c != CRACKED_BRICKS && c != TILES && c != CRACKED_TILES && c != POLISHED) continue;
+                    int x = p.x0 + dx, y = p.y0 + dy, z = p.z0 + dz;
+                    int best = 0;
+                    for (int[] d : NB4) {
+                        int nx = x + d[0], nz = z + d[1];
+                        if (!p.inBox(nx, nz)) continue;
+                        byte o = p.at(nx, y, nz);
+                        if (o != AIR && !(o == NONE && y > terrain(p, nx, nz))) continue;
+                        int h = y - ground(p, nx, nz);
+                        best = Math.max(best, h == 2 ? 3 : h == 1 ? 2 : h == 3 ? 1 : 0);
+                    }
+                    if (best == 0) continue;
+                    long tie = (long) (rnd(p, x, y, z, 70) * (1L << 30));
+                    cand.add(new long[]{best, tie, x, y, z, c});
+                }
+            }
+        cand.sort((a, b) -> a[0] != b[0] ? Long.compare(b[0], a[0]) : Long.compare(a[1], b[1]));
+        int want = RUNES_LO + (Hashing.unit(Hashing.mix(p.h, 71, 0, 0)) < 0.5 ? 1 : 0);
+        for (long[] q : cand) {
+            if (p.runes.size() >= want) break;
+            boolean far = true;
+            for (int[] r : p.runes) {
+                double dx = r[0] - q[2], dy = r[1] - q[3], dz = r[2] - q[4];
+                if (dx * dx + dy * dy + dz * dz < RUNE_GAP * RUNE_GAP) { far = false; break; }
+            }
+            if (far) p.runes.add(new int[]{(int) q[2], (int) q[3], (int) q[4], (int) q[5]});
+        }
     }
 
     /** Notes each column's lowest and highest rows the plan sets ({@link #keepOff}). */

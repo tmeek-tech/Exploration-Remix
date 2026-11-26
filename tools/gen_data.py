@@ -12,6 +12,7 @@ import textures
 import plants_vent
 from plants_fern import HANGING_SIZES
 import choir_blocks
+import rune_stones
 import worldgen
 import sounds
 import creatures
@@ -282,7 +283,9 @@ BLOCK_TAGS = {
                                         "cinder_chain",
                                         # the Deep Gardens: the vent field's dripstone, and the neon blocks grown on its rock
                                         "black_dripstone", "pointed_black_dripstone", "glow_mat", "thin_glow_mat", "vent_crown",
-                                        "vent_beads", "seep_crust"],
+                                        "vent_beads", "seep_crust",
+                                        # 0.23.1: the rune stones (any tool breaks them, a pickaxe best, as their stone)
+                                        *rune_stones.BLOCK_IDS],
     ("minecraft", "mineable/axe"): ["orange_shelf_fungus", "ivory_bracket", "grotto_ivy", "blue_lichen", "thick_blue_lichen", "smoulder_lichen",
                                     # Deep Gardens round 2: the giant mushrooms
                                     "pale_stem", "glow_cap"],
@@ -1078,8 +1081,10 @@ def block_assets():
 
 def tags():
     # Band stone: nothing breaks it, moves it or grows through it.
+    # 0.23.1: and no feature carves or grows through a rune stone either, nor does a geode swallow one
+    stones = [f"{MOD}:{b}" for b in rune_stones.BLOCK_IDS]
     for t in ("dragon_immune", "wither_immune", "features_cannot_replace", "geode_invalid_blocks"):
-        tag("minecraft", "blocks", t, [f"{MOD}:band_stone"])
+        tag("minecraft", "blocks", t, [f"{MOD}:band_stone"] + (stones if t in ("features_cannot_replace", "geode_invalid_blocks") else []))
     for (ns, name), ids in BLOCK_TAGS.items():
         tag(ns, "blocks", name, [f"{MOD}:{b}" for b in ids])
     tag(MOD, "blocks", "plants", [f"{MOD}:{b}" for b in BLOCKS if b not in NOT_PLANTS] + VANILLA_PLANTS)
@@ -1179,7 +1184,7 @@ def creature_data():
 
 
 # Entities that are not creatures (creatures.py names those): 0.5.1's lava bomb, thrown by the Caldera's eruptions.
-ENTITY_NAMES = {"lava_bomb": "Lava Bomb"}
+ENTITY_NAMES = {"lava_bomb": "Lava Bomb", "freed_rune": "Freed Rune"}
 
 
 # What the Hollow Choir's arena says (0.21.9): the key's tooltip, how the three sockets stand, why a blow on the crown
@@ -1277,6 +1282,8 @@ def main():
         elif os.path.isfile(d): os.remove(d)
     names = block_assets()
     textures.write_all(os.path.join(ASSETS, "textures"))
+    # 0.23.1: the rune stones, a hidden block in each layer that frees runes when broken (rune_stones.py)
+    names.update(rune_stones.write_all(RES, write))
     # 0.12.0: the timed swords' blade light and swing sweep (textures/misc)
     swings.write_all(ASSETS)
     names.update(worldgen.write_all(DATA, RES, write))

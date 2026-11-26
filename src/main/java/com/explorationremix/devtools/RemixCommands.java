@@ -96,6 +96,8 @@ import java.util.Locale;
  *     <li>{@code /remix deadends [radius]}: the blind cave ends left above the old floor in the loaded chunks round you
  *     (DeadEnds), with the nearest</li>
  *     <li>{@code /remix groups list|here|spawn <kind>|stats}: vanilla's hostile mobs in groups (MobGroupCommands)</li>
+ *     <li>{@code /remix runestones ...}: the rune stones set as the world was made: how many, the ones round you, the
+ *     places that hide them and standing by one (RuneStoneCommands)</li>
  *     <li>{@code /remix shapes}: what the Upper Caves' noise shapes hold over your column and whether you stand in one</li>
  *     <li>{@code /remix shapes <kind> [n] [view]}: the n-th nearest place of a noise shape (warrens, chambers, mouth, frozen, rifts,
  *     halls, sinkholes, hollows; see UpperShapes.find) round the command's position, with a wide view into it when
@@ -131,6 +133,8 @@ public final class RemixCommands {
                 .then(com.explorationremix.creature.groups.MobGroupCommands.command())
                 // runes: rune items, rows, energy and run depth for trying them out
                 .then(com.explorationremix.rune.RuneCommands.command())
+                // 0.23.1: the rune stones, where they are and standing by one (RuneStoneCommands)
+                .then(com.explorationremix.rune.stone.RuneStoneCommands.command())
                 .then(Commands.literal("entrances").executes(c -> entrances(c, 8))
                         .then(Commands.argument("cells", IntegerArgumentType.integer(1, 24)).executes(c -> entrances(c, IntegerArgumentType.getInteger(c, "cells")))))
                 .then(Commands.literal("deadends").executes(c -> deadEnds(c, 4))

@@ -1,0 +1,12 @@
+{
+  "parent": "explorationremix:block/template/rune_stone",
+  "render_type": "minecraft:cutout_mipped",
+  "textures": {
+    "rock_end": "minecraft:block/blackstone_top",
+    "rock_side": "minecraft:block/blackstone",
+    "end": "explorationremix:block/rune_stone/blackstone_0_end",
+    "side": "explorationremix:block/rune_stone/blackstone_0_side",
+    "end_glow": "explorationremix:block/rune_stone/blackstone_0_end_glow",
+    "side_glow": "explorationremix:block/rune_stone/blackstone_0_side_glow"
+  }
+}

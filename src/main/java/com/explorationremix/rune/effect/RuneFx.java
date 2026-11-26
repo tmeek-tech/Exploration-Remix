@@ -40,6 +40,9 @@ public final class RuneFx {
 
         void moteTick(RuneMote m);
 
+        /** A rune freed from a rune stone, while it rises and flies (0.23.1). */
+        default void freedTick(com.explorationremix.rune.stone.FreedRune r) {}
+
         ClientSide NONE = new ClientSide() {
             @Override
             public void play(Fx fx) {}
@@ -417,6 +420,26 @@ public final class RuneFx {
         play(l, c, SoundEvents.POWDER_SNOW_BREAK, 1.0F, 1.2F);
         play(l, c, SoundEvents.AMETHYST_CLUSTER_BREAK, 0.6F, 1.7F);
         play(l, c, SoundEvents.CAVE_VINES_PICK_BERRIES, 0.8F, 1.3F);
+    }
+
+    // ------------------------------------------------------------------------------------------------ rune stones (0.23.1)
+
+    /** The rune stones' light: their carving's light blue. */
+    public static final int STONE_BLUE = 0x8EC2FF;
+
+    /** A rune stone breaks at {@code c}: {@code toward} its breaker (zero for a blast), {@code host} its stone's state id. */
+    public static void stoneBurst(ServerLevel l, Vec3 c, Vec3 toward, int host) {
+        send(l, Fx.Kind.STONE_BURST, c, toward, host, Element.NONE, 1.0F, 0.0F, -1, FAR);
+    }
+
+    /** The rune stone at {@code at} answers one broken {@code from} away: the spark reaches it in {@code delay} ticks. */
+    public static void stoneFlare(ServerLevel l, Vec3 at, Vec3 from, int delay) {
+        send(l, Fx.Kind.STONE_FLARE, at, from, STONE_BLUE, Element.NONE, 1.0F, delay, -1, FAR);
+    }
+
+    /** A freed rune reaches {@code player} at {@code at}: {@code index} 0 a stone's first rune, 1 its second. */
+    public static void stoneCatch(ServerLevel l, Vec3 at, int index, int player) {
+        send(l, Fx.Kind.STONE_CATCH, at, Vec3.ZERO, STONE_BLUE, Element.NONE, index, 0.0F, player, NEAR);
     }
 
     // ------------------------------------------------------------------------------------------------ sounds

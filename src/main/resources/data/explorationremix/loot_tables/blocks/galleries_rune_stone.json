@@ -1,0 +1,63 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:tag",
+          "name": "explorationremix:runes/deep_gardens",
+          "expand": true,
+          "weight": 10
+        },
+        {
+          "type": "minecraft:tag",
+          "name": "explorationremix:runes/blue_reaches",
+          "expand": true,
+          "weight": 5
+        },
+        {
+          "type": "minecraft:tag",
+          "name": "explorationremix:runes/upper_caves",
+          "expand": true,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:tag",
+          "name": "explorationremix:runes/deep_gardens",
+          "expand": true,
+          "weight": 10
+        },
+        {
+          "type": "minecraft:tag",
+          "name": "explorationremix:runes/blue_reaches",
+          "expand": true,
+          "weight": 5
+        },
+        {
+          "type": "minecraft:tag",
+          "name": "explorationremix:runes/upper_caves",
+          "expand": true,
+          "weight": 2
+        }
+      ],
+      "conditions": [
+        {
+          "condition": "minecraft:table_bonus",
+          "enchantment": "minecraft:fortune",
+          "chances": [
+            0.3333,
+            0.4167,
+            0.5,
+            0.5833
+          ]
+        }
+      ]
+    }
+  ]
+}

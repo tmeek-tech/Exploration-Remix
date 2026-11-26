@@ -47,6 +47,9 @@ public final class Network {
     final long seed;
     /** The cell size (blocks): one plan per layer per cell. */
     final double cell;
+
+    /** The cell size (blocks), for the tests and tools outside this package. */
+    public double cellSize() { return cell; }
     final Perlin warpA, warpB, floorN, ceilN, pendN, islandN, rough1, rough2, detail, ledgeN;
     final NetDark dark;
     /** The Blue Reaches' noise rifts (0.21.7): their shape; the network keeps them clear of its works ({@link NetRifts}). */

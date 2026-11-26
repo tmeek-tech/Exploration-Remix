@@ -41,7 +41,8 @@
     "rune.RopeClimbMixin",
     "LivingImmobileMixin",
     "PlayerSweepMixin",
-    "EntityLavaPlaneMixin"
+    "EntityLavaPlaneMixin",
+    "StructureStartMixin"
   ],
   "client": [
     "client.LightTextureMixin",
@@ -58,7 +59,9 @@
     "client.CameraMixin",
     "client.SenseGlowMixin",
     "client.SenseColourMixin",
-    "client.PeerTurnMixin"
+    "client.PeerTurnMixin",
+    "client.MultiPlayerGameModeAccessor",
+    "client.LevelRendererAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

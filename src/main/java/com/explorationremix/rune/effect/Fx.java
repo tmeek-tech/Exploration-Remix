@@ -80,7 +80,19 @@ public record Fx(Kind kind, double x, double y, double z, float dx, float dy, fl
         /** A sword's parry (0.22.7): at the blade, {@code d} towards what was turned back; {@code entity} the player who parried. */
         PARRY,
         /** A blow taken on a raised sword (0.22.7): at the blade, {@code d} towards the attacker, {@code size} how hard; {@code entity} the player. */
-        BLOCK
+        BLOCK,
+        /**
+         * A rune stone breaks (0.23.1): at its middle, {@code d} towards whoever broke it (none for a blast), {@code rgb}
+         * the stone it hid in (its state id) for the chips thrown out.
+         */
+        STONE_BURST,
+        /**
+         * Another rune stone answers a broken one (0.23.1): at its middle, {@code d} from the broken one to it, {@code a}
+         * the ticks the answering spark takes to reach it.
+         */
+        STONE_FLARE,
+        /** A freed rune reaches its player (0.23.1): at their chest, {@code size} 0 for a stone's first rune, 1 its second; {@code entity} the player. */
+        STONE_CATCH
     }
 
     public Vec3 pos() { return new Vec3(x, y, z); }
