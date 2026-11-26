@@ -34,10 +34,11 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * A rune freed from a broken rune stone (0.23.1; Taran's card pick: "the runes rise out of it and fly to you"): it rises
- * out of the stone turning slowly, hangs there a moment, glowing, then streaks to the player who broke it, through
- * anything in the way, and goes into their pack, with a clear note and the rune's name over the hotbar. A second rune
- * rises beside the first and comes a beat later, a note higher.
+ * A rune freed from a broken rune stone (0.23.1; Taran's card pick: "the runes rise out of it and fly to you"): it comes
+ * out of the hole towards the player who broke it (the way they dug in is open, where the rock over a stone in a wall
+ * would hide a rune that rose straight up), lifting a little and turning slowly, hangs there a moment, glowing, then
+ * streaks to them, through anything in the way, and goes into their pack, with a clear note and the rune's name over the
+ * hotbar. A second rune comes out beside the first and flies a beat later, a note higher.
  *
  * <p>It never loses its rune: a player gone, dead, in another world or more than {@link #REACH} blocks off, or a flight
  * that runs past {@link #LIFE} ticks, leaves it lying where it is as an item; a full pack drops what does not fit at the
@@ -50,6 +51,11 @@ public class FreedRune extends Entity {
 
     /** Ticks it rises out of the stone, slowing. */
     public static final int RISE = 12;
+    /**
+     * How fast it sets off out of the hole towards its player, and upwards, blocks a tick: slowing as it rises, it ends
+     * about 1.2 blocks out from the stone's middle (some 0.7 in front of its face) and 0.3 up.
+     */
+    static final double OUT = 0.22, LIFT = 0.055;
     /** Ticks it hangs, glowing, before it flies (the second rune waits a few more). */
     public static final int HANG = 8, SECOND_WAIT = 5;
     /** It flies to its player from this far; any further and it is left as an item. */
@@ -89,8 +95,8 @@ public class FreedRune extends Entity {
     public int age() { return age; }
 
     /**
-     * Frees {@code stack} from the stone at {@code at} for {@code owner}: rune {@code index} of {@code of}, the second
-     * drifting out to the other side of the first, square to the way the player looks at the stone.
+     * Frees {@code stack} from the stone at {@code at} for {@code owner}: rune {@code index} of {@code of}, out of the
+     * hole towards the player's eyes, the second drifting out to the other side of the first, square to that way.
      */
     public static void spawn(ServerLevel level, Vec3 at, ServerPlayer owner, ItemStack stack, int index, int of, long stone) {
         FreedRune r = RuneRegistry.FREED_RUNE.get().create(level);
@@ -105,9 +111,10 @@ public class FreedRune extends Entity {
         Vec3 look = at.subtract(owner.getEyePosition());
         Vec3 side = new Vec3(-look.z, 0, look.x);
         side = side.lengthSqr() < 1.0E-6 ? new Vec3(1, 0, 0) : side.normalize();
+        Vec3 out = look.lengthSqr() < 1.0E-6 ? new Vec3(0, 1, 0) : look.normalize().reverse();
         double spread = of > 1 ? (index == 0 ? -0.055 : 0.055) : 0.0;
         r.setPos(at.x, at.y - 0.15, at.z);
-        r.setDeltaMovement(side.x * spread, 0.2 - 0.03 * index, side.z * spread);
+        r.setDeltaMovement(out.scale(OUT).add(side.scale(spread)).add(0, LIFT - 0.02 * index, 0));
         r.setYRot(level.random.nextFloat() * 360.0F);
         if (!level.addFreshEntity(r)) drop(level, at, stack);
     }
