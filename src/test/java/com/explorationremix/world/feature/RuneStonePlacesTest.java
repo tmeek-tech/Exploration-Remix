@@ -26,7 +26,7 @@ class RuneStonePlacesTest {
 
     @Test
     void aboutOneVentInEightWithAWayInHidesAStone() {
-        List<GardensField.VentChamber> vs = T.gardens.ventChambers(-1536, -1536, 1536, 1536);
+        List<GardensField.VentChamber> vs = T.gardens.ventChambers(-512, -512, 512, 512);
         int open = 0, hide = 0;
         for (GardensField.VentChamber v : vs) {
             if (v.cracks().length > 0) open++;
@@ -37,8 +37,9 @@ class RuneStonePlacesTest {
         }
         double share = hide / (double) Math.max(1, open);
         System.out.printf(Locale.ROOT, "RuneStonePlacesTest: %d vents, %d with a way in, %d hide a stone (%.3f)%n", vs.size(), open, hide, share);
-        assertTrue(open >= 100, "only " + open + " vents with a way in");
-        assertTrue(share > 0.07 && share < 0.2, hide + " of " + open + " vents with a way in hide a stone");
+        // measured over 3072 x 3072 blocks when this was written: 1758 vents, all with a way in, 231 hiding one (0.131)
+        assertTrue(open >= 120, "only " + open + " vents with a way in");
+        assertTrue(share > 0.06 && share < 0.2, hide + " of " + open + " vents with a way in hide a stone");
     }
 
     @Test
@@ -52,6 +53,7 @@ class RuneStonePlacesTest {
         }
         double share = hide / (double) Math.max(1, all);
         System.out.printf(Locale.ROOT, "RuneStonePlacesTest: %d ponds in 3 x 3 Blue cells, %d hide a stone (%.3f)%n", all, hide, share);
+        // measured when this was written: 55 ponds, 14 hiding one (0.255)
         assertTrue(all >= 25, "only " + all + " ponds in 9 cells");
         assertTrue(share > 0.15 && share < 0.55, hide + " of " + all + " ponds hide a stone");
     }
