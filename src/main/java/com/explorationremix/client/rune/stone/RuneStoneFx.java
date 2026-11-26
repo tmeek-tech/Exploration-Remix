@@ -113,7 +113,7 @@ public final class RuneStoneFx {
         // ring inside the hole was hidden by the rock round it, and one lying flat at the stone's middle swept through
         // the eyes of whoever dug it from close by, a grey band across half the view)
         Vec3 face = Vec3.atLowerCornerOf(Direction.getNearest(n.x, n.y, n.z).getNormal());
-        GlowParticle.ring(c.add(face.scale(0.53)), face).colour(CORE).fadeTo(DIM).size(0.3F, 2.3F).alpha(0.85F).life(10).spawn();
+        GlowParticle.ring(c.add(face.scale(0.53)), face).colour(MAIN).fadeTo(DIM).size(0.3F, 2.3F).alpha(0.85F).life(10).spawn();
         GlowParticle.ring(c.add(face.scale(0.57)), face).colour(MAIN).fadeTo(DIM).size(0.6F, 3.0F).alpha(0.32F).life(14).spawn();
         for (int i = 0; i < count(24); i++) {
             Vec3 way = blast || r.nextFloat() < 0.35F ? sphere(r) : cone(r, n, 75);
@@ -207,7 +207,7 @@ public final class RuneStoneFx {
         Vec3 base = Vec3.atLowerCornerOf(lit.pos);
         for (Map.Entry<Direction, RuneStoneClient.Face> f : RuneStoneClient.open(l, lit)) {
             Vec3 out = normal(f.getKey());
-            GlowParticle.flash(Vec3.atCenterOf(lit.pos).add(out.scale(0.52))).colour(CORE).fadeTo(MAIN).size(0.2F, 0.8F).alpha(0.6F).life(5).spawn();
+            GlowParticle.flash(Vec3.atCenterOf(lit.pos).add(out.scale(0.52))).colour(MAIN).fadeTo(DIM).size(0.2F, 0.8F).alpha(0.6F).life(5).spawn();
             List<Vec3> points = f.getValue().points();
             if (points.isEmpty()) continue;
             for (int i = 0; i < count(5); i++) {
