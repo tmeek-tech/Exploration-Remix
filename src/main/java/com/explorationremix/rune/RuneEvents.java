@@ -75,10 +75,11 @@ public final class RuneEvents {
     // ------------------------------------------------------------------------------------------------ the enchanting table
 
     /**
-     * An enchanting table opens its rune sockets (RuneTableMenu): the weapon in hand's and the worn armor's. Since
-     * 0.22.6 the table enchants no more, whatever is in hand. Sneaking with something in hand uses that as ever (a block
-     * is placed against the table). Both sides answer, so the player's game neither draws a bow nor waits on the
-     * table's own screen. In combat it opens with the sockets held shut until the combat is over.
+     * An enchanting table opens its rune sockets (RuneTableMenu): what is in hand's (a weapon, a tool, or since 0.23.0 a
+     * piece of armor, which the table opens on rather than it being put on) and the worn armor's. Since 0.22.6 the
+     * table enchants no more, whatever is in hand. Sneaking with something in hand uses that as ever (a block is placed
+     * against the table, a piece of armor is put on). Both sides answer, so the player's game neither draws a bow nor
+     * waits on the table's own screen. In combat it opens with the sockets held shut until the combat is over.
      */
     @SubscribeEvent
     public static void rightClickBlock(PlayerInteractEvent.RightClickBlock e) {

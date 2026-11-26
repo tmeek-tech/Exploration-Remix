@@ -89,6 +89,26 @@ class ArmorSetTest {
     }
 
     @Test
+    void aPieceInHandCountsAsIfWornInPlaceOfTheOneWornThere() {
+        // 0.23.0: the table counts a helmet held in the hand as if it were put on, swapped for the one worn
+        ArmorSet worn = set("lantern vigor", "mend", "mend", null);
+        ArmorSet putOn = worn.with(Piece.HELMET, runes("sense mend"));
+        assertEquals(3, putOn.count(RuneId.MEND));
+        assertTrue(putOn.awake(RuneId.MEND));
+        assertEquals(0, putOn.count(RuneId.VIGOR), "the helmet it takes the place of no longer counts");
+        assertEquals(1, worn.count(RuneId.VIGOR), "the set itself is left as it was");
+        assertTrue(putOn.has(RuneId.SENSE));
+        assertFalse(putOn.has(RuneId.LANTERN));
+        assertEquals(putOn, worn.with(Piece.HELMET, runes("sense mend")).with(Piece.HELMET, runes("sense mend")));
+        // into a slot worn empty, and a held piece holding another piece's effect rune counts only its collect runes
+        ArmorSet boots = worn.with(Piece.BOOTS, new ArmorRunes(RuneId.LANTERN, RuneId.MEND, null));
+        assertEquals(3, boots.count(RuneId.MEND));
+        assertNull(boots.effect(Piece.BOOTS));
+        assertEquals(worn, worn.with(Piece.HELMET, worn.piece(Piece.HELMET)), "a worn piece counted as itself changes nothing");
+        assertFalse(worn.with(Piece.CHEST, null).worn(Piece.CHEST));
+    }
+
+    @Test
     void aPieceNotWornCountsForNothing() {
         ArmorSet s = set(null, "mend", "mend", "mend");
         assertFalse(s.worn(Piece.HELMET));

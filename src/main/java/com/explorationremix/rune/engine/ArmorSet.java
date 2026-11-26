@@ -42,6 +42,16 @@ public final class ArmorSet {
     /** The runes on a worn piece (EMPTY with none), or null when nothing that takes runes is worn there. */
     public ArmorRunes piece(Piece p) { return pieces[p.ordinal()]; }
 
+    /**
+     * The set with {@code a} worn as {@code p}, in place of whatever is worn there (null: nothing worn there). The
+     * enchanting table counts a piece of armor held in the hand so, as if it were put on (0.23.0).
+     */
+    public ArmorSet with(Piece p, ArmorRunes a) {
+        ArmorRunes[] next = pieces.clone();
+        next[p.ordinal()] = a;
+        return new ArmorSet(next);
+    }
+
     public boolean worn(Piece p) { return pieces[p.ordinal()] != null; }
 
     /** How many worn pieces carry collect rune {@code c} (each piece once). */

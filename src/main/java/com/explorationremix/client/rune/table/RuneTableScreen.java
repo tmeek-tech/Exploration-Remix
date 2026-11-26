@@ -38,11 +38,15 @@ import java.util.Locale;
 /**
  * The enchanting table's rune view, its clicks and its words: the view itself is in the world (RuneTableView). A column
  * at the left holds everything that takes runes (Taran, 2026-11-25: runes for bows and armor, and in place of the
- * table's enchanting): the weapon or tool in the main hand, then the helmet, chestplate, leggings and boots worn; click
- * one and its sockets hang over the book. Click a socket to raise the runes you carry for it, click one of those to set
- * it; right-click a socket (or pick the struck one among the risen) to take its rune out. Each socket is named under
- * it, the active one with its second phase's mark once it wakes. At the right, the sets: each collect rune worn and how
- * many pieces carry it, awake at three. A panel framed in silver at the foot of the screen says what the mouse is over:
+ * table's enchanting): what is in the main hand (a weapon, a tool, or since 0.23.0 a piece of armor: Taran, 2026-11-26,
+ * "make it so that you can right click armor held in your hand onto the enchanting table"), then the helmet,
+ * chestplate, leggings and boots worn; click one and its sockets hang over the book. Click a socket to raise the runes
+ * you carry for it, click one of those to set it; right-click a socket (or pick the struck one among the risen) to take
+ * its rune out. Each socket is named under it, the active one with its second phase's mark once it wakes. At the right,
+ * the sets: each collect rune worn and how many pieces carry it, awake at three. A piece of armor held in the hand is
+ * counted as if it were worn in place of the one worn there: under its collect sockets, in the panel ("If worn"), and in
+ * the tally, whose pips show what putting it on would light (a ring) or put out (faded). A panel framed in silver at the
+ * foot of the screen says what the mouse is over:
  * what it is, and for a rune not yet set what the gear would do with it (Taran, 2026-11-23: "have tooltips appear at
  * the bottom of the screen"); over nothing, it says what the gear does.
  *
@@ -116,7 +120,7 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
         seenFocus = -1;
     }
 
-    /** The gear the table opens on: what is in hand, if it takes runes; else the first piece worn that does. */
+    /** The gear the table opens on: what is in hand, if it takes runes (a piece of armor held too); else the first piece worn that does. */
     private int firstGear() {
         if (!menu.hand().isEmpty()) return RuneTableMenu.HAND;
         for (int g = 1; g < RuneTableMenu.GEAR; g++) if (!menu.gear(g).isEmpty()) return g;
@@ -144,8 +148,8 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         changes();
-        ArmorSet set = WornRunes.of(minecraft.player);
-        hoverSides(mouseX, mouseY, set);
+        ArmorSet set = WornRunes.of(minecraft.player), counted = counted(set);
+        hoverSides(mouseX, mouseY, set, counted);
         hover(mouseX, mouseY);
         // the words come in with the runes, once the view is most of the way over the table
         fade = Mth.clamp((RuneTableView.shown(partialTick) - 0.55F) / 0.45F, 0.0F, 1.0F);
@@ -155,11 +159,14 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
         Reading now = weaponReading(level);
         header(g);
         column(g);
-        tally(g, set);
-        for (RuneTableView.Target t : RuneTableView.targets) if (t.kind == RuneTableView.Target.Kind.SOCKET) socketLabel(g, t, now, set);
+        tally(g, set, counted);
+        for (RuneTableView.Target t : RuneTableView.targets) if (t.kind == RuneTableView.Target.Kind.SOCKET) socketLabel(g, t, now, counted);
         risenHint(g);
-        panel(g, say(said(time), now, set, level), time);
+        panel(g, say(said(time), now, set, counted, level), time);
     }
+
+    /** The sets as they would be with the gear shown worn (a piece in hand as if put on): RuneTableView.counted. */
+    private ArmorSet counted(ArmorSet set) { return RuneTableView.counted(menu, set); }
 
     /** The weapon in hand's runes read now, when it is the gear shown; else null. */
     @Nullable
@@ -254,29 +261,54 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
         }
     }
 
-    /** The sets at the right: each collect rune worn, how many pieces carry it (a pip for each piece), lit once awake. */
-    private void tally(GuiGraphics g, ArmorSet set) {
-        List<RuneId> sets = set.collects();
+    /**
+     * The sets at the right: each collect rune worn, how many pieces carry it (a pip for each piece), lit once awake.
+     * With a piece of armor in hand shown, its own collect runes join the list, and the pips show what putting it on
+     * would do: a ring for a pip it would light, a faded pip for one it would put out (the piece worn there carries that
+     * rune and it doesn't).
+     */
+    private void tally(GuiGraphics g, ArmorSet set, ArmorSet counted) {
+        List<RuneId> sets = tallyRows(set, counted);
         if (sets.isEmpty()) return;
         int x1 = width - TALLY_RIGHT, x0 = x1 - TALLY_W;
         icon(g, RuneTableView.iconIndex(Socket.COLLECT_1), x0, TALLY_TOP - 1, 1.0F);
         g.drawString(font, words("sets"), x0 + ICON + 3, TALLY_TOP, a(DIM), false);
         for (int i = 0; i < sets.size(); i++) {
             RuneId c = sets.get(i);
-            int y = TALLY_TOP + (i + 1) * TALLY_ROW + 2, count = set.count(c);
+            int y = TALLY_TOP + (i + 1) * TALLY_ROW + 2, count = set.count(c), then = counted.count(c);
             boolean hover = c == hoveredSet;
-            int colour = set.full(c) ? BRIGHT : set.awake(c) ? SET_AWAKE : hover ? TEXT : DIM;
+            int colour = set.full(c) ? BRIGHT : set.awake(c) ? SET_AWAKE : hover ? TEXT : count == 0 ? FAINT : DIM;
             g.drawString(font, c.title, x0, y, a(colour), false);
             for (int p = 0; p < ArmorSet.FULL; p++) {
                 int px = x1 - (ArmorSet.FULL - p) * 5;
-                g.fill(px, y + 2, px + 3, y + 5, a(p < count ? SET_LIT : SET_DARK));
+                boolean lit = p < count, will = p < then;
+                g.fill(px, y + 2, px + 3, y + 5, a(lit && will ? SET_LIT : SET_DARK));
+                if (will && !lit) {
+                    // putting the piece in hand on would light it: a ring
+                    g.fill(px, y + 2, px + 3, y + 3, a(SET_LIT));
+                    g.fill(px, y + 4, px + 3, y + 5, a(SET_LIT));
+                    g.fill(px, y + 3, px + 1, y + 4, a(SET_LIT));
+                    g.fill(px + 2, y + 3, px + 3, y + 4, a(SET_LIT));
+                } else if (lit && !will) {
+                    // it would put this one out: faded
+                    g.fill(px, y + 2, px + 3, y + 5, a(SET_LIT, 0.4F));
+                }
             }
         }
     }
 
+    /** The tally's rows, in the rune list's order: each collect rune worn, and each a piece in hand would bring. */
+    private static List<RuneId> tallyRows(ArmorSet set, ArmorSet counted) {
+        if (counted == set) return set.collects();
+        List<RuneId> out = new ArrayList<>();
+        for (RuneId r : RuneId.ofKind(RuneKind.COLLECT)) if (set.count(r) > 0 || counted.count(r) > 0) out.add(r);
+        return out;
+    }
+
     /**
      * Under each socket, two lines: its kind's icon and name, in its colour, and the rune in it ("II" once the active's
-     * second phase wakes; a collect rune bright once its set is awake).
+     * second phase wakes; a collect rune with how many pieces carry it, bright once its set is awake). {@code set} is
+     * counted with the gear shown worn (a piece in hand as if it were).
      */
     private void socketLabel(GuiGraphics g, RuneTableView.Target t, @Nullable Reading now, ArmorSet set) {
         if (!t.onScreen) return;
@@ -382,14 +414,18 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
 
     // ------------------------------------------------------------------------------------------------ what the panel says
 
-    /** What the panel says now: of the box or set the mouse is over, else of {@code t} on the gear shown. */
-    private Say say(@Nullable RuneTableView.Target t, @Nullable Reading now, ArmorSet set, int level) {
+    /**
+     * What the panel says now: of the box or set the mouse is over, else of {@code t} on the gear shown. {@code set} is
+     * the sets as worn, {@code counted} as they would be with the gear shown worn.
+     */
+    private Say say(@Nullable RuneTableView.Target t, @Nullable Reading now, ArmorSet set, ArmorSet counted, int level) {
         if (hoveredGear >= 0) return sayGear(hoveredGear, set, level);
-        if (hoveredSet != null) return saySet(hoveredSet, set);
+        if (hoveredSet != null) return saySet(hoveredSet, set, counted);
         int f = RuneTableView.picked;
         ItemStack gear = menu.gear(f);
         if (gear.isEmpty()) return new Say(words("what_it_does"), TEXT, NO_ICON, List.of(new Line(nothingThere(f).getString(), DIM, NO_ICON)));
-        if (f != RuneTableMenu.HAND) return sayArmor(t, RuneTableMenu.piece(f), set);
+        Piece piece = menu.armorPiece(f);
+        if (piece != null) return sayArmor(t, piece, gear, f == RuneTableMenu.HAND, set);
         if (menu.tool()) return sayTool(t, menu.rune(f, Socket.TOOL));
         HostSpec spec = RuneGear.spec(gear);
         if (now == null || spec == null) return new Say(words("what_it_does"), TEXT, NO_ICON, List.of());
@@ -449,14 +485,19 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
     }
 
     /**
-     * Of a piece of armor. Over nothing, what its runes do: the effect rune, and how far each collect rune's set has
-     * come. A socket: its rune and what it does (a collect rune, how many pieces carry it); a risen rune, what it is and,
-     * for a collect rune, how far its set would come; the struck one, how far its set would fall back.
+     * Of a piece of armor, worn or held in the hand ({@code held}). Over nothing, what its runes do: the effect rune, and
+     * how far each collect rune's set has come. A socket: its rune and what it does (a collect rune, how many pieces
+     * carry it); a risen rune, what it is and, for a collect rune, how far its set would come; the struck one, how far
+     * its set would fall back. A piece in hand is counted as if it were worn in place of the one worn there (each such
+     * line led "If worn"), and over nothing it says its runes wait for it to be put on.
      */
-    private Say sayArmor(@Nullable RuneTableView.Target t, Piece piece, ArmorSet set) {
+    private Say sayArmor(@Nullable RuneTableView.Target t, Piece piece, ItemStack gear, boolean held, ArmorSet set) {
         List<Line> out = new ArrayList<>();
-        ArmorRunes a = set.piece(piece) == null ? ArmorRunes.EMPTY : set.piece(piece);
+        ArmorRunes a = RuneGear.armor(gear);
+        // the sets with this piece's runes where it is (or would be) worn: as worn for a worn piece
+        ArmorSet counted = set.with(piece, a);
         int effect = RuneTableView.iconIndex(Socket.EFFECT), collect = RuneTableView.iconIndex(Socket.COLLECT_1);
+        String ifWorn = held ? words("if_worn") : "";
         if (t == null) {
             if (a.isEmpty()) {
                 out.add(new Line(words("none_set_armor"), TEXT, NO_ICON));
@@ -465,9 +506,10 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
                 if (a.effect() != null) out.add(new Line(a.effect().title + ": " + desc(a.effect()), TEXT, effect));
                 else out.add(new Line(words("no_effect"), DIM, effect));
                 for (RuneId c : new RuneId[]{a.first(), a.second()}) {
-                    if (c != null) out.add(new Line(Explain.collectLine(c, set.count(c)), set.awake(c) ? TEXT : DIM, collect));
+                    if (c != null) out.add(new Line(Explain.collectLine(c, counted.count(c)), counted.awake(c) ? TEXT : DIM, collect, ifWorn));
                 }
             }
+            if (held) out.add(heldLine(piece));
             return new Say(words("what_it_does"), TEXT, NO_ICON, out);
         }
         int kind = 0xFF000000 | RuneTableView.colour(t.socket), icon = RuneTableView.iconIndex(t.socket);
@@ -475,15 +517,15 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
             case SOCKET -> {
                 if (t.rune == null) yield emptySocket(t, kind, icon);
                 out.add(new Line(desc(t.rune), TEXT, NO_ICON));
-                if (t.rune.isCollect()) out.add(new Line(Explain.collectLine(t.rune, set.count(t.rune)), set.awake(t.rune) ? TEXT : DIM, collect));
+                if (t.rune.isCollect()) out.add(new Line(Explain.collectLine(t.rune, counted.count(t.rune)), counted.awake(t.rune) ? TEXT : DIM, collect, ifWorn));
                 out.add(new Line(words("click_change"), FAINT, NO_ICON));
                 yield new Say(t.rune.title, kind, icon, out);
             }
             case RUNE -> {
                 out.add(new Line(desc(t.rune), TEXT, NO_ICON));
                 if (t.rune.isCollect()) {
-                    ArmorSet with = withRunes(set, piece, a.with(t.socket, t.rune));
-                    out.add(new Line(Explain.collectLine(t.rune, with.count(t.rune)), DIM, collect, words("with_it")));
+                    ArmorSet with = set.with(piece, a.with(t.socket, t.rune));
+                    out.add(new Line(Explain.collectLine(t.rune, with.count(t.rune)), DIM, collect, words(held ? "if_worn_with_it" : "with_it")));
                     RuneId was = a.get(t.socket);
                     if (was != null && was != t.rune) out.add(new Line(Explain.collectLine(was, with.count(was)), DIM, collect));
                 }
@@ -492,20 +534,20 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
             case TAKE_OUT -> {
                 out.add(new Line(words("back_to_you"), DIM, NO_ICON));
                 if (t.rune.isCollect()) {
-                    ArmorSet without = withRunes(set, piece, a.with(t.socket, null));
-                    out.add(new Line(Explain.collectLine(t.rune, without.count(t.rune)), DIM, collect, words("without_it")));
+                    ArmorSet without = set.with(piece, a.with(t.socket, null));
+                    out.add(new Line(Explain.collectLine(t.rune, without.count(t.rune)), DIM, collect, words(held ? "if_worn_without_it" : "without_it")));
                 }
                 yield new Say(Component.translatable("screen.explorationremix.rune_table.take_out", t.rune.title).getString(), kind, icon, out);
             }
         };
     }
 
-    /** The set as it would be with {@code a} on {@code piece} instead. */
-    private static ArmorSet withRunes(ArmorSet set, Piece piece, ArmorRunes a) {
-        ArmorRunes[] pieces = new ArmorRunes[Piece.values().length];
-        for (Piece p : Piece.values()) pieces[p.ordinal()] = set.piece(p);
-        pieces[piece.ordinal()] = a;
-        return new ArmorSet(pieces);
+    /** A piece in hand isn't worn: its runes work once it is put on (in place of the piece worn there, if one is). */
+    private Line heldLine(Piece piece) {
+        ItemStack worn = menu.armor(piece);
+        String says = worn.isEmpty() ? words("held")
+                : Component.translatable("screen.explorationremix.rune_table.held_swap", worn.getHoverName()).getString();
+        return new Line(says, FAINT, NO_ICON);
     }
 
     /** Of a tool: its one rune, or what goes in its socket. */
@@ -550,7 +592,7 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
                 Component.translatable("rune.explorationremix.kind." + t.socket.kind.word)).getString(), kind, icon, out);
     }
 
-    /** Of a box in the column: what that gear's runes are, and the click that shows them. */
+    /** Of a box in the column: what that gear's runes are (a piece in hand, that it isn't worn), and the click that shows them. */
     private Say sayGear(int k, ArmorSet set, int level) {
         List<Line> out = new ArrayList<>();
         ItemStack gear = menu.gear(k);
@@ -565,15 +607,24 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
             if (r != null) names.add(r.title);
         }
         out.add(new Line(names.isEmpty() ? words("no_runes") : String.join(", ", names), names.isEmpty() ? DIM : TEXT, NO_ICON));
+        Piece held = k == RuneTableMenu.HAND ? menu.heldPiece() : null;
+        if (held != null) out.add(heldLine(held));
         if (k != RuneTableView.picked) out.add(new Line(words("click_gear"), FAINT, NO_ICON));
         return new Say(gear.getHoverName().getString(), TEXT, NO_ICON, out);
     }
 
-    /** Of a set in the tally: how far it has come, and what it does awake and full. */
-    private Say saySet(RuneId c, ArmorSet set) {
+    /**
+     * Of a set in the tally: how far it has come, and what it does awake and full; with a piece of armor in hand shown
+     * that would change it, how far it would come with that piece put on.
+     */
+    private Say saySet(RuneId c, ArmorSet set, ArmorSet counted) {
         List<Line> out = new ArrayList<>();
         int collect = RuneTableView.iconIndex(Socket.COLLECT_1);
         out.add(new Line(Explain.collectLine(c, set.count(c)), set.awake(c) ? TEXT : DIM, NO_ICON));
+        if (counted.count(c) != set.count(c)) {
+            String lead = Component.translatable("screen.explorationremix.rune_table.set_if_worn", menu.hand().getHoverName()).getString();
+            out.add(new Line(Explain.collectLine(c, counted.count(c)), DIM, NO_ICON, lead));
+        }
         List<String> on = new ArrayList<>();
         for (Piece p : Piece.values()) {
             ArmorRunes a = set.piece(p);
@@ -614,7 +665,7 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
     // ------------------------------------------------------------------------------------------------ the mouse
 
     /** Which box of the column, or which set of the tally, the mouse is over. */
-    private void hoverSides(int mouseX, int mouseY, ArmorSet set) {
+    private void hoverSides(int mouseX, int mouseY, ArmorSet set, ArmorSet counted) {
         int was = hoveredGear;
         hoveredGear = -1;
         hoveredSet = null;
@@ -629,7 +680,7 @@ public class RuneTableScreen extends AbstractContainerScreen<RuneTableMenu> {
             }
         }
         if (hoveredGear >= 0 && hoveredGear != was) minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.AMETHYST_CLUSTER_STEP, 1.5F, 0.2F));
-        List<RuneId> sets = set.collects();
+        List<RuneId> sets = tallyRows(set, counted);
         int x1 = width - TALLY_RIGHT, x0 = x1 - TALLY_W;
         if (mouseX >= x0 && mouseX < x1) {
             for (int i = 0; i < sets.size(); i++) {

@@ -30,14 +30,17 @@ import net.minecraft.world.level.block.EnchantmentTableBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.network.NetworkHooks;
 
+import javax.annotation.Nullable;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * An enchanting table: the rune sockets of what is in the main hand (a weapon's active rune, modifier and passive, or a
- * tool's one tool rune) and of each piece of armor worn (an effect rune and two collect runes), set from the runes the
- * player carries. Since 0.22.6 the table enchants no more: it is where runes are set, whatever is in hand. The client draws it in the world, over
+ * An enchanting table: the rune sockets of what is in the main hand (a weapon's active rune, modifier and passive, a
+ * tool's one tool rune, or a piece of armor's effect rune and two collect runes) and of each piece of armor worn, set
+ * from the runes the player carries. Since 0.22.6 the table enchants no more: it is where runes are set, whatever is in
+ * hand. Since 0.23.0 a piece of armor held in the hand is set there too, worn or not (Taran, 2026-11-26: "make it so
+ * that you can right click armor held in your hand onto the enchanting table"). The client draws it in the world, over
  * the table (RuneTableScreen); this is the server's side, which decides every change.
  *
  * <p>Gear never leaves the hand or the body, and a rune is always in exactly one place: setting one takes that rune
@@ -47,7 +50,7 @@ import java.util.Map;
  * rune); while in combat (hurt in the last few seconds) runes can't be changed, and being hurt closes it.
  */
 public class RuneTableMenu extends AbstractContainerMenu {
-    /** Gear 0 is the weapon or tool in the main hand; 1 to 4 the worn helmet, chestplate, leggings and boots. */
+    /** Gear 0 is the weapon, tool or piece of armor in the main hand; 1 to 4 the worn helmet, chestplate, leggings and boots. */
     public static final int HAND = 0, GEAR = 1 + Piece.values().length;
     /** How far the player may stand from the table (as for any container). */
     private static final double REACH_SQR = 64.0;
@@ -96,14 +99,25 @@ public class RuneTableMenu extends AbstractContainerMenu {
         return RuneGear.isGear(s) ? s : ItemStack.EMPTY;
     }
 
-    /** What is in the main hand if it takes runes there: a weapon or a tool (empty if neither). */
+    /**
+     * What is in the main hand if it takes runes: a weapon, a tool or a piece of armor (empty if none of those, or if it
+     * is a stack of several, as another mod's armor might be: a rune set in one would be copied when the stack splits).
+     */
     public ItemStack hand() {
         ItemStack s = player.getMainHandItem();
-        return RuneGear.isGear(s) || RuneGear.isTool(s) ? s : ItemStack.EMPTY;
+        return RuneGear.takesRunes(s) && s.getCount() == 1 ? s : ItemStack.EMPTY;
     }
 
     /** Whether the main hand holds a tool (its one socket a tool rune's). */
     public boolean tool() { return RuneGear.isTool(player.getMainHandItem()); }
+
+    /** The piece of armor held in the main hand (not worn), or null if what is there isn't armor that takes runes. */
+    @Nullable
+    public Piece heldPiece() { return RuneGear.piece(hand()); }
+
+    /** The piece of armor gear {@code g} is: a worn piece's own, or the one held in the hand; null for a weapon or a tool. */
+    @Nullable
+    public Piece armorPiece(int g) { return g == HAND ? heldPiece() : piece(g); }
 
     /** The armor worn as {@code p} (empty if none, or if what is worn there isn't armor that takes runes). */
     public ItemStack armor(Piece p) {
@@ -117,14 +131,15 @@ public class RuneTableMenu extends AbstractContainerMenu {
         return g > 0 && g < GEAR ? armor(Piece.values()[g - 1]) : ItemStack.EMPTY;
     }
 
-    /** The piece gear {@code g} is, or null for the hand. */
+    /** The worn piece gear {@code g} is, or null for the hand (whatever it holds: {@link #armorPiece} says if that is armor). */
+    @Nullable
     public static Piece piece(int g) { return g > 0 && g < GEAR ? Piece.values()[g - 1] : null; }
 
     /** The gear number of a piece of armor. */
     public static int gearOf(Piece p) { return 1 + p.ordinal(); }
 
-    /** Gear {@code g}'s sockets, left to right: a weapon's three, a tool's one, a piece of armor's three. */
-    public Socket[] sockets(int g) { return g != HAND ? Socket.ARMOR : tool() ? Socket.TOOLS : Socket.WEAPON; }
+    /** Gear {@code g}'s sockets, left to right: a weapon's three, a tool's one, a piece of armor's three (worn or held). */
+    public Socket[] sockets(int g) { return armorPiece(g) != null ? Socket.ARMOR : tool() ? Socket.TOOLS : Socket.WEAPON; }
 
     /** Whether gear {@code g} has socket {@code s}. */
     public boolean has(int g, Socket s) {
@@ -138,7 +153,8 @@ public class RuneTableMenu extends AbstractContainerMenu {
     public RuneId rune(int g, Socket s) {
         ItemStack st = gear(g);
         if (st.isEmpty() || !has(g, s)) return null;
-        if (g != HAND) return RuneGear.armor(st).get(s);
+        // the socket says what the gear is: has() matched it to the gear's own
+        if (s.armor()) return RuneGear.armor(st).get(s);
         return s == Socket.TOOL ? RuneGear.tool(st) : RuneGear.loadout(st).get(s);
     }
 
@@ -190,15 +206,15 @@ public class RuneTableMenu extends AbstractContainerMenu {
         if (runeOrdinal >= 0 && r == null) return;
         // runes that don't fit this gear (from before 0.22.6) go back first, so a change never loses them
         RuneGear.handBack(gear, p);
-        if (r == null) takeOut(p, g, gear, s);
-        else set(p, g, gear, s, r);
+        if (r == null) takeOut(p, gear, s);
+        else set(p, gear, s, r);
     }
 
     /**
      * Sets {@code r} into the socket {@code s}: one is taken from what they carry, and what it displaces is handed back
      * (the one there before; on armor, the same collect rune moving from the piece's other collect socket).
      */
-    private boolean set(ServerPlayer p, int g, ItemStack gear, Socket s, RuneId r) {
+    private boolean set(ServerPlayer p, ItemStack gear, Socket s, RuneId r) {
         if (r.kind != s.kind || !r.fits(RuneGear.fits(gear))) return false;
         List<RuneId> before, after;
         Loadout l = null;
@@ -208,7 +224,7 @@ public class RuneTableMenu extends AbstractContainerMenu {
             if (was == r) return false;
             before = was == null ? List.of() : List.of(was);
             after = List.of(r);
-        } else if (g == HAND) {
+        } else if (s.kind.weapon()) {
             Loadout was = RuneGear.loadout(gear);
             if (was.get(s) == r) return false;
             l = was.with(s, r);
@@ -235,13 +251,13 @@ public class RuneTableMenu extends AbstractContainerMenu {
     }
 
     /** Takes the rune out of the socket {@code s}, back to the player. */
-    private boolean takeOut(ServerPlayer p, int g, ItemStack gear, Socket s) {
+    private boolean takeOut(ServerPlayer p, ItemStack gear, Socket s) {
         RuneId was;
         if (s == Socket.TOOL) {
             was = RuneGear.tool(gear);
             if (was == null) return false;
             RuneGear.setTool(gear, null);
-        } else if (g == HAND) {
+        } else if (s.kind.weapon()) {
             Loadout l = RuneGear.loadout(gear);
             was = l.get(s);
             if (was == null) return false;
