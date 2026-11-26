@@ -3,8 +3,10 @@ package com.explorationremix.client.rune.table;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.client.rune.GlowSprite;
 import com.explorationremix.client.rune.fx.GlowParticle;
+import com.explorationremix.rune.RuneGear;
 import com.explorationremix.rune.armor.WornRunes;
 import com.explorationremix.rune.engine.ArmorSet;
+import com.explorationremix.rune.engine.Piece;
 import com.explorationremix.rune.engine.RuneId;
 import com.explorationremix.rune.engine.RuneKind;
 import com.explorationremix.rune.engine.Socket;
@@ -59,14 +61,15 @@ import java.util.Map;
 /**
  * The enchanting table's rune view, drawn in the world itself (Taran, 2026-11-22: "a beautiful in-world interface on
  * the enchanting table"). The view eases from the player's eyes to over the table and looks down on its open book; the
- * room dims, and the gear being set (the weapon or tool in hand, or a worn piece of armor: picked in the screen's column,
- * {@link #picked}) floats over the book before a rune circle, slowly turning, its sockets hanging in a shallow arc below
+ * room dims, and the gear being set (what is in hand, a weapon, a tool or a piece of armor; or a worn piece of armor:
+ * picked in the screen's column, {@link #picked}) floats over the book before a rune circle, slowly turning, its sockets hanging in a shallow arc below
  * it: a weapon's active rune (light blue), modifier (lavender) and passive (silver-blue), a piece of armor's effect rune
  * (periwinkle) and two collect runes (pale lilac), or a tool's one rune (pale sky blue). Each is a silver ring set with
  * gems of its colour, its rune's tablet in the middle and a thread of light up to the gear. Picking a socket makes the
  * runes the player carries for it rise out of it into an arc over the gear; picking one of those sets it. Up the active
  * socket's outer side a gauge of pips fills with the player's XP level toward the rune's second phase, and glints once
- * it wakes; over a collect socket four pips count the worn pieces carrying its rune, and glint once three do. Light runs
+ * it wakes; over a collect socket four pips count the worn pieces carrying its rune (a piece held in the hand counted as if it were
+ * worn in place of the one worn there), and glint once three do. Light runs
  * slowly round the circle, stars twinkle about it, and motes drift up from the book the whole time. Leaving gives the
  * view back as smoothly as it was taken.
  *
@@ -175,6 +178,8 @@ public final class RuneTableView {
     /** The gear drawn over the book, and its sockets (kept as the view leaves, so they fade where they were). */
     private static ItemStack shownGear = ItemStack.EMPTY;
     private static Socket[] shownSockets = Socket.WEAPON;
+    /** The sets its collect sockets count by ({@link #counted}), kept likewise. */
+    private static ArmorSet shownSets = ArmorSet.NONE;
 
     private RuneTableView() {}
 
@@ -222,6 +227,15 @@ public final class RuneTableView {
         hovered = null;
         picked = first;
         targets.clear();
+    }
+
+    /**
+     * The sets as they would be with the gear shown worn: a piece of armor held in the hand, when it is shown, counted in
+     * place of the one worn there, as putting it on would swap them; with anything else shown, {@code worn} itself.
+     */
+    static ArmorSet counted(RuneTableMenu menu, ArmorSet worn) {
+        Piece held = picked == RuneTableMenu.HAND ? menu.heldPiece() : null;
+        return held == null ? worn : worn.with(held, RuneGear.armor(menu.hand()));
     }
 
     /** The screen picked other gear to set: its sockets come in where the last one's were. */
@@ -515,6 +529,7 @@ public final class RuneTableView {
         if (menu != null) {
             shownGear = menu.gear(picked);
             shownSockets = menu.sockets(picked);
+            shownSets = counted(menu, WornRunes.of(mc.player));
             plan(shownSockets.length);
             layout(menu, time);
         } else {
@@ -609,7 +624,7 @@ public final class RuneTableView {
         g.disc(w, wr * 0.38F, CORE, 0.22F * shown);
         g.disc(place(gw / 2.0, (weaponY + socketsY) / 2.0, 0.0), (float) (gh * 0.55 * perPx(0.0)), DEEP, 0.12F * shown);
         int level = Minecraft.getInstance().player.experienceLevel;
-        ArmorSet set = WornRunes.of(Minecraft.getInstance().player);
+        ArmorSet set = shownSets;
         for (Target tg : targets) {
             boolean hover = tg.same(hovered);
             int colour = colour(tg.socket);
@@ -686,7 +701,7 @@ public final class RuneTableView {
     private static void frames(PoseStack pose, Camera camera, float time, float shown) {
         Sprites s = new Sprites(pose.last().pose(), camera);
         int level = Minecraft.getInstance().player.experienceLevel;
-        ArmorSet set = WornRunes.of(Minecraft.getInstance().player);
+        ArmorSet set = shownSets;
         for (Target tg : targets) {
             double r = tg.radius * grow(tg, shown) * lift(tg);
             int ru = ringU(tg.socket), rv = ringV(tg.socket);
@@ -727,7 +742,7 @@ public final class RuneTableView {
         Sprites add = new Sprites(pose.last().pose(), camera);
         float pulse = 0.5F + 0.5F * Mth.sin(time * 0.12F);
         int level = Minecraft.getInstance().player.experienceLevel;
-        ArmorSet set = WornRunes.of(Minecraft.getInstance().player);
+        ArmorSet set = shownSets;
         for (Target tg : targets) {
             double r = tg.radius * grow(tg, shown) * lift(tg);
             float light = tg.same(hovered) ? 0.32F : 0.0F;
