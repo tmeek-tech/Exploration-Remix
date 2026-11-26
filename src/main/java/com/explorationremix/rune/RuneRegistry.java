@@ -133,15 +133,16 @@ public final class RuneRegistry {
 
     /**
      * The rune stones (0.23.1), one per layer, each hiding in its layer's stone and freeing one or two of its runes when
-     * broken (RuneStoneBlock). Coloured on maps as the stone each hides in; a little harder than it (hardness 4) so the
-     * carving's light has time to build while it is dug.
+     * broken (RuneStoneBlock). Coloured on maps as the stone each hides in; harder than it (hardness 5, a second with an
+     * iron pickaxe) so the carving's light has time to build while it is dug.
      */
     private static final Map<RuneStoneKind, RegistryObject<Block>> STONES = new EnumMap<>(RuneStoneKind.class);
 
     static {
         for (RuneStoneKind k : RuneStoneKind.values()) {
             RegistryObject<Block> b = BLOCKS.register(k.id, () -> new RuneStoneBlock(k, BlockBehaviour.Properties.of()
-                    .mapColor(s -> s.getBlock() instanceof RuneStoneBlock rs ? rs.host(s).block().defaultMapColor() : MapColor.STONE)
+                    // read through the kind's own property: the block's states are made (and coloured) before it knows its kind
+                    .mapColor(s -> s.hasProperty(k.host) ? s.getValue(k.host).block().defaultMapColor() : MapColor.STONE)
                     .instrument(NoteBlockInstrument.BASEDRUM).strength(5.0F, 6.0F).sound(SoundType.STONE)));
             STONES.put(k, b);
             ITEMS.register(k.id, () -> new BlockItem(b.get(), new Item.Properties()));
