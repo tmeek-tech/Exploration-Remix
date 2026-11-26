@@ -5,6 +5,7 @@ import com.explorationremix.rune.stone.RuneStoneKind;
 import com.explorationremix.rune.stone.RuneStones;
 import com.explorationremix.world.terrain.Hashing;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
@@ -40,8 +41,6 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class RuneStoneStructures {
     private RuneStoneStructures() {}
 
-    /** About how many a stronghold and a city hide (one fewer to one more, by the start). */
-    public static final int STRONGHOLD = 6, CITY = 4;
     /** A piece with fewer blocks in its box than this is passed over. */
     static final int MIN_VOLUME = 150;
     private static final long SALT = 0x53545231L;
@@ -50,41 +49,65 @@ public final class RuneStoneStructures {
     /** For /remix runestones: stones set in strongholds and in cities. */
     public static final AtomicLong STRONGHOLDS = new AtomicLong(), CITIES = new AtomicLong();
 
-    /** After start's pieces are built in the chunk at {@code chunkPos} ({@code box}: its blocks). */
-    public static void placed(StructureStart start, WorldGenLevel level, BoundingBox box, ChunkPos chunkPos) {
-        Structure s = start.getStructure();
-        boolean city;
-        if (s.type() == StructureType.STRONGHOLD) city = false;
-        else if (isCity(level, s)) city = true;
-        else return;
-        List<StructurePiece> pieces = start.getPieces();
-        if (pieces.isEmpty()) return;
-        RuneStoneKind kind = city ? RuneStoneKind.BLUE_REACHES : RuneStoneKind.UPPER_CAVES;
-        long h = Hashing.mix(level.getSeed(), SALT, start.getChunkPos().x, start.getChunkPos().z);
-        int want = (city ? CITY : STRONGHOLD) - 1 + (int) (Hashing.unit(Hashing.mix(h, 1, 0, 0)) * 3);
-        List<long[]> order = new ArrayList<>();
-        for (int i = 0; i < pieces.size(); i++) {
-            StructurePiece piece = pieces.get(i);
-            if (!holds(piece, city)) continue;
-            order.add(new long[]{Hashing.mix(h, 2, i, 0), i});
+    /** The game's structures that hide stones: about how many each holds (one fewer to one more, by the start), of what kind. */
+    public enum Site {
+        STRONGHOLD(6, RuneStoneKind.UPPER_CAVES), CITY(4, RuneStoneKind.BLUE_REACHES);
+
+        public final int about;
+        public final RuneStoneKind kind;
+
+        Site(int about, RuneStoneKind kind) {
+            this.about = about;
+            this.kind = kind;
         }
-        order.sort(Comparator.comparingLong(o -> o[0]));
-        for (int n = 0; n < Math.min(want, order.size()); n++) {
-            int i = (int) order.get(n)[1];
-            BoundingBox b = pieces.get(i).getBoundingBox();
-            if (!home(b, chunkPos)) continue;
-            BlockPos at = spot(level, kind, city, b, box, Hashing.mix(h, 3, i, 0));
-            if (at == null) continue;
-            RuneStoneHost host = RuneStoneHost.of(level.getBlockState(at));
-            if (host == null) continue;
-            level.setBlock(at, kind.state(host), 2);
-            (city ? CITIES : STRONGHOLDS).incrementAndGet();
-            RuneStones.placed(kind);
+
+        /** The site structure s is, or null for one that hides none. */
+        @Nullable
+        public static Site of(RegistryAccess access, Structure s) {
+            if (s.type() == StructureType.STRONGHOLD) return STRONGHOLD;
+            if (s.type() != StructureType.JIGSAW) return null;
+            return access.registryOrThrow(Registries.STRUCTURE).getResourceKey(s).filter(BuiltinStructures.ANCIENT_CITY::equals).isPresent() ? CITY : null;
         }
     }
 
-    private static boolean isCity(WorldGenLevel level, Structure s) {
-        return level.registryAccess().registryOrThrow(Registries.STRUCTURE).getResourceKey(s).map(BuiltinStructures.ANCIENT_CITY::equals).orElse(false);
+    /** After start's pieces are built in the chunk at {@code chunkPos} ({@code box}: its blocks). */
+    public static void placed(StructureStart start, WorldGenLevel level, BoundingBox box, ChunkPos chunkPos) {
+        Site site = Site.of(level.registryAccess(), start.getStructure());
+        if (site == null) return;
+        List<StructurePiece> pieces = start.getPieces();
+        long h = hash(level.getSeed(), start);
+        for (int i : chosen(start, level.getSeed(), site)) {
+            BoundingBox b = pieces.get(i).getBoundingBox();
+            if (!homeOf(b).equals(chunkPos)) continue;
+            BlockPos at = spot(level, site, b, box, Hashing.mix(h, 3, i, 0));
+            if (at == null) continue;
+            RuneStoneHost host = RuneStoneHost.of(level.getBlockState(at));
+            if (host == null) continue;
+            level.setBlock(at, site.kind.state(host), 2);
+            (site == Site.CITY ? CITIES : STRONGHOLDS).incrementAndGet();
+            RuneStones.placed(site.kind);
+        }
+    }
+
+    private static long hash(long seed, StructureStart start) {
+        return Hashing.mix(seed, SALT, start.getChunkPos().x, start.getChunkPos().z);
+    }
+
+    /**
+     * The pieces of start that take a stone, as indices into its pieces: of those that may hold one ({@link #holds}),
+     * the first few in an order of the start's own, as many as it hides.
+     */
+    public static int[] chosen(StructureStart start, long seed, Site site) {
+        List<StructurePiece> pieces = start.getPieces();
+        long h = hash(seed, start);
+        int want = site.about - 1 + (int) (Hashing.unit(Hashing.mix(h, 1, 0, 0)) * 3);
+        List<long[]> order = new ArrayList<>();
+        for (int i = 0; i < pieces.size(); i++)
+            if (holds(pieces.get(i), site == Site.CITY)) order.add(new long[]{Hashing.mix(h, 2, i, 0), i});
+        order.sort(Comparator.comparingLong(o -> o[0]));
+        int[] out = new int[Math.min(want, order.size())];
+        for (int n = 0; n < out.length; n++) out[n] = (int) order.get(n)[1];
+        return out;
     }
 
     /** Whether a piece may hold a stone: big enough, and for a city one of its buildings, walls or its centre. */
@@ -97,8 +120,8 @@ public final class RuneStoneStructures {
         return e.contains("/structures/") || e.contains("/city_center/") || e.contains("/walls/");
     }
 
-    /** Whether the chunk at {@code c} is the one that holds most of box b (columns; the first of equals, west then north). */
-    static boolean home(BoundingBox b, ChunkPos c) {
+    /** The chunk that holds most of box b's columns (the first of equals, west then north): the one that sets its stone. */
+    public static ChunkPos homeOf(BoundingBox b) {
         int best = -1, bx = 0, bz = 0;
         for (int cx = b.minX() >> 4; cx <= b.maxX() >> 4; cx++)
             for (int cz = b.minZ() >> 4; cz <= b.maxZ() >> 4; cz++) {
@@ -110,7 +133,7 @@ public final class RuneStoneStructures {
                     bz = cz;
                 }
             }
-        return bx == c.x && bz == c.z;
+        return new ChunkPos(bx, bz);
     }
 
     /**
@@ -119,7 +142,8 @@ public final class RuneStoneStructures {
      * chunk, two blocks over the floor there best (eye level), then one, then three; among equals, by {@code h}.
      */
     @Nullable
-    static BlockPos spot(WorldGenLevel level, RuneStoneKind kind, boolean city, BoundingBox b, BoundingBox box, long h) {
+    static BlockPos spot(WorldGenLevel level, Site site, BoundingBox b, BoundingBox box, long h) {
+        boolean city = site == Site.CITY;
         int x0 = Math.max(b.minX(), box.minX()), x1 = Math.min(b.maxX(), box.maxX());
         int z0 = Math.max(b.minZ(), box.minZ()), z1 = Math.min(b.maxZ(), box.maxZ());
         int y0 = Math.max(b.minY(), level.getMinBuildHeight()), y1 = Math.min(b.maxY(), level.getMaxBuildHeight() - 1);
@@ -132,7 +156,7 @@ public final class RuneStoneStructures {
                 for (int y = y0; y <= y1; y++) {
                     BlockState s = level.getBlockState(p.set(x, y, z));
                     RuneStoneHost host = RuneStoneHost.of(s);
-                    if (host == null || !kind.takes(host) || (city && host == RuneStoneHost.DEEPSLATE)) continue;
+                    if (host == null || !site.kind.takes(host) || (city && host == RuneStoneHost.DEEPSLATE)) continue;
                     int score = 0;
                     for (int[] d : NB4) {
                         int nx = x + d[0], nz = z + d[1];

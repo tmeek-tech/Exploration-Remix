@@ -16,6 +16,11 @@ vanilla picture is needed or copied: a groove is the host's darkest shade or the
 (down and to the right, as the game's light falls from the top left) its lightest. Four looks per host, picked by the
 block's position, each with a different rune on its sides and on its top and bottom.
 
+While a stone is dug, and when another one near it breaks, its carving lights up from inside: each face's `_lit`
+texture holds that light exactly, added over the face by the client (client.rune.stone.RuneStoneClient, scaled by how
+far the dig has got): the strokes' heart white, the strokes light blue, a soft light blue bleed a few pixels round
+them, so the light grows brighter without turning cyan. The atlas takes them from textures/block/ on its own.
+
 Writes the textures, the models (on one template: the rock, the carving, the glow), the blockstates (property host, the
 four looks as random variants), the items, the loot tables (one rune for certain, a second one time in three, or half
 the time with a Bounty pickaxe, as with Fortune II; the Galleries' stones roll the deepest layers most, as the ruins'

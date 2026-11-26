@@ -256,6 +256,55 @@ class GalleriesRuinsTest {
         assertTrue(shut.isEmpty(), shut.size() + " of " + chests + " chests can't be walked to: " + shut);
     }
 
+    /**
+     * Each cluster hides its rune stones (0.23.1; Taran: "Put the Galleries runes in the ruins", card "2-3 per ruin
+     * cluster"): RUNES_LO or one more, each in a wall block of brick, tile or polished stone with open air beside it a
+     * block to three over the ground there, at least RUNE_GAP apart; most at eye level, and hardly a cluster short.
+     */
+    @Test
+    void eachClusterHidesTwoOrThreeRuneStonesInItsWalls() {
+        int stones = 0, clusters = 0, eye = 0, few = 0;
+        List<String> fails = new ArrayList<>();
+        for (long seed : SEEDS) {
+            GalleriesRuins r = GalleriesRuins.of(terrain(seed));
+            for (GalleriesRuins.Plan p : plans(seed)) {
+                clusters++;
+                int n = p.runes.size();
+                stones += n;
+                if (n < GalleriesRuins.RUNES_LO) few++;
+                if (n > GalleriesRuins.RUNES_LO + 1) fails.add("seed " + seed + " " + where(p) + ": " + n + " stones");
+                for (int a = 0; a < n; a++) {
+                    int[] q = p.runes.get(a);
+                    String at = "seed " + seed + " " + where(p) + ": the stone at (" + q[0] + ", " + q[1] + ", " + q[2] + ")";
+                    byte code = p.at(q[0], q[1], q[2]);
+                    if (code != q[3]) fails.add(at + " notes " + q[3] + " but the plan holds " + code);
+                    if (code != GalleriesRuins.BRICKS && code != GalleriesRuins.CRACKED_BRICKS && code != GalleriesRuins.TILES
+                            && code != GalleriesRuins.CRACKED_TILES && code != GalleriesRuins.POLISHED) fails.add(at + " is in " + code);
+                    int best = 0;
+                    for (int[] d : GalleriesRuins.NB4) {
+                        int nx = q[0] + d[0], nz = q[2] + d[1];
+                        byte o = p.at(nx, q[1], nz);
+                        if (o != GalleriesRuins.AIR && !(o == GalleriesRuins.NONE && p.inBox(nx, nz) && q[1] > r.terrain(p, nx, nz))) continue;
+                        int h = q[1] - r.ground(p, nx, nz);
+                        best = Math.max(best, h == 2 ? 3 : h == 1 ? 2 : h == 3 ? 1 : 0);
+                    }
+                    if (best == 0) fails.add(at + " has no open air beside it one to three blocks over the ground");
+                    if (best == 3) eye++;
+                    for (int b = a + 1; b < n; b++) {
+                        int[] o = p.runes.get(b);
+                        double dd = Math.sqrt(Math.pow(o[0] - q[0], 2) + Math.pow(o[1] - q[1], 2) + Math.pow(o[2] - q[2], 2));
+                        if (dd < GalleriesRuins.RUNE_GAP) fails.add(at + " is " + String.format(java.util.Locale.ROOT, "%.1f", dd) + " from another");
+                    }
+                }
+            }
+        }
+        System.out.printf(java.util.Locale.ROOT, "GalleriesRuinsTest: %d rune stones in %d clusters (%.2f a cluster), %d at eye level, %d clusters short%n",
+                stones, clusters, stones / (double) Math.max(1, clusters), eye, few);
+        assertTrue(fails.isEmpty(), fails.size() + " failures:\n" + String.join("\n", fails));
+        assertTrue(few * 10 <= clusters, few + " of " + clusters + " clusters hide fewer than " + GalleriesRuins.RUNES_LO);
+        assertTrue(eye * 2 >= stones, "only " + eye + " of " + stones + " stones at eye level");
+    }
+
     /** Whether code b is a block (not nothing, air or lava). */
     static boolean block(byte b) {
         return b != GalleriesRuins.NONE && b != GalleriesRuins.AIR && b != GalleriesRuins.LAVA;

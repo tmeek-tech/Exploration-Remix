@@ -31,13 +31,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>Runs last in the vent field's chunks (top layer), once the chunk's blocks are all in.
  */
 public final class RuneStoneVentsFeature extends Feature<NoneFeatureConfiguration> {
-    /** The share of the vents with a way in that hide a stone. */
-    public static final double SHARE = 1.0 / 8.0;
     /** How far under the sill the chamber's floor is looked for (rows), and how far from the axis its wall (blocks). */
-    static final int FLOOR_DOWN = 12, REACH = 9;
+    public static final int FLOOR_DOWN = 12, REACH = 9;
     /** The ways looked along from the axis for the wall. */
     static final int WAYS = 16;
-    private static final long SALT = 0x52554E45L;
+    private static final long SALT = RuneStoneSites.VENT_SALT;
 
     /** For /remix runestones: vents met that hide a stone, and stones set in them. */
     public static final AtomicLong VENTS = new AtomicLong(), SET = new AtomicLong();
@@ -53,7 +51,7 @@ public final class RuneStoneVentsFeature extends Feature<NoneFeatureConfiguratio
         int bottom = t.shape.bottom(Terrain.GARDENS);
         boolean any = false;
         for (GardensField.VentChamber v : t.gardens.ventChambers(cp.getMinBlockX(), cp.getMinBlockZ(), cp.getMinBlockX() + 16, cp.getMinBlockZ() + 16)) {
-            if (!hides(v)) continue;
+            if (!RuneStoneSites.ventHides(v)) continue;
             VENTS.incrementAndGet();
             BlockPos at = spot(level, v, bottom, cp);
             if (at == null) continue;
@@ -65,11 +63,6 @@ public final class RuneStoneVentsFeature extends Feature<NoneFeatureConfiguratio
             any = true;
         }
         return any;
-    }
-
-    /** Whether vent v hides a stone: one with a way into its chamber, one in eight of those, by its key. */
-    public static boolean hides(GardensField.VentChamber v) {
-        return v.cracks().length > 0 && Hashing.unit(Hashing.mix(v.key(), SALT, 7, 0)) < SHARE;
     }
 
     /**

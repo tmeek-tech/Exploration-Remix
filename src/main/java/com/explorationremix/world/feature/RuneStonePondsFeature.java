@@ -32,11 +32,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * The ancient cities' stones are set with the cities ({@link RuneStoneStructures}).
  */
 public final class RuneStonePondsFeature extends Feature<NoneFeatureConfiguration> {
-    /** The share of ponds that hide a stone. */
-    public static final double SHARE = 1.0 / 3.0;
     /** How far from a pond's middle its stone may lie (blocks, and never nearer its shore than SHORE). */
     static final double NEAR = 3.5, SHORE = 1.5;
-    private static final long SALT = 0x504F4E44L;
+    private static final long SALT = RuneStoneSites.POND_SALT;
 
     /** For /remix runestones: ponds met that hide a stone, and stones set in them. */
     public static final AtomicLong PONDS = new AtomicLong(), SET = new AtomicLong();
@@ -53,7 +51,7 @@ public final class RuneStonePondsFeature extends Feature<NoneFeatureConfiguratio
         boolean any = false;
         for (Network.PondInfo pond : t.network.pondsIn(x0, z0, x0 + 15, z0 + 15)) {
             if ((Mth.floor(pond.x()) >> 4) != cp.x || (Mth.floor(pond.z()) >> 4) != cp.z) continue;
-            if (!hides(t.seed, pond)) continue;
+            if (!RuneStoneSites.pondHides(t.seed, pond)) continue;
             PONDS.incrementAndGet();
             BlockPos at = spot(level, t.seed, pond);
             if (at == null) continue;
@@ -65,11 +63,6 @@ public final class RuneStonePondsFeature extends Feature<NoneFeatureConfiguratio
             any = true;
         }
         return any;
-    }
-
-    /** Whether a pond hides a stone: one in three, by its middle. */
-    public static boolean hides(long seed, Network.PondInfo pond) {
-        return Hashing.unit(Hashing.mix(seed, SALT, Mth.floor(pond.x() * 4), Mth.floor(pond.z() * 4))) < SHARE;
     }
 
     /**
