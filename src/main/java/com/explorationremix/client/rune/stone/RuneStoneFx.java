@@ -99,17 +99,22 @@ public final class RuneStoneFx {
 
     /**
      * A stone breaks at {@code c} ({@code toward}: to whoever broke it, nothing for a blast): a white flash cooling to
-     * light blue and a softer light left a moment in the hole, a ring thrown out at the breaker and a wide faint one round
-     * the stone, shards of light flung out (most towards the open side), glints hanging in the air, motes rising out of
-     * the hole after it, chips of the stone it hid in ({@code host}, a state id) thrown with it, and a jolt close by.
+     * light blue and a softer light left a moment in the hole, a bright ring and a wide faint one spreading over the face
+     * round the hole, shards of light flung out (most towards the open side), glints hanging in the air, motes
+     * rising out of the hole after it, chips of the stone it hid in ({@code host}, a state id) thrown with it, and a jolt
+     * close by.
      */
     public static void burst(ClientLevel l, RandomSource r, Vec3 c, Vec3 toward, int host, double dist) {
         boolean blast = toward.lengthSqr() < 1.0E-6;
         Vec3 n = blast ? new Vec3(0, 1, 0) : toward.normalize();
         GlowParticle.flash(c).colour(WHITE).fadeTo(0xBFD9FF).size(0.5F, 1.7F).alpha(0.85F).life(5).spawn();
         GlowParticle.flash(c).colour(MAIN).fadeTo(DIM).size(0.6F, 1.1F).alpha(0.45F).life(13).ease(1.5F).spawn();
-        GlowParticle.ring(c.add(n.scale(0.35)), n).colour(CORE).fadeTo(DIM).size(0.3F, 2.3F).alpha(0.85F).life(10).spawn();
-        GlowParticle.ring(c, new Vec3(0, 1, 0)).colour(MAIN).fadeTo(DIM).size(0.4F, 3.2F).alpha(0.4F).life(14).spawn();
+        // the rings lie on the face the breaker dug in from, just out from it, washing over the stone round the hole (a
+        // ring inside the hole was hidden by the rock round it, and one lying flat at the stone's middle swept through
+        // the eyes of whoever dug it from close by, a grey band across half the view)
+        Vec3 face = Vec3.atLowerCornerOf(Direction.getNearest(n.x, n.y, n.z).getNormal());
+        GlowParticle.ring(c.add(face.scale(0.53)), face).colour(CORE).fadeTo(DIM).size(0.3F, 2.3F).alpha(0.85F).life(10).spawn();
+        GlowParticle.ring(c.add(face.scale(0.57)), face).colour(MAIN).fadeTo(DIM).size(0.6F, 3.0F).alpha(0.32F).life(14).spawn();
         for (int i = 0; i < count(24); i++) {
             Vec3 way = blast || r.nextFloat() < 0.35F ? sphere(r) : cone(r, n, 75);
             Vec3 v = way.scale(0.22 + r.nextDouble() * 0.38).add(0, 0.04, 0);
