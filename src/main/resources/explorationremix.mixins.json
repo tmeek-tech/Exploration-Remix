@@ -41,7 +41,8 @@
     "rune.RopeClimbMixin",
     "LivingImmobileMixin",
     "PlayerSweepMixin",
-    "EntityLavaPlaneMixin"
+    "EntityLavaPlaneMixin",
+    "StructureStartMixin"
   ],
   "client": [
     "client.LightTextureMixin",

@@ -927,6 +927,30 @@ public final class GardensField {
         return out;
     }
 
+    /**
+     * A vent and its sunken chamber, for the rune stones hidden in it (0.23.1): its key (as a {@link LiveVent}'s), its
+     * axis at its base (world x, z), its sill row (a layer row, 0 the layer's bottom: the chamber's bowl sinks under it),
+     * its form, whether it is live, and the ways its open cracks face (radians from +x toward +z; none: no way in).
+     */
+    public record VentChamber(long key, double x, double z, int sillRow, int form, boolean live, double[] cracks) {}
+
+    /** Every vent whose base stands in the box (its axis there), live or dead, in the canonical order. */
+    public List<VentChamber> ventChambers(double minX, double minZ, double maxX, double maxZ) {
+        List<VentChamber> out = new ArrayList<>();
+        for (GardensSites.Site s : ventsNear(minX, minZ, maxX, maxZ)) {
+            double x = s.x + gv.ox, z = s.z + gv.oz;
+            if (x < minX || x >= maxX || z < minZ || z >= maxZ) continue;
+            int nc = 0;
+            for (double c : s.cracks) if (!Double.isNaN(c)) nc++;
+            double[] cracks = new double[nc];
+            nc = 0;
+            for (double c : s.cracks) if (!Double.isNaN(c)) cracks[nc++] = c;
+            long key = ((long) Math.floor(x) & 0x3FFFFFFL) << 38 | ((long) Math.floor(z) & 0x3FFFFFFL) << 12 | (s.ys & 0xFFFL);
+            out.add(new VentChamber(key, x, z, s.ys, s.form, s.live, cracks));
+        }
+        return out;
+    }
+
     /** Whether a point (x, row, z) lies within {@code reach} of a vent from {@link #limeVents} (its body's column). */
     public static boolean inReach(double[] vent, double x, double row, double z, double reach) {
         double dx = vent[0] - x, dz = vent[1] - z;

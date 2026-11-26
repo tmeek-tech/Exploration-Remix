@@ -1235,6 +1235,13 @@ def build_features():
     # mantises, each in the mouth of its vent (about half the live vents); every vent field chunk, and the feature works
     # out from the field's plan which vents' tops stand in the chunk.
     feature("chimney_lurkers", "top_layer_modification", VENT_FIELD, {"type": f"{MOD}:chimney_lurkers", "config": {}}, [])
+    # 0.23.1: the rune stones (Taran: "Put the Galleries runes in the ruins, the Gardens runes in vents, the Reaches runes
+    # in ponds and ancient cities, and the Upper Caves runes in strongholds"). One vent in eight with a way into its sunken
+    # chamber hides a Deep Gardens stone in the chamber's wall (RuneStoneVentsFeature), and one pond in three on the
+    # rifts' shelves a Blue Reaches stone in its bed (RuneStonePondsFeature), each set last in its chunks, read from the
+    # blocks. The ruins' stones are laid with the ruins (GalleriesRuinsFeature), the cities' and strongholds' with them.
+    feature("rune_stones_vents", "top_layer_modification", VENT_FIELD, {"type": f"{MOD}:rune_stones_vents", "config": {}}, [])
+    feature("rune_stones_ponds", "top_layer_modification", ["deep_blue_rift"], {"type": f"{MOD}:rune_stones_ponds", "config": {}}, [])
     # The lava's pockets given back in the bottom two layers (LavaPocketsFeature; fix round 3 after the 0.8.0 pack runs):
     # the pack's Terrain Slabs lays its slabs at underground_structures into any spot a body can pass, lava too, and
     # waterlogs every slab whose spot holds a fluid, so each 1 x 1 dip of the Wasteland's lava table (117 in the pack run's

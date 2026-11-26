@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
 
 /**
  * What happens when a rune stone breaks (0.23.1; Taran, 2026-11-26: "Also give them some magic effects that make them
@@ -40,6 +41,14 @@ public final class RuneStones {
 
     /** For /remix runestones: stones broken and runes they gave since the game started. */
     public static final AtomicLong BROKEN = new AtomicLong(), FREED = new AtomicLong();
+    /** For /remix runestones: stones set as the world was made since the game started, by kind. */
+    private static final AtomicLongArray PLACED = new AtomicLongArray(RuneStoneKind.values().length);
+
+    /** A stone of kind k was set as the world was made. */
+    public static void placed(RuneStoneKind k) { PLACED.incrementAndGet(k.ordinal()); }
+
+    /** How many stones of kind k were set as the world was made since the game started. */
+    public static long placedCount(RuneStoneKind k) { return PLACED.get(k.ordinal()); }
 
     private RuneStones() {}
 
