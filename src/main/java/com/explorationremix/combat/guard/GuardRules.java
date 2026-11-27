@@ -22,6 +22,11 @@ public final class GuardRules {
     public static final double REACH = 4.0;
     /** A parried creature is thrown back this hard (a step), and reels as a strong attack's interrupt makes it (1.5 s). */
     public static final double PARRY_PUSH = 0.6;
+    /**
+     * A thrown bottle breaking this near a player (blocks from their body) in their parry window is caught on the blade
+     * (0.23.6, a witch's): most land at the feet rather than on the player, and would splash them all the same.
+     */
+    public static final double BOTTLE_CATCH = 2.0;
 
     /** One player's guard. Never saved. */
     public static final class State {

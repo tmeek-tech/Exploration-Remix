@@ -172,6 +172,11 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> RUNE_STONE_CATCH = register("rune_stone.catch");
     public static final RegistryObject<SoundEvent> RUNE_STONE_FLARE = register("rune_stone.flare");
 
+    // 0.23.6: vanilla's hostile mobs' tells (combat.foes): the rush of a blow drawn back, under each mob's own voice, and
+    // a skeleton's bowstring creaking the last bit back before it lets go
+    public static final RegistryObject<SoundEvent> FOE_WINDUP = register("foe.windup");
+    public static final RegistryObject<SoundEvent> FOE_DRAW = register("foe.draw");
+
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUNDS.register(name, () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ExplorationRemix.MOD_ID, name)));
     }

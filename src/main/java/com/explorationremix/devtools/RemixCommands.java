@@ -96,6 +96,8 @@ import java.util.Locale;
  *     <li>{@code /remix deadends [radius]}: the blind cave ends left above the old floor in the loaded chunks round you
  *     (DeadEnds), with the nearest</li>
  *     <li>{@code /remix groups list|here|spawn <kind>|stats}: vanilla's hostile mobs in groups (MobGroupCommands)</li>
+ *     <li>{@code /remix foes [hold|release]}: vanilla's hostile mobs' fights round you, whose turn it is, your recovery,
+ *     and mobs held still in a move for pictures (FoeCommands)</li>
  *     <li>{@code /remix runestones ...}: the rune stones set as the world was made: how many, the ones round you, the
  *     places that hide them and standing by one (RuneStoneCommands)</li>
  *     <li>{@code /remix shapes}: what the Upper Caves' noise shapes hold over your column and whether you stand in one</li>
@@ -131,6 +133,8 @@ public final class RemixCommands {
                 .then(com.explorationremix.creature.LurkerCommands.command())
                 // vanilla's hostile mobs in groups
                 .then(com.explorationremix.creature.groups.MobGroupCommands.command())
+                // vanilla's hostile mobs' fights and a player's recovery (0.23.6)
+                .then(com.explorationremix.combat.foes.FoeCommands.command())
                 // runes: rune items, rows, energy and run depth for trying them out
                 .then(com.explorationremix.rune.RuneCommands.command())
                 // 0.23.1: the rune stones, where they are and standing by one (RuneStoneCommands)

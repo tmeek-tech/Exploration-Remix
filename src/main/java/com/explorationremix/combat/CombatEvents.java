@@ -1,6 +1,7 @@
 package com.explorationremix.combat;
 
 import com.explorationremix.ExplorationRemix;
+import com.explorationremix.combat.foes.Foes;
 import com.explorationremix.combat.swing.Swordplay;
 import com.explorationremix.rune.RuneRegistry;
 import com.explorationremix.rune.effect.RuneFx;
@@ -113,6 +114,10 @@ public final class CombatEvents {
             // a heavy attack stops a creature winding up a strike
             if ((strong || jump) && t instanceof WindUp w && w.windingUp()) {
                 w.interrupt(p);
+                Stagger.interrupt(t);
+            } else if ((strong || jump) && Foes.windingUp(t)) {
+                // a vanilla hostile's wind-up (0.23.6) is stopped the same way
+                Foes.interrupt(t);
                 Stagger.interrupt(t);
             }
             feel(p, t, strength, crit, momentum, strong || jump, jump);

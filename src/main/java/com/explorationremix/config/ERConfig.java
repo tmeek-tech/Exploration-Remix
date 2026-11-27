@@ -60,6 +60,15 @@ public final class ERConfig {
     public final ForgeConfigSpec.BooleanValue mobGroupsEnabled;
     public final ForgeConfigSpec.IntValue mobGroupMin, mobGroupMax, mobGroupsKept, mobGroupsMost;
     public final ForgeConfigSpec.DoubleValue mobEndermanChance, mobWoodsCanopy;
+    // 0.23.6: vanilla's hostile mobs fight the new way (combat.foes), and players heal after a while unhurt
+    // (combat.recovery), read while the server runs.
+    public final ForgeConfigSpec.BooleanValue foesEnabled, foesStrikeTogether, foesGlint;
+    public final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> foesKinds;
+    public final ForgeConfigSpec.DoubleValue foesDamage, foesHealth, foesWindup;
+    public final ForgeConfigSpec.IntValue foesStrikers;
+    public final ForgeConfigSpec.BooleanValue recoveryEnabled, recoveryReplacesFoodHealing, recoveryOnlyBlows;
+    public final ForgeConfigSpec.DoubleValue recoveryDelay, recoveryHearts, recoveryFoodCost;
+    public final ForgeConfigSpec.IntValue recoveryMinFood;
 
     public static final class LayerConfig {
         public final String id;
@@ -293,6 +302,42 @@ public final class ERConfig {
                 "the biome has endermen, and only where it is dark enough).").defineInRange("endermanChance", 0.02, 0.0, 1.0);
         mobWoodsCanopy = b.comment("Share of the ground round a spot in woods or savanna that trees must cover for zombies and skeletons to come",
                 "out there (0: anywhere in those biomes).").defineInRange("woodsCanopy", 0.08, 0.0, 1.0);
+        b.pop();
+
+        b.comment("Vanilla's hostile mobs fight the new way (0.23.6): every blow winds up first, about half a second you can read, with a glint",
+                "and a sound, so it can be parried or stepped out of; each kind has a move of its own (zombies lunge into a slam, skeletons",
+                "aim ahead, back off and kick, spiders crouch and pounce and drop from above, creepers rush once lit, endermen blink behind",
+                "you, witches' bottles can be parried back, big slimes hurt only where they slam down); a group circles you and takes turns.",
+                "The Nether's and the End's mobs are untouched. Read while the server runs; stats change as mobs load.").push("foes");
+        foesEnabled = b.comment("Have vanilla's hostile mobs fight the new way. Off: as vanilla made them (mobs already loaded keep their new",
+                "fight until they unload).").define("enabled", true);
+        foesKinds = b.comment("The kinds that do: zombie (husks, zombie villagers, drowned too), skeleton (strays too), spider, cave_spider,",
+                "creeper, enderman, witch, slime, pillager, vindicator.").defineList("kinds",
+                java.util.Arrays.stream(com.explorationremix.combat.foes.FoeKind.values()).map(k -> k.key).toList(),
+                o -> o instanceof String str && com.explorationremix.combat.foes.FoeKind.byKey(str) != null);
+        foesDamage = b.comment("Their blows (and skeletons' arrows) are this much harder; vindicators, pillagers, witches and creepers stay as",
+                "they were.").defineInRange("damage", com.explorationremix.combat.foes.FoeRules.DAMAGE, 0.25, 4.0);
+        foesHealth = b.comment("They have this much more health.").defineInRange("health", com.explorationremix.combat.foes.FoeRules.HEALTH, 0.25, 4.0);
+        foesWindup = b.comment("How long their wind-ups are (1: about half a second for a zombie's slam).").defineInRange("windup", 1.0, 0.3, 3.0);
+        foesGlint = b.comment("A glint at a mob's eyes as it winds up (the sound and the pose come either way).").define("glint", true);
+        foesStrikers = b.comment("Most mobs winding up blows at one player at a time; the rest circle and wait their turn (0: no limit, all",
+                "rush in).").defineInRange("strikers", com.explorationremix.combat.foes.FoeRules.STRIKERS, 0, 16);
+        foesStrikeTogether = b.comment("Mobs that reach a player at once wind up together instead of taking turns.").define("strikeTogether", false);
+        b.pop();
+
+        b.comment("Players' health comes back after a while unhurt (0.23.6), so it takes a run of blows to kill. Read while the server runs.")
+                .push("recovery");
+        recoveryEnabled = b.comment("Heal after a while unhurt. Off: only vanilla's healing from food.").define("enabled", true);
+        recoveryDelay = b.comment("Seconds unhurt before health starts coming back.").defineInRange("delaySeconds", 5.0, 0.5, 120.0);
+        recoveryHearts = b.comment("Hearts a second it comes back at.").defineInRange("heartsPerSecond", 2.0, 0.05, 40.0);
+        recoveryFoodCost = b.comment("What healing costs in food, as a share of what vanilla's food healing costs for as much health (1.5",
+                "hunger points a heart).").defineInRange("foodCost", 1.0 / 3.0, 0.0, 4.0);
+        recoveryMinFood = b.comment("Hunger points needed to heal (more than 3 drumsticks, as sprinting needs; 0: heal even starving).")
+                .defineInRange("minFood", 7, 0, 20);
+        recoveryReplacesFoodHealing = b.comment("Vanilla's slow healing from a full food bar goes (it would heal you mid-fight).")
+                .define("replacesFoodHealing", true);
+        recoveryOnlyBlows = b.comment("Only blows from mobs and players restart the wait; falls, fire, poison and drowning hurt but don't.")
+                .define("onlyBlows", false);
         b.pop();
 
         b.comment("Fixes where other mods meet. Changes apply to newly generated chunks.").push("compat");
