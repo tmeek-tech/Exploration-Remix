@@ -74,6 +74,16 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   to 30 across, small fork rooms where three ways meet, a few short galleries and a great hall with an arch, on four
   storeys 25 apart joined by staged climbs. There are no dead ends: every room has at least two ways out. Its refuge,
   the **Ash Hollows**, is two pale, bare domed rooms per cell, each cut into a quiet tunnel.
+  **Ember urchins** (0.23.7) walk its tunnels, about one to every hundred blocks of them: each a black ball of cooled
+  crust a block and a quarter across, glowing orange in its cracks, held up in the middle of the tunnel on thirty long
+  springy spines braced on the walls, the floor and the roof, so that it fills the way from wall to wall. It creeps
+  along at a quarter of a walk, a spine or two stepping at a time, crosses caves on its lower spines and wades lava, and
+  casts a dim light round it, so its black spines show against the rock from down the tunnel. It never hunts you: it is
+  in the way. Its spines turn towards you and its embers flare hot as you come near; touching one pricks (about two
+  hearts on Normal, none on Peaceful), sets you burning and shoves you back, and a sword blow pricks the one who struck
+  it. Forty hearts behind armor make it a long fight, so the way past one is to wait, go round by another tunnel, or
+  slip by in a cave. It keeps out of the Ash Hollows, and drops a few ember spines that burn in a furnace as long as a
+  blaze rod.
 * **Basalt Galleries** (0.5; halls since 0.20.4): the biggest caves in the game, domed halls about 80 to 130 blocks
   across and up to about 90 tall, each its own cave behind ragged basalt walls that break here and there, and every
   hall opens into each of its neighbours through a doorway; their floors are a landscape of ledges and low ground round
@@ -337,6 +347,12 @@ shimmer and a soft note in your own hands; then, for as long as it has that ener
 | `/remix groups here` | the group home of the ground, cave or water where you are, the groups of each home round you, and any monsters round you in no group |
 | `/remix groups spawn <kind>` | a group of `undead`, `spiders`, `witches`, `creepers`, `slimes`, `husks`, `strays` or `drowned` near you, at the first place of its home dark enough to take it |
 | `/remix groups stats` | what the group spawner has done since the server started |
+| `/remix ember spawn` | an ember urchin where you look, stood up on its spines over the floor there |
+| `/remix ember list [radius]` | the ember urchins round you (64 blocks), nearest first: where each is and what it is doing |
+| `/remix ember tp [n] [distance]` | to the n-th nearest ember urchin, standing 8 blocks (or the distance given) ahead of it on its tunnel's floor, facing it |
+| `/remix ember flare` | the nearest ember urchin flares, as if hurt, for ten seconds |
+| `/remix ember refill` | one ember urchin set down out of sight round you now, as the top-up near players would |
+| `/remix ember counts` | the floors looked at and the ember urchins set down with the world since the server started, and by the top-up |
 | `/remix choir` | the Hollow Choir's arena nearest you: where its bowl, rim and ceiling are, which cavern tier it is cut into, where its three sockets stand, how many are filled, and, if the Choir is up, its phase, tendrils standing, health and sprouts |
 | `/remix choir tp` | onto that arena's rim, looking in across the bowl |
 | `/remix choir city` | the heart of the nearest planned ancient city, where its reliquary holds one choir key |

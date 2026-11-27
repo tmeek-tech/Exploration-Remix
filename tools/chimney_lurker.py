@@ -395,8 +395,9 @@ def write(assets, write_json):
         cv.img.save(os.path.join(tex_dir, f"{NAME}_{neon}.png"))
         cv.glow.save(os.path.join(tex_dir, f"{NAME}_{neon}_glow.png"))
     write_json(os.path.join(assets, "models", "item", NAME + "_spawn_egg.json"), {"parent": "minecraft:item/template_spawn_egg"})
-    return {f"entity.{MOD}.{NAME}": "Vent Urchin", f"item.{MOD}.{NAME}_spawn_egg": "Vent Urchin Spawn Egg",
-            f"item.{MOD}.{NAME}_fang": "Vent Urchin Spine"}
+    # shown as the Chimney Spider since 0.23.4 (its ids stay chimney_lurker)
+    return {f"entity.{MOD}.{NAME}": "Chimney Spider", f"item.{MOD}.{NAME}_spawn_egg": "Chimney Spider Spawn Egg",
+            f"item.{MOD}.{NAME}_fang": "Chimney Spider Spine"}
 
 
 if __name__ == "__main__":

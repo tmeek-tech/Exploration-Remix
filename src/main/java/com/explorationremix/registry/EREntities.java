@@ -3,6 +3,7 @@ package com.explorationremix.registry;
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.block.TubeWormsBlockEntity;
 import com.explorationremix.creature.ChimneyLurkerEntity;
+import com.explorationremix.creature.EmberUrchinEntity;
 import com.explorationremix.creature.FireflySwarm;
 import com.explorationremix.creature.GiantSkeinEntity;
 import com.explorationremix.creature.MossbackDen;
@@ -94,6 +95,31 @@ public final class EREntities {
     /** What a vent urchin leaves: one of its spines (the 0.21.0 lurker's fang, its id kept), kept for crafting later. */
     public static final RegistryObject<Item> CHIMNEY_LURKER_FANG = ERBlocks.ITEMS.register("chimney_lurker_fang", () -> new Item(new Item.Properties()));
 
+    // The ember urchin of the Wasteland (0.23.7, Taran's ask: "more of a ball than a disk, be black with orange, ember-like
+    // details, and straddle the cave walls ... more of an obstacle to avoid than something to fight"). Its box is its
+    // ball's (a block and a quarter); its thirty walking spines reach some three and a half blocks round it, drawn from
+    // its body, which holds them to the tunnel's rock. A monster, but vanilla never spawns it: they are set down in the
+    // Wasteland's tunnels with the world (world.feature.EmberUrchinsFeature), and one killed comes back out of sight a
+    // day later (creature.EmberRefill). Sent every tick, so it glides smoothly; fireproof (it wades through lava).
+    public static final RegistryObject<EntityType<EmberUrchinEntity>> EMBER_URCHIN = ENTITIES.register("ember_urchin",
+            () -> EntityType.Builder.of(EmberUrchinEntity::new, MobCategory.MONSTER).sized(1.25F, 1.25F).clientTrackingRange(10)
+                    .updateInterval(1).fireImmune().build("ember_urchin"));
+
+    public static final RegistryObject<Item> EMBER_URCHIN_SPAWN_EGG = ERBlocks.ITEMS.register("ember_urchin_spawn_egg",
+            () -> new ForgeSpawnEggItem(EMBER_URCHIN, 0x110d0c, 0xff8a2e, new Item.Properties()));
+
+    /**
+     * What an ember urchin leaves: one of its spines, still hot inside (the cards' "Ember spines that burn like blaze
+     * rods"): it burns in a furnace as long as a blaze rod does, twelve items.
+     */
+    public static final RegistryObject<Item> EMBER_URCHIN_SPINE = ERBlocks.ITEMS.register("ember_urchin_spine",
+            () -> new Item(new Item.Properties()) {
+                @Override
+                public int getBurnTime(net.minecraft.world.item.ItemStack stack, @javax.annotation.Nullable net.minecraft.world.item.crafting.RecipeType<?> type) {
+                    return 2400;
+                }
+            });
+
     // The Hollow Choir, the Deep Dark's boss (0.21.9, creature.choir.HollowChoirEntity): a crown hanging over the dais
     // of its own arena, held up by six tendrils that are its parts. Its box is the crown alone (3.6 across, 2.4 tall);
     // the tendrils and the bell are drawn well outside it, so it has its own culling box. Vanilla never spawns it: it
@@ -141,6 +167,7 @@ public final class EREntities {
         e.put(GIANT_SKEIN.get(), GiantSkeinEntity.attributes().build());
         e.put(STILT_MANTIS.get(), StiltMantisEntity.attributes().build());
         e.put(CHIMNEY_LURKER.get(), ChimneyLurkerEntity.attributes().build());
+        e.put(EMBER_URCHIN.get(), EmberUrchinEntity.attributes().build());
         e.put(HOLLOW_CHOIR.get(), HollowChoirEntity.attributes().build());
     }
 }

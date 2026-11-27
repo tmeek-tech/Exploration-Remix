@@ -1235,6 +1235,10 @@ def build_features():
     # mantises, each in the mouth of its vent (about half the live vents); every vent field chunk, and the feature works
     # out from the field's plan which vents' tops stand in the chunk.
     feature("chimney_lurkers", "top_layer_modification", VENT_FIELD, {"type": f"{MOD}:chimney_lurkers", "config": {}}, [])
+    # The Wasteland's ember urchins (EmberUrchinsFeature, 0.23.7): set down as each chunk is made, last, over the floors
+    # of its tunnels and caves (never the Ash Hollows), about one to every hundred blocks of tunnel; every Wasteland
+    # chunk, and the feature picks a column in each quarter of it and rolls each floor down it by the way's width.
+    feature("ember_urchins", "top_layer_modification", ["wasteland"], {"type": f"{MOD}:ember_urchins", "config": {}}, [])
     # 0.23.1: the rune stones (Taran: "Put the Galleries runes in the ruins, the Gardens runes in vents, the Reaches runes
     # in ponds and ancient cities, and the Upper Caves runes in strongholds"). One vent in eight with a way into its sunken
     # chamber hides a Deep Gardens stone in the chamber's wall (RuneStoneVentsFeature), and one pond in three on the
@@ -1363,7 +1367,9 @@ BLOCK_TAGS = {
                   "minecraft:dirt", "minecraft:clay", "minecraft:brown_mushroom_block", "#minecraft:coal_ores", "#minecraft:iron_ores",
                   "#minecraft:copper_ores", "#minecraft:gold_ores", "#minecraft:redstone_ores", "#minecraft:lapis_ores", "#minecraft:diamond_ores",
                   "#minecraft:emerald_ores"]
-                 + STAND_INS + optional(CREATE_STONES),
+                 + STAND_INS + optional(CREATE_STONES)
+                 # 0.23.3: Minecraft Remix's real ores in the veins still count as the rock round them
+                 + [{"id": "#forge:ores", "required": False}],
     "asurine_lining": ["minecraft:deepslate_tiles"] + optional(["create:asurine"]),
     "blue_rift_walls": ["minecraft:deepslate", "minecraft:cobbled_deepslate", "minecraft:gravel", "minecraft:tuff", "minecraft:calcite",
                         "minecraft:deepslate_tiles"] + optional(["create:asurine"]),
@@ -1396,7 +1402,8 @@ BLOCK_TAGS = {
     "basalt_rock": ["minecraft:basalt", "minecraft:smooth_basalt", "minecraft:blackstone", "minecraft:gilded_blackstone",
                     "minecraft:magma_block", "minecraft:deepslate_gold_ore", "minecraft:brown_terracotta",
                     f"{MOD}:ember_crust", f"{MOD}:smooth_ember_crust"]
-                   + optional(["create:scoria", "create:scorchia"]),
+                   + optional(["create:scoria", "create:scorchia"])
+                   + [{"id": "#forge:ores", "required": False}],
     # 0.5.1's terrain reset (TerrainReset.RESET_AS_ROCK): blocks a reset puts back as plain rock, whatever the palette
     # chose there (ores and gilded blackstone are not given back to a player who mined them).
     "reset_as_rock": [{"id": "#forge:ores", "required": False}, "minecraft:gilded_blackstone"],

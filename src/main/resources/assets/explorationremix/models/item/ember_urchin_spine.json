@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "explorationremix:item/ember_urchin_spine"
+  }
+}
