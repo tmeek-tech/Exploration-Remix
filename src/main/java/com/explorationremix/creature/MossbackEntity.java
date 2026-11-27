@@ -174,6 +174,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
     /** The rear under way ends in a drop from its wall or ceiling, not a lunge. */
     private boolean rearToDrop;
     private boolean frozen;                  // /remix mossback freeze: holds still where it is, in the state it is in
+    @Nullable private MossbackWatch watch;   // /remix mossback watch: how it gets on, logged
 
     // its family's den (see MossbackDen and DenRegistry; the den's record says which role it has)
     @Nullable private DenRegistry.Role role;
@@ -500,6 +501,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
         if (isInWater() && getFluidHeight(FluidTags.WATER) > getFluidJumpThreshold()) getJumpControl().jump();
         if (home == null) home = blockPosition();
         stateTicks++;
+        if (watch != null && watch.hunt) { watchHunt(watch); return; }
         if (hunger > 0) hunger--;
         tripTick();
         LivingEntity t = getTarget();
@@ -567,8 +569,9 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
                 // a leg is done: sometimes settle in the plants to wait (a guard often, a roamer out on a foray seldom
                 // and not for long), otherwise pause and pick the next leg
                 float waits = isGuard() ? 0.35F : out ? 0.1F : 0.25F;
-                if (random.nextFloat() < waits && findWaitSpot()) { toState(WAIT, out ? 200 + random.nextInt(400) : 600 + random.nextInt(1200)); return; }
-                pauseTicks = out ? 10 + random.nextInt(25) : 20 + random.nextInt(50);
+                boolean keepOn = watch != null && watch.roam;          // watched on the move: no waits, short pauses
+                if (!keepOn && random.nextFloat() < waits && findWaitSpot()) { toState(WAIT, out ? 200 + random.nextInt(400) : 600 + random.nextInt(1200)); return; }
+                pauseTicks = keepOn ? 5 : out ? 10 + random.nextInt(25) : 20 + random.nextInt(50);
                 stateTicks = 0;
                 // a foray leg that got it nowhere (water or rock it cannot cross that way): the next one fans wider
                 if (out) {
@@ -1359,6 +1362,7 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
     public void remove(RemovalReason reason) {
         if (!level().isClientSide) {
             release(false);
+            if (watch != null) { watch.drop(this); watch = null; }
             // taken out of the level without dying (Peaceful, the void, another dimension): it leaves its family
             if ((reason == RemovalReason.DISCARDED || reason == RemovalReason.CHANGED_DIMENSION) && !isDeadOrDying()) MossbackDen.lizardGone(this);
         }
@@ -1543,8 +1547,66 @@ public class MossbackEntity extends Monster implements ClimbMoveControl.Climber,
         else if (isAlive()) {
             if (airTicks > 0) airDist += Math.sqrt(Mth.square(getX() - xo) + Mth.square(getY() - yo) + Mth.square(getZ() - zo));
             updateForward();
+            if (watch != null && !watch.tick(this)) watch = null;
         }
     }
+
+    /** For /remix mossback watch: logs how it gets on for {@code ticks} (0 stops); with {@code roam} it keeps on the move. */
+    public void watch(int ticks, boolean roam, boolean hunt) {
+        if (watch != null) watch.drop(this);
+        watch = ticks > 0 ? new MossbackWatch(this, ticks, roam, hunt) : null;
+        if (watch == null && state() == CHASE && getTarget() == null) toState(ROAM, 0);
+    }
+
+    /** For /remix mossback replay: walks to {@code goal} (hunting it, or roaming there) for at most {@code ticks}, watched. */
+    public void replay(Vec3 goal, boolean chase, int ticks) {
+        watch(ticks, true, true);
+        watch.goal = goal;
+        watch.chase = chase;
+    }
+
+    /**
+     * Watched hunting (/remix mossback watch ... hunt): it chases a spot as it would its quarry, a fresh path every half
+     * second at its hunting pace; once there (or after half a minute), the spot moves on 10 to 24 blocks.
+     */
+    private void watchHunt(MossbackWatch w) {
+        PathNavigation nav = getNavigation();
+        if (w.goal != null) {
+            // a replay: to the one goal, a fresh path every half second hunting, or whenever the last ran out roaming
+            byte want = w.chase ? CHASE : ROAM;
+            if (state() != want) toState(want, 0);
+            if (Mth.square(getX() - w.goal.x) + Mth.square(getZ() - w.goal.z) < 1.5 * 1.5 && Math.abs(getY() - w.goal.y) < 1.0) {
+                if (w.arrivedAt < 0) w.arrivedAt = w.ticks();
+                nav.stop();
+                return;
+            }
+            if ((w.chase && w.decoyTicks % 10 == 0) || nav.isDone()) {
+                Path p = nav.createPath(BlockPos.containing(w.goal), w.chase ? 1 : 0);
+                if (p != null) nav.moveTo(p, w.chase ? CHASE_SPEED : ROAM_SPEED);
+            }
+            w.decoyTicks++;
+            return;
+        }
+        if (state() != CHASE) toState(CHASE, 0);
+        w.decoyTicks++;
+        if (w.decoy == null || position().distanceToSqr(w.decoy) < 2.5 * 2.5 || w.decoyTicks > 600) {
+            Vec3 next = null;
+            for (int i = 0; i < 12 && next == null; i++) {
+                Vec3 v = spotNear(blockPosition(), 24, 6);
+                if (v != null && v.distanceToSqr(position()) > 10 * 10) next = v;
+            }
+            if (next == null) return;
+            w.decoy = next;
+            w.decoyTicks = 0;
+            nav.stop();
+        }
+        if (w.decoyTicks % 10 == 1 || nav.isDone()) {
+            Path p = nav.createPath(BlockPos.containing(w.decoy), 1);
+            if (p != null) nav.moveTo(p, CHASE_SPEED);
+        }
+    }
+
+    public boolean watched() { return watch != null; }
 
     private void clientTick() {
         glowO = glow; jawO = jaw; rearO = rear; frillO = frill; windupO = windup;

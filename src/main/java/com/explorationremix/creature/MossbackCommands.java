@@ -47,6 +47,18 @@ import java.util.Locale;
  *     <li>{@code /remix mossback catch}: gives the nearest roamer a chicken in its jaws and sends it home with it (to try
  *     following one home)</li>
  *     <li>{@code /remix mossback foray}: sends the nearest roamer out on a foray now (a guard stays at home)</li>
+ *     <li>{@code /remix mossback watch [ticks] [mind|roam|hunt] [radius]}: logs how every Mossback within the radius (256
+ *     by default) gets on for that long (6000 ticks by default; 0 stops): each stall, where it was sent somewhere and
+ *     stayed put, with the rock round it, and a summary ({@code [mossback watch]} and {@code [mossback stall]} lines in
+ *     the server log). {@code mind}: they go about as they would; {@code roam}: they keep on the move (no waits in the
+ *     plants, short pauses); {@code hunt}: each chases a spot 10 to 24 blocks off as it would its quarry, and the spot
+ *     moves on whenever it gets there</li>
+ *     <li>{@code /remix mossback replay <from> <to> roam|hunt [ticks]}: sets one down at {@code from} and has it walk to
+ *     {@code to} as it would roaming (one path, a new one when it runs out) or hunting (a fresh path every half second),
+ *     watched; a {@code [mossback replay]} line says whether and when it got there (for going over a stall again)</li>
+ *     <li>{@code /remix mossback scatter <count> [radius] [seed]}: sets that many down (no den) on cave floors under the
+ *     rock in the loaded chunks round you, at least 24 blocks apart, never in dripstone caves (for watching them); with a
+ *     seed, on the same spots each time</li>
  * </ul>
  */
 public final class MossbackCommands {
@@ -78,7 +90,98 @@ public final class MossbackCommands {
                 .then(Commands.literal("away").then(Commands.argument("blocks", IntegerArgumentType.integer(17, 90))
                         .executes(c -> away(c, IntegerArgumentType.getInteger(c, "blocks")))))
                 .then(Commands.literal("catch").executes(MossbackCommands::giveCatch))
-                .then(Commands.literal("foray").executes(MossbackCommands::foray));
+                .then(Commands.literal("foray").executes(MossbackCommands::foray))
+                .then(Commands.literal("watch").executes(c -> watch(c, 6000, "", 256))
+                        .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 72000))
+                                .executes(c -> watch(c, IntegerArgumentType.getInteger(c, "ticks"), "", 256))
+                                .then(Commands.argument("how", StringArgumentType.word())
+                                        .suggests((c, b) -> SharedSuggestionProvider.suggest(new String[]{"mind", "roam", "hunt"}, b))
+                                        .executes(c -> watch(c, IntegerArgumentType.getInteger(c, "ticks"), StringArgumentType.getString(c, "how"), 256))
+                                        .then(Commands.argument("radius", IntegerArgumentType.integer(4, 1024))
+                                                .executes(c -> watch(c, IntegerArgumentType.getInteger(c, "ticks"), StringArgumentType.getString(c, "how"),
+                                                        IntegerArgumentType.getInteger(c, "radius")))))))
+                .then(Commands.literal("replay").then(Commands.argument("from", net.minecraft.commands.arguments.coordinates.Vec3Argument.vec3(false))
+                        .then(Commands.argument("to", net.minecraft.commands.arguments.coordinates.Vec3Argument.vec3(false))
+                                .then(Commands.argument("how", StringArgumentType.word())
+                                        .suggests((c, b) -> SharedSuggestionProvider.suggest(new String[]{"roam", "hunt"}, b))
+                                        .executes(c -> replay(c, 1200))
+                                        .then(Commands.argument("ticks", IntegerArgumentType.integer(20, 12000))
+                                                .executes(c -> replay(c, IntegerArgumentType.getInteger(c, "ticks"))))))))
+                .then(Commands.literal("scatter").then(Commands.argument("count", IntegerArgumentType.integer(1, 200))
+                        .executes(c -> scatter(c, IntegerArgumentType.getInteger(c, "count"), 128, null))
+                        .then(Commands.argument("radius", IntegerArgumentType.integer(8, 512))
+                                .executes(c -> scatter(c, IntegerArgumentType.getInteger(c, "count"), IntegerArgumentType.getInteger(c, "radius"), null))
+                                .then(Commands.argument("seed", com.mojang.brigadier.arguments.LongArgumentType.longArg())
+                                        .executes(c -> scatter(c, IntegerArgumentType.getInteger(c, "count"), IntegerArgumentType.getInteger(c, "radius"),
+                                                com.mojang.brigadier.arguments.LongArgumentType.getLong(c, "seed")))))));
+    }
+
+    private static int watch(CommandContext<CommandSourceStack> c, int ticks, String how, int radius) {
+        boolean roam = how.equals("roam"), hunt = how.equals("hunt");
+        List<MossbackEntity> all = near(c, radius);
+        for (MossbackEntity m : all) m.watch(ticks, roam, hunt);
+        say(c, ticks == 0 ? "Stopped watching " + all.size() + " Mossbacks"
+                : "Watching " + all.size() + " Mossbacks for " + ticks + " ticks" + (hunt ? ", hunting a spot that moves on" : roam ? ", kept on the move" : "")
+                + " ([mossback watch] and [mossback stall] lines in the server log)");
+        return all.size();
+    }
+
+    /** Sets a Mossback down at {@code from} (no den) and has it walk to {@code to}, watched ([mossback replay] line at the end). */
+    private static int replay(CommandContext<CommandSourceStack> c, int ticks) {
+        ServerLevel level = c.getSource().getLevel();
+        Vec3 from = net.minecraft.commands.arguments.coordinates.Vec3Argument.getVec3(c, "from");
+        Vec3 to = net.minecraft.commands.arguments.coordinates.Vec3Argument.getVec3(c, "to");
+        boolean hunt = StringArgumentType.getString(c, "how").equals("hunt");
+        MossbackEntity m = EREntities.MOSSBACK.get().create(level);
+        if (m == null) return 0;
+        Vec3 d = to.subtract(from);
+        m.moveTo(from.x, from.y, from.z, (float) (Math.toDegrees(Math.atan2(d.z, d.x)) - 90.0), 0.0F);
+        m.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(from)), MobSpawnType.COMMAND, null, null);
+        level.addFreshEntity(m);
+        m.replay(to, hunt, ticks);
+        say(c, String.format(Locale.ROOT, "Replay #%d: from %.2f %.2f %.2f to %.2f %.2f %.2f, %s", m.getId(), from.x, from.y, from.z, to.x, to.y, to.z, hunt ? "hunting" : "roaming"));
+        return 1;
+    }
+
+    /**
+     * Sets {@code count} Mossbacks down on cave floors (under rock, not in dripstone caves) in the loaded chunks round the
+     * source; with a seed, on the same spots each time the same chunks are loaded (to set two builds the same test).
+     */
+    private static int scatter(CommandContext<CommandSourceStack> c, int count, int radius, Long seed) {
+        ServerLevel level = c.getSource().getLevel();
+        Vec3 p = c.getSource().getPosition();
+        net.minecraft.util.RandomSource r = seed == null ? level.getRandom() : net.minecraft.util.RandomSource.create(seed);
+        java.util.List<BlockPos> placed = new java.util.ArrayList<>();
+        int apart = 24;
+        java.util.List<Integer> floors = new java.util.ArrayList<>();
+        for (int tries = 0; placed.size() < count && tries < count * 300; tries++) {
+            int x = (int) Math.floor(p.x) + r.nextInt(2 * radius + 1) - radius, z = (int) Math.floor(p.z) + r.nextInt(2 * radius + 1) - radius;
+            if (!level.hasChunksAt(x - 3, z - 3, x + 4, z + 4)) continue;
+            boolean crowded = false;
+            for (BlockPos q : placed) if (Math.abs(q.getX() - x) < apart && Math.abs(q.getZ() - z) < apart) { crowded = true; break; }
+            if (crowded) continue;
+            int top = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, x, z);
+            floors.clear();
+            for (int y = top - 4; y >= -63; y--) {
+                if (com.explorationremix.creature.climb.ClimbNodeEvaluator.classify(level, x, y, z, 2, 1, 2)
+                        != com.explorationremix.creature.climb.ClimbNodeEvaluator.FLOOR) continue;
+                BlockPos at = new BlockPos(x, y, z);
+                if (level.canSeeSky(at) || level.getBiome(at).is(net.minecraft.world.level.biome.Biomes.DRIPSTONE_CAVES)) continue;
+                floors.add(y);
+            }
+            if (floors.isEmpty()) continue;
+            int y = floors.get(r.nextInt(floors.size()));
+            MossbackEntity m = EREntities.MOSSBACK.get().create(level);
+            if (m == null) return placed.size();
+            m.moveTo(x + 1.0, y, z + 1.0, r.nextFloat() * 360.0F, 0.0F);
+            if (!level.noCollision(m)) { m.discard(); continue; }
+            m.finalizeSpawn(level, level.getCurrentDifficultyAt(new BlockPos(x, y, z)), MobSpawnType.COMMAND, null, null);
+            level.addFreshEntity(m);
+            placed.add(new BlockPos(x, y, z));
+        }
+        say(c, "Set down " + placed.size() + " of " + count + " Mossbacks on cave floors within " + radius + " blocks");
+        for (BlockPos q : placed) say(c, "  " + q.toShortString() + " " + level.getBiome(q).unwrapKey().map(k -> k.location().getPath()).orElse("?"));
+        return placed.size();
     }
 
     private static void say(CommandContext<CommandSourceStack> c, String msg) {

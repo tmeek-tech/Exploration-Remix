@@ -131,7 +131,7 @@ test {
     // A question to the cave plans about a noise layer (no plan) throws under the tests; the game gets an empty answer.
     systemProperty 'explorationremix.strictPlans', 'true'
     // the Mossback's motion clips (MossbackClips, a slow test): where to write them, which ones, how many frames a second
-    ['mossback.clips', 'mossback.only', 'mossback.fps'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
+    ['mossback.clips', 'mossback.only', 'mossback.fps', 'mossback.trace'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
     // and the stilt mantis's (MantisClips, 0.20.0), in one of its four colours
     ['mantis.clips', 'mantis.only', 'mantis.fps', 'mantis.colour', 'mantis.zoom', 'mantis.cells', 'mantis.debug'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
     // and the vent urchin's (LurkerClips and LurkerVentsTest, 0.21.0, 0.21.3)

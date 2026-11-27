@@ -4,6 +4,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -34,6 +35,13 @@ public class ClimbMoveControl extends MoveControl {
 
     /** Ticks in a row it has barely moved while sent somewhere (for the dev listing). */
     public int wedged() { return wedged; }
+
+    // counted for /remix mossback watch: ticks it climbed straight up because the way across was blocked, and the
+    // times it was wedged and stepped out, or found no way out
+    private int climbs, waysOut, noWayOut;
+    public int climbs() { return climbs; }
+    public int waysOut() { return waysOut; }
+    public int noWayOut() { return noWayOut; }
 
     public <T extends Mob & Climber> ClimbMoveControl(T mob) {
         super(mob);
@@ -86,20 +94,87 @@ public class ClimbMoveControl extends MoveControl {
             return;
         }
         if (settle) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
-        // rounding the top of what it climbs: while the way across is still blocked by the edge, it climbs straight up
-        // first (aiming straight at the waypoint would leave it hanging just under the edge)
-        if (dy > -0.1 && v.horizontalDistanceSqr() > 1.0E-6
-                && !mob.level().noCollision(mob, mob.getBoundingBox().move(v.x, 0.0, v.z).deflate(1.0E-4)))
+        // the way across is judged from where this tick's move up or down leaves the box, as the move itself goes (up or
+        // down first, then across): a box a hair too high to slip under a lip ahead, judged where it was, climbed away
+        // from it instead of letting itself down, and hung there, up and down, for minutes
+        AABB box = mob.getBoundingBox();
+        if (v.y != 0.0 && free(box.move(0.0, v.y, 0.0))) box = box.move(0.0, v.y, 0.0);
+        boolean blocked = false;
+        double across = Math.sqrt(v.horizontalDistanceSqr());
+        if (across > 1.0E-3 && !free(box.move(v.x, 0.0, v.z))) {
+            // blocked across, unless it slides on along one way for most of its step, as the move will (past the corner
+            // of a slab, say: climbing there instead, under leaves that let it rise a hair, it lost the floor and hung)
+            boolean alongX = free(box.move(v.x, 0.0, 0.0)), alongZ = free(box.move(0.0, 0.0, v.z));
+            double slide = Math.max(alongX ? Math.abs(v.x) : 0.0, alongZ ? Math.abs(v.z) : 0.0);
+            blocked = slide < 0.5 * across;
+            if (blocked && !floor) {
+                // a way through a little higher or lower, within this tick's step (under a lip, over the edge of a
+                // carpet): it goes there and on at once (moving up or down by its full pace instead, it overshot a gap a
+                // few hundredths high again and again, bobbing at it for half a minute)
+                Vec3 through = slipThrough(v, speed, dy);
+                if (through != null) {
+                    v = through;
+                    blocked = false;
+                }
+            }
+            if (blocked && slide > 1.0E-4) {
+                // the rock it clings to stands in the way straight at its waypoint, but the way along the rock is clear:
+                // it goes round the corner, along the rock at its full pace until it is in line with the waypoint
+                // (climbing instead while the move along crept on, it bobbed up and down at the corner for seconds)
+                boolean x = alongX && (!alongZ || Math.abs(v.x) >= Math.abs(v.z));
+                double d = x ? dx : dz, s = Math.copySign(Math.min(Math.abs(d), across), d);
+                if (free(x ? box.move(s, 0.0, 0.0) : box.move(0.0, 0.0, s))) {
+                    v = x ? new Vec3(s, v.y, 0.0) : new Vec3(0.0, v.y, s);
+                    blocked = false;
+                }
+            }
+        }
+        if (blocked && dy > -0.1) {
+            // rounding the top of what it climbs: while the way across is still blocked by the edge, it climbs straight
+            // up first (aiming straight at the waypoint would leave it hanging just under the edge)
             v = new Vec3(v.x * 0.1, speed, v.z * 0.1);
-        else if (floor) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
+            climbs++;
+        } else if (blocked && !floor) {
+            // its waypoint lower and the way across blocked (by a lip of rock or leaves at the box's top, say): it lets
+            // itself down to the waypoint's height at its full pace, then across, instead of inching down in proportion
+            // (it gave up and stepped back up before it got under)
+            v = new Vec3(v.x, -Math.min(speed, -dy), v.z);
+        } else if (floor) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
         if (wedged >= WEDGED_TICKS) {
             Vec3 out = wayOut(v, step);
-            if (out != null) v = out;
+            if (out != null) { v = out; waysOut++; }
+            else noWayOut++;
             wedged = WEDGED_TICKS / 2;
         }
         mob.setDeltaMovement(v);
         turn(dx, dz);
     }
+
+    private boolean free(AABB box) {
+        return mob.level().noCollision(mob, box.deflate(1.0E-4));
+    }
+
+    /**
+     * The least move up or down, within one step, after which the way across is clear from where the box is: towards
+     * the waypoint's height, or either way while it is about level with it; null when there is none. (Away from a
+     * waypoint well above it, it slipped down under the slab it was to climb onto.)
+     */
+    @javax.annotation.Nullable
+    private Vec3 slipThrough(Vec3 v, double speed, double dy) {
+        AABB box = mob.getBoundingBox();
+        int sides = Math.abs(dy) < 0.1 ? 2 : 1;
+        for (int k = 1; k <= SLIP_STEPS; k++) {
+            double o = speed * k / SLIP_STEPS;
+            for (int side = 0; side < sides; side++) {
+                double off = (side == 0) == (dy < 0.0) ? -o : o;
+                AABB b = box.move(0.0, off, 0.0);
+                if (free(b) && free(b.move(v.x, 0.0, v.z))) return new Vec3(v.x, off, v.z);
+            }
+        }
+        return null;
+    }
+
+    private static final int SLIP_STEPS = 8;
 
     private static double exact(double d, double share) {
         return Math.abs(d) < 0.1 && Math.abs(d) > Math.abs(share) ? d : share;
