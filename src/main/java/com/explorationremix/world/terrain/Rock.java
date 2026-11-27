@@ -83,7 +83,9 @@ public enum Rock {
     DEEPSLATE_CHALCOPYRITE(0x5d6658),
     HEMATITE(0x86625a),
     LIMESTONE_HEMATITE(0xa88f7c),
-    CALCITE_HEMATITE(0xc9a89a);
+    CALCITE_HEMATITE(0xc9a89a),
+    /** Minecraft Remix's diamonds in kimberlite (since 0.23.5), vanilla's deepslate diamond ore when it is missing. */
+    KIMBERLITE_DIAMOND(0x51625f);
 
     public final int color;
 
