@@ -106,6 +106,7 @@ public final class DeepMaterials {
                 case HEMATITE -> remix("hematite_ore", Blocks.IRON_ORE);
                 case LIMESTONE_HEMATITE -> remix("limestone_hematite_ore", Blocks.IRON_ORE);
                 case CALCITE_HEMATITE -> remix("calcite_hematite_ore", Blocks.IRON_ORE);
+                case KIMBERLITE_DIAMOND -> remix("kimberlite_diamond_ore", Blocks.DEEPSLATE_DIAMOND_ORE);
             };
             STATES.put(r, s);
             BY_ORDINAL[r.ordinal()] = s;
@@ -125,9 +126,9 @@ public final class DeepMaterials {
     }
 
     /**
-     * Minecraft Remix's real ore by id (Taran's other mod: its ores replace vanilla's iron, copper and gold, one block for
-     * each rock an ore is found in), or the vanilla ore it replaces when that mod is not installed. Its basalt ores stand
-     * upright, as the deep layers' basalt does.
+     * Minecraft Remix's real ore by id (Taran's other mod: its ores replace vanilla's iron, copper, gold and diamonds, one
+     * block for each rock an ore is found in), or the vanilla ore it replaces when that mod is not installed. Its basalt
+     * ores stand upright, as the deep layers' basalt does.
      */
     private static BlockState remix(String id, Block fallback) {
         Block b = ForgeRegistries.BLOCKS.getValue(new ResourceLocation("mcremix", id));

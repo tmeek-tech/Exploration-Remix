@@ -227,7 +227,8 @@ public final class Palette {
                     if (n < -0.1) return Rock.ASURINE;
                     return n > 0.1 ? Rock.COBBLED_DEEPSLATE : Rock.DEEPSLATE;
                 }
-                if (speck(x, y, z) < 0.0018) return Rock.DEEPSLATE_DIAMOND_ORE;
+                // its diamonds: Minecraft Remix's, in a speck of the kimberlite they come up in (0.23.5)
+                if (speck(x, y, z) < 0.0018) return Rock.KIMBERLITE_DIAMOND;
                 if (n < -0.05) return Rock.ASURINE;
                 return n > 0.2 ? Rock.COBBLED_DEEPSLATE : Rock.DEEPSLATE;
             }
