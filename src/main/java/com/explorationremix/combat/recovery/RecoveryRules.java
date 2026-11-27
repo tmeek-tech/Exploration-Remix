@@ -1,7 +1,7 @@
 package com.explorationremix.combat.recovery;
 
 /**
- * The numbers of a player's health coming back after a while unhurt (0.23.6, Taran 2026-11-27: "regeneration after a
+ * The numbers of a player's health coming back after a while unhurt (0.23.8, Taran 2026-11-27: "regeneration after a
  * while not being hit so they would need to be hit a few times in a row"), with no game in them so they can be tested.
  * The picks (cards of 27 Nov, the recommended ones built while open): back after 5 seconds without harm, two hearts a
  * second, for a third of what food's healing costs, while more than three drumsticks are left; food's own slow healing

@@ -60,7 +60,7 @@ public final class ERConfig {
     public final ForgeConfigSpec.BooleanValue mobGroupsEnabled;
     public final ForgeConfigSpec.IntValue mobGroupMin, mobGroupMax, mobGroupsKept, mobGroupsMost;
     public final ForgeConfigSpec.DoubleValue mobEndermanChance, mobWoodsCanopy;
-    // 0.23.6: vanilla's hostile mobs fight the new way (combat.foes), and players heal after a while unhurt
+    // 0.23.8: vanilla's hostile mobs fight the new way (combat.foes), and players heal after a while unhurt
     // (combat.recovery), read while the server runs.
     public final ForgeConfigSpec.BooleanValue foesEnabled, foesStrikeTogether, foesGlint;
     public final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> foesKinds;
@@ -304,7 +304,7 @@ public final class ERConfig {
                 "out there (0: anywhere in those biomes).").defineInRange("woodsCanopy", 0.08, 0.0, 1.0);
         b.pop();
 
-        b.comment("Vanilla's hostile mobs fight the new way (0.23.6): every blow winds up first, about half a second you can read, with a glint",
+        b.comment("Vanilla's hostile mobs fight the new way (0.23.8): every blow winds up first, about half a second you can read, with a glint",
                 "and a sound, so it can be parried or stepped out of; each kind has a move of its own (zombies lunge into a slam, skeletons",
                 "aim ahead, back off and kick, spiders crouch and pounce and drop from above, creepers rush once lit, endermen blink behind",
                 "you, witches' bottles can be parried back, big slimes hurt only where they slam down); a group circles you and takes turns.",
@@ -325,7 +325,7 @@ public final class ERConfig {
         foesStrikeTogether = b.comment("Mobs that reach a player at once wind up together instead of taking turns.").define("strikeTogether", false);
         b.pop();
 
-        b.comment("Players' health comes back after a while unhurt (0.23.6), so it takes a run of blows to kill. Read while the server runs.")
+        b.comment("Players' health comes back after a while unhurt (0.23.8), so it takes a run of blows to kill. Read while the server runs.")
                 .push("recovery");
         recoveryEnabled = b.comment("Heal after a while unhurt. Off: only vanilla's healing from food.").define("enabled", true);
         recoveryDelay = b.comment("Seconds unhurt before health starts coming back.").defineInRange("delaySeconds", 5.0, 0.5, 120.0);

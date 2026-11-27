@@ -23,7 +23,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * A player's health comes back once they have gone a while unhurt (0.23.6, {@link RecoveryRules}): any harm (or, as set,
+ * A player's health comes back once they have gone a while unhurt (0.23.8, {@link RecoveryRules}): any harm (or, as set,
  * only blows) starts the wait again, so it takes a few hits in a row to bring someone down. It costs a little food and
  * needs more than three drumsticks; the natural regeneration rule turned off turns it off too, and food's own slow
  * healing goes (see the mixin on FoodData), as set. Their hearts ripple while it works (FoeNet tells their game).

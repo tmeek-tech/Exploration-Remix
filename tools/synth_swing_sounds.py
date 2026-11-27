@@ -252,7 +252,7 @@ def skein_windup(rng):
 
 
 def foe_windup(rng):
-    """Half a second (0.23.6, vanilla hostiles' wind-ups; pitched to each wind-up's length): air drawn in under the
+    """Half a second (0.23.8, vanilla hostiles' wind-ups; pitched to each wind-up's length): air drawn in under the
     mob's own voice, rising and swelling to a sudden stop on the beat of the blow, with a low strain under it."""
     dur = 0.5
     n = secs(dur)
@@ -270,7 +270,7 @@ def foe_windup(rng):
 
 
 def foe_draw(rng):
-    """0.4 s (0.23.6): a bow or crossbow drawn the last bit tighter: the wood's creak (stick-slip ticks, quickening,
+    """0.4 s (0.23.8): a bow or crossbow drawn the last bit tighter: the wood's creak (stick-slip ticks, quickening,
     in its hollow) and the string's thin tension tone rising under it, the tell that the shot is coming."""
     dur = 0.4
     n = secs(dur)

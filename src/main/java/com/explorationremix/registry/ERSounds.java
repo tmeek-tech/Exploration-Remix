@@ -138,6 +138,14 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_HURT = register("chimney_lurker.hurt");
     public static final RegistryObject<SoundEvent> CHIMNEY_LURKER_DEATH = register("chimney_lurker.death");
 
+    // The ember urchin of the Wasteland (0.23.7, creature.EmberUrchinEntity): embers, not chitin: its coals' crackle,
+    // its needles' ticks on the rock, the hiss as it flares, its crust cracking hurt, and its embers going out.
+    public static final RegistryObject<SoundEvent> EMBER_URCHIN_CRACKLE = register("ember_urchin.crackle");
+    public static final RegistryObject<SoundEvent> EMBER_URCHIN_STEP = register("ember_urchin.step");
+    public static final RegistryObject<SoundEvent> EMBER_URCHIN_HISS = register("ember_urchin.hiss");
+    public static final RegistryObject<SoundEvent> EMBER_URCHIN_HURT = register("ember_urchin.hurt");
+    public static final RegistryObject<SoundEvent> EMBER_URCHIN_DEATH = register("ember_urchin.death");
+
     // The Hollow Choir of the Deep Dark (0.21.9, creature.choir.HollowChoirEntity): bells and voices, never vanilla's
     // bell block and never the Warden: the summoning's swell, the toll it fights with and the same toll heard a
     // hundred and fifty blocks off (which is also the trophy bell's idle note), a tendril's lift and its slam, a
@@ -172,7 +180,7 @@ public final class ERSounds {
     public static final RegistryObject<SoundEvent> RUNE_STONE_CATCH = register("rune_stone.catch");
     public static final RegistryObject<SoundEvent> RUNE_STONE_FLARE = register("rune_stone.flare");
 
-    // 0.23.6: vanilla's hostile mobs' tells (combat.foes): the rush of a blow drawn back, under each mob's own voice, and
+    // 0.23.8: vanilla's hostile mobs' tells (combat.foes): the rush of a blow drawn back, under each mob's own voice, and
     // a skeleton's bowstring creaking the last bit back before it lets go
     public static final RegistryObject<SoundEvent> FOE_WINDUP = register("foe.windup");
     public static final RegistryObject<SoundEvent> FOE_DRAW = register("foe.draw");

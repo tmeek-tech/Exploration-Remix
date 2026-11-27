@@ -116,7 +116,7 @@ public final class CombatEvents {
                 w.interrupt(p);
                 Stagger.interrupt(t);
             } else if ((strong || jump) && Foes.windingUp(t)) {
-                // a vanilla hostile's wind-up (0.23.6) is stopped the same way
+                // a vanilla hostile's wind-up (0.23.8) is stopped the same way
                 Foes.interrupt(t);
                 Stagger.interrupt(t);
             }

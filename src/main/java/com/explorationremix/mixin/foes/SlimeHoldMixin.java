@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** A slime squashing down for its slam, and in the slam's leap (0.23.6): its own hops and steering are held. */
+/** A slime squashing down for its slam, and in the slam's leap (0.23.8): its own hops and steering are held. */
 @Mixin(targets = "net.minecraft.world.entity.monster.Slime$SlimeMoveControl")
 public abstract class SlimeHoldMixin extends MoveControl {
     @Shadow @Final private Slime slime;

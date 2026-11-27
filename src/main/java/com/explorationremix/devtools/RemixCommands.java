@@ -131,9 +131,10 @@ public final class RemixCommands {
                 .then(com.explorationremix.creature.MantisCommands.command())
                 // the chimney lurkers of the Deep Gardens' vents (0.21.0)
                 .then(com.explorationremix.creature.LurkerCommands.command())
+                .then(com.explorationremix.creature.EmberCommands.command())
                 // vanilla's hostile mobs in groups
                 .then(com.explorationremix.creature.groups.MobGroupCommands.command())
-                // vanilla's hostile mobs' fights and a player's recovery (0.23.6)
+                // vanilla's hostile mobs' fights and a player's recovery (0.23.8)
                 .then(com.explorationremix.combat.foes.FoeCommands.command())
                 // runes: rune items, rows, energy and run depth for trying them out
                 .then(com.explorationremix.rune.RuneCommands.command())

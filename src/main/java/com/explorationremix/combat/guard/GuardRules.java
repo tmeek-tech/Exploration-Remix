@@ -24,7 +24,7 @@ public final class GuardRules {
     public static final double PARRY_PUSH = 0.6;
     /**
      * A thrown bottle breaking this near a player (blocks from their body) in their parry window is caught on the blade
-     * (0.23.6, a witch's): most land at the feet rather than on the player, and would splash them all the same.
+     * (0.23.8, a witch's): most land at the feet rather than on the player, and would splash them all the same.
      */
     public static final double BOTTLE_CATCH = 2.0;
 

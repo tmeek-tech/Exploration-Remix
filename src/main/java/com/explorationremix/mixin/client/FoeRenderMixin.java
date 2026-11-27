@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Vanilla's hostile mobs posed for their moves (0.23.6, client.foes): their parts once vanilla has set them up for the
+ * Vanilla's hostile mobs posed for their moves (0.23.8, client.foes): their parts once vanilla has set them up for the
  * draw (the layers that copy them, armour and held items, follow), and their whole body once it has been turned to
  * face its way.
  */

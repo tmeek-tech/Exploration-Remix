@@ -84,7 +84,7 @@ public final class ExplorationRemix {
         RuneNet.register();
         // 0.12.0: the timed swings' channel (the swinger's game times them; the server checks and deals the hits)
         SwingNet.register();
-        // 0.23.6: the fights' channel (vanilla hostiles' moves, posed by each game; a player's health coming back)
+        // 0.23.8: the fights' channel (vanilla hostiles' moves, posed by each game; a player's health coming back)
         FoeNet.register();
         if (DevAutoRun.enabled()) MinecraftForge.EVENT_BUS.register(DevAutoRun.class);
     }

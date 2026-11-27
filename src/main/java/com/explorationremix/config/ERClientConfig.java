@@ -32,7 +32,7 @@ public final class ERClientConfig {
     public final ForgeConfigSpec.EnumValue<Crickets> crickets;
     /** A cricket near the player (two in a big cave) sings now and then and goes quiet as they come close (0.20.9). */
     public final ForgeConfigSpec.BooleanValue nearCrickets;
-    /** Vanilla hostiles' bodies posed for their wind-ups, blows, flinches, reels and walks (client.foes, 0.23.6). */
+    /** Vanilla hostiles' bodies posed for their wind-ups, blows, flinches, reels and walks (client.foes, 0.23.8). */
     public final ForgeConfigSpec.BooleanValue foePoses;
 
     /** Which light tremors and climb answers a player feels ({@code tremorEffects}). */

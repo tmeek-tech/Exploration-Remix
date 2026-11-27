@@ -1161,6 +1161,16 @@ def creature_data():
                   runes.drop_pool(0.5, 0.1, [("collect/deep_gardens", None)])]})
     write(os.path.join(ASSETS, "models", "item", "chimney_lurker_fang.json"),
           {"parent": "minecraft:item/generated", "textures": {"layer0": f"{MOD}:item/chimney_lurker_fang"}})
+    # 0.23.7: the ember urchin of the Wasteland: a few of its spines (the cards' "Ember spines that burn like blaze
+    # rods"); no rune, the Wasteland has none of its own. Its pricks are their own damage, scaled as a mob's blows are
+    # (so none in Peaceful, where it only shoves).
+    write(os.path.join(DATA, "loot_tables", "entities", "ember_urchin.json"), {
+        "type": "minecraft:entity",
+        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{MOD}:ember_urchin_spine", "functions": [
+            {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 3}},
+            {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]}]}]})
+    write(os.path.join(DATA, "damage_type", "ember_urchin.json"),
+          {"message_id": f"{MOD}.ember_urchin", "exhaustion": 0.1, "scaling": "when_caused_by_living_non_player", "effects": "poking"})
     # 0.21.9: the Hollow Choir of the Deep Dark. It costs three keys from three ancient cities and five minutes of a
     # hard fight, and there is one of it per arena per summoning, so it pays like nothing else: the hollow bell itself,
     # and two runes for certain, one of the Blue Reaches and one of either deep layer (Taran's pick: experience, a

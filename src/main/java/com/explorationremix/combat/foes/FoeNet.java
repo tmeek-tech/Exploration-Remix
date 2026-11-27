@@ -14,7 +14,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.function.Supplier;
 
 /**
- * The fights' channel (0.23.6), {@code explorationremix:foes}, server to client only: a vanilla mob starting a phase of
+ * The fights' channel (0.23.8), {@code explorationremix:foes}, server to client only: a vanilla mob starting a phase of
  * one of its moves (so each game round it poses the mob's body for it, see client.foes), and whether a player's health
  * is coming back (so their hearts ripple, see combat.recovery).
  */

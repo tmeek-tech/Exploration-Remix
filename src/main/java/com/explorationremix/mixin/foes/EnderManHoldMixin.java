@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** An enderman winding up or striking (0.23.6) doesn't flit away mid blow: being stared at, rained on or shot waits for it. */
+/** An enderman winding up or striking (0.23.8) doesn't flit away mid blow: being stared at, rained on or shot waits for it. */
 @Mixin(EnderMan.class)
 public abstract class EnderManHoldMixin {
     @Inject(method = "teleport(DDD)Z", at = @At("HEAD"), cancellable = true)

@@ -7,7 +7,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 
-/** The fights' client side (0.23.6), on the mod bus: what the server tells of them goes to {@link FoeClient}. */
+/** The fights' client side (0.23.8), on the mod bus: what the server tells of them goes to {@link FoeClient}. */
 @Mod.EventBusSubscriber(modid = ExplorationRemix.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class FoeClientSetup {
     private FoeClientSetup() {}

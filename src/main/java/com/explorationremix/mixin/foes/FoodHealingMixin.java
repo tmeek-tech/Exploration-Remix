@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
- * Food's slow healing goes while health comes back after a while unhurt instead (0.23.6, combat.recovery): food asks
+ * Food's slow healing goes while health comes back after a while unhurt instead (0.23.8, combat.recovery): food asks
  * the natural regeneration rule as if it were off. Hunger and starving are as they were.
  */
 @Mixin(FoodData.class)

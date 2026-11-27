@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * A pillager holding a loaded crossbow on its quarry (0.23.6): a tell {@link FoeRules#SHOT_TELL} ticks before the bolt
+ * A pillager holding a loaded crossbow on its quarry (0.23.8): a tell {@link FoeRules#SHOT_TELL} ticks before the bolt
  * goes (the wait after loading counts down to it), as the skeletons' shots have.
  */
 @Mixin(RangedCrossbowAttackGoal.class)

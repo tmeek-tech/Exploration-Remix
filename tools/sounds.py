@@ -190,7 +190,7 @@ SWING_EVENTS = {
     "guard.parry": files("guard", "parry", 2, 1.0, 32),
     "mossback.windup": creature("windup", 2, 1.0, 24),
     "skein.windup": creature("windup", 2, 1.0, 20, who="skein"),
-    # 0.23.6: vanilla hostiles' wind-ups (pitched to each one's length) and the creak before a skeleton's or pillager's shot
+    # 0.23.8: vanilla hostiles' wind-ups (pitched to each one's length) and the creak before a skeleton's or pillager's shot
     "foe.windup": files("foe", "windup", 2, 0.9, 20),
     "foe.draw": files("foe", "draw", 2, 0.9, 24),
 }
@@ -276,13 +276,32 @@ LURKER_EVENTS = {
     "chimney_lurker.death": creature("death", 1, 1.0, 24, who="chimney_lurker"),
 }
 LURKER_SUBTITLES = {
-    "chimney_lurker.step": "Spines tick on rock", "chimney_lurker.click": "Vent Urchin clicks",
-    "chimney_lurker.rattle": "Vent Urchin's spines rattle", "chimney_lurker.hiss": "Vent Urchin hisses",
-    "chimney_lurker.bite": "Teeth snap", "chimney_lurker.hurt": "Vent Urchin hurts",
-    "chimney_lurker.death": "Vent Urchin dies",
+    "chimney_lurker.step": "Spines tick on rock", "chimney_lurker.click": "Chimney Spider clicks",
+    "chimney_lurker.rattle": "Chimney Spider's spines rattle", "chimney_lurker.hiss": "Chimney Spider hisses",
+    "chimney_lurker.bite": "Teeth snap", "chimney_lurker.hurt": "Chimney Spider hurts",
+    "chimney_lurker.death": "Chimney Spider dies",
 }
 CREATURE_EVENTS.update(LURKER_EVENTS)
 CREATURE_SUBTITLES.update(LURKER_SUBTITLES)
+
+
+# The Wasteland's ember urchin (0.23.7, tools/synth_creature_sounds.py ember_urchin): its embers' crackle carries a
+# little down a tunnel (you hear one round a corner before you meet it); its hiss as it flares carries further; its
+# needles' ticks on the rock are heard only close.
+EMBER_EVENTS = {
+    "ember_urchin.crackle": creature("crackle", 3, 0.6, 20, who="ember_urchin"),
+    "ember_urchin.step": creature("tap", 4, 0.45, 12, who="ember_urchin"),
+    "ember_urchin.hiss": creature("hiss", 2, 0.9, 24, who="ember_urchin"),
+    "ember_urchin.hurt": creature("hurt", 2, 0.9, 16, who="ember_urchin"),
+    "ember_urchin.death": creature("death", 1, 1.0, 24, who="ember_urchin"),
+}
+EMBER_SUBTITLES = {
+    "ember_urchin.crackle": "Embers crackle", "ember_urchin.step": "Needles tick on rock",
+    "ember_urchin.hiss": "Ember Urchin hisses", "ember_urchin.hurt": "Ember Urchin cracks",
+    "ember_urchin.death": "Ember Urchin goes out",
+}
+CREATURE_EVENTS.update(EMBER_EVENTS)
+CREATURE_SUBTITLES.update(EMBER_SUBTITLES)
 
 # The Hollow Choir, the Deep Dark's boss (0.21.9; tools/synth_choir_sounds.py makes the files): a ring of bone plates
 # with bells under it, hanging over its arena on six tendrils. Everything it has is a struck bell and cold, hollow

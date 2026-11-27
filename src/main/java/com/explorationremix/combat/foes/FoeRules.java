@@ -1,7 +1,7 @@
 package com.explorationremix.combat.foes;
 
 /**
- * The numbers of vanilla's hostile mobs' fights (0.23.6, Taran 2026-11-27), with no game in them so they can be tested:
+ * The numbers of vanilla's hostile mobs' fights (0.23.8, Taran 2026-11-27), with no game in them so they can be tested:
  * how long each blow winds up and how a mob comes back from it, how far a lunge or a pounce carries, where an archer
  * aims, and where the mobs waiting their turn stand round their quarry.
  * <p>

@@ -1,7 +1,7 @@
 package com.explorationremix.combat.foes;
 
 /**
- * The moves vanilla's hostile mobs make since 0.23.6 (Taran 2026-11-27), as both sides name them: the server says which
+ * The moves vanilla's hostile mobs make since 0.23.8 (Taran 2026-11-27), as both sides name them: the server says which
  * one a mob starts and which phase it is in ({@link Phase}), and each client poses the mob's body for it.
  */
 public enum FoeMove {

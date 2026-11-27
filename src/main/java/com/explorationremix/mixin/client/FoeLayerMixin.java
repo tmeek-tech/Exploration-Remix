@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** A layer that poses its own copy of the model (a stray's clothes, a drowned's outer skin) is posed as its mob is (0.23.6). */
+/** A layer that poses its own copy of the model (a stray's clothes, a drowned's outer skin) is posed as its mob is (0.23.8). */
 @Mixin(RenderLayer.class)
 public abstract class FoeLayerMixin {
     @Inject(method = "coloredCutoutModelCopyLayerRender", at = @At(value = "INVOKE",

@@ -8,7 +8,7 @@ Deterministic: the same script gives the same sounds.
 
 Needs numpy and ffmpeg with libvorbis. Writes src/main/resources/assets/explorationremix/sounds/creature/<name>/*.ogg
 (tools/sounds.py lists them in sounds.json). Run from anywhere: python3 tools/synth_creature_sounds.py [mossback]
-[skein] [firefly] [stilt_mantis] [chimney_lurker] (all when none is named).
+[skein] [firefly] [stilt_mantis] [chimney_lurker] [ember_urchin] (all when none is named).
 """
 import os, sys
 import numpy as np
@@ -557,11 +557,132 @@ def lurker_death(rng):
 LURKER_MAKERS = {"tap": lurker_tap, "click": lurker_click, "rattle": lurker_rattle, "hiss": lurker_hiss,
                  "bite": lurker_bite, "hurt": lurker_hurt, "death": lurker_death}
 
+# =============================================================================================== the ember urchin
+# 0.23.7: the Wasteland's ember urchin, a black ball of cooled crust on thirty long needles, hot inside. Embers, not
+# chitin: the soft pops and ticks of coals settling over a low breath of heat, the fine glassy tick of a needle's point
+# set on rock, the steam-sharp hiss as it flares (water on hot coals, its crust crackling), a cracked crust's spit and
+# knock hurt, and its long dying hiss as its embers go out and its spines settle round it. A short dry echo: a tunnel.
+
+EMBER_COUNTS = {"crackle": 3, "tap": 4, "hiss": 2, "hurt": 2, "death": 1}
+
+
+def pops(rng, n, times, fc_lo, fc_hi, amp_lo=0.3, length=0.003):
+    """Ember pops: sharp little cracks, each with a soft low thump under it (a bubble of gas bursting in a coal)."""
+    out = clicks(rng, n, times, fc_lo, fc_hi, amp_lo, 1.1, length)
+    t = np.arange(secs(0.03)) / SR
+    for at in times:
+        th = S.tone(rng.uniform(140, 260) * np.ones(len(t)), np.exp(-t / 0.006), ((1, 1.0),)) * rng.uniform(0.1, 0.35)
+        S.add_clipped(out, th, int(at * SR))
+    return out
+
+
+def breath(rng, n, fc=600, q=0.6):
+    """The low rush of heat off it: soft, slow-swelling filtered noise."""
+    t = np.arange(n) / SR
+    x = noise(rng, n, S.bandpass(fc, q))
+    x = x / (np.std(x) + 1e-12)
+    return x * (0.6 + 0.4 * np.sin(2 * np.pi * rng.uniform(0.4, 0.7) * t + rng.uniform(0, 6.28)))
+
+
+def ember_crackle(rng):
+    """Its embers settling: a scatter of soft pops and fine ticks, now and then a pair close together, over a faint breath."""
+    dur = rng.uniform(1.3, 1.8)
+    n = secs(dur + 0.1)
+    t = np.arange(n) / SR
+    times, at = [], rng.uniform(0.02, 0.1)
+    while at < dur:
+        times.append(at)
+        if rng.random() < 0.25: times.append(at + rng.uniform(0.008, 0.025))
+        at += rng.exponential(0.12) + 0.02
+    x = pops(rng, n, times, 1800, 5200, 0.2) * 0.9
+    x += breath(rng, n) * 0.05 * np.minimum(1, t / 0.3) * np.clip((dur + 0.1 - t) / 0.4, 0, 1)
+    x = S.filt(x, S.highpass(90, 2))
+    return S.normalize_peak(hard_room(x, rng, 0.12), -9.0)
+
+
+def ember_tap(rng):
+    """A needle's point set on rock: a fine, glassy tick, its long thin shaft ringing faintly after it."""
+    n = secs(0.16)
+    t = np.arange(n) / SR
+    x = clicks(rng, n, [0.002], 3800, 5600, 0.8, 2.4, 0.0018)
+    ring = S.tone(rng.uniform(2300, 3100) * np.ones(n), np.exp(-t / 0.03), ((1, 1.0), (2.76, 0.3)))
+    x += 0.12 * ring
+    x += clicks(rng, n, [0.002 + rng.uniform(0.01, 0.02)], 6000, 7600, 0.2, 1.4, 0.0012) * 0.25
+    x = S.filt(x, S.highpass(600, 2))
+    return S.normalize_peak(hard_room(x, rng, 0.08), -8.0)
+
+
+def ember_hiss(rng):
+    """It flares: a sharp, steamy hiss swelling fast and falling away, its crust crackling hard under it."""
+    dur = rng.uniform(0.7, 0.9)
+    n = secs(dur + 0.1)
+    t = np.arange(n) / SR
+    air = noise(rng, n, S.bandpass(rng.uniform(3600, 4600), 0.7))
+    air = air / (np.std(air) + 1e-12)
+    env = np.minimum(1, t / 0.05) * np.exp(-np.maximum(0, t - 0.08) / (dur * 0.45))
+    flutter = 0.75 + 0.25 * np.sin(2 * np.pi * rng.uniform(17, 24) * t)
+    times, at = [], 0.01
+    while at < dur * 0.8:
+        times.append(at)
+        at += rng.exponential(0.03) + 0.008
+    crack = pops(rng, n, times, 1500, 4200, 0.3) * np.exp(-t / (dur * 0.5))
+    x = air * 0.32 * env * flutter + crack * 0.7
+    x = S.filt(x, S.lowpass(9000, 2))
+    return S.normalize_peak(hard_room(x, rng, 0.14), -2.5)
+
+
+def ember_hurt(rng):
+    """Its crust cracks: a split and a knock deep in the ball, a spit of hot sparks and a short hiss after."""
+    dur = rng.uniform(0.35, 0.45)
+    n = secs(dur + 0.1)
+    t = np.arange(n) / SR
+    x = clicks(rng, n, [0.003, 0.003 + rng.uniform(0.006, 0.012)], 1200, 2000, 0.8, 1.8, 0.006) * 1.4
+    knock = S.tone(rng.uniform(95, 125) * np.ones(n), np.exp(-t / 0.05), ((1, 1.0), (2.4, 0.4), (3.9, 0.15)))
+    x += 0.7 * knock
+    sparks = sorted(rng.uniform(0.02, dur * 0.6, 10))
+    x += pops(rng, n, sparks, 2600, 6000, 0.2) * 0.6
+    hs = noise(rng, n, S.bandpass(4200, 0.8))
+    hs = hs / (np.std(hs) + 1e-12)
+    x += hs * 0.12 * np.clip((t - 0.03) / 0.04, 0, 1) * np.exp(-np.maximum(0, t - 0.07) / 0.12)
+    return S.normalize_peak(hard_room(x, rng, 0.18), -2.0)
+
+
+def ember_death(rng):
+    """Its embers go out: a long falling hiss, its crackle slowing and thinning, its spines settling round it (fine
+    ticks, then a few), a last knock as its ball comes down, and quiet."""
+    dur = 2.6
+    n = secs(dur)
+    t = np.arange(n) / SR
+    hs = noise(rng, n, S.bandpass(3200, 0.6))
+    hs = hs / (np.std(hs) + 1e-12)
+    fall = np.exp(-t / 0.9)
+    x = hs * 0.25 * np.minimum(1, t / 0.03) * fall
+    x = S.filt(x, lambda f: 1 / np.sqrt(1 + (f / 5000) ** 4))
+    times, at = [], 0.02
+    while at < dur - 0.5:
+        times.append(at)
+        at += 0.02 + 0.5 * (at / dur) ** 1.6 * rng.uniform(0.6, 1.4)
+    x += pops(rng, n, times, 1600, 4800, 0.2) * 0.6 * np.exp(-t / 1.4)
+    spines = [rng.uniform(0.25, 0.45)]
+    while spines[-1] < 1.6:
+        spines.append(spines[-1] + rng.exponential(0.07) + 0.015)
+    x += clicks(rng, n, spines, 3800, 5800, 0.3, 2.2, 0.0018) * 0.45
+    at = rng.uniform(0.9, 1.1)
+    k = np.arange(n - secs(at)) / SR
+    thud = S.tone(rng.uniform(70, 90) * np.ones(len(k)), np.exp(-k / 0.08), ((1, 1.0), (2.2, 0.35)))
+    S.add_clipped(x, thud * 0.6, secs(at))
+    x *= np.clip((dur - t) / 0.3, 0, 1)
+    return S.normalize_peak(hard_room(x, rng, 0.2), -2.0)
+
+
+EMBER_MAKERS = {"crackle": ember_crackle, "tap": ember_tap, "hiss": ember_hiss, "hurt": ember_hurt, "death": ember_death}
+
 # each creature's sounds (how many of each), their makers and the base of their seeds
 CREATURES = {"mossback": (COUNTS, MAKERS, 7700), "skein": (SKEIN_COUNTS, SKEIN_MAKERS, 9100),
              "firefly": (FIREFLY_COUNTS, FIREFLY_MAKERS, 9900),
              "stilt_mantis": (MANTIS_COUNTS, MANTIS_MAKERS, 10300),
-             "chimney_lurker": (LURKER_COUNTS, LURKER_MAKERS, 10700)}
+             "chimney_lurker": (LURKER_COUNTS, LURKER_MAKERS, 10700),
+             "ember_urchin": (EMBER_COUNTS, EMBER_MAKERS, 11300)}
 
 
 def make(name):

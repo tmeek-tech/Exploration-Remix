@@ -22,7 +22,7 @@ import net.minecraft.world.item.BowItem;
 import javax.annotation.Nullable;
 
 /**
- * Vanilla's hostile mobs' bodies (0.23.6), posed on top of vanilla's own animation each draw: the wind-up before each
+ * Vanilla's hostile mobs' bodies (0.23.8), posed on top of vanilla's own animation each draw: the wind-up before each
  * blow, the blow, the stumble after a miss (the server says which move a mob is in and since when, see
  * {@link FoeClient}); a flinch when hit, a sway while reeling, a zombie's shamble and a skeleton's stalk. Two parts:
  * the model's parts ({@link #parts}, after its setupAnim, and again for a layer that poses its own copy, a stray's

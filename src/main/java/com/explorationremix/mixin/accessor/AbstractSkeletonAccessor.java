@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
 /**
- * A skeleton's own arrow (a stray's slows): the reworked skeletons (0.23.6, combat.foes) loose it themselves, aimed
+ * A skeleton's own arrow (a stray's slows): the reworked skeletons (0.23.8, combat.foes) loose it themselves, aimed
  * ahead of a moving player.
  */
 @Mixin(AbstractSkeleton.class)

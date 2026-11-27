@@ -50,7 +50,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
- * Vanilla's hostile mobs fight the new way (0.23.6, Taran 2026-11-27: "make vanilla hostile mobs harder and give them
+ * Vanilla's hostile mobs fight the new way (0.23.8, Taran 2026-11-27: "make vanilla hostile mobs harder and give them
  * better animations"). As each one joins a world it gets a quarter more health and half again the blow, and its attack
  * goal is swapped for one of ours: every blow now winds up first (the mob's own voice, a rush of air, a glint at its
  * eyes, and a pose its body takes, see client.foes), so it can be parried, blocked, stepped out of, or stopped by a

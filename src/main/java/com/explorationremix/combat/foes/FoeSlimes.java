@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Slimes (not magma cubes) since 0.23.6: they hop after you as they always did, but touching one no longer hurts. Its
+ * Slimes (not magma cubes) since 0.23.8: they hop after you as they always did, but touching one no longer hurts. Its
  * blow is the slam: within {@link FoeRules#SLAM_FROM} of its quarry it squashes down ({@link FoeRules#SQUASH}: the tell),
  * leaps, and comes down on it, hurting and throwing what stands within reach of where it lands, a big one further and
  * harder. The smallest slimes do no harm, as before. Run from each slime's tick (it has no goal of ours: vanilla's hop

@@ -778,6 +778,9 @@ def write_all(assets, write):
     # 0.21.9: the Deep Dark's Hollow Choir, a crown and six tendrils drawn from loose parts (hollow_choir.py)
     import hollow_choir
     names.update(hollow_choir.write(assets, write))
+    # 0.23.7: the Wasteland's ember urchin, a black ball on thirty springy spines (ember_urchin.py)
+    import ember_urchin
+    names.update(ember_urchin.write(assets, write))
     return names
 
 

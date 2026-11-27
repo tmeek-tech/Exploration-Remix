@@ -1184,6 +1184,91 @@
     ],
     "subtitle": "subtitles.explorationremix.chimney_lurker.death"
   },
+  "ember_urchin.crackle": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/ember_urchin/crackle1",
+        "volume": 0.6,
+        "attenuation_distance": 20
+      },
+      {
+        "name": "explorationremix:creature/ember_urchin/crackle2",
+        "volume": 0.6,
+        "attenuation_distance": 20
+      },
+      {
+        "name": "explorationremix:creature/ember_urchin/crackle3",
+        "volume": 0.6,
+        "attenuation_distance": 20
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ember_urchin.crackle"
+  },
+  "ember_urchin.step": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/ember_urchin/tap1",
+        "volume": 0.45,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:creature/ember_urchin/tap2",
+        "volume": 0.45,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:creature/ember_urchin/tap3",
+        "volume": 0.45,
+        "attenuation_distance": 12
+      },
+      {
+        "name": "explorationremix:creature/ember_urchin/tap4",
+        "volume": 0.45,
+        "attenuation_distance": 12
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ember_urchin.step"
+  },
+  "ember_urchin.hiss": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/ember_urchin/hiss1",
+        "volume": 0.9,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:creature/ember_urchin/hiss2",
+        "volume": 0.9,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ember_urchin.hiss"
+  },
+  "ember_urchin.hurt": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/ember_urchin/hurt1",
+        "volume": 0.9,
+        "attenuation_distance": 16
+      },
+      {
+        "name": "explorationremix:creature/ember_urchin/hurt2",
+        "volume": 0.9,
+        "attenuation_distance": 16
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ember_urchin.hurt"
+  },
+  "ember_urchin.death": {
+    "sounds": [
+      {
+        "name": "explorationremix:creature/ember_urchin/death1",
+        "volume": 1.0,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.ember_urchin.death"
+  },
   "choir.wake": {
     "sounds": [
       {

@@ -24,7 +24,7 @@ import javax.annotation.Nullable;
 import java.util.Iterator;
 
 /**
- * What this game is told of the fights (0.23.6): which move each vanilla hostile near it is in, and since when (posed
+ * What this game is told of the fights (0.23.8): which move each vanilla hostile near it is in, and since when (posed
  * by {@link FoePoses}); and whether the player's own health is coming back, which ripples their hearts as Regeneration
  * does (the health bar is drawn as if they had it, for that one draw).
  */

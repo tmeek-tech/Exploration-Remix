@@ -53,7 +53,7 @@ import java.util.UUID;
  * a shield). A blocked blow does a third of its damage, pushes half as hard and costs the sword a point of wear; a
  * parried one (just after the guard went up) does nothing, throws the creature back a step and leaves it reeling, and
  * knocks rune energy loose as a full hit would; a parried arrow flies back at its shooter, and a parried bottle (a
- * witch's, 0.23.6) at its thrower, caught as it breaks on or beside the player. A boss's blows can't be
+ * witch's, 0.23.8) at its thrower, caught as it breaks on or beside the player. A boss's blows can't be
  * taken on a blade (the Hollow Choir's slams and tolls reach from afar), nor a Mossback's shaking while it holds you.
  * A shield in the other hand still blocks everything, the vanilla way.
  */
@@ -150,7 +150,7 @@ public final class Guard {
 
     /**
      * An arrow strikes a player as their guard has just gone up: it is turned back at whoever loosed it. A thrown bottle
-     * (a witch's, 0.23.6) is sent back the same way, before it breaks.
+     * (a witch's, 0.23.8) is sent back the same way, before it breaks.
      */
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void impact(ProjectileImpactEvent e) {

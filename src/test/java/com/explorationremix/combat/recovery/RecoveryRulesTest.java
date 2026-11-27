@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Health coming back after a while unhurt (0.23.6): only a run of blows close together brings a player down. */
+/** Health coming back after a while unhurt (0.23.8): only a run of blows close together brings a player down. */
 class RecoveryRulesTest {
     @Test
     void itComesBackAfterFiveSecondsUnhurt() {

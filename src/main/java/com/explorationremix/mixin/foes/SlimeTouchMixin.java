@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Touching a slime that fights the new way (0.23.6) doesn't hurt: its slam is its blow. Magma cubes are as they were. */
+/** Touching a slime that fights the new way (0.23.8) doesn't hurt: its slam is its blow. Magma cubes are as they were. */
 @Mixin(Slime.class)
 public abstract class SlimeTouchMixin {
     @Inject(method = "playerTouch", at = @At("HEAD"), cancellable = true)

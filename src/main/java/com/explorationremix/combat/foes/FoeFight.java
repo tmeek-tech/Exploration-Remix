@@ -11,7 +11,7 @@ import javax.annotation.Nullable;
 import java.util.EnumSet;
 
 /**
- * What the reworked mobs' fights share (0.23.6): getting to their quarry, waiting their turn on a ring round it
+ * What the reworked mobs' fights share (0.23.8): getting to their quarry, waiting their turn on a ring round it
  * ({@link FoeTurns}) while others strike, holding their ground between blows, and the melee move itself: the wind-up
  * (told to every game, which poses the mob for it), the strike with its lunge, the blow once within reach, and the
  * recovery, longer after a miss. A mob that reels (its mind stops, see Stagger) loses the move it was making.

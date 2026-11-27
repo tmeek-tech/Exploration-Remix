@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * The dev tools for vanilla's hostile mobs' fights and a player's recovery (0.23.6, {@code /remix foes}): the reworked
+ * The dev tools for vanilla's hostile mobs' fights and a player's recovery (0.23.8, {@code /remix foes}): the reworked
  * mobs round you, what each is doing and who it is after, how many hold a turn at you and how many wait, and how long
  * since you were last hurt. {@code hold <targets> <move> <phase> <ticks> <at>} poses mobs still {@code at} ticks into
  * a phase of a move on every game that sees them, for pictures (give them NoAI first, or their own fight tells the

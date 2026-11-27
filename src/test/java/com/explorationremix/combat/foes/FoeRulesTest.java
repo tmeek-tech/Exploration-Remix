@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The numbers of vanilla's hostile mobs' fights (0.23.6): leaps that land, shots that lead, blows with an opening. */
+/** The numbers of vanilla's hostile mobs' fights (0.23.8): leaps that land, shots that lead, blows with an opening. */
 class FoeRulesTest {
     /** Most blocks' friction (stone, dirt, deepslate): what the ground holds of a leap the tick it sets off. */
     private static final double STONE = 0.6;
