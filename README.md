@@ -213,6 +213,48 @@ pillager outposts), patrols, phantoms, village sieges, the Nether and the End ar
 enderman's chance and how wooded the woods must be are in `explorationremix-world.toml` (`[mobGroups]`, read while the
 server runs; `enabled = false` brings vanilla's own spawning back).
 
+## How hostile mobs fight
+
+Vanilla's hostile mobs of the overworld (zombies, husks, zombie villagers and drowned; skeletons and strays; spiders and
+cave spiders; creepers; endermen; witches; slimes; pillagers and vindicators) fight harder, and show each blow before
+it lands (0.23.8). They have a quarter more health and hit half again as hard (a zombie has 25 health and slams for 4.5
+on Normal); vindicators, pillagers, witches and creepers keep their damage. Every blow winds up first, about half a
+second, with the mob's own voice, a rush of air, a glint at its eyes and a pose of its body, so it can be parried,
+blocked, stepped out of or stopped by a strong attack, as the cave hunters' blows can; a blow that misses leaves the mob
+open for longer than one that lands. No more than two mobs wind up at one player at a time: the rest circle, the first
+behind the player and the next on the flanks, and step in as a turn comes free.
+
+Each kind has a move of its own:
+
+* **Zombies** raise both arms over their head and slam them down with a lurch of about two blocks; a slam that misses
+  drives their fists into the ground.
+* **Skeletons** aim where a running player will be, creak and glint on the last of every draw (time to raise a guard and
+  turn the arrow back), back off from a player who comes near and kick away one who reaches them. Without a bow they
+  swipe.
+* **Spiders** crouch with their front legs up and pounce from 2.4 to 5 blocks away, and let go onto a player below a
+  ledge or a wall they cling to; cave spiders do it quicker.
+* **Creepers** crouch and shudder as they swell, and once lit run down the last blocks, so backing off at a walk no
+  longer saves you.
+* **Endermen** blink behind a player 4 to 16 blocks away, with a sound, and wind up an overhead claw a little later than
+  usual: time to turn round.
+* **Witches** wind up each throw and keep their distance; a bottle parried flies back at the witch.
+* **Slimes** squash before each hop, and hurt only in a landing slam that throws you, never by touch.
+* **Vindicators** chop overhead with the axe, slowly; **pillagers** show each bolt before it goes.
+
+They flinch when hit and sway while they reel; zombies shamble and skeletons stalk. The Nether's and the End's mobs and
+this mod's own creatures are untouched. The kinds, the damage and health, the wind-ups' length, the glint and how many
+strike at once are in `explorationremix-world.toml` (`[foes]`, read while the server runs; `enabled = false` brings
+vanilla's fights back), and the poses can be turned off in `explorationremix-client.toml` (`foePoses`).
+
+## Health coming back
+
+A player's health comes back once they have gone 5 seconds unhurt, two hearts a second, so it takes a run of blows close
+together to bring someone down (0.23.8). It needs more than three drumsticks and costs a third of the food vanilla's
+healing would for the same health (a whole bar for five drumsticks); vanilla's own slow healing from a full food bar is
+gone, so nothing heals you mid-fight. The hearts ripple while it works, as with Regeneration. The `naturalRegeneration`
+game rule turns it off with vanilla's. The wait, the rate, the cost, whether falls and fire restart the wait, and
+whether vanilla's healing stays are in `explorationremix-world.toml` (`[recovery]`).
+
 ## The Hollow Choir
 
 The Deep Dark's boss (0.21.9). It does not wander and it cannot be stumbled into: you call it, into an arena that was
@@ -347,6 +389,9 @@ shimmer and a soft note in your own hands; then, for as long as it has that ener
 | `/remix groups here` | the group home of the ground, cave or water where you are, the groups of each home round you, and any monsters round you in no group |
 | `/remix groups spawn <kind>` | a group of `undead`, `spiders`, `witches`, `creepers`, `slimes`, `husks`, `strays` or `drowned` near you, at the first place of its home dark enough to take it |
 | `/remix groups stats` | what the group spawner has done since the server started |
+| `/remix foes` | the reworked hostile mobs within 24 blocks of you: what each is doing, its health and what it is after; how many hold a turn at you and how many wait; how long since you were last hurt, and whether your health is coming back |
+| `/remix foes hold <targets> <move> <phase> <ticks> <at>` | holds mobs still `at` ticks into a phase of a move `ticks` long (`slam windup 10 5`), drawn so on every game that sees them, for pictures; give them `NoAI` first, or their own fight poses them otherwise |
+| `/remix foes release <targets>` | lets them go |
 | `/remix ember spawn` | an ember urchin where you look, stood up on its spines over the floor there |
 | `/remix ember list [radius]` | the ember urchins round you (64 blocks), nearest first: where each is and what it is doing |
 | `/remix ember tp [n] [distance]` | to the n-th nearest ember urchin, standing 8 blocks (or the distance given) ahead of it on its tunnel's floor, facing it |

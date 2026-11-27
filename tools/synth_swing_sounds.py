@@ -251,6 +251,49 @@ def skein_windup(rng):
     return S.normalize_peak(x, -2.5)
 
 
+def foe_windup(rng):
+    """Half a second (0.23.8, vanilla hostiles' wind-ups; pitched to each wind-up's length): air drawn in under the
+    mob's own voice, rising and swelling to a sudden stop on the beat of the blow, with a low strain under it."""
+    dur = 0.5
+    n = secs(dur)
+    t = np.arange(n) / SR
+    k = t / dur
+    fc = curve(n, [(0, 240), (0.6, 620), (1, 1500)]) * rng.uniform(0.93, 1.07)
+    air = sweep_band(S.filt(rng.standard_normal(n), S.pink), fc, 1.5)
+    air = air / (np.std(air) + 1e-9)
+    f0 = rng.uniform(52, 60) * (1 + 0.25 * k)
+    strain = S.tone(f0, np.ones(n), ((1, 1.0), (2, 0.5), (3, 0.25)))
+    strain *= 0.6 + 0.4 * np.abs(np.sin(2 * np.pi * (6 + 10 * k) * t))
+    env = (0.12 + 0.88 * k ** 1.8) * np.minimum(1, t / 0.04) * np.minimum(1, (dur - t) / 0.012)
+    x = S.filt((0.9 * air + 0.45 * strain / (np.std(strain) + 1e-9)) * env, lambda f: S.lowpass(3200, 2)(f) * S.highpass(70, 2)(f))
+    return S.normalize_peak(S.fade_edges(x, 0.003), -3.0)
+
+
+def foe_draw(rng):
+    """0.4 s (0.23.8): a bow or crossbow drawn the last bit tighter: the wood's creak (stick-slip ticks, quickening,
+    in its hollow) and the string's thin tension tone rising under it, the tell that the shot is coming."""
+    dur = 0.4
+    n = secs(dur)
+    t = np.arange(n) / SR
+    k = t / dur
+    rate = 40 + 140 * k ** 1.4
+    ph = np.cumsum(rate) / SR
+    ticks = np.zeros(n)
+    for e in np.nonzero(np.diff(np.floor(ph)) > 0)[0]:
+        L = secs(0.003)
+        burst = rng.standard_normal(L) * np.hanning(L)
+        end = min(n, e + L)
+        ticks[e:end] += burst[:end - e] * rng.uniform(0.5, 1.0)
+    creak = S.filt(ticks, S.bandpass(rng.uniform(950, 1250), 2.2)) + 0.5 * S.filt(ticks, S.bandpass(rng.uniform(2100, 2500), 2.5))
+    creak = creak / (np.std(creak) + 1e-9)
+    f0 = rng.uniform(310, 350) * (1 + 0.08 * k)
+    string = S.tone(f0, np.ones(n), ((1, 1.0), (2, 0.45), (3, 0.3), (5, 0.12)))
+    string = string / (np.std(string) + 1e-9)
+    env = (0.3 + 0.7 * k) * np.minimum(1, t / 0.02) * np.minimum(1, (dur - t) / 0.03)
+    x = S.filt((0.85 * creak + 0.25 * string * k) * env, lambda f: S.lowpass(5000, 2)(f) * S.highpass(200, 2)(f))
+    return S.normalize_peak(S.fade_edges(x, 0.003), -4.0)
+
+
 # (folder, name, maker, how many, seed base)
 SETS = [
     ("swing", "light", light, 3, 4100),
@@ -264,6 +307,8 @@ SETS = [
     ("guard", "parry", guard_parry, 2, 5100),
     ("creature/mossback", "windup", mossback_windup, 2, 4600),
     ("creature/skein", "windup", skein_windup, 2, 4700),
+    ("foe", "windup", foe_windup, 2, 5200),
+    ("foe", "draw", foe_draw, 2, 5300),
 ]
 
 

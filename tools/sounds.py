@@ -190,12 +190,16 @@ SWING_EVENTS = {
     "guard.parry": files("guard", "parry", 2, 1.0, 32),
     "mossback.windup": creature("windup", 2, 1.0, 24),
     "skein.windup": creature("windup", 2, 1.0, 20, who="skein"),
+    # 0.23.8: vanilla hostiles' wind-ups (pitched to each one's length) and the creak before a skeleton's or pillager's shot
+    "foe.windup": files("foe", "windup", 2, 0.9, 20),
+    "foe.draw": files("foe", "draw", 2, 0.9, 24),
 }
 SWING_SUBTITLES = {
     "swing.light": "Blade swishes", "swing.heavy": "Blade chops", "swing.thrust": "Blade thrusts",
     "swing.charge": "Blade gathers", "runes.ready": "Runes ready", "mossback.windup": "Mossback winds up",
     "skein.windup": "Skein winds up", "swing.smash": "Blade smashes down", "guard.raise": "Blade raised",
-    "guard.block": "Blade blocks", "guard.parry": "Blade parries",
+    "guard.block": "Blade blocks", "guard.parry": "Blade parries", "foe.windup": "Mob winds up",
+    "foe.draw": "Bowstring creaks",
 }
 CREATURE_EVENTS.update(SWING_EVENTS)
 CREATURE_SUBTITLES.update(SWING_SUBTITLES)

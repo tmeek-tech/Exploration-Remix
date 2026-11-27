@@ -32,6 +32,8 @@ public final class ERClientConfig {
     public final ForgeConfigSpec.EnumValue<Crickets> crickets;
     /** A cricket near the player (two in a big cave) sings now and then and goes quiet as they come close (0.20.9). */
     public final ForgeConfigSpec.BooleanValue nearCrickets;
+    /** Vanilla hostiles' bodies posed for their wind-ups, blows, flinches, reels and walks (client.foes, 0.23.8). */
+    public final ForgeConfigSpec.BooleanValue foePoses;
 
     /** Which light tremors and climb answers a player feels ({@code tremorEffects}). */
     public enum TremorEffects {
@@ -83,6 +85,11 @@ public final class ERClientConfig {
         b.push("runes");
         runeShake = b.comment("Shake the view a little when a rune blast, a wall slam or a stagger goes off near you, and kick it when your own",
                 "hit lands (scaled by the game's Distortion Effects setting).").define("runeShake", true);
+        b.pop();
+        b.push("fights");
+        foePoses = b.comment("Pose vanilla's hostile mobs for their moves: the wind-up before each blow, the blow, the stumble after a miss,",
+                "a flinch when hit, a sway while reeling, and a zombie's shamble and a skeleton's stalk. Turn it off if another mod",
+                "animates them (the wind-ups still have their sound and glint).").define("foePoses", true);
         b.pop();
     }
 }

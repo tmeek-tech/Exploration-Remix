@@ -869,6 +869,13 @@ public final class RuneFxClient implements RuneFx.ClientSide {
 
     // ------------------------------------------------------------------------------------------------ staggered creatures
 
+    /** Ticks left of {@code entity}'s reel as this game was shown it (client.foes poses it reeling), or 0. */
+    public static float reelLeft(int entity, float partialTicks) {
+        if (STAGGERED.isEmpty()) return 0.0F;
+        Long end = STAGGERED.get(entity);
+        return end == null ? 0.0F : Math.max(0.0F, end - ticks - partialTicks);
+    }
+
     /** Stars circle a staggered creature's head until it comes to itself. */
     @SubscribeEvent
     public static void tick(TickEvent.ClientTickEvent e) {

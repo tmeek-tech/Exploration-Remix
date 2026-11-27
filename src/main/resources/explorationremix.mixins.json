@@ -42,7 +42,14 @@
     "LivingImmobileMixin",
     "PlayerSweepMixin",
     "EntityLavaPlaneMixin",
-    "StructureStartMixin"
+    "StructureStartMixin",
+    "accessor.AbstractSkeletonAccessor",
+    "foes.SkeletonWeaponMixin",
+    "foes.SlimeHoldMixin",
+    "foes.SlimeTouchMixin",
+    "foes.EnderManHoldMixin",
+    "foes.CrossbowTellMixin",
+    "foes.FoodHealingMixin"
   ],
   "client": [
     "client.LightTextureMixin",
@@ -61,7 +68,9 @@
     "client.SenseColourMixin",
     "client.PeerTurnMixin",
     "client.MultiPlayerGameModeAccessor",
-    "client.LevelRendererAccessor"
+    "client.LevelRendererAccessor",
+    "client.FoeRenderMixin",
+    "client.FoeLayerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

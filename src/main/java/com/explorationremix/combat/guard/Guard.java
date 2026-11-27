@@ -21,9 +21,12 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
+import net.minecraft.world.entity.projectile.ThrownPotion;
 import net.minecraft.world.entity.projectile.ThrownTrident;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.Tags;
 import net.minecraftforge.event.TickEvent;
@@ -49,7 +52,8 @@ import java.util.UUID;
  * ({@link GuardRules}): a creature's own blow from within reach, or an arrow (one that pierces goes through, as it does
  * a shield). A blocked blow does a third of its damage, pushes half as hard and costs the sword a point of wear; a
  * parried one (just after the guard went up) does nothing, throws the creature back a step and leaves it reeling, and
- * knocks rune energy loose as a full hit would; a parried arrow flies back at its shooter. A boss's blows can't be
+ * knocks rune energy loose as a full hit would; a parried arrow flies back at its shooter, and a parried bottle (a
+ * witch's, 0.23.8) at its thrower, caught as it breaks on or beside the player. A boss's blows can't be
  * taken on a blade (the Hollow Choir's slams and tolls reach from afar), nor a Mossback's shaking while it holds you.
  * A shield in the other hand still blocks everything, the vanilla way.
  */
@@ -144,14 +148,52 @@ public final class Guard {
         }
     }
 
-    /** An arrow strikes a player as their guard has just gone up: it is turned back at whoever loosed it. */
+    /**
+     * An arrow strikes a player as their guard has just gone up: it is turned back at whoever loosed it. A thrown bottle
+     * (a witch's, 0.23.8) is sent back the same way, before it breaks.
+     */
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void impact(ProjectileImpactEvent e) {
+        if (e.getProjectile() instanceof ThrownPotion potion) {
+            potionImpact(e, potion);
+            return;
+        }
         if (!(e.getProjectile() instanceof AbstractArrow arrow) || arrow.level().isClientSide()) return;
         if (!(e.getRayTraceResult() instanceof EntityHitResult hit) || !(hit.getEntity() instanceof ServerPlayer p) || !guarding(p)) return;
         if (arrow.getPierceLevel() > 0 || !arrowInFront(p, arrow) || !GuardRules.parries(state(p), p.level().getGameTime())) return;
         e.setImpactResult(ProjectileImpactEvent.ImpactResult.SKIP_ENTITY);
         turnBack(p, arrow);
+    }
+
+    /**
+     * A bottle breaks on a player in their parry window, or beside them (most land at the feet, near enough to splash
+     * them anyway): from in front, with nothing between, it is caught on the blade instead.
+     */
+    private static void potionImpact(ProjectileImpactEvent e, ThrownPotion potion) {
+        if (!(potion.level() instanceof ServerLevel l)) return;
+        Vec3 v = potion.getDeltaMovement();
+        if (v.lengthSqr() < 1.0E-6) return;
+        HitResult hit = e.getRayTraceResult();
+        Vec3 at = hit.getLocation();
+        long now = l.getGameTime();
+        ServerPlayer catcher = null;
+        double best = Double.MAX_VALUE;
+        for (ServerPlayer p : l.getEntitiesOfClass(ServerPlayer.class, new AABB(at, at).inflate(GuardRules.BOTTLE_CATCH + 2.0), Guard::guarding)) {
+            if (p == potion.getOwner() || !GuardRules.parries(state(p), now)) continue;
+            Vec3 look = p.getLookAngle();
+            if (!GuardRules.inFront(look.x, look.y, look.z, -v.x, -v.y, -v.z)) continue;
+            boolean on = hit instanceof EntityHitResult eh && eh.getEntity() == p;
+            double d = on ? 0.0 : Math.sqrt(p.getBoundingBox().distanceToSqr(at));
+            if (d > GuardRules.BOTTLE_CATCH || d >= best) continue;
+            // a bottle breaking on the far side of a wall, or round a corner, is no one's to catch
+            Vec3 eye = p.getEyePosition(), near = at.subtract(v.normalize().scale(0.15));
+            if (!on && l.clip(new ClipContext(eye, near, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, p)).getType() != HitResult.Type.MISS) continue;
+            catcher = p;
+            best = d;
+        }
+        if (catcher == null) return;
+        e.setImpactResult(ProjectileImpactEvent.ImpactResult.SKIP_ENTITY);
+        turnBackPotion(catcher, potion);
     }
 
     // ------------------------------------------------------------------------------------------------ what a guard does
@@ -260,6 +302,34 @@ public final class Guard {
         RuneFx.parry(p.serverLevel(), at, way, p.getId());
         p.level().playSound(null, at.x, at.y, at.z, ERSounds.GUARD_PARRY.get(), SoundSource.PLAYERS, 1.0F, 1.05F + p.getRandom().nextFloat() * 0.1F);
         if (shooter instanceof LivingEntity le && shooter != p) CastService.parried(p, le);
+    }
+
+    /**
+     * A parried bottle flies back at whoever threw it (or straight back the way it came), arced to come down on them; it
+     * is the player's now (its splash is theirs), and can't break on them on its way out.
+     */
+    private static void turnBackPotion(ServerPlayer p, ThrownPotion potion) {
+        Vec3 v = potion.getDeltaMovement();
+        Vec3 back = v.lengthSqr() < 1.0E-6 ? p.getLookAngle() : v.normalize().reverse();
+        Vec3 from = p.getEyePosition().add(0.0, -0.3, 0.0).add(back.scale(0.9));
+        double speed = Math.max(0.75, v.length());
+        Entity thrower = potion.getOwner();
+        Vec3 way = back;
+        if (thrower != null && thrower != p && thrower.isAlive() && thrower.level() == p.level() && thrower.distanceToSqr(p) < 32.0 * 32.0) {
+            Vec3 d = thrower.getBoundingBox().getCenter().subtract(from);
+            double t = d.length() / speed;
+            // a bottle falls as it flies (0.05 a tick): aimed above by as much as it will drop on the way
+            way = d.add(0.0, 0.025 * t * t, 0.0).normalize();
+        }
+        potion.setPos(from.x, from.y, from.z);
+        potion.setDeltaMovement(way.scale(speed));
+        potion.setOwner(p);
+        ((ProjectileAccessor) potion).er$setLeftOwner(false);
+        potion.hasImpulse = true;
+        Vec3 at = blade(p);
+        RuneFx.parry(p.serverLevel(), at, way, p.getId());
+        p.level().playSound(null, at.x, at.y, at.z, ERSounds.GUARD_PARRY.get(), SoundSource.PLAYERS, 1.0F, 1.05F + p.getRandom().nextFloat() * 0.1F);
+        if (thrower instanceof LivingEntity le && thrower != p) CastService.parried(p, le);
     }
 
     // ------------------------------------------------------------------------------------------------ the rest

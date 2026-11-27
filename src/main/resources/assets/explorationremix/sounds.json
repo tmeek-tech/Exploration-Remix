@@ -803,6 +803,36 @@
     ],
     "subtitle": "subtitles.explorationremix.skein.windup"
   },
+  "foe.windup": {
+    "sounds": [
+      {
+        "name": "explorationremix:foe/windup1",
+        "volume": 0.9,
+        "attenuation_distance": 20
+      },
+      {
+        "name": "explorationremix:foe/windup2",
+        "volume": 0.9,
+        "attenuation_distance": 20
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.foe.windup"
+  },
+  "foe.draw": {
+    "sounds": [
+      {
+        "name": "explorationremix:foe/draw1",
+        "volume": 0.9,
+        "attenuation_distance": 24
+      },
+      {
+        "name": "explorationremix:foe/draw2",
+        "volume": 0.9,
+        "attenuation_distance": 24
+      }
+    ],
+    "subtitle": "subtitles.explorationremix.foe.draw"
+  },
   "firefly.flutter": {
     "sounds": [
       {
