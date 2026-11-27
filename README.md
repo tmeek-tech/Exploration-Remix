@@ -19,7 +19,7 @@ later milestones, built on these caves.
 | Java | 17 |
 | Immersive Weathering | 1.20.1-2.0.5 or later, required: the cold caves grow its frosty ferns, frost and icicles, and its frost on the snowy surface gives way to the mod's hoarfrost |
 | Create | optional: its stones (asurine, crimsite, ochrum, veridium, limestone, scoria, scorchia) build the layers; vanilla stones stand in without it |
-| mcremix | optional: rusted machine parts in the Rust Springs; Create and vanilla parts stand in without it |
+| mcremix | optional: rusted machine parts in the Rust Springs, and (0.42.0 and later) its real ores in the layers' veins, each in the rock round it: gold quartz in Lantern Lake, the Ember Gardens, the Wasteland and the Galleries, chalcopyrite in the Silver Fern Rift, hematite in the Ivory Root Cavern. Create and vanilla parts, and vanilla's ores, stand in without it |
 
 **New worlds only.** The overworld is extended to y -784 when a world is created (to y -832 before 0.19.6, when the
 Deep Gardens grew shorter). Existing chunks are not regenerated, so a world made with an older version keeps its old

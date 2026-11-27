@@ -59,6 +59,10 @@
     {
       "id": "create:scorchia",
       "required": false
+    },
+    {
+      "id": "#forge:ores",
+      "required": false
     }
   ]
 }
