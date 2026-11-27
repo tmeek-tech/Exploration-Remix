@@ -4,6 +4,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -34,6 +35,13 @@ public class ClimbMoveControl extends MoveControl {
 
     /** Ticks in a row it has barely moved while sent somewhere (for the dev listing). */
     public int wedged() { return wedged; }
+
+    // counted for /remix mossback watch: ticks it climbed straight up because the way across was blocked, and the
+    // times it was wedged and stepped out, or found no way out
+    private int climbs, waysOut, noWayOut;
+    public int climbs() { return climbs; }
+    public int waysOut() { return waysOut; }
+    public int noWayOut() { return noWayOut; }
 
     public <T extends Mob & Climber> ClimbMoveControl(T mob) {
         super(mob);
@@ -86,19 +94,41 @@ public class ClimbMoveControl extends MoveControl {
             return;
         }
         if (settle) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
-        // rounding the top of what it climbs: while the way across is still blocked by the edge, it climbs straight up
-        // first (aiming straight at the waypoint would leave it hanging just under the edge)
-        if (dy > -0.1 && v.horizontalDistanceSqr() > 1.0E-6
-                && !mob.level().noCollision(mob, mob.getBoundingBox().move(v.x, 0.0, v.z).deflate(1.0E-4)))
+        // the way across is judged from where this tick's move up or down leaves the box, as the move itself goes (up or
+        // down first, then across): a box a hair too high to slip under a lip ahead, judged where it was, climbed away
+        // from it instead of letting itself down, and hung there, up and down, for minutes
+        AABB box = mob.getBoundingBox();
+        if (v.y != 0.0 && free(box.move(0.0, v.y, 0.0))) box = box.move(0.0, v.y, 0.0);
+        boolean blocked = false;
+        if (v.horizontalDistanceSqr() > 1.0E-6 && !free(box.move(v.x, 0.0, v.z))) {
+            // blocked across, unless it slides on along one way for most of its step, as the move will (past the corner
+            // of a slab, say: climbing there instead, under leaves that let it rise a hair, it lost the floor and hung)
+            double slide = Math.max(free(box.move(v.x, 0.0, 0.0)) ? Math.abs(v.x) : 0.0, free(box.move(0.0, 0.0, v.z)) ? Math.abs(v.z) : 0.0);
+            blocked = slide < 0.5 * Math.sqrt(v.horizontalDistanceSqr());
+        }
+        if (blocked && dy > -0.1) {
+            // rounding the top of what it climbs: while the way across is still blocked by the edge, it climbs straight
+            // up first (aiming straight at the waypoint would leave it hanging just under the edge)
             v = new Vec3(v.x * 0.1, speed, v.z * 0.1);
-        else if (floor) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
+            climbs++;
+        } else if (blocked && !floor) {
+            // its waypoint lower and the way across blocked (by a lip of rock or leaves at the box's top, say): it lets
+            // itself down to the waypoint's height at its full pace, then across, instead of inching down in proportion
+            // (it gave up and stepped back up before it got under)
+            v = new Vec3(v.x, -Math.min(speed, -dy), v.z);
+        } else if (floor) v = new Vec3(v.x, mob.getDeltaMovement().y, v.z);
         if (wedged >= WEDGED_TICKS) {
             Vec3 out = wayOut(v, step);
-            if (out != null) v = out;
+            if (out != null) { v = out; waysOut++; }
+            else noWayOut++;
             wedged = WEDGED_TICKS / 2;
         }
         mob.setDeltaMovement(v);
         turn(dx, dz);
+    }
+
+    private boolean free(AABB box) {
+        return mob.level().noCollision(mob, box.deflate(1.0E-4));
     }
 
     private static double exact(double d, double share) {

@@ -67,9 +67,12 @@ public class ClimbNavigation extends net.minecraft.world.entity.ai.navigation.Pa
     public void tick() {
         ++this.tick;
         if (this.hasDelayedRecomputation) this.recomputePath();
-        if (this.isDone()) return;
+        if (this.isDone()) {
+            stepTicks = 0;
+            return;
+        }
         followThePath();
-        if (this.isDone()) return;
+        if (this.isDone() || failing()) return;
         Vec3 next = this.path.getNextEntityPos(this.mob);
         Vec3 wanted = againstRock(this.path, next);
         // a wall climbed from the floor: it walks to the wall's foot first, then up it (aimed straight at the node up the
@@ -83,6 +86,60 @@ public class ClimbNavigation extends net.minecraft.world.entity.ai.navigation.Pa
                 wanted = new Vec3(wanted.x, mob.getY(), wanted.z);
         }
         this.mob.getMoveControl().setWantedPosition(wanted.x, wanted.y, wanted.z, this.speedModifier);
+    }
+
+    /** Paths given up because the next node took too long to reach (vanilla's timeout), for /remix mossback watch. */
+    private int timeouts;
+    public int timeouts() { return timeouts; }
+
+    /**
+     * A move of its path it has been on this long while it steers (from the node it passed last to the next one) is one
+     * it cannot make: something the nodes misjudge holds it there. That move is left out of its paths this long.
+     */
+    static final int GIVE_UP_TICKS = 80, AVOID_TICKS = 600;
+    private long stepFrom = Long.MAX_VALUE, stepTo = Long.MAX_VALUE;
+    private int stepTicks, failedMoves;
+
+    /** Moves it gave up as ones it could not make, for /remix mossback watch. */
+    public int failedMoves() { return failedMoves; }
+
+    /**
+     * Whether it has been on the same move too long, steering all the while: that move is left out of its paths for a
+     * while and the way is found again from where it is (round it, or anywhere else when there is no way round). Its
+     * own mind sends it on new paths as it pleases (a hunter every half second); the move is the same one so long as
+     * it has not got past it, so the count runs on across them. A path's first node is where it starts, so before it
+     * gets there the move is from the node it is in now. True when no way is left.
+     */
+    private boolean failing() {
+        if (!(mob instanceof ClimbMoveControl.Climber c) || !c.canSteer() || c.airborne()) {
+            stepTicks = 0;
+            return false;
+        }
+        int i = this.path.getNextNodeIndex();
+        Node to = this.path.getNode(i);
+        BlockPos from = i > 0 ? this.path.getNode(i - 1).asBlockPos()
+                : BlockPos.containing(mob.getX() - cw * 0.5 + 0.5, mob.getY() + 0.05, mob.getZ() - cw * 0.5 + 0.5);
+        long f = from.asLong(), t = BlockPos.asLong(to.x, to.y, to.z);
+        if (f != stepFrom || t != stepTo) {
+            stepFrom = f;
+            stepTo = t;
+            stepTicks = 0;
+            return false;
+        }
+        if (++stepTicks < GIVE_UP_TICKS) return false;
+        stepTicks = 0;
+        failedMoves++;
+        if (f != t && this.nodeEvaluator instanceof ClimbNodeEvaluator e) e.avoid(from, to.asBlockPos(), level.getGameTime() + AVOID_TICKS);
+        recomputePath();
+        return this.isDone();
+    }
+
+    @Override
+    protected void doStuckDetection(Vec3 pos) {
+        Path before = this.path;
+        super.doStuckDetection(pos);
+        // vanilla's timeout drops the path without calling it stuck
+        if (before != null && this.path == null && !this.isStuck()) timeouts++;
     }
 
     /** How near the foot of a wall (across) it walks before it climbs. */
@@ -99,9 +156,15 @@ public class ClimbNavigation extends net.minecraft.world.entity.ai.navigation.Pa
     @Override
     protected void followThePath() {
         Vec3 pos = getTempMobPos();
-        // close enough to the next node in all three directions: on to the one after it
-        float reach = Math.max(0.55F, this.mob.getBbWidth() / 2.0F);
+        // close enough to the next node in all three directions: on to the one after it (closer when the move after it
+        // goes up or down: onto or off a slab, a step or a wall, that move is only sure to be clear of rock from where the
+        // box stands at the node, and half its width short of it the box was caught on the step's corner, or under a lip)
+        double reach = Math.max(0.55F, this.mob.getBbWidth() / 2.0F);
         Vec3 next = againstRock(this.path, this.path.getNextEntityPos(this.mob));
+        int i = this.path.getNextNodeIndex();
+        if (i + 1 < this.path.getNodeCount()
+                && Math.abs(againstRock(this.path.getNode(i + 1).asBlockPos(), this.path.getEntityPosAtNode(this.mob, i + 1)).y - next.y) > 0.1)
+            reach = CLOSE;
         // swimming it floats a little above a water node
         Vec3i n = this.path.getNextNodePos();
         double reachY = this.mob.isInWater()
@@ -112,12 +175,18 @@ public class ClimbNavigation extends net.minecraft.world.entity.ai.navigation.Pa
         doStuckDetection(pos);
     }
 
+    /** How near a node (across) it gets before it heads on, when the move after it goes up or down. */
+    private static final double CLOSE = 0.35;
+
+    private Vec3 againstRock(Path path, Vec3 at) {
+        return againstRock(path.getNextNodePos(), at);
+    }
+
     /**
      * The waypoint's box pressed against the rock its node clings to (walls and ceilings), or standing where it will
      * stand on a floor: on a slab in its cells, or down on a slab under them.
      */
-    private Vec3 againstRock(Path path, Vec3 at) {
-        Vec3i n = path.getNextNodePos();
+    private Vec3 againstRock(Vec3i n, Vec3 at) {
         byte k = kindAt(n.getX(), n.getY(), n.getZ());
         double half = mob.getBbWidth() / 2.0;
         double gapSide = cw / 2.0 - half;                // between the box and the cells' edge on each side

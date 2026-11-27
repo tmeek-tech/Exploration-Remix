@@ -13,8 +13,10 @@ import java.util.Map;
  *
  * <p>Server: a path of ClimbNodeEvaluator's nodes (the 2 x 1 x 2 cells its box fills, walked as floor, wall or
  * ceiling), found and followed as the game's path finder and ClimbNavigation do; ClimbMoveControl's steering (straight
- * at the next waypoint, straight up while the way across is blocked, a way out when wedged); vanilla collision with its
- * step up of a block; MossbackEntity's surface tracking, its press against a wall, gravity and friction.
+ * at the next waypoint, straight up while the way across is blocked, down first when its waypoint is lower, a way out
+ * when wedged); vanilla collision with its step up of a block; MossbackEntity's surface tracking, its press against a
+ * wall, gravity and friction. It has no water, and it leaves out ClimbNavigation's last resort of giving up a move it
+ * has been on for four seconds, so a test here shows the nodes and the steering get it there on their own.
  *
  * <p>Client: the entity tracker's updates (every 3 ticks, and at once when the rock it clings to or its heading
  * changes, or it lands or leaves the floor), each eased to over 3 ticks as the client does; its body turned to its
@@ -97,6 +99,10 @@ class GameDriver extends ClipDriver {
         return this;
     }
 
+    /** The nodes of its path, and the index of the next one. */
+    List<int[]> path() { return path; }
+    int nextIndex() { return next; }
+
     /** Its path is walked (or it has none). */
     boolean arrived() { return next >= path.size(); }
 
@@ -120,6 +126,16 @@ class GameDriver extends ClipDriver {
     static boolean SINK = true;
     /** Whether a level diagonal step is left out where rock stands at both corners it sweeps past, as ClimbNodeEvaluator now has it. */
     static boolean CORNERS = true;
+    /**
+     * Whether the way across is judged from where the move up or down leaves the box, and it lets itself down first when
+     * its waypoint is lower and the way across blocked, as ClimbMoveControl has it since 0.23.2 (false: it climbed
+     * whenever the way across was blocked from where it was and its waypoint was no more than 0.1 lower).
+     */
+    static boolean AFTER_VERTICAL = true;
+    /** Whether a move onto or off a slab needs room for the lifted box over the cells it crosses, as ClimbNodeEvaluator has it since 0.23.2. */
+    static boolean HEADROOM = true;
+    /** Whether it gets within 0.35 of a node (not half its width) before it heads on up or down, as ClimbNavigation has it since 0.23.2. */
+    static boolean CLOSE = true;
     /** Prints each tick, server and client (for looking into a scene). */
     static boolean trace = Boolean.getBoolean("mossback.trace");
 
@@ -149,7 +165,9 @@ class GameDriver extends ClipDriver {
     private void navigate() {
         if (arrived()) return;
         double[] w = waypoint(next);
-        if (Math.abs(x - w[0]) < W / 2 && Math.abs(z - w[2]) < W / 2 && Math.abs(y - w[1]) < 0.75) next++;
+        // closer when the move after it goes up or down
+        double reach = CLOSE && next + 1 < path.size() && Math.abs(waypoint(next + 1)[1] - w[1]) > 0.1 ? 0.35 : W / 2;
+        if (Math.abs(x - w[0]) < reach && Math.abs(z - w[2]) < reach && Math.abs(y - w[1]) < 0.75) next++;
         if (arrived()) return;
         w = waypoint(next);
         // a wall climbed from the floor: to the wall's foot first, then up it
@@ -256,12 +274,21 @@ class GameDriver extends ClipDriver {
             turn(dx, dz);
             return;
         }
-        if (dy > -0.1 && ux * ux + uz * uz > 1.0E-6
-                && collides(x - W / 2 + ux + 1.0E-4, y + 1.0E-4, z - W / 2 + uz + 1.0E-4, x + W / 2 + ux - 1.0E-4, y + H - 1.0E-4, z + W / 2 + uz - 1.0E-4)) {
+        // the way across, judged from where this tick's move up or down leaves the box
+        double ay = AFTER_VERTICAL && uy != 0.0
+                && !collides(x - W / 2 + 1.0E-4, y + uy + 1.0E-4, z - W / 2 + 1.0E-4, x + W / 2 - 1.0E-4, y + uy + H - 1.0E-4, z + W / 2 - 1.0E-4) ? uy : 0.0;
+        boolean blocked = ux * ux + uz * uz > 1.0E-6 && boxHits(ux, ay, uz);
+        // unless it slides on along one way for most of its step
+        if (blocked && AFTER_VERTICAL)
+            blocked = Math.max(boxHits(ux, ay, 0) ? 0.0 : Math.abs(ux), boxHits(0, ay, uz) ? 0.0 : Math.abs(uz)) < 0.5 * Math.sqrt(ux * ux + uz * uz);
+        if (trace) System.out.printf("    steer next %d want (%.3f %.3f %.3f) d (%.4f %.4f %.4f) u (%.4f %.4f %.4f) ay %.4f blocked %s floor %s wedged %d%n",
+                next, wantX, wantY, wantZ, dx, dy, dz, ux, uy, uz, ay, blocked, floor, wedged);
+        if (blocked && dy > -0.1) {
             ux *= 0.1;
             uy = speed;
             uz *= 0.1;
-        } else if (floor) uy = vy;
+        } else if (AFTER_VERTICAL && blocked && !floor) uy = -Math.min(speed, -dy);
+        else if (floor) uy = vy;
         if (wedged >= 6) {
             double s = Math.max(0.12, step), bestDot = -Double.MAX_VALUE;
             double[] best = null;
@@ -275,6 +302,11 @@ class GameDriver extends ClipDriver {
         }
         vx = ux; vy = uy; vz = uz;
         turn(dx, dz);
+    }
+
+    /** Whether its box moved by (mx, my, mz), shrunk a hair, overlaps rock. */
+    private boolean boxHits(double mx, double my, double mz) {
+        return collides(x - W / 2 + mx + 1.0E-4, y + my + 1.0E-4, z - W / 2 + mz + 1.0E-4, x + W / 2 + mx - 1.0E-4, y + my + H - 1.0E-4, z + W / 2 + mz - 1.0E-4);
     }
 
     private static double exact(double d, double share) {
@@ -623,16 +655,29 @@ class GameDriver extends ClipDriver {
                     byte k = g.kind(x, y, z);
                     if (k < FLOOR) continue;
                     int axes = (s[0] != 0 ? 1 : 0) + (s[1] != 0 ? 1 : 0) + (s[2] != 0 ? 1 : 0);
+                    // never straight down through a slab it stands on, or straight up through one it would stand on
+                    boolean offSlab = HEADROOM && s[1] < 0 && bottom(g, n.x, n.y, n.z) > 0.0, ontoSlab = HEADROOM && s[1] > 0 && bottom(g, x, y, z) > 0.0;
+                    if (axes == 1 && (offSlab || ontoSlab)) continue;
                     if (axes == 2) {
                         boolean viaFirst, viaSecond;
-                        if (s[0] == 0) { viaFirst = g.kind(n.x, y, n.z) != BLOCKED; viaSecond = g.kind(n.x, n.y, z) != BLOCKED; }
-                        else if (s[1] == 0) { viaFirst = g.kind(x, n.y, n.z) != BLOCKED; viaSecond = g.kind(n.x, n.y, z) != BLOCKED; }
-                        else { viaFirst = g.kind(x, n.y, n.z) != BLOCKED; viaSecond = g.kind(n.x, y, n.z) != BLOCKED; }
+                        if (s[1] == 0) { viaFirst = g.kind(x, n.y, n.z) != BLOCKED; viaSecond = g.kind(n.x, n.y, z) != BLOCKED; }
+                        else {
+                            byte up = g.kind(n.x, y, n.z);
+                            boolean high = HEADROOM && s[1] > 0 && y + bottom(g, x, y, z) - n.y - bottom(g, n.x, n.y, n.z) > 1.0 + 1.0E-4;
+                            viaFirst = !offSlab && up != BLOCKED && (!high || up == WALL || up == CEILING);
+                            viaSecond = !ontoSlab && g.kind(x, n.y, z) != BLOCKED;
+                        }
                         if (!viaFirst && !viaSecond) continue;
                         // a level one sweeps past a corner cell on each side: not with rock in both
-                        if (CORNERS && s[1] == 0 && solid(g.world, n.x + (s[0] > 0 ? 2 : -1), n.y, n.z + (s[2] > 0 ? 0 : 1))
-                                && solid(g.world, n.x + (s[0] > 0 ? 0 : 1), n.y, n.z + (s[2] > 0 ? 2 : -1))) continue;
+                        if (CORNERS && s[1] == 0) {
+                            // between the lower of the two boxes' bottoms and the higher one's top
+                            double at = n.y + (HEADROOM ? bottom(g, n.x, n.y, n.z) : 0.0), far = y + (HEADROOM ? bottom(g, x, y, z) : 0.0);
+                            double lo = Math.min(at, far), top = Math.max(at, far) + H;
+                            if (rockIn(g.world, n.x + (s[0] > 0 ? 2 : -1), n.z + (s[2] > 0 ? 0 : 1), lo, top)
+                                    && rockIn(g.world, n.x + (s[0] > 0 ? 0 : 1), n.z + (s[2] > 0 ? 2 : -1), lo, top)) continue;
+                        }
                     }
+                    if (HEADROOM && !headroom(g, n, x, y, z)) continue;
                     Node m = node(nodes, x, y, z);
                     if (m.closed) continue;
                     float d = n.distanceTo(m);
@@ -650,6 +695,39 @@ class GameDriver extends ClipDriver {
             List<int[]> out = new ArrayList<>();
             for (Node n = reached != null ? reached : best; n != null; n = n.from) out.add(0, new int[]{n.x, n.y, n.z});
             return out;
+        }
+
+        /** ClimbNodeEvaluator.headroom: room for the box over the lower node's cells where it stands higher in one of two (on or off a slab). */
+        private static boolean headroom(GameDriver g, Node from, int x, int y, int z) {
+            double a = bottom(g, from.x, from.y, from.z), b = bottom(g, x, y, z);
+            if (a == 0.0 && b == 0.0 || Math.abs(from.y + a - (y + b)) < 1.0E-4) return true;
+            double hi = Math.max(from.y + a, y + b), top = hi + H;
+            int row = (from.y + a < y + b ? from.y : y) + 1;
+            for (int r = row; r < top - 1.0E-6; r++)
+                for (int cx = Math.min(from.x, x); cx <= Math.max(from.x, x) + 1; cx++)
+                    for (int cz = Math.min(from.z, z); cz <= Math.max(from.z, z) + 1; cz++) {
+                        double[] sh = shape(g.world, cx, r, cz);
+                        if (sh != null && r + sh[1] < top - 1.0E-6 && r + sh[4] > hi + THIN) return false;
+                    }
+            return true;
+        }
+
+        /** ClimbNodeEvaluator.rockIn: rock in the column (x, z) a box from lo up to top would hit. */
+        private static boolean rockIn(BlockWorld w, int x, int z, double lo, double top) {
+            for (int r = (int) Math.floor(lo); r < top - 1.0E-6; r++) {
+                double[] sh = shape(w, x, r, z);
+                if (sh != null && r + sh[1] < top - 1.0E-6 && r + sh[4] > lo + THIN) return true;
+            }
+            return false;
+        }
+
+        /** ClimbNodeEvaluator.bottom: where the box stands at a floor node above its low corner (up on a slab, down on slabs under it). */
+        private static double bottom(GameDriver g, int x, int y, int z) {
+            if (g.kind(x, y, z) != FLOOR) return 0.0;
+            double lift = lift(g.world, x, y, z);
+            if (lift > 0.0) return (float) lift;
+            double under = support(g.world, x, y, z);
+            return under > 0.0 && under < 1.0 ? (float) (under - 1.0) : 0.0;
         }
 
         private static Node node(Map<Long, Node> nodes, int x, int y, int z) {

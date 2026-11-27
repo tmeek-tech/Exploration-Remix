@@ -2,6 +2,8 @@ package com.explorationremix.creature.climb;
 
 import it.unimi.dsi.fastutil.longs.Long2ByteMap;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2FloatMap;
+import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
@@ -24,13 +26,18 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * above (ceiling). Water can be swum at its top, never under it. Floors cost least, then walls, then ceilings, so it walks normally where it can
  * and climbs where it must. Moves go to the 18 face and edge neighbours; an edge move needs one of its two straight
  * halves open, so it rounds a ledge but never cuts through a corner of rock, and a level one is left out where rock
- * stands at both corners it would sweep past.
+ * stands at both corners it would sweep past. A move onto or off a slab (or snow) needs room for the lifted box over
+ * the cells it crosses, and a move the creature tried and failed to make is left out for a while ({@link #avoid}).
  */
 public class ClimbNodeEvaluator extends NodeEvaluator {
     /** A node's kind; FLOOR to CEILING and WATER can be walked. */
     public static final byte BLOCKED = 0, OPEN = 1, FLOOR = 2, WALL = 3, CEILING = 4, WATER = 5;
 
     private final Long2ByteMap kinds = new Long2ByteOpenHashMap();
+    private final Long2FloatMap lifts = new Long2FloatOpenHashMap();
+    /** Moves it failed to make: from node, to node, and the game time they are left out until. */
+    private final java.util.List<long[]> avoided = new java.util.ArrayList<>();
+    private long now;
     private static final int[][] STEPS;
 
     static {
@@ -48,12 +55,35 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
     public void prepare(PathNavigationRegion region, Mob mob) {
         super.prepare(region, mob);
         kinds.clear();
+        lifts.clear();
+        now = mob.level().getGameTime();
+        avoided.removeIf(a -> a[2] <= now);
     }
 
     @Override
     public void done() {
         super.done();
         kinds.clear();
+        lifts.clear();
+    }
+
+    /**
+     * Leaves the move from node {@code from} to node {@code to} out of this creature's paths until game time
+     * {@code until}: it tried it and could not make it (some shape the nodes misjudge).
+     */
+    public void avoid(BlockPos from, BlockPos to, long until) {
+        long f = from.asLong(), t = to.asLong();
+        for (long[] a : avoided)
+            if (a[0] == f && a[1] == t) { a[2] = Math.max(a[2], until); return; }
+        avoided.add(new long[]{f, t, until});
+    }
+
+    private boolean avoided(Node from, int x, int y, int z) {
+        if (avoided.isEmpty()) return false;
+        long f = BlockPos.asLong(from.x, from.y, from.z), t = BlockPos.asLong(x, y, z);
+        for (long[] a : avoided)
+            if (a[0] == f && a[1] == t && a[2] > now) return true;
+        return false;
     }
 
     /**
@@ -103,18 +133,29 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
             byte k = kind(x, y, z);
             if (!walkable(k)) continue;
             int axes = (s[0] != 0 ? 1 : 0) + (s[1] != 0 ? 1 : 0) + (s[2] != 0 ? 1 : 0);
+            // never straight down through a slab it stands on, or straight up through one it would stand on
+            boolean offSlab = s[1] < 0 && bottom(from.x, from.y, from.z) > 0.0, ontoSlab = s[1] > 0 && bottom(x, y, z) > 0.0;
+            if (axes == 1 && (offSlab || ontoSlab)) continue;
             if (axes == 2) {
                 // round an edge only through an open straight half, never through rock
                 boolean viaFirst, viaSecond;
-                if (s[0] == 0) { viaFirst = kind(from.x, y, from.z) != BLOCKED; viaSecond = kind(from.x, from.y, z) != BLOCKED; }
-                else if (s[1] == 0) { viaFirst = kind(x, from.y, from.z) != BLOCKED; viaSecond = kind(from.x, from.y, z) != BLOCKED; }
-                else { viaFirst = kind(x, from.y, from.z) != BLOCKED; viaSecond = kind(from.x, y, from.z) != BLOCKED; }
+                if (s[1] == 0) { viaFirst = kind(x, from.y, from.z) != BLOCKED; viaSecond = kind(from.x, from.y, z) != BLOCKED; }
+                else {
+                    // up or down first, or across first (off a slab it goes across first, onto one up first); up more
+                    // than a block (off a slab onto a block, or onto a slab on one), it cannot step: straight up first
+                    // only with rock beside it to climb (it floated up through the air and fell)
+                    byte up = kind(from.x, y, from.z);
+                    boolean high = s[1] > 0 && y + bottom(x, y, z) - from.y - bottom(from.x, from.y, from.z) > 1.0 + 1.0E-4;
+                    viaFirst = !offSlab && up != BLOCKED && (!high || up == WALL || up == CEILING);
+                    viaSecond = !ontoSlab && kind(x, from.y, z) != BLOCKED;
+                }
                 if (!viaFirst && !viaSecond) continue;
                 // across the floor, the box cuts past a corner cell on each side that neither node holds: with rock in
                 // both (two slab corners where slab lines meet, or a slab and a block) it wedged between them and
                 // quivered there, so it goes round by a straight half instead
-                if (s[1] == 0 && rockAtBothCorners(from, s[0], s[2])) continue;
+                if (s[1] == 0 && rockAtBothCorners(from, s[0], s[2], y + bottom(x, y, z))) continue;
             }
+            if (!headroom(from, x, y, z) || avoided(from, x, y, z)) continue;
             Node n = getNode(x, y, z);
             if (n.closed) continue;
             n.type = typeOf(k);
@@ -126,23 +167,72 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
 
     /**
      * Whether rock stands in both cells a level diagonal step from {@code from} (by {@code sx}, {@code sz}) sweeps past:
-     * the two corners of the cells the two boxes fill together that neither box fills.
+     * the two corners of the cells the two boxes fill together that neither box fills. Rock counts between the lower of
+     * the box's two bottoms and the higher one's top ({@code to}: where its bottom stands at the far node): up on slabs
+     * a block in the row over a corner is in its way and a slab beside it is not.
      */
-    private boolean rockAtBothCorners(Node from, int sx, int sz) {
+    private boolean rockAtBothCorners(Node from, int sx, int sz, double to) {
+        double at = from.y + bottom(from.x, from.y, from.z);
+        double lo = Math.min(at, to), top = Math.max(at, to) + mob.getBbHeight();
         int ax = sx > 0 ? from.x + entityWidth : from.x - 1, az = sz > 0 ? from.z : from.z + entityDepth - 1;
         int bx = sx > 0 ? from.x : from.x + entityWidth - 1, bz = sz > 0 ? from.z + entityDepth : from.z - 1;
-        return rockIn(level, ax, from.y, az, entityHeight) && rockIn(level, bx, from.y, bz, entityHeight);
+        return rockIn(ax, az, lo, top) && rockIn(bx, bz, lo, top);
     }
 
-    /** Rock in the {@code h} cells from (x, y, z) up that a box there would hit (a carpet at its foot it walks over). */
-    private static boolean rockIn(BlockGetter level, int x, int y, int z, int h) {
+    /** Rock in the column (x, z) that a box from {@code lo} up to {@code top} would hit (a carpet or a slab it stands level with it walks over). */
+    private boolean rockIn(int x, int z, double lo, double top) {
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-        for (int dy = 0; dy < h; dy++) {
-            p.set(x, y + dy, z);
+        for (int r = Mth.floor(lo); r < top - 1.0E-6; r++) {
+            p.set(x, r, z);
             VoxelShape shape = level.getBlockState(p).getCollisionShape(level, p);
-            if (!shape.isEmpty() && (dy > 0 || shape.max(net.minecraft.core.Direction.Axis.Y) > THIN)) return true;
+            if (!shape.isEmpty() && r + shape.min(net.minecraft.core.Direction.Axis.Y) < top - 1.0E-6
+                    && r + shape.max(net.minecraft.core.Direction.Axis.Y) > lo + THIN) return true;
         }
         return false;
+    }
+
+    /**
+     * Whether the box has room to get from {@code from} to the node at (x, y, z) when a slab or snow layer lifts it in
+     * one of them, or slabs under the cells let it down (and it stands higher in one). It crosses at the higher of the two
+     * heights over the cells of both (onto a slab it steps up while it is still over the cells it leaves; off one it is
+     * still on it when it is most of the way over the next cells), so at that height its back reaches into the row over
+     * the lower node's cells, which that node's own rule never looked at: that row must be clear there. (Under a block of
+     * rock or a leaf there, the path led it to push at the step for ever.)
+     */
+    private boolean headroom(Node from, int x, int y, int z) {
+        double a = bottom(from.x, from.y, from.z), b = bottom(x, y, z);
+        if (a == 0.0 && b == 0.0 || Math.abs(from.y + a - (y + b)) < 1.0E-4) return true;
+        double hi = Math.max(from.y + a, y + b), top = hi + mob.getBbHeight();
+        int row = (from.y + a < y + b ? from.y : y) + entityHeight;
+        int x0 = Math.min(from.x, x), x1 = Math.max(from.x, x) + entityWidth - 1, z0 = Math.min(from.z, z), z1 = Math.max(from.z, z) + entityDepth - 1;
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int r = row; r < top - 1.0E-6; r++)
+            for (int cx = x0; cx <= x1; cx++)
+                for (int cz = z0; cz <= z1; cz++) {
+                    p.set(cx, r, cz);
+                    VoxelShape shape = level.getBlockState(p).getCollisionShape(level, p);
+                    // rock between the lifted box's bottom (a carpet, a slab it stands on, lies below it) and its top
+                    if (!shape.isEmpty() && r + shape.min(net.minecraft.core.Direction.Axis.Y) < top - 1.0E-6
+                            && r + shape.max(net.minecraft.core.Direction.Axis.Y) > hi + THIN) return false;
+                }
+        return true;
+    }
+
+    /**
+     * Where the box stands at a floor node, above the node's low corner: up on a slab or snow layer in its cells, or
+     * down on slabs under them (0 at every other node, and on a floor of whole blocks). Cached for this search.
+     */
+    private double bottom(int x, int y, int z) {
+        if (kind(x, y, z) != FLOOR) return 0.0;
+        long key = BlockPos.asLong(x, y, z);
+        float b = lifts.getOrDefault(key, Float.NaN);
+        if (Float.isNaN(b)) {
+            double lift = lift(level, x, y, z, entityWidth, entityDepth);
+            double under = lift > 0.0 ? 1.0 : support(level, x, y, z, entityWidth, entityDepth);
+            b = (float) (lift > 0.0 ? lift : under > 0.0 && under < 1.0 ? under - 1.0 : 0.0);
+            lifts.put(key, b);
+        }
+        return b;
     }
 
     private static boolean walkable(byte k) {
@@ -201,7 +291,8 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
                     if (dy == 0 && top <= 0.5) { raised = true; continue; }
                     return BLOCKED;
                 }
-        if (raised) {
+        // a slab under water (a pond's edge, a waterlogged slab) is no floor to walk: there it swims, at the top
+        if (raised && !water) {
             // standing on the low block lifts the box half a block: the cells above must be open
             for (int dx = 0; dx < w; dx++)
                 for (int dz = 0; dz < d; dz++) {
