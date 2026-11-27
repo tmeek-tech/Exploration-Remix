@@ -136,6 +136,20 @@ class GameDriver extends ClipDriver {
     static boolean HEADROOM = true;
     /** Whether it gets within 0.35 of a node (not half its width) before it heads on up or down, as ClimbNavigation has it since 0.23.2. */
     static boolean CLOSE = true;
+    /**
+     * Whether, the way straight at its waypoint blocked by the rock it clings to but the way along the rock clear, it goes
+     * along the rock at its full pace until it is in line with the waypoint, as ClimbMoveControl has it since 0.23.2.
+     */
+    static boolean ROUND_CORNERS = true;
+    /** Whether, the way across blocked, it first tries a little higher or lower within one step, as ClimbMoveControl has it since 0.23.2. */
+    static boolean SLIP = true;
+    /** Whether a side less than half a block high (a big dripleaf's leaf) is no wall to cling to, as ClimbNodeEvaluator has it since 0.23.2. */
+    static boolean THIN_SIDES = true;
+    /**
+     * Whether a level diagonal step is left out where it would step up onto the corner it cuts past and, lifted, meet
+     * rock over the cells it sweeps, as ClimbNodeEvaluator has it since 0.23.2.
+     */
+    static boolean CORNER_STEP = true;
     /** Prints each tick, server and client (for looking into a scene). */
     static boolean trace = Boolean.getBoolean("mossback.trace");
 
@@ -279,8 +293,32 @@ class GameDriver extends ClipDriver {
                 && !collides(x - W / 2 + 1.0E-4, y + uy + 1.0E-4, z - W / 2 + 1.0E-4, x + W / 2 - 1.0E-4, y + uy + H - 1.0E-4, z + W / 2 - 1.0E-4) ? uy : 0.0;
         boolean blocked = ux * ux + uz * uz > 1.0E-6 && boxHits(ux, ay, uz);
         // unless it slides on along one way for most of its step
-        if (blocked && AFTER_VERTICAL)
-            blocked = Math.max(boxHits(ux, ay, 0) ? 0.0 : Math.abs(ux), boxHits(0, ay, uz) ? 0.0 : Math.abs(uz)) < 0.5 * Math.sqrt(ux * ux + uz * uz);
+        if (blocked && AFTER_VERTICAL) {
+            boolean alongX = !boxHits(ux, ay, 0), alongZ = !boxHits(0, ay, uz);
+            double across = Math.sqrt(ux * ux + uz * uz), slide = Math.max(alongX ? Math.abs(ux) : 0.0, alongZ ? Math.abs(uz) : 0.0);
+            blocked = slide < 0.5 * across;
+            // or slip through a little higher or lower, within one step (the least move that frees it, towards the
+            // waypoint's height, or either way while about level with it)
+            if (blocked && SLIP && !floor)
+                for (int k = 1; k <= 8 && blocked; k++)
+                    for (int side = 0; side < (Math.abs(dy) < 0.1 ? 2 : 1) && blocked; side++) {
+                        double off = (side == 0) == (dy < 0.0) ? -speed * k / 8.0 : speed * k / 8.0;
+                        if (!boxHits(0, off, 0) && !boxHits(ux, off, uz)) {
+                            uy = off;
+                            ay = off;
+                            blocked = false;
+                        }
+                    }
+            // or round the corner, along the rock at its full pace until it is in line with its waypoint
+            if (blocked && ROUND_CORNERS && slide > 1.0E-4) {
+                boolean alx = alongX && (!alongZ || Math.abs(ux) >= Math.abs(uz));
+                double d = alx ? dx : dz, s = Math.copySign(Math.min(Math.abs(d), across), d);
+                if (!(alx ? boxHits(s, ay, 0) : boxHits(0, ay, s))) {
+                    if (alx) { ux = s; uz = 0.0; } else { ux = 0.0; uz = s; }
+                    blocked = false;
+                }
+            }
+        }
         if (trace) System.out.printf("    steer next %d want (%.3f %.3f %.3f) d (%.4f %.4f %.4f) u (%.4f %.4f %.4f) ay %.4f blocked %s floor %s wedged %d%n",
                 next, wantX, wantY, wantZ, dx, dy, dz, ux, uy, uz, ay, blocked, floor, wedged);
         if (blocked && dy > -0.1) {
@@ -676,6 +714,7 @@ class GameDriver extends ClipDriver {
                             if (rockIn(g.world, n.x + (s[0] > 0 ? 2 : -1), n.z + (s[2] > 0 ? 0 : 1), lo, top)
                                     && rockIn(g.world, n.x + (s[0] > 0 ? 0 : 1), n.z + (s[2] > 0 ? 2 : -1), lo, top)) continue;
                         }
+                        if (CORNER_STEP && s[1] == 0 && liftedAtCorner(g, n, s[0], s[2])) continue;
                     }
                     if (HEADROOM && !headroom(g, n, x, y, z)) continue;
                     Node m = node(nodes, x, y, z);
@@ -710,6 +749,46 @@ class GameDriver extends ClipDriver {
                         if (sh != null && r + sh[1] < top - 1.0E-6 && r + sh[4] > hi + THIN) return false;
                     }
             return true;
+        }
+
+        /**
+         * ClimbNodeEvaluator.liftedAtCorner: a level diagonal step across a floor up onto a corner it cuts past, with room
+         * for the lifted box over the cells it stands in, where the lifted box meets rock over the cells it sweeps.
+         */
+        private static boolean liftedAtCorner(GameDriver g, Node from, int sx, int sz) {
+            if (g.kind(from.x, from.y, from.z) != FLOOR) return false;
+            double at = from.y + (HEADROOM ? bottom(g, from.x, from.y, from.z) : 0.0);
+            double step = Math.max(stepAt(g.world, from.x + (sx > 0 ? 2 : -1), from.z + (sz > 0 ? 0 : 1), at),
+                    stepAt(g.world, from.x + (sx > 0 ? 0 : 1), from.z + (sz > 0 ? 2 : -1), at));
+            if (step <= at || rockOver(g.world, from.x, from.z, from.x + 1, from.z + 1, step)) return false;
+            return rockOver(g.world, Math.min(from.x, from.x + sx), Math.min(from.z, from.z + sz),
+                    Math.max(from.x, from.x + sx) + 1, Math.max(from.z, from.z + sz) + 1, step);
+        }
+
+        /** ClimbNodeEvaluator.stepAt: where a box standing at {@code at} stands once it steps up onto the rock in column (x, z) cutting past it. */
+        private static double stepAt(BlockWorld w, int x, int z, double at) {
+            double limit = at + 1.0, step = at;
+            for (int r = (int) Math.floor(at); r < at + H - 1.0E-6; r++) {
+                double[] sh = shape(w, x, r, z);
+                if (sh == null) continue;
+                double lo = r + sh[1], hi = r + sh[4];
+                if (lo >= at + H - 1.0E-6 || hi <= at + THIN) continue;
+                if (hi > limit + 1.0E-6) return at;
+                step = Math.max(step, hi);
+            }
+            return step > at && !rockOver(w, x, z, x, z, step) ? step : at;
+        }
+
+        /** ClimbNodeEvaluator.rockOver: rock in the cells from (x0, z0) to (x1, z1) a box standing at {@code at} would hit. */
+        private static boolean rockOver(BlockWorld w, int x0, int z0, int x1, int z1, double at) {
+            double top = at + H;
+            for (int r = (int) Math.floor(at); r < top - 1.0E-6; r++)
+                for (int cx = x0; cx <= x1; cx++)
+                    for (int cz = z0; cz <= z1; cz++) {
+                        double[] sh = shape(w, cx, r, cz);
+                        if (sh != null && r + sh[1] < top - 1.0E-6 && r + sh[4] > at + THIN) return true;
+                    }
+            return false;
         }
 
         /** ClimbNodeEvaluator.rockIn: rock in the column (x, z) a box from lo up to top would hit. */
@@ -881,6 +960,8 @@ class GameDriver extends ClipDriver {
         private static boolean face(BlockWorld w, int x, int y, int z, int axis, boolean high) {
             if (!solid(w, x, y, z)) return false;
             double[] s = shape(w, x, y, z);
+            // a side to cling to is at least half a block high (a big dripleaf's leaf is none)
+            if (THIN_SIDES && axis != 1 && s[4] - s[1] < 0.5) return false;
             return high ? s[3 + axis] >= 1.0 - REACH : s[axis] <= REACH;
         }
     }

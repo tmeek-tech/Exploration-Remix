@@ -91,8 +91,9 @@ class ClimbAiTest {
 
     /**
      * Where Mossbacks were found stuck in a test world's caves (0.23.1), each scene drawn from one: its box a hair too
-     * high to slip under a lip ahead, held off the floor by the rock its side touches, and slab steps with no room for its
-     * back over them. A start, a heading and a goal for each.
+     * high to slip under a lip ahead, held off the floor by the rock its side touches, slab steps with no room for its
+     * back over them, and (a second build of 0.23.2) a slab's corner it stepped up onto, cutting past it, under a lip.
+     * A start, a heading and a goal for each.
      */
     record Stuck(String name, Supplier<BlockWorld> world, double sx, double sy, double sz, double hx, double hz, double gx, double gy, double gz) {}
 
@@ -111,7 +112,11 @@ class ClimbAiTest {
                     .fill(-8, 1, -8, 1, 1, -1), -3.0, 0.0, -4.0, 1, 0, 9, 1, -4),
             // off a slab line under a lip it fits under unlifted: still on the slab its back hits the lip
             new Stuck("off a slab under a lip", () -> slabs(new BlockWorld().fill(-8, -1, -8, 14, -1, 8), 1).fill(3, 1, -8, 3, 1, -1),
-                    -3.0, 0.0, -4.0, 1, 0, 8, 0, -4));
+                    -3.0, 0.0, -4.0, 1, 0, 8, 0, -4),
+            // cutting across past a slab's corner it stepped up onto it, and lifted, its back met a lip over the node
+            // it was heading for: the way on blocked, the way down under its feet (a hunter stood there over a minute)
+            new Stuck("past a slab's corner under a lip", () -> new BlockWorld().fill(-8, -1, -8, 14, -1, 12).slab(4, 0, 4).block(5, 0, 4)
+                    .fill(4, 0, 5, 8, 2, 5).fill(2, 1, 3, 2, 1, 4), 4.0, 0.0, 3.0, -1, 1, 3, 0, 9));
 
     static GameDriver run(Stuck s, double modifier, double phase, int limit) {
         return run(s.world.get(), s.sx + phase * 0.11, s.sy, s.sz + phase * 0.07, s.hx, s.hz, s.gx, s.gy, s.gz, modifier, limit);
@@ -136,12 +141,14 @@ class ClimbAiTest {
 
     /**
      * Stalls logged in that test world ({@code climb/stalls.txt}), each replayed on the blocks round it, from where its
-     * box was to the node after the one it was heading for; the rules before 0.23.2 stayed stuck on every one.
+     * box was to the node after the one it was heading for: 13 where the rules before 0.23.2 stayed stuck, and 9 where a
+     * first build of 0.23.2 did (bobbing at a gap a few hundredths high, clinging to big dripleaf leaves, stepping up
+     * onto a corner it cut past under a lip).
      */
     @Test
     void itGetsPastStallsRecordedInATestWorld() {
         List<RecordedStall> stalls = RecordedStall.load("/climb/stalls.txt");
-        assertTrue(stalls.size() >= 13, "only " + stalls.size() + " recorded stalls");
+        assertTrue(stalls.size() >= 22, "only " + stalls.size() + " recorded stalls");
         List<String> bad = new ArrayList<>();
         for (RecordedStall s : stalls)
             for (double modifier : new double[]{GameDriver.ROAM, GameDriver.CHASE}) {

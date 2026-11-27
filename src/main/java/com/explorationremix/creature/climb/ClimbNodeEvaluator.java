@@ -26,8 +26,9 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * above (ceiling). Water can be swum at its top, never under it. Floors cost least, then walls, then ceilings, so it walks normally where it can
  * and climbs where it must. Moves go to the 18 face and edge neighbours; an edge move needs one of its two straight
  * halves open, so it rounds a ledge but never cuts through a corner of rock, and a level one is left out where rock
- * stands at both corners it would sweep past. A move onto or off a slab (or snow) needs room for the lifted box over
- * the cells it crosses, and a move the creature tried and failed to make is left out for a while ({@link #avoid}).
+ * stands at both corners it would sweep past, or where it would step up onto one and meet rock over its back. A move
+ * onto or off a slab (or snow) needs room for the lifted box over the cells it crosses, and a move the creature tried
+ * and failed to make is left out for a while ({@link #avoid}).
  */
 public class ClimbNodeEvaluator extends NodeEvaluator {
     /** A node's kind; FLOOR to CEILING and WATER can be walked. */
@@ -79,8 +80,12 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
     }
 
     private boolean avoided(Node from, int x, int y, int z) {
+        return avoided(from.x, from.y, from.z, x, y, z);
+    }
+
+    private boolean avoided(int fx, int fy, int fz, int x, int y, int z) {
         if (avoided.isEmpty()) return false;
-        long f = BlockPos.asLong(from.x, from.y, from.z), t = BlockPos.asLong(x, y, z);
+        long f = BlockPos.asLong(fx, fy, fz), t = BlockPos.asLong(x, y, z);
         for (long[] a : avoided)
             if (a[0] == f && a[1] == t && a[2] > now) return true;
         return false;
@@ -89,7 +94,8 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
     /**
      * The node whose box is centred nearest the mob, or else the walkable one round it whose box is nearest where the
      * mob really is (a box straddling two nodes starts from the one it stands or clings in, not one it would have to
-     * squeeze down or round an edge to reach).
+     * squeeze down or round an edge to reach), leaving out one it tried and failed to get to from where it is (it
+     * stood on a slab under a lip, its own node no node, and was sent at the one it could not reach for over a minute).
      */
     @Override
     public Node getStart() {
@@ -104,7 +110,7 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
                 for (int dz = -1; dz <= 1; dz++) {
                     int nx = x + dx, ny = y + dy, nz = z + dz;
                     byte k = kind(nx, ny, nz);
-                    if ((dx | dy | dz) == 0 || !walkable(k)) continue;
+                    if ((dx | dy | dz) == 0 || !walkable(k) || avoided(x, y, z, nx, ny, nz)) continue;
                     // a floor wins a tie: it is where it walks most easily
                     double d = Mth.square(nx + entityWidth * 0.5 - mob.getX()) + Mth.square(ny - mob.getY())
                             + Mth.square(nz + entityDepth * 0.5 - mob.getZ()) + (k == FLOOR ? 0.0 : 0.05);
@@ -154,6 +160,10 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
                 // both (two slab corners where slab lines meet, or a slab and a block) it wedged between them and
                 // quivered there, so it goes round by a straight half instead
                 if (s[1] == 0 && rockAtBothCorners(from, s[0], s[2], y + bottom(x, y, z))) continue;
+                // or it would step up onto the corner it cuts past, and lifted meet rock over the cells it sweeps (a lip
+                // over the far node, which its own rule never looked at): it stood on a slab's corner under a lip of
+                // silt, the way on blocked and the way down under its feet, for over a minute
+                if (s[1] == 0 && liftedAtCorner(from, s[0], s[2])) continue;
             }
             if (!headroom(from, x, y, z) || avoided(from, x, y, z)) continue;
             Node n = getNode(x, y, z);
@@ -177,6 +187,59 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
         int ax = sx > 0 ? from.x + entityWidth : from.x - 1, az = sz > 0 ? from.z : from.z + entityDepth - 1;
         int bx = sx > 0 ? from.x : from.x + entityWidth - 1, bz = sz > 0 ? from.z + entityDepth : from.z - 1;
         return rockIn(ax, az, lo, top) && rockIn(bx, bz, lo, top);
+    }
+
+    /**
+     * Whether a level diagonal step across a floor from {@code from} (by {@code sx}, {@code sz}) cuts past a corner cell
+     * it steps up onto (see {@link #stepAt}) where the box, lifted onto it, meets rock over the cells the two boxes fill
+     * together. It steps up only with room for the lifted box over the cells it stands in, as the game lifts it from
+     * there (under rock there it slides past the corner instead), and only standing on a floor (clinging to a wall or
+     * ceiling it slides past).
+     */
+    private boolean liftedAtCorner(Node from, int sx, int sz) {
+        if (kind(from.x, from.y, from.z) != FLOOR) return false;
+        double at = from.y + bottom(from.x, from.y, from.z);
+        int ax = sx > 0 ? from.x + entityWidth : from.x - 1, az = sz > 0 ? from.z : from.z + entityDepth - 1;
+        int bx = sx > 0 ? from.x : from.x + entityWidth - 1, bz = sz > 0 ? from.z + entityDepth : from.z - 1;
+        double step = Math.max(stepAt(ax, az, at), stepAt(bx, bz, at));
+        if (step <= at || rockOver(from.x, from.z, from.x + entityWidth - 1, from.z + entityDepth - 1, step)) return false;
+        return rockOver(Math.min(from.x, from.x + sx), Math.min(from.z, from.z + sz),
+                Math.max(from.x, from.x + sx) + entityWidth - 1, Math.max(from.z, from.z + sz) + entityDepth - 1, step);
+    }
+
+    /**
+     * Where a box standing at {@code at} stands once it steps up onto the rock in the column (x, z) as it cuts past it:
+     * on rock in its way no higher than it steps, with room over it for the box. {@code at} where it would not step
+     * (nothing in its way, or rock it slides along: too high to step onto, or with rock over it).
+     */
+    private double stepAt(int x, int z, double at) {
+        double height = mob.getBbHeight(), limit = at + mob.maxUpStep(), step = at;
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int r = Mth.floor(at); r < at + height - 1.0E-6; r++) {
+            p.set(x, r, z);
+            VoxelShape shape = level.getBlockState(p).getCollisionShape(level, p);
+            if (shape.isEmpty()) continue;
+            double lo = r + shape.min(net.minecraft.core.Direction.Axis.Y), hi = r + shape.max(net.minecraft.core.Direction.Axis.Y);
+            if (lo >= at + height - 1.0E-6 || hi <= at + THIN) continue;
+            if (hi > limit + 1.0E-6) return at;
+            step = Math.max(step, hi);
+        }
+        return step > at && !rockOver(x, z, x, z, step) ? step : at;
+    }
+
+    /** Rock in the cells from (x0, z0) to (x1, z1) that a box standing at {@code at} would hit (a slab it stands level with is none). */
+    private boolean rockOver(int x0, int z0, int x1, int z1, double at) {
+        double top = at + mob.getBbHeight();
+        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+        for (int r = Mth.floor(at); r < top - 1.0E-6; r++)
+            for (int cx = x0; cx <= x1; cx++)
+                for (int cz = z0; cz <= z1; cz++) {
+                    p.set(cx, r, cz);
+                    VoxelShape shape = level.getBlockState(p).getCollisionShape(level, p);
+                    if (!shape.isEmpty() && r + shape.min(net.minecraft.core.Direction.Axis.Y) < top - 1.0E-6
+                            && r + shape.max(net.minecraft.core.Direction.Axis.Y) > at + THIN) return true;
+                }
+        return false;
     }
 
     /** Rock in the column (x, z) that a box from {@code lo} up to {@code top} would hit (a carpet or a slab it stands level with it walks over). */
@@ -379,6 +442,10 @@ public class ClimbNodeEvaluator extends NodeEvaluator {
     private static boolean face(BlockGetter level, BlockPos p, net.minecraft.core.Direction.Axis axis, boolean high) {
         if (!solid(level, p)) return false;
         VoxelShape shape = level.getBlockState(p).getCollisionShape(level, p);
+        // a side to cling to is at least half a block high: the edge of a big dripleaf's leaf, a quarter of a block
+        // thick in the air, is none (clinging to one, it ended up pressed up under the leaf, or wedged between two)
+        if (axis != net.minecraft.core.Direction.Axis.Y
+                && shape.max(net.minecraft.core.Direction.Axis.Y) - shape.min(net.minecraft.core.Direction.Axis.Y) < 0.5) return false;
         return high ? shape.max(axis) >= 1.0 - REACH : shape.min(axis) <= REACH;
     }
 
