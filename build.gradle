@@ -136,4 +136,6 @@ test {
     ['mantis.clips', 'mantis.only', 'mantis.fps', 'mantis.colour', 'mantis.zoom', 'mantis.cells', 'mantis.debug'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
     // and the vent urchin's (LurkerClips and LurkerVentsTest, 0.21.0, 0.21.3)
     ['lurker.clips', 'lurker.only', 'lurker.fps', 'lurker.colour', 'lurker.zoom', 'lurker.debug', 'lurker.trace', 'lurker.az', 'lurker.could', 'lurker.x0', 'lurker.z0', 'lurker.size', 'lurker.flue', 'lurker.wide', 'lurker.narrow', 'lurker.seats'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
+    // and the ember urchin's (EmberClips' scenes and its walks through the Wasteland, 0.23.7)
+    ['ember.clips', 'ember.only', 'ember.fps', 'ember.zoom', 'ember.debug', 'ember.seeds', 'ember.ticks', 'ember.x', 'ember.z', 'ember.sheet', 'ember.draw'].each { k -> if (System.getProperty(k) != null) systemProperty k, System.getProperty(k) }
 }

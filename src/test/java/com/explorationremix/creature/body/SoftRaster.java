@@ -15,6 +15,8 @@ final class SoftRaster {
     private final Vector3d eye = new Vector3d(), fwd = new Vector3d(), right = new Vector3d(), upv = new Vector3d();
     private double focal;
     private final Vector3d light = new Vector3d(-0.45, 0.8, -0.35).normalize();
+    /** How lit the scene is (1 daylight; lower for a dim cave): glow is never dimmed. */
+    double dim = 1.0;
 
     SoftRaster(int w, int h, int supersample) {
         this.w = w * supersample; this.h = h * supersample; this.ss = supersample;
@@ -64,7 +66,7 @@ final class SoftRaster {
         // two-sided: light the side facing the camera
         double vx = eye.x - p0[0], vy = eye.y - p0[1], vz = eye.z - p0[2];
         if (nx * vx + ny * vy + nz * vz < 0) { nx = -nx; ny = -ny; nz = -nz; }
-        double shade = 0.5 + 0.5 * Math.max(0, nx * light.x + ny * light.y + nz * light.z);
+        double shade = (0.5 + 0.5 * Math.max(0, nx * light.x + ny * light.y + nz * light.z)) * dim;
         shade = Math.max(shade, glow);
         int minX = (int) Math.max(0, Math.floor(Math.min(sx[0], Math.min(sx[1], sx[2]))));
         int maxX = (int) Math.min(w - 1, Math.ceil(Math.max(sx[0], Math.max(sx[1], sx[2]))));

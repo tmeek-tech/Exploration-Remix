@@ -100,6 +100,8 @@ public final class ClientSetup {
         event.registerEntityRenderer(EREntities.STILT_MANTIS.get(), StiltMantisRenderer::new);
         // 0.21.0: the chimney lurker of the Deep Gardens' vents
         event.registerEntityRenderer(EREntities.CHIMNEY_LURKER.get(), ChimneyLurkerRenderer::new);
+        // 0.23.7: the ember urchin of the Wasteland
+        event.registerEntityRenderer(EREntities.EMBER_URCHIN.get(), com.explorationremix.client.render.EmberUrchinRenderer::new);
         // 0.21.9: the Hollow Choir of the Deep Dark
         event.registerEntityRenderer(EREntities.HOLLOW_CHOIR.get(), HollowChoirRenderer::new);
         // 0.9.0: the eruptions' lava bombs, a spinning glowing block of magma in a halo
