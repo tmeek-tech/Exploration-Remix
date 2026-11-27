@@ -39,7 +39,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /**
- * /remix lurker: looking after the Deep Gardens' vent urchins (the chimney lurkers' id kept) while testing (operators only).
+ * /remix lurker: looking after the Deep Gardens' chimney spiders (the vent urchins of 0.21.3 to 0.23.3; the chimney lurkers' id kept) while testing (operators only).
  * <ul>
  *     <li>{@code /remix lurker spawn [colour]}: one where you look; it takes the nearest live vent with no lurker of its
  *     own and goes home to it (or, with none near, lurks where it stands)</li>
@@ -49,7 +49,7 @@ import java.util.function.Consumer;
  *     is there now, a death on record; and the counts of those set down with the world and moved in since</li>
  *     <li>{@code /remix lurker tp [n] [distance]}: to the nth nearest vent that holds a lurker (from 1), standing that
  *     far off its axis (12 blocks, or the distance given) on its floor, facing its rim</li>
- *     <li>{@code /remix lurker inside}: down inside the nearest urchin's vent, on its chamber's floor a little off its
+ *     <li>{@code /remix lurker inside}: down inside the nearest spider's vent, on its chamber's floor a little off its
  *     flue's foot, looking up its flue at it (as someone come in through a crack)</li>
  *     <li>{@code /remix lurker place}: a lurker into the nearest vent that holds one and has none now (as the refill
  *     would, seen or not)</li>
@@ -122,7 +122,7 @@ public final class LurkerCommands {
             e.setColour(n);
         }
         level.addFreshEntity(e);
-        src.sendSuccess(() -> Component.literal("A vent urchin at " + BlockPos.containing(at).toShortString() + ": " + e.describe()), true);
+        src.sendSuccess(() -> Component.literal("A chimney spider at " + BlockPos.containing(at).toShortString() + ": " + e.describe()), true);
         return 1;
     }
 
@@ -132,7 +132,7 @@ public final class LurkerCommands {
         List<ChimneyLurkerEntity> all = new ArrayList<>(src.getLevel().getEntitiesOfClass(ChimneyLurkerEntity.class, new AABB(p, p).inflate(radius),
                 e -> e.isAlive() && e.position().distanceTo(p) <= radius));
         all.sort(Comparator.comparingDouble(e -> e.position().distanceToSqr(p)));
-        StringBuilder b = new StringBuilder(all.size() + " vent urchin(s) within " + radius + " blocks");
+        StringBuilder b = new StringBuilder(all.size() + " chimney spider(s) within " + radius + " blocks");
         for (ChimneyLurkerEntity e : all.subList(0, Math.min(all.size(), 16)))
             b.append(String.format(Locale.ROOT, "\n %.1f %.1f %.1f (%d off): %s", e.getX(), e.getY(), e.getZ(),
                     (int) e.position().distanceTo(p), e.describe()));
@@ -189,22 +189,22 @@ public final class LurkerCommands {
                 if (shown++ >= 14) continue;
                 Long died = LurkerRefill.diedAt(level, v.key());
                 String state = !h ? (v.flue() < LurkerVents.MIN_FLUE ? "its mouth too narrow for one" : v.flue() > LurkerVents.MAX_FLUE ? "its mouth too wide for one" : "holds none")
-                        : e != null ? "its urchin: " + e.describe()
-                        : died != null ? String.format(Locale.ROOT, "empty, its urchin killed %.1f days ago", (level.getGameTime() - died) / 24000.0)
+                        : e != null ? "its spider: " + e.describe()
+                        : died != null ? String.format(Locale.ROOT, "empty, its spider killed %.1f days ago", (level.getGameTime() - died) / 24000.0)
                         : "empty (none set down yet, or out of reach)";
                 lines.append(String.format(Locale.ROOT, "\n %.0f %.0f, rim %.0f (%d off): %s, flue %.1f from its axis, %d crack(s); %s", v.x(), v.z(), f.top, (int) f.dist,
                         Neon.ofCode(v.colour()).getSerializedName(), v.flue(), v.cracks().length, state));
             }
-            String head = String.format(Locale.ROOT, "%d live vent(s) within %d blocks, %d hold an urchin, %d of them there now (loaded)",
+            String head = String.format(Locale.ROOT, "%d live vent(s) within %d blocks, %d hold a spider, %d of them there now (loaded)",
                     found.size(), radius, held, there);
-            String tail = String.format(Locale.ROOT, "\nSet down with the world since the game started: %d held vents met, %d urchins. Refill: %d looks at empty vents, %d moved in.",
+            String tail = String.format(Locale.ROOT, "\nSet down with the world since the game started: %d held vents met, %d spiders. Refill: %d looks at empty vents, %d moved in.",
                     ChimneyLurkersFeature.VENTS.get(), ChimneyLurkersFeature.PLACED.get(), LurkerRefill.LOOKS, LurkerRefill.MOVED_IN);
             src.sendSuccess(() -> Component.literal(head + lines + tail), false);
         });
         return 1;
     }
 
-    /** The nearest live vent's seat (within 64) and each side of it, and why each will or will not do for an urchin's way down, from the loaded blocks. */
+    /** The nearest live vent's seat (within 64) and each side of it, and why each will or will not do for a spider's way down, from the loaded blocks. */
     private static int sides(CommandContext<CommandSourceStack> c) {
         CommandSourceStack src = c.getSource();
         Terrain t = terrain(src);
@@ -224,12 +224,12 @@ public final class LurkerCommands {
         return 1;
     }
 
-    /** The nearest urchin's way down and back from over its rim on its side, run as trials over the loaded blocks. */
+    /** The nearest spider's way down and back from over its rim on its side, run as trials over the loaded blocks. */
     private static int trial(CommandContext<CommandSourceStack> c) {
         CommandSourceStack src = c.getSource();
         ChimneyLurkerEntity e = nearest(src, 64, false);
         if (e == null || e.home() == null) {
-            src.sendFailure(Component.literal("No vent urchin with a vent within 64 blocks"));
+            src.sendFailure(Component.literal("No chimney spider with a vent within 64 blocks"));
             return 0;
         }
         LurkerVents.Home h = e.home();
@@ -244,7 +244,7 @@ public final class LurkerCommands {
         CommandSourceStack src = c.getSource();
         ChimneyLurkerEntity e = nearest(src, 64, false);
         if (e == null || e.home() == null) {
-            src.sendFailure(Component.literal("No vent urchin with a vent within 64 blocks"));
+            src.sendFailure(Component.literal("No chimney spider with a vent within 64 blocks"));
             return 0;
         }
         StringBuilder b = new StringBuilder("How it sees the players within 64 blocks:");
@@ -269,7 +269,7 @@ public final class LurkerCommands {
         whenFound(src, t, p, 384, found -> {
             found.removeIf(f -> !LurkerVents.held(f.vent));
             if (found.size() < n) {
-                src.sendFailure(Component.literal("Only " + found.size() + " vent(s) holding an urchin within 384 blocks"));
+                src.sendFailure(Component.literal("Only " + found.size() + " vent(s) holding a spider within 384 blocks"));
                 return;
             }
             if (player.hasDisconnected() || player.level() != level) return;
@@ -311,7 +311,7 @@ public final class LurkerCommands {
     }
 
     /**
-     * Down inside the nearest urchin's vent (0.21.4): on its chamber's floor two to four blocks off its flue's foot, in
+     * Down inside the nearest spider's vent (0.21.4): on its chamber's floor two to four blocks off its flue's foot, in
      * sight of its underside, looking up its flue at it.
      */
     private static int inside(CommandContext<CommandSourceStack> c) {
@@ -320,7 +320,7 @@ public final class LurkerCommands {
         ChimneyLurkerEntity e = nearest(src, 64, false);
         LurkerVents.Home h = e == null ? null : e.home();
         if (h == null) {
-            src.sendFailure(Component.literal("No vent urchin with a vent within 64 blocks"));
+            src.sendFailure(Component.literal("No chimney spider with a vent within 64 blocks"));
             return 0;
         }
         ServerLevel level = src.getLevel();
@@ -383,11 +383,11 @@ public final class LurkerCommands {
                 e.settleAt(h);
                 e.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(h.waitX(), h.waitY(), h.waitZ())), MobSpawnType.COMMAND, null, null);
                 level.addFreshEntity(e);
-                src.sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "An urchin into the vent at %.0f %.0f (%d off), waiting at %.1f %.1f %.1f",
+                src.sendSuccess(() -> Component.literal(String.format(Locale.ROOT, "A spider into the vent at %.0f %.0f (%d off), waiting at %.1f %.1f %.1f",
                         v.x(), v.z(), (int) f.dist, h.waitX(), h.waitY(), h.waitZ())), true);
                 return;
             }
-            src.sendFailure(Component.literal("No empty vent that holds an urchin within 192 blocks (with its chunks loaded)"));
+            src.sendFailure(Component.literal("No empty vent that holds a spider within 192 blocks (with its chunks loaded)"));
         });
         return 1;
     }
@@ -413,7 +413,7 @@ public final class LurkerCommands {
         }
         ChimneyLurkerEntity e = nearest(src, 64, false);
         if (e == null) {
-            src.sendFailure(Component.literal("No vent urchin within 64 blocks"));
+            src.sendFailure(Component.literal("No chimney spider within 64 blocks"));
             return 0;
         }
         e.huntNow(le);
@@ -431,7 +431,7 @@ public final class LurkerCommands {
             n++;
         }
         int count = n;
-        src.sendSuccess(() -> Component.literal(count + " vent urchin(s) going home"), true);
+        src.sendSuccess(() -> Component.literal(count + " chimney spider(s) going home"), true);
         return n;
     }
 
@@ -439,7 +439,7 @@ public final class LurkerCommands {
         CommandSourceStack src = c.getSource();
         ChimneyLurkerEntity e = nearest(src, 64, true);
         if (e == null) {
-            src.sendFailure(Component.literal("No vent urchin waiting in its vent within 64 blocks"));
+            src.sendFailure(Component.literal("No chimney spider waiting in its vent within 64 blocks"));
             return 0;
         }
         if (!e.strikeNow()) {
@@ -454,7 +454,7 @@ public final class LurkerCommands {
         CommandSourceStack src = c.getSource();
         if (!(src.getEntity() instanceof ServerPlayer p)) return 0;
         int in = LurkerRefill.lookRound(src.getLevel(), p, true);
-        src.sendSuccess(() -> Component.literal(in + " urchin(s) moved into empty vents 48 to 128 blocks off, out of sight"), false);
+        src.sendSuccess(() -> Component.literal(in + " spider(s) moved into empty vents 48 to 128 blocks off, out of sight"), false);
         return in;
     }
 }
