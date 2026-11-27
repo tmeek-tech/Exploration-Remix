@@ -23,6 +23,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -117,7 +118,12 @@ class PaletteLooksTest {
         // geodes (96,341 cobbled deepslate now plain deepslate, the rest the floors' patchwork gone and the bands moved
         // a block by the wobble), and through the public path at 53 of layer 0's 60,000 (43 in the geodes, 10 where the
         // geodes' edge or a noise rift's own biome moved the biome); the interior, layer 1, the bands and the upper caves
-        // answer as before.
+        // answer as before. Pinned again for 0.23.3 (Minecraft Remix's real ores): the Lantern Lake's and the Ember
+        // Gardens' gold is gold quartz in the rock round it, the Silver Fern Rift's copper chalcopyrite and the Ivory Root
+        // Cavern's iron hematite (in its stone, limestone or calcite), so the by-biome and upper caves answers move.
+        // Hashed with every gold, copper and iron ore, vanilla's or the new, as one token for each metal, both answer the
+        // same before and after (bcebb7668b40a196 by biome, b9b9c94cad6dddc0 upper caves): only which ore block an ore is
+        // changed. The interior, the public path and the cold caves answer as before.
         Terrain t = terrain();
         Palette p = t.palette;
         Shape s = t.shape;
@@ -173,11 +179,11 @@ class PaletteLooksTest {
         // all six at once, so a re-pin sees every part that moved
         final long fBiome = hBiome, fInterior = hInterior, fPublicOld = hPublicOld, fPublic = hPublic, fUpper = hUpper, fCold = hCold;
         assertAll(
-                () -> assertEquals("baa98f2afa09f366", String.format("%016x", fBiome), "layers 0 and 1, by biome"),
+                () -> assertEquals("97ad689cc2ad9298", String.format("%016x", fBiome), "layers 0 and 1, by biome"),
                 () -> assertEquals("a79cc526d8233378", String.format("%016x", fInterior), "layers 0 and 1, interior"),
                 () -> assertEquals("4fee8427d07163cd", String.format("%016x", fPublicOld), "layer 0 through the public path, and the bands (den rifts off)"),
                 () -> assertEquals("05f6bdfe9f077f4d", String.format("%016x", fPublic), "layer 0 through the public path, and the bands"),
-                () -> assertEquals("d903f5c9057642af", String.format("%016x", fUpper), "the upper caves but the cold ones"),
+                () -> assertEquals("11e0e6f63690f1e0", String.format("%016x", fUpper), "the upper caves but the cold ones"),
                 () -> assertEquals("ac2a7d75882ff5c5", String.format("%016x", fCold), "the frozen Root Vaults and the Frost Fern Grotto"));
     }
 
@@ -186,7 +192,7 @@ class PaletteLooksTest {
     /** The Wasteland's stones (and the Galleries' top rows', which may take its look at the join). */
     private static final Set<Rock> WASTELAND_STONE = EnumSet.of(Rock.BASALT, Rock.SMOOTH_BASALT, Rock.BLACKSTONE,
             Rock.GILDED_BLACKSTONE, Rock.MAGMA, Rock.OBSIDIAN, Rock.CRYING_OBSIDIAN, Rock.TUFF, Rock.CALCITE, Rock.DRIPSTONE,
-            Rock.SCORIA, Rock.SCORCHIA, Rock.DEEPSLATE_GOLD_ORE);
+            Rock.SCORIA, Rock.SCORCHIA, Rock.BASALT_GOLD_QUARTZ, Rock.SMOOTH_BASALT_GOLD_QUARTZ);
     /**
      * The Galleries' stones under the join's blend (Taran, 2026-11-23: "Blackstone could be replaced with smooth basalt.
      * Don't use scoria but scorchia could be used sparingly. Remove ember crust."): no blackstone, gilded blackstone or
@@ -195,7 +201,8 @@ class PaletteLooksTest {
      * the basalt").
      */
     private static final Set<Rock> GALLERIES_STONE = EnumSet.of(Rock.BASALT, Rock.SMOOTH_BASALT, Rock.MAGMA, Rock.OBSIDIAN,
-            Rock.CRYING_OBSIDIAN, Rock.TUFF, Rock.SCORCHIA, Rock.DEEPSLATE_GOLD_ORE, Rock.EMBER_CRUST, Rock.SMOOTH_EMBER_CRUST);
+            Rock.CRYING_OBSIDIAN, Rock.TUFF, Rock.SCORCHIA, Rock.BASALT_GOLD_QUARTZ, Rock.SMOOTH_BASALT_GOLD_QUARTZ,
+            Rock.SCORCHIA_GOLD_QUARTZ, Rock.EMBER_CRUST, Rock.SMOOTH_EMBER_CRUST);
     /**
      * The rows either side of the join (Palette.lookLayer), where a block of either layer takes either layer's look: the
      * Wasteland's stones or the Galleries' (until 0.22.9 the Galleries' were all among the Wasteland's; the ember crust is
@@ -725,13 +732,52 @@ class PaletteLooksTest {
     }
 
     @Test
+    void veinsAreRealOresInTheRockRoundThem() {
+        // 0.23.3: gold, copper and iron are Minecraft Remix's real ores, each in the rock round it (vanilla's ores when it
+        // is not installed), and no vanilla gold, copper or iron ore is chosen anywhere any more
+        assertEquals(Rock.LIMESTONE_GOLD_QUARTZ, Palette.goldIn(Rock.LIMESTONE));
+        assertEquals(Rock.BLACKSTONE_GOLD_QUARTZ, Palette.goldIn(Rock.BLACKSTONE));
+        assertEquals(Rock.BASALT_GOLD_QUARTZ, Palette.goldIn(Rock.BASALT));
+        assertEquals(Rock.SMOOTH_BASALT_GOLD_QUARTZ, Palette.goldIn(Rock.SMOOTH_BASALT));
+        assertEquals(Rock.SCORCHIA_GOLD_QUARTZ, Palette.goldIn(Rock.SCORCHIA));
+        assertEquals(Rock.DEEPSLATE_GOLD_QUARTZ, Palette.goldIn(Rock.DEEPSLATE));
+        Terrain t = terrain();
+        Palette p = new Palette(t, SEED, new Stand());   // the Galleries' looks stood in for: their field is slow to build
+        Shape s = t.shape;
+        Set<Rock> old = EnumSet.of(Rock.GOLD_ORE, Rock.DEEPSLATE_GOLD_ORE, Rock.DEEPSLATE_COPPER_ORE, Rock.DEEPSLATE_IRON_ORE,
+                Rock.IRON_ORE);
+        Set<Rock> seen = EnumSet.noneOf(Rock.class);
+        Random r = new Random(SEED);
+        DeepBiome[] gardens = {DeepBiome.LANTERN_LAKE, DeepBiome.EMBER_GARDENS};
+        for (int k = 0; k < 100000; k++) {
+            int x = r.nextInt(4000) - 2000, z = r.nextInt(4000) - 2000;
+            int above = 1 + r.nextInt(8), below = 1 + r.nextInt(8);
+            boolean wet = r.nextInt(4) == 0;
+            int y = s.bottom(Terrain.GARDENS) + r.nextInt(s.height(Terrain.GARDENS));
+            seen.add(p.shell(gardens[k % 2], Terrain.GARDENS, x, y, z, above, below, wet));
+            boolean gal = r.nextBoolean();
+            int li = gal ? Terrain.GALLERIES : Terrain.WASTELAND;
+            y = s.bottom(li) + r.nextInt(s.height(li));
+            seen.add(p.shell(gal ? DeepBiome.BASALT_GALLERIES : DeepBiome.WASTELAND, li, x, y, z, above, below, wet));
+            y = -64 + r.nextInt(120);
+            seen.add(p.upperShell(DeepBiome.SILVER_FERN_RIFT, x, y, z, above, below, wet));
+            seen.add(p.upperShell(DeepBiome.IVORY_ROOT_CAVERN, x, y, z, above, below, wet));
+        }
+        for (Rock q : old) assertFalse(seen.contains(q), q + " is still placed");
+        for (Rock q : EnumSet.of(Rock.LIMESTONE_GOLD_QUARTZ, Rock.DEEPSLATE_GOLD_QUARTZ, Rock.BLACKSTONE_GOLD_QUARTZ,
+                Rock.BASALT_GOLD_QUARTZ, Rock.SMOOTH_BASALT_GOLD_QUARTZ, Rock.ASURINE_CHALCOPYRITE,
+                Rock.DEEPSLATE_CHALCOPYRITE, Rock.HEMATITE, Rock.LIMESTONE_HEMATITE, Rock.CALCITE_HEMATITE))
+            assertTrue(seen.contains(q), q + " never placed");
+    }
+
+    @Test
     void columnsReadOneByOne() {
         // over rows either side of the tide's mark: a block is in its column's stone, or smooth basalt where the tide
         // turned it
         Terrain t = terrain();
         Palette p = new Palette(t, SEED, new Stand());
         int W = t.shape.waterY(Terrain.GALLERIES), same = 0, all = 0;
-        Set<Rock> specks = EnumSet.of(Rock.DEEPSLATE_GOLD_ORE);
+        Set<Rock> specks = EnumSet.of(Rock.BASALT_GOLD_QUARTZ, Rock.SMOOTH_BASALT_GOLD_QUARTZ, Rock.SCORCHIA_GOLD_QUARTZ);
         for (int c = 0; c < 2000; c++) {
             int x0 = Math.floorDiv(c * 3 * 37 - 100000, 3) * 3, z0 = (c * 3 * 53) % 6000 - 3000;   // the corner of a 3x3 column
             Map<Rock, Integer> count = new EnumMap<>(Rock.class);

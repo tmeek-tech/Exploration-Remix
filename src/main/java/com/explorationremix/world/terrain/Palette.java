@@ -176,10 +176,10 @@ public final class Palette {
                 }
                 if (ceil) {
                     boolean lime = n > -0.1;
-                    if (vein(x, y, z, 0.03)) return lime ? Rock.GOLD_ORE : Rock.DEEPSLATE_GOLD_ORE;
+                    if (vein(x, y, z, 0.03)) return lime ? Rock.LIMESTONE_GOLD_QUARTZ : Rock.DEEPSLATE_GOLD_QUARTZ;
                     return lime ? Rock.LIMESTONE : Rock.COBBLED_DEEPSLATE;
                 }
-                if (vein(x, y, z, 0.026)) return slate ? Rock.DEEPSLATE_GOLD_ORE : Rock.GILDED_BLACKSTONE;
+                if (vein(x, y, z, 0.026)) return slate ? Rock.DEEPSLATE_GOLD_QUARTZ : Rock.GILDED_BLACKSTONE;
                 if (seam(x, y, z)) return Rock.LIMESTONE;
                 return n > 0.3 ? Rock.LIMESTONE : dark;
             }
@@ -194,9 +194,9 @@ public final class Palette {
                 }
                 if (flesh) return Rock.MUSHROOM;
                 if (speck(x, y, z) < 0.006) return Rock.GILDED_BLACKSTONE;
-                if (vein(x, y, z, 0.02)) return speck(x, y, z) < 0.6 ? Rock.DEEPSLATE_GOLD_ORE : Rock.DEEPSLATE_REDSTONE_ORE;
-                if (ceil && n > 0.2) return Rock.LIMESTONE;
-                return n > 0.4 ? Rock.DEEPSLATE : Rock.BLACKSTONE;
+                Rock rock = ceil && n > 0.2 ? Rock.LIMESTONE : n > 0.4 ? Rock.DEEPSLATE : Rock.BLACKSTONE;
+                if (vein(x, y, z, 0.02)) return speck(x, y, z) < 0.6 ? goldIn(rock) : Rock.DEEPSLATE_REDSTONE_ORE;
+                return rock;
             }
             case RUST_SPRINGS: {
                 // Crimsite caverns over a pale mineral crust, with grey stone and granite in the walls.
@@ -368,12 +368,27 @@ public final class Palette {
 
     /**
      * The ember crust in stone {@code r}: the smooth ember crust in smooth basalt, the ember crust in basalt, so the crust
-     * is always the stone round it with a crack in it; any other stone (scorchia, magma, gold ore) keeps no crust.
+     * is always the stone round it with a crack in it; any other stone (scorchia, magma, an ore) keeps no crust.
      */
     static Rock ember(Rock r) {
         if (r == Rock.BASALT) return Rock.EMBER_CRUST;
         if (r == Rock.SMOOTH_BASALT) return Rock.SMOOTH_EMBER_CRUST;
         return r;
+    }
+
+    /**
+     * Gold in stone {@code r}: Minecraft Remix's gold quartz ore in that stone (vanilla's gold ore without it), so a
+     * speck of gold is the rock round it with gold in it. Deepslate's for a stone that has none.
+     */
+    static Rock goldIn(Rock r) {
+        return switch (r) {
+            case LIMESTONE -> Rock.LIMESTONE_GOLD_QUARTZ;
+            case BLACKSTONE -> Rock.BLACKSTONE_GOLD_QUARTZ;
+            case BASALT -> Rock.BASALT_GOLD_QUARTZ;
+            case SMOOTH_BASALT -> Rock.SMOOTH_BASALT_GOLD_QUARTZ;
+            case SCORCHIA -> Rock.SCORCHIA_GOLD_QUARTZ;
+            default -> Rock.DEEPSLATE_GOLD_QUARTZ;
+        };
     }
 
     /** Thin cracks in networks, rarer than {@link #vein}'s: about one block in a hundred where they run. */
@@ -510,8 +525,8 @@ public final class Palette {
                     return n > -0.1 ? Rock.BLACKSTONE : Rock.BASALT;
                 }
                 if (n > 0.28) return speck(x, y, z) < 0.035 ? Rock.GILDED_BLACKSTONE : Rock.BLACKSTONE;
-                if (speck(x, y, z) < 0.002) return Rock.DEEPSLATE_GOLD_ORE;
-                return n > 0.12 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+                Rock rock = n > 0.12 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+                return speck(x, y, z) < 0.002 ? goldIn(rock) : rock;
             }
         }
     }
@@ -598,8 +613,8 @@ public final class Palette {
             Rock r = cell != 0 ? dryColumn(DeepBiome.BASALT_GALLERIES, cell, x, z) : n > 0.25 ? Rock.SMOOTH_BASALT : Rock.BASALT;
             return crack(x, y, z, EMBER_VAULT) && !hanging(x, y, z) ? ember(r) : r;
         }
-        if (speck(x, y, z) < 0.003) return Rock.DEEPSLATE_GOLD_ORE;
         Rock r = cell != 0 ? dryColumn(DeepBiome.BASALT_GALLERIES, cell, x, z) : n > 0.08 ? Rock.SMOOTH_BASALT : Rock.BASALT;
+        if (speck(x, y, z) < 0.003) return goldIn(r);
         return glowingJoint(x, y, z) && !hanging(x, y, z) ? ember(r) : r;
     }
 
@@ -769,7 +784,7 @@ public final class Palette {
                 return n < asurineShare(x, y, z) - 0.09 ? Rock.ASURINE : Rock.DEEPSLATE;
             }
             if (ceil && n > -0.15 && riftBandAt(x, y - below + 1, z) == RIFT_GREEN) return Rock.MOSS;
-            if (vein(x, y, z, 0.026)) return Rock.DEEPSLATE_COPPER_ORE;
+            if (vein(x, y, z, 0.026)) return n < asurineShare(x, y, z) ? Rock.ASURINE_CHALCOPYRITE : Rock.DEEPSLATE_CHALCOPYRITE;
             if (n < asurineShare(x, y, z)) return Rock.ASURINE;
             return n > 0.38 ? Rock.COBBLED_DEEPSLATE : Rock.DEEPSLATE;
         }
@@ -798,10 +813,10 @@ public final class Palette {
             return n > 0.26 ? Rock.CALCITE : Rock.LIMESTONE;
         }
         double line = lake + 6 + 6 * wobN.noise2(x * 0.021, z * 0.021);
-        if (y < line) return vein(x, y, z, 0.024) ? Rock.IRON_ORE : Rock.STONE;
-        if (vein(x, y, z, 0.02)) return Rock.IRON_ORE;
-        if (seam(x, y, z)) return Rock.CALCITE;
-        return n > 0.24 ? Rock.CALCITE : Rock.LIMESTONE;
+        if (y < line) return vein(x, y, z, 0.024) ? Rock.HEMATITE : Rock.STONE;
+        boolean calcite = seam(x, y, z) || n > 0.24;
+        if (vein(x, y, z, 0.02)) return calcite ? Rock.CALCITE_HEMATITE : Rock.LIMESTONE_HEMATITE;
+        return calcite ? Rock.CALCITE : Rock.LIMESTONE;
     }
 
     // ============================================================================================== entrances

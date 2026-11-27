@@ -2,7 +2,8 @@ package com.explorationremix.world.terrain;
 
 /**
  * The blocks the deep world is built from, before they become block states. Every one is vanilla or Create (with a
- * vanilla stand-in when Create is missing), except band stone. The colour is only for the offline preview.
+ * vanilla stand-in when Create is missing), except band stone and the ores, which are Minecraft Remix's (vanilla's when
+ * it is missing). The colour is only for the offline preview.
  */
 public enum Rock {
     STONE(0x7d7d7d),
@@ -68,7 +69,21 @@ public enum Rock {
     // ---- 0.14: the host rock round the caves near the surface keeps the pack's (WWOO's) stone: diorite under flower forests
     DIORITE(0xbcbcbc),
     // ---- 0.22.9: the ember crust's cracks in smooth basalt (last, so the others keep their ordinals)
-    SMOOTH_EMBER_CRUST(0x4c3e42);
+    SMOOTH_EMBER_CRUST(0x4c3e42),
+    // ---- 0.23.3: the veins are Minecraft Remix's real ores, each in the rock round it, when that mod is installed
+    // (vanilla's ores when it is not): gold in quartz, copper as chalcopyrite, iron as hematite. Vanilla's gold, copper
+    // and iron ores above are no longer placed and stay for their ordinals.
+    LIMESTONE_GOLD_QUARTZ(0xc9b98a),
+    DEEPSLATE_GOLD_QUARTZ(0x77705b),
+    BLACKSTONE_GOLD_QUARTZ(0x4a3f3a),
+    BASALT_GOLD_QUARTZ(0x6a6862),
+    SMOOTH_BASALT_GOLD_QUARTZ(0x5f5d5a),
+    SCORCHIA_GOLD_QUARTZ(0x4d4440),
+    ASURINE_CHALCOPYRITE(0x5f7390),
+    DEEPSLATE_CHALCOPYRITE(0x5d6658),
+    HEMATITE(0x86625a),
+    LIMESTONE_HEMATITE(0xa88f7c),
+    CALCITE_HEMATITE(0xc9a89a);
 
     public final int color;
 

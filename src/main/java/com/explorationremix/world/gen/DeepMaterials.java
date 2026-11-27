@@ -21,7 +21,8 @@ import java.util.List;
 
 /**
  * Turns the terrain's {@link Rock} choices into block states. Create's stones are looked up by id when the server
- * starts, with a vanilla stand-in (and a log line) when Create is missing.
+ * starts, with a vanilla stand-in (and a log line) when Create is missing, and so are Minecraft Remix's ores, with
+ * vanilla's in their place when it is missing.
  */
 public final class DeepMaterials {
     private static final EnumMap<Rock, BlockState> STATES = new EnumMap<>(Rock.class);
@@ -94,6 +95,17 @@ public final class DeepMaterials {
                 case EMBER_CRUST -> ERBlocks.EMBER_CRUST.get().defaultBlockState();
                 case DIORITE -> Blocks.DIORITE.defaultBlockState();
                 case SMOOTH_EMBER_CRUST -> ERBlocks.SMOOTH_EMBER_CRUST.get().defaultBlockState();
+                case LIMESTONE_GOLD_QUARTZ -> remix("limestone_gold_quartz_ore", Blocks.GOLD_ORE);
+                case DEEPSLATE_GOLD_QUARTZ -> remix("deepslate_gold_quartz_ore", Blocks.DEEPSLATE_GOLD_ORE);
+                case BLACKSTONE_GOLD_QUARTZ -> remix("blackstone_gold_quartz_ore", Blocks.DEEPSLATE_GOLD_ORE);
+                case BASALT_GOLD_QUARTZ -> remix("basalt_gold_quartz_ore", Blocks.DEEPSLATE_GOLD_ORE);
+                case SMOOTH_BASALT_GOLD_QUARTZ -> remix("smooth_basalt_gold_quartz_ore", Blocks.DEEPSLATE_GOLD_ORE);
+                case SCORCHIA_GOLD_QUARTZ -> remix("scorchia_gold_quartz_ore", Blocks.DEEPSLATE_GOLD_ORE);
+                case ASURINE_CHALCOPYRITE -> remix("asurine_chalcopyrite_ore", Blocks.DEEPSLATE_COPPER_ORE);
+                case DEEPSLATE_CHALCOPYRITE -> remix("deepslate_chalcopyrite_ore", Blocks.DEEPSLATE_COPPER_ORE);
+                case HEMATITE -> remix("hematite_ore", Blocks.IRON_ORE);
+                case LIMESTONE_HEMATITE -> remix("limestone_hematite_ore", Blocks.IRON_ORE);
+                case CALCITE_HEMATITE -> remix("calcite_hematite_ore", Blocks.IRON_ORE);
             };
             STATES.put(r, s);
             BY_ORDINAL[r.ordinal()] = s;
@@ -110,6 +122,18 @@ public final class DeepMaterials {
             return fallback.defaultBlockState();
         }
         return b.defaultBlockState();
+    }
+
+    /**
+     * Minecraft Remix's real ore by id (Taran's other mod: its ores replace vanilla's iron, copper and gold, one block for
+     * each rock an ore is found in), or the vanilla ore it replaces when that mod is not installed. Its basalt ores stand
+     * upright, as the deep layers' basalt does.
+     */
+    private static BlockState remix(String id, Block fallback) {
+        Block b = ForgeRegistries.BLOCKS.getValue(new ResourceLocation("mcremix", id));
+        if (b == null || b == Blocks.AIR) return fallback.defaultBlockState();
+        BlockState s = b.defaultBlockState();
+        return s.hasProperty(RotatedPillarBlock.AXIS) ? s.setValue(RotatedPillarBlock.AXIS, Direction.Axis.Y) : s;
     }
 
     @Nullable
