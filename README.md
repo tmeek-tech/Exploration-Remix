@@ -27,6 +27,11 @@ layout where it was explored, and one made before 0.19.6 loses its rows below y 
 its old crude oil where it was explored, so pools there may not meet the new ones at the edge of explored ground. In
 one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and items) turn into vent beads.
 
+**The Basalt Galleries are always 144 rows** (since 0.24.2). A settings file kept from an early build may still ask
+for 256 (`height` under `[world.basalt_galleries]`): that put the Galleries 112 rows deeper, with only rock between them
+and the Wasteland, so no way led down. The file is now put back to 144 on the next start; a world made with it ends at
+y -896 instead of -784, and its Galleries only join the Wasteland in a new world.
+
 ## Installing
 
 1. Put `explorationremix-<version>.jar` in the `mods` folder of the client and the server.

@@ -45,6 +45,27 @@ class ConfigKeysTest {
     }
 
     /**
+     * The Basalt Galleries are built for 144 rows (0.24.2): their halls and ways down are laid out up from the lava table,
+     * so a taller layer leaves its extra rows as rock under the Wasteland (no way down at all at 256, the height Taran's
+     * file had kept from an early build). The world config takes no other height and puts one back to 144, the height
+     * the terrain's own defaults (and every test of the Galleries) use. The lava table's depth keeps its range.
+     */
+    @Test
+    void theGalleriesHeightIsFixed() {
+        ForgeConfigSpec.ValueSpec h = spec(WORLD, "world.basalt_galleries.height");
+        assertEquals(144, h.getDefault());
+        assertEquals(com.explorationremix.world.terrain.TerrainSettings.defaults().layers().get(3).height(), h.getDefault());
+        assertTrue(h.test(144));
+        for (int v : new int[]{64, 128, 143, 145, 160, 192, 224, 256, 288}) {
+            assertFalse(h.test(v), "height " + v + " accepted");
+            assertEquals(144, h.correct(v), "height " + v + " not put back to 144");
+        }
+        ForgeConfigSpec.ValueSpec fd = spec(WORLD, "world.basalt_galleries.fluidDepth");
+        assertEquals(10, fd.getDefault());
+        assertTrue(fd.test(6) && fd.test(24));
+    }
+
+    /**
      * 0.21.6, the lava plane: the calm and the fall have new names for their new defaults (15.25 calm minutes, a
      * 15-second fall), so a file written before keeps none of the old 13.5 and 2; the rise's climbs and breaks are new.
      */
