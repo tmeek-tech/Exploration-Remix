@@ -30,10 +30,13 @@ import java.util.Locale;
  * /remix ember: looking after the Wasteland's ember urchins while testing (operators only).
  * <ul>
  *     <li>{@code /remix ember spawn}: one where you look, stood up on its spines over the floor there</li>
- *     <li>{@code /remix ember list [radius]}: the urchins round you, nearest first: where, and what each is doing</li>
+ *     <li>{@code /remix ember list [radius]}: the urchins round you, nearest first: where, what each is doing, and how
+ *     fast it goes (blocks a second, over the last second or so)</li>
  *     <li>{@code /remix ember tp [n] [distance]}: to the nth nearest urchin (from 1), standing that far off it (8
  *     blocks, or the distance given) on the floor of its tunnel ahead of it, facing it</li>
  *     <li>{@code /remix ember flare}: the nearest flares (as if hurt) for ten seconds</li>
+ *     <li>{@code /remix ember chase}: the nearest (within 32) comes for you, as if you hurt it (0.24.3); its chase
+ *     shows in {@code list}</li>
  *     <li>{@code /remix ember refill}: one set down out of sight round you now, as the top-up would, whatever the count</li>
  *     <li>{@code /remix ember counts}: floors looked at and urchins set down with the world since the game started, and
  *     by the top-up</li>
@@ -52,6 +55,7 @@ public final class EmberCommands {
                                 .then(Commands.argument("distance", IntegerArgumentType.integer(3, 32))
                                         .executes(c -> tp(c, IntegerArgumentType.getInteger(c, "n"), IntegerArgumentType.getInteger(c, "distance"))))))
                 .then(Commands.literal("flare").executes(EmberCommands::flare))
+                .then(Commands.literal("chase").executes(EmberCommands::chase))
                 .then(Commands.literal("refill").executes(EmberCommands::refill))
                 .then(Commands.literal("counts").executes(EmberCommands::counts));
     }
@@ -156,6 +160,25 @@ public final class EmberCommands {
         }
         all.get(0).flareFor(200);
         c.getSource().sendSuccess(() -> Component.literal("The nearest ember urchin flares"), false);
+        return 1;
+    }
+
+    private static int chase(CommandContext<CommandSourceStack> c) {
+        CommandSourceStack src = c.getSource();
+        if (!(src.getEntity() instanceof ServerPlayer player)) {
+            src.sendFailure(Component.literal("Only for a player"));
+            return 0;
+        }
+        List<EmberUrchinEntity> all = near(src, 32);
+        if (all.isEmpty()) {
+            src.sendFailure(Component.literal("No ember urchin within 32 blocks"));
+            return 0;
+        }
+        if (!all.get(0).chaseFor(player)) {
+            src.sendFailure(Component.literal("It chases no one in creative, spectating or in Peaceful"));
+            return 0;
+        }
+        src.sendSuccess(() -> Component.literal("The nearest ember urchin comes for you"), false);
         return 1;
     }
 

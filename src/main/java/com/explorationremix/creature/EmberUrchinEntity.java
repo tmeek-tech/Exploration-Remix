@@ -2,6 +2,7 @@ package com.explorationremix.creature;
 
 import com.explorationremix.ExplorationRemix;
 import com.explorationremix.creature.body.EmberBody;
+import com.explorationremix.creature.body.EmberChase;
 import com.explorationremix.creature.body.EmberPose;
 import com.explorationremix.creature.body.EmberRig;
 import com.explorationremix.creature.body.EmberRock;
@@ -69,22 +70,29 @@ import java.util.Map;
  * <p>A black ball a block and a quarter across, plated, with embers in its seams, held in a tunnel's middle by thirty
  * long springy spines braced on its floor, walls and roof (its body, {@link EmberBody}, which bows each spine where it
  * presses on the rock). It goes its own way round the tunnels at a quarter of a player's walk ({@link EmberWalk}),
- * never after anyone and never turning (it has no front); in a cave it walks the floor on its lower spines. It keeps to
- * the Wasteland and out of the Ash Hollows.
+ * never turning (it has no front); in a cave it walks the floor on its lower spines. It keeps to the Wasteland and out
+ * of the Ash Hollows.
  *
- * <p>It is an obstacle, not a fight (the cards):
+ * <p>It chases (0.24.3, Taran: "Can you make it chase the player at the player's walking speed and keep this as its
+ * meandering speed?"; the rules are {@link EmberChase}'s): a player it sees within sixteen blocks, or one who hurts it,
+ * it flares and hisses at, and after half a second scuttles after at a player's walk, finding its way round bends and
+ * between storeys; it presses in on them, pricking and shoving them on, until they get away: out of its sight five
+ * seconds, 32 blocks off (a sprint gets away), or into the Ash Hollows. Never in Peaceful, nor after a player in
+ * creative or spectating.
+ *
+ * <p>Otherwise it is an obstacle, not a fight (the cards):
  * <ul>
  *     <li>Its spines, wherever they are as it walks (worked out on the server too, so a prick is where its spines are
  *     drawn), prick anything that touches them: about two hearts, a moment alight, and a shove back out of them. A
  *     player in creative or spectating is never touched.</li>
- *     <li>It never walks into anyone: someone in its spines' way ahead holds it where it is, and held long, it turns
- *     back the way it came.</li>
+ *     <li>Not chasing, it never walks into anyone: someone in its spines' way ahead holds it where it is, and held
+ *     long, it turns back the way it came.</li>
  *     <li>About forty hearts, fireproof (it wades through lava), unmoved by blows; every blow struck at it by hand
  *     pricks the striker back. Arrows work, slowly.</li>
  *     <li>Its embers smoulder like breathing coals and flare as someone comes near (with a hiss), its spines turning to
  *     them; it casts a dim light on the rock round it (a light block it carries, put back as it goes).</li>
  * </ul>
- * In Peaceful it stays, and only shoves.
+ * In Peaceful it stays, never chases, and only shoves.
  */
 public class EmberUrchinEntity extends Monster {
     /** Its spines' prick (data/explorationremix/damage_type/ember_urchin.json: scaled by difficulty, none in Peaceful). */
@@ -122,6 +130,8 @@ public class EmberUrchinEntity extends Monster {
     public static final int LIGHT_CALM = 8, LIGHT_FLARED = 11;
     /** Its embers' breath (ticks a breath). */
     public static final double BREATH = 90.0;
+    /** It looks for someone to chase every NOTICE_EVERY ticks, and again at whom it chases every SIGHT_EVERY. */
+    static final int NOTICE_EVERY = 10, SIGHT_EVERY = 4;
     /** Its ball's middle over its box's foot (its box is its ball). */
     public static final double HALF = 0.625;
 
@@ -132,6 +142,12 @@ public class EmberUrchinEntity extends Monster {
     private final Vector3d mid = new Vector3d(), touched = new Vector3d();
     private boolean dormant, walkSeeded;
     private int hurtFlare, othersIn;
+    /** Whom it chases, and when it gives up ({@link EmberChase}); where they are, and when it last hissed. */
+    private final EmberChase chase = new EmberChase();
+    private final Vector3d chaseAt = new Vector3d();
+    private int hissedAt = -1000;
+    /** How far it moves a tick, over the last second or so (for /remix ember list). */
+    private double pace;
     /** When each thing it pricked was pricked (by entity id: tick). */
     private final Map<Integer, Integer> pricked = new HashMap<>();
     /** The server's own working of its spines (for its pricks), kept while anyone is near. */
@@ -310,6 +326,8 @@ public class EmberUrchinEntity extends Monster {
             Entity by = source.getEntity();
             // a blow struck by hand: its spines prick the striker back (the cards' "Every sword blow pricks you back")
             if (hurt && by instanceof LivingEntity le && source.getDirectEntity() == by && !(le instanceof EmberUrchinEntity)) prickBack(le);
+            // a player who hurts it, from anywhere near, it comes for (the cards' "Yes, it comes for whoever hurts it")
+            if (hurt && by instanceof Player p && chaseable(p) && p.distanceTo(this) <= EmberChase.FAR) setAfter(p);
         }
         return hurt;
     }
@@ -346,6 +364,11 @@ public class EmberUrchinEntity extends Monster {
             boolean near = false;
             for (Player p : level().players()) if (!p.isSpectator() && p.distanceToSqr(this) < WAKE_RANGE * WAKE_RANGE) { near = true; break; }
             dormant = !near;
+            // asleep, it chases no one (whom it chased has gone far off at once: put somewhere else, say)
+            if (dormant && chase.chasing()) {
+                chase.stop("far");
+                walk.endChase();
+            }
         }
         return dormant;
     }
@@ -368,16 +391,22 @@ public class EmberUrchinEntity extends Monster {
         double reach = spec.span();
         List<LivingEntity> near = level().getEntitiesOfClass(LivingEntity.class, getBoundingBox().inflate(reach + 1.5),
                 e -> e != this && e.isAlive() && !e.isSpectator() && !(e instanceof EmberUrchinEntity));
-        boolean blocked = blockedBy(near, reach);
         if (--othersIn <= 0) {
             othersIn = 12;
             others.clear();
             for (EmberUrchinEntity o : level().getEntitiesOfClass(EmberUrchinEntity.class, getBoundingBox().inflate(16.0), o -> o != this && o.isAlive()))
                 others.add(new Vector3d(o.getX(), o.getY() + HALF, o.getZ()));
         }
-        Vector3d v = walk.tick(ground, mid, others, blocked);
+        chaseTick();
+        Vector3d v;
+        if (chase.phase == EmberChase.Phase.ROUSE) v = walk.rouse(ground, mid);
+        else if (chase.phase == EmberChase.Phase.CHASE) v = walk.chase(ground, mid, chase.seenAt, others);
+        else v = walk.tick(ground, mid, others, blockedBy(near, reach));
         setDeltaMovement(Vec3.ZERO);
+        double wasX = getX(), wasY = getY(), wasZ = getZ();
         if (v.lengthSquared() > 1.0E-8) move(MoverType.SELF, new Vec3(v.x, v.y, v.z));
+        double moved = Math.sqrt((getX() - wasX) * (getX() - wasX) + (getY() - wasY) * (getY() - wasY) + (getZ() - wasZ) * (getZ() - wasZ));
+        pace += (moved - pace) * 0.1;
         mid.set(getX(), getY() + HALF, getZ());
 
         // its spines turn to the nearest player it can see; it flares at one near, or hurt
@@ -388,15 +417,18 @@ public class EmberUrchinEntity extends Monster {
             double d = p.distanceToSqr(mid.x, mid.y, mid.z);
             if (d < best) { best = d; nearest = p; }
         }
-        if ((tickCount + getId()) % 10 == 0) {
+        if (chase.chasing()) {
+            // chasing, its spines turn to whom it chases
+            if (entityData.get(DATA_FOCUS) != chase.target) entityData.set(DATA_FOCUS, chase.target);
+        } else if ((tickCount + getId()) % 10 == 0) {
             int focus = nearest != null && sees(nearest) ? nearest.getId() : -1;
             if (entityData.get(DATA_FOCUS) != focus) entityData.set(DATA_FOCUS, focus);
         }
         if (hurtFlare > 0) hurtFlare--;
-        boolean flared = hurtFlare > 0 || (nearest != null && best < FLARE_NEAR * FLARE_NEAR);
+        boolean flared = hurtFlare > 0 || chase.chasing() || (nearest != null && best < FLARE_NEAR * FLARE_NEAR);
         if (flared != entityData.get(DATA_FLARED)) {
             entityData.set(DATA_FLARED, flared);
-            if (flared) playSound(ERSounds.EMBER_URCHIN_HISS.get(), 0.9F, 0.9F + random.nextFloat() * 0.2F);
+            if (flared) hiss();
         }
         holdTick(near);
         if ((tickCount & 3) == 0 || strayLight != null) lightTick(sl, flared);
@@ -423,6 +455,68 @@ public class EmberUrchinEntity extends Monster {
     private boolean sees(Entity e) {
         Vec3 from = middle(), to = e.getEyePosition();
         return level().clip(new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this)).getType() == HitResult.Type.MISS;
+    }
+
+    // ------------------------------------------------------------------------------------------------ chasing
+
+    /** Whether it may chase a player: alive and playing (not in creative, not spectating), in its level, out of Peaceful. */
+    private boolean chaseable(Player p) {
+        return p.isAlive() && !p.isSpectator() && !p.isCreative() && p.level() == level() && level().getDifficulty() != Difficulty.PEACEFUL;
+    }
+
+    /** Whether a player stands where it may go (its own ground: in the Wasteland, out of the Ash Hollows). */
+    private boolean onItsGround(Player p) {
+        return ground == null || ground.allowed(p.getX(), p.getY() + 1.0, p.getZ());
+    }
+
+    /**
+     * Its chase this tick ({@link EmberChase}): whom it chases looked at again (gone, out of sight, too far, no way to
+     * them), or, chasing no one, the nearest player it may chase that it sees within {@link EmberChase#SEE} and that
+     * stands on its ground, noticed.
+     */
+    private void chaseTick() {
+        if (chase.chasing()) {
+            Player t = level().getEntity(chase.target) instanceof Player p ? p : null;
+            boolean there = t != null && chaseable(t);
+            Boolean seen = null;
+            double distance = 0;
+            if (there) {
+                chaseAt.set(t.getX(), t.getY(), t.getZ());
+                distance = middle().distanceTo(t.getEyePosition());
+                if ((tickCount + getId()) % SIGHT_EVERY == 0) seen = sees(t);
+            }
+            chase.tick(there, seen, chaseAt, distance, walk.gettingThere());
+            if (!chase.chasing()) walk.endChase();
+            return;
+        }
+        chase.tick(false, null, chaseAt, 0, true);
+        if (!chase.free() || (tickCount + getId()) % NOTICE_EVERY != 0) return;
+        Vec3 m = middle();
+        Player pick = null;
+        double best = EmberChase.SEE * EmberChase.SEE;
+        for (Player p : level().players()) {
+            if (!chaseable(p)) continue;
+            double d = p.getEyePosition().distanceToSqr(m);
+            if (d < best && onItsGround(p) && sees(p)) { best = d; pick = p; }
+        }
+        if (pick != null) setAfter(pick);
+    }
+
+    /** It is set after {@code p} (seen, or hurt by them): it flares and hisses, and sets off after its warning. */
+    private void setAfter(Player p) {
+        boolean fresh = !chase.chasing() || chase.target != p.getId();
+        chase.start(p.getId(), chaseAt.set(p.getX(), p.getY(), p.getZ()));
+        if (fresh) {
+            hiss();
+            if (entityData.get(DATA_FOCUS) != p.getId()) entityData.set(DATA_FOCUS, p.getId());
+        }
+    }
+
+    /** Its hiss as it flares (once, though it flares and sets off after someone together). */
+    private void hiss() {
+        if (tickCount - hissedAt < 20) return;
+        hissedAt = tickCount;
+        playSound(ERSounds.EMBER_URCHIN_HISS.get(), 0.9F, 0.9F + random.nextFloat() * 0.2F);
     }
 
     // ------------------------------------------------------------------------------------------------ its spines
@@ -568,13 +662,25 @@ public class EmberUrchinEntity extends Monster {
         String spines = hold != null && hold.laid() ? hold.plantedCount() + " of " + hold.legs.length + " spines braced" : "spines not worked out (no one near)";
         String light = lightPos != null ? String.format(Locale.ROOT, "light %d at %d %d %d", lightLevel, lightPos.getX(), lightPos.getY(), lightPos.getZ())
                 : "no light";
-        return String.format(Locale.ROOT, "%s; %s; %s%s; %s; %.0f/%.0f health; pricked %d, pricked back %d",
-                walk.describe(), spines, entityData.get(DATA_FLARED) ? "flared" : "smouldering", dormant ? ", asleep" : "", light,
+        String after = chase.describe();
+        Entity t = chase.chasing() ? level().getEntity(chase.target) : null;
+        if (t != null) after += String.format(Locale.ROOT, " %s, %.1f off", t.getName().getString(), middle().distanceTo(t.getEyePosition()));
+        return String.format(Locale.ROOT, "%s%s, %.1f blocks a second; %s; %s%s; %s; %.0f/%.0f health; pricked %d, pricked back %d",
+                after.isEmpty() ? "" : after + "; ", walk.describe(), pace * 20.0, spines, entityData.get(DATA_FLARED) ? "flared" : "smouldering", dormant ? ", asleep" : "", light,
                 getHealth(), getMaxHealth(), pricks, pricksBack);
     }
 
     /** For /remix ember flare: flares as if hurt, for {@code ticks}. */
     public void flareFor(int ticks) { hurtFlare = Math.max(hurtFlare, ticks); }
+
+    /** For /remix ember chase: it comes for {@code p} as if they hurt it (false if it may not chase them). */
+    public boolean chaseFor(Player p) {
+        if (!chaseable(p)) return false;
+        setAfter(p);
+        return true;
+    }
+
+    public EmberChase chase() { return chase; }
 
     public EmberWalk walk() { return walk; }
 
@@ -631,12 +737,16 @@ public class EmberUrchinEntity extends Monster {
         body.tick(rock.around(body, drive, terrain), drive);
     }
 
-    /** Client: a spine's point sets down on the rock: a light tick of its needle (thinned, so many tick rather than roar). */
+    /**
+     * Client: a spine's point sets down on the rock: a light tick of its needle (thinned, so many tick rather than roar);
+     * scuttling after someone, a quicker, louder rattle of them (the cards' "its needles rattling on the rock").
+     */
     private void footfall(EmberBody.Leg leg, double speed) {
-        if (isSilent() || tickCount - lastStep < 3) return;
+        float quick = body != null ? (float) body.quick() : 0.0F;
+        if (isSilent() || tickCount - lastStep < (quick > 0.5F ? 2 : 3)) return;
         lastStep = tickCount;
-        float pitch = (leg.index % 3 == 0 ? 1.1F : 0.95F) * (0.9F + random.nextFloat() * 0.2F);
-        level().playLocalSound(leg.at.x, leg.at.y, leg.at.z, ERSounds.EMBER_URCHIN_STEP.get(), getSoundSource(), 0.22F, pitch, false);
+        float pitch = (leg.index % 3 == 0 ? 1.1F : 0.95F) * (0.9F + random.nextFloat() * 0.2F) * (1.0F + 0.12F * quick);
+        level().playLocalSound(leg.at.x, leg.at.y, leg.at.z, ERSounds.EMBER_URCHIN_STEP.get(), getSoundSource(), 0.22F + 0.16F * quick, pitch, false);
     }
 
     /** Client: how flared it is (0 smouldering, 1 flared). */

@@ -35,10 +35,11 @@ class EmberClips {
         int mat(int x, int y, int z);
     }
 
-    enum Camera { SIDE, FOLLOW, FIXED }
+    /** SIDE: off to one side of it; FOLLOW: to the side of its way, a little behind; FIXED: still; RUNNER: the eyes of whom it chases. */
+    enum Camera { SIDE, FOLLOW, FIXED, RUNNER }
 
     static final class Scene {
-        final String name;
+        String name;
         final Blocks blocks;
         final Vector3d start;
         final double heading;
@@ -57,6 +58,16 @@ class EmberClips {
         int flareFrom = -1, flareTo = -1, dieAt = -1;
         boolean still;
         double dim = 0.55;
+        /**
+         * Someone it chases (0.24.3): their feet along this way (places about a block apart), from {@code runnerAt} along
+         * it, going on at {@code runnerSpeed} blocks a tick from tick {@code runnerFrom} (and stopping at its end); a prick
+         * shoves them {@code shove} on along it. {@code chaseNow}: it is set after them at once (as if they hurt it), else
+         * only once it sees them near.
+         */
+        List<Vector3d> runner;
+        double runnerAt, runnerSpeed, shove = 2.5;
+        int runnerFrom;
+        boolean chaseNow;
 
         Scene(String name, Blocks blocks, Vector3d start, double headingDeg) {
             this.name = name;
@@ -168,6 +179,24 @@ class EmberClips {
         portrait.flareFrom = 100;
         portrait.flareTo = 200;
         out.add(portrait);
+        // chasing someone down a tunnel (0.24.3), seen from the side: it sees them, rouses, then scuttles after them at a
+        // player's walk as they walk away, and presses in when they stop
+        Scene chase = new Scene("chase", carved(new int[]{-60, 0, -2, 140, 5, 2}), new Vector3d(-30.5, 3.0, 0.5), 0);
+        chase.ticks = 260;
+        chase.cut = b -> b[2] > 2.5;
+        chase.camOffset = new Vector3d(1.5, 0.8, 10.5);
+        chase.runner = line(new Vector3d(-17.5, 0, 0.5), new Vector3d(14.5, 0, 0.5));
+        chase.runnerSpeed = EmberWalk.CHASE_SPEED;
+        chase.runnerFrom = 20;
+        out.add(chase);
+        // the same seen as they see it coming, walking backward away from it down the tunnel
+        Scene behind = new Scene("chased", carved(new int[]{-60, 0, -2, 140, 5, 2}), new Vector3d(-30.5, 3.0, 0.5), 0);
+        behind.ticks = 260;
+        behind.camera = Camera.RUNNER;
+        behind.runner = line(new Vector3d(-17.5, 0, 0.5), new Vector3d(14.5, 0, 0.5));
+        behind.runnerSpeed = EmberWalk.CHASE_SPEED;
+        behind.runnerFrom = 20;
+        out.add(behind);
         // dying in a tunnel: its spines droop and it falls, its embers going out
         Scene dying = new Scene("dying", carved(new int[]{-20, 0, -2, 20, 5, 2}), new Vector3d(0.5, 3.0, 0.5), 0);
         dying.ticks = 80;
@@ -177,6 +206,14 @@ class EmberClips {
         dying.camOffset = new Vector3d(0, 0.6, 7.5);
         out.add(dying);
         return out;
+    }
+
+    /** Feet along a straight line from a to b, a block apart. */
+    static List<Vector3d> line(Vector3d a, Vector3d b) {
+        List<Vector3d> way = new ArrayList<>();
+        int n = (int) Math.ceil(a.distance(b));
+        for (int k = 0; k <= n; k++) way.add(new Vector3d(a).lerp(b, (double) k / n));
+        return way;
     }
 
     /** A walk through the Wasteland's own tunnels for {@code seed}, from a tunnel's floor near the middle of a square. */
@@ -258,6 +295,14 @@ class EmberClips {
         double went, lowest = Double.MAX_VALUE, highest = -Double.MAX_VALUE, planted;
         /** The furthest its middle got from where it started (blocks): pacing round a pocket keeps this small. */
         double farthest;
+        /**
+         * Chasing: ticks chased and pressing in, when it first pressed in and when it gave up (-1 never) and why; how far
+         * it was from them (across, on average and at most) while it chased; its ways found and the most places looked
+         * through for one; pricks.
+         */
+        int chaseTicks, caughtTicks, firstCaught = -1, gaveUpAt = -1, routes, routeMost, pricks;
+        String gaveUp = "";
+        double chaseDist, chaseDistMost;
 
         double braced() { return planted / Math.max(1, live); }
 
@@ -267,11 +312,15 @@ class EmberClips {
         double pointInShare() { return pointIn / (double) Math.max(1, swingTicks); }
 
         String line() {
+            String chase = chaseTicks == 0 && gaveUpAt < 0 ? "" : String.format(Locale.ROOT,
+                    "; chased %d ticks (pressing in %d, first at %d, %d pricks), %.1f from them on average and %.1f at most, %d ways found (at most %d places looked through), gave up %s",
+                    chaseTicks, caughtTicks, firstCaught, pricks, chaseDist / Math.max(1, chaseTicks), chaseDistMost, routes, routeMost,
+                    gaveUpAt < 0 ? "never" : "at " + gaveUpAt + " (" + gaveUp + ")");
             return String.format(Locale.ROOT, "%d ticks: walked %.1f, at most %.1f from its start (%.0f%% held, %.0f%% resting, stuck %d, turned back %d, wound on %d), height %.2f to %.2f,"
                             + " %.1f of 30 braced, %d steps, bows through rock %.2f%% of spine-ticks (%d planted, %d stepping, %d free),"
-                            + " stepping points in rock %.2f%% of stepping ticks (%d), ball in rock %d, out of its ground %d",
+                            + " stepping points in rock %.2f%% of stepping ticks (%d), ball in rock %d, out of its ground %d%s",
                     ticks, went, farthest, 100.0 * held / ticks, 100.0 * rests / ticks, stuck, turnedBack, wayOns, lowest, highest, braced(), steps,
-                    100.0 * throughShare(), throughPlanted, throughSwinging, throughFree, 100.0 * pointInShare(), pointIn, ballIn, outOfGround);
+                    100.0 * throughShare(), throughPlanted, throughSwinging, throughFree, 100.0 * pointInShare(), pointIn, ballIn, outOfGround, chase);
         }
     }
 
@@ -292,6 +341,8 @@ class EmberClips {
         EmberWalk walk = new EmberWalk();
         walk.setSeed(s.name.hashCode() * 31L);
         walk.face(Math.cos(s.heading), Math.sin(s.heading));
+        EmberChase chase = new EmberChase();
+        Runner runner = s.runner != null ? new Runner(s.runner, s.runnerAt) : null;
         EmberWalk.Ground g = ground(s.blocks, s.allowed);
         Terrain terrain = (x, y, z, sink) -> { if (s.blocks.mat(x, y, z) == ROCK) sink.box(x, y, z, x + 1, y + 1, z + 1); };
         int[] steps = {0};
@@ -319,8 +370,9 @@ class EmberClips {
                 double dx = s.blocker.x - mid.x, dz = s.blocker.z - mid.z, d = Math.sqrt(dx * dx + dz * dz);
                 blocked = d - 0.3 <= spec.span() + 0.6 && (d < 1.0E-3 || (dx * walk.heading.x + dz * walk.heading.z) / d > 0.3);
             }
+            if (runner != null && tick >= s.runnerFrom) runner.go(s.runnerSpeed);
             if (!dead && !s.still) {
-                Vector3d v = walk.tick(g, mid, none, blocked);
+                Vector3d v = runner != null ? chaseTick(s, g, walk, chase, runner, mid, tick, st) : walk.tick(g, mid, none, blocked);
                 // its box (its ball) never goes into the rock, sliding along it as the game's own collision does (axis by axis)
                 double vx = v.x, vy = v.y, vz = v.z;
                 if (!EmberWalk.clear(g, mid.x, mid.y + vy, mid.z, spec.radius)) vy = 0;
@@ -336,7 +388,7 @@ class EmberClips {
             st.farthest = Math.max(st.farthest, mid.distance(s.start));
             st.lowest = Math.min(st.lowest, mid.y);
             st.highest = Math.max(st.highest, mid.y);
-            boolean flaring = !dead && ((tick >= s.flareFrom && tick < s.flareTo)
+            boolean flaring = !dead && ((tick >= s.flareFrom && tick < s.flareTo) || chase.chasing()
                     || (s.blocker != null && s.blocker.distance(mid) < EmberUrchinEntity.FLARE_NEAR));
             flareO = flare;
             flare += ((flaring ? 1.0 : 0.0) - flare) * (flaring ? 0.3 : 0.035);
@@ -344,7 +396,7 @@ class EmberClips {
             drive.x = mid.x; drive.y = mid.y; drive.z = mid.z;
             drive.mode = dead ? EmberBody.Mode.DEAD : EmberBody.Mode.LIVE;
             drive.flare = flare;
-            Vector3d looked = s.blocker != null ? new Vector3d(s.blocker).add(0, 1.6, 0) : s.focus;
+            Vector3d looked = s.blocker != null ? new Vector3d(s.blocker).add(0, 1.6, 0) : runner != null ? runner.eye() : s.focus;
             if (looked != null && looked.distance(mid) < EmberUrchinEntity.NOTICE) { drive.focus.set(looked); drive.focusAmount = 1.0; }
             else drive.focusAmount = 0.0;
             TerrainPatch patch = rock.around(body, drive, terrain);
@@ -386,6 +438,7 @@ class EmberClips {
                 else cam.lerp(c, 0.08);
                 Vector3d eye;
                 if (s.camera == Camera.FIXED) eye = new Vector3d(s.fixedEye);
+                else if (s.camera == Camera.RUNNER && runner != null) eye = runner.eye();
                 else if (s.camera == Camera.FOLLOW) {
                     // to the side of its way, a little behind
                     Vector3d h = walk.heading, side = new Vector3d(-h.z, 0, h.x);
@@ -405,6 +458,7 @@ class EmberClips {
                 if (dead) level *= Math.max(0.0, 1.0 - (tick - s.dieAt + pt) / 16.0);
                 drawPose(r, pose, tex, glowTex, level, fl, embers);
                 if (s.blocker != null) r.dot(new double[]{s.blocker.x, s.blocker.y + 1.0, s.blocker.z}, 0x3070ff, 3);
+                if (runner != null && s.camera != Camera.RUNNER) r.dot(new double[]{runner.feet.x, runner.feet.y + 1.0, runner.feet.z}, 0x3070ff, 3);
                 File f = new File(dir, String.format("f%05d.png", frame++));
                 r.save(f);
                 if (k == 0 && keys.contains(tick))
@@ -414,6 +468,8 @@ class EmberClips {
         st.stuck = walk.stuckCount;
         st.turnedBack = walk.turnedBack;
         st.wayOns = walk.wayOns;
+        st.routes = walk.routes;
+        st.routeMost = walk.routeMost;
         st.steps = steps[0];
         System.out.println("  " + st.line());
         if (draw) {
@@ -427,6 +483,147 @@ class EmberClips {
     }
 
     static String fmt(Vector3d v) { return String.format(Locale.ROOT, "(%.2f, %.2f, %.2f)", v.x, v.y, v.z); }
+
+    // ------------------------------------------------------------------------------------------------ chasing
+
+    /** Someone going along a way (their feet at each place), part way along it. */
+    static final class Runner {
+        final List<Vector3d> way;
+        double along;
+        final Vector3d feet = new Vector3d();
+
+        Runner(List<Vector3d> way, double along) {
+            this.way = way;
+            this.along = along;
+            place();
+        }
+
+        /** On along the way by {@code d} (blocks), stopping at its end. */
+        void go(double d) {
+            double left = d;
+            while (left > 1.0E-9 && along < way.size() - 1) {
+                int i = (int) Math.floor(along);
+                double seg = way.get(i).distance(way.get(i + 1)), at = (along - i) * seg;
+                if (seg < 1.0E-6) { along = i + 1; continue; }
+                if (at + left < seg) { along = i + (at + left) / seg; left = 0; }
+                else { left -= seg - at; along = i + 1; }
+            }
+            place();
+        }
+
+        private void place() {
+            int i = Math.min((int) Math.floor(along), way.size() - 1);
+            if (i >= way.size() - 1) { feet.set(way.get(way.size() - 1)); return; }
+            feet.set(way.get(i)).lerp(way.get(i + 1), along - i);
+        }
+
+        Vector3d eye() { return new Vector3d(feet).add(0, 1.62, 0); }
+    }
+
+    /**
+     * Its going this tick with someone about ({@link Runner}): it notices them as the entity does (seen within {@link
+     * EmberChase#SEE}), rouses, chases ({@link EmberWalk#chase}) and gives up by {@link EmberChase}'s rules; pressing
+     * in on them, it pricks them every {@link EmberUrchinEntity#PRICK_EVERY} ticks and shoves them on along their way.
+     */
+    static Vector3d chaseTick(Scene s, EmberWalk.Ground g, EmberWalk walk, EmberChase chase, Runner runner, Vector3d mid, int tick, Stats st) {
+        Vector3d eye = runner.eye();
+        double dx = runner.feet.x - mid.x, dz = runner.feet.z - mid.z, across = Math.sqrt(dx * dx + dz * dz);
+        boolean sees = tick % 4 == 0 ? sees(s.blocks, mid, eye) : chase.seesNow;
+        if (chase.free() && (s.chaseNow && tick == 0 || sees && mid.distance(eye) <= EmberChase.SEE)) chase.start(0, runner.feet);
+        boolean was = chase.chasing();
+        chase.tick(true, tick % 4 == 0 ? sees : null, runner.feet, mid.distance(eye), walk.gettingThere());
+        if (was && !chase.chasing()) {
+            walk.endChase();
+            if (st.gaveUpAt < 0) { st.gaveUpAt = tick; st.gaveUp = chase.gaveUp; }
+        }
+        Vector3d v;
+        if (chase.phase == EmberChase.Phase.ROUSE) v = walk.rouse(g, mid);
+        else if (chase.phase == EmberChase.Phase.CHASE) {
+            v = walk.chase(g, mid, chase.seenAt, List.of());
+            st.chaseTicks++;
+            st.chaseDist += across;
+            st.chaseDistMost = Math.max(st.chaseDistMost, across);
+            if (walk.caught()) {
+                st.caughtTicks++;
+                if (st.firstCaught < 0) st.firstCaught = tick;
+                if (st.caughtTicks % EmberUrchinEntity.PRICK_EVERY == 1) {
+                    st.pricks++;
+                    runner.go(s.shove);
+                }
+            }
+        } else v = walk.tick(g, mid, List.of(), false);
+        if (DEBUG && tick % 20 == 0)
+            System.out.printf("      t%d them at %s (%.1f across, %s): %s; %s%n", tick, fmt(runner.feet), across, sees ? "seen" : "unseen", chase.describe(), walk.describe());
+        return v;
+    }
+
+    /** Whether the way from a to b is clear of rock (looked at every fifth of a block). */
+    static boolean sees(Blocks b, Vector3d a, Vector3d to) {
+        double d = a.distance(to);
+        int n = (int) Math.ceil(d / 0.2);
+        for (int k = 1; k < n; k++) {
+            double f = (double) k / n;
+            if (b.mat((int) Math.floor(a.x + (to.x - a.x) * f), (int) Math.floor(a.y + (to.y - a.y) * f), (int) Math.floor(a.z + (to.z - a.z) * f)) == ROCK)
+                return false;
+        }
+        return true;
+    }
+
+    /**
+     * A way someone could go from where its middle is at {@code from}, about {@code length} steps long (or as far as
+     * there is): the places it could step to a block at a time ({@link EmberWalk#step}, with only the room it squeezes
+     * through chasing, so that it could follow), out to the first place {@code length} steps from it (else the
+     * furthest), as their feet (on the floor under each).
+     */
+    static List<Vector3d> runnerWay(EmberWalk.Ground g, Vector3d from, int length, long seed) {
+        java.util.HashMap<Long, double[]> seen = new java.util.HashMap<>();
+        java.util.HashMap<Long, Long> parent = new java.util.HashMap<>();
+        java.util.ArrayDeque<double[]> open = new java.util.ArrayDeque<>();
+        // {x, y, z, depth}
+        double[] first = {from.x, from.y, from.z, 0};
+        seen.put(key(from.x, from.y, from.z), first);
+        open.add(first);
+        int[] wx = {1, -1, 0, 0, 1, 1, -1, -1}, wz = {0, 0, 1, -1, 1, -1, 1, -1};
+        java.util.Random r = new java.util.Random(seed);
+        double[] far = first;
+        int cells = 0;
+        while (!open.isEmpty() && cells++ < 40000) {
+            double[] c = open.poll();
+            if (c[3] > far[3]) far = c;
+            if (c[3] >= length) break;
+            int turn = r.nextInt(8);
+            for (int j = 0; j < 8; j++) {
+                int k = (j + turn) % 8;
+                double x = c[0] + wx[k], z = c[2] + wz[k];
+                double y = EmberWalk.step(g, c[1], x, z, EmberWalk.PROBE_STEP, EmberWalk.SQUEEZE);
+                if (Double.isNaN(y)) continue;
+                long kk = key(x, y, z);
+                if (seen.containsKey(kk)) continue;
+                double[] n = {x, y, z, c[3] + 1};
+                seen.put(kk, n);
+                parent.put(kk, key(c[0], c[1], c[2]));
+                open.add(n);
+            }
+        }
+        List<Vector3d> way = new ArrayList<>();
+        for (Long k = key(far[0], far[1], far[2]); k != null; k = parent.get(k)) {
+            double[] c = seen.get(k);
+            way.add(0, feet(g, c[0], c[1], c[2]));
+        }
+        return way;
+    }
+
+    private static long key(double x, double y, double z) {
+        return ((long) Math.floor(x) & 0x3FFFFFFL) << 38 | ((long) Math.floor(y) & 0xFFFL) << 26 | ((long) Math.floor(z) & 0x3FFFFFFL);
+    }
+
+    /** The feet of someone standing under a middle at (x, y, z): on the floor's top. */
+    static Vector3d feet(EmberWalk.Ground g, double x, double y, double z) {
+        int bx = (int) Math.floor(x), bz = (int) Math.floor(z);
+        int f = (int) Math.floor(y);
+        while (f > y - 12 && !g.solid(bx, f - 1, bz)) f--;
+        return new Vector3d(x, f, z);
+    }
 
     // ------------------------------------------------------------------------------------------------ drawing
 

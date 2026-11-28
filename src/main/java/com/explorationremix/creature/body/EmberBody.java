@@ -22,6 +22,8 @@ import org.joml.Vector3d;
  *     is pressed in too far (bowed past bearing) lifts and steps: to where it will hold longest as the ball goes on (far
  *     ahead for one it is coming toward, near in for one it is leaving). No two neighbours lift together, so a ripple of
  *     steps runs over it.</li>
+ *     <li>Going quicker (chasing someone at a player's walk, 0.24.3), its steps are quicker and more of its spines step
+ *     at once, earlier, and its ball leans further into its going: a scuttle ({@link #quick}).</li>
  *     <li>Its ball leans a little into its going and gives a little at each step (a spring), so it rides its spines.</li>
  *     <li>Dying, its spines let go and droop and it settles onto the rock under it.</li>
  * </ul>
@@ -86,6 +88,15 @@ public final class EmberBody {
     static final int MOST_UP = 6, FORCED_UP = 9;
     static final int SWING = 6, SWING_QUICK = 4;
     /**
+     * Its scuttle ({@link #quick}): going from QUICK_FROM to QUICK_AT (blocks a tick: from a little over its own walk to
+     * about a player's walk), its steps grow up to this much quicker (ticks off each), up to this many more of its spines
+     * are up at once and lift a tick, a braced spine steps this much sooner (of its strain), and a new point is judged
+     * over a shorter life (as it bears so much less long).
+     */
+    static final double QUICK_FROM = 0.07, QUICK_AT = 0.19;
+    static final int QUICK_SWING = 3, QUICK_SWING_QUICK = 2, QUICK_UP = 4, QUICK_LIFTS = 2;
+    static final double QUICK_SOONER = 0.25, QUICK_LIFE = 0.25, QUICK_LEAN = 0.8;
+    /**
      * A step lifts its point this far off its rock (blocks at scale 1), and draws it in toward the ball by this share of
      * its reach at the step's height (as a leg's knee bends to lift it), so that it swings round inside corners, not
      * through them.
@@ -126,6 +137,8 @@ public final class EmberBody {
     /** Its going (blocks a tick), eased. */
     private final Vector3d vel = new Vector3d();
     private double speed, flare, focusAmount;
+    /** How far it scuttles (0 at its own walk, 1 at a player's): see {@link #QUICK_FROM}. */
+    private double quick;
     private int standing, settleNext;
     private Mode mode = Mode.LIVE;
     private long ticks;
@@ -223,6 +236,7 @@ public final class EmberBody {
         lastBox.set(in.x, in.y, in.z);
         vel.lerp(t0, 0.35);
         speed += (vel.length() - speed) * 0.3;
+        quick = clamp01((speed - QUICK_FROM * spec.scale) / ((QUICK_AT - QUICK_FROM) * spec.scale));
         flare += (clamp01(in.flare) - flare) * (in.flare > flare ? 0.35 : 0.05);
         leanTick();
         giveTick();
@@ -238,7 +252,7 @@ public final class EmberBody {
         double s = mode == Mode.DEAD ? 0.0 : Math.min(1.0, speed / (0.055 * spec.scale));
         t1.set(vel.z, 0, -vel.x);                       // the way round which its top tips forward: up x going
         double l = t1.length();
-        if (l > 1.0E-6) t1.mul(LEAN * s / l); else t1.zero();
+        if (l > 1.0E-6) t1.mul(LEAN * (1.0 + QUICK_LEAN * quick) * s / l); else t1.zero();
         double wob = mode == Mode.DEAD ? 0.0 : WOBBLE * (1.0 + 1.5 * flare);
         t1.add(Math.sin(age * 0.043) * wob, Math.sin(age * 0.029 + 1.3) * wob * 0.6, Math.cos(age * 0.037 + 0.4) * wob);
         lean.lerp(t1, 0.12);
@@ -269,6 +283,7 @@ public final class EmberBody {
         give.zero();
         giveVel.zero();
         speed = 0;
+        quick = 0;
         flare = clamp01(in.flare);
         lean.zero();
         leanPrev.zero();
@@ -369,6 +384,11 @@ public final class EmberBody {
         for (Leg lg : legs) if (lg.swinging) swing(rock, lg);
         boolean moving = speed > MOVING * spec.scale;
         standing = moving ? 0 : standing + 1;
+        // its scuttle: quicker steps, more up at once, stepping sooner
+        int swingFor = (int) Math.round(SWING - QUICK_SWING * quick), swingQuick = (int) Math.round(SWING_QUICK - QUICK_SWING_QUICK * quick);
+        int mostUp = MOST_UP + (int) Math.round(QUICK_UP * quick), forcedUp = FORCED_UP + (int) Math.round(QUICK_UP * quick);
+        int lifts = 2 + (int) Math.round(QUICK_LIFTS * quick);
+        double soon = 0.8 - QUICK_SOONER * quick;
         Leg pick = null;
         for (Leg lg : legs) {
             if (lg.swinging) continue;
@@ -376,8 +396,8 @@ public final class EmberBody {
                 freePose(rock, lg, false);
                 if (lg.planted) continue;
                 // reaching no rock: now and then it looks again (the ball has come nearer some)
-                if ((ticks + lg.index) % FREE_LOOK == 0 && up < MOST_UP && !neighbourUp(lg) && search(rock, lg, SWING, found, foundN)) {
-                    begin(lg, SWING, found, foundN, true);
+                if ((ticks + lg.index) % FREE_LOOK == 0 && up < mostUp && !neighbourUp(lg) && search(rock, lg, swingFor, found, foundN)) {
+                    begin(lg, swingFor, found, foundN, true);
                     up++;
                 }
                 continue;
@@ -390,21 +410,21 @@ public final class EmberBody {
             if (lost || lg.strain >= 1.3) {
                 // pulled past bearing (or its rock gone, or its bow pressed into rock however it turns): up at once,
                 // neighbours or not
-                if (up < FORCED_UP) { step(rock, lg, SWING_QUICK); up++; }
+                if (up < forcedUp) { step(rock, lg, swingQuick); up++; }
                 continue;
             }
-            if (lg.strain >= 1.0 || (moving && lg.strain > 0.8)) {
+            if (lg.strain >= 1.0 || (moving && lg.strain > soon)) {
                 if (!neighbourUp(lg) && (pick == null || lg.strain > pick.strain)) pick = lg;
             }
         }
-        // the hardest pulled spine that may lift lifts, and a second if the going is quick
-        for (int k = 0; k < 2 && pick != null && up < MOST_UP; k++) {
-            step(rock, pick, SWING);
+        // the hardest pulled spine that may lift lifts, and a second if the going is quick (more, scuttling)
+        for (int k = 0; k < lifts && pick != null && up < mostUp; k++) {
+            step(rock, pick, swingFor);
             up++;
             Leg next = null;
             for (Leg lg : legs) {
                 if (!lg.planted || lg.swinging || lg == pick) continue;
-                if ((lg.strain >= 1.0 || (moving && lg.strain > 0.8)) && !neighbourUp(lg) && (next == null || lg.strain > next.strain)) next = lg;
+                if ((lg.strain >= 1.0 || (moving && lg.strain > soon)) && !neighbourUp(lg) && (next == null || lg.strain > next.strain)) next = lg;
             }
             pick = next;
         }
@@ -565,7 +585,7 @@ public final class EmberBody {
         socket(i, hipNow);
         bendFor(i, hipNow, lg.at, lg.nrm, t4);
         boolean clear = clearBend(rock, i, hipNow, lg.at, t4, t4);
-        lg.bend.lerp(t4, 0.35);
+        lg.bend.lerp(t4, 0.35 + 0.35 * quick);
         if (lg.bend.lengthSquared() < 1.0E-6 || (clear && !bowClear(rock, i, hipNow, lg.at, lg.bend, false))) lg.bend.set(t4);
     }
 
@@ -630,7 +650,10 @@ public final class EmberBody {
         out.normalize();
     }
 
-    /** Whether a braced spine's bow has come to lie in rock (the ball has gone on round a corner, say). */
+    /**
+     * Whether a braced spine's bow has come to lie in rock (the ball has gone on round a corner, say): looked at in two
+     * places along it, and two more scuttling (when its bow sweeps along the rock so much quicker).
+     */
     private boolean bowInRock(TerrainPatch rock, Leg lg) {
         int i = lg.index;
         socket(i, hipNow);
@@ -638,6 +661,11 @@ public final class EmberBody {
         bow.point(0.4 * bow.length, bp);
         if (rock.solid(bp.x, bp.y, bp.z)) return true;
         bow.point(0.7 * bow.length, bp);
+        if (rock.solid(bp.x, bp.y, bp.z)) return true;
+        if (quick < 0.3) return false;
+        bow.point(0.22 * bow.length, bp);
+        if (rock.solid(bp.x, bp.y, bp.z)) return true;
+        bow.point(0.86 * bow.length, bp);
         return rock.solid(bp.x, bp.y, bp.z);
     }
 
@@ -708,6 +736,8 @@ public final class EmberBody {
         square(ea.set(Math.abs(w.y) < 0.9 ? 0 : 1, Math.abs(w.y) < 0.9 ? 1 : 0, 0), w);
         eb.set(w).cross(ea).normalize();
         boolean moving = speed > MOVING * spec.scale;
+        // scuttling, a point bears so much less long that its life is judged over less
+        int lifeCap = Math.max(4 * LIFE_STEP, (int) Math.round(LIFE_CAP * (1.0 - (1.0 - QUICK_LIFE) * quick)));
         double best = -Double.MAX_VALUE;
         boolean any = false;
         double turnRound = (seed & 0xFF) / 256.0 * 2.0 * Math.PI;
@@ -731,8 +761,8 @@ public final class EmberBody {
                 bow.set(hip, sTip, sBend, L);
                 if (bow.rootWay(sRoot).dot(w) < ROOT_OUT) continue;
                 if (bowBlocked(rock)) continue;
-                double life = moving ? life(hip, w, sTip, L) : LIFE_CAP;
-                double score = (moving ? 3.0 * life / LIFE_CAP : 0.0) - a / RINGS[NEAR_RINGS - 1] - 4.0 * Math.abs(q - PLANT_AIM);
+                double life = moving ? life(hip, w, sTip, L, lifeCap) : lifeCap;
+                double score = (moving ? 3.0 * life / lifeCap : 0.0) - a / RINGS[NEAR_RINGS - 1] - 4.0 * Math.abs(q - PLANT_AIM);
                 if (score > best) {
                     best = score;
                     out.set(sTip);
@@ -754,14 +784,17 @@ public final class EmberBody {
         return rock.solid(bp.x, bp.y, bp.z);
     }
 
-    /** How many ticks a point at {@code at} would bear as the ball goes on as it goes now, its socket at {@code hip} now. */
-    private int life(Vector3d hip, Vector3d way, Vector3d at, double len) {
-        for (int t = LIFE_STEP; t <= LIFE_CAP; t += LIFE_STEP) {
+    /** How many ticks (up to {@code cap}) a point at {@code at} would bear as the ball goes on as it goes now, its socket at {@code hip} now. */
+    private int life(Vector3d hip, Vector3d way, Vector3d at, double len, int cap) {
+        for (int t = LIFE_STEP; t <= cap; t += LIFE_STEP) {
             lt.set(hip).fma(t, vel);
             if (strain(lt, way, at, len) >= 1.0) return t - LIFE_STEP;
         }
-        return LIFE_CAP;
+        return cap;
     }
+
+    /** How far it scuttles now (0 at its own walk, 1 at a player's). */
+    public double quick() { return quick; }
 
     /** Whether a point at p (out of its rock along n) stands on rock. */
     private static boolean standsOn(TerrainPatch rock, Vector3d p, Vector3d n) {
