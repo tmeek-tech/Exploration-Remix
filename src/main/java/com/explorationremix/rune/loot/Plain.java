@@ -13,10 +13,13 @@ import java.util.List;
 /**
  * Runes in place of enchanting (0.22.6). The enchanting table sets runes and nothing else, so what the world hands out
  * comes without enchantments too: new chest loot, fishing, bartering, trades and the gear mobs spawn with come plain, and
- * an enchanted book found or sold becomes a rune. Gear that was enchanted before keeps its enchantments.
+ * an enchanted book caught, bartered or sold becomes a rune. Gear that was enchanted before keeps its enchantments.
  * <ul>
- *   <li>A book found in the world (a chest, a catch, a barter) becomes a rune of any layer: one first found in the Upper
- *   Caves most often, one of the Deep Gardens least.</li>
+ *   <li>A book caught or bartered for becomes a rune of any layer: one first found in the Upper Caves most often, one of
+ *   the Deep Gardens least.</li>
+ *   <li>A book in a chest comes as a plain book (0.24.5, Taran: "Can you take the runes out of other chests as well?",
+ *   after the Galleries ruins' chest lost its rune on the rune stone card): runes are found in rune stones, not in
+ *   chests.</li>
  *   <li>A librarian's book trade sells a rune instead: a novice's or apprentice's one of the Upper Caves, a journeyman's
  *   or expert's one of the Blue Reaches. The Deep Gardens' runes are only ever found.</li>
  *   <li>A trade that sold enchanted gear sells it plain, for half the emeralds.</li>
@@ -68,10 +71,13 @@ public final class Plain {
     /** A rune trade's price in emeralds: 6 to 10 for one of the Upper Caves, 12 to 19 for the Blue Reaches', 18 to 28 deeper. */
     static int price(int layer, RandomSource rand) { return Math.min(64, 6 + 6 * layer + rand.nextInt(5 + 3 * layer)); }
 
-    /** What the world hands out instead of this stack: an enchanted book becomes a rune, enchanted gear comes plain. */
-    public static ItemStack of(ItemStack stack, RandomSource rand) {
+    /**
+     * What the world hands out instead of this stack: an enchanted book becomes a rune, or a plain book in a chest
+     * (inChest); enchanted gear comes plain.
+     */
+    public static ItemStack of(ItemStack stack, RandomSource rand, boolean inChest) {
         if (stack.is(Items.ENCHANTED_BOOK)) {
-            ItemStack rune = RuneItem.stack(pick(rand, 0, 2), stack.getCount());
+            ItemStack rune = inChest ? ItemStack.EMPTY : RuneItem.stack(pick(rand, 0, 2), stack.getCount());
             return rune.isEmpty() ? new ItemStack(Items.BOOK, stack.getCount()) : rune;
         }
         return plain(stack);
