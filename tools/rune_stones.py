@@ -24,9 +24,10 @@ since Embeddium fills a texture's clear pixels with its average colour. The atla
 its own.
 
 Writes the textures, the models (on one template: the rock, the carving, the glow), the blockstates (property host, the
-four looks as random variants), the items, the loot tables (one rune for certain, a second one time in three, or half
-the time with a Bounty pickaxe, as with Fortune II; the Galleries' stones roll the deepest layers most, as the ruins'
-rune chest does) and the English names. Called by gen_data.main.
+four looks as random variants), the items, the loot tables (one rune for certain and a second one time in three,
+whatever the pickaxe: until 0.24.5 a Bounty pickaxe made it half the time, as Fortune II; the Galleries' stones roll
+the deepest layers most, as the ruins' rune chest did until 0.24.5, when Taran's card took its rune out and left the
+ruins' runes to the stones) and the English names. Called by gen_data.main.
 
 python3 tools/rune_stones.py --sheet OUT.png [VANILLA_BLOCK_TEXTURES] draws every look lit and in the dark, close up and
 set in a wall of its host, for review (the walls need vanilla's textures, from a folder or the game's client jar).
@@ -72,7 +73,7 @@ HOSTS = {
 # ============================================================================================== the stones
 # block id -> (English name, its layer's rune tags with their weights, its hosts, the first its default). The layer
 # tags are runes.py's: a layer's runes but its collect runes (Taran's card pick: the layer's own). The Galleries have
-# no runes of their own, so theirs roll the three layers as the ruins' rune chest does: the Deep Gardens' most often.
+# no runes of their own, so theirs roll the three layers as the ruins' rune chest did: the Deep Gardens' most often.
 # The block ids and the host lists must match block/RuneStoneKind.java.
 STONES = {
     "upper_caves_rune_stone": ("Upper Caves Rune Stone", [("upper_caves", 1)],
@@ -86,9 +87,10 @@ STONES = {
 }
 BLOCK_IDS = list(STONES)
 LOOKS = 4
-# The chance of a second rune by the pickaxe's Fortune level (a Bounty rune counts as Fortune II, ToolRunes): one in
-# three bare (Taran's card pick), a half with Bounty.
-SECOND = [0.3333, 0.4167, 0.5, 0.5833]
+# The chance of a second rune: one in three (Taran's card pick), whatever the pickaxe. A Bounty rune (Fortune II,
+# ToolRunes) raised it to a half until 0.24.5, when Taran changed their mind: "Can you make bounty not effect rune
+# blocks?" So no Fortune counts.
+SECOND = 0.3333
 
 # ============================================================================================== the runes carved
 # The carving's light: the active runes' light blue (runes.KIND_GLYPH["action"]), its core near white, its dim end. No
@@ -312,7 +314,7 @@ def loot(weights):
     return {"type": "minecraft:block",
             "pools": [{"rolls": 1, "entries": entries},
                       {"rolls": 1, "entries": entries,
-                       "conditions": [{"condition": "minecraft:table_bonus", "enchantment": "minecraft:fortune", "chances": SECOND}]}]}
+                       "conditions": [{"condition": "minecraft:random_chance", "chance": SECOND}]}]}
 
 
 def write_all(res, write):

@@ -33,8 +33,9 @@ import javax.annotation.Nullable;
  *
  * <p>It takes a beat longer to break than its host (hardness 5, a second with an iron pickaxe), so the carving's light has time to build while it is
  * dug, and any tool breaks it, so a rune is never lost to the wrong tool. A Gentle pickaxe (Silk Touch) breaks it all the
- * same: the stone never comes out whole. It gives 3 to 7 experience. What it frees is its loot table's; how it goes is
- * {@link RuneStones}'s.
+ * same: the stone never comes out whole. No tool frees more: a Bounty pickaxe did until 0.24.5, when Taran changed their
+ * mind ("Can you make bounty not effect rune blocks?"). It gives 3 to 7 experience. What it frees is its loot table's;
+ * how it goes is {@link RuneStones}'s.
  */
 public class RuneStoneBlock extends Block {
     /** The kind whose property the block being made takes (createBlockStateDefinition runs inside Block's constructor). */
