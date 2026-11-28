@@ -181,7 +181,7 @@ y -896 instead of -784, and its Galleries only join the Wasteland in a new world
     stays reachable.
   * The Ivory Root Cavern's floors, and the floors of the halls that take its look, are pale calcite terraces with
     patches of moss on them; about half of each patch is bare Create limestone in rounded pieces a few blocks across
-    (0.24.4), and moss carpets grow only on the moss.
+    (0.24.6), and moss carpets grow only on the moss.
 * **Looks:** new plants and crystals (white glow flowers, lantern fungi and roots, giant lantern fungi with glowing
   caps, wisteria, lantern pods, lavender flowers and glowing gold flowers, silver ferns (placed on the side of a block
   they hang down it, as in the Silver Fern Rift), orange shelf fungi, lavender coral, pale coral fans, ember vines,

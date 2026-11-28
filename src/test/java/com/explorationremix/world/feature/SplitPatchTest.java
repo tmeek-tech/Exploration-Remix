@@ -7,7 +7,7 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * The Ivory Root Caverns' moss patches (0.24.4, Taran, 2026-11-28: "replace about half of the moss in Ivory Root Caverns
+ * The Ivory Root Caverns' moss patches (0.24.6, Taran, 2026-11-28: "replace about half of the moss in Ivory Root Caverns
  * with limestone"): half of the patches' ground bare (limestone) and half moss, the patches together as big as vanilla's
  * square patches were, the moss and limestone in pieces a few blocks across, and the same floors for the same seed.
  */

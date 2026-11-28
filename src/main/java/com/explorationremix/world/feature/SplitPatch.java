@@ -14,8 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * lowest {@code bareShare}). Both are pure functions of the world's seed and the block's x and z, so patches that overlap
  * agree on every block, and the same seed gives the same floors.
  *
- * <p>0.24.4 (Taran, 2026-11-28: "Can you replace about half of the moss in Ivory Root Caverns with limestone?"): the halls'
- * moss patches keep their places and sizes, and half of each, in rounded pieces a few blocks across, is limestone.
+ * <p>0.24.6 (Taran, 2026-11-28: "Can you replace about half of the moss in Ivory Root Caverns with limestone?"): the halls'
+ * moss patches are as many and as big as before, and half of each, in rounded pieces a few blocks across, is limestone.
  */
 public final class SplitPatch {
     /** How far a patch's outline wanders in or out, as a share of its radius. */

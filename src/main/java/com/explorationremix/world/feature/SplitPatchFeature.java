@@ -1,5 +1,6 @@
 package com.explorationremix.world.feature;
 
+import com.explorationremix.world.terrain.Hashing;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
@@ -25,9 +26,14 @@ import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvi
  * down through open air from the origin's height, then up out of anything solid, within {@code vertical_range}, so a
  * patch drapes over steps and leaves water, plants and overhangs alone.
  *
- * <p>The Ivory Root Caverns' moss (0.24.4, Taran, 2026-11-28: "replace about half of the moss in Ivory Root Caverns with
+ * <p>A patch takes only its two half widths from the chunk's random, drawn as vanilla's patch drew its square's sides;
+ * everything else it picks (which blocks grow plants, and any random cover) comes from a random of its own, seeded by the
+ * world and its middle. So the tries after it in a chunk land in the same places whatever its covers, split or plants
+ * are, and changing those never moves a patch.
+ *
+ * <p>The Ivory Root Caverns' moss (0.24.6, Taran, 2026-11-28: "replace about half of the moss in Ivory Root Caverns with
  * limestone"; cards: moss islands on limestone, anywhere in the halls, Create's limestone, carpets only on the moss): the
- * patches keep the places and sizes vanilla's patches had (their outlines were squares with ragged edges), and half of
+ * patches are placed as vanilla's were, as many and as big (their outlines were squares with ragged edges), and half of
  * each is limestone in rounded pieces a few blocks across.
  */
 public final class SplitPatchFeature extends Feature<SplitPatchFeature.Config> {
@@ -53,11 +59,12 @@ public final class SplitPatchFeature extends Feature<SplitPatchFeature.Config> {
     public boolean place(FeaturePlaceContext<Config> ctx) {
         Config c = ctx.config();
         WorldGenLevel level = ctx.level();
-        RandomSource random = ctx.random();
         BlockPos origin = ctx.origin();
         SplitPatch shape = SplitPatch.of(level.getSeed(), c.bareShare(), c.splitScale());
-        // half widths as vanilla's patch drew them (its square's half side, plus the half block of its edge row)
-        double ax = c.radius().sample(random) + 0.5, az = c.radius().sample(random) + 0.5;
+        // half widths as vanilla's patch drew them (its square's half side, plus the half block of its edge row): the only
+        // draws from the chunk's random
+        double ax = c.radius().sample(ctx.random()) + 0.5, az = c.radius().sample(ctx.random()) + 0.5;
+        RandomSource random = RandomSource.create(Hashing.mix(level.getSeed(), origin.getX(), origin.getY(), origin.getZ()));
         int reach = SplitPatch.reach(Math.max(ax, az));
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos below = new BlockPos.MutableBlockPos();

@@ -730,10 +730,11 @@ def build_features():
             attach(simple(f"{MOD}:pool_pearls"), "floor", 32, f"#{MOD}:grotto_bed", radius=5, height=2, in_water=True),
             [count(32), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, looks(0, 1, cold=False), BIOME])
     # The halls' moss in patches, not a spatter of carpets (Taran, 0.14.0): a moss floor with a carpet here and there.
-    # 0.24.4 (Taran, 2026-11-28: "replace about half of the moss in Ivory Root Caverns with limestone"; cards: moss islands
-    # on limestone, anywhere in the halls, Create's limestone, carpets only on the moss): the patches keep vanilla's
-    # vegetation_patch's places and sizes (3 a chunk, half widths 3 to 6), shaped by noise instead of squares, and half
-    # of each is limestone in rounded pieces 3 to 9 blocks across (SplitPatchFeature); carpets on one moss block in seven.
+    # 0.24.6 (Taran, 2026-11-28: "replace about half of the moss in Ivory Root Caverns with limestone"; cards: moss islands
+    # on limestone, anywhere in the halls, Create's limestone, carpets only on the moss): the patches are placed as
+    # vanilla's vegetation_patch's were, as many and as big (3 a chunk, half widths 3 to 6), shaped by noise instead of
+    # squares, and half of each is limestone in rounded pieces 3 to 9 blocks across (SplitPatchFeature); carpets on one
+    # moss block in seven.
     feature("ivory_root_cavern/moss", "vegetal_decoration", ["ivory_root_cavern"],
             {"type": f"{MOD}:split_patch", "config": {
                 "replaceable": f"#{MOD}:cave_rock", "cover": simple("minecraft:moss_block"), "bare": LIMESTONE,
