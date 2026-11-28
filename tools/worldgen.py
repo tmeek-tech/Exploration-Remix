@@ -730,13 +730,15 @@ def build_features():
             attach(simple(f"{MOD}:pool_pearls"), "floor", 32, f"#{MOD}:grotto_bed", radius=5, height=2, in_water=True),
             [count(32), SQUARE, layer(up)] + floor(through=AIR_OR_WATER) + [IN_WATER, looks(0, 1, cold=False), BIOME])
     # The halls' moss in patches, not a spatter of carpets (Taran, 0.14.0): a moss floor with a carpet here and there.
+    # 0.24.4 (Taran, 2026-11-28: "replace about half of the moss in Ivory Root Caverns with limestone"; cards: moss islands
+    # on limestone, anywhere in the halls, Create's limestone, carpets only on the moss): the patches keep vanilla's
+    # vegetation_patch's places and sizes (3 a chunk, half widths 3 to 6), shaped by noise instead of squares, and half
+    # of each is limestone in rounded pieces 3 to 9 blocks across (SplitPatchFeature); carpets on one moss block in seven.
     feature("ivory_root_cavern/moss", "vegetal_decoration", ["ivory_root_cavern"],
-            {"type": "minecraft:vegetation_patch", "config": {
-                "replaceable": f"#{MOD}:cave_rock", "ground_state": simple("minecraft:moss_block"),
-                "vegetation_feature": {"feature": {"type": "minecraft:simple_block", "config": {"to_place": simple("minecraft:moss_carpet")}},
-                                       "placement": []},
-                "surface": "floor", "depth": 1, "vertical_range": 4, "extra_bottom_block_chance": 0.0, "extra_edge_column_chance": 0.35,
-                "vegetation_chance": 0.15, "xz_radius": uniform(2, 5)}},
+            {"type": f"{MOD}:split_patch", "config": {
+                "replaceable": f"#{MOD}:cave_rock", "cover": simple("minecraft:moss_block"), "bare": LIMESTONE,
+                "vegetation": simple("minecraft:moss_carpet"), "vegetation_chance": 0.15,
+                "radius": uniform(3, 6), "vertical_range": 4, "bare_share": 0.5, "split_scale": 9.0}},
             [count(3), SQUARE, layer(up)] + floor() + [BIOME])
     feature("lantern_lake/wisteria", "vegetal_decoration", ["lantern_lake"],
             hanging_patch(hanging_column("explorationremix:wisteria_plant", LILAC_TIPS, 1, 6), tries=10, xz=5, y=2),
