@@ -78,12 +78,16 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   crust a block and a quarter across, glowing orange in its cracks, held up in the middle of the tunnel on thirty long
   springy spines braced on the walls, the floor and the roof, so that it fills the way from wall to wall. It creeps
   along at a quarter of a walk, a spine or two stepping at a time, crosses caves on its lower spines and wades lava, and
-  casts a dim light round it, so its black spines show against the rock from down the tunnel. It never hunts you: it is
-  in the way. Its spines turn towards you and its embers flare hot as you come near; touching one pricks (about two
-  hearts on Normal, none on Peaceful), sets you burning and shoves you back, and a sword blow pricks the one who struck
-  it. Forty hearts behind armor make it a long fight, so the way past one is to wait, go round by another tunnel, or
-  slip by in a cave. It keeps out of the Ash Hollows, and drops a few ember spines that burn in a furnace as long as a
-  blaze rod.
+  casts a dim light round it, so its black spines show against the rock from down the tunnel. Its spines turn towards
+  you and its embers flare hot as you come near; touching one pricks (about two hearts on Normal, none on Peaceful),
+  sets you burning and shoves you back, and a sword blow pricks the one who struck it. Since 0.24.3 it chases: see it
+  within sixteen blocks, or hurt it from anywhere near, and it flares with a hiss and after half a second scuttles
+  after you at a player's walk, its needles rattling, round bends and up and down between storeys, pressing in to
+  prick and shove you on whenever it catches you. Walking keeps it where it is behind you; a sprint, ducking out of its
+  sight for five seconds, or getting 32 blocks off makes it give up and creep on its way again, and it will not follow
+  you into the Ash Hollows. It never chases in Peaceful. Forty hearts behind armor make it a long fight, so the way past
+  one is to slip by, go round by another tunnel, or run. It drops a few ember spines that burn in a furnace as long as
+  a blaze rod.
 * **Basalt Galleries** (0.5; halls since 0.20.4): the biggest caves in the game, domed halls about 80 to 130 blocks
   across and up to about 90 tall, each its own cave behind ragged basalt walls that break here and there, and every
   hall opens into each of its neighbours through a doorway; their floors are a landscape of ledges and low ground round
