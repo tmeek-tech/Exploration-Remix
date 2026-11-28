@@ -39,6 +39,7 @@ import com.explorationremix.world.feature.PondSpillFeature;
 import com.explorationremix.world.feature.CattailBedsFeature;
 import com.explorationremix.world.feature.SinkholeRimFeature;
 import com.explorationremix.world.feature.SkeinsFeature;
+import com.explorationremix.world.feature.SplitPatchFeature;
 import com.explorationremix.world.feature.StiltMantisesFeature;
 import com.explorationremix.world.feature.ChimneyLurkersFeature;
 import com.explorationremix.world.feature.ChoirArenaFeature;
@@ -77,6 +78,8 @@ public final class ERWorldgen {
     public static final RegistryObject<Feature<SurfaceAttachFeature.Config>> SURFACE_ATTACH = FEATURES.register("surface_attach", () -> new SurfaceAttachFeature(SurfaceAttachFeature.Config.CODEC));
     public static final RegistryObject<Feature<GiantSpikeFeature.Config>> GIANT_SPIKE = FEATURES.register("giant_spike", () -> new GiantSpikeFeature(GiantSpikeFeature.Config.CODEC));
     public static final RegistryObject<Feature<PointedPatchFeature.Config>> POINTED_PATCH = FEATURES.register("pointed_patch", () -> new PointedPatchFeature(PointedPatchFeature.Config.CODEC));
+    // 0.24.6: ground cover in noise-shaped patches split between two covers (the Ivory Root Caverns' moss, half of it limestone)
+    public static final RegistryObject<Feature<SplitPatchFeature.Config>> SPLIT_PATCH = FEATURES.register("split_patch", () -> new SplitPatchFeature(SplitPatchFeature.Config.CODEC));
     // 0.20.7: the Frost Fern Grotto's ice columns grown from noise over each chunk (0.14.0's placed pillars are gone)
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> ICE_COLUMNS = FEATURES.register("ice_columns", () -> new IceColumnsFeature(NoneFeatureConfiguration.CODEC));
     // 0.20.1: ice crusting the deep Frost Fern Grotto's walls (its glowing veins left with the glow ice in 0.20.7)
