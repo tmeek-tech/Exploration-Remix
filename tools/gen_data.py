@@ -1256,11 +1256,13 @@ def particles():
 
 
 def ruin_loot():
-    """0.22.4: the lower Galleries' ruins' chests (GalleriesRuinsFeature; Taran's card: "A rune and some loot"). The rune's
-    chest in each cluster's big structure holds a rune for certain, most often one of the deep layers' (each item in a
-    tag takes its entry's weight: the Deep Gardens' 5 x 10, the Blue Reaches' 7 x 5, the Upper Caves' 16 x 2), and a few
-    things besides; the loot chests in two or three of its huts hold the builders' leavings: gold, iron, torches for the
-    dark, obsidian, a bottle of fire resistance for the lava, now and then a diamond, a golden apple or ancient debris."""
+    """0.22.4: the lower Galleries' ruins' chests (GalleriesRuinsFeature). The chests in two or three of a cluster's huts
+    hold the builders' leavings: gold, iron, torches for the dark, obsidian, a bottle of fire resistance for the lava,
+    now and then a diamond, a golden apple or ancient debris. The chest in its big structure held a rune for certain
+    beside two to four of them (Taran's card: "A rune and some loot") until 0.24.5, when Taran's rune stone card took the
+    rune out ("Chest without its rune": the ruins' runes are all in the rune stones in their walls, rune_stones.py); it
+    rolls the leavings as the huts' chests do, so it is not the poorest of the cluster's chests. Its table keeps its name,
+    which an old world's unopened chests still name."""
     def item(name, weight, lo=1, hi=1, extra=None):
         e = {"type": "minecraft:item", "name": name, "weight": weight}
         f = [] if lo == hi == 1 else [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": lo, "max": hi}}]
@@ -1272,14 +1274,10 @@ def ruin_loot():
                 item("minecraft:experience_bottle", 8, 1, 4),
                 item("minecraft:potion", 6, extra={"function": "minecraft:set_potion", "id": "minecraft:fire_resistance"}),
                 item("minecraft:diamond", 3, 1, 2), item("minecraft:golden_apple", 2), item("minecraft:ancient_debris", 1)]
-    write(os.path.join(DATA, "loot_tables", "chests", "galleries_ruin.json"), {
-        "type": "minecraft:chest",
-        "pools": [{"rolls": {"type": "minecraft:uniform", "min": 3, "max": 6}, "entries": leavings}]})
-    write(os.path.join(DATA, "loot_tables", "chests", "galleries_ruin_rune.json"), {
-        "type": "minecraft:chest",
-        "pools": [{"rolls": 1, "entries": [{"type": "minecraft:tag", "name": f"{MOD}:runes/{layer}", "expand": True, "weight": w}
-                                           for layer, w in (("deep_gardens", 10), ("blue_reaches", 5), ("upper_caves", 2))]},
-                  {"rolls": {"type": "minecraft:uniform", "min": 2, "max": 4}, "entries": leavings}]})
+    for name in ("galleries_ruin", "galleries_ruin_rune"):
+        write(os.path.join(DATA, "loot_tables", "chests", name + ".json"), {
+            "type": "minecraft:chest",
+            "pools": [{"rolls": {"type": "minecraft:uniform", "min": 3, "max": 6}, "entries": leavings}]})
 
 
 def main():

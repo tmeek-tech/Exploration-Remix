@@ -113,8 +113,9 @@ y -896 instead of -784, and its Galleries only join the Wasteland in a new world
   a broken tower, a pillared hall, a stepped shrine or a great gate in the middle, and six or seven small ruins round it
   (wall pieces, column stubs and fallen columns, huts' footings, small arches, lava braziers, wells, stair stubs). They
   are built of dark deepslate: bricks, tiles, polished and chiseled deepslate, basalt pillars (the `stone` of the
-  `basalt_galleries/ruins` feature can pick Create's blue asurine, calcite or stone instead). The middle holds a
-  chest with a rune and some loot, and up to three huts round it hold a loot chest. The terrain reset rebuilds a
+  `basalt_galleries/ruins` feature can pick Create's blue asurine, calcite or stone instead). The middle and up to
+  three huts round it each hold a chest of loot, and two or three blocks of a cluster's walls are rune stones that give
+  its runes when broken (0.23.1; until 0.24.5 the middle's chest held a rune as well). The terrain reset rebuilds a
   broken ruin, its chests empty.
   Nothing lives here: no plants and no mobs. Light comes from lava you can see: a few big lava falls, chains of shallow
   lava pools winding along the halls' low floors, magma, and the lava in the ruins' channels and braziers. (Until 0.22.4
