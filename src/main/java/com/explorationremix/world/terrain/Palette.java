@@ -347,9 +347,9 @@ public final class Palette {
     // ============================================================================================== the ember crust
     // 0.22.9 (Taran, 2026-11-25: "re-add ember crust to light up the lower Galleries but give it a texture that blends in
     // better with the basalt"): basalt or smooth basalt with a crack in it that still glows (ERBlocks.EMBER_CRUST, light
-    // 13), the light of the lower Galleries where no lava reaches. Built at the cards' recommended answers: glowing
-    // fissures in deep red, on the cliffs, walls and tops, lighting most of the high ground, in the halls, the Caldera, the
-    // Causeway and the Basalt Rifts. It is laid in three ways, each a stone's own crack (ember): glowing joints down the
+    // 13), the light of the lower Galleries where no lava reaches. Built to the cards' answers: on the cliffs, walls and
+    // tops, lighting most of the high ground, in the halls, the Caldera, the Causeway and the Basalt Rifts; and since
+    // 0.24.1 drawn as crazed crust in lava orange (tools/minerals.py). It is laid in three ways, each a stone's own crack (ember): glowing joints down the
     // walls and cliffs, cooling cracks across the tops, and cracks in networks over the vaults. Never on a hanging
     // cluster, under the flood's tide mark (its lava lights the walls it covers), in a wet floor, in scorchia or in the
     // Obsidian Tubes.
@@ -401,8 +401,8 @@ public final class Palette {
 
     /**
      * A glowing joint in a wall or cliff: the joints between its columns ({@code columnEdge} under 0.35) in upright
-     * streaks a few to a dozen blocks long where a slow noise passes {@link #EMBER_JOINT}, so here and there a lit crack
-     * runs down between two columns, and the crust's own crack runs on from block to block down it.
+     * streaks a few to a dozen blocks long where a slow noise passes {@link #EMBER_JOINT}, so here and there a strip of
+     * crazed rock, its cracks still glowing, runs down between two columns.
      */
     private boolean glowingJoint(int x, int y, int z) {
         if (crackN.noise3(x * 0.05, ny(y) * 0.035, z * 0.05) < EMBER_JOINT) return false;

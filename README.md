@@ -27,6 +27,11 @@ layout where it was explored, and one made before 0.19.6 loses its rows below y 
 its old crude oil where it was explored, so pools there may not meet the new ones at the edge of explored ground. In
 one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and items) turn into vent beads.
 
+**The Basalt Galleries are always 144 rows** (since 0.24.2). A settings file kept from an early build may still ask
+for 256 (`height` under `[world.basalt_galleries]`): that put the Galleries 112 rows deeper, with only rock between them
+and the Wasteland, so no way led down. The file is now put back to 144 on the next start; a world made with it ends at
+y -896 instead of -784, and its Galleries only join the Wasteland in a new world.
+
 ## Installing
 
 1. Put `explorationremix-<version>.jar` in the `mods` folder of the client and the server.
@@ -114,8 +119,8 @@ one made before 0.19.9, the den fissure, vent glow and throat vein blocks (and i
   Nothing lives here: no plants and no mobs. Light comes from lava you can see: a few big lava falls, chains of shallow
   lava pools winding along the halls' low floors, magma, and the lava in the ruins' channels and braziers. (Until 0.22.4
   an unseen glow block, `explorationremix:glow`, lit the walls too; an old world's glow turns to air.)
-  **Ember crust** (0.22.9) lights the rest: basalt, or smooth basalt, with a crack in it that still glows deep red, the
-  stone round it up close. Lit cracks run down the joints between the columns of the walls and the high ground's cliffs,
+  **Ember crust** (0.22.9) lights the rest: basalt, or smooth basalt, crazed with fine cracks, a few of them still
+  glowing lava orange (0.24.1), the stone round it up close. Lit cracks run down the joints between the columns of the walls and the high ground's cliffs,
   small webs of cooling cracks lie across the tops about every ten blocks, and cracks run over the vaults, in the halls,
   the Caldera, the Causeway and the Basalt Rifts (never under the flood's mark, where the lava lights the walls, nor on
   the clusters hanging from the vaults). Each

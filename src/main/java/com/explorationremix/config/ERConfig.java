@@ -141,10 +141,17 @@ public final class ERConfig {
         // the Galleries fall from 4 over its lava table to 4 under its floor, so a deep table makes them deep pits: 16 at
         // most (10 is what was measured).
         layers[2] = new LayerConfig(b, d.layers().get(2), "cave height", "cave width", false, 64, 160, 16);
-        // The Basalt Galleries' halls stand on ledges 43 to 62 blocks over the lava table under vaults up to 108 over it,
-        // and the lava cycle floods 40 blocks: under 128 the halls lose their headroom and the band's landing stands in
-        // the flood, and a lava table more than 24 over the floor leaves a 128-tall layer too little room above it.
-        layers[3] = new LayerConfig(b, d.layers().get(3), "hall height", "hall width", false, 128, 256, 24);
+        // The Basalt Galleries are built for exactly 144 rows (0.24.2; 128 to 256 before). Their halls, high ground and
+        // ramps are laid out up from the lava table (ledges 43 to 62 blocks over it, vaults to about 108, the lava cycle's
+        // 40 blocks), and the ways down climb from there to the Wasteland right over the layer's top, so in a taller
+        // layer the extra rows stay rock between the two. Ways down with a ramp over 1024 x 1024 blocks of seed 8675309:
+        // 75 a km2 at 144 rows, 53 at 160, 32 at 192, 2 at 224, none at 256, where the Galleries' space stopped 95 rows
+        // under the Wasteland and few walkable places stood over 80 rows above the lava. Taran's file had kept an early
+        // build's 256 (inside the old range, so Forge kept it), and every world Taran made from 0.5 on had that layout,
+        // so the Wasteland never led down into the Galleries there. The height is fixed; Forge puts any other value, an
+        // old file's 256 among them, back to 144. The lava table may still sit 6 to 24 over the floor (62 to 76 ways
+        // down a km2 across that range).
+        layers[3] = new LayerConfig(b, d.layers().get(3), "hall height", "hall width", false, 144, 144, 24);
         b.pop();
 
         b.comment("The Upper Caves grown from noise instead of placed pieces (needs replaceVanillaCaveBiomes). Changes apply to newly",
