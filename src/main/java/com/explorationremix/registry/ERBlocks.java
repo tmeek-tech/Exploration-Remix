@@ -262,8 +262,9 @@ public final class ERBlocks {
      * Basalt with a crack in it that still glows from the heat under it: the light of the lower Galleries' halls, high
      * ground, Caldera, Causeway and Basalt Rifts where no lava reaches (Palette, 0.22.9). Since 0.22.9 it is basalt up
      * close (Taran, 2026-11-25: "re-add ember crust to light up the lower Galleries but give it a texture that blends in
-     * better with the basalt"): drawn as vanilla's basalt with a cutout crack over it whose deep red stretches alone are
-     * drawn at full brightness (tools/minerals.py, a glow_cube over a rock in tools/gen_data.py), so no emissive
+     * better with the basalt"): drawn as vanilla's basalt crazed with fine cutout cracks, whose lava orange stretches
+     * (0.24.1, Taran's cards "Crazed crust" and "Lava orange") alone are drawn at full brightness (tools/minerals.py, a
+     * glow_cube over a rock in tools/gen_data.py), so no emissive
      * rendering, and as hard as basalt. Under Complementary it is lit as rock (client/ShaderGlow leaves it out), so its
      * basalt does not glow. Unlike magma it is safe to walk on.
      */

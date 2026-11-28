@@ -193,11 +193,12 @@ BLOCKS = {
     # 0.5: the lifeless Basalt Galleries' glowing rock, and the chains their climbs hang in place of vines (also in the
     # Wasteland's bare refuges). The chain gives no light, and its embers only glint (an overlay kept out of
     # glowing_blocks.json). 0.22.9 (Taran, 2026-11-25: "re-add ember crust to light up the lower Galleries but give it a
-    # texture that blends in better with the basalt"): the ember crust is vanilla's basalt with a crack in it that still
-    # glows (tools/minerals.py), the smooth ember crust smooth basalt with the same cracks, so each is the stone round it.
-    # Three cracks to a face, each turned or mirrored on its own over the rock, which stays as vanilla draws it (option
-    # turns "overlay"). They give light, but under Complementary they are lit as rock (shader_glow False: ShaderGlow
-    # leaves them out), so only their cracks glow and not the basalt.
+    # texture that blends in better with the basalt"): the ember crust is vanilla's basalt crazed with fine cracks, a few
+    # still glowing lava orange (tools/minerals.py; 0.24.1, Taran's cards "Crazed crust" and "Lava orange"), the smooth
+    # ember crust smooth basalt with the same cracks, so each is the stone round it. Three crazings to a face, each turned
+    # or mirrored on its own over the rock, which stays as vanilla draws it (option turns "overlay"). They give light, but
+    # under Complementary they are lit as rock (shader_glow False: ShaderGlow leaves them out), so only their cracks glow
+    # and not the basalt.
     "ember_crust": ("Ember Crust", "glow_cube", dict(EMBER_CRUST, rock="basalt")),
     "smooth_ember_crust": ("Smooth Ember Crust", "glow_cube", dict(EMBER_CRUST, rock="smooth_basalt")),
     # (0.20.1's glow ice, the deep Frost Fern Grotto's glowing veins, left the game in 0.20.7: Taran, "Remove glow ice".)
