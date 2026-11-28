@@ -31,9 +31,38 @@ class SplitPatchTest {
     }
 
     /**
-     * Laid as the halls lay them (3 a chunk, half widths 3 to 6) over a flat floor, the patches cover as much ground as
-     * vanilla's vegetation_patch did with the same draws (its squares, corners cut, each edge column kept at 35 %), and
-     * the moss on it is about half what that put down.
+     * Each patch, on its own on a flat floor, takes as much ground as vanilla's vegetation_patch of the same draws (its
+     * square of half sides 3 to 6, corners cut, each edge column kept at 35 %), small and big alike: in the halls the
+     * patches seldom overlap, so this is what keeps the moss at half.
+     */
+    @Test
+    void eachPatchAsBigAsVanillas() {
+        SplitPatch sp = new SplitPatch(SEED, 0.5, 9);
+        Random r = new Random(11);
+        double allOld = 0, allNow = 0;
+        for (int side = 3; side <= 6; side++) {
+            double old = 0, now = 0;
+            for (int k = 0; k < 4000; k++) {
+                int ox = r.nextInt(400000) - 200000, oz = r.nextInt(400000) - 200000;
+                for (int i = -side; i <= side; i++) for (int j = -side; j <= side; j++) {
+                    boolean ex = i == -side || i == side, ez = j == -side || j == side;
+                    if (!(ex && ez || (ex || ez) && r.nextFloat() > 0.35F)) old++;
+                }
+                double a = SplitPatch.halfWidth(side);
+                int reach = SplitPatch.reach(a);
+                for (int i = -reach; i <= reach; i++) for (int j = -reach; j <= reach; j++)
+                    if (sp.inside(ox + i, oz + j, i, j, a, a)) now++;
+            }
+            assertEquals(1.0, now / old, 0.03, "half side " + side);
+            allOld += old;
+            allNow += now;
+        }
+        assertEquals(1.0, allNow / allOld, 0.015, "all sizes");
+    }
+
+    /**
+     * Laid as the halls lay them (3 a chunk, half sides 3 to 6) over a flat floor, the patches cover as much ground as
+     * vanilla's vegetation_patch did with the same draws, and the moss on it is about half what that put down.
      */
     @Test
     void halfTheMossOfVanillasPatches() {
@@ -51,7 +80,7 @@ class SplitPatchTest {
                 int x = ox + i, z = oz + j;
                 if (x >= 0 && x < W && z >= 0 && z < W) old[x][z] = true;
             }
-            double ax = rx + 0.5, az = rz + 0.5;
+            double ax = SplitPatch.halfWidth(rx), az = SplitPatch.halfWidth(rz);
             int reach = SplitPatch.reach(Math.max(ax, az));
             for (int i = -reach; i <= reach; i++) for (int j = -reach; j <= reach; j++) {
                 int x = ox + i, z = oz + j;
@@ -66,8 +95,8 @@ class SplitPatchTest {
             if (now[x][z] == 2) bare++;
         }
         double cover = (double) (moss + bare) / oldMoss, kept = (double) moss / oldMoss;
-        assertEquals(1.0, cover, 0.08, "the patches' ground against vanilla's");
-        assertEquals(0.5, kept, 0.06, "the moss left against vanilla's");
+        assertEquals(1.0, cover, 0.05, "the patches' ground against vanilla's");
+        assertEquals(0.5, kept, 0.05, "the moss left against vanilla's");
     }
 
     /** The moss and the limestone lie in pieces a few blocks across: runs along x of 7 blocks or so, rarely one alone. */
@@ -102,7 +131,7 @@ class SplitPatchTest {
         Random r = new Random(9);
         for (int k = 0; k < 2000; k++) {
             int ox = r.nextInt(20000) - 10000, oz = r.nextInt(20000) - 10000;
-            double ax = 3.5 + r.nextInt(4), az = 3.5 + r.nextInt(4);
+            double ax = SplitPatch.halfWidth(3 + r.nextInt(4)), az = SplitPatch.halfWidth(3 + r.nextInt(4));
             int reach = SplitPatch.reach(Math.max(ax, az));
             assertTrue(sp.inside(ox, oz, 0, 0, ax, az), "the middle");
             for (int i = -reach - 3; i <= reach + 3; i++) for (int j = -reach - 3; j <= reach + 3; j++) {

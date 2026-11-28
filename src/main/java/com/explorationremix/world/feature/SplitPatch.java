@@ -24,6 +24,10 @@ public final class SplitPatch {
     static final double EDGE_SCALE = 3.2;
     /** The split field's fine part, as a share of its slow part's weight and of its width. */
     static final double SPLIT_FINE = 0.3, SPLIT_FINE_SCALE = 0.35;
+    /** How much more ground a patch's wobbly outline takes, on average, than its ellipse (measured: SplitPatchTest). */
+    static final double OUTLINE_GAIN = 1.022;
+    /** The share of a vanilla patch's edge rows it kept (its extra_edge_column_chance in the halls' moss). */
+    static final double VANILLA_EDGE_KEPT = 0.35;
 
     private static final Map<Key, SplitPatch> CACHE = new ConcurrentHashMap<>();
 
@@ -68,6 +72,16 @@ public final class SplitPatch {
 
     /** How far from a patch's middle its outline can reach, in blocks, for half widths up to {@code a}. */
     public static int reach(double a) { return (int) Math.ceil(a * (1 + EDGE)); }
+
+    /**
+     * The half width along one axis of a patch as big as a vanilla vegetation_patch of that half side (its square
+     * {@code 2 side + 1} across, the corners cut and {@link #VANILLA_EDGE_KEPT} of the edge rows kept): vanilla's
+     * patch covers about {@code (2 side - 1 + 2 kept)} blocks along each axis, and an ellipse as big, its outline's
+     * gain taken off, has this half width. So each patch, small or big, takes as much ground as the one it replaces.
+     */
+    public static double halfWidth(int side) {
+        return (2 * side - 1 + 2 * VANILLA_EDGE_KEPT) / Math.sqrt(Math.PI * OUTLINE_GAIN);
+    }
 
     /** The split field at a column (its slow part, with a fine part riding on it), about -1 to 1. */
     public double split(int x, int z) {

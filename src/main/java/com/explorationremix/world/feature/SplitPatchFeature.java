@@ -20,9 +20,10 @@ import net.minecraft.world.level.levelgen.feature.stateproviders.BlockStateProvi
 
 /**
  * A patch of ground cover laid over the floors round its origin, like vanilla's vegetation_patch, but shaped and split by
- * noise ({@link SplitPatch}): an ellipse of its own size whose outline a fine field pushes in and out, its top blocks
- * taking {@code cover} or, where a second field over the world's x and z lies in its lowest {@code bare_share},
- * {@code bare}. Plants ({@code vegetation}) grow only on the cover. Each column finds its floor as vanilla's patch does:
+ * noise ({@link SplitPatch}): an ellipse as big as vanilla's square of half sides drawn from {@code radius} (corners
+ * cut, about a third of the edge rows kept; {@link SplitPatch#halfWidth}), whose outline a fine field pushes in and out,
+ * its top blocks taking {@code cover} or, where a second field over the world's x and z lies in its lowest
+ * {@code bare_share}, {@code bare}. Plants ({@code vegetation}) grow only on the cover. Each column finds its floor as vanilla's patch does:
  * down through open air from the origin's height, then up out of anything solid, within {@code vertical_range}, so a
  * patch drapes over steps and leaves water, plants and overhangs alone.
  *
@@ -61,9 +62,10 @@ public final class SplitPatchFeature extends Feature<SplitPatchFeature.Config> {
         WorldGenLevel level = ctx.level();
         BlockPos origin = ctx.origin();
         SplitPatch shape = SplitPatch.of(level.getSeed(), c.bareShare(), c.splitScale());
-        // half widths as vanilla's patch drew them (its square's half side, plus the half block of its edge row): the only
-        // draws from the chunk's random
-        double ax = c.radius().sample(ctx.random()) + 0.5, az = c.radius().sample(ctx.random()) + 0.5;
+        // half widths from the sides vanilla's patch drew, each as big as vanilla's square was: the only draws from the
+        // chunk's random
+        double ax = SplitPatch.halfWidth(c.radius().sample(ctx.random()));
+        double az = SplitPatch.halfWidth(c.radius().sample(ctx.random()));
         RandomSource random = RandomSource.create(Hashing.mix(level.getSeed(), origin.getX(), origin.getY(), origin.getZ()));
         int reach = SplitPatch.reach(Math.max(ax, az));
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
