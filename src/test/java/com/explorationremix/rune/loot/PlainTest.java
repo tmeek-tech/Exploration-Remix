@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** What an enchanted book becomes (0.22.6), and which collect runes each layer gives. */
+/** What an enchanted book becomes (0.22.6; a chest's a plain book since 0.24.5), and which collect runes each layer gives. */
 class PlainTest {
     @Test
     void aBookIsAnyRuneButACollectOneWeightedByWhereItIsFound() {
@@ -35,6 +35,15 @@ class PlainTest {
         }
         assertTrue(Plain.bookRunes(0, 0).contains(RuneId.HASTE), "tool runes are sold too");
         assertTrue(Plain.bookRunes(1, 1).contains(RuneId.GLIDE), "and armor's effect runes");
+    }
+
+    @Test
+    void aChestIsKnownByItsTablesPath() {
+        for (String chest : List.of("chests/simple_dungeon", "chests/stronghold_library", "chests/village/village_weaponsmith",
+                "chests/ancient_city", "structures/chests/tower_top"))
+            assertTrue(PlainLoot.chestPath(chest), chest + " fills a chest: its book comes plain");
+        for (String other : List.of("gameplay/fishing", "gameplay/piglin_bartering", "entities/zombie", "blocks/chest", "chestnut/tree"))
+            assertFalse(PlainLoot.chestPath(other), other + " is no chest's: its book is still a rune");
     }
 
     @Test

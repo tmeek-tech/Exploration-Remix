@@ -93,7 +93,8 @@ public final class GalleriesRuins {
             LAVA = 16, CHAIN = 17;
     /** Brick stairs: STAIRS + the side they rise toward (0 east, 1 south, 2 west, 3 north), + 4 upside down. */
     public static final byte STAIRS = 32;
-    /** A loot chest (CHEST) or the rune's (RUNE_CHEST), + the side it faces (0 east, 1 south, 2 west, 3 north). */
+    /** A hut's loot chest (CHEST) or the big structure's (RUNE_CHEST, which held a rune until 0.24.5), + the side it
+     * faces (0 east, 1 south, 2 west, 3 north). */
     public static final byte CHEST = 40, RUNE_CHEST = 44;
 
     /** Whether code b is a full block of rock (holds lava beside or under it). */
