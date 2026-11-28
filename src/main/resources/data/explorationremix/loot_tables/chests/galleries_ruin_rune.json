@@ -2,33 +2,10 @@
   "type": "minecraft:chest",
   "pools": [
     {
-      "rolls": 1,
-      "entries": [
-        {
-          "type": "minecraft:tag",
-          "name": "explorationremix:runes/deep_gardens",
-          "expand": true,
-          "weight": 10
-        },
-        {
-          "type": "minecraft:tag",
-          "name": "explorationremix:runes/blue_reaches",
-          "expand": true,
-          "weight": 5
-        },
-        {
-          "type": "minecraft:tag",
-          "name": "explorationremix:runes/upper_caves",
-          "expand": true,
-          "weight": 2
-        }
-      ]
-    },
-    {
       "rolls": {
         "type": "minecraft:uniform",
-        "min": 2,
-        "max": 4
+        "min": 3,
+        "max": 6
       },
       "entries": [
         {

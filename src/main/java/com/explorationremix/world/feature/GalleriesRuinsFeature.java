@@ -44,12 +44,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * and stone are the others). A block of the plan goes in only where it leaves no
  * fluid loose: open air is never set beside a fluid (nor over one), a fluid is only ever replaced by a full block, and
  * the plan's lava goes in last, where its block holds it in the world as built (solid under it and on its four sides,
- * or lava; open over it), else it is a chiseled block. The chests take their loot tables: the rune's ({@link
- * #RUNE_CHEST}: a rune for certain and some loot) and the others' ({@link #LOOT_CHEST}). Two or three of the walls'
- * blocks are rune stones (0.23.1, {@link GalleriesRuins#runes}).
+ * or lava; open over it), else it is a chiseled block. The chests take their loot tables: the big structure's ({@link
+ * #RUNE_CHEST}) and the huts' ({@link #LOOT_CHEST}), which since 0.24.5 roll the same loot: the big structure's held a
+ * rune as well until then, and Taran's rune stone card took it out ("Chest without its rune"), so the ruins' runes are
+ * all in the two or three of the walls' blocks that are rune stones (0.23.1, {@link GalleriesRuins#runes}).
  */
 public final class GalleriesRuinsFeature extends Feature<GalleriesRuinsFeature.Config> {
-    /** The rune's chest's table and the loot chests'. */
+    /** The big structure's chest's table (named for the rune it held until 0.24.5, as an old world's chests still name
+     * it) and the huts' loot chests'. */
     public static final ResourceLocation RUNE_CHEST = new ResourceLocation(ExplorationRemix.MOD_ID, "chests/galleries_ruin_rune"),
             LOOT_CHEST = new ResourceLocation(ExplorationRemix.MOD_ID, "chests/galleries_ruin");
 
